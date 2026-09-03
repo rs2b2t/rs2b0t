@@ -36,6 +36,7 @@ import MossGiant, { SETTINGS as MOSSGIANT_SETTINGS } from './MossGiant/MossGiant
 import BrimhavenMossGiants, { SETTINGS as BRIMHAVEN_MOSS_GIANTS_SETTINGS } from './BrimhavenMossGiants/BrimhavenMossGiants.js';
 import GreenDragon, { SETTINGS as GREENDRAGON_SETTINGS } from './GreenDragon/GreenDragon.js';
 import FireGiant, { SETTINGS as FIREGIANT_SETTINGS } from './FireGiant/FireGiant.js';
+import JiveDragons, { SETTINGS as JIVEDRAGONS_SETTINGS } from './JiveDragons/JiveDragons.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab/RockCrab.js';
 import ThievingBot, { SETTINGS as THIEVING_SETTINGS } from './ThievingBot/ThievingBot.js';
 import WalkToBot, { WALKTO_SETTINGS } from './WalkToBot/WalkToBot.js';
@@ -193,6 +194,15 @@ ScriptRegistry.register({
     tags: ['waterfall', 'safespot', 'members', 'banking'],
     settingsSchema: FIREGIANT_SETTINGS,
     create: () => new FireGiant()
+});
+
+ScriptRegistry.register({
+    name: 'JiveDragons',
+    description: 'Taverley Dungeon blue dragons: mage or range from a derived safespot, or melee with the Dragonfire shield. Opens the dusty-key gate, fetching the key off Velrak when the bank has none.',
+    category: 'Combat',
+    tags: ['taverley', 'dragons', 'safespot', 'members', 'banking', 'clues'],
+    settingsSchema: JIVEDRAGONS_SETTINGS,
+    create: () => new JiveDragons()
 });
 
 ScriptRegistry.register({

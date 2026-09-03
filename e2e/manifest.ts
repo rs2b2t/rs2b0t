@@ -337,6 +337,14 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'jivedragons-live',
+        harness: 'jivedragons-live.ts',
+        covers: { scripts: ['JiveDragons'] },
+        status: 'vetted',
+        budgetMin: 25,
+        provenAt: 'e4ec531a'
+    },
+    {
         id: 'fishing-contest-244-live',
         harness: 'fishing-contest-244-live.ts',
         covers: { scripts: ['AIOQuester'] },

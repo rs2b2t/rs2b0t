@@ -8,7 +8,10 @@ import {
     hitRegion,
     listScroll,
     paintCols,
+    railRows,
     resolveDock,
+    statColumns,
+    stripSegments,
     toCanvasPoint,
     wrapText,
     type Region
@@ -216,5 +219,60 @@ describe('listScroll', () => {
 
     test('a new focus row re-attaches the list the user scrolled away from', () => {
         expect(listScroll(60, 6, state(0, true, 20), 0, 40)).toEqual({ offset: 35, manual: false, focus: 40 });
+    });
+});
+
+describe('stripSegments', () => {
+    test('tabs sit left, brand right, and status takes what is left', () => {
+        const s = stripSegments(500, [60, 50], 90, 8);
+        expect(s.tabs).toEqual([{ x: 8, w: 60 }, { x: 68, w: 50 }]);
+        expect(s.brand).toEqual({ x: 402, w: 90 });
+        expect(s.status.x).toBe(118);
+        expect(s.status.w).toBe(284);
+    });
+
+    test('a status slot that would go negative clamps to zero width', () => {
+        const s = stripSegments(120, [60, 50], 90, 8);
+        expect(s.status.w).toBe(0);
+        expect(s.brand.x).toBeGreaterThanOrEqual(s.status.x);
+    });
+
+    test('no tabs leaves the status starting at the pad', () => {
+        const s = stripSegments(500, [], 90, 8);
+        expect(s.status.x).toBe(8);
+    });
+});
+
+describe('railRows', () => {
+    test('splits the body height evenly', () => {
+        expect(railRows(128, 4)).toEqual([
+            { y: 0, h: 32 }, { y: 32, h: 32 }, { y: 64, h: 32 }, { y: 96, h: 32 }
+        ]);
+    });
+
+    test('a body too short to give each entry a row still yields one rect each', () => {
+        const rows = railRows(2, 4);
+        expect(rows).toHaveLength(4);
+        expect(rows.every(r => r.h >= 1)).toBe(true);
+    });
+
+    test('zero entries is empty, not a divide by zero', () => {
+        expect(railRows(128, 0)).toEqual([]);
+    });
+});
+
+describe('statColumns', () => {
+    test('columns share the width right of the rail', () => {
+        expect(statColumns(506, 72, 8, 2)).toEqual([
+            { x: 80, w: 209 }, { x: 289, w: 209 }
+        ]);
+    });
+
+    test('one column takes the whole body', () => {
+        expect(statColumns(506, 72, 8, 1)).toEqual([{ x: 80, w: 418 }]);
+    });
+
+    test('a rail wider than the panel yields no columns rather than negatives', () => {
+        expect(statColumns(80, 100, 8, 2)).toEqual([]);
     });
 });

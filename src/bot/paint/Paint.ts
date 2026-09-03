@@ -6,7 +6,10 @@ import {
     listScroll,
     paintCols,
     paintState,
+    railRows,
     resolveDock,
+    statColumns,
+    stripSegments,
     wrapText,
     type Dock,
     type Rect,
@@ -57,6 +60,8 @@ const LINE = 16;
 const TITLE_H = 20;
 const TAB_H = 18;
 const BUTTON_H = 16;
+const RAIL_W = 72;
+const STATUS_FG = '#6fe08b';
 
 const BG = 'rgba(12, 12, 14, 0.88)';
 const BG_TITLE = 'rgba(28, 28, 34, 0.95)';
@@ -69,6 +74,8 @@ const BORDER = 'rgba(90, 90, 100, 0.8)';
 export class PaintFrame {
     private readonly regions: Region[] = [];
     private cursorY: number;
+    /** Left inset for body rows, widened by the rail so nothing paints over it. */
+    private bodyX = PAD;
     private readonly accent: string;
     private readonly panel: Rect;
     private collapsed = false;
@@ -102,7 +109,7 @@ export class PaintFrame {
 
         const toggle = { x: r.x + r.w - TITLE_H, y: r.y, w: TITLE_H, h: TITLE_H };
         this.ctx.fillStyle = paintState.isHovered(toggle) ? FG : FG_DIM;
-        this.ctx.fillText(this.collapsed ? '+' : '–', toggle.x + 7, toggle.y + r.h / 2 + 1);
+        this.ctx.fillText(this.collapsed ? '+' : '-', toggle.x + 7, toggle.y + r.h / 2 + 1);
         this.regions.push({ id: 'paint:toggle', ...toggle, kind: 'widget' });
         if (paintState.consumeClick('paint:toggle')) {
             this.collapsed = !this.collapsed;
@@ -158,7 +165,12 @@ export class PaintFrame {
 
     /** Columns of monospace text the panel fits between its gutters. */
     cols(): number {
-        return paintCols(this.panel.w, PAD, this.charW);
+        return paintCols(this.panel.w - this.bodyX + PAD, PAD, this.charW);
+    }
+
+    /** Rows still clear of the panel's bottom edge. */
+    rowsLeft(): number {
+        return Math.max(0, Math.floor((this.panel.y + this.panel.h - this.cursorY) / LINE));
     }
 
     text(line: string, color?: string): void {
@@ -166,7 +178,7 @@ export class PaintFrame {
             return;
         }
         this.ctx.fillStyle = color ?? FG;
-        this.ctx.fillText(clipText(line, this.cols()), this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
+        this.ctx.fillText(clipText(line, this.cols()), this.panel.x + this.bodyX, this.cursorY + LINE / 2 + 1);
         this.cursorY += LINE;
     }
 
@@ -179,8 +191,8 @@ export class PaintFrame {
         if (this.collapsed || cells.length === 0) {
             return;
         }
-        const widths = cellWidths(this.panel.w - PAD * 2, cells.map(c => c.weight ?? 1));
-        let x = this.panel.x + PAD;
+        const widths = cellWidths(this.panel.w - PAD - this.bodyX, cells.map(c => c.weight ?? 1));
+        let x = this.panel.x + this.bodyX;
         cells.forEach((cell, i) => {
             const w = widths[i] ?? 0;
             // One character of gutter, so a clipped column never touches the next.
@@ -199,7 +211,7 @@ export class PaintFrame {
         }
         for (const line of wrapText(text, this.cols(), indent)) {
             this.ctx.fillStyle = color ?? FG;
-            this.ctx.fillText(line, this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
+            this.ctx.fillText(line, this.panel.x + this.bodyX, this.cursorY + LINE / 2 + 1);
             this.cursorY += LINE;
         }
     }
@@ -231,7 +243,7 @@ export class PaintFrame {
         for (const line of lines.slice(scroll.offset, scroll.offset + rows)) {
             const entry = entryOf(line);
             this.ctx.fillStyle = entry.color ?? o.color ?? FG;
-            this.ctx.fillText(clipText(entry.text, room), this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
+            this.ctx.fillText(clipText(entry.text, room), this.panel.x + this.bodyX, this.cursorY + LINE / 2 + 1);
             this.cursorY += LINE;
         }
         this.chrome(
@@ -255,7 +267,7 @@ export class PaintFrame {
         if (this.collapsed) {
             return 0;
         }
-        return this.list(id, lines, this.rowsLeft(lines.length, opts), opts);
+        return this.list(id, lines, this.fillRows(lines.length, opts), opts);
     }
 
     /** A `fill` laid `columns` across, reading left to right; the wheel moves a full row. */
@@ -265,7 +277,7 @@ export class PaintFrame {
         }
         const cols = Math.max(1, Math.trunc(columns));
         const total = gridRows(lines.length, cols);
-        const rows = this.rowsLeft(total, opts);
+        const rows = this.fillRows(total, opts);
         const key = `list:${id}`;
         const focus = opts.focus !== undefined && opts.focus >= 0 ? Math.floor(opts.focus / cols) : -1;
         const scroll = this.scrollFor(key, total, rows, focus);
@@ -304,7 +316,7 @@ export class PaintFrame {
     }
 
     /** Rows of the remaining panel height a filling list may use, less its counter row. */
-    private rowsLeft(total: number, opts: PaintFillOptions): number {
+    private fillRows(total: number, opts: PaintFillOptions): number {
         const bottom = this.panel.y + this.panel.h - (opts.reserve ?? 0);
         const avail = Math.floor((bottom - this.cursorY) / LINE);
         // The counter and any footer share one row, so a list needing either shows one fewer.
@@ -349,11 +361,11 @@ export class PaintFrame {
             this.ctx.fillStyle = this.accent;
             this.ctx.fillRect(this.panel.x + this.panel.w - 5, top + progress * (h - thumbH), 3, thumbH);
         }
-        const counter = from > 0 ? `${from}–${to} of ${total}` : '';
+        const counter = from > 0 ? `${from} to ${to} of ${total}` : '';
         const text = [counter, footer].filter(Boolean).join(' · ');
         if (text.length > 0) {
             this.ctx.fillStyle = FG_DIM;
-            this.ctx.fillText(clipText(text, this.cols()), this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
+            this.ctx.fillText(clipText(text, this.cols()), this.panel.x + this.bodyX, this.cursorY + LINE / 2 + 1);
             this.cursorY += LINE;
         }
     }
@@ -364,11 +376,11 @@ export class PaintFrame {
         }
         const f = Math.max(0, Math.min(1, fraction));
         const labelW = 48;
-        const barX = this.panel.x + PAD + labelW;
-        const barW = this.panel.w - PAD * 2 - labelW - 42;
+        const barX = this.panel.x + this.bodyX + labelW;
+        const barW = this.panel.w - PAD - this.bodyX - labelW - 42;
         const barY = this.cursorY + 3;
         this.ctx.fillStyle = FG;
-        this.ctx.fillText(label, this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
+        this.ctx.fillText(label, this.panel.x + this.bodyX, this.cursorY + LINE / 2 + 1);
         this.ctx.fillStyle = 'rgba(255,255,255,0.12)';
         this.ctx.fillRect(barX, barY, barW, LINE - 6);
         this.ctx.fillStyle = color ?? (f < 0.35 ? '#e05b5b' : f < 0.65 ? '#e8c35b' : '#69c86b');
@@ -382,7 +394,7 @@ export class PaintFrame {
         if (this.collapsed || items.length === 0) {
             return null;
         }
-        let bx = this.panel.x + PAD;
+        let bx = this.panel.x + this.bodyX;
         let clicked: string | null = null;
         for (const item of items) {
             const w = this.ctx.measureText(item.label).width + 18;
@@ -404,7 +416,7 @@ export class PaintFrame {
         }
         const text = `${label}: ${current} ▸`;
         const w = this.ctx.measureText(text).width + 14;
-        const r = { x: this.panel.x + PAD, y: this.cursorY + 2, w, h: BUTTON_H };
+        const r = { x: this.panel.x + this.bodyX, y: this.cursorY + 2, w, h: BUTTON_H };
         this.drawButton(r, text);
         this.regions.push({ id: `sel:${id}`, ...r, kind: 'widget' });
         this.cursorY += BUTTON_H + 4;
@@ -423,7 +435,7 @@ export class PaintFrame {
             return null;
         }
         const y = this.cursorY + 2;
-        let x = this.panel.x + PAD;
+        let x = this.panel.x + this.bodyX;
         let picked: string | null = null;
 
         const prevW = this.ctx.measureText('◀').width + 14;
@@ -438,7 +450,7 @@ export class PaintFrame {
         const mid = `${label}: ${current}`;
         const midW = Math.min(
             this.ctx.measureText(mid).width + 14,
-            this.panel.w - PAD * 2 - prevW - 40
+            this.panel.w - PAD - this.bodyX - prevW - 40
         );
         const midR = { x, y, w: Math.max(midW, 40), h: BUTTON_H };
         this.drawButton(midR, mid);
@@ -456,6 +468,142 @@ export class PaintFrame {
 
         this.cursorY += BUTTON_H + 4;
         return picked;
+    }
+
+    /**
+     * Title row of tabs, a live status and a brand. Returns the active tab and
+     * replaces `title()` for a branded panel.
+     */
+    strip(id: string, tabs: string[], status: string, brand: string): string {
+        const { x, w } = this.panel;
+        const r = { x, y: this.cursorY, w, h: TITLE_H };
+        this.collapsed = paintState.get('paint:collapsed', '0') === '1';
+
+        this.ctx.fillStyle = BG_TITLE;
+        this.ctx.fillRect(r.x, r.y, r.w, r.h);
+        this.ctx.strokeStyle = BORDER;
+        this.ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+
+        let active = paintState.get(`strip:${id}`, tabs[0] ?? '');
+        if (!tabs.includes(active)) {
+            active = tabs[0] ?? '';
+        }
+        const mid = r.y + r.h / 2 + 1;
+        const widths = tabs.map(name => this.ctx.measureText(name).width + 14);
+        const seg = stripSegments(r.w, widths, this.ctx.measureText(brand).width + PAD + TITLE_H, PAD);
+
+        tabs.forEach((name, i) => {
+            const slot = seg.tabs[i]!;
+            const box = { x: r.x + slot.x, y: r.y + 2, w: slot.w, h: r.h - 4 };
+            const isActive = name === active;
+            this.ctx.fillStyle = isActive ? BG_WIDGET_HOT : paintState.isHovered(box) ? BG_WIDGET : 'transparent';
+            this.ctx.fillRect(box.x, box.y, box.w, box.h);
+            this.ctx.font = FONT_BOLD;
+            this.ctx.fillStyle = isActive ? this.accent : FG_DIM;
+            this.ctx.fillText(name, box.x + 7, mid);
+            this.ctx.font = FONT;
+            const regionId = `strip:${id}:${name}`;
+            this.regions.push({ id: regionId, ...box, kind: 'widget' });
+            if (paintState.consumeClick(regionId)) {
+                active = name;
+                paintState.set(`strip:${id}`, name);
+            }
+        });
+
+        const room = Math.max(0, Math.floor(seg.status.w / this.charW) - 1);
+        this.ctx.fillStyle = STATUS_FG;
+        this.ctx.fillText(clipText(status, room), r.x + seg.status.x, mid);
+        this.ctx.font = FONT_BOLD;
+        this.ctx.fillStyle = this.accent;
+        this.ctx.fillText(brand, r.x + seg.brand.x, mid);
+        this.ctx.font = FONT;
+
+        const toggle = { x: r.x + r.w - TITLE_H, y: r.y, w: TITLE_H, h: TITLE_H };
+        this.ctx.fillStyle = paintState.isHovered(toggle) ? FG : FG_DIM;
+        this.ctx.fillText(this.collapsed ? '+' : '-', toggle.x + 7, mid);
+        this.regions.push({ id: 'paint:toggle', ...toggle, kind: 'widget' });
+        if (paintState.consumeClick('paint:toggle')) {
+            this.collapsed = !this.collapsed;
+            paintState.set('paint:collapsed', this.collapsed ? '1' : '0');
+        }
+
+        this.cursorY = r.y + r.h;
+        if (!this.collapsed) {
+            this.regions.push({ id: 'paint:panel', ...this.panel, kind: 'panel' });
+            this.ctx.fillStyle = BG;
+            this.ctx.fillRect(this.panel.x, this.cursorY, this.panel.w, this.panel.y + this.panel.h - this.cursorY);
+            this.ctx.strokeStyle = BORDER;
+            this.ctx.strokeRect(this.panel.x + 0.5, this.cursorY + 0.5, this.panel.w - 1, this.panel.y + this.panel.h - this.cursorY - 1);
+        } else {
+            this.regions.push({ id: 'paint:panel', x: this.panel.x, y: this.panel.y, w: this.panel.w, h: TITLE_H, kind: 'panel' });
+        }
+        return active;
+    }
+
+    /** Vertical sub-tab column down the panel's left edge. Returns the active entry. */
+    rail(id: string, names: string[]): string {
+        const key = `rail:${id}`;
+        if (this.collapsed || names.length === 0) {
+            return paintState.get(key, names[0] ?? '');
+        }
+        let active = paintState.get(key, names[0]!);
+        if (!names.includes(active)) {
+            active = names[0]!;
+        }
+        const top = this.cursorY;
+        this.bodyX = RAIL_W + PAD;
+        const bodyH = this.panel.y + this.panel.h - top - LINE;
+        for (const [i, row] of railRows(bodyH, names.length).entries()) {
+            const name = names[i]!;
+            const box = { x: this.panel.x + 2, y: top + row.y, w: RAIL_W - 4, h: row.h };
+            const isActive = name === active;
+            this.ctx.fillStyle = isActive ? BG_WIDGET_HOT : paintState.isHovered(box) ? BG_WIDGET : 'transparent';
+            this.ctx.fillRect(box.x, box.y, box.w, box.h);
+            if (isActive) {
+                this.ctx.fillStyle = this.accent;
+                this.ctx.fillRect(box.x, box.y, 2, box.h);
+            }
+            this.ctx.fillStyle = isActive ? '#fff' : FG_DIM;
+            this.ctx.fillText(clipText(name, Math.floor((RAIL_W - 12) / this.charW)), box.x + 6, box.y + box.h / 2 + 1);
+            const regionId = `${key}:${name}`;
+            this.regions.push({ id: regionId, ...box, kind: 'widget' });
+            if (paintState.consumeClick(regionId)) {
+                active = name;
+                paintState.set(key, name);
+            }
+        }
+        return active;
+    }
+
+    /** Rows of cells laid out right of the rail. */
+    statGrid(rows: PaintCell[][], columns = 2): void {
+        if (this.collapsed) {
+            return;
+        }
+        const slots = statColumns(this.panel.w, this.bodyX - PAD, PAD, columns);
+        for (const row of rows) {
+            row.forEach((cell, i) => {
+                const slot = slots[i];
+                if (!slot) {
+                    return;
+                }
+                const room = Math.max(0, Math.floor(slot.w / this.charW) - 1);
+                this.ctx.fillStyle = cell.color ?? FG;
+                this.ctx.fillText(clipText(cell.text, room), this.panel.x + slot.x, this.cursorY + LINE / 2 + 1);
+            });
+            this.cursorY += LINE;
+        }
+    }
+
+    /** Right-aligned byline on the panel's last row. */
+    footer(text: string): void {
+        if (this.collapsed) {
+            return;
+        }
+        const y = this.panel.y + this.panel.h - LINE / 2 - 1;
+        const w = this.ctx.measureText(text).width;
+        this.ctx.fillStyle = FG_DIM;
+        this.ctx.fillText(text, this.panel.x + this.panel.w - PAD - w, y);
     }
 
     gap(px = 6): void {
