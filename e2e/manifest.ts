@@ -386,9 +386,9 @@ export const CASES: readonly Case[] = [
         harness: 'jiveshilo-live.ts',
         covers: { scripts: ['JiveShilo'] },
         status: 'vetted',
-        provenAt: 'ca9b256b',
+        provenAt: '9ba30fdc',
         budgetMin: 12,
-        note: 'seeds Shilo Village complete, Fishing 99 and 60gp on the bank; passes once the rod is bought, fish are caught along the bank, a trip has sold them for feathers and the casting resumes'
+        note: 'seeds Shilo Village complete, Fishing 99 and 60gp on the bank; passes once the rod is bought, fish are caught along the river sweep, a trip has sold them for feathers and the casting resumes'
     },
     {
         id: 'fishing-contest-244-live',
@@ -930,7 +930,7 @@ export const CASES: readonly Case[] = [
         covers: { scripts: ['RangingGuild'] },
         status: 'vetted',
         budgetMin: 15,
-        provenAt: '03024497'
+        provenAt: 'aeeb61ba'
     },
     {
         id: 'relogin-test',
