@@ -493,7 +493,7 @@ export const SUPPLY_GATHERS: Record<string, (snap: QuestSnapshot, need: number) 
     "wizard's mind bomb": snap => makeRoom(snap) ?? custom('buy a mind bomb at the Rising Sun', buyMindBomb),
     // A jug, then water, then clay, then the bowl: one free slot carries the lot.
     'unfired bowl': snap => makeRoom(snap) ?? custom('make an unfired bowl', makeUnfiredBowl),
-    plank: (snap, need) => makeRoom(snap, need) ?? custom(`fetch ${need} planks`, log => grabPlanks(need, log))
+    plank: (snap, need) => makeRoom(snap, need) ?? custom(`fetch ${need} plank${need === 1 ? '' : 's'}`, log => grabPlanks(need, log))
 };
 
 

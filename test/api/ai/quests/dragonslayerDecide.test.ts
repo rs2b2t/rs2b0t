@@ -299,6 +299,8 @@ describe('Dragon Slayer sources its own shopping at the point of use', () => {
         const graveyard = { x: 3171, z: 3680, level: 0 };
         const step = decide(snapshot({ carried: [DS_ID.MAP, DS_ID.HAMMER, NAILS, DS_ID.PLANK], tile: graveyard, ...boat }));
         expect((step as { name: string }).name).toContain('fetch 2 planks');
+        const last = decide(snapshot({ carried: [DS_ID.MAP, DS_ID.HAMMER, NAILS, [DS_ID.PLANK, 2]], tile: graveyard, ...boat }));
+        expect((last as { name: string }).name).toBe('fetch 1 plank');
     });
 
     test('an unread bank is scanned before a hull supply is bought', () => {

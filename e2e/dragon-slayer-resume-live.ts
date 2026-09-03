@@ -27,7 +27,7 @@ const EARNED_QP: readonly [string, number][] = [
 
 // Why: the charms are gone at every stage this harness seeds, the door ate them, and the hull supplies are gone from stage 7.
 const CHARM_SHOPPING = /buy \d+× (Lobster pot|Silk)|mind bomb|unfired bowl/i;
-const HULL_SHOPPING = /buy \d+× Hammer|fetch \d+ planks|smith \d+ nails/i;
+const HULL_SHOPPING = /buy \d+× Hammer|fetch \d+ planks?|smith \d+ nails/i;
 const forbidden = (line: string): boolean => CHARM_SHOPPING.test(line) || (stage >= 7 && HULL_SHOPPING.test(line));
 
 interface Snap {
