@@ -382,6 +382,15 @@ export const CASES: readonly Case[] = [
         note: 'a kill from full health is three food trips at about 9% per cast, so --kill-min 35 is the budget the proof ran with'
     },
     {
+        id: 'jiveshilo-live',
+        harness: 'jiveshilo-live.ts',
+        covers: { scripts: ['JiveShilo'] },
+        status: 'vetted',
+        provenAt: '06bb7124',
+        budgetMin: 12,
+        note: 'seeds Shilo Village complete, Fishing 99 and 60gp at the river; passes once the rod is bought, fish are caught, a trip has sold them for feathers and the casting resumes'
+    },
+    {
         id: 'fishing-contest-244-live',
         harness: 'fishing-contest-244-live.ts',
         covers: { scripts: ['AIOQuester'] },

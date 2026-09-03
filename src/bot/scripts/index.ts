@@ -39,6 +39,7 @@ import FireGiant, { SETTINGS as FIREGIANT_SETTINGS } from './FireGiant/FireGiant
 import JiveDragons, { SETTINGS as JIVEDRAGONS_SETTINGS } from './JiveDragons/JiveDragons.js';
 import JiveDemons, { SETTINGS as JIVEDEMONS_SETTINGS } from './JiveDemons/JiveDemons.js';
 import JiveKBD, { SETTINGS as JIVEKBD_SETTINGS } from './JiveKBD/JiveKBD.js';
+import JiveShilo, { SETTINGS as JIVESHILO_SETTINGS } from './JiveShilo/JiveShilo.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab/RockCrab.js';
 import RangingGuild, { RANGING_GUILD_SETTINGS } from './RangingGuild/RangingGuild.js';
 import ThievingBot, { SETTINGS as THIEVING_SETTINGS } from './ThievingBot/ThievingBot.js';
@@ -233,6 +234,15 @@ ScriptRegistry.register({
     tags: ['kbd', 'dragon', 'safespot', 'wilderness', 'members', 'banking'],
     settingsSchema: JIVEKBD_SETTINGS,
     create: () => new JiveKBD()
+});
+
+ScriptRegistry.register({
+    name: 'JiveShilo',
+    description: "Fly fishes the river inside Shilo Village, sells the trout and salmon to Fernahei's fishing hut and spends the coins on his feathers, so a pack of fish comes back as feathers and nothing is ever banked. Needs Shilo Village complete and Fishing 20.",
+    category: 'Fishing',
+    tags: ['fishing', 'shilo', 'shopping', 'feathers', 'members', 'afk'],
+    settingsSchema: JIVESHILO_SETTINGS,
+    create: () => new JiveShilo()
 });
 
 ScriptRegistry.register({

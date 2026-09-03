@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 64. Categories: 20.
+- Scripts: 65. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -16,7 +16,7 @@
 - [Cooking](#cooking) — 1
 - [Crafting](#crafting) — 7
 - [Firemaking](#firemaking) — 1
-- [Fishing](#fishing) — 1
+- [Fishing](#fishing) — 2
 - [Fletching](#fletching) — 2
 - [Herblore](#herblore) — 5
 - [Magic](#magic) — 2
@@ -662,6 +662,19 @@ Fishes a chosen method at the spot that offers it; banks the catch, optionally c
 | `forgetfulBank` | boolean | `false` | Forgetful bank exits |
 | `purgePackOnStart` | boolean | `true` | Bank junk on start |
 | `packJunk` | string | `"Bank"` | Event junk while gathering — one of: Bank, Drop, Off |
+
+### JiveShilo
+
+Fly fishes the river inside Shilo Village, sells the trout and salmon to Fernahei's fishing hut and spends the coins on his feathers, so a pack of fish comes back as feathers and nothing is ever banked. Needs Shilo Village complete and Fishing 20.
+
+- Tags: `fishing`, `shilo`, `shopping`, `feathers`, `members`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `riverStand` | tile | `{"x":2855,"z":2972,"level":0}` | River stand tile (x,z) |
+| `hutStand` | tile | `{"x":2870,"z":2971,"level":0}` | Fernahei's counter tile (x,z) |
+| `spotRadius` | number (1–20) | `2` | Spot search radius (tiles) |
+| `feathersTarget` | number (0–100000) | `0` | Stop at this many feathers (0 = keep going) |
 
 ## Fletching
 
