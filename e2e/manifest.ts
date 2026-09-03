@@ -385,7 +385,8 @@ export const CASES: readonly Case[] = [
         id: 'jiveshilo-live',
         harness: 'jiveshilo-live.ts',
         covers: { scripts: ['JiveShilo'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: '06bb7124',
         budgetMin: 12,
         note: 'seeds Shilo Village complete, Fishing 99 and 60gp at the river; passes once the rod is bought, fish are caught, a trip has sold them for feathers and the casting resumes'
     },
