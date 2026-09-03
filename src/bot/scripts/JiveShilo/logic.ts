@@ -1,5 +1,5 @@
 import type Tile from '../../geometry/Tile.js';
-import { SCAN_STANDS, SPOT_STANDS } from './river.js';
+import { SEARCH_AREA, SPOT_STANDS, SWEEP } from './river.js';
 
 export const ROD = 'Fly fishing rod';
 export const FEATHER = 'Feather';
@@ -75,11 +75,23 @@ export function standFor(spot: { x: number; z: number }): Tile | null {
 
 const cheb = (a: { x: number; z: number }, b: { x: number; z: number }): number => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
 
-/** The fishable spot whose stand is the shortest walk from here, with its stand. */
-export function nearestFishable<T extends SpotLike>(spots: readonly T[], here: { x: number; z: number }): { spot: T; stand: Tile } | null {
+/** True for a tile inside the stretch of river the search covers. */
+export function inArea(t: { x: number; z: number }): boolean {
+    return t.x >= SEARCH_AREA.minX && t.x <= SEARCH_AREA.maxX && t.z >= SEARCH_AREA.minZ && t.z <= SEARCH_AREA.maxZ;
+}
+
+/** The fishable spot whose stand is the shortest walk from here, with its stand; `fallback` names a stand for a spot tile the table does not know. */
+export function nearestFishable<T extends SpotLike>(
+    spots: readonly T[],
+    here: { x: number; z: number },
+    fallback: (spot: T) => Tile | null = () => null
+): { spot: T; stand: Tile } | null {
     let best: { spot: T; stand: Tile } | null = null;
     for (const spot of spots) {
-        const stand = standFor(spot.tile());
+        if (!inArea(spot.tile())) {
+            continue;
+        }
+        const stand = standFor(spot.tile()) ?? fallback(spot);
         if (!stand) {
             continue;
         }
@@ -90,9 +102,11 @@ export function nearestFishable<T extends SpotLike>(spots: readonly T[], here: {
     return best;
 }
 
-// Why: a spot beyond npc view range is invisible to the client, so with none in sight the bank is walked stand by stand, nearest first and never the one it has left.
-/** The next bank tile to look for spots from. */
-export function nextScan(here: { x: number; z: number }, last: Tile | null): Tile {
-    const others = SCAN_STANDS.filter(s => !last || s.x !== last.x || s.z !== last.z);
-    return others.reduce((a, b) => (cheb(b, here) < cheb(a, here) ? b : a));
+// Why: a spot beyond npc view range is invisible to the client, so with none in sight the bank is swept end to end and the sweep turns at both ends, never settling on the two nearest stands.
+/** The next sweep stop as an index into SWEEP: the nearest one to begin, then the one after the last in sweep order. */
+export function nextScan(here: { x: number; z: number }, last: number | null): number {
+    if (last === null) {
+        return SWEEP.reduce((best, s, i) => (cheb(s, here) < cheb(SWEEP[best]!, here) ? i : best), 0);
+    }
+    return (last + 1) % SWEEP.length;
 }

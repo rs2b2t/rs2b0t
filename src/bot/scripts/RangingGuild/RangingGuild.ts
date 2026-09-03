@@ -79,6 +79,8 @@ const SHOT_MS = 6000;
 const MODAL_MS = 1500;
 const SHOP_MS = 5000;
 const MAX_FAILURES = 12;
+/** Recovery passes with no progress between them before the script gives up for good. */
+const MAX_RECOVERIES = 3;
 const MAX_BANK_FAILS = 4;
 const TARGET_RANGE = 12;
 
@@ -96,6 +98,8 @@ export default class RangingGuild extends LoopingBot {
     private arrowsBought = 0;
     private trips = 0;
     private failures = 0;
+    private recoveries = 0;
+    private pendingRecovery: string | null = null;
     private bankFails = 0;
 
     override async onStart(): Promise<void> {
@@ -115,6 +119,12 @@ export default class RangingGuild extends LoopingBot {
     }
 
     override async loop(): Promise<void> {
+        if (this.pendingRecovery !== null) {
+            const msg = this.pendingRecovery;
+            this.pendingRecovery = null;
+            await this.recover(msg);
+            return;
+        }
         await this.settle();
         const action = decide(this.view());
         switch (action.kind) {
@@ -163,12 +173,14 @@ export default class RangingGuild extends LoopingBot {
         };
     }
 
-    /** A result box or an idle ticket shop left up from the last pass swallows the next click. */
+    // Why: a Ranged level-up box lands between shots, and `Reach.npcDialog` answers retry on sight of any open chat, so twelve judge talks in a row failed live against one box nobody clicked through.
+    /** A result box, an idle ticket shop or a level-up page left up from the last pass swallows the next click. */
     private async settle(): Promise<void> {
         const main = Modals.main();
         if (main === TARGET_RESULT_MODAL || (main === TICKET_SHOP_MODAL && Inventory.countById(ARCHERY_TICKET) < TICKETS_PER_RUNE_ARROWS)) {
             await Modals.close();
         }
+        await this.drainChat();
     }
 
     private async enter(): Promise<void> {
@@ -180,7 +192,7 @@ export default class RangingGuild extends LoopingBot {
             this.fail('the judge did not start a round');
             return;
         }
-        this.failures = 0;
+        this.progress();
         this.roundPoints = 0;
         this.log(`paid ${ENTRY_FEE} coins for a round of ${SHOTS_PER_ROUND} (${Inventory.countById(COINS)} coins left)`);
     }
@@ -198,7 +210,7 @@ export default class RangingGuild extends LoopingBot {
             this.fail('the judge did not sell more arrows');
             return;
         }
-        this.failures = 0;
+        this.progress();
         this.log('bought 10 bronze arrows from the judge');
     }
 
@@ -217,12 +229,13 @@ export default class RangingGuild extends LoopingBot {
         const gained = Inventory.countById(ARCHERY_TICKET) - before;
         this.rounds++;
         this.ticketsEarned += gained;
-        this.failures = 0;
+        this.progress();
         Supervisor.noteProgress();
         this.log(`round ${this.rounds}: scored ${score}, +${gained} tickets (${Inventory.countById(ARCHERY_TICKET)} held)`);
     }
 
     private async openJudge(): Promise<boolean> {
+        await this.drainChat();
         const reach = await Reach.npcDialog({ name: JUDGE, near: JUDGE_STAND, log: m => this.log(`  ${m}`) });
         if (reach !== 'done') {
             this.fail(`could not talk to the judge (${reach})`);
@@ -319,11 +332,12 @@ export default class RangingGuild extends LoopingBot {
             const points = hitPoints(hit);
             this.shots++;
             this.roundPoints += points;
-            this.failures = 0;
+            this.progress();
             Supervisor.noteProgress();
             this.log(`shot ${count}/${SHOTS_PER_ROUND}: ${hitLabel(hit)} +${points} (round ${this.roundPoints})`);
             await Execution.delayUntil(() => Modals.main() === TARGET_RESULT_MODAL, MODAL_MS);
             await Modals.closeIfOpen();
+            await this.drainChat();
             return;
         }
         if (refusal === null) {
@@ -368,7 +382,7 @@ export default class RangingGuild extends LoopingBot {
             return;
         }
         this.arrowsBought += RUNE_ARROWS_PER_TRADE;
-        this.failures = 0;
+        this.progress();
         Supervisor.noteProgress();
         this.log(`bought ${RUNE_ARROWS_PER_TRADE} rune arrows for ${TICKETS_PER_RUNE_ARROWS} tickets (${Inventory.countById(ARCHERY_TICKET)} tickets, ${Inventory.countById(RUNE_ARROW)} rune arrows held)`);
     }
@@ -423,12 +437,32 @@ export default class RangingGuild extends LoopingBot {
         }
     }
 
+    private progress(): void {
+        this.failures = 0;
+        this.recoveries = 0;
+    }
+
+    // Why: twelve misses in a row live were one level-up page and a stop, so a run of failures now clears whatever is up, walks back to the range and tries again, and only three such passes with nothing landing between them end the script.
     private fail(msg: string): void {
         this.failures++;
         this.log(`${msg} (${this.failures}/${MAX_FAILURES})`);
         if (this.failures >= MAX_FAILURES) {
-            this.stop(`gave up after ${MAX_FAILURES} failures: ${msg}`);
+            this.pendingRecovery = msg;
         }
+    }
+
+    private async recover(msg: string): Promise<void> {
+        this.recoveries++;
+        if (this.recoveries > MAX_RECOVERIES) {
+            this.stop(`gave up after ${MAX_RECOVERIES} recoveries: ${msg}`);
+            return;
+        }
+        this.status = `recovering (${this.recoveries}/${MAX_RECOVERIES})`;
+        this.log(`recovering after ${MAX_FAILURES} failures (${this.recoveries}/${MAX_RECOVERIES}): ${msg}`);
+        await Modals.closeIfOpen();
+        await this.drainChat();
+        await this.walkTo(STAND, 1);
+        this.failures = 0;
     }
 
     private stop(reason: string): void {

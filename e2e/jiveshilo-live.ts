@@ -2,7 +2,7 @@
  *  Why: every function in JiveShilo.ts drives a live client, so this run is the only proof the spots are on the near bank, the hut buys the fish and the feathers come back to the river. */
 
 // Usage: HEADED=1 bun e2e/jiveshilo-live.ts [--base url] [--minutes n] [--no-deploy]
-import { deployIsolatedClient, fail, launchBrowser, setSettings, stopScript } from './lib/harness.js';
+import { deployIsolatedClient, fail, launchBrowser, requireSim, setSettings, stopScript } from './lib/harness.js';
 import { cheatQuiet, clearChatDialogs, getServerVarQuiet, mainlandAccount, relog, startScript, teleTo } from './tutorial/harness.js';
 
 interface Args {
@@ -61,6 +61,7 @@ interface Snapshot {
 const fmt = (p: Point | null): string => (p ? `(${p.x},${p.z},${p.level})` : '(?)');
 const cheb = (a: Point, b: Point): number => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
 
+await requireSim(args.base);
 const client = args.deploy ? deployIsolatedClient(`js${Date.now().toString(36).slice(-6)}`) : null;
 const browser = await launchBrowser();
 try {
