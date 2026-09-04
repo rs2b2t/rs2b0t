@@ -17,7 +17,7 @@ import { jiveFrame } from '../../paint/jive.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { COINS, PACK, acceptAction, decide, dumpables, heldWithOffer, planPile, type Dumpable, type Step } from './logic.js';
+import { COINS, PACK, TRADE_SLOTS, acceptAction, decide, dumpables, heldWithOffer, planPile, type Dumpable, type Step } from './logic.js';
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const CATALOG_WAIT_MS = 15_000;
@@ -234,7 +234,7 @@ class Restock implements Task {
 
         const list = bot.dumpable(Bank.items().map(i => ({ id: i.id, count: i.count })));
         bot.noteBank(list);
-        const pile = planPile(list, PACK);
+        const pile = planPile(list, TRADE_SLOTS);
         if (pile.length === 0) {
             await Bank.close();
             bot.setStatus('stopped');

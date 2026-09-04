@@ -2,6 +2,9 @@ import { clientName, displayName, notedId, tradeable, unnotedId, type Catalog } 
 
 export const COINS = 995;
 export const PACK = 28;
+// Why: the engine gives a trade only what the receiver has room for, one slot per stackable kind and per non-stackable unit, and the maker keeps a few free beside the coin float its own pack carries, so a trip that filled the pack would be refused space it cannot get.
+/** Slots one trade carries, short of a full pack so the maker can receive every line. */
+export const TRADE_SLOTS = 20;
 
 export interface Dumpable {
     /** The unnoted obj id, which is how a bank row and a trade slot are matched. */
@@ -37,8 +40,8 @@ export function dumpables(items: readonly { id: number; count: number }[], cat: 
 }
 
 // Why: a noted stack is one slot however deep, so most banks go in a trip or two; an item with no noted form costs a slot a unit and is cut to what is left.
-/** The lines one trip carries, filling `slots` pack slots from the top of the list. */
-export function planPile(list: readonly Dumpable[], slots = PACK): Dumpable[] {
+/** The lines one trip carries, filling `slots` trade slots from the top of the list. */
+export function planPile(list: readonly Dumpable[], slots = TRADE_SLOTS): Dumpable[] {
     const out: Dumpable[] = [];
     let room = slots;
     for (const d of list) {

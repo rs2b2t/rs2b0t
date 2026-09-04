@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { ObjRecord } from '#/bot/adapter/ClientAdapter.js';
 import { buildCatalog } from '#/bot/api/market/catalog.js';
-import { COINS, PACK, acceptAction, decide, dumpables, heldWithOffer, planPile, type Dumpable } from '#/bot/scripts/JiveMarketDumper/logic.js';
+import { COINS, PACK, TRADE_SLOTS, acceptAction, decide, dumpables, heldWithOffer, planPile, type Dumpable } from '#/bot/scripts/JiveMarketDumper/logic.js';
 
 function rec(id: number, name: string, over: Partial<ObjRecord> = {}): ObjRecord {
     return { id, name, cost: 1, stackable: false, members: false, equippable: false, certlink: -1, certtemplate: -1, ...over };
@@ -55,13 +55,20 @@ describe('planPile', () => {
     });
 
     test('an unnotable item takes a slot a unit and is cut to what fits', () => {
-        expect(planPile([scims], PACK)).toEqual([{ ...scims, count: PACK }]);
+        expect(planPile([scims], 6)).toEqual([{ ...scims, count: 6 }]);
         expect(planPile([yews, scims], 4)).toEqual([yews, { ...scims, count: 3 }]);
     });
 
-    test('stops at the pack, and takes nothing with no room', () => {
+    // Why: the maker has to have room for every slot it is handed, and it keeps only a few free beside its coin float, so a trip stops well short of a full pack.
+    test('stops at twenty slots by default, short of the pack', () => {
         const many: Dumpable[] = Array.from({ length: 40 }, (_, i) => ({ id: 3000 + i, name: `Thing ${i}`, displayName: `Thing ${i}`, notedId: 4000 + i, count: 1 }));
-        expect(planPile(many)).toHaveLength(PACK);
+        expect(TRADE_SLOTS).toBe(20);
+        expect(TRADE_SLOTS).toBeLessThan(PACK);
+        expect(planPile(many)).toHaveLength(TRADE_SLOTS);
+        expect(planPile([scims])).toEqual([{ ...scims, count: TRADE_SLOTS }]);
+    });
+
+    test('takes nothing with no room', () => {
         expect(planPile([yews], 0)).toEqual([]);
     });
 });
