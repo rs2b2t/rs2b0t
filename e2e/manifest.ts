@@ -403,7 +403,8 @@ export const CASES: readonly Case[] = [
         id: 'jiveenchanter-live',
         harness: 'jiveenchanter-live.ts',
         covers: { scripts: ['JiveEnchanter'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: '8d156980',
         budgetMin: 8,
         note: 'seeds 60 jewels, the runes for 80 casts and a matching staff at Varrock West with Magic 70; passes once the staff is wielded, a full load has come back to the bank as products, a second trip has left and the casting has resumed'
     },
