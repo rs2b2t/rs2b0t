@@ -409,6 +409,14 @@ export const CASES: readonly Case[] = [
         note: 'seeds 60 jewels, the runes for 80 casts and a matching staff at Varrock West with Magic 70; passes once the staff is wielded, a full load has come back to the bank as products, a second trip has left and the casting has resumed'
     },
     {
+        id: 'jivemarketdumper-live',
+        harness: 'jivemarketdumper-live.ts',
+        covers: { scripts: ['JiveMarketDumper', 'MarketMaker'] },
+        status: 'unvetted',
+        budgetMin: 8,
+        note: 'a MarketMaker on a two-row book at Seers with a 200k float, a customer whose bank holds 500 yews, 1000 iron and two chainbodies; passes when two piles under the 100k cap sell for the full book price and the run stops on nothing left it buys'
+    },
+    {
         id: 'fishing-contest-244-live',
         harness: 'fishing-contest-244-live.ts',
         covers: { scripts: ['AIOQuester'] },

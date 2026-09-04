@@ -41,6 +41,7 @@ import JiveDemons, { SETTINGS as JIVEDEMONS_SETTINGS } from './JiveDemons/JiveDe
 import JiveEnchanter, { SETTINGS as JIVEENCHANTER_SETTINGS } from './JiveEnchanter/JiveEnchanter.js';
 import JiveKBD, { SETTINGS as JIVEKBD_SETTINGS } from './JiveKBD/JiveKBD.js';
 import JiveCrafting, { SETTINGS as JIVECRAFTING_SETTINGS } from './JiveCrafting/JiveCrafting.js';
+import JiveMarketDumper, { SETTINGS as JIVEMARKETDUMPER_SETTINGS } from './JiveMarketDumper/JiveMarketDumper.js';
 import JiveShilo, { SETTINGS as JIVESHILO_SETTINGS } from './JiveShilo/JiveShilo.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab/RockCrab.js';
 import RangingGuild, { RANGING_GUILD_SETTINGS } from './RangingGuild/RangingGuild.js';
@@ -263,6 +264,15 @@ ScriptRegistry.register({
     tags: ['magic', 'enchanting', 'jewellery', 'banking', 'afk'],
     settingsSchema: JIVEENCHANTER_SETTINGS,
     create: () => new JiveEnchanter()
+});
+
+ScriptRegistry.register({
+    name: 'JiveMarketDumper',
+    description: "Sells the bank to a running MarketMaker: reads the maker's order book, withdraws what it buys as notes in piles under the coin cap, trades each pile to the maker beside the bank and accepts only when the coins cover the book price, banking the payment between trips. Stops honestly when the bank holds nothing the maker buys.",
+    category: 'Money making',
+    tags: ['trading', 'bank', 'market', 'afk'],
+    settingsSchema: JIVEMARKETDUMPER_SETTINGS,
+    create: () => new JiveMarketDumper()
 });
 
 ScriptRegistry.register({

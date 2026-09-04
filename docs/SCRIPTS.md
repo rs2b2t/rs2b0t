@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 67. Categories: 20.
+- Scripts: 68. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -21,7 +21,7 @@
 - [Herblore](#herblore) — 5
 - [Magic](#magic) — 3
 - [Mining](#mining) — 3
-- [Money making](#money-making) — 4
+- [Money making](#money-making) — 5
 - [Navigation](#navigation) — 2
 - [Prayer](#prayer) — 1
 - [Quest](#quest) — 3
@@ -845,6 +845,18 @@ Mines the selected rock types, then banks the ore at the nearest bank or drops i
 | `packJunk` | string | `"Bank"` | Event junk while gathering — one of: Bank, Drop, Off |
 
 ## Money making
+
+### JiveMarketDumper
+
+Sells the bank to a running MarketMaker: reads the maker's order book, withdraws what it buys as notes in piles under the coin cap, trades each pile to the maker beside the bank and accepts only when the coins cover the book price, banking the payment between trips. Stops honestly when the bank holds nothing the maker buys.
+
+- Tags: `trading`, `bank`, `market`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `maker` | string | `""` | Maker name |
+| `priceBook` | string | `""` | Order book — one of:  |
+| `maxPerTrade` | number (1000–10000000) | `200000` | Max gp a trade |
 
 ### MarketMaker
 
