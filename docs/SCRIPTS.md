@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 66. Categories: 20.
+- Scripts: 67. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -19,7 +19,7 @@
 - [Fishing](#fishing) — 2
 - [Fletching](#fletching) — 2
 - [Herblore](#herblore) — 5
-- [Magic](#magic) — 2
+- [Magic](#magic) — 3
 - [Mining](#mining) — 3
 - [Money making](#money-making) — 4
 - [Navigation](#navigation) — 2
@@ -793,6 +793,16 @@ High alchemy loop — tick the items to alch and the bot drains them richest fir
 | `items` | string[] | `["black_dragonhide_body","red_dragonhide_body","blue_dragonhide_body","dragonhide_body","black_dragonhide_chaps","red_dragonhide_chaps","blue_dragonhide_chaps","dragonhide_chaps","magic_longbow","steel_platebody","yew_longbow"]` | Items to alch — one of: Custom item (named below), Rune platebody (39,000), Rune 2h sword (38,400), Rune platelegs (38,400), Rune kiteshield (32,640), Rune chainbody (30,000), Rune sq shield (23,040), Rune full helm (21,120), Rune scimitar (15,360), Air battlestaff (9,300), Earth battlestaff (9,300), Fire battlestaff (9,300), Water battlestaff (9,300), Black d'hide body (8,088), Adamant platebody (7,680), Red d'hide body (6,738), Blue d'hide body (5,616), Green d'hide body (4,680), Battlestaff (4,200), Adamant 2h sword (3,840), Adamant platelegs (3,840), Black d'hide chaps (3,732), Adamant kiteshield (3,264), Mithril platebody (3,120), Red d'hide chaps (3,108), Blue d'hide chaps (2,592), Green d'hide chaps (2,340), Black platebody (2,304), Mithril 2h sword (1,560), Mithril platelegs (1,560), Magic longbow (1,536), Mithril kiteshield (1,326), Steel platebody (1,200), Yew longbow (768), Steel 2h sword (600), Steel platelegs (600), Maple longbow (384) |
 | `customItem` | string | `""` | Custom item |
 | `alchs` | number (1–1000) | `27` | Alchs per trip |
+
+### JiveEnchanter
+
+Stands at the nearest bank and enchants one jewel picked from the dropdown: wields a matching elemental staff when the bank has one, withdraws the jewels by id and the runes their casts need, casts one enchant every three ticks and banks the products. Stops honestly when the bank runs out of the jewel or a rune.
+
+- Tags: `magic`, `enchanting`, `jewellery`, `banking`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `jewel` | string | `"Sapphire ring"` | Jewel — one of: Sapphire ring, Sapphire necklace, Sapphire amulet, Emerald ring, Emerald amulet, Ruby ring, Ruby amulet, Diamond ring, Diamond amulet, Dragonstone ring, Dragonstone amulet |
 
 ## Mining
 

@@ -400,6 +400,14 @@ export const CASES: readonly Case[] = [
         note: 'seeds a mould, 30 gold bars and 30 gems in the Al Kharid bank with Crafting 99; passes once a full load has come back to the bank as jewels, a second trip has left, and the furnace has taken bars again'
     },
     {
+        id: 'jiveenchanter-live',
+        harness: 'jiveenchanter-live.ts',
+        covers: { scripts: ['JiveEnchanter'] },
+        status: 'unvetted',
+        budgetMin: 8,
+        note: 'seeds 60 jewels, the runes for 80 casts and a matching staff at Varrock West with Magic 70; passes once the staff is wielded, a full load has come back to the bank as products, a second trip has left and the casting has resumed'
+    },
+    {
         id: 'fishing-contest-244-live',
         harness: 'fishing-contest-244-live.ts',
         covers: { scripts: ['AIOQuester'] },

@@ -38,6 +38,7 @@ import GreenDragon, { SETTINGS as GREENDRAGON_SETTINGS } from './GreenDragon/Gre
 import FireGiant, { SETTINGS as FIREGIANT_SETTINGS } from './FireGiant/FireGiant.js';
 import JiveDragons, { SETTINGS as JIVEDRAGONS_SETTINGS } from './JiveDragons/JiveDragons.js';
 import JiveDemons, { SETTINGS as JIVEDEMONS_SETTINGS } from './JiveDemons/JiveDemons.js';
+import JiveEnchanter, { SETTINGS as JIVEENCHANTER_SETTINGS } from './JiveEnchanter/JiveEnchanter.js';
 import JiveKBD, { SETTINGS as JIVEKBD_SETTINGS } from './JiveKBD/JiveKBD.js';
 import JiveCrafting, { SETTINGS as JIVECRAFTING_SETTINGS } from './JiveCrafting/JiveCrafting.js';
 import JiveShilo, { SETTINGS as JIVESHILO_SETTINGS } from './JiveShilo/JiveShilo.js';
@@ -253,6 +254,15 @@ ScriptRegistry.register({
     tags: ['crafting', 'jewellery', 'al kharid', 'banking', 'afk'],
     settingsSchema: JIVECRAFTING_SETTINGS,
     create: () => new JiveCrafting()
+});
+
+ScriptRegistry.register({
+    name: 'JiveEnchanter',
+    description: 'Stands at the nearest bank and enchants one jewel picked from the dropdown: wields a matching elemental staff when the bank has one, withdraws the jewels by id and the runes their casts need, casts one enchant every three ticks and banks the products. Stops honestly when the bank runs out of the jewel or a rune.',
+    category: 'Magic',
+    tags: ['magic', 'enchanting', 'jewellery', 'banking', 'afk'],
+    settingsSchema: JIVEENCHANTER_SETTINGS,
+    create: () => new JiveEnchanter()
 });
 
 ScriptRegistry.register({
