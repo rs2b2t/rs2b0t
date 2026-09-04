@@ -9,7 +9,7 @@ import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { walkOpening } from '../../event/webwalk/walkOpening.js';
 import Tile from '../../geometry/Tile.js';
-import { jiveFrame } from '../../paint/jive.js';
+import { XpTracker, jiveFrame, paintLevels } from '../../paint/jive.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
@@ -28,6 +28,7 @@ const PANEL_WAIT_MS = 6000;
 const STALL_TICKS = 12;
 const CRAFT_HOLD_TICKS = 40;
 const BATCH: Record<string, number> = { 'Make 10': 10, 'Make 5': 5, Make: 1 };
+const CONTROL_ROWS = 2;
 
 export const SETTINGS: SettingsSchema = {
     product: { type: 'string', default: 'Sapphire ring', options: PRODUCT_OPTIONS, label: 'Product', help: 'which gold jewel to make this session' }
@@ -38,7 +39,7 @@ export default class JiveCrafting extends TaskBot {
 
     private status = 'starting';
     private startedAt = Date.now();
-    private xpAtStart = 0;
+    private xp = new XpTracker(['crafting'], Skills);
     private made = 0;
     private trips = 0;
     private banked = 0;
@@ -56,7 +57,7 @@ export default class JiveCrafting extends TaskBot {
         }
         this.jewel = jewel;
         this.startedAt = Date.now();
-        this.xpAtStart = Skills.xp('crafting');
+        this.xp.begin();
 
         const level = Skills.level('crafting');
         if (level < jewel.level) {
@@ -104,7 +105,6 @@ export default class JiveCrafting extends TaskBot {
             sections: ['Overview', 'Supplies']
         });
         const mins = (Date.now() - this.startedAt) / 60_000;
-        const xp = Skills.xp('crafting') - this.xpAtStart;
 
         if (page === 'Options') {
             p.statGrid([
@@ -114,10 +114,10 @@ export default class JiveCrafting extends TaskBot {
         } else if (section === 'Overview') {
             p.statGrid([
                 [{ text: `Runtime: ${fmtDuration(mins)}` }, { text: `Made: ${this.made}` }],
-                [{ text: `Xp/hr: ${mins > 0.5 ? `${((xp / mins) * 60 / 1000).toFixed(1)}k` : 'n/a'}` }, { text: `Trips: ${this.trips}` }],
-                [{ text: `Banked: ${this.banked}` }, { text: `Crafting: ${Skills.level('crafting')}` }]
+                [{ text: `Trips: ${this.trips}` }, { text: `Banked: ${this.banked}` }]
             ]);
             p.bar('Pack', Inventory.used() / PACK);
+            paintLevels(p, this.xp.progress(), mins, CONTROL_ROWS);
         } else {
             const pack = this.pack();
             p.statGrid([

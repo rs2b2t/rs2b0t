@@ -21,7 +21,7 @@ import { DeathRecovery } from '../../api/tasks/DeathRecovery.js';
 import { DROP_DB } from '../../data/dropdb.js';
 import { SPELL_DB } from '../../data/spelldb.js';
 import Tile from '../../geometry/Tile.js';
-import { jiveFrame } from '../../paint/jive.js';
+import { COMBAT_SKILLS, XpTracker, jiveFrame, paintLevels } from '../../paint/jive.js';
 import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
@@ -456,6 +456,7 @@ export default class JiveKBD extends TaskBot implements CombatHost, EntryHost {
 
     status = 'starting';
     startedAt = Date.now();
+    xp = new XpTracker(COMBAT_SKILLS, Skills);
     killsTotal = 0;
     bankTrips = 0;
     looted = 0;
@@ -499,6 +500,7 @@ export default class JiveKBD extends TaskBot implements CombatHost, EntryHost {
         VERBOSE = this.settings.str('logDetail', 'Normal') === 'Verbose';
 
         this.startedAt = Date.now();
+        this.xp.begin();
         this.safespotIdx = 0;
         this.lastDoseTick = null;
         lootSkip.clear();
@@ -705,7 +707,7 @@ export default class JiveKBD extends TaskBot implements CombatHost, EntryHost {
             script: 'JiveKBD',
             status: this.status,
             pages: ['Statistics', 'Options'],
-            sections: ['Overview', 'Combat', 'Loot']
+            sections: ['Overview', 'Combat', 'Levels', 'Loot']
         });
         const mins = (Date.now() - this.startedAt) / 60_000;
 
@@ -727,6 +729,8 @@ export default class JiveKBD extends TaskBot implements CombatHost, EntryHost {
                 [{ text: `Staff: ${WEAPON}` }, { text: `Spell: ${SPELL}` }],
                 [{ text: `Casts: ${castsLeft()}` }, { text: `Food: ${foodCount()}` }]
             ]);
+        } else if (section === 'Levels') {
+            paintLevels(p, this.xp.gains(), mins, CONTROL_ROWS);
         } else if (section === 'Loot') {
             const top = [...this.lootCounts.entries()]
                 .sort((a, b) => b[1] - a[1])

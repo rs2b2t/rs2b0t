@@ -1,7 +1,7 @@
 /** Live proof for JiveCrafting: bank at Al Kharid for the mould, the bars and the gems, make the jewel at the furnace, bank the load and go again.
  *  Why: the furnace panel, the use-on and the booth walk all drive a live client, so this run is the only proof the panel slot names match the table and the loop closes. */
 
-// Usage: HEADED=1 bun e2e/jivecrafting-live.ts [--base url] [--product 'Sapphire ring'] [--minutes n] [--no-deploy]
+// Usage: HEADED=1 bun e2e/jivecrafting-live.ts [--base url] [--product 'Sapphire ring'] [--level 99] [--minutes n] [--no-deploy]
 import { jewelByName } from '#/bot/scripts/JiveCrafting/logic.js';
 import { deployIsolatedClient, fail, launchBrowser, requireSim, setSettings, stopScript } from './lib/harness.js';
 import { cheatQuiet, clearChatDialogs, mainlandAccount, seedItemsToBank, startScript, teleTo } from './tutorial/harness.js';
@@ -11,6 +11,7 @@ interface Args {
     user: string;
     minutes: number;
     product: string;
+    level: number;
     deploy: boolean;
 }
 
@@ -20,6 +21,7 @@ function parse(argv: readonly string[]): Args {
         user: `jc${Date.now().toString(36).slice(-6)}`,
         minutes: 10,
         product: 'Sapphire ring',
+        level: 99,
         deploy: true
     };
     for (let i = 0; i < argv.length; i++) {
@@ -31,14 +33,17 @@ function parse(argv: readonly string[]): Args {
         else if (flag === '--user') { out.user = value; }
         else if (flag === '--minutes') { out.minutes = Number(value); }
         else if (flag === '--product') { out.product = value; }
+        else if (flag === '--level') { out.level = Number(value); }
     }
     if (!Number.isFinite(out.minutes) || out.minutes <= 0) { fail(`--minutes takes a positive number, got '${out.minutes}'`); }
+    if (!Number.isInteger(out.level) || out.level < 1 || out.level > 99) { fail(`--level takes 1 to 99, got '${out.level}'`); }
     return out;
 }
 
 const args = parse(process.argv.slice(2));
 const jewel = jewelByName(args.product);
 if (!jewel) { fail(`--product '${args.product}' is not a gold jewel the script knows`); }
+if (args.level < jewel.level) { fail(`${jewel.label} needs Crafting ${jewel.level}, --level gave ${args.level}`); }
 
 interface Point { x: number; z: number; level: number }
 
@@ -73,7 +78,7 @@ try {
     await mainlandAccount(page, args.base, args.user, client?.page);
     console.log(`mainland-ready as '${args.user}'`);
 
-    await cheatQuiet(page, 'setstat crafting 99', 1200);
+    await cheatQuiet(page, `setstat crafting ${args.level}`, 1200);
     await clearChatDialogs(page, 'crafting level-ups');
     await seedItemsToBank(
         page,
@@ -147,8 +152,8 @@ try {
         }
         console.log(`  t=${Math.round((Date.now() - t0) / 1000)}s pos=${fmt(last.pos)} bars=${last.bars} gems=${last.gems} ${jewel.item}=${last.product} xp=+${last.xp - first.xp} runner=${last.runner}`);
 
-        // Why: the overlay only paints while the script runs, so the proof frame is taken at the furnace once the first jewel exists.
-        if (!shotTaken && last.xp > first.xp) {
+        // Why: the overlay only paints while the script runs, and its rate and eta need half a minute, so the proof frame is taken once the first load is banked.
+        if (!shotTaken && fullLoads >= 1) {
             await page.screenshot({ path: SCREENSHOT });
             shotTaken = true;
         }

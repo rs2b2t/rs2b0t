@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { Paint } from '#/bot/paint/Paint.js';
-import { JIVE_BYLINE, jiveFrame } from '#/bot/paint/jive.js';
+import { JIVE_BYLINE, XpTracker, jiveFrame, paintLevels } from '#/bot/paint/jive.js';
+import { xpAtLevel } from '#/bot/paint/levelProgress.js';
 import { paintState, resolveDock } from '#/bot/paint/paintLogic.js';
 
 const PANEL = resolveDock('chatbox');
@@ -206,5 +207,110 @@ describe('rail inset', () => {
         p.end();
         expect(drawn.find(d => d.text === 'kills: 4')!.x).toBe(PANEL.x + PAD);
         expect(drawn.find(d => d.text === 'HP')!.x).toBe(PANEL.x + PAD);
+    });
+});
+
+describe('XpTracker', () => {
+    const table: Record<string, { xp: number; level: number }> = {
+        attack: { xp: 1000, level: 20 },
+        strength: { xp: 5000, level: 30 },
+        hitpoints: { xp: 2000, level: 25 }
+    };
+    const read = { xp: (s: string) => table[s]!.xp, level: (s: string) => table[s]!.level };
+
+    test('gains lists only the skills that moved since begin, biggest first', () => {
+        const t = new XpTracker(['attack', 'strength', 'hitpoints'], read);
+        t.begin();
+        expect(t.gains()).toEqual([]);
+        table.strength!.xp += 300;
+        table.hitpoints!.xp += 500;
+        expect(t.gains().map(g => [g.skill, g.gained])).toEqual([['hitpoints', 500], ['strength', 300]]);
+        table.strength!.xp -= 300;
+        table.hitpoints!.xp -= 500;
+    });
+
+    test('progress lists every tracked skill even at zero gain, with its level', () => {
+        const t = new XpTracker(['attack'], read);
+        t.begin();
+        expect(t.progress()).toEqual([{ skill: 'attack', level: 20, xp: 1000, gained: 0 }]);
+    });
+
+    test('before begin nothing counts as gained', () => {
+        const t = new XpTracker(['attack'], read);
+        expect(t.gains()).toEqual([]);
+    });
+});
+
+describe('paintLevels', () => {
+    beforeEach(() => paintState.reset());
+
+    const gain = (skill: string, level: number, gained: number) => ({ skill, level, xp: xpAtLevel(level) + 50, gained });
+
+    test('draws a bar and an eta row per skill, right of the rail', () => {
+        const { ctx, drawn } = recorder();
+        const out = jiveFrame(ctx, { script: 'JiveDragons', status: '', pages: ['Statistics'], sections: ['Overview', 'Levels'] });
+        paintLevels(out.frame, [gain('strength', 71, 4000), gain('hitpoints', 80, 1500)], 10, 2);
+        out.frame.end();
+        const texts = drawn.map(d => d.text);
+        expect(texts).toContain('Str 71');
+        expect(texts).toContain('HP 80');
+        expect(texts.filter(t => t.startsWith('eta '))).toHaveLength(2);
+        expect(drawn.find(d => d.text === 'Str 71')!.x).toBeGreaterThanOrEqual(PANEL.x + RAIL_W);
+        expect(drawn.find(d => d.text === 'HP 80')!.y).toBeGreaterThan(drawn.find(d => d.text === 'Str 71')!.y);
+    });
+
+    test('paints only as many skills as fit above the reserved rows', () => {
+        const { ctx, drawn } = recorder();
+        const out = jiveFrame(ctx, { script: 'JiveDragons', status: '', pages: ['Statistics'], sections: ['Overview', 'Levels'] });
+        const gains = ['attack', 'strength', 'defence', 'hitpoints', 'prayer'].map((s, i) => gain(s, 70, 5000 - i));
+        paintLevels(out.frame, gains, 10, 2);
+        expect(out.frame.rowsLeft()).toBeGreaterThanOrEqual(2);
+        out.frame.end();
+        const bars = drawn.filter(d => /^[A-Za-z]+ 70$/.test(d.text));
+        expect(bars).toHaveLength(3);
+        expect(bars.map(b => b.text)).toEqual(['Att 70', 'Str 70', 'Def 70']);
+    });
+
+    test('says so when nothing has gained yet', () => {
+        const { ctx, drawn } = recorder();
+        const out = jiveFrame(ctx, { script: 'JiveDragons', status: '', pages: ['Statistics'], sections: ['Overview', 'Levels'] });
+        paintLevels(out.frame, [], 10, 2);
+        out.frame.end();
+        expect(drawn.map(d => d.text)).toContain('no experience yet');
+    });
+});
+
+describe('bar label', () => {
+    beforeEach(() => paintState.reset());
+
+    function rectRecorder(): { ctx: CanvasRenderingContext2D; drawn: Drawn[]; rects: { x: number; w: number }[] } {
+        const base = recorder();
+        const rects: { x: number; w: number }[] = [];
+        (base.ctx as unknown as { fillRect: (x: number, y: number, w: number, h: number) => void }).fillRect = (x, _y, w) => {
+            rects.push({ x, w });
+        };
+        return { ctx: base.ctx, drawn: base.drawn, rects };
+    }
+
+    test('a label wider than the slot pushes the bar right instead of running under it', () => {
+        const { ctx, drawn, rects } = rectRecorder();
+        const p = Paint.begin(ctx, { dock: 'chatbox' });
+        p.title('x');
+        const before = rects.length;
+        p.bar('Range 70', 0.5);
+        p.end();
+        const label = drawn.find(d => d.text === 'Range 70')!;
+        const track = rects[before]!;
+        expect(track.x).toBeGreaterThanOrEqual(label.x + 'Range 70'.length * CHAR_W);
+    });
+
+    test('a short label keeps the fixed slot, so bars stay aligned', () => {
+        const { ctx, drawn, rects } = rectRecorder();
+        const p = Paint.begin(ctx, { dock: 'chatbox' });
+        p.title('x');
+        const before = rects.length;
+        p.bar('HP', 0.5);
+        p.end();
+        expect(rects[before]!.x).toBe(drawn.find(d => d.text === 'HP')!.x + 48);
     });
 });

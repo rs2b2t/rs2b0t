@@ -1,21 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import {
-    PaintState,
-    WHEEL_ROWS,
-    cellWidths,
-    clipText,
-    gridRows,
-    hitRegion,
-    listScroll,
-    paintCols,
-    railRows,
-    resolveDock,
-    statColumns,
-    stripSegments,
-    toCanvasPoint,
-    wrapText,
-    type Region
-} from '#/bot/paint/paintLogic.js';
+import { PaintState, WHEEL_ROWS, cellWidths, clipText, gridRows, hitRegion, listScroll, paintCols, paintSkillShort, railRows, resolveDock, statColumns, stripSegments, toCanvasPoint, type Region, wrapText } from '#/bot/paint/paintLogic.js';
 
 describe('toCanvasPoint', () => {
     test('maps CSS pixels to 765x503 logical space via the bounding rect', () => {
@@ -274,5 +258,18 @@ describe('statColumns', () => {
 
     test('a rail wider than the panel yields no columns rather than negatives', () => {
         expect(statColumns(80, 100, 8, 2)).toEqual([]);
+    });
+});
+
+describe('paintSkillShort for level bars', () => {
+    test('shortens every combat and skilling name the jive scripts train to fit a bar label', () => {
+        const short: Record<string, string> = {
+            attack: 'Att', strength: 'Str', defence: 'Def', hitpoints: 'HP', ranged: 'Range', magic: 'Mage', prayer: 'Pray',
+            crafting: 'Craft', smithing: 'Smith', herblore: 'Herb', agility: 'Agil', thieving: 'Thief', fletching: 'Fletch', runecraft: 'RC'
+        };
+        for (const [skill, label] of Object.entries(short)) {
+            expect(paintSkillShort(skill)).toBe(label);
+        }
+        expect(paintSkillShort('slayer')).toBe('slayer');
     });
 });

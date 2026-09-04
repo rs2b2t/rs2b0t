@@ -22,7 +22,7 @@ import { DeathRecovery } from '../../api/tasks/DeathRecovery.js';
 import { DROP_DB } from '../../data/dropdb.js';
 import { SPELL_DB } from '../../data/spelldb.js';
 import Tile from '../../geometry/Tile.js';
-import { jiveFrame } from '../../paint/jive.js';
+import { COMBAT_SKILLS, XpTracker, jiveFrame, paintLevels } from '../../paint/jive.js';
 import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
@@ -500,6 +500,7 @@ export default class JiveDemons extends TaskBot implements CombatHost {
 
     status = 'starting';
     startedAt = Date.now();
+    xp = new XpTracker(COMBAT_SKILLS, Skills);
     killsTotal = 0;
     bankTrips = 0;
     looted = 0;
@@ -550,6 +551,7 @@ export default class JiveDemons extends TaskBot implements CombatHost {
         VERBOSE = this.settings.str('logDetail', 'Normal') === 'Verbose';
 
         this.startedAt = Date.now();
+        this.xp.begin();
         this.safespotIdx = 0;
         lootSkip.clear();
         this.keyState = SITE.keyItem === null ? 'held' : keyStatus(Inventory.countById(SITE.keyItem.id), Bank.countById(SITE.keyItem.id));
@@ -741,7 +743,7 @@ export default class JiveDemons extends TaskBot implements CombatHost {
             script: 'JiveDemons',
             status: this.status,
             pages: ['Statistics', 'Options'],
-            sections: ['Overview', 'Combat', 'Loot']
+            sections: ['Overview', 'Combat', 'Levels', 'Loot']
         });
         const mins = (Date.now() - this.startedAt) / 60_000;
 
@@ -765,6 +767,8 @@ export default class JiveDemons extends TaskBot implements CombatHost {
                 [{ text: `Style: ${STYLE}` }, { text: `Weapon: ${WEAPON}` }],
                 [{ text: supply }, { text: `Food: ${foodCount()}` }]
             ]);
+        } else if (section === 'Levels') {
+            paintLevels(p, this.xp.gains(), mins, CONTROL_ROWS);
         } else if (section === 'Loot') {
             // Why: a p.list would draw from the panel edge and paint over the rail labels, so the drops go through the grid like every other row.
             const top = [...this.lootCounts.entries()]

@@ -274,6 +274,34 @@ export function paintSkillShort(skill: string): string {
             return 'Cook';
         case 'mining':
             return 'Mine';
+        case 'attack':
+            return 'Att';
+        case 'strength':
+            return 'Str';
+        case 'defence':
+            return 'Def';
+        case 'hitpoints':
+            return 'HP';
+        case 'ranged':
+            return 'Range';
+        case 'magic':
+            return 'Mage';
+        case 'prayer':
+            return 'Pray';
+        case 'crafting':
+            return 'Craft';
+        case 'smithing':
+            return 'Smith';
+        case 'herblore':
+            return 'Herb';
+        case 'agility':
+            return 'Agil';
+        case 'thieving':
+            return 'Thief';
+        case 'fletching':
+            return 'Fletch';
+        case 'runecraft':
+            return 'RC';
         default:
             return skill;
     }

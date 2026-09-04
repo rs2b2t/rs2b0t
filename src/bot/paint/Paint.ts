@@ -375,7 +375,7 @@ export class PaintFrame {
             return;
         }
         const f = Math.max(0, Math.min(1, fraction));
-        const labelW = 48;
+        const labelW = Math.max(48, Math.ceil(this.ctx.measureText(label).width) + 6);
         const barX = this.panel.x + this.bodyX + labelW;
         const barW = this.panel.w - PAD - this.bodyX - labelW - 42;
         const barY = this.cursorY + 3;

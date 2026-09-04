@@ -12,7 +12,7 @@ import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../geometry/Tile.js';
-import { jiveFrame } from '../../paint/jive.js';
+import { XpTracker, jiveFrame, paintLevels } from '../../paint/jive.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
@@ -29,6 +29,7 @@ const LIVE_STAND_STEPS = 300;
 const STAND_WALK_MS = 30_000;
 const SCAN_WALK_MS = 45_000;
 const HUT_WALK_MS = 60_000;
+const CONTROL_ROWS = 2;
 
 export const SETTINGS: SettingsSchema = {
     hutStand: { type: 'tile', default: HUT_STAND, label: "Fernahei's counter tile (x,z)" },
@@ -40,7 +41,7 @@ export default class JiveShilo extends TaskBot {
 
     private status = 'starting';
     private startedAt = Date.now();
-    private xpAtStart = 0;
+    private xp = new XpTracker(['fishing'], Skills);
     private caught = 0;
     private trips = 0;
     private sold = 0;
@@ -58,7 +59,7 @@ export default class JiveShilo extends TaskBot {
         this.hutStand = this.settings.tile('hutStand', HUT_STAND);
         this.feathersTarget = this.settings.num('feathersTarget', 0);
         this.startedAt = Date.now();
-        this.xpAtStart = Skills.xp('fishing');
+        this.xp.begin();
 
         const level = Skills.level('fishing');
         if (level < FLY_LEVEL) {
@@ -118,7 +119,6 @@ export default class JiveShilo extends TaskBot {
             sections: ['Overview', 'Haul']
         });
         const mins = (Date.now() - this.startedAt) / 60_000;
-        const xp = Skills.xp('fishing') - this.xpAtStart;
 
         if (page === 'Options') {
             p.statGrid([
@@ -128,10 +128,11 @@ export default class JiveShilo extends TaskBot {
         } else if (section === 'Overview') {
             p.statGrid([
                 [{ text: `Runtime: ${fmtDuration(mins)}` }, { text: `Caught: ${this.caught}` }],
-                [{ text: `Xp/hr: ${mins > 0.5 ? `${((xp / mins) * 60 / 1000).toFixed(1)}k` : 'n/a'}` }, { text: `Trips: ${this.trips}` }],
+                [{ text: `Fish/hr: ${mins > 0.5 ? Math.round((this.caught / mins) * 60) : 'n/a'}` }, { text: `Trips: ${this.trips}` }],
                 [{ text: `Feathers: ${Inventory.count(FEATHER)}` }, { text: `Coins: ${Inventory.count('Coins')}` }]
             ]);
             p.bar('Pack', Inventory.used() / 28);
+            paintLevels(p, this.xp.progress(), mins, CONTROL_ROWS);
         } else {
             const lines = [...this.soldByName.entries()].map(([name, n]) => ({ text: `${n}x ${name}` }));
             p.statGrid([

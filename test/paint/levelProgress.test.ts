@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { etaHours, levelProgress, xpAtLevel } from '#/bot/paint/levelProgress.js';
+import { etaHours, levelProgress, levelRow, xpAtLevel } from '#/bot/paint/levelProgress.js';
+import { fmtDuration } from '#/bot/paint/paintLogic.js';
 
 describe('xpAtLevel', () => {
     // Pinned against the published curve, a generated table is only trustworthy
@@ -54,5 +55,37 @@ describe('etaHours', () => {
     test('is null when stalled or already there', () => {
         expect(etaHours(100_000, 0)).toBeNull();
         expect(etaHours(0, 50_000)).toBeNull();
+    });
+});
+
+describe('levelRow', () => {
+    const gain = { skill: 'crafting', level: 61, xp: xpAtLevel(61) + 10_000, gained: 4_000 };
+
+    test('labels the bar with the short skill name and the level', () => {
+        const row = levelRow(gain, 10);
+        expect(row.label).toBe('Craft 61');
+        expect(row.fraction).toBeCloseTo(10_000 / (xpAtLevel(62) - xpAtLevel(61)), 5);
+    });
+
+    test('reads the rate, the gap and the eta off the gain and the minutes run', () => {
+        const row = levelRow(gain, 10);
+        expect(row.cells[0]).toBe('24.0k/hr');
+        expect(row.cells[1]).toBe(`${(xpAtLevel(62) - xpAtLevel(61) - 10_000).toLocaleString()} to go`);
+        const hours = (xpAtLevel(62) - xpAtLevel(61) - 10_000) / 24_000;
+        expect(row.cells[2]).toBe(`eta ${fmtDuration(hours * 60)}`);
+    });
+
+    test('shows n/a for the rate and the eta until half a minute has run or while nothing is gained', () => {
+        expect(levelRow(gain, 0.2).cells[0]).toBe('xp/hr n/a');
+        expect(levelRow(gain, 0.2).cells[2]).toBe('eta n/a');
+        expect(levelRow({ ...gain, gained: 0 }, 10).cells[2]).toBe('eta n/a');
+    });
+
+    test('a maxed skill reads as full with nothing to go', () => {
+        const row = levelRow({ skill: 'fishing', level: 99, xp: xpAtLevel(99), gained: 100 }, 10);
+        expect(row.label).toBe('Fish 99');
+        expect(row.fraction).toBe(1);
+        expect(row.cells[1]).toBe('maxed');
+        expect(row.cells[2]).toBe('');
     });
 });
