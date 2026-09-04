@@ -394,7 +394,8 @@ export const CASES: readonly Case[] = [
         id: 'jivecrafting-live',
         harness: 'jivecrafting-live.ts',
         covers: { scripts: ['JiveCrafting'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: '6bba87ec',
         budgetMin: 10,
         note: 'seeds a mould, 30 gold bars and 30 gems in the Al Kharid bank with Crafting 99; passes once a full load has come back to the bank as jewels, a second trip has left, and the furnace has taken bars again'
     },
