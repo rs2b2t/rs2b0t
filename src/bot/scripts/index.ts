@@ -39,6 +39,7 @@ import FireGiant, { SETTINGS as FIREGIANT_SETTINGS } from './FireGiant/FireGiant
 import JiveDragons, { SETTINGS as JIVEDRAGONS_SETTINGS } from './JiveDragons/JiveDragons.js';
 import JiveDemons, { SETTINGS as JIVEDEMONS_SETTINGS } from './JiveDemons/JiveDemons.js';
 import JiveKBD, { SETTINGS as JIVEKBD_SETTINGS } from './JiveKBD/JiveKBD.js';
+import JiveCrafting, { SETTINGS as JIVECRAFTING_SETTINGS } from './JiveCrafting/JiveCrafting.js';
 import JiveShilo, { SETTINGS as JIVESHILO_SETTINGS } from './JiveShilo/JiveShilo.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab/RockCrab.js';
 import RangingGuild, { RANGING_GUILD_SETTINGS } from './RangingGuild/RangingGuild.js';
@@ -243,6 +244,15 @@ ScriptRegistry.register({
     tags: ['fishing', 'shilo', 'shopping', 'feathers', 'members', 'afk'],
     settingsSchema: JIVESHILO_SETTINGS,
     create: () => new JiveShilo()
+});
+
+ScriptRegistry.register({
+    name: 'JiveCrafting',
+    description: 'Makes one gold jewel picked from the dropdown at the Al Kharid furnace: banks for the mould, the gold bars and the gems, uses a bar on the furnace, clicks the biggest Make button that fits the load and walks back with it. Stops honestly when the bank runs out of any of the three.',
+    category: 'Crafting',
+    tags: ['crafting', 'jewellery', 'al kharid', 'banking', 'afk'],
+    settingsSchema: JIVECRAFTING_SETTINGS,
+    create: () => new JiveCrafting()
 });
 
 ScriptRegistry.register({

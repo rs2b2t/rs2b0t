@@ -391,6 +391,14 @@ export const CASES: readonly Case[] = [
         note: 'seeds Shilo Village complete, Fishing 99 and 60gp on the bank; passes once the rod is bought, fish are caught along the river sweep, a trip has sold them for feathers and the casting resumes'
     },
     {
+        id: 'jivecrafting-live',
+        harness: 'jivecrafting-live.ts',
+        covers: { scripts: ['JiveCrafting'] },
+        status: 'unvetted',
+        budgetMin: 10,
+        note: 'seeds a mould, 30 gold bars and 30 gems in the Al Kharid bank with Crafting 99; passes once a full load has come back to the bank as jewels, a second trip has left, and the furnace has taken bars again'
+    },
+    {
         id: 'fishing-contest-244-live',
         harness: 'fishing-contest-244-live.ts',
         covers: { scripts: ['AIOQuester'] },

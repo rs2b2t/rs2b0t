@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 65. Categories: 20.
+- Scripts: 66. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -14,7 +14,7 @@
 - [Agility](#agility) — 4
 - [Combat](#combat) — 15
 - [Cooking](#cooking) — 1
-- [Crafting](#crafting) — 7
+- [Crafting](#crafting) — 8
 - [Firemaking](#firemaking) — 1
 - [Fishing](#fishing) — 2
 - [Fletching](#fletching) — 2
@@ -596,6 +596,16 @@ Banks at the nearest bank, withdraws uncut gems and a chisel, cuts every gem you
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `gems` | string[] | `[]` | Gems to cut — one of: Sapphire, Emerald, Ruby, Diamond, Dragonstone, Opal, Jade, Red topaz |
+
+### JiveCrafting
+
+Makes one gold jewel picked from the dropdown at the Al Kharid furnace: banks for the mould, the gold bars and the gems, uses a bar on the furnace, clicks the biggest Make button that fits the load and walks back with it. Stops honestly when the bank runs out of any of the three.
+
+- Tags: `crafting`, `jewellery`, `al kharid`, `banking`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `product` | string | `"Sapphire ring"` | Product — one of: Gold ring, Sapphire ring, Emerald ring, Ruby ring, Diamond ring, Dragonstone ring, Gold necklace, Sapphire necklace, Emerald necklace, Ruby necklace, Diamond necklace, Dragonstone necklace, Gold amulet, Sapphire amulet, Emerald amulet, Ruby amulet, Diamond amulet, Dragonstone amulet |
 
 ### LeatherCrafter
 
