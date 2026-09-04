@@ -1,5 +1,5 @@
-/** Live proof for JiveMarketDumper: a MarketMaker at Seers bank with a two-row book, a customer whose bank holds both rows and something the book does not buy.
- *  Why: the window, the maker's pricing and the notes withdrawal all drive two live clients, so this run is the only proof the bank empties into the maker at the book price and the run stops when nothing it buys is left. */
+/** Live proof for JiveMarketDumper: a MarketMaker at Seers bank on a two-row book, a customer whose bank holds both rows and two chainbodies the book does not price.
+ *  Why: the window, the maker's pricing and the notes withdrawal all drive two live clients, so this run is the only proof a bank empties into the maker in one pile, the unpriced items ride along, and the run stops with the bank bare. */
 
 // Usage: HEADED=1 bun e2e/jivemarketdumper-live.ts [--base url] [--minutes n] [--no-deploy]
 import type { Page } from 'playwright-core';
@@ -42,8 +42,9 @@ const YEW_BUY = 288;
 const IRON_BUY = 18;
 const SEED_YEWS = 500;
 const SEED_IRON = 1000;
-/** Everything the book buys, at the buy price: two piles under the cap, then nothing left. */
-const EXPECTED_GP = SEED_YEWS * YEW_BUY + SEED_IRON * IRON_BUY;
+/** The stock is worth more than the maker can pay, so it bids its ceiling for the pile and the dump takes it. */
+const PILE_WORTH = SEED_YEWS * YEW_BUY + SEED_IRON * IRON_BUY;
+const EXPECTED_GP = CAP;
 const POLL_MS = 2000;
 const SCREENSHOT = 'docs/e2e/jivemarketdumper-live.png';
 
@@ -57,7 +58,7 @@ const BOOK = JSON.stringify([{
     ]
 }]);
 
-const SALE = /^\[dumper\] sold (.+?) for ([\d,]+)gp$/;
+const SALE = /\[dumper\] dumped (.+?) for ([\d,]+)gp$/;
 
 interface Snapshot {
     pos: Point | null;
@@ -140,12 +141,8 @@ try {
     // Why: not in the book, so it has to stay in the bank while the run still ends with "nothing it buys".
     await cheatQuiet(custPage, '~bankitem rune_chainbody 2');
     await teleArrive(custPage, SPOT);
-    await writeStorage(custPage, {
-        'rs2b0t:set:PriceBooks:books': BOOK,
-        'rs2b0t:set:JiveMarketDumper:maker': MAKER,
-        'rs2b0t:set:JiveMarketDumper:priceBook': 'e2e',
-        'rs2b0t:set:JiveMarketDumper:maxPerTrade': String(CAP)
-    });
+    // Why: the dumper is given the maker's name and nothing else; it never reads a price book.
+    await writeStorage(custPage, { 'rs2b0t:set:JiveMarketDumper:maker': MAKER });
 
     await startScript(makerPage, 'MarketMaker');
     console.log('MarketMaker started, waiting for its ledger and coin float');
@@ -182,6 +179,7 @@ try {
     let sales = 0;
     let gp = 0;
     let stopReason = '';
+    let refusedStop = '';
     let shotTaken = false;
 
     while (Date.now() < deadline) {
@@ -196,8 +194,11 @@ try {
                 gp += Number(sale[2]!.replace(/,/g, ''));
             }
             // Why: the runner prefixes its own stop line, so the reason is matched anywhere in the line rather than at its start.
-            if (/\[dumper\] the bank holds nothing/.test(line.msg)) {
+            if (/\[dumper\] the bank holds nothing tradeable/.test(line.msg)) {
                 stopReason = line.msg;
+            }
+            if (/\[dumper\] all that is left is/.test(line.msg)) {
+                refusedStop = line.msg;
             }
         }
         if (fresh.length > 0) {
@@ -226,16 +227,19 @@ try {
     console.log(`final: sales=${sales} gp=${gp} expected=${EXPECTED_GP} runner=${last.runner}`);
 
     const tail = async (): Promise<string> => `customer: ${last.logs.slice(-6).map(l => l.msg).join(' | ')}\n  maker: ${(await runnerLogs(makerPage, 8)).join(' | ')}`;
-    if (sales < 2) {
-        fail(`only ${sales} sale(s), so the bank never emptied in piles under the cap: ${await tail()}`);
+    if (sales < 1) {
+        fail(`no pile was ever dumped: ${await tail()}`);
     }
     if (gp !== EXPECTED_GP) {
-        fail(`took ${gp}gp for stock worth ${EXPECTED_GP}gp at the book's buy prices: ${await tail()}`);
+        fail(`took ${gp}gp, and the maker's ceiling on stock worth ${PILE_WORTH}gp is ${EXPECTED_GP}gp: ${await tail()}`);
+    }
+    if (refusedStop !== '') {
+        fail(`the chainbodies the book does not price were left banked instead of riding along: ${refusedStop}`);
     }
     if (last.runner !== 'stopped' || stopReason === '') {
-        fail(`the run did not stop on an empty bank: ${await tail()}`);
+        fail(`the run did not stop on a bare bank: ${await tail()}`);
     }
-    console.log(`PASS, ${sales} sales took ${gp.toLocaleString()}gp for every yew log and iron ore in the bank, then stopped: ${stopReason.replace(/^\[dumper\] /, '')}`);
+    console.log(`PASS, ${sales} pile(s) took ${gp.toLocaleString()}gp and emptied the bank, unpriced chainbodies included, then stopped: ${stopReason.replace(/^.*\[dumper\] /, '')}`);
 } finally {
     client?.cleanup();
     await browser.close();

@@ -4,13 +4,17 @@ import { SETTINGS } from '#/bot/scripts/JiveMarketDumper/JiveMarketDumper.js';
 import '#/bot/scripts/index.js';
 
 describe('JiveMarketDumper settings', () => {
-    test('names the maker, takes the maker\'s book from the price books store, and caps a trade at the default float', () => {
+    test('the maker is the only thing to set', () => {
+        expect(Object.keys(SETTINGS)).toEqual(['maker']);
         expect(SETTINGS.maker!.default).toBe('');
-        expect(SETTINGS.priceBook!.optionsFrom).toBe('priceBooks');
-        expect(SETTINGS.maxPerTrade!.default).toBe(200_000);
     });
 
-    test('no bank or stand tile is offered, since the script starts beside the maker at its bank', () => {
+    test('no price book and no trade cap, since the dump takes whatever the maker pays', () => {
+        expect(SETTINGS.priceBook).toBeUndefined();
+        expect(SETTINGS.maxPerTrade).toBeUndefined();
+    });
+
+    test('no bank or stand tile, since it starts beside the maker at its bank', () => {
         expect(SETTINGS.bankStand).toBeUndefined();
         expect(SETTINGS.spot).toBeUndefined();
     });

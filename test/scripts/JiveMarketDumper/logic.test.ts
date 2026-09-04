@@ -1,8 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { ObjRecord } from '#/bot/adapter/ClientAdapter.js';
 import { buildCatalog } from '#/bot/api/market/catalog.js';
-import type { PriceBook } from '#/bot/api/market/priceBook.js';
-import { COINS, PACK, acceptAction, adapt, decide, heldWithOffer, parseMakerLine, pileValue, planPile, sellables, type Sellable } from '#/bot/scripts/JiveMarketDumper/logic.js';
+import { COINS, PACK, acceptAction, decide, dumpables, heldWithOffer, planPile, type Dumpable } from '#/bot/scripts/JiveMarketDumper/logic.js';
 
 function rec(id: number, name: string, over: Partial<ObjRecord> = {}): ObjRecord {
     return { id, name, cost: 1, stackable: false, members: false, equippable: false, certlink: -1, certtemplate: -1, ...over };
@@ -13,8 +12,8 @@ const IRON_NOTE = 441;
 const YEW = 1515;
 const YEW_NOTE = 1516;
 const SCIM = 1333;
-const JUNK = 1127;
-const DUST = 2000;
+/** Untradeable, the one thing a dump has to leave behind. */
+const CAPE = 1019;
 
 const CAT = buildCatalog([
     rec(IRON, 'Iron ore'),
@@ -23,98 +22,55 @@ const CAT = buildCatalog([
     rec(YEW_NOTE, 'Yew logs', { certlink: YEW, certtemplate: 799, stackable: true }),
     rec(COINS, 'Coins', { stackable: true }),
     rec(SCIM, 'Rune scimitar'),
-    rec(JUNK, 'Rune platebody'),
-    rec(DUST, 'Chocolate dust')
+    rec(CAPE, 'Cape')
 ]);
 
-const BOOK: PriceBook = {
-    name: 'e2e',
-    margin: 20,
-    maxTradeValue: 100_000,
-    rows: [
-        { id: IRON, mid: 20, cap: 4_000, buying: true, selling: true },
-        { id: YEW, mid: 320, cap: 2_000, buying: true, selling: true },
-        { id: SCIM, mid: 15_000, cap: 20, buying: true, selling: true },
-        { id: DUST, mid: 50, cap: 100, buying: false, selling: true }
-    ]
-};
-
-describe('sellables', () => {
-    test('keeps the rows the book buys, priced at the buy side, most valuable line first', () => {
-        const list = sellables([{ id: IRON, count: 300 }, { id: YEW, count: 100 }, { id: COINS, count: 5000 }, { id: JUNK, count: 3 }, { id: DUST, count: 40 }], BOOK, CAT);
-        expect(list.map(s => [s.name, s.count, s.each])).toEqual([['Yew logs', 100, 288], ['Iron ore', 300, 18]]);
+describe('dumpables', () => {
+    test('takes every tradeable item, whatever the maker pays for it', () => {
+        const list = dumpables([{ id: YEW, count: 500 }, { id: IRON, count: 1000 }, { id: SCIM, count: 2 }], CAT);
+        expect(list.map(d => [d.displayName, d.count])).toEqual([['Iron ore', 1000], ['Rune scimitar', 2], ['Yew logs', 500]]);
     });
 
-    test('folds noted pack stacks onto the unnoted row and reports the noted id to withdraw as', () => {
-        const list = sellables([{ id: IRON_NOTE, count: 50 }, { id: IRON, count: 2 }], BOOK, CAT);
-        expect(list).toHaveLength(1);
-        expect(list[0]).toMatchObject({ id: IRON, notedId: IRON_NOTE, count: 52 });
+    test('leaves coins and anything the engine will not trade', () => {
+        expect(dumpables([{ id: COINS, count: 50_000 }, { id: YEW, count: 1 }], CAT).map(d => d.displayName)).toEqual(['Yew logs']);
     });
 
-    test('an item with no noted form is still sellable, one slot a unit', () => {
-        const [scim] = sellables([{ id: SCIM, count: 3 }], BOOK, CAT);
-        expect(scim).toMatchObject({ id: SCIM, notedId: null, count: 3, each: 13_500 });
+    test('folds a noted bank row onto its item and says what a note-mode withdrawal lands as', () => {
+        const list = dumpables([{ id: IRON_NOTE, count: 50 }, { id: IRON, count: 2 }], CAT);
+        expect(list).toEqual([{ id: IRON, name: 'Iron ore', displayName: 'Iron ore', notedId: IRON_NOTE, count: 52 }]);
+    });
+
+    test('an item with no noted form still goes, one slot a unit', () => {
+        expect(dumpables([{ id: SCIM, count: 3 }], CAT)[0]).toMatchObject({ id: SCIM, notedId: null, count: 3 });
     });
 });
 
 describe('planPile', () => {
-    const list: Sellable[] = [
-        { id: YEW, name: 'Yew logs', displayName: 'Yew logs', notedId: YEW_NOTE, count: 500, each: 288 },
-        { id: IRON, name: 'Iron ore', displayName: 'Iron ore', notedId: IRON_NOTE, count: 1000, each: 18 }
-    ];
+    const yews: Dumpable = { id: YEW, name: 'Yew logs', displayName: 'Yew logs', notedId: YEW_NOTE, count: 500 };
+    const iron: Dumpable = { id: IRON, name: 'Iron ore', displayName: 'Iron ore', notedId: IRON_NOTE, count: 1000 };
+    const scims: Dumpable = { id: SCIM, name: 'Rune scimitar', displayName: 'Rune scimitar', notedId: null, count: 40 };
 
-    test('fills the coin cap from the top of the list, taking a partial stack when a whole one is too dear', () => {
-        const pile = planPile(list, 100_000);
-        expect(pile.map(l => [l.name, l.count])).toEqual([['Yew logs', 347], ['Iron ore', 3]]);
-        expect(pileValue(pile)).toBe(347 * 288 + 3 * 18);
+    test('a noted stack is one slot however deep, so a whole bank of them rides in one trip', () => {
+        expect(planPile([yews, iron])).toEqual([yews, iron]);
     });
 
-    test('a noted line takes one slot however big, an unnoted line one a unit', () => {
-        const scims: Sellable[] = [{ id: SCIM, name: 'Rune scimitar', displayName: 'Rune scimitar', notedId: null, count: 40, each: 13_500 }];
-        expect(planPile(scims, 10_000_000, 5)).toEqual([{ ...scims[0], count: 5 }]);
-        expect(planPile(list, 10_000_000, 1)).toEqual([{ ...list[0] }]);
+    test('an unnotable item takes a slot a unit and is cut to what fits', () => {
+        expect(planPile([scims], PACK)).toEqual([{ ...scims, count: PACK }]);
+        expect(planPile([yews, scims], 4)).toEqual([yews, { ...scims, count: 3 }]);
     });
 
-    test('is empty when the cap buys nothing or the pack has no room', () => {
-        expect(planPile(list, 10)).toEqual([]);
-        expect(planPile(list, 100_000, 0)).toEqual([]);
-    });
-
-    test('never exceeds the pack', () => {
-        const many: Sellable[] = Array.from({ length: 40 }, (_, i) => ({ id: 3000 + i, name: `Thing ${i}`, displayName: `Thing ${i}`, notedId: 4000 + i, count: 1, each: 5 }));
-        expect(planPile(many, 1_000_000)).toHaveLength(PACK);
-    });
-});
-
-describe('parseMakerLine', () => {
-    test('reads the ceiling the maker names and the items it will not count', () => {
-        expect(parseMakerLine('max I can offer is 100,000gp per trade')).toEqual({ kind: 'ceiling', gp: 100_000 });
-        expect(parseMakerLine('3 Rune platebody: not counted, keep them.')).toEqual({ kind: 'ignored', count: 3, name: 'Rune platebody' });
-        expect(parseMakerLine('Iron ore x100 = 1,800. Total 1,800gp.')).toBeNull();
-        expect(parseMakerLine('Thanks mc. Pleasure doing business.')).toBeNull();
+    test('stops at the pack, and takes nothing with no room', () => {
+        const many: Dumpable[] = Array.from({ length: 40 }, (_, i) => ({ id: 3000 + i, name: `Thing ${i}`, displayName: `Thing ${i}`, notedId: 4000 + i, count: 1 }));
+        expect(planPile(many)).toHaveLength(PACK);
+        expect(planPile([yews], 0)).toEqual([]);
     });
 });
 
 describe('decide', () => {
     test('owns an open window first, then goes to the maker with a pile, then banks', () => {
-        expect(decide({ tradeActive: true, pileValue: 0 })).toEqual({ kind: 'trade' });
-        expect(decide({ tradeActive: false, pileValue: 500 })).toEqual({ kind: 'approach' });
-        expect(decide({ tradeActive: false, pileValue: 0 })).toEqual({ kind: 'bank' });
-    });
-});
-
-describe('adapt', () => {
-    test('a named ceiling becomes the cap and named items are dropped', () => {
-        const out = adapt({ cap: 200_000, offered: 100_000, notes: [{ kind: 'ceiling', gp: 100_000 }, { kind: 'ignored', count: 3, name: 'Rune platebody' }] });
-        expect(out).toEqual({ cap: 100_000, drop: ['Rune platebody'], dropAll: false });
-    });
-
-    test('a short offer with no words lowers the cap to what was offered', () => {
-        expect(adapt({ cap: 200_000, offered: 62_000, notes: [] })).toEqual({ cap: 62_000, drop: [], dropAll: false });
-    });
-
-    test('nothing offered and nothing said drops the whole pile', () => {
-        expect(adapt({ cap: 200_000, offered: 0, notes: [] })).toEqual({ cap: 200_000, drop: [], dropAll: true });
+        expect(decide({ tradeActive: true, pile: 0 })).toEqual({ kind: 'trade' });
+        expect(decide({ tradeActive: false, pile: 3 })).toEqual({ kind: 'approach' });
+        expect(decide({ tradeActive: false, pile: 0 })).toEqual({ kind: 'bank' });
     });
 });
 

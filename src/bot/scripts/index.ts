@@ -268,7 +268,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'JiveMarketDumper',
-    description: "Sells the bank to a running MarketMaker: reads the maker's order book, withdraws what it buys as notes in piles under the coin cap, trades each pile to the maker beside the bank and accepts only when the coins cover the book price, banking the payment between trips. Stops honestly when the bank holds nothing the maker buys.",
+    description: 'Dumps a bank to a running MarketMaker: withdraws every tradeable item as notes, puts the pile up in one window and takes whatever the maker bids, banking the coins between trips. It needs no price book, since anything the maker will not pay for rides along with what it does. Stops when the bank is empty or the maker turns down all that is left.',
     category: 'Money making',
     tags: ['trading', 'bank', 'market', 'afk'],
     settingsSchema: JIVEMARKETDUMPER_SETTINGS,
