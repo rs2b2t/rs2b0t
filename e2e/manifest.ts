@@ -413,9 +413,9 @@ export const CASES: readonly Case[] = [
         harness: 'jivemarketdumper-live.ts',
         covers: { scripts: ['JiveMarketDumper', 'MarketMaker'] },
         status: 'vetted',
-        provenAt: '200e8523',
+        provenAt: 'b93dc065',
         budgetMin: 8,
-        note: 'a MarketMaker on a two-row book at Seers with a 200k float, a customer whose bank holds 500 yews, 1000 iron and two chainbodies; passes when two piles under the 100k cap sell for the full book price and the run stops on nothing left it buys'
+        note: 'a MarketMaker on a two-row book at Seers with a 200k float, a customer whose bank holds 500 yews, 1000 iron and two chainbodies the book does not price; passes when one pile takes the maker ceiling of 100k, the chainbodies ride along unpriced and the bank ends bare'
     },
     {
         id: 'fishing-contest-244-live',
