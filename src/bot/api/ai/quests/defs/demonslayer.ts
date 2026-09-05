@@ -15,7 +15,6 @@ import { executeStep } from '../exec/steps.js';
 import { gpShort } from '../engine/provisioning.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { QUESTS } from '../data/quests.js';
-import { FOOD_FLOAT } from '../food.js';
 
 const TRAIBORN_KEY_ID = 2399;
 const ROVIN_KEY_ID = 2400;
@@ -348,7 +347,6 @@ export function decide(snap: QuestSnapshot): QuestStep {
 export const demonslayer: QuestModule = {
     record: QUESTS.find(r => r.id === 'demon')!,
     bank: new Tile(3185, 3440, 0),
-    food: FOOD_FLOAT,
     grind: ['delrith', 'weakened delrith', 'dark wizard', 'goblin'],
     gather: {
         'bucket of water': fillBucket,
