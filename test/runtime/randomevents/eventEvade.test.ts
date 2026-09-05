@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { fleeCandidates } from '#/bot/runtime/randomevents/eventEvade.js';
+import { fleeCandidates, stepOffCandidates } from '#/bot/runtime/randomevents/eventEvade.js';
 
 const HERE = { x: 100, z: 100, level: 0 };
 const WEST_THREAT = { x: 98, z: 100 };
@@ -43,5 +43,18 @@ describe('fleeCandidates', () => {
     });
     test('a short request still returns the innermost ring rather than nothing', () => {
         expect(fleeCandidates(HERE, HERE, 4)).toHaveLength(8);
+    });
+});
+
+describe('stepOffCandidates', () => {
+    test('offers the eight adjacent tiles, away from the Ent first', () => {
+        const c = stepOffCandidates(HERE, WEST_THREAT);
+        expect(c).toHaveLength(8);
+        expect(c[0]).toEqual({ x: 101, z: 100, level: 0 });
+        expect(c.every(t => Math.max(Math.abs(t.x - 100), Math.abs(t.z - 100)) === 1)).toBe(true);
+    });
+
+    test('keeps the caller level', () => {
+        expect(stepOffCandidates({ x: 100, z: 100, level: 2 }, WEST_THREAT)[0].level).toBe(2);
     });
 });

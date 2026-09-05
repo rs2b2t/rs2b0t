@@ -1321,6 +1321,13 @@ export type WoodcuttingLocation = GatheringLocation;
 export const WOODCUTTING_LOCATIONS: WoodcuttingLocation[];
 export const WOODCUTTING_LOCATION_OPTIONS: string[];
 export function resolveWoodcuttingLocation(setting: string, startTile: WorldTile): WoodcuttingLocation | null;
+export const ENT_NPC_IDS: Set<number>;
+export const ENT_LIFE_TICKS: number;
+export function isEntNpcId(id: number): boolean;
+export function entNpcOnTile(
+    npcs: readonly { id: number; tile: WorldTile }[],
+    tile: WorldTile
+): boolean;
 
 export interface FishingGearPiece { name: string; min: number; restock: number }
 export interface FishingMethod { name: string; op: string; pair: string; gear: FishingGearPiece[] }

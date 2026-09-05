@@ -2,10 +2,12 @@ import { reader } from '../../adapter/ClientAdapter.js';
 import { BotHost } from '../BotHost.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { fleeCandidates } from './eventEvade.js';
+import { fleeCandidates, stepOffCandidates } from './eventEvade.js';
 import { Game } from '../../api/game/Game.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
+import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import { Traversal } from '../../api/walking/Traversal.js';
+import { ENT_LIFE_TICKS, ENT_NPC_IDS } from '../../data/woodcuttingLocations.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
@@ -73,6 +75,21 @@ export function isHostileEventNpc(
     return true;
 }
 
+/**
+ * Ent `p_opnpc` hijack: only the NPC we are facing while animating, not a neighbour loc chop.
+ * Why: a scene-wide Ent match would idle the grove for the event's remaining life.
+ */
+export function isEntHijack(
+    npc: { id: number; index: number; distance: number },
+    selfFaceEntity: number,
+    animating: boolean
+): boolean {
+    if (!ENT_NPC_IDS.has(npc.id) || npc.distance > 1 || !animating) {
+        return false;
+    }
+    return selfFaceEntity === npc.index;
+}
+
 export class GearLossTracker {
     private held = new Set<string>();
     private lost = new Map<string, number>();
@@ -99,7 +116,18 @@ export class GearLossTracker {
     }
 }
 
-type EventKind = 'dialog' | 'pick' | 'evade' | 'lost-tool' | 'box' | 'lamp' | 'hazard' | 'lost-gear' | 'mime' | 'maze';
+type EventKind =
+    | 'dialog'
+    | 'pick'
+    | 'evade'
+    | 'lost-tool'
+    | 'box'
+    | 'lamp'
+    | 'hazard'
+    | 'hijack'
+    | 'lost-gear'
+    | 'mime'
+    | 'maze';
 
 interface DetectedEvent {
     kind: EventKind;
@@ -299,6 +327,19 @@ class RandomEventsImpl {
             }
         }
 
+        let animating = false;
+        try {
+            animating = Game.animating();
+        } catch {
+            animating = false;
+        }
+        const selfFace = reader.selfFaceEntity();
+        for (const npc of npcs) {
+            if (isEntHijack(npc, selfFace, animating)) {
+                return { kind: 'hijack', name: 'ent' };
+            }
+        }
+
         for (const loc of reader.locs()) {
             if (loc.id === GAS_CHEST_LOC_ID && loc.distance <= 1) {
                 return { kind: 'hazard', name: 'poisonous gas' };
@@ -388,6 +429,9 @@ class RandomEventsImpl {
                 break;
             case 'hazard':
                 acted = await this.handleHazard(event.name, log);
+                break;
+            case 'hijack':
+                acted = await this.handleHijack(log);
                 break;
             case 'mime':
                 acted = await performMimeStage(log);
@@ -550,6 +594,29 @@ class RandomEventsImpl {
             await Traversal.walkTo(flee, { radius: 1, timeoutMs: 15_000, log });
         }
         await Execution.delayTicks(60);
+        return true;
+    }
+
+    private async handleHijack(log: (msg: string) => void): Promise<boolean> {
+        const me = Game.tile();
+        if (!me) {
+            return false;
+        }
+        const ent = Npcs.query()
+            .where(n => ENT_NPC_IDS.has(n.id) && n.distance() <= 1)
+            .nearest();
+        if (!ent) {
+            return false;
+        }
+        log('random event: ent — cancelling chop');
+        const candidates = stepOffCandidates(me, ent.tile());
+        const step = candidates.find(t => Reachability.canReach(t, { maxSteps: 400 })) ?? candidates[0];
+        if (step) {
+            DirectNavigator.walk(step);
+            await Execution.delayTicks(1);
+        }
+        // Why: the Ent stays for 60 ticks; pending() must not keep the grove paused after we cancel.
+        this.cooldownUntil.set('hijack:ent', performance.now() + ENT_LIFE_TICKS * 600 + 4000);
         return true;
     }
 

@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { GearLossTracker, handleLocation, isHostileEventNpc, pickSacrificial, RandomEvents } from '#/bot/runtime/randomevents/RandomEvents.js';
+import { GearLossTracker, handleLocation, isEntHijack, isHostileEventNpc, pickSacrificial, RandomEvents } from '#/bot/runtime/randomevents/RandomEvents.js';
 
 describe('handleLocation', () => {
     test('worn handle wins (the wielded-pick case the old scan missed)', () => {
@@ -95,6 +95,45 @@ describe('isHostileEventNpc', () => {
 
     test('non-hostile id is never an event', () => {
         expect(isHostileEventNpc(riverTroll({ id: 1, distance: 1, inCombat: true }), 3, true)).toBe(false);
+    });
+
+    test('Ent ids are not hostiles (tree spirit stops at 443)', () => {
+        expect(isHostileEventNpc(riverTroll({ id: 443, distance: 1 }), 3, false)).toBe(true);
+        expect(isHostileEventNpc(riverTroll({ id: 444, distance: 1 }), 3, false)).toBe(false);
+        expect(isHostileEventNpc(riverTroll({ id: 452, distance: 1 }), 3, false)).toBe(false);
+        expect(isHostileEventNpc(riverTroll({ id: 453, distance: 1 }), 3, false)).toBe(false);
+    });
+});
+
+describe('isEntHijack', () => {
+    const ent = (over: Partial<{ id: number; index: number; distance: number }> = {}) => ({
+        id: 444,
+        index: 12,
+        distance: 1,
+        ...over
+    });
+
+    test('facing the Ent while chopping it is a hijack', () => {
+        expect(isEntHijack(ent(), 12, true)).toBe(true);
+        expect(isEntHijack(ent({ id: 452, index: 7 }), 7, true)).toBe(true);
+    });
+
+    test('a neighbour loc chop (not facing the Ent) is not a hijack', () => {
+        expect(isEntHijack(ent(), -1, true)).toBe(false);
+        expect(isEntHijack(ent(), 99, true)).toBe(false);
+    });
+
+    test('standing next to an Ent after cancelling is not a hijack', () => {
+        expect(isEntHijack(ent(), 12, false)).toBe(false);
+    });
+
+    test('an Ent more than one tile away is not our loc', () => {
+        expect(isEntHijack(ent({ distance: 2 }), 12, true)).toBe(false);
+    });
+
+    test('tree spirit and suit of armour ids are outside the Ent range', () => {
+        expect(isEntHijack(ent({ id: 443 }), 12, true)).toBe(false);
+        expect(isEntHijack(ent({ id: 453 }), 12, true)).toBe(false);
     });
 });
 

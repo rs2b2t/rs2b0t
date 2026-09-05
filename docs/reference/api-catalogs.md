@@ -114,6 +114,7 @@ FISHING_LOCATIONS / resolveFishingLocation / FISHING_LOCATION_OPTIONS
 MINING_LOCATIONS / resolveMiningLocation / MINING_LOCATION_OPTIONS
 MINING_LOCATION_OPTION_LABELS / miningLocationLabel(loc)   // option text with the recommended combat level
 WOODCUTTING_LOCATIONS / resolveWoodcuttingLocation / WOODCUTTING_LOCATION_OPTIONS
+ENT_NPC_IDS / ENT_LIFE_TICKS / isEntNpcId(id) / entNpcOnTile(npcs, tile)
 ```
 
 ## See also

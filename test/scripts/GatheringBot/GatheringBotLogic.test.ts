@@ -10,6 +10,8 @@ import {
     gatherHuntRadius,
     gatherSpotRangeOrigin,
     hostileAttackerNearby,
+    locGatherShouldYield,
+    entAbortAction,
     shouldFleeCombat,
     isAutoLocation,
     pickNearestPreferLocal,
@@ -439,6 +441,37 @@ describe('shouldYieldGathering', () => {
         expect(shouldYieldGathering(false, true, false, false, true, true)).toBe(true);
         expect(shouldYieldGathering(false, false, true, false, true, true)).toBe(true);
         expect(shouldYieldGathering(false, false, false, true, true, true)).toBe(true);
+    });
+});
+
+describe('locGatherShouldYield (Ent / smoking rock on the clicked tile)', () => {
+    const calm = {
+        eventPending: false,
+        inventoryFull: false,
+        dialogPending: false,
+        inCombat: false,
+        allowCombatGather: false,
+        shouldEatMinerFood: false,
+        clickedTileHazard: false,
+        noResourceInCamp: false
+    };
+
+    test('an Ent on the clicked tile yields even when other trees remain', () => {
+        expect(locGatherShouldYield({ ...calm, clickedTileHazard: true })).toBe(true);
+        expect(locGatherShouldYield(calm)).toBe(false);
+    });
+
+    test('other trees in camp are not treated as an empty grove', () => {
+        expect(locGatherShouldYield({ ...calm, noResourceInCamp: false, clickedTileHazard: false })).toBe(false);
+        expect(locGatherShouldYield({ ...calm, noResourceInCamp: true })).toBe(true);
+    });
+});
+
+describe('entAbortAction', () => {
+    test('chops a neighbour in reach, else walks, else steps off', () => {
+        expect(entAbortAction({ neighbourInReach: true, neighbourExists: true })).toBe('chop-neighbour');
+        expect(entAbortAction({ neighbourInReach: false, neighbourExists: true })).toBe('walk-to-neighbour');
+        expect(entAbortAction({ neighbourInReach: false, neighbourExists: false })).toBe('step-off');
     });
 });
 
