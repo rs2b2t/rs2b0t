@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { ENT_NPC_IDS, entHazard, GearLossTracker, handleLocation, hazardHoldTicks, isHostileEventNpc, pickSacrificial, RandomEvents } from '#/bot/runtime/randomevents/RandomEvents.js';
+import { ENT_NPC_IDS, entHazard, PLANT_REACH, pickEventNear, GearLossTracker, handleLocation, hazardHoldTicks, isHostileEventNpc, pickSacrificial, RandomEvents } from '#/bot/runtime/randomevents/RandomEvents.js';
 
 describe('handleLocation', () => {
     test('worn handle wins (the wielded-pick case the old scan missed)', () => {
@@ -183,5 +183,23 @@ describe('hazardHoldTicks', () => {
     test('holds only long enough to break the chop chain on an ent', () => {
         expect(hazardHoldTicks('ent')).toBeLessThan(10);
         expect(hazardHoldTicks('ent')).toBeGreaterThan(0);
+    });
+});
+
+// Why: the plant spawns within one tile of its target and never moves, and clicking someone else's answers "It's not here for you", so a wide reach can only ever walk the run to a plant it cannot pick. At Seers bank an eight-tile reach took the ones spawning on the woodcutters.
+describe('the strange plant reach', () => {
+    test('covers the tile it spawns on and a step or two of drift', () => {
+        expect(pickEventNear({ name: 'strange plant', distance: 1 })).toBe(true);
+        expect(pickEventNear({ name: 'strange plant', distance: PLANT_REACH })).toBe(true);
+    });
+
+    test('stops well short of the next bank fixture, so a plant that is not ours is left alone', () => {
+        expect(PLANT_REACH).toBeLessThan(8);
+        expect(pickEventNear({ name: 'strange plant', distance: PLANT_REACH + 1 })).toBe(false);
+        expect(pickEventNear({ name: 'strange plant', distance: 8 })).toBe(false);
+    });
+
+    test('names only the plant, since the other pickables are not this event', () => {
+        expect(pickEventNear({ name: 'evil chicken', distance: 1 })).toBe(false);
     });
 });

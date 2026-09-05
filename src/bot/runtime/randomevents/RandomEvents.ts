@@ -20,6 +20,16 @@ import { SettingsStore } from '../Settings.js';
 
 const DIALOG_EVENT_NPCS = ['genie', 'drunken dwarf', 'mysterious old man', 'sandwich lady', 'frog'];
 const PICK_EVENT_NPCS = ['strange plant'];
+
+// Why: the plant spawns within one tile of whoever it is for and never moves, and clicking someone else's answers "It's not here for you", so anything further out is a walk the run cannot cash in. At Seers bank the old eight-tile reach kept finding the ones that spawn on the woodcutters.
+/** How far a strange plant may be and still be ours: its spawn tile plus a step or two of drift. */
+export const PLANT_REACH = 3;
+
+/** Whether this npc is a pickable event close enough to belong to us. */
+export function pickEventNear(npc: { name: string | null; distance: number }): boolean {
+    const name = npc.name?.toLowerCase();
+    return name !== undefined && PICK_EVENT_NPCS.includes(name) && npc.distance <= PLANT_REACH;
+}
 const idRange = (lo: number, hi: number): number[] => Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
 const HOSTILE_EVENT_NPC_IDS = new Set<number>([
     ...idRange(391, 396), // River troll  (macro_rivertrollguardian_1..6)
@@ -317,7 +327,7 @@ class RandomEventsImpl {
             if (DIALOG_EVENT_NPCS.includes(name) && npc.distance <= 6) {
                 return { kind: 'dialog', name };
             }
-            if (PICK_EVENT_NPCS.includes(name) && npc.distance <= 8) {
+            if (pickEventNear(npc)) {
                 return { kind: 'pick', name };
             }
         }
