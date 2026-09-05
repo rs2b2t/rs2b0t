@@ -253,10 +253,16 @@ export function shouldSettle(freeSlots: number, packCoins: number, coinFloor: nu
     return freeSlots <= FREE_SLOT_FLOOR || packCoins > coinFloor;
 }
 
+// Why: a reset is what an operator reaches for when the shop is wedged, so it owes a trip whatever the pack looks like and Settle's deposit takes everything.
+/** Whether a bank trip is owed: no room, takings over the float, or a reset asked for one. */
+export function settleDue(freeSlots: number, packCoins: number, coinFloor: number, forced: boolean): boolean {
+    return forced || shouldSettle(freeSlots, packCoins, coinFloor);
+}
+
 // Why: OpenWindow runs above Settle, so a queue of customers dumping goods kept it opening windows on a pack with no room to take any and the shop never reached the bank; it yields the tick once a trip is due, though a bank it cannot reach must not shut the shop, so a backed-off bank leaves it serving.
 /** Whether the next window should wait for a bank trip. */
-export function bankBeforeServing(freeSlots: number, packCoins: number, coinFloor: number, bankReady: boolean): boolean {
-    return bankReady && shouldSettle(freeSlots, packCoins, coinFloor);
+export function bankBeforeServing(freeSlots: number, packCoins: number, coinFloor: number, bankReady: boolean, forced = false): boolean {
+    return bankReady && settleDue(freeSlots, packCoins, coinFloor, forced);
 }
 
 /** Coins worth going to the bank for: the gap up to the float, capped at what the bank holds. */

@@ -13,6 +13,7 @@ import {
     resolveQuote,
     floatShortfall,
     bankBeforeServing,
+    settleDue,
     shouldSettle,
     tradeIsStalled,
     sideSignature,
@@ -301,6 +302,20 @@ describe('advertiseDue', () => {
     });
 });
 
+// Why: a reset is what an operator reaches for when the shop is wedged, so it owes a bank trip whatever the pack looks like, and the trip deposits everything.
+describe('settleDue', () => {
+    test('is owed on no room or takings over the float, as before', () => {
+        expect(settleDue(2, 0, 50_000, false)).toBe(true);
+        expect(settleDue(20, 60_000, 50_000, false)).toBe(true);
+        expect(settleDue(20, 1_000, 50_000, false)).toBe(false);
+    });
+
+    test('a reset owes one whatever the pack holds, empty included', () => {
+        expect(settleDue(28, 0, 50_000, true)).toBe(true);
+        expect(settleDue(20, 1_000, 50_000, true)).toBe(true);
+    });
+});
+
 // Why: OpenWindow runs above Settle, so a queue of customers dumping goods kept it opening windows on a pack with no room and the shop never reached the bank.
 describe('bankBeforeServing', () => {
     test('holds the next window while the pack has no room for what comes in', () => {
@@ -318,6 +333,11 @@ describe('bankBeforeServing', () => {
     // Why: the shop is worth more open than shut, so a bank it cannot reach must not stop it trading.
     test('serves on while the bank is backed off, however full it is', () => {
         expect(bankBeforeServing(0, 90_000, 50_000, false)).toBe(false);
+    });
+
+    test('a reset holds the next window too, so its bank trip is not starved by the queue', () => {
+        expect(bankBeforeServing(28, 0, 50_000, true, true)).toBe(true);
+        expect(bankBeforeServing(28, 0, 50_000, false, true)).toBe(false);
     });
 });
 
