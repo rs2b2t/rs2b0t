@@ -45,6 +45,14 @@ export const CASES: readonly Case[] = [
         note: 'noted rune chainbodies, natures and a fire staff banked at Varrock West; passes when the note stack shrinks, coins appear and magic XP moves. `--item "Iron platebody"` runs the same drain through the Custom chip on any item the database knows'
     },
     {
+        id: 'alcher-fire-battlestaff-live',
+        harness: 'alcher-fire-battlestaff-live.ts',
+        covers: { scripts: ['Alcher'] },
+        status: 'unvetted',
+        budgetMin: 8,
+        note: 'Varrock West with rune chainbodies, natures and a Fire battlestaff banked (no Staff of fire); passes on wore Fire battlestaff plus notes turning into coins'
+    },
+    {
         id: 'alcher-swarm-drain-live',
         harness: 'alcher-swarm-drain-live.ts',
         covers: { scripts: ['Alcher'] },

@@ -10,7 +10,10 @@ import {
     alchItem,
     customAlchItem,
     fmtGp,
+    FIRE_STAFF,
+    FIRE_STAVES,
     nextAlchTarget,
+    pickFireStaff,
     selectedAlchItems
 } from '#/bot/scripts/Alcher/AlcherLogic.js';
 
@@ -206,5 +209,17 @@ describe('fmtGp', () => {
 
     test('rounds rather than truncating a fractional rate', () => {
         expect(fmtGp(999.6)).toBe('1.0k');
+    });
+});
+
+describe('pickFireStaff', () => {
+    test('Staff of fire is first so a bank that has both keeps the old withdraw', () => {
+        expect(FIRE_STAVES[0]).toBe(FIRE_STAFF);
+        expect(pickFireStaff(name => name === 'Fire battlestaff' || name === 'Staff of fire')).toBe('Staff of fire');
+    });
+
+    test('accepts a Fire battlestaff on its own', () => {
+        expect(pickFireStaff(name => name === 'Fire battlestaff')).toBe('Fire battlestaff');
+        expect(pickFireStaff(() => false)).toBeUndefined();
     });
 });

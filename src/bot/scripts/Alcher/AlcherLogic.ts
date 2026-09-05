@@ -1,7 +1,29 @@
 import { ITEM_DB } from '../../data/itemdb.js';
+import { STAFF_RUNES } from '../../data/spelldb.js';
 
 /** High Level Alchemy pays 60% of an item's shop cost. */
 const ALCH_RATE = 0.6;
+
+/** Preferred fire-rune staff when several are in the bank. */
+export const FIRE_STAFF = 'Staff of fire';
+
+const FIRE_RUNE = 'fire rune';
+
+// Why: Staff of fire stays first so a bank that still has one withdraws it ahead of a battlestaff.
+export const FIRE_STAVES: readonly string[] = [
+    FIRE_STAFF,
+    ...Object.entries(STAFF_RUNES)
+        .filter(([staff, runes]) =>
+            staff.toLowerCase() !== FIRE_STAFF.toLowerCase()
+            && runes.some(r => r.toLowerCase() === FIRE_RUNE)
+        )
+        .map(([staff]) => staff)
+];
+
+/** First fire-rune staff the predicate reports as present. */
+export function pickFireStaff(has: (name: string) => boolean): string | undefined {
+    return FIRE_STAVES.find(name => has(name));
+}
 
 export interface AlchItem {
     /** Stable settings key, the obj name from the item database. */

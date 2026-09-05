@@ -20,7 +20,9 @@ import {
     DEFAULT_ALCH_ITEMS,
     customAlchItem,
     fmtGp,
+    FIRE_STAVES,
     nextAlchTarget,
+    pickFireStaff,
     selectedAlchItems,
     type AlchItem
 } from './AlcherLogic.js';
@@ -29,7 +31,6 @@ import type Tile from '../../geometry/Tile.js';
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const MAGIC_TAB = 6;
 const ALCH_SPELL = 'High Level Alchemy';
-const FIRE_STAFF = 'Staff of fire';
 const NATURE_RUNE = 'Nature rune';
 /** High Level Alchemy unlocks at 55 Magic. */
 const ALCHEMY_REQUIRED = 55;
@@ -224,6 +225,16 @@ export default class Alcher extends TaskBot {
         this.status = s;
         this.statusColor = color;
     }
+
+    // Why: a count of zero can be a list that has not loaded rather than an empty bank. Before halting on "out of X", confirm the list is ready and every named item reads zero.
+    async bankTrulyOutOf(...names: string[]): Promise<boolean> {
+        const settled = await Execution.delayUntil(() => Bank.ready(), 3500);
+        if (!settled) {
+            return false;
+        }
+        return names.every(name => Bank.count(name) === 0);
+    }
+
     items(): AlchItem[] {
         return this.selected;
     }
@@ -387,12 +398,12 @@ export default class Alcher extends TaskBot {
     }
 }
 
-// Why: set the staff of fire once. Deposit everything, withdraw one, close so Wield is a backpack op, wield, reopen.
+// Why: set a fire-rune staff once. Deposit everything, withdraw one, close so Wield is a backpack op, wield, reopen.
 class EnsureGear implements Task {
     constructor(private bot: Alcher) {}
 
     validate(): boolean {
-        return !Equipment.contains(FIRE_STAFF);
+        return pickFireStaff(name => Equipment.contains(name)) === undefined;
     }
 
     async execute(): Promise<void> {
@@ -403,10 +414,26 @@ class EnsureGear implements Task {
             await Bank.depositAllMatching(() => true);
             await Execution.delayTicks(1);
         }
-        if (Inventory.count(FIRE_STAFF) === 0) {
-            if (!(await Bank.withdrawX(FIRE_STAFF, 1))) {
-                this.bot.log(`no ${FIRE_STAFF} in the bank — stopping`);
-                ScriptRunner.stop(`no ${FIRE_STAFF} in the bank`);
+        let staff = pickFireStaff(name => Inventory.count(name) > 0);
+        if (!staff) {
+            staff = pickFireStaff(name => Bank.count(name) > 0);
+            if (!staff) {
+                if (!(await this.bot.bankTrulyOutOf(...FIRE_STAVES))) {
+                    this.bot.log('withdraw of a fire staff stalled but the bank list is still settling — retrying');
+                    return;
+                }
+                this.bot.log('no fire staff in the bank — stopping');
+                ScriptRunner.stop('no fire staff in the bank');
+                return;
+            }
+            this.bot.log(`withdrawing ${staff}`);
+            if (!(await Bank.withdrawX(staff, 1))) {
+                if (!(await this.bot.bankTrulyOutOf(...FIRE_STAVES))) {
+                    this.bot.log(`withdraw of ${staff} stalled but the bank list is still settling — retrying`);
+                    return;
+                }
+                this.bot.log('no fire staff in the bank — stopping');
+                ScriptRunner.stop('no fire staff in the bank');
                 return;
             }
         }
@@ -414,13 +441,18 @@ class EnsureGear implements Task {
             this.bot.log('bank would not close — retrying');
             return;
         }
-        this.bot.setStatus(`wielding ${FIRE_STAFF}`, WARN);
-        if (!(await Equipment.equip(FIRE_STAFF))) {
-            this.bot.log(`could not wield ${FIRE_STAFF} — stopping`);
-            ScriptRunner.stop(`could not wield ${FIRE_STAFF}`);
+        // Why: close leaves Deposit-* ops on the side pack for a beat, so wait for Wield before equip.
+        await Execution.delayUntil(
+            () => !Bank.isOpen() && (Inventory.first(staff)?.actions().some(o => /wield|wear|equip/i.test(o)) ?? false),
+            3000
+        );
+        this.bot.setStatus(`wielding ${staff}`, WARN);
+        if (!(await Equipment.equip(staff))) {
+            this.bot.log(`could not wield ${staff} — stopping`);
+            ScriptRunner.stop(`could not wield ${staff}`);
             return;
         }
-        this.bot.log(`wore ${FIRE_STAFF} — casts need only ${NATURE_RUNE}s now`);
+        this.bot.log(`wore ${staff} — casts need only ${NATURE_RUNE}s now`);
         await this.bot.openBank();
     }
 }
