@@ -39,6 +39,7 @@ export class ScriptContext {
     loopCount = 0;
 
     lastProgressAt = performance.now();
+    lastReportedProgressAt = 0;
     watchdogWarned = false;
 
     crashError: Error | null = null;
@@ -87,6 +88,11 @@ export class ScriptContext {
     progress(): void {
         this.lastProgressAt = performance.now();
         this.watchdogWarned = false;
+    }
+
+    noteProgress(): void {
+        this.lastReportedProgressAt = performance.now();
+        this.progress();
     }
 
     pause(): void {
