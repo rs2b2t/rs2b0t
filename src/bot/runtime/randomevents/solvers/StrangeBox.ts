@@ -1,6 +1,8 @@
 import { actions, reader } from '../../../adapter/ClientAdapter.js';
+import { Bank } from '../../../api/bank/Bank.js';
 import { Execution } from '../../../api/execution/Execution.js';
 import { Inventory } from '../../../api/inventory/Inventory.js';
+import { Shop } from '../../../api/shop/Shop.js';
 import { Modals } from '../../../api/ui/widgets/Modals.js';
 
 const CUBE_IF = {
@@ -77,9 +79,32 @@ const LAMP_IF = {
     } as Record<string, number>
 };
 
+// Why: Inventory with the bank open is the side backpack (Deposit-*), so Open/Rub are absent.
+// Why: a shop main modal also blocks the cube/lamp interface; close both, then re-read the item.
+export async function closeBankAndShop(log: (msg: string) => void, reason: string): Promise<boolean> {
+    if (Shop.isOpen()) {
+        log(`random event: closing shop ${reason}`);
+        await Shop.close();
+        if (Shop.isOpen()) {
+            return false;
+        }
+    }
+    if (Bank.isOpen()) {
+        log(`random event: closing bank ${reason}`);
+        if (!(await Bank.close())) {
+            return false;
+        }
+    }
+    return true;
+}
+
 export async function solveAllBoxes(log: (msg: string) => void): Promise<boolean> {
     let solved = 0;
     for (let i = 0; i < 30 && Inventory.contains('Strange box'); i++) {
+        if (!(await closeBankAndShop(log, 'so Open hits the backpack'))) {
+            log('random event: could not close bank/shop to open strange box');
+            return solved > 0;
+        }
         const box = Inventory.first('Strange box');
         if (!box) {
             break;
@@ -112,6 +137,13 @@ export async function solveAllBoxes(log: (msg: string) => void): Promise<boolean
 }
 
 export async function rubLamp(lampSkill: string, log: (msg: string) => void): Promise<boolean> {
+    if (!Inventory.contains('Lamp')) {
+        return false;
+    }
+    if (!(await closeBankAndShop(log, 'so Rub hits the backpack'))) {
+        log('random event: could not close bank/shop to rub lamp');
+        return false;
+    }
     const lamp = Inventory.first('Lamp');
     if (!lamp) {
         return false;

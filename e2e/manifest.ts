@@ -991,6 +991,14 @@ export const CASES: readonly Case[] = [
         note: 'Varrock West with iron, coal, natures and a Fire battlestaff banked (no Staff of fire); passes on wore Fire battlestaff plus steel bars'
     },
     {
+        id: 'strangebox-bank-open-live',
+        harness: 'strangebox-bank-open-live.ts',
+        covers: { subsystems: ['random-events'] },
+        status: 'unvetted',
+        budgetMin: 5,
+        note: 'Varrock West booth left open, then ::give macro_cube; passes when the solver closes the bank, Open is present, and the box is consumed (#756)'
+    },
+    {
         id: 'strangebox-repro-live',
         harness: 'strangebox-repro-live.ts',
         covers: { subsystems: ['random-events'] },

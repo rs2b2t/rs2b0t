@@ -76,6 +76,25 @@ describe('Inventory while the bank modal is open', () => {
         expect(calls).toEqual(['button']);
     });
 
+    test('Open is absent on a bank-side Strange box', async () => {
+        (reader as any).bankComId = () => 5382;
+        (reader as any).bankSideItems = () => [
+            {
+                id: 3062,
+                name: 'Strange box',
+                count: 1,
+                slot: 0,
+                comId: 5064,
+                ops: ['Deposit-1', null, null, 'Deposit-All', null]
+            }
+        ];
+
+        const box = Inventory.first('Strange box');
+        expect(box).not.toBeNull();
+        expect(box!.actions().some(op => op.toLowerCase() === 'open')).toBe(false);
+        expect(await box!.interact('Open')).toBe(false);
+    });
+
     test('keeps normal held-item behavior after the bank closes', async () => {
         const calls: string[] = [];
         (reader as any).bankComId = () => -1;
