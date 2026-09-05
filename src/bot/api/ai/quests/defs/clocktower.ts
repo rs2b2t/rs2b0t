@@ -494,7 +494,6 @@ export const clocktower: QuestModule = {
     record: QUESTS.find(r => r.id === 'cog')!,
     bank: BANK,
     hops: HOPS,
-    food: 6,
     tools: ['cog', 'rat poison', 'bucket', 'bucket of water'],
     readProgress: readClockTowerProgress,
     decide
