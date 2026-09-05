@@ -42,7 +42,10 @@ export const BLACK_DEMON: Target = { squares: ['m44_152'], adult: { id: 84, size
 // Why: the lair's own spiders are ice spiders, wander 10 and clamped at 12; the poison spiders sit in the dungeon by the in-lever, outside this square.
 export const KING_BLACK_DRAGON: Target = { squares: ['m42_153'], adult: { id: 50, size: 5 }, baby: { id: 64, size: 1, maxrange: 12 }, maxrange: 20, inside: { x: 2717, z: 9802 }, outside: { x: 3067, z: 10254 } };
 
-export const TARGETS: Record<string, Target> = { blue: BLUE_DRAGON, demon: BLACK_DEMON, kbd: KING_BLACK_DRAGON };
+// Why: both spawns sit in one room whose walls pin the two bodies into the same box, so a stand that sees one sees the other.
+export const BLACK_DRAGON: Target = { squares: ['m44_153'], adult: { id: 54, size: 4 }, baby: null, maxrange: 12, inside: GATE_INSIDE, outside: LADDER_BOTTOM };
+
+export const TARGETS: Record<string, Target> = { blue: BLUE_DRAGON, demon: BLACK_DEMON, black: BLACK_DRAGON, kbd: KING_BLACK_DRAGON };
 
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];
 const DZ = [1, 0, -1, 0, 1, -1, -1, 1];
@@ -162,9 +165,14 @@ export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS): Deri
         const seen = new Set<string>();
         const body = new Set<string>();
         const queue: { x: number; z: number }[] = [];
-        if (fits(spawn.x, spawn.z, spawn.size)) {
-            seen.add(key(spawn.x, spawn.z));
-            queue.push({ x: spawn.x, z: spawn.z });
+        // Why: a spawn line is where the npc stands, not proof its own south-west origin fits; the black dragon at (2829,9826) covers rock at (2832,9829) and seeding only that origin drops a dragon that is plainly in the room.
+        for (let ox = spawn.x - spawn.size + 1; ox <= spawn.x; ox++) {
+            for (let oz = spawn.z - spawn.size + 1; oz <= spawn.z; oz++) {
+                if (fits(ox, oz, spawn.size) && !seen.has(key(ox, oz))) {
+                    seen.add(key(ox, oz));
+                    queue.push({ x: ox, z: oz });
+                }
+            }
         }
         let placements = 0;
         while (queue.length > 0) {

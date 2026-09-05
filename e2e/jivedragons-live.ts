@@ -1,7 +1,7 @@
 /** Live proof for JiveDragons at the Taverley Dungeon blue dragons: --style --minutes --dusty --clue --leave --tick --no-starve.
  *  Why: supply.ts and combat.ts carry no unit tests because every function in them drives a live client, so this run is the only proof either of them works. */
 
-// Usage: HEADED=1 bun e2e/jivedragons-live.ts [--base url] [--style melee|mage|range] [--minutes n] [--tick ms] [--dusty] [--clue] [--leave teleport|walk] [--no-starve]
+// Usage: HEADED=1 bun e2e/jivedragons-live.ts [--base url] [--site blue|black] [--style melee|mage|range] [--minutes n] [--tick ms] [--dusty] [--clue] [--leave teleport|walk] [--no-starve]
 import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 
@@ -14,6 +14,8 @@ type Style = 'melee' | 'mage' | 'range';
 const STYLES: Style[] = ['melee', 'mage', 'range'];
 
 type Leave = 'teleport' | 'walk';
+type SiteArg = 'blue' | 'black';
+const SITES: SiteArg[] = ['blue', 'black'];
 const LEAVES: Leave[] = ['teleport', 'walk'];
 
 /** A hard map clue: the tier blue dragons drop, and one dig rather than a trail no run is long enough to finish. */
@@ -30,6 +32,7 @@ interface Args {
     deploy: boolean;
     leave: Leave;
     clue: boolean;
+    site: SiteArg;
 }
 
 function fail(msg: string): never {
@@ -47,7 +50,8 @@ function parse(argv: readonly string[]): Args {
         starve: true,
         deploy: true,
         leave: 'teleport',
-        clue: false
+        clue: false,
+        site: 'blue'
     };
     for (let i = 0; i < argv.length; i++) {
         const flag = argv[i];
@@ -63,9 +67,11 @@ function parse(argv: readonly string[]): Args {
         else if (flag === '--minutes') { out.minutes = Number(value); }
         else if (flag === '--tick') { out.tickMs = Number(value); }
         else if (flag === '--leave') { out.leave = value as Leave; }
+        else if (flag === '--site') { out.site = value as SiteArg; }
     }
     if (!LEAVES.includes(out.leave)) { fail(`--leave takes ${LEAVES.join(', ')}, got '${out.leave}'`); }
     if (!STYLES.includes(out.style)) { fail(`--style takes ${STYLES.join(', ')}, got '${out.style}'`); }
+    if (!SITES.includes(out.site)) { fail(`--site takes ${SITES.join(', ')}, got '${out.site}'`); }
     if (!Number.isFinite(out.minutes) || out.minutes <= 0) { fail(`--minutes takes a positive number, got '${out.minutes}'`); }
     return out;
 }
@@ -75,17 +81,45 @@ const args = parse(process.argv.slice(2));
 interface Point { x: number; z: number; level: number }
 
 // Why: sites.ts is not on the harness ABI, so the lair box, the safespots and the anchor are mirrored here and a drift in either copy shows up as a failed milestone rather than a silent pass.
-const LAIR = { minX: 2888, maxX: 2923, minZ: 9769, maxZ: 9816, level: 0 };
-const SAFESPOTS: Point[] = [{ x: 2901, z: 9809, level: 0 }, { x: 2900, z: 9809, level: 0 }, { x: 2901, z: 9810, level: 0 }];
-const MELEE_ANCHOR: Point = { x: 2900, z: 9808, level: 0 };
+const BLUE_SITE = {
+    key: 'taverley-blue',
+    antipoison: false,
+    lair: { minX: 2888, maxX: 2923, minZ: 9769, maxZ: 9816, level: 0 },
+    safespots: [{ x: 2901, z: 9809, level: 0 }, { x: 2900, z: 9809, level: 0 }, { x: 2901, z: 9810, level: 0 }],
+    meleeAnchor: { x: 2900, z: 9808, level: 0 },
+    target: 'Blue dragon',
+    baby: 'Baby blue dragon',
+    food: { debug: 'lobster', name: 'Lobster' },
+    heal: 12,
+    lootKey: 'loot'
+};
+
+// Why: the black room sits deeper on the same key side, so only the box, the tiles, the target and the food differ; the corridor stand is what the walk in reaches without crossing the dragons.
+const BLACK_SITE = {
+    key: 'taverley-black',
+    antipoison: true,
+    lair: { minX: 2818, maxX: 2850, minZ: 9815, maxZ: 9832, level: 0 },
+    safespots: [{ x: 2836, z: 9817, level: 0 }, { x: 2835, z: 9817, level: 0 }, { x: 2834, z: 9817, level: 0 }],
+    meleeAnchor: { x: 2835, z: 9818, level: 0 },
+    target: 'Black dragon',
+    baby: null,
+    food: { debug: 'shark', name: 'Shark' },
+    heal: 20,
+    lootKey: 'lootBlack'
+};
+
+const SITE = args.site === 'black' ? BLACK_SITE : BLUE_SITE;
+const LAIR = SITE.lair;
+const SAFESPOTS: Point[] = SITE.safespots;
+const MELEE_ANCHOR: Point = SITE.meleeAnchor;
 const BANK: Point = { x: 2946, z: 3369, level: 0 };
 
 const DUSTY_ID = 1590;
 const JAIL_KEY_ID = 1591;
-const TARGET = 'Blue dragon';
-const BABY = 'Baby blue dragon';
-const FOOD = { debug: 'lobster', name: 'Lobster' };
-const LOBSTER_HEAL = 12;
+const TARGET = SITE.target;
+const BABY = SITE.baby;
+const FOOD = SITE.food;
+const LOBSTER_HEAL = SITE.heal;
 const PACK_FOOD = 20;
 const PANIC_PCT = 30;
 
@@ -140,6 +174,8 @@ const LOOT = ['Dragon bones', 'Dragonhide', 'Uncut diamond', 'Uncut ruby', 'Uncu
 
 const COMMON_BANK: BankSeedItem[] = [
     { debugName: FOOD.debug, displayName: FOOD.name, qty: 400 },
+    // Why: the black run's walk in passes the dungeon's poison spiders, so its trip carries a Superantipoison and the bank has to hold one.
+    ...(SITE.antipoison ? [{ debugName: '4dose2antipoison', displayName: 'Superantipoison(4)', qty: 20 }] : []),
     { debugName: 'lawrune', displayName: 'Law rune', qty: 200 },
     { debugName: 'airrune', displayName: 'Air rune', qty: 20_000 },
     { debugName: 'waterrune', displayName: 'Water rune', qty: 200 }
@@ -164,7 +200,7 @@ const CLUE_TOOLS: BankSeedItem[] = [
 // Why: the pack starts stocked so the first task is the key leg rather than a restock, which is what makes "one bank stop for a cold key" a number worth counting.
 // Why: leaveVia and solveClues both follow the flags rather than sitting on a fixed value, because the script ships with teleport and clues ON and the harness used to pin both to the opposite, so the shipped defaults were the two settings no run ever exercised.
 function kitFor(style: Style): Kit {
-    const common = { foodWithdraw: PACK_FOOD, panicHp: PANIC_PCT, foodReserve: 4, healTo: 90, site: 'taverley-blue', teleStock: 2, buryBones: false, solveClues: args.clue, bankCommonJunk: false, loot: LOOT.join(', '), logDetail: 'Verbose', usePotions: false, leaveVia: args.leave };
+    const common = { foodWithdraw: PACK_FOOD, panicHp: PANIC_PCT, foodReserve: 4, healTo: 90, site: SITE.key, teleStock: 2, buryBones: false, solveClues: args.clue, bankCommonJunk: false, [SITE.lootKey]: LOOT.join(', '), logDetail: 'Verbose', usePotions: false, leaveVia: args.leave };
     if (style === 'melee') {
         return {
             pack: [['antidragonbreathshield', 'Dragonfire shield', 1], [FOOD.debug, FOOD.name, PACK_FOOD]],
@@ -183,7 +219,7 @@ function kitFor(style: Style): Kit {
         };
     }
     return {
-        pack: [['magic_shortbow', 'Magic shortbow', 1], ['rune_arrow', 'Rune arrow', 500], [FOOD.debug, FOOD.name, PACK_FOOD]],
+        pack: [['magic_shortbow', 'Magic shortbow', 1], ['rune_arrow', 'Rune arrow', 500], [FOOD.debug, FOOD.name, PACK_FOOD], ...(SITE.antipoison ? [['4dose2antipoison', 'Superantipoison(4)', 1] as const] : [])],
         worn: RANGE_WORN,
         bank: [...COMMON_BANK, { debugName: 'magic_shortbow', displayName: 'Magic shortbow', qty: 1 }, { debugName: 'rune_arrow', displayName: 'Rune arrow', qty: 5000 }],
         settings: { ...common, combatStyle: 'range', bow: 'Magic shortbow', ammo: 'Rune arrow', rangeStyle: 'rapid', ammoWithdraw: 500 }
@@ -253,7 +289,8 @@ interface Sample {
     logs: LogLine[];
 }
 
-interface Probe { dustyId: number; jailKeyId: number; food: string; law: string; target: string; baby: string }
+// Why: the black room has no baby dragon, so the roll list is empty rather than the site sharing a name with its adults.
+interface Probe { dustyId: number; jailKeyId: number; food: string; law: string; target: string; baby: string | null }
 
 interface Api {
     __rs2b0t: {
@@ -302,7 +339,7 @@ function sample(page: Page, probe: Probe): Promise<Sample> {
             law: a.Inventory.count(p.law),
             worn: a.Equipment.items().map(i => i.name ?? '?'),
             adults: npcs.filter(n => n.name === p.target).length,
-            babies: npcs.filter(n => n.name === p.baby).map(n => ({ index: n.index, dist: n.distance(), aims: n.targetsMe() })),
+            babies: p.baby === null ? [] : npcs.filter(n => n.name === p.baby).map(n => ({ index: n.index, dist: n.distance(), aims: n.targetsMe() })),
             logs: (g.rs2b0t.runner.ctx?.log ?? []).slice(-500).map(l => ({ time: l.time, level: l.level, msg: l.msg }))
         };
     }, probe);

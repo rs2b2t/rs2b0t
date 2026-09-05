@@ -1,9 +1,10 @@
 import { reader } from '../../adapter/ClientAdapter.js';
+import { GameMessages } from '../../api/chatbox/gameMessages.js';
 import { SolveClue } from '../../api/ai/clues/SolveClue.js';
 import { paintClueProgress } from '../../api/ai/clues/cluePaint.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
-import { EMPTY_VIAL, plannedPotions, potionToSip, type PotionPlan } from '../../api/combat/boostPotions.js';
+import { EMPTY_VIAL, plannedPotions, potionToSip, rangingPlan, type PotionPlan } from '../../api/combat/boostPotions.js';
 import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, parseCombatStyle, parseRangeStyle, type MeleeCombatStyle } from '../../api/combat/CombatStyle.js';
 import { castsAvailable } from '../../api/combat/CombatStyleLogic.js';
 import { Special } from '../../api/combat/Special.js';
@@ -30,9 +31,9 @@ import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
 import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from './combat.js';
-import { keyStatus, lootHalts, meleeShieldGate, siteTileOf, wantsDrop, type Style } from './logic.js';
-import { SITE_OPTIONS, TAVERLEY_BLUE, siteFor, type DragonSite } from './sites.js';
-import { acquireKey, bankRoutine, enterLair, escapeRunesFor, inCell, leaveCell, type BankOpts, type KeyState } from './supply.js';
+import { keepDoses, keyStatus, lootHalts, meleeShieldGate, siteTileOf, wantsDrop, type Style } from './logic.js';
+import { SITE_OPTIONS, TAVERLEY_BLACK, TAVERLEY_BLUE, siteFor, type DragonSite } from './sites.js';
+import { ANTIPOISON_DOSES, POISONED, acquireKey, antipoisonPlan, bankRoutine, doseToDrink, enterLair, escapeRunesFor, inCell, leaveCell, type BankOpts, type KeyState } from './supply.js';
 
 const SHIELD = 'Dragonfire shield';
 
@@ -66,6 +67,13 @@ const DROPS: string[] = DROP_DB[TAVERLEY_BLUE.target] ?? [];
 // Why: Bass is food the run never eats and a coin pile is 11 to 440, so both spend a walk off the safespot that the hides pay for better.
 const DEFAULT_LOOT = DROPS.filter(n => !['bass', 'coins'].includes(n.toLowerCase()));
 
+const BLACK_DROPS: string[] = DROP_DB['Black dragon'] ?? [];
+// Why: the same rule as the blue table, a pile of coins or a cake is a walk off the safespot the hides and the bones pay for better.
+const DEFAULT_BLACK_LOOT = BLACK_DROPS.filter(n => !['coins', 'chocolate cake'].includes(n.toLowerCase()));
+
+const SHOW_BLUE = { key: 'site', anyOf: [TAVERLEY_BLUE.key] };
+const SHOW_BLACK = { key: 'site', anyOf: [TAVERLEY_BLACK.key] };
+
 export const SETTINGS: SettingsSchema = {
     combatStyle: { type: 'string', default: 'range', options: ['melee', 'mage', 'range'], label: 'Combat style', help: 'mage and range fight from a tile no dragon can path to. Melee stands in the dragonfire and needs the Dragonfire shield' },
     meleeStyle: { type: 'string', default: 'strength', options: COMBAT_STYLE_OPTIONS, label: 'Melee style', group: 'Combat', showIf: SHOW_MELEE },
@@ -88,9 +96,12 @@ export const SETTINGS: SettingsSchema = {
     foodReserve: { type: 'number', default: 4, min: 0, max: 27, label: 'Food kept back from slot-freeing', group: 'Food & healing', help: 'a full pack spends food to make room for loot instead of banking, never below this many' },
     healTo: { type: 'number', default: 90, min: 10, max: 100, label: 'Heal to HP% before heading back', group: 'Food & healing', help: 'the walk in is long, so the trip eats up at the booth and tops the food back up after' },
 
-    loot: { type: 'string[]', default: DEFAULT_LOOT, options: DROPS, label: 'Loot to pick up (drop table)', group: 'Banking & loot', help: 'the blue dragon table. Everything picked up is banked. Bass and Coins start unticked because neither pays for the walk off the safespot' },
+    loot: { type: 'string[]', default: DEFAULT_LOOT, options: DROPS, label: 'Loot to pick up (drop table)', group: 'Banking & loot', showIf: SHOW_BLUE, help: 'the blue dragon table. Everything picked up is banked. Bass and Coins start unticked because neither pays for the walk off the safespot' },
+    lootBlack: { type: 'string[]', default: DEFAULT_BLACK_LOOT, options: BLACK_DROPS, label: 'Loot to pick up (drop table)', group: 'Banking & loot', showIf: SHOW_BLACK, help: 'the black dragon table, a different list from the blue one. Everything picked up is banked. Coins and Chocolate cake start unticked because neither pays for the walk off the safespot' },
     bankCommonJunk: { type: 'boolean', default: true, label: 'Also grab shared gems/junk', group: 'Banking & loot' },
     buryBones: { type: 'boolean', default: false, label: 'Bury dragon bones', group: 'Banking & loot', help: 'bury Dragon bones for Prayer xp instead of banking them (always looted when on). They are the best drop here, so this trades gold for xp' },
+    rangingPotion: { type: 'boolean', default: false, label: 'Drink a ranging potion', group: 'Combat', showIf: SHOW_RANGE, help: 'sips a dose once the boost decays to within a tenth of the base level. The loadout carry list sets the dose form and the count per trip, otherwise one Ranging potion(3)' },
+    antipoisonDoses: { type: 'number', default: 1, min: 0, max: 4, label: 'Superantipoison flasks per trip', group: 'Food & healing', showIf: SHOW_BLACK, help: 'the walk to the black dragons passes the dungeon spiders. A dose is drunk on the poison message; 0 carries none' },
 
     solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues', help: 'blue dragons drop hard clues. The trail leaves the dungeon and comes back' },
 
@@ -136,6 +147,7 @@ let FOOD_RESERVE = 4;
 let ESCAPE_STOCK = 2;
 let HEAL_TO = 0.9;
 let LOOT_SET = new Set<string>();
+let ANTIPOISON_WANT = 0;
 let BANK_COMMON = true;
 let VERBOSE = false;
 let USE_SPECIAL = true;
@@ -188,7 +200,10 @@ function needStyleSupplies(): boolean {
 
 /** Every setting bankRoutine reads. */
 function bankOpts(): BankOpts {
-    return { withdrawFood: true, runeCasts: RUNE_CASTS, runeBuffer: RUNE_BUFFER, ammo: AMMO_WITHDRAW, escapeStock: ESCAPE_STOCK, healTo: HEAL_TO, potions: POTIONS };
+    return {
+        withdrawFood: true, runeCasts: RUNE_CASTS, runeBuffer: RUNE_BUFFER, ammo: AMMO_WITHDRAW, escapeStock: ESCAPE_STOCK, healTo: HEAL_TO, potions: POTIONS,
+        flasks: ANTIPOISON_WANT > 0 ? [antipoisonPlan(ANTIPOISON_WANT)] : []
+    };
 }
 
 // Why: bankRoutine returns void and countBankTrip fires only where it runs to the end, so the counter moving is what separates an empty bank from a walk that never got there.
@@ -200,6 +215,24 @@ async function bankTrip(bot: JiveDragons): Promise<void> {
     if (bot.bankTrips > before) {
         bot.noteTrip(hasFood(), !needStyleSupplies());
     }
+}
+
+function dosesHeld(): number {
+    return ANTIPOISON_DOSES.reduce((n, name) => n + Inventory.count(name), 0);
+}
+
+/** Drink the smallest antipoison flask held. False with none in the pack. */
+async function drinkAntipoison(): Promise<boolean> {
+    const name = doseToDrink(n => Inventory.count(n));
+    const dose = name === null ? null : Inventory.first(name);
+    if (name === null || dose === null) {
+        return false;
+    }
+    const before = dosesHeld();
+    if (!(await dose.interact('Drink'))) {
+        return false;
+    }
+    return Execution.delayUntil(() => dosesHeld() !== before, 3000);
 }
 
 function potionsHeld(plan: PotionPlan): number {
@@ -357,6 +390,30 @@ class Parked implements Task {
     }
     async execute(): Promise<void> {
         await Execution.delayTicks(PARK_TICKS);
+    }
+}
+
+// Why: the poison varp never reaches the client and poison_player prints its line once per fresh poisoning, so the line is the only signal and the mark moves past it whether or not a dose was there to answer it.
+
+class CurePoison implements Task {
+    private mark = GameMessages.mark();
+    private warned = false;
+    constructor(private bot: JiveDragons) {}
+    validate(): boolean {
+        return ANTIPOISON_WANT > 0 && GameMessages.sawSince(this.mark, POISONED);
+    }
+    async execute(): Promise<void> {
+        this.mark = GameMessages.mark();
+        this.bot.setStatus('poisoned, drinking an antipoison');
+        if (await drinkAntipoison()) {
+            this.bot.log('poisoned. Drank a Superantipoison');
+            this.warned = false;
+            return;
+        }
+        if (!this.warned) {
+            this.bot.log('WARNING: poisoned with no Superantipoison in the pack. The food covers it until the bank run.');
+            this.warned = true;
+        }
     }
 }
 
@@ -653,7 +710,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         WEAPON = STYLE === 'mage' ? this.settings.str('staff', 'Staff of fire')
             : STYLE === 'range' ? this.settings.str('bow', 'Maple shortbow')
                 : this.settings.str('weapon', 'Rune scimitar');
-        FOOD_NAME = scriptFood(this.settings, 'Lobster');
+        FOOD_NAME = scriptFood(this.settings, SITE.food ?? 'Lobster');
         LEAVE_WALK = this.settings.str('leaveVia', 'teleport') === 'walk';
         ESCAPE_LABEL = LEAVE_WALK ? 'walk out' : escapeRunesFor(SITE.escapeTeleportId).label;
         BURY_BONES = this.settings.bool('buryBones', false);
@@ -668,7 +725,10 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         FOOD_RESERVE = this.settings.num('foodReserve', 4);
         ESCAPE_STOCK = this.settings.num('teleStock', 2);
         HEAL_TO = this.settings.num('healTo', 90) / 100;
-        LOOT_SET = new Set(this.settings.list('loot', DEFAULT_LOOT).map(s => s.toLowerCase()));
+        // Why: each site names the loot setting whose chips are its own drop table, and the schema default is that list, so neither is written down twice.
+        const lootSetting = SITE.lootSetting ?? 'loot';
+        const lootDefault = (SETTINGS[lootSetting]?.default as string[] | undefined) ?? DEFAULT_LOOT;
+        LOOT_SET = new Set(this.settings.list(lootSetting, lootDefault).map(s => s.toLowerCase()));
         // Why: fired arrows land where the dragon dies and sit on no drop table, so the 500 a trip withdraws come home only if the loot set names them.
         if (STYLE === 'range') {
             LOOT_SET.add(AMMO.toLowerCase());
@@ -676,9 +736,11 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
         VERBOSE = this.settings.str('logDetail', 'Normal') === 'Verbose';
         USE_SPECIAL = this.settings.bool('useSpecial', true);
-        POTIONS = STYLE === 'melee' && this.settings.bool('usePotions', true)
-            ? plannedPotions(suppliesOf(selectedLoadout(this.settings)))
-            : [];
+        const carry = suppliesOf(selectedLoadout(this.settings));
+        POTIONS = STYLE === 'melee' && this.settings.bool('usePotions', true) ? plannedPotions(carry)
+            : STYLE === 'range' && this.settings.bool('rangingPotion', false) ? [rangingPlan(carry)]
+                : [];
+        ANTIPOISON_WANT = SITE.antipoison === true ? this.settings.num('antipoisonDoses', 1) : 0;
 
         this.startedAt = Date.now();
         this.xp.begin();
@@ -735,6 +797,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             }),
             new Retreat(this, SITE),
             new Eat(this),
+            new CurePoison(this),
             new GearEquip(this),
             new SetAttackStyle(this),
             new ArmAutocast(this),
@@ -797,7 +860,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         return SPELL;
     }
     keepExtra(): string[] {
-        return potionDoseNames();
+        return keepDoses(potionDoseNames(), ANTIPOISON_DOSES, ANTIPOISON_WANT > 0);
     }
     leaveByWalk(): boolean {
         return LEAVE_WALK;

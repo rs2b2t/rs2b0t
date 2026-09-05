@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { DRAGON_SITES, SITE_OPTIONS, siteFor } from '#/bot/scripts/JiveDragons/sites.js';
+import { DRAGON_SITES, SITE_OPTIONS, TAVERLEY_BLUE, siteFor } from '#/bot/scripts/JiveDragons/sites.js';
 import { SPELL_TELEPORTS } from '#/bot/event/webwalk/teleportCatalog.js';
-import { derive, inputsPresent } from '../../../tools/nav/jive-safespots.js';
+import { BLACK_DRAGON, derive, inputsPresent } from '../../../tools/nav/jive-safespots.js';
 
 describe('DRAGON_SITES', () => {
-    test('Taverley blue is the only entry and every option resolves', () => {
-        expect(SITE_OPTIONS).toEqual(['taverley-blue']);
+    test('the two Taverley sites are the entries and every option resolves', () => {
+        expect(SITE_OPTIONS).toEqual(['taverley-blue', 'taverley-black']);
         for (const key of SITE_OPTIONS) {
             expect(siteFor(key).key).toBe(key);
         }
@@ -83,4 +83,71 @@ describe.skipIf(!inputsPresent())('the checked-in derivation (pack-gated)', () =
         expect(flanking).toEqual(site.safespots.map(t => `${t.x},${t.z}`).sort());
         expect(derived.spawns.filter(s => s.adult).map(s => [s.x, s.z])).toEqual([[2897, 9797], [2899, 9802], [2904, 9802]]);
     }, 60_000);
+});
+
+describe('the Taverley black dragons', () => {
+    const s = DRAGON_SITES['taverley-black']!;
+
+    // Why: derived by tools/nav/jive-safespots.ts --target black, the same probe the blue tiles came from.
+    test('stand in the corridor south of the room, off every tile a dragon reaches', () => {
+        expect(s.safespots.map(t => [t.x, t.z])).toEqual([[2836, 9817], [2835, 9817], [2834, 9817]]);
+        expect([s.meleeAnchor.x, s.meleeAnchor.z]).toEqual([2835, 9818]);
+        expect(s.safespots.every(t => t.level === 0)).toBe(true);
+    });
+
+    test('take the gate, the key, the bank and the way out from the blue site, since they share a dungeon', () => {
+        expect(s.gate).toEqual(TAVERLEY_BLUE.gate);
+        expect(s.keyItem).toEqual(TAVERLEY_BLUE.keyItem);
+        expect(s.bank).toEqual(TAVERLEY_BLUE.bank);
+        expect(s.escapeTeleportId).toBe(TAVERLEY_BLUE.escapeTeleportId);
+        expect(s.walkOut).toEqual(TAVERLEY_BLUE.walkOut);
+    });
+
+    test('carry their own target, loot list, food and poison kit', () => {
+        expect(s.target).toBe('Black dragon');
+        expect(s.bones).toBe('Dragon bones');
+        expect(s.lootSetting).toBe('lootBlack');
+        expect(s.food).toBe('Shark');
+        expect(s.antipoison).toBe(true);
+        expect(TAVERLEY_BLUE.lootSetting).toBeUndefined();
+        expect(TAVERLEY_BLUE.antipoison).toBeUndefined();
+    });
+
+    // Why: the dragons only breathe from melee reach on this content, so a melee-proof tile is breath-proof and the site needs no ranged-threat flag.
+    test('are not a ranged threat, the same as the blues', () => {
+        expect(s.rangedThreat).toBeUndefined();
+    });
+
+    test('cover both spawns, the walk in and the blue lair, but never the surface', () => {
+        for (const [x, z] of [[2829, 9826], [2835, 9824]]) {
+            expect(s.inArea({ x: x!, z: z!, level: 0 })).toBe(true);
+        }
+        expect(s.inArea({ x: 2836, z: 9817, level: 0 })).toBe(true);
+        expect(s.inArea({ x: 2911, z: 9809, level: 0 })).toBe(true);
+        expect(s.inArea({ x: 2946, z: 3369, level: 0 })).toBe(false);
+        expect(s.inArea(null)).toBe(false);
+    });
+
+    test('the blue area stays its own, so the two sites do not swap lairs', () => {
+        expect(TAVERLEY_BLUE.inArea({ x: 2829, z: 9826, level: 0 })).toBe(false);
+    });
+});
+
+// Why: the tool's own pick for this room is the west cluster, which the walk in reaches only by crossing the dragons, so the site takes the corridor tiles instead and this pins them as tiles the probe still calls safe.
+describe.skipIf(!inputsPresent(BLACK_DRAGON))('the black dragon derivation (pack-gated)', () => {
+    test('every safespot the site carries is one the probe derived, and both spawns are covered', () => {
+        const site = DRAGON_SITES['taverley-black']!;
+        const derived = derive(BLACK_DRAGON);
+        const safe = new Set(derived.safespots.map(t => `${t.x},${t.z}`));
+        for (const tile of site.safespots) {
+            expect(safe.has(`${tile.x},${tile.z}`)).toBe(true);
+        }
+        expect(derived.spawns.filter(sp => sp.adult)).toHaveLength(2);
+    });
+
+    test('the melee anchor is one the probe derived too', () => {
+        const site = DRAGON_SITES['taverley-black']!;
+        const anchors = new Set(derive(BLACK_DRAGON).anchors.map(a => `${a.x},${a.z}`));
+        expect(anchors.has(`${site.meleeAnchor.x},${site.meleeAnchor.z}`)).toBe(true);
+    });
 });

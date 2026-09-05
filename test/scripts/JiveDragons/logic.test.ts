@@ -1,24 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import {
-    SAFESPOT_BLIND_MS,
-    attackRangeFor,
-    bodyOrigin,
-    engageRangeFor,
-    gapTo,
-    holdDue,
-    hurtOnSpot,
-    isClueObj,
-    lootHalts,
-    keyStatus,
-    meleeShieldGate,
-    nearestSpot,
-    nextSafespot,
-    noteSighting,
-    retreatAim,
-    retreatDue,
-    settled,
-    wantsDrop
-} from '#/bot/scripts/JiveDragons/logic.js';
+import { SAFESPOT_BLIND_MS, attackRangeFor, bodyOrigin, engageRangeFor, gapTo, holdDue, hurtOnSpot, isClueObj, keepDoses, keyStatus, lootHalts, meleeShieldGate, nearestSpot, nextSafespot, noteSighting, retreatAim, retreatDue, settled, wantsDrop } from '#/bot/scripts/JiveDragons/logic.js';
 
 describe('nextSafespot', () => {
     const base = { index: 0, spots: 3, hurt: false, blindMs: 0 };
@@ -307,5 +288,23 @@ describe('hurtOnSpot', () => {
         expect(hurtOnSpot({ rangedThreat: false, onSpot: false, lastHp: 80, hp: 70 })).toBe(false);
         expect(hurtOnSpot({ rangedThreat: false, onSpot: true, lastHp: -1, hp: 70 })).toBe(false);
         expect(hurtOnSpot({ rangedThreat: false, onSpot: true, lastHp: 70, hp: 70 })).toBe(false);
+    });
+});
+
+// Why: the key stop deposits everything off the keep list before the first full bank trip, so a dose left off it is banked and the walk in is unprotected, which is what let poison chip the run on the safespot.
+describe('keepDoses', () => {
+    const boosts = ['Super attack(3)', 'Super attack(2)'];
+    const anti = ['Superantipoison(4)', 'Superantipoison(3)'];
+
+    test('keeps the antipoison alongside the boosts on a site that carries one', () => {
+        expect(keepDoses(boosts, anti, true)).toEqual([...boosts, ...anti]);
+    });
+
+    test('keeps only the boosts where the site carries no antipoison', () => {
+        expect(keepDoses(boosts, anti, false)).toEqual(boosts);
+    });
+
+    test('a run carrying neither keeps nothing extra', () => {
+        expect(keepDoses([], anti, false)).toEqual([]);
     });
 });

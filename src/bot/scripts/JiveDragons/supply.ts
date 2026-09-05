@@ -79,6 +79,26 @@ export interface EscapeSpell {
 export type KeyState = 'held' | 'bank' | 'fetch';
 
 export const SHIELD = 'Dragonfire shield';
+
+/** poison_player's opening line, printed once per fresh poisoning. */
+export const POISONED = /you have been poisoned/i;
+
+export const ANTIPOISON_LABEL = 'Superantipoison';
+export const ANTIPOISON_DOSES: readonly string[] = [4, 3, 2, 1].map(d => `${ANTIPOISON_LABEL}(${d})`);
+
+export function antipoisonPlan(want: number): FlaskPlan {
+    return { flask: ANTIPOISON_DOSES[0]!, doses: ANTIPOISON_DOSES, want };
+}
+
+/** The first dose form held, smallest flask first so a part-used one goes before a full one. */
+export function doseToDrink(count: (name: string) => number): string | null {
+    for (const name of [...ANTIPOISON_DOSES].reverse()) {
+        if (count(name) > 0) {
+            return name;
+        }
+    }
+    return null;
+}
 const BOOTH = 'Bank booth';
 const BOOTH_OP = 'Use-quickly';
 

@@ -243,3 +243,13 @@ export function siteTileOf(schema: SettingsSchema, bag: SettingsBag, key: string
     const set = bag.tile(key, site);
     return set.equals(def) ? site : set;
 }
+
+// Why: every bank stop deposits what the keep list does not name, the key stop included, and that one runs before the first full trip; a dose left off the list is banked and the walk in goes unprotected.
+/** The dose forms a deposit keeps: the boost flasks, plus the antipoison on a site that carries one. */
+export function keepDoses(
+    potionDoses: readonly string[],
+    antipoisonDoses: readonly string[],
+    carriesAntipoison: boolean
+): string[] {
+    return carriesAntipoison ? [...potionDoses, ...antipoisonDoses] : [...potionDoses];
+}

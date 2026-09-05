@@ -57,3 +57,50 @@ describe('JiveDragons site tiles', () => {
         expect(siteTile(bag, 'bankTile', elsewhere)).toEqual(new Tile(3013, 3355, 0));
     });
 });
+
+describe('the black dragon chips', () => {
+    const blue = SETTINGS.loot!;
+    const black = SETTINGS.lootBlack!;
+
+    // Why: a SettingDef's options are a fixed string[] with no hook onto another key's value, so each table is its own setting and the site chooses which one is shown.
+    test('are their own setting, shown for the black site and hidden for the blue one', () => {
+        expect(blue.showIf).toEqual({ key: 'site', anyOf: ['taverley-blue'] });
+        expect(black.showIf).toEqual({ key: 'site', anyOf: ['taverley-black'] });
+    });
+
+    test('offer the black dragon table, not the blue one', () => {
+        expect(black.options).toEqual(DROP_DB['Black dragon']);
+        expect(black.options).toContain('Dragon med helm');
+        expect(black.options).not.toContain('Bass');
+        expect(blue.options).not.toContain('Dragon med helm');
+    });
+
+    test('start with the hides and the bones ticked and the junk clear', () => {
+        const defaults = black.default as string[];
+        expect(defaults).toContain('Dragonhide');
+        expect(defaults).toContain('Dragon bones');
+        expect(defaults).not.toContain('Coins');
+        expect(defaults).not.toContain('Chocolate cake');
+    });
+
+    test('rune arrows are on the black table, so a range run gets its own ammo back by name', () => {
+        expect(DROP_DB['Black dragon']!).toContain('Rune arrow');
+    });
+});
+
+describe('the ranged supplies', () => {
+    test('the ranging potion is a ranged option, off by default since it is an extra cost', () => {
+        expect(SETTINGS.rangingPotion!.default).toBe(false);
+        expect(SETTINGS.rangingPotion!.showIf).toEqual({ key: 'combatStyle', anyOf: ['range'] });
+    });
+
+    test('the antipoison is offered on the black site only, one flask by default', () => {
+        expect(SETTINGS.antipoisonDoses!.default).toBe(1);
+        expect(SETTINGS.antipoisonDoses!.min).toBe(0);
+        expect(SETTINGS.antipoisonDoses!.showIf).toEqual({ key: 'site', anyOf: ['taverley-black'] });
+    });
+
+    test('rune arrows are among the ammo the panel offers', () => {
+        expect(SETTINGS.ammo!.options).toContain('Rune arrow');
+    });
+});
