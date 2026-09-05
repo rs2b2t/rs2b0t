@@ -1,6 +1,6 @@
 import { reader } from '../../adapter/ClientAdapter.js';
 import { Bank } from '../../api/bank/Bank.js';
-import { nearestBank } from '../../api/bank/BankLocations.js';
+import { BANK_LOCATIONS, nearestBank, type BankLocation } from '../../api/bank/BankLocations.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
@@ -38,8 +38,28 @@ const COINS_LAND_MS = 5_000;
 const MAKER_MISSES = 10;
 const TOP_LINES = 3;
 
+/** The option that leaves the bank to the walker. */
+export const NEAREST_BANK = 'Nearest';
+
+// Why: the maker stands at a bank of its own choosing and the nearest one to wherever the dumper started is not always that bank, so the operator names it and the run walks there.
+/** The bank a setting names, or null for the nearest one. */
+export function bankChoice(name: string): BankLocation | null {
+    const want = name.trim().toLowerCase();
+    if (want === '' || want === NEAREST_BANK.toLowerCase()) {
+        return null;
+    }
+    return BANK_LOCATIONS.find(b => b.name.toLowerCase() === want) ?? null;
+}
+
 export const SETTINGS: SettingsSchema = {
-    maker: { type: 'string', default: '', label: 'Maker name', help: 'the player running MarketMaker; start this script standing beside it, at its bank' }
+    maker: { type: 'string', default: '', label: 'Maker name', help: 'the player running MarketMaker; start this script standing beside it, at its bank' },
+    bank: {
+        type: 'string',
+        default: NEAREST_BANK,
+        options: [NEAREST_BANK, ...BANK_LOCATIONS.map(b => b.name)],
+        label: 'Bank',
+        help: 'where the takings go between trips. Pick the maker\'s own bank, since the nearest one to where this starts is not always the one it stands at'
+    }
 };
 
 export default class JiveMarketDumper extends TaskBot {
@@ -86,7 +106,8 @@ export default class JiveMarketDumper extends TaskBot {
         if (!here) {
             return false;
         }
-        const bank = nearestBank(here);
+        const named = this.settings.str('bank', NEAREST_BANK);
+        const bank = bankChoice(named) ?? nearestBank(here);
         if (!bank) {
             ScriptRunner.stop('[dumper] no reachable bank');
             return false;

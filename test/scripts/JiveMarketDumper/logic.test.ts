@@ -12,6 +12,7 @@ const IRON_NOTE = 441;
 const YEW = 1515;
 const YEW_NOTE = 1516;
 const SCIM = 1333;
+const ARROW = 892;
 /** Untradeable, the one thing a dump has to leave behind. */
 const CAPE = 1019;
 
@@ -22,6 +23,7 @@ const CAT = buildCatalog([
     rec(YEW_NOTE, 'Yew logs', { certlink: YEW, certtemplate: 799, stackable: true }),
     rec(COINS, 'Coins', { stackable: true }),
     rec(SCIM, 'Rune scimitar'),
+    rec(ARROW, 'Rune arrow', { stackable: true }),
     rec(CAPE, 'Cape')
 ]);
 
@@ -37,18 +39,24 @@ describe('dumpables', () => {
 
     test('folds a noted bank row onto its item and says what a note-mode withdrawal lands as', () => {
         const list = dumpables([{ id: IRON_NOTE, count: 50 }, { id: IRON, count: 2 }], CAT);
-        expect(list).toEqual([{ id: IRON, name: 'Iron ore', displayName: 'Iron ore', notedId: IRON_NOTE, count: 52 }]);
+        expect(list).toEqual([{ id: IRON, name: 'Iron ore', displayName: 'Iron ore', notedId: IRON_NOTE, stackable: false, count: 52 }]);
     });
 
     test('an item with no noted form still goes, one slot a unit', () => {
-        expect(dumpables([{ id: SCIM, count: 3 }], CAT)[0]).toMatchObject({ id: SCIM, notedId: null, count: 3 });
+        expect(dumpables([{ id: SCIM, count: 3 }], CAT)[0]).toMatchObject({ id: SCIM, notedId: null, stackable: false, count: 3 });
+    });
+
+    test('reports what stacks, so the pile can give a stack one slot rather than one a unit', () => {
+        expect(dumpables([{ id: ARROW, count: 5000 }], CAT)[0]).toMatchObject({ id: ARROW, stackable: true, count: 5000 });
     });
 });
 
 describe('planPile', () => {
-    const yews: Dumpable = { id: YEW, name: 'Yew logs', displayName: 'Yew logs', notedId: YEW_NOTE, count: 500 };
-    const iron: Dumpable = { id: IRON, name: 'Iron ore', displayName: 'Iron ore', notedId: IRON_NOTE, count: 1000 };
-    const scims: Dumpable = { id: SCIM, name: 'Rune scimitar', displayName: 'Rune scimitar', notedId: null, count: 40 };
+    const yews: Dumpable = { id: YEW, name: 'Yew logs', displayName: 'Yew logs', notedId: YEW_NOTE, stackable: false, count: 500 };
+    const iron: Dumpable = { id: IRON, name: 'Iron ore', displayName: 'Iron ore', notedId: IRON_NOTE, stackable: false, count: 1000 };
+    const scims: Dumpable = { id: SCIM, name: 'Rune scimitar', displayName: 'Rune scimitar', notedId: null, stackable: false, count: 40 };
+    // Why: a stackable has no noted form because it already stacks, so a slot a unit would cap a 5,000 stack at twenty and leave the rest banked forever.
+    const arrows: Dumpable = { id: ARROW, name: 'Rune arrow', displayName: 'Rune arrow', notedId: null, stackable: true, count: 5000 };
 
     test('a noted stack is one slot however deep, so a whole bank of them rides in one trip', () => {
         expect(planPile([yews, iron])).toEqual([yews, iron]);
@@ -61,11 +69,22 @@ describe('planPile', () => {
 
     // Why: the maker has to have room for every slot it is handed, and it keeps only a few free beside its coin float, so a trip stops well short of a full pack.
     test('stops at twenty slots by default, short of the pack', () => {
-        const many: Dumpable[] = Array.from({ length: 40 }, (_, i) => ({ id: 3000 + i, name: `Thing ${i}`, displayName: `Thing ${i}`, notedId: 4000 + i, count: 1 }));
+        const many: Dumpable[] = Array.from({ length: 40 }, (_, i) => ({ id: 3000 + i, name: `Thing ${i}`, displayName: `Thing ${i}`, notedId: 4000 + i, stackable: false, count: 1 }));
         expect(TRADE_SLOTS).toBe(20);
         expect(TRADE_SLOTS).toBeLessThan(PACK);
         expect(planPile(many)).toHaveLength(TRADE_SLOTS);
         expect(planPile([scims])).toEqual([{ ...scims, count: TRADE_SLOTS }]);
+    });
+
+    test('a stackable rides whole in one slot, however deep the stack', () => {
+        expect(planPile([arrows])).toEqual([arrows]);
+        expect(planPile([arrows], 1)).toEqual([arrows]);
+    });
+
+    test('twenty stackable kinds all fit, where twenty unnotable units would fill the trip alone', () => {
+        const many: Dumpable[] = Array.from({ length: 20 }, (_, i) => ({ ...arrows, id: 9000 + i, name: `Rune ${i}`, displayName: `Rune ${i}` }));
+        expect(planPile(many)).toHaveLength(20);
+        expect(planPile(many).every(l => l.count === 5000)).toBe(true);
     });
 
     test('takes nothing with no room', () => {

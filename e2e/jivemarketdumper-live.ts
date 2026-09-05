@@ -141,8 +141,9 @@ try {
     // Why: not in the book, so it has to stay in the bank while the run still ends with "nothing it buys".
     await cheatQuiet(custPage, '~bankitem rune_chainbody 2');
     await teleArrive(custPage, SPOT);
-    // Why: the dumper is given the maker's name and nothing else; it never reads a price book.
-    await writeStorage(custPage, { 'rs2b0t:set:JiveMarketDumper:maker': MAKER });
+    // Why: the dumper is given the maker's name and the bank it stands at, and nothing else; it never reads a price book.
+    // Why: naming the bank rather than leaving it on Nearest is what proves the setting is honoured, since the maker's own bank is the one the takings have to reach.
+    await writeStorage(custPage, { 'rs2b0t:set:JiveMarketDumper:maker': MAKER, 'rs2b0t:set:JiveMarketDumper:bank': 'Seers' });
 
     await startScript(makerPage, 'MarketMaker');
     console.log('MarketMaker started, waiting for its ledger and coin float');
@@ -226,6 +227,9 @@ try {
     await stopScript(makerPage);
     console.log(`final: sales=${sales} gp=${gp} expected=${EXPECTED_GP} runner=${last.runner}`);
 
+    if (!last.logs.some(l => /\[dumper\] .*banking at Seers/.test(l.msg))) {
+        fail(`the run did not take the named bank: ${last.logs.slice(-6).map(l => l.msg).join(' | ')}`);
+    }
     const tail = async (): Promise<string> => `customer: ${last.logs.slice(-6).map(l => l.msg).join(' | ')}\n  maker: ${(await runnerLogs(makerPage, 8)).join(' | ')}`;
     if (sales < 1) {
         fail(`no pile was ever dumped: ${await tail()}`);

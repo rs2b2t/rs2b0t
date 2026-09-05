@@ -868,6 +868,7 @@ Dumps a bank to a running MarketMaker: withdraws every tradeable item as notes, 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `maker` | string | `""` | Maker name |
+| `bank` | string | `"Nearest"` | Bank — one of: Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Fishing Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
 
 ### MarketMaker
 

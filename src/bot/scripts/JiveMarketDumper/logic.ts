@@ -14,6 +14,8 @@ export interface Dumpable {
     /** The name the maker speaks, for the log and the paint. */
     displayName: string;
     notedId: number | null;
+    /** Already stacks in one slot, so it needs no noted form. */
+    stackable: boolean;
     count: number;
 }
 
@@ -34,12 +36,18 @@ export function dumpables(items: readonly { id: number; count: number }[], cat: 
         if (name === undefined) {
             continue;
         }
-        out.push({ id, name, displayName: displayName(cat, id), notedId: notedId(cat, id), count });
+        out.push({ id, name, displayName: displayName(cat, id), notedId: notedId(cat, id), stackable: cat.byId.get(id)?.stackable === true, count });
     }
     return out.sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
-// Why: a noted stack is one slot however deep, so most banks go in a trip or two; an item with no noted form costs a slot a unit and is cut to what is left.
+// Why: a stackable has no noted form because it already stacks, so keying the slot cost off the noted id alone charged a 5,000 stack 5,000 slots and capped it at the trip size.
+/** Slots a line takes in the window: one for anything that stacks or notes, one per unit otherwise. */
+export function slotsFor(d: Dumpable): number {
+    return d.stackable || d.notedId !== null ? 1 : d.count;
+}
+
+// Why: a noted or stacked line is one slot however deep, so most banks go in a trip or two; only an item that is neither costs a slot a unit and is cut to what is left.
 /** The lines one trip carries, filling `slots` trade slots from the top of the list. */
 export function planPile(list: readonly Dumpable[], slots = TRADE_SLOTS): Dumpable[] {
     const out: Dumpable[] = [];
@@ -48,14 +56,14 @@ export function planPile(list: readonly Dumpable[], slots = TRADE_SLOTS): Dumpab
         if (room < 1) {
             break;
         }
-        if (d.notedId === null) {
-            const n = Math.min(d.count, room);
-            out.push({ ...d, count: n });
-            room -= n;
+        if (slotsFor(d) === 1) {
+            out.push({ ...d });
+            room -= 1;
             continue;
         }
-        out.push({ ...d });
-        room -= 1;
+        const n = Math.min(d.count, room);
+        out.push({ ...d, count: n });
+        room -= n;
     }
     return out;
 }
