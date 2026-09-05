@@ -4,6 +4,7 @@ import { Execution } from '../../../api/execution/Execution.js';
 import { ChatDialog } from '../../../api/ui/dialogue/ChatDialog.js';
 import { Locs } from '../../../api/locs/Locs.js';
 import { MAZE_SHRINE, MAZE_SHRINE_DOOR } from './mazeGraph.js';
+import { walkTowards, type MazeWalkWorld } from './mazeWalk.js';
 import { selectRoute } from './selectRoute.js';
 
 /** Region 45,71, content mapzone `0_45_71` / enum macro_maze_teleports. */
@@ -50,40 +51,21 @@ export async function solveMaze(log: (msg: string) => void): Promise<boolean> {
         `random event: maze — spawn (${start.x},${start.z}) -> ${route.doors.length} doors, first (${route.doors[0].x},${route.doors[0].z})`
     );
 
-    const walkTowards = async (d: { x: number; z: number }, onto: boolean): Promise<void> => {
-        const reached = (t: { x: number; z: number }): boolean =>
-            onto ? t.x === d.x && t.z === d.z : chebyshev(t, d) <= 1;
-        for (let w = 0; w < 12 && inMaze(); w++) {
-            const now = reader.worldTile();
-            if (now && reached(now)) {
-                return;
-            }
+    const world: MazeWalkWorld = {
+        tile: () => reader.worldTile(),
+        walkTo: d => {
             const local = reader.toLocal(d.x, d.z);
-            if (!local) {
-                await Execution.delayTicks(1);
-                continue;
-            }
-            const before = reader.worldTile();
-            actions.walkTo(local.lx, local.lz);
-            const moved = await Execution.delayUntil(() => {
-                const t = reader.worldTile();
-                return t !== null && before !== null && chebyshev(t, before) >= 1;
-            }, 1_500);
-            if (!moved && inMaze()) {
+            if (local) {
                 actions.walkTo(local.lx, local.lz);
             }
-            await Execution.delayUntil(() => {
-                const t = reader.worldTile();
-                return t !== null && (reached(t) || (before !== null && chebyshev(t, before) >= 2));
-            }, 4_000);
-        }
+        },
+        inMaze,
+        until: (cond, ms) => Execution.delayUntil(cond, ms),
+        ticks: n => Execution.delayTicks(n)
     };
+    const goTo = (d: { x: number; z: number }, onto: boolean): Promise<boolean> => walkTowards(world, d, onto);
     /** True when the walk got next to `d`; false means it is walled off. */
-    const walkAdjacent = async (d: { x: number; z: number }): Promise<boolean> => {
-        await walkTowards(d, false);
-        const t = reader.worldTile();
-        return t !== null && chebyshev(t, d) <= 1;
-    };
+    const walkAdjacent = (d: { x: number; z: number }): Promise<boolean> => goTo(d, false);
 
     const openDoorAt = async (d: { x: number; z: number }): Promise<void> => {
         await clearMesbox();
@@ -171,7 +153,7 @@ export async function solveMaze(log: (msg: string) => void): Promise<boolean> {
             Math.abs(me0.z - MAZE_SHRINE.z) <= 2;
         if (!nearShrine || pass > 0) {
             const stand = touchStands[pass % touchStands.length]!;
-            await walkTowards(stand, pass % 2 === 0);
+            await goTo(stand, pass % 2 === 0);
             await clearMesbox();
         }
 
