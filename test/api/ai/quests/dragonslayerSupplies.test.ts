@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
+import { dragonslayer } from '#/bot/api/ai/quests/defs/dragonslayer/index.js';
 import { SUPPLY_GATHERS } from '#/bot/api/ai/quests/defs/dragonslayer/supplies.js';
+import { planProvisioning } from '#/bot/api/ai/quests/engine/provisioning.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 function snapshot(over: Partial<QuestSnapshot> = {}): QuestSnapshot {
@@ -58,5 +60,14 @@ describe('Dragon Slayer supply gathers', () => {
         const onlyKeepers = new Map([['coins', 1], ['silk', 1], ['plank', 3]]);
         const step = SUPPLY_GATHERS.hammer(snapshot({ inv: onlyKeepers, freeSlots: 0 }), 1);
         expect(step.kind).toBe('wait');
+    });
+});
+
+describe('Dragon Slayer record', () => {
+    test('lists nothing the quest consumes, so a resumed session re-provisions nothing', () => {
+        // Why: the engine walks record.items on every session start and after every death, and the door and the hull eat six of what the record used to list.
+        const plan = planProvisioning(dragonslayer.record.items, new Map([['coins', 1]]), new Map());
+        expect(plan.gather).toEqual([]);
+        expect(plan.satisfied).toBe(true);
     });
 });

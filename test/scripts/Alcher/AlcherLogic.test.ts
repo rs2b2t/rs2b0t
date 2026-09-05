@@ -68,6 +68,20 @@ describe('labels disambiguate what the client name does not', () => {
     test('every option has a label and every label an option', () => {
         expect(Object.keys(ALCH_OPTION_LABELS).sort()).toEqual([...ALCH_OPTIONS].sort());
     });
+
+    // Why: the chips are for finding an item, so they read in name order; the drain still runs richest first off ALCH_ITEMS.
+    test('the chips after the custom one read alphabetically by the label shown', () => {
+        const shown = ALCH_OPTIONS.slice(1).map(key => ALCH_OPTION_LABELS[key]!);
+        expect(shown).toEqual([...shown].sort((a, b) => a.localeCompare(b)));
+        // Why: a cheap adamant sword ahead of the far richer rune platebody is what says this is not the old value order.
+        expect(shown[0]).toBe('Adamant 2h sword (3,840)');
+        expect(shown.indexOf('Adamant 2h sword (3,840)')).toBeLessThan(shown.indexOf('Rune platebody (39,000)'));
+    });
+
+    test('the drain order is untouched by the chip order, richest first', () => {
+        expect(ALCH_ITEMS.map(i => i.alchValue)).toEqual([...ALCH_ITEMS.map(i => i.alchValue)].sort((a, b) => b - a));
+        expect(selectedAlchItems(['yew_longbow', 'rune_platebody']).map(i => i.key)).toEqual(['rune_platebody', 'yew_longbow']);
+    });
 });
 
 describe('the custom chip', () => {

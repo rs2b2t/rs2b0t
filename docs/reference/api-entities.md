@@ -48,7 +48,7 @@ All entities are `Locatable` (`tile(): Tile`, `distance(): number`); most are
 `Interactable` (`actions(): string[]`, `interact(action): boolean | Promise<boolean>`).
 
 ```ts
-class Npc  { name; id; level; index; inCombat; health; valid(); targetsMe(); targetsAnotherPlayer(); /* + Locatable + Interactable */ }
+class Npc  { name; id; level; index; size; inCombat; health; valid(); targetsMe(); targetsAnotherPlayer(); /* + Locatable + Interactable */ }
 class Loc  { name; id; /* + Locatable + Interactable */ }
 class GroundItem { name; id; count; /* + Locatable + Interactable */ }
 class Player { name; index; inCombat; targetsMe(); /* + Locatable, actions() */ }

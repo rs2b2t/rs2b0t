@@ -192,6 +192,8 @@ export class Npc implements Interactable, Locatable {
     readonly id: number;
     readonly level: number;
     readonly index: number;
+    /** Tiles along each side of the footprint; `tile()` is the one under its centre. */
+    readonly size: number;
     readonly inCombat: boolean;
     readonly health: number;
     tile(): Tile;

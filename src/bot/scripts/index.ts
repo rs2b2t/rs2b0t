@@ -36,7 +36,16 @@ import MossGiant, { SETTINGS as MOSSGIANT_SETTINGS } from './MossGiant/MossGiant
 import BrimhavenMossGiants, { SETTINGS as BRIMHAVEN_MOSS_GIANTS_SETTINGS } from './BrimhavenMossGiants/BrimhavenMossGiants.js';
 import GreenDragon, { SETTINGS as GREENDRAGON_SETTINGS } from './GreenDragon/GreenDragon.js';
 import FireGiant, { SETTINGS as FIREGIANT_SETTINGS } from './FireGiant/FireGiant.js';
+import JiveDragons, { SETTINGS as JIVEDRAGONS_SETTINGS } from './JiveDragons/JiveDragons.js';
+import JiveDemons, { SETTINGS as JIVEDEMONS_SETTINGS } from './JiveDemons/JiveDemons.js';
+import JiveEnchanter, { SETTINGS as JIVEENCHANTER_SETTINGS } from './JiveEnchanter/JiveEnchanter.js';
+import JiveKBD, { SETTINGS as JIVEKBD_SETTINGS } from './JiveKBD/JiveKBD.js';
+import JiveCrafting, { SETTINGS as JIVECRAFTING_SETTINGS } from './JiveCrafting/JiveCrafting.js';
+import JiveChests, { SETTINGS as JIVECHESTS_SETTINGS } from './JiveChests/JiveChests.js';
+import JiveMarketDumper, { SETTINGS as JIVEMARKETDUMPER_SETTINGS } from './JiveMarketDumper/JiveMarketDumper.js';
+import JiveShilo, { SETTINGS as JIVESHILO_SETTINGS } from './JiveShilo/JiveShilo.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab/RockCrab.js';
+import RangingGuild, { RANGING_GUILD_SETTINGS } from './RangingGuild/RangingGuild.js';
 import ThievingBot, { SETTINGS as THIEVING_SETTINGS } from './ThievingBot/ThievingBot.js';
 import WalkToBot, { WALKTO_SETTINGS } from './WalkToBot/WalkToBot.js';
 import DoorOpener, { SETTINGS as DOOROPENER_SETTINGS } from './DoorOpener/DoorOpener.js';
@@ -160,6 +169,15 @@ ScriptRegistry.register({
 });
 
 ScriptRegistry.register({
+    name: 'RangingGuild',
+    description: 'Plays the Ranging Guild archery competition for tickets and trades every 2000 for 50 rune arrows. Pays the judge 200 coins a round, shoots the ten arrows from behind the haystacks, banks at Seers for coins and the best bow',
+    category: 'Money making',
+    tags: ['ranging guild', 'minigame', 'archery', 'tickets', 'rune arrows', 'seers', 'afk'],
+    settingsSchema: RANGING_GUILD_SETTINGS,
+    create: () => new RangingGuild()
+});
+
+ScriptRegistry.register({
     name: 'MossGiant',
     description: 'Moss giants N of Ardougne: range/mage safespot or melee, banks all loot',
     category: 'Combat',
@@ -193,6 +211,78 @@ ScriptRegistry.register({
     tags: ['waterfall', 'safespot', 'members', 'banking'],
     settingsSchema: FIREGIANT_SETTINGS,
     create: () => new FireGiant()
+});
+
+ScriptRegistry.register({
+    name: 'JiveDragons',
+    description: 'Taverley Dungeon blue dragons: mage or range from a derived safespot, or melee with the Dragonfire shield. Opens the dusty-key gate, fetching the key off Velrak when the bank has none.',
+    category: 'Combat',
+    tags: ['taverley', 'dragons', 'safespot', 'members', 'banking', 'clues'],
+    settingsSchema: JIVEDRAGONS_SETTINGS,
+    create: () => new JiveDragons()
+});
+
+ScriptRegistry.register({
+    name: 'JiveDemons',
+    description: 'Taverley Dungeon black demons: mage or range from a derived safespot in the pocket past the blue dragons. Opens the dusty-key gate, fetching the key off Velrak when the bank has none.',
+    category: 'Combat',
+    tags: ['taverley', 'demons', 'safespot', 'members', 'banking'],
+    settingsSchema: JIVEDEMONS_SETTINGS,
+    create: () => new JiveDemons()
+});
+
+ScriptRegistry.register({
+    name: 'JiveKBD',
+    description: 'King Black Dragon with magic from the alcove beside the lair exit lever, wearing the Dragonfire shield against the far fire. Walks the wilderness from Edgeville to the Lava Maze ladder, drinks a Superantipoison before the lever spiders, and teleports to Varrock to bank.',
+    category: 'Combat',
+    tags: ['kbd', 'dragon', 'safespot', 'wilderness', 'members', 'banking'],
+    settingsSchema: JIVEKBD_SETTINGS,
+    create: () => new JiveKBD()
+});
+
+ScriptRegistry.register({
+    name: 'JiveShilo',
+    description: "Fly fishes the river inside Shilo Village, sells the trout and salmon to Fernahei's fishing hut and spends the coins on his feathers, so a pack of fish comes back as feathers and nothing is ever banked. Needs Shilo Village complete and Fishing 20.",
+    category: 'Fishing',
+    tags: ['fishing', 'shilo', 'shopping', 'feathers', 'members', 'afk'],
+    settingsSchema: JIVESHILO_SETTINGS,
+    create: () => new JiveShilo()
+});
+
+ScriptRegistry.register({
+    name: 'JiveCrafting',
+    description: 'Makes one gold jewel picked from the dropdown at the Al Kharid furnace: banks for the mould, the gold bars and the gems, uses a bar on the furnace, clicks the biggest Make button that fits the load and walks back with it. Stops honestly when the bank runs out of any of the three.',
+    category: 'Crafting',
+    tags: ['crafting', 'jewellery', 'al kharid', 'banking', 'afk'],
+    settingsSchema: JIVECRAFTING_SETTINGS,
+    create: () => new JiveCrafting()
+});
+
+ScriptRegistry.register({
+    name: 'JiveEnchanter',
+    description: 'Stands at the nearest bank and enchants one jewel picked from the dropdown: wields a matching elemental staff when the bank has one, withdraws the jewels by id and the runes their casts need, casts one enchant every three ticks and banks the products. Stops honestly when the bank runs out of the jewel or a rune.',
+    category: 'Magic',
+    tags: ['magic', 'enchanting', 'jewellery', 'banking', 'afk'],
+    settingsSchema: JIVEENCHANTER_SETTINGS,
+    create: () => new JiveEnchanter()
+});
+
+ScriptRegistry.register({
+    name: 'JiveMarketDumper',
+    description: 'Dumps a bank to a running MarketMaker: withdraws every tradeable item as notes, puts the pile up in one window and takes whatever the maker bids, banking the coins between trips. It needs no price book, since anything the maker will not pay for rides along with what it does. Stops when the bank is empty or the maker turns down all that is left.',
+    category: 'Money making',
+    tags: ['trading', 'bank', 'market', 'afk'],
+    settingsSchema: JIVEMARKETDUMPER_SETTINGS,
+    create: () => new JiveMarketDumper()
+});
+
+ScriptRegistry.register({
+    name: 'JiveChests',
+    description: 'Opens the Taverley crystal chest on a bank of crystal keys: withdraws seven at Falador West, walks to the chest, uses a key on it per open, drops the raw swordfish, body runes and spinach rolls the roll gives, then teleports back and banks the rest. Stops when the bank runs out of keys.',
+    category: 'Money making',
+    tags: ['chest', 'taverley', 'banking', 'looting', 'afk'],
+    settingsSchema: JIVECHESTS_SETTINGS,
+    create: () => new JiveChests()
 });
 
 ScriptRegistry.register({

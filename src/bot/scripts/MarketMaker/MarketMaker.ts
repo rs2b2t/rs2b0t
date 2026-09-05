@@ -40,12 +40,13 @@ import {
     dealOf,
     dealTotals,
     floatShortfall,
+    bankBeforeServing,
     FREE_SLOT_FLOOR,
+    settleDue,
     freshChatLines,
     listedRows,
     RateLimiter,
     resolveQuote,
-    shouldSettle,
     tradeIsStalled,
     sideSignature,
     type Deal
@@ -198,6 +199,8 @@ export default class MarketMaker extends TaskBot {
 
     private lastAdvertiseAt = 0;
     private lastResetAt = 0;
+    /** A reset owes a bank trip that empties the pack, cleared once the trip has run. */
+    private settleOwed = false;
     private advertiseCursor = 0;
     private advertCycle = 0;
 
@@ -375,6 +378,14 @@ export default class MarketMaker extends TaskBot {
     // Why: hardcoding "a minute" goes wrong the moment the setting is tuned, and the customer is the one who has to believe it.
     coolNote(): string {
         return this.cooldownMs <= 0 ? 'Try again.' : `Ask again in ${Math.round(this.cooldownMs / 1000)}s.`;
+    }
+
+    settleForced(): boolean {
+        return this.settleOwed;
+    }
+
+    clearForcedSettle(): void {
+        this.settleOwed = false;
     }
 
     bankReady(nowMs: number): boolean {
@@ -562,7 +573,8 @@ export default class MarketMaker extends TaskBot {
         this.tradeRequests.clear();
         this.tradeClosedAt = null;
         this.lastTold = '';
-        this.setStatus('reset, open for business');
+        this.settleOwed = true;
+        this.setStatus('reset, banking the pack');
     }
 
     /** Say how the shop works. */
@@ -1067,6 +1079,10 @@ class OpenWindow implements Task {
         if (this.bot.counter().current() !== null || this.bot.requests().size === 0 || Trade.active() || reader.modals().main !== -1) {
             return false;
         }
+        // Why: Settle sits below this task, so a pack with no room has to yield the tick or the queue keeps it opening windows it cannot take goods into.
+        if (bankBeforeServing(Inventory.free(), this.bot.packCoins(), this.bot.float(), this.bot.bankReady(Date.now()), this.bot.settleForced())) {
+            return false;
+        }
         // Why: this task runs ahead of Restock, so claiming the tick when every request is waiting on a bank trip starves the fetch that would let any of them open.
         const now = Date.now();
         return [...this.bot.requests()].some(name => {
@@ -1182,11 +1198,12 @@ class Settle implements Task {
         if (!outOfRoom && this.bot.counter().nextIntent(Date.now(), this.bot.intentTtl()) !== null) {
             return false;
         }
-        return shouldSettle(Inventory.free(), this.bot.packCoins(), this.bot.float())
+        return settleDue(Inventory.free(), this.bot.packCoins(), this.bot.float(), this.bot.settleForced())
             || this.bot.floatShort() > 0;
     }
 
     async execute(): Promise<void> {
+        this.bot.clearForcedSettle();
         this.bot.setStatus('banking the takings');
         if (!(await Banking.open({ stand: this.bot.standTile(), boothName: BOOTH.name, boothOp: BOOTH.op, log: m => this.bot.log(m) }))) {
             this.bot.backOffBank('could not open the bank');

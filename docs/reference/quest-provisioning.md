@@ -51,7 +51,10 @@ Two rules that are easy to get wrong:
 - **A quest that buys anything must keep `coins` in its `tools`.** Omit it and the
   provisioner does not carry coin, so every purchase step parks with "need gp".
 - Quest-internal consumables are not `record.items`. The record lists what the quest
-  *requires*; things consumed along the way are the module's own business.
+  *requires*; things consumed along the way are the module's own business. The engine walks
+  the list again on every session start and after every death, so a listed consumable is
+  re-fetched by any run resumed past the leg that spent it. Dragon Slayer's Oracle charms
+  were, with the map already in Ned's hands.
 
 ## Prayer
 

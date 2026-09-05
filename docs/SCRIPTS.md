@@ -5,23 +5,23 @@
 
 # Bundled scripts
 
-- Scripts: 60. Categories: 20.
+- Scripts: 69. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
 ## Contents
 
 - [Agility](#agility) — 4
-- [Combat](#combat) — 12
+- [Combat](#combat) — 15
 - [Cooking](#cooking) — 1
-- [Crafting](#crafting) — 7
+- [Crafting](#crafting) — 8
 - [Firemaking](#firemaking) — 1
-- [Fishing](#fishing) — 1
+- [Fishing](#fishing) — 2
 - [Fletching](#fletching) — 2
 - [Herblore](#herblore) — 5
-- [Magic](#magic) — 2
+- [Magic](#magic) — 3
 - [Mining](#mining) — 3
-- [Money making](#money-making) — 3
+- [Money making](#money-making) — 6
 - [Navigation](#navigation) — 2
 - [Prayer](#prayer) — 1
 - [Quest](#quest) — 3
@@ -335,6 +335,112 @@ Edgeville dungeon hill giants — enters through the public trapdoor and banks l
 | `buryBones` | boolean | `false` | Bury big bones |
 | `lootSlots` | number (1–27) | `14` | Bank after this many loot slots |
 
+### JiveDemons
+
+Taverley Dungeon black demons: mage or range from a derived safespot in the pocket past the blue dragons. Opens the dusty-key gate, fetching the key off Velrak when the bank has none.
+
+- Tags: `taverley`, `demons`, `safespot`, `members`, `banking`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `combatStyle` | string | `"range"` | Combat style — one of: range, mage |
+| `staff` | string | `"Staff of fire"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
+| `spell` | string | `"Fire Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
+| `runesWithdraw` | number (1–2000) | `150` | Casts of runes per bank trip |
+| `runeBuffer` | number (0–2000) | `300` | Spare runes per type |
+| `bow` | string | `"Maple shortbow"` | Bow — one of: Shortbow, Longbow, Oak shortbow, Oak longbow, Willow shortbow, Willow longbow, Maple shortbow, Maple longbow, Yew shortbow, Yew longbow, Magic shortbow, Magic longbow |
+| `rangeStyle` | string | `"rapid"` | Ranged style — one of: accurate, rapid, longrange |
+| `ammo` | string | `"Iron arrow"` | Ammo — one of: Bronze arrow, Iron arrow, Steel arrow, Mithril arrow, Adamant arrow, Rune arrow, Dragon arrow |
+| `ammoWithdraw` | number (1–5000) | `500` | Ammo per bank trip |
+| `loadout` | string | `""` | Loadout — one of:  |
+| `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
+| `panicHp` | number (1–98) | `30` | Panic-to-bank below HP% |
+| `retreatHp` | number (0–99) | `50` | Retreat to a safespot below HP% |
+| `foodReserve` | number (0–27) | `4` | Food kept back from slot-freeing |
+| `healTo` | number (10–100) | `90` | Heal to HP% before heading back |
+| `loot` | string[] | `["Adamant javelin","Adamantite bar","Air rune","Black axe","Black sword","Blood rune","Chaos rune","Chaos talisman","Coins","Death rune","Defence potion(3)","Dragon med helm","Dragon spear","Dragonstone","Fire rune","Half of a key","Herb","Law rune","Lobster","Mithril kiteshield","Nature rune","Nature talisman","Rune 2h sword","Rune arrow","Rune battleaxe","Rune chainbody","Rune javelin","Rune kiteshield","Rune med helm","Rune spear","Rune sq shield","Runite bar","Shield left half","Silver ore","Steel arrow","Steel battleaxe","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire"]` | Loot to pick up (drop table) — one of: Adamant javelin, Adamantite bar, Air rune, Ashes, Black axe, Black sword, Blood rune, Chaos rune, Chaos talisman, Coins, Death rune, Defence potion(3), Dragon med helm, Dragon spear, Dragonstone, Fire rune, Half of a key, Herb, Law rune, Lobster, Mithril kiteshield, Nature rune, Nature talisman, Rune 2h sword, Rune arrow, Rune battleaxe, Rune chainbody, Rune javelin, Rune kiteshield, Rune med helm, Rune spear, Rune sq shield, Runite bar, Shield left half, Silver ore, Steel arrow, Steel battleaxe, Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire |
+| `bankCommonJunk` | boolean | `true` | Also grab shared gems/junk |
+| `site` | string | `"taverley-black-demon"` | Demon site — one of: taverley-black-demon |
+| `safespot1` | tile | `{"x":2856,"z":9786,"level":0}` | Safespot 1 |
+| `safespot2` | tile | `{"x":2857,"z":9786,"level":0}` | Safespot 2 |
+| `safespot3` | tile | `{"x":2855,"z":9786,"level":0}` | Safespot 3 |
+| `bankTile` | tile | `{"x":2946,"z":3369,"level":0}` | Bank stand tile |
+| `leaveVia` | string | `"teleport"` | Leave the dungeon by — one of: Falador teleport, Walk out through the gate |
+| `teleStock` | number (0–10) | `2` | Spare escape casts |
+| `logDetail` | string | `"Normal"` | Log detail — one of: Normal, Verbose |
+
+### JiveDragons
+
+Taverley Dungeon blue dragons: mage or range from a derived safespot, or melee with the Dragonfire shield. Opens the dusty-key gate, fetching the key off Velrak when the bank has none.
+
+- Tags: `taverley`, `dragons`, `safespot`, `members`, `banking`, `clues`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `combatStyle` | string | `"range"` | Combat style — one of: melee, mage, range |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
+| `weapon` | string | `"Rune scimitar"` | Weapon — one of: Bronze scimitar, Iron scimitar, Steel scimitar, Black scimitar, Mithril scimitar, Adamant scimitar, Rune scimitar, Bronze sword, Iron sword, Steel sword, Black sword, Mithril sword, Adamant sword, Rune sword, Bronze longsword, Iron longsword, Steel longsword, Black longsword, Mithril longsword, Adamant longsword, Rune longsword, Dragon longsword, Bronze dagger, Iron dagger, Steel dagger, Black dagger, Mithril dagger, Adamant dagger, Rune dagger, Dragon dagger, Dragon dagger(p) |
+| `staff` | string | `"Staff of fire"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
+| `spell` | string | `"Fire Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
+| `runesWithdraw` | number (1–2000) | `150` | Casts of runes per bank trip |
+| `runeBuffer` | number (0–2000) | `300` | Spare runes per type |
+| `bow` | string | `"Maple shortbow"` | Bow — one of: Shortbow, Longbow, Oak shortbow, Oak longbow, Willow shortbow, Willow longbow, Maple shortbow, Maple longbow, Yew shortbow, Yew longbow, Magic shortbow, Magic longbow |
+| `rangeStyle` | string | `"rapid"` | Ranged style — one of: accurate, rapid, longrange |
+| `ammo` | string | `"Iron arrow"` | Ammo — one of: Bronze arrow, Iron arrow, Steel arrow, Mithril arrow, Adamant arrow, Rune arrow, Dragon arrow |
+| `ammoWithdraw` | number (1–5000) | `500` | Ammo per bank trip |
+| `useSpecial` | boolean | `true` | Use special attacks |
+| `usePotions` | boolean | `true` | Drink super attack / strength |
+| `loadout` | string | `""` | Loadout — one of:  |
+| `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
+| `panicHp` | number (1–98) | `30` | Panic-to-bank below HP% |
+| `retreatHp` | number (0–99) | `50` | Retreat to a safespot below HP% |
+| `foodReserve` | number (0–27) | `4` | Food kept back from slot-freeing |
+| `healTo` | number (10–100) | `90` | Heal to HP% before heading back |
+| `loot` | string[] | `["Adamant full helm","Adamantite ore","Chaos talisman","Dragon bones","Dragon spear","Dragonhide","Fire rune","Half of a key","Herb","Law rune","Mithril axe","Mithril kiteshield","Mithril spear","Nature rune","Nature talisman","Rune dagger","Rune javelin","Rune spear","Shield left half","Steel battleaxe","Steel platelegs","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire","Water rune"]` | Loot to pick up (drop table) — one of: Adamant full helm, Adamantite ore, Bass, Chaos talisman, Coins, Dragon bones, Dragon spear, Dragonhide, Fire rune, Half of a key, Herb, Law rune, Mithril axe, Mithril kiteshield, Mithril spear, Nature rune, Nature talisman, Rune dagger, Rune javelin, Rune spear, Shield left half, Steel battleaxe, Steel platelegs, Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire, Water rune |
+| `lootBlack` | string[] | `["Adamant dart(p)","Adamant javelin","Adamant platebody","Adamantite bar","Air rune","Blood rune","Chaos talisman","Death rune","Dragon bones","Dragon med helm","Dragon spear","Dragonhide","Dragonstone","Fire rune","Half of a key","Law rune","Mithril 2h sword","Mithril axe","Mithril battleaxe","Mithril kiteshield","Nature rune","Nature talisman","Rune 2h sword","Rune arrow","Rune battleaxe","Rune javelin","Rune kiteshield","Rune knife","Rune longsword","Rune spear","Rune sq shield","Runite bar","Shield left half","Silver ore","Steel arrow","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire"]` | Loot to pick up (drop table) — one of: Adamant dart(p), Adamant javelin, Adamant platebody, Adamantite bar, Air rune, Blood rune, Chaos talisman, Chocolate cake, Coins, Death rune, Dragon bones, Dragon med helm, Dragon spear, Dragonhide, Dragonstone, Fire rune, Half of a key, Law rune, Mithril 2h sword, Mithril axe, Mithril battleaxe, Mithril kiteshield, Nature rune, Nature talisman, Rune 2h sword, Rune arrow, Rune battleaxe, Rune javelin, Rune kiteshield, Rune knife, Rune longsword, Rune spear, Rune sq shield, Runite bar, Shield left half, Silver ore, Steel arrow, Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire |
+| `bankCommonJunk` | boolean | `true` | Also grab shared gems/junk |
+| `buryBones` | boolean | `false` | Bury dragon bones |
+| `rangingPotion` | boolean | `false` | Drink a ranging potion |
+| `antipoisonDoses` | number (0–4) | `1` | Superantipoison flasks per trip |
+| `solveClues` | boolean | `true` | Solve clue drops |
+| `site` | string | `"taverley-blue"` | Dragon site — one of: taverley-blue, taverley-black |
+| `safespot1` | tile | `{"x":2901,"z":9809,"level":0}` | Safespot 1 |
+| `safespot2` | tile | `{"x":2900,"z":9809,"level":0}` | Safespot 2 |
+| `safespot3` | tile | `{"x":2901,"z":9810,"level":0}` | Safespot 3 |
+| `meleeTile` | tile | `{"x":2900,"z":9808,"level":0}` | Melee anchor tile |
+| `bankTile` | tile | `{"x":2946,"z":3369,"level":0}` | Bank stand tile |
+| `leaveVia` | string | `"teleport"` | Leave the lair by — one of: Falador teleport, Walk out through the gate |
+| `teleStock` | number (0–10) | `2` | Spare escape casts |
+| `logDetail` | string | `"Normal"` | Log detail — one of: Normal, Verbose |
+
+### JiveKBD
+
+King Black Dragon with magic from the alcove beside the lair exit lever, wearing the Dragonfire shield against the far fire. Walks the wilderness from Edgeville to the Lava Maze ladder, drinks a Superantipoison before the lever spiders, and teleports to Varrock to bank.
+
+- Tags: `kbd`, `dragon`, `safespot`, `wilderness`, `members`, `banking`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `staff` | string | `"Staff of fire"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
+| `spell` | string | `"Fire Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
+| `runesWithdraw` | number (1–2000) | `150` | Casts of runes per bank trip |
+| `runeBuffer` | number (0–2000) | `300` | Spare runes per type |
+| `loadout` | string | `""` | Loadout — one of:  |
+| `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
+| `dosesWithdraw` | number (1–4) | `1` | Superantipoison flasks per trip |
+| `panicHp` | number (1–98) | `30` | Panic-to-bank below HP% |
+| `retreatHp` | number (0–99) | `50` | Retreat to a safespot below HP% |
+| `foodReserve` | number (0–27) | `4` | Food kept back from slot-freeing |
+| `healTo` | number (10–100) | `90` | Heal to HP% before heading back |
+| `loot` | string[] | `["Adamant axe","Adamant javelin","Adamant platebody","Adamantite bar","Air rune","Amulet of strength","Blood rune","Bronze arrow","Chaos talisman","Coal","Coins","Death rune","Dragon bones","Dragon med helm","Dragon spear","Dragonhide","Dragonstone","Fire rune","Half of a key","Iron arrow","Iron ore","Law rune","Mithril battleaxe","Nature rune","Nature talisman","Oyster pearls","Rune 2h sword","Rune arrow","Rune axe","Rune battleaxe","Rune javelin","Rune kiteshield","Rune longsword","Rune spear","Rune sq shield","Runite bar","Shark","Shield left half","Silver ore","Steel arrow","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire","Yew logs"]` | Loot to pick up (drop table) — one of: Adamant axe, Adamant javelin, Adamant platebody, Adamantite bar, Air rune, Amulet of strength, Blood rune, Bronze arrow, Chaos talisman, Coal, Coins, Death rune, Dragon bones, Dragon med helm, Dragon spear, Dragonhide, Dragonstone, Fire rune, Half of a key, Iron arrow, Iron ore, Law rune, Mithril battleaxe, Nature rune, Nature talisman, Oyster pearls, Rune 2h sword, Rune arrow, Rune axe, Rune battleaxe, Rune javelin, Rune kiteshield, Rune longsword, Rune spear, Rune sq shield, Runite bar, Shark, Shield left half, Silver ore, Steel arrow, Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire, Yew logs |
+| `bankCommonJunk` | boolean | `true` | Also grab shared gems/junk |
+| `site` | string | `"kbd-lair"` | Lair — one of: kbd-lair |
+| `safespot1` | tile | `{"x":2717,"z":9801,"level":0}` | Safespot 1 |
+| `safespot2` | tile | `{"x":2716,"z":9801,"level":0}` | Safespot 2 |
+| `bankTile` | tile | `{"x":3094,"z":3493,"level":0}` | Bank stand tile |
+| `teleStock` | number (0–10) | `2` | Spare escape casts |
+| `logDetail` | string | `"Normal"` | Log detail — one of: Normal, Verbose |
+
 ### MossGiant
 
 Moss giants N of Ardougne: range/mage safespot or melee, banks all loot
@@ -494,6 +600,16 @@ Banks at the nearest bank, withdraws uncut gems and a chisel, cuts every gem you
 |---|---|---|---|
 | `gems` | string[] | `[]` | Gems to cut — one of: Sapphire, Emerald, Ruby, Diamond, Dragonstone, Opal, Jade, Red topaz |
 
+### JiveCrafting
+
+Makes one gold jewel picked from the dropdown at the Al Kharid furnace: banks for the mould, the gold bars and the gems, uses a bar on the furnace, clicks the biggest Make button that fits the load and walks back with it. Stops honestly when the bank runs out of any of the three.
+
+- Tags: `crafting`, `jewellery`, `al kharid`, `banking`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `product` | string | `"Sapphire ring"` | Product — one of: Gold ring, Sapphire ring, Emerald ring, Ruby ring, Diamond ring, Dragonstone ring, Gold necklace, Sapphire necklace, Emerald necklace, Ruby necklace, Diamond necklace, Dragonstone necklace, Gold amulet, Sapphire amulet, Emerald amulet, Ruby amulet, Diamond amulet, Dragonstone amulet |
+
 ### LeatherCrafter
 
 Needle-and-thread crafting loop — banks for leather and makes the best item your Crafting level allows for it
@@ -559,6 +675,17 @@ Fishes a chosen method at the spot that offers it; banks the catch, optionally c
 | `forgetfulBank` | boolean | `false` | Forgetful bank exits |
 | `purgePackOnStart` | boolean | `true` | Bank junk on start |
 | `packJunk` | string | `"Bank"` | Event junk while gathering — one of: Bank, Drop, Off |
+
+### JiveShilo
+
+Fly fishes the river inside Shilo Village, sells the trout and salmon to Fernahei's fishing hut and spends the coins on his feathers, so a pack of fish comes back as feathers and nothing is ever banked. Needs Shilo Village complete and Fishing 20.
+
+- Tags: `fishing`, `shilo`, `shopping`, `feathers`, `members`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `hutStand` | tile | `{"x":2870,"z":2971,"level":0}` | Fernahei's counter tile (x,z) |
+| `feathersTarget` | number (0–100000) | `0` | Stop at this many feathers (0 = keep going) |
 
 ## Fletching
 
@@ -666,9 +793,19 @@ High alchemy loop — tick the items to alch and the bot drains them richest fir
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `items` | string[] | `["black_dragonhide_body","red_dragonhide_body","blue_dragonhide_body","dragonhide_body","black_dragonhide_chaps","red_dragonhide_chaps","blue_dragonhide_chaps","dragonhide_chaps","magic_longbow","steel_platebody","yew_longbow"]` | Items to alch — one of: Custom item (named below), Rune platebody (39,000), Rune 2h sword (38,400), Rune platelegs (38,400), Rune kiteshield (32,640), Rune chainbody (30,000), Rune sq shield (23,040), Rune full helm (21,120), Rune scimitar (15,360), Air battlestaff (9,300), Earth battlestaff (9,300), Fire battlestaff (9,300), Water battlestaff (9,300), Black d'hide body (8,088), Adamant platebody (7,680), Red d'hide body (6,738), Blue d'hide body (5,616), Green d'hide body (4,680), Battlestaff (4,200), Adamant 2h sword (3,840), Adamant platelegs (3,840), Black d'hide chaps (3,732), Adamant kiteshield (3,264), Mithril platebody (3,120), Red d'hide chaps (3,108), Blue d'hide chaps (2,592), Green d'hide chaps (2,340), Black platebody (2,304), Mithril 2h sword (1,560), Mithril platelegs (1,560), Magic longbow (1,536), Mithril kiteshield (1,326), Steel platebody (1,200), Yew longbow (768), Steel 2h sword (600), Steel platelegs (600), Maple longbow (384) |
+| `items` | string[] | `["black_dragonhide_body","red_dragonhide_body","blue_dragonhide_body","dragonhide_body","black_dragonhide_chaps","red_dragonhide_chaps","blue_dragonhide_chaps","dragonhide_chaps","magic_longbow","steel_platebody","yew_longbow"]` | Items to alch — one of: Custom item (named below), Adamant 2h sword (3,840), Adamant kiteshield (3,264), Adamant platebody (7,680), Adamant platelegs (3,840), Air battlestaff (9,300), Battlestaff (4,200), Black d'hide body (8,088), Black d'hide chaps (3,732), Black platebody (2,304), Blue d'hide body (5,616), Blue d'hide chaps (2,592), Earth battlestaff (9,300), Fire battlestaff (9,300), Green d'hide body (4,680), Green d'hide chaps (2,340), Magic longbow (1,536), Maple longbow (384), Mithril 2h sword (1,560), Mithril kiteshield (1,326), Mithril platebody (3,120), Mithril platelegs (1,560), Red d'hide body (6,738), Red d'hide chaps (3,108), Rune 2h sword (38,400), Rune chainbody (30,000), Rune full helm (21,120), Rune kiteshield (32,640), Rune platebody (39,000), Rune platelegs (38,400), Rune scimitar (15,360), Rune sq shield (23,040), Steel 2h sword (600), Steel platebody (1,200), Steel platelegs (600), Water battlestaff (9,300), Yew longbow (768) |
 | `customItem` | string | `""` | Custom item |
 | `alchs` | number (1–1000) | `27` | Alchs per trip |
+
+### JiveEnchanter
+
+Stands at the nearest bank and enchants one jewel picked from the dropdown: wields a matching elemental staff when the bank has one, withdraws the jewels by id and the runes their casts need, casts one enchant every three ticks and banks the products. Stops honestly when the bank runs out of the jewel or a rune.
+
+- Tags: `magic`, `enchanting`, `jewellery`, `banking`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `jewel` | string | `"Sapphire ring"` | Jewel — one of: Sapphire ring, Sapphire necklace, Sapphire amulet, Emerald ring, Emerald amulet, Ruby ring, Ruby amulet, Diamond ring, Diamond amulet, Dragonstone ring, Dragonstone amulet |
 
 ## Mining
 
@@ -712,6 +849,27 @@ Mines the selected rock types, then banks the ore at the nearest bank or drops i
 
 ## Money making
 
+### JiveChests
+
+Opens the Taverley crystal chest on a bank of crystal keys: withdraws seven at Falador West, walks to the chest, uses a key on it per open, drops the raw swordfish, body runes and spinach rolls the roll gives, then teleports back and banks the rest. Stops when the bank runs out of keys.
+
+- Tags: `chest`, `taverley`, `banking`, `looting`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `teleportHome` | boolean | `true` | Teleport back to Falador |
+
+### JiveMarketDumper
+
+Dumps a bank to a running MarketMaker: withdraws every tradeable item as notes, puts the pile up in one window and takes whatever the maker bids, banking the coins between trips. It needs no price book, since anything the maker will not pay for rides along with what it does. Stops when the bank is empty or the maker turns down all that is left.
+
+- Tags: `trading`, `bank`, `market`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `maker` | string | `""` | Maker name |
+| `bank` | string | `"Nearest"` | Bank — one of: Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Fishing Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
+
 ### MarketMaker
 
 Player shop — stands at a bank, buys and sells the items in an order book, quotes in public chat ("buy 100 iron ore"), and declines any trade that does not match what it quoted
@@ -729,6 +887,16 @@ Player shop — stands at a bank, buys and sells the items in an order book, quo
 | `coinFloat` | number (0–100000000) | `200000` | Coins to carry (float) |
 | `blacklist` | string[] | `[]` | Refuse these names |
 
+### RangingGuild
+
+Plays the Ranging Guild archery competition for tickets and trades every 2000 for 50 rune arrows. Pays the judge 200 coins a round, shoots the ten arrows from behind the haystacks, banks at Seers for coins and the best bow
+
+- Tags: `ranging guild`, `minigame`, `archery`, `tickets`, `rune arrows`, `seers`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `coinsPerTrip` | number (200–1000000) | `10000` | Coins per bank trip |
+
 ### ShopBuyout
 
 Parks at ONE shop and buys it out repeatedly on a total gp budget — no routing. Defaults to Lundail's Mage Arena rune shop (banks via Gundai's dialog); get the bot to the shop yourself.
@@ -737,7 +905,7 @@ Parks at ONE shop and buys it out repeatedly on a total gp budget — no routing
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `shop` | string | `"Aemad's vials — East Ardougne (Ardougne East bank)"` | Shop — one of: Aemad's vials — East Ardougne (Ardougne East bank), Mage Arena runes — Lundail (Gundai bank), Betty's runes — Port Sarim (Falador West bank), Aubury's runes — Varrock (Varrock East bank), Lowe's arrows — Varrock (Varrock East bank), Hickton's arrows — Catherby (Catherby bank), Gerrant's feathers — Port Sarim (Draynor bank), Harry's fishing — Catherby (Catherby bank), Bob's axes — Lumbridge (Draynor bank), Nurmof's pickaxes — Dwarven Mine (Falador East bank), Wizard Guild runes — Yanille (Yanille bank) |
+| `shop` | string | `"Aemad's vials — East Ardougne (Ardougne East bank)"` | Shop — one of: Aemad's vials — East Ardougne (Ardougne East bank), Mage Arena runes — Lundail (Gundai bank), Betty's runes — Port Sarim (Falador West bank), Aubury's runes — Varrock (Varrock East bank), Lowe's arrows — Varrock (Varrock East bank), Hickton's arrows — Catherby (Catherby bank), Gerrant's feathers — Port Sarim (Draynor bank), Harry's fishing — Catherby (Catherby bank), Fernahei's fishing — Shilo Village (Shilo bank), Bob's axes — Lumbridge (Draynor bank), Nurmof's pickaxes — Dwarven Mine (Falador East bank), Wizard Guild runes — Yanille (Yanille bank) |
 | `budgetGp` | number (100–) | `250000` | Total gp to spend |
 | `perTripGp` | number (100–) | `100000` | Gp per bank trip |
 | `stopFloorGp` | number (0–) | `5000` | Stop below bank gp |

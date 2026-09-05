@@ -138,3 +138,11 @@ describe('HerbloreSecondaries decisions', () => {
         ).toBe(false);
     });
 });
+
+describe('HerbloreSecondaries banks', () => {
+    test('white berries bank at Ardougne West, where the Deserted Keep lever lands', () => {
+        const w = secondaryById('white_berries');
+        expect(w.bankName).toBe('Ardougne West');
+        expect(w.bank).toEqual({ x: 2616, z: 3332, level: 0 });
+    });
+});

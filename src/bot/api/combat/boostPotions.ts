@@ -18,6 +18,9 @@ function superPotion(skill: string, short: string, label: string): BoostPotion {
 export const SUPER_ATTACK: BoostPotion = superPotion('attack', 'Att', 'Super attack');
 export const SUPER_STRENGTH: BoostPotion = superPotion('strength', 'Str', 'Super strength');
 
+// Why: a ranged run boosts its own skill, and a melee one never sips this, so it stays out of BOOST_POTIONS and a caller that wants it asks for it by name.
+export const RANGING_POTION: BoostPotion = superPotion('ranged', 'Rng', 'Ranging potion');
+
 // Why: the server runs one op per tick and drops the rest, so a fixed order is what makes "one sip per tick" a decision rather than a race.
 
 /** Checked in this order; attack wins a tick both could use. */
@@ -45,17 +48,25 @@ export interface PotionPlan {
     want: number;
 }
 
+/** The dose form and count a loadout names for `potion`, or one three-dose flask. */
+function planFor(potion: BoostPotion, carry: readonly CarryEntry[]): PotionPlan {
+    for (const entry of carry) {
+        const dose = potion.doses.find(d => d.toLowerCase() === entry.item.trim().toLowerCase());
+        if (dose !== undefined) {
+            return { potion, flask: dose, want: entry.qty };
+        }
+    }
+    return { potion, flask: potion.flask, want: 1 };
+}
+
+/** The ranging potion a ranged run carries, off the same loadout carry list. */
+export function rangingPlan(carry: readonly CarryEntry[]): PotionPlan {
+    return planFor(RANGING_POTION, carry);
+}
+
 /** The potions to carry, taking the dose form and count from the loadout and falling back to one three-dose flask of each. */
 export function plannedPotions(carry: readonly CarryEntry[]): PotionPlan[] {
-    return BOOST_POTIONS.map(potion => {
-        for (const entry of carry) {
-            const dose = potion.doses.find(d => d.toLowerCase() === entry.item.trim().toLowerCase());
-            if (dose !== undefined) {
-                return { potion, flask: dose, want: entry.qty };
-            }
-        }
-        return { potion, flask: potion.flask, want: 1 };
-    });
+    return BOOST_POTIONS.map(potion => planFor(potion, carry));
 }
 
 export interface SipState {

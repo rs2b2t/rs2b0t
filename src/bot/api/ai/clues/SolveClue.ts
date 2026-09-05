@@ -209,7 +209,7 @@ export class SolveClue implements Task {
         const outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`));
 
         if (outcome === 'yield') {
-            this.status = 'event — yielding';
+            this.status = 'event: yielding';
             return;
         }
         if (outcome === 'abandon') {
@@ -247,7 +247,7 @@ export class SolveClue implements Task {
         }
 
         this.status = 'restoring gear';
-        this.host.setStatus('clue — reclaiming stripped gear');
+        this.host.setStatus('clue: reclaiming stripped gear');
         this.host.log(`[clue] reclaiming gear banked for Entrana: ${want.join(', ')}`);
 
         if (!(await walkToBank(bank.tile, m => this.host.log(`  ${m}`)))) {
@@ -321,7 +321,7 @@ export class SolveClue implements Task {
         }
 
         this.status = 'banking';
-        this.host.setStatus('clue — banking loot before the trail');
+        this.host.setStatus('clue: banking loot before the trail');
         this.host.log(`[clue] banking loot at the ${bank.name} bank (${bank.tile}) before solving`);
 
         if (!(await walkToBank(bank.tile, m => this.host.log(`  ${m}`)))) {
@@ -446,7 +446,7 @@ export class SolveClue implements Task {
                 freeSlots: Inventory.free(),
                 reserveSlots: fetchingCoordTools ? COORD_TOOL_SLOTS : 0
             });
-            this.host.setStatus(`clue — withdrawing ${food}`);
+            this.host.setStatus(`clue: withdrawing ${food}`);
             this.host.log(`[clue] taking ${target} ${food} for the trail (a grind load is ${this.host.foodWithdraw()})`);
             for (let guard = 0; guard < 12 && Inventory.count(food) < target && !Inventory.isFull(); guard++) {
                 const need = target - Inventory.count(food);
@@ -464,7 +464,7 @@ export class SolveClue implements Task {
         this.host.log(`[clue] trail pack: ${Inventory.count(food)} ${food}, ${this.describeTeleports(kit)}, ${Inventory.free()} slots free`);
 
         if (fetchingCoordTools) {
-            this.host.setStatus('clue — acquiring coordinate tools');
+            this.host.setStatus('clue: acquiring coordinate tools');
             await ensureCoordTools(m => this.host.log(`[clue] ${m}`));
         }
 
@@ -526,7 +526,7 @@ export class SolveClue implements Task {
         }
 
         this.status = 'restoring prayer';
-        this.host.setStatus(`clue — restoring prayer at ${altar.name}`);
+        this.host.setStatus(`clue: restoring prayer at ${altar.name}`);
         this.host.log(`[clue] prayer ${Prayer.points()}/${Prayer.max()} — praying at the ${altar.name} altar (${altar.tile})`);
 
         const walked = await Traversal.walkResilient(altar.tile, {

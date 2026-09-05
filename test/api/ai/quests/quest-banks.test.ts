@@ -29,3 +29,21 @@ describe('per-quest provisioning bank', () => {
         }
     });
 });
+
+// Why: a free quest is fought at low level against low-level things, and the pack pays for food it never eats with slots the quest items need. Dragon Slayer keeps its ration, since Elvarg is the one free fight that earns it.
+describe('food on the free quests', () => {
+    const FREE_WITH_FOOD = ['blackknight', 'demon', 'haunted', 'gobdip', 'squire', 'hunt', 'blackarmgang', 'vampire'];
+
+    test('none of the free quests carries a food float, Dragon Slayer aside', () => {
+        for (const id of FREE_WITH_FOOD) {
+            const module = QUEST_DEFS.find(m => m.record.id === id);
+            expect(module, `no module for '${id}'`).toBeDefined();
+            expect(module!.food, `${id} still asks for food`).toBeUndefined();
+        }
+    });
+
+    test('Dragon Slayer keeps its ration', () => {
+        const ds = QUEST_DEFS.find(m => m.record.id === 'dragon');
+        expect(ds?.food).toBeGreaterThan(0);
+    });
+});

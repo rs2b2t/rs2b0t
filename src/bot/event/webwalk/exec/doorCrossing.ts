@@ -10,7 +10,9 @@ import { Locs, type Loc } from '../../../api/locs/Locs.js';
 import { Reachability } from '../geometry/Reachability.js';
 import { CANT_REACH, GameMessages } from '../../../api/chatbox/gameMessages.js';
 import { Input } from '../../../input/Input.js';
+import { BotHost } from '../../../runtime/BotHost.js';
 import { DirectNavigator } from '../DirectNavigator.js';
+import { DEFAULT_DOOR_STEP_TICKS } from '../pathFollowPolicy.js';
 import {
     chooseCrossClick,
     isOnFarSide,
@@ -38,6 +40,7 @@ const WEB_SLASH_CHAT_MS = 3500;
 const WEB_PASSAGE_MS = 4000;
 const APPROACH_WALK_MS = 3000;
 const SCENE_STEP_MS = 8000;
+const STEP_WAIT_MS = 4000;
 
 /** True when content has swapped this placement to bigweb_slashed (walkable). */
 function slashedWebAtPlacement(locX: number, locZ: number): boolean {
@@ -423,15 +426,48 @@ export function barrierLooksOpen(transport: TransportInfo): boolean {
     return findTransportLoc(transport) === null;
 }
 
+/** Ticks from the Open click to the open leaf, the step click and the crossing, for the crossed log line. */
+export function crossingTiming(openClick: number | null, opened: number | null, stepped: number | null, now: number): string {
+    if (openClick === null) {
+        return '';
+    }
+    const rel = (tick: number | null): string => (tick === null ? 'unseen' : `+${tick - openClick}`);
+    return ` (Open sent tick ${openClick}, open ${rel(opened)}, stepped ${rel(stepped)}, crossed +${now - openClick})`;
+}
+
+// Why: the sprite the reader's `worldTile` follows reaches the far tile a tick or two after the server moved the player, so a same-frame stepper judges the crossing on the server's tile; the default keeps the sprite so every other walker's timing stays as its live proofs recorded it.
+function positionFor(stepTicks: number): () => WorldTile | null {
+    return stepTicks === 0 ? () => reader.serverTile() : () => reader.worldTile();
+}
+
+// Why: on the frame the leaf swings the client has already applied the collision change, so the poll here only covers a scene that has not caught up, and it stops at the next PLAYER_INFO because a leaf landing on the step tile never frees the edge and the caller's scene-step owns that case.
+async function stepThroughOpened(approach: PathStepTile, step: PathStepTile, stepTicks: number, position: () => WorldTile | null): Promise<number> {
+    if (stepTicks > 0) {
+        await Execution.delayTicks(stepTicks);
+    } else if (!Reachability.canStep(approach, step)) {
+        const seen = BotHost.tickCount;
+        await Execution.delayUntil(() => Reachability.canStep(approach, step) || BotHost.tickCount > seen, STEP_WAIT_MS);
+    }
+    const stepped = BotHost.tickCount;
+    DirectNavigator.walk(step);
+    await Execution.delayUntil(() => isOnFarSide(position(), approach, step), STEP_WAIT_MS);
+    return stepped;
+}
+
 export async function crossMultiTileDoor(
     approach: PathStepTile,
     step: PathStepTile,
     transport: TransportInfo,
     log: (msg: string) => void,
-    onQuestLock?: (x: number, z: number) => void
+    onQuestLock?: (x: number, z: number) => void,
+    stepTicks: number = DEFAULT_DOOR_STEP_TICKS
 ): Promise<boolean> {
     const dir = { x: Math.sign(step.x - approach.x), z: Math.sign(step.z - approach.z) };
     const landing = { x: step.x + dir.x, z: step.z + dir.z, level: step.level };
+    let openClick: number | null = null;
+    let opened: number | null = null;
+    let stepped: number | null = null;
+    const position = positionFor(stepTicks);
 
     // Why: a web already slashed (multiloc or a prior cut) is walked through as soon as "Slashed web" or passage shows, without a long canStep-only poll.
     // Why: only an identical placement matches, so a neighbouring web is never slashed instead.
@@ -454,9 +490,9 @@ export async function crossMultiTileDoor(
         }
     }
 
-    // Fast path: already open (or gone). Skip approach-Open-wait loops that feel
-    // like a multi-second pause at every previously-opened door on the route.
-    if (barrierLooksOpen(transport)) {
+    // Fast path: already open or gone, so no approach-Open-wait pause at a door opened earlier on the route.
+    // Why: `findTransportLoc` falls back to any same-named Open loc within five tiles, so an open door with a shut neighbour (Doric's hut) reads as shut; a steppable edge is open whatever the lookup says.
+    if (barrierLooksOpen(transport) || Reachability.canStep(approach, step)) {
         const here0 = reader.worldTile();
         if (isOnFarSide(here0, approach, step)) {
             log(`crossed '${transport.locName}' at (${transport.locX},${transport.locZ}) (already past)`);
@@ -490,9 +526,9 @@ export async function crossMultiTileDoor(
 
     const deadline = performance.now() + MULTI_DOOR_CROSS_MS;
     while (performance.now() < deadline) {
-        const here = reader.worldTile();
+        const here = position();
         if (isOnFarSide(here, approach, step)) {
-            log(`crossed '${transport.locName}' at (${transport.locX},${transport.locZ})`);
+            log(`crossed '${transport.locName}' at (${transport.locX},${transport.locZ})${crossingTiming(openClick, opened, stepped, BotHost.tickCount)}`);
             return true;
         }
         // Mid-loop: web became slashed (us or someone else) → walk, do not re-Slash.
@@ -558,7 +594,10 @@ export async function crossMultiTileDoor(
                 log(`'${transport.action}' not offered by ${transport.locName} (ops: ${shut.actions().join(', ')})`);
                 return false;
             }
-            await Execution.delayUntil(
+            openClick = BotHost.tickCount;
+            opened = null;
+            stepped = null;
+            const swung = await Execution.delayUntil(
                 () =>
                     findTransportLoc(transport) === null
                     || Reachability.canStep(approach, step)
@@ -566,6 +605,9 @@ export async function crossMultiTileDoor(
                     || chatShowsQuestLock(),
                 OPEN_WAIT_MS
             );
+            if (swung && !GameMessages.sawSince(mark, CANT_REACH) && !chatShowsQuestLock()) {
+                opened = BotHost.tickCount;
+            }
             if (GameMessages.sawSince(mark, CANT_REACH)) {
                 log(`server says can't reach ${transport.locName} — repathing`);
                 return false;
@@ -576,10 +618,7 @@ export async function crossMultiTileDoor(
                 onQuestLock?.(transport.locX, transport.locZ);
                 return false;
             }
-            // Collision often lags a tick after Open, step through immediately.
-            await Execution.delayTicks(1);
-            DirectNavigator.walk(step);
-            await Execution.delayUntil(() => isOnFarSide(reader.worldTile(), approach, step), 4000);
+            stepped = await stepThroughOpened(approach, step, stepTicks, position);
             continue;
         }
         const canStepEdge = Reachability.canStep(approach, step);

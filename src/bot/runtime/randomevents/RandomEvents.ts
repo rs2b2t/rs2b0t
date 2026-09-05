@@ -31,6 +31,29 @@ const HOSTILE_EVENT_NPC_IDS = new Set<number>([
     ...idRange(438, 443)  // Tree spirit  (macro_dryhadguardian_1..6)
 ]);
 
+// Why: an ent replaces the tree you were chopping, and the spawn queues the chop on the player, so it swings without a click and the chop re-queues itself. The seventh swing turns the axe into a Broken axe only Bob repairs, and the npc is named "Tree" with the level hidden, so nothing else about it reads as a hazard.
+/** `macro_ent_tree1` through `macro_ent_magic`, the woodcutting random that eats an axe. */
+export const ENT_NPC_IDS: ReadonlySet<number> = new Set(idRange(444, 452));
+
+/** How close an ent has to be before the run steps off it. */
+const ENT_ENGAGE_DISTANCE = 3;
+
+export const ENT_HAZARD = 'ent';
+
+/** Whether this npc is an ent close enough to be chopping us. */
+export function entHazard(npc: { id: number; distance: number }): boolean {
+    return ENT_NPC_IDS.has(npc.id) && npc.distance <= ENT_ENGAGE_DISTANCE;
+}
+
+/** Ticks held after stepping off a hazard. */
+const HAZARD_HOLD_TICKS = 60;
+// Why: the gas, the rock and the whirlpool all outlast the step away, so the hold waits them out. An ent's own tree is deleted for those same 60 ticks and the run has other trees, so holding there would only idle it; the walk is what breaks the chop chain.
+const ENT_HOLD_TICKS = 3;
+
+export function hazardHoldTicks(name: string): number {
+    return name === ENT_HAZARD ? ENT_HOLD_TICKS : HAZARD_HOLD_TICKS;
+}
+
 const GAS_CHEST_LOC_ID = 2141;
 /** Whirlpool fishing-spot variants (macro). 406 is the fourth changetype id. */
 const WHIRLPOOL_NPC_IDS = [403, 404, 405, 406];
@@ -52,6 +75,14 @@ const GEAR_LOSS_WINDOW_MS = 90_000;
  *  Why: detecting by id within this range when they face or attack us, rather than only when adjacent, stops fishers dying before distance<=1 fires. */
 const HOSTILE_ENGAGE_DISTANCE = 8;
 
+/** `macro_swarm`, the one hostile random that cannot follow. */
+const SWARM_NPC_ID = 411;
+
+/** Whether an npc's face target is this player. */
+function facesSlot(faceEntity: number, selfSlot: number): boolean {
+    return faceEntity >= 32768 && faceEntity - 32768 === selfSlot;
+}
+
 export function isHostileEventNpc(
     npc: {
         id: number;
@@ -59,7 +90,7 @@ export function isHostileEventNpc(
         distance: number;
         faceEntity: number;
     },
-    _selfSlot: number,
+    selfSlot: number,
     _playerInCombat: boolean
 ): boolean {
     if (!HOSTILE_EVENT_NPC_IDS.has(npc.id)) {
@@ -68,8 +99,13 @@ export function isHostileEventNpc(
     if (npc.distance > HOSTILE_ENGAGE_DISTANCE) {
         return false;
     }
+    // Why: `macro_swarm` carries maxrange 3, so it is pinned three tiles from where it spawned and a step or two leaves it behind, and it hits 2s at attackrate 7 meanwhile. Evading one that is only sitting there costs a walk and a repath to dodge a few points of damage that never arrives.
+    // Why: it does enter opplayer2 on the player, so an actual attack shows up as its own combat flag or its face target, and those are what earn the interrupt.
+    if (npc.id === SWARM_NPC_ID) {
+        return npc.inCombat || facesSlot(npc.faceEntity, selfSlot);
+    }
     // Why: these antimacro ids only exist as your own random event. They are not world mobs you walk past.
-    // Why: soft flags (combatCycle / faceEntity) often lag or never set for 0-damage Swarm (#422), which left walks repathing until timeout while Supervisor never intercepted, so presence within engage range is enough.
+    // Why: soft flags (combatCycle / faceEntity) often lag or never set for the rest (#422), which left walks repathing until timeout while Supervisor never intercepted, so presence within engage range is enough.
     return true;
 }
 
@@ -311,6 +347,9 @@ class RandomEventsImpl {
             if (WHIRLPOOL_NPC_IDS.includes(npc.id) && npc.distance <= 3) {
                 return { kind: 'hazard', name: 'whirlpool' };
             }
+            if (entHazard(npc)) {
+                return { kind: 'hazard', name: ENT_HAZARD };
+            }
         }
 
         this.gearLoss.update(
@@ -549,7 +588,7 @@ class RandomEventsImpl {
         if (flee) {
             await Traversal.walkTo(flee, { radius: 1, timeoutMs: 15_000, log });
         }
-        await Execution.delayTicks(60);
+        await Execution.delayTicks(hazardHoldTicks(name));
         return true;
     }
 

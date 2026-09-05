@@ -73,7 +73,11 @@ export const ALCH_ITEMS: readonly AlchItem[] = FODDER
     })
     .sort(richestFirst);
 
-export const ALCH_OPTIONS: string[] = [CUSTOM_ALCH_KEY, ...ALCH_ITEMS.map(i => i.key)];
+// Why: the chips are for finding an item by name, so they read alphabetically by the label shown; ALCH_ITEMS keeps its richest-first order, which is what the drain runs on.
+export const ALCH_OPTIONS: string[] = [
+    CUSTOM_ALCH_KEY,
+    ...[...ALCH_ITEMS].sort((a, b) => a.label.localeCompare(b.label)).map(i => i.key)
+];
 
 export const ALCH_OPTION_LABELS: Record<string, string> = {
     [CUSTOM_ALCH_KEY]: 'Custom item (named below)',

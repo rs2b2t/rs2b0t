@@ -1,30 +1,14 @@
 import { Skills } from '../../../../skills/Skills.js';
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
-import { FOOD_FLOAT, QuestFood } from '../../food.js';
 import { KS_ID, KS_NAME, KS_STAGE, RELDO, SQUIRE, THURGO } from './areas.js';
 import { mineBlurite } from './dungeon.js';
 import { readKnightsSwordProgress } from './journal.js';
 import { fetchPortrait } from './portrait.js';
 import { bankedId, heldId, ironBarsAt, kit, pie, pieDish } from './supplies.js';
 
-const FOOD_TARGET = FOOD_FLOAT;
-const FOOD_LOW = 5;
 
 const talk = (stop: typeof SQUIRE): QuestStep => ({ kind: 'talk', stop });
-
-function foodWant(snap: QuestSnapshot): { name: string; held: number; target: number; low: number } | null {
-    const name = QuestFood.name?.trim();
-    if (!name) {
-        return null;
-    }
-    return {
-        name,
-        held: snap.inv.get(name.toLowerCase()) ?? 0,
-        target: FOOD_TARGET,
-        low: FOOD_LOW
-    };
-}
 
 /**
  * `squire_status_report` at stage 6 has one branch per place the sword can be,
@@ -56,7 +40,7 @@ function materials(snap: QuestSnapshot, miningLevel: number): QuestStep {
     }
     if (heldId(snap, KS_ID.BLURITE_ORE) === 0) {
         // Stock up above ground; kit() refuses to send the bot back out of the cave.
-        return kit(snap, foodWant(snap)) ?? { kind: 'custom', name: 'mine blurite', run: mineBlurite };
+        return kit(snap) ?? { kind: 'custom', name: 'mine blurite', run: mineBlurite };
     }
     return talk(THURGO);
 }

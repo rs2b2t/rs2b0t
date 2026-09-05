@@ -264,6 +264,26 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'dragon-slayer-resume-live',
+        harness: 'dragon-slayer-resume-live.ts',
+        covers: { scripts: ['AIOQuester'] },
+        status: 'vetted',
+        provenAt: '9fb7d961',
+        args: ['--stage', '8', '--until', '9', '--minutes', '15'],
+        budgetMin: 18,
+        note: "resumes Dragon Slayer with the map already in Ned's hands and an empty pack; fails on any shopping line and passes once the ship has sailed"
+    },
+    {
+        id: 'dragon-slayer-resume-hull-live',
+        harness: 'dragon-slayer-resume-live.ts',
+        covers: { scripts: ['AIOQuester'] },
+        status: 'vetted',
+        provenAt: '18a7c16b',
+        args: ['--stage', '3', '--until', '7', '--minutes', '45'],
+        budgetMin: 40,
+        note: 'resumes Dragon Slayer with the ship bought and nothing but the map, the shield and coins in the pack; passes once the hull is patched, which is the hammer, twelve smithed nails and three wilderness planks fetched in one trip'
+    },
+    {
         id: 'dragonslayer-solo-test',
         harness: 'dragonslayer-solo-test.ts',
         covers: { scripts: ['AIOQuester'] },
@@ -335,6 +355,77 @@ export const CASES: readonly Case[] = [
         harness: 'firegiant-test.ts',
         covers: { scripts: ['FireGiant'] },
         status: 'unvetted'
+    },
+    {
+        id: 'jivedragons-live',
+        harness: 'jivedragons-live.ts',
+        covers: { scripts: ['JiveDragons'] },
+        status: 'vetted',
+        budgetMin: 25,
+        provenAt: 'ff0d19b9',
+        note: '`--site blue|black` picks the lair. The black run seeds Sharks and a Superantipoison and passes on the corridor stand, both spawns in view, with no health lost on a safespot'
+    },
+    {
+        id: 'jivedemons-live',
+        harness: 'jivedemons-live.ts',
+        covers: { scripts: ['JiveDemons'] },
+        status: 'vetted',
+        budgetMin: 25,
+        provenAt: '9ff4ff8b'
+    },
+    {
+        id: 'jivekbd-live',
+        harness: 'jivekbd-live.ts',
+        covers: { scripts: ['JiveKBD'] },
+        status: 'vetted',
+        budgetMin: 45,
+        provenAt: 'ec523361',
+        note: 'a kill from full health is three food trips at about 9% per cast, so --kill-min 35 is the budget the proof ran with'
+    },
+    {
+        id: 'jiveshilo-live',
+        harness: 'jiveshilo-live.ts',
+        covers: { scripts: ['JiveShilo'] },
+        status: 'vetted',
+        provenAt: '9ba30fdc',
+        budgetMin: 12,
+        note: 'seeds Shilo Village complete, Fishing 99 and 60gp on the bank; passes once the rod is bought, fish are caught along the river sweep, a trip has sold them for feathers and the casting resumes'
+    },
+    {
+        id: 'jivecrafting-live',
+        harness: 'jivecrafting-live.ts',
+        covers: { scripts: ['JiveCrafting'] },
+        status: 'vetted',
+        provenAt: '6bba87ec',
+        budgetMin: 10,
+        note: 'seeds a mould, 30 gold bars and 30 gems in the Al Kharid bank with Crafting 99; passes once a full load has come back to the bank as jewels, a second trip has left, and the furnace has taken bars again'
+    },
+    {
+        id: 'jiveenchanter-live',
+        harness: 'jiveenchanter-live.ts',
+        covers: { scripts: ['JiveEnchanter'] },
+        status: 'vetted',
+        provenAt: '8d156980',
+        budgetMin: 8,
+        note: 'seeds 60 jewels, the runes for 80 casts and a matching staff at Varrock West with Magic 70; passes once the staff is wielded, a full load has come back to the bank as products, a second trip has left and the casting has resumed'
+    },
+    {
+        id: 'jivemarketdumper-live',
+        harness: 'jivemarketdumper-live.ts',
+        covers: { scripts: ['JiveMarketDumper', 'MarketMaker'] },
+        status: 'vetted',
+        provenAt: '7a8e329d',
+        budgetMin: 8,
+        note: 'a MarketMaker on a two-row book at Seers with a 200k float, a customer whose bank holds 500 yews, 1000 iron and two chainbodies the book does not price; passes when one pile takes the maker ceiling of 100k, the chainbodies ride along unpriced and the bank ends bare'
+    },
+    {
+        id: 'jivechests-live',
+        harness: 'jivechests-live.ts',
+        covers: { scripts: ['JiveChests'] },
+        status: 'vetted',
+        provenAt: '5c9e5d69',
+        budgetMin: 10,
+        note: 'seeds 14 crystal keys and a teleport kit at Falador West; passes once a seven-key trip is open at the Taverley chest, the haul is banked, the next seven are drawn and no swordfish, body runes or spinach rolls come home'
     },
     {
         id: 'fishing-contest-244-live',
@@ -871,6 +962,14 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'rangingguild-live',
+        harness: 'rangingguild-live.ts',
+        covers: { scripts: ['RangingGuild'] },
+        status: 'vetted',
+        budgetMin: 15,
+        provenAt: 'aeeb61ba'
+    },
+    {
         id: 'relogin-test',
         harness: 'relogin-test.ts',
         covers: { scripts: ['AIOTeleport'] },
@@ -959,6 +1058,15 @@ export const CASES: readonly Case[] = [
         documentedIn: 'docs/reference/quest-harness-recipes-2.md'
     },
     {
+        id: 'shopbuyout-fernahei-live',
+        harness: 'shopbuyout-fernahei-live.ts',
+        covers: { scripts: ['ShopBuyout'] },
+        status: 'vetted',
+        provenAt: '683f264f',
+        budgetMin: 8,
+        note: 'Shilo Village marked complete and 1000gp banked; passes when the teller hands over the coins, the bot stands at Fernahei\'s counter and feathers land in the pack'
+    },
+    {
         id: 'smelter-swarm-422-live',
         harness: 'smelter-swarm-422-live.ts',
         covers: { scripts: ['SmelterBot'] },
@@ -972,6 +1080,15 @@ export const CASES: readonly Case[] = [
         provenAt: '57498434',
         budgetMin: 10,
         note: 'Varrock West bank → anvil → bank on a 54-bar Platebody load; the remainder the bot cannot smith has to send it back'
+    },
+    {
+        id: 'smithingbot-doors-live',
+        harness: 'smithingbot-doors-live.ts',
+        covers: { scripts: ['SmithingBot'], subsystems: ['nav'] },
+        status: 'vetted',
+        provenAt: 'ca329ff5',
+        budgetMin: 12,
+        note: "Falador east bank into Doric's hut, the harness shuts the door, then back out; passes when both steps through the opened door leave on the tick the leaf swings"
     },
     {
         id: 'superheater-smelt-live',
