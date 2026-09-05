@@ -40,6 +40,7 @@ import {
     dealOf,
     dealTotals,
     floatShortfall,
+    bankBeforeServing,
     FREE_SLOT_FLOOR,
     freshChatLines,
     listedRows,
@@ -1065,6 +1066,10 @@ class OpenWindow implements Task {
     validate(): boolean {
         // Why: requesting while the bank is still closing opens the window on their client and not on ours, and the bot then owns a window it cannot see.
         if (this.bot.counter().current() !== null || this.bot.requests().size === 0 || Trade.active() || reader.modals().main !== -1) {
+            return false;
+        }
+        // Why: Settle sits below this task, so a pack with no room has to yield the tick or the queue keeps it opening windows it cannot take goods into.
+        if (bankBeforeServing(Inventory.free(), this.bot.packCoins(), this.bot.float(), this.bot.bankReady(Date.now()))) {
             return false;
         }
         // Why: this task runs ahead of Restock, so claiming the tick when every request is waiting on a bank trip starves the fetch that would let any of them open.

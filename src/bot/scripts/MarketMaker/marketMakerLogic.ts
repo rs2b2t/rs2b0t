@@ -253,6 +253,12 @@ export function shouldSettle(freeSlots: number, packCoins: number, coinFloor: nu
     return freeSlots <= FREE_SLOT_FLOOR || packCoins > coinFloor;
 }
 
+// Why: OpenWindow runs above Settle, so a queue of customers dumping goods kept it opening windows on a pack with no room to take any and the shop never reached the bank; it yields the tick once a trip is due, though a bank it cannot reach must not shut the shop, so a backed-off bank leaves it serving.
+/** Whether the next window should wait for a bank trip. */
+export function bankBeforeServing(freeSlots: number, packCoins: number, coinFloor: number, bankReady: boolean): boolean {
+    return bankReady && shouldSettle(freeSlots, packCoins, coinFloor);
+}
+
 /** Coins worth going to the bank for: the gap up to the float, capped at what the bank holds. */
 // Why: asking for the raw float is a standing order the shop can never fill once the bank runs dry, and Settle deposits the pack before it tops up, so it banked and re-withdrew the same stack every loop.
 export function floatShortfall(packCoins: number, bankCoins: number, coinFloor: number): number {

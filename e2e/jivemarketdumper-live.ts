@@ -1,7 +1,7 @@
 /** Live proof for JiveMarketDumper: a MarketMaker at Seers bank on a two-row book, a customer whose bank holds both rows and two chainbodies the book does not price.
  *  Why: the window, the maker's pricing and the notes withdrawal all drive two live clients, so this run is the only proof a bank empties into the maker in one pile, the unpriced items ride along, and the run stops with the bank bare. */
 
-// Usage: HEADED=1 bun e2e/jivemarketdumper-live.ts [--base url] [--minutes n] [--no-deploy]
+// Usage: HEADED=1 bun e2e/jivemarketdumper-live.ts [--base url] [--flood] [--minutes n] [--no-deploy]
 import type { Page } from 'playwright-core';
 import { deployIsolatedClient, fail, launchBrowser, requireSim, stopScript } from './lib/harness.js';
 import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript } from './tutorial/harness.js';
@@ -9,14 +9,16 @@ import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, st
 interface Args {
     base: string;
     minutes: number;
+    flood: boolean;
     deploy: boolean;
 }
 
 function parse(argv: readonly string[]): Args {
-    const out: Args = { base: process.env.BASE ?? 'http://localhost:8890', minutes: 8, deploy: true };
+    const out: Args = { base: process.env.BASE ?? 'http://localhost:8890', minutes: 8, flood: false, deploy: true };
     for (let i = 0; i < argv.length; i++) {
         const flag = argv[i];
         if (flag === '--no-deploy') { out.deploy = false; continue; }
+        if (flag === '--flood') { out.flood = true; continue; }
         const value = argv[++i];
         if (value === undefined) { break; }
         if (flag === '--base') { out.base = value; }
@@ -47,6 +49,14 @@ const PILE_WORTH = SEED_YEWS * YEW_BUY + SEED_IRON * IRON_BUY;
 const EXPECTED_GP = CAP;
 const POLL_MS = 2000;
 const SCREENSHOT = 'docs/e2e/jivemarketdumper-live.png';
+
+/** Twenty distinct kinds, so one pile is twenty slots on the maker's side whatever each stack is worth. */
+const FLOOD_KINDS = [
+    'bronze_sword', 'iron_sword', 'steel_sword', 'black_sword', 'mithril_sword',
+    'bronze_axe', 'iron_axe', 'steel_axe', 'black_axe', 'mithril_axe',
+    'bronze_dagger', 'iron_dagger', 'steel_dagger', 'black_dagger', 'mithril_dagger',
+    'bronze_mace', 'iron_mace', 'steel_mace', 'black_mace', 'mithril_mace'
+];
 
 const BOOK = JSON.stringify([{
     name: 'e2e',
@@ -140,6 +150,12 @@ try {
     await cheatQuiet(custPage, `~bankitem iron_ore ${SEED_IRON}`);
     // Why: not in the book, so it has to stay in the bank while the run still ends with "nothing it buys".
     await cheatQuiet(custPage, '~bankitem rune_chainbody 2');
+    // Why: twenty distinct kinds is twenty slots on the maker's side however small each stack is, which is the pack-flooding case that used to leave it opening windows it had no room to take goods into.
+    if (args.flood) {
+        for (const obj of FLOOD_KINDS) {
+            await cheatQuiet(custPage, `~bankitem ${obj} 1`, 500);
+        }
+    }
     await teleArrive(custPage, SPOT);
     // Why: the dumper is given the maker's name and the bank it stands at, and nothing else; it never reads a price book.
     // Why: naming the bank rather than leaving it on Nearest is what proves the setting is honoured, since the maker's own bank is the one the takings have to reach.
@@ -224,6 +240,9 @@ try {
     if (last.runner !== 'stopped') {
         await stopScript(custPage);
     }
+    // Why: the assertions below run after teardown, so the maker's own state is read while it is still up and only judged later.
+    const makerLog = await runnerLogs(makerPage, 40);
+    const makerUp = await makerPage.evaluate(() => (globalThis as never as { rs2b0t: { runner: { state: string } } }).rs2b0t.runner.state);
     await stopScript(makerPage);
     console.log(`final: sales=${sales} gp=${gp} expected=${EXPECTED_GP} runner=${last.runner}`);
 
@@ -234,8 +253,20 @@ try {
     if (sales < 1) {
         fail(`no pile was ever dumped: ${await tail()}`);
     }
-    if (gp !== EXPECTED_GP) {
+    // Why: the flood seeds twenty more kinds, so the pile splits differently and the takings are whatever the maker's float covered across the trips; the point of that run is that it kept trading, not the total.
+    if (!args.flood && gp !== EXPECTED_GP) {
         fail(`took ${gp}gp, and the maker's ceiling on stock worth ${PILE_WORTH}gp is ${EXPECTED_GP}gp: ${await tail()}`);
+    }
+    if (args.flood && sales < 2) {
+        fail(`the flood took ${sales} sale(s); the maker has to bank between them and come back: ${await tail()}`);
+    }
+    if (args.flood) {
+        if (!makerLog.some(m => /bank|deposit/i.test(m))) {
+            fail(`the maker never banked the flood: ${makerLog.slice(-8).join(' | ')}`);
+        }
+        if (makerUp !== 'running') {
+            fail(`the maker did not survive the flood (${makerUp}): ${makerLog.slice(-8).join(' | ')}`);
+        }
     }
     if (refusedStop !== '') {
         fail(`the chainbodies the book does not price were left banked instead of riding along: ${refusedStop}`);
