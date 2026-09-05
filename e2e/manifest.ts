@@ -639,7 +639,11 @@ export const CASES: readonly Case[] = [
         id: 'maze-probe-live',
         harness: 'maze-probe-live.ts',
         covers: { subsystems: ['nav'] },
-        status: 'unvetted'
+        status: 'vetted',
+        args: ['--spawn', 'se', '--minutes', '4'],
+        budgetMin: 6,
+        provenAt: 'f3e20a70',
+        note: 'teleports to one of the four maze corners and passes when the guardian solves the route out. `--spawn se` is the 28-step leg to the door at (2936,4560) that used to read as walled off; nw, ne and sw all pass too'
     },
     {
         id: 'merlin-mordred-353-live',
