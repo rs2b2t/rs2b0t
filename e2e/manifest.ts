@@ -362,7 +362,8 @@ export const CASES: readonly Case[] = [
         covers: { scripts: ['JiveDragons'] },
         status: 'vetted',
         budgetMin: 25,
-        provenAt: 'e4ec531a'
+        provenAt: 'ff0d19b9',
+        note: '`--site blue|black` picks the lair. The black run seeds Sharks and a Superantipoison and passes on the corridor stand, both spawns in view, with no health lost on a safespot'
     },
     {
         id: 'jivedemons-live',
