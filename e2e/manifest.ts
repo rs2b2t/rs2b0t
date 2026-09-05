@@ -422,7 +422,8 @@ export const CASES: readonly Case[] = [
         id: 'jivechests-live',
         harness: 'jivechests-live.ts',
         covers: { scripts: ['JiveChests'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: '5c9e5d69',
         budgetMin: 10,
         note: 'seeds 14 crystal keys and a teleport kit at Falador West; passes once a seven-key trip is open at the Taverley chest, the haul is banked, the next seven are drawn and no swordfish, body runes or spinach rolls come home'
     },
