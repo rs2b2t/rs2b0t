@@ -327,10 +327,13 @@ describe('gatheringCombatPolicy (Desert Mining Camp)', () => {
 });
 
 describe('effectiveGatherLeash', () => {
-    test('Auto keeps the UI setting (freeform / unverified snaps)', () => {
+    test('freeform keeps the UI setting (Use Closest / Use Start / Use Custom / Auto)', () => {
+        expect(effectiveGatherLeash(12, 'Use Closest')).toBe(12);
+        expect(effectiveGatherLeash(12, 'Use Start Position')).toBe(12);
+        expect(effectiveGatherLeash(12, 'Use Custom Position')).toBe(12);
         expect(effectiveGatherLeash(12, 'Auto')).toBe(12);
         expect(effectiveGatherLeash(18, 'auto')).toBe(18);
-        expect(effectiveGatherLeash(40, 'Auto')).toBe(40);
+        expect(effectiveGatherLeash(40, 'Use Closest')).toBe(40);
         expect(effectiveGatherLeash(64, 'Auto')).toBe(64);
     });
 
@@ -343,18 +346,21 @@ describe('effectiveGatherLeash', () => {
         expect(effectiveGatherLeash(64, 'Draynor Village')).toBe(64);
     });
 
-    test('None (power) also floors — start-tile clusters need width', () => {
-        expect(effectiveGatherLeash(10, 'None')).toBe(NAMED_CAMP_LEASH_FLOOR);
-        expect(effectiveGatherLeash(8, 'none')).toBe(NAMED_CAMP_LEASH_FLOOR);
+    test('unknown names also floor — start-tile clusters need width', () => {
+        expect(effectiveGatherLeash(10, 'Atlantis')).toBe(NAMED_CAMP_LEASH_FLOOR);
+        expect(effectiveGatherLeash(8, 'Some Unknown Camp')).toBe(NAMED_CAMP_LEASH_FLOOR);
     });
 });
 
 describe('isAutoLocation', () => {
-    test('only Auto is expert freeform (no mob flee)', () => {
+    test('Use Closest / Use Start Position / Use Custom Position / Auto are expert freeform (no mob flee)', () => {
+        expect(isAutoLocation('Use Closest')).toBe(true);
+        expect(isAutoLocation('Use Start Position')).toBe(true);
+        expect(isAutoLocation('Use Custom Position')).toBe(true);
         expect(isAutoLocation('Auto')).toBe(true);
         expect(isAutoLocation(' auto ')).toBe(true);
         expect(isAutoLocation('Fishing Guild')).toBe(false);
-        expect(isAutoLocation('None')).toBe(false);
+        expect(isAutoLocation('Atlantis')).toBe(false);
     });
 });
 

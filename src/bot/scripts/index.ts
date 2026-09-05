@@ -278,12 +278,12 @@ ScriptRegistry.register({
         leashRadius: GATHERING_SETTINGS.leashRadius,
         location: {
             type: 'string',
-            default: 'Auto',
+            default: 'Use Closest',
             options: MINING_LOCATION_OPTIONS,
             optionLabels: MINING_LOCATION_OPTION_LABELS,
             label: 'Location / full inventory',
             help:
-                'Mine camp + full-pack behaviour. Auto = if you start in the same 64×64 map square as a known mine camp, snap to the nearest such camp and bank there; otherwise freeform (start-tile leash + nearest bank). Named camps pin spot + bank. Camps with aggressive NPCs show a recommended combat level (2× highest aggro + 1). None = power-mine (drop ore; configured food still restocks from the nearest bank).'
+                'Mine camp + full-pack behaviour. Use Closest = nearest camp by distance. Use Start Position = freeform around your start tile + nearest bank. Use Custom Position = freeform around the custom tile. Named camps pin spot + bank. Camps with aggressive NPCs show a recommended combat level (2× highest aggro + 1). Power-mine via Bank=false (drop ore; configured food still restocks from the nearest bank).'
         },
         ...MINER_FOOD_SETTINGS,
         tickManip: {
@@ -380,7 +380,7 @@ ScriptRegistry.register({
             max: 64,
             label: 'Leash radius (tiles)',
             help:
-                'How far from the camp/start anchor to prefer fishing spots. Only Location Auto uses this as-is. Named camps and None floor to 64 (Fishing Guild / Catherby piers are huge). The bot still hunts past the leash when spots hop along the pier. Location Auto does not mob-flee (expert / may-die).'
+                'How far from the camp/start anchor to prefer fishing spots. Only Location Use Closest / Use Start Position / Use Custom Position use this as-is. Named camps floor to 64 (Fishing Guild / Catherby piers are huge). The bot still hunts past the leash when spots hop along the pier. Freeform locations do not mob-flee (expert / may-die).'
         },
         tickManip: {
             type: 'string',
@@ -392,11 +392,11 @@ ScriptRegistry.register({
         },
         location: {
             type: 'string',
-            default: 'Auto',
+            default: 'Use Closest',
             options: FISHING_LOCATION_OPTIONS,
             label: 'Location / full inventory',
             help:
-                'Fishing camp + full-pack behaviour. Auto = if you start in the same 64×64 map square as a known camp, snap to the nearest such camp and bank there; otherwise freeform (start-tile leash + nearest bank). Named camps pin pier + bank (and range for Catherby cook). None = power-fish (always drop; cook is disabled).'
+                'Fishing camp + full-pack behaviour. Use Closest = nearest camp by distance. Use Start Position = freeform around your start tile + nearest bank. Use Custom Position = freeform around the custom tile. Named camps pin pier + bank (and range for Catherby cook). Power-fish via Bank=false (always drop; cook is disabled).'
         },
         cookMode: {
             type: 'string',

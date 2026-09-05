@@ -12,30 +12,31 @@ import {
 const bankTiles = new Set(BANK_LOCATIONS.map(b => `${b.tile.x},${b.tile.z},${b.tile.level}`));
 
 describe('resolveFishingLocation', () => {
-    test('None resolves to no location', () => {
-        expect(resolveFishingLocation('None', new Tile(3086, 3231, 0))).toBeNull();
+    test('Use Start Position and Use Custom Position are freeform (null)', () => {
+        expect(resolveFishingLocation('Use Start Position', new Tile(3086, 3231, 0))).toBeNull();
+        expect(resolveFishingLocation('Use Custom Position', new Tile(3086, 3231, 0))).toBeNull();
     });
 
-    test('Auto detects Draynor from the fishing spots', () => {
-        expect(resolveFishingLocation('Auto', new Tile(3086, 3231, 0))?.name).toBe('Draynor Village');
+    test('Use Closest detects Draynor from the fishing spots', () => {
+        expect(resolveFishingLocation('Use Closest', new Tile(3086, 3231, 0))?.name).toBe('Draynor Village');
     });
 
-    test('Auto detects Draynor from inside the bank', () => {
-        expect(resolveFishingLocation('Auto', new Tile(3092, 3243, 0))?.name).toBe('Draynor Village');
+    test('Use Closest detects Draynor from inside the bank', () => {
+        expect(resolveFishingLocation('Use Closest', new Tile(3092, 3243, 0))?.name).toBe('Draynor Village');
     });
 
-    test('Auto freeform from Lumbridge (outside Draynor map square)', () => {
-        // Lumbridge 3222,3218 is map square (50,50); Draynor fish 3086,3231 is (48,50).
-        expect(resolveFishingLocation('Auto', new Tile(3222, 3218, 0))).toBeNull();
+    test('Use Closest still snaps from Lumbridge (no chunk gate, nearest by distance)', () => {
+        // Lumbridge 3222,3218 is map square (50,50); Draynor fish 3086,3231 is (48,50), now nearest not freeform.
+        expect(resolveFishingLocation('Use Closest', new Tile(3222, 3218, 0))?.name).toBe('Draynor Village');
     });
 
-    test('Auto freeform on other level even when xz matches a camp', () => {
-        // sameMapSquare requires level match, level 1 at Draynor coords is freeform.
-        expect(resolveFishingLocation('Auto', new Tile(3086, 3231, 1))).toBeNull();
+    test('Use Closest ignores level (planar distance)', () => {
+        // level 1 at Draynor coords still snaps to Draynor, not freeform.
+        expect(resolveFishingLocation('Use Closest', new Tile(3086, 3231, 1))?.name).toBe('Draynor Village');
     });
 
-    test('Auto freeform at Ardougne river fly (outside every fishing camp chunk)', () => {
-        expect(resolveFishingLocation('Auto', new Tile(2566, 3374, 0))).toBeNull();
+    test('Use Closest at Ardougne river fly still snaps to nearest camp', () => {
+        expect(resolveFishingLocation('Use Closest', new Tile(2566, 3374, 0))).not.toBeNull();
     });
 
     test('named locations resolve case-insensitively', () => {
@@ -62,11 +63,12 @@ describe('resolveFishingLocation', () => {
 });
 
 describe('FISHING_LOCATIONS table', () => {
-    test('dropdown options are Auto + every location + None', () => {
+    test('dropdown options are Use Closest + Use Start Position + Use Custom Position + every location', () => {
         expect(FISHING_LOCATION_OPTIONS).toEqual([
-            'Auto',
-            ...FISHING_LOCATIONS.map(l => l.name),
-            'None'
+            'Use Closest',
+            'Use Start Position',
+            'Use Custom Position',
+            ...FISHING_LOCATIONS.map(l => l.name)
         ]);
         expect(LOCATION_OPTIONS).toEqual(FISHING_LOCATION_OPTIONS);
     });
