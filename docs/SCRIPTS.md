@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 68. Categories: 20.
+- Scripts: 69. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -21,7 +21,7 @@
 - [Herblore](#herblore) — 5
 - [Magic](#magic) — 3
 - [Mining](#mining) — 3
-- [Money making](#money-making) — 5
+- [Money making](#money-making) — 6
 - [Navigation](#navigation) — 2
 - [Prayer](#prayer) — 1
 - [Quest](#quest) — 3
@@ -848,6 +848,16 @@ Mines the selected rock types, then banks the ore at the nearest bank or drops i
 | `packJunk` | string | `"Bank"` | Event junk while gathering — one of: Bank, Drop, Off |
 
 ## Money making
+
+### JiveChests
+
+Opens the Taverley crystal chest on a bank of crystal keys: withdraws seven at Falador West, walks to the chest, uses a key on it per open, drops the raw swordfish, body runes and spinach rolls the roll gives, then teleports back and banks the rest. Stops when the bank runs out of keys.
+
+- Tags: `chest`, `taverley`, `banking`, `looting`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `teleportHome` | boolean | `true` | Teleport back to Falador |
 
 ### JiveMarketDumper
 

@@ -41,6 +41,7 @@ import JiveDemons, { SETTINGS as JIVEDEMONS_SETTINGS } from './JiveDemons/JiveDe
 import JiveEnchanter, { SETTINGS as JIVEENCHANTER_SETTINGS } from './JiveEnchanter/JiveEnchanter.js';
 import JiveKBD, { SETTINGS as JIVEKBD_SETTINGS } from './JiveKBD/JiveKBD.js';
 import JiveCrafting, { SETTINGS as JIVECRAFTING_SETTINGS } from './JiveCrafting/JiveCrafting.js';
+import JiveChests, { SETTINGS as JIVECHESTS_SETTINGS } from './JiveChests/JiveChests.js';
 import JiveMarketDumper, { SETTINGS as JIVEMARKETDUMPER_SETTINGS } from './JiveMarketDumper/JiveMarketDumper.js';
 import JiveShilo, { SETTINGS as JIVESHILO_SETTINGS } from './JiveShilo/JiveShilo.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab/RockCrab.js';
@@ -273,6 +274,15 @@ ScriptRegistry.register({
     tags: ['trading', 'bank', 'market', 'afk'],
     settingsSchema: JIVEMARKETDUMPER_SETTINGS,
     create: () => new JiveMarketDumper()
+});
+
+ScriptRegistry.register({
+    name: 'JiveChests',
+    description: 'Opens the Taverley crystal chest on a bank of crystal keys: withdraws seven at Falador West, walks to the chest, uses a key on it per open, drops the raw swordfish, body runes and spinach rolls the roll gives, then teleports back and banks the rest. Stops when the bank runs out of keys.',
+    category: 'Money making',
+    tags: ['chest', 'taverley', 'banking', 'looting', 'afk'],
+    settingsSchema: JIVECHESTS_SETTINGS,
+    create: () => new JiveChests()
 });
 
 ScriptRegistry.register({

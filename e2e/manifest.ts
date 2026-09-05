@@ -419,6 +419,14 @@ export const CASES: readonly Case[] = [
         note: 'a MarketMaker on a two-row book at Seers with a 200k float, a customer whose bank holds 500 yews, 1000 iron and two chainbodies the book does not price; passes when one pile takes the maker ceiling of 100k, the chainbodies ride along unpriced and the bank ends bare'
     },
     {
+        id: 'jivechests-live',
+        harness: 'jivechests-live.ts',
+        covers: { scripts: ['JiveChests'] },
+        status: 'unvetted',
+        budgetMin: 10,
+        note: 'seeds 14 crystal keys and a teleport kit at Falador West; passes once a seven-key trip is open at the Taverley chest, the haul is banked, the next seven are drawn and no swordfish, body runes or spinach rolls come home'
+    },
+    {
         id: 'fishing-contest-244-live',
         harness: 'fishing-contest-244-live.ts',
         covers: { scripts: ['AIOQuester'] },
