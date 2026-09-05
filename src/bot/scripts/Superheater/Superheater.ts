@@ -13,13 +13,14 @@ import { nearestBank } from '../../api/bank/BankLocations.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import {
     BAR_OPTIONS,
-    FIRE_STAFF,
+    FIRE_STAVES,
     MAGIC_REQUIRED,
     NATURES_DEFAULT,
     NATURES_MIN,
     NATURE_RUNE,
     barsPerTrip,
     barsSmeltable,
+    pickFireStaff,
     primaryOre,
     recipeForBar,
     withdrawSet,
@@ -162,13 +163,13 @@ export default class Superheater extends TaskBot {
         this.trips++;
     }
 
-    // Why: Bank.isOpen() only proves the component exists. The item list fills a beat after opening and again after every deposit, so a count of zero can be a list that has not loaded rather than an empty bank. Before halting on "out of X", confirm the list is loaded and the item reads zero; otherwise retry.
-    async bankTrulyOutOf(name: string): Promise<boolean> {
+    // Why: Bank.isOpen() only proves the component exists. The item list fills a beat after opening and again after every deposit, so a count of zero can be a list that has not loaded rather than an empty bank. Before halting on "out of X", confirm the list is loaded and every named item reads zero; otherwise retry.
+    async bankTrulyOutOf(...names: string[]): Promise<boolean> {
         const settled = await Execution.delayUntil(() => Bank.loaded(), 3500);
         if (!settled) {
             return false;
         }
-        return Bank.count(name) === 0;
+        return names.every(name => Bank.count(name) === 0);
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
@@ -194,12 +195,12 @@ export default class Superheater extends TaskBot {
     }
 }
 
-// Why: set the staff of fire once. Deposit everything, withdraw one, close so Wield is a backpack op, wield, reopen.
+// Why: set a fire-rune staff once. Deposit everything, withdraw one, close so Wield is a backpack op, wield, reopen.
 class EnsureGear implements Task {
     constructor(private bot: Superheater) {}
 
     validate(): boolean {
-        return !Equipment.contains(FIRE_STAFF);
+        return pickFireStaff(name => Equipment.contains(name)) === undefined;
     }
 
     async execute(): Promise<void> {
@@ -210,15 +211,27 @@ class EnsureGear implements Task {
             await Bank.depositAllMatching(() => true);
             await Execution.delayTicks(1);
         }
-        if (Inventory.count(FIRE_STAFF) === 0) {
-            if (!(await Bank.withdrawX(FIRE_STAFF, 1))) {
-                // The bank list may still be settling after open, so re-check before declaring the staff gone.
-                if (!(await this.bot.bankTrulyOutOf(FIRE_STAFF))) {
-                    this.bot.log(`withdraw of ${FIRE_STAFF} stalled but the bank list is still settling — retrying`);
+        let staff = pickFireStaff(name => Inventory.count(name) > 0);
+        if (!staff) {
+            staff = pickFireStaff(name => Bank.count(name) > 0);
+            if (!staff) {
+                // The bank list may still be settling after open, so re-check before declaring every fire staff gone.
+                if (!(await this.bot.bankTrulyOutOf(...FIRE_STAVES))) {
+                    this.bot.log('withdraw of a fire staff stalled but the bank list is still settling — retrying');
                     return;
                 }
-                this.bot.log(`no ${FIRE_STAFF} in the bank — stopping`);
-                ScriptRunner.stop(`no ${FIRE_STAFF} in the bank`);
+                this.bot.log('no fire staff in the bank — stopping');
+                ScriptRunner.stop('no fire staff in the bank');
+                return;
+            }
+            this.bot.log(`withdrawing ${staff}`);
+            if (!(await Bank.withdrawX(staff, 1))) {
+                if (!(await this.bot.bankTrulyOutOf(...FIRE_STAVES))) {
+                    this.bot.log(`withdraw of ${staff} stalled but the bank list is still settling — retrying`);
+                    return;
+                }
+                this.bot.log('no fire staff in the bank — stopping');
+                ScriptRunner.stop('no fire staff in the bank');
                 return;
             }
         }
@@ -226,13 +239,18 @@ class EnsureGear implements Task {
             this.bot.log('bank would not close — retrying');
             return;
         }
-        this.bot.setStatus(`wielding ${FIRE_STAFF}`);
-        if (!(await Equipment.equip(FIRE_STAFF))) {
-            this.bot.log(`could not wield ${FIRE_STAFF} — stopping`);
-            ScriptRunner.stop(`could not wield ${FIRE_STAFF}`);
+        // Why: close leaves Deposit-* ops on the side pack for a beat, so wait for Wield before equip.
+        await Execution.delayUntil(
+            () => !Bank.isOpen() && (Inventory.first(staff)?.actions().some(o => /wield|wear|equip/i.test(o)) ?? false),
+            3000
+        );
+        this.bot.setStatus(`wielding ${staff}`);
+        if (!(await Equipment.equip(staff))) {
+            this.bot.log(`could not wield ${staff} — stopping`);
+            ScriptRunner.stop(`could not wield ${staff}`);
             return;
         }
-        this.bot.log(`wore ${FIRE_STAFF} — casts need only ${NATURE_RUNE}s now`);
+        this.bot.log(`wore ${staff} — casts need only ${NATURE_RUNE}s now`);
         await this.bot.openBank();
     }
 }

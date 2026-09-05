@@ -983,6 +983,14 @@ export const CASES: readonly Case[] = [
         note: 'Varrock West with iron, coal, natures and a staff of fire banked; passes on steel bars plus magic and smithing XP together'
     },
     {
+        id: 'superheater-fire-battlestaff-live',
+        harness: 'superheater-fire-battlestaff-live.ts',
+        covers: { scripts: ['Superheater'] },
+        status: 'unvetted',
+        budgetMin: 10,
+        note: 'Varrock West with iron, coal, natures and a Fire battlestaff banked (no Staff of fire); passes on wore Fire battlestaff plus steel bars'
+    },
+    {
         id: 'strangebox-repro-live',
         harness: 'strangebox-repro-live.ts',
         covers: { subsystems: ['random-events'] },
