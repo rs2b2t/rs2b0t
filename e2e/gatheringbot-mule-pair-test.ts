@@ -225,6 +225,9 @@ try {
     }
 
     console.log(`\nPASS gatheringbot-mule-pair: ${detail}`);
+    const shotPath = `out/gatheringbot-mule-pair-${stamp}.png`;
+    await pageG.screenshot({ path: shotPath, fullPage: false }).catch(() => undefined);
+    console.log(`screenshot: ${shotPath}`);
     process.exit(0);
 } catch (e) {
     console.error(e);
