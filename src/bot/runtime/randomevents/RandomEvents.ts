@@ -31,6 +31,29 @@ const HOSTILE_EVENT_NPC_IDS = new Set<number>([
     ...idRange(438, 443)  // Tree spirit  (macro_dryhadguardian_1..6)
 ]);
 
+// Why: an ent replaces the tree you were chopping, and the spawn queues the chop on the player, so it swings without a click and the chop re-queues itself. The seventh swing turns the axe into a Broken axe only Bob repairs, and the npc is named "Tree" with the level hidden, so nothing else about it reads as a hazard.
+/** `macro_ent_tree1` through `macro_ent_magic`, the woodcutting random that eats an axe. */
+export const ENT_NPC_IDS: ReadonlySet<number> = new Set(idRange(444, 452));
+
+/** How close an ent has to be before the run steps off it. */
+const ENT_ENGAGE_DISTANCE = 3;
+
+export const ENT_HAZARD = 'ent';
+
+/** Whether this npc is an ent close enough to be chopping us. */
+export function entHazard(npc: { id: number; distance: number }): boolean {
+    return ENT_NPC_IDS.has(npc.id) && npc.distance <= ENT_ENGAGE_DISTANCE;
+}
+
+/** Ticks held after stepping off a hazard. */
+const HAZARD_HOLD_TICKS = 60;
+// Why: the gas, the rock and the whirlpool all outlast the step away, so the hold waits them out. An ent's own tree is deleted for those same 60 ticks and the run has other trees, so holding there would only idle it; the walk is what breaks the chop chain.
+const ENT_HOLD_TICKS = 3;
+
+export function hazardHoldTicks(name: string): number {
+    return name === ENT_HAZARD ? ENT_HOLD_TICKS : HAZARD_HOLD_TICKS;
+}
+
 const GAS_CHEST_LOC_ID = 2141;
 /** Whirlpool fishing-spot variants (macro). 406 is the fourth changetype id. */
 const WHIRLPOOL_NPC_IDS = [403, 404, 405, 406];
@@ -324,6 +347,9 @@ class RandomEventsImpl {
             if (WHIRLPOOL_NPC_IDS.includes(npc.id) && npc.distance <= 3) {
                 return { kind: 'hazard', name: 'whirlpool' };
             }
+            if (entHazard(npc)) {
+                return { kind: 'hazard', name: ENT_HAZARD };
+            }
         }
 
         this.gearLoss.update(
@@ -562,7 +588,7 @@ class RandomEventsImpl {
         if (flee) {
             await Traversal.walkTo(flee, { radius: 1, timeoutMs: 15_000, log });
         }
-        await Execution.delayTicks(60);
+        await Execution.delayTicks(hazardHoldTicks(name));
         return true;
     }
 

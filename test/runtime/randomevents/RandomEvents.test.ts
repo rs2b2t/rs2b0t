@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { GearLossTracker, handleLocation, isHostileEventNpc, pickSacrificial, RandomEvents } from '#/bot/runtime/randomevents/RandomEvents.js';
+import { ENT_NPC_IDS, entHazard, GearLossTracker, handleLocation, hazardHoldTicks, isHostileEventNpc, pickSacrificial, RandomEvents } from '#/bot/runtime/randomevents/RandomEvents.js';
 
 describe('handleLocation', () => {
     test('worn handle wins (the wielded-pick case the old scan missed)', () => {
@@ -145,5 +145,43 @@ describe('ignored randoms (#597)', () => {
         inArena = true;
         expect(RandomEvents.isIgnored('swarm')).toBe(true);
         RandomEvents.setIgnoredRandoms([]);
+    });
+});
+
+// Why: an ent replaces the tree you were chopping and the server queues the chop on you, so it swings on its own; the seventh swing turns the axe into a Broken axe that only Bob repairs.
+describe('the woodcutting ent', () => {
+    const ent = (over: Partial<{ id: number; distance: number }> = {}) => ({ id: 444, distance: 1, ...over });
+
+    test('every ent the content spawns is known, tree through magic', () => {
+        expect(ENT_NPC_IDS.size).toBe(9);
+        for (const id of [444, 445, 446, 447, 448, 449, 450, 451, 452]) {
+            expect(ENT_NPC_IDS.has(id)).toBe(true);
+        }
+    });
+
+    test('stops at the ids either side, so a tree spirit stays an evade and 453 is nothing', () => {
+        expect(ENT_NPC_IDS.has(443)).toBe(false);
+        expect(ENT_NPC_IDS.has(453)).toBe(false);
+    });
+
+    test('is a hazard to step away from within reach, and ignored further out', () => {
+        expect(entHazard(ent())).toBe(true);
+        expect(entHazard(ent({ id: 452, distance: 3 }))).toBe(true);
+        expect(entHazard(ent({ distance: 4 }))).toBe(false);
+        expect(entHazard(ent({ id: 411 }))).toBe(false);
+    });
+});
+
+// Why: gas, a smoking rock and a whirlpool all outlast the step away, so the hold waits them out; the ent's own tree is gone for the same 60 ticks and the run has other trees, so holding there only idles it.
+describe('hazardHoldTicks', () => {
+    test('waits the lasting hazards out', () => {
+        for (const name of ['poisonous gas', 'smoking rock', 'whirlpool']) {
+            expect(hazardHoldTicks(name)).toBe(60);
+        }
+    });
+
+    test('holds only long enough to break the chop chain on an ent', () => {
+        expect(hazardHoldTicks('ent')).toBeLessThan(10);
+        expect(hazardHoldTicks('ent')).toBeGreaterThan(0);
     });
 });
