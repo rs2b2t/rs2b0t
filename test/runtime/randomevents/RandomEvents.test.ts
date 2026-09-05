@@ -79,10 +79,40 @@ describe('isHostileEventNpc', () => {
         expect(isHostileEventNpc(riverTroll({ distance: 1 }), 3, false)).toBe(true);
     });
 
-    test('hostile id within engage range is an event even with no combat/face flags (#422 Swarm)', () => {
-        // Soft flags lag for 0-damage Swarm; antimacro ids only exist for the victim.
+    test('hostile id within engage range is an event even with no combat/face flags (#422)', () => {
+        // Soft flags lag for these; antimacro ids only exist for the victim.
         expect(isHostileEventNpc(riverTroll({ distance: 5, faceEntity: -1, inCombat: false }), 3, false)).toBe(true);
-        expect(isHostileEventNpc(riverTroll({ id: 411, distance: 4, faceEntity: -1 }), 3, false)).toBe(true);
+    });
+
+    // Why: the Swarm is clamped three tiles from where it spawns and hits 2s, so standing near one costs almost nothing and the walk away costs a trip; every other hostile follows and hits properly.
+    describe('the Swarm', () => {
+        const swarm = (over: Partial<{ inCombat: boolean; distance: number; faceEntity: number }> = {}) =>
+            riverTroll({ id: 411, distance: 4, faceEntity: -1, inCombat: false, ...over });
+
+        test('is left alone while it is only standing there', () => {
+            expect(isHostileEventNpc(swarm(), 3, false)).toBe(false);
+            expect(isHostileEventNpc(swarm({ distance: 1 }), 3, false)).toBe(false);
+        });
+
+        test('is an event once it faces us, which is what attacking looks like', () => {
+            expect(isHostileEventNpc(swarm({ faceEntity: 32768 + 3 }), 3, false)).toBe(true);
+        });
+
+        test('is an event once it is in combat', () => {
+            expect(isHostileEventNpc(swarm({ inCombat: true }), 3, false)).toBe(true);
+        });
+
+        test('is not woken by us fighting something else', () => {
+            expect(isHostileEventNpc(swarm(), 3, true)).toBe(false);
+        });
+
+        test('facing another player is not us being attacked', () => {
+            expect(isHostileEventNpc(swarm({ faceEntity: 32768 + 9 }), 3, false)).toBe(false);
+        });
+
+        test('still ignored past engage range however it is flagged', () => {
+            expect(isHostileEventNpc(swarm({ distance: 12, inCombat: true }), 3, false)).toBe(false);
+        });
     });
 
     test('hostile already in combat within engage range is an event', () => {

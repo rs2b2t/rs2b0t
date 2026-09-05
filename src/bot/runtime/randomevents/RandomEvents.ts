@@ -52,6 +52,14 @@ const GEAR_LOSS_WINDOW_MS = 90_000;
  *  Why: detecting by id within this range when they face or attack us, rather than only when adjacent, stops fishers dying before distance<=1 fires. */
 const HOSTILE_ENGAGE_DISTANCE = 8;
 
+/** `macro_swarm`, the one hostile random that cannot follow. */
+const SWARM_NPC_ID = 411;
+
+/** Whether an npc's face target is this player. */
+function facesSlot(faceEntity: number, selfSlot: number): boolean {
+    return faceEntity >= 32768 && faceEntity - 32768 === selfSlot;
+}
+
 export function isHostileEventNpc(
     npc: {
         id: number;
@@ -59,7 +67,7 @@ export function isHostileEventNpc(
         distance: number;
         faceEntity: number;
     },
-    _selfSlot: number,
+    selfSlot: number,
     _playerInCombat: boolean
 ): boolean {
     if (!HOSTILE_EVENT_NPC_IDS.has(npc.id)) {
@@ -68,8 +76,13 @@ export function isHostileEventNpc(
     if (npc.distance > HOSTILE_ENGAGE_DISTANCE) {
         return false;
     }
+    // Why: `macro_swarm` carries maxrange 3, so it is pinned three tiles from where it spawned and a step or two leaves it behind, and it hits 2s at attackrate 7 meanwhile. Evading one that is only sitting there costs a walk and a repath to dodge a few points of damage that never arrives.
+    // Why: it does enter opplayer2 on the player, so an actual attack shows up as its own combat flag or its face target, and those are what earn the interrupt.
+    if (npc.id === SWARM_NPC_ID) {
+        return npc.inCombat || facesSlot(npc.faceEntity, selfSlot);
+    }
     // Why: these antimacro ids only exist as your own random event. They are not world mobs you walk past.
-    // Why: soft flags (combatCycle / faceEntity) often lag or never set for 0-damage Swarm (#422), which left walks repathing until timeout while Supervisor never intercepted, so presence within engage range is enough.
+    // Why: soft flags (combatCycle / faceEntity) often lag or never set for the rest (#422), which left walks repathing until timeout while Supervisor never intercepted, so presence within engage range is enough.
     return true;
 }
 
