@@ -403,13 +403,13 @@ Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought throu
 | `rangingPotion` | boolean | `false` | Drink a ranging potion |
 | `antipoisonDoses` | number (0–4) | `1` | Superantipoison flasks per trip |
 | `solveClues` | boolean | `true` | Solve clue drops |
-| `site` | string | `"taverley-blue"` | Dragon site — one of: taverley-blue, taverley-black, heroes-blue |
+| `site` | string | `"taverley-blue"` | Dragon site — one of: taverley-blue, taverley-black, heroes-blue, gutanoth-blue |
 | `safespot1` | tile | `{"x":2901,"z":9809,"level":0}` | Safespot 1 |
 | `safespot2` | tile | `{"x":2900,"z":9809,"level":0}` | Safespot 2 |
 | `safespot3` | tile | `{"x":2901,"z":9810,"level":0}` | Safespot 3 |
 | `meleeTile` | tile | `{"x":2900,"z":9808,"level":0}` | Melee anchor tile |
 | `bankTile` | tile | `{"x":2946,"z":3369,"level":0}` | Bank stand tile |
-| `leaveVia` | string | `"teleport"` | Leave the lair by — one of: Falador teleport, Walk out through the gate |
+| `leaveVia` | string | `"teleport"` | Leave the lair by — one of: The escape teleport this site names, Walk out |
 | `teleStock` | number (0–10) | `2` | Spare escape casts |
 | `logDetail` | string | `"Normal"` | Log detail — one of: Normal, Verbose |
 

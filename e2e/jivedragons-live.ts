@@ -1,7 +1,7 @@
-/** Live proof for JiveDragons at the Taverley dragons and the Heroes' Guild pen: --site --style --minutes --dusty --clue --leave --tick --no-starve.
+/** Live proof for JiveDragons at the Taverley dragons, the Heroes' Guild pen and the Gu'Tanoth Enclave: --site --style --minutes --dusty --clue --leave --tick --no-starve.
  *  Why: supply.ts and combat.ts carry no unit tests because every function in them drives a live client, so this run is the only proof either of them works. */
 
-// Usage: HEADED=1 bun e2e/jivedragons-live.ts [--base url] [--site blue|black|heroes] [--style melee|mage|range] [--minutes n] [--tick ms] [--dusty] [--clue] [--leave teleport|walk] [--no-starve]
+// Usage: HEADED=1 bun e2e/jivedragons-live.ts [--base url] [--site blue|black|heroes|gutanoth] [--style melee|mage|range] [--minutes n] [--tick ms] [--dusty] [--clue] [--leave teleport|walk] [--no-starve]
 import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 
@@ -14,8 +14,8 @@ type Style = 'melee' | 'mage' | 'range';
 const STYLES: Style[] = ['melee', 'mage', 'range'];
 
 type Leave = 'teleport' | 'walk';
-type SiteArg = 'blue' | 'black' | 'heroes';
-const SITES: SiteArg[] = ['blue', 'black', 'heroes'];
+type SiteArg = 'blue' | 'black' | 'heroes' | 'gutanoth';
+const SITES: SiteArg[] = ['blue', 'black', 'heroes', 'gutanoth'];
 const LEAVES: Leave[] = ['teleport', 'walk'];
 
 /** A hard map clue: the tier blue dragons drop, and one dig rather than a trail no run is long enough to finish. */
@@ -72,7 +72,7 @@ function parse(argv: readonly string[]): Args {
     if (!LEAVES.includes(out.leave)) { fail(`--leave takes ${LEAVES.join(', ')}, got '${out.leave}'`); }
     if (!STYLES.includes(out.style)) { fail(`--style takes ${STYLES.join(', ')}, got '${out.style}'`); }
     if (!SITES.includes(out.site)) { fail(`--site takes ${SITES.join(', ')}, got '${out.site}'`); }
-    if (out.dusty && out.site === 'heroes') { fail('--dusty is a dusty-key site flag, and the Heroes\' Guild pen has no key'); }
+    if (out.dusty && out.site !== 'blue' && out.site !== 'black') { fail(`--dusty is a dusty-key site flag, and '${out.site}' has no key`); }
     if (!Number.isFinite(out.minutes) || out.minutes <= 0) { fail(`--minutes takes a positive number, got '${out.minutes}'`); }
     return out;
 }
@@ -94,7 +94,10 @@ const BLUE_SITE = {
     baby: 'Baby blue dragon',
     food: { debug: 'lobster', name: 'Lobster' },
     heal: 12,
-    lootKey: 'loot'
+    lootKey: 'loot',
+    bank: { x: 2946, z: 3369, level: 0 },
+    escape: [['airrune', 'Air rune', 30], ['waterrune', 'Water rune', 10], ['lawrune', 'Law rune', 10]] as readonly (readonly [string, string, number])[],
+    rangedThreat: false
 };
 
 // Why: the black room sits deeper on the same key side, so only the box, the tiles, the target and the food differ; the corridor stand is what the walk in reaches without crossing the dragons.
@@ -110,7 +113,10 @@ const BLACK_SITE = {
     baby: null,
     food: { debug: 'shark', name: 'Shark' },
     heal: 20,
-    lootKey: 'lootBlack'
+    lootKey: 'lootBlack',
+    bank: BLUE_SITE.bank,
+    escape: BLUE_SITE.escape,
+    rangedThreat: false
 };
 
 // Why: the pen has no gate to unlock and no key to fetch, so the only gate on it is Heroes' Quest on the guild doors, which the varp buys outright. ^hero_complete is 15 in general/configs/quest.constant.
@@ -126,14 +132,37 @@ const HEROES_SITE = {
     baby: null,
     food: { debug: 'lobster', name: 'Lobster' },
     heal: 12,
-    lootKey: 'loot'
+    lootKey: 'loot',
+    bank: BLUE_SITE.bank,
+    escape: BLUE_SITE.escape,
+    rangedThreat: false
 };
 
-const SITE = args.site === 'black' ? BLACK_SITE : args.site === 'heroes' ? HEROES_SITE : BLUE_SITE;
+// Why: the guard waves you past on `%itwatchtower >= 13`, and the Watchtower spell wants the scroll read at 14, so one varp buys both the way in and the way out.
+// Why: the cave holds greater demons, ogre shamans and chieftains as well as the six dragons, so the stand is the one cluster clear of all of them and this run is a mage run.
+const GUTANOTH_SITE = {
+    key: 'gutanoth-blue',
+    keyed: false,
+    quest: { name: 'itwatchtower', value: 14 } as { name: string; value: number } | null,
+    antipoison: false,
+    lair: { minX: 2560, maxX: 2623, minZ: 9408, maxZ: 9471, level: 0 },
+    safespots: [{ x: 2585, z: 9468, level: 0 }, { x: 2586, z: 9468, level: 0 }, { x: 2584, z: 9468, level: 0 }],
+    meleeAnchor: { x: 2588, z: 9468, level: 0 },
+    target: 'Blue dragon',
+    baby: null,
+    food: { debug: 'shark', name: 'Shark' },
+    heal: 20,
+    lootKey: 'loot',
+    bank: { x: 2612, z: 3092, level: 0 },
+    escape: [['earthrune', 'Earth rune', 30], ['lawrune', 'Law rune', 10]] as readonly (readonly [string, string, number])[],
+    rangedThreat: true
+};
+
+const SITE = args.site === 'black' ? BLACK_SITE : args.site === 'heroes' ? HEROES_SITE : args.site === 'gutanoth' ? GUTANOTH_SITE : BLUE_SITE;
 const LAIR = SITE.lair;
 const SAFESPOTS: Point[] = SITE.safespots;
 const MELEE_ANCHOR: Point = SITE.meleeAnchor;
-const BANK: Point = { x: 2946, z: 3369, level: 0 };
+const BANK: Point = SITE.bank;
 
 const DUSTY_ID = 1590;
 const JAIL_KEY_ID = 1591;
@@ -199,15 +228,12 @@ const COMMON_BANK: BankSeedItem[] = [
     ...(SITE.antipoison ? [{ debugName: '4dose2antipoison', displayName: 'Superantipoison(4)', qty: 20 }] : []),
     { debugName: 'lawrune', displayName: 'Law rune', qty: 200 },
     { debugName: 'airrune', displayName: 'Air rune', qty: 20_000 },
-    { debugName: 'waterrune', displayName: 'Water rune', qty: 200 }
+    { debugName: 'waterrune', displayName: 'Water rune', qty: 200 },
+    { debugName: 'earthrune', displayName: 'Earth rune', qty: 200 }
 ];
 
 // Why: the first bank stop the run makes is the key check, which is not the full bank routine, so nothing stocks escape runes before the first trip and the first exit always walks. A teleport run is handed the cast up front so its first exit is the one under test; a walk run is still given none, which is what makes the gate walk-out its own proof.
-const ESCAPE_RUNES: readonly (readonly [string, string, number])[] = [
-    ['airrune', 'Air rune', 30],
-    ['waterrune', 'Water rune', 10],
-    ['lawrune', 'Law rune', 10]
-];
+const ESCAPE_RUNES: readonly (readonly [string, string, number])[] = SITE.escape;
 
 // Why: the solver names what it is missing before it walks, and on the first clue run it named all of these. A hard trail chains, and the leg after the first was a coordinate clue it abandoned for want of a sextant.
 const CLUE_TOOLS: BankSeedItem[] = [
@@ -568,7 +594,7 @@ try {
     const required = [...keyAsserts, 'gate', spotAssert, 'kill', 'banktrip', exitAssert, 'wielded', 'loot'];
     // Why: the trail is what the clue case is for, and a run that picks a scroll up and never starts it would otherwise pass on the pickup alone.
     if (args.clue) { required.push('clue', 'cluedone'); }
-    if (args.style !== 'melee') { required.push('hpheld'); }
+    if (args.style !== 'melee') { required.push(SITE.rangedThreat ? 'spotheld' : 'hpheld'); }
     if (args.style === 'melee') { required.push('meleekills'); }
     // Why: only the bow leaves anything of its own on the floor, so the arrows-come-home claim is a range claim.
     if (args.style === 'range') { required.push('arrows'); }
@@ -684,16 +710,22 @@ try {
             if (engagingLines > 0) { mark('meleekills', `${s.kills} kill(s) with ${engagingLines} engage line(s) against ${waitingPolls} leash poll(s)`); }
         }
         if (tripsAtKill >= 0 && s.trips > tripsAtKill) { mark('banktrip', `bank trip ${s.trips} finished after the first kill`); }
-        // Why: countBankTrip fires at the end of bankRoutine and leaveLair gates its start, so a trip that lands after the gate walk-out is the only proof from out here that leaveLair returned true.
-        if (walkOutSaid && outOfLairSaid && tripsAtWalkOut < 0 && !inLair(s.tile) && s.tile !== null) {
+        // Why: countBankTrip fires at the end of bankRoutine and leaveLair gates its start, so a trip that lands after the walk-out is the only proof from out here that leaveLair returned true.
+        // Why: `--leave walk` sends leaveLair straight down the walk path, so it never prints the "will not fire" fallback line and requiring that line made this assertion unreachable in the one mode it is for.
+        const walkedOut = args.leave === 'walk' || walkOutSaid;
+        if (walkedOut && outOfLairSaid && tripsAtWalkOut < 0 && !inLair(s.tile) && s.tile !== null) {
             tripsAtWalkOut = s.trips;
             walkOutTile = s.tile;
         }
         if (tripsAtWalkOut >= 0 && s.trips > tripsAtWalkOut) {
-            mark('walkout', `the gate walk-out landed outside the lair at ${walkOutTile?.x},${walkOutTile?.z} with no teleport, and trip ${s.trips} completed`);
+            mark('walkout', `the walk-out landed outside the lair at ${walkOutTile?.x},${walkOutTile?.z} with no teleport, and trip ${s.trips} completed`);
         }
-        if (guardsSafespot && violations.length === 0 && safespotMs >= SOAK_MS) {
+        if (guardsSafespot && !SITE.rangedThreat && violations.length === 0 && safespotMs >= SOAK_MS) {
             mark('hpheld', `no hp lost across ${Math.round(safespotMs / 1000)}s standing on a safespot with an adult up`);
+        }
+        // Why: on a rangedThreat site the room reaches the tile, so the claim is that it held the tile and kept fighting rather than that nothing landed on it.
+        if (guardsSafespot && SITE.rangedThreat && safespotMs >= SOAK_MS && s.kills > 1) {
+            mark('spotheld', `held a safespot for ${Math.round(safespotMs / 1000)}s with an adult up across ${s.kills} kill(s), taking ${violations.length} hit(s) on it`);
         }
 
         if (args.starve && starve === null && met['kill'] && lairMs >= SOAK_MS) {
@@ -754,7 +786,8 @@ try {
     const oneEndDrops = hpDrops.filter(d => d.eitherEnd && !d.bothEnds).length;
     console.log(`HP: ${hpDrops.length} drop(s), ${bothEndsDrops} with a safespot at both ends, ${oneEndDrops} taken walking on or off one, ${violations.length} counted as violations, ${Math.round(safespotMs / 1000)}s parked on a safespot with an adult up of ${Math.round(lairMs / 1000)}s in the lair`);
     console.log(`LOOT: ${final.looted} pickup(s), ${arrowLoots} of them Rune arrow, ${coinLoots} of them Coins`);
-    if (violations.length > 0) { fail(`hp fell ${violations.length} time(s) while standing on a safespot: ${JSON.stringify(violations)}`); }
+    // Why: a rangedThreat site expects the room to reach the tile, which is what the site flag says and what stops the ladder rotating off a good stand.
+    if (!SITE.rangedThreat && violations.length > 0) { fail(`hp fell ${violations.length} time(s) while standing on a safespot: ${JSON.stringify(violations)}`); }
     if (coinLoots > 0) { fail(`it picked up Coins ${coinLoots} time(s) off a loot list that does not name them`); }
     if (missing.length > 0) { fail(`the budget ran out with these unproven: ${missing.join(', ')} (status '${final.status}' at ${final.tile?.x},${final.tile?.z})`); }
     if (pageErrors.length > 0) { fail(`${pageErrors.length} browser page error(s): ${pageErrors.join('\n')}`); }

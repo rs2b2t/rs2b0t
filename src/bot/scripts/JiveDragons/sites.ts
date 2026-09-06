@@ -15,6 +15,24 @@ export interface DragonGate {
     inside: Tile;
 }
 
+// Why: the Enclave guard is an npc with a two-option chat, not a door, and the content runs `@enter_skavid_cave` off the first option once Watch Tower is complete, which teleports rather than opening anything.
+/** A way in that is a conversation rather than a door. */
+export interface DragonTalkGate {
+    npc: string;
+    op: string;
+    /** The option that gets you past; the reply teleports you inside. */
+    choose: string;
+    stand: Tile;
+}
+
+// Why: nothing walks out of the Enclave, so the way back is the cave loc's own op, which teleports to the Gu'Tanoth hillside.
+/** A way out that is a loc op rather than the walk back in reverse. */
+export interface DragonExit {
+    locId: number;
+    op: string;
+    stand: Tile;
+}
+
 export interface DragonSite {
     key: string;
     label: string;
@@ -39,6 +57,10 @@ export interface DragonSite {
     food?: string;
     /** The route in is worth a Superantipoison. */
     antipoison?: boolean;
+    /** The way in is a conversation rather than a door. */
+    talkGate?: DragonTalkGate;
+    /** The way out is a loc op rather than the walk back. */
+    exit?: DragonExit;
     inArea(t: AreaPoint | null): boolean;
 }
 
@@ -118,10 +140,45 @@ export const HEROES_BLUE: DragonSite = {
     inArea: inBox({ minX: 2886, maxX: 2942, minZ: 9883, maxZ: 9917, level: 0 })
 };
 
+// Why: the six spawns share the cave with ten spiders, six shamans, six chieftains and five greater demons, none of which the safespot deriver models, so the stand was picked off `bun tools/nav/jive-safespots.ts --target gutanoth` cross-referenced against those spawn tiles: it is the only cluster that both sees all of a dragon's wander and sits ten tiles clear of the nearest greater demon.
+// Why: the stand at (2585,9468) looks at 69 of the 98 body tiles of the dragon at (2590,9461) and at no other dragon, so a cast never picks a second one up.
+
+export const GUTANOTH_BLUE: DragonSite = {
+    key: 'gutanoth-blue',
+    label: "Gu'Tanoth Enclave blue dragons",
+    target: 'Blue dragon',
+    bones: 'Dragon bones',
+    keyItem: null,
+    gate: null,
+    // Why: `[opnpc1,enclave_guard]` runs `@enter_skavid_cave` on the first option once Watch Tower is complete, which is the guard being distracted; without the quest it wants a Nightshade and this site is gated on the quest anyway.
+    talkGate: {
+        npc: 'Enclave guard',
+        op: 'Talk-to',
+        choose: 'I want to go in there',
+        stand: new Tile(2508, 3038, 0)
+    },
+    // Why: `p_teleport(0_40_147_28_2)` drops you at the south end, sixty tiles of cave short of the stand.
+    approach: [new Tile(2588, 9432, 0), new Tile(2586, 9452, 0), new Tile(2585, 9468, 0)],
+    safespots: [new Tile(2585, 9468, 0), new Tile(2586, 9468, 0), new Tile(2584, 9468, 0)],
+    meleeAnchor: new Tile(2588, 9468, 0),
+    // Why: `[oploc1,enclavecave]` teleports to (2540,3054) on the Gu'Tanoth hillside, and it sits thirteen tiles east of the stand.
+    exit: { locId: 2813, op: 'Enter', stand: new Tile(2597, 9468, 0) },
+    bank: new Tile(2612, 3092, 0),
+    // Why: the Watchtower spell needs the quest this site already needs, and lands two ladders and 111 tiles from the Yanille bank; every other spell lands further.
+    escapeTeleportId: 'watchtower',
+    walkOut: new Tile(2540, 3054, 0),
+    food: 'Shark',
+    // Why: the stand is melee-proof but nothing in the cave is range-proof, and a live soak took 8 and 13 off it with one adult up, so a hit here is the room rather than the tile being wrong and the ladder must not rotate off it.
+    rangedThreat: true,
+    // Why: one box over the cave, which is its own region behind the guard's teleport.
+    inArea: inBox({ minX: 2560, maxX: 2623, minZ: 9408, maxZ: 9471, level: 0 })
+};
+
 export const DRAGON_SITES: Record<string, DragonSite> = {
     [TAVERLEY_BLUE.key]: TAVERLEY_BLUE,
     [TAVERLEY_BLACK.key]: TAVERLEY_BLACK,
-    [HEROES_BLUE.key]: HEROES_BLUE
+    [HEROES_BLUE.key]: HEROES_BLUE,
+    [GUTANOTH_BLUE.key]: GUTANOTH_BLUE
 };
 
 export const SITE_OPTIONS: string[] = Object.keys(DRAGON_SITES);

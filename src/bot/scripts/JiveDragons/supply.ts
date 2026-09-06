@@ -211,9 +211,41 @@ async function walkApproach(h: JiveHost, site: DragonSite): Promise<void> {
     }
 }
 
+// Why: the guard answers with a two-option chat and only the first option runs the teleport, so the talk is driven to that option rather than clicked through; the reply moves the player, which is what inArea then proves.
+async function talkPastGuard(h: JiveHost, site: DragonSite): Promise<boolean> {
+    const talk = site.talkGate!;
+    h.setStatus(`walking to the ${talk.npc}`);
+    if (!(await Traversal.walkResilient(talk.stand, { radius: 2, attempts: 5, timeoutMs: 300_000, log: m => h.log(`  ${m}`) }))) {
+        return false;
+    }
+    for (let attempt = 0; attempt < 3 && !site.inArea(Game.tile()); attempt++) {
+        const guard = Npcs.query().name(talk.npc).action(talk.op).nearest();
+        if (!guard) {
+            h.log(`no ${talk.npc} in the scene to talk past. Retrying.`);
+            await Execution.delayTicks(2);
+            continue;
+        }
+        h.setStatus(`talking past the ${talk.npc}`);
+        if (!(await guard.interact(talk.op))) {
+            continue;
+        }
+        await driveDialog([talk.choose], say(h));
+        if (await waitFed(() => site.inArea(Game.tile()), DOOR_MS)) {
+            h.log(`the ${talk.npc} let us past`);
+            await walkApproach(h, site);
+            return true;
+        }
+    }
+    h.log(`the ${talk.npc} did not let us past. It needs Watch Tower complete. Retrying.`);
+    return false;
+}
+
 export async function enterLair(h: JiveHost, site: DragonSite): Promise<boolean> {
     if (site.inArea(Game.tile())) {
         return true;
+    }
+    if (site.talkGate) {
+        return talkPastGuard(h, site);
     }
     const gate = site.gate;
     // Why: a gateless site is reached by transports and doors the graph already carries, so the approach walk is the way in and inArea is the only proof it landed.
@@ -285,7 +317,29 @@ export async function leaveLair(h: JiveHost, site: DragonSite): Promise<boolean>
 
 // Why: the gate takes the key on the way in only, and answers a plain Open from the inside.
 
+// Why: no path leaves the Enclave, so the way out is the cave's own op, which teleports to the hillside; walking to walkOut from inside would plan a route the cave does not have.
+async function leaveByLoc(h: JiveHost, site: DragonSite): Promise<boolean> {
+    const exit = site.exit!;
+    h.setStatus('walking to the cave mouth');
+    await walkNear(exit.stand, 2, say(h));
+    await Execution.delayTicks(1);
+    const cave = locById(exit.locId);
+    if (!cave || !(await cave.interact(exit.op))) {
+        h.log('the cave mouth is not in the scene yet. Retrying.');
+        return false;
+    }
+    if (!(await waitFed(() => !site.inArea(Game.tile()), DOOR_MS))) {
+        h.log('the cave mouth did not let us out. Retrying.');
+        return false;
+    }
+    h.log('out of the dragon lair');
+    return true;
+}
+
 async function walkOutOfLair(h: JiveHost, site: DragonSite): Promise<boolean> {
+    if (site.exit) {
+        return leaveByLoc(h, site);
+    }
     const gate = site.gate;
     // Why: with no gate the way out is the way in run backwards, so walking to walkOut climbs the ladder and opens the doors above it on its own.
     if (!gate) {

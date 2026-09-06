@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { DRAGON_SITES, SITE_OPTIONS, TAVERLEY_BLUE, siteFor } from '#/bot/scripts/JiveDragons/sites.js';
 import { SPELL_TELEPORTS } from '#/bot/event/webwalk/teleportCatalog.js';
-import { BLACK_DRAGON, HEROES_BLUE, derive, inputsPresent } from '../../../tools/nav/jive-safespots.js';
+import { BLACK_DRAGON, GUTANOTH_BLUE, HEROES_BLUE, derive, inputsPresent } from '../../../tools/nav/jive-safespots.js';
 
 describe('DRAGON_SITES', () => {
-    test('the two Taverley sites and the Heroes\' Guild pen are the entries, and every option resolves', () => {
-        expect(SITE_OPTIONS).toEqual(['taverley-blue', 'taverley-black', 'heroes-blue']);
+    test('the two Taverley sites, the Heroes\' Guild pen and the Enclave are the entries, and every option resolves', () => {
+        expect(SITE_OPTIONS).toEqual(['taverley-blue', 'taverley-black', 'heroes-blue', 'gutanoth-blue']);
         for (const key of SITE_OPTIONS) {
             expect(siteFor(key).key).toBe(key);
         }
@@ -250,5 +250,85 @@ describe.skipIf(!inputsPresent(HEROES_BLUE))("the Heroes' Guild derivation (engi
             const [x, z] = k.split(',').map(Number);
             expect(site.inArea({ x: x!, z: z!, level: 0 })).toBe(false);
         }
+    }, 60_000);
+});
+
+// Why: the guard is an npc with a two-option chat rather than a door, and nothing walks out of the cave, so this site is the one that exercises talkGate and exit.
+describe("the Gu'Tanoth Enclave blue dragons", () => {
+    const s = DRAGON_SITES['gutanoth-blue']!;
+
+    test('the way in is the guard conversation, not a gate or a key', () => {
+        expect(s.gate).toBeNull();
+        expect(s.keyItem).toBeNull();
+        expect(s.talkGate).toMatchObject({ npc: 'Enclave guard', op: 'Talk-to', choose: 'I want to go in there' });
+        expect([s.talkGate!.stand.x, s.talkGate!.stand.z]).toEqual([2508, 3038]);
+    });
+
+    test('the way out is the cave loc, since no route leaves the Enclave on foot', () => {
+        expect(s.exit).toMatchObject({ locId: 2813, op: 'Enter' });
+        expect([s.exit!.stand.x, s.exit!.stand.z]).toEqual([2597, 9468]);
+        expect([s.walkOut.x, s.walkOut.z]).toEqual([2540, 3054]);
+    });
+
+    test('it banks at Yanille and escapes on the Watchtower spell the quest already covers', () => {
+        expect([s.bank.x, s.bank.z, s.bank.level]).toEqual([2612, 3092, 0]);
+        expect(s.escapeTeleportId).toBe('watchtower');
+        expect(SPELL_TELEPORTS.some(t => t.teleportId === s.escapeTeleportId)).toBe(true);
+    });
+
+    // Why: the stand is melee-proof but the cave is not range-proof, and a soak took 8 and 13 off it with one adult up, so a hit there must not read as a bad tile.
+    test('a hit on the stand is the room, not the tile', () => {
+        expect(s.rangedThreat).toBe(true);
+    });
+
+    test('it hunts blue dragons for dragon bones on the shared loot chips', () => {
+        expect(s.target).toBe('Blue dragon');
+        expect(s.bones).toBe('Dragon bones');
+        expect(s.lootSetting).toBeUndefined();
+    });
+
+    test('the stand and the anchor sit in the cave, and the guard does not', () => {
+        for (const t of s.safespots) {
+            expect(s.inArea(t)).toBe(true);
+        }
+        expect(s.inArea(s.meleeAnchor)).toBe(true);
+        expect(s.inArea(s.exit!.stand)).toBe(true);
+        expect(s.inArea(s.talkGate!.stand)).toBe(false);
+        expect(s.inArea(s.walkOut)).toBe(false);
+        expect(s.inArea(null)).toBe(false);
+    });
+
+    test('every edge of the cave box is pinned from both sides', () => {
+        expect(s.inArea({ x: 2560, z: 9440, level: 0 })).toBe(true);
+        expect(s.inArea({ x: 2559, z: 9440, level: 0 })).toBe(false);
+        expect(s.inArea({ x: 2623, z: 9440, level: 0 })).toBe(true);
+        expect(s.inArea({ x: 2624, z: 9440, level: 0 })).toBe(false);
+        expect(s.inArea({ x: 2590, z: 9408, level: 0 })).toBe(true);
+        expect(s.inArea({ x: 2590, z: 9407, level: 0 })).toBe(false);
+        expect(s.inArea({ x: 2590, z: 9471, level: 0 })).toBe(true);
+        expect(s.inArea({ x: 2590, z: 9472, level: 0 })).toBe(false);
+        expect(s.inArea({ x: 2585, z: 9468, level: 1 })).toBe(false);
+    });
+
+    test('the melee anchor stands outside every adult spawn footprint', () => {
+        const spawns = [[2568, 9437], [2579, 9445], [2590, 9461], [2592, 9431], [2604, 9443], [2609, 9459]];
+        for (const [x, z] of spawns) {
+            const inside = s.meleeAnchor.x >= x! - 3 && s.meleeAnchor.x <= x! + 3 && s.meleeAnchor.z >= z! - 3 && s.meleeAnchor.z <= z! + 3;
+            expect(inside).toBe(false);
+        }
+    });
+});
+
+describe.skipIf(!inputsPresent(GUTANOTH_BLUE))("the Enclave derivation (pack-gated)", () => {
+    test('the tool still derives every checked-in tile as a safespot', () => {
+        const site = DRAGON_SITES['gutanoth-blue']!;
+        const derived = derive(GUTANOTH_BLUE);
+        expect(derived.spawns.filter(sp => sp.adult).map(sp => [sp.x, sp.z]))
+            .toEqual([[2568, 9437], [2579, 9445], [2590, 9461], [2592, 9431], [2604, 9443], [2609, 9459]]);
+        const spots = new Set(derived.safespots.map(t => `${t.x},${t.z}`));
+        for (const t of site.safespots) {
+            expect(spots.has(`${t.x},${t.z}`)).toBe(true);
+        }
+        expect(derived.anchors.some(a => a.x === site.meleeAnchor.x && a.z === site.meleeAnchor.z)).toBe(true);
     }, 60_000);
 });

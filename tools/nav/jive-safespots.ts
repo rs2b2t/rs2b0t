@@ -66,7 +66,11 @@ export const HEROES_GATE = [1557, 1558];
 // Why: the lone adult is penned behind railing and spearwall, both `blockrange=no`, so the fight is cast through the fence and the loot walk goes in through the gate.
 export const HEROES_BLUE: Target = { squares: ['m45_154'], adult: { id: 55, size: 4 }, baby: null, maxrange: 6, inside: { x: 2892, z: 9908 }, outside: LADDER_BOTTOM, openLocs: HEROES_GATE, projectile: true };
 
-export const TARGETS: Record<string, Target> = { blue: BLUE_DRAGON, demon: BLACK_DEMON, black: BLACK_DRAGON, kbd: KING_BLACK_DRAGON, heroes: HEROES_BLUE };
+// Why: the Ogre Enclave has no gate, only the guard's teleport, so the region floods from where it drops you at (2588,9410) and the Taverley ladder stands in for a tile on the other side of nothing.
+// Why: the six spawns share one cave with ten spiders, six shamans, six chieftains and five greater demons, so the derivation is what says which dragon has a tile none of the rest of it reaches.
+export const GUTANOTH_BLUE: Target = { squares: ['m40_147'], adult: { id: 55, size: 4 }, baby: null, maxrange: 6, inside: { x: 2588, z: 9410 }, outside: LADDER_BOTTOM };
+
+export const TARGETS: Record<string, Target> = { blue: BLUE_DRAGON, demon: BLACK_DEMON, black: BLACK_DRAGON, kbd: KING_BLACK_DRAGON, heroes: HEROES_BLUE, gutanoth: GUTANOTH_BLUE };
 
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];
 const DZ = [1, 0, -1, 0, 1, -1, -1, 1];
