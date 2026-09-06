@@ -362,8 +362,8 @@ export const CASES: readonly Case[] = [
         covers: { scripts: ['JiveDragons'] },
         status: 'vetted',
         budgetMin: 25,
-        provenAt: '9202e232',
-        note: '`--site blue|black|heroes` picks the lair. The black run seeds Sharks and a Superantipoison and passes on the corridor stand, both spawns in view, with no health lost on a safespot. The heroes run sets heroquest itself and asserts no key leg: it casts through the pen fence and walks the drops out through the gate'
+        provenAt: '47c5d120',
+        note: '`--site blue|black|heroes|gutanoth` picks the lair. The black run seeds Sharks and a Superantipoison and passes on the corridor stand, both spawns in view, with no health lost on a safespot. The heroes run sets heroquest itself and asserts no key leg: it casts through the pen fence and walks the drops out through the gate. The gutanoth run sets itwatchtower itself, talks past the Enclave guard, banks at Yanille on the Watchtower spell, and claims it held the stand rather than that nothing hit it, since the cave reaches the tile at range'
     },
     {
         id: 'jivedemons-live',
