@@ -70,6 +70,7 @@ const FEATHER = 'Feather';
 const FEATHER_PRICE = 2;
 const SHOP_WALK_MS = 60_000;
 import {
+    featherCoinsToDraw,
     fishingSessionBroken,
     hostileAttackerNearby,
     shouldFleeCombat
@@ -1758,9 +1759,10 @@ export class BuyGuildFeathers implements Task {
             }
             await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
             await Bank.depositAllMatching(bot.restockDepositMatcher());
-            const banked = Bank.count(COINS);
-            if (banked > 0) {
-                await Bank.withdrawX(COINS, banked);
+            const draw = featherCoinsToDraw(Inventory.count(COINS), Bank.count(COINS), FEATHER_PRICE);
+            if (draw > 0) {
+                bot.log(`feathers: drawing ${draw}gp of the ${Bank.count(COINS)}gp banked`);
+                await Bank.withdrawX(COINS, draw);
             }
             await bot.closeScriptBank(log, { allowForgetful: false });
         }

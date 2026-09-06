@@ -261,7 +261,12 @@ export {
 // Pure policy (also in GatheringBotLogic), re-export for existing test/import paths.
 export {
     FEATHER_RESTOCK_MINUTES,
+    FEATHER_BUYOUT_GP,
+    FEATHER_STOCK,
+    buyoutCost,
     featherBuyoutDue,
+    featherCoinsToDraw,
+    shopBuyPrice,
     fishingSessionBroken,
     gatheringCombatPolicy,
     hostileAttackerNearby,

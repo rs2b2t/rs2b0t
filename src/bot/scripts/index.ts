@@ -28,7 +28,7 @@ import ChickenKiller, { SETTINGS as CHICKEN_SETTINGS } from './ChickenKiller/Chi
 import CowKiller, { SETTINGS as COWKILLER_SETTINGS } from './ChickenKiller/CowKiller.js';
 import ClueSolver, { SETTINGS as CLUESOLVER_SETTINGS } from './ClueSolver/ClueSolver.js';
 import CookBot, { SETTINGS as COOKBOT_SETTINGS } from './CookBot/CookBot.js';
-import GatheringBot, { FEATHER_RESTOCK_MINUTES, GATHERING_SETTINGS } from './GatheringBot/GatheringBot.js';
+import GatheringBot, { FEATHER_BUYOUT_GP, FEATHER_RESTOCK_MINUTES, GATHERING_SETTINGS } from './GatheringBot/GatheringBot.js';
 import Woodcutter, { WOODCUTTER_SETTINGS } from './GatheringBot/Woodcutter.js';
 import { FORGETFUL_BANK_SETTING, TOOL_ACQUIRE_SETTING } from '../api/acquisition/ToolAcquire.js';
 import AIOQuester, { AIO_SETTINGS } from './AIOQuester/AIOQuester.js';
@@ -487,7 +487,7 @@ ScriptRegistry.register({
             max: 120,
             label: 'Buy out Roachey every (minutes)',
             showIf: { key: 'location', anyOf: ['Fishing Guild'] },
-            help: `walks to Roachey in the Fishing Guild on this clock and buys every feather the coins cover, then goes back to the water. His stock comes back one a tick toward 1500, so a full buyout is ${FEATHER_RESTOCK_MINUTES} minutes from full and anything sooner takes a partial stack. 0 turns it off`
+            help: `walks to Roachey in the Fishing Guild on this clock, draws what a full shelf costs out of the bank and buys every feather that covers, then goes back to the water. His price climbs 1gp per 50 bought to a 12gp ceiling, so 1500 of them run to ${FEATHER_BUYOUT_GP.toLocaleString('en-US')}gp and that is the most a trip takes; his stock comes back one a tick, a full buyout ${FEATHER_RESTOCK_MINUTES} minutes. 0 turns it off`
         },
         location: {
             type: 'string',

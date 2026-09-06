@@ -175,6 +175,43 @@ export function fishingSessionBroken(opts: {
 /** Minutes the guild shop needs to refill a bought-out feather stack. */
 export const FEATHER_RESTOCK_MINUTES = 15;
 
+/** Feathers Roachey's shelf holds when it is full, which is every feather a trip can buy. */
+export const FEATHER_STOCK = 1500;
+/** Roachey's `shop_sell_multiplier` and `shop_delta`, which set how steeply his price climbs. */
+export const ROACHEY_SELL_MULTIPLIER = 1000;
+export const SHOP_DELTA = 10;
+
+// Why: `calc_shop_value` is the engine's own curve, `max(100, sell - clamp(-bought * delta))` scaled by the base cost, so Roachey's feathers go from 2gp to a 12gp ceiling over the first 500 and a full shelf is far more than stock times cost.
+/** What the next one costs once `bought` have left the shelf. */
+export function shopBuyPrice(
+    baseCost: number,
+    bought: number,
+    sellMultiplier = ROACHEY_SELL_MULTIPLIER,
+    delta = SHOP_DELTA
+): number {
+    const swing = Math.min(1000, Math.max(-5000, -bought * delta));
+    return Math.max(1, Math.floor((Math.max(100, sellMultiplier - swing) * baseCost) / 1000));
+}
+
+/** Coins a full shelf costs, summed one at a time. */
+export function buyoutCost(baseCost: number, stock: number, sellMultiplier?: number, delta?: number): number {
+    let total = 0;
+    for (let bought = 0; bought < stock; bought++) {
+        total += shopBuyPrice(baseCost, bought, sellMultiplier, delta);
+    }
+    return total;
+}
+
+/** What Roachey's full shelf of feathers costs, the ceiling on one trip's draw. */
+export const FEATHER_BUYOUT_GP = buyoutCost(2, FEATHER_STOCK);
+
+// Why: the bank is the operator's, not the trip's, so it draws what a full shelf costs and leaves the rest banked whatever the stack is.
+/** Coins to take out for a buyout, on top of what is already held. */
+export function featherCoinsToDraw(held: number, banked: number, price: number, stock = FEATHER_STOCK): number {
+    const budget = buyoutCost(price, stock);
+    return held >= budget ? 0 : Math.max(0, Math.min(banked, budget - held));
+}
+
 /** Whether the guild feather buyout is owed; the first trip is owed as soon as the run starts. */
 export function featherBuyoutDue(lastAtMs: number | null, intervalMinutes: number, nowMs: number): boolean {
     if (intervalMinutes <= 0) {

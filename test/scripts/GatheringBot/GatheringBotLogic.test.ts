@@ -1,8 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import {
     DEFAULT_CHASE_RADIUS,
+    FEATHER_BUYOUT_GP,
     FEATHER_RESTOCK_MINUTES,
+    FEATHER_STOCK,
+    buyoutCost,
     featherBuyoutDue,
+    featherCoinsToDraw,
+    shopBuyPrice,
     HOME_ARRIVE_RADIUS,
     LOCAL_MINE_PREFER_RADIUS,
     NAMED_CAMP_LEASH_FLOOR,
@@ -523,5 +528,54 @@ describe('the guild feather buyout', () => {
     test('a shorter interval is honoured, since a partial stack still buys', () => {
         expect(featherBuyoutDue(0, 5, 5 * MIN)).toBe(true);
         expect(featherBuyoutDue(0, 5, 4 * MIN)).toBe(false);
+    });
+});
+
+// Why: `calc_shop_value` raises the price with every one bought, so a shelf costs far more than stock times cost and a trip that drew stock times cost would come home with change and no feathers.
+describe("Roachey's price curve", () => {
+    test('the first feather is the 2gp the shop lists', () => {
+        expect(shopBuyPrice(2, 0)).toBe(2);
+    });
+
+    test('it climbs a gp per fifty bought', () => {
+        expect(shopBuyPrice(2, 50)).toBe(3);
+        expect(shopBuyPrice(2, 250)).toBe(7);
+    });
+
+    test('and stops at twelve, where the engine clamps the swing', () => {
+        expect(shopBuyPrice(2, 500)).toBe(12);
+        expect(shopBuyPrice(2, 1499)).toBe(12);
+    });
+
+    test('a full shelf is 15,250gp, which is what the constant carries', () => {
+        expect(buyoutCost(2, FEATHER_STOCK)).toBe(15_250);
+        expect(FEATHER_BUYOUT_GP).toBe(15_250);
+    });
+
+    test('571 of them cost 4,102gp, which is the live run that bought that many on 4,000', () => {
+        expect(buyoutCost(2, 571)).toBe(4102);
+    });
+});
+
+describe('drawing coins for the buyout', () => {
+    test('takes a shelf out of a bank that holds more', () => {
+        expect(featherCoinsToDraw(0, 5_000_000, 2)).toBe(FEATHER_BUYOUT_GP);
+    });
+
+    test('takes the whole of a bank that holds less', () => {
+        expect(featherCoinsToDraw(0, 900, 2)).toBe(900);
+    });
+
+    test('counts what is already held against the budget', () => {
+        expect(featherCoinsToDraw(250, 5_000_000, 2)).toBe(FEATHER_BUYOUT_GP - 250);
+    });
+
+    test('draws nothing when the pack already covers a shelf', () => {
+        expect(featherCoinsToDraw(FEATHER_BUYOUT_GP, 5_000_000, 2)).toBe(0);
+        expect(featherCoinsToDraw(FEATHER_BUYOUT_GP + 1, 5_000_000, 2)).toBe(0);
+    });
+
+    test('an empty bank asks for nothing', () => {
+        expect(featherCoinsToDraw(0, 0, 2)).toBe(0);
     });
 });
