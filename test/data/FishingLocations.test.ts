@@ -86,7 +86,8 @@ describe('FISHING_LOCATIONS table', () => {
     });
 
     test('core catalog entries are verified; tick-manip camps may be provisional', () => {
-        const provisional = new Set(['Gnome Stronghold (fishing)']);
+        // Why: `verified` means the location sweep passed, and its bank probe looks for a loc whose name holds 'bank'; Shilo's teller is an npc, so the camp is proven by the fish-shilo-feathers scenario instead and stays provisional here.
+        const provisional = new Set(['Gnome Stronghold (fishing)', 'Shilo Village']);
         for (const loc of FISHING_LOCATIONS) {
             if (provisional.has(loc.name)) {
                 expect(loc.verified, loc.name).toBe(false);
@@ -103,5 +104,55 @@ describe('FISHING_LOCATIONS table', () => {
     test('Karamja banks at Draynor (no local bank)', () => {
         const musa = FISHING_LOCATIONS.find(l => l.name === 'Karamja (Musa Point)');
         expect(musa?.bankStand).toEqual(new Tile(3093, 3243, 0));
+    });
+});
+
+describe('the Shilo Village camp', () => {
+    const shilo = FISHING_LOCATIONS.find(l => l.name === 'Shilo Village')!;
+
+    // Why: Shilo has no booth at all, so the fields stay off and Banking.open picks the teller up off the known bank standing at this tile.
+    test('banks at the teller, naming no booth', () => {
+        expect(shilo.bankStand).toEqual(new Tile(2852, 2954, 0));
+        expect(shilo.boothName).toBeUndefined();
+        expect(shilo.boothOp).toBeUndefined();
+        const teller = BANK_LOCATIONS.find(b => b.name === 'Shilo Village')!;
+        expect(teller.tile).toEqual(shilo.bankStand);
+        expect(teller.npcAccess?.op).toBe('Bank');
+        expect(teller.requires?.quest).toBe('Shilo Village');
+    });
+
+    test('buys its feathers off Fernahei rather than the bank', () => {
+        expect(shilo.baitVendor).toEqual({ keeper: 'Fernahei', stand: new Tile(2870, 2971, 0), price: 2, item: 'Feather' });
+    });
+
+    // Why: derived by tools/nav/shilo-fishing-stands.ts; the walk round to these is 74 to 90 tiles against 14 to 56 along the village bank.
+    test('refuses the four river tiles whose only stand is across the water', () => {
+        expect(shilo.avoidSpots?.map(t => [t.x, t.z])).toEqual([[2850, 2976], [2855, 2977], [2860, 2976], [2869, 2977]]);
+    });
+
+    test('sweeps the village bank east to west, and every stop is inside camp membership', () => {
+        expect(shilo.sweep?.map(t => [t.x, t.z])).toEqual([[2862, 2971], [2856, 2972], [2841, 2970], [2836, 2970], [2822, 2968]]);
+        for (const stop of shilo.sweep ?? []) {
+            expect(shilo.spot.distanceTo(stop), `${stop}`).toBeLessThanOrEqual(shilo.campRadius!);
+        }
+    });
+
+    test('the bank stand and Fernahei are both inside camp membership too', () => {
+        expect(shilo.spot.distanceTo(shilo.bankStand)).toBeLessThanOrEqual(shilo.campRadius!);
+        expect(shilo.spot.distanceTo(shilo.baitVendor!.stand)).toBeLessThanOrEqual(shilo.campRadius!);
+    });
+
+    test('no avoided tile is also a sweep stop', () => {
+        const sweep = new Set((shilo.sweep ?? []).map(t => `${t.x},${t.z}`));
+        for (const t of shilo.avoidSpots ?? []) {
+            expect(sweep.has(`${t.x},${t.z}`), `${t}`).toBe(false);
+        }
+    });
+
+    test('the Fishing Guild keeps Roachey, so the vendor is per camp rather than global', () => {
+        const guild = FISHING_LOCATIONS.find(l => l.name === 'Fishing Guild')!;
+        expect(guild.baitVendor?.keeper).toBe('Roachey');
+        expect(guild.baitVendor?.stand).toEqual(new Tile(2596, 3399, 0));
+        expect(FISHING_LOCATIONS.filter(l => l.baitVendor).map(l => l.name)).toEqual(['Fishing Guild', 'Shilo Village']);
     });
 });

@@ -11,10 +11,11 @@
 //   HEADED=1 SLOWMO=200 bun e2e/gatheringbot-test.ts mine-bank
 //   BUDGET_S=180 bun e2e/gatheringbot-test.ts   # per-scenario seconds (default 150)
 import type { Page } from 'playwright-core';
-import { launchBrowser, parseArgs } from './lib/harness.js';
+import { deployIsolatedClient, launchBrowser, parseArgs } from './lib/harness.js';
 import {
     cheatQuiet,
     mainlandAccount,
+    relog,
     seedItemsToBank,
     startScript,
     type BankSeedItem
@@ -897,6 +898,9 @@ type Scenario = {
     bankSeed?: { items: BankSeedItem[]; stand: Tile };
     /** Skill levels to advance before start. End-game uses ~90 for success rolls. */
     stats?: { skill: string; level: number }[];
+    // Why: a camp behind a quest is unreachable without it, Shilo's every tile sits past Vigroy's cart, and no cheat here completes one on its own.
+    /** Quest varps to set before the seed, `[name, value]`; Shilo Village is `zombiequeen` at 15. */
+    questVars?: { name: string; value: number }[];
     /** Before seed: open this bank and withdraw matching tools, then clearinv. */
     purgeBank?: { stand: Tile; match: RegExp; label: string };
     /**
@@ -979,6 +983,10 @@ const SPOT = {
     lavaRunite: { x: 3058, z: 3884, level: 0 },
     /** Fishing Guild dock walkway. */
     fishingGuild: { x: 2604, z: 3420, level: 0 },
+    /** Shilo river, mid-sweep, the camp pin. */
+    shiloRiver: { x: 2841, z: 2970, level: 0 },
+    /** The Shilo teller, which is an npc and not a booth. */
+    shiloBank: { x: 2852, z: 2954, level: 0 },
     /** Ardougne West / north bank, path start for guild sharks. */
     ardougneWestBank: { x: 2616, z: 3332, level: 0 },
     /** Near Bob (Lumbridge axes). */
@@ -2070,6 +2078,44 @@ const SCENARIOS: Scenario[] = [
     },
 
     {
+        id: 'fish-shilo-feathers',
+        tags: ['fishing', 'fish', 'shilo', 'shop', 'feathers', 'bank'],
+        script: 'Fisher',
+        // Flow: stand at the Shilo teller with no feathers anywhere, walk the river, run out, buy Fernahei's shelf and cast again.
+        start: SPOT.shiloBank,
+        camp: SPOT.shiloRiver,
+        bank: SPOT.shiloBank,
+        questVars: [{ name: 'zombiequeen', value: 15 }],
+        settings: {
+            fishMethod: 'Fly fishing — trout/salmon',
+            location: 'Shilo Village',
+            cookMode: 'Off',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            leashRadius: 30
+        },
+        seed: [
+            { debug: 'fly_fishing_rod', name: 'Fly fishing rod', qty: 1 },
+            { debug: 'coins', name: 'Coins', qty: 4000 }
+        ],
+        // Why: the scene probe waits on a booth or a chest, and Shilo's bank is a teller with neither, so there is nothing here for it to wait on.
+        scene: 'skip',
+        budgetMs: 480_000,
+        // Why: the shop half passes inside a minute and the teller opens for its own coin draw, so the budget is there for a full pack going in; a run that only bought feathers proves half the camp.
+        check: ({ cur, start, productPeak, bankedHint, sawNearBank }) => {
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            const bought = logHas(cur, /feathers: bought \d+ from Fernahei/i);
+            const teller = logHas(cur, /bank: Shilo Village uses npc access/i);
+            const banked = productPeak >= 20 && bankedHint && sawNearBank && invMatch(cur, /^raw /i) <= 2;
+            return bought && teller && banked && cur.xp.fishing > start.xp.fishing ? 'pass' : 'wait';
+        },
+        failMsg: ({ start, cur, minDistToCamp }) =>
+            `shilo xp ${start.xp.fishing}→${cur.xp.fishing}, feathers=${invMatch(cur, /^feather$/i)}, raw=${invMatch(cur, /^raw /i)}, distCamp=${minDistToCamp}, tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
+    },
+
+    {
         id: 'fish-guild-feathers',
         tags: ['fishing', 'fish', 'guild', 'shop', 'feathers'],
         script: 'Fisher',
@@ -2597,6 +2643,10 @@ if (selected.length === 0) {
 console.log(`gatheringbot-test base=${base} user=${USER} scenarios=${selected.map(s => s.id).join(',')}`);
 console.log(`per-scenario budget ≈ ${Math.round(PER_SCENARIO_MS / 1000)}s (override with BUDGET_S=)`);
 
+// Why: public/bot is shared, so a run on /bot.html silently exercises whichever branch another session deployed last, and deploying by hand clobbers theirs in turn. An isolated copy takes this harness out of that race.
+const client = deployIsolatedClient(`gb${Date.now().toString(36).slice(-6)}`);
+console.log(`client: ${client.page}`);
+
 const browser = await launchBrowser({ swiftshader: true });
 const results: { id: string; ok: boolean; detail: string; ms: number }[] = [];
 
@@ -2612,7 +2662,7 @@ try {
         }
     });
 
-    await mainlandAccount(page, base, USER);
+    await mainlandAccount(page, base, USER, client.page);
     console.log(`${stamp()} mainland-ready as '${USER}'`);
 
     // Why: early zones (Draynor jail guard) kill a low-HP bot stuck behind "Congratulations, you advanced…", so max once and drain the chat before any tele/seed/start.
@@ -2637,6 +2687,16 @@ try {
             // Drain any leftover level-up / NPC chat before tele into danger zones.
             await clearChatDialogs(page);
             await clearInv(page);
+
+            // Why: setvar moves the server varp, and the bank's own quest gate reads Quests.status off the client's journal, which only picks the new value up on a fresh login. Without the relog the Shilo teller is filtered out of nearestBank and the run stands on the tile dropping its catch.
+            if ((sc.questVars ?? []).length > 0) {
+                for (const q of sc.questVars ?? []) {
+                    await cheatQuiet(page, `setvar ${q.name} ${q.value}`);
+                    console.log(`  ${q.name}=${q.value}`);
+                }
+                await relog(page, USER);
+                await clearChatDialogs(page);
+            }
 
             // Isolate bank tools so acquire cannot withdraw leftovers from prior runs.
             if (sc.purgeBank) {
@@ -3016,6 +3076,7 @@ try {
     }
 } finally {
     await browser.close();
+    client.cleanup();
 }
 
 console.log('\n── summary ──');

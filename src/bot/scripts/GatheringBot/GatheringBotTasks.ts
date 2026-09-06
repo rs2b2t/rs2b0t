@@ -64,11 +64,9 @@ import { BROKEN_AXE, COINS, buyPlansCost, fishingGearShopCart, planGatherToolAcq
 import { Shop } from '../../api/shop/Shop.js';
 
 /** Roachey's counter in the Fishing Guild, a short walk from the pier. */
-const ROACHEY = 'Roachey';
-const ROACHEY_STAND = new Tile(2596, 3399, 0);
-const FEATHER = 'Feather';
-const FEATHER_PRICE = 2;
 const SHOP_WALK_MS = 60_000;
+/** One hop along a camp's sweep is a few tiles, so a stop that will not arrive is a stop worth giving up on. */
+const SWEEP_WALK_MS = 30_000;
 import {
     featherCoinsToDraw,
     fishingSessionBroken,
@@ -1742,16 +1740,21 @@ export class BuyGuildFeathers implements Task {
         if (EventSignal.pending() || Game.inCombat() || Inventory.isFull()) {
             return false;
         }
-        return this.bot.guildFeatherTripDue();
+        return this.bot.baitVendor() !== null && this.bot.guildFeatherTripDue();
     }
 
     async execute(): Promise<void> {
         const bot = this.bot;
+        const vendor = bot.baitVendor();
+        if (!vendor) {
+            return;
+        }
+        const { keeper, stand, price, item } = vendor;
         const log = (m: string) => bot.log(`  ${m}`);
         // Why: the clock starts on the attempt rather than the sale, or a shop that will not open is retried every loop.
         bot.noteGuildFeatherTrip();
 
-        if (Inventory.count(COINS) < FEATHER_PRICE) {
+        if (Inventory.count(COINS) < price) {
             bot.setStatus('feathers: drawing coins');
             if (!(await bot.openScriptBank(log))) {
                 bot.log('feathers: could not open the bank for coins, will try again next round');
@@ -1759,7 +1762,7 @@ export class BuyGuildFeathers implements Task {
             }
             await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
             await Bank.depositAllMatching(bot.restockDepositMatcher());
-            const draw = featherCoinsToDraw(Inventory.count(COINS), Bank.count(COINS), FEATHER_PRICE);
+            const draw = featherCoinsToDraw(Inventory.count(COINS), Bank.count(COINS), price);
             if (draw > 0) {
                 bot.log(`feathers: drawing ${draw}gp of the ${Bank.count(COINS)}gp banked`);
                 await Bank.withdrawX(COINS, draw);
@@ -1767,29 +1770,29 @@ export class BuyGuildFeathers implements Task {
             await bot.closeScriptBank(log, { allowForgetful: false });
         }
         const coins = Inventory.count(COINS);
-        if (coins < FEATHER_PRICE) {
-            bot.log(`feathers: only ${coins}gp on hand or banked, skipping Roachey this round`);
+        if (coins < price) {
+            bot.log(`feathers: only ${coins}gp on hand or banked, skipping ${keeper} this round`);
             return;
         }
-        bot.setStatus('feathers: walking to Roachey');
-        if (!(await Traversal.walkResilient(ROACHEY_STAND, { radius: 2, attempts: 3, timeoutMs: SHOP_WALK_MS, log }))) {
-            bot.log('feathers: could not reach Roachey, will try again next round');
+        bot.setStatus(`feathers: walking to ${keeper}`);
+        if (!(await Traversal.walkResilient(stand, { radius: 2, attempts: 3, timeoutMs: SHOP_WALK_MS, log }))) {
+            bot.log(`feathers: could not reach ${keeper}, will try again next round`);
             return;
         }
-        if (!(await Shop.open(ROACHEY))) {
-            bot.log(`feathers: could not open ${ROACHEY}'s shop`);
+        if (!(await Shop.open(keeper))) {
+            bot.log(`feathers: could not open ${keeper}'s shop`);
             return;
         }
         bot.setStatus('feathers: buying out the stack');
-        const before = Inventory.count(FEATHER);
-        const stock = Shop.stock().find(line => line.name === FEATHER)?.count ?? 0;
-        const room = Math.max(0, coins / FEATHER_PRICE);
-        await Shop.buy(FEATHER, Math.min(stock, Math.floor(room)));
+        const before = Inventory.count(item);
+        const stock = Shop.stock().find(line => line.name === item)?.count ?? 0;
+        const room = Math.max(0, coins / price);
+        await Shop.buy(item, Math.min(stock, Math.floor(room)));
         await Shop.close();
-        const got = Inventory.count(FEATHER) - before;
+        const got = Inventory.count(item) - before;
         bot.log(got > 0
-            ? `feathers: bought ${got} from ${ROACHEY} (holding ${Inventory.count(FEATHER)})`
-            : `feathers: ${ROACHEY} had none to sell`);
+            ? `feathers: bought ${got} from ${keeper} (holding ${Inventory.count(item)})`
+            : `feathers: ${keeper} had none to sell`);
         bot.setStatus('feathers: back to the water');
         await bot.walkHomeIfNeeded(log);
     }
@@ -2295,6 +2298,9 @@ export class Gather implements Task {
 
     /** Whether a fishing spot is in range for this camp mode. */
     private fishSpotInRange(spotTile: Tile): boolean {
+        if (this.bot.avoidsSpot(spotTile)) {
+            return false;
+        }
         if (this.bot.isNamedCamp()) {
             return resourceWithinCamp(this.bot.getAnchor().distanceTo(spotTile), this.bot.leashRadius());
         }
@@ -2611,6 +2617,13 @@ export class Gather implements Task {
             ) {
                 this.bot.setStatus('fish: returning to camp');
                 await this.bot.walkHomeIfNeeded(m => this.bot.log(`  ${m}`));
+                return;
+            }
+            // Why: a camp whose river runs past the client's npc view has to go and look, or it holds a pin that will not see a spot again until one happens to land beside it.
+            const stop = this.bot.nextSweepStop();
+            if (stop !== null) {
+                this.bot.setStatus(`fish: sweeping to ${stop}`);
+                await Traversal.walkResilient(stop, { radius: 1, attempts: 2, timeoutMs: SWEEP_WALK_MS, log: m => this.bot.log(`  ${m}`) });
                 return;
             }
             // Named: membership disk from home. Freeform: hunt from player/start.

@@ -485,9 +485,9 @@ ScriptRegistry.register({
             default: 0,
             min: 0,
             max: 120,
-            label: 'Buy out Roachey every (minutes)',
-            showIf: { key: 'location', anyOf: ['Fishing Guild'] },
-            help: `walks to Roachey in the Fishing Guild on this clock, draws what a full shelf costs out of the bank and buys every feather that covers, then goes back to the water. His price climbs 1gp per 50 bought to a 12gp ceiling, so 1500 of them run to ${FEATHER_BUYOUT_GP.toLocaleString('en-US')}gp and that is the most a trip takes; his stock comes back one a tick, a full buyout ${FEATHER_RESTOCK_MINUTES} minutes. 0 turns it off`
+            label: 'Buy out the feather shop every (minutes)',
+            showIf: { key: 'location', anyOf: ['Fishing Guild', 'Shilo Village'] },
+            help: `walks to the camp's own feather shop on this clock, Roachey in the Fishing Guild or Fernahei in Shilo, draws what a full shelf costs out of the bank and buys every feather that covers, then goes back to the water. The price climbs 1gp per 50 bought to a 12gp ceiling, so 1500 of them run to ${FEATHER_BUYOUT_GP.toLocaleString('en-US')}gp and that is the most a trip takes; stock comes back one a tick, a full buyout ${FEATHER_RESTOCK_MINUTES} minutes. 0 turns it off`
         },
         location: {
             type: 'string',

@@ -27,7 +27,27 @@ export interface GatheringLocation {
     chaseRadius?: number;
     /** CSV-ish resource tags for docs / verify helper (not used by Gather target pick). */
     resources?: readonly string[];
+    // Why: the spot pick is straight-line `nearest()`, so water a few tiles across a river beats water twenty tiles along the bank the camp stands on, and the walk round is the length of the river. Shilo has four such tiles.
+    /** Tiles a spot may occupy that this camp will not walk to, because reaching them means going the long way round. */
+    avoidSpots?: readonly Tile[];
+    // Why: a spot is in the client's npc list only within about fifteen tiles, so one home pin on a long river sees nothing at all whenever the spot moves to the far end, and the camp idles rather than looking.
+    /** Stands to walk between when no spot is in scene, in order; the camp holds its pin when absent. */
+    sweep?: readonly Tile[];
+    /** Where this camp buys its bait or feathers, when a shop is nearer than the bank. */
+    baitVendor?: BaitVendor;
     notes?: string;
+}
+
+/** A shop the camp restocks bait or feathers at. */
+export interface BaitVendor {
+    /** The shopkeeper's display name, what `Shop.open` is aimed by. */
+    keeper: string;
+    /** The customer side of the counter. */
+    stand: Tile;
+    /** What one unit costs, which sets how many coins a trip draws. */
+    price: number;
+    /** The item bought, so a bait camp and a feather camp share the task. */
+    item: string;
 }
 
 export const DEFAULT_BOOTH_NAME = 'Bank booth';

@@ -3,6 +3,8 @@ import {
     DEFAULT_CHASE_RADIUS,
     FEATHER_BUYOUT_GP,
     FEATHER_RESTOCK_MINUTES,
+    BAIT_RETRY_MINUTES,
+    baitTripDue,
     featherBuyoutDue,
     featherCoinsToDraw,
     HOME_ARRIVE_RADIUS,
@@ -520,6 +522,37 @@ describe('the guild feather buyout', () => {
     test('zero minutes turns it off, first trip included', () => {
         expect(featherBuyoutDue(null, 0, 999 * MIN)).toBe(false);
         expect(featherBuyoutDue(0, 0, 999 * MIN)).toBe(false);
+    });
+
+    describe('the bait trip', () => {
+        const due = (over: Partial<Parameters<typeof baitTripDue>[0]> = {}): boolean =>
+            baitTripDue({ hasVendor: true, outOfBait: false, lastAtMs: 0, intervalMinutes: 0, nowMs: 999 * MIN, ...over });
+
+        test('a camp with no shop never goes, however short it is', () => {
+            expect(due({ hasVendor: false, outOfBait: true, lastAtMs: null })).toBe(false);
+            expect(due({ hasVendor: false, intervalMinutes: 15, lastAtMs: null })).toBe(false);
+        });
+
+        // Why: the bank run at a shop-only camp finds no bait to withdraw and spins on 'bank has no Feather', so running out has to send the trip by itself.
+        test('runs out of bait and goes, even with the clock switched off', () => {
+            expect(due({ outOfBait: true })).toBe(true);
+            expect(due({ outOfBait: false })).toBe(false);
+        });
+
+        test('a needed trip still waits out the retry, so an empty shelf is not hit every loop', () => {
+            expect(due({ outOfBait: true, lastAtMs: 0, nowMs: 30_000 })).toBe(false);
+            expect(due({ outOfBait: true, lastAtMs: 0, nowMs: BAIT_RETRY_MINUTES * MIN })).toBe(true);
+        });
+
+        test('the clock still sends a trip that holds plenty of bait', () => {
+            expect(due({ outOfBait: false, intervalMinutes: 15, lastAtMs: 0, nowMs: 15 * MIN })).toBe(true);
+            expect(due({ outOfBait: false, intervalMinutes: 15, lastAtMs: 0, nowMs: 14 * MIN })).toBe(false);
+        });
+
+        test('the first trip is owed at once on the clock, and at once when out of bait', () => {
+            expect(due({ intervalMinutes: 15, lastAtMs: null })).toBe(true);
+            expect(due({ outOfBait: true, lastAtMs: null })).toBe(true);
+        });
     });
 
     test('a shorter interval is honoured, since a partial stack still buys', () => {

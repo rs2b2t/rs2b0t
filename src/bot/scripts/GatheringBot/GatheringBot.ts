@@ -32,7 +32,8 @@ import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import { cookSurfaceForFishCamp, resolveFishCampCookSurface } from '../../data/cookingRanges.js';
 import { resolveFishingLocation, type FishingLocation } from '../../data/fishingLocations.js';
-import { effectiveGatherLeash, isAutoLocation, NAMED_CAMP_LEASH_FLOOR } from './GatherCamp.js';
+import type { BaitVendor } from '../../data/gatheringLocations.js';
+import { effectiveGatherLeash, isAutoLocation, spotAvoided, sweepStopFor, NAMED_CAMP_LEASH_FLOOR } from './GatherCamp.js';
 import {
     DEFAULT_CHASE_RADIUS,
     resolveCampRadius,
@@ -173,7 +174,7 @@ import {
     type ToolAcquireHost
 } from './ToolAcquireExec.js';
 import {
-    featherBuyoutDue,
+    baitTripDue,
     gatheringCombatPolicy,
     hostileAttackerNearby,
     incomingPlayerAttacker,
@@ -264,6 +265,8 @@ export {
     FEATHER_BUYOUT_GP,
     FEATHER_STOCK,
     buyoutCost,
+    BAIT_RETRY_MINUTES,
+    baitTripDue,
     featherBuyoutDue,
     featherCoinsToDraw,
     shopBuyPrice,
@@ -433,6 +436,8 @@ export default class GatheringBot extends TaskBot {
     private baitQty = 1000;
     private guildFeatherMinutes = 0;
     private lastGuildFeatherAt: number | null = null;
+    /** Where along the camp's sweep the search is; it wraps rather than turning at the ends. */
+    private sweepIndex = 0;
 
     /** Off / gatherer (handoff) / mule (bank-side). See muleMode settings. */
     private muleMode: MuleMode = 'off';
@@ -493,10 +498,8 @@ export default class GatheringBot extends TaskBot {
             this.action = method.op;
             this.pairOp = method.pair;
             this.baitQty = Math.max(1, Math.floor(this.settings.num('baitQty', 1000)));
-            // Why: the trip is the guild shop's own, so it is offered there and nowhere else.
-            this.guildFeatherMinutes = this.settings.str('location', 'None') === 'Fishing Guild'
-                ? Math.max(0, Math.floor(this.settings.num('guildFeatherMinutes', 0)))
-                : 0;
+            // Why: the location is resolved further down, so the camp gate is the vendor lookup in BuyGuildFeathers rather than a name test here, and a camp with no shop never fires whatever this reads.
+            this.guildFeatherMinutes = Math.max(0, Math.floor(this.settings.num('guildFeatherMinutes', 0)));
             // Apply bait/feather target only to pieces that need them; tools stay min=1.
             this.fishMethod = { ...method, gear: withBaitTarget(method, this.baitQty).gear };
             this.fishing = true;
@@ -2428,9 +2431,36 @@ export default class GatheringBot extends TaskBot {
     // Why: the skip uses the soft arrive disk ({@link HOME_ARRIVE_RADIUS}), not the full gather leash.
     // Why: bank stands at named camps often sit inside the leash but far from resources, the Catherby bank is ~36 from the pier.
 
-    /** Whether a Roachey feather run is owed. */
+    /** Where this camp buys its bait, when it has a shop of its own. */
+    baitVendor(): BaitVendor | null {
+        return this.location?.baitVendor ?? null;
+    }
+
+    /** Whether a spot sits on a tile this camp will not walk to. */
+    avoidsSpot(tile: Tile): boolean {
+        return spotAvoided(tile, this.location?.avoidSpots ?? []);
+    }
+
+    // Why: the stops are walked in order and wrap, so a spot that appeared behind the bot is reached on the way back rather than only ever being searched for downstream.
+
+    /** The next stop on this camp's sweep, or null when it holds its pin instead. */
+    nextSweepStop(): Tile | null {
+        const sweep = this.location?.sweep ?? [];
+        const next = sweepStopFor(sweep, this.sweepIndex, Game.tile());
+        this.sweepIndex = next.index;
+        return next.stop === null ? null : Tile.from(next.stop);
+    }
+
+    /** Whether a feather run is owed. */
     guildFeatherTripDue(): boolean {
-        return this.isFishing() && featherBuyoutDue(this.lastGuildFeatherAt, this.guildFeatherMinutes, Date.now());
+        const vendor = this.baitVendor();
+        return this.isFishing() && baitTripDue({
+            hasVendor: vendor !== null,
+            outOfBait: vendor !== null && Inventory.count(vendor.item) === 0,
+            lastAtMs: this.lastGuildFeatherAt,
+            intervalMinutes: this.guildFeatherMinutes,
+            nowMs: Date.now()
+        });
     }
 
     noteGuildFeatherTrip(): void {

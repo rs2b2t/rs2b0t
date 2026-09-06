@@ -202,3 +202,26 @@ export function featherBuyoutDue(lastAtMs: number | null, intervalMinutes: numbe
     }
     return lastAtMs === null || nowMs - lastAtMs >= intervalMinutes * 60_000;
 }
+
+// Why: at a camp whose bait only comes from a shop, Shilo's feathers among them, the bank run finds none to withdraw and spins on 'bank has no Feather', so being out of it is a reason to go on its own rather than only the clock.
+// Why: an empty shelf or an empty purse would then retry every loop, so a need trip is paced off the same stamp the clock trip is.
+
+/** Minutes a needed bait trip waits before trying the shop again. */
+export const BAIT_RETRY_MINUTES = 1;
+
+/** Whether a trip to the camp's bait shop is owed, on the clock or on an empty pack. */
+export function baitTripDue(input: {
+    hasVendor: boolean;
+    outOfBait: boolean;
+    lastAtMs: number | null;
+    intervalMinutes: number;
+    nowMs: number;
+}): boolean {
+    if (!input.hasVendor) {
+        return false;
+    }
+    if (featherBuyoutDue(input.lastAtMs, input.intervalMinutes, input.nowMs)) {
+        return true;
+    }
+    return input.outOfBait && featherBuyoutDue(input.lastAtMs, BAIT_RETRY_MINUTES, input.nowMs);
+}
