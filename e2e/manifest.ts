@@ -467,10 +467,10 @@ export const CASES: readonly Case[] = [
         harness: 'marketmaker-pair-live.ts',
         covers: { scripts: ['MarketMaker'] },
         status: 'vetted',
-        provenAt: '02ca7734',
+        provenAt: 'd6cc4a8f',
         budgetMin: 17,
         env: { BUDGET_S: '900' },
-        note: 'two accounts at Seers bank: a sale paid by coins in the window, a mixed pile bought with no chat, a live re-price mid-trade, a pile over the trade cap bid at the cap, coins ignored and named, and a cooldown after walking out'
+        note: 'two accounts at Seers bank: a sale whose goods go up before a coin is offered against them, a mixed pile bought with no chat, a live re-price mid-trade, a pile over the trade cap bid at the cap, coins ignored and named, and a cooldown after walking out'
     },
     {
         id: 'marketmaker-aliases-live',
