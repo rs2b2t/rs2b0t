@@ -11,6 +11,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
+export const DEFAULT_ENGINE_DIR = process.env.ENGINE_DIR ?? join(homedir(), 'code', 'rs2b2t-engine');
+
 // rs2b0t's historical names for symbols the engine calls something else. Keys are the
 // engine's name, values are ours. Renaming ours would touch every call site in Client.ts.
 const ALIAS: Record<string, string> = {
@@ -67,8 +69,7 @@ export function generateProt(engineDir: string): { client: string; server: strin
 }
 
 if (import.meta.main) {
-    const engine = process.env.ENGINE_DIR ?? join(homedir(), 'code', 'rs2b2t-engine');
-    const { client, server } = generateProt(engine);
+    const { client, server } = generateProt(DEFAULT_ENGINE_DIR);
     writeFileSync('src/client/io/ClientProt.ts', client);
     writeFileSync('src/client/io/ServerProt.ts', server);
     console.log('wrote src/client/io/{ClientProt,ServerProt}.ts');
