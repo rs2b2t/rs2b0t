@@ -33,6 +33,15 @@ export interface DragonExit {
     stand: Tile;
 }
 
+// Why: a cave with six dragons in it has more than one good stand, and which one you want depends on what else is camping the room, so the site carries them numbered and the operator picks.
+/** One numbered place to fight from: the tiles the ladder rotates between and the tile melee uses. */
+export interface DragonStand {
+    /** Which dragon it looks at, for the log line. */
+    label: string;
+    tiles: Tile[];
+    anchor: Tile;
+}
+
 export interface DragonSite {
     key: string;
     label: string;
@@ -61,6 +70,8 @@ export interface DragonSite {
     talkGate?: DragonTalkGate;
     /** The way out is a loc op rather than the walk back. */
     exit?: DragonExit;
+    /** Numbered stands to choose between; `safespots` and `meleeAnchor` are the first of them. */
+    stands?: DragonStand[];
     inArea(t: AreaPoint | null): boolean;
 }
 
@@ -140,8 +151,42 @@ export const HEROES_BLUE: DragonSite = {
     inArea: inBox({ minX: 2886, maxX: 2942, minZ: 9883, maxZ: 9917, level: 0 })
 };
 
-// Why: the six spawns share the cave with ten spiders, six shamans, six chieftains and five greater demons, none of which the safespot deriver models, so the stand was picked off `bun tools/nav/jive-safespots.ts --target gutanoth` cross-referenced against those spawn tiles: it is the only cluster that both sees all of a dragon's wander and sits ten tiles clear of the nearest greater demon.
-// Why: the stand at (2585,9468) looks at 69 of the 98 body tiles of the dragon at (2590,9461) and at no other dragon, so a cast never picks a second one up.
+// Why: the six spawns share the cave with ten spiders, six shamans, six chieftains and five greater demons, none of which the safespot deriver models, so every stand comes off `bun tools/nav/jive-safespots.ts --target gutanoth` cross-referenced against those spawn tiles: each seed is a derived safespot, sits at least five tiles off the nearest of them, has neighbours to rotate onto, and sees as much of one dragon's wander as the cave allows.
+// Why: a stand is chosen for how much of a dragon's wander it sees, not for seeing one dragon and no other. Requiring that first left the south dragon a stand that saw 11% of it, and a live run there took no kills at all in twenty minutes.
+// Why: stand 1 is the proven one and stays first, at 79% of its dragon and ten tiles clear, which is more room than any other stand in the cave has.
+
+const GUTANOTH_STANDS: DragonStand[] = [
+    {
+        label: 'the north dragon at 2590,9461',
+        tiles: [new Tile(2585, 9468, 0), new Tile(2586, 9468, 0), new Tile(2584, 9468, 0)],
+        anchor: new Tile(2588, 9468, 0)
+    },
+    {
+        label: 'the west dragon at 2568,9437',
+        tiles: [new Tile(2573, 9429, 0), new Tile(2572, 9429, 0), new Tile(2574, 9429, 0)],
+        anchor: new Tile(2574, 9430, 0)
+    },
+    {
+        label: 'the north-west dragon at 2579,9445',
+        tiles: [new Tile(2587, 9449, 0), new Tile(2586, 9447, 0), new Tile(2587, 9447, 0)],
+        anchor: new Tile(2586, 9449, 0)
+    },
+    {
+        label: 'the south dragon at 2592,9431',
+        tiles: [new Tile(2591, 9423, 0), new Tile(2590, 9423, 0), new Tile(2591, 9422, 0)],
+        anchor: new Tile(2597, 9426, 0)
+    },
+    {
+        label: 'the east dragon at 2604,9443',
+        tiles: [new Tile(2611, 9441, 0), new Tile(2611, 9442, 0), new Tile(2610, 9442, 0)],
+        anchor: new Tile(2610, 9441, 0)
+    },
+    {
+        label: 'the far east dragon at 2609,9459',
+        tiles: [new Tile(2604, 9466, 0), new Tile(2603, 9464, 0), new Tile(2603, 9465, 0)],
+        anchor: new Tile(2606, 9466, 0)
+    }
+];
 
 export const GUTANOTH_BLUE: DragonSite = {
     key: 'gutanoth-blue',
@@ -157,10 +202,11 @@ export const GUTANOTH_BLUE: DragonSite = {
         choose: 'I want to go in there',
         stand: new Tile(2508, 3038, 0)
     },
-    // Why: `p_teleport(0_40_147_28_2)` drops you at the south end, sixty tiles of cave short of the stand.
-    approach: [new Tile(2588, 9432, 0), new Tile(2586, 9452, 0), new Tile(2585, 9468, 0)],
-    safespots: [new Tile(2585, 9468, 0), new Tile(2586, 9468, 0), new Tile(2584, 9468, 0)],
-    meleeAnchor: new Tile(2588, 9468, 0),
+    // Why: `p_teleport(0_40_147_28_2)` drops you at the south end, so the approach is the walk up the middle of the cave and the fight loop takes it from wherever the chosen stand is.
+    approach: [new Tile(2588, 9432, 0)],
+    stands: GUTANOTH_STANDS,
+    safespots: GUTANOTH_STANDS[0]!.tiles,
+    meleeAnchor: GUTANOTH_STANDS[0]!.anchor,
     // Why: `[oploc1,enclavecave]` teleports to (2540,3054) on the Gu'Tanoth hillside, and it sits thirteen tiles east of the stand.
     exit: { locId: 2813, op: 'Enter', stand: new Tile(2597, 9468, 0) },
     bank: new Tile(2612, 3092, 0),
@@ -182,6 +228,17 @@ export const DRAGON_SITES: Record<string, DragonSite> = {
 };
 
 export const SITE_OPTIONS: string[] = Object.keys(DRAGON_SITES);
+
+// Why: a site with no stands keeps behaving as it always did, and a number past the end clamps rather than throwing on a settings typo.
+/** The numbered stand to fight from, 1-based; the site's own tiles when it names none. */
+export function standFor(site: DragonSite, n: number): DragonStand {
+    const stands = site.stands;
+    if (!stands || stands.length === 0) {
+        return { label: site.label, tiles: [...site.safespots], anchor: site.meleeAnchor };
+    }
+    const i = Math.min(Math.max(1, Math.trunc(n) || 1), stands.length) - 1;
+    return stands[i]!;
+}
 
 export function siteFor(key: string): DragonSite {
     return DRAGON_SITES[key] ?? TAVERLEY_BLUE;

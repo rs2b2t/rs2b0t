@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { DRAGON_SITES, SITE_OPTIONS, TAVERLEY_BLUE, siteFor } from '#/bot/scripts/JiveDragons/sites.js';
+import { DRAGON_SITES, SITE_OPTIONS, TAVERLEY_BLUE, siteFor, standFor } from '#/bot/scripts/JiveDragons/sites.js';
 import { SPELL_TELEPORTS } from '#/bot/event/webwalk/teleportCatalog.js';
 import { BLACK_DRAGON, GUTANOTH_BLUE, HEROES_BLUE, derive, inputsPresent } from '../../../tools/nav/jive-safespots.js';
 
@@ -287,6 +287,46 @@ describe("the Gu'Tanoth Enclave blue dragons", () => {
         expect(s.lootSetting).toBeUndefined();
     });
 
+    // Why: the cave holds six dragons and which one is worth camping depends on what else is in the room, so the stands are numbered and the operator picks one.
+    test('it carries six numbered stands, one per dragon in the cave', () => {
+        expect(s.stands).toHaveLength(6);
+        for (const st of s.stands!) {
+            expect(st.tiles).toHaveLength(3);
+            expect(st.label).toMatch(/dragon at \d{4},\d{4}/);
+            for (const t of st.tiles) {
+                expect(s.inArea(t)).toBe(true);
+            }
+            expect(s.inArea(st.anchor)).toBe(true);
+        }
+    });
+
+    // Why: a stand that sees a sliver of its dragon's wander takes no kills, which is what the first pass at the south stand did on a live run.
+    test('every stand looks at its own dragon and sits clear of the rest of the cave', () => {
+        const spawns = [[2590, 9461], [2568, 9437], [2579, 9445], [2592, 9431], [2604, 9443], [2609, 9459]];
+        s.stands!.forEach((st, i) => {
+            const [x, z] = spawns[i]!;
+            const cheb = (t: { x: number; z: number }) => Math.max(Math.abs(t.x - x!), Math.abs(t.z - z!));
+            expect(st.label).toContain(`${x},${z}`);
+            // the body is 4 wide, so a tile within 14 of the spawn corner is inside a 10 cast of some of it
+            expect(Math.min(...st.tiles.map(cheb))).toBeLessThanOrEqual(14);
+        });
+    });
+
+    test('no two stands share a tile, so a number picks a place rather than a shade of one', () => {
+        const seen = new Set<string>();
+        for (const st of s.stands!) {
+            for (const t of st.tiles) {
+                expect(seen.has(`${t.x},${t.z}`)).toBe(false);
+                seen.add(`${t.x},${t.z}`);
+            }
+        }
+    });
+
+    test('stand 1 is what the site fights from by default, since it is the one with a live proof', () => {
+        expect(s.safespots).toEqual(s.stands![0]!.tiles);
+        expect(s.meleeAnchor).toEqual(s.stands![0]!.anchor);
+    });
+
     test('the stand and the anchor sit in the cave, and the guard does not', () => {
         for (const t of s.safespots) {
             expect(s.inArea(t)).toBe(true);
@@ -331,4 +371,33 @@ describe.skipIf(!inputsPresent(GUTANOTH_BLUE))('the Enclave derivation (pack-gat
         }
         expect(derived.anchors.some(a => a.x === site.meleeAnchor.x && a.z === site.meleeAnchor.z)).toBe(true);
     }, 60_000);
+});
+
+// Why: the number comes off a settings box, so a typo or an old profile must land on a stand rather than throw.
+describe('standFor', () => {
+    const enclave = DRAGON_SITES['gutanoth-blue']!;
+
+    test('picks the numbered stand, 1-based', () => {
+        expect(standFor(enclave, 1)).toEqual(enclave.stands![0]!);
+        expect(standFor(enclave, 3)).toEqual(enclave.stands![2]!);
+        expect(standFor(enclave, 6)).toEqual(enclave.stands![5]!);
+    });
+
+    test('clamps a number past either end rather than throwing', () => {
+        expect(standFor(enclave, 0)).toEqual(enclave.stands![0]!);
+        expect(standFor(enclave, -4)).toEqual(enclave.stands![0]!);
+        expect(standFor(enclave, 99)).toEqual(enclave.stands![5]!);
+        expect(standFor(enclave, 2.7)).toEqual(enclave.stands![1]!);
+        expect(standFor(enclave, Number.NaN)).toEqual(enclave.stands![0]!);
+    });
+
+    test('a site that names no stands answers with its own tiles, whatever the number', () => {
+        const taverley = DRAGON_SITES['taverley-blue']!;
+        expect(taverley.stands).toBeUndefined();
+        for (const n of [1, 4, 99]) {
+            const stand = standFor(taverley, n);
+            expect(stand.tiles).toEqual(taverley.safespots);
+            expect(stand.anchor).toEqual(taverley.meleeAnchor);
+        }
+    });
 });

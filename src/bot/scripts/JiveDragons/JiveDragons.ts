@@ -34,7 +34,7 @@ import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
 import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from './combat.js';
 import { keepDoses, keyStatus, lootHalts, meleeShieldGate, siteTileOf, wantsDrop, type Style } from './logic.js';
-import { HEROES_BLUE, SITE_OPTIONS, TAVERLEY_BLACK, TAVERLEY_BLUE, siteFor, type DragonSite } from './sites.js';
+import { HEROES_BLUE, SITE_OPTIONS, TAVERLEY_BLACK, TAVERLEY_BLUE, siteFor, standFor, type DragonSite } from './sites.js';
 import { ANTIPOISON_DOSES, POISONED, acquireKey, antipoisonPlan, bankRoutine, doseToDrink, enterLair, escapeRunesFor, inCell, leaveCell, type BankOpts, type KeyState } from './supply.js';
 
 const SHIELD = 'Dragonfire shield';
@@ -65,6 +65,7 @@ const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
 const SHOW_RANGE = { key: 'combatStyle', anyOf: ['range'] };
 const SHOW_MELEE = { key: 'combatStyle', anyOf: ['melee'] };
 const SHOW_SAFESPOT = { key: 'combatStyle', anyOf: ['mage', 'range'] };
+const SHOW_STAND = { key: 'site', anyOf: ['gutanoth-blue'] };
 
 const DROPS: string[] = DROP_DB[TAVERLEY_BLUE.target] ?? [];
 // Why: Bass is food the run never eats and a coin pile is 11 to 440, so both spend a walk off the safespot that the hides pay for better.
@@ -110,7 +111,8 @@ export const SETTINGS: SettingsSchema = {
     solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues', help: 'blue dragons drop hard clues. The trail leaves the dungeon and comes back' },
 
     site: { type: 'string', default: 'taverley-blue', options: SITE_OPTIONS, label: 'Dragon site', group: 'Location', help: "below combat 97 the Taverley baby blues aggress on the walk in, above it they never do. The Heroes' Guild dragon is one adult penned behind a fence, so the fight is cast through it and only the loot walk opens the gate; the guild doors need Heroes' Quest. The Gu'Tanoth Enclave is a mage site: the Enclave guard waves you past once Watch Tower is complete, the stand looks at one dragon of the six and nothing else, and the cave shares its floor with greater demons, ogre shamans and chieftains, so melee there is your own risk" },
-    safespot1: { type: 'tile', default: TAVERLEY_BLUE.safespots[0], label: 'Safespot 1', group: 'Location', showIf: SHOW_SAFESPOT, help: 'derived off the collision pack as melee-proof with line of sight on an adult' },
+    stand: { type: 'number', default: 1, min: 1, max: 6, label: 'Stand', group: 'Location', showIf: SHOW_STAND, help: 'which of the site\'s numbered stands to fight from, one per dragon. The Enclave has six, listed north, west, north-west, south, east, far east; 1 is the roomiest and the one with a live proof behind it. A number past the end takes the last, and a site with one stand ignores it' },
+    safespot1: { type: 'tile', default: TAVERLEY_BLUE.safespots[0], label: 'Safespot 1', group: 'Location', showIf: SHOW_SAFESPOT, help: 'the chosen stand fills these; set one to move it off the derived tile' },
     safespot2: { type: 'tile', default: TAVERLEY_BLUE.safespots[1], label: 'Safespot 2', group: 'Location', showIf: SHOW_SAFESPOT, help: 'the ladder rotates here when a hit lands, or when nothing is in range for 20s' },
     safespot3: { type: 'tile', default: TAVERLEY_BLUE.safespots[2], label: 'Safespot 3', group: 'Location', showIf: SHOW_SAFESPOT },
     meleeTile: { type: 'tile', default: TAVERLEY_BLUE.meleeAnchor, label: 'Melee anchor tile', group: 'Location', showIf: SHOW_MELEE, help: 'derived bordering an adult body no baby can reach; a dragon further out gets leashed in' },
@@ -713,12 +715,16 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
         const base = siteFor(this.settings.str('site', 'taverley-blue'));
+        const stand = standFor(base, this.settings.num('stand', 1));
         SITE = {
             ...base,
-            safespots: base.safespots.map((spot, i) => siteTile(this.settings, SPOT_KEYS[i], spot)),
-            meleeAnchor: siteTile(this.settings, 'meleeTile', base.meleeAnchor),
+            safespots: stand.tiles.map((spot, i) => siteTile(this.settings, SPOT_KEYS[i], spot)),
+            meleeAnchor: siteTile(this.settings, 'meleeTile', stand.anchor),
             bank: siteTile(this.settings, 'bankTile', base.bank)
         };
+        if ((base.stands?.length ?? 0) > 1) {
+            this.log(`standing at ${stand.label}, stand ${this.settings.num('stand', 1)} of ${base.stands!.length}`);
+        }
         STYLE = this.settings.str('combatStyle', 'range') as Style;
         MELEE_STYLE = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
         RANGE_MODE = parseRangeStyle(this.settings.str('rangeStyle', 'rapid'));

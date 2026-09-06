@@ -1,7 +1,7 @@
 /** Live proof for JiveDragons at the Taverley dragons, the Heroes' Guild pen and the Gu'Tanoth Enclave: --site --style --minutes --dusty --clue --leave --tick --no-starve.
  *  Why: supply.ts and combat.ts carry no unit tests because every function in them drives a live client, so this run is the only proof either of them works. */
 
-// Usage: HEADED=1 bun e2e/jivedragons-live.ts [--base url] [--site blue|black|heroes|gutanoth] [--style melee|mage|range] [--minutes n] [--tick ms] [--dusty] [--clue] [--leave teleport|walk] [--no-starve]
+// Usage: HEADED=1 bun e2e/jivedragons-live.ts [--base url] [--site blue|black|heroes|gutanoth] [--stand n] [--style melee|mage|range] [--minutes n] [--tick ms] [--dusty] [--clue] [--leave teleport|walk] [--no-starve]
 import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 
@@ -33,6 +33,7 @@ interface Args {
     leave: Leave;
     clue: boolean;
     site: SiteArg;
+    stand: number;
 }
 
 function fail(msg: string): never {
@@ -51,7 +52,8 @@ function parse(argv: readonly string[]): Args {
         deploy: true,
         leave: 'teleport',
         clue: false,
-        site: 'blue'
+        site: 'blue',
+        stand: 1
     };
     for (let i = 0; i < argv.length; i++) {
         const flag = argv[i];
@@ -68,10 +70,12 @@ function parse(argv: readonly string[]): Args {
         else if (flag === '--tick') { out.tickMs = Number(value); }
         else if (flag === '--leave') { out.leave = value as Leave; }
         else if (flag === '--site') { out.site = value as SiteArg; }
+        else if (flag === '--stand') { out.stand = Number(value); }
     }
     if (!LEAVES.includes(out.leave)) { fail(`--leave takes ${LEAVES.join(', ')}, got '${out.leave}'`); }
     if (!STYLES.includes(out.style)) { fail(`--style takes ${STYLES.join(', ')}, got '${out.style}'`); }
     if (!SITES.includes(out.site)) { fail(`--site takes ${SITES.join(', ')}, got '${out.site}'`); }
+    if (!Number.isInteger(out.stand) || out.stand < 1) { fail(`--stand takes a whole number from 1, got '${out.stand}'`); }
     if (out.dusty && out.site !== 'blue' && out.site !== 'black') { fail(`--dusty is a dusty-key site flag, and '${out.site}' has no key`); }
     if (!Number.isFinite(out.minutes) || out.minutes <= 0) { fail(`--minutes takes a positive number, got '${out.minutes}'`); }
     return out;
@@ -80,6 +84,8 @@ function parse(argv: readonly string[]): Args {
 const args = parse(process.argv.slice(2));
 
 interface Point { x: number; z: number; level: number }
+
+interface Stand { tiles: Point[]; anchor: Point }
 
 // Why: sites.ts is not on the harness ABI, so the lair box, the safespots and the anchor are mirrored here and a drift in either copy shows up as a failed milestone rather than a silent pass.
 const BLUE_SITE = {
@@ -97,7 +103,8 @@ const BLUE_SITE = {
     lootKey: 'loot',
     bank: { x: 2946, z: 3369, level: 0 },
     escape: [['airrune', 'Air rune', 30], ['waterrune', 'Water rune', 10], ['lawrune', 'Law rune', 10]] as readonly (readonly [string, string, number])[],
-    rangedThreat: false
+    rangedThreat: false,
+    stands: undefined as Stand[] | undefined
 };
 
 // Why: the black room sits deeper on the same key side, so only the box, the tiles, the target and the food differ; the corridor stand is what the walk in reaches without crossing the dragons.
@@ -116,7 +123,8 @@ const BLACK_SITE = {
     lootKey: 'lootBlack',
     bank: BLUE_SITE.bank,
     escape: BLUE_SITE.escape,
-    rangedThreat: false
+    rangedThreat: false,
+    stands: undefined as Stand[] | undefined
 };
 
 // Why: the pen has no gate to unlock and no key to fetch, so the only gate on it is Heroes' Quest on the guild doors, which the varp buys outright. ^hero_complete is 15 in general/configs/quest.constant.
@@ -135,7 +143,8 @@ const HEROES_SITE = {
     lootKey: 'loot',
     bank: BLUE_SITE.bank,
     escape: BLUE_SITE.escape,
-    rangedThreat: false
+    rangedThreat: false,
+    stands: undefined as Stand[] | undefined
 };
 
 // Why: the guard waves you past on `%itwatchtower >= 13`, and the Watchtower spell wants the scroll read at 14, so one varp buys both the way in and the way out.
@@ -146,6 +155,15 @@ const GUTANOTH_SITE = {
     quest: { name: 'itwatchtower', value: 14 } as { name: string; value: number } | null,
     antipoison: false,
     lair: { minX: 2560, maxX: 2623, minZ: 9408, maxZ: 9471, level: 0 },
+    // Why: mirrored from sites.ts the way every other row here is, so a stand that drifts in one copy fails a milestone rather than passing quietly.
+    stands: [
+        { tiles: [{ x: 2585, z: 9468, level: 0 }, { x: 2586, z: 9468, level: 0 }, { x: 2584, z: 9468, level: 0 }], anchor: { x: 2588, z: 9468, level: 0 } },
+        { tiles: [{ x: 2573, z: 9429, level: 0 }, { x: 2572, z: 9429, level: 0 }, { x: 2574, z: 9429, level: 0 }], anchor: { x: 2574, z: 9430, level: 0 } },
+        { tiles: [{ x: 2587, z: 9449, level: 0 }, { x: 2586, z: 9447, level: 0 }, { x: 2587, z: 9447, level: 0 }], anchor: { x: 2586, z: 9449, level: 0 } },
+        { tiles: [{ x: 2591, z: 9423, level: 0 }, { x: 2590, z: 9423, level: 0 }, { x: 2591, z: 9422, level: 0 }], anchor: { x: 2597, z: 9426, level: 0 } },
+        { tiles: [{ x: 2611, z: 9441, level: 0 }, { x: 2611, z: 9442, level: 0 }, { x: 2610, z: 9442, level: 0 }], anchor: { x: 2610, z: 9441, level: 0 } },
+        { tiles: [{ x: 2604, z: 9466, level: 0 }, { x: 2603, z: 9464, level: 0 }, { x: 2603, z: 9465, level: 0 }], anchor: { x: 2606, z: 9466, level: 0 } }
+    ] as Stand[] | undefined,
     safespots: [{ x: 2585, z: 9468, level: 0 }, { x: 2586, z: 9468, level: 0 }, { x: 2584, z: 9468, level: 0 }],
     meleeAnchor: { x: 2588, z: 9468, level: 0 },
     target: 'Blue dragon',
@@ -160,8 +178,11 @@ const GUTANOTH_SITE = {
 
 const SITE = args.site === 'black' ? BLACK_SITE : args.site === 'heroes' ? HEROES_SITE : args.site === 'gutanoth' ? GUTANOTH_SITE : BLUE_SITE;
 const LAIR = SITE.lair;
-const SAFESPOTS: Point[] = SITE.safespots;
-const MELEE_ANCHOR: Point = SITE.meleeAnchor;
+// Why: --stand picks one of the site's numbered stands, so the milestones watch the tiles that number names rather than the site's default three.
+const STANDS = SITE.stands;
+const STAND = STANDS ? STANDS[Math.min(Math.max(1, args.stand), STANDS.length) - 1]! : undefined;
+const SAFESPOTS: Point[] = STAND ? STAND.tiles : SITE.safespots;
+const MELEE_ANCHOR: Point = STAND ? STAND.anchor : SITE.meleeAnchor;
 const BANK: Point = SITE.bank;
 
 const DUSTY_ID = 1590;
@@ -247,7 +268,7 @@ const CLUE_TOOLS: BankSeedItem[] = [
 // Why: the pack starts stocked so the first task is the key leg rather than a restock, which is what makes "one bank stop for a cold key" a number worth counting.
 // Why: leaveVia and solveClues both follow the flags rather than sitting on a fixed value, because the script ships with teleport and clues ON and the harness used to pin both to the opposite, so the shipped defaults were the two settings no run ever exercised.
 function kitFor(style: Style): Kit {
-    const common = { foodWithdraw: PACK_FOOD, panicHp: PANIC_PCT, foodReserve: 4, healTo: 90, site: SITE.key, teleStock: 2, buryBones: false, solveClues: args.clue, bankCommonJunk: false, [SITE.lootKey]: LOOT.join(', '), logDetail: 'Verbose', usePotions: false, leaveVia: args.leave };
+    const common = { foodWithdraw: PACK_FOOD, panicHp: PANIC_PCT, foodReserve: 4, healTo: 90, site: SITE.key, stand: args.stand, teleStock: 2, buryBones: false, solveClues: args.clue, bankCommonJunk: false, [SITE.lootKey]: LOOT.join(', '), logDetail: 'Verbose', usePotions: false, leaveVia: args.leave };
     if (style === 'melee') {
         return {
             pack: [['antidragonbreathshield', 'Dragonfire shield', 1], [FOOD.debug, FOOD.name, PACK_FOOD]],
