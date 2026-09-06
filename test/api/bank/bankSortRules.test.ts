@@ -7,6 +7,11 @@ function item(id: number, name: string, cost = 1): SortableItem {
 }
 
 describe('categoryOf', () => {
+    // Why: the strange plant's fruit is an edible, so it belongs beside the sharks rather than in the junk run at the far end of the bank.
+    test('Strange fruit sits with the food', () => {
+        expect(categoryOf(item(464, 'Strange fruit'))).toBe('food');
+    });
+
     test('coins are matched by id, never by name', () => {
         expect(categoryOf(item(995, 'Coins'))).toBe('coins');
         expect(categoryOf(item(617, 'Coins'))).not.toBe('coins');

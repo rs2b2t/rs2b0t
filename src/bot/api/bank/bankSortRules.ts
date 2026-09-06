@@ -75,6 +75,8 @@ const RULES: readonly CategoryRule[] = [
         'bread', 'cake', 'stew', 'meat', 'chicken', 'kebab', 'wine', 'beer'
     ) },
     { category: 'food', match: word('cod', 'pie') },
+    // Why: the strange plant's reward is an edible, so it belongs with the food rather than falling through to junk.
+    { category: 'food', match: any('strange fruit') },
     { category: 'herbs', match: any(
         'grimy', 'clean ', 'guam', 'marrentill', 'tarromin', 'harralander', 'ranarr',
         'irit', 'avantoe', 'kwuarm', 'cadantine', 'dwarf weed', 'torstol',
