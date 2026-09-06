@@ -319,7 +319,7 @@ describe("the Gu'Tanoth Enclave blue dragons", () => {
     });
 });
 
-describe.skipIf(!inputsPresent(GUTANOTH_BLUE))("the Enclave derivation (pack-gated)", () => {
+describe.skipIf(!inputsPresent(GUTANOTH_BLUE))('the Enclave derivation (pack-gated)', () => {
     test('the tool still derives every checked-in tile as a safespot', () => {
         const site = DRAGON_SITES['gutanoth-blue']!;
         const derived = derive(GUTANOTH_BLUE);
