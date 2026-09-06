@@ -3,7 +3,7 @@ import Tile from '#/bot/geometry/Tile.js';
 import { decide, featherAsk, inArea, nearestFishable, nextScan, sellPlan, standFor, tripLine, type PackState } from '#/bot/scripts/JiveShilo/logic.js';
 import { SEARCH_AREA, SPOT_STANDS, SWEEP } from '#/bot/scripts/JiveShilo/river.js';
 
-const ready: PackState = { rod: true, feathers: 40, fish: 5, coins: 12, free: 20 };
+const ready: PackState = { rod: true, feathers: 40, fish: 5, coins: 12, free: 20, inVillage: true, bankTried: false };
 
 describe('decide', () => {
     test('fishes while the rod, the feathers and the room are all there', () => {
@@ -22,13 +22,13 @@ describe('decide', () => {
         expect(decide({ ...ready, rod: false }, 0)).toEqual({ kind: 'sell' });
     });
 
-    test('no rod and no fish is a shop trip on coins', () => {
-        expect(decide({ ...ready, rod: false, fish: 0 }, 0)).toEqual({ kind: 'gear' });
+    test('no rod and no fish is a shop trip on coins, once the bank has been tried', () => {
+        expect(decide({ ...ready, rod: false, fish: 0, bankTried: true }, 0)).toEqual({ kind: 'gear' });
         expect(decide({ ...ready, feathers: 0, fish: 0 }, 0)).toEqual({ kind: 'gear' });
     });
 
     test('no rod, no fish and no coins stops with the reason', () => {
-        const step = decide({ ...ready, rod: false, fish: 0, coins: 0 }, 0);
+        const step = decide({ ...ready, rod: false, fish: 0, coins: 0, bankTried: true }, 0);
         expect(step.kind).toBe('stop');
         expect(step.kind === 'stop' && step.reason).toContain('no fly fishing rod');
     });
@@ -158,5 +158,48 @@ describe('nextScan', () => {
         for (const { stand } of SPOT_STANDS) {
             expect(SWEEP.some(s => Math.max(Math.abs(s.x - stand.x), Math.abs(s.z - stand.z)) <= 15)).toBe(true);
         }
+    });
+});
+
+// Why: the run is started from wherever the operator happens to be, and every tile it works is inside the village, so the walk in comes before any of it.
+describe('reaching the village', () => {
+    test('walks there first, whatever the pack holds', () => {
+        expect(decide({ ...ready, inVillage: false }, 0)).toEqual({ kind: 'travel' });
+        expect(decide({ ...ready, inVillage: false, rod: false, coins: 0, fish: 0 }, 0)).toEqual({ kind: 'travel' });
+    });
+
+    test('inside the village it gets on with the fishing', () => {
+        expect(decide(ready, 0)).toEqual({ kind: 'fish' });
+    });
+
+    test('a met feather target still ends the run rather than walking anywhere', () => {
+        expect(decide({ ...ready, inVillage: false, feathers: 500 }, 500).kind).toBe('stop');
+    });
+});
+
+// Why: a banked rod is free and the counter's costs coins, so the bank is looked in once before anything is bought, and the miss is remembered so the trip does not walk back and forth.
+describe('the rod', () => {
+    const noRod = { ...ready, rod: false, fish: 0 };
+
+    test('comes out of the bank before it is bought', () => {
+        expect(decide(noRod, 0)).toEqual({ kind: 'bank' });
+    });
+
+    test('is bought once the bank has been looked in and had none', () => {
+        expect(decide({ ...noRod, bankTried: true }, 0)).toEqual({ kind: 'gear' });
+    });
+
+    test('with no rod in the bank and no coins the run stops and says which', () => {
+        const step = decide({ ...noRod, bankTried: true, coins: 0 }, 0);
+        expect(step.kind).toBe('stop');
+        expect(step.kind === 'stop' && step.reason).toContain('no fly fishing rod');
+    });
+
+    test('fish aboard are still sold first, since that is what pays for the rod', () => {
+        expect(decide({ ...noRod, fish: 5 }, 0)).toEqual({ kind: 'sell' });
+    });
+
+    test('an empty feather stack is the counter\'s business, not the bank\'s', () => {
+        expect(decide({ ...ready, feathers: 0, fish: 0 }, 0)).toEqual({ kind: 'gear' });
     });
 });

@@ -1,4 +1,4 @@
-import type Tile from '../../geometry/Tile.js';
+import Tile from '../../geometry/Tile.js';
 import { SEARCH_AREA, SPOT_STANDS, SWEEP } from './river.js';
 
 export const ROD = 'Fly fishing rod';
@@ -16,22 +16,34 @@ export interface PackState {
     fish: number;
     coins: number;
     free: number;
+    /** Inside the village, where the river, the counter and the teller all are. */
+    inVillage: boolean;
+    /** The bank has already been looked in for a rod this trip. */
+    bankTried: boolean;
 }
 
 export type Step =
     | { kind: 'fish' }
     | { kind: 'sell' }
     | { kind: 'gear' }
+    | { kind: 'travel' }
+    | { kind: 'bank' }
     | { kind: 'stop'; reason: string };
 
-// Why: a full pack or an empty feather stack with fish aboard both end at the counter, and the same visit buys the rod or the feathers, so one trip kind covers every reason to leave the river.
+// Why: a full pack or an empty feather stack with fish aboard both end at the counter and the same visit buys the rod or the feathers, so one trip kind covers every reason to leave the river; a banked rod is free where the counter's costs coins, so the teller is looked in once before anything is bought and the miss is remembered, or the trip walks between the two.
 /** One step per loop, read off the pack alone so a restart lands on the same choice. */
 export function decide(pack: PackState, feathersTarget: number): Step {
     if (feathersTarget > 0 && pack.feathers >= feathersTarget) {
         return { kind: 'stop', reason: `holding ${pack.feathers} feathers, the target was ${feathersTarget}` };
     }
+    if (!pack.inVillage) {
+        return { kind: 'travel' };
+    }
     if (pack.fish > 0 && (pack.free === 0 || pack.feathers === 0 || !pack.rod)) {
         return { kind: 'sell' };
+    }
+    if (!pack.rod && !pack.bankTried) {
+        return { kind: 'bank' };
     }
     if (!pack.rod || pack.feathers === 0) {
         if (pack.coins > 0) {
@@ -62,6 +74,19 @@ export function featherAsk(stock: number, coins: number): number {
 export function tripLine(sold: { name: string; count: number }[], earned: number, feathers: number, spent: number, holding: number): string {
     const fish = sold.length === 0 ? 'nothing' : sold.map(s => `${s.count} ${s.name.replace(/^Raw /, '').toLowerCase()}`).join(' + ');
     return `sold ${fish} for ${earned}gp, bought ${feathers} feathers for ${spent}gp (holding ${holding})`;
+}
+
+// Why: the river, Fernahei's counter and the teller all sit inside this, and a run started anywhere else walks in before it does anything.
+/** The village, wide enough to hold the river stretch, the hut and the bank. */
+export const VILLAGE = { minX: 2814, maxX: 2884, minZ: 2938, maxZ: 2990 } as const;
+
+/** The tile the walk in aims at: the bank, which is where a rod comes from. */
+export const VILLAGE_ARRIVAL = new Tile(2852, 2954, 0);
+
+export function inVillage(t: { x: number; z: number; level: number } | null): boolean {
+    return t !== null && t.level === 0
+        && t.x >= VILLAGE.minX && t.x <= VILLAGE.maxX
+        && t.z >= VILLAGE.minZ && t.z <= VILLAGE.maxZ;
 }
 
 export interface SpotLike {

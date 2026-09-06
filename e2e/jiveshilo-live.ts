@@ -3,7 +3,7 @@
 
 // Usage: HEADED=1 bun e2e/jiveshilo-live.ts [--base url] [--minutes n] [--no-deploy]
 import { deployIsolatedClient, fail, launchBrowser, requireSim, setSettings, stopScript } from './lib/harness.js';
-import { cheatQuiet, clearChatDialogs, getServerVarQuiet, mainlandAccount, relog, startScript, teleTo } from './tutorial/harness.js';
+import { cheatQuiet, clearChatDialogs, getServerVarQuiet, mainlandAccount, relog, seedItemsToBank, startScript, teleTo } from './tutorial/harness.js';
 
 interface Args {
     base: string;
@@ -36,12 +36,18 @@ const args = parse(process.argv.slice(2));
 
 interface Point { x: number; z: number; level: number }
 
-/** The first scan stand, beside the three spawn tiles. */
-const RIVER_STAND: Point = { x: 2857, z: 2972, level: 0 };
+// Why: the bank is one inventory whichever branch you open, and the Shilo teller is an npc the seeding helper cannot open, so the rod goes in at a booth and the run finds it at the teller.
+/** A booth the seed can open; the rod lands in the same bank the village teller serves. */
+const SEED_BANK: Point = { x: 3185, z: 3440, level: 0 };
+// Why: outside the village and a walk of 344 by the route probe, without needing the cart seeded.
+/** Where the run is started, so the walk to the village is the first thing it does. */
+const START: Point = { x: 2892, z: 3086, level: 0 };
 const HUT_STAND: Point = { x: 2870, z: 2971, level: 0 };
 const SHILO_VILLAGE_COMPLETE = 15;
 /** A rod is 5gp and the first feathers a couple each, so this buys the kit and nothing more. */
 const SEED_GP = 60;
+// Why: the walk from the mainland crosses on Vigroy's cart, and the nav refuses the leg without the fare in the pack.
+const CART_FARE = 100;
 const POLL_MS = 2000;
 const SCREENSHOT = 'docs/e2e/jiveshilo-live.png';
 
@@ -79,13 +85,21 @@ try {
         fail(`setvar zombiequeen ${SHILO_VILLAGE_COMPLETE} did not take (read back ${quest})`);
     }
     await cheatQuiet(page, 'setstat fishing 99', 1200);
+    // Why: the walk in crosses the Karamja jungle and a tutorial-fresh account dies to the first aggressive spider, which respawns it in Lumbridge without the cart fare.
+    for (const stat of ['hitpoints', 'defence', 'attack', 'strength']) {
+        await cheatQuiet(page, `setstat ${stat} 80`, 900);
+    }
     await clearChatDialogs(page, 'fishing level-ups');
     await cheatQuiet(page, `give coins ${SEED_GP}`, 900);
-    if (!(await teleTo(page, RIVER_STAND, 6, 25_000))) {
-        fail('could not reach the Shilo river stand');
-    }
-    // Why: a headless ::tele leaves the scene unbuilt and the login payload rebuilds it.
+    // Why: a banked rod is the cheaper of the two sources, so the run has to prefer it over Fernahei's counter.
+    await seedItemsToBank(page, [{ debugName: 'fly_fishing_rod', displayName: 'Fly fishing rod', qty: 1 }], SEED_BANK);
+    // Why: a headless ::tele leaves the scene unbuilt and the login payload rebuilds it, and the login puts the player back where the server last saved them, so the tele to the start tile comes after the relog rather than before it.
     await relog(page, args.user);
+    if (!(await teleTo(page, START, 6, 25_000))) {
+        fail(`could not reach the start tile (${START.x},${START.z}) outside the village`);
+    }
+    // Why: the nav pays Vigroy's cart fare out of the pack, so the walk in needs coins on top of what the counter costs.
+    await cheatQuiet(page, `give coins ${CART_FARE}`, 900);
 
     await setSettings(page, 'JiveShilo', {});
 
@@ -125,10 +139,13 @@ try {
     let last = first;
     let lastLogTime = 0;
     let rodBought = false;
+    let rodBanked = false;
+    let walkedIn = false;
     let trips = 0;
     let fishSold = 0;
     let feathersBought = 0;
     let xpAfterTrip = 0;
+    let castAgain = false;
     let atHut = false;
     let shotTaken = false;
 
@@ -140,6 +157,8 @@ try {
         for (const line of fresh) {
             console.log(`      · [${line.level}] ${line.msg}`);
             if (/^\[shilo\] bought a Fly fishing rod/.test(line.msg)) { rodBought = true; }
+            if (/^\[shilo\] took a Fly fishing rod out of the bank/.test(line.msg)) { rodBanked = true; }
+            if (/walking to Shilo Village/.test(line.msg)) { walkedIn = true; }
             const trip = TRIP.exec(line.msg);
             if (trip) {
                 trips++;
@@ -153,6 +172,8 @@ try {
         if (fresh.length > 0) {
             lastLogTime = Math.max(lastLogTime, ...fresh.map(l => l.time));
         }
+        // Why: the run ends on the budget mid-trip as often as not, so resuming is remembered from whichever trip it followed rather than read off the last one.
+        if (xpAfterTrip > 0 && last.xp > xpAfterTrip) { castAgain = true; }
         console.log(`  t=${Math.round((Date.now() - t0) / 1000)}s pos=${fmt(last.pos)} coins=${last.coins} rod=${last.rod} feathers=${last.feathers} fish=${last.fish} xp=+${last.xp - first.xp} runner=${last.runner}`);
 
         // Why: the overlay only paints while the script runs, so the proof frame is taken at the first sale rather than after the stop.
@@ -164,7 +185,7 @@ try {
             console.log('  runner stopped');
             break;
         }
-        if (rodBought && fishSold > 0 && feathersBought > 0 && xpAfterTrip > 0 && last.xp > xpAfterTrip) {
+        if ((rodBanked || rodBought) && fishSold > 0 && feathersBought > 0 && castAgain) {
             break;
         }
     }
@@ -179,8 +200,11 @@ try {
     console.log(`final: pos=${fmt(last.pos)} coins=${last.coins} rod=${last.rod} feathers=${last.feathers} trips=${trips} fishSold=${fishSold} feathersBought=${feathersBought} xp=+${xpGained} atHut=${atHut}`);
 
     const tail = (): string => last.logs.slice(-6).map(l => l.msg).join(' | ');
-    if (!rodBought) {
-        fail(`never bought the fly fishing rod from Fernahei: ${tail()}`);
+    if (!walkedIn) {
+        fail(`never walked in from the start tile outside the village: ${tail()}`);
+    }
+    if (!rodBanked) {
+        fail(`did not take the banked rod${rodBought ? ', it bought one from Fernahei instead' : ''}: ${tail()}`);
     }
     if (xpGained <= 0) {
         fail(`no fishing xp, so the rod never went into the river: ${tail()}`);
@@ -188,10 +212,10 @@ try {
     if (fishSold === 0 || feathersBought === 0) {
         fail(`no trip turned fish into feathers (sold ${fishSold}, bought ${feathersBought}): ${tail()}`);
     }
-    if (last.xp <= xpAfterTrip) {
+    if (!castAgain) {
         fail(`the casting did not resume after the trip: ${tail()}`);
     }
-    console.log(`PASS, bought the rod, caught fish, ${trips} trip(s) sold ${fishSold} fish and bought ${feathersBought} feathers, cast again after, fishing xp +${xpGained}`);
+    console.log(`PASS, walked in from ${START.x},${START.z}, took the banked rod, caught fish, ${trips} trip(s) sold ${fishSold} fish and bought ${feathersBought} feathers, cast again after, fishing xp +${xpGained}`);
 } finally {
     client?.cleanup();
     await browser.close();

@@ -5,6 +5,8 @@ import { Game } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import type { Npc } from '../../api/model/Npc.js';
 import { Npcs } from '../../api/npcs/Npcs.js';
+import { Bank } from '../../api/bank/Bank.js';
+import { nearestBank } from '../../api/bank/BankLocations.js';
 import { Shop } from '../../api/shop/Shop.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
@@ -16,7 +18,7 @@ import { XpTracker, jiveFrame, paintLevels } from '../../paint/jive.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { CAST, FEATHER, FISH, FLY_LEVEL, KEEPER, ROD, SPOT, decide, featherAsk, nearestFishable, nextScan, sellPlan, tripLine, type PackState, type Step } from './logic.js';
+import { CAST, FEATHER, FISH, FLY_LEVEL, KEEPER, ROD, SPOT, VILLAGE_ARRIVAL, decide, featherAsk, inVillage, nearestFishable, nextScan, sellPlan, tripLine, type PackState, type Step } from './logic.js';
 import { SEARCH_AREA, SPOT_STANDS, SWEEP } from './river.js';
 
 /** The customer side of Fernahei's counter, the tile the ShopBuyout preset stands on. */
@@ -29,6 +31,8 @@ const LIVE_STAND_STEPS = 300;
 const STAND_WALK_MS = 30_000;
 const SCAN_WALK_MS = 45_000;
 const HUT_WALK_MS = 60_000;
+/** The walk in can start anywhere on the mainland, so it gets the long budget and the cart crossing inside it. */
+const TRAVEL_MS = 300_000;
 const CONTROL_ROWS = 2;
 
 export const SETTINGS: SettingsSchema = {
@@ -52,6 +56,9 @@ export default class JiveShilo extends TaskBot {
 
     hutStand = HUT_STAND;
     feathersTarget = 0;
+    /** The teller has been looked in for a rod, so a miss does not send the trip back. */
+    bankTried = false;
+    travelLogged = false;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -67,7 +74,7 @@ export default class JiveShilo extends TaskBot {
             return;
         }
         this.log(`[shilo] fly fishing the river from ${SEARCH_AREA.minX},${SEARCH_AREA.minZ} to ${SEARCH_AREA.maxX},${SEARCH_AREA.maxZ} (${SPOT_STANDS.length} known spot tiles, ${SWEEP.length} sweep stops), selling to ${KEEPER} at ${this.hutStand}${this.feathersTarget > 0 ? `, stopping at ${this.feathersTarget} feathers` : ''}`);
-        this.add(new ContinueDialog(), new Stop(this), new Restock(this), new Fish(this));
+        this.add(new ContinueDialog(), new Stop(this), new Travel(this), new RodFromBank(this), new Restock(this), new Fish(this));
     }
 
     override recoveryAnchor(): Tile | null {
@@ -84,7 +91,9 @@ export default class JiveShilo extends TaskBot {
             feathers: Inventory.count(FEATHER),
             fish: this.fishHeld(),
             coins: Inventory.count('Coins'),
-            free: Inventory.free()
+            free: Inventory.free(),
+            inVillage: inVillage(Game.tile()),
+            bankTried: this.bankTried
         };
     }
 
@@ -147,6 +156,67 @@ export default class JiveShilo extends TaskBot {
     }
 }
 
+// Why: the run is started wherever the operator happens to be, and the river, the counter and the teller are all inside the village, so the walk in comes before any of them. The nav crosses on Vigroy's cart, which needs the quest.
+class Travel implements Task {
+    constructor(private bot: JiveShilo) {}
+
+    validate(): boolean {
+        return this.bot.step().kind === 'travel';
+    }
+
+    async execute(): Promise<void> {
+        const bot = this.bot;
+        bot.setStatus('walking to Shilo Village');
+        if (!bot.travelLogged) {
+            bot.travelLogged = true;
+            bot.log('[shilo] walking to Shilo Village from outside the village');
+        }
+        if (!(await Traversal.walkResilient(VILLAGE_ARRIVAL, { radius: 4, attempts: 4, timeoutMs: TRAVEL_MS, log: m => bot.log(`  ${m}`) }))) {
+            bot.log('[shilo] the walk to the village failed, will retry. It needs Shilo Village complete to cross on the cart');
+        }
+    }
+}
+
+// Why: a banked rod is free where Fernahei's costs coins, so the teller is looked in once and a miss is remembered rather than walked back to.
+class RodFromBank implements Task {
+    constructor(private bot: JiveShilo) {}
+
+    validate(): boolean {
+        return this.bot.step().kind === 'bank';
+    }
+
+    async execute(): Promise<void> {
+        const bot = this.bot;
+        const here = Game.tile();
+        const bank = here === null ? null : nearestBank(here);
+        if (!bank) {
+            bot.bankTried = true;
+            return;
+        }
+        bot.setStatus(`looking for a ${ROD} in the bank`);
+        const log = (m: string): void => bot.log(`  ${m}`);
+        const opened = bank.npcAccess
+            ? await Bank.openNpcAccess(bank.npcAccess, log)
+            : await Bank.openNearest(bank.access?.name ?? 'Bank booth', bank.access?.op ?? 'Use-quickly', log);
+        if (!opened) {
+            bot.log('[shilo] could not open the bank, will retry');
+            return;
+        }
+        if (!(await Execution.delayUntil(() => Bank.isOpen() && Bank.loaded(), 5000))) {
+            bot.log('[shilo] the bank list has not filled in, retrying');
+            return;
+        }
+        const banked = Bank.count(ROD);
+        if (banked > 0 && await Bank.withdrawX(ROD, 1)) {
+            bot.log(`[shilo] took a ${ROD} out of the bank`);
+        } else {
+            bot.log(`[shilo] no ${ROD} in the bank, buying one from ${KEEPER}`);
+        }
+        bot.bankTried = true;
+        await Bank.close();
+    }
+}
+
 class Stop implements Task {
     constructor(private bot: JiveShilo) {}
 
@@ -187,8 +257,9 @@ class Restock implements Task {
         bot.setStatus('selling the catch');
         const coinsBefore = Inventory.count('Coins');
         const sold: { name: string; count: number }[] = [];
+        // Why: the counter caps each click at what the slot holds, so the catch goes ten at a time until it is gone; the pack count is only what the log reports, never what the sale is sized by.
         for (const line of sellPlan(name => Inventory.count(name))) {
-            const n = await Shop.sell(line.name, line.count);
+            const n = await Shop.sellAll(line.name);
             if (n > 0) {
                 sold.push({ name: line.name, count: n });
             }
