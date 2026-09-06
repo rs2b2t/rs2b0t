@@ -59,7 +59,7 @@ import PixFont from '#/client/graphics/PixFont.js';
 import PixMap from '#/client/graphics/PixMap.js';
 
 import ClientStream from '#/client/io/ClientStream.js';
-import { ClientProt } from '#/client/io/ClientProt.js';
+import { ClientProt, CLIENT_VERSION } from '#/client/io/ClientProt.js';
 import Database from '#/client/io/Database.js';
 import Isaac from '#/client/io/Isaac.js';
 import JagFile from '#/client/io/JagFile.js';
@@ -74,8 +74,6 @@ import WordFilter from '#/client/wordfilter/WordFilter.js';
 import WordPack from '#/client/wordfilter/WordPack.js';
 
 import JagFX from '#/client/sound/JagFX.js';
-
-const CLIENT_VERSION = 289;
 
 const MAX_PLAYER_COUNT = 2048;
 const LOCAL_PLAYER_INDEX = 2047;
