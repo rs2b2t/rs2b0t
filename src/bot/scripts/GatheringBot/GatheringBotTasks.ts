@@ -1750,9 +1750,23 @@ export class BuyGuildFeathers implements Task {
         // Why: the clock starts on the attempt rather than the sale, or a shop that will not open is retried every loop.
         bot.noteGuildFeatherTrip();
 
+        if (Inventory.count(COINS) < FEATHER_PRICE) {
+            bot.setStatus('feathers: drawing coins');
+            if (!(await bot.openScriptBank(log))) {
+                bot.log('feathers: could not open the bank for coins, will try again next round');
+                return;
+            }
+            await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
+            await Bank.depositAllMatching(bot.restockDepositMatcher());
+            const banked = Bank.count(COINS);
+            if (banked > 0) {
+                await Bank.withdrawX(COINS, banked);
+            }
+            await bot.closeScriptBank(log, { allowForgetful: false });
+        }
         const coins = Inventory.count(COINS);
         if (coins < FEATHER_PRICE) {
-            bot.log(`feathers: only ${coins}gp, skipping Roachey this round`);
+            bot.log(`feathers: only ${coins}gp on hand or banked, skipping Roachey this round`);
             return;
         }
         bot.setStatus('feathers: walking to Roachey');

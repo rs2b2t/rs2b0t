@@ -2069,6 +2069,40 @@ const SCENARIOS: Scenario[] = [
             `shark path xp ${start.xp.fishing}→${cur.xp.fishing}, distGuild=${minDistToCamp}, tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}, raw=${invMatch(cur, /^raw /i)}`
     },
 
+    {
+        id: 'fish-guild-feathers',
+        tags: ['fishing', 'fish', 'guild', 'shop', 'feathers'],
+        script: 'Fisher',
+        // Flow: stand on the guild docks, walk to Roachey on the clock, buy his feathers, go back.
+        start: SPOT.fishingGuild,
+        camp: SPOT.fishingGuild,
+        settings: {
+            fishMethod: 'Harpoon — sharks',
+            location: 'Fishing Guild',
+            cookMode: 'Off',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            guildFeatherMinutes: 1,
+            leashRadius: 30
+        },
+        seed: [
+            { debug: 'harpoon', name: 'Harpoon', qty: 1 },
+            { debug: 'coins', name: 'Coins', qty: 4000 }
+        ],
+        scene: 'bank',
+        budgetMs: 240_000,
+        check: ({ cur }) => {
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            return logHas(cur, /feathers: bought \d+ from Roachey/i) && invMatch(cur, /^feather$/i) > 0
+                ? 'pass'
+                : 'wait';
+        },
+        failMsg: ({ cur }) =>
+            `feathers=${invMatch(cur, /^feather$/i)} coins=${invCount(cur, 'Coins')} bought=${logHas(cur, /feathers: bought/i)} tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
+    },
+
     // ── tool acquire (bank-isolated; assert shop/smith not leftover withdraw) ─
     {
         id: 'buy-pick',
