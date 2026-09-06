@@ -63,8 +63,8 @@ describe('the black dragon chips', () => {
     const black = SETTINGS.lootBlack!;
 
     // Why: a SettingDef's options are a fixed string[] with no hook onto another key's value, so each table is its own setting and the site chooses which one is shown.
-    test('are their own setting, shown for the black site and hidden for the blue one', () => {
-        expect(blue.showIf).toEqual({ key: 'site', anyOf: ['taverley-blue'] });
+    test('are their own setting, shown for the black site and hidden for either blue one', () => {
+        expect(blue.showIf).toEqual({ key: 'site', anyOf: ['taverley-blue', 'heroes-blue'] });
         expect(black.showIf).toEqual({ key: 'site', anyOf: ['taverley-black'] });
     });
 

@@ -1,12 +1,17 @@
 /** Derive the safespots and melee anchor of a Jive grind site, which feed sites.ts under scripts/JiveDragons, scripts/JiveDemons and scripts/JiveKBD.
  *  Why: walkable is not reachable and a multi-tile body slides several tiles off its spawn, so the melee-proof set has to come from the collision pack rather than from looking at the map. */
 
-//   bun tools/nav/jive-safespots.ts [--target blue|demon|kbd] [--content ~/code/rs2b2t-content]
+//   bun tools/nav/jive-safespots.ts [--target blue|demon|kbd] [--content ~/code/rs2b2t-content] [--engine ~/code/rs2b2t-engine]
 import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
 import { gunzipSync } from 'fflate';
+import CollisionEngine from '#/bot/event/webwalk/rsmod/CollisionEngine.js';
+import { changeLandCollision, changeLocCollision, changeRoofCollision } from '#/bot/event/webwalk/rsmod/collision.js';
+import { CollisionFlag, CollisionType } from '#/bot/event/webwalk/rsmod/flags.js';
+import { canTravel } from '#/bot/event/webwalk/rsmod/StepValidator.js';
 import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
+import { BLOCK_MAP_SQUARE, LEVELS, MAP_X, MAP_Z, OPEN, REMOVE_ROOFS, Reader, bridgedLevel, forEachLoc, loadLocTypes, loadMapsquares, packCoord, parseLands } from './lib.js';
 
 const argVal = (flag: string): string | undefined => {
     const i = process.argv.indexOf(flag);
@@ -15,6 +20,7 @@ const argVal = (flag: string): string | undefined => {
 
 export const PACK = 'out/collision.lcnav.gz';
 export const MAPS = path.join(argVal('--content') ?? process.env.CONTENT_DIR ?? path.join(homedir(), 'code', 'rs2b2t-content'), 'maps');
+export const ENGINE = argVal('--engine') ?? process.env.ENGINE_DIR ?? path.join(homedir(), 'code', 'rs2b2t-engine');
 
 const LEVEL = 0;
 const CAST_RANGE = 10;
@@ -33,6 +39,16 @@ export interface Target {
     inside: { x: number; z: number };
     /** A tile on the wrong side of the gate, whose region a site area must stay out of. */
     outside: { x: number; z: number };
+    // Why: the collision pack bakes one wall layer, the walking one, so a `blockrange=no` railing reads as opaque and a pen fought through a fence derives zero safespots. Either field rebuilds the collision from the engine's own loc configs instead.
+    /** Loc ids left out of the collision, so a gate the bot opens on the way in reads as passable. */
+    openLocs?: number[];
+    /** Cast line of sight against projectile blockers, for a target penned behind a fence spells pass through. */
+    projectile?: boolean;
+}
+
+/** Whether the target needs collision rebuilt from the engine rather than read off the pack. */
+export function needsEngine(target: Target): boolean {
+    return target.projectile === true || (target.openLocs?.length ?? 0) > 0;
 }
 
 // Why: m45_152 holds the three babies south of z 9792.
@@ -45,11 +61,135 @@ export const KING_BLACK_DRAGON: Target = { squares: ['m42_153'], adult: { id: 50
 // Why: both spawns sit in one room whose walls pin the two bodies into the same box, so a stand that sees one sees the other.
 export const BLACK_DRAGON: Target = { squares: ['m44_153'], adult: { id: 54, size: 4 }, baby: null, maxrange: 12, inside: GATE_INSIDE, outside: LADDER_BOTTOM };
 
-export const TARGETS: Record<string, Target> = { blue: BLUE_DRAGON, demon: BLACK_DEMON, black: BLACK_DRAGON, kbd: KING_BLACK_DRAGON };
+/** The double gate in the north wall of the Heroes' Guild pen. */
+export const HEROES_GATE = [1557, 1558];
+// Why: the lone adult is penned behind railing and spearwall, both `blockrange=no`, so the fight is cast through the fence and the loot walk goes in through the gate.
+export const HEROES_BLUE: Target = { squares: ['m45_154'], adult: { id: 55, size: 4 }, baby: null, maxrange: 6, inside: { x: 2892, z: 9908 }, outside: LADDER_BOTTOM, openLocs: HEROES_GATE, projectile: true };
+
+export const TARGETS: Record<string, Target> = { blue: BLUE_DRAGON, demon: BLACK_DEMON, black: BLACK_DRAGON, kbd: KING_BLACK_DRAGON, heroes: HEROES_BLUE };
 
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];
 const DZ = [1, 0, -1, 0, 1, -1, -1, 1];
 const WALL_N = 1, WALL_E = 2, WALL_S = 4, WALL_W = 8;
+const PROJ_N = 0x400, PROJ_E = 0x1000, PROJ_S = 0x4000, PROJ_W = 0x10000, PROJ_LOC = 0x20000;
+
+const squareOf = (t: { x: number; z: number }): string => `m${t.x >> 6}_${t.z >> 6}`;
+
+/** Every square the derivation touches: the spawn squares plus the two the floods start from. */
+export function squaresFor(target: Target): Set<string> {
+    return new Set([...target.squares, squareOf(target.inside), squareOf(target.outside)]);
+}
+
+/** The geometry the derivation reads, either off the baked pack or rebuilt from the engine. */
+interface Collision {
+    walk(x: number, z: number): boolean;
+    exit(x: number, z: number): number;
+    /** Whether a sight line may step one tile along x, and the same along z. */
+    seeX(x: number, z: number, step: number): boolean;
+    seeZ(x: number, z: number, step: number): boolean;
+}
+
+function packSource(packPath: string): Collision {
+    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
+    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+        bytes = gunzipSync(bytes);
+    }
+    const finder = new PathFinder(bytes);
+    const walk = (x: number, z: number): boolean => finder.walkable(x, z, LEVEL);
+    const wall = (x: number, z: number): number => finder.wallMask(x, z, LEVEL);
+    return {
+        walk,
+        exit: (x, z) => finder.exitMask(x, z, LEVEL),
+        seeX: (x, z, s) => (wall(x, z) & (s > 0 ? WALL_E : WALL_W)) === 0 && (wall(x + s, z) & (s > 0 ? WALL_W : WALL_E)) === 0 && walk(x + s, z),
+        seeZ: (x, z, s) => (wall(x, z) & (s > 0 ? WALL_N : WALL_S)) === 0 && (wall(x, z + s) & (s > 0 ? WALL_S : WALL_N)) === 0 && walk(x, z + s)
+    };
+}
+
+function engineSource(target: Target, engineDir: string): Collision {
+    const locTypes = loadLocTypes(engineDir).configs;
+    const collision = new CollisionEngine();
+    const grounds = new Map<number, Uint8Array>();
+    const skip = new Set(target.openLocs ?? []);
+    const want = squaresFor(target);
+    let loaded = 0;
+    for (const { mx, mz, land, loc } of loadMapsquares(engineDir)) {
+        if (!want.has(`m${mx}_${mz}`)) {
+            continue;
+        }
+        loaded++;
+        const ground = new Uint8Array(MAP_X * MAP_Z * LEVELS);
+        const lands = parseLands(new Reader(land), ground);
+        grounds.set((mx << 8) | mz, ground);
+        const ox = mx << 6, oz = mz << 6;
+        for (let level = 0; level < LEVELS; level++) {
+            for (let x = 0; x < MAP_X; x++) {
+                for (let z = 0; z < MAP_Z; z++) {
+                    if (x % 7 === 0 && z % 7 === 0) {
+                        collision.allocateIfAbsent(ox + x, oz + z, level);
+                    }
+                    const coord = packCoord(x, z, level);
+                    const land = lands[coord]!;
+                    if ((land & REMOVE_ROOFS) !== OPEN) {
+                        changeRoofCollision(collision, ox + x, oz + z, level, true);
+                    }
+                    if ((land & BLOCK_MAP_SQUARE) !== BLOCK_MAP_SQUARE) {
+                        continue;
+                    }
+                    const actual = bridgedLevel(lands, coord, x, z, level);
+                    if (actual >= 0) {
+                        changeLandCollision(collision, ox + x, oz + z, actual, true);
+                    }
+                }
+            }
+        }
+        forEachLoc(new Reader(loc), ({ locId, x, z, level, coord, shape, angle }) => {
+            if (skip.has(locId)) {
+                return;
+            }
+            const actual = bridgedLevel(lands, coord, x, z, level);
+            const type = locTypes[locId];
+            if (actual < 0 || !type?.blockwalk) {
+                return;
+            }
+            changeLocCollision(collision, shape, angle, type.blockrange, type.length, type.width, type.active, ox + x, oz + z, actual, true);
+        });
+    }
+    if (loaded !== want.size) {
+        throw new Error(`${engineDir} holds ${loaded} of the ${want.size} squares this target needs (${[...want].join(', ')})`);
+    }
+    const hasGround = (x: number, z: number, level: number): boolean => {
+        if (level === 0) {
+            return true;
+        }
+        const ground = grounds.get(((x >> 6) << 8) | (z >> 6));
+        return ground !== undefined && ground[packCoord(x & 0x3f, z & 0x3f, level)] === 1;
+    };
+    const flags = (x: number, z: number): number => collision.get(x, z, LEVEL);
+    const walk = (x: number, z: number): boolean => (flags(x, z) & CollisionFlag.WALK_BLOCKED) === CollisionFlag.OPEN;
+    const seeWalk = {
+        seeX: (x: number, z: number, s: number): boolean => canTravel(collision, LEVEL, x, z, s, 0, 1, 0, CollisionType.NORMAL),
+        seeZ: (x: number, z: number, s: number): boolean => canTravel(collision, LEVEL, x, z, 0, s, 1, 0, CollisionType.NORMAL)
+    };
+    const seeProj = {
+        seeX: (x: number, z: number, s: number): boolean =>
+            (flags(x, z) & (s > 0 ? PROJ_E : PROJ_W)) === 0 && (flags(x + s, z) & (s > 0 ? PROJ_W : PROJ_E)) === 0 && (flags(x + s, z) & PROJ_LOC) === 0,
+        seeZ: (x: number, z: number, s: number): boolean =>
+            (flags(x, z) & (s > 0 ? PROJ_N : PROJ_S)) === 0 && (flags(x, z + s) & (s > 0 ? PROJ_S : PROJ_N)) === 0 && (flags(x, z + s) & PROJ_LOC) === 0
+    };
+    return {
+        walk,
+        exit: (x, z) => {
+            let mask = 0;
+            for (let dir = 0; dir < 8; dir++) {
+                if (canTravel(collision, LEVEL, x, z, DX[dir]!, DZ[dir]!, 1, 0, CollisionType.NORMAL) && hasGround(x + DX[dir]!, z + DZ[dir]!, LEVEL)) {
+                    mask |= 1 << dir;
+                }
+            }
+            return mask;
+        },
+        ...(target.projectile === true ? seeProj : seeWalk)
+    };
+}
 
 const key = (x: number, z: number): string => `${x},${z}`;
 const parse = (k: string): [number, number] => k.split(',').map(Number) as [number, number];
@@ -73,6 +213,9 @@ export interface Safespot {
     x: number;
     z: number;
     range: number;
+    // Why: a stand that sees one corner of the wander area loses the target the moment it slides off that corner, and the ladder then rotates on a dragon that was never out of reach.
+    /** Adult body tiles this stand can see inside cast range, out of `adultBodies`. */
+    covers: number;
 }
 
 export interface Anchor {
@@ -96,8 +239,11 @@ export interface Derivation {
     flanking: Safespot[];
 }
 
-export function inputsPresent(target = BLUE_DRAGON, maps = MAPS): boolean {
-    return fs.existsSync(PACK) && target.squares.every(s => fs.existsSync(path.join(maps, `${s}.jm2`)));
+export function inputsPresent(target = BLUE_DRAGON, maps = MAPS, engineDir = ENGINE): boolean {
+    const geometry = needsEngine(target)
+        ? fs.existsSync(path.join(engineDir, 'data/pack/server/loc.dat')) && fs.existsSync(path.join(engineDir, 'data/pack/client/config'))
+        : fs.existsSync(PACK);
+    return geometry && target.squares.every(s => fs.existsSync(path.join(maps, `${s}.jm2`)));
 }
 
 /** Read the spawns straight out of the .jm2 NPC sections, so a moved npc shows up as a moved tile. */
@@ -129,14 +275,12 @@ export function readSpawns(target = BLUE_DRAGON, maps = MAPS): Spawn[] {
     return spawns;
 }
 
-export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS): Derivation {
-    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) bytes = gunzipSync(bytes);
-    const finder = new PathFinder(bytes);
+export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS, engineDir = ENGINE): Derivation {
+    const source = needsEngine(target) ? engineSource(target, engineDir) : packSource(packPath);
+    const where = needsEngine(target) ? engineDir : packPath;
 
-    const walk = (x: number, z: number): boolean => finder.walkable(x, z, LEVEL);
-    const exit = (x: number, z: number): number => finder.exitMask(x, z, LEVEL);
-    const wall = (x: number, z: number): number => finder.wallMask(x, z, LEVEL);
+    const walk = (x: number, z: number): boolean => source.walk(x, z);
+    const exit = (x: number, z: number): number => source.exit(x, z);
 
     /** Whether a size-N body placed with its south-west corner here stands on solid ground. */
     const fits = (ox: number, oz: number, size: number): boolean => {
@@ -201,15 +345,8 @@ export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS): Deri
         return { spawn, placements, body, threat };
     };
 
-    const openX = (x: number, z: number, step: number): boolean =>
-        (wall(x, z) & (step > 0 ? WALL_E : WALL_W)) === 0
-        && (wall(x + step, z) & (step > 0 ? WALL_W : WALL_E)) === 0
-        && walk(x + step, z);
-
-    const openZ = (x: number, z: number, step: number): boolean =>
-        (wall(x, z) & (step > 0 ? WALL_N : WALL_S)) === 0
-        && (wall(x, z + step) & (step > 0 ? WALL_S : WALL_N)) === 0
-        && walk(x, z + step);
+    const openX = (x: number, z: number, step: number): boolean => source.seeX(x, z, step);
+    const openZ = (x: number, z: number, step: number): boolean => source.seeZ(x, z, step);
 
     // Why: the engine casts the ray along the longer axis and only shifts the short axis when the scaled fraction rolls over, so a diagonal that looks clear can still enter a rock tile.
     const sees = (x0: number, z0: number, x1: number, z1: number): boolean => {
@@ -265,7 +402,7 @@ export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS): Deri
 
     const flood = (from: { x: number; z: number }, what: string): Set<string> => {
         if (!walk(from.x, from.z)) {
-            throw new Error(`${what} (${from.x}, ${from.z}) is not walkable in ${packPath}`);
+            throw new Error(`${what} (${from.x}, ${from.z}) is not walkable in ${where}`);
         }
         const seen = new Set<string>([key(from.x, from.z)]);
         const stack = [from];
@@ -285,19 +422,21 @@ export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS): Deri
     const reachable = flood(target.inside, "the gate's inside tile");
     const outside = flood(target.outside, 'the ladder-side tile');
     if (outside.has(key(target.inside.x, target.inside.z))) {
-        throw new Error(`the gate at (${target.inside.x}, ${target.inside.z}) is open in ${packPath}, so the two sides of it cannot be told apart`);
+        throw new Error(`the gate at (${target.inside.x}, ${target.inside.z}) is open in ${where}, so the two sides of it cannot be told apart`);
     }
     const safespots: Safespot[] = [];
     for (const k of reachable) {
         if (allBody.has(k) || adultThreat.has(k) || babyThreat.has(k)) continue;
         const [x, z] = parse(k);
-        let range = Infinity;
+        let range = Infinity, covers = 0;
         for (const b of adultBody) {
             const [bx, bz] = parse(b);
             const d = cheb(x, z, bx, bz);
-            if (d < range && d <= CAST_RANGE && sees(x, z, bx, bz)) range = d;
+            if (d > CAST_RANGE || !sees(x, z, bx, bz)) continue;
+            covers++;
+            if (d < range) range = d;
         }
-        if (range <= CAST_RANGE) safespots.push({ x, z, range });
+        if (range <= CAST_RANGE) safespots.push({ x, z, range, covers });
     }
     safespots.sort((a, b) => a.range - b.range || a.x - b.x || a.z - b.z);
 
@@ -318,14 +457,16 @@ export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS): Deri
         if (touchedSpawns > 0) anchors.push({ x, z, spawns: touchedSpawns, tiles });
     }
     anchors.sort((a, b) => b.spawns - a.spawns || b.tiles - a.tiles || a.x - b.x || a.z - b.z);
-    const anchor = anchors[0];
-    if (!anchor) {
+    if (anchors.length === 0) {
         throw new Error('no melee anchor survives: every tile bordering an adult is a body tile or inside a baby\'s reach');
     }
-    const flanking = safespots.filter(s => cheb(s.x, s.z, anchor.x, anchor.z) <= 2);
-    if (flanking.length === 0) {
-        throw new Error(`no safespot within 2 of the anchor (${anchor.x}, ${anchor.z})`);
+    // Why: the anchor is only usable with a safespot to step back onto, and the tile touching the most body is not always the one that has it: in the Heroes' Guild pen the best-touching tiles sit deepest inside the fence, where every retreat is another tile the dragon reaches.
+    const spotsNear = (a: Anchor): Safespot[] => safespots.filter(s => cheb(s.x, s.z, a.x, a.z) <= 2);
+    const anchor = anchors.find(a => spotsNear(a).length > 0);
+    if (!anchor) {
+        throw new Error(`no safespot within 2 of any of the ${anchors.length} melee anchors, the best being (${anchors[0]!.x}, ${anchors[0]!.z})`);
     }
+    const flanking = spotsNear(anchor);
     return { spawns, wanders, bodies: allBody.size, adultBodies: adultBody.size, reachable, outside, safespots, anchors, anchor, flanking };
 }
 
@@ -340,7 +481,7 @@ if (import.meta.main) {
     console.log(`bodies ${d.bodies} (${d.adultBodies} adult)`);
     console.log(`${d.reachable.size} tiles reachable from the gate's inside tile (${target.inside.x}, ${target.inside.z}), ${d.outside.size} on the ladder side`);
     console.log(`${d.safespots.length} safespots: reachable, off every body, out of every threat set, and looking at an adult inside ${CAST_RANGE}`);
-    for (const s of d.safespots.slice(0, 12)) console.log(`  (${s.x}, ${s.z})  sees an adult ${s.range} away`);
+    for (const s of d.safespots.slice(0, 12)) console.log(`  (${s.x}, ${s.z})  sees an adult ${s.range} away, ${s.covers} of ${d.adultBodies} body tiles`);
     const adultSpawns = d.spawns.filter(s => s.adult).length;
     console.log(`${d.anchors.length} melee anchors: off every body, out of every baby's reach, touching an adult at range 1`);
     for (const a of d.anchors) console.log(`  (${a.x}, ${a.z})  ${a.spawns} of ${adultSpawns} adult spawns, ${a.tiles} body tiles at range 1`);

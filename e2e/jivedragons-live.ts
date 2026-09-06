@@ -1,21 +1,21 @@
-/** Live proof for JiveDragons at the Taverley Dungeon blue dragons: --style --minutes --dusty --clue --leave --tick --no-starve.
+/** Live proof for JiveDragons at the Taverley dragons and the Heroes' Guild pen: --site --style --minutes --dusty --clue --leave --tick --no-starve.
  *  Why: supply.ts and combat.ts carry no unit tests because every function in them drives a live client, so this run is the only proof either of them works. */
 
-// Usage: HEADED=1 bun e2e/jivedragons-live.ts [--base url] [--site blue|black] [--style melee|mage|range] [--minutes n] [--tick ms] [--dusty] [--clue] [--leave teleport|walk] [--no-starve]
+// Usage: HEADED=1 bun e2e/jivedragons-live.ts [--base url] [--site blue|black|heroes] [--style melee|mage|range] [--minutes n] [--tick ms] [--dusty] [--clue] [--leave teleport|walk] [--no-starve]
 import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 
 import type { Page } from 'playwright-core';
 
 import { deployIsolatedClient, launchBrowser, logout, setSettings, stopScript } from './lib/harness.js';
-import { cheatQuiet, clearChatDialogs, mainlandAccount, seedItemsToBank, startScript, teleTo, type BankSeedItem } from './tutorial/harness.js';
+import { cheatQuiet, clearChatDialogs, getServerVarQuiet, mainlandAccount, seedItemsToBank, startScript, teleTo, type BankSeedItem } from './tutorial/harness.js';
 
 type Style = 'melee' | 'mage' | 'range';
 const STYLES: Style[] = ['melee', 'mage', 'range'];
 
 type Leave = 'teleport' | 'walk';
-type SiteArg = 'blue' | 'black';
-const SITES: SiteArg[] = ['blue', 'black'];
+type SiteArg = 'blue' | 'black' | 'heroes';
+const SITES: SiteArg[] = ['blue', 'black', 'heroes'];
 const LEAVES: Leave[] = ['teleport', 'walk'];
 
 /** A hard map clue: the tier blue dragons drop, and one dig rather than a trail no run is long enough to finish. */
@@ -72,6 +72,7 @@ function parse(argv: readonly string[]): Args {
     if (!LEAVES.includes(out.leave)) { fail(`--leave takes ${LEAVES.join(', ')}, got '${out.leave}'`); }
     if (!STYLES.includes(out.style)) { fail(`--style takes ${STYLES.join(', ')}, got '${out.style}'`); }
     if (!SITES.includes(out.site)) { fail(`--site takes ${SITES.join(', ')}, got '${out.site}'`); }
+    if (out.dusty && out.site === 'heroes') { fail('--dusty is a dusty-key site flag, and the Heroes\' Guild pen has no key'); }
     if (!Number.isFinite(out.minutes) || out.minutes <= 0) { fail(`--minutes takes a positive number, got '${out.minutes}'`); }
     return out;
 }
@@ -83,6 +84,8 @@ interface Point { x: number; z: number; level: number }
 // Why: sites.ts is not on the harness ABI, so the lair box, the safespots and the anchor are mirrored here and a drift in either copy shows up as a failed milestone rather than a silent pass.
 const BLUE_SITE = {
     key: 'taverley-blue',
+    keyed: true,
+    quest: null as { name: string; value: number } | null,
     antipoison: false,
     lair: { minX: 2888, maxX: 2923, minZ: 9769, maxZ: 9816, level: 0 },
     safespots: [{ x: 2901, z: 9809, level: 0 }, { x: 2900, z: 9809, level: 0 }, { x: 2901, z: 9810, level: 0 }],
@@ -97,6 +100,8 @@ const BLUE_SITE = {
 // Why: the black room sits deeper on the same key side, so only the box, the tiles, the target and the food differ; the corridor stand is what the walk in reaches without crossing the dragons.
 const BLACK_SITE = {
     key: 'taverley-black',
+    keyed: true,
+    quest: null as { name: string; value: number } | null,
     antipoison: true,
     lair: { minX: 2818, maxX: 2850, minZ: 9815, maxZ: 9832, level: 0 },
     safespots: [{ x: 2836, z: 9817, level: 0 }, { x: 2835, z: 9817, level: 0 }, { x: 2834, z: 9817, level: 0 }],
@@ -108,7 +113,23 @@ const BLACK_SITE = {
     lootKey: 'lootBlack'
 };
 
-const SITE = args.site === 'black' ? BLACK_SITE : BLUE_SITE;
+// Why: the pen has no gate to unlock and no key to fetch, so the only gate on it is Heroes' Quest on the guild doors, which the varp buys outright. ^hero_complete is 15 in general/configs/quest.constant.
+const HEROES_SITE = {
+    key: 'heroes-blue',
+    keyed: false,
+    quest: { name: 'heroquest', value: 15 } as { name: string; value: number } | null,
+    antipoison: false,
+    lair: { minX: 2886, maxX: 2942, minZ: 9883, maxZ: 9917, level: 0 },
+    safespots: [{ x: 2905, z: 9909, level: 0 }, { x: 2906, z: 9911, level: 0 }, { x: 2907, z: 9911, level: 0 }],
+    meleeAnchor: { x: 2909, z: 9910, level: 0 },
+    target: 'Blue dragon',
+    baby: null,
+    food: { debug: 'lobster', name: 'Lobster' },
+    heal: 12,
+    lootKey: 'loot'
+};
+
+const SITE = args.site === 'black' ? BLACK_SITE : args.site === 'heroes' ? HEROES_SITE : BLUE_SITE;
 const LAIR = SITE.lair;
 const SAFESPOTS: Point[] = SITE.safespots;
 const MELEE_ANCHOR: Point = SITE.meleeAnchor;
@@ -511,6 +532,13 @@ try {
         console.log(`world tick: ${args.tickMs}ms`);
     }
 
+    if (SITE.quest !== null) {
+        await cheatQuiet(page, `setvar ${SITE.quest.name} ${SITE.quest.value}`);
+        const set = await getServerVarQuiet(page, SITE.quest.name);
+        if (set !== SITE.quest.value) { fail(`setvar ${SITE.quest.name} ${SITE.quest.value} did not take (read back ${set}), so the guild doors stay shut`); }
+        console.log(`${SITE.quest.name}=${set}, the guild doors will open`);
+    }
+
     await command(page, '~clearinv inv');
     await command(page, '~clearinv worn');
     await command(page, '~clearbank');
@@ -524,17 +552,20 @@ try {
 
     await setSettings(page, 'JiveDragons', kit.settings);
     await startScript(page, 'JiveDragons');
-    console.log(`JiveDragons started; watching the key, the gate, ${args.style === 'melee' ? 'the melee anchor' : `the safespot at ${SAFESPOTS[0].x},${SAFESPOTS[0].z}`}, a kill and a bank trip`);
+    console.log(`JiveDragons started; watching ${SITE.keyed ? 'the key, ' : ''}the walk in, ${args.style === 'melee' ? 'the melee anchor' : `the safespot at ${SAFESPOTS[0].x},${SAFESPOTS[0].z}`}, a kill and a bank trip`);
 
     const probe: Probe = { dustyId: DUSTY_ID, jailKeyId: JAIL_KEY_ID, food: FOOD.name, law: 'Law rune', target: TARGET, baby: BABY };
     const guardsSafespot = args.style !== 'melee';
     const spotAssert = args.style === 'melee' ? 'meleeanchor' : 'safespot';
     // Why: SolveClue sits above AcquireKey in the task order, so a run holding a scroll walks the trail before it ever goes for the key. That is the right order and it costs the key leg a trail's worth of clock, which the budget has to allow rather than call late.
     const clueDetour = args.clue ? CLUE_DETOUR_MS : 0;
-    const chain: [string, number][] = [['key', KEY_MS + clueDetour], ['gate', GATE_MS + clueDetour], [spotAssert, SPOT_MS + clueDetour], ['kill', KILL_MS + clueDetour], ['banktrip', BANK_MS + clueDetour]];
+    // Why: a keyless site has no key leg at all, so its chain starts at the walk in and the gate budget absorbs the clock the key leg used to spend.
+    const keyLeg: [string, number][] = SITE.keyed ? [['key', KEY_MS + clueDetour]] : [];
+    const chain: [string, number][] = [...keyLeg, ['gate', GATE_MS + clueDetour], [spotAssert, SPOT_MS + clueDetour], ['kill', KILL_MS + clueDetour], ['banktrip', BANK_MS + clueDetour]];
     // Why: melee passed a full run on 2 kills and 0 pickups, because a kill did not end the fight call and the drops rotted inside it, so every style now has to bring something home.
     const exitAssert = args.leave === 'walk' ? 'walkout' : 'teleport';
-    const required = ['key', 'gate', spotAssert, 'kill', 'banktrip', exitAssert, 'wielded', 'loot', args.dusty ? 'bankedkey' : 'coldkey'];
+    const keyAsserts = SITE.keyed ? ['key', args.dusty ? 'bankedkey' : 'coldkey'] : [];
+    const required = [...keyAsserts, 'gate', spotAssert, 'kill', 'banktrip', exitAssert, 'wielded', 'loot'];
     // Why: the trail is what the clue case is for, and a run that picks a scroll up and never starts it would otherwise pass on the pickup alone.
     if (args.clue) { required.push('clue', 'cluedone'); }
     if (args.style !== 'melee') { required.push('hpheld'); }
@@ -563,7 +594,7 @@ try {
             if (/^looted Coins$/i.test(line.msg)) { coinLoots++; }
             if (/^looted Rune arrow$/i.test(line.msg)) { arrowLoots++; mark('arrows', 'the arrows it fired came home'); }
             if (line.msg.includes(BANK_READ_LINE)) { bankReads++; }
-            if (/Walking out through the gate instead/i.test(line.msg)) { walkOutSaid = true; }
+            if (/will not fire \(.*\)\. Walking out /i.test(line.msg)) { walkOutSaid = true; }
             if (/^teleported out to /i.test(line.msg)) { mark('teleport', line.msg); }
             if (/^out of the dragon lair/i.test(line.msg)) { outOfLairSaid = true; }
         }
@@ -625,7 +656,7 @@ try {
 
         // Why: killJailer is skipped whenever the Jail key is already held, so a Jail key arriving twice is what a per-retry re-kill looks like from out here, and the status transition alone would miss a retry that never changed it.
         // Why: Bank.isOpen() is sampled every 750ms and the booth the harness starts on opens and shuts inside one interval, so the bank stop is proved by the line acquireKey logs rather than by a counted transition.
-        if (s.dusty > 0 && !met['key']) {
+        if (SITE.keyed && s.dusty > 0 && !met['key']) {
             const cost = `${jailerFights} Jailer fight(s), ${jailKeyPickups} Jail key pickup(s), ${bankReads} bank read line(s), ${bankOpens} sampled bank open(s)`;
             mark('key', `holding the Dusty key after ${cost}, keyState=${s.keyState}`);
             if (args.dusty && jailerFights === 0 && jailKeyPickups === 0) { mark('bankedkey', 'the banked key cost no Jailer kill'); }

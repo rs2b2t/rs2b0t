@@ -215,9 +215,9 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'JiveDragons',
-    description: 'Taverley Dungeon blue dragons: mage or range from a derived safespot, or melee with the Dragonfire shield. Opens the dusty-key gate, fetching the key off Velrak when the bank has none.',
+    description: "Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought through its fence: mage or range from a derived safespot, or melee with the Dragonfire shield. Opens the dusty-key gate, fetching the key off Velrak when the bank has none.",
     category: 'Combat',
-    tags: ['taverley', 'dragons', 'safespot', 'members', 'banking', 'clues'],
+    tags: ['taverley', 'heroes guild', 'dragons', 'safespot', 'members', 'banking', 'clues'],
     settingsSchema: JIVEDRAGONS_SETTINGS,
     create: () => new JiveDragons()
 });

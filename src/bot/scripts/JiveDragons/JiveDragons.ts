@@ -23,8 +23,10 @@ import { Skills } from '../../api/skills/Skills.js';
 import { Sustain } from '../../api/sustain/Sustain.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import { DeathRecovery } from '../../api/tasks/DeathRecovery.js';
+import { Traversal } from '../../api/walking/Traversal.js';
 import { DROP_DB } from '../../data/dropdb.js';
 import { SPELL_DB } from '../../data/spelldb.js';
+import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../geometry/Tile.js';
 import { COMBAT_SKILLS, XpTracker, jiveFrame, paintLevels } from '../../paint/jive.js';
 import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
@@ -32,7 +34,7 @@ import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
 import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from './combat.js';
 import { keepDoses, keyStatus, lootHalts, meleeShieldGate, siteTileOf, wantsDrop, type Style } from './logic.js';
-import { SITE_OPTIONS, TAVERLEY_BLACK, TAVERLEY_BLUE, siteFor, type DragonSite } from './sites.js';
+import { HEROES_BLUE, SITE_OPTIONS, TAVERLEY_BLACK, TAVERLEY_BLUE, siteFor, type DragonSite } from './sites.js';
 import { ANTIPOISON_DOSES, POISONED, acquireKey, antipoisonPlan, bankRoutine, doseToDrink, enterLair, escapeRunesFor, inCell, leaveCell, type BankOpts, type KeyState } from './supply.js';
 
 const SHIELD = 'Dragonfire shield';
@@ -41,6 +43,7 @@ const LOOT_RADIUS = 10;
 const LOOT_BURST_MAX = 8;
 const LOOT_SKIP_MS = 30_000;
 const LOOT_WAIT_MS = 4000;
+const LOOT_WALK_MS = 30_000;
 
 const ASSERT_BATCH = 5;
 const ASSERT_RETRY_MS = 60_000;
@@ -71,7 +74,8 @@ const BLACK_DROPS: string[] = DROP_DB['Black dragon'] ?? [];
 // Why: the same rule as the blue table, a pile of coins or a cake is a walk off the safespot the hides and the bones pay for better.
 const DEFAULT_BLACK_LOOT = BLACK_DROPS.filter(n => !['coins', 'chocolate cake'].includes(n.toLowerCase()));
 
-const SHOW_BLUE = { key: 'site', anyOf: [TAVERLEY_BLUE.key] };
+// Why: both blue sites read the same drop table off the same `loot` key, so the chips show for either.
+const SHOW_BLUE = { key: 'site', anyOf: [TAVERLEY_BLUE.key, HEROES_BLUE.key] };
 const SHOW_BLACK = { key: 'site', anyOf: [TAVERLEY_BLACK.key] };
 
 export const SETTINGS: SettingsSchema = {
@@ -105,7 +109,7 @@ export const SETTINGS: SettingsSchema = {
 
     solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues', help: 'blue dragons drop hard clues. The trail leaves the dungeon and comes back' },
 
-    site: { type: 'string', default: 'taverley-blue', options: SITE_OPTIONS, label: 'Dragon site', group: 'Location', help: 'below combat 97 the baby blues aggress on the walk in, above it they never do' },
+    site: { type: 'string', default: 'taverley-blue', options: SITE_OPTIONS, label: 'Dragon site', group: 'Location', help: "below combat 97 the Taverley baby blues aggress on the walk in, above it they never do. The Heroes' Guild dragon is one adult penned behind a fence, so the fight is cast through it and only the loot walk opens the gate; the guild doors need Heroes' Quest" },
     safespot1: { type: 'tile', default: TAVERLEY_BLUE.safespots[0], label: 'Safespot 1', group: 'Location', showIf: SHOW_SAFESPOT, help: 'derived off the collision pack as melee-proof with line of sight on an adult' },
     safespot2: { type: 'tile', default: TAVERLEY_BLUE.safespots[1], label: 'Safespot 2', group: 'Location', showIf: SHOW_SAFESPOT, help: 'the ladder rotates here when a hit lands, or when nothing is in range for 20s' },
     safespot3: { type: 'tile', default: TAVERLEY_BLUE.safespots[2], label: 'Safespot 3', group: 'Location', showIf: SHOW_SAFESPOT },
@@ -308,6 +312,18 @@ async function eatOnce(bot: JiveDragons): Promise<boolean> {
     return Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
 }
 
+// Why: a Take click walks on the scene's own collision and never opens a door, so a drop behind one dies silently on the click and the skip list swallows the pile behind it. The Heroes' Guild dragon drops inside its pen, on the far side of the gate.
+
+/** Walk a drop the Take click cannot path to into reach, opening whatever is in the way. */
+async function reachDrop(bot: JiveDragons, drop: GroundItem): Promise<void> {
+    const tile = drop.tile();
+    if (Reachability.canReach(tile)) {
+        return;
+    }
+    bot.vlog(`${drop.name ?? 'loot'} at ${tile} is behind something the Take click cannot open. Walking to it.`);
+    await Traversal.walkResilient(tile, { radius: 1, attempts: 3, timeoutMs: LOOT_WALK_MS, log: m => bot.vlog(`  ${m}`) });
+}
+
 async function lootOnce(bot: JiveDragons): Promise<boolean> {
     const drop = findLoot();
     if (drop === null) {
@@ -315,6 +331,7 @@ async function lootOnce(bot: JiveDragons): Promise<boolean> {
     }
     const name = drop.name ?? '';
     bot.setStatus(`looting ${name}`);
+    await reachDrop(bot, drop);
     const usedBefore = Inventory.used();
     const countBefore = Inventory.count(name);
     if (!(await drop.interact('Take'))) {
@@ -994,7 +1011,8 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             p.statGrid([
                 [{ text: `Runtime: ${fmtDuration(mins)}` }, { text: `Kills: ${this.killsTotal}` }],
                 [{ text: `Kills/hr: ${mins > 0.5 ? Math.round((this.killsTotal / mins) * 60) : 'n/a'}` }, { text: `Trips: ${this.bankTrips}` }],
-                [{ text: `Spot: ${anchorFor(SITE, STYLE, this.safespotIdx)}` }, { text: `Key: ${this.keyState}` }]
+                // Why: a site with no key item never leaves 'held', so the cell would read as a key the run does not carry.
+                [{ text: `Spot: ${anchorFor(SITE, STYLE, this.safespotIdx)}` }, ...(SITE.keyItem === null ? [] : [{ text: `Key: ${this.keyState}` }])]
             ]);
             p.bar('HP', this.hpFraction());
         } else if (section === 'Combat') {

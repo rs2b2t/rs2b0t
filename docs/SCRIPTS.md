@@ -371,9 +371,9 @@ Taverley Dungeon black demons: mage or range from a derived safespot in the pock
 
 ### JiveDragons
 
-Taverley Dungeon blue dragons: mage or range from a derived safespot, or melee with the Dragonfire shield. Opens the dusty-key gate, fetching the key off Velrak when the bank has none.
+Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought through its fence: mage or range from a derived safespot, or melee with the Dragonfire shield. Opens the dusty-key gate, fetching the key off Velrak when the bank has none.
 
-- Tags: `taverley`, `dragons`, `safespot`, `members`, `banking`, `clues`
+- Tags: `taverley`, `heroes guild`, `dragons`, `safespot`, `members`, `banking`, `clues`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
@@ -403,7 +403,7 @@ Taverley Dungeon blue dragons: mage or range from a derived safespot, or melee w
 | `rangingPotion` | boolean | `false` | Drink a ranging potion |
 | `antipoisonDoses` | number (0–4) | `1` | Superantipoison flasks per trip |
 | `solveClues` | boolean | `true` | Solve clue drops |
-| `site` | string | `"taverley-blue"` | Dragon site — one of: taverley-blue, taverley-black |
+| `site` | string | `"taverley-blue"` | Dragon site — one of: taverley-blue, taverley-black, heroes-blue |
 | `safespot1` | tile | `{"x":2901,"z":9809,"level":0}` | Safespot 1 |
 | `safespot2` | tile | `{"x":2900,"z":9809,"level":0}` | Safespot 2 |
 | `safespot3` | tile | `{"x":2901,"z":9810,"level":0}` | Safespot 3 |

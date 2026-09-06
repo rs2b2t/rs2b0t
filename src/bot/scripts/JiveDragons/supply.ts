@@ -204,12 +204,27 @@ async function walkExact(dest: Tile, log: (m: string) => void): Promise<boolean>
     return me !== null && dest.distanceTo(me) === 0;
 }
 
+/** Walk the site's approach stops in order. */
+async function walkApproach(h: JiveHost, site: DragonSite): Promise<void> {
+    for (const stop of site.approach) {
+        await Traversal.walkResilient(stop, { radius: 0, attempts: 3, timeoutMs: 60_000, log: m => h.log(`  ${m}`) });
+    }
+}
+
 export async function enterLair(h: JiveHost, site: DragonSite): Promise<boolean> {
     if (site.inArea(Game.tile())) {
         return true;
     }
     const gate = site.gate;
+    // Why: a gateless site is reached by transports and doors the graph already carries, so the approach walk is the way in and inArea is the only proof it landed.
     if (!gate) {
+        h.setStatus('walking into the dungeon');
+        await walkApproach(h, site);
+        if (!site.inArea(Game.tile())) {
+            h.log('the walk in did not reach the dungeon. Retrying.');
+            return false;
+        }
+        h.log('inside the dragon lair');
         return true;
     }
     h.setStatus('walking to the dungeon gate');
@@ -232,9 +247,7 @@ export async function enterLair(h: JiveHost, site: DragonSite): Promise<boolean>
         return false;
     }
     h.log('inside the dragon lair');
-    for (const stop of site.approach) {
-        await Traversal.walkResilient(stop, { radius: 0, attempts: 3, timeoutMs: 60_000, log: m => h.log(`  ${m}`) });
-    }
+    await walkApproach(h, site);
     return true;
 }
 
@@ -266,7 +279,7 @@ export async function leaveLair(h: JiveHost, site: DragonSite): Promise<boolean>
     if (why === null) {
         return true;
     }
-    h.log(`the ${escapeRunesFor(site.escapeTeleportId).label} will not fire (${why}). Walking out through the gate instead.`);
+    h.log(`the ${escapeRunesFor(site.escapeTeleportId).label} will not fire (${why}). Walking out ${site.gate === null ? 'the way we came in' : 'through the gate'} instead.`);
     return walkOutOfLair(h, site);
 }
 
@@ -274,8 +287,16 @@ export async function leaveLair(h: JiveHost, site: DragonSite): Promise<boolean>
 
 async function walkOutOfLair(h: JiveHost, site: DragonSite): Promise<boolean> {
     const gate = site.gate;
+    // Why: with no gate the way out is the way in run backwards, so walking to walkOut climbs the ladder and opens the doors above it on its own.
     if (!gate) {
-        return !site.inArea(Game.tile());
+        h.setStatus('walking out of the dungeon');
+        await walkNear(site.walkOut, 3, say(h));
+        if (site.inArea(Game.tile())) {
+            h.log('the walk out did not leave the dungeon. Retrying.');
+            return false;
+        }
+        h.log('out of the dragon lair');
+        return true;
     }
     h.setStatus('walking back to the dungeon gate');
     // Why: the inside stand is the one gap in the lair wall, so requiring it would seal the bot in whenever a player or an npc parks on it.

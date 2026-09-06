@@ -363,7 +363,7 @@ export const CASES: readonly Case[] = [
         status: 'vetted',
         budgetMin: 25,
         provenAt: 'ff0d19b9',
-        note: '`--site blue|black` picks the lair. The black run seeds Sharks and a Superantipoison and passes on the corridor stand, both spawns in view, with no health lost on a safespot'
+        note: '`--site blue|black|heroes` picks the lair. The black run seeds Sharks and a Superantipoison and passes on the corridor stand, both spawns in view, with no health lost on a safespot. The heroes run sets heroquest itself and asserts no key leg: it casts through the pen fence and walks the drops out through the gate'
     },
     {
         id: 'jivedemons-live',

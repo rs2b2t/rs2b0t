@@ -96,9 +96,32 @@ export const TAVERLEY_BLACK: DragonSite = {
     inArea: t => TAVERLEY_BLUE.inArea(t) || BLACK_ROOM(t) || BLACK_PASSAGE(t)
 };
 
+// Why: the lone adult is penned behind railing and spearwall, both `blockrange=no`, so a spell crosses the fence and the dragon never crosses back. Its own gate at (2909, 9910) is what the loot walk opens, and npcs do not open gates, so leaving it open does not widen the wander.
+// Why: derived by tools/nav/jive-safespots.ts --target heroes, which rebuilds collision off the engine's loc configs. The pack bakes only the walking wall layer, reads the railing as opaque and derives no safespot here at all.
+
+export const HEROES_BLUE: DragonSite = {
+    key: 'heroes-blue',
+    label: "Heroes' Guild blue dragon",
+    target: 'Blue dragon',
+    bones: 'Dragon bones',
+    keyItem: null,
+    gate: null,
+    // Why: the cellar ladder is a transport the graph already carries, so the walk in only needs its landing named; the fight loop takes the rest.
+    approach: [new Tile(2892, 9908, 0)],
+    safespots: [new Tile(2905, 9909, 0), new Tile(2906, 9911, 0), new Tile(2907, 9911, 0)],
+    meleeAnchor: new Tile(2909, 9910, 0),
+    bank: TAVERLEY_BLUE.bank,
+    escapeTeleportId: TAVERLEY_BLUE.escapeTeleportId,
+    // Why: outside the guild doors, one east of Achietties, so the walk out proves the doors opened before the bank leg starts.
+    walkOut: new Tile(2904, 3510, 0),
+    // Why: the cellar is its own region behind one ladder, so a single box bounds it without swallowing anything else.
+    inArea: inBox({ minX: 2886, maxX: 2942, minZ: 9883, maxZ: 9917, level: 0 })
+};
+
 export const DRAGON_SITES: Record<string, DragonSite> = {
     [TAVERLEY_BLUE.key]: TAVERLEY_BLUE,
-    [TAVERLEY_BLACK.key]: TAVERLEY_BLACK
+    [TAVERLEY_BLACK.key]: TAVERLEY_BLACK,
+    [HEROES_BLUE.key]: HEROES_BLUE
 };
 
 export const SITE_OPTIONS: string[] = Object.keys(DRAGON_SITES);
