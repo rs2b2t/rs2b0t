@@ -65,6 +65,7 @@ import Isaac from '#/client/io/Isaac.js';
 import JagFile from '#/client/io/JagFile.js';
 import Packet from '#/client/io/Packet.js';
 import OnDemand from '#/client/io/OnDemand.js';
+import { assertPacketConsumed } from '#/client/io/packetGuard.js';
 import { ServerProt, ServerProtSizes } from '#/client/io/ServerProt.js';
 
 import { reverseDnsLookup } from '#/client/util/WebDns.js';
@@ -102,6 +103,7 @@ export class Client extends GameShell {
     static nodeId: number = 10;
     static memServer: boolean = true;
     static lowMem: boolean = false;
+    static readonly STRICT_PACKETS: boolean = process.env.STRICT_PACKETS === '1';
 
     static cyclelogic1: number = 0;
     static cyclelogic2: number = 0;
@@ -6044,7 +6046,26 @@ export class Client extends GameShell {
         return type !== 1;
     }
 
+    // Off by default so a benign trailing byte never takes down a live bot; on for every
+    // test and e2e run. See src/client/io/packetGuard.ts.
     private async tcpIn(): Promise<boolean> {
+        if (!Client.STRICT_PACKETS) {
+            return this.tcpInDispatch();
+        }
+
+        const handled = await this.tcpInDispatch();
+
+        // ptype is reset to -1 only when a handler ran to completion, so this is the one
+        // point where psize and in.pos both describe the packet just consumed. ptype0
+        // still holds the opcode, since the read loop stashes it before dispatching.
+        if (handled && this.ptype === -1) {
+            assertPacketConsumed(this.ptype0, this.psize, this.in.pos);
+        }
+
+        return handled;
+    }
+
+    private async tcpInDispatch(): Promise<boolean> {
         if (!this.stream) {
             return false;
         }
