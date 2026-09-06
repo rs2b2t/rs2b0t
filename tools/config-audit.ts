@@ -23,9 +23,7 @@ SeqType.init(jag);
 
 let failures = 0;
 
-// Loc, Obj and Npc decode lazily in list(id), so every id has to be visited to force the
-// read. SeqType decodes eagerly in init and exposes list as a plain array, so reaching
-// this line at all means its whole stream already decoded.
+// Loc/obj/npc decode lazily in list(id); seq decodes eagerly in init, so every id must be visited.
 const families: [string, number, (id: number) => unknown][] = [
     ['loc', LocType.numDefinitions, id => LocType.list(id)],
     ['obj', ObjType.numDefinitions, id => ObjType.list(id)],
