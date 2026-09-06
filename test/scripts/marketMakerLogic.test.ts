@@ -155,7 +155,7 @@ describe('cooldowns punish the staller', () => {
 });
 
 describe('decideBeat', () => {
-    const base = { stillBeatsNeeded: 3, reOfferCap: 12, waitCap: 25, oweMatched: false, wantMatched: true, oweAnything: true };
+    const base = { stillBeatsNeeded: 3, reOfferCap: 12, waitCap: 25, oweMatched: false, wantMatched: true, oweAnything: true, oweFixed: false };
 
     // Why: one customer sitting on an open window blocks every customer behind them, so waiting is capped.
     test('waiting is given up on once the customer has sat on it long enough', () => {
@@ -693,5 +693,41 @@ describe('listedRows', () => {
 
     test('bank stock counts, so a row the shop would fetch is still listed', () => {
         expect(rows('sell', { 851: 40 }).rows.map(r => r.id)).toEqual([851]);
+    });
+});
+
+// Why: what a sale owes is the customer's own request, which nothing on their side of the window changes, so making them watch an empty side settle before the goods go up is delay and nothing else.
+describe('a sale puts its goods up straight away', () => {
+    const base = { stillBeatsNeeded: 3, reOfferCap: 12, waitCap: 25, wantMatched: false, oweAnything: true, oweFixed: true, oweMatched: false };
+
+    test('offers on the first beat, before their side has settled or paid', () => {
+        const beat = decideBeat({ ...base, theirSig: '995x1', window: windowAt({ stillBeats: 0, lastSig: '' }) });
+        expect(beat).toEqual({ do: 'offer', reason: 'the goods asked for do not depend on their side' });
+    });
+
+    test('offers while their side is still moving', () => {
+        const beat = decideBeat({ ...base, theirSig: '995x7', window: windowAt({ lastSig: '995x1', stillBeats: 0 }) });
+        expect(beat.do).toBe('offer');
+    });
+
+    test('once the goods are up it settles and waits on the money like any other trade', () => {
+        const beat = decideBeat({ ...base, theirSig: '995x1', window: windowAt({ stillBeats: 9, lastSig: '995x1' }), oweMatched: true });
+        expect(beat).toEqual({ do: 'wait', reason: 'their side is not the deal yet' });
+    });
+
+    test('and accepts once the money is the deal', () => {
+        const beat = decideBeat({ ...base, theirSig: '995x1', window: windowAt({ stillBeats: 9, lastSig: '995x1' }), oweMatched: true, wantMatched: true });
+        expect(beat).toEqual({ do: 'accept' });
+    });
+
+    test('a customer who keeps changing their side still runs out of re-offers', () => {
+        const beat = decideBeat({ ...base, theirSig: '995x1', window: windowAt({ reOffers: 12 }) });
+        expect(beat).toEqual({ do: 'give-up', reason: 'too many changes in one trade' });
+    });
+
+    // Why: a purchase owes what is on their side, so putting coins up against a side still moving is what the settle wait is for.
+    test('a purchase still waits for their side to settle', () => {
+        const beat = decideBeat({ ...base, oweFixed: false, theirSig: '440x10', window: windowAt({ lastSig: '440x9', stillBeats: 0 }) });
+        expect(beat).toEqual({ do: 'wait', reason: 'their side moved' });
     });
 });

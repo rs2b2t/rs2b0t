@@ -384,11 +384,15 @@ try {
     if (!(await openTrade(custPage, 'sale'))) {
         fail(await dump(makerPage, custPage, 'sale leg: the window never opened'));
     }
-    await offerItem(custPage, { name: 'Coins', id: COINS, qty: 100 * IRON_SELL });
 
-    if (!(await waitBotSide(custPage, s => unitsOn(s, IRON, IRON_NOTE) === 100, 45_000, 'sale'))) {
-        fail(await dump(makerPage, custPage, 'sale leg: the maker never put up 100 iron ore'));
+    // Why: what a sale owes is the request, not anything on the customer's side, so the goods have to be up before a coin is offered; waiting for their side to settle first is delay and nothing else.
+    const upAt = Date.now();
+    if (!(await waitBotSide(custPage, s => unitsOn(s, IRON, IRON_NOTE) === 100, 20_000, 'sale'))) {
+        fail(await dump(makerPage, custPage, 'sale leg: the maker did not put up 100 iron ore against an empty customer side'));
     }
+    const upMs = Date.now() - upAt;
+    console.log(`${at()} the maker put its side up ${(upMs / 1000).toFixed(1)}s after the window opened, with nothing offered against it`);
+    await offerItem(custPage, { name: 'Coins', id: COINS, qty: 100 * IRON_SELL });
     if (!(await settle(custPage, 'sale'))) {
         fail(await dump(makerPage, custPage, 'sale leg: the trade never completed'));
     }
@@ -399,7 +403,7 @@ try {
     if (oreGained !== 100 || gpSpent !== 100 * IRON_SELL) {
         fail(await dump(makerPage, custPage, `sale leg: expected +100 ore and -${100 * IRON_SELL}gp, got +${oreGained} and -${gpSpent}`));
     }
-    results.push(`sold 100 iron ore for ${100 * IRON_SELL}gp, paid by coins in the window`);
+    results.push(`sold 100 iron ore for ${100 * IRON_SELL}gp, its side up ${(upMs / 1000).toFixed(1)}s before a coin was offered`);
     console.log(`${at()} PASS leg 1: ${results[0]}`);
 
     // ---- leg 2: a mixed pile, bought with no chat at all ------------------

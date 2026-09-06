@@ -1005,6 +1005,7 @@ class ServeWindow implements Task {
             oweMatched: offersMatch(mine, a.owe),
             wantMatched: offerCovers(theirs, a.want),
             oweAnything: a.owe.size > 0,
+            oweFixed: a.kind === 'sell',
             stillBeatsNeeded: STILL_BEATS,
             reOfferCap: REOFFER_CAP,
             waitCap: WAIT_BEATS

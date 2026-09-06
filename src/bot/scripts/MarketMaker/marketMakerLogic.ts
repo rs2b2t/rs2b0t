@@ -190,6 +190,8 @@ export function decideBeat(input: {
     oweMatched: boolean;
     wantMatched: boolean;
     oweAnything: boolean;
+    /** The owed side comes from what they asked for rather than from their side of the window. */
+    oweFixed: boolean;
     stillBeatsNeeded: number;
     reOfferCap: number;
     /** Beats of waiting on them before the window is given back. */
@@ -210,9 +212,16 @@ function beatFor(input: {
     oweMatched: boolean;
     wantMatched: boolean;
     oweAnything: boolean;
+    oweFixed: boolean;
     stillBeatsNeeded: number;
     reOfferCap: number;
 }): Beat {
+    // Why: a sale owes what the customer asked for, which nothing on their side changes, so the goods go up the beat the window opens rather than after their coins have settled; the money is still what the accept is judged on.
+    if (input.oweFixed && input.oweAnything && !input.oweMatched) {
+        return input.window.reOffers >= input.reOfferCap
+            ? { do: 'give-up', reason: 'too many changes in one trade' }
+            : { do: 'offer', reason: 'the goods asked for do not depend on their side' };
+    }
     if (input.theirSig !== input.window.lastSig) {
         return { do: 'wait', reason: 'their side moved' };
     }
