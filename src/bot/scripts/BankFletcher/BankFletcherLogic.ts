@@ -23,7 +23,8 @@ export const BOW_STRING = 'Bow string';
 export const BOW_STRING_ID = 1777;
 
 export type WorkKind = 'knife' | 'attach' | 'string' | 'cut+string';
-export type FletchMode = 'cut' | 'string' | 'cut+string';
+export type FletchMode = 'auto' | 'cut' | 'string' | 'cut+string';
+export const FLETCH_MODES: FletchMode[] = ['auto', 'cut', 'string', 'cut+string'];
 export type WoodKey = 'normal' | 'oak' | 'willow' | 'maple' | 'yew' | 'magic';
 export type BowShape = 'short' | 'long';
 
