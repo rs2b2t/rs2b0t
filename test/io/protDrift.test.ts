@@ -1,13 +1,20 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { generateProt } from '../../tools/gen-prot.js';
+import { DEFAULT_ENGINE_DIR, generateProt } from '../../tools/gen-prot.js';
 
-const ENGINE = process.env.ENGINE_DIR ?? join(homedir(), 'code', 'rs2b2t-engine-289');
+const ENGINE = DEFAULT_ENGINE_DIR;
 
-describe('protocol drift', () => {
+describe.skipIf(!existsSync(join(ENGINE, 'src/network/game/client/ClientGameProt.ts')))('protocol drift (engine-gated)', () => {
+    test('engine checkout is revision 289', () => {
+        const worldConfig = readFileSync(join(ENGINE, 'src/util/WorldConfig.ts'), 'utf8');
+        expect(
+            /revision:\s*289/.test(worldConfig),
+            `ENGINE_DIR (${ENGINE}) is not on revision 289 — point ENGINE_DIR at a 289 checkout before trusting this drift check`
+        ).toBe(true);
+    });
+
     test('committed ClientProt matches the engine', () => {
         const { client } = generateProt(ENGINE);
         const committed = readFileSync('src/client/io/ClientProt.ts', 'utf8');
