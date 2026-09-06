@@ -104,7 +104,8 @@ const BLUE_SITE = {
     bank: { x: 2946, z: 3369, level: 0 },
     escape: [['airrune', 'Air rune', 30], ['waterrune', 'Water rune', 10], ['lawrune', 'Law rune', 10]] as readonly (readonly [string, string, number])[],
     rangedThreat: false,
-    stands: undefined as Stand[] | undefined
+    stands: undefined as Stand[] | undefined,
+    alsoHunt: undefined as string | undefined
 };
 
 // Why: the black room sits deeper on the same key side, so only the box, the tiles, the target and the food differ; the corridor stand is what the walk in reaches without crossing the dragons.
@@ -124,7 +125,8 @@ const BLACK_SITE = {
     bank: BLUE_SITE.bank,
     escape: BLUE_SITE.escape,
     rangedThreat: false,
-    stands: undefined as Stand[] | undefined
+    stands: undefined as Stand[] | undefined,
+    alsoHunt: undefined as string | undefined
 };
 
 // Why: the pen has no gate to unlock and no key to fetch, so the only gate on it is Heroes' Quest on the guild doors, which the varp buys outright. ^hero_complete is 15 in general/configs/quest.constant.
@@ -144,7 +146,8 @@ const HEROES_SITE = {
     bank: BLUE_SITE.bank,
     escape: BLUE_SITE.escape,
     rangedThreat: false,
-    stands: undefined as Stand[] | undefined
+    stands: undefined as Stand[] | undefined,
+    alsoHunt: undefined as string | undefined
 };
 
 // Why: the guard waves you past on `%itwatchtower >= 13`, and the Watchtower spell wants the scroll read at 14, so one varp buys both the way in and the way out.
@@ -170,10 +173,12 @@ const GUTANOTH_SITE = {
     baby: null,
     food: { debug: 'shark', name: 'Shark' },
     heal: 20,
-    lootKey: 'loot',
+    lootKey: 'lootEnclave',
     bank: { x: 2612, z: 3092, level: 0 },
     escape: [['earthrune', 'Earth rune', 30], ['lawrune', 'Law rune', 10]] as readonly (readonly [string, string, number])[],
-    rangedThreat: true
+    rangedThreat: true,
+    // Why: the stand fills its dragon's respawn with a greater demon, so the run has to see one engaged as well as a dragon killed.
+    alsoHunt: 'Greater demon' as string | undefined
 };
 
 const SITE = args.site === 'black' ? BLACK_SITE : args.site === 'heroes' ? HEROES_SITE : args.site === 'gutanoth' ? GUTANOTH_SITE : BLUE_SITE;
@@ -241,7 +246,7 @@ const MAGE_WORN: readonly (readonly [string, string])[] = [
     ['amulet_of_magic', 'Amulet of magic']
 ];
 
-const LOOT = ['Dragon bones', 'Dragonhide', 'Uncut diamond', 'Uncut ruby', 'Uncut emerald', 'Uncut sapphire'];
+const LOOT = ['Dragon bones', 'Dragonhide', 'Uncut diamond', 'Uncut ruby', 'Uncut emerald', 'Uncut sapphire', ...(SITE.alsoHunt === undefined ? [] : ['Rune javelin', 'Rune spear', 'Death rune', 'Chaos rune'])];
 
 const COMMON_BANK: BankSeedItem[] = [
     { debugName: FOOD.debug, displayName: FOOD.name, qty: 400 },
@@ -353,12 +358,14 @@ interface Sample {
     law: number;
     worn: string[];
     adults: number;
+    /** Nearest filler npc and how many are in the client's list, for a site that fills downtime. */
+    filler: { count: number; near: number };
     babies: BabyView[];
     logs: LogLine[];
 }
 
 // Why: the black room has no baby dragon, so the roll list is empty rather than the site sharing a name with its adults.
-interface Probe { dustyId: number; jailKeyId: number; food: string; law: string; target: string; baby: string | null }
+interface Probe { dustyId: number; jailKeyId: number; food: string; law: string; target: string; baby: string | null; filler: string | null }
 
 interface Api {
     __rs2b0t: {
@@ -407,6 +414,10 @@ function sample(page: Page, probe: Probe): Promise<Sample> {
             law: a.Inventory.count(p.law),
             worn: a.Equipment.items().map(i => i.name ?? '?'),
             adults: npcs.filter(n => n.name === p.target).length,
+            filler: (() => {
+                const f = p.filler === null ? [] : npcs.filter(n => n.name === p.filler);
+                return { count: f.length, near: f.length === 0 ? -1 : Math.min(...f.map(n => n.distance())) };
+            })(),
             babies: p.baby === null ? [] : npcs.filter(n => n.name === p.baby).map(n => ({ index: n.index, dist: n.distance(), aims: n.targetsMe() })),
             logs: (g.rs2b0t.runner.ctx?.log ?? []).slice(-500).map(l => ({ time: l.time, level: l.level, msg: l.msg }))
         };
@@ -511,6 +522,8 @@ let deaths = 0;
 let bothEndsDrops = 0;
 let harnessCredit = 0;
 let engagingLines = 0;
+let fillerEngages = 0;
+let fillerKills = 0;
 let coinLoots = 0;
 let arrowLoots = 0;
 let waitingPolls = 0;
@@ -601,7 +614,7 @@ try {
     await startScript(page, 'JiveDragons');
     console.log(`JiveDragons started; watching ${SITE.keyed ? 'the key, ' : ''}the walk in, ${args.style === 'melee' ? 'the melee anchor' : `the safespot at ${SAFESPOTS[0].x},${SAFESPOTS[0].z}`}, a kill and a bank trip`);
 
-    const probe: Probe = { dustyId: DUSTY_ID, jailKeyId: JAIL_KEY_ID, food: FOOD.name, law: 'Law rune', target: TARGET, baby: BABY };
+    const probe: Probe = { dustyId: DUSTY_ID, jailKeyId: JAIL_KEY_ID, food: FOOD.name, law: 'Law rune', target: TARGET, baby: BABY, filler: SITE.alsoHunt ?? null };
     const guardsSafespot = args.style !== 'melee';
     const spotAssert = args.style === 'melee' ? 'meleeanchor' : 'safespot';
     // Why: SolveClue sits above AcquireKey in the task order, so a run holding a scroll walks the trail before it ever goes for the key. That is the right order and it costs the key leg a trail's worth of clock, which the budget has to allow rather than call late.
@@ -616,6 +629,7 @@ try {
     // Why: the trail is what the clue case is for, and a run that picks a scroll up and never starts it would otherwise pass on the pickup alone.
     if (args.clue) { required.push('clue', 'cluedone'); }
     if (args.style !== 'melee') { required.push(SITE.rangedThreat ? 'spotheld' : 'hpheld'); }
+    if (SITE.alsoHunt !== undefined) { required.push('filler'); }
     if (args.style === 'melee') { required.push('meleekills'); }
     // Why: only the bow leaves anything of its own on the floor, so the arrows-come-home claim is a range claim.
     if (args.style === 'range') { required.push('arrows'); }
@@ -638,6 +652,8 @@ try {
             printed.add(key);
             console.log(`${stamp()} [${line.level}] ${line.msg.slice(0, 300)}`);
             if (/^engaging blue dragon /i.test(line.msg)) { engagingLines++; }
+            if (SITE.alsoHunt !== undefined && new RegExp(`^engaging ${SITE.alsoHunt} `, 'i').test(line.msg)) { fillerEngages++; }
+            if (SITE.alsoHunt !== undefined && new RegExp(`^${SITE.alsoHunt} \\d+ down`, 'i').test(line.msg)) { fillerKills++; }
             if (/^looted Coins$/i.test(line.msg)) { coinLoots++; }
             if (/^looted Rune arrow$/i.test(line.msg)) { arrowLoots++; mark('arrows', 'the arrows it fired came home'); }
             if (line.msg.includes(BANK_READ_LINE)) { bankReads++; }
@@ -745,6 +761,10 @@ try {
             mark('hpheld', `no hp lost across ${Math.round(safespotMs / 1000)}s standing on a safespot with an adult up`);
         }
         // Why: on a rangedThreat site the room reaches the tile, so the claim is that it held the tile and kept fighting rather than that nothing landed on it.
+        // Why: an engagement only proves it took the filler; the kill is what proves the stand can finish one between dragons.
+        if (SITE.alsoHunt !== undefined && fillerKills > 0 && s.kills > fillerKills) {
+            mark('filler', `${fillerKills} ${SITE.alsoHunt} kill(s) off ${fillerEngages} engagement(s), filling the respawn downtime between ${s.kills - fillerKills} dragon kill(s)`);
+        }
         if (guardsSafespot && SITE.rangedThreat && safespotMs >= SOAK_MS && s.kills > 1) {
             mark('spotheld', `held a safespot for ${Math.round(safespotMs / 1000)}s with an adult up across ${s.kills} kill(s), taking ${violations.length} hit(s) on it`);
         }
@@ -791,7 +811,7 @@ try {
         if (Date.now() - lastState >= 15_000) {
             lastState = Date.now();
             const aims = [...babyRoll.entries()].map(([index, roll]) => `${index}@${roll.nearest}x${roll.seen}`).join(' ') || 'none';
-            console.log(`${stamp()} STATE ${JSON.stringify({ tile: s.tile, hp: `${s.hp}/${s.maxHp}`, status: s.status, kills: s.kills, trips: s.trips, food: s.food, law: s.law, spot: s.spotIdx, adults: s.adults, worn: s.worn.filter(w => w !== '?').join('/'), anchorMax: maxAnchorDist, babies: aims })}`);
+            console.log(`${stamp()} STATE ${JSON.stringify({ tile: s.tile, hp: `${s.hp}/${s.maxHp}`, status: s.status, kills: s.kills, trips: s.trips, food: s.food, law: s.law, spot: s.spotIdx, adults: s.adults, filler: s.filler, worn: s.worn.filter(w => w !== '?').join('/'), anchorMax: maxAnchorDist, babies: aims })}`);
         }
 
         if (required.every(id => met[id] !== undefined)) { break; }

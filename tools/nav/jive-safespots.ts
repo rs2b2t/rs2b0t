@@ -44,6 +44,9 @@ export interface Target {
     openLocs?: number[];
     /** Cast line of sight against projectile blockers, for a target penned behind a fence spells pass through. */
     projectile?: boolean;
+    // Why: the anchor-needs-a-safespot rule is a melee guarantee, and a target nothing can melee safely still has casting stands worth deriving; without this the derivation throws and reports nothing at all.
+    /** Report the best anchor with whatever flanking it has rather than failing when none has a safespot beside it. */
+    meleeOptional?: boolean;
 }
 
 /** Whether the target needs collision rebuilt from the engine rather than read off the pack. */
@@ -70,7 +73,10 @@ export const HEROES_BLUE: Target = { squares: ['m45_154'], adult: { id: 55, size
 // Why: the six spawns share one cave with ten spiders, six shamans, six chieftains and five greater demons, so the derivation is what says which dragon has a tile none of the rest of it reaches.
 export const GUTANOTH_BLUE: Target = { squares: ['m40_147'], adult: { id: 55, size: 4 }, baby: null, maxrange: 6, inside: { x: 2588, z: 9410 }, outside: LADDER_BOTTOM };
 
-export const TARGETS: Record<string, Target> = { blue: BLUE_DRAGON, demon: BLACK_DEMON, black: BLACK_DRAGON, kbd: KING_BLACK_DRAGON, heroes: HEROES_BLUE, gutanoth: GUTANOTH_BLUE };
+// Why: the same cave as GUTANOTH_BLUE, read for its five greater demons instead: size 3 against the dragons' 4, and `maxrange` 8 against their 6.
+export const GUTANOTH_DEMON: Target = { squares: ['m40_147'], adult: { id: 83, size: 3 }, baby: null, maxrange: 8, inside: { x: 2588, z: 9410 }, outside: LADDER_BOTTOM, meleeOptional: true };
+
+export const TARGETS: Record<string, Target> = { blue: BLUE_DRAGON, demon: BLACK_DEMON, black: BLACK_DRAGON, kbd: KING_BLACK_DRAGON, heroes: HEROES_BLUE, gutanoth: GUTANOTH_BLUE, gutanothdemon: GUTANOTH_DEMON };
 
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];
 const DZ = [1, 0, -1, 0, 1, -1, -1, 1];
@@ -466,7 +472,7 @@ export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS, engin
     }
     // Why: the anchor is only usable with a safespot to step back onto, and the tile touching the most body is not always the one that has it: in the Heroes' Guild pen the best-touching tiles sit deepest inside the fence, where every retreat is another tile the dragon reaches.
     const spotsNear = (a: Anchor): Safespot[] => safespots.filter(s => cheb(s.x, s.z, a.x, a.z) <= 2);
-    const anchor = anchors.find(a => spotsNear(a).length > 0);
+    const anchor = anchors.find(a => spotsNear(a).length > 0) ?? (target.meleeOptional ? anchors[0]! : undefined);
     if (!anchor) {
         throw new Error(`no safespot within 2 of any of the ${anchors.length} melee anchors, the best being (${anchors[0]!.x}, ${anchors[0]!.z})`);
     }

@@ -72,6 +72,9 @@ export interface DragonSite {
     exit?: DragonExit;
     /** Numbered stands to choose between; `safespots` and `meleeAnchor` are the first of them. */
     stands?: DragonStand[];
+    // Why: a stand is idle while its dragon respawns, and the Enclave puts a greater demon inside cast range of one, so the idle time goes on that rather than on nothing.
+    /** Other npcs worth killing from the same stand, taken only when the target is not up. */
+    alsoHunt?: string[];
     inArea(t: AreaPoint | null): boolean;
 }
 
@@ -214,6 +217,9 @@ export const GUTANOTH_BLUE: DragonSite = {
     escapeTeleportId: 'watchtower',
     walkOut: new Tile(2540, 3054, 0),
     food: 'Shark',
+    // Why: the cave's greater demons cannot be camped at all, since the four in the east chamber wander into one shared body with no tile that sees one out of another's reach; the fifth stands within a cast of stand 1, so it is filler rather than a site of its own.
+    alsoHunt: ['Greater demon'],
+    lootSetting: 'lootEnclave',
     // Why: the stand is melee-proof but nothing in the cave is range-proof, and a live soak took 8 and 13 off it with one adult up, so a hit here is the room rather than the tile being wrong and the ladder must not rotate off it.
     rangedThreat: true,
     // Why: one box over the cave, which is its own region behind the guard's teleport.
@@ -228,6 +234,12 @@ export const DRAGON_SITES: Record<string, DragonSite> = {
 };
 
 export const SITE_OPTIONS: string[] = Object.keys(DRAGON_SITES);
+
+// Why: the target comes first in the list, so a caller that wants one thing to hunt takes the head and a caller that wants everything takes the lot.
+/** Every npc name this site kills: its target, then anything it fills downtime with. */
+export function huntNames(site: DragonSite): string[] {
+    return [site.target, ...(site.alsoHunt ?? [])];
+}
 
 // Why: a site with no stands keeps behaving as it always did, and a number past the end clamps rather than throwing on a settings typo.
 /** The numbered stand to fight from, 1-based; the site's own tiles when it names none. */

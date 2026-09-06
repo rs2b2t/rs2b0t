@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { DRAGON_SITES, SITE_OPTIONS, TAVERLEY_BLUE, siteFor, standFor } from '#/bot/scripts/JiveDragons/sites.js';
+import { DRAGON_SITES, SITE_OPTIONS, TAVERLEY_BLUE, huntNames, siteFor, standFor } from '#/bot/scripts/JiveDragons/sites.js';
 import { SPELL_TELEPORTS } from '#/bot/event/webwalk/teleportCatalog.js';
 import { BLACK_DRAGON, GUTANOTH_BLUE, HEROES_BLUE, derive, inputsPresent } from '../../../tools/nav/jive-safespots.js';
 
@@ -281,10 +281,16 @@ describe("the Gu'Tanoth Enclave blue dragons", () => {
         expect(s.rangedThreat).toBe(true);
     });
 
-    test('it hunts blue dragons for dragon bones on the shared loot chips', () => {
+    test('it hunts blue dragons for dragon bones, off its own merged chip list', () => {
         expect(s.target).toBe('Blue dragon');
         expect(s.bones).toBe('Dragon bones');
-        expect(s.lootSetting).toBeUndefined();
+        expect(s.lootSetting).toBe('lootEnclave');
+    });
+
+    // Why: a stand is idle while its dragon respawns, and the cave puts a greater demon inside a cast of stand 1, so the idle time goes on that.
+    test('and fills the respawn downtime with the cave greater demons', () => {
+        expect(s.alsoHunt).toEqual(['Greater demon']);
+        expect(huntNames(s)).toEqual(['Blue dragon', 'Greater demon']);
     });
 
     // Why: the cave holds six dragons and which one is worth camping depends on what else is in the room, so the stands are numbered and the operator picks one.
@@ -398,6 +404,21 @@ describe('standFor', () => {
             const stand = standFor(taverley, n);
             expect(stand.tiles).toEqual(taverley.safespots);
             expect(stand.anchor).toEqual(taverley.meleeAnchor);
+        }
+    });
+});
+
+// Why: the target has to come first, or a site that fills downtime would take the filler while its own target is up.
+describe('huntNames', () => {
+    test('puts the site target first and the filler after it', () => {
+        expect(huntNames(DRAGON_SITES['gutanoth-blue']!)[0]).toBe('Blue dragon');
+    });
+
+    test('a site that fills no downtime hunts its target and nothing else', () => {
+        for (const key of ['taverley-blue', 'taverley-black', 'heroes-blue']) {
+            const site = DRAGON_SITES[key]!;
+            expect(site.alsoHunt).toBeUndefined();
+            expect(huntNames(site)).toEqual([site.target]);
         }
     });
 });

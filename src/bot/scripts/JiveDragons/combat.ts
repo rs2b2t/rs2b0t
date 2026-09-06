@@ -12,7 +12,7 @@ import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../geometry/Tile.js';
 import { SAFESPOT_BLIND_MS, bodyOrigin, engageRangeFor, gapTo, holdDue, hurtOnSpot, nextSafespot, noteSighting, retreatAim, retreatDue, settled, type Sighting, type Style } from './logic.js';
-import type { DragonSite } from './sites.js';
+import { huntNames, type DragonSite } from './sites.js';
 import { waitFed, type JiveHost } from './supply.js';
 
 /** What a fight needs from the bot on top of what supply needs. */
@@ -132,10 +132,9 @@ function sightedFrom(spot: Tile, n: Npc): boolean {
 
 // Why: the query name match is exact, so 'Baby blue dragon' never matches 'Blue dragon' and the babies stay untargeted.
 
-/** Adults inside `radius` that no other player is fighting and that `from` can see. `ours` is exempt from the fight check. */
-function adultsNear(site: DragonSite, ours: number | null, radius: number, from: Tile | null): Npc[] {
+function huntableNear(site: DragonSite, name: string, ours: number | null, radius: number, from: Tile | null): Npc[] {
     return Npcs.query()
-        .name(site.target)
+        .name(name)
         .action(ATTACK)
         .within(radius)
         .where(n => site.inArea(n.tile()) && (from === null || sightedFrom(from, n)) && !takenByAnother({
@@ -147,8 +146,24 @@ function adultsNear(site: DragonSite, ours: number | null, radius: number, from:
         .results();
 }
 
+// Why: the stand is idle while its dragon respawns, so the filler is taken then and only then, or it would trade the drop the trip is for. One already engaged stays in the field though: a greater demon on 87 health dropped the moment a dragon respawns heals back before the next lull and is never killed, which live looked like three engagements and no kill.
+/** Adults inside `radius` that no other player is fighting and that `from` can see: the target's own first, plus a filler already being fought, and the rest of the filler only when the target is not up. */
+function adultsNear(site: DragonSite, ours: number | null, radius: number, from: Tile | null): Npc[] {
+    const primary = huntableNear(site, site.target, ours, radius, from);
+    if ((site.alsoHunt?.length ?? 0) === 0) {
+        return primary;
+    }
+    const filler = site.alsoHunt!.flatMap(name => huntableNear(site, name, ours, radius, from));
+    if (primary.length === 0) {
+        return filler;
+    }
+    const engaged = ours === null ? [] : filler.filter(n => n.index === ours);
+    return [...engaged, ...primary];
+}
+
 function stillThere(site: DragonSite, idx: number): boolean {
-    return Npcs.all().some(n => n.index === idx && n.name === site.target);
+    const names = huntNames(site);
+    return Npcs.all().some(n => n.index === idx && names.includes(n.name ?? ''));
 }
 
 function onAnySafespot(site: DragonSite): boolean {
@@ -170,6 +185,8 @@ function retreatNeeded(host: CombatHost, site: DragonSite): boolean {
 
 export class Fight implements Task {
     private engaged: number | null = null;
+    /** What the engaged npc is called, so a site that fills downtime names the thing it killed. */
+    private engagedName = '';
     private seenAt = 0;
     private engagedAt = 0;
     private engagedHealth = -1;
@@ -344,7 +361,7 @@ export class Fight implements Task {
         const killed = performance.now() - this.seenAt < KILL_GRACE_MS;
         if (killed) {
             this.host.countKill();
-            this.host.log(`${name} ${this.engaged} down`);
+            this.host.log(`${this.engagedName || name} ${this.engaged} down`);
         }
         this.clearTarget();
         return killed;
@@ -439,15 +456,18 @@ export class Fight implements Task {
     /** Send the attack and watch for the drag off the safespot. False means the click was refused. */
     private async engage(target: Npc, name: string): Promise<boolean> {
         const style = this.host.style();
+        // Why: a site that fills downtime kills more than one kind of thing, and a line that names the site's target for all of them reads as the dragon being fought when it is the demon.
+        const shown = (target.name ?? name).toLowerCase();
+        this.engagedName = shown;
         // Why: a target whose defence roll dwarfs the attack roll shows no health change for minutes, so the re-click runs every few seconds and the line would crowd out everything else.
         if (target.index === this.engaged) {
             this.reissues++;
             if (this.reissues === 1 || this.reissues % REISSUE_LOG_EVERY === 0) {
-                this.host.log(`${name} ${target.index} stalled. Re-issuing the attack (${this.reissues} so far).`);
+                this.host.log(`${shown} ${target.index} stalled. Re-issuing the attack (${this.reissues} so far).`);
             }
         } else {
             this.reissues = 0;
-            this.host.log(`engaging ${name} ${target.index} at ${target.tile()} (gap ${gapTo(this.anchor(), target.tile(), target.size)})`);
+            this.host.log(`engaging ${shown} ${target.index} at ${target.tile()} (gap ${gapTo(this.anchor(), target.tile(), target.size)})`);
         }
         // Why: arming is one-shot and the next attack spends it, so the bar is clicked against the swing that is about to go out rather than on an idle tick that may never attack.
         await this.host.armSpecial?.();

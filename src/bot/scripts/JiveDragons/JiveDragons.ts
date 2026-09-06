@@ -34,7 +34,7 @@ import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
 import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from './combat.js';
 import { keepDoses, keyStatus, lootHalts, meleeShieldGate, siteTileOf, wantsDrop, type Style } from './logic.js';
-import { HEROES_BLUE, SITE_OPTIONS, TAVERLEY_BLACK, TAVERLEY_BLUE, siteFor, standFor, type DragonSite } from './sites.js';
+import { GUTANOTH_BLUE, HEROES_BLUE, SITE_OPTIONS, TAVERLEY_BLACK, TAVERLEY_BLUE, huntNames, siteFor, standFor, type DragonSite } from './sites.js';
 import { ANTIPOISON_DOSES, POISONED, acquireKey, antipoisonPlan, bankRoutine, doseToDrink, enterLair, escapeRunesFor, inCell, leaveCell, type BankOpts, type KeyState } from './supply.js';
 
 const SHIELD = 'Dragonfire shield';
@@ -75,8 +75,14 @@ const BLACK_DROPS: string[] = DROP_DB['Black dragon'] ?? [];
 // Why: the same rule as the blue table, a pile of coins or a cake is a walk off the safespot the hides and the bones pay for better.
 const DEFAULT_BLACK_LOOT = BLACK_DROPS.filter(n => !['coins', 'chocolate cake'].includes(n.toLowerCase()));
 
-// Why: both blue sites read the same drop table off the same `loot` key, so the chips show for either.
+// Why: the Enclave kills blue dragons and greater demons off one stand, so its chips are the two tables merged rather than either alone.
+const ENCLAVE_DROPS: string[] = [...new Set([...DROPS, ...(DROP_DB['Greater demon'] ?? [])])].sort((a, b) => a.localeCompare(b));
+// Why: the same rule as the other tables, plus Ashes and Thread, which a greater demon drops by the pile and neither sells nor stacks into anything.
+const DEFAULT_ENCLAVE_LOOT = ENCLAVE_DROPS.filter(n => !['bass', 'coins', 'ashes', 'thread', 'tuna'].includes(n.toLowerCase()));
+
+// Why: both Taverley blue and the guild pen read the same drop table off the same `loot` key, so the chips show for either.
 const SHOW_BLUE = { key: 'site', anyOf: [TAVERLEY_BLUE.key, HEROES_BLUE.key] };
+const SHOW_ENCLAVE = { key: 'site', anyOf: [GUTANOTH_BLUE.key] };
 const SHOW_BLACK = { key: 'site', anyOf: [TAVERLEY_BLACK.key] };
 
 export const SETTINGS: SettingsSchema = {
@@ -103,6 +109,7 @@ export const SETTINGS: SettingsSchema = {
 
     loot: { type: 'string[]', default: DEFAULT_LOOT, options: DROPS, label: 'Loot to pick up (drop table)', group: 'Banking & loot', showIf: SHOW_BLUE, help: 'the blue dragon table. Everything picked up is banked. Bass and Coins start unticked because neither pays for the walk off the safespot' },
     lootBlack: { type: 'string[]', default: DEFAULT_BLACK_LOOT, options: BLACK_DROPS, label: 'Loot to pick up (drop table)', group: 'Banking & loot', showIf: SHOW_BLACK, help: 'the black dragon table, a different list from the blue one. Everything picked up is banked. Coins and Chocolate cake start unticked because neither pays for the walk off the safespot' },
+    lootEnclave: { type: 'string[]', default: DEFAULT_ENCLAVE_LOOT, options: ENCLAVE_DROPS, label: 'Loot to pick up (drop table)', group: 'Banking & loot', showIf: SHOW_ENCLAVE, help: 'the blue dragon and greater demon tables merged, since the stand kills both. Everything picked up is banked. Bass, Coins, Tuna, Ashes and Thread start unticked because none pays for the walk off the safespot' },
     bankCommonJunk: { type: 'boolean', default: true, label: 'Also grab shared gems/junk', group: 'Banking & loot' },
     buryBones: { type: 'boolean', default: false, label: 'Bury dragon bones', group: 'Banking & loot', help: 'bury Dragon bones for Prayer xp instead of banking them (always looted when on). They are the best drop here, so this trades gold for xp' },
     rangingPotion: { type: 'boolean', default: false, label: 'Drink a ranging potion', group: 'Combat', showIf: SHOW_RANGE, help: 'sips a dose once the boost decays to within a tenth of the base level. The loadout carry list sets the dose form and the count per trip, otherwise one Ranging potion(3)' },
@@ -843,7 +850,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         return SITE.bank;
     }
     override grindTargets(): string[] {
-        return [SITE.target.toLowerCase()];
+        return huntNames(SITE).map(n => n.toLowerCase());
     }
 
     setStatus(s: string): void {
