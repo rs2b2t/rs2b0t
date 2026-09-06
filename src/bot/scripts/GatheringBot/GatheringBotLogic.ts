@@ -2,8 +2,12 @@
  * Pure GatheringBot policy helpers (unit-tested, no live client).
  * Kept separate so task modules can import without circular deps on the bot class.
  */
+
+import { buyoutCost, shopBuyPrice } from '../../api/shop/shopPrice.js';
 import { wildernessLevelAt, type WildTile } from '../../event/webwalk/wilderness.js';
 import { combatBreaksGather } from './TickManipLogic.js';
+
+export { buyoutCost, shopBuyPrice };
 
 type GatheringCombatMode =
     | 'standard'
@@ -179,36 +183,15 @@ export const FEATHER_RESTOCK_MINUTES = 15;
 export const FEATHER_STOCK = 1500;
 /** Roachey's `shop_sell_multiplier` and `shop_delta`, which set how steeply his price climbs. */
 export const ROACHEY_SELL_MULTIPLIER = 1000;
-export const SHOP_DELTA = 10;
-
-// Why: `calc_shop_value` is the engine's own curve, `max(100, sell - clamp(-bought * delta))` scaled by the base cost, so Roachey's feathers go from 2gp to a 12gp ceiling over the first 500 and a full shelf is far more than stock times cost.
-/** What the next one costs once `bought` have left the shelf. */
-export function shopBuyPrice(
-    baseCost: number,
-    bought: number,
-    sellMultiplier = ROACHEY_SELL_MULTIPLIER,
-    delta = SHOP_DELTA
-): number {
-    const swing = Math.min(1000, Math.max(-5000, -bought * delta));
-    return Math.max(1, Math.floor((Math.max(100, sellMultiplier - swing) * baseCost) / 1000));
-}
-
-/** Coins a full shelf costs, summed one at a time. */
-export function buyoutCost(baseCost: number, stock: number, sellMultiplier?: number, delta?: number): number {
-    let total = 0;
-    for (let bought = 0; bought < stock; bought++) {
-        total += shopBuyPrice(baseCost, bought, sellMultiplier, delta);
-    }
-    return total;
-}
+export const ROACHEY_DELTA = 10;
 
 /** What Roachey's full shelf of feathers costs, the ceiling on one trip's draw. */
-export const FEATHER_BUYOUT_GP = buyoutCost(2, FEATHER_STOCK);
+export const FEATHER_BUYOUT_GP = buyoutCost(2, FEATHER_STOCK, ROACHEY_SELL_MULTIPLIER, ROACHEY_DELTA);
 
 // Why: the bank is the operator's, not the trip's, so it draws what a full shelf costs and leaves the rest banked whatever the stack is.
 /** Coins to take out for a buyout, on top of what is already held. */
 export function featherCoinsToDraw(held: number, banked: number, price: number, stock = FEATHER_STOCK): number {
-    const budget = buyoutCost(price, stock);
+    const budget = buyoutCost(price, stock, ROACHEY_SELL_MULTIPLIER, ROACHEY_DELTA);
     return held >= budget ? 0 : Math.max(0, Math.min(banked, budget - held));
 }
 
