@@ -6467,7 +6467,7 @@ export class Client extends GameShell {
                     throw new Error();
                 }
 
-                const size: number = this.in.g1();
+                const size: number = this.in.g2();
                 for (let i: number = 0; i < size; i++) {
                     inv.linkObjType[i] = this.in.g2();
 
@@ -6502,7 +6502,7 @@ export class Client extends GameShell {
                 }
 
                 while (this.in.pos < this.psize) {
-                    const slot: number = this.in.g1();
+                    const slot: number = this.in.gsmart();
                     const id: number = this.in.g2();
 
                     let count: number = this.in.g1();
