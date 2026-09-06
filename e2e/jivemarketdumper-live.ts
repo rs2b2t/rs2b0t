@@ -42,6 +42,8 @@ const YEW = 1515;
 const CAP = 100_000;
 const YEW_BUY = 288;
 const IRON_BUY = 18;
+/** Junk the pack starts loaded with, banked before the first pile is planned. */
+const PACK_SEED = ['bronze_med_helm', 'bucket_empty', 'tinderbox'] as const;
 const SEED_YEWS = 500;
 const SEED_IRON = 1000;
 /** The stock is worth more than the maker can pay, so it bids its ceiling for the pile and the dump takes it. */
@@ -146,6 +148,10 @@ try {
     await maxmeAndClearDialogs(custPage);
     await clearChatDialogs(custPage);
     await cheatQuiet(custPage, '~clearinv');
+    // Why: the run has to bank what it starts holding before it plans anything, or `decide` reads a loaded pack as a pile and walks the operator's own goods to the maker.
+    for (const obj of PACK_SEED) {
+        await cheatQuiet(custPage, `give ${obj} 1`, 500);
+    }
     await cheatQuiet(custPage, `~bankitem yew_logs ${SEED_YEWS}`);
     await cheatQuiet(custPage, `~bankitem iron_ore ${SEED_IRON}`);
     // Why: not in the book, so it has to stay in the bank while the run still ends with "nothing it buys".
@@ -194,6 +200,7 @@ try {
     let last = await read();
     let lastLogTime = 0;
     let sales = 0;
+    let packBanked = 0;
     let gp = 0;
     let stopReason = '';
     let refusedStop = '';
@@ -209,6 +216,10 @@ try {
             if (sale) {
                 sales++;
                 gp += Number(sale[2]!.replace(/,/g, ''));
+            }
+            const purge = /\[dumper\] banked the (\d+) slot\(s\) the pack started with/.exec(line.msg);
+            if (purge) {
+                packBanked = Number(purge[1]);
             }
             // Why: the runner prefixes its own stop line, so the reason is matched anywhere in the line rather than at its start.
             if (/\[dumper\] the bank holds nothing tradeable/.test(line.msg)) {
@@ -250,6 +261,9 @@ try {
         fail(`the run did not take the named bank: ${last.logs.slice(-6).map(l => l.msg).join(' | ')}`);
     }
     const tail = async (): Promise<string> => `customer: ${last.logs.slice(-6).map(l => l.msg).join(' | ')}\n  maker: ${(await runnerLogs(makerPage, 8)).join(' | ')}`;
+    if (packBanked !== PACK_SEED.length) {
+        fail(`the run banked ${packBanked} of the ${PACK_SEED.length} slots the pack started with: ${await tail()}`);
+    }
     if (sales < 1) {
         fail(`no pile was ever dumped: ${await tail()}`);
     }
@@ -274,7 +288,7 @@ try {
     if (last.runner !== 'stopped' || stopReason === '') {
         fail(`the run did not stop on a bare bank: ${await tail()}`);
     }
-    console.log(`PASS, ${sales} pile(s) took ${gp.toLocaleString()}gp and emptied the bank, unpriced chainbodies included, then stopped: ${stopReason.replace(/^.*\[dumper\] /, '')}`);
+    console.log(`PASS, banked the ${packBanked} slot(s) the pack started with, ${sales} pile(s) took ${gp.toLocaleString()}gp and emptied the bank, unpriced chainbodies included, then stopped: ${stopReason.replace(/^.*\[dumper\] /, '')}`);
 } finally {
     client?.cleanup();
     await browser.close();

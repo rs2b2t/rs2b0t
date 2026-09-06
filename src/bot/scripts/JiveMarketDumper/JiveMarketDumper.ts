@@ -97,6 +97,9 @@ export default class JiveMarketDumper extends TaskBot {
         if (!(await this.resolveBank())) {
             return;
         }
+        if (!(await this.bankThePack())) {
+            return;
+        }
         this.log(`[dumper] dumping the bank to ${this.maker}, whatever it pays, banking at ${this.bankName}`);
         this.add(new ContinueDialog(), new Sell(this), new Approach(this), new Restock(this));
     }
@@ -123,6 +126,27 @@ export default class JiveMarketDumper extends TaskBot {
             ScriptRunner.stop(`[dumper] the walk to ${bank.name} failed`);
             return false;
         }
+        return true;
+    }
+
+    // Why: a pack the run starts with is the operator's own goods rather than a planned pile, and `decide` reads any loaded pack as one and walks it to the maker; banking it first also means the first pile is planned off everything banked.
+    private async bankThePack(): Promise<boolean> {
+        if (Inventory.used() === 0) {
+            return true;
+        }
+        const had = Inventory.used();
+        this.setStatus('banking what the pack came with');
+        if (!(await this.openBank())) {
+            ScriptRunner.stop(`[dumper] could not open ${this.bankName} to bank the ${had} slot(s) the pack started with`);
+            return false;
+        }
+        await Bank.depositAllMatching(() => true);
+        if (!(await Execution.delayUntil(() => Inventory.used() === 0, 5000))) {
+            ScriptRunner.stop(`[dumper] ${Inventory.used()} slot(s) of the pack would not go into the bank`);
+            return false;
+        }
+        this.log(`[dumper] banked the ${had} slot(s) the pack started with`);
+        await Bank.close();
         return true;
     }
 
