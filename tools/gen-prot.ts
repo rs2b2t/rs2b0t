@@ -1,11 +1,4 @@
-// Generate src/client/io/{ClientProt,ServerProt}.ts from the engine's prot tables, so a
-// revision bump is a regenerate-and-review instead of ~150 hand-transcribed opcodes.
-//
-//   bun tools/gen-prot.ts            # write the files
-//   bun test test/io/protDrift.test.ts   # fail if they drift from the engine
-//
-// The engine declares `static readonly NAME = new XGameProt(<id>, <length>);`. Server
-// opcodes live in two files: ServerGameProt.ts and ServerGameZoneProt.ts.
+// Why: a revision bump renumbers ~150 opcodes; generate them from the engine and gate on drift (see test/io/protDrift.test.ts).
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';

@@ -1,9 +1,4 @@
-// Decode every loc, obj, npc and seq in a client config archive with STRICT_CONFIG on,
-// so an opcode our decoders do not know throws instead of silently misaligning the
-// reader. A revision bump is exactly when a new config opcode appears, and a desync in
-// one entry corrupts every entry after it in the same stream.
-//
-//   STRICT_CONFIG=1 bun tools/config-audit.ts --config /tmp/pack/client/config
+// Why: an unknown config opcode desyncs every entry after it; decode the whole cache under STRICT_CONFIG=1.
 
 import { readFileSync } from 'node:fs';
 
