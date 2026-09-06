@@ -75,7 +75,7 @@ import WordPack from '#/client/wordfilter/WordPack.js';
 
 import JagFX from '#/client/sound/JagFX.js';
 
-const CLIENT_VERSION = 274;
+const CLIENT_VERSION = 289;
 
 const MAX_PLAYER_COUNT = 2048;
 const LOCAL_PLAYER_INDEX = 2047;
