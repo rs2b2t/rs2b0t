@@ -18,7 +18,7 @@ import { XpTracker, jiveFrame, paintLevels } from '../../paint/jive.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { CAST, FEATHER, FISH, FLY_LEVEL, KEEPER, ROD, SPOT, VILLAGE_ARRIVAL, decide, featherAsk, inVillage, nearestFishable, nextScan, sellPlan, tripLine, type PackState, type Step } from './logic.js';
+import { CAST, COINS, FEATHER, FISH, FLY_LEVEL, KEEPER, ROD, SPOT, VILLAGE_ARRIVAL, coinsToDraw, decide, featherAsk, inVillage, nearestFishable, nextScan, sellPlan, tripLine, type PackState, type Step } from './logic.js';
 import { SEARCH_AREA, SPOT_STANDS, SWEEP } from './river.js';
 
 /** The customer side of Fernahei's counter, the tile the ShopBuyout preset stands on. */
@@ -29,6 +29,8 @@ const CAST_HOLD_TICKS = 20;
 /** Flood budget for a live stand beside a spot tile the table does not know; the far bank is 80 tiles round and never inside it. */
 const LIVE_STAND_STEPS = 300;
 const STAND_WALK_MS = 30_000;
+/** The walk round to the far bank is 74 to 90 by the pack against the 14 to 56 along this one. */
+const FAR_STAND_WALK_MS = 120_000;
 const SCAN_WALK_MS = 45_000;
 const HUT_WALK_MS = 60_000;
 /** The walk in can start anywhere on the mainland, so it gets the long budget and the cart crossing inside it. */
@@ -56,8 +58,10 @@ export default class JiveShilo extends TaskBot {
 
     hutStand = HUT_STAND;
     feathersTarget = 0;
-    /** The teller has been looked in for a rod, so a miss does not send the trip back. */
-    bankTried = false;
+    /** The teller has been visited since the last catch, so an empty one cannot loop the trip. */
+    tellerSeen = false;
+    /** The teller stop is done and the counter is the other half of the same trip. */
+    hutDue = false;
     travelLogged = false;
 
     override async onStart(): Promise<void> {
@@ -74,7 +78,7 @@ export default class JiveShilo extends TaskBot {
             return;
         }
         this.log(`[shilo] fly fishing the river from ${SEARCH_AREA.minX},${SEARCH_AREA.minZ} to ${SEARCH_AREA.maxX},${SEARCH_AREA.maxZ} (${SPOT_STANDS.length} known spot tiles, ${SWEEP.length} sweep stops), selling to ${KEEPER} at ${this.hutStand}${this.feathersTarget > 0 ? `, stopping at ${this.feathersTarget} feathers` : ''}`);
-        this.add(new ContinueDialog(), new Stop(this), new Travel(this), new RodFromBank(this), new Restock(this), new Fish(this));
+        this.add(new ContinueDialog(), new Stop(this), new Travel(this), new TellerStop(this), new Restock(this), new Fish(this));
     }
 
     override recoveryAnchor(): Tile | null {
@@ -93,7 +97,8 @@ export default class JiveShilo extends TaskBot {
             coins: Inventory.count('Coins'),
             free: Inventory.free(),
             inVillage: inVillage(Game.tile()),
-            bankTried: this.bankTried
+            tellerSeen: this.tellerSeen,
+            hutDue: this.hutDue
         };
     }
 
@@ -177,8 +182,8 @@ class Travel implements Task {
     }
 }
 
-// Why: a banked rod is free where Fernahei's costs coins, so the teller is looked in once and a miss is remembered rather than walked back to.
-class RodFromBank implements Task {
+// Why: the teller is the first half of every trip: the catch goes in, the coins for the feathers come out and a banked rod is free where Fernahei's costs coins. The catch is only kept back when the bank has nothing to draw, since then the counter has to buy it to pay for anything.
+class TellerStop implements Task {
     constructor(private bot: JiveShilo) {}
 
     validate(): boolean {
@@ -189,12 +194,17 @@ class RodFromBank implements Task {
         const bot = this.bot;
         const here = Game.tile();
         const bank = here === null ? null : nearestBank(here);
-        if (!bank) {
-            bot.bankTried = true;
+        if (!here || !bank) {
+            bot.tellerSeen = true;
             return;
         }
-        bot.setStatus(`looking for a ${ROD} in the bank`);
+        bot.setStatus('banking the catch');
         const log = (m: string): void => bot.log(`  ${m}`);
+        // Why: `openNpcAccess` only looks for the teller in the scene it is standing in, so unlike a booth open it never walks; from the river the Banker is out of view and every attempt says so.
+        if (bank.tile.distanceTo(here) > 2 && !(await Traversal.walkResilient(bank.tile, { radius: 2, attempts: 3, timeoutMs: HUT_WALK_MS, log }))) {
+            bot.log('[shilo] the walk to the teller failed, will retry');
+            return;
+        }
         const opened = bank.npcAccess
             ? await Bank.openNpcAccess(bank.npcAccess, log)
             : await Bank.openNearest(bank.access?.name ?? 'Bank booth', bank.access?.op ?? 'Use-quickly', log);
@@ -202,17 +212,32 @@ class RodFromBank implements Task {
             bot.log('[shilo] could not open the bank, will retry');
             return;
         }
-        if (!(await Execution.delayUntil(() => Bank.isOpen() && Bank.loaded(), 5000))) {
+        // Why: `loaded()` is "the list is non-empty", which a bank the last trip drew the last of can never satisfy; `ready()` is the check that covers an empty one.
+        if (!(await Execution.delayUntil(() => Bank.ready(), 5000))) {
             bot.log('[shilo] the bank list has not filled in, retrying');
             return;
         }
-        const banked = Bank.count(ROD);
-        if (banked > 0 && await Bank.withdrawX(ROD, 1)) {
-            bot.log(`[shilo] took a ${ROD} out of the bank`);
-        } else {
-            bot.log(`[shilo] no ${ROD} in the bank, buying one from ${KEEPER}`);
+
+        const balance = Bank.count(COINS);
+        const draw = coinsToDraw(Inventory.count(COINS), balance);
+        const held = bot.fishHeld();
+        if (draw > 0 && held > 0) {
+            const catchNames = new Set<string>(FISH.map(f => f.toLowerCase()));
+            await Bank.depositAllMatching(name => catchNames.has(name.toLowerCase()));
+            bot.log(`[shilo] banked ${held} fish`);
+        } else if (held > 0) {
+            bot.log(`[shilo] nothing banked to draw on, so the ${held} fish go to ${KEEPER} instead`);
         }
-        bot.bankTried = true;
+        if (draw > 0) {
+            await Bank.withdrawX(COINS, draw);
+            bot.log(`[shilo] drew ${draw}gp of the ${balance}gp banked`);
+        }
+        if (Inventory.count(ROD) === 0 && Bank.count(ROD) > 0 && await Bank.withdrawX(ROD, 1)) {
+            bot.log(`[shilo] took a ${ROD} out of the bank`);
+        }
+
+        bot.tellerSeen = true;
+        bot.hutDue = true;
         await Bank.close();
     }
 }
@@ -281,6 +306,7 @@ class Restock implements Task {
         const spent = coinsForFeathers - Inventory.count('Coins');
         await Shop.close();
 
+        bot.hutDue = false;
         bot.noteTrip(sold, earned, feathers, spent);
         bot.log(`[shilo] ${tripLine(sold, earned, feathers, spent, Inventory.count(FEATHER))}`);
     }
@@ -329,11 +355,14 @@ class Fish implements Task {
             await Execution.delayTicks(1);
             return;
         }
-        const { spot, stand } = pick;
+        const { spot, stand, far } = pick;
         this.lastScan = null;
         if (stand.distanceTo(here) > 0 && this.castIndex !== spot.index) {
             bot.setStatus(`walking to the spot at ${spot.tile().x},${spot.tile().z}`);
-            await Traversal.walkResilient(stand, { radius: 0, attempts: 3, timeoutMs: STAND_WALK_MS, log: m => bot.log(`  ${m}`) });
+            if (far) {
+                bot.log(`[shilo] the only spot in view is across the water at ${spot.tile().x},${spot.tile().z}, walking round`);
+            }
+            await Traversal.walkResilient(stand, { radius: 0, attempts: 3, timeoutMs: far ? FAR_STAND_WALK_MS : STAND_WALK_MS, log: m => bot.log(`  ${m}`) });
             return;
         }
 
@@ -359,6 +388,10 @@ class Fish implements Task {
             () => !Game.animating() || Inventory.isFull() || Inventory.count(FEATHER) === 0 || !spot.valid() || EventSignal.pending() || ChatDialog.canContinue(),
             CAST_HOLD_TICKS
         );
-        bot.noteCatch(Math.max(0, bot.fishHeld() - before));
+        const caught = Math.max(0, bot.fishHeld() - before);
+        if (caught > 0) {
+            bot.tellerSeen = false;
+        }
+        bot.noteCatch(caught);
     }
 }

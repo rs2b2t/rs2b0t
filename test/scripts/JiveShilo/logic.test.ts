@@ -1,34 +1,48 @@
 import { describe, expect, test } from 'bun:test';
 import Tile from '#/bot/geometry/Tile.js';
-import { decide, featherAsk, inArea, nearestFishable, nextScan, sellPlan, standFor, tripLine, type PackState } from '#/bot/scripts/JiveShilo/logic.js';
+import { COINS, FEATHER_BUYOUT_GP, coinsToDraw, decide, featherAsk, inArea, nearestFishable, nextScan, sellPlan, standEntry, standFor, tripLine, type PackState } from '#/bot/scripts/JiveShilo/logic.js';
 import { SEARCH_AREA, SPOT_STANDS, SWEEP } from '#/bot/scripts/JiveShilo/river.js';
 
-const ready: PackState = { rod: true, feathers: 40, fish: 5, coins: 12, free: 20, inVillage: true, bankTried: false };
+const ready: PackState = { rod: true, feathers: 40, fish: 5, coins: 12, free: 20, inVillage: true, tellerSeen: true, hutDue: false };
 
 describe('decide', () => {
     test('fishes while the rod, the feathers and the room are all there', () => {
         expect(decide(ready, 0)).toEqual({ kind: 'fish' });
     });
 
-    test('a full pack with fish aboard goes to the counter', () => {
+    test('a full pack with fish aboard goes to the teller', () => {
+        expect(decide({ ...ready, free: 0, tellerSeen: false }, 0)).toEqual({ kind: 'bank' });
+    });
+
+    // Why: a catch re-arms the teller for the next full pack, and a stop on every fish is what made the run walk the village between casts.
+    test('a catch on its own is not a trip, however much room the teller has not seen', () => {
+        expect(decide({ ...ready, fish: 3, tellerSeen: false }, 0)).toEqual({ kind: 'fish' });
+    });
+
+    test('an empty feather stack goes to the teller for the coins', () => {
+        expect(decide({ ...ready, feathers: 0, tellerSeen: false }, 0)).toEqual({ kind: 'bank' });
+    });
+
+    test('a lost rod goes to the teller too, since a banked rod is free', () => {
+        expect(decide({ ...ready, rod: false, tellerSeen: false }, 0)).toEqual({ kind: 'bank' });
+    });
+
+    test('the counter follows the teller every trip, selling what is still held', () => {
+        expect(decide({ ...ready, hutDue: true, fish: 0 }, 0)).toEqual({ kind: 'gear' });
+        expect(decide({ ...ready, hutDue: true, fish: 8 }, 0)).toEqual({ kind: 'sell' });
+    });
+
+    test('a full pack the teller has already seen still sells at the counter', () => {
         expect(decide({ ...ready, free: 0 }, 0)).toEqual({ kind: 'sell' });
     });
 
-    test('an empty feather stack with fish aboard sells before it buys', () => {
-        expect(decide({ ...ready, feathers: 0 }, 0)).toEqual({ kind: 'sell' });
-    });
-
-    test('a lost rod with fish aboard sells first too, since the fish pay for the rod', () => {
-        expect(decide({ ...ready, rod: false }, 0)).toEqual({ kind: 'sell' });
-    });
-
-    test('no rod and no fish is a shop trip on coins, once the bank has been tried', () => {
-        expect(decide({ ...ready, rod: false, fish: 0, bankTried: true }, 0)).toEqual({ kind: 'gear' });
+    test('no rod and no fish is a shop trip on coins, once the teller has been seen', () => {
+        expect(decide({ ...ready, rod: false, fish: 0 }, 0)).toEqual({ kind: 'gear' });
         expect(decide({ ...ready, feathers: 0, fish: 0 }, 0)).toEqual({ kind: 'gear' });
     });
 
     test('no rod, no fish and no coins stops with the reason', () => {
-        const step = decide({ ...ready, rod: false, fish: 0, coins: 0, bankTried: true }, 0);
+        const step = decide({ ...ready, rod: false, fish: 0, coins: 0 }, 0);
         expect(step.kind).toBe('stop');
         expect(step.kind === 'stop' && step.reason).toContain('no fly fishing rod');
     });
@@ -90,10 +104,20 @@ describe('standFor', () => {
         expect(standFor({ x: 2834, z: 2974 })).toEqual(new Tile(2834, 2975, 0));
     });
 
-    test('a far-bank tile and open water have no stand', () => {
-        expect(standFor({ x: 2855, z: 2977 })).toBeNull();
-        expect(standFor({ x: 2860, z: 2976 })).toBeNull();
+    test('a far-bank tile maps to the stand across the water, marked as such', () => {
+        expect(standFor({ x: 2855, z: 2977 })).toEqual(new Tile(2855, 2978, 0));
+        expect(standEntry({ x: 2860, z: 2976 })?.far).toBe(true);
+        expect(standEntry({ x: 2862, z: 2972 })?.far).toBeUndefined();
+    });
+
+    test('open water the spot never lands on has no stand', () => {
         expect(standFor({ x: 2850, z: 2975 })).toBeNull();
+        expect(standEntry({ x: 2850, z: 2975 })).toBeNull();
+    });
+
+    test('every tile the enum and the map can put a spot on is baked', () => {
+        expect(SPOT_STANDS.length).toBe(13);
+        expect(SPOT_STANDS.filter(s => s.far).length).toBe(4);
     });
 
     test('every baked stand is orthogonally beside its spot', () => {
@@ -104,15 +128,20 @@ describe('standFor', () => {
 });
 
 describe('inArea', () => {
-    test('covers the river from the west end to the east end of the village', () => {
+    test('covers both banks from the west end to the east end', () => {
         expect(inArea({ x: SEARCH_AREA.minX, z: SEARCH_AREA.minZ })).toBe(true);
         expect(inArea({ x: SEARCH_AREA.maxX, z: SEARCH_AREA.maxZ })).toBe(true);
-        expect(inArea({ x: 2869, z: 2977 })).toBe(false);
-        expect(inArea({ x: 2822, z: 2969 })).toBe(false);
+        expect(inArea({ x: 2869, z: 2977 })).toBe(true);
+        expect(inArea({ x: 2822, z: 2969 })).toBe(true);
     });
 
-    test('every baked spot tile but the westmost lies inside it', () => {
-        expect(SPOT_STANDS.filter(s => inArea(s.spot)).length).toBe(SPOT_STANDS.length - 1);
+    test('and nothing past the ends, so the query stays on the river', () => {
+        expect(inArea({ x: 2900, z: 2970 })).toBe(false);
+        expect(inArea({ x: 2840, z: 2950 })).toBe(false);
+    });
+
+    test('every baked spot tile lies inside it', () => {
+        expect(SPOT_STANDS.every(s => inArea(s.spot))).toBe(true);
     });
 });
 
@@ -126,9 +155,22 @@ describe('nearestFishable', () => {
         expect(pick?.stand).toEqual(new Tile(2862, 2971, 0));
     });
 
-    test('is null when every spot in view sits where no bank reaches', () => {
-        expect(nearestFishable([at(2855, 2977), at(2869, 2977)], { x: 2857, z: 2972 })).toBeNull();
+    test('takes a far-bank spot when it is all there is, rather than sweeping past it', () => {
+        const pick = nearestFishable([at(2855, 2977), at(2869, 2977)], { x: 2857, z: 2972 });
+        expect(pick?.spot.x).toBe(2855);
+        expect(pick?.far).toBe(true);
+        expect(pick?.stand).toEqual(new Tile(2855, 2978, 0));
+    });
+
+    test('is null with nothing in view at all', () => {
         expect(nearestFishable([], { x: 2857, z: 2972 })).toBeNull();
+        expect(nearestFishable([at(2850, 2975)], { x: 2857, z: 2972 })).toBeNull();
+    });
+
+    test('a spot on this bank beats one across the water that is closer in a straight line', () => {
+        const pick = nearestFishable([at(2860, 2976), at(2822, 2969)], { x: 2857, z: 2972 });
+        expect(pick?.spot.x).toBe(2822);
+        expect(pick?.far).toBe(false);
     });
 
     test('asks the fallback for a spot tile the table does not know and ignores one outside the area', () => {
@@ -141,17 +183,26 @@ describe('nearestFishable', () => {
 
 describe('nextScan', () => {
     test('starts at the nearest sweep stop', () => {
-        expect(SWEEP[nextScan({ x: 2860, z: 2972 }, null)]).toEqual(SWEEP[0]!);
-        expect(SWEEP[nextScan({ x: 2825, z: 2969 }, null)]).toEqual(SWEEP[2]!);
+        expect(SWEEP[nextScan({ x: 2863, z: 2971 }, null)]).toEqual(SWEEP[0]!);
+        expect(SWEEP[nextScan({ x: 2823, z: 2968 }, null)]).toEqual(SWEEP[4]!);
     });
 
     test('then follows the sweep east to west and back, turning at both ends', () => {
         const here = { x: 2857, z: 2972 };
-        expect(nextScan(here, 0)).toBe(1);
-        expect(nextScan(here, 1)).toBe(2);
-        expect(nextScan(here, 2)).toBe(3);
-        expect(nextScan(here, 3)).toBe(0);
-        expect(SWEEP[1]).toEqual(SWEEP[3]);
+        for (let i = 0; i < SWEEP.length - 1; i++) {
+            expect(nextScan(here, i)).toBe(i + 1);
+        }
+        expect(nextScan(here, SWEEP.length - 1)).toBe(0);
+        expect(SWEEP[0]).not.toEqual(SWEEP[SWEEP.length - 1]!);
+    });
+
+    // Why: the stops are a view apart, so a scan step is a few tiles rather than the length of the river, which is what made a spot one tile out of view look like the bot running around.
+    test('no two stops in a row are more than a view apart', () => {
+        for (let i = 1; i < SWEEP.length; i++) {
+            const a = SWEEP[i - 1]!;
+            const b = SWEEP[i]!;
+            expect(Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z))).toBeLessThanOrEqual(15);
+        }
     });
 
     test('the sweep covers the whole area within npc view range', () => {
@@ -179,27 +230,52 @@ describe('reaching the village', () => {
 
 // Why: a banked rod is free and the counter's costs coins, so the bank is looked in once before anything is bought, and the miss is remembered so the trip does not walk back and forth.
 describe('the rod', () => {
-    const noRod = { ...ready, rod: false, fish: 0 };
+    const noRod = { ...ready, rod: false, fish: 0, tellerSeen: false };
 
     test('comes out of the bank before it is bought', () => {
         expect(decide(noRod, 0)).toEqual({ kind: 'bank' });
     });
 
-    test('is bought once the bank has been looked in and had none', () => {
-        expect(decide({ ...noRod, bankTried: true }, 0)).toEqual({ kind: 'gear' });
+    test('is bought once the teller has been seen and had none', () => {
+        expect(decide({ ...noRod, tellerSeen: true }, 0)).toEqual({ kind: 'gear' });
     });
 
     test('with no rod in the bank and no coins the run stops and says which', () => {
-        const step = decide({ ...noRod, bankTried: true, coins: 0 }, 0);
+        const step = decide({ ...noRod, tellerSeen: true, coins: 0 }, 0);
         expect(step.kind).toBe('stop');
         expect(step.kind === 'stop' && step.reason).toContain('no fly fishing rod');
     });
 
-    test('fish aboard are still sold first, since that is what pays for the rod', () => {
-        expect(decide({ ...noRod, fish: 5 }, 0)).toEqual({ kind: 'sell' });
+    test('fish aboard go to the teller first, since the catch is banked rather than sold', () => {
+        expect(decide({ ...noRod, fish: 5 }, 0)).toEqual({ kind: 'bank' });
     });
 
     test('an empty feather stack is the counter\'s business, not the bank\'s', () => {
         expect(decide({ ...ready, feathers: 0, fish: 0 }, 0)).toEqual({ kind: 'gear' });
+    });
+});
+
+// Why: Fernahei's shelf is 800 feathers at a delta of 20, so a buyout runs to 8,225gp and a trip that drew every coin banked would carry the lot around the village for nothing.
+describe('drawing coins at the teller', () => {
+    test("a shelf of Fernahei's feathers is 8,225gp", () => {
+        expect(FEATHER_BUYOUT_GP).toBe(8225);
+        expect(COINS).toBe('Coins');
+    });
+
+    test('takes a shelf out of a bank that holds more', () => {
+        expect(coinsToDraw(0, 3_000_000)).toBe(FEATHER_BUYOUT_GP);
+    });
+
+    test('takes all of a bank that holds less', () => {
+        expect(coinsToDraw(0, 500)).toBe(500);
+    });
+
+    test('counts what the pack already holds against the budget', () => {
+        expect(coinsToDraw(225, 3_000_000)).toBe(FEATHER_BUYOUT_GP - 225);
+        expect(coinsToDraw(FEATHER_BUYOUT_GP, 3_000_000)).toBe(0);
+    });
+
+    test('an empty bank asks for nothing, which is what sends the catch to the counter', () => {
+        expect(coinsToDraw(0, 0)).toBe(0);
     });
 });

@@ -46,12 +46,17 @@ const HUT_STAND: Point = { x: 2870, z: 2971, level: 0 };
 const SHILO_VILLAGE_COMPLETE = 15;
 /** A rod is 5gp and the first feathers a couple each, so this buys the kit and nothing more. */
 const SEED_GP = 60;
+// Why: a buyout is 5,000gp odd, so this covers several trips; a bank that runs dry mid-run sends the catch to the counter instead, which is the fallback rather than the path under test.
+/** Banked, so the teller has coins to draw and the trip banks its catch rather than selling it. */
+const SEED_BANK_GP = 60_000;
 // Why: the walk from the mainland crosses on Vigroy's cart, and the nav refuses the leg without the fare in the pack.
 const CART_FARE = 100;
 const POLL_MS = 2000;
 const SCREENSHOT = 'docs/e2e/jiveshilo-live.png';
 
 const TRIP = /^\[shilo\] sold (.+?) for (\d+)gp, bought (\d+) feathers for (\d+)gp \(holding (\d+)\)/;
+const BANKED = /^\[shilo\] banked (\d+) fish/;
+const DREW = /^\[shilo\] drew (\d+)gp/;
 
 interface Snapshot {
     pos: Point | null;
@@ -92,7 +97,10 @@ try {
     await clearChatDialogs(page, 'fishing level-ups');
     await cheatQuiet(page, `give coins ${SEED_GP}`, 900);
     // Why: a banked rod is the cheaper of the two sources, so the run has to prefer it over Fernahei's counter.
-    await seedItemsToBank(page, [{ debugName: 'fly_fishing_rod', displayName: 'Fly fishing rod', qty: 1 }], SEED_BANK);
+    await seedItemsToBank(page, [
+        { debugName: 'fly_fishing_rod', displayName: 'Fly fishing rod', qty: 1 },
+        { debugName: 'coins', displayName: 'Coins', qty: SEED_BANK_GP }
+    ], SEED_BANK);
     // Why: a headless ::tele leaves the scene unbuilt and the login payload rebuilds it, and the login puts the player back where the server last saved them, so the tele to the start tile comes after the relog rather than before it.
     await relog(page, args.user);
     if (!(await teleTo(page, START, 6, 25_000))) {
@@ -143,6 +151,8 @@ try {
     let walkedIn = false;
     let trips = 0;
     let fishSold = 0;
+    let fishBanked = 0;
+    let coinsDrawn = 0;
     let feathersBought = 0;
     let xpAfterTrip = 0;
     let castAgain = false;
@@ -159,6 +169,10 @@ try {
             if (/^\[shilo\] bought a Fly fishing rod/.test(line.msg)) { rodBought = true; }
             if (/^\[shilo\] took a Fly fishing rod out of the bank/.test(line.msg)) { rodBanked = true; }
             if (/walking to Shilo Village/.test(line.msg)) { walkedIn = true; }
+            const banked = BANKED.exec(line.msg);
+            if (banked) { fishBanked += Number(banked[1]); }
+            const drew = DREW.exec(line.msg);
+            if (drew) { coinsDrawn += Number(drew[1]); }
             const trip = TRIP.exec(line.msg);
             if (trip) {
                 trips++;
@@ -177,7 +191,7 @@ try {
         console.log(`  t=${Math.round((Date.now() - t0) / 1000)}s pos=${fmt(last.pos)} coins=${last.coins} rod=${last.rod} feathers=${last.feathers} fish=${last.fish} xp=+${last.xp - first.xp} runner=${last.runner}`);
 
         // Why: the overlay only paints while the script runs, so the proof frame is taken at the first sale rather than after the stop.
-        if (!shotTaken && fishSold > 0) {
+        if (!shotTaken && fishBanked > 0) {
             await page.screenshot({ path: SCREENSHOT });
             shotTaken = true;
         }
@@ -185,7 +199,7 @@ try {
             console.log('  runner stopped');
             break;
         }
-        if ((rodBanked || rodBought) && fishSold > 0 && feathersBought > 0 && castAgain) {
+        if ((rodBanked || rodBought) && fishBanked > 0 && coinsDrawn > 0 && feathersBought > 0 && castAgain) {
             break;
         }
     }
@@ -197,7 +211,7 @@ try {
         await stopScript(page);
     }
     const xpGained = last.xp - first.xp;
-    console.log(`final: pos=${fmt(last.pos)} coins=${last.coins} rod=${last.rod} feathers=${last.feathers} trips=${trips} fishSold=${fishSold} feathersBought=${feathersBought} xp=+${xpGained} atHut=${atHut}`);
+    console.log(`final: pos=${fmt(last.pos)} coins=${last.coins} rod=${last.rod} feathers=${last.feathers} trips=${trips} fishBanked=${fishBanked} coinsDrawn=${coinsDrawn} fishSold=${fishSold} feathersBought=${feathersBought} xp=+${xpGained} atHut=${atHut}`);
 
     const tail = (): string => last.logs.slice(-6).map(l => l.msg).join(' | ');
     if (!walkedIn) {
@@ -209,13 +223,19 @@ try {
     if (xpGained <= 0) {
         fail(`no fishing xp, so the rod never went into the river: ${tail()}`);
     }
-    if (fishSold === 0 || feathersBought === 0) {
-        fail(`no trip turned fish into feathers (sold ${fishSold}, bought ${feathersBought}): ${tail()}`);
+    if (fishBanked === 0) {
+        fail(`no trip banked its catch${fishSold > 0 ? `, it sold ${fishSold} at the counter instead` : ''}: ${tail()}`);
+    }
+    if (coinsDrawn === 0) {
+        fail(`no trip drew coins at the teller, so the feathers were not paid for out of the bank: ${tail()}`);
+    }
+    if (feathersBought === 0) {
+        fail(`no trip bought feathers (drew ${coinsDrawn}gp): ${tail()}`);
     }
     if (!castAgain) {
         fail(`the casting did not resume after the trip: ${tail()}`);
     }
-    console.log(`PASS, walked in from ${START.x},${START.z}, took the banked rod, caught fish, ${trips} trip(s) sold ${fishSold} fish and bought ${feathersBought} feathers, cast again after, fishing xp +${xpGained}`);
+    console.log(`PASS, walked in from ${START.x},${START.z}, took the banked rod, caught fish, ${trips} trip(s) banked ${fishBanked} fish, drew ${coinsDrawn}gp and bought ${feathersBought} feathers, cast again after, fishing xp +${xpGained}`);
 } finally {
     client?.cleanup();
     await browser.close();

@@ -1,7 +1,20 @@
 import Tile from '../../geometry/Tile.js';
-import { SEARCH_AREA, SPOT_STANDS, SWEEP } from './river.js';
+import { buyoutCost } from '../../api/shop/shopPrice.js';
+import { SEARCH_AREA, SPOT_STANDS, SWEEP, type SpotStand } from './river.js';
 
 export const ROD = 'Fly fishing rod';
+export const COINS = 'Coins';
+/** Fernahei's feather shelf: 800 at `shop_delta` 20, so a buyout runs to 8,225gp and that is all a trip draws. */
+export const FEATHER_STOCK = 800;
+export const HUT_SELL_MULTIPLIER = 1000;
+export const HUT_DELTA = 20;
+export const FEATHER_BUYOUT_GP = buyoutCost(2, FEATHER_STOCK, HUT_SELL_MULTIPLIER, HUT_DELTA);
+
+// Why: the bank is the operator's, not the trip's, so a trip takes what a shelf of feathers costs and leaves the rest banked.
+/** Coins to take out of the teller, on top of what is already held. */
+export function coinsToDraw(held: number, banked: number): number {
+    return held >= FEATHER_BUYOUT_GP ? 0 : Math.max(0, Math.min(banked, FEATHER_BUYOUT_GP - held));
+}
 export const FEATHER = 'Feather';
 export const KEEPER = 'Fernahei';
 export const SPOT = 'Fishing spot';
@@ -18,8 +31,10 @@ export interface PackState {
     free: number;
     /** Inside the village, where the river, the counter and the teller all are. */
     inVillage: boolean;
-    /** The bank has already been looked in for a rod this trip. */
-    bankTried: boolean;
+    /** The teller has been visited since the last catch, so an empty one cannot loop the trip. */
+    tellerSeen: boolean;
+    /** The teller stop is done and the counter is the other half of the same trip. */
+    hutDue: boolean;
 }
 
 export type Step =
@@ -30,7 +45,7 @@ export type Step =
     | { kind: 'bank' }
     | { kind: 'stop'; reason: string };
 
-// Why: a full pack or an empty feather stack with fish aboard both end at the counter and the same visit buys the rod or the feathers, so one trip kind covers every reason to leave the river; a banked rod is free where the counter's costs coins, so the teller is looked in once before anything is bought and the miss is remembered, or the trip walks between the two.
+// Why: a trip is the teller then the counter, every time: the catch is banked rather than sold, the coins for the feathers are drawn there and a banked rod is free where the counter's costs coins, and the counter is walked to straight after so every trip ends with the feathers bought out.
 /** One step per loop, read off the pack alone so a restart lands on the same choice. */
 export function decide(pack: PackState, feathersTarget: number): Step {
     if (feathersTarget > 0 && pack.feathers >= feathersTarget) {
@@ -39,11 +54,14 @@ export function decide(pack: PackState, feathersTarget: number): Step {
     if (!pack.inVillage) {
         return { kind: 'travel' };
     }
+    if (pack.hutDue) {
+        return pack.fish > 0 ? { kind: 'sell' } : { kind: 'gear' };
+    }
+    if (!pack.tellerSeen && (pack.free === 0 || !pack.rod || pack.feathers === 0)) {
+        return { kind: 'bank' };
+    }
     if (pack.fish > 0 && (pack.free === 0 || pack.feathers === 0 || !pack.rod)) {
         return { kind: 'sell' };
-    }
-    if (!pack.rod && !pack.bankTried) {
-        return { kind: 'bank' };
     }
     if (!pack.rod || pack.feathers === 0) {
         if (pack.coins > 0) {
@@ -95,7 +113,12 @@ export interface SpotLike {
 
 /** The village-side bank tile for a spot on one of the known river tiles, or null when it sits where no bank reaches. */
 export function standFor(spot: { x: number; z: number }): Tile | null {
-    return SPOT_STANDS.find(s => s.spot.x === spot.x && s.spot.z === spot.z)?.stand ?? null;
+    return standEntry(spot)?.stand ?? null;
+}
+
+/** The table row for a spot tile, which carries whether its stand is across the water. */
+export function standEntry(spot: { x: number; z: number }): SpotStand | null {
+    return SPOT_STANDS.find(s => s.spot.x === spot.x && s.spot.z === spot.z) ?? null;
 }
 
 const cheb = (a: { x: number; z: number }, b: { x: number; z: number }): number => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
@@ -105,23 +128,28 @@ export function inArea(t: { x: number; z: number }): boolean {
     return t.x >= SEARCH_AREA.minX && t.x <= SEARCH_AREA.maxX && t.z >= SEARCH_AREA.minZ && t.z <= SEARCH_AREA.maxZ;
 }
 
-/** The fishable spot whose stand is the shortest walk from here, with its stand; `fallback` names a stand for a spot tile the table does not know. */
+// Why: the walk round to the far bank is 74 to 90 against 14 to 56 along the village one, so any spot on our side beats every spot across the water however close that one looks in a straight line, and an unknown tile is treated as across it.
+/** The spot to fish and the tile to stand on: this bank first, then the shortest walk; `fallback` names a stand for a spot tile the table does not know. */
 export function nearestFishable<T extends SpotLike>(
     spots: readonly T[],
     here: { x: number; z: number },
     fallback: (spot: T) => Tile | null = () => null
-): { spot: T; stand: Tile } | null {
-    let best: { spot: T; stand: Tile } | null = null;
+): { spot: T; stand: Tile; far: boolean } | null {
+    let best: { spot: T; stand: Tile; far: boolean } | null = null;
     for (const spot of spots) {
         if (!inArea(spot.tile())) {
             continue;
         }
-        const stand = standFor(spot.tile()) ?? fallback(spot);
+        const known = standEntry(spot.tile());
+        const stand = known?.stand ?? fallback(spot);
         if (!stand) {
             continue;
         }
-        if (!best || cheb(stand, here) < cheb(best.stand, here)) {
-            best = { spot, stand };
+        const far = known ? known.far === true : true;
+        const better = !best
+            || (best.far !== far ? !far : cheb(stand, here) < cheb(best.stand, here));
+        if (better) {
+            best = { spot, stand, far };
         }
     }
     return best;
