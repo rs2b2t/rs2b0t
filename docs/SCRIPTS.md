@@ -700,11 +700,11 @@ Bank-standing fletcher — keeps the knife (or bow string), Make-X logs into sha
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
+| `mode` | string | `"auto"` | Fletch mode — one of: auto (from product), cut logs, string bows, cut+string |
 | `material` | string | `"Logs"` | Log type — one of: Logs, Oak logs, Willow logs, Maple logs, Yew logs, Magic logs |
 | `product` | string | `"Arrow shafts"` | Fletch product — one of: Arrow shafts, Short bow, Long bow, String short bow, String long bow, Headless arrows, Bronze arrows, Iron arrows, Steel arrows, Mithril arrows, Adamant arrows, Rune arrows |
 | `bankStand` | tile | `{"x":3185,"z":3440,"level":0}` | Bank stand tile (x,z) |
 | `bankBooth` | string | `"Bank booth"` | Bank booth loc name |
-| `leashRadius` | number (2–20) | `6` | Booth search radius (tiles) |
 
 ### DartFletcher
 
