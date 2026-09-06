@@ -173,6 +173,7 @@ import {
     type ToolAcquireHost
 } from './ToolAcquireExec.js';
 import {
+    featherBuyoutDue,
     gatheringCombatPolicy,
     hostileAttackerNearby,
     incomingPlayerAttacker,
@@ -210,6 +211,7 @@ import {
     MuleRequestOrWait,
     MinerEatFood,
     RepairBrokenGatherTool,
+    BuyGuildFeathers,
     RestockFishingGear,
     RestockGatherTool,
     SupplierWithdrawRaw,
@@ -258,6 +260,8 @@ export {
 
 // Pure policy (also in GatheringBotLogic), re-export for existing test/import paths.
 export {
+    FEATHER_RESTOCK_MINUTES,
+    featherBuyoutDue,
     fishingSessionBroken,
     gatheringCombatPolicy,
     hostileAttackerNearby,
@@ -422,6 +426,8 @@ export default class GatheringBot extends TaskBot {
     private forgetfulBank = false;
     /** Buy/withdraw target for bait & feathers when the method needs them. */
     private baitQty = 1000;
+    private guildFeatherMinutes = 0;
+    private lastGuildFeatherAt: number | null = null;
 
     /** Off / gatherer (handoff) / mule (bank-side). See muleMode settings. */
     private muleMode: MuleMode = 'off';
@@ -482,6 +488,10 @@ export default class GatheringBot extends TaskBot {
             this.action = method.op;
             this.pairOp = method.pair;
             this.baitQty = Math.max(1, Math.floor(this.settings.num('baitQty', 1000)));
+            // Why: the trip is the guild shop's own, so it is offered there and nowhere else.
+            this.guildFeatherMinutes = this.settings.str('location', 'None') === 'Fishing Guild'
+                ? Math.max(0, Math.floor(this.settings.num('guildFeatherMinutes', 0)))
+                : 0;
             // Apply bait/feather target only to pieces that need them; tools stay min=1.
             this.fishMethod = { ...method, gear: withBaitTarget(method, this.baitQty).gear };
             this.fishing = true;
@@ -938,7 +948,7 @@ export default class GatheringBot extends TaskBot {
             ...(!muleSide && this.tickManip.cookEatInterleave ? [new TannerfishSustain(this)] : []),
             ...(!muleSide && this.tickManip.useKnifeDelay ? [new TrimKnifeDelayLogs(this)] : []),
             ...(!muleSide && (this.mining() || this.woodcutting()) ? [new RepairBrokenGatherTool(this)] : []),
-            ...(!muleSide && this.fishing ? [new RestockFishingGear(this)] : []),
+            ...(!muleSide && this.fishing ? [new BuyGuildFeathers(this), new RestockFishingGear(this)] : []),
             ...(gatherTools
                 ? [new EnsureGatherToolEquipped(this), new RestockGatherTool(this), new UpgradeGatherTool(this)]
                 : []),
@@ -2412,6 +2422,15 @@ export default class GatheringBot extends TaskBot {
 
     // Why: the skip uses the soft arrive disk ({@link HOME_ARRIVE_RADIUS}), not the full gather leash.
     // Why: bank stands at named camps often sit inside the leash but far from resources, the Catherby bank is ~36 from the pier.
+
+    /** Whether a Roachey feather run is owed. */
+    guildFeatherTripDue(): boolean {
+        return this.isFishing() && featherBuyoutDue(this.lastGuildFeatherAt, this.guildFeatherMinutes, Date.now());
+    }
+
+    noteGuildFeatherTrip(): void {
+        this.lastGuildFeatherAt = Date.now();
+    }
 
     /** Soft return toward the gather anchor after bank, shop or repair. */
     async walkHomeIfNeeded(

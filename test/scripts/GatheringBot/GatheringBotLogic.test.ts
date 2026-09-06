@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
     DEFAULT_CHASE_RADIUS,
+    FEATHER_RESTOCK_MINUTES,
+    featherBuyoutDue,
     HOME_ARRIVE_RADIUS,
     LOCAL_MINE_PREFER_RADIUS,
     NAMED_CAMP_LEASH_FLOOR,
@@ -492,5 +494,34 @@ describe('fishingSessionBroken', () => {
         expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: true, spotGone: true })).toBe(true);
         expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: true, eventPending: true })).toBe(true);
         expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: true, inventoryFull: true })).toBe(true);
+    });
+});
+
+// Why: Roachey's feathers come back one a tick toward a baseline of 1500, so a full buyout is fifteen minutes of restock and anything sooner takes a partial stack.
+describe('the guild feather buyout', () => {
+    const MIN = 60_000;
+
+    test('the default interval is the shop\'s own full-recovery time', () => {
+        expect(FEATHER_RESTOCK_MINUTES).toBe(15);
+    });
+
+    test('the first trip is owed as soon as the run starts', () => {
+        expect(featherBuyoutDue(null, 15, 0)).toBe(true);
+    });
+
+    test('waits the interval out between trips', () => {
+        expect(featherBuyoutDue(0, 15, 14 * MIN)).toBe(false);
+        expect(featherBuyoutDue(0, 15, 15 * MIN)).toBe(true);
+        expect(featherBuyoutDue(0, 15, 40 * MIN)).toBe(true);
+    });
+
+    test('zero minutes turns it off, first trip included', () => {
+        expect(featherBuyoutDue(null, 0, 999 * MIN)).toBe(false);
+        expect(featherBuyoutDue(0, 0, 999 * MIN)).toBe(false);
+    });
+
+    test('a shorter interval is honoured, since a partial stack still buys', () => {
+        expect(featherBuyoutDue(0, 5, 5 * MIN)).toBe(true);
+        expect(featherBuyoutDue(0, 5, 4 * MIN)).toBe(false);
     });
 });

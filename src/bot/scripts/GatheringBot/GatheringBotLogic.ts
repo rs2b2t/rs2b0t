@@ -170,3 +170,15 @@ export function fishingSessionBroken(opts: {
         opts.becameWhirlpool
     );
 }
+
+// Why: Roachey restocks a feather every tick toward a baseline of 1500, which the engine's cleanup pass adds one at a time, so a full buyout is back in fifteen minutes and anything sooner takes a partial stack at 2gp each.
+/** Minutes the guild shop needs to refill a bought-out feather stack. */
+export const FEATHER_RESTOCK_MINUTES = 15;
+
+/** Whether the guild feather buyout is owed; the first trip is owed as soon as the run starts. */
+export function featherBuyoutDue(lastAtMs: number | null, intervalMinutes: number, nowMs: number): boolean {
+    if (intervalMinutes <= 0) {
+        return false;
+    }
+    return lastAtMs === null || nowMs - lastAtMs >= intervalMinutes * 60_000;
+}

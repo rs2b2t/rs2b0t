@@ -61,6 +61,14 @@ import {
 import { Banking } from '../../api/bank/Banking.js';
 import { parseRangeStyle } from '../../api/combat/CombatStyle.js';
 import { BROKEN_AXE, COINS, buyPlansCost, fishingGearShopCart, planGatherToolAcquire } from '../../api/acquisition/ToolAcquire.js';
+import { Shop } from '../../api/shop/Shop.js';
+
+/** Roachey's counter in the Fishing Guild, a short walk from the pier. */
+const ROACHEY = 'Roachey';
+const ROACHEY_STAND = new Tile(2596, 3399, 0);
+const FEATHER = 'Feather';
+const FEATHER_PRICE = 2;
+const SHOP_WALK_MS = 60_000;
 import {
     fishingSessionBroken,
     hostileAttackerNearby,
@@ -1722,6 +1730,52 @@ export class EnsureGatherToolEquipped implements Task {
         this.bot.setStatus(`equip: ${need.join(' + ')}`);
         this.bot.log(`equip: wielding ${need.join(', ')}`);
         await this.bot.equipTools(need);
+    }
+}
+
+// Why: Roachey's feathers come back one a tick toward 1500, so a bought-out stack is fifteen minutes from full and the trip is worth taking on that clock rather than only when the pack runs dry. The shop is a short walk from the guild pier, and the run banks nothing on the way.
+export class BuyGuildFeathers implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    validate(): boolean {
+        if (EventSignal.pending() || Game.inCombat() || Inventory.isFull()) {
+            return false;
+        }
+        return this.bot.guildFeatherTripDue();
+    }
+
+    async execute(): Promise<void> {
+        const bot = this.bot;
+        const log = (m: string) => bot.log(`  ${m}`);
+        // Why: the clock starts on the attempt rather than the sale, or a shop that will not open is retried every loop.
+        bot.noteGuildFeatherTrip();
+
+        const coins = Inventory.count(COINS);
+        if (coins < FEATHER_PRICE) {
+            bot.log(`feathers: only ${coins}gp, skipping Roachey this round`);
+            return;
+        }
+        bot.setStatus('feathers: walking to Roachey');
+        if (!(await Traversal.walkResilient(ROACHEY_STAND, { radius: 2, attempts: 3, timeoutMs: SHOP_WALK_MS, log }))) {
+            bot.log('feathers: could not reach Roachey, will try again next round');
+            return;
+        }
+        if (!(await Shop.open(ROACHEY))) {
+            bot.log(`feathers: could not open ${ROACHEY}'s shop`);
+            return;
+        }
+        bot.setStatus('feathers: buying out the stack');
+        const before = Inventory.count(FEATHER);
+        const stock = Shop.stock().find(line => line.name === FEATHER)?.count ?? 0;
+        const room = Math.max(0, coins / FEATHER_PRICE);
+        await Shop.buy(FEATHER, Math.min(stock, Math.floor(room)));
+        await Shop.close();
+        const got = Inventory.count(FEATHER) - before;
+        bot.log(got > 0
+            ? `feathers: bought ${got} from ${ROACHEY} (holding ${Inventory.count(FEATHER)})`
+            : `feathers: ${ROACHEY} had none to sell`);
+        bot.setStatus('feathers: back to the water');
+        await bot.walkHomeIfNeeded(log);
     }
 }
 
