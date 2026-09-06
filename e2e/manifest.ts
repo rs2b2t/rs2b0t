@@ -387,9 +387,9 @@ export const CASES: readonly Case[] = [
         harness: 'jiveshilo-live.ts',
         covers: { scripts: ['JiveShilo'] },
         status: 'vetted',
-        provenAt: '02af4505',
-        budgetMin: 12,
-        note: 'starts outside the village with a rod banked and Shilo Village complete; passes once it has walked in, taken the banked rod, caught fish along the river sweep, sold them for feathers and cast again'
+        provenAt: '6167bd6c',
+        budgetMin: 16,
+        note: 'starts outside the village with a rod and 60,000gp banked and Shilo Village complete; passes once it has walked in, taken the banked rod, caught fish along the river sweep, banked the catch, drawn coins at the teller, bought Fernahei out of feathers and cast again'
     },
     {
         id: 'jivecrafting-live',
