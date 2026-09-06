@@ -170,7 +170,7 @@ import {
     toolRestockPlan,
     toolsNeedingEquip
 } from '../api/acquisition/Tools.js';
-import { Traversal } from '../api/walking/Traversal.js';
+import { NAV_PURE_WALK, NAV_WITH_TELES, Traversal } from '../api/walking/Traversal.js';
 import { Reachability } from '../event/webwalk/geometry/Reachability.js';
 import {
     WALK_DESTINATIONS,
@@ -239,6 +239,8 @@ export function installAbi(): void {
         Tile,
         Area,
         Traversal,
+        NAV_PURE_WALK,
+        NAV_WITH_TELES,
         DirectNavigator,
         /** Client-side reachability probes, for a harness asking what this pocket can walk to. */
         Reachability,

@@ -284,7 +284,7 @@ export class SolveClue implements Task {
     /**
      * Why: `start_chop_jungle` wants a machete, an axe and Radimus's notes, and the bank is the only source.
      * Why: `~woodcutting_axe_checker` reads the pack and the right hand, never the bank, so the axe has to come out.
-     * Why: without them the trail spends its whole budget swinging at a band that will not open.
+     * Why: without them the trail spends its budget swinging at a band that will not open.
      */
     private async stockJungleKit(): Promise<void> {
         const want: string[] = [];

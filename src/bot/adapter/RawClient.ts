@@ -37,6 +37,7 @@ export interface RawClient {
     chatType: Int32Array;
     chatUsername: (string | null)[];
     chatText: (string | null)[];
+    addChat(type: number, text: string, sender: string): void;
 
     menuNumEntries: number;
     menuOption: string[];
@@ -114,6 +115,7 @@ export const SELF_TEST = [
     'chatType',
     'chatUsername',
     'chatText',
+    'addChat',
     'menuNumEntries',
     'menuOption',
     'menuAction',

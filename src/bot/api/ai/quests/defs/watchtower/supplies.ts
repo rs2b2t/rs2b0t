@@ -43,7 +43,7 @@ const KIT_ITEMS: readonly WatchtowerItem[] = [
     WT_ITEM.SKAVID_MAP
 ];
 
-/** Tolls and shop money the whole quest runs on. */
+/** Tolls and shop money the quest runs on. */
 const KIT_COINS = 2000;
 
 export function withdrawFrom(items: { name: string; id?: number; qty: number }[]): QuestStep {
@@ -180,7 +180,7 @@ export function sourceFood(snap: QuestSnapshot, want: number): QuestStep | null 
     return { kind: 'wait', reason: 'no food in the bank for the shaman enclave' };
 }
 
-// Why: the bank supplies the whole kit at once, where sourcing item by item paid for a trip each, from wherever the quest had got to.
+// Why: the bank supplies the kit in one go, where sourcing item by item paid for a trip each, from wherever the quest had got to.
 // Why: only what the bank holds is asked for, so the shop, the ground candle and the guard's riddle stay as the fallbacks and an empty bank changes nothing.
 
 /** Everything the kit still needs that the bank can supply, in one withdrawal. */

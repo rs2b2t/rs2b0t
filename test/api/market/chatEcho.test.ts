@@ -38,7 +38,15 @@ const EVERY_REPLY: string[] = [
     ...formatPriceList([{ name: 'Iron ore', buy: 18, sell: 22 }], 'buy'),
     ...formatPriceList([{ name: 'Iron ore', buy: 18, sell: 22 }], 'sell'),
     "I don't sell 'dragon claws'.",
-    formatAmbiguous([{ name: 'Maple longbow', id: 851 }, { name: 'Maple longbow', id: 62 }]),
+    formatAmbiguous([
+        { name: 'Maple longbow', id: 851, base: 'Maple longbow', word: null },
+        { name: 'Maple longbow (u)', id: 62, base: 'Maple longbow', word: 'u' }
+    ]),
+    formatAmbiguous([
+        { name: 'Green dragonhide', id: 1753, base: 'Dragonhide', word: 'green' },
+        { name: 'Blue dragonhide', id: 1751, base: 'Dragonhide', word: 'blue' }
+    ]),
+    'I am out of stock right now.',
     `${formatGp(100)} x Iron ore = ${formatGp(2200)}gp (${formatGp(22)}ea). Trade me.`,
     'Just trade me and put it up. I price what I see.',
     `${formatGp(100)} x Iron ore = ${formatGp(2200)}gp (${formatGp(22)}ea). Give me a moment.`,

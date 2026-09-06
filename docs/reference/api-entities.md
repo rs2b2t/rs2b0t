@@ -24,11 +24,13 @@ query()
   .name(...names: string[])   // case-insensitive exact match against any name
   .action(action: string)     // offers this action (case-insensitive)
   .within(dist: number)       // within dist tiles of the local player
+  .withinOf(origin: WorldTile, dist: number)   // within dist tiles of another tile
   .inside({ minX, maxX, minZ, maxZ })
   .where(pred: (e) => boolean)
   // terminals:
   .results(): E[]
   .nearest(): E | null
+  .nearestPreferLocal(preferRadius: number): E | null   // the cluster within preferRadius first, when one exists
   .first(): E | null
   .exists(): boolean
   .count(): number
@@ -46,10 +48,10 @@ All entities are `Locatable` (`tile(): Tile`, `distance(): number`); most are
 `Interactable` (`actions(): string[]`, `interact(action): boolean | Promise<boolean>`).
 
 ```ts
-class Npc  { name; level; index; inCombat; health; valid(); /* + Locatable + Interactable */ }
+class Npc  { name; id; level; index; inCombat; health; valid(); targetsMe(); targetsAnotherPlayer(); /* + Locatable + Interactable */ }
 class Loc  { name; id; /* + Locatable + Interactable */ }
 class GroundItem { name; id; count; /* + Locatable + Interactable */ }
-class Player { name; inCombat; /* + Locatable, actions() */ }
+class Player { name; index; inCombat; targetsMe(); /* + Locatable, actions() */ }
 ```
 
 > **Note:** `interact()` sends the action in place. It does **not** walk the

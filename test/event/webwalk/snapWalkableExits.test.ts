@@ -9,7 +9,7 @@ import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 import { richTransportQuestMap } from '#/bot/event/webwalk/transportQuestReqs.js';
 import { emptyWorldStateData, type WorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 
-// Why: zq_logbalance moves the player in two 2-tile teleports and the walker reads the midpoint, so a plan from that tile has to route rather than report the whole map unreachable.
+// Why: zq_logbalance moves the player in two 2-tile teleports and the walker reads the midpoint, so a plan from that tile has to route rather than report every destination unreachable.
 
 /** Between the log's two 1x1 blocking locs: walkable, no exits, no transport edge. */
 const LOG_MIDPOINT: NavPoint = { x: 2908, z: 3049, level: 0 };

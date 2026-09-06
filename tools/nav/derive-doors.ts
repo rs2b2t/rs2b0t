@@ -81,7 +81,7 @@ function main(): void {
             'mournerstewdoor',
             // Shield of Arrav's three hideout doors. Why: the weapon store answers Open with "The door is securely locked" and yields only to an oplocu with the key, while the other two refuse until you have joined and then p_teleport you through, none is an edge the walker can step.
             'phoenixdoor', 'phoenixdoor2', 'blackarmdoor',
-            // The Legends Quest trials. Why: the outer gate answers Open with "You push on the doors, they're really shut" and yields only to a Search with a lockpick, and the inner one raises a brute-strength prompt and a roll that a walker cannot answer. Baked as edges the pathfinder routes into both and the walker loops a tile short.
+            // The Legends Quest trials. Why: the outer gate answers Open with "You push on the doors" and yields only to a Search with a lockpick, and the inner one raises a brute-strength prompt and a roll that a walker cannot answer. Baked as edges the pathfinder routes into both and the walker loops a tile short.
             'lglockpickgatebottoml', 'lglockpickgatebottomr', 'lgstrengthtrialgatel', 'lgstrengthtrialgater',
             // Khazard stronghold's front door. Why: quest_tree.rs2 opens it only for a player already north of it, so the pathfinder routed every trip to the chest through a door that answers "The door seems to be locked from the inside.", the crumbled wall is the way in, driven by defs/treegnome.
             'khazard_stronghold_door',

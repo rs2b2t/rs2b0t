@@ -42,7 +42,24 @@ export const CASES: readonly Case[] = [
         status: 'vetted',
         provenAt: 'd00d66de',
         budgetMin: 12,
-        note: 'noted rune chainbodies, natures and a fire staff banked at Varrock West; passes when the note stack shrinks, coins appear and magic XP moves'
+        note: 'noted rune chainbodies, natures and a fire staff banked at Varrock West; passes when the note stack shrinks, coins appear and magic XP moves. `--item "Iron platebody"` runs the same drain through the Custom chip on any item the database knows'
+    },
+    {
+        id: 'alcher-swarm-drain-live',
+        harness: 'alcher-swarm-drain-live.ts',
+        covers: { scripts: ['Alcher'] },
+        status: 'unvetted',
+        budgetMin: 8,
+        note: 'two ticked items at Varrock West, rune chainbodies over yew longbows, with macro_swarm spawned mid-alch; passes when the event interrupts the cast loop and is evaded, then the drain retires the chainbodies and moves on to the longbows'
+    },
+    {
+        id: 'banksorter-live',
+        harness: 'banksorter-live.ts',
+        covers: { scripts: ['BankSorter'] },
+        status: 'vetted',
+        provenAt: 'd02c664c',
+        budgetMin: 8,
+        note: 'seeds a scrambled bank at Varrock West, sorts it cold, then tops it up and re-sorts; passes when both orders are contiguous by category and ranked by tier inside each one, the incremental pass takes one insert batch, and varp 304 comes back to where it started'
     },
     {
         id: 'ardyfighter-restock-loop-live',
@@ -68,6 +85,14 @@ export const CASES: readonly Case[] = [
         provenAt: 'b668c7d8',
         budgetMin: 12,
         note: 'empty pack plus banked trout forces the out-of-food trip; the run fails if the booth stays open or combat never resumes'
+    },
+    {
+        id: 'autofighter-special-live',
+        harness: 'autofighter-special-live.ts',
+        covers: { scripts: ['AutoFighter'] },
+        status: 'unvetted',
+        budgetMin: 10,
+        note: 'a dragon dagger on a full bar: %sa_energy has to fall with specials on and stay at 1000 with the setting off'
     },
     {
         id: 'autofighter-targets-loot-live',
@@ -351,10 +376,40 @@ export const CASES: readonly Case[] = [
         harness: 'marketmaker-pair-live.ts',
         covers: { scripts: ['MarketMaker'] },
         status: 'vetted',
-        provenAt: '55e047c3',
-        budgetMin: 16,
+        provenAt: '02ca7734',
+        budgetMin: 17,
         env: { BUDGET_S: '900' },
-        note: 'two accounts at Seers bank: a sale paid by coins in the window, a mixed pile bought with no chat, a live re-price mid-trade, coins ignored and named, and a cooldown after walking out'
+        note: 'two accounts at Seers bank: a sale paid by coins in the window, a mixed pile bought with no chat, a live re-price mid-trade, a pile over the trade cap bid at the cap, coins ignored and named, and a cooldown after walking out'
+    },
+    {
+        id: 'marketmaker-aliases-live',
+        harness: 'marketmaker-aliases-live.ts',
+        covers: { scripts: ['MarketMaker'] },
+        status: 'vetted',
+        provenAt: 'f4e6d57c',
+        budgetMin: 14,
+        env: { BUDGET_S: '900' },
+        note: 'the names the content repeats: a list carrying only stock, a repeated name answered with its colours, and a colour and a key half each resolving to the one obj the customer named'
+    },
+    {
+        id: 'marketmaker-short-float-live',
+        harness: 'marketmaker-short-float-live.ts',
+        covers: { scripts: ['MarketMaker'] },
+        status: 'vetted',
+        budgetMin: 6,
+        env: { WATCH_S: '90' },
+        provenAt: '974e867e',
+        note: 'a bank holding less than the coin float: one trip and open for business, rather than banking and re-withdrawing the same stack every loop'
+    },
+    {
+        id: 'marketmaker-upkeep-live',
+        harness: 'marketmaker-upkeep-live.ts',
+        covers: { scripts: ['MarketMaker'], subsystems: ['panel'] },
+        status: 'vetted',
+        budgetMin: 20,
+        env: { IDLE_MIN: '12' },
+        provenAt: 'f8a624c9',
+        note: 'a shop left standing past the 10min wedge with no stall-guard restart, its own chat read back off its own client, and the order book filtered and edited without losing the scroll or the caret'
     },
     {
         id: 'gatheringbot-mule-pair-test',
@@ -926,6 +981,14 @@ export const CASES: readonly Case[] = [
         provenAt: '7fe84288',
         budgetMin: 10,
         note: 'Varrock West with iron, coal, natures and a staff of fire banked; passes on steel bars plus magic and smithing XP together'
+    },
+    {
+        id: 'superheater-fire-battlestaff-live',
+        harness: 'superheater-fire-battlestaff-live.ts',
+        covers: { scripts: ['Superheater'] },
+        status: 'unvetted',
+        budgetMin: 10,
+        note: 'Varrock West with iron, coal, natures and a Fire battlestaff banked (no Staff of fire); passes on wore Fire battlestaff plus steel bars'
     },
     {
         id: 'strangebox-repro-live',

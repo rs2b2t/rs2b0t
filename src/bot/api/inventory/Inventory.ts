@@ -20,7 +20,7 @@ export function backpackCapacity(): number {
  * @see docs/reference/api-items.md#invitem
  */
 export class InvItem {
-    constructor(readonly snap: InvItemSnapshot, private readonly componentOps = false) {}
+    constructor(/** @internal */ readonly snap: InvItemSnapshot, private readonly componentOps = false) {}
 
     get name(): string | null {
         return this.snap.name;

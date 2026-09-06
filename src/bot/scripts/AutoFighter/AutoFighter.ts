@@ -15,6 +15,7 @@ import {
 import { Autocast } from '../../api/magic/Autocast.js';
 import { castsAvailable, runeWithdrawList } from '../../api/combat/CombatStyleLogic.js';
 import { foodHealAmount } from '../../api/combat/food.js';
+import { Special } from '../../api/combat/Special.js';
 import { SPELL_DB } from '../../data/spelldb.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Skills } from '../../api/skills/Skills.js';
@@ -46,6 +47,8 @@ import {
     shouldBuryRegularBones,
     autoRetaliateShouldEnable,
     assertAutoRetaliateOn,
+    shouldArmSpecial,
+    specialAvailable,
     SPOT_OPTIONS,
     START_POSITION,
     wantsAutoFighterLoot
@@ -67,6 +70,7 @@ const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
 const SHOW_RANGE = { key: 'combatStyle', anyOf: ['range'] };
 const SHOW_MELEE = { key: 'combatStyle', anyOf: ['melee'] };
 const SHOW_MAGE_RANGE = { key: 'combatStyle', anyOf: ['mage', 'range'] };
+const SHOW_MELEE_RANGE = { key: 'combatStyle', anyOf: ['melee', 'range'] };
 
 export const SETTINGS: SettingsSchema = {
     target: { type: 'string', default: 'Guard', label: 'Target NPC name(s)', help: 'comma-separated exact in-game names to fight, e.g. Guard, Knight, Moss giant' },
@@ -82,6 +86,7 @@ export const SETTINGS: SettingsSchema = {
             'melee / mage / range. Older saves that stored attack/strength/controlled/defence under this key are migrated to Melee style.'
     },
     meleeStyle: { type: 'string', default: 'strength', options: COMBAT_STYLE_OPTIONS, label: 'Melee style', group: 'Combat', showIf: SHOW_MELEE, help: 'which melee stat to train; re-applied each login since com_mode is not saved' },
+    useSpecial: { type: 'boolean', default: true, label: 'Use special attacks', group: 'Combat', showIf: SHOW_MELEE_RANGE, help: 'arms the spec bar whenever energy covers the wielded weapon\'s special (dragon dagger, dragon longsword, magic shortbow, …); does nothing with a weapon that has no special' },
     spell: { type: 'string', default: 'Fire Strike', options: Object.keys(SPELL_DB), label: 'Autocast spell', group: 'Combat', showIf: SHOW_MAGE, help: 'kept armed via autocast — a staff must be wielded' },
     runesWithdraw: { type: 'number', default: 150, min: 1, max: 1000, label: 'Casts of runes per bank trip', group: 'Combat', showIf: SHOW_MAGE, help: 'the bot tops runes up to this many casts of the selected spell; runes the wielded staff provides free are skipped' },
     rangeStyle: { type: 'string', default: 'rapid', options: RANGE_STYLE_OPTIONS, label: 'Ranged style', group: 'Combat', showIf: SHOW_RANGE },
@@ -138,6 +143,7 @@ let AUTO_BANK = true;
 let BANK_COMMON = true;
 let STYLE: 'melee' | 'mage' | 'range' = 'melee';
 let MELEE_STYLE: MeleeCombatStyle = 'strength';
+let USE_SPECIAL = true;
 let RANGE_MODE = 1;
 let SPELL = 'Fire Strike';
 let RUNES_WITHDRAW = 150;
@@ -167,6 +173,24 @@ function lootCount(): number {
 }
 function lootSlots(): number {
     return Inventory.items().filter(item => isLoot(item.name)).length;
+}
+/** The wielded weapon when it carries a special this bot may arm, else ''. */
+function specWeapon(): string {
+    const weapon = Special.wielded();
+    return specialAvailable(USE_SPECIAL, STYLE, Special.cost(weapon)) ? weapon : '';
+}
+function specialDue(): boolean {
+    return shouldArmSpecial(USE_SPECIAL, STYLE, Special.cost(Special.wielded()), Special.energy(), Special.armed());
+}
+// Why: arming is one-shot, the next attack spends it and the engine clears the flag, so it is re-armed per special.
+async function armSpecial(bot: AutoFighter): Promise<boolean> {
+    const weapon = Special.wielded();
+    if (!specialDue() || !(await Special.arm())) {
+        return false;
+    }
+    bot.countSpecial();
+    bot.log(`special armed with ${weapon} (bar at ${Math.round(Special.energy() / 10)}%, spent on the next hit)`);
+    return true;
 }
 function wieldedNames(): string[] {
     return Equipment.items().map(i => i.name ?? '');
@@ -212,6 +236,7 @@ export default class AutoFighter extends TaskBot {
     private kills = 0;
     private looted = 0;
     private buried = 0;
+    private specials = 0;
     private eats = 0;
     private trips = 0;
     private deaths = 0;
@@ -263,6 +288,7 @@ export default class AutoFighter extends TaskBot {
             // storage still has a training-style value but meleeStyle already set, rewrite combatStyle only
             SettingsStore.save('AutoFighter', 'combatStyle', 'melee');
         }
+        USE_SPECIAL = this.settings.bool('useSpecial', true);
         SPELL = this.settings.str('spell', 'Fire Strike');
         RUNES_WITHDRAW = this.settings.num('runesWithdraw', 150);
         RANGE_MODE = parseRangeStyle(this.settings.str('rangeStyle', 'rapid'));
@@ -339,6 +365,7 @@ export default class AutoFighter extends TaskBot {
             new BankRun(this),
             new SetAttackStyle(this),
             new ArmAutocast(this),
+            new ArmSpecial(this),
             new Fight(this),
             new ReturnToAnchor(this)
         );
@@ -364,6 +391,9 @@ export default class AutoFighter extends TaskBot {
             p.row(`Runtime: ${fmtDuration(mins)}`, `Kills: ${this.kills}`, `XP/hr: ${xph}`);
             p.row(STYLE === 'mage' ? `Casts: ${castsLeft()}` : STYLE === 'range' ? `Ammo: ${totalAmmo()}` : `Style: ${MELEE_STYLE}`, `Food: ${foodCount()}`, this.deaths ? `Deaths: ${this.deaths}` : `Trips: ${this.trips}`);
             p.row(`Clues: ${this.cluesSolved}`, `Clue: ${this.solveClue?.clueStatus() ?? 'idle'}`, `Bones: ${this.buried}`);
+            if (specWeapon() !== '') {
+                p.row(`Spec: ${Math.round(Special.energy() / 10)}%`, `Specials: ${this.specials}`);
+            }
             p.bar('HP', Skills.hpFraction());
         }
         p.gap();
@@ -375,6 +405,7 @@ export default class AutoFighter extends TaskBot {
     countKill(): void { this.kills++; }
     countLoot(): void { this.looted++; }
     countBurial(): void { this.buried++; }
+    countSpecial(): void { this.specials++; }
     countEat(): void { this.eats++; }
     countTrip(): void {
         this.trips++;
@@ -742,6 +773,26 @@ class ArmAutocast implements Task {
     }
 }
 
+// Why: Fight.validate is false while already in combat, so a retaliation fight would never reach the inline arm.
+class ArmSpecial implements Task {
+    private fails = 0;
+    private retryAt = 0;
+    constructor(private bot: AutoFighter) {}
+    validate(): boolean {
+        return Date.now() >= this.retryAt && specialDue();
+    }
+    async execute(): Promise<void> {
+        this.bot.setStatus('arming the special attack');
+        if (await armSpecial(this.bot)) {
+            this.fails = 0;
+        } else if (++this.fails >= 5) {
+            this.fails = 0;
+            this.retryAt = Date.now() + 60_000;
+            this.bot.log(`WARNING: could not arm the ${Special.wielded()} special (combat tab not ready?) — retrying in 60s`);
+        }
+    }
+}
+
 class ReequipGear implements Task {
     private lastFailLogAt = 0;
     constructor(private bot: AutoFighter) {}
@@ -843,6 +894,8 @@ class Fight implements Task {
             if (!Game.inCombat() && !cur.inCombat) {
                 return;
             }
+            // Why: inline, not left to the sibling task, this loop owns the bot until the target dies.
+            await armSpecial(this.bot);
             await Execution.delayTicks(2);
         }
     }

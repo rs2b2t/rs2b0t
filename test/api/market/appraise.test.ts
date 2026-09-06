@@ -149,21 +149,42 @@ describe('buying: what it will not take', () => {
 });
 
 describe('buying: it never offers more than it has', () => {
-    test('a thin purse drops entire lines, biggest first', () => {
-        const a = look(
-            [item(SCIM, 'Rune scimitar', 1), item(IRON, 'Iron ore', 100)],
-            { desk: desk({ purse: 5_000 }) }
-        );
-        expect(a.total).toBe(1800);
-        expect(a.lines.map(l => l.id)).toEqual([IRON]);
-        expect(a.ignored).toContainEqual({ name: 'Rune scimitar', count: 1 });
-        expect(a.note).toContain('1,800gp');
+    const pile = [item(SCIM, 'Rune scimitar', 1), item(IRON, 'Iron ore', 100)];
+    const tight = { ...BOOK, maxTradeValue: 5_000 };
+
+    // Why: the window cannot say which units of a stack it is paying for, so the shop bids its ceiling for the pile as it stands.
+    test('a thin purse bids the purse for the pile', () => {
+        const a = look(pile, { desk: desk({ purse: 5_000 }) });
+        expect(a.kind).toBe('buy');
+        expect(a.total).toBe(5_000);
+        expect([...a.owe]).toEqual([[COINS, 5_000]]);
+        expect([...a.want]).toEqual([[SCIM, 1], [IRON, 100]]);
+        expect(a.ignored).toEqual([]);
+        expect(a.note).toBe('max I can offer is 5,000gp per trade');
     });
 
-    test('the per-trade ceiling trims the same way', () => {
-        const tight = { ...BOOK, maxTradeValue: 5_000 };
-        const a = look([item(SCIM, 'Rune scimitar', 1), item(IRON, 'Iron ore', 100)], { book: tight });
-        expect(a.total).toBe(1800);
+    test('the per-trade cap bids the cap the same way', () => {
+        const a = look(pile, { book: tight });
+        expect(a.total).toBe(5_000);
+        expect([...a.owe]).toEqual([[COINS, 5_000]]);
+        expect(a.note).toBe('max I can offer is 5,000gp per trade');
+    });
+
+    test('the lines still say what the pile is worth', () => {
+        const a = look(pile, { book: tight });
+        expect(a.lines.map(l => l.value)).toEqual([13_500, 1_800]);
+    });
+
+    test('the tighter of purse and cap is the ceiling', () => {
+        const a = look(pile, { book: tight, desk: desk({ purse: 2_000 }) });
+        expect(a.total).toBe(2_000);
+        expect(a.note).toBe('max I can offer is 2,000gp per trade');
+    });
+
+    test('under the ceiling the deal is the full value', () => {
+        const a = look(pile);
+        expect(a.total).toBe(15_300);
+        expect(a.note).toBeNull();
     });
 
     test('an empty purse buys nothing at all', () => {
@@ -231,6 +252,24 @@ describe('selling: the customer named x, it costs y, they owe x * y', () => {
 describe('describeAppraisal', () => {
     test('a plain purchase', () => {
         expect(describeAppraisal(look([item(IRON, 'Iron ore', 100)]))).toBe('Iron ore x100 = 1,800. Total 1,800gp.');
+    });
+
+    test('a capped purchase says the cap, the value and what it pays', () => {
+        const a = look([item(SCIM, 'Rune scimitar', 1)], { book: { ...BOOK, maxTradeValue: 5_000 } });
+        expect(describeAppraisal(a)).toBe('max I can offer is 5,000gp per trade. Rune scimitar x1 = 13,500. Total 5,000gp.');
+    });
+
+    // Why: two priced lines already run past the chat limit, so a note at the end is a note nobody reads.
+    test('the note leads, so the cap survives the chat limit', () => {
+        const a = look([item(SCIM, 'Rune scimitar', 1), item(IRON, 'Iron ore', 100)], { book: { ...BOOK, maxTradeValue: 5_000 } });
+        const line = describeAppraisal(a);
+        expect(line).toStartWith('max I can offer is 5,000gp per trade. ');
+        expect(line.length).toBe(80);
+    });
+
+    test('a short sale leads with why it is short', () => {
+        const a = look([item(COINS, 'Coins', 660)], { intent: { itemId: IRON, maxQty: 100 }, desk: desk({ have: { [IRON]: 30 } }) });
+        expect(describeAppraisal(a)).toBe('that is all the Iron ore I have. Iron ore x30 = 660. You owe 660gp.');
     });
 
     // Why: an empty window is when a customer is most likely to be lost, so it teaches rather than shrugs.

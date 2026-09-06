@@ -146,7 +146,7 @@ export type MasterOfferAction = 'wait' | 'accept' | 'decline';
 
 /**
  * Master first-screen policy.
- * Why: declining a blank "Trading With" header after 8 ticks cancelled real runner offers (~6s close in the wall logs).
+ * Why: declining a blank "Trading With" header after 8 ticks cancelled live runner offers (~6s close in the wall logs).
  */
 export function masterOfferDecision(opts: {
     who: string | null;
@@ -163,7 +163,7 @@ export function masterOfferDecision(opts: {
     return 'wait';
 }
 
-/** True when the open trade header is the player we just clicked (blank header is still that click). */
+/** True when the open trade header is the player last clicked (blank header is still that click). */
 export function tradeWindowIsFor(partnerHeader: string | null, clicked: string): boolean {
     if (partnerHeader === null || partnerHeader.length === 0) {
         return true;

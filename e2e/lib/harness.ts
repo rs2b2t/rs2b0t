@@ -61,7 +61,7 @@ export function deployIsolatedClient(tag: string, engineDir = process.env.ENGINE
 }
 
 /** Flags that consume the argument after them. Their values are not positionals. */
-const VALUE_FLAGS = new Set(['--base', '--minutes', '--stage', '--engine']);
+const VALUE_FLAGS = new Set(['--base', '--minutes', '--stage', '--engine', '--item']);
 
 /** Positional argv for harnesses that index their arguments: `--base` first, then a positional URL, then `fallbackBase`.
  *  Why: the e2e runner appends global flags (`--no-deploy`) to every harness, so raw `process.argv[2]` indexing reads a flag as the engine base. */
