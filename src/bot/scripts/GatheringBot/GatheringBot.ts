@@ -212,6 +212,7 @@ import {
     RepairBrokenGatherTool,
     RestockFishingGear,
     RestockGatherTool,
+    StartupProvision,
     SupplierWithdrawRaw,
     TannerfishSustain,
     TrimKnifeDelayLogs,
@@ -268,6 +269,36 @@ export {
     wildernessMinerStanceNeeded
 } from './GatheringBotLogic.js';
 
+/** Teleport destinations funded by the bank-provision rune top-up. */
+export interface BankTeleport {
+    name: string;
+    level: number;
+    runes: { rune: string; count: number }[];
+}
+
+/** Mirror of the FireGiant ESCAPE_TELES shape: destination → rune cost per cast. */
+export const BANK_TELEPORTS: Record<string, BankTeleport> = {
+    Varrock: { name: 'Varrock', level: 25, runes: [{ rune: 'Fire rune', count: 1 }, { rune: 'Air rune', count: 3 }, { rune: 'Law rune', count: 1 }] },
+    Lumbridge: { name: 'Lumbridge', level: 31, runes: [{ rune: 'Earth rune', count: 1 }, { rune: 'Air rune', count: 3 }, { rune: 'Law rune', count: 1 }] },
+    Falador: { name: 'Falador', level: 37, runes: [{ rune: 'Water rune', count: 1 }, { rune: 'Air rune', count: 3 }, { rune: 'Law rune', count: 1 }] },
+    Camelot: { name: 'Camelot', level: 45, runes: [{ rune: 'Air rune', count: 5 }, { rune: 'Law rune', count: 1 }] },
+    Ardougne: { name: 'Ardougne', level: 51, runes: [{ rune: 'Water rune', count: 2 }, { rune: 'Law rune', count: 2 }] },
+    Watchtower: { name: 'Watchtower', level: 58, runes: [{ rune: 'Earth rune', count: 2 }, { rune: 'Law rune', count: 2 }] },
+    Trollheim: { name: 'Trollheim', level: 61, runes: [{ rune: 'Fire rune', count: 2 }, { rune: 'Law rune', count: 2 }] }
+};
+
+export const BANK_TELEPORT_OPTIONS = ['Off', ...Object.keys(BANK_TELEPORTS)] as const;
+
+export const BANK_TELEPORT_NON_ZERO = Object.keys(BANK_TELEPORTS);
+
+/** Bank-open passes the startup provisioning tries before giving up. */
+export const STARTUP_PROVISION_RETRIES = 3;
+
+/** Persisted option value → dropdown label. */
+export const BANK_TELEPORT_OPTION_LABELS: Record<string, string> = Object.fromEntries(
+    Object.keys(BANK_TELEPORTS).map(key => [key, `${BANK_TELEPORTS[key].name} teleport`])
+);
+
 export const GATHERING_SETTINGS: SettingsSchema = {
     targetType: { type: 'string', default: 'loc', label: "Target type ('loc' or 'npc')", help: 'loc = scenery (rocks/trees), npc = fishing spots' },
     target: { type: 'string', default: 'Rocks', label: 'Target name', help: 'in-game name, e.g. Rocks / Tree / Fishing spot' },
@@ -317,6 +348,35 @@ export const GATHERING_SETTINGS: SettingsSchema = {
         group: 'Banking',
         help:
             'When random-event loot (caskets, fruit, gems, …) steals pack slots under chop-then-burn or power mode: Bank at the camp (default), Drop, or Off. Location None has no camp bank — Bank falls back to Drop. (Future: shared API helper for other scripts.)'
+    },
+    withdrawCoins: {
+        type: 'number',
+        default: 0,
+        min: 0,
+        label: 'Coins to withdraw at bank',
+        group: 'Banking',
+        help:
+            'Top coins up to this many at each bank trip so the pack always has spending money (shops, cart rail). 0 = never withdraw. The coins are kept out of the deposit, so they carry from bank trip to bank trip.'
+    },
+    bankTeleport: {
+        type: 'string',
+        default: 'Off',
+        options: [...BANK_TELEPORT_OPTIONS],
+        optionLabels: BANK_TELEPORT_OPTION_LABELS,
+        label: 'Teleport runes',
+        group: 'Banking',
+        help:
+            'Withdraw and keep the runes needed for one chosen spell teleport, so a manual/bot escape is always funded. Off = never withdraw. The rune stack is kept out of the deposit.'
+    },
+    teleCasts: {
+        type: 'number',
+        default: 1,
+        min: 1,
+        label: 'Teleport casts to stock',
+        group: 'Banking',
+        showIf: { key: 'bankTeleport', anyOf: BANK_TELEPORT_NON_ZERO },
+        help:
+            'Shown when Teleport runes is not Off. How many casts worth of the chosen teleport runes to withdraw at once, but only when a single cast can no longer be made from the pack, so runes do not drain on partial top-ups.'
     }
 };
 
@@ -351,6 +411,13 @@ export default class GatheringBot extends TaskBot {
     private fishMethod: FishingMethod | null = null;
     private fishing = false;
     private chopping = false;
+
+    /** Coins target kept in the pack (0 = never withdraw). */
+    private withdrawCoinsTarget = 0;
+    /** Teleport funded by rune withdrawals; 'Off' keeps runes untouched. */
+    private bankTeleport = 'Off';
+    /** Casts worth of runes to restock when the pack drops below one cast. */
+    private teleCasts = 1;
 
     private toolReqs: ToolReq[] = [];
 
@@ -415,6 +482,8 @@ export default class GatheringBot extends TaskBot {
 
     /** One-shot bank trip at run start when Buy/repair is on: withdraw a better banked axe or pick, then an optional shop upgrade. */
     private startupToolBankSyncPending = false;
+    /** One-shot bank trip at run start to withdraw the configured coins/teleport runes before the first camp walk. */
+    private startupProvisionPending = false;
     /**
      * When true, ~1/{@link FORGETFUL_BANK_ODDS} bank closes walk out and re-open
      * as if something was forgotten. Off by default (settings: forgetfulBank).
@@ -715,6 +784,22 @@ export default class GatheringBot extends TaskBot {
 
         this.toolAcquire = parseToolAcquireMode(this.settings.str('toolAcquire', 'Off'));
         this.forgetfulBank = this.settings.bool('forgetfulBank', false);
+        this.withdrawCoinsTarget = Math.max(0, Math.floor(this.settings.num('withdrawCoins', 0)));
+        this.bankTeleport = this.settings.str('bankTeleport', 'Off').trim();
+        this.teleCasts = Math.max(1, Math.floor(this.settings.num('teleCasts', 1)));
+        if (this.bankTeleport !== 'Off' && !(this.bankTeleport in BANK_TELEPORTS)) {
+            this.log(`bank: unknown teleport '${this.bankTeleport}' - treating as Off`);
+            this.bankTeleport = 'Off';
+        }
+        if (this.bankTeleport !== 'Off') {
+            const tele = BANK_TELEPORTS[this.bankTeleport];
+            this.log(
+                `bank: keeping ${tele.name} teleport runes (magic ${tele.level}, ${this.teleCasts} cast(s)); ` +
+                    `coins target ${this.withdrawCoinsTarget.toLocaleString()}gp`
+            );
+        } else if (this.withdrawCoinsTarget > 0) {
+            this.log(`bank: coins target ${this.withdrawCoinsTarget.toLocaleString()}gp`);
+        }
         this.startupToolBankSyncPending = false;
         if (desertCamp && this.toolAcquire === 'on') {
             const message = `${desertCamp.name} does not support Tool acquire Buy/repair`;
@@ -816,6 +901,14 @@ export default class GatheringBot extends TaskBot {
                 obstacles: this.location?.obstacles ?? ['door', 'gate'],
                 log: m => this.log(m)
             });
+        }
+
+        // Why: the provision trip must run before the first camp walk, or a coin-gated
+        // transport edge (boat/cart) reports "unreachable without Nx Coins" and strands the run.
+        this.startupProvisionPending =
+            !this.powerMode && this.muleMode === 'off' && !this.strictDesertCampBanking() && this.bankProvisionNeeded();
+        if (this.startupProvisionPending) {
+            this.log('bank: startup provisioning trip queued (coins/runes before first camp walk)');
         }
 
         // Why: tick-manip retaliate methods run Auto Retaliate ON with no FleeCombat, and may die.
@@ -925,6 +1018,8 @@ export default class GatheringBot extends TaskBot {
         const minerFoodLoop = this.minerFoodEnabled();
         this.add(
             new ContinueDialog(),
+            // Why: cold-start coins/runes must arrive before the first camp walk (see StartupProvision).
+            new StartupProvision(this),
             ...(minerFoodLoop ? [new MinerEatFood(this)] : []),
             // Why: a sticky combatCycle with no face target waits rather than thrash-walking.
             // Why: named and None only break multi-combat pulls, such as wildy spiders, by walking off.
@@ -1056,7 +1151,96 @@ export default class GatheringBot extends TaskBot {
                 names.add(bar);
             }
         }
+        if (this.withdrawCoinsTarget > 0) {
+            names.add(COINS);
+        }
+        if (this.bankTeleport !== 'Off') {
+            for (const r of this.teleportRunes()) {
+                names.add(r.rune);
+            }
+        }
         return [...names];
+    }
+
+    /** Rune requirements for the configured bank teleport; empty when Off. */
+    teleportRunes(): { rune: string; count: number }[] {
+        return BANK_TELEPORTS[this.bankTeleport]?.runes ?? [];
+    }
+
+    /** Every distinct rune kept for the configured teleport. */
+    teleportRuneNames(): string[] {
+        return [...new Set(this.teleportRunes().map(r => r.rune))];
+    }
+
+    bankTeleportEnabled(): boolean {
+        return this.bankTeleport !== 'Off';
+    }
+
+    /**
+     * Whether the pack can make one teleport cast, mirroring the FireGiant hasEscapeRunes gate.
+     * The restock fires only when this is false, never as a partial top-up.
+     */
+    teleportOneCastReady(): boolean {
+        if (!this.bankTeleportEnabled()) {
+            return true;
+        }
+        return this.teleportRunes().every(r => Inventory.count(r.rune) >= r.count);
+    }
+
+    /** True when the pack is short of the configured coins. */
+    coinsProvisionNeeded(): boolean {
+        return this.withdrawCoinsTarget > 0 && Inventory.count(COINS) < this.withdrawCoinsTarget;
+    }
+
+    /** True when the pack is short of the configured coins or teleport runes. */
+    bankProvisionNeeded(): boolean {
+        return this.coinsProvisionNeeded() || (this.bankTeleportEnabled() && !this.teleportOneCastReady());
+    }
+
+    startupProvisionNeeded(): boolean {
+        return this.startupProvisionPending && this.bankProvisionNeeded();
+    }
+
+    clearStartupProvision(): void {
+        this.startupProvisionPending = false;
+    }
+
+    /** One-shot startup bank trip for the configured coins/teleport runes. */
+    async runStartupProvision(log: (m: string) => void = m => this.log(`  ${m}`)): Promise<void> {
+        if (!(await this.openScriptBank(log))) {
+            log('bank: could not open bank for startup coins/runes - will retry');
+            return;
+        }
+        await this.waitBankReady(log);
+        // Why: the bank stays open across retries, so a withdraw that failed to stick or a slow
+        // tab reload retries cheaply instead of closing the bank and reopening it every pass.
+        let tried = 0;
+        for (tried = 0; tried < STARTUP_PROVISION_RETRIES && this.bankProvisionNeeded(); tried++) {
+            await this.withdrawTripProvisionsAtBank(log);
+            if (tried + 1 < STARTUP_PROVISION_RETRIES && this.bankProvisionNeeded()) {
+                log(`bank: provision retry ${tried + 1}/${STARTUP_PROVISION_RETRIES}`);
+            }
+        }
+        if (Bank.isOpen() && !(await this.closeScriptBank(log, { allowForgetful: false }))) {
+            log('bank: startup provision left the bank open - will retry');
+        }
+        if (!this.bankProvisionNeeded()) {
+            this.startupProvisionPending = false;
+        }
+    }
+
+    /** Final give-up once the open-once retries and the task-level open budget are exhausted. */
+    async giveUpStartupProvision(log: (m: string) => void = m => this.log(`  ${m}`)): Promise<void> {
+        this.startupProvisionPending = false;
+        if (this.coinsProvisionNeeded()) {
+            const need = this.withdrawCoinsTarget - Inventory.count(COINS);
+            this.stopMissingGear(
+                `could not withdraw ${this.withdrawCoinsTarget}gp of startup coins after ${STARTUP_PROVISION_RETRIES} tries`,
+                [`${need} gp`]
+            );
+            return;
+        }
+        log('bank: giving up on startup teleport runes - continuing without');
     }
 
     toolAcquireEnabled(): boolean {
@@ -2761,6 +2945,70 @@ export default class GatheringBot extends TaskBot {
             }
         }
         return true;
+    }
+
+    /**
+     * Same-bank top up for coins and the chosen teleport runes (BankCatch end-of-trip); never throws.
+     * Runes restock only when a single cast can no longer be made; coins top up whenever under target.
+     */
+    async withdrawTripProvisionsAtBank(log: (m: string) => void = m => this.log(`  ${m}`)): Promise<void> {
+        if (!Bank.isOpen()) {
+            return;
+        }
+        await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
+        if (!Bank.isOpen()) {
+            return;
+        }
+
+        if (this.withdrawCoinsTarget > 0) {
+            const have = Inventory.count(COINS);
+            if (have < this.withdrawCoinsTarget) {
+                const ok = await this.withdrawCoinsFor(this.withdrawCoinsTarget, log);
+                log(
+                    ok
+                        ? `bank: coins ${have.toLocaleString()} → ${Inventory.count(COINS).toLocaleString()}gp`
+                        : `bank: coins under ${this.withdrawCoinsTarget.toLocaleString()}gp but bank has none`
+                );
+            }
+        }
+
+        if (this.bankTeleportEnabled() && !this.teleportOneCastReady()) {
+            await this.withdrawEscapeRunes(log);
+        }
+    }
+
+    /** FireGiant-style escape restock: top each teleport rune back to the cast budget. */
+    private async withdrawEscapeRunes(log: (m: string) => void): Promise<void> {
+        for (const { rune, count } of this.teleportRunes()) {
+            const target = count * this.teleCasts;
+            if (Inventory.count(rune) < target) {
+                const got = await this.withdrawTo(rune, target);
+                log(`bank: withdrew ${got} ${rune} (${Inventory.count(rune)}/${target}) for ${this.bankTeleport} teleport`);
+            }
+        }
+    }
+
+    /** Guarded withdraw to a target count, mirroring the FireGiant withdrawTo helper. */
+    private async withdrawTo(name: string, target: number): Promise<number> {
+        const start = Inventory.count(name);
+        for (let guard = 0; guard < 40 && Inventory.count(name) < target && !Inventory.isFull() && Bank.isOpen(); guard++) {
+            const before = Inventory.count(name);
+            const need = target - before;
+            if (need > 10 && (await Bank.withdrawX(name, need))) {
+                if (Inventory.count(name) > before) {
+                    continue;
+                }
+                break;
+            }
+            if (!Bank.isOpen()) {
+                break;
+            }
+            await Bank.withdraw(name, need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1');
+            if (!(await Execution.delayUntil(() => Inventory.count(name) > before, 2500))) {
+                break;
+            }
+        }
+        return Inventory.count(name) - start;
     }
 
     /**
