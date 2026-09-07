@@ -23,7 +23,9 @@ export const enum RestartMode {
 export default class SeqType {
     static numDefinitions: number = 0;
     static list: SeqType[] = [];
+    static readonly STRICT: boolean = process.env.STRICT_CONFIG === '1';
 
+    id: number = -1;
     numFrames: number = 0;
     frames: Int16Array | null = null;
     iframes: Int16Array | null = null;
@@ -50,6 +52,7 @@ export default class SeqType {
                 this.list[id] = new SeqType();
             }
 
+            this.list[id].id = id;
             this.list[id].decode(dat);
         }
     }
@@ -125,8 +128,8 @@ export default class SeqType {
                 this.postanim_move = dat.g1();
             } else if (code === 11) {
                 this.duplicatebehaviour = dat.g1();
-            } else {
-                console.log('Error unrecognised seq config code: ', code);
+            } else if (SeqType.STRICT) {
+                throw new Error(`SeqType ${this.id}: unknown config opcode ${code}`);
             }
         }
 

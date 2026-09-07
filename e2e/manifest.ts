@@ -108,8 +108,8 @@ export const CASES: readonly Case[] = [
         harness: 'bankfletcher-live.ts',
         covers: { scripts: ['BankFletcher'] },
         status: 'unvetted',
-        budgetMin: 5,
-        note: 'Varrock West: knife stays through a willow longbow bank trip, stringing raises strung id 847, headless attach climbs'
+        budgetMin: 8,
+        note: 'Draynor start banks locally rather than trekking to the Varrock West preset, then Varrock West: knife stays through a willow longbow bank trip, stringing raises strung id 847, headless attach climbs'
     },
     {
         id: 'baxtorian-rope-369-live',
