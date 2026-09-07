@@ -1,5 +1,7 @@
 import type { Page } from 'playwright-core';
 
+import { ClientProt } from '../../src/client/io/ClientProt.js';
+
 type Rs2b0t = {
     rs2b0t: {
         client: {
@@ -178,16 +180,16 @@ export async function cheat(page: Page, command: string): Promise<void> {
 }
 
 export async function cheatQuiet(page: Page, command: string, waitMs = 700): Promise<boolean> {
-    const sent = await page.evaluate(c => {
+    const sent = await page.evaluate(([c, op]) => {
         const { client } = (globalThis as never as Rs2b0t).rs2b0t;
         if (!client.ingame) {
             return false;
         }
-        client.out.p1Enc(224);
+        client.out.p1Enc(op);
         client.out.p1(c.length + 1);
         client.out.pjstr(c);
         return true;
-    }, command);
+    }, [command, ClientProt.CLIENT_CHEAT] as const);
     await page.waitForTimeout(waitMs);
     return sent;
 }
@@ -205,17 +207,17 @@ export async function getServerVar(page: Page, name: string): Promise<number | n
 }
 
 export async function getServerVarQuiet(page: Page, name: string): Promise<number | null> {
-    const sent = await page.evaluate(n => {
+    const sent = await page.evaluate(([n, op]) => {
         const { client } = (globalThis as never as Rs2b0t).rs2b0t;
         if (!client.ingame) {
             return false;
         }
         const cmd = `getvar ${n}`;
-        client.out.p1Enc(224);
+        client.out.p1Enc(op);
         client.out.p1(cmd.length + 1);
         client.out.pjstr(cmd);
         return true;
-    }, name);
+    }, [name, ClientProt.CLIENT_CHEAT] as const);
     if (!sent) {
         return null;
     }

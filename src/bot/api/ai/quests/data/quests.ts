@@ -162,7 +162,7 @@ export const QUESTS: QuestRecord[] = [
         requirements: {},
         items: [
             { name: 'Onion', qty: 1, kind: 'acquirable' },
-            { name: 'Rats tail', qty: 1, kind: 'acquirable' },
+            { name: "Rat's tail", qty: 1, kind: 'acquirable' },
             { name: 'Burnt meat', qty: 1, kind: 'acquirable' },
             { name: 'Eye of newt', qty: 1, kind: 'acquirable' }
         ]

@@ -4,6 +4,8 @@ import { homedir } from 'node:os';
 import { chromium } from 'playwright-core';
 import type { Browser, Page } from 'playwright-core';
 
+import { ClientProt } from '../../src/client/io/ClientProt.js';
+
 export function fail(msg: string): never {
     console.error(`FAIL: ${msg}`);
     process.exit(1);
@@ -159,20 +161,20 @@ export async function login(page: Page, user: string, pass = 'test'): Promise<bo
 }
 
 /**
- * Send a client cheat packet (CLIENT_CHEAT / op 224) without keyboard focus.
+ * Send a client cheat packet (CLIENT_CHEAT) without keyboard focus.
  * `command` is the text after `::`, e.g. `tele 0,50,50,20,20`.
  */
 export async function cheatQuiet(page: Page, command: string, waitMs = 700): Promise<boolean> {
-    const sent = await page.evaluate(c => {
+    const sent = await page.evaluate(([c, op]) => {
         const client = (globalThis as never as Rs2b0t).rs2b0t?.client;
         if (!client?.ingame || !client.out) {
             return false;
         }
-        client.out.p1Enc(224); // ClientProt.CLIENT_CHEAT
+        client.out.p1Enc(op);
         client.out.p1(c.length + 1);
         client.out.pjstr(c);
         return true;
-    }, command);
+    }, [command, ClientProt.CLIENT_CHEAT] as const);
     await page.waitForTimeout(waitMs);
     return sent;
 }
