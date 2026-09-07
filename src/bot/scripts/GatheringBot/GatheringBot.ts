@@ -16,7 +16,8 @@ import { Bank, withdrawOp, type BackpackItem } from '../../api/bank/Bank.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
-import { Paint } from '../../paint/Paint.js';
+import { paintLevels, scriptFrame } from '../../paint/jive.js';
+import type { SkillGain } from '../../paint/levelProgress.js';
 import { Skills } from '../../api/skills/Skills.js';
 import {
     foodCount as countFood,
@@ -140,12 +141,9 @@ import {
 } from '../../api/bank/Banking.js';
 import {
     fmtDuration,
-    fmtXpGained as fmtXpGainedPaint,
     fmtXpHr as fmtXpHrPaint,
     gatherPaintAccent,
-    paintClip,
-    paintSkillShort,
-    paintSkillTitle
+    paintClip
 } from '../../paint/paintLogic.js';
 import { driveDialog } from '../../api/ai/quests/exec/primitives.js';
 import {
@@ -235,6 +233,12 @@ import {
 
 /** Default half-size of the Auto (start) burn box around the script start tile. */
 const LOCAL_BURN_HALF = 8;
+
+/** The family this script's paint signs itself with, the way the Jive scripts carry theirs. */
+const GATHER_BYLINE = 'Gathering scripts';
+/** The gap and the button row that follow every section. */
+const CONTROL_ROWS = 2;
+const PAINT_DIM = '#8a919a';
 
 // Re-export pure policy from api/ so existing `#/bot/scripts/GatheringBot` imports keep working.
 export {
@@ -1580,14 +1584,6 @@ export default class GatheringBot extends TaskBot {
         return this.powerMode ? 'power' : 'nearest bank';
     }
 
-    private paintSkillShort(skill: string): string {
-        return paintSkillShort(skill);
-    }
-
-    private paintSkillTitle(skill: string): string {
-        return paintSkillTitle(skill);
-    }
-
     private trackedSkills(): string[] {
         const skills: string[] = [];
         if (this.fishing) {
@@ -1628,10 +1624,6 @@ export default class GatheringBot extends TaskBot {
             return '—';
         }
         return fmtXpHrPaint(this.xpGained(skill), mins);
-    }
-
-    private fmtXpGained(skill: string): string {
-        return fmtXpGainedPaint(this.xpGained(skill));
     }
 
     private fullInventoryNote(): string {
@@ -1704,9 +1696,38 @@ export default class GatheringBot extends TaskBot {
         return 'fishing';
     }
 
+    // Why: the sections are built per run rather than fixed, because a fisher that is not cooking and a chopper that is not burning have nothing to put on those rails.
+    private paintSections(): string[] {
+        const sections = ['Overview', 'Levels'];
+        if (this.fishing && this.cookMode !== 'off') {
+            sections.push('Cook');
+        }
+        if (this.chopping && this.burnMode !== 'off') {
+            sections.push('Burn');
+        }
+        return sections;
+    }
+
+    /** Every tracked skill as a level bar's worth of progress, off the same baseline the XP rows read. */
+    private skillGains(): SkillGain[] {
+        return this.trackedSkills().map(skill => ({
+            skill,
+            level: Skills.level(skill),
+            xp: Skills.xp(skill),
+            gained: this.xpGained(skill)
+        }));
+    }
+
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const p = Paint.begin(ctx, { dock: 'chatbox', accent: this.paintAccent() });
-        p.title(`${this.paintKind()} — ${this.paintTitleStatus()}`);
+        const { frame: p, page, section } = scriptFrame(ctx, {
+            script: this.paintKind(),
+            status: this.paintTitleStatus(),
+            pages: ['Statistics', 'Options'],
+            sections: this.paintSections(),
+            accent: this.paintAccent(),
+            byline: GATHER_BYLINE,
+            key: 'gb'
+        });
 
         const mins = (Date.now() - this.startedAt) / 60_000;
         const rate = mins > 0.5 ? `${Math.round((this.gathered / mins) * 60)}/hr` : '—/hr';
@@ -1714,118 +1735,59 @@ export default class GatheringBot extends TaskBot {
         const cookOn = this.fishing && this.cookMode !== 'off';
         const burnOn = this.chopping && this.burnMode !== 'off';
 
-        const tabNames = ['Overview', 'Skills'];
-        if (cookOn) {
-            tabNames.push('Cook');
-        }
-        if (burnOn) {
-            tabNames.push('Burn');
-        }
-        tabNames.push('Setup');
-
-        const tab = p.tabs('gb', tabNames);
-
-        if (tab === 'Overview') {
-            p.row(`Runtime: ${fmtDuration(mins)}`, `${product}: ${this.gathered}`, rate);
-            const third =
-                this.mining() && this.gems > 0
-                    ? `Gems: ${this.gems}`
-                    : this.minerFood
-                        ? `Food: ${this.minerFoodCount()}/${this.minerFood.target} · ate ${this.minerFoodEaten}`
-                        : cookOn
-                            ? `Ok ${this.cooked} · Burnt ${this.burnt}`
-                            : burnOn
-                                ? `Burned: ${this.firesLit}`
-                                : `Inv: ${Inventory.used()}/28`;
-            p.row(`Banked: ${this.banked}`, `Trips: ${this.trips}`, third);
+        if (page === 'Options') {
+            const loc = this.anchor
+                ? `${this.paintLocLabel()} (${this.anchor.x},${this.anchor.z})`
+                : this.paintLocLabel();
+            // Why: the camp name runs past a half-width cell, so it takes a row of its own.
+            p.statGrid([[{ text: `Loc: ${this.paintClip(loc, 40)}` }]], 1);
+            p.statGrid([
+                [{ text: `Mode: ${this.paintModeLabel()}` }, { text: `Leash: ${this.leash}` }],
+                [{ text: `Action: ${this.action}` }, { text: `Target: ${this.paintClip(this.target, 18)}` }],
+                [{ text: `Gear: ${this.paintClip(this.gearLabel(), 18)}` }, { text: `Tick: ${this.tickManip.method === 'off' ? 'off' : this.paintClip(this.tickManip.label, 18)}` }]
+            ]);
+            p.text(this.paintFullNote(), PAINT_DIM);
+        } else if (section === 'Overview') {
+            const third = this.mining() && this.gems > 0
+                ? `Gems: ${this.gems}`
+                : this.minerFood
+                    ? `Food: ${this.minerFoodCount()}/${this.minerFood.target}`
+                    : cookOn
+                        ? `Ok ${this.cooked} · Burnt ${this.burnt}`
+                        : burnOn
+                            ? `Burned: ${this.firesLit}`
+                            : `Trips: ${this.trips}`;
+            p.statGrid([
+                [{ text: `Runtime: ${fmtDuration(mins)}` }, { text: `${product}: ${this.gathered}` }],
+                [{ text: `Rate: ${rate}` }, { text: `Banked: ${this.banked}` }],
+                [{ text: `Trips: ${this.trips}` }, { text: third }]
+            ]);
             p.bar('Pack', Inventory.used() / 28);
-
-            const skills = this.trackedSkills();
-            if (skills.length === 1) {
-                const sk = skills[0];
-                p.row(
-                    `${this.paintSkillShort(sk)}: ${Skills.level(sk)}`,
-                    `XP/hr: ${this.fmtXpHr(sk, mins)}`,
-                    this.fmtXpGained(sk)
-                );
-            } else if (skills.length >= 2) {
-                p.row(
-                    ...skills.slice(0, 3).map(sk => `${this.paintSkillShort(sk)} ${this.fmtXpHr(sk, mins)}/hr`)
-                );
-            }
-
-            if (this.tickManip.method !== 'off') {
-                const flags = [
-                    this.tickManip.mayDie ? 'may-die' : null,
-                    this.tickManip.useKnifeDelay ? 'knife' : null,
-                    this.tickManip.timedReclick || this.tickManip.method === 'iron-cadence' ? 'reclick' : null,
-                    this.tickManip.shortbowRapid ? 'rapid' : null,
-                    this.tickManip.farmerWillowCycle ? 'farmer' : null,
-                    this.tickManip.cookEatInterleave ? 'cook/eat' : null
-                ]
-                    .filter(Boolean)
-                    .join(' · ');
-                p.row(
-                    `Tick: ${this.paintClip(this.tickManip.label, 22)}`,
-                    flags || 'on',
-                    this.tickManip.allowCombat ? 'combat OK' : 'flee'
-                );
-            }
-
-            p.text(this.paintClip(`${this.action} · ${this.target} · ${this.paintLocLabel()}`), '#8a919a');
-        } else if (tab === 'Skills') {
-            const skills = this.trackedSkills();
-            if (skills.length === 0) {
-                p.text('no tracked skills', '#8a919a');
-            } else {
-                for (const sk of skills) {
-                    p.row(
-                        `${this.paintSkillTitle(sk)} ${Skills.level(sk)}`,
-                        `XP/hr: ${this.fmtXpHr(sk, mins)}`,
-                        this.fmtXpGained(sk)
-                    );
-                }
-            }
-            p.text(this.paintClip(`session ${fmtDuration(mins)} · ${product} ${this.gathered} (${rate})`), '#8a919a');
-        } else if (tab === 'Cook') {
-            p.row(`Mode: ${this.paintCookMode()}`, `Cooked: ${this.cooked}`, `Burnt: ${this.burnt}`);
-            if (this.cookMode === 'bank-raw-then-cook') {
-                p.row(
-                    `Raw bank: ${this.bankRawInBank}/${this.bankRawTarget}`,
-                    `Phase: ${this.cookPhaseLabel()}`,
-                    `After: ${this.afterCook}`
-                );
-                p.row(`Filter: ${this.cookFishFilter || 'all raw'}`, `Policy: ${this.burntPolicy}`);
-            } else {
-                p.row(`Phase: ${this.cookPhaseLabel()}`, `Policy: ${this.burntPolicy}`, `Filter: ${this.cookFishFilter || 'all raw'}`);
-            }
-            p.row(`Cook XP/hr: ${this.fmtXpHr('cooking', mins)}`, this.fmtXpGained('cooking'));
+            p.text(this.paintClip(`${this.action} · ${this.target} · ${this.paintLocLabel()}`), PAINT_DIM);
+        } else if (section === 'Levels') {
+            paintLevels(p, this.skillGains(), mins, CONTROL_ROWS, 'no tracked skills');
+        } else if (section === 'Cook') {
+            p.statGrid([
+                [{ text: `Mode: ${this.paintCookMode()}` }, { text: `Phase: ${this.cookPhaseLabel()}` }],
+                [{ text: `Cooked: ${this.cooked}` }, { text: `Burnt: ${this.burnt}` }],
+                [{ text: `Filter: ${this.cookFishFilter || 'all raw'}` }, { text: `Policy: ${this.burntPolicy}` }],
+                ...(this.cookMode === 'bank-raw-then-cook'
+                    ? [[{ text: `Raw bank: ${this.bankRawInBank}/${this.bankRawTarget}` }, { text: `After: ${this.afterCook}` }]]
+                    : [])
+            ]);
             p.text(
                 this.rangeStand
                     ? this.paintClip(`Range: ${this.rangeName} @ (${this.rangeStand.x}, ${this.rangeStand.z})`)
                     : 'Range: not resolved',
-                '#8a919a'
+                PAINT_DIM
             );
-        } else if (tab === 'Burn') {
-            p.row(`Mode: ${this.burnMode}`, `Burned: ${this.firesLit}`, `Logs: ${this.burnLogs}`);
-            p.row(`Spot: ${this.burnSpotName || '—'}`, `FM XP/hr: ${this.fmtXpHr('firemaking', mins)}`);
-            p.row(this.fmtXpGained('firemaking'), this.hasTinderbox() ? 'Tinderbox: yes' : 'Tinderbox: missing');
-            p.text(this.paintFullNote(), '#8a919a');
         } else {
-            // Setup, keep ≤4 content lines so the note clears paintControls in the chatbox dock.
-            const loc = this.anchor
-                ? `${this.paintLocLabel()} (${this.anchor.x},${this.anchor.z})`
-                : this.paintLocLabel();
-            p.row(`Loc: ${this.paintClip(loc, 28)}`, `Mode: ${this.paintModeLabel()}`);
-            p.row(`Action: ${this.action}`, `Target: ${this.paintClip(this.target, 22)}`);
-            p.row(`Leash: ${this.leash}`, `Gear: ${this.paintClip(this.gearLabel(), 24)}`);
-            if (this.tickManip.method !== 'off') {
-                p.row(
-                    `Tick: ${this.paintClip(this.tickManip.label, 24)}`,
-                    this.tickManip.mayDie ? 'may die' : 'safe'
-                );
-            }
-            p.text(this.paintFullNote(), '#8a919a');
+            p.statGrid([
+                [{ text: `Mode: ${this.burnMode}` }, { text: `Spot: ${this.burnSpotName || '—'}` }],
+                [{ text: `Burned: ${this.firesLit}` }, { text: `Logs: ${this.burnLogs}` }],
+                [{ text: `FM/hr: ${this.fmtXpHr('firemaking', mins)}` }, { text: this.hasTinderbox() ? 'Tinderbox: yes' : 'Tinderbox: missing' }]
+            ]);
+            p.text(this.paintFullNote(), PAINT_DIM);
         }
 
         p.gap();

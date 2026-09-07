@@ -15,6 +15,13 @@ export interface JiveFrameOptions {
     /** Rail entries for the first page. Later pages draw no rail. */
     sections: string[];
     dock?: Dock;
+    // Why: the chrome is not the branding, and a script family outside Jive wants the strip and the rail under its own name rather than a byline calling it something it is not.
+    /** Strip accent; the Jive magenta when absent. */
+    accent?: string;
+    /** Footer byline; `Jive scripts` when absent. */
+    byline?: string;
+    /** Namespace for the strip and rail tab state; the script name when absent. */
+    key?: string;
 }
 
 export interface JiveFrame {
@@ -23,13 +30,19 @@ export interface JiveFrame {
     section: string;
 }
 
-/** The Jive chrome: a branded strip, a rail on the first page, and a byline. */
-export function jiveFrame(ctx: CanvasRenderingContext2D, opts: JiveFrameOptions): JiveFrame {
-    const frame = Paint.begin(ctx, { dock: opts.dock ?? 'chatbox', accent: JIVE_ACCENT });
-    const page = frame.strip(`jive:${opts.script}`, opts.pages, opts.status, opts.script);
-    const section = page === opts.pages[0] ? frame.rail(`jive:${opts.script}`, opts.sections) : '';
-    frame.footer(JIVE_BYLINE);
+/** A branded strip, a rail on the first page, and a byline. */
+export function scriptFrame(ctx: CanvasRenderingContext2D, opts: JiveFrameOptions): JiveFrame {
+    const key = opts.key ?? opts.script;
+    const frame = Paint.begin(ctx, { dock: opts.dock ?? 'chatbox', accent: opts.accent ?? JIVE_ACCENT });
+    const page = frame.strip(key, opts.pages, opts.status, opts.script);
+    const section = page === opts.pages[0] ? frame.rail(key, opts.sections) : '';
+    frame.footer(opts.byline ?? JIVE_BYLINE);
     return { frame, page, section };
+}
+
+/** The Jive chrome: {@link scriptFrame} under the Jive accent and byline. */
+export function jiveFrame(ctx: CanvasRenderingContext2D, opts: JiveFrameOptions): JiveFrame {
+    return scriptFrame(ctx, { ...opts, key: opts.key ?? `jive:${opts.script}`, accent: JIVE_ACCENT, byline: JIVE_BYLINE });
 }
 
 interface SkillReader {
