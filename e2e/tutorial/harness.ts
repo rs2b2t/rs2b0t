@@ -4,6 +4,7 @@ import { simUnreachable } from '../lib/harness.js';
 
 type Rs2b0t = {
     rs2b0t: {
+        protocol?: { version: number; clientCheat: number };
         client: {
             ingame: boolean;
             sceneState: number;
@@ -185,11 +186,11 @@ export async function cheat(page: Page, command: string): Promise<void> {
 
 export async function cheatQuiet(page: Page, command: string, waitMs = 700): Promise<boolean> {
     const sent = await page.evaluate(c => {
-        const { client } = (globalThis as never as Rs2b0t).rs2b0t;
+        const { client, protocol } = (globalThis as never as Rs2b0t).rs2b0t;
         if (!client.ingame) {
             return false;
         }
-        client.out.p1Enc(224);
+        client.out.p1Enc(protocol?.clientCheat ?? 224);
         client.out.p1(c.length + 1);
         client.out.pjstr(c);
         return true;
@@ -212,12 +213,12 @@ export async function getServerVar(page: Page, name: string): Promise<number | n
 
 export async function getServerVarQuiet(page: Page, name: string): Promise<number | null> {
     const sent = await page.evaluate(n => {
-        const { client } = (globalThis as never as Rs2b0t).rs2b0t;
+        const { client, protocol } = (globalThis as never as Rs2b0t).rs2b0t;
         if (!client.ingame) {
             return false;
         }
         const cmd = `getvar ${n}`;
-        client.out.p1Enc(224);
+        client.out.p1Enc(protocol?.clientCheat ?? 224);
         client.out.p1(cmd.length + 1);
         client.out.pjstr(cmd);
         return true;

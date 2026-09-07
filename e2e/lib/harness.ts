@@ -182,16 +182,18 @@ export async function login(page: Page, user: string, pass = 'test'): Promise<bo
 }
 
 /**
- * Send a client cheat packet (CLIENT_CHEAT / op 224) without keyboard focus.
+ * Send a client cheat packet (CLIENT_CHEAT, whose opcode the bundle publishes) without keyboard focus.
  * `command` is the text after `::`, e.g. `tele 0,50,50,20,20`.
  */
 export async function cheatQuiet(page: Page, command: string, waitMs = 700): Promise<boolean> {
     const sent = await page.evaluate(c => {
-        const client = (globalThis as never as Rs2b0t).rs2b0t?.client;
+        const g = (globalThis as never as Rs2b0t).rs2b0t;
+        const client = g?.client;
         if (!client?.ingame || !client.out) {
             return false;
         }
-        client.out.p1Enc(224); // ClientProt.CLIENT_CHEAT
+        // Why: CLIENT_CHEAT is 34 on 289 and was 224 on 274, and a bundle built before it was published falls back to the old number.
+        client.out.p1Enc(g.protocol?.clientCheat ?? 224);
         client.out.p1(c.length + 1);
         client.out.pjstr(c);
         return true;
@@ -265,6 +267,7 @@ export async function startFromLibrary(page: Page, category: string, script: str
 
 export type Rs2b0t = {
     rs2b0t: {
+        protocol?: { version: number; clientCheat: number };
         client: {
             ingame: boolean;
             sceneState: number;
