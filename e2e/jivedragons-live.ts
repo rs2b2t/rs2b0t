@@ -205,15 +205,13 @@ const IRON_SITE = {
     quest: { name: 'elenaquest', value: 30 } as { name: string; value: number } | null,
     antipoison: false,
     lair: { minX: 2624, maxX: 2751, minZ: 9408, maxZ: 9599, level: 0 },
-    // Why: mirrored from sites.ts the way every other row here is, so a stand that drifts in one copy fails a milestone rather than passing quietly.
+    // Why: mirrored from sites.ts the way every other row here is, so a stand that drifts in one copy fails a milestone rather than passing quietly. The camps are open tiles that see seven dragons each, not pockets: the breath is 0 through the shield with a dose up.
     stands: [
-        { tiles: [{ x: 2697, z: 9458, level: 0 }, { x: 2696, z: 9457, level: 0 }, { x: 2697, z: 9459, level: 0 }], anchor: { x: 2698, z: 9457, level: 0 } },
-        { tiles: [{ x: 2714, z: 9416, level: 0 }, { x: 2715, z: 9415, level: 0 }, { x: 2715, z: 9416, level: 0 }], anchor: { x: 2714, z: 9417, level: 0 } },
-        { tiles: [{ x: 2747, z: 9453, level: 0 }, { x: 2747, z: 9454, level: 0 }, { x: 2747, z: 9452, level: 0 }], anchor: { x: 2746, z: 9452, level: 0 } },
-        { tiles: [{ x: 2716, z: 9415, level: 0 }, { x: 2715, z: 9415, level: 0 }, { x: 2717, z: 9414, level: 0 }], anchor: { x: 2716, z: 9416, level: 0 } }
+        { tiles: [{ x: 2718, z: 9436, level: 0 }, { x: 2717, z: 9436, level: 0 }, { x: 2718, z: 9437, level: 0 }], anchor: { x: 2718, z: 9436, level: 0 } },
+        { tiles: [{ x: 2727, z: 9450, level: 0 }, { x: 2727, z: 9449, level: 0 }, { x: 2728, z: 9450, level: 0 }], anchor: { x: 2727, z: 9450, level: 0 } }
     ] as Stand[] | undefined,
-    safespots: [{ x: 2697, z: 9458, level: 0 }, { x: 2696, z: 9457, level: 0 }, { x: 2697, z: 9459, level: 0 }],
-    meleeAnchor: { x: 2698, z: 9457, level: 0 },
+    safespots: [{ x: 2718, z: 9436, level: 0 }, { x: 2717, z: 9436, level: 0 }, { x: 2718, z: 9437, level: 0 }],
+    meleeAnchor: { x: 2718, z: 9436, level: 0 },
     target: 'Iron dragon',
     baby: null,
     food: { debug: 'shark', name: 'Shark' },
@@ -233,10 +231,10 @@ const STEEL_SITE = {
     ...IRON_SITE,
     key: 'brimhaven-steel',
     stands: [
-        { tiles: [{ x: 2696, z: 9457, level: 0 }, { x: 2696, z: 9458, level: 0 }, { x: 2697, z: 9458, level: 0 }], anchor: { x: 2696, z: 9455, level: 0 } }
+        { tiles: [{ x: 2718, z: 9447, level: 0 }, { x: 2718, z: 9446, level: 0 }, { x: 2717, z: 9446, level: 0 }], anchor: { x: 2718, z: 9447, level: 0 } }
     ] as Stand[] | undefined,
-    safespots: [{ x: 2696, z: 9457, level: 0 }, { x: 2696, z: 9458, level: 0 }, { x: 2697, z: 9458, level: 0 }],
-    meleeAnchor: { x: 2696, z: 9455, level: 0 },
+    safespots: [{ x: 2718, z: 9447, level: 0 }, { x: 2718, z: 9446, level: 0 }, { x: 2717, z: 9446, level: 0 }],
+    meleeAnchor: { x: 2718, z: 9447, level: 0 },
     target: 'Steel dragon',
     lootKey: 'lootSteel',
     bar: 'Steel bar' as string | null
@@ -258,7 +256,8 @@ const BABY = SITE.baby;
 const FOOD = SITE.food;
 const LOBSTER_HEAL = SITE.heal;
 // Why: a fee site's pack also carries the coins, the axe and a flask, so its food drops to leave the escape runes a slot.
-const PACK_FOOD = SITE.fee > 0 ? 16 : 20;
+// Why: with a dose up the breath is 0 and the food goes unused, so the fee sites carry eight and three flasks.
+const PACK_FOOD = SITE.fee > 0 ? 8 : 20;
 const PANIC_PCT = 30;
 
 // Why: the Brimhaven walk in chops vines at Woodcutting 22 and squeezes a pipe at Agility 34, and a rune axe wants Attack 40, which the 75 already covers.
@@ -284,8 +283,10 @@ const HARNESS_HIT_GRACE_MS = 2500;
 /** The substring acquireKey logs once it has read the bank and found no key there. */
 const BANK_READ_LINE = 'in the bank or in the pack';
 
-const PROOF_PATH = 'out/jivedragons-proof.json';
-const SHOT_PATH = 'out/jivedragons-live.png';
+// Why: three runs on three stands at once each write a proof, and one shared name keeps only the last finisher's.
+const RUN_TAG = `${args.site}${STANDS ? `-stand${args.stand}` : ''}`;
+const PROOF_PATH = `out/jivedragons-${RUN_TAG}-proof.json`;
+const SHOT_PATH = `out/jivedragons-${RUN_TAG}-live.png`;
 
 interface Kit {
     pack: readonly (readonly [string, string, number])[];
@@ -334,7 +335,7 @@ const COMMON_BANK: BankSeedItem[] = [
 
 /** What a fee site's pack starts with on top of the style kit: the fee, the axe and one flask. The shield goes on with the armour. */
 const FEE_PACK: readonly (readonly [string, string, number])[] = SITE.fee > 0
-    ? [['coins', 'Coins', 1000], ...(SITE.axe !== null ? [[SITE.axe.toLowerCase().replace(/ /g, '_'), SITE.axe, 1] as const] : []), ...(SITE.antifire ? [['4dose1antidragon', 'Antifire potion(4)', 1] as const] : [])]
+    ? [['coins', 'Coins', 1000], ...(SITE.axe !== null ? [[SITE.axe.toLowerCase().replace(/ /g, '_'), SITE.axe, 1] as const] : []), ...(SITE.antifire ? [['4dose1antidragon', 'Antifire potion(4)', 3] as const] : [])]
     : [];
 const FEE_WORN: readonly (readonly [string, string])[] = SITE.fee > 0 ? [['antidragonbreathshield', 'Dragonfire shield']] : [];
 
@@ -353,7 +354,7 @@ const CLUE_TOOLS: BankSeedItem[] = [
 // Why: the pack starts stocked so the first task is the key leg rather than a restock, which is what makes "one bank stop for a cold key" a number worth counting.
 // Why: leaveVia and solveClues both follow the flags rather than sitting on a fixed value, because the script ships with teleport and clues ON and the harness used to pin both to the opposite, so the shipped defaults were the two settings no run ever exercised.
 function kitFor(style: Style): Kit {
-    const common = { foodWithdraw: PACK_FOOD, panicHp: PANIC_PCT, foodReserve: 4, healTo: 90, site: SITE.key, stand: args.stand, teleStock: 2, buryBones: false, solveClues: args.clue, bankCommonJunk: false, [SITE.lootKey]: LOOT.join(', '), logDetail: 'Verbose', usePotions: false, leaveVia: args.leave, ...(SITE.antifire ? { antifireDoses: 1 } : {}), ...(SITE.axe !== null ? { axe: SITE.axe } : {}) };
+    const common = { foodWithdraw: PACK_FOOD, panicHp: PANIC_PCT, foodReserve: 4, healTo: 90, site: SITE.key, stand: args.stand, teleStock: 2, buryBones: false, solveClues: args.clue, bankCommonJunk: false, [SITE.lootKey]: LOOT.join(', '), logDetail: 'Verbose', usePotions: false, leaveVia: args.leave, ...(SITE.antifire ? { antifireDoses: 3 } : {}), ...(SITE.axe !== null ? { axe: SITE.axe } : {}) };
     if (style === 'melee') {
         return {
             pack: [...(SITE.fee > 0 ? [] : [['antidragonbreathshield', 'Dragonfire shield', 1] as const]), ...FEE_PACK, [FOOD.debug, FOOD.name, PACK_FOOD]],

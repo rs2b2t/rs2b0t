@@ -1,7 +1,7 @@
 /** Derive the safespots and melee anchor of a Jive grind site, which feed sites.ts under scripts/JiveDragons, scripts/JiveDemons and scripts/JiveKBD.
  *  Why: walkable is not reachable and a multi-tile body slides several tiles off its spawn, so the melee-proof set has to come from the collision pack rather than from looking at the map. */
 
-//   bun tools/nav/jive-safespots.ts [--target blue|demon|kbd] [--content ~/code/rs2b2t-content] [--engine ~/code/rs2b2t-engine]
+//   bun tools/nav/jive-safespots.ts [--target blue|demon|kbd] [--anywhere] [--content ~/code/rs2b2t-content] [--engine ~/code/rs2b2t-engine]
 import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
@@ -38,6 +38,9 @@ export interface Target {
     // Why: a stand is ranked by how much of one dragon's own wander it sees, and a chase leash of 20 says nothing about where the dragon idles; the Enclave's south stand saw 11% of its dragon and took no kills in twenty minutes.
     /** The npc's own wanderrange when it differs from `maxrange`, for the share a stand sees of each spawn's idle wander. */
     wander?: number;
+    // Why: a metal dragon parks at ten tiles and breathes, and the shield with an Antifire dose makes that 0, so the stand need not be melee-proof; only a tile inside an idle wander footprint is out, and the rest rank by what they see.
+    /** Rank every reachable tile outside the idle wander footprints, not only the melee-proof ones. */
+    anywhere?: boolean;
     /** The tile the site region floods from. */
     inside: { x: number; z: number };
     /** A tile on the wrong side of the gate, whose region a site area must stay out of. */
@@ -447,9 +450,11 @@ export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS, engin
         throw new Error(`the gate at (${target.inside.x}, ${target.inside.z}) is open in ${where}, so the two sides of it cannot be told apart`);
     }
     const homes = adults.map(w => (target.wander === undefined ? w : wander(w.spawn, target.wander)));
+    const homeBody = new Set<string>();
+    for (const h of homes) for (const b of h.body) homeBody.add(b);
     const safespots: Safespot[] = [];
     for (const k of reachable) {
-        if (allBody.has(k) || adultThreat.has(k) || babyThreat.has(k)) continue;
+        if (target.anywhere === true ? homeBody.has(k) : (allBody.has(k) || adultThreat.has(k) || babyThreat.has(k))) continue;
         const [x, z] = parse(k);
         const seen = new Set<string>();
         let range = Infinity, covers = 0;
@@ -511,8 +516,9 @@ export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS, engin
 
 if (import.meta.main) {
     const name = argVal('--target') ?? 'blue';
-    const target = TARGETS[name];
-    if (!target) throw new Error(`--target takes ${Object.keys(TARGETS).join(', ')}, got '${name}'`);
+    const picked = TARGETS[name];
+    if (!picked) throw new Error(`--target takes ${Object.keys(TARGETS).join(', ')}, got '${name}'`);
+    const target = process.argv.includes('--anywhere') ? { ...picked, anywhere: true } : picked;
     const d = derive(target);
     for (const w of d.wanders) {
         console.log(`${w.spawn.adult ? 'adult' : 'baby '} spawn (${w.spawn.x}, ${w.spawn.z}) size ${w.spawn.size}: ${w.placements} placements, ${w.body.size} body tiles, ${w.threat.size} tiles it can hit`);

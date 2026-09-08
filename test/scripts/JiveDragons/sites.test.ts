@@ -457,6 +457,11 @@ describe('the Brimhaven Dungeon metal dragons', () => {
         expect([iron.bank.x, iron.bank.z]).toEqual([2655, 3283]);
     });
 
+    test('iron and steel finish whichever of the two bites, so each is the other\'s filler', () => {
+        expect(huntNames(iron)).toEqual(['Iron dragon', 'Steel dragon']);
+        expect(iron.foodPerTrip).toBe(8);
+    });
+
     test('the approach runs one stop per obstacle from the landing to the pipe', () => {
         expect(iron.approach.map(t => [t.x, t.z])).toEqual([[2691, 9564], [2649, 9562], [2672, 9499], [2682, 9506], [2698, 9500], [2698, 9492]]);
     });
@@ -470,11 +475,11 @@ describe('the Brimhaven Dungeon metal dragons', () => {
         }
     });
 
-    test('iron carries four numbered stands and steel one, and the picker knows which sites have several', () => {
-        expect(iron.stands!.length).toBe(4);
+    test('iron carries two open camps and steel one, and the picker knows which sites have several', () => {
+        expect(iron.stands!.length).toBe(2);
         expect(steel.stands!.length).toBe(1);
         expect(iron.safespots).toBe(iron.stands![0]!.tiles);
-        expect(standFor(iron, 9).label).toBe(iron.stands![3]!.label);
+        expect(standFor(iron, 9).label).toBe(iron.stands![1]!.label);
         expect(standFor(steel, 3).tiles).toBe(steel.stands![0]!.tiles);
         expect(STAND_SITE_KEYS).toEqual(['gutanoth-blue', 'brimhaven-iron']);
         expect(MAX_STANDS).toBe(6);
@@ -485,32 +490,31 @@ describe('the Brimhaven Dungeon metal dragons', () => {
         expect(steel.lootSetting).toBe('lootSteel');
         expect(iron.lootSetting).toBe('lootIron');
         expect(steel.bank).toBe(iron.bank);
-        expect(huntNames(steel)).toEqual(['Steel dragon']);
+        expect(huntNames(steel)).toEqual(['Steel dragon', 'Iron dragon']);
     });
 });
 
-// Why: the room is one open cave under a chase leash of 20, so the pockets the sites carry are pinned as tiles the probe still calls melee-proof, and the stand's dragon as one it sees.
+// Why: the camps are open tiles, so they are pinned as tiles the anywhere derivation ranks, each seeing several dragons' idle wander rather than one pocket's worth.
 describe.skipIf(!inputsPresent(IRON_DRAGON))('the Brimhaven derivation (pack-gated)', () => {
-    test('every iron stand tile is a derived safespot and sees the dragon it is named for', () => {
-        const derived = derive(IRON_DRAGON);
+    test('every iron camp tile is an open candidate that sees at least five dragons', () => {
+        const derived = derive({ ...IRON_DRAGON, anywhere: true });
         const spots = new Map(derived.safespots.map(s => [`${s.x},${s.z}`, s]));
         for (const stand of BRIMHAVEN_IRON.stands!) {
-            const [x, z] = stand.label.match(/(\d+),(\d+)/)!.slice(1).map(Number);
-            const i = derived.spawns.filter(s => s.adult).findIndex(s => s.x === x && s.z === z);
-            expect(i).toBeGreaterThanOrEqual(0);
             for (const t of stand.tiles) {
                 const spot = spots.get(`${t.x},${t.z}`);
                 expect(spot).toBeDefined();
-                expect(spot!.shares[i]).toBeGreaterThan(0);
+                expect(spot!.shares.filter(f => f > 0.15).length).toBeGreaterThanOrEqual(5);
             }
         }
     }, 120_000);
 
-    test('the steel stand is a derived safespot for its dragon', () => {
-        const derived = derive(STEEL_DRAGON);
-        const spots = new Set(derived.safespots.map(s => `${s.x},${s.z}`));
+    test('the steel camp sees all four dragons', () => {
+        const derived = derive({ ...STEEL_DRAGON, anywhere: true });
+        const spots = new Map(derived.safespots.map(s => [`${s.x},${s.z}`, s]));
         for (const t of BRIMHAVEN_STEEL.stands![0]!.tiles) {
-            expect(spots.has(`${t.x},${t.z}`)).toBe(true);
+            const spot = spots.get(`${t.x},${t.z}`);
+            expect(spot).toBeDefined();
+            expect(spot!.shares.filter(f => f > 0.15).length).toBe(4);
         }
     }, 120_000);
 });

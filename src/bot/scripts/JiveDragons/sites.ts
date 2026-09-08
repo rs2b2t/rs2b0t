@@ -98,6 +98,9 @@ export interface DragonSite {
     coins?: number;
     /** The walk in chops vines, so an axe rides in the pack. */
     axe?: boolean;
+    // Why: with the breath at 0 the food goes unused and the doses are what the trip burns, so a site can say how much food a trip carries when the panel is left at its default.
+    /** Food per trip while the panel's foodWithdraw sits on its schema default. */
+    foodPerTrip?: number;
     inArea(t: AreaPoint | null): boolean;
 }
 
@@ -252,37 +255,26 @@ export const GUTANOTH_BLUE: DragonSite = {
 // Why: the dungeon is nine pockets joined by vines, stepping stones, a log and a pipe, all of them edges in transports.json, and the landing is sealed from everything else; the box covers all of it so the walk in from the landing is a walk to the stand and never a second payment.
 const BRIMHAVEN_DUNGEON = inBox({ minX: 2624, maxX: 2751, minZ: 9408, maxZ: 9599, level: 0 });
 
-// Why: derived by tools/nav/jive-safespots.ts --target iron, which ranks a pocket by the share of one dragon's own wander it sees; the room is one open cave under a chase leash of 20, so only four of the thirteen have a melee-proof pocket in cast range at all. Each stand also sits clear of the wild dogs, black demons and bronze dragons on the north edge.
-// Why: stand 1 is nearest the pipe and the one with a live proof; stand 2 sees the most of its dragon but is eighty tiles deeper in.
+// Why: derived by tools/nav/jive-safespots.ts --target iron --anywhere. A metal dragon parks at ten tiles and breathes, and the shield with an Antifire dose makes that 0, so the stand is not a melee-proof pocket but the open tile that sees the most dragons; losing one is harder than finding one. Stand 1 sees seven of the thirteen inside cast range, stand 2 the other seven. Both sit clear of the wild dogs, black demons and bronze dragons on the north edge.
 const BRIMHAVEN_IRON_STANDS: DragonStand[] = [
     {
-        label: 'the north-west dragon at 2704,9457',
-        tiles: [new Tile(2697, 9458, 0), new Tile(2696, 9457, 0), new Tile(2697, 9459, 0)],
-        anchor: new Tile(2698, 9457, 0)
+        label: 'the west half of the room from 2718,9436',
+        tiles: [new Tile(2718, 9436, 0), new Tile(2717, 9436, 0), new Tile(2718, 9437, 0)],
+        anchor: new Tile(2718, 9436, 0)
     },
     {
-        label: 'the south dragon at 2714,9420',
-        tiles: [new Tile(2714, 9416, 0), new Tile(2715, 9415, 0), new Tile(2715, 9416, 0)],
-        anchor: new Tile(2714, 9417, 0)
-    },
-    {
-        label: 'the east dragon at 2739,9450',
-        tiles: [new Tile(2747, 9453, 0), new Tile(2747, 9454, 0), new Tile(2747, 9452, 0)],
-        anchor: new Tile(2746, 9452, 0)
-    },
-    {
-        label: 'the south-east dragon at 2722,9424',
-        tiles: [new Tile(2716, 9415, 0), new Tile(2715, 9415, 0), new Tile(2717, 9414, 0)],
-        anchor: new Tile(2716, 9416, 0)
+        label: 'the east half of the room from 2727,9450',
+        tiles: [new Tile(2727, 9450, 0), new Tile(2727, 9449, 0), new Tile(2728, 9450, 0)],
+        anchor: new Tile(2727, 9450, 0)
     }
 ];
 
-// Why: only the west steel dragon has a pocket in cast range, and it is the same pocket as iron stand 1, so a steel run sees an iron dragon from it too.
+// Why: the same derivation for the four steel dragons; the one tile sees all four, and the iron camp is eleven tiles north of it.
 const BRIMHAVEN_STEEL_STANDS: DragonStand[] = [
     {
-        label: 'the west dragon at 2702,9447',
-        tiles: [new Tile(2696, 9457, 0), new Tile(2696, 9458, 0), new Tile(2697, 9458, 0)],
-        anchor: new Tile(2696, 9455, 0)
+        label: 'all four dragons from 2718,9447',
+        tiles: [new Tile(2718, 9447, 0), new Tile(2718, 9446, 0), new Tile(2717, 9446, 0)],
+        anchor: new Tile(2718, 9447, 0)
     }
 ];
 
@@ -315,7 +307,10 @@ export const BRIMHAVEN_IRON: DragonSite = {
     escapeTeleportId: 'ardougne',
     walkOut: new Tile(2745, 3152, 0),
     food: 'Shark',
+    foodPerTrip: 8,
     lootSetting: 'lootIron',
+    // Why: losing a metal dragon's aggro is hard, so whichever of the two kinds is biting gets finished, and auto-retaliate stays on for it.
+    alsoHunt: ['Steel dragon'],
     fireAtRange: true,
     rangedThreat: true,
     antifire: true,
@@ -333,6 +328,7 @@ export const BRIMHAVEN_STEEL: DragonSite = {
     stands: BRIMHAVEN_STEEL_STANDS,
     safespots: BRIMHAVEN_STEEL_STANDS[0]!.tiles,
     meleeAnchor: BRIMHAVEN_STEEL_STANDS[0]!.anchor,
+    alsoHunt: ['Iron dragon'],
     lootSetting: 'lootSteel'
 };
 

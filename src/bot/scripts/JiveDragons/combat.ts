@@ -1,8 +1,9 @@
+import { reader } from '../../adapter/ClientAdapter.js';
 import type { Task } from '../../api/bot/Bot.js';
 import { buryOneInFight } from '../../api/combat/fightUpkeep.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, facingPlayer } from '../../api/game/Game.js';
 import { Npcs, type Npc } from '../../api/npcs/Npcs.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Sustain } from '../../api/sustain/Sustain.js';
@@ -149,8 +150,8 @@ function huntableNear(site: DragonSite, name: string, ours: number | null, radiu
         .results();
 }
 
-// Why: the stand is idle while its dragon respawns, so the filler is taken then and only then, or it would trade the drop the trip is for. One already engaged stays in the field though: a greater demon on 87 health dropped the moment a dragon respawns heals back before the next lull and is never killed, which live looked like three engagements and no kill.
-/** Adults inside `radius` that no other player is fighting and that `from` can see: the target's own first, plus a filler already being fought, and the rest of the filler only when the target is not up. */
+// Why: the stand is idle while its dragon respawns, so the filler is taken then and only then, or it would trade the drop the trip is for. One already engaged stays in the field though: a greater demon on 87 health dropped the moment a dragon respawns heals back before the next lull and is never killed, which live looked like three engagements and no kill. A filler that is biting us stays in too, since losing a metal dragon's aggro is harder than killing it and auto-retaliate is already hitting it.
+/** Adults inside `radius` that no other player is fighting and that `from` can see: the target's own first, plus a filler already being fought or biting us, and the rest of the filler only when the target is not up. */
 function adultsNear(site: DragonSite, ours: number | null, radius: number, from: Tile | null): Npc[] {
     const primary = huntableNear(site, site.target, ours, radius, from);
     if ((site.alsoHunt?.length ?? 0) === 0) {
@@ -160,8 +161,19 @@ function adultsNear(site: DragonSite, ours: number | null, radius: number, from:
     if (primary.length === 0) {
         return filler;
     }
-    const engaged = ours === null ? [] : filler.filter(n => n.index === ours);
+    const engaged = filler.filter(n => n.index === ours || n.targetsMe());
     return [...engaged, ...primary];
+}
+
+// Why: auto-retaliate swings the casts to whatever bit us last, and a loop that keeps re-clicking the dragon it chose fights its own client; the face entity is the one thing the client says about who we are hitting, so the loop follows it and the kill is counted under that dragon.
+/** The huntable npc our own character is facing, when auto-retaliate has picked one. */
+function retaliationTarget(site: DragonSite): Npc | null {
+    const fe = reader.selfFaceEntity();
+    if (fe < 0 || facingPlayer(fe)) {
+        return null;
+    }
+    const names = huntNames(site);
+    return Npcs.all().find(n => n.index === fe && names.includes(n.name ?? '')) ?? null;
 }
 
 function stillThere(site: DragonSite, idx: number): boolean {
@@ -281,7 +293,16 @@ export class Fight implements Task {
             for (const n of field) {
                 this.seen.set(n.index, noteSighting(this.seen.get(n.index), n.tile(), performance.now()));
             }
-            const live = this.engaged === null ? undefined : field.find(n => n.index === this.engaged);
+            const facing = retaliationTarget(this.site);
+            if (facing !== null && facing.index !== this.engaged) {
+                const shown = (facing.name ?? name).toLowerCase();
+                this.host.log(`retaliating at ${shown} ${facing.index} at ${facing.tile()} (gap ${gapTo(this.anchor(), facing.tile(), facing.size)}), so it is the target now`);
+                this.engagedName = shown;
+                this.reissues = 0;
+                this.setTarget(facing.index);
+                this.engagedHealth = -1;
+            }
+            const live = this.engaged === null ? undefined : (field.find(n => n.index === this.engaged) ?? (facing?.index === this.engaged ? facing : undefined));
             if (live && live.targetsAnotherPlayer()) {
                 this.host.log(`${name} ${live.index} was taken by another player. Finding another.`);
                 this.skip.set(live.index, performance.now() + TAKEN_SKIP_MS);
@@ -301,9 +322,11 @@ export class Fight implements Task {
             }
 
             const now = performance.now();
-            const target = field
-                .filter(n => (this.skip.get(n.index) ?? 0) < now && (!usesSafespot(style) || settled(this.seen.get(n.index), now, SETTLE_MS)))
-                .sort((a, b) => a.distance() - b.distance())[0];
+            // Why: with two dragons in view the nearest one changes as they shuffle, and a pick that follows it splits the casts between them; the one already engaged, by click or by retaliation, keeps the fight until it is down or gone.
+            const target = (this.engaged === null ? undefined : field.find(n => n.index === this.engaged && (this.skip.get(n.index) ?? 0) < now))
+                ?? field
+                    .filter(n => (this.skip.get(n.index) ?? 0) < now && (!usesSafespot(style) || settled(this.seen.get(n.index), now, SETTLE_MS)))
+                    .sort((a, b) => a.distance() - b.distance())[0];
             if (!target) {
                 this.explainEmptyField(now);
                 await this.idle();

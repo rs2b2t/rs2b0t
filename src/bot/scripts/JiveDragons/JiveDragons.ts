@@ -48,6 +48,7 @@ const LOOT_WALK_MS = 30_000;
 
 const ASSERT_BATCH = 5;
 const ASSERT_RETRY_MS = 60_000;
+const SIP_RETRY_MS = 5000;
 const PARK_TICKS = 10;
 
 // Why: the byline owns the row under the body and the controls need the one above it, so the drop list and the park reason are budgeted against the tallest section.
@@ -126,13 +127,13 @@ export const SETTINGS: SettingsSchema = {
     buryBones: { type: 'boolean', default: false, label: 'Bury dragon bones', group: 'Banking & loot', help: 'bury Dragon bones for Prayer xp instead of banking them (always looted when on). They are the best drop here, so this trades gold for xp' },
     rangingPotion: { type: 'boolean', default: false, label: 'Drink a ranging potion', group: 'Combat', showIf: SHOW_RANGE, help: 'sips a dose once the boost decays to within a tenth of the base level. The loadout carry list sets the dose form and the count per trip, otherwise one Ranging potion(3)' },
     antipoisonDoses: { type: 'number', default: 1, min: 0, max: 4, label: 'Superantipoison flasks per trip', group: 'Food & healing', showIf: SHOW_BLACK, help: 'the walk to the black dragons passes the dungeon spiders. A dose is drunk on the poison message; 0 carries none' },
-    antifireDoses: { type: 'number', default: 1, min: 0, max: 4, label: 'Antifire potion flasks per trip', group: 'Food & healing', showIf: SHOW_BRIMHAVEN, help: 'a metal dragon breathes from ten tiles and the shield alone leaves 5 a breath; a dose on top makes it 0 for six minutes, and the next goes down as the last lapses. 0 carries none and the food takes the breaths' },
+    antifireDoses: { type: 'number', default: 3, min: 0, max: 6, label: 'Antifire potion flasks per trip', group: 'Food & healing', showIf: SHOW_BRIMHAVEN, help: 'a metal dragon breathes from ten tiles and the shield alone leaves 5 a breath; a dose on top makes it 0 for six minutes, and the next goes down as the last lapses, so the doses are what a trip burns and three flasks is 72 minutes. The Brimhaven sites carry 8 food a trip while the food knob sits on its default. 0 carries none and the food takes the breaths' },
     axe: { type: 'string', default: 'Rune axe', options: AXES.map(t => t.name), label: 'Axe for the vines', group: 'Location', showIf: SHOW_BRIMHAVEN, help: 'the walk in chops through two vine walls, so an axe rides in the pack every trip; any tier works, a better one chops faster' },
 
     solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues', help: 'blue dragons drop hard clues. The trail leaves the dungeon and comes back' },
 
-    site: { type: 'string', default: 'taverley-blue', options: SITE_OPTIONS, label: 'Dragon site', group: 'Location', help: "below combat 97 the Taverley baby blues aggress on the walk in, above it they never do. The Heroes' Guild dragon is one adult penned behind a fence, so the fight is cast through it and only the loot walk opens the gate; the guild doors need Heroes' Quest. The Gu'Tanoth Enclave is a mage site: the Enclave guard waves you past once Watch Tower is complete, the stand looks at one dragon of the six and nothing else, and the cave shares its floor with greater demons, ogre shamans and chieftains, so melee there is your own risk. The Brimhaven Dungeon metal dragons cost Saniboch 875 coins a trip and the walk in chops two vines and crosses stepping stones, a log and a pipe, so it wants Woodcutting 22, Agility 34 and an axe; they breathe from ten tiles, so every style wears the Dragonfire shield, range is refused, and the trip banks at Ardougne on the Ardougne teleport, which needs Plague City" },
-    stand: { type: 'number', default: 1, min: 1, max: MAX_STANDS, label: 'Stand', group: 'Location', showIf: SHOW_STAND, help: 'which of the site\'s numbered stands to fight from, one per dragon. The Enclave has six, listed north, west, north-west, south, east, far east; 1 is the roomiest and the one with a live proof behind it. The iron dragons have four, nearest the pipe first; only four of the thirteen have a melee-proof pocket in cast range at all. A number past the end takes the last, and a site with one stand ignores it' },
+    site: { type: 'string', default: 'taverley-blue', options: SITE_OPTIONS, label: 'Dragon site', group: 'Location', help: "below combat 97 the Taverley baby blues aggress on the walk in, above it they never do. The Heroes' Guild dragon is one adult penned behind a fence, so the fight is cast through it and only the loot walk opens the gate; the guild doors need Heroes' Quest. The Gu'Tanoth Enclave is a mage site: the Enclave guard waves you past once Watch Tower is complete, the stand looks at one dragon of the six and nothing else, and the cave shares its floor with greater demons, ogre shamans and chieftains, so melee there is your own risk. The Brimhaven Dungeon metal dragons cost Saniboch 875 coins a trip and the walk in chops two vines and crosses stepping stones, a log and a pipe, so it wants Woodcutting 22, Agility 34 and an axe; they park at ten tiles and breathe, so the stand is the open tile that sees the most of them, every style wears the Dragonfire shield with an Antifire dose up, range is refused, iron and steel finish whichever bites, and the trip banks at Ardougne on the Ardougne teleport, which needs Plague City" },
+    stand: { type: 'number', default: 1, min: 1, max: MAX_STANDS, label: 'Stand', group: 'Location', showIf: SHOW_STAND, help: 'which of the site\'s numbered stands to fight from, one per dragon. The Enclave has six, listed north, west, north-west, south, east, far east; 1 is the roomiest and the one with a live proof behind it. The iron dragons have two open camps, the west half of the room then the east, seven dragons in view from each. A number past the end takes the last, and a site with one stand ignores it' },
     safespot1: { type: 'tile', default: TAVERLEY_BLUE.safespots[0], label: 'Safespot 1', group: 'Location', showIf: SHOW_SAFESPOT, help: 'the chosen stand fills these; set one to move it off the derived tile' },
     safespot2: { type: 'tile', default: TAVERLEY_BLUE.safespots[1], label: 'Safespot 2', group: 'Location', showIf: SHOW_SAFESPOT, help: 'the ladder rotates here when a hit lands, or when nothing is in range for 20s' },
     safespot3: { type: 'tile', default: TAVERLEY_BLUE.safespots[2], label: 'Safespot 3', group: 'Location', showIf: SHOW_SAFESPOT },
@@ -524,13 +525,18 @@ class SipAntifire implements Task {
         return ANTIFIRE_WANT > 0 && Date.now() >= this.retryAt && antifire.due();
     }
     async execute(): Promise<void> {
-        if (antifireHeld() > 0 && await sipAntifire(this.bot)) {
+        if (antifireHeld() === 0) {
+            this.retryAt = Date.now() + ASSERT_RETRY_MS;
+            if (!antifire.warned) {
+                this.bot.log('WARNING: an Antifire dose is due and the pack holds no flask. The shield holds the breaths to 5 until the bank run.');
+                antifire.warned = true;
+            }
             return;
         }
-        this.retryAt = Date.now() + ASSERT_RETRY_MS;
-        if (!antifire.warned) {
-            this.bot.log(`WARNING: an Antifire dose is due and the pack holds ${antifireHeld()} flask(s). The shield holds the breaths to 5 until the bank run.`);
-            antifire.warned = true;
+        // Why: a sip sent mid-walk can miss its three-second window, and a minute without a dose is five a breath; a held flask is retried in a few seconds instead.
+        if (!(await sipAntifire(this.bot))) {
+            this.retryAt = Date.now() + SIP_RETRY_MS;
+            this.bot.vlog('the Antifire sip did not land, trying again shortly');
         }
     }
 }
@@ -602,24 +608,24 @@ class SetAttackStyle implements Task {
     }
 }
 
-// Why: two metal dragons breathe at the stand at once and auto-retaliate swings the casts to whichever breathed last, so the script's target stalls while the other one dies uncounted; with it off the casts go where the click went.
+// Why: two metal dragons breathe at the stand at once and losing either one's aggro is harder than killing it, so auto-retaliate stays on and the fight loop follows whatever it is hitting.
 class SetRetaliate implements Task {
     private fails = 0;
     private retryAt = 0;
     constructor(private readonly bot: JiveDragons) {}
     validate(): boolean {
-        return SITE.fireAtRange === true && Game.autoRetaliateOn() && Date.now() >= this.retryAt;
+        return SITE.fireAtRange === true && !Game.autoRetaliateOn() && Date.now() >= this.retryAt;
     }
     async execute(): Promise<void> {
-        this.bot.setStatus('turning auto-retaliate off');
-        Game.setAutoRetaliate(false);
-        if (await Execution.delayUntil(() => !Game.autoRetaliateOn(), 3000)) {
-            this.bot.log('auto-retaliate off, so the casts stay on the dragon that was clicked');
+        this.bot.setStatus('turning auto-retaliate on');
+        Game.setAutoRetaliate(true);
+        if (await Execution.delayUntil(() => Game.autoRetaliateOn(), 3000)) {
+            this.bot.log('auto-retaliate on, so whichever dragon bites gets the casts and the fight follows it');
             this.fails = 0;
         } else if (++this.fails >= ASSERT_BATCH) {
             this.fails = 0;
             this.retryAt = Date.now() + ASSERT_RETRY_MS;
-            this.bot.log(`could not turn auto-retaliate off. Retrying in ${ASSERT_RETRY_MS / 1000}s.`);
+            this.bot.log(`could not turn auto-retaliate on. Retrying in ${ASSERT_RETRY_MS / 1000}s.`);
         }
     }
 }
@@ -869,7 +875,9 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         RUNE_CASTS = this.settings.num('runesWithdraw', 150);
         RUNE_BUFFER = this.settings.num('runeBuffer', 300);
         AMMO_WITHDRAW = this.settings.num('ammoWithdraw', 500);
-        FOOD_WITHDRAW = this.settings.num('foodWithdraw', 20);
+        // Why: the panel knob is one for every site, so a site with its own figure takes it only while the knob sits on the schema default.
+        const foodKnob = this.settings.num('foodWithdraw', 20);
+        FOOD_WITHDRAW = SITE.foodPerTrip !== undefined && foodKnob === SETTINGS.foodWithdraw!.default ? SITE.foodPerTrip : foodKnob;
         FOOD_RESERVE = this.settings.num('foodReserve', 4);
         ESCAPE_STOCK = this.settings.num('teleStock', 2);
         HEAL_TO = this.settings.num('healTo', 90) / 100;

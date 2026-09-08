@@ -405,7 +405,7 @@ Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought throu
 | `buryBones` | boolean | `false` | Bury dragon bones |
 | `rangingPotion` | boolean | `false` | Drink a ranging potion |
 | `antipoisonDoses` | number (0–4) | `1` | Superantipoison flasks per trip |
-| `antifireDoses` | number (0–4) | `1` | Antifire potion flasks per trip |
+| `antifireDoses` | number (0–6) | `3` | Antifire potion flasks per trip |
 | `axe` | string | `"Rune axe"` | Axe for the vines — one of: Rune axe, Adamant axe, Mithril axe, Steel axe, Iron axe, Bronze axe |
 | `solveClues` | boolean | `true` | Solve clue drops |
 | `site` | string | `"taverley-blue"` | Dragon site — one of: taverley-blue, taverley-black, heroes-blue, gutanoth-blue, brimhaven-iron, brimhaven-steel |
