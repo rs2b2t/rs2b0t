@@ -215,6 +215,8 @@ export class Fight implements Task {
     private diagAt = 0;
     private biterNotedAt = 0;
     private reclickedAt = 0;
+    /** When the engaged dragon last lost health under the loop's eye, or was first engaged. */
+    private damagedAt = 0;
     private reissues = 0;
     private readonly skip = new Map<number, number>();
     private readonly seen = new Map<number, Sighting>();
@@ -334,10 +336,14 @@ export class Fight implements Task {
             // Why: Game.inCombat() reads our own combat bar, which never lights up while safespotting, so a changing target health is the only proof the attack landed.
             if (live) {
                 if (live.health !== this.engagedHealth) {
+                    // Why: a re-issue clears the health it knew and restarts the engage clock, so a fight landing nothing looked fresh every few seconds; only a drop the loop watched counts as damage.
+                    if (this.engagedHealth !== -1 && live.health < this.engagedHealth) {
+                        this.damagedAt = performance.now();
+                    }
                     this.engagedHealth = live.health;
                     this.engagedAt = performance.now();
                 }
-                if (!holdsAnchor(this.site, style) && performance.now() - this.engagedAt > CHASE_STALL_MS) {
+                if (!holdsAnchor(this.site, style) && performance.now() - this.damagedAt > CHASE_STALL_MS) {
                     this.host.log(`${this.engagedName || name} ${live.index} took no damage for ${CHASE_STALL_MS / 1000}s from ${Game.tile()}, so there is no way in beside it. Skipping it for ${CHASE_SKIP_MS / 1000}s.`);
                     this.skip.set(live.index, performance.now() + CHASE_SKIP_MS);
                     this.clearTarget();
@@ -413,6 +419,9 @@ export class Fight implements Task {
     }
 
     private setTarget(idx: number): void {
+        if (idx !== this.engaged) {
+            this.damagedAt = performance.now();
+        }
         this.engaged = idx;
         this.host.targetIdx = idx;
         this.seenAt = performance.now();

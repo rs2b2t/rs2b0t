@@ -880,7 +880,8 @@ try {
 
         if (args.starve && starve === null && met['kill'] && lairMs >= SOAK_MS) {
             if (starveDue === 0) { starveDue = Date.now(); }
-            const clean = args.style === 'melee' || (!onSafespot(s.tile) && !onSafespot(last?.tile ?? null));
+            // Why: a melee run had its pack cleared three seconds after the first kill, before the pickup, so the loot milestone waited on a second trip every time.
+            const clean = (args.style === 'melee' && met['loot'] !== undefined) || (!onSafespot(s.tile) && !onSafespot(last?.tile ?? null));
             if (inLair(s.tile) && !s.bankOpen && (clean || Date.now() - starveDue > STARVE_WAIT_MS)) {
                 starve = { at: elapsed, hitAt: null, hp: s.hp, maxHp: s.maxHp, food: s.food, law: s.law, damage: null, hitTile: s.tile, tripsBefore: s.trips };
                 noteOverlay(`STARVE TEST, on purpose: taking all ${s.food} food and hitting for ${LOBSTER_HEAL * 3}. The bot should bank, not die.`);
