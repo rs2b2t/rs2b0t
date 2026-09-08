@@ -34,13 +34,12 @@ import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
 import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from './combat.js';
-import { ANTIFIRE_MARGIN_TICKS, ANTIFIRE_TICKS, POTION_PROTECTS, SHIELD_ABSORBS, antifireDue, antifireLapsed, keepDoses, keyStatus, lootHalts, shieldGate, siteTileOf, styleGate, wantsDrop, type Style } from './logic.js';
+import { ANTIFIRE_MARGIN_TICKS, ANTIFIRE_TICKS, POTION_PROTECTS, SHIELD_ABSORBS, antifireDue, antifireLapsed, keepDoses, keyStatus, lootHalts, lootReach, shieldGate, siteTileOf, styleGate, wantsDrop, type Style } from './logic.js';
 import { BRIMHAVEN_IRON, BRIMHAVEN_STEEL, GUTANOTH_BLUE, HEROES_BLUE, MAX_STANDS, SITE_OPTIONS, STAND_SITE_KEYS, TAVERLEY_BLACK, TAVERLEY_BLUE, huntNames, needsShield, siteFor, standFor, type DragonSite } from './sites.js';
 import { ANTIFIRE_DOSES, ANTIPOISON_DOSES, COINS, POISONED, acquireKey, antifirePlan, antipoisonPlan, bankRoutine, doseToDrink, enterLair, escapeRunesFor, feePrepaid, inCell, leaveCell, type BankOpts, type KeyState } from './supply.js';
 
 const SHIELD = 'Dragonfire shield';
 
-const LOOT_RADIUS = 10;
 const LOOT_BURST_MAX = 8;
 const LOOT_SKIP_MS = 30_000;
 const LOOT_WAIT_MS = 4000;
@@ -352,7 +351,7 @@ function findLoot(): GroundItem | null {
     const now = performance.now();
     return GroundItems.query()
         .where(g => SITE.inArea(g.tile()) && (lootSkip.get(lootKey(g)) ?? 0) < now && wantsDrop({ id: g.id, name: g.name }, lootFilter()))
-        .within(LOOT_RADIUS)
+        .within(lootReach(SITE.fireAtRange === true))
         .nearest();
 }
 

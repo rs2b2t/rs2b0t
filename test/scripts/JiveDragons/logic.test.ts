@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ANTIFIRE_MARGIN_TICKS, ANTIFIRE_TICKS, POTION_PROTECTS, SAFESPOT_BLIND_MS, SHIELD_ABSORBS, antifireDue, antifireLapsed, attackRangeFor, bodyOrigin, engageRangeFor, gapTo, holdDue, hurtOnSpot, isClueObj, keepDoses, keyStatus, lootHalts, nearestSpot, nextApproachIndex, nextSafespot, noteSighting, retreatAim, retreatDue, settled, shieldGate, styleGate, wantsDrop } from '#/bot/scripts/JiveDragons/logic.js';
+import { lootReach, ANTIFIRE_MARGIN_TICKS, ANTIFIRE_TICKS, POTION_PROTECTS, SAFESPOT_BLIND_MS, SHIELD_ABSORBS, antifireDue, antifireLapsed, attackRangeFor, bodyOrigin, engageRangeFor, gapTo, holdDue, hurtOnSpot, isClueObj, keepDoses, keyStatus, lootHalts, nearestSpot, nextApproachIndex, nextSafespot, noteSighting, retreatAim, retreatDue, settled, shieldGate, styleGate, wantsDrop } from '#/bot/scripts/JiveDragons/logic.js';
 
 describe('nextSafespot', () => {
     const base = { index: 0, spots: 3, hurt: false, blindMs: 0 };
@@ -356,5 +356,12 @@ describe('keepDoses', () => {
 
     test('a run carrying neither keeps nothing extra', () => {
         expect(keepDoses([], anti, false)).toEqual([]);
+    });
+});
+
+describe('lootReach', () => {
+    test('a fire-at-range site walks fourteen tiles for a drop, a melee-proof pocket ten', () => {
+        expect(lootReach(true)).toBe(14);
+        expect(lootReach(false)).toBe(10);
     });
 });

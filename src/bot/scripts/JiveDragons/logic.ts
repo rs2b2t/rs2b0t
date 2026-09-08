@@ -158,6 +158,15 @@ export function retreatAim(a: RetreatAim): { index: number; next: number } {
     return { index, next: a.spots.length > 0 ? (index + 1) % a.spots.length : index };
 }
 
+export const LOOT_REACH = 10;
+export const LOOT_REACH_OPEN = 14;
+
+/** How far from the bot a drop is worth walking to. */
+// Why: a metal dragon killed at gap 9 drops at its own corner, up to thirteen tiles off the camp, and ten left both kills of a live run unlooted; under a dose the walk is fire-proof and the dragons do not chase.
+export function lootReach(fireAtRange: boolean): number {
+    return fireAtRange ? LOOT_REACH_OPEN : LOOT_REACH;
+}
+
 // Why: clicking Attack beyond weapon range makes the server walk you into range, which steps off the safespot.
 const ATTACK_RANGE: Record<Style, number> = { melee: 1, range: 7, mage: 10 };
 
