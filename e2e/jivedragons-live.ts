@@ -364,7 +364,8 @@ function kitFor(style: Style): Kit {
         const fee = SITE.fee > 0;
         const weapon = fee ? { debug: 'dragon_longsword', name: 'Dragon longsword' } : { debug: 'rune_scimitar', name: 'Rune scimitar' };
         return {
-            pack: [...(fee ? [] : [['antidragonbreathshield', 'Dragonfire shield', 1] as const]), ...FEE_PACK, ...(fee ? [['4doseprayerrestore', 'Prayer potion(4)', 3] as const] : []), [FOOD.debug, FOOD.name, PACK_FOOD]],
+            // Why: a fee site walks straight in on the seeded pack with no bank stop first, so the weapon has to start in the pack there or the run fights bare-handed.
+            pack: [...(fee ? [[weapon.debug, weapon.name, 1] as const] : [['antidragonbreathshield', 'Dragonfire shield', 1] as const]), ...FEE_PACK, ...(fee ? [['4doseprayerrestore', 'Prayer potion(4)', 3] as const] : []), [FOOD.debug, FOOD.name, PACK_FOOD]],
             worn: [...(fee ? MELEE_WORN : []), ...FEE_WORN],
             bank: [...COMMON_BANK, { debugName: weapon.debug, displayName: weapon.name, qty: 1 }, { debugName: 'antidragonbreathshield', displayName: 'Dragonfire shield', qty: 1 }, ...(fee ? [{ debugName: '4doseprayerrestore', displayName: 'Prayer potion(4)', qty: 10 }] : [])],
             settings: { ...common, combatStyle: 'melee', meleeStyle: fee ? 'controlled' : 'strength', weapon: weapon.name, useSpecial: true, prayMelee: true, prayerDoses: 3 }

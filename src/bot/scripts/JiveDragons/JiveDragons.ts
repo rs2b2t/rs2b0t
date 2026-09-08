@@ -299,6 +299,19 @@ function prayerDue(): boolean {
     return PRAYER !== null && SITE.inArea(Game.tile()) && prayerSipDue(Prayer.points(), Prayer.max());
 }
 
+/** Put the overhead up or take it down, saying so once per change. False when the toggle did not land. */
+// Why: the Sustain hook flips it from inside walks and fights and the task flips it between them, so one helper carries the log line or the change made inside a fight is never seen.
+async function setOverhead(bot: JiveDragons, want: boolean): Promise<boolean> {
+    if (PRAYER === null || Prayer.active(PRAYER) === want || (want && !Prayer.available(PRAYER))) {
+        return true;
+    }
+    if (!(await Prayer.set(PRAYER, want))) {
+        return false;
+    }
+    bot.log(want ? `praying ${PRAYER} (${Prayer.points()}/${Prayer.max()})` : `${PRAYER} off, nothing in reach`);
+    return true;
+}
+
 /** Drink the smallest Prayer flask held, and put the overhead back up if the pool had run dry mid-fight. False with none in the pack. */
 async function sipPrayer(bot: JiveDragons): Promise<boolean> {
     const name = doseToDrink(n => Inventory.count(n), PRAYER_DOSES);
@@ -315,9 +328,7 @@ async function sipPrayer(bot: JiveDragons): Promise<boolean> {
         return false;
     }
     bot.log(`drank ${name}, prayer ${Prayer.points()}/${Prayer.max()} (holding ${PRAYER_DOSES.map(n => `${Inventory.count(n)}x ${n}`).filter(t => !t.startsWith('0x')).join(', ') || 'none'})`);
-    if (PRAYER !== null && prayerWanted(bot) && !Prayer.active(PRAYER)) {
-        await Prayer.set(PRAYER, true);
-    }
+    await setOverhead(bot, prayerWanted(bot));
     return true;
 }
 
@@ -602,12 +613,9 @@ class PrayMelee implements Task {
         return Prayer.active(PRAYER) !== want && (!want || Prayer.available(PRAYER));
     }
     async execute(): Promise<void> {
-        const want = prayerWanted(this.bot);
-        if (!(await Prayer.set(PRAYER!, want))) {
+        if (!(await setOverhead(this.bot, prayerWanted(this.bot)))) {
             this.retryAt = Date.now() + SIP_RETRY_MS;
-            return;
         }
-        this.bot.log(want ? `praying ${PRAYER} (${Prayer.points()}/${Prayer.max()})` : `${PRAYER} off, nothing in reach`);
     }
 }
 
@@ -1047,10 +1055,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
                 if (PRAYER_WANT > 0 && prayerHeld() > 0 && prayerDue()) {
                     await sipPrayer(this);
                 }
-                const want = prayerWanted(this);
-                if (Prayer.active(PRAYER) !== want && (!want || Prayer.available(PRAYER))) {
-                    await Prayer.set(PRAYER, want);
-                }
+                await setOverhead(this, prayerWanted(this));
             }
         });
 
