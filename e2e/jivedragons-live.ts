@@ -261,7 +261,7 @@ const PACK_FOOD = SITE.fee > 0 ? 8 : 20;
 const PANIC_PCT = 30;
 
 // Why: the Brimhaven walk in chops vines at Woodcutting 22 and squeezes a pipe at Agility 34, and a rune axe wants Attack 40, which the 75 already covers.
-const LEVELS: [string, number][] = [['attack', 75], ['strength', 75], ['defence', 75], ['hitpoints', 99], ['ranged', 85], ['magic', 80], ['agility', 40], ['woodcutting', 45]];
+const LEVELS: [string, number][] = [['attack', 75], ['strength', 75], ['defence', 75], ['hitpoints', 99], ['prayer', 70], ['ranged', 85], ['magic', 80], ['agility', 40], ['woodcutting', 45]];
 
 const POLL_MS = 750;
 const KEY_MS = 900_000;
@@ -339,6 +339,8 @@ const FEE_PACK: readonly (readonly [string, string, number])[] = SITE.fee > 0
     ? [['coins', 'Coins', 1000], ...(SITE.axe !== null ? [[SITE.axe.toLowerCase().replace(/ /g, '_'), SITE.axe, 1] as const] : []), ...(SITE.antifire ? [['4dose1antidragon', 'Antifire potion(4)', 3] as const] : [])]
     : [];
 const FEE_WORN: readonly (readonly [string, string])[] = SITE.fee > 0 ? [['antidragonbreathshield', 'Dragonfire shield']] : [];
+/** The rune set for a melee run that stands beside its dragon. */
+const MELEE_WORN: readonly (readonly [string, string])[] = [['rune_full_helm', 'Rune full helm'], ['rune_platebody', 'Rune platebody'], ['rune_platelegs', 'Rune platelegs']];
 
 // Why: the first bank stop the run makes is the key check, which is not the full bank routine, so nothing stocks escape runes before the first trip and the first exit always walks. A teleport run is handed the cast up front so its first exit is the one under test; a walk run is still given none, which is what makes the gate walk-out its own proof.
 const ESCAPE_RUNES: readonly (readonly [string, string, number])[] = SITE.escape;
@@ -356,12 +358,15 @@ const CLUE_TOOLS: BankSeedItem[] = [
 // Why: leaveVia and solveClues both follow the flags rather than sitting on a fixed value, because the script ships with teleport and clues ON and the harness used to pin both to the opposite, so the shipped defaults were the two settings no run ever exercised.
 function kitFor(style: Style): Kit {
     const common = { foodWithdraw: PACK_FOOD, panicHp: PANIC_PCT, foodReserve: 4, healTo: 90, site: SITE.key, stand: args.stand, teleStock: 2, buryBones: false, solveClues: args.clue, bankCommonJunk: false, [SITE.lootKey]: LOOT.join(', '), logDetail: 'Verbose', usePotions: false, leaveVia: args.leave, ...(SITE.antifire ? { antifireDoses: 3 } : {}), ...(SITE.axe !== null ? { axe: SITE.axe } : {}) };
+    // Why: on a fee site melee chases the dragon and prays through the headbutts, so the trip carries Prayer flasks, wears the rune set, and swings the Dragon longsword on its stab style, which the pack's own rolls make the best one-handed damage against stab defence 50.
     if (style === 'melee') {
+        const fee = SITE.fee > 0;
+        const weapon = fee ? { debug: 'dragon_longsword', name: 'Dragon longsword' } : { debug: 'rune_scimitar', name: 'Rune scimitar' };
         return {
-            pack: [...(SITE.fee > 0 ? [] : [['antidragonbreathshield', 'Dragonfire shield', 1] as const]), ...FEE_PACK, [FOOD.debug, FOOD.name, PACK_FOOD]],
-            worn: FEE_WORN,
-            bank: [...COMMON_BANK, { debugName: 'rune_scimitar', displayName: 'Rune scimitar', qty: 1 }, { debugName: 'antidragonbreathshield', displayName: 'Dragonfire shield', qty: 1 }],
-            settings: { ...common, combatStyle: 'melee', meleeStyle: 'strength', weapon: 'Rune scimitar', useSpecial: true }
+            pack: [...(fee ? [] : [['antidragonbreathshield', 'Dragonfire shield', 1] as const]), ...FEE_PACK, ...(fee ? [['4doseprayerrestore', 'Prayer potion(4)', 3] as const] : []), [FOOD.debug, FOOD.name, PACK_FOOD]],
+            worn: [...(fee ? MELEE_WORN : []), ...FEE_WORN],
+            bank: [...COMMON_BANK, { debugName: weapon.debug, displayName: weapon.name, qty: 1 }, { debugName: 'antidragonbreathshield', displayName: 'Dragonfire shield', qty: 1 }, ...(fee ? [{ debugName: '4doseprayerrestore', displayName: 'Prayer potion(4)', qty: 10 }] : [])],
+            settings: { ...common, combatStyle: 'melee', meleeStyle: fee ? 'controlled' : 'strength', weapon: weapon.name, useSpecial: true, prayMelee: true, prayerDoses: 3 }
         };
     }
     // Why: Fire Wave needs 75 Magic against the 80 the character has, and the Mystic fire staff pays the fire runes, so a cast costs one blood and five air rather than the four fire and three air a level 35 Fire Bolt was spending.
@@ -719,6 +724,7 @@ try {
     if (args.style !== 'melee') { required.push(SITE.rangedThreat ? 'spotheld' : 'hpheld'); }
     if (SITE.alsoHunt !== undefined) { required.push('filler'); }
     if (args.style === 'melee') { required.push('meleekills'); }
+    if (args.style === 'melee' && SITE.fee > 0) { required.push('prayer'); }
     // Why: only the bow leaves anything of its own on the floor, so the arrows-come-home claim is a range claim.
     if (args.style === 'range') { required.push('arrows'); }
     if (args.starve) { required.push('starvebank'); }
@@ -749,6 +755,7 @@ try {
             if (/^teleported out to /i.test(line.msg)) { mark('teleport', line.msg); }
             if (SITE.fee > 0 && /^paid saniboch \d+ coins/i.test(line.msg)) { mark('fee', line.msg); }
             if (SITE.antifire && /^drank antifire potion/i.test(line.msg)) { mark('antifire', line.msg); }
+            if (args.style === 'melee' && SITE.fee > 0 && /^praying protect from melee/i.test(line.msg)) { mark('prayer', line.msg); }
             if (/^out of the dragon lair/i.test(line.msg)) { outOfLairSaid = true; }
         }
 

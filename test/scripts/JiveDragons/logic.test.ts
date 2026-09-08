@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { lootReach, ANTIFIRE_MARGIN_TICKS, ANTIFIRE_TICKS, POTION_PROTECTS, SAFESPOT_BLIND_MS, SHIELD_ABSORBS, antifireDue, antifireLapsed, attackRangeFor, bodyOrigin, engageRangeFor, gapTo, holdDue, hurtOnSpot, isClueObj, keepDoses, keyStatus, lootHalts, nearestSpot, nextApproachIndex, nextSafespot, noteSighting, retreatAim, retreatDue, settled, shieldGate, styleGate, wantsDrop } from '#/bot/scripts/JiveDragons/logic.js';
+import { PROTECT_FROM_MELEE, chaseMode, lootReach, prayerFor, prayerSipDue, ANTIFIRE_MARGIN_TICKS, ANTIFIRE_TICKS, POTION_PROTECTS, SAFESPOT_BLIND_MS, SHIELD_ABSORBS, antifireDue, antifireLapsed, attackRangeFor, bodyOrigin, engageRangeFor, gapTo, holdDue, hurtOnSpot, isClueObj, keepDoses, keyStatus, lootHalts, nearestSpot, nextApproachIndex, nextSafespot, noteSighting, retreatAim, retreatDue, settled, shieldGate, styleGate, wantsDrop } from '#/bot/scripts/JiveDragons/logic.js';
 
 describe('nextSafespot', () => {
     const base = { index: 0, spots: 3, hurt: false, blindMs: 0 };
@@ -363,5 +363,28 @@ describe('lootReach', () => {
     test('a fire-at-range site walks fourteen tiles for a drop, a melee-proof pocket ten', () => {
         expect(lootReach(true)).toBe(14);
         expect(lootReach(false)).toBe(10);
+    });
+});
+
+describe('melee on a fire-at-range site', () => {
+    test('chases, since the dragons stop at range and never close; every other pairing holds its tile', () => {
+        expect(chaseMode('melee', true)).toBe(true);
+        expect(chaseMode('melee', false)).toBe(false);
+        expect(chaseMode('mage', true)).toBe(false);
+        expect(chaseMode('range', true)).toBe(false);
+    });
+
+    test('prays Protect from Melee there and nowhere else', () => {
+        expect(prayerFor('melee', true)).toBe(PROTECT_FROM_MELEE);
+        expect(prayerFor('melee', false)).toBeNull();
+        expect(prayerFor('mage', true)).toBeNull();
+    });
+
+    test('sips under the floor or under the fraction of the level, whichever is higher', () => {
+        expect(prayerSipDue(8, 43)).toBe(true);
+        expect(prayerSipDue(9, 43)).toBe(false);
+        expect(prayerSipDue(14, 99)).toBe(true);
+        expect(prayerSipDue(15, 99)).toBe(false);
+        expect(prayerSipDue(0, 0)).toBe(false);
     });
 });

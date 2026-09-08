@@ -299,7 +299,7 @@ Wilderness green dragons N of Edgeville: melee/mage w/ anti-dragon shield, banks
 | `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage |
 | `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
 | `useSpecial` | boolean | `true` | Use special attacks |
-| `weapon` | string | `"Rune scimitar"` | Weapon — one of: Bronze scimitar, Iron scimitar, Steel scimitar, Black scimitar, Mithril scimitar, Adamant scimitar, Rune scimitar, Bronze sword, Iron sword, Steel sword, Black sword, Mithril sword, Adamant sword, Rune sword, Bronze longsword, Iron longsword, Steel longsword, Black longsword, Mithril longsword, Adamant longsword, Rune longsword, Dragon longsword, Bronze dagger, Iron dagger, Steel dagger, Black dagger, Mithril dagger, Adamant dagger, Rune dagger, Dragon dagger, Dragon dagger(p) |
+| `weapon` | string | `"Rune scimitar"` | Weapon — one of: Bronze scimitar, Iron scimitar, Steel scimitar, Black scimitar, Mithril scimitar, Adamant scimitar, Rune scimitar, Bronze sword, Iron sword, Steel sword, Black sword, Mithril sword, Adamant sword, Rune sword, Bronze longsword, Iron longsword, Steel longsword, Black longsword, Mithril longsword, Adamant longsword, Rune longsword, Dragon longsword, Bronze dagger, Iron dagger, Steel dagger, Black dagger, Mithril dagger, Adamant dagger, Rune dagger, Dragon dagger, Dragon dagger(p), Dragon battleaxe, Dragon mace |
 | `staff` | string | `"Staff of fire"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
 | `spell` | string | `"Fire Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–1000) | `150` | Casts of runes per bank trip |
@@ -379,7 +379,7 @@ Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought throu
 |---|---|---|---|
 | `combatStyle` | string | `"range"` | Combat style — one of: melee, mage, range |
 | `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
-| `weapon` | string | `"Rune scimitar"` | Weapon — one of: Bronze scimitar, Iron scimitar, Steel scimitar, Black scimitar, Mithril scimitar, Adamant scimitar, Rune scimitar, Bronze sword, Iron sword, Steel sword, Black sword, Mithril sword, Adamant sword, Rune sword, Bronze longsword, Iron longsword, Steel longsword, Black longsword, Mithril longsword, Adamant longsword, Rune longsword, Dragon longsword, Bronze dagger, Iron dagger, Steel dagger, Black dagger, Mithril dagger, Adamant dagger, Rune dagger, Dragon dagger, Dragon dagger(p) |
+| `weapon` | string | `"Rune scimitar"` | Weapon — one of: Bronze scimitar, Iron scimitar, Steel scimitar, Black scimitar, Mithril scimitar, Adamant scimitar, Rune scimitar, Bronze sword, Iron sword, Steel sword, Black sword, Mithril sword, Adamant sword, Rune sword, Bronze longsword, Iron longsword, Steel longsword, Black longsword, Mithril longsword, Adamant longsword, Rune longsword, Dragon longsword, Bronze dagger, Iron dagger, Steel dagger, Black dagger, Mithril dagger, Adamant dagger, Rune dagger, Dragon dagger, Dragon dagger(p), Dragon battleaxe, Dragon mace |
 | `staff` | string | `"Staff of fire"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
 | `spell` | string | `"Fire Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–2000) | `150` | Casts of runes per bank trip |
@@ -390,6 +390,7 @@ Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought throu
 | `ammoWithdraw` | number (1–5000) | `500` | Ammo per bank trip |
 | `useSpecial` | boolean | `true` | Use special attacks |
 | `usePotions` | boolean | `true` | Drink super attack / strength |
+| `prayMelee` | boolean | `true` | Pray Protect from Melee on the metal dragons |
 | `loadout` | string | `""` | Loadout — one of:  |
 | `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
 | `panicHp` | number (1–98) | `30` | Panic-to-bank below HP% |
@@ -406,6 +407,7 @@ Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought throu
 | `rangingPotion` | boolean | `false` | Drink a ranging potion |
 | `antipoisonDoses` | number (0–4) | `1` | Superantipoison flasks per trip |
 | `antifireDoses` | number (0–6) | `3` | Antifire potion flasks per trip |
+| `prayerDoses` | number (0–6) | `3` | Prayer potion flasks per trip |
 | `axe` | string | `"Rune axe"` | Axe for the vines — one of: Rune axe, Adamant axe, Mithril axe, Steel axe, Iron axe, Bronze axe |
 | `solveClues` | boolean | `true` | Solve clue drops |
 | `site` | string | `"taverley-blue"` | Dragon site — one of: taverley-blue, taverley-black, heroes-blue, gutanoth-blue, brimhaven-iron, brimhaven-steel |

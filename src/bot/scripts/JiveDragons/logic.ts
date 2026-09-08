@@ -158,6 +158,29 @@ export function retreatAim(a: RetreatAim): { index: number; next: number } {
     return { index, next: a.spots.length > 0 ? (index + 1) % a.spots.length : index };
 }
 
+// Why: a metal dragon walks only until the player is inside its range 10 and then stands and breathes, so a melee bot on a tile never gets a body beside it; it has to go to the dragon.
+/** Whether melee has to walk to its target rather than hold a tile and wait for one. */
+export function chaseMode(style: Style, fireAtRange: boolean): boolean {
+    return style === 'melee' && fireAtRange;
+}
+
+export const PROTECT_FROM_MELEE = 'Protect from Melee';
+
+// Why: check_protect_prayer zeroes an npc's melee under it, and adjacent a metal dragon headbutts three swings in four for up to 22, so the chase prays and the shield with a dose takes the fourth.
+/** The overhead a style keeps up on the site, or null. */
+export function prayerFor(style: Style, fireAtRange: boolean): string | null {
+    return chaseMode(style, fireAtRange) ? PROTECT_FROM_MELEE : null;
+}
+
+export const PRAYER_SIP_FLOOR = 8;
+export const PRAYER_SIP_FRACTION = 0.15;
+
+/** Whether the prayer pool is low enough to sip: under the floor, or under the fraction of the level. */
+// Why: the overhead drops the moment points hit 0 and the next headbutt lands full, so the sip goes in with a margin a swing cannot cross.
+export function prayerSipDue(points: number, max: number): boolean {
+    return max > 0 && points <= Math.max(PRAYER_SIP_FLOOR, Math.floor(max * PRAYER_SIP_FRACTION));
+}
+
 export const LOOT_REACH = 10;
 export const LOOT_REACH_OPEN = 14;
 

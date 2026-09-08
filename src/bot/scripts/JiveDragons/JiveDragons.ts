@@ -9,6 +9,8 @@ import { EMPTY_VIAL, plannedPotions, potionToSip, rangingPlan, type PotionPlan }
 import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, parseCombatStyle, parseRangeStyle, type MeleeCombatStyle } from '../../api/combat/CombatStyle.js';
 import { castsAvailable } from '../../api/combat/CombatStyleLogic.js';
 import { Special } from '../../api/combat/Special.js';
+import { Prayer } from '../../api/prayer/Prayer.js';
+import { Npcs } from '../../api/npcs/Npcs.js';
 import { ARROWS, BOWS, MELEE_WEAPONS, STAFFS } from '../../api/combat/equipment.js';
 import { foodCount as foodCountIn, foodForms, foodHealAmount, isFoodItem, shouldEatToUseFood } from '../../api/combat/food.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
@@ -34,13 +36,15 @@ import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
 import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from './combat.js';
-import { ANTIFIRE_MARGIN_TICKS, ANTIFIRE_TICKS, POTION_PROTECTS, SHIELD_ABSORBS, antifireDue, antifireLapsed, keepDoses, keyStatus, lootHalts, lootReach, shieldGate, siteTileOf, styleGate, wantsDrop, type Style } from './logic.js';
+import { ANTIFIRE_MARGIN_TICKS, ANTIFIRE_TICKS, POTION_PROTECTS, SHIELD_ABSORBS, antifireDue, antifireLapsed, keepDoses, keyStatus, lootHalts, lootReach, shieldGate, siteTileOf, prayerFor, prayerSipDue, styleGate, wantsDrop, type Style } from './logic.js';
 import { BRIMHAVEN_IRON, BRIMHAVEN_STEEL, GUTANOTH_BLUE, HEROES_BLUE, MAX_STANDS, SITE_OPTIONS, STAND_SITE_KEYS, TAVERLEY_BLACK, TAVERLEY_BLUE, huntNames, needsShield, siteFor, standFor, type DragonSite } from './sites.js';
-import { ANTIFIRE_DOSES, ANTIPOISON_DOSES, COINS, POISONED, acquireKey, antifirePlan, antipoisonPlan, bankRoutine, doseToDrink, enterLair, escapeRunesFor, feePrepaid, inCell, leaveCell, type BankOpts, type KeyState } from './supply.js';
+import { ANTIFIRE_DOSES, ANTIPOISON_DOSES, PRAYER_DOSES, prayerPlan, COINS, POISONED, acquireKey, antifirePlan, antipoisonPlan, bankRoutine, doseToDrink, enterLair, escapeRunesFor, feePrepaid, inCell, leaveCell, type BankOpts, type KeyState } from './supply.js';
 
 const SHIELD = 'Dragonfire shield';
 
 const LOOT_BURST_MAX = 8;
+/** How near a dragon has to be for the overhead to go up ahead of the fight. */
+const PRAYER_FIELD_RADIUS = 10;
 const LOOT_SKIP_MS = 30_000;
 const LOOT_WAIT_MS = 4000;
 const LOOT_WALK_MS = 30_000;
@@ -109,6 +113,7 @@ export const SETTINGS: SettingsSchema = {
     ammoWithdraw: { type: 'number', default: 500, min: 1, max: 5000, label: 'Ammo per bank trip', group: 'Combat', showIf: SHOW_RANGE },
     useSpecial: { type: 'boolean', default: true, label: 'Use special attacks', group: 'Combat', showIf: SHOW_MELEE, help: 'arms the spec bar for the attack that opens each kill, whenever the energy is there and the wielded weapon has a special (dragon dagger, dragon longsword and the rest). A weapon with none is left alone' },
     usePotions: { type: 'boolean', default: true, label: 'Drink super attack / strength', group: 'Combat', showIf: SHOW_MELEE, help: 'sips a dose once the boost decays to within a tenth of the base level. The loadout carry list sets the dose form and the count per trip, otherwise one Super attack(3) and one Super strength(3)' },
+    prayMelee: { type: 'boolean', default: true, label: 'Pray Protect from Melee on the metal dragons', group: 'Combat', showIf: SHOW_MELEE, help: 'the metal dragons stop at ten tiles and breathe, so melee walks to one and fights beside it, where it headbutts for up to 22; the overhead makes that 0 and the shield with a dose takes the close breath. Needs 43 Prayer' },
 
     loadout: { ...LOADOUT_SETTING, group: 'Food & healing' },
     foodWithdraw: { type: 'number', default: 20, min: 1, max: 27, label: 'Food to withdraw per bank run', group: 'Food & healing' },
@@ -127,6 +132,7 @@ export const SETTINGS: SettingsSchema = {
     rangingPotion: { type: 'boolean', default: false, label: 'Drink a ranging potion', group: 'Combat', showIf: SHOW_RANGE, help: 'sips a dose once the boost decays to within a tenth of the base level. The loadout carry list sets the dose form and the count per trip, otherwise one Ranging potion(3)' },
     antipoisonDoses: { type: 'number', default: 1, min: 0, max: 4, label: 'Superantipoison flasks per trip', group: 'Food & healing', showIf: SHOW_BLACK, help: 'the walk to the black dragons passes the dungeon spiders. A dose is drunk on the poison message; 0 carries none' },
     antifireDoses: { type: 'number', default: 3, min: 0, max: 6, label: 'Antifire potion flasks per trip', group: 'Food & healing', showIf: SHOW_BRIMHAVEN, help: 'a metal dragon breathes from ten tiles and the shield alone leaves 5 a breath; a dose on top makes it 0 for six minutes, and the next goes down as the last lapses, so the doses are what a trip burns and three flasks is 72 minutes. The Brimhaven sites carry 8 food a trip while the food knob sits on its default. 0 carries none and the food takes the breaths' },
+    prayerDoses: { type: 'number', default: 3, min: 0, max: 6, label: 'Prayer potion flasks per trip', group: 'Food & healing', showIf: SHOW_BRIMHAVEN, help: 'melee only. A dose restores a quarter of the level plus seven, and Protect from Melee drains about a point every two seconds beside a dragon' },
     axe: { type: 'string', default: 'Rune axe', options: AXES.map(t => t.name), label: 'Axe for the vines', group: 'Location', showIf: SHOW_BRIMHAVEN, help: 'the walk in chops through two vine walls, so an axe rides in the pack every trip; any tier works, a better one chops faster' },
 
     solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues', help: 'blue dragons drop hard clues. The trail leaves the dungeon and comes back' },
@@ -182,6 +188,9 @@ let VERBOSE = false;
 let USE_SPECIAL = true;
 /** Empty in mage and range mode: an attack or strength boost does nothing for a spell or a bow. */
 let POTIONS: PotionPlan[] = [];
+/** The overhead the run keeps up beside a dragon, or null. */
+let PRAYER: string | null = null;
+let PRAYER_WANT = 0;
 
 function wieldedNames(): string[] {
     return Equipment.items().map(i => i.name ?? '');
@@ -231,7 +240,7 @@ function needStyleSupplies(): boolean {
 function bankOpts(): BankOpts {
     return {
         withdrawFood: true, runeCasts: RUNE_CASTS, runeBuffer: RUNE_BUFFER, ammo: AMMO_WITHDRAW, escapeStock: ESCAPE_STOCK, healTo: HEAL_TO, potions: POTIONS,
-        flasks: [...(ANTIPOISON_WANT > 0 ? [antipoisonPlan(ANTIPOISON_WANT)] : []), ...(ANTIFIRE_WANT > 0 ? [antifirePlan(ANTIFIRE_WANT)] : [])],
+        flasks: [...(ANTIPOISON_WANT > 0 ? [antipoisonPlan(ANTIPOISON_WANT)] : []), ...(ANTIFIRE_WANT > 0 ? [antifirePlan(ANTIFIRE_WANT)] : []), ...(PRAYER_WANT > 0 ? [prayerPlan(PRAYER_WANT)] : [])],
         carry: SITE.axe === true && AXE !== '' ? [AXE] : []
     };
 }
@@ -269,6 +278,47 @@ async function drinkAntipoison(): Promise<boolean> {
 
 function antifireHeld(): number {
     return ANTIFIRE_DOSES.reduce((n, name) => n + Inventory.count(name), 0);
+}
+
+function prayerHeld(): number {
+    return PRAYER_DOSES.reduce((n, name) => n + Inventory.count(name), 0);
+}
+
+/** Whether a dragon the run hunts stands inside the fight's field of the bot. */
+function adultInField(): boolean {
+    const names = huntNames(SITE);
+    return Npcs.query().where(n => names.includes(n.name ?? '')).within(PRAYER_FIELD_RADIUS).results().length > 0;
+}
+
+/** Whether the overhead should be up right now: inside the lair with a dragon in reach or a fight live. */
+function prayerWanted(bot: JiveDragons): boolean {
+    return PRAYER !== null && SITE.inArea(Game.tile()) && (bot.targetIdx !== null || adultInField());
+}
+
+function prayerDue(): boolean {
+    return PRAYER !== null && SITE.inArea(Game.tile()) && prayerSipDue(Prayer.points(), Prayer.max());
+}
+
+/** Drink the smallest Prayer flask held, and put the overhead back up if the pool had run dry mid-fight. False with none in the pack. */
+async function sipPrayer(bot: JiveDragons): Promise<boolean> {
+    const name = doseToDrink(n => Inventory.count(n), PRAYER_DOSES);
+    const dose = name === null ? null : Inventory.first(name);
+    if (name === null || dose === null) {
+        return false;
+    }
+    const status = bot.status;
+    bot.setStatus('drinking a Prayer potion');
+    const before = Inventory.count(name);
+    const drunk = (await dose.interact('Drink')) && (await Execution.delayUntil(() => Inventory.count(name) < before, 3000));
+    bot.setStatus(status);
+    if (!drunk) {
+        return false;
+    }
+    bot.log(`drank ${name}, prayer ${Prayer.points()}/${Prayer.max()} (holding ${PRAYER_DOSES.map(n => `${Inventory.count(n)}x ${n}`).filter(t => !t.startsWith('0x')).join(', ') || 'none'})`);
+    if (PRAYER !== null && prayerWanted(bot) && !Prayer.active(PRAYER)) {
+        await Prayer.set(PRAYER, true);
+    }
+    return true;
 }
 
 // Why: `%dragonresist` never reaches the client, so the lapse is kept as a tick from the sip, and a breath the shield took with no potion line after it resets the clock to now. The hook runs from the fight's idle ticks as well as its own task, since a fight holds the loop for two minutes and a dose lapsing inside one is two minutes of breaths.
@@ -536,6 +586,50 @@ class SipAntifire implements Task {
         if (!(await sipAntifire(this.bot))) {
             this.retryAt = Date.now() + SIP_RETRY_MS;
             this.bot.vlog('the Antifire sip did not land, trying again shortly');
+        }
+    }
+}
+
+// Why: the overhead spends points every tick it is up, so it goes on when a dragon is in the field and comes off outside the lair, where the bank trip would drain a flask for nothing.
+class PrayMelee implements Task {
+    private retryAt = 0;
+    constructor(private readonly bot: JiveDragons) {}
+    validate(): boolean {
+        if (PRAYER === null || Date.now() < this.retryAt) {
+            return false;
+        }
+        const want = prayerWanted(this.bot);
+        return Prayer.active(PRAYER) !== want && (!want || Prayer.available(PRAYER));
+    }
+    async execute(): Promise<void> {
+        const want = prayerWanted(this.bot);
+        if (!(await Prayer.set(PRAYER!, want))) {
+            this.retryAt = Date.now() + SIP_RETRY_MS;
+            return;
+        }
+        this.bot.log(want ? `praying ${PRAYER} (${Prayer.points()}/${Prayer.max()})` : `${PRAYER} off, nothing in reach`);
+    }
+}
+
+class SipPrayer implements Task {
+    private retryAt = 0;
+    private warned = false;
+    constructor(private readonly bot: JiveDragons) {}
+    validate(): boolean {
+        return PRAYER_WANT > 0 && Date.now() >= this.retryAt && prayerDue();
+    }
+    async execute(): Promise<void> {
+        if (prayerHeld() === 0) {
+            this.retryAt = Date.now() + ASSERT_RETRY_MS;
+            if (!this.warned) {
+                this.bot.log('WARNING: prayer is low and the pack holds no Prayer potion. The overhead drops when it hits 0 and the headbutts land full until the bank run.');
+                this.warned = true;
+            }
+            return;
+        }
+        this.warned = false;
+        if (!(await sipPrayer(this.bot))) {
+            this.retryAt = Date.now() + SIP_RETRY_MS;
         }
     }
 }
@@ -897,6 +991,11 @@ export default class JiveDragons extends TaskBot implements CombatHost {
                 : [];
         ANTIPOISON_WANT = SITE.antipoison === true ? this.settings.num('antipoisonDoses', 1) : 0;
         ANTIFIRE_WANT = SITE.antifire === true ? this.settings.num('antifireDoses', 1) : 0;
+        PRAYER = this.settings.bool('prayMelee', true) ? prayerFor(STYLE, SITE.fireAtRange === true) : null;
+        PRAYER_WANT = PRAYER === null ? 0 : this.settings.num('prayerDoses', 3);
+        if (PRAYER !== null && !Prayer.known(PRAYER)) {
+            PRAYER = null;
+        }
         AXE = SITE.axe === true ? this.settings.str('axe', 'Rune axe') : '';
         antifire.reset();
 
@@ -929,6 +1028,11 @@ export default class JiveDragons extends TaskBot implements CombatHost {
 
         this.log(`JiveDragons: ${SITE.label}, style ${STYLE}${WEAPON === '' ? '' : ` w/ ${WEAPON}`}${STYLE === 'mage' ? ` (${SPELL})` : ''}, food '${FOOD_NAME}' (retreat<${Math.round(RETREAT_HP * 100)}%, panic<${Math.round(PANIC_HP * 100)}%), escape ${ESCAPE_LABEL}, clues ${SOLVE_CLUES ? 'on' : 'off'}${BURY_BONES ? `, burying ${SITE.bones}` : ''}, bank ${SITE.bank}`);
         this.vlog(`safespots [${SITE.safespots.join(' ')}], melee anchor ${SITE.meleeAnchor}, loot [${[...LOOT_SET].join(', ')}]`);
+        if (PRAYER !== null) {
+            this.log(Prayer.max() >= 43
+                ? `melee here chases the dragon from ${SITE.meleeAnchor} and prays ${PRAYER}, ${PRAYER_WANT} Prayer flask(s) a trip`
+                : `WARNING: ${PRAYER} needs 43 Prayer and this character has ${Prayer.max()}, so the headbutts land; melee here chases the dragon and eats through them`);
+        }
 
         // Why: waitFed, Fight.idle and every walkResilient in this script pump Sustain, and with no hook set all of them stood in dragonfire without taking a bite.
         Sustain.set(async () => {
@@ -937,6 +1041,16 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             }
             if (ANTIFIRE_WANT > 0 && antifireHeld() > 0 && antifire.due()) {
                 await sipAntifire(this);
+            }
+            // Why: a fight holds the loop for two minutes and a walk out holds it longer, so the pool is topped up and the overhead put back or taken down from inside them.
+            if (PRAYER !== null) {
+                if (PRAYER_WANT > 0 && prayerHeld() > 0 && prayerDue()) {
+                    await sipPrayer(this);
+                }
+                const want = prayerWanted(this);
+                if (Prayer.active(PRAYER) !== want && (!want || Prayer.available(PRAYER))) {
+                    await Prayer.set(PRAYER, want);
+                }
             }
         });
 
@@ -960,6 +1074,8 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             new Eat(this),
             new CurePoison(this),
             new SipAntifire(this),
+            new SipPrayer(this),
+            new PrayMelee(this),
             new GearEquip(this),
             new SetAttackStyle(this),
             new SetRetaliate(this),
@@ -1024,7 +1140,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         return SPELL;
     }
     keepExtra(): string[] {
-        return [...keepDoses(potionDoseNames(), ANTIPOISON_DOSES, ANTIPOISON_WANT > 0), ...(ANTIFIRE_WANT > 0 ? ANTIFIRE_DOSES : []), ...(AXE === '' ? [] : [AXE])];
+        return [...keepDoses(potionDoseNames(), ANTIPOISON_DOSES, ANTIPOISON_WANT > 0), ...(ANTIFIRE_WANT > 0 ? ANTIFIRE_DOSES : []), ...(PRAYER_WANT > 0 ? PRAYER_DOSES : []), ...(AXE === '' ? [] : [AXE])];
     }
     leaveByWalk(): boolean {
         return LEAVE_WALK;

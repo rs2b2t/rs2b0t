@@ -12,7 +12,7 @@ import { Traversal } from '../../api/walking/Traversal.js';
 import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../geometry/Tile.js';
-import { SAFESPOT_BLIND_MS, bodyOrigin, engageRangeFor, gapTo, holdDue, hurtOnSpot, nextSafespot, noteSighting, retreatAim, retreatDue, settled, type Sighting, type Style } from './logic.js';
+import { SAFESPOT_BLIND_MS, bodyOrigin, chaseMode, engageRangeFor, gapTo, holdDue, hurtOnSpot, nextSafespot, noteSighting, retreatAim, retreatDue, settled, type Sighting, type Style } from './logic.js';
 import { huntNames, type DragonSite } from './sites.js';
 import { waitFed, walkApproach, type JiveHost } from './supply.js';
 
@@ -109,8 +109,9 @@ function usesSafespot(style: Style): boolean {
 }
 
 // Why: only the ladder is safespot-only. Every style fights from a fixed tile, melee included, since the anchor is the tile bordering the most adult body tiles that no baby can reach, and the leash pulls a dragon in rather than the bot walking out. A click that does walk us off it is caught below and the dragon skipped.
-function holdsAnchor(_style: Style): boolean {
-    return true;
+// Why: on a fire-at-range site a melee bot chases instead: the dragons stop at ten tiles, so the click walks the bot to the body and the fight happens beside it, with no leash, no pull-off skip and no walk back while a target is live.
+function holdsAnchor(site: DragonSite, style: Style): boolean {
+    return !chaseMode(style, site.fireAtRange === true);
 }
 
 function spotName(style: Style, index: number): string {
@@ -223,7 +224,7 @@ export class Fight implements Task {
         if (!this.site.inArea(Game.tile()) || this.host.hpFraction() < this.host.panicHp()) {
             return false;
         }
-        if (holdsAnchor(this.host.style()) && !onSpot) {
+        if (holdsAnchor(this.site, this.host.style()) && !onSpot) {
             return false;
         }
         return this.field(FIELD_RADIUS).length > 0 || this.blindDue();
@@ -287,7 +288,7 @@ export class Fight implements Task {
             if (this.settleKill(name)) {
                 return;
             }
-            if (holdsAnchor(style) && !atTile(this.anchor()) && !(await this.walkBack())) {
+            if (holdsAnchor(this.site, style) && !atTile(this.anchor()) && !(await this.walkBack())) {
                 return;
             }
 
@@ -350,7 +351,7 @@ export class Fight implements Task {
                 await this.idle();
                 return;
             }
-            if (holdsAnchor(style) && !this.inReach(target)) {
+            if (holdsAnchor(this.site, style) && !this.inReach(target)) {
                 if (!(await this.leash(target.index))) {
                     this.skip.set(target.index, now + LEASH_SKIP_MS);
                 }
@@ -359,7 +360,7 @@ export class Fight implements Task {
             if (!(await this.engage(target, name))) {
                 continue;
             }
-            if (holdsAnchor(style) && !atTile(this.anchor())) {
+            if (holdsAnchor(this.site, style) && !atTile(this.anchor())) {
                 this.skip.set(target.index, performance.now() + PULL_SKIP_MS);
                 this.host.log(`${name} ${target.index} pulled us off ${spotName(style, this.host.safespotIndex())}. Skipping it for ${PULL_SKIP_MS / 1000}s.`);
                 this.clearTarget();
@@ -548,7 +549,7 @@ export class Fight implements Task {
         this.setTarget(target.index);
         this.engagedAt = performance.now();
         this.engagedHealth = -1;
-        await waitFed(() => (holdsAnchor(style) && !atTile(this.anchor())) || this.field(FIELD_RADIUS).length === 0, ENGAGE_SETTLE_MS);
+        await waitFed(() => (holdsAnchor(this.site, style) && !atTile(this.anchor())) || this.field(FIELD_RADIUS).length === 0, ENGAGE_SETTLE_MS);
         return true;
     }
 
@@ -648,8 +649,11 @@ export class WalkToSpot implements Task {
 
     validate(): boolean {
         const here = Game.tile();
+        // Why: a chase stands beside its dragon, tiles off the camp, and this task sits above Fight, so a live target holds it or every pass walked the bot out of its own fight.
+        const chasing = chaseMode(this.host.style(), this.site.fireAtRange === true) && this.host.targetIdx !== null;
         return here !== null
             && this.site.inArea(here)
+            && !chasing
             && this.host.hpFraction() >= this.host.panicHp()
             && this.anchor().distanceTo(here) > APPROACH_RADIUS;
     }

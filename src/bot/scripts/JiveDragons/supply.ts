@@ -98,6 +98,11 @@ export function antipoisonPlan(want: number): FlaskPlan {
     return { flask: ANTIPOISON_DOSES[0]!, doses: ANTIPOISON_DOSES, want };
 }
 
+export const PRAYER_LABEL = 'Prayer potion';
+export const PRAYER_DOSES: readonly string[] = [4, 3, 2, 1].map(d => `${PRAYER_LABEL}(${d})`);
+export function prayerPlan(want: number): FlaskPlan {
+    return { flask: PRAYER_DOSES[0]!, doses: PRAYER_DOSES, want };
+}
 export const ANTIFIRE_LABEL = 'Antifire potion';
 export const ANTIFIRE_DOSES: readonly string[] = [4, 3, 2, 1].map(d => `${ANTIFIRE_LABEL}(${d})`);
 
