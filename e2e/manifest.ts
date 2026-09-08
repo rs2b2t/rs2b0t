@@ -362,7 +362,7 @@ export const CASES: readonly Case[] = [
         covers: { scripts: ['JiveDragons'] },
         status: 'vetted',
         budgetMin: 25,
-        provenAt: '3f974eb8',
+        provenAt: 'ddd0beab',
         note: '`--site blue|black|heroes|gutanoth|iron|steel` picks the lair. The black run seeds Sharks and a Superantipoison and passes on the corridor stand, both spawns in view, with no health lost on a safespot. The heroes run sets heroquest itself and asserts no key leg: it casts through the pen fence and walks the drops out through the gate. The gutanoth run sets itwatchtower itself, talks past the Enclave guard, banks at Yanille on the Watchtower spell, and claims it held the stand rather than that nothing hit it, since the cave reaches the tile at range; `--stand n` picks one of its six, one per dragon, and the run also requires a greater demon killed off the same stand while a dragon was respawning. The iron and steel runs need the 289 sim: they set elenaquest for the Ardougne teleport, seed coins, a Rune axe, Antifire potions and the shield, and require Saniboch paid, the walk through the vines, stones, log and pipe, a dose drunk, a kill and a bank trip through Ardougne; `--stand n` picks one of the four iron pockets'
     },
     {
