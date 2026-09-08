@@ -12,6 +12,7 @@ import { Special } from '../../api/combat/Special.js';
 import { Prayer } from '../../api/prayer/Prayer.js';
 import { Npcs } from '../../api/npcs/Npcs.js';
 import { ARROWS, BOWS, MELEE_WEAPONS, STAFFS } from '../../api/combat/equipment.js';
+import { bestMeleeWeapon, knownMeleeWeapon } from '../../api/combat/meleeWeapons.js';
 import { foodCount as foodCountIn, foodForms, foodHealAmount, isFoodItem, shouldEatToUseFood } from '../../api/combat/food.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
@@ -69,6 +70,7 @@ function inPairs<T>(cells: T[]): T[][] {
 const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
 const SHOW_RANGE = { key: 'combatStyle', anyOf: ['range'] };
 const SHOW_MELEE = { key: 'combatStyle', anyOf: ['melee'] };
+const BEST_WEAPON = 'Best available';
 const SHOW_SAFESPOT = { key: 'combatStyle', anyOf: ['mage', 'range'] };
 const SHOW_STAND = { key: 'site', anyOf: STAND_SITE_KEYS };
 const SHOW_BRIMHAVEN = { key: 'site', anyOf: [BRIMHAVEN_IRON.key, BRIMHAVEN_STEEL.key] };
@@ -102,7 +104,7 @@ const SHOW_STEEL = { key: 'site', anyOf: [BRIMHAVEN_STEEL.key] };
 export const SETTINGS: SettingsSchema = {
     combatStyle: { type: 'string', default: 'range', options: ['melee', 'mage', 'range'], label: 'Combat style', help: 'mage and range fight from a tile no dragon can path to. Melee stands in the dragonfire and needs the Dragonfire shield' },
     meleeStyle: { type: 'string', default: 'strength', options: COMBAT_STYLE_OPTIONS, label: 'Melee style', group: 'Combat', showIf: SHOW_MELEE },
-    weapon: { type: 'string', default: 'Rune scimitar', options: MELEE_WEAPONS, label: 'Weapon', group: 'Combat', showIf: SHOW_MELEE, help: '1-handed, so the shield slot stays free for the Dragonfire shield' },
+    weapon: { type: 'string', default: BEST_WEAPON, options: [BEST_WEAPON, ...MELEE_WEAPONS], label: 'Weapon', group: 'Combat', showIf: SHOW_MELEE, help: 'Best available wears whatever the bank, the pack or the body holds that ranks highest and the Attack level allows, stab first on the metal dragons; a name pins that weapon. 1-handed, so the shield slot stays free for the Dragonfire shield' },
     staff: { type: 'string', default: 'Staff of fire', options: STAFFS, label: 'Staff', group: 'Combat', showIf: SHOW_MAGE },
     spell: { type: 'string', default: 'Fire Strike', options: Object.keys(SPELL_DB), label: 'Autocast spell', group: 'Combat', showIf: SHOW_MAGE },
     runesWithdraw: { type: 'number', default: 150, min: 1, max: 2000, label: 'Casts of runes per bank trip', group: 'Combat', showIf: SHOW_MAGE },
@@ -162,6 +164,14 @@ let STYLE: Style = 'range';
 let MELEE_STYLE: MeleeCombatStyle = 'strength';
 let RANGE_MODE = 1;
 let WEAPON = '';
+/** Whether the weapon is picked from what the bank holds rather than pinned by name. */
+let WEAPON_PICKED = false;
+const unusableWeapons = new Set<string>();
+
+/** A melee weapon worn or carried, when the pick may settle on one without a bank stop. */
+function meleeWeaponHeld(): string | null {
+    return knownMeleeWeapon(Equipment.items().map(i => i.name ?? '')) ?? knownMeleeWeapon(Inventory.items().map(i => i.name ?? ''));
+}
 let SPELL = 'Fire Strike';
 let AMMO = 'Iron arrow';
 let FOOD_NAME = 'Lobster';
@@ -230,6 +240,10 @@ function ammoLeft(): number {
 function needStyleSupplies(): boolean {
     if (STYLE === 'mage') {
         return castsLeft() < 1;
+    }
+    // Why: a melee run with its weapon in the bank walked in and fought with its fists, since nothing on the bank list was about the weapon.
+    if (STYLE === 'melee') {
+        return WEAPON === '' || (!Equipment.contains(WEAPON) && Inventory.first(WEAPON) === null);
     }
     return STYLE === 'range' && ammoLeft() === 0;
 }
@@ -676,6 +690,13 @@ class GearEquip implements Task {
         }
         if (++this.fails >= ASSERT_BATCH) {
             this.fails = 0;
+            // Why: a wield the engine refuses is a level or a quest short, and a picked weapon has a next best behind it; a pinned one only has the retry.
+            if (WEAPON_PICKED && item === WEAPON) {
+                unusableWeapons.add(item);
+                WEAPON = '';
+                this.bot.log(`${item} will not go on, a level or a quest short. Picking another at the bank.`);
+                return;
+            }
             this.retryAt = Date.now() + ASSERT_RETRY_MS;
             this.bot.log(`could not equip ${item}. Retrying in ${ASSERT_RETRY_MS / 1000}s.`);
         }
@@ -972,7 +993,12 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         AMMO = this.settings.str('ammo', 'Iron arrow');
         WEAPON = STYLE === 'mage' ? this.settings.str('staff', 'Staff of fire')
             : STYLE === 'range' ? this.settings.str('bow', 'Maple shortbow')
-                : this.settings.str('weapon', 'Rune scimitar');
+                : this.settings.str('weapon', BEST_WEAPON);
+        WEAPON_PICKED = STYLE === 'melee' && WEAPON === BEST_WEAPON;
+        unusableWeapons.clear();
+        if (WEAPON_PICKED) {
+            WEAPON = meleeWeaponHeld() ?? '';
+        }
         FOOD_NAME = scriptFood(this.settings, SITE.food ?? 'Lobster');
         LEAVE_WALK = this.settings.str('leaveVia', 'teleport') === 'walk';
         ESCAPE_LABEL = LEAVE_WALK ? 'walk out' : escapeRunesFor(SITE.escapeTeleportId).label;
@@ -1142,6 +1168,21 @@ export default class JiveDragons extends TaskBot implements CombatHost {
     }
     foodWithdraw(): number {
         return FOOD_WITHDRAW;
+    }
+    pickWeapon(available: readonly string[]): void {
+        if (!WEAPON_PICKED) {
+            return;
+        }
+        const attack = Skills.level('attack');
+        const chosen = bestMeleeWeapon(available, { attack, preferStab: SITE.fireAtRange === true, unusable: unusableWeapons });
+        if (chosen === null) {
+            this.parkFor(`no melee weapon the character can wield at ${attack} Attack is in the bank, the pack or worn. Deposit one and resume.`);
+            return;
+        }
+        if (chosen !== WEAPON) {
+            this.log(`weapon: ${chosen}, the best on hand at ${attack} Attack${SITE.fireAtRange === true ? ', stab first for the metal dragons' : ''}`);
+            WEAPON = chosen;
+        }
     }
     weaponName(): string {
         return WEAPON;

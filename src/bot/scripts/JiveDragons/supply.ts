@@ -39,6 +39,8 @@ export interface JiveHost {
     foodName(): string;
     foodWithdraw(): number;
     weaponName(): string;
+    /** Settle which melee weapon the trip carries, given everything the bank, the pack and the body hold. */
+    pickWeapon?(available: readonly string[]): void;
     ammoName(): string;
     spellName(): string;
     keepExtra(): string[];
@@ -542,6 +544,10 @@ export async function bankRoutine(h: JiveHost, site: DragonSite, opts: BankOpts)
     }
     if (!(await openSiteBank(h, site))) {
         return;
+    }
+    // Why: the pick has to land before the deposit, or a weapon the pack already holds goes into the bank and straight back out.
+    if (h.style() === 'melee' && h.pickWeapon) {
+        h.pickWeapon([...Bank.items(), ...Inventory.items(), ...Equipment.items()].map(i => i.name ?? ''));
     }
     await Bank.depositAllMatching(depositAllExcept(keepNames(h, site)), say(h));
     if (opts.withdrawFood) {
