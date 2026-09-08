@@ -340,7 +340,8 @@ const FEE_PACK: readonly (readonly [string, string, number])[] = SITE.fee > 0
     : [];
 const FEE_WORN: readonly (readonly [string, string])[] = SITE.fee > 0 ? [['antidragonbreathshield', 'Dragonfire shield']] : [];
 /** The rune set for a melee run that stands beside its dragon. */
-const MELEE_WORN: readonly (readonly [string, string])[] = [['rune_full_helm', 'Rune full helm'], ['rune_platebody', 'Rune platebody'], ['rune_platelegs', 'Rune platelegs']];
+// Why: a platebody is gated on Dragon Slayer, which the harness account has not done, and the chainbody is not.
+const MELEE_WORN: readonly (readonly [string, string])[] = [['rune_full_helm', 'Rune full helm'], ['rune_chainbody', 'Rune chainbody'], ['rune_platelegs', 'Rune platelegs']];
 
 // Why: the first bank stop the run makes is the key check, which is not the full bank routine, so nothing stocks escape runes before the first trip and the first exit always walks. A teleport run is handed the cast up front so its first exit is the one under test; a walk run is still given none, which is what makes the gate walk-out its own proof.
 const ESCAPE_RUNES: readonly (readonly [string, string, number])[] = SITE.escape;
