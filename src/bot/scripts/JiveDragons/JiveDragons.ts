@@ -2,6 +2,7 @@ import { reader } from '../../adapter/ClientAdapter.js';
 import { GameMessages } from '../../api/chatbox/gameMessages.js';
 import { SolveClue } from '../../api/ai/clues/SolveClue.js';
 import { paintClueProgress } from '../../api/ai/clues/cluePaint.js';
+import { AXES } from '../../api/acquisition/Tools.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { EMPTY_VIAL, plannedPotions, potionToSip, rangingPlan, type PotionPlan } from '../../api/combat/boostPotions.js';
@@ -33,9 +34,9 @@ import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
 import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from './combat.js';
-import { keepDoses, keyStatus, lootHalts, meleeShieldGate, siteTileOf, wantsDrop, type Style } from './logic.js';
-import { GUTANOTH_BLUE, HEROES_BLUE, SITE_OPTIONS, TAVERLEY_BLACK, TAVERLEY_BLUE, huntNames, siteFor, standFor, type DragonSite } from './sites.js';
-import { ANTIPOISON_DOSES, POISONED, acquireKey, antipoisonPlan, bankRoutine, doseToDrink, enterLair, escapeRunesFor, inCell, leaveCell, type BankOpts, type KeyState } from './supply.js';
+import { ANTIFIRE_MARGIN_TICKS, ANTIFIRE_TICKS, POTION_PROTECTS, SHIELD_ABSORBS, antifireDue, antifireLapsed, keepDoses, keyStatus, lootHalts, shieldGate, siteTileOf, styleGate, wantsDrop, type Style } from './logic.js';
+import { BRIMHAVEN_IRON, BRIMHAVEN_STEEL, GUTANOTH_BLUE, HEROES_BLUE, MAX_STANDS, SITE_OPTIONS, STAND_SITE_KEYS, TAVERLEY_BLACK, TAVERLEY_BLUE, huntNames, needsShield, siteFor, standFor, type DragonSite } from './sites.js';
+import { ANTIFIRE_DOSES, ANTIPOISON_DOSES, COINS, POISONED, acquireKey, antifirePlan, antipoisonPlan, bankRoutine, doseToDrink, enterLair, escapeRunesFor, inCell, leaveCell, type BankOpts, type KeyState } from './supply.js';
 
 const SHIELD = 'Dragonfire shield';
 
@@ -65,7 +66,8 @@ const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
 const SHOW_RANGE = { key: 'combatStyle', anyOf: ['range'] };
 const SHOW_MELEE = { key: 'combatStyle', anyOf: ['melee'] };
 const SHOW_SAFESPOT = { key: 'combatStyle', anyOf: ['mage', 'range'] };
-const SHOW_STAND = { key: 'site', anyOf: ['gutanoth-blue'] };
+const SHOW_STAND = { key: 'site', anyOf: STAND_SITE_KEYS };
+const SHOW_BRIMHAVEN = { key: 'site', anyOf: [BRIMHAVEN_IRON.key, BRIMHAVEN_STEEL.key] };
 
 const DROPS: string[] = DROP_DB[TAVERLEY_BLUE.target] ?? [];
 // Why: Bass is food the run never eats and a coin pile is 11 to 440, so both spend a walk off the safespot that the hides pay for better.
@@ -80,10 +82,18 @@ const ENCLAVE_DROPS: string[] = [...new Set([...DROPS, ...(DROP_DB['Greater demo
 // Why: the same rule as the other tables, plus Ashes and Thread, which a greater demon drops by the pile and neither sells nor stacks into anything.
 const DEFAULT_ENCLAVE_LOOT = ENCLAVE_DROPS.filter(n => !['bass', 'coins', 'ashes', 'thread', 'tuna'].includes(n.toLowerCase()));
 
+// Why: the bars are the drop the trip is for, five a kill, and a coin pile here is 270 to 990 against a walk of a few tiles, so only the bolts and the curry start unticked.
+const IRON_DROPS: string[] = DROP_DB[BRIMHAVEN_IRON.target] ?? [];
+const DEFAULT_IRON_LOOT = IRON_DROPS.filter(n => !['bolts', 'curry'].includes(n.toLowerCase()));
+const STEEL_DROPS: string[] = DROP_DB[BRIMHAVEN_STEEL.target] ?? [];
+const DEFAULT_STEEL_LOOT = STEEL_DROPS.filter(n => !['bolts', 'curry'].includes(n.toLowerCase()));
+
 // Why: both Taverley blue and the guild pen read the same drop table off the same `loot` key, so the chips show for either.
 const SHOW_BLUE = { key: 'site', anyOf: [TAVERLEY_BLUE.key, HEROES_BLUE.key] };
 const SHOW_ENCLAVE = { key: 'site', anyOf: [GUTANOTH_BLUE.key] };
 const SHOW_BLACK = { key: 'site', anyOf: [TAVERLEY_BLACK.key] };
+const SHOW_IRON = { key: 'site', anyOf: [BRIMHAVEN_IRON.key] };
+const SHOW_STEEL = { key: 'site', anyOf: [BRIMHAVEN_STEEL.key] };
 
 export const SETTINGS: SettingsSchema = {
     combatStyle: { type: 'string', default: 'range', options: ['melee', 'mage', 'range'], label: 'Combat style', help: 'mage and range fight from a tile no dragon can path to. Melee stands in the dragonfire and needs the Dragonfire shield' },
@@ -110,21 +120,25 @@ export const SETTINGS: SettingsSchema = {
     loot: { type: 'string[]', default: DEFAULT_LOOT, options: DROPS, label: 'Loot to pick up (drop table)', group: 'Banking & loot', showIf: SHOW_BLUE, help: 'the blue dragon table. Everything picked up is banked. Bass and Coins start unticked because neither pays for the walk off the safespot' },
     lootBlack: { type: 'string[]', default: DEFAULT_BLACK_LOOT, options: BLACK_DROPS, label: 'Loot to pick up (drop table)', group: 'Banking & loot', showIf: SHOW_BLACK, help: 'the black dragon table, a different list from the blue one. Everything picked up is banked. Coins and Chocolate cake start unticked because neither pays for the walk off the safespot' },
     lootEnclave: { type: 'string[]', default: DEFAULT_ENCLAVE_LOOT, options: ENCLAVE_DROPS, label: 'Loot to pick up (drop table)', group: 'Banking & loot', showIf: SHOW_ENCLAVE, help: 'the blue dragon and greater demon tables merged, since the stand kills both. Everything picked up is banked. Bass, Coins, Tuna, Ashes and Thread start unticked because none pays for the walk off the safespot' },
+    lootIron: { type: 'string[]', default: DEFAULT_IRON_LOOT, options: IRON_DROPS, label: 'Loot to pick up (drop table)', group: 'Banking & loot', showIf: SHOW_IRON, help: 'the iron dragon table. Every kill drops five Iron bars and the bones, and the coin piles are 270 to 990, so all three start ticked; untick the bars to spend the slots on food. Bolts and Curry start unticked' },
+    lootSteel: { type: 'string[]', default: DEFAULT_STEEL_LOOT, options: STEEL_DROPS, label: 'Loot to pick up (drop table)', group: 'Banking & loot', showIf: SHOW_STEEL, help: 'the steel dragon table. Every kill drops five Steel bars and the bones, and the coin piles are 470 to 650, so all three start ticked. Bolts and Curry start unticked' },
     bankCommonJunk: { type: 'boolean', default: true, label: 'Also grab shared gems/junk', group: 'Banking & loot' },
     buryBones: { type: 'boolean', default: false, label: 'Bury dragon bones', group: 'Banking & loot', help: 'bury Dragon bones for Prayer xp instead of banking them (always looted when on). They are the best drop here, so this trades gold for xp' },
     rangingPotion: { type: 'boolean', default: false, label: 'Drink a ranging potion', group: 'Combat', showIf: SHOW_RANGE, help: 'sips a dose once the boost decays to within a tenth of the base level. The loadout carry list sets the dose form and the count per trip, otherwise one Ranging potion(3)' },
     antipoisonDoses: { type: 'number', default: 1, min: 0, max: 4, label: 'Superantipoison flasks per trip', group: 'Food & healing', showIf: SHOW_BLACK, help: 'the walk to the black dragons passes the dungeon spiders. A dose is drunk on the poison message; 0 carries none' },
+    antifireDoses: { type: 'number', default: 1, min: 0, max: 4, label: 'Antifire potion flasks per trip', group: 'Food & healing', showIf: SHOW_BRIMHAVEN, help: 'a metal dragon breathes from ten tiles and the shield alone leaves 5 a breath; a dose on top makes it 0 for six minutes, and the next goes down as the last lapses. 0 carries none and the food takes the breaths' },
+    axe: { type: 'string', default: 'Rune axe', options: AXES.map(t => t.name), label: 'Axe for the vines', group: 'Location', showIf: SHOW_BRIMHAVEN, help: 'the walk in chops through two vine walls, so an axe rides in the pack every trip; any tier works, a better one chops faster' },
 
     solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues', help: 'blue dragons drop hard clues. The trail leaves the dungeon and comes back' },
 
-    site: { type: 'string', default: 'taverley-blue', options: SITE_OPTIONS, label: 'Dragon site', group: 'Location', help: "below combat 97 the Taverley baby blues aggress on the walk in, above it they never do. The Heroes' Guild dragon is one adult penned behind a fence, so the fight is cast through it and only the loot walk opens the gate; the guild doors need Heroes' Quest. The Gu'Tanoth Enclave is a mage site: the Enclave guard waves you past once Watch Tower is complete, the stand looks at one dragon of the six and nothing else, and the cave shares its floor with greater demons, ogre shamans and chieftains, so melee there is your own risk" },
-    stand: { type: 'number', default: 1, min: 1, max: 6, label: 'Stand', group: 'Location', showIf: SHOW_STAND, help: 'which of the site\'s numbered stands to fight from, one per dragon. The Enclave has six, listed north, west, north-west, south, east, far east; 1 is the roomiest and the one with a live proof behind it. A number past the end takes the last, and a site with one stand ignores it' },
+    site: { type: 'string', default: 'taverley-blue', options: SITE_OPTIONS, label: 'Dragon site', group: 'Location', help: "below combat 97 the Taverley baby blues aggress on the walk in, above it they never do. The Heroes' Guild dragon is one adult penned behind a fence, so the fight is cast through it and only the loot walk opens the gate; the guild doors need Heroes' Quest. The Gu'Tanoth Enclave is a mage site: the Enclave guard waves you past once Watch Tower is complete, the stand looks at one dragon of the six and nothing else, and the cave shares its floor with greater demons, ogre shamans and chieftains, so melee there is your own risk. The Brimhaven Dungeon metal dragons cost Saniboch 875 coins a trip and the walk in chops two vines and crosses stepping stones, a log and a pipe, so it wants Woodcutting 22, Agility 34 and an axe; they breathe from ten tiles, so every style wears the Dragonfire shield, range is refused, and the trip banks at Ardougne on the Ardougne teleport, which needs Plague City" },
+    stand: { type: 'number', default: 1, min: 1, max: MAX_STANDS, label: 'Stand', group: 'Location', showIf: SHOW_STAND, help: 'which of the site\'s numbered stands to fight from, one per dragon. The Enclave has six, listed north, west, north-west, south, east, far east; 1 is the roomiest and the one with a live proof behind it. The iron dragons have four, nearest the pipe first; only four of the thirteen have a melee-proof pocket in cast range at all. A number past the end takes the last, and a site with one stand ignores it' },
     safespot1: { type: 'tile', default: TAVERLEY_BLUE.safespots[0], label: 'Safespot 1', group: 'Location', showIf: SHOW_SAFESPOT, help: 'the chosen stand fills these; set one to move it off the derived tile' },
     safespot2: { type: 'tile', default: TAVERLEY_BLUE.safespots[1], label: 'Safespot 2', group: 'Location', showIf: SHOW_SAFESPOT, help: 'the ladder rotates here when a hit lands, or when nothing is in range for 20s' },
     safespot3: { type: 'tile', default: TAVERLEY_BLUE.safespots[2], label: 'Safespot 3', group: 'Location', showIf: SHOW_SAFESPOT },
     meleeTile: { type: 'tile', default: TAVERLEY_BLUE.meleeAnchor, label: 'Melee anchor tile', group: 'Location', showIf: SHOW_MELEE, help: 'derived bordering an adult body no baby can reach; a dragon further out gets leashed in' },
     bankTile: { type: 'tile', default: TAVERLEY_BLUE.bank, label: 'Bank stand tile', group: 'Location' },
-    leaveVia: { type: 'string', default: 'teleport', options: ['teleport', 'walk'], optionLabels: { teleport: 'The escape teleport this site names', walk: 'Walk out' }, label: 'Leave the lair by', group: 'Location', help: 'the teleport falls back to the walk when the runes or the magic level are short. Each site names the one spell that lands nearest its bank: Falador for Taverley and the guild, Watchtower for the Enclave' },
+    leaveVia: { type: 'string', default: 'teleport', options: ['teleport', 'walk'], optionLabels: { teleport: 'The escape teleport this site names', walk: 'Walk out' }, label: 'Leave the lair by', group: 'Location', help: 'the teleport falls back to the walk when the runes or the magic level are short. Each site names the one spell that lands nearest its bank: Falador for Taverley and the guild, Watchtower for the Enclave, Ardougne for Brimhaven' },
     teleStock: { type: 'number', default: 2, min: 0, max: 10, label: 'Spare escape casts', group: 'Location', help: 'casts carried on top of the one needed to leave' },
     logDetail: { type: 'string', default: 'Normal', options: ['Normal', 'Verbose'], label: 'Log detail', group: 'Diagnostics', help: 'Verbose adds the loot, slot-freeing and key-state traces' }
 };
@@ -161,6 +175,8 @@ let ESCAPE_STOCK = 2;
 let HEAL_TO = 0.9;
 let LOOT_SET = new Set<string>();
 let ANTIPOISON_WANT = 0;
+let ANTIFIRE_WANT = 0;
+let AXE = '';
 let BANK_COMMON = true;
 let VERBOSE = false;
 let USE_SPECIAL = true;
@@ -215,8 +231,14 @@ function needStyleSupplies(): boolean {
 function bankOpts(): BankOpts {
     return {
         withdrawFood: true, runeCasts: RUNE_CASTS, runeBuffer: RUNE_BUFFER, ammo: AMMO_WITHDRAW, escapeStock: ESCAPE_STOCK, healTo: HEAL_TO, potions: POTIONS,
-        flasks: ANTIPOISON_WANT > 0 ? [antipoisonPlan(ANTIPOISON_WANT)] : []
+        flasks: [...(ANTIPOISON_WANT > 0 ? [antipoisonPlan(ANTIPOISON_WANT)] : []), ...(ANTIFIRE_WANT > 0 ? [antifirePlan(ANTIFIRE_WANT)] : [])],
+        carry: SITE.axe === true && AXE !== '' ? [AXE] : []
     };
+}
+
+/** Whether the pack is short of the coins the way in costs. */
+function needCoins(): boolean {
+    return SITE.feeGate !== undefined && Inventory.count(COINS) < SITE.feeGate.coins;
 }
 
 // Why: bankRoutine returns void and countBankTrip fires only where it runs to the end, so the counter moving is what separates an empty bank from a walk that never got there.
@@ -230,10 +252,6 @@ async function bankTrip(bot: JiveDragons): Promise<void> {
     }
 }
 
-function dosesHeld(): number {
-    return ANTIPOISON_DOSES.reduce((n, name) => n + Inventory.count(name), 0);
-}
-
 /** Drink the smallest antipoison flask held. False with none in the pack. */
 async function drinkAntipoison(): Promise<boolean> {
     const name = doseToDrink(n => Inventory.count(n));
@@ -241,11 +259,66 @@ async function drinkAntipoison(): Promise<boolean> {
     if (name === null || dose === null) {
         return false;
     }
-    const before = dosesHeld();
+    // Why: a sip turns the (4) into a (3), so the flask count never moves; the dose form's own count is what drops.
+    const before = Inventory.count(name);
     if (!(await dose.interact('Drink'))) {
         return false;
     }
-    return Execution.delayUntil(() => dosesHeld() !== before, 3000);
+    return Execution.delayUntil(() => Inventory.count(name) < before, 3000);
+}
+
+function antifireHeld(): number {
+    return ANTIFIRE_DOSES.reduce((n, name) => n + Inventory.count(name), 0);
+}
+
+// Why: `%dragonresist` never reaches the client, so the lapse is kept as a tick from the sip, and a breath the shield took with no potion line after it resets the clock to now. The hook runs from the fight's idle ticks as well as its own task, since a fight holds the loop for two minutes and a dose lapsing inside one is two minutes of breaths.
+
+/** The Antifire clock: when the last dose lapses, and the chat mark the breath lines are read from. */
+const antifire = {
+    until: 0,
+    mark: GameMessages.mark(),
+    warned: false,
+    noteBreaths(): void {
+        if (antifireLapsed(GameMessages.sawSince(this.mark, SHIELD_ABSORBS), GameMessages.sawSince(this.mark, POTION_PROTECTS))) {
+            this.until = 0;
+        }
+        this.mark = GameMessages.mark();
+    },
+    due(): boolean {
+        this.noteBreaths();
+        return antifireDue({ inLair: SITE.inArea(Game.tile()), tick: Game.tick(), until: this.until });
+    },
+    ticksLeft(): number {
+        return Math.max(0, this.until - Game.tick());
+    },
+    reset(): void {
+        this.until = 0;
+        this.mark = GameMessages.mark();
+        this.warned = false;
+    }
+};
+
+/** Drink the smallest Antifire flask held and start the clock. False with none in the pack. */
+async function sipAntifire(bot: JiveDragons): Promise<boolean> {
+    const name = doseToDrink(n => Inventory.count(n), ANTIFIRE_DOSES);
+    const dose = name === null ? null : Inventory.first(name);
+    if (name === null || dose === null) {
+        return false;
+    }
+    // Why: the sip runs inside walks and fights through the Sustain hook, so the status it shows goes back to whatever the task had up.
+    const status = bot.status;
+    bot.setStatus('drinking an Antifire potion');
+    // Why: the flask count holds steady from (4) to (1), so the sip is proved by the dose form's own count dropping; summing them drank a whole flask in one go and started the clock on the last dose.
+    const before = Inventory.count(name);
+    const drunk = (await dose.interact('Drink')) && (await Execution.delayUntil(() => Inventory.count(name) < before, 3000));
+    bot.setStatus(status);
+    if (!drunk) {
+        return false;
+    }
+    antifire.until = Game.tick() + ANTIFIRE_TICKS;
+    antifire.warned = false;
+    bot.log(`drank ${name}, the next dose in ${Math.round(((ANTIFIRE_TICKS - ANTIFIRE_MARGIN_TICKS) * 0.6) / 60)} minutes (holding ${ANTIFIRE_DOSES.map(n => `${Inventory.count(n)}x ${n}`).filter(t => !t.startsWith('0x')).join(', ') || 'none'})`);
+    return true;
 }
 
 function potionsHeld(plan: PotionPlan): number {
@@ -443,6 +516,25 @@ class CurePoison implements Task {
     }
 }
 
+// Why: a due dose with nothing to drink is the state the operator has to hear about, so the empty pack warns once and then leaves the loop alone for a minute rather than validating every pass.
+class SipAntifire implements Task {
+    private retryAt = 0;
+    constructor(private readonly bot: JiveDragons) {}
+    validate(): boolean {
+        return ANTIFIRE_WANT > 0 && Date.now() >= this.retryAt && antifire.due();
+    }
+    async execute(): Promise<void> {
+        if (antifireHeld() > 0 && await sipAntifire(this.bot)) {
+            return;
+        }
+        this.retryAt = Date.now() + ASSERT_RETRY_MS;
+        if (!antifire.warned) {
+            this.bot.log(`WARNING: an Antifire dose is due and the pack holds ${antifireHeld()} flask(s). The shield holds the breaths to 5 until the bank run.`);
+            antifire.warned = true;
+        }
+    }
+}
+
 class Eat implements Task {
     constructor(private readonly bot: JiveDragons) {}
     validate(): boolean {
@@ -458,7 +550,7 @@ class GearEquip implements Task {
     private retryAt = 0;
     constructor(private readonly bot: JiveDragons) {}
     private missing(): string | null {
-        const wear = STYLE === 'melee' ? [SHIELD, WEAPON] : [WEAPON, STYLE === 'range' ? AMMO : ''];
+        const wear = [...(needsShield(SITE, STYLE) ? [SHIELD] : []), WEAPON, STYLE === 'range' ? AMMO : ''];
         return wear.find(n => n !== '' && !Equipment.contains(n) && Inventory.first(n) !== null) ?? null;
     }
     validate(): boolean {
@@ -506,6 +598,28 @@ class SetAttackStyle implements Task {
             this.fails = 0;
             this.retryAt = Date.now() + ASSERT_RETRY_MS;
             this.bot.log(`could not set the ${STYLE} attack style. Retrying in ${ASSERT_RETRY_MS / 1000}s.`);
+        }
+    }
+}
+
+// Why: two metal dragons breathe at the stand at once and auto-retaliate swings the casts to whichever breathed last, so the script's target stalls while the other one dies uncounted; with it off the casts go where the click went.
+class SetRetaliate implements Task {
+    private fails = 0;
+    private retryAt = 0;
+    constructor(private readonly bot: JiveDragons) {}
+    validate(): boolean {
+        return SITE.fireAtRange === true && Game.autoRetaliateOn() && Date.now() >= this.retryAt;
+    }
+    async execute(): Promise<void> {
+        this.bot.setStatus('turning auto-retaliate off');
+        Game.setAutoRetaliate(false);
+        if (await Execution.delayUntil(() => !Game.autoRetaliateOn(), 3000)) {
+            this.bot.log('auto-retaliate off, so the casts stay on the dragon that was clicked');
+            this.fails = 0;
+        } else if (++this.fails >= ASSERT_BATCH) {
+            this.fails = 0;
+            this.retryAt = Date.now() + ASSERT_RETRY_MS;
+            this.bot.log(`could not turn auto-retaliate off. Retrying in ${ASSERT_RETRY_MS / 1000}s.`);
         }
     }
 }
@@ -632,6 +746,10 @@ class BankRun implements Task {
         if (needStyleSupplies() && !this.bot.supplyKnownEmpty()) {
             return true;
         }
+        // Why: the fee is spent on the way in, so a pack short of it outside the dungeon has nowhere to go but the booth.
+        if (needCoins() && !SITE.inArea(Game.tile()) && !this.bot.supplyKnownEmpty()) {
+            return true;
+        }
         // Why: food is a resource the run spends and FreeSlot turns it into room, so a pack full of food is no reason to walk to Falador.
         return Inventory.isFull() && foodCount() <= FOOD_RESERVE;
     }
@@ -640,7 +758,7 @@ class BankRun implements Task {
             return;
         }
         this.bot.setStatus('banking, restocking');
-        this.bot.log(`banking (food ${foodCount()}${STYLE === 'mage' ? `, casts ${castsLeft()}` : ''}${STYLE === 'range' ? `, ammo ${ammoLeft()}` : ''})`);
+        this.bot.log(`banking (food ${foodCount()}${STYLE === 'mage' ? `, casts ${castsLeft()}` : ''}${STYLE === 'range' ? `, ammo ${ammoLeft()}` : ''}${SITE.coins === undefined ? '' : `, coins ${Inventory.count(COINS)}`})`);
         await bankTrip(this.bot);
     }
 }
@@ -683,7 +801,7 @@ class AcquireKey implements Task {
 class EnterLair implements Task {
     constructor(private readonly bot: JiveDragons) {}
     validate(): boolean {
-        if (this.bot.parked || SITE.inArea(Game.tile()) || hpFrac() < PANIC_HP) {
+        if (this.bot.parked || SITE.inArea(Game.tile()) || hpFrac() < PANIC_HP || needCoins()) {
             return false;
         }
         return SITE.keyItem === null || Inventory.countById(SITE.keyItem.id) > 0;
@@ -771,6 +889,9 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             : STYLE === 'range' && this.settings.bool('rangingPotion', false) ? [rangingPlan(carry)]
                 : [];
         ANTIPOISON_WANT = SITE.antipoison === true ? this.settings.num('antipoisonDoses', 1) : 0;
+        ANTIFIRE_WANT = SITE.antifire === true ? this.settings.num('antifireDoses', 1) : 0;
+        AXE = SITE.axe === true ? this.settings.str('axe', 'Rune axe') : '';
+        antifire.reset();
 
         this.startedAt = Date.now();
         this.xp.begin();
@@ -794,7 +915,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         });
 
         // Why: Bank.count reads the last snapshot and the bank has never been open at this point, so this only catches a shield that is nowhere, and supply.ts repeats the check with the booth open.
-        const gate = meleeShieldGate(STYLE, Equipment.contains(SHIELD) || Inventory.count(SHIELD) > 0 || Bank.count(SHIELD) > 0);
+        const gate = styleGate(STYLE, SITE.fireAtRange === true) ?? shieldGate(STYLE, SITE.fireAtRange === true, Equipment.contains(SHIELD) || Inventory.count(SHIELD) > 0 || Bank.count(SHIELD) > 0);
         if (gate !== null) {
             this.parkFor(gate);
         }
@@ -806,6 +927,9 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         Sustain.set(async () => {
             if (needEat()) {
                 await eatOnce(this);
+            }
+            if (ANTIFIRE_WANT > 0 && antifireHeld() > 0 && antifire.due()) {
+                await sipAntifire(this);
             }
         });
 
@@ -828,8 +952,10 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             new Retreat(this, SITE),
             new Eat(this),
             new CurePoison(this),
+            new SipAntifire(this),
             new GearEquip(this),
             new SetAttackStyle(this),
+            new SetRetaliate(this),
             new ArmAutocast(this),
             new SipPotion(this),
             new PanicBank(this),
@@ -890,7 +1016,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         return SPELL;
     }
     keepExtra(): string[] {
-        return keepDoses(potionDoseNames(), ANTIPOISON_DOSES, ANTIPOISON_WANT > 0);
+        return [...keepDoses(potionDoseNames(), ANTIPOISON_DOSES, ANTIPOISON_WANT > 0), ...(ANTIFIRE_WANT > 0 ? ANTIFIRE_DOSES : []), ...(AXE === '' ? [] : [AXE])];
     }
     leaveByWalk(): boolean {
         return LEAVE_WALK;
@@ -1041,7 +1167,8 @@ export default class JiveDragons extends TaskBot implements CombatHost {
                 [{ text: `Style: ${STYLE}` }, { text: `Weapon: ${WEAPON}` }],
                 [{ text: supply }, { text: `Spec: ${spec}` }],
                 [{ text: `Food: ${foodCount()}` }, { text: `Sips: ${this.sips}` }],
-                ...(POTIONS.length > 0 ? [POTIONS.map(boost)] : [])
+                ...(POTIONS.length > 0 ? [POTIONS.map(boost)] : []),
+                ...(ANTIFIRE_WANT > 0 ? [[{ text: `Antifire: ${antifire.ticksLeft() > 0 ? `${Math.round(antifire.ticksLeft() * 0.6)}s` : 'lapsed'}` }, { text: `Doses: ${antifireHeld()}` }]] : [])
             ]);
         } else if (section === 'Levels') {
             paintLevels(p, this.xp.gains(), mins, CONTROL_ROWS);

@@ -1,4 +1,6 @@
+import { reader } from '../../adapter/ClientAdapter.js';
 import { driveDialog } from '../../api/ai/quests/exec/primitives.js';
+import { GameMessages } from '../../api/chatbox/gameMessages.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { depositAllExcept } from '../../api/bank/bankRules.js';
 import type { PotionPlan } from '../../api/combat/boostPotions.js';
@@ -12,6 +14,8 @@ import { Game } from '../../api/game/Game.js';
 import { GroundItems } from '../../api/grounditems/GroundItems.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Locs, type Loc } from '../../api/locs/Locs.js';
+import { Modals } from '../../api/ui/widgets/Modals.js';
+import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import { Npcs, talkOp, type Npc } from '../../api/npcs/Npcs.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Sustain } from '../../api/sustain/Sustain.js';
@@ -20,12 +24,14 @@ import { Traversal } from '../../api/walking/Traversal.js';
 import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import { SPELL_TELEPORTS } from '../../event/webwalk/teleportCatalog.js';
 import Tile from '../../geometry/Tile.js';
-import { keyStatus, meleeShieldGate, type Style } from './logic.js';
-import type { DragonSite } from './sites.js';
+import { keyStatus, nextApproachIndex, shieldGate, type Style } from './logic.js';
+import { needsShield, type DragonSite } from './sites.js';
 
 /** What supply and combat need from the bot, so neither imports JiveDragons.ts. */
 export interface JiveHost {
     log(m: string): void;
+    /** Suppressed unless the panel asks for it; a host without one logs nothing extra. */
+    vlog?(m: string): void;
     setStatus(s: string): void;
     parkFor(reason: string): void;
     countBankTrip(): void;
@@ -66,6 +72,8 @@ export interface BankOpts {
     flasks?: FlaskPlan[];
     /** Gear worn every trip on top of the weapon and the ammo. */
     wear?: string[];
+    /** Items carried in the pack every trip, an axe for the vines. */
+    carry?: string[];
     /** How the trip leaves the lair; leaveLair when absent. */
     leave?: (h: JiveHost, site: DragonSite) => Promise<boolean>;
 }
@@ -90,15 +98,24 @@ export function antipoisonPlan(want: number): FlaskPlan {
     return { flask: ANTIPOISON_DOSES[0]!, doses: ANTIPOISON_DOSES, want };
 }
 
+export const ANTIFIRE_LABEL = 'Antifire potion';
+export const ANTIFIRE_DOSES: readonly string[] = [4, 3, 2, 1].map(d => `${ANTIFIRE_LABEL}(${d})`);
+
+export function antifirePlan(want: number): FlaskPlan {
+    return { flask: ANTIFIRE_DOSES[0]!, doses: ANTIFIRE_DOSES, want };
+}
+
 /** The first dose form held, smallest flask first so a part-used one goes before a full one. */
-export function doseToDrink(count: (name: string) => number): string | null {
-    for (const name of [...ANTIPOISON_DOSES].reverse()) {
+export function doseToDrink(count: (name: string) => number, doses: readonly string[] = ANTIPOISON_DOSES): string | null {
+    for (const name of [...doses].reverse()) {
         if (count(name) > 0) {
             return name;
         }
     }
     return null;
 }
+
+export const COINS = 'Coins';
 const BOOTH = 'Bank booth';
 const BOOTH_OP = 'Use-quickly';
 
@@ -204,11 +221,87 @@ async function walkExact(dest: Tile, log: (m: string) => void): Promise<boolean>
     return me !== null && dest.distanceTo(me) === 0;
 }
 
-/** Walk the site's approach stops in order. */
-async function walkApproach(h: JiveHost, site: DragonSite): Promise<void> {
-    for (const stop of site.approach) {
-        await Traversal.walkResilient(stop, { radius: 0, attempts: 3, timeoutMs: 60_000, log: m => h.log(`  ${m}`) });
+const APPROACH_LEG_MS = 120_000;
+
+// Why: the stops are one obstacle apart on a site like Brimhaven, so a walk that always began at the first would recross every obstacle whenever the bot drifted past the last; and a stand the loaded scene already reaches needs no stop at all.
+
+/** Walk the site's approach stops from the nearest one on, unless `stand` is already reachable from here. */
+export async function walkApproach(h: JiveHost, site: DragonSite, stand?: Tile): Promise<void> {
+    const here = Game.tile();
+    if (here === null || site.approach.length === 0) {
+        return;
     }
+    if (stand !== undefined && Reachability.canReach(stand, { adjacentOk: true, maxSteps: 6000 })) {
+        return;
+    }
+    const from = nextApproachIndex(site.approach, here);
+    for (const stop of site.approach.slice(from)) {
+        const me = Game.tile();
+        if (me !== null && stop.distanceTo(me) <= 1) {
+            continue;
+        }
+        await Traversal.walkResilient(stop, { radius: 0, attempts: 3, timeoutMs: APPROACH_LEG_MS, log: m => h.log(`  ${m}`) });
+    }
+}
+
+const PAY_MS = 20_000;
+
+// Why: the Pay op runs a player line, an objbox and Saniboch's reply before the varbit is set, and the box is a main modal that suspends the script until it is clicked, so the drive answers boxes as well as chat pages and stops on the line the payment prints.
+
+/** Pay the doorman and take the entrance loc through. */
+async function payAndEnter(h: JiveHost, site: DragonSite): Promise<boolean> {
+    const fee = site.feeGate!;
+    if (Inventory.count(COINS) < fee.coins) {
+        h.log(`the way in costs ${fee.coins} coins and the pack holds ${Inventory.count(COINS)}. Banking for more.`);
+        return false;
+    }
+    h.setStatus(`walking to ${fee.npc}`);
+    if (!(await Traversal.walkResilient(fee.stand, { radius: 2, attempts: 5, timeoutMs: 300_000, log: say(h) }))) {
+        return false;
+    }
+    const doorman = Npcs.query().name(fee.npc).action(fee.op).nearest();
+    if (!doorman) {
+        h.log(`no ${fee.npc} in the scene to pay. Retrying.`);
+        await Execution.delayTicks(2);
+        return false;
+    }
+    h.setStatus(`paying ${fee.npc}`);
+    const mark = GameMessages.mark();
+    const before = Inventory.count(COINS);
+    if (!(await doorman.interact(fee.op))) {
+        return false;
+    }
+    const paid = (): boolean => GameMessages.sawSince(mark, fee.paidLine) || Inventory.count(COINS) < before;
+    const deadline = performance.now() + PAY_MS;
+    while (performance.now() < deadline && !EventSignal.pending()) {
+        if (ChatDialog.canContinue()) {
+            await ChatDialog.continue();
+        } else if (reader.modals().main !== -1) {
+            await Modals.close();
+        } else if (paid() && !ChatDialog.isOpen()) {
+            break;
+        }
+        await Execution.delayTicks(1);
+    }
+    if (!paid()) {
+        h.log(`${fee.npc} took no payment. Retrying.`);
+        return false;
+    }
+    h.log(`paid ${fee.npc} ${fee.coins} coins`);
+    await Execution.delayTicks(1);
+    const door = locById(fee.entrance.locId, 8);
+    if (!door || !(await door.interact(fee.entrance.op))) {
+        h.log('the dungeon entrance is not in the scene yet. Retrying.');
+        return false;
+    }
+    if (!(await waitFed(() => site.inArea(Game.tile()), DOOR_MS))) {
+        h.log('the entrance did not let us through. Retrying.');
+        return false;
+    }
+    h.log('inside the dungeon');
+    h.setStatus('walking in to the dragons');
+    await walkApproach(h, site);
+    return true;
 }
 
 // Why: the guard answers with a two-option chat and only the first option runs the teleport, so the talk is driven to that option rather than clicked through; the reply moves the player, which is what inArea then proves.
@@ -246,6 +339,9 @@ export async function enterLair(h: JiveHost, site: DragonSite): Promise<boolean>
     }
     if (site.talkGate) {
         return talkPastGuard(h, site);
+    }
+    if (site.feeGate) {
+        return payAndEnter(h, site);
     }
     const gate = site.gate;
     // Why: a gateless site is reached by transports and doors the graph already carries, so the approach walk is the way in and inArea is the only proof it landed.
@@ -377,6 +473,9 @@ function keepNames(h: JiveHost, site: DragonSite): string[] {
     if (site.keyItem !== null) {
         extra.push(site.keyItem.name);
     }
+    if (site.coins !== undefined) {
+        extra.push(COINS);
+    }
     return combatKeepNames({
         food: h.foodName(),
         style: h.style(),
@@ -412,12 +511,13 @@ export async function bankRoutine(h: JiveHost, site: DragonSite, opts: BankOpts)
         await withdrawFoodTo(h);
     }
     await withdrawKey(h, site);
-    await withdrawGear(h, opts.wear);
+    await withdrawGear(h, site, opts.wear, opts.carry);
+    await withdrawCoins(h, site);
     await withdrawStyleSupplies(h, opts);
     await withdrawEscapeRunes(h, site, opts);
     await withdrawFlasks(h, [...(opts.potions ?? []).map(asFlask), ...(opts.flasks ?? [])]);
     // Why: Equipment.equip shuts the bank to get the backpack ops back, so every withdrawal has to land before anything is worn.
-    await equipGear(h, opts.wear);
+    await equipGear(h, site, opts.wear);
     if (await healUp(h, opts.healTo ?? HEAL_TO) && opts.withdrawFood && await openSiteBank(h, site)) {
         await withdrawFoodTo(h);
     }
@@ -468,23 +568,38 @@ async function needOne(h: JiveHost, name: string): Promise<void> {
     }
 }
 
-async function withdrawGear(h: JiveHost, wear: readonly string[] = []): Promise<void> {
-    if (h.style() === 'melee') {
+async function withdrawGear(h: JiveHost, site: DragonSite, wear: readonly string[] = [], carry: readonly string[] = []): Promise<void> {
+    if (needsShield(site, h.style())) {
         await needOne(h, SHIELD);
     }
     await needOne(h, h.weaponName());
-    for (const name of wear) {
+    for (const name of [...wear, ...carry]) {
         await needOne(h, name);
     }
     // Why: reader.bankItems() is empty whenever the bank modal is shut, so a count of zero only carries a fact with the bank open.
-    const gate = meleeShieldGate(h.style(), Equipment.contains(SHIELD) || Inventory.count(SHIELD) > 0 || Bank.count(SHIELD) > 0);
+    const gate = shieldGate(h.style(), site.fireAtRange === true, Equipment.contains(SHIELD) || Inventory.count(SHIELD) > 0 || Bank.count(SHIELD) > 0);
     if (gate !== null) {
         h.parkFor(gate);
     }
 }
 
-async function equipGear(h: JiveHost, extra: readonly string[] = []): Promise<void> {
-    const wear = [...(h.style() === 'melee' ? [SHIELD, h.weaponName()] : [h.weaponName(), h.style() === 'range' ? h.ammoName() : '']), ...extra];
+// Why: the fee and the fares are spent every trip, so the pile is topped back up to the site's figure rather than stocked once.
+async function withdrawCoins(h: JiveHost, site: DragonSite): Promise<void> {
+    if (site.coins === undefined || Inventory.count(COINS) >= site.coins) {
+        return;
+    }
+    h.setStatus('withdrawing coins');
+    const got = await withdrawTo(COINS, site.coins);
+    if (got > 0) {
+        h.log(`withdrew ${got} coins (${Inventory.count(COINS)}/${site.coins})`);
+    } else if (Inventory.count(COINS) < (site.feeGate?.coins ?? 0)) {
+        h.log(`WARNING: the bank cannot cover the ${site.feeGate?.coins ?? site.coins} coins the way in costs. Deposit coins to resume.`);
+    }
+}
+
+async function equipGear(h: JiveHost, site: DragonSite, extra: readonly string[] = []): Promise<void> {
+    const shield = needsShield(site, h.style()) ? [SHIELD] : [];
+    const wear = [...shield, h.weaponName(), h.style() === 'range' ? h.ammoName() : '', ...extra];
     for (const name of wear) {
         if (name !== '' && !Equipment.contains(name) && Inventory.first(name) !== null && await Equipment.equip(name)) {
             h.log(`wearing ${name}`);
@@ -806,12 +921,12 @@ export async function acquireKey(h: JiveHost, site: DragonSite): Promise<KeyStat
     await Bank.depositAllMatching(depositAllExcept(keepNames(h, site)), say(h));
     const fromBank = await withdrawKey(h, site);
     // Why: this leg walks into the Jailer fight and on into the lair, so the gear leaves the booth with the key rather than waiting for a bank run that only comes after the first kill.
-    await withdrawGear(h);
+    await withdrawGear(h, site);
     if (!fromBank) {
         await withdrawFoodTo(h);
     }
     await Bank.close();
-    await equipGear(h);
+    await equipGear(h, site);
     if (fromBank) {
         h.log(`took the ${item.name} out of the bank`);
         return state();

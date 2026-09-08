@@ -35,6 +35,9 @@ export interface Target {
     baby: { id: number; size: number; maxrange?: number } | null;
     /** What the engine clamps the npc's movement with. */
     maxrange: number;
+    // Why: a stand is ranked by how much of one dragon's own wander it sees, and a chase leash of 20 says nothing about where the dragon idles; the Enclave's south stand saw 11% of its dragon and took no kills in twenty minutes.
+    /** The npc's own wanderrange when it differs from `maxrange`, for the share a stand sees of each spawn's idle wander. */
+    wander?: number;
     /** The tile the site region floods from. */
     inside: { x: number; z: number };
     /** A tile on the wrong side of the gate, whose region a site area must stay out of. */
@@ -76,7 +79,11 @@ export const GUTANOTH_BLUE: Target = { squares: ['m40_147'], adult: { id: 55, si
 // Why: the same cave as GUTANOTH_BLUE, read for its five greater demons instead: size 3 against the dragons' 4, and `maxrange` 8 against their 6.
 export const GUTANOTH_DEMON: Target = { squares: ['m40_147'], adult: { id: 83, size: 3 }, baby: null, maxrange: 8, inside: { x: 2588, z: 9410 }, outside: LADDER_BOTTOM, meleeOptional: true };
 
-export const TARGETS: Record<string, Target> = { blue: BLUE_DRAGON, demon: BLACK_DEMON, black: BLACK_DRAGON, kbd: KING_BLACK_DRAGON, heroes: HEROES_BLUE, gutanoth: GUTANOTH_BLUE, gutanothdemon: GUTANOTH_DEMON };
+// Why: the Brimhaven Dungeon has no gate, only Saniboch's teleport in and the exit loc out, so the region floods from a tile south of the pipe and the landing at (2713,9564) is the sealed other side. wanderrange 5, maxrange 20 and attackrange 10, so a stand is melee-proof rather than fire-proof.
+export const IRON_DRAGON: Target = { squares: ['m42_147'], adult: { id: 1591, size: 4 }, baby: null, maxrange: 20, wander: 5, inside: { x: 2698, z: 9491 }, outside: { x: 2713, z: 9564 }, meleeOptional: true };
+export const STEEL_DRAGON: Target = { squares: ['m42_147'], adult: { id: 1592, size: 4 }, baby: null, maxrange: 20, wander: 5, inside: { x: 2698, z: 9491 }, outside: { x: 2713, z: 9564 }, meleeOptional: true };
+
+export const TARGETS: Record<string, Target> = { blue: BLUE_DRAGON, demon: BLACK_DEMON, black: BLACK_DRAGON, kbd: KING_BLACK_DRAGON, heroes: HEROES_BLUE, gutanoth: GUTANOTH_BLUE, gutanothdemon: GUTANOTH_DEMON, iron: IRON_DRAGON, steel: STEEL_DRAGON };
 
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];
 const DZ = [1, 0, -1, 0, 1, -1, -1, 1];
@@ -226,6 +233,11 @@ export interface Safespot {
     // Why: a stand that sees one corner of the wander area loses the target the moment it slides off that corner, and the ladder then rotates on a dragon that was never out of reach.
     /** Adult body tiles this stand can see inside cast range, out of `adultBodies`. */
     covers: number;
+    /** The largest share of one adult's own wander body this stand sees, and which spawn that is. */
+    share: number;
+    of: { x: number; z: number };
+    /** That share for every adult spawn, in `spawns` order. */
+    shares: number[];
 }
 
 export interface Anchor {
@@ -314,8 +326,8 @@ export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS, engin
     };
 
     /** Every footprint origin the npc can reach inside `maxrange`, then the tiles it covers and the tiles it can hit from them. */
-    const wander = (spawn: Spawn): Wander => {
-        const reach = spawn.adult ? target.maxrange : (target.baby?.maxrange ?? target.maxrange);
+    const wander = (spawn: Spawn, reachOverride?: number): Wander => {
+        const reach = reachOverride ?? (spawn.adult ? target.maxrange : (target.baby?.maxrange ?? target.maxrange));
         const seen = new Set<string>();
         const body = new Set<string>();
         const queue: { x: number; z: number }[] = [];
@@ -396,7 +408,7 @@ export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS, engin
     };
 
     const spawns = readSpawns(target, maps);
-    const wanders = spawns.map(wander);
+    const wanders = spawns.map(s => wander(s));
     const adults = wanders.filter(w => w.spawn.adult);
     const allBody = new Set<string>();
     const adultBody = new Set<string>();
@@ -434,21 +446,38 @@ export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS, engin
     if (outside.has(key(target.inside.x, target.inside.z))) {
         throw new Error(`the gate at (${target.inside.x}, ${target.inside.z}) is open in ${where}, so the two sides of it cannot be told apart`);
     }
+    const homes = adults.map(w => (target.wander === undefined ? w : wander(w.spawn, target.wander)));
     const safespots: Safespot[] = [];
     for (const k of reachable) {
         if (allBody.has(k) || adultThreat.has(k) || babyThreat.has(k)) continue;
         const [x, z] = parse(k);
+        const seen = new Set<string>();
         let range = Infinity, covers = 0;
         for (const b of adultBody) {
             const [bx, bz] = parse(b);
             const d = cheb(x, z, bx, bz);
             if (d > CAST_RANGE || !sees(x, z, bx, bz)) continue;
             covers++;
+            seen.add(b);
             if (d < range) range = d;
         }
-        if (range <= CAST_RANGE) safespots.push({ x, z, range, covers });
+        if (range > CAST_RANGE) continue;
+        let share = 0, of = { x: 0, z: 0 };
+        const shares: number[] = [];
+        for (const h of homes) {
+            let hit = 0;
+            for (const b of h.body) if (seen.has(b)) hit++;
+            const frac = h.body.size === 0 ? 0 : hit / h.body.size;
+            shares.push(frac);
+            if (frac > share) {
+                share = frac;
+                of = { x: h.spawn.x, z: h.spawn.z };
+            }
+        }
+        safespots.push({ x, z, range, covers, share, of, shares });
     }
-    safespots.sort((a, b) => a.range - b.range || a.x - b.x || a.z - b.z);
+    // Why: a target with no wander of its own keeps the old order, which the checked-in derivations are pinned against.
+    safespots.sort((a, b) => (target.wander === undefined ? 0 : b.share - a.share) || a.range - b.range || a.x - b.x || a.z - b.z);
 
     const anchors: Anchor[] = [];
     for (const k of reachable) {
@@ -491,7 +520,7 @@ if (import.meta.main) {
     console.log(`bodies ${d.bodies} (${d.adultBodies} adult)`);
     console.log(`${d.reachable.size} tiles reachable from the gate's inside tile (${target.inside.x}, ${target.inside.z}), ${d.outside.size} on the ladder side`);
     console.log(`${d.safespots.length} safespots: reachable, off every body, out of every threat set, and looking at an adult inside ${CAST_RANGE}`);
-    for (const s of d.safespots.slice(0, 12)) console.log(`  (${s.x}, ${s.z})  sees an adult ${s.range} away, ${s.covers} of ${d.adultBodies} body tiles`);
+    for (const s of d.safespots.slice(0, 12)) console.log(`  (${s.x}, ${s.z})  sees an adult ${s.range} away, ${s.covers} of ${d.adultBodies} body tiles, ${Math.round(s.share * 100)}% of the one at (${s.of.x}, ${s.of.z})`);
     const adultSpawns = d.spawns.filter(s => s.adult).length;
     console.log(`${d.anchors.length} melee anchors: off every body, out of every baby's reach, touching an adult at range 1`);
     for (const a of d.anchors) console.log(`  (${a.x}, ${a.z})  ${a.spawns} of ${adultSpawns} adult spawns, ${a.tiles} body tiles at range 1`);

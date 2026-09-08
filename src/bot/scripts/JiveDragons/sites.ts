@@ -33,6 +33,18 @@ export interface DragonExit {
     stand: Tile;
 }
 
+// Why: Saniboch's Pay op sets a varbit the entrance tree reads and clears on the way through, so every trip is a payment and a click, and neither is a door the graph can carry.
+/** A way in that costs coins: an npc paid from `stand`, then a loc op that teleports inside. */
+export interface DragonFeeGate {
+    npc: string;
+    op: string;
+    coins: number;
+    stand: Tile;
+    entrance: { locId: number; op: string };
+    /** The line the payment prints, which is what proves the coins landed. */
+    paidLine: RegExp;
+}
+
 // Why: a cave with six dragons in it has more than one good stand, and which one you want depends on what else is camping the room, so the site carries them numbered and the operator picks.
 /** One numbered place to fight from: the tiles the ladder rotates between and the tile melee uses. */
 export interface DragonStand {
@@ -75,6 +87,17 @@ export interface DragonSite {
     // Why: a stand is idle while its dragon respawns, and the Enclave puts a greater demon inside cast range of one, so the idle time goes on that rather than on nothing.
     /** Other npcs worth killing from the same stand, taken only when the target is not up. */
     alsoHunt?: string[];
+    /** The way in costs coins at an npc before a loc op teleports inside. */
+    feeGate?: DragonFeeGate;
+    // Why: metal dragons breathe from ten tiles by script, so no tile is fire-proof and the Dragonfire shield goes on whatever the style; the bow has no hand left for it.
+    /** The target breathes at range, so every style wears the shield and range is refused. */
+    fireAtRange?: boolean;
+    /** The trip carries Antifire potions and sips one whenever the last dose lapses. */
+    antifire?: boolean;
+    /** Coins carried per trip, for the fee and the fares on the way. */
+    coins?: number;
+    /** The walk in chops vines, so an axe rides in the pack. */
+    axe?: boolean;
     inArea(t: AreaPoint | null): boolean;
 }
 
@@ -226,12 +249,112 @@ export const GUTANOTH_BLUE: DragonSite = {
     inArea: inBox({ minX: 2560, maxX: 2623, minZ: 9408, maxZ: 9471, level: 0 })
 };
 
+// Why: the dungeon is nine pockets joined by vines, stepping stones, a log and a pipe, all of them edges in transports.json, and the landing is sealed from everything else; the box covers all of it so the walk in from the landing is a walk to the stand and never a second payment.
+const BRIMHAVEN_DUNGEON = inBox({ minX: 2624, maxX: 2751, minZ: 9408, maxZ: 9599, level: 0 });
+
+// Why: derived by tools/nav/jive-safespots.ts --target iron, which ranks a pocket by the share of one dragon's own wander it sees; the room is one open cave under a chase leash of 20, so only four of the thirteen have a melee-proof pocket in cast range at all. Each stand also sits clear of the wild dogs, black demons and bronze dragons on the north edge.
+// Why: stand 1 is nearest the pipe and the one with a live proof; stand 2 sees the most of its dragon but is eighty tiles deeper in.
+const BRIMHAVEN_IRON_STANDS: DragonStand[] = [
+    {
+        label: 'the north-west dragon at 2704,9457',
+        tiles: [new Tile(2697, 9458, 0), new Tile(2696, 9457, 0), new Tile(2697, 9459, 0)],
+        anchor: new Tile(2698, 9457, 0)
+    },
+    {
+        label: 'the south dragon at 2714,9420',
+        tiles: [new Tile(2714, 9416, 0), new Tile(2715, 9415, 0), new Tile(2715, 9416, 0)],
+        anchor: new Tile(2714, 9417, 0)
+    },
+    {
+        label: 'the east dragon at 2739,9450',
+        tiles: [new Tile(2747, 9453, 0), new Tile(2747, 9454, 0), new Tile(2747, 9452, 0)],
+        anchor: new Tile(2746, 9452, 0)
+    },
+    {
+        label: 'the south-east dragon at 2722,9424',
+        tiles: [new Tile(2716, 9415, 0), new Tile(2715, 9415, 0), new Tile(2717, 9414, 0)],
+        anchor: new Tile(2716, 9416, 0)
+    }
+];
+
+// Why: only the west steel dragon has a pocket in cast range, and it is the same pocket as iron stand 1, so a steel run sees an iron dragon from it too.
+const BRIMHAVEN_STEEL_STANDS: DragonStand[] = [
+    {
+        label: 'the west dragon at 2702,9447',
+        tiles: [new Tile(2696, 9457, 0), new Tile(2696, 9458, 0), new Tile(2697, 9458, 0)],
+        anchor: new Tile(2696, 9455, 0)
+    }
+];
+
+// Why: the walk in is the landing pocket to the pipe, one obstacle a stop, so a leg that fails retries its own crossing rather than every crossing.
+const BRIMHAVEN_APPROACH = [new Tile(2691, 9564, 0), new Tile(2649, 9562, 0), new Tile(2672, 9499, 0), new Tile(2682, 9506, 0), new Tile(2698, 9500, 0), new Tile(2698, 9492, 0)];
+
+// Why: the Ardougne teleport lands twenty tiles from the east bank and the ferry to Brimhaven leaves from beside it, so the trip is spell, booth, fare, Saniboch, fare again; Falador is two boats further.
+export const BRIMHAVEN_IRON: DragonSite = {
+    key: 'brimhaven-iron',
+    label: 'Brimhaven Dungeon iron dragons',
+    target: 'Iron dragon',
+    bones: 'Dragon bones',
+    keyItem: null,
+    gate: null,
+    feeGate: {
+        npc: 'Saniboch',
+        op: 'Pay',
+        coins: 875,
+        stand: new Tile(2747, 3152, 0),
+        entrance: { locId: 5083, op: 'Enter' },
+        paidLine: /you pay saniboch 875 coins/i
+    },
+    approach: BRIMHAVEN_APPROACH,
+    stands: BRIMHAVEN_IRON_STANDS,
+    safespots: BRIMHAVEN_IRON_STANDS[0]!.tiles,
+    meleeAnchor: BRIMHAVEN_IRON_STANDS[0]!.anchor,
+    // Why: `[oploc1,karam_dungeon_exit]` teleports to the tile beside Saniboch, and the loc is a wall piece on the landing's east side.
+    exit: { locId: 5084, op: 'leave', stand: new Tile(2713, 9564, 0) },
+    bank: new Tile(2655, 3283, 0),
+    escapeTeleportId: 'ardougne',
+    walkOut: new Tile(2745, 3152, 0),
+    food: 'Shark',
+    lootSetting: 'lootIron',
+    fireAtRange: true,
+    rangedThreat: true,
+    antifire: true,
+    // Why: 875 for Saniboch and 30 each way on the ferry, with a margin for a pile the run leaves behind.
+    coins: 1000,
+    axe: true,
+    inArea: BRIMHAVEN_DUNGEON
+};
+
+export const BRIMHAVEN_STEEL: DragonSite = {
+    ...BRIMHAVEN_IRON,
+    key: 'brimhaven-steel',
+    label: 'Brimhaven Dungeon steel dragons',
+    target: 'Steel dragon',
+    stands: BRIMHAVEN_STEEL_STANDS,
+    safespots: BRIMHAVEN_STEEL_STANDS[0]!.tiles,
+    meleeAnchor: BRIMHAVEN_STEEL_STANDS[0]!.anchor,
+    lootSetting: 'lootSteel'
+};
+
 export const DRAGON_SITES: Record<string, DragonSite> = {
     [TAVERLEY_BLUE.key]: TAVERLEY_BLUE,
     [TAVERLEY_BLACK.key]: TAVERLEY_BLACK,
     [HEROES_BLUE.key]: HEROES_BLUE,
-    [GUTANOTH_BLUE.key]: GUTANOTH_BLUE
+    [GUTANOTH_BLUE.key]: GUTANOTH_BLUE,
+    [BRIMHAVEN_IRON.key]: BRIMHAVEN_IRON,
+    [BRIMHAVEN_STEEL.key]: BRIMHAVEN_STEEL
 };
+
+/** Every site whose stands are numbered, for the panel's stand picker. */
+export const STAND_SITE_KEYS: string[] = Object.values(DRAGON_SITES).filter(s => (s.stands?.length ?? 0) > 1).map(s => s.key);
+
+/** The most stands any site carries. */
+export const MAX_STANDS: number = Math.max(...Object.values(DRAGON_SITES).map(s => s.stands?.length ?? 1));
+
+/** Whether the run wears the Dragonfire shield: always for melee, and on a site that breathes at range for every style. */
+export function needsShield(site: DragonSite, style: string): boolean {
+    return style === 'melee' || site.fireAtRange === true;
+}
 
 export const SITE_OPTIONS: string[] = Object.keys(DRAGON_SITES);
 

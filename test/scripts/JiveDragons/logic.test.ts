@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { SAFESPOT_BLIND_MS, attackRangeFor, bodyOrigin, engageRangeFor, gapTo, holdDue, hurtOnSpot, isClueObj, keepDoses, keyStatus, lootHalts, meleeShieldGate, nearestSpot, nextSafespot, noteSighting, retreatAim, retreatDue, settled, wantsDrop } from '#/bot/scripts/JiveDragons/logic.js';
+import { ANTIFIRE_MARGIN_TICKS, ANTIFIRE_TICKS, POTION_PROTECTS, SAFESPOT_BLIND_MS, SHIELD_ABSORBS, antifireDue, antifireLapsed, attackRangeFor, bodyOrigin, engageRangeFor, gapTo, holdDue, hurtOnSpot, isClueObj, keepDoses, keyStatus, lootHalts, nearestSpot, nextApproachIndex, nextSafespot, noteSighting, retreatAim, retreatDue, settled, shieldGate, styleGate, wantsDrop } from '#/bot/scripts/JiveDragons/logic.js';
 
 describe('nextSafespot', () => {
     const base = { index: 0, spots: 3, hurt: false, blindMs: 0 };
@@ -124,19 +124,69 @@ describe('retreatAim', () => {
     });
 });
 
-describe('meleeShieldGate', () => {
+describe('shieldGate', () => {
     test('melee without the shield is refused, naming where to get one', () => {
-        const why = meleeShieldGate('melee', false);
+        const why = shieldGate('melee', false, false);
         expect(why).toContain('Duke Horacio');
     });
 
     test('melee with the shield passes', () => {
-        expect(meleeShieldGate('melee', true)).toBeNull();
+        expect(shieldGate('melee', false, true)).toBeNull();
     });
 
     test('a safespot is fire-proof, so mage and range never need it', () => {
-        expect(meleeShieldGate('mage', false)).toBeNull();
-        expect(meleeShieldGate('range', false)).toBeNull();
+        expect(shieldGate('mage', false, false)).toBeNull();
+        expect(shieldGate('range', false, false)).toBeNull();
+    });
+
+    test('a site that breathes at range wants the shield whatever the style', () => {
+        expect(shieldGate('mage', true, false)).toContain('metal dragons');
+        expect(shieldGate('mage', true, true)).toBeNull();
+        expect(shieldGate('melee', true, false)).toContain('metal dragons');
+    });
+});
+
+describe('styleGate', () => {
+    test('range is refused where the shield is worn, since a bow takes both hands', () => {
+        expect(styleGate('range', true)).toContain('both hands');
+        expect(styleGate('range', false)).toBeNull();
+        expect(styleGate('mage', true)).toBeNull();
+        expect(styleGate('melee', true)).toBeNull();
+    });
+});
+
+describe('antifire', () => {
+    test('a dose is due on the first pass inside the lair and again as the last one lapses', () => {
+        expect(antifireDue({ inLair: true, tick: 100, until: 0 })).toBe(true);
+        expect(antifireDue({ inLair: true, tick: 100, until: 100 + ANTIFIRE_TICKS })).toBe(false);
+        expect(antifireDue({ inLair: true, tick: 100 + ANTIFIRE_TICKS - ANTIFIRE_MARGIN_TICKS, until: 100 + ANTIFIRE_TICKS })).toBe(true);
+    });
+
+    test('never outside the lair', () => {
+        expect(antifireDue({ inLair: false, tick: 100, until: 0 })).toBe(false);
+    });
+
+    test('a shield line with no potion line after it means the dose lapsed', () => {
+        expect(antifireLapsed(true, false)).toBe(true);
+        expect(antifireLapsed(true, true)).toBe(false);
+        expect(antifireLapsed(false, false)).toBe(false);
+    });
+
+    test('the lines match what metal_dragon.rs2 prints', () => {
+        expect(SHIELD_ABSORBS.test('Your shield absorbs most of the dragon fire!')).toBe(true);
+        expect(POTION_PROTECTS.test("Your potion protects you from the heat of the dragon's breath!")).toBe(true);
+    });
+});
+
+describe('nextApproachIndex', () => {
+    const stops = [{ x: 2691, z: 9564 }, { x: 2649, z: 9562 }, { x: 2698, z: 9500 }];
+
+    test('the landing starts at the first stop', () => {
+        expect(nextApproachIndex(stops, { x: 2713, z: 9564 })).toBe(0);
+    });
+
+    test('a bot already past the stones carries on from the pipe rather than recrossing them', () => {
+        expect(nextApproachIndex(stops, { x: 2697, z: 9458 })).toBe(2);
     });
 });
 

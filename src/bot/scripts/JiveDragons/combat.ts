@@ -13,7 +13,7 @@ import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../geometry/Tile.js';
 import { SAFESPOT_BLIND_MS, bodyOrigin, engageRangeFor, gapTo, holdDue, hurtOnSpot, nextSafespot, noteSighting, retreatAim, retreatDue, settled, type Sighting, type Style } from './logic.js';
 import { huntNames, type DragonSite } from './sites.js';
-import { waitFed, type JiveHost } from './supply.js';
+import { waitFed, walkApproach, type JiveHost } from './supply.js';
 
 /** What a fight needs from the bot on top of what supply needs. */
 export interface CombatHost extends JiveHost {
@@ -61,6 +61,9 @@ const APPROACH_MS = 120_000;
 
 /** A gap this long between two of Fight's own polls is time the bot spent somewhere other than the tile. */
 const HOLD_GAP_MS = 10_000;
+/** How often an empty field with adults in the scene is explained, one line, under Verbose. */
+const FIELD_DIAG_MS = 10_000;
+const FIELD_DIAG_RADIUS = 16;
 
 /** How long a body must hold its tile before a safespot style clicks it. */
 const SETTLE_MS = 1200;
@@ -193,6 +196,7 @@ export class Fight implements Task {
     private lastHp = -1;
     private blindSince = 0;
     private polledAt = 0;
+    private diagAt = 0;
     private reissues = 0;
     private readonly skip = new Map<number, number>();
     private readonly seen = new Map<number, Sighting>();
@@ -301,6 +305,7 @@ export class Fight implements Task {
                 .filter(n => (this.skip.get(n.index) ?? 0) < now && (!usesSafespot(style) || settled(this.seen.get(n.index), now, SETTLE_MS)))
                 .sort((a, b) => a.distance() - b.distance())[0];
             if (!target) {
+                this.explainEmptyField(now);
                 await this.idle();
                 return;
             }
@@ -323,6 +328,28 @@ export class Fight implements Task {
 
     private anchor(): Tile {
         return anchorFor(this.site, this.host.style(), this.host.safespotIndex());
+    }
+
+    // Why: the Brimhaven run stood a dragon's breath away from one for two minutes with no engage line, and nothing said which filter was dropping it; the lines are joined, since the harness shows only a few per poll.
+
+    /** One Verbose line naming every adult near the stand and which of the field's filters it fails. */
+    private explainEmptyField(now: number): void {
+        if (!this.host.vlog || now - this.diagAt < FIELD_DIAG_MS) {
+            return;
+        }
+        this.diagAt = now;
+        const spot = this.anchor();
+        const names = huntNames(this.site);
+        const near = Npcs.query().where(n => names.includes(n.name ?? '')).within(FIELD_DIAG_RADIUS).results();
+        if (near.length === 0) {
+            return;
+        }
+        const rows = near.map(n => {
+            const t = n.tile();
+            const seen = this.seen.get(n.index);
+            return `${n.index}@${t.x},${t.z} gap ${gapTo(spot, t, n.size)} sight ${sightedFrom(spot, n) ? 'y' : 'n'} combat ${n.inCombat ? 'y' : 'n'} me ${n.targetsMe() ? 'y' : 'n'} other ${n.targetsAnotherPlayer() ? 'y' : 'n'} settled ${settled(seen, now, SETTLE_MS) ? 'y' : 'n'} skip ${(this.skip.get(n.index) ?? 0) > now ? 'y' : 'n'}`;
+        });
+        this.host.vlog(`no target from ${spot}: ${rows.join(' | ')}`);
     }
 
     private field(radius: number): Npc[] {
@@ -589,13 +616,8 @@ export class WalkToSpot implements Task {
     async execute(): Promise<void> {
         this.host.setStatus('walking to the fight spot');
         const log = (m: string): void => this.host.log(`  ${m}`);
-        for (const stop of this.site.approach) {
-            const here = Game.tile();
-            if (here !== null && stop.distanceTo(here) > 1) {
-                await Traversal.walkResilient(stop, { radius: 1, attempts: 3, timeoutMs: APPROACH_MS, log });
-            }
-        }
         const spot = this.anchor();
+        await walkApproach(this.host, this.site, spot);
         const style = this.host.style();
         await Traversal.walkResilient(spot, { radius: 0, attempts: 5, timeoutMs: APPROACH_MS, log });
         if (!atTile(spot)) {

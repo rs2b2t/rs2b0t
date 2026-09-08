@@ -104,3 +104,28 @@ describe('the ranged supplies', () => {
         expect(SETTINGS.ammo!.options).toContain('Rune arrow');
     });
 });
+
+describe('JiveDragons Brimhaven settings', () => {
+    test('the iron and steel chips carry the bars, the bones and the coins ticked, and the bolts and curry not', () => {
+        for (const [key, bar] of [['lootIron', 'Iron bar'], ['lootSteel', 'Steel bar']] as const) {
+            const def = SETTINGS[key]!.default as string[];
+            expect(def).toContain(bar);
+            expect(def).toContain('Dragon bones');
+            expect(def).toContain('Coins');
+            expect(def).not.toContain('Bolts');
+            expect(def).not.toContain('Curry');
+        }
+    });
+
+    test('the antifire flask count and the axe show for the Brimhaven sites only', () => {
+        expect(SETTINGS.antifireDoses!.showIf).toEqual({ key: 'site', anyOf: ['brimhaven-iron', 'brimhaven-steel'] });
+        expect(SETTINGS.axe!.showIf).toEqual({ key: 'site', anyOf: ['brimhaven-iron', 'brimhaven-steel'] });
+        expect(SETTINGS.axe!.options).toContain('Rune axe');
+        expect(SETTINGS.axe!.default).toBe('Rune axe');
+    });
+
+    test('the stand picker shows for every site with several stands and reaches the biggest', () => {
+        expect(SETTINGS.stand!.showIf).toEqual({ key: 'site', anyOf: ['gutanoth-blue', 'brimhaven-iron'] });
+        expect(SETTINGS.stand!.max).toBe(6);
+    });
+});

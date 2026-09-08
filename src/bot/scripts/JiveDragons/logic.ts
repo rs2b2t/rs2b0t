@@ -184,13 +184,63 @@ export function gapTo(from: Spot, tile: Spot, size: number): number {
 
 // Why: dragonfire is 5 through the shield and 30 without, rising to 50 when the attack roll beats the defence roll.
 // Why: mage and range fight from a tile no footprint touches, and the op trigger is the only thing that breathes, so the shield would only cost the slot the weapon needs.
+// Why: a metal dragon breathes at anything inside ten tiles by script, so on that site the shield goes on whatever the style.
 
-/** Why melee may not start, or null when it may. */
-export function meleeShieldGate(style: Style, hasShield: boolean): string | null {
-    if (style !== 'melee' || hasShield) {
+/** Why the run may not start without the shield, or null when it may. */
+export function shieldGate(style: Style, fireAtRange: boolean, hasShield: boolean): string | null {
+    if (hasShield || (style !== 'melee' && !fireAtRange)) {
         return null;
     }
+    if (fireAtRange) {
+        return 'the metal dragons breathe fire at range, so every style here wears the Dragonfire shield, and there is none in the bank or worn. Duke Horacio in Lumbridge Castle hands one out free.';
+    }
     return 'melee needs the Dragonfire shield and there is none in the bank or worn. Duke Horacio in Lumbridge Castle hands one out free, or switch to mage or range, which fight from a fire-proof safespot.';
+}
+
+// Why: every bow in the era takes both hands, so a range run on a site that wears the shield has nowhere to put it.
+
+/** Why the style cannot be used on the site, or null when it can. */
+export function styleGate(style: Style, fireAtRange: boolean): string | null {
+    if (style !== 'range' || !fireAtRange) {
+        return null;
+    }
+    return 'range cannot fight the metal dragons: every style here wears the Dragonfire shield against the far breath, and a bow needs both hands. Switch to mage or melee.';
+}
+
+/** The far breath through the shield, printed whether or not a dose is up. */
+export const SHIELD_ABSORBS = /your shield absorbs most of the dragon fire/i;
+/** Printed after the shield line only while an Antifire dose is up. */
+export const POTION_PROTECTS = /your potion protects you from the heat/i;
+/** How long a dose lasts: `%dragonresist = map_clock + 600`. */
+export const ANTIFIRE_TICKS = 600;
+/** Ticks before the lapse the next dose goes down, so no breath lands in the gap. */
+export const ANTIFIRE_MARGIN_TICKS = 20;
+
+export interface AntifireState {
+    inLair: boolean;
+    tick: number;
+    /** The tick the last dose lapses, 0 when none has been drunk. */
+    until: number;
+}
+
+// Why: `%dragonresist` never reaches the client, so the clock is kept here from the sip, and a breath the shield took with no potion line after it says the clock is wrong.
+// Why: an empty pack is not "not due": the caller warns on it, since a due dose with nothing to drink is the state the operator has to hear about.
+
+/** Whether an Antifire dose is due. */
+export function antifireDue(s: AntifireState): boolean {
+    return s.inLair && s.tick >= s.until - ANTIFIRE_MARGIN_TICKS;
+}
+
+/** Whether a breath's chat lines say the dose has lapsed. */
+export function antifireLapsed(sawShield: boolean, sawPotion: boolean): boolean {
+    return sawShield && !sawPotion;
+}
+
+// Why: the approach stops are one obstacle apart, and a walk that always started at the first would recross every obstacle whenever the bot drifted past the last one.
+
+/** The index of the approach stop to start from: the nearest one, ties to the earlier. */
+export function nextApproachIndex(stops: readonly Spot[], here: Spot): number {
+    return nearestSpot(here, stops);
 }
 
 /** Every hard trail is a distinct obj all displaying "Clue scroll", so id is the only match. */
