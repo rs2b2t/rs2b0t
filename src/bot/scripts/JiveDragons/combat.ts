@@ -49,6 +49,9 @@ const LEASH_PASSES = 60;
 const RE_ENGAGE_MS = 4000;
 const ENGAGE_SETTLE_MS = 1200;
 const KILL_GRACE_MS = 6000;
+// Why: a dragon standing where the tiles beside it are rock takes the click, walks the bot to the nearest tile it can reach and never gets a swing; at a quarter hit chance a minute with no change is one fight in three hundred, so it reads as no way in.
+const CHASE_STALL_MS = 60_000;
+const CHASE_SKIP_MS = 90_000;
 
 const TAKEN_SKIP_MS = 15_000;
 const LEASH_SKIP_MS = 20_000;
@@ -333,6 +336,12 @@ export class Fight implements Task {
                 if (live.health !== this.engagedHealth) {
                     this.engagedHealth = live.health;
                     this.engagedAt = performance.now();
+                }
+                if (!holdsAnchor(this.site, style) && performance.now() - this.engagedAt > CHASE_STALL_MS) {
+                    this.host.log(`${this.engagedName || name} ${live.index} took no damage for ${CHASE_STALL_MS / 1000}s from ${Game.tile()}, so there is no way in beside it. Skipping it for ${CHASE_SKIP_MS / 1000}s.`);
+                    this.skip.set(live.index, performance.now() + CHASE_SKIP_MS);
+                    this.clearTarget();
+                    continue;
                 }
                 if (performance.now() - this.engagedAt < RE_ENGAGE_MS) {
                     await this.idle();
