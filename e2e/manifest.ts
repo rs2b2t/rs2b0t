@@ -1099,6 +1099,14 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'cooksassistant-758-live',
+        harness: 'cooksassistant-758-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'unvetted',
+        budgetMin: 10,
+        note: "seeds 990 coins on a started Cook's Assistant at the Lumbridge farm; before withdraws Coins, after Takes the egg and never withdraws Coins (#758)"
+    },
+    {
         id: 'witchs-potion-rats-tail-live',
         harness: 'witchs-potion-rats-tail-live.ts',
         covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
