@@ -45,6 +45,7 @@ import {
     windowCandidates,
     FREE_SLOT_FLOOR,
     settleDue,
+    settleRuns,
     freshChatLines,
     listedRows,
     RateLimiter,
@@ -1155,8 +1156,8 @@ class Restock implements Task {
         if (Trade.active() || this.bot.counter().current() !== null) {
             return false;
         }
-        // Why: a bought pack is banked before the next fetch, so Settle below gets the tick while a trip is owed.
-        if (!this.bot.bankReady(Date.now()) || this.bot.settleForced()) {
+        // Why: a trip that is owed, after a buy, on a full pack or on takings over the float, runs before the fetch, or Settle's deposit takes the fetched goods back to the bank with the takings.
+        if (!this.bot.bankReady(Date.now()) || settleDue(Inventory.free(), this.bot.packCoins(), this.bot.float(), this.bot.settleForced())) {
             return false;
         }
         const want = this.bot.counter().nextIntent(Date.now(), this.bot.intentTtl());
@@ -1216,15 +1217,10 @@ class Settle implements Task {
         if (Trade.active() || this.bot.counter().current() !== null || !this.bot.bankReady(Date.now())) {
             return false;
         }
-        // Why: holding an order used to block banking outright, so a pack that filled up could never be emptied:
-        // Why: Restock kept going back for goods with no room to put them, and the shop lived at the bank.
-        // Why: a forced trip, after a buy or a reset, is owed ahead of any order too.
-        const outOfRoom = Inventory.free() <= FREE_SLOT_FLOOR;
-        if (!outOfRoom && !this.bot.settleForced() && this.bot.counter().nextIntent(Date.now(), this.bot.intentTtl()) !== null) {
-            return false;
-        }
-        return settleDue(Inventory.free(), this.bot.packCoins(), this.bot.float(), this.bot.settleForced())
-            || this.bot.floatShort() > 0;
+        // Why: holding an order used to block banking outright, so a pack that filled up could never be emptied and takings over the float held every window shut with the order waiting on one.
+        const due = Inventory.free() <= FREE_SLOT_FLOOR
+            || settleDue(Inventory.free(), this.bot.packCoins(), this.bot.float(), this.bot.settleForced());
+        return settleRuns({ due, floatShort: this.bot.floatShort() > 0, orderLive: this.bot.counter().nextIntent(Date.now(), this.bot.intentTtl()) !== null });
     }
 
     async execute(): Promise<void> {

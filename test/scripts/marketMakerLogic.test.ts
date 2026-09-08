@@ -16,6 +16,7 @@ import {
     buyOwesSettle,
     windowCandidates,
     settleDue,
+    settleRuns,
     shouldSettle,
     tradeIsStalled,
     sideSignature,
@@ -757,5 +758,26 @@ describe('a sale puts its goods up straight away', () => {
     test('a purchase still waits for their side to settle', () => {
         const beat = decideBeat({ ...base, oweFixed: false, theirSig: '440x10', window: windowAt({ lastSig: '440x9', stillBeats: 0 }) });
         expect(beat).toEqual({ do: 'wait', reason: 'their side moved' });
+    });
+});
+
+// Why: the customer who bought the cap and asked again had the goods fetched and no window, with the takings over the float holding every window and the live order holding Settle.
+describe('settleRuns', () => {
+    test('a due trip runs whether or not an order is live', () => {
+        expect(settleRuns({ due: true, floatShort: false, orderLive: true })).toBe(true);
+        expect(settleRuns({ due: true, floatShort: false, orderLive: false })).toBe(true);
+    });
+
+    test('a float top-up alone waits for the live order', () => {
+        expect(settleRuns({ due: false, floatShort: true, orderLive: true })).toBe(false);
+        expect(settleRuns({ due: false, floatShort: true, orderLive: false })).toBe(true);
+    });
+
+    test('nothing owed, nothing runs', () => {
+        expect(settleRuns({ due: false, floatShort: false, orderLive: false })).toBe(false);
+    });
+
+    test('takings over the float after a cap-sized sale make the trip due with the next order live', () => {
+        expect(settleRuns({ due: settleDue(20, 5_000_000, 200_000, false), floatShort: false, orderLive: true })).toBe(true);
     });
 });

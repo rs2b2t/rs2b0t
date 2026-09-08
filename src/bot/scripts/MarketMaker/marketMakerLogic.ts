@@ -268,6 +268,12 @@ export function settleDue(freeSlots: number, packCoins: number, coinFloor: numbe
     return forced || shouldSettle(freeSlots, packCoins, coinFloor);
 }
 
+// Why: OpenWindow holds every window while a trip is due, so an order that held Settle back waited on a window that could not open: the customer who bought the cap and asked again had the goods fetched and no window, with the takings still in the pack. A live order now delays only a float top-up.
+/** Whether Settle takes the tick: a due trip always, a float top-up only while no order is live. */
+export function settleRuns(input: { due: boolean; floatShort: boolean; orderLive: boolean }): boolean {
+    return input.due || (input.floatShort && !input.orderLive);
+}
+
 // Why: a sale in progress has its goods fetched for one customer, and a window opened with anyone else meanwhile takes their stock into the same pack; the sale's customer is the only request answered until it settles or lapses.
 /** The requests a window may open with: the sale's customer alone while a sale is live, every request otherwise. */
 export function windowCandidates(requests: readonly string[], saleCustomer: string | null): string[] {

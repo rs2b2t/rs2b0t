@@ -1,7 +1,8 @@
 /** Two-account MarketMaker e2e at Seers bank, against the window-is-the-transaction model.
- *  Six legs: a sale paid by coins in the window, a mixed pile bought with no chat, a live re-price
- *  mid-trade, a pile over the trade cap bid at the cap, coins ignored and named, and the cooldown
- *  after walking out. Quotes and appraisals travel over public chat, and the shop pays out in notes. */
+ *  Seven legs: a sale paid by coins in the window, a mixed pile bought with no chat, a live re-price
+ *  mid-trade, a pile over the trade cap bid at the cap, coins ignored and named, the cooldown
+ *  after walking out, and a second order placed while the takings sit over the float. Quotes and
+ *  appraisals travel over public chat, and the shop pays out in notes. */
 
 // Usage:
 //   HEADED=1 bun e2e/marketmaker-pair-live.ts
@@ -539,6 +540,55 @@ try {
     }
     results.push(`ignored a customer for ${COOLDOWN_S}s after they walked out mid-trade`);
     console.log(`${at()} PASS leg 6: ${results[5]}`);
+
+    // ---- leg 7: a second order while the takings sit over the float -------
+    // Why: takings over the float owe a trip, the window waits on that trip, and a live order used to hold the trip back, so the customer who bought and asked again got their goods fetched and no window.
+    if (Date.now() > deadline) {
+        fail('out of budget before the second-order leg');
+    }
+    await custPage.waitForTimeout(COOLDOWN_S * 1000 + 3_000);
+    const ore7 = await oreCount(custPage);
+    const gp7 = await countById(custPage, COINS);
+    if ((await askUntilAnswered(custPage, 'buy 100 iron ore', /trade me/i)) === null) {
+        fail(await dump(makerPage, custPage, 'second-order leg: the maker never answered the first request'));
+    }
+    if (!(await openTrade(custPage, 'second order, first sale'))) {
+        fail(await dump(makerPage, custPage, 'second-order leg: the first window never opened'));
+    }
+    if (!(await waitBotSide(custPage, s => unitsOn(s, IRON, IRON_NOTE) === 100, 20_000, 'second order, first sale'))) {
+        fail(await dump(makerPage, custPage, 'second-order leg: the maker did not put up 100 iron ore'));
+    }
+    await offerItem(custPage, { name: 'Coins', id: COINS, qty: 100 * IRON_SELL });
+    if (!(await settle(custPage, 'second order, first sale'))) {
+        fail(await dump(makerPage, custPage, 'second-order leg: the first sale never completed'));
+    }
+    const mark7 = await chatMark(custPage);
+    await say(custPage, 'buy 100 iron ore');
+    if ((await waitForMakerLine(custPage, /trade me/i, 120_000, mark7)) === null) {
+        fail(await dump(makerPage, custPage, 'second-order leg: the maker never came back with the second order'));
+    }
+    const makerGp = await countById(makerPage, COINS);
+    if (makerGp > 200_000) {
+        fail(await dump(makerPage, custPage, `second-order leg: the maker is serving with ${makerGp}gp in the pack, the takings were not banked first`));
+    }
+    if (!(await openTrade(custPage, 'second order, second sale'))) {
+        fail(await dump(makerPage, custPage, 'second-order leg: the second window never opened'));
+    }
+    if (!(await waitBotSide(custPage, s => unitsOn(s, IRON, IRON_NOTE) === 100, 20_000, 'second order, second sale'))) {
+        fail(await dump(makerPage, custPage, 'second-order leg: the maker did not put up 100 iron ore the second time'));
+    }
+    await offerItem(custPage, { name: 'Coins', id: COINS, qty: 100 * IRON_SELL });
+    if (!(await settle(custPage, 'second order, second sale'))) {
+        fail(await dump(makerPage, custPage, 'second-order leg: the second sale never completed'));
+    }
+    await custPage.waitForTimeout(2500);
+    const oreGained7 = (await oreCount(custPage)) - ore7;
+    const gpSpent7 = gp7 - (await countById(custPage, COINS));
+    if (oreGained7 !== 200 || gpSpent7 !== 200 * IRON_SELL) {
+        fail(await dump(makerPage, custPage, `second-order leg: expected +200 ore and -${200 * IRON_SELL}gp over the two sales, got +${oreGained7} and -${gpSpent7}`));
+    }
+    results.push(`served a second order placed while the takings sat over the float, with ${makerGp}gp in the pack at the window`);
+    console.log(`${at()} PASS leg 7: ${results[6]}`);
 
     console.log(`PASS: ${results.join(', ')}`);
     process.exit(0);
