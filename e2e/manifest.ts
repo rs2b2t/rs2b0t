@@ -1107,6 +1107,14 @@ export const CASES: readonly Case[] = [
         note: "seeds Rat's tail on a started Witch's Potion; passes when AIOQuester picks an onion and never attacks a Rimmington rat (#796)"
     },
     {
+        id: 'runemysteries-759-live',
+        harness: 'runemysteries-759-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'unvetted',
+        budgetMin: 8,
+        note: 'seeds leftover air talismans plus the research package at stage 3; passes when AIOQuester talks to Aubury and never Sedridor (#759)'
+    },
+    {
         id: 'witchs-house-226-live',
         harness: 'witchs-house-226-live.ts',
         covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
