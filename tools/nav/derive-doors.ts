@@ -117,6 +117,10 @@ function main(): void {
     ]);
     // Why: gates.rs2 hits loc_add(type=-1) for this Duel Arena outer leaf and leaves Gate#3198 closed, so navigation has to detour through its paired Gate#3197 one tile north.
     const BROKEN_ENGINE_EXCLUDED = new Set(['3198@3312,3235,0']);
+    // Why: 2-tile doors sit on an unwalkable loc tile, so WALL_STRAIGHT derivation never emits them.
+    const CURATED_EXTRA: DoorEdge[] = [
+        { x: 3107, z: 3162, level: 0, locId: 1536, locName: 'Door', dir: 'E' }
+    ];
 
     const edges: DoorEdge[] = [];
     const skippedShapes = new Map<string, number>();
@@ -167,6 +171,11 @@ function main(): void {
             });
             nameCounts.set(locName, (nameCounts.get(locName) ?? 0) + 1);
         });
+    }
+
+    for (const extra of CURATED_EXTRA) {
+        edges.push(extra);
+        nameCounts.set(extra.locName, (nameCounts.get(extra.locName) ?? 0) + 1);
     }
 
     edges.sort((a, b) => a.level - b.level || a.x - b.x || a.z - b.z || a.locId - b.locId);
