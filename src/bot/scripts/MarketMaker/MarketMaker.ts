@@ -42,6 +42,7 @@ import {
     floatShortfall,
     bankBeforeServing,
     buyOwesSettle,
+    windowCandidates,
     FREE_SLOT_FLOOR,
     settleDue,
     freshChatLines,
@@ -1088,7 +1089,7 @@ class OpenWindow implements Task {
         }
         // Why: this task runs ahead of Restock, so claiming the tick when every request is waiting on a bank trip starves the fetch that would let any of them open.
         const now = Date.now();
-        return [...this.bot.requests()].some(name => {
+        return this.candidates(now).some(name => {
             if (this.bot.blocked(name) || this.bot.counter().onCooldown(name, now)) {
                 return true;
             }
@@ -1097,9 +1098,28 @@ class OpenWindow implements Task {
         });
     }
 
+    // Why: a sale in progress is served before anyone else's window, or the goods fetched for it sit in a pack another customer is filling; the others keep their place in the queue and hear why once.
+    /** Whose request may open a window now. */
+    private candidates(now: number): string[] {
+        const sale = this.bot.counter().nextIntent(now, this.bot.intentTtl());
+        const names = [...this.bot.requests()];
+        const picked = windowCandidates(names, sale?.customer ?? null);
+        if (sale !== null) {
+            for (const name of names) {
+                if (!picked.includes(name) && this.toldWaiting.get(name) !== sale.customer) {
+                    this.toldWaiting.set(name, sale.customer);
+                    this.bot.say(`${name}, serving ${sale.customer} first. One moment.`);
+                }
+            }
+        }
+        return picked;
+    }
+
+    private readonly toldWaiting = new Map<string, string>();
+
     async execute(): Promise<void> {
         const now = Date.now();
-        for (const name of [...this.bot.requests()]) {
+        for (const name of this.candidates(now)) {
             if (this.bot.blocked(name) || this.bot.counter().onCooldown(name, now)) {
                 this.bot.requests().delete(name);
                 continue;

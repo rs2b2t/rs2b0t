@@ -14,6 +14,7 @@ import {
     floatShortfall,
     bankBeforeServing,
     buyOwesSettle,
+    windowCandidates,
     settleDue,
     shouldSettle,
     tradeIsStalled,
@@ -314,6 +315,18 @@ describe('settleDue', () => {
     test('a reset owes one whatever the pack holds, empty included', () => {
         expect(settleDue(28, 0, 50_000, true)).toBe(true);
         expect(settleDue(20, 1_000, 50_000, true)).toBe(true);
+    });
+});
+
+// Why: a sale's goods are fetched for one customer, and a window opened with anyone else meanwhile takes their stock into the same pack.
+describe('windowCandidates', () => {
+    test('with a sale live only its customer may open, whatever the queue order', () => {
+        expect(windowCandidates(['Bob', 'alice', 'Carol'], 'Alice')).toEqual(['alice']);
+        expect(windowCandidates(['Bob', 'Carol'], 'Alice')).toEqual([]);
+    });
+
+    test('with no sale live the queue is served in order', () => {
+        expect(windowCandidates(['Bob', 'Alice'], null)).toEqual(['Bob', 'Alice']);
     });
 });
 
