@@ -49,8 +49,8 @@ const LEASH_PASSES = 60;
 const RE_ENGAGE_MS = 4000;
 const ENGAGE_SETTLE_MS = 1200;
 const KILL_GRACE_MS = 6000;
-// Why: a dragon standing where the tiles beside it are rock takes the click, walks the bot to the nearest tile it can reach and never gets a swing; at a quarter hit chance a minute with no change is one fight in three hundred, so it reads as no way in.
-const CHASE_STALL_MS = 60_000;
+// Why: a dragon standing where the tiles beside it are rock takes the click, walks the bot to the nearest tile it can reach and never gets a swing; a minute fired once on a live fight in a dry spell, and ninety seconds is thirty swings, one fight in a thousand at a quarter hit chance.
+const CHASE_STALL_MS = 90_000;
 const CHASE_SKIP_MS = 90_000;
 
 const TAKEN_SKIP_MS = 15_000;
@@ -302,7 +302,7 @@ export class Fight implements Task {
                 this.seen.set(n.index, noteSighting(this.seen.get(n.index), n.tile(), performance.now()));
             }
             const facing = retaliationTarget(this.site);
-            // Why: a chase runs with retaliate off, so the face is always its own target and adopting it re-took a dragon the stall skip had just dropped.
+            // Why: a chase runs with retaliate off, so the face is always its own target and adopting it re-took a dragon the stall skip had dropped.
             if (holdsAnchor(this.site, style) && facing !== null && facing.index !== this.engaged) {
                 const gap = gapTo(this.anchor(), facing.tile(), facing.size);
                 // Why: a biter the field already holds is one the loop can fight from the tile; one it does not, parked a tile past the radius, walks the bot off if the client is left chasing it and drops out again next pass, so the engaged dragon is clicked again at once to cancel the walk.
