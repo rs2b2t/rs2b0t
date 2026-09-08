@@ -1,7 +1,43 @@
 import { ITEM_DB } from '../../data/itemdb.js';
 
-/** High Level Alchemy pays 60% of an item's shop cost. */
-const ALCH_RATE = 0.6;
+/** High Level Alchemy pays 60% of an item's shop cost; Low pays 40%. */
+export const HIGH_ALCH_RATE = 0.6;
+export const LOW_ALCH_RATE = 0.4;
+export const HIGH_ALCH_LEVEL = 55;
+export const LOW_ALCH_LEVEL = 21;
+export const HIGH_ALCH_SPELL = 'High Level Alchemy';
+export const LOW_ALCH_SPELL = 'Low Level Alchemy';
+
+export const SPELL_HIGH = 'High';
+export const SPELL_LOW = 'Low';
+export const SPELL_OPTIONS = [SPELL_HIGH, SPELL_LOW];
+export const SPELL_OPTION_LABELS: Record<string, string> = {
+    [SPELL_HIGH]: HIGH_ALCH_SPELL,
+    [SPELL_LOW]: LOW_ALCH_SPELL
+};
+
+export interface AlchSpell {
+    key: typeof SPELL_HIGH | typeof SPELL_LOW;
+    name: string;
+    level: number;
+    rate: number;
+}
+
+const HIGH: AlchSpell = { key: SPELL_HIGH, name: HIGH_ALCH_SPELL, level: HIGH_ALCH_LEVEL, rate: HIGH_ALCH_RATE };
+const LOW: AlchSpell = { key: SPELL_LOW, name: LOW_ALCH_SPELL, level: LOW_ALCH_LEVEL, rate: LOW_ALCH_RATE };
+
+/** High is the default, so a missing or unknown setting keeps saved High runs working. */
+export function resolveAlchSpell(raw: string): AlchSpell {
+    const wanted = raw.trim().toLowerCase();
+    if (wanted === 'low' || wanted === 'low level alchemy' || wanted === 'lowalch') {
+        return LOW;
+    }
+    return HIGH;
+}
+
+export function alchValueOf(cost: number, rate = HIGH_ALCH_RATE): number {
+    return Math.floor(cost * rate);
+}
 
 export interface AlchItem {
     /** Stable settings key, the obj name from the item database. */
@@ -69,7 +105,7 @@ const richestFirst = (a: AlchItem, b: AlchItem): number => b.alchValue - a.alchV
 export const ALCH_ITEMS: readonly AlchItem[] = FODDER
     .flatMap(({ obj, label }) => {
         const rec = ITEM_DB.find(r => r.obj === obj);
-        return rec ? [{ key: obj, id: rec.id, name: rec.name, label: label ?? rec.name, alchValue: Math.floor(rec.cost * ALCH_RATE) }] : [];
+        return rec ? [{ key: obj, id: rec.id, name: rec.name, label: label ?? rec.name, alchValue: alchValueOf(rec.cost) }] : [];
     })
     .sort(richestFirst);
 
@@ -86,21 +122,36 @@ function fold(s: string): string {
 
 // Why: the field takes the obj name or the client name, and several items share a client name, so the obj name is the precise form and the first database match settles the rest.
 /** The item the custom field names, or null when the database has no such item. */
-export function customAlchItem(text: string): AlchItem | null {
+export function customAlchItem(text: string, rate = HIGH_ALCH_RATE): AlchItem | null {
     const wanted = fold(text);
     if (wanted === '') {
         return null;
     }
     const known = ALCH_ITEMS.find(i => fold(i.key) === wanted || fold(i.label) === wanted);
     if (known) {
-        return known;
+        return revalue(known, rate);
     }
     const rec = ITEM_DB.find(r => fold(r.obj) === wanted) ?? ITEM_DB.find(r => fold(r.name) === wanted);
     if (!rec) {
         return null;
     }
-    return ALCH_ITEMS.find(i => i.id === rec.id)
-        ?? { key: rec.obj, id: rec.id, name: rec.name, label: rec.name, alchValue: Math.floor(rec.cost * ALCH_RATE) };
+    const fodder = ALCH_ITEMS.find(i => i.id === rec.id);
+    if (fodder) {
+        return revalue(fodder, rate);
+    }
+    return { key: rec.obj, id: rec.id, name: rec.name, label: rec.name, alchValue: alchValueOf(rec.cost, rate) };
+}
+
+function revalue(item: AlchItem, rate: number): AlchItem {
+    if (rate === HIGH_ALCH_RATE) {
+        return item;
+    }
+    const rec = ITEM_DB.find(r => r.id === item.id);
+    return rec ? { ...item, alchValue: alchValueOf(rec.cost, rate) } : item;
+}
+
+function applyRate(items: AlchItem[], rate: number): AlchItem[] {
+    return rate === HIGH_ALCH_RATE ? items : items.map(i => revalue(i, rate));
 }
 
 /** Yew and magic longbows, steel platebodies and the dragonhide armour. */
@@ -125,18 +176,19 @@ export function alchItem(key: string): AlchItem | null {
 
 // Why: the chip control emits option order rather than click order, so table order is the drain priority; with the custom chip ticked an unresolved name selects nothing, so a typo stops the run instead of alching the defaults.
 /** The ticked items plus the custom one, richest first. */
-export function selectedAlchItems(keys: readonly string[], customText = ''): AlchItem[] {
+export function selectedAlchItems(keys: readonly string[], customText = '', rate = HIGH_ALCH_RATE): AlchItem[] {
     const wanted = new Set(keys.map(k => k.trim().toLowerCase()));
     const picked = ALCH_ITEMS.filter(i => wanted.has(i.key));
     if (!wanted.has(CUSTOM_ALCH_KEY)) {
-        return picked.length > 0 ? picked : ALCH_ITEMS.filter(i => DEFAULT_ALCH_ITEMS.includes(i.key));
+        const rows = picked.length > 0 ? picked : ALCH_ITEMS.filter(i => DEFAULT_ALCH_ITEMS.includes(i.key));
+        return applyRate(rows, rate);
     }
     const custom = customAlchItem(customText);
     if (custom && !picked.includes(custom)) {
         picked.push(custom);
         picked.sort(richestFirst);
     }
-    return picked;
+    return applyRate(picked, rate);
 }
 
 /** The richest selected item the bank has not run out of. */

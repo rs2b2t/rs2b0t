@@ -45,6 +45,14 @@ export const CASES: readonly Case[] = [
         note: 'noted rune chainbodies, natures and a fire staff banked at Varrock West; passes when the note stack shrinks, coins appear and magic XP moves. `--item "Iron platebody"` runs the same drain through the Custom chip on any item the database knows'
     },
     {
+        id: 'alcher-low-744-live',
+        harness: 'alcher-low-744-live.ts',
+        covers: { scripts: ['Alcher'] },
+        status: 'unvetted',
+        budgetMin: 10,
+        note: 'Magic 25 at Varrock West with spell=Low; before (main) stops because High needs 55 Magic; after casts Low Level Alchemy (31xp) and the note stack turns into coins'
+    },
+    {
         id: 'alcher-swarm-drain-live',
         harness: 'alcher-swarm-drain-live.ts',
         covers: { scripts: ['Alcher'] },

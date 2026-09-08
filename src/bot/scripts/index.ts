@@ -569,9 +569,9 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'Alcher',
-    description: 'High alchemy loop — tick the items to alch and the bot drains them richest first, withdrawing each as notes and casting High Level Alchemy (fire staff + nature runes) until the bank is out, then moving to the next',
+    description: 'Alchemy loop — tick the items to alch and the bot drains them richest first, withdrawing each as notes and casting High or Low Level Alchemy (fire staff + nature runes) until the bank is out, then moving to the next',
     category: 'Magic',
-    tags: ['magic', 'high alchemy', 'alchemy', 'banking', 'noted'],
+    tags: ['magic', 'high alchemy', 'low alchemy', 'alchemy', 'banking', 'noted'],
     settingsSchema: ALCHER_SETTINGS,
     create: () => new Alcher()
 });

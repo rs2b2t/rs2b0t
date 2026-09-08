@@ -7,10 +7,21 @@ import {
     ALCH_OPTION_LABELS,
     CUSTOM_ALCH_KEY,
     DEFAULT_ALCH_ITEMS,
+    HIGH_ALCH_LEVEL,
+    HIGH_ALCH_RATE,
+    HIGH_ALCH_SPELL,
+    LOW_ALCH_LEVEL,
+    LOW_ALCH_RATE,
+    LOW_ALCH_SPELL,
+    SPELL_HIGH,
+    SPELL_LOW,
+    SPELL_OPTIONS,
     alchItem,
+    alchValueOf,
     customAlchItem,
     fmtGp,
     nextAlchTarget,
+    resolveAlchSpell,
     selectedAlchItems
 } from '#/bot/scripts/Alcher/AlcherLogic.js';
 
@@ -24,7 +35,7 @@ describe('the fodder table resolves against the item database', () => {
     test('the alch value is 60% of the shop cost, rounded down', () => {
         for (const item of ALCH_ITEMS) {
             const rec = ITEM_DB.find(r => r.obj === item.key);
-            expect(item.alchValue).toBe(Math.floor(rec!.cost * 0.6));
+            expect(item.alchValue).toBe(Math.floor(rec!.cost * HIGH_ALCH_RATE));
         }
     });
 
@@ -206,5 +217,49 @@ describe('fmtGp', () => {
 
     test('rounds rather than truncating a fractional rate', () => {
         expect(fmtGp(999.6)).toBe('1.0k');
+    });
+});
+
+describe('the spell setting', () => {
+    test('High is the default, so a missing setting keeps saved items and alchs working', () => {
+        expect(resolveAlchSpell('')).toEqual({
+            key: SPELL_HIGH,
+            name: HIGH_ALCH_SPELL,
+            level: HIGH_ALCH_LEVEL,
+            rate: HIGH_ALCH_RATE
+        });
+        expect(resolveAlchSpell('High').name).toBe(HIGH_ALCH_SPELL);
+        expect(resolveAlchSpell('high level alchemy').name).toBe(HIGH_ALCH_SPELL);
+    });
+
+    test('Low maps to Low Level Alchemy at 21 Magic and 40% of shop cost', () => {
+        expect(resolveAlchSpell('Low')).toEqual({
+            key: SPELL_LOW,
+            name: LOW_ALCH_SPELL,
+            level: LOW_ALCH_LEVEL,
+            rate: LOW_ALCH_RATE
+        });
+        expect(resolveAlchSpell('low level alchemy').name).toBe(LOW_ALCH_SPELL);
+        expect(resolveAlchSpell('lowalch').level).toBe(LOW_ALCH_LEVEL);
+    });
+
+    test('a yew longbow pays 512 under Low and 768 under High', () => {
+        const cost = ITEM_DB.find(r => r.obj === 'yew_longbow')!.cost;
+        expect(alchValueOf(cost, HIGH_ALCH_RATE)).toBe(768);
+        expect(alchValueOf(cost, LOW_ALCH_RATE)).toBe(512);
+        expect(selectedAlchItems(['yew_longbow'], '', LOW_ALCH_RATE)[0]?.alchValue).toBe(512);
+    });
+
+    test('the bundled Alcher defaults spell to High and leaves items and alchs alone', async () => {
+        const { ScriptRegistry } = await import('#/bot/runtime/ScriptRegistry.js');
+        await import('#/bot/scripts/index.js');
+        const schema = ScriptRegistry.get('Alcher')?.settingsSchema;
+        expect(schema?.spell).toMatchObject({
+            type: 'string',
+            default: SPELL_HIGH,
+            options: SPELL_OPTIONS
+        });
+        expect(schema?.items?.default).toEqual(DEFAULT_ALCH_ITEMS);
+        expect(schema?.alchs?.default).toBe(27);
     });
 });
