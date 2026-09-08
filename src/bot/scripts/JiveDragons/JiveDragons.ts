@@ -36,7 +36,7 @@ import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
 import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from './combat.js';
-import { ANTIFIRE_MARGIN_TICKS, ANTIFIRE_TICKS, POTION_PROTECTS, SHIELD_ABSORBS, antifireDue, antifireLapsed, keepDoses, keyStatus, lootHalts, lootReach, shieldGate, siteTileOf, prayerFor, prayerSipDue, styleGate, wantsDrop, type Style } from './logic.js';
+import { ANTIFIRE_MARGIN_TICKS, ANTIFIRE_TICKS, POTION_PROTECTS, SHIELD_ABSORBS, antifireDue, antifireLapsed, keepDoses, keyStatus, lootHalts, lootReach, shieldGate, siteTileOf, chaseMode, prayerFor, prayerSipDue, styleGate, wantsDrop, type Style } from './logic.js';
 import { BRIMHAVEN_IRON, BRIMHAVEN_STEEL, GUTANOTH_BLUE, HEROES_BLUE, MAX_STANDS, SITE_OPTIONS, STAND_SITE_KEYS, TAVERLEY_BLACK, TAVERLEY_BLUE, huntNames, needsShield, siteFor, standFor, type DragonSite } from './sites.js';
 import { ANTIFIRE_DOSES, ANTIPOISON_DOSES, PRAYER_DOSES, prayerPlan, COINS, POISONED, acquireKey, antifirePlan, antipoisonPlan, bankRoutine, doseToDrink, enterLair, escapeRunesFor, feePrepaid, inCell, leaveCell, type BankOpts, type KeyState } from './supply.js';
 
@@ -710,23 +710,31 @@ class SetAttackStyle implements Task {
 }
 
 // Why: two metal dragons breathe at the stand at once and losing either one's aggro is harder than killing it, so auto-retaliate stays on and the fight loop follows whatever it is hitting.
+// Why: a chase stands beside the dragon it was sent at, and retaliating to a bite from ten tiles away walked it off that dragon to one it could not reach; the breath it answers is 0 under the shield and a dose.
+function retaliateWanted(): boolean {
+    return SITE.fireAtRange === true && !chaseMode(STYLE, true);
+}
+
 class SetRetaliate implements Task {
     private fails = 0;
     private retryAt = 0;
     constructor(private readonly bot: JiveDragons) {}
     validate(): boolean {
-        return SITE.fireAtRange === true && !Game.autoRetaliateOn() && Date.now() >= this.retryAt;
+        return SITE.fireAtRange === true && Game.autoRetaliateOn() !== retaliateWanted() && Date.now() >= this.retryAt;
     }
     async execute(): Promise<void> {
-        this.bot.setStatus('turning auto-retaliate on');
-        Game.setAutoRetaliate(true);
-        if (await Execution.delayUntil(() => Game.autoRetaliateOn(), 3000)) {
-            this.bot.log('auto-retaliate on, so whichever dragon bites gets the casts and the fight follows it');
+        const want = retaliateWanted();
+        this.bot.setStatus(`turning auto-retaliate ${want ? 'on' : 'off'}`);
+        Game.setAutoRetaliate(want);
+        if (await Execution.delayUntil(() => Game.autoRetaliateOn() === want, 3000)) {
+            this.bot.log(want
+                ? 'auto-retaliate on, so whichever dragon bites gets the casts and the fight follows it'
+                : 'auto-retaliate off, so the chase stays on the dragon it was sent at');
             this.fails = 0;
         } else if (++this.fails >= ASSERT_BATCH) {
             this.fails = 0;
             this.retryAt = Date.now() + ASSERT_RETRY_MS;
-            this.bot.log(`could not turn auto-retaliate on. Retrying in ${ASSERT_RETRY_MS / 1000}s.`);
+            this.bot.log(`could not turn auto-retaliate ${want ? 'on' : 'off'}. Retrying in ${ASSERT_RETRY_MS / 1000}s.`);
         }
     }
 }

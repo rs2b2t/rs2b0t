@@ -687,6 +687,13 @@ try {
         if (set !== SITE.quest.value) { fail(`setvar ${SITE.quest.name} ${SITE.quest.value} did not take (read back ${set}), so the guild doors stay shut`); }
         console.log(`${SITE.quest.name}=${set}, the guild doors will open`);
     }
+    // Why: the dragon longsword and dagger are gated on Lost City in levelrequire, and the run is made to wield one.
+    if (args.style === 'melee' && SITE.fee > 0) {
+        await cheatQuiet(page, 'setvar zanaris 6');
+        const set = await getServerVarQuiet(page, 'zanaris');
+        if (set !== 6) { fail(`setvar zanaris 6 did not take (read back ${set}), so the dragon longsword cannot be wielded`); }
+        console.log('zanaris=6, Lost City complete for the dragon longsword');
+    }
 
     await command(page, '~clearinv inv');
     await command(page, '~clearinv worn');
