@@ -268,6 +268,12 @@ export function settleDue(freeSlots: number, packCoins: number, coinFloor: numbe
     return forced || shouldSettle(freeSlots, packCoins, coinFloor);
 }
 
+// Why: goods bought sit in the pack until a trip, and the operator wants them in the bank before the next customer, whatever room is left; a buy is the side where the shop's coins went out.
+/** Whether a completed trade owes a bank trip: the shop bought something. */
+export function buyOwesSettle(give: ReadonlyMap<number, number>, coinId: number): boolean {
+    return give.has(coinId);
+}
+
 // Why: OpenWindow runs above Settle, so a queue of customers dumping goods kept it opening windows on a pack with no room to take any and the shop never reached the bank; it yields the tick once a trip is due, though a bank it cannot reach must not shut the shop, so a backed-off bank leaves it serving.
 /** Whether the next window should wait for a bank trip. */
 export function bankBeforeServing(freeSlots: number, packCoins: number, coinFloor: number, bankReady: boolean, forced = false): boolean {

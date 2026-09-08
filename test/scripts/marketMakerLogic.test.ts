@@ -13,6 +13,7 @@ import {
     resolveQuote,
     floatShortfall,
     bankBeforeServing,
+    buyOwesSettle,
     settleDue,
     shouldSettle,
     tradeIsStalled,
@@ -313,6 +314,20 @@ describe('settleDue', () => {
     test('a reset owes one whatever the pack holds, empty included', () => {
         expect(settleDue(28, 0, 50_000, true)).toBe(true);
         expect(settleDue(20, 1_000, 50_000, true)).toBe(true);
+    });
+});
+
+// Why: what the shop buys goes to the bank before the next customer, so the trade that put coins out is the one that owes the trip.
+describe('buyOwesSettle', () => {
+    const coins = 995;
+
+    test('a trade where the shop paid coins owes a bank trip', () => {
+        expect(buyOwesSettle(new Map([[coins, 500]]), coins)).toBe(true);
+    });
+
+    test('a sale, where only goods went out, owes none', () => {
+        expect(buyOwesSettle(new Map([[440, 100]]), coins)).toBe(false);
+        expect(buyOwesSettle(new Map(), coins)).toBe(false);
     });
 });
 

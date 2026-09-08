@@ -41,6 +41,7 @@ import {
     dealTotals,
     floatShortfall,
     bankBeforeServing,
+    buyOwesSettle,
     FREE_SLOT_FLOOR,
     settleDue,
     freshChatLines,
@@ -49,8 +50,7 @@ import {
     resolveQuote,
     tradeIsStalled,
     sideSignature,
-    type Deal
-} from './marketMakerLogic.js';
+    type Deal } from './marketMakerLogic.js';
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const COIN_NAME = 'Coins';
@@ -724,8 +724,10 @@ export default class MarketMaker extends TaskBot {
                 this.ledger.add(id, qty);
             }
         }
-        if (accepted.give.has(this.coinId)) {
+        if (buyOwesSettle(accepted.give, this.coinId)) {
             this.bought++;
+            // Why: what was bought goes to the bank before anyone else is served, so the forced settle a reset uses is owed here too.
+            this.settleOwed = true;
         } else {
             this.sold++;
         }
@@ -1133,7 +1135,8 @@ class Restock implements Task {
         if (Trade.active() || this.bot.counter().current() !== null) {
             return false;
         }
-        if (!this.bot.bankReady(Date.now())) {
+        // Why: a bought pack is banked before the next fetch, so Settle below gets the tick while a trip is owed.
+        if (!this.bot.bankReady(Date.now()) || this.bot.settleForced()) {
             return false;
         }
         const want = this.bot.counter().nextIntent(Date.now(), this.bot.intentTtl());
@@ -1195,8 +1198,9 @@ class Settle implements Task {
         }
         // Why: holding an order used to block banking outright, so a pack that filled up could never be emptied:
         // Why: Restock kept going back for goods with no room to put them, and the shop lived at the bank.
+        // Why: a forced trip, after a buy or a reset, is owed ahead of any order too.
         const outOfRoom = Inventory.free() <= FREE_SLOT_FLOOR;
-        if (!outOfRoom && this.bot.counter().nextIntent(Date.now(), this.bot.intentTtl()) !== null) {
+        if (!outOfRoom && !this.bot.settleForced() && this.bot.counter().nextIntent(Date.now(), this.bot.intentTtl()) !== null) {
             return false;
         }
         return settleDue(Inventory.free(), this.bot.packCoins(), this.bot.float(), this.bot.settleForced())
