@@ -476,11 +476,11 @@ describe('the Brimhaven Dungeon metal dragons', () => {
         }
     });
 
-    test('iron carries three open camps and steel one, and the picker knows which sites have several', () => {
-        expect(iron.stands!.length).toBe(3);
+    test('iron carries two open camps and steel one, and the picker knows which sites have several', () => {
+        expect(iron.stands!.length).toBe(2);
         expect(steel.stands!.length).toBe(1);
         expect(iron.safespots).toBe(iron.stands![0]!.tiles);
-        expect(standFor(iron, 9).label).toBe(iron.stands![2]!.label);
+        expect(standFor(iron, 9).label).toBe(iron.stands![1]!.label);
         expect(standFor(steel, 3).tiles).toBe(steel.stands![0]!.tiles);
         expect(STAND_SITE_KEYS).toEqual(['gutanoth-blue', 'brimhaven-iron']);
         expect(MAX_STANDS).toBe(6);

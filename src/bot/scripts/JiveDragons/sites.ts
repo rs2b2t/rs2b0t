@@ -257,17 +257,12 @@ export const GUTANOTH_BLUE: DragonSite = {
 // Why: the dungeon is nine pockets joined by vines, stepping stones, a log and a pipe, all of them edges in transports.json, and the landing is sealed from everything else; the box covers all of it so the walk in from the landing is a walk to the stand and never a second payment.
 const BRIMHAVEN_DUNGEON = inBox({ minX: 2624, maxX: 2751, minZ: 9408, maxZ: 9599, level: 0 });
 
-// Why: derived by tools/nav/jive-safespots.ts --target iron --anywhere. A metal dragon parks at ten tiles and breathes, and the shield with an Antifire dose makes that 0, so the stand is not a melee-proof pocket but the open tile that sees the most dragons; losing one is harder than finding one. A camp still keeps out of every idle wander footprint and the tile beside it, iron and steel alike, since a dragon that wanders adjacent headbutts for fifteen a hit and did, from a camp four tiles off an iron spawn. Camp 1 sees the dragon at (2739,9450) over two thirds of its wander, camp 2 the one spawned on a blocked tile at (2736,9424) that the deriver used to drop, camp 3 the south-west one, all clear of the wild dogs, black demons and bronze dragons on the north edge.
+// Why: derived by tools/nav/jive-safespots.ts --target iron --anywhere. A metal dragon parks at ten tiles and breathes, and the shield with an Antifire dose makes that 0, so the stand is not a melee-proof pocket but the open tile that sees the most dragons; losing one is harder than finding one. A camp still keeps out of every idle wander footprint and the tile beside it, iron and steel alike, since a dragon that wanders adjacent headbutts for fifteen a hit and did, from a camp four tiles off an iron spawn. Camp 1 sees the dragon at (2739,9450) over two thirds of its wander and camp 2 the south-west one, both on the room's edge and clear of the wild dogs, black demons and bronze dragons on the north side; the open tile at (2740,9434) ranked as well but sits between spawns, where a dragon another bot's fight has displaced parks adjacent and headbutts, and a five-bot run lost a trip's food on it before a cast landed.
 const BRIMHAVEN_IRON_STANDS: DragonStand[] = [
     {
         label: 'the north-east corner from 2744,9457',
         tiles: [new Tile(2744, 9457, 0), new Tile(2743, 9457, 0), new Tile(2744, 9458, 0)],
         anchor: new Tile(2744, 9457, 0)
-    },
-    {
-        label: 'the east wall from 2740,9434',
-        tiles: [new Tile(2740, 9434, 0)],
-        anchor: new Tile(2740, 9434, 0)
     },
     {
         label: 'the south-west from 2704,9417',
