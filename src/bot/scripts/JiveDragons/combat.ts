@@ -344,7 +344,8 @@ export class Fight implements Task {
                     this.engagedAt = performance.now();
                 }
                 if (!holdsAnchor(this.site, style) && performance.now() - this.damagedAt > CHASE_STALL_MS) {
-                    this.host.log(`${this.engagedName || name} ${live.index} took no damage for ${CHASE_STALL_MS / 1000}s from ${Game.tile()}, so there is no way in beside it. Skipping it for ${CHASE_SKIP_MS / 1000}s.`);
+                    const here = Game.tile();
+                    this.host.log(`${this.engagedName || name} ${live.index} took no damage for ${CHASE_STALL_MS / 1000}s from (${here?.x}, ${here?.z}), so there is no way in beside it. Skipping it for ${CHASE_SKIP_MS / 1000}s.`);
                     this.skip.set(live.index, performance.now() + CHASE_SKIP_MS);
                     this.clearTarget();
                     continue;
