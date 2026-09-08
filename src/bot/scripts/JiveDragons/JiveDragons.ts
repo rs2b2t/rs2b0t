@@ -36,7 +36,7 @@ import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
 import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from './combat.js';
 import { ANTIFIRE_MARGIN_TICKS, ANTIFIRE_TICKS, POTION_PROTECTS, SHIELD_ABSORBS, antifireDue, antifireLapsed, keepDoses, keyStatus, lootHalts, shieldGate, siteTileOf, styleGate, wantsDrop, type Style } from './logic.js';
 import { BRIMHAVEN_IRON, BRIMHAVEN_STEEL, GUTANOTH_BLUE, HEROES_BLUE, MAX_STANDS, SITE_OPTIONS, STAND_SITE_KEYS, TAVERLEY_BLACK, TAVERLEY_BLUE, huntNames, needsShield, siteFor, standFor, type DragonSite } from './sites.js';
-import { ANTIFIRE_DOSES, ANTIPOISON_DOSES, COINS, POISONED, acquireKey, antifirePlan, antipoisonPlan, bankRoutine, doseToDrink, enterLair, escapeRunesFor, inCell, leaveCell, type BankOpts, type KeyState } from './supply.js';
+import { ANTIFIRE_DOSES, ANTIPOISON_DOSES, COINS, POISONED, acquireKey, antifirePlan, antipoisonPlan, bankRoutine, doseToDrink, enterLair, escapeRunesFor, feePrepaid, inCell, leaveCell, type BankOpts, type KeyState } from './supply.js';
 
 const SHIELD = 'Dragonfire shield';
 
@@ -133,7 +133,7 @@ export const SETTINGS: SettingsSchema = {
     solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues', help: 'blue dragons drop hard clues. The trail leaves the dungeon and comes back' },
 
     site: { type: 'string', default: 'taverley-blue', options: SITE_OPTIONS, label: 'Dragon site', group: 'Location', help: "below combat 97 the Taverley baby blues aggress on the walk in, above it they never do. The Heroes' Guild dragon is one adult penned behind a fence, so the fight is cast through it and only the loot walk opens the gate; the guild doors need Heroes' Quest. The Gu'Tanoth Enclave is a mage site: the Enclave guard waves you past once Watch Tower is complete, the stand looks at one dragon of the six and nothing else, and the cave shares its floor with greater demons, ogre shamans and chieftains, so melee there is your own risk. The Brimhaven Dungeon metal dragons cost Saniboch 875 coins a trip and the walk in chops two vines and crosses stepping stones, a log and a pipe, so it wants Woodcutting 22, Agility 34 and an axe; they park at ten tiles and breathe, so the stand is the open tile that sees the most of them, every style wears the Dragonfire shield with an Antifire dose up, range is refused, iron and steel finish whichever bites, and the trip banks at Ardougne on the Ardougne teleport, which needs Plague City" },
-    stand: { type: 'number', default: 1, min: 1, max: MAX_STANDS, label: 'Stand', group: 'Location', showIf: SHOW_STAND, help: 'which of the site\'s numbered stands to fight from, one per dragon. The Enclave has six, listed north, west, north-west, south, east, far east; 1 is the roomiest and the one with a live proof behind it. The iron dragons have two open camps, the west half of the room then the east, seven dragons in view from each. A number past the end takes the last, and a site with one stand ignores it' },
+    stand: { type: 'number', default: 1, min: 1, max: MAX_STANDS, label: 'Stand', group: 'Location', showIf: SHOW_STAND, help: 'which of the site\'s numbered stands to fight from, one per dragon. The Enclave has six, listed north, west, north-west, south, east, far east; 1 is the roomiest and the one with a live proof behind it. The iron dragons have two open camps, the east side of the room with four in view then the north-east corner with two, both clear of every dragon\'s idle wander. A number past the end takes the last, and a site with one stand ignores it' },
     safespot1: { type: 'tile', default: TAVERLEY_BLUE.safespots[0], label: 'Safespot 1', group: 'Location', showIf: SHOW_SAFESPOT, help: 'the chosen stand fills these; set one to move it off the derived tile' },
     safespot2: { type: 'tile', default: TAVERLEY_BLUE.safespots[1], label: 'Safespot 2', group: 'Location', showIf: SHOW_SAFESPOT, help: 'the ladder rotates here when a hit lands, or when nothing is in range for 20s' },
     safespot3: { type: 'tile', default: TAVERLEY_BLUE.safespots[2], label: 'Safespot 3', group: 'Location', showIf: SHOW_SAFESPOT },
@@ -237,9 +237,9 @@ function bankOpts(): BankOpts {
     };
 }
 
-/** Whether the pack is short of the coins the way in costs. */
+/** Whether the pack is short of the coins the way in costs, with a fee already paid needing none. */
 function needCoins(): boolean {
-    return SITE.feeGate !== undefined && Inventory.count(COINS) < SITE.feeGate.coins;
+    return SITE.feeGate !== undefined && !feePrepaid(SITE) && Inventory.count(COINS) < SITE.feeGate.coins;
 }
 
 // Why: bankRoutine returns void and countBankTrip fires only where it runs to the end, so the counter moving is what separates an empty bank from a walk that never got there.
@@ -309,7 +309,7 @@ async function sipAntifire(bot: JiveDragons): Promise<boolean> {
     // Why: the sip runs inside walks and fights through the Sustain hook, so the status it shows goes back to whatever the task had up.
     const status = bot.status;
     bot.setStatus('drinking an Antifire potion');
-    // Why: the flask count holds steady from (4) to (1), so the sip is proved by the dose form's own count dropping; summing them drank a whole flask in one go and started the clock on the last dose.
+    // Why: the flask count holds steady from (4) to (1), so the sip is proved by the dose form's own count dropping; summing them drank a flask in one go and started the clock on the last dose.
     const before = Inventory.count(name);
     const drunk = (await dose.interact('Drink')) && (await Execution.delayUntil(() => Inventory.count(name) < before, 3000));
     bot.setStatus(status);
@@ -981,7 +981,8 @@ export default class JiveDragons extends TaskBot implements CombatHost {
     }
 
     override recoveryAnchor(): Tile | null {
-        return SITE.bank;
+        // Why: the wedge guard walks to this anchor, and from a fee-gated camp the bank is out through the dungeon end to end and another payment; inside, the stand is the anchor, so a wedge there restarts the loop in place.
+        return SITE.inArea(Game.tile()) ? (SITE.safespots[0] ?? SITE.bank) : SITE.bank;
     }
     override grindTargets(): string[] {
         return huntNames(SITE).map(n => n.toLowerCase());

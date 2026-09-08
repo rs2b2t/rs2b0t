@@ -83,8 +83,9 @@ export const GUTANOTH_BLUE: Target = { squares: ['m40_147'], adult: { id: 55, si
 export const GUTANOTH_DEMON: Target = { squares: ['m40_147'], adult: { id: 83, size: 3 }, baby: null, maxrange: 8, inside: { x: 2588, z: 9410 }, outside: LADDER_BOTTOM, meleeOptional: true };
 
 // Why: the Brimhaven Dungeon has no gate, only Saniboch's teleport in and the exit loc out, so the region floods from a tile south of the pipe and the landing at (2713,9564) is the sealed other side. wanderrange 5, maxrange 20 and attackrange 10, so a stand is melee-proof rather than fire-proof.
-export const IRON_DRAGON: Target = { squares: ['m42_147'], adult: { id: 1591, size: 4 }, baby: null, maxrange: 20, wander: 5, inside: { x: 2698, z: 9491 }, outside: { x: 2713, z: 9564 }, meleeOptional: true };
-export const STEEL_DRAGON: Target = { squares: ['m42_147'], adult: { id: 1592, size: 4 }, baby: null, maxrange: 20, wander: 5, inside: { x: 2698, z: 9491 }, outside: { x: 2713, z: 9564 }, meleeOptional: true };
+// Why: the other kind shares the room, so it rides in the baby slot at its own wanderrange and a camp keeps out of its idle reach as well.
+export const IRON_DRAGON: Target = { squares: ['m42_147'], adult: { id: 1591, size: 4 }, baby: { id: 1592, size: 4, maxrange: 5 }, maxrange: 20, wander: 5, inside: { x: 2698, z: 9491 }, outside: { x: 2713, z: 9564 }, meleeOptional: true };
+export const STEEL_DRAGON: Target = { squares: ['m42_147'], adult: { id: 1592, size: 4 }, baby: { id: 1591, size: 4, maxrange: 5 }, maxrange: 20, wander: 5, inside: { x: 2698, z: 9491 }, outside: { x: 2713, z: 9564 }, meleeOptional: true };
 
 export const TARGETS: Record<string, Target> = { blue: BLUE_DRAGON, demon: BLACK_DEMON, black: BLACK_DRAGON, kbd: KING_BLACK_DRAGON, heroes: HEROES_BLUE, gutanoth: GUTANOTH_BLUE, gutanothdemon: GUTANOTH_DEMON, iron: IRON_DRAGON, steel: STEEL_DRAGON };
 
@@ -450,11 +451,20 @@ export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS, engin
         throw new Error(`the gate at (${target.inside.x}, ${target.inside.z}) is open in ${where}, so the two sides of it cannot be told apart`);
     }
     const homes = adults.map(w => (target.wander === undefined ? w : wander(w.spawn, target.wander)));
-    const homeBody = new Set<string>();
-    for (const h of homes) for (const b of h.body) homeBody.add(b);
+    // Why: a camp in the open still keeps out of every idle wander footprint and the tile beside it, the target's and the other kind's alike, since a dragon that wanders adjacent headbutts for fifteen whatever the dose says.
+    const idle = new Set<string>();
+    for (const h of homes) {
+        for (const b of h.body) idle.add(b);
+        for (const t of h.threat) idle.add(t);
+    }
+    for (const w of wanders) {
+        if (w.spawn.adult) continue;
+        for (const b of w.body) idle.add(b);
+        for (const t of w.threat) idle.add(t);
+    }
     const safespots: Safespot[] = [];
     for (const k of reachable) {
-        if (target.anywhere === true ? homeBody.has(k) : (allBody.has(k) || adultThreat.has(k) || babyThreat.has(k))) continue;
+        if (target.anywhere === true ? idle.has(k) : (allBody.has(k) || adultThreat.has(k) || babyThreat.has(k))) continue;
         const [x, z] = parse(k);
         const seen = new Set<string>();
         let range = Infinity, covers = 0;

@@ -432,6 +432,7 @@ describe('the Brimhaven Dungeon metal dragons', () => {
         expect(iron.gate).toBeNull();
         expect(iron.feeGate).toMatchObject({ npc: 'Saniboch', op: 'Pay', coins: 875, entrance: { locId: 5083, op: 'Enter' } });
         expect(iron.feeGate!.paidLine.test('You pay Saniboch 875 coins.')).toBe(true);
+        expect(iron.feeGate!.prepaidLine.test('You have already given me lots of nice coins, you may go in.')).toBe(true);
         expect(iron.coins).toBeGreaterThanOrEqual(875 + 60);
         expect(steel.feeGate).toBe(iron.feeGate);
     });
@@ -496,25 +497,25 @@ describe('the Brimhaven Dungeon metal dragons', () => {
 
 // Why: the camps are open tiles, so they are pinned as tiles the anywhere derivation ranks, each seeing several dragons' idle wander rather than one pocket's worth.
 describe.skipIf(!inputsPresent(IRON_DRAGON))('the Brimhaven derivation (pack-gated)', () => {
-    test('every iron camp tile is an open candidate that sees at least five dragons', () => {
+    test('every iron camp tile is an open candidate clear of both kinds\' idle reach, and camp 1 sees four dragons', () => {
         const derived = derive({ ...IRON_DRAGON, anywhere: true });
         const spots = new Map(derived.safespots.map(s => [`${s.x},${s.z}`, s]));
-        for (const stand of BRIMHAVEN_IRON.stands!) {
+        for (const [i, stand] of BRIMHAVEN_IRON.stands!.entries()) {
             for (const t of stand.tiles) {
                 const spot = spots.get(`${t.x},${t.z}`);
                 expect(spot).toBeDefined();
-                expect(spot!.shares.filter(f => f > 0.15).length).toBeGreaterThanOrEqual(5);
+                expect(spot!.shares.filter(f => f > 0.15).length).toBeGreaterThanOrEqual(i === 0 ? 4 : 2);
             }
         }
     }, 120_000);
 
-    test('the steel camp sees all four dragons', () => {
+    test('the steel camp is an open candidate that sees the west dragon at half its wander', () => {
         const derived = derive({ ...STEEL_DRAGON, anywhere: true });
         const spots = new Map(derived.safespots.map(s => [`${s.x},${s.z}`, s]));
         for (const t of BRIMHAVEN_STEEL.stands![0]!.tiles) {
             const spot = spots.get(`${t.x},${t.z}`);
             expect(spot).toBeDefined();
-            expect(spot!.shares.filter(f => f > 0.15).length).toBe(4);
+            expect(spot!.share).toBeGreaterThan(0.4);
         }
     }, 120_000);
 });

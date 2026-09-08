@@ -245,13 +245,41 @@ export async function walkApproach(h: JiveHost, site: DragonSite, stand?: Tile):
 }
 
 const PAY_MS = 20_000;
+const DIALOGUE_QUIET_TICKS = 3;
 
-// Why: the Pay op runs a player line, an objbox and Saniboch's reply before the varbit is set, and the box is a main modal that suspends the script until it is clicked, so the drive answers boxes as well as chat pages and stops on the line the payment prints.
+// Why: the varbit the tree reads survives a click that never went through, so a payment the entrance did not follow is kept here, and the next attempt goes to the tree rather than to the bank for a fee it has already paid.
+let feePaidFor: string | null = null;
 
-/** Pay the doorman and take the entrance loc through. */
+/** Whether the site's fee was paid on an attempt whose entrance did not follow. */
+export function feePrepaid(site: DragonSite): boolean {
+    return feePaidFor === site.key;
+}
+
+// Why: Saniboch's reply is three pages and the coins leave on the first, so a check that stops at the coins clicks the tree behind the last page, where the op waits and times out; the drive runs on until the chat has been shut for a few ticks.
+async function settleDialogue(): Promise<void> {
+    let quiet = 0;
+    for (let i = 0; i < 40 && quiet < DIALOGUE_QUIET_TICKS && !EventSignal.pending(); i++) {
+        if (ChatDialog.canContinue()) {
+            await ChatDialog.continue();
+            quiet = 0;
+        } else if (reader.modals().main !== -1) {
+            await Modals.close();
+            quiet = 0;
+        } else if (ChatDialog.isOpen()) {
+            quiet = 0;
+        } else {
+            quiet++;
+        }
+        await Execution.delayTicks(1);
+    }
+}
+
+// Why: the Pay op runs a player line, an objbox and Saniboch's reply before the varbit is set, and the box is a main modal that suspends the script until it is clicked, so the drive answers boxes as well as chat pages and stops on the line the payment prints; a second Pay on a set varbit prints the prepaid line and moves nothing.
+
+/** Pay the doorman, unless the fee is already paid, and take the entrance loc through. */
 async function payAndEnter(h: JiveHost, site: DragonSite): Promise<boolean> {
     const fee = site.feeGate!;
-    if (Inventory.count(COINS) < fee.coins) {
+    if (!feePrepaid(site) && Inventory.count(COINS) < fee.coins) {
         h.log(`the way in costs ${fee.coins} coins and the pack holds ${Inventory.count(COINS)}. Banking for more.`);
         return false;
     }
@@ -259,36 +287,39 @@ async function payAndEnter(h: JiveHost, site: DragonSite): Promise<boolean> {
     if (!(await Traversal.walkResilient(fee.stand, { radius: 2, attempts: 5, timeoutMs: 300_000, log: say(h) }))) {
         return false;
     }
-    const doorman = Npcs.query().name(fee.npc).action(fee.op).nearest();
-    if (!doorman) {
-        h.log(`no ${fee.npc} in the scene to pay. Retrying.`);
-        await Execution.delayTicks(2);
-        return false;
-    }
-    h.setStatus(`paying ${fee.npc}`);
-    const mark = GameMessages.mark();
-    const before = Inventory.count(COINS);
-    if (!(await doorman.interact(fee.op))) {
-        return false;
-    }
-    const paid = (): boolean => GameMessages.sawSince(mark, fee.paidLine) || Inventory.count(COINS) < before;
-    const deadline = performance.now() + PAY_MS;
-    while (performance.now() < deadline && !EventSignal.pending()) {
-        if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-        } else if (reader.modals().main !== -1) {
-            await Modals.close();
-        } else if (paid() && !ChatDialog.isOpen()) {
-            break;
+    if (feePrepaid(site)) {
+        h.log(`${fee.npc} is already paid from the last attempt, going straight to the entrance`);
+    } else {
+        const doorman = Npcs.query().name(fee.npc).action(fee.op).nearest();
+        if (!doorman) {
+            h.log(`no ${fee.npc} in the scene to pay. Retrying.`);
+            await Execution.delayTicks(2);
+            return false;
         }
-        await Execution.delayTicks(1);
+        h.setStatus(`paying ${fee.npc}`);
+        const mark = GameMessages.mark();
+        const before = Inventory.count(COINS);
+        if (!(await doorman.interact(fee.op))) {
+            return false;
+        }
+        const paid = (): boolean => GameMessages.sawSince(mark, fee.paidLine) || GameMessages.sawSince(mark, fee.prepaidLine) || Inventory.count(COINS) < before;
+        const deadline = performance.now() + PAY_MS;
+        while (performance.now() < deadline && !EventSignal.pending() && !paid()) {
+            if (ChatDialog.canContinue()) {
+                await ChatDialog.continue();
+            } else if (reader.modals().main !== -1) {
+                await Modals.close();
+            }
+            await Execution.delayTicks(1);
+        }
+        if (!paid()) {
+            h.log(`${fee.npc} took no payment. Retrying.`);
+            return false;
+        }
+        feePaidFor = site.key;
+        h.log(GameMessages.sawSince(mark, fee.prepaidLine) ? `${fee.npc} says the fee is already paid` : `paid ${fee.npc} ${fee.coins} coins`);
     }
-    if (!paid()) {
-        h.log(`${fee.npc} took no payment. Retrying.`);
-        return false;
-    }
-    h.log(`paid ${fee.npc} ${fee.coins} coins`);
-    await Execution.delayTicks(1);
+    await settleDialogue();
     const door = locById(fee.entrance.locId, 8);
     if (!door || !(await door.interact(fee.entrance.op))) {
         h.log('the dungeon entrance is not in the scene yet. Retrying.');
@@ -298,6 +329,7 @@ async function payAndEnter(h: JiveHost, site: DragonSite): Promise<boolean> {
         h.log('the entrance did not let us through. Retrying.');
         return false;
     }
+    feePaidFor = null;
     h.log('inside the dungeon');
     h.setStatus('walking in to the dragons');
     await walkApproach(h, site);

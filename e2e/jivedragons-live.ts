@@ -205,13 +205,13 @@ const IRON_SITE = {
     quest: { name: 'elenaquest', value: 30 } as { name: string; value: number } | null,
     antipoison: false,
     lair: { minX: 2624, maxX: 2751, minZ: 9408, maxZ: 9599, level: 0 },
-    // Why: mirrored from sites.ts the way every other row here is, so a stand that drifts in one copy fails a milestone rather than passing quietly. The camps are open tiles that see seven dragons each, not pockets: the breath is 0 through the shield with a dose up.
+    // Why: mirrored from sites.ts the way every other row here is, so a stand that drifts in one copy fails a milestone rather than passing quietly. The camps are open tiles clear of every idle wander footprint, not pockets: the breath is 0 through the shield with a dose up, and a dragon that wanders adjacent is the one thing that still hits.
     stands: [
-        { tiles: [{ x: 2718, z: 9436, level: 0 }, { x: 2717, z: 9436, level: 0 }, { x: 2718, z: 9437, level: 0 }], anchor: { x: 2718, z: 9436, level: 0 } },
-        { tiles: [{ x: 2727, z: 9450, level: 0 }, { x: 2727, z: 9449, level: 0 }, { x: 2728, z: 9450, level: 0 }], anchor: { x: 2727, z: 9450, level: 0 } }
+        { tiles: [{ x: 2734, z: 9430, level: 0 }, { x: 2735, z: 9430, level: 0 }, { x: 2734, z: 9429, level: 0 }], anchor: { x: 2734, z: 9430, level: 0 } },
+        { tiles: [{ x: 2744, z: 9457, level: 0 }, { x: 2743, z: 9457, level: 0 }, { x: 2744, z: 9458, level: 0 }], anchor: { x: 2744, z: 9457, level: 0 } }
     ] as Stand[] | undefined,
-    safespots: [{ x: 2718, z: 9436, level: 0 }, { x: 2717, z: 9436, level: 0 }, { x: 2718, z: 9437, level: 0 }],
-    meleeAnchor: { x: 2718, z: 9436, level: 0 },
+    safespots: [{ x: 2734, z: 9430, level: 0 }, { x: 2735, z: 9430, level: 0 }, { x: 2734, z: 9429, level: 0 }],
+    meleeAnchor: { x: 2734, z: 9430, level: 0 },
     target: 'Iron dragon',
     baby: null,
     food: { debug: 'shark', name: 'Shark' },
@@ -231,10 +231,10 @@ const STEEL_SITE = {
     ...IRON_SITE,
     key: 'brimhaven-steel',
     stands: [
-        { tiles: [{ x: 2718, z: 9447, level: 0 }, { x: 2718, z: 9446, level: 0 }, { x: 2717, z: 9446, level: 0 }], anchor: { x: 2718, z: 9447, level: 0 } }
+        { tiles: [{ x: 2698, z: 9440, level: 0 }, { x: 2698, z: 9439, level: 0 }, { x: 2697, z: 9441, level: 0 }], anchor: { x: 2698, z: 9440, level: 0 } }
     ] as Stand[] | undefined,
-    safespots: [{ x: 2718, z: 9447, level: 0 }, { x: 2718, z: 9446, level: 0 }, { x: 2717, z: 9446, level: 0 }],
-    meleeAnchor: { x: 2718, z: 9447, level: 0 },
+    safespots: [{ x: 2698, z: 9440, level: 0 }, { x: 2698, z: 9439, level: 0 }, { x: 2697, z: 9441, level: 0 }],
+    meleeAnchor: { x: 2698, z: 9440, level: 0 },
     target: 'Steel dragon',
     lootKey: 'lootSteel',
     bar: 'Steel bar' as string | null

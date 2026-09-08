@@ -209,6 +209,8 @@ export class Fight implements Task {
     private blindSince = 0;
     private polledAt = 0;
     private diagAt = 0;
+    private biterNotedAt = 0;
+    private reclickedAt = 0;
     private reissues = 0;
     private readonly skip = new Map<number, number>();
     private readonly seen = new Map<number, Sighting>();
@@ -295,12 +297,28 @@ export class Fight implements Task {
             }
             const facing = retaliationTarget(this.site);
             if (facing !== null && facing.index !== this.engaged) {
-                const shown = (facing.name ?? name).toLowerCase();
-                this.host.log(`retaliating at ${shown} ${facing.index} at ${facing.tile()} (gap ${gapTo(this.anchor(), facing.tile(), facing.size)}), so it is the target now`);
-                this.engagedName = shown;
-                this.reissues = 0;
-                this.setTarget(facing.index);
-                this.engagedHealth = -1;
+                const gap = gapTo(this.anchor(), facing.tile(), facing.size);
+                // Why: a biter the field already holds is one the loop can fight from the tile; one it does not, parked a tile past the radius, walks the bot off if the client is left chasing it and drops out again next pass, so the engaged dragon is clicked again at once to cancel the walk.
+                if (field.some(n => n.index === facing.index)) {
+                    const shown = (facing.name ?? name).toLowerCase();
+                    this.host.log(`retaliating at ${shown} ${facing.index} at ${facing.tile()} (gap ${gap}), so it is the target now`);
+                    this.engagedName = shown;
+                    this.reissues = 0;
+                    this.setTarget(facing.index);
+                    this.engagedHealth = -1;
+                } else {
+                    const mine = this.engaged === null ? undefined : field.find(n => n.index === this.engaged);
+                    // Why: a fresh Attack click restarts the swing, and one every pass never let a cast finish: 140 re-clicks in six minutes landed nothing. The click back waits out the engage cadence, which is longer than a cast.
+                    if (mine && performance.now() - this.reclickedAt >= RE_ENGAGE_MS) {
+                        this.reclickedAt = performance.now();
+                        if (performance.now() - this.biterNotedAt > FIELD_DIAG_MS) {
+                            this.biterNotedAt = performance.now();
+                            this.host.vlog?.(`${(facing.name ?? name).toLowerCase()} ${facing.index} bites from gap ${gap}, beyond reach; clicking ${this.engagedName} ${mine.index} back`);
+                        }
+                        await this.engage(mine, name);
+                        continue;
+                    }
+                }
             }
             const live = this.engaged === null ? undefined : (field.find(n => n.index === this.engaged) ?? (facing?.index === this.engaged ? facing : undefined));
             if (live && live.targetsAnotherPlayer()) {
