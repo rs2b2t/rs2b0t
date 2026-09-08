@@ -1,7 +1,7 @@
 /** Derive the safespots and melee anchor of a Jive grind site, which feed sites.ts under scripts/JiveDragons, scripts/JiveDemons and scripts/JiveKBD.
  *  Why: walkable is not reachable and a multi-tile body slides several tiles off its spawn, so the melee-proof set has to come from the collision pack rather than from looking at the map. */
 
-//   bun tools/nav/jive-safespots.ts [--target blue|demon|kbd] [--anywhere] [--content ~/code/rs2b2t-content] [--engine ~/code/rs2b2t-engine]
+//   bun tools/nav/jive-safespots.ts [--target blue|demon|kbd] [--anywhere] [--probe x,z] [--content ~/code/rs2b2t-content] [--engine ~/code/rs2b2t-engine]
 import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
@@ -301,6 +301,18 @@ export function readSpawns(target = BLUE_DRAGON, maps = MAPS): Spawn[] {
     return spawns;
 }
 
+/** Print the collision round a tile: '.' walkable, '#' blocked, 'S' a spawn tile of the target, 'X' a spawn tile that is blocked. */
+export function probe(target: Target, x: number, z: number, r = 6, packPath = PACK, maps = MAPS, engineDir = ENGINE): void {
+    const source = needsEngine(target) ? engineSource(target, engineDir) : packSource(packPath);
+    const spawns = new Set(readSpawns(target, maps).map(s => key(s.x, s.z)));
+    for (let zz = z + r; zz >= z - r; zz--) {
+        let row = `${String(zz).padStart(5)} `;
+        for (let xx = x - r; xx <= x + r; xx++) row += spawns.has(key(xx, zz)) ? (source.walk(xx, zz) ? 'S' : 'X') : source.walk(xx, zz) ? '.' : '#';
+        console.log(row);
+    }
+    console.log(`      ${String(x - r).padEnd(r)}^${x}`);
+}
+
 export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS, engineDir = ENGINE): Derivation {
     const source = needsEngine(target) ? engineSource(target, engineDir) : packSource(packPath);
     const where = needsEngine(target) ? engineDir : packPath;
@@ -343,6 +355,11 @@ export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS, engin
                     queue.push({ x: ox, z: oz });
                 }
             }
+        }
+        // Why: the server puts an npc on its spawn line whatever the ground there; the iron dragon at (2736,9424) stands on a blocked tile, fitted nowhere, and its wander covered the camp it was left out of.
+        if (queue.length === 0) {
+            seen.add(key(spawn.x, spawn.z));
+            queue.push({ x: spawn.x, z: spawn.z });
         }
         let placements = 0;
         while (queue.length > 0) {
@@ -529,6 +546,12 @@ if (import.meta.main) {
     const picked = TARGETS[name];
     if (!picked) throw new Error(`--target takes ${Object.keys(TARGETS).join(', ')}, got '${name}'`);
     const target = process.argv.includes('--anywhere') ? { ...picked, anywhere: true } : picked;
+    const at = argVal('--probe');
+    if (at !== undefined) {
+        const [px, pz] = at.split(',').map(Number);
+        probe(target, px!, pz!);
+        process.exit(0);
+    }
     const d = derive(target);
     for (const w of d.wanders) {
         console.log(`${w.spawn.adult ? 'adult' : 'baby '} spawn (${w.spawn.x}, ${w.spawn.z}) size ${w.spawn.size}: ${w.placements} placements, ${w.body.size} body tiles, ${w.threat.size} tiles it can hit`);

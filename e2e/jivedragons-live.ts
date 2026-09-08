@@ -207,11 +207,12 @@ const IRON_SITE = {
     lair: { minX: 2624, maxX: 2751, minZ: 9408, maxZ: 9599, level: 0 },
     // Why: mirrored from sites.ts the way every other row here is, so a stand that drifts in one copy fails a milestone rather than passing quietly. The camps are open tiles clear of every idle wander footprint, not pockets: the breath is 0 through the shield with a dose up, and a dragon that wanders adjacent is the one thing that still hits.
     stands: [
-        { tiles: [{ x: 2734, z: 9430, level: 0 }, { x: 2735, z: 9430, level: 0 }, { x: 2734, z: 9429, level: 0 }], anchor: { x: 2734, z: 9430, level: 0 } },
-        { tiles: [{ x: 2744, z: 9457, level: 0 }, { x: 2743, z: 9457, level: 0 }, { x: 2744, z: 9458, level: 0 }], anchor: { x: 2744, z: 9457, level: 0 } }
+        { tiles: [{ x: 2744, z: 9457, level: 0 }, { x: 2743, z: 9457, level: 0 }, { x: 2744, z: 9458, level: 0 }], anchor: { x: 2744, z: 9457, level: 0 } },
+        { tiles: [{ x: 2740, z: 9434, level: 0 }], anchor: { x: 2740, z: 9434, level: 0 } },
+        { tiles: [{ x: 2704, z: 9417, level: 0 }, { x: 2703, z: 9417, level: 0 }, { x: 2705, z: 9417, level: 0 }], anchor: { x: 2704, z: 9417, level: 0 } }
     ] as Stand[] | undefined,
-    safespots: [{ x: 2734, z: 9430, level: 0 }, { x: 2735, z: 9430, level: 0 }, { x: 2734, z: 9429, level: 0 }],
-    meleeAnchor: { x: 2734, z: 9430, level: 0 },
+    safespots: [{ x: 2744, z: 9457, level: 0 }, { x: 2743, z: 9457, level: 0 }, { x: 2744, z: 9458, level: 0 }],
+    meleeAnchor: { x: 2744, z: 9457, level: 0 },
     target: 'Iron dragon',
     baby: null,
     food: { debug: 'shark', name: 'Shark' },

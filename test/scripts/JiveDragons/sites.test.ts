@@ -476,11 +476,11 @@ describe('the Brimhaven Dungeon metal dragons', () => {
         }
     });
 
-    test('iron carries two open camps and steel one, and the picker knows which sites have several', () => {
-        expect(iron.stands!.length).toBe(2);
+    test('iron carries three open camps and steel one, and the picker knows which sites have several', () => {
+        expect(iron.stands!.length).toBe(3);
         expect(steel.stands!.length).toBe(1);
         expect(iron.safespots).toBe(iron.stands![0]!.tiles);
-        expect(standFor(iron, 9).label).toBe(iron.stands![1]!.label);
+        expect(standFor(iron, 9).label).toBe(iron.stands![2]!.label);
         expect(standFor(steel, 3).tiles).toBe(steel.stands![0]!.tiles);
         expect(STAND_SITE_KEYS).toEqual(['gutanoth-blue', 'brimhaven-iron']);
         expect(MAX_STANDS).toBe(6);
@@ -495,18 +495,27 @@ describe('the Brimhaven Dungeon metal dragons', () => {
     });
 });
 
-// Why: the camps are open tiles, so they are pinned as tiles the anywhere derivation ranks, each seeing several dragons' idle wander rather than one pocket's worth.
+// Why: the camps are open tiles, so they are pinned as tiles the anywhere derivation ranks, each seeing most of one dragon's idle wander rather than one pocket's worth.
 describe.skipIf(!inputsPresent(IRON_DRAGON))('the Brimhaven derivation (pack-gated)', () => {
-    test('every iron camp tile is an open candidate clear of both kinds\' idle reach, and camp 1 sees four dragons', () => {
+    test('every iron camp tile is an open candidate clear of both kinds\' idle reach that sees a dragon over sixty percent of its wander', () => {
         const derived = derive({ ...IRON_DRAGON, anywhere: true });
         const spots = new Map(derived.safespots.map(s => [`${s.x},${s.z}`, s]));
-        for (const [i, stand] of BRIMHAVEN_IRON.stands!.entries()) {
+        for (const stand of BRIMHAVEN_IRON.stands!) {
             for (const t of stand.tiles) {
                 const spot = spots.get(`${t.x},${t.z}`);
                 expect(spot).toBeDefined();
-                expect(spot!.shares.filter(f => f > 0.15).length).toBeGreaterThanOrEqual(i === 0 ? 4 : 2);
+                expect(spot!.share).toBeGreaterThanOrEqual(0.6);
             }
         }
+    }, 120_000);
+
+    // Why: the server puts an npc on its spawn line whatever the ground, and this one's wander covered the camp a live run took ten headbutts on.
+    test('the iron dragon spawned on a blocked tile at (2736,9424) is seeded, and the camp its wander covers is no candidate', () => {
+        const derived = derive({ ...IRON_DRAGON, anywhere: true });
+        const blocked = derived.wanders.find(w => w.spawn.x === 2736 && w.spawn.z === 9424);
+        expect(blocked).toBeDefined();
+        expect(blocked!.placements).toBeGreaterThan(100);
+        expect(derived.safespots.some(s => s.x === 2734 && s.z === 9430)).toBe(false);
     }, 120_000);
 
     test('the steel camp is an open candidate that sees the west dragon at half its wander', () => {
