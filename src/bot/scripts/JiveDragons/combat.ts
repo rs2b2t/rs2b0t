@@ -302,7 +302,8 @@ export class Fight implements Task {
                 this.seen.set(n.index, noteSighting(this.seen.get(n.index), n.tile(), performance.now()));
             }
             const facing = retaliationTarget(this.site);
-            if (facing !== null && facing.index !== this.engaged) {
+            // Why: a chase runs with retaliate off, so the face is always its own target and adopting it re-took a dragon the stall skip had just dropped.
+            if (holdsAnchor(this.site, style) && facing !== null && facing.index !== this.engaged) {
                 const gap = gapTo(this.anchor(), facing.tile(), facing.size);
                 // Why: a biter the field already holds is one the loop can fight from the tile; one it does not, parked a tile past the radius, walks the bot off if the client is left chasing it and drops out again next pass, so the engaged dragon is clicked again at once to cancel the walk.
                 if (field.some(n => n.index === facing.index)) {
