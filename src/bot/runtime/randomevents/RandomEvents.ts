@@ -88,6 +88,10 @@ const HOSTILE_ENGAGE_DISTANCE = 8;
 /** `macro_swarm`, the one hostile random that cannot follow. */
 const SWARM_NPC_ID = 411;
 
+/** `macro_dryhadguardian_1..6`, the Tree spirit. */
+// Why: it fires on a shop standing at the bank with a window open, and a pause on its presence alone walks the shop off the customer; it attacks the moment it lands, so its combat flag or face target is enough to earn the interrupt and nothing is lost by waiting for one.
+const TREE_SPIRIT_NPC_IDS: ReadonlySet<number> = new Set(idRange(438, 443));
+
 /** Whether an npc's face target is this player. */
 function facesSlot(faceEntity: number, selfSlot: number): boolean {
     return faceEntity >= 32768 && faceEntity - 32768 === selfSlot;
@@ -111,7 +115,7 @@ export function isHostileEventNpc(
     }
     // Why: `macro_swarm` carries maxrange 3, so it is pinned three tiles from where it spawned and a step or two leaves it behind, and it hits 2s at attackrate 7 meanwhile. Evading one that is only sitting there costs a walk and a repath to dodge a few points of damage that never arrives.
     // Why: it does enter opplayer2 on the player, so an actual attack shows up as its own combat flag or its face target, and those are what earn the interrupt.
-    if (npc.id === SWARM_NPC_ID) {
+    if (npc.id === SWARM_NPC_ID || TREE_SPIRIT_NPC_IDS.has(npc.id)) {
         return npc.inCombat || facesSlot(npc.faceEntity, selfSlot);
     }
     // Why: these antimacro ids only exist as your own random event. They are not world mobs you walk past.

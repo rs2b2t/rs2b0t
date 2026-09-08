@@ -115,6 +115,31 @@ describe('isHostileEventNpc', () => {
         });
     });
 
+    // Why: the Tree spirit fires on a shop at the bank with a window open, and evading on its presence alone walked the shop off the customer; it attacks the moment it lands, so the flags are enough.
+    describe('the Tree spirit', () => {
+        const spirit = (over: Partial<{ id: number; inCombat: boolean; distance: number; faceEntity: number }> = {}) =>
+            riverTroll({ id: 438, distance: 2, faceEntity: -1, inCombat: false, ...over });
+
+        test('is left alone while it is only standing there, whichever of its six ids it wears', () => {
+            expect(isHostileEventNpc(spirit(), 3, false)).toBe(false);
+            expect(isHostileEventNpc(spirit({ id: 443, distance: 1 }), 3, false)).toBe(false);
+        });
+
+        test('is an event once it faces us or is in combat', () => {
+            expect(isHostileEventNpc(spirit({ faceEntity: 32768 + 3 }), 3, false)).toBe(true);
+            expect(isHostileEventNpc(spirit({ id: 443, inCombat: true }), 3, false)).toBe(true);
+        });
+
+        test('is not woken by us fighting something else, nor by it facing another player', () => {
+            expect(isHostileEventNpc(spirit(), 3, true)).toBe(false);
+            expect(isHostileEventNpc(spirit({ faceEntity: 32768 + 9 }), 3, false)).toBe(false);
+        });
+
+        test('still ignored past engage range however it is flagged', () => {
+            expect(isHostileEventNpc(spirit({ distance: 12, inCombat: true }), 3, false)).toBe(false);
+        });
+    });
+
     test('hostile already in combat within engage range is an event', () => {
         expect(isHostileEventNpc(riverTroll({ distance: 6, inCombat: true }), 3, false)).toBe(true);
     });
