@@ -152,7 +152,7 @@ try {
     console.log('AIO Teleport: paused cleanly (no progress while paused)');
 
     await page.getByRole('button', { name: 'Resume' }).click();
-    // Why: a loop body can outlast this whole check, a fresh account's first AIO Teleport body is a bank routine whose booth retry runs a minute from Tutorial Island, so a finished iteration proves nothing about resume. Every waiter the scheduler fires marks lastProgressAt, and resume() marks it once itself, so a mark after the click is the parked body waking.
+    // Why: a loop body can outlast this check end to end, a fresh account's first AIO Teleport body is a bank routine whose booth retry runs a minute from Tutorial Island, so a finished iteration proves nothing about resume. Every waiter the scheduler fires marks lastProgressAt, and resume() marks it once itself, so a mark after the click is the parked body waking.
     const resumedAt = await page.evaluate(() => (globalThis as never as RunnerGlobal).rs2b0t.runner.ctx?.lastProgressAt ?? 0);
     await page.waitForFunction(
         ([loops, at]) => {
