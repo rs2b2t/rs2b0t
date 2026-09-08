@@ -617,7 +617,10 @@ export class HoldSafespot implements Task {
     constructor(private readonly host: CombatHost, private readonly site: DragonSite) {}
 
     validate(): boolean {
+        // Why: a chase stands beside its dragon through the fight's two-minute hand-backs, and this task walked it home at every one, a six-second round trip and a restarted swing each time.
+        const chasing = chaseMode(this.host.style(), this.site.fireAtRange === true) && this.host.targetIdx !== null;
         return this.site.inArea(Game.tile())
+            && !chasing
             && !atTile(this.spot())
             && holdDue({ onSafespot: onAnySafespot(this.site), hasFood: this.host.hasFood() })
             && this.host.hpFraction() >= this.host.panicHp();
