@@ -1,7 +1,7 @@
 /** Live proof for JiveDragons at the Taverley dragons, the Heroes' Guild pen, the Gu'Tanoth Enclave and the Brimhaven Dungeon metal dragons: --site --style --minutes --dusty --clue --leave --tick --no-starve.
  *  Why: supply.ts and combat.ts carry no unit tests because every function in them drives a live client, so this run is the only proof either of them works. */
 
-// Usage: HEADED=1 bun e2e/jivedragons-live.ts [--base url] [--site blue|black|heroes|gutanoth|iron|steel] [--stand n] [--style melee|mage|range] [--minutes n] [--tick ms] [--dusty] [--clue] [--leave teleport|walk] [--no-starve]
+// Usage: [RUN_TAG=name] HEADED=1 bun e2e/jivedragons-live.ts [--base url] [--site blue|black|heroes|gutanoth|iron|steel] [--stand n] [--style melee|mage|range] [--minutes n] [--tick ms] [--dusty] [--clue] [--leave teleport|walk] [--no-starve]
 import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 
@@ -285,7 +285,8 @@ const HARNESS_HIT_GRACE_MS = 2500;
 const BANK_READ_LINE = 'in the bank or in the pack';
 
 // Why: three runs on three stands at once each write a proof, and one shared name keeps only the last finisher's.
-const RUN_TAG = `${args.site}${STANDS ? `-stand${args.stand}` : ''}`;
+// Why: several bots on one stand at once each need their own proof files, and the tag is the only thing in the path.
+const RUN_TAG = process.env.RUN_TAG ?? `${args.site}${STANDS ? `-stand${args.stand}` : ''}`;
 const PROOF_PATH = `out/jivedragons-${RUN_TAG}-proof.json`;
 const SHOT_PATH = `out/jivedragons-${RUN_TAG}-live.png`;
 
