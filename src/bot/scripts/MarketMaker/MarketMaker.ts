@@ -25,6 +25,7 @@ import { resolvePrices, rowValid } from '../../api/market/prices.js';
 import { normaliseOffer, offerCovers, offersMatch } from '../../api/market/driveMarketTrade.js';
 import { appraise, describeAppraisal, type Appraisal, type DeskState } from '../../api/market/appraise.js';
 import type { OfferItem } from '../../api/market/quote.js';
+import { sortBank } from '../../api/bank/bankSort.js';
 import Tile from '../../geometry/Tile.js';
 import { Paint, type PaintFrame } from '../../paint/Paint.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
@@ -203,6 +204,8 @@ export default class MarketMaker extends TaskBot {
     private lastResetAt = 0;
     /** A reset owes a bank trip that empties the pack, cleared once the trip has run. */
     private settleOwed = false;
+    /** A bank sort owed on the next trip, at startup and after every reset. */
+    private sortOwed = false;
     private advertiseCursor = 0;
     private advertCycle = 0;
 
@@ -242,6 +245,7 @@ export default class MarketMaker extends TaskBot {
             ScriptRunner.stop('no order book');
             return;
         }
+        this.sortOwed = true;
 
         const bank = nearestBank(this.spot);
         const reach = bank ? this.spot.distanceTo(Tile.from(bank.tile)) : Infinity;
@@ -382,12 +386,27 @@ export default class MarketMaker extends TaskBot {
         return this.cooldownMs <= 0 ? 'Try again.' : `Ask again in ${Math.round(this.cooldownMs / 1000)}s.`;
     }
 
+    // Why: the sort rides the same forced trip a reset owes, so the shop sorts before it serves at startup and straight after a reset; the flag outlives a trip that never opened the bank.
     settleForced(): boolean {
-        return this.settleOwed;
+        return this.settleOwed || this.sortOwed;
     }
 
     clearForcedSettle(): void {
         this.settleOwed = false;
+    }
+
+    sortDue(): boolean {
+        return this.sortOwed;
+    }
+
+    /** Sort the open bank with the bank sorter's rules, once per owed sort. */
+    async sortBankNow(): Promise<void> {
+        this.setStatus('sorting the bank');
+        const result = await sortBank({ log: m => this.log(m) });
+        this.sortOwed = false;
+        this.log(result.sorted
+            ? `bank sorted, ${result.moves} move(s)${result.unmatched.length > 0 ? `, ${result.unmatched.length} item(s) the rules do not place` : ''}`
+            : `bank sort stopped: ${result.reason} after ${result.moves} move(s)`);
     }
 
     bankReady(nowMs: number): boolean {
@@ -576,6 +595,7 @@ export default class MarketMaker extends TaskBot {
         this.tradeClosedAt = null;
         this.lastTold = '';
         this.settleOwed = true;
+        this.sortOwed = true;
         this.setStatus('reset, banking the pack');
     }
 
@@ -1247,6 +1267,10 @@ class Settle implements Task {
 
         if (!(await this.bot.refreshLedger()) || this.bot.packCoins() < Math.min(this.bot.float(), inBank)) {
             this.bot.backOffBank(`float ${this.bot.packCoins()}/${this.bot.float()}`);
+        }
+        if (this.bot.sortDue()) {
+            await this.bot.sortBankNow();
+            await this.bot.refreshLedger();
         }
         await Bank.close();
         // Why: the modal reads closed a tick before the engine has settled it, and a trade request sent in that gap opens the window on the customer's client alone. Every purchase runs into it, since fetching the goods puts a bank trip directly in front of opening the window.
