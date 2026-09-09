@@ -108,8 +108,8 @@ export const CASES: readonly Case[] = [
         harness: 'bankfletcher-live.ts',
         covers: { scripts: ['BankFletcher'] },
         status: 'unvetted',
-        budgetMin: 5,
-        note: 'Varrock West: knife stays through a willow longbow bank trip, stringing raises strung id 847, headless attach climbs'
+        budgetMin: 8,
+        note: 'Draynor start banks locally rather than trekking to the Varrock West preset, then Varrock West: knife stays through a willow longbow bank trip, stringing raises strung id 847, headless attach climbs'
     },
     {
         id: 'baxtorian-rope-369-live',
@@ -987,6 +987,22 @@ export const CASES: readonly Case[] = [
         note: 'Varrock West with iron, coal, natures and a staff of fire banked; passes on steel bars plus magic and smithing XP together'
     },
     {
+        id: 'superheater-fire-battlestaff-live',
+        harness: 'superheater-fire-battlestaff-live.ts',
+        covers: { scripts: ['Superheater'] },
+        status: 'unvetted',
+        budgetMin: 10,
+        note: 'Varrock West with iron, coal, natures and a Fire battlestaff banked (no Staff of fire); passes on wore Fire battlestaff plus steel bars'
+    },
+    {
+        id: 'strangebox-bank-open-live',
+        harness: 'strangebox-bank-open-live.ts',
+        covers: { subsystems: ['random-events'] },
+        status: 'unvetted',
+        budgetMin: 5,
+        note: 'Varrock West booth left open, then ::give macro_cube; passes when the solver closes the bank, Open is present, and the box is consumed (#756)'
+    },
+    {
         id: 'strangebox-repro-live',
         harness: 'strangebox-repro-live.ts',
         covers: { subsystems: ['random-events'] },
@@ -1093,6 +1109,14 @@ export const CASES: readonly Case[] = [
         harness: 'waterfall-exit-test.ts',
         covers: { subsystems: ['nav', 'quests'] },
         status: 'unvetted'
+    },
+    {
+        id: 'witchs-potion-rats-tail-live',
+        harness: 'witchs-potion-rats-tail-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'unvetted',
+        budgetMin: 8,
+        note: "seeds Rat's tail on a started Witch's Potion; passes when AIOQuester picks an onion and never attacks a Rimmington rat (#796)"
     },
     {
         id: 'witchs-house-226-live',
