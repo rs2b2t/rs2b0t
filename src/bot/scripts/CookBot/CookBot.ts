@@ -73,6 +73,7 @@ export const SETTINGS: SettingsSchema = {
     rangeStand: { type: 'tile', default: DEFAULT_RANGE_STAND, label: 'Range stand tile (Custom only)' },
     rangeName: { type: 'string', default: 'Range', label: 'Range loc name (Custom only)' },
     bankBooth: { type: 'string', default: 'Bank booth', label: 'Bank booth loc name' },
+    bankNpc: { type: 'string', default: '', label: 'Banker NPC name (blank = booth)', help: 'for banks opened by talking to a banker NPC instead of a booth, e.g. Zanaris fairies' },
     obstacle: { type: 'string', default: 'door, gate', label: 'Openable obstacles (contains)', help: 'doors on the way to the bank or the range get opened' },
     leashRadius: { type: 'number', default: 8, min: 2, max: 20, label: 'Cook surface search radius (tiles)' }
 };
@@ -99,6 +100,7 @@ export default class CookBot extends TaskBot {
     private logName = 'Logs';
     private plotHalf = 8;
     private boothName = 'Bank booth';
+    private bankerNpc = '';
     private obstacle: string[] = ['door', 'gate'];
     private leash = 8;
     private readonly noLight = new NoLightTiles();
@@ -109,6 +111,7 @@ export default class CookBot extends TaskBot {
         this.fish = this.settings.str('fish', 'Raw salmon');
         this.mode = parseSurfaceMode(this.settings.str('surface', 'Range'));
         this.boothName = this.settings.str('bankBooth', 'Bank booth');
+        this.bankerNpc = this.settings.str('bankNpc', '');
         this.obstacle = this.settings.str('obstacle', 'door, gate').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
         this.leash = this.settings.num('leashRadius', 8);
         this.startedAt = Date.now();
@@ -209,6 +212,7 @@ export default class CookBot extends TaskBot {
     firePlotHalf(): number { return this.plotHalf; }
     firePlot(): FirePlot { return firePlotFor(this.whereName, this.bankStand, this.plotHalf); }
     refusedTiles(): NoLightTiles { return this.noLight; }
+    bankerNpcName(): string { return this.bankerNpc; }
     rawCount(): number { return countRaw(Inventory.items(), this.fish); }
     logCount(): number { return this.mode === 'fire' ? Inventory.count(this.logName) : 0; }
 
@@ -256,7 +260,11 @@ class BankTrip implements Task {
     async execute(): Promise<void> {
         this.bot.setStatus('banking');
         await walkOpening(this.bot.bankTile(), 0, this.bot.obstacleList(), m => this.bot.log(m));
-        if (!(await this.open())) {
+        const npc = this.bot.bankerNpcName();
+        const opened = npc
+            ? await Bank.openNpcAccess({ name: npc, op: 'Bank' }, m => this.bot.log(`  ${m}`))
+            : await this.open();
+        if (!opened) {
             this.bot.log('could not open the bank — will retry');
             return;
         }
