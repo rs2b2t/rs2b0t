@@ -61,6 +61,24 @@ describe('progressSignature', () => {
 });
 
 describe('ProgressWatchdog', () => {
+    test('failed attempts count only unchanged observations', () => {
+        const w = new ProgressWatchdog();
+        expect(w.noteFailure('ore:0', 'ore:0')).toBe(1);
+        expect(w.noteFailure('ore:0', 'ore:1')).toBe(0);
+        expect(w.noteFailure('ore:1', 'ore:1')).toBe(1);
+    });
+    test('progress observed between failed attempts resets their budget', () => {
+        const w = new ProgressWatchdog();
+        w.noteFailure('stage:0', 'stage:0');
+        w.noteFailure('stage:0', 'stage:0');
+        expect(w.noteFailure('stage:1', 'stage:1')).toBe(1);
+    });
+    test('reset clears the failed-attempt budget', () => {
+        const w = new ProgressWatchdog();
+        w.noteFailure('a', 'a');
+        w.reset();
+        expect(w.noteFailure('a', 'a')).toBe(1);
+    });
     test('unchanged signature counts up; change resets', () => {
         const w = new ProgressWatchdog();
         expect(w.note('a')).toBe(0);

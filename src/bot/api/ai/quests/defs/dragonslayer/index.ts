@@ -4,6 +4,7 @@ import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Game } from '../../../../game/Game.js';
 import { Equipment } from '../../../../equipment/Equipment.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
+import { Skills } from '../../../../skills/Skills.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
@@ -721,11 +722,25 @@ function hullErrand(snap: QuestSnapshot): QuestStep | null {
         id: DS_ID.NAILS,
         name: DS_ITEM.NAILS,
         qty: planksWanted * SHIP_REPAIR.nailsPerPlank,
-        source: (s, need) => custom(
-            `smith ${need} nails for ${planksWanted} plank${planksWanted === 1 ? '' : 's'}`
-                + ` (${heldId(s, DS_ID.NAILS)} carried / ${bankedId(s, DS_ID.NAILS)} banked)`,
-            log => smithNails(need, log)
-        )
+        source: (s, need) => {
+            if (Skills.effective('smithing') < 34) {
+                return { kind: 'wait', reason: 'Smithing 34 is required to make nails; train Smithing or obtain and bank Nails' };
+            }
+            if ((s.inv.get('steel bar') ?? 0) === 0) {
+                const bars = Math.ceil(need / 2);
+                if ((s.inv.get('iron ore') ?? 0) < bars && Skills.effective('mining') < 15) {
+                    return { kind: 'wait', reason: 'Mining 15 is required for iron ore; train Mining or obtain iron ore, steel bars or Nails' };
+                }
+                if ((s.inv.get('coal') ?? 0) < bars * 2 && Skills.effective('mining') < 30) {
+                    return { kind: 'wait', reason: 'Mining 30 is required for coal; train Mining or obtain coal, steel bars or Nails' };
+                }
+            }
+            return custom(
+                `smith ${need} nails for ${planksWanted} plank${planksWanted === 1 ? '' : 's'}`
+                    + ` (${heldId(s, DS_ID.NAILS)} carried / ${bankedId(s, DS_ID.NAILS)} banked)`,
+                log => smithNails(need, log)
+            );
+        }
     };
     // Why: at the spawns a part-filled pack is a trip half done rather than a hull half patched, and read the other way it sent the bot back to Port Sarim after every plank.
     const planksToFetch = inPlankGraveyard(snap.tile) ? SHIP_REPAIR.planks : planksWanted;

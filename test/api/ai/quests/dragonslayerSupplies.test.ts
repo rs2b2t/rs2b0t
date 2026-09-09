@@ -1,9 +1,14 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 
 import { dragonslayer } from '#/bot/api/ai/quests/defs/dragonslayer/index.js';
 import { SUPPLY_GATHERS } from '#/bot/api/ai/quests/defs/dragonslayer/supplies.js';
 import { planProvisioning } from '#/bot/api/ai/quests/engine/provisioning.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+import { Skills } from '#/bot/api/skills/Skills.js';
+
+let levels = spyOn(Skills, 'effective');
+beforeEach(() => { levels = spyOn(Skills, 'effective').mockReturnValue(99); });
+afterEach(() => levels.mockRestore());
 
 function snapshot(over: Partial<QuestSnapshot> = {}): QuestSnapshot {
     return {
@@ -27,6 +32,27 @@ const ORE_LOAD = new Map([
 ]);
 
 describe('Dragon Slayer supply gathers', () => {
+    test('waits before acquiring bowl materials when Crafting is 7', () => {
+        levels.mockReturnValue(7);
+        const given = snapshot({ inv: ORE_LOAD, freeSlots: 0 });
+
+        const step = SUPPLY_GATHERS['unfired bowl'](given, 1);
+
+        expect(step.kind).toBe('wait');
+        if (step.kind !== 'wait') throw new Error('expected a blocked production step');
+        expect(step.reason).toMatch(/Crafting 8/);
+        expect(step.reason).toMatch(/bank|obtain/i);
+    });
+
+    test('produces a bowl when Crafting is exactly 8', () => {
+        levels.mockReturnValue(8);
+        const given = snapshot();
+
+        const step = SUPPLY_GATHERS['unfired bowl'](given, 1);
+
+        expect(step).toMatchObject({ kind: 'custom', name: 'make an unfired bowl' });
+    });
+
     test('a full pack banks before it shops', () => {
         // Why: a purchase into a full pack is not refused, inv_add drops the overflow at the bot's feet and the coins go anyway.
         for (const name of Object.keys(SUPPLY_GATHERS)) {
