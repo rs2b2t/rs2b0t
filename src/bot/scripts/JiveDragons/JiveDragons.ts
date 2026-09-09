@@ -69,6 +69,7 @@ function inPairs<T>(cells: T[]): T[][] {
 
 const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
 const SHOW_RANGE = { key: 'combatStyle', anyOf: ['range'] };
+const SHOW_SPECIAL = { key: 'combatStyle', anyOf: ['melee', 'range'] };
 const SHOW_MELEE = { key: 'combatStyle', anyOf: ['melee'] };
 const BEST_WEAPON = 'Best available';
 const SHOW_SAFESPOT = { key: 'combatStyle', anyOf: ['mage', 'range'] };
@@ -113,7 +114,7 @@ export const SETTINGS: SettingsSchema = {
     rangeStyle: { type: 'string', default: 'rapid', options: RANGE_STYLE_OPTIONS, label: 'Ranged style', group: 'Combat', showIf: SHOW_RANGE },
     ammo: { type: 'string', default: 'Iron arrow', options: ARROWS, label: 'Ammo', group: 'Combat', showIf: SHOW_RANGE },
     ammoWithdraw: { type: 'number', default: 500, min: 1, max: 5000, label: 'Ammo per bank trip', group: 'Combat', showIf: SHOW_RANGE },
-    useSpecial: { type: 'boolean', default: true, label: 'Use special attacks', group: 'Combat', showIf: SHOW_MELEE, help: 'arms the spec bar for the attack that opens each kill, whenever the energy is there and the wielded weapon has a special (dragon dagger, dragon longsword and the rest). A weapon with none is left alone' },
+    useSpecial: { type: 'boolean', default: true, label: 'Use special attacks', group: 'Combat', showIf: SHOW_SPECIAL, help: 'arms the spec bar whenever the energy covers the wielded weapon\'s special, for the swing or the shot about to go out; a staff has none' },
     usePotions: { type: 'boolean', default: true, label: 'Drink super attack / strength', group: 'Combat', showIf: SHOW_MELEE, help: 'sips a dose once the boost decays to within a tenth of the base level. The loadout carry list sets the dose form and the count per trip, otherwise one Super attack(3) and one Super strength(3)' },
     prayMelee: { type: 'boolean', default: true, label: 'Pray Protect from Melee on the metal dragons', group: 'Combat', showIf: SHOW_MELEE, help: 'the metal dragons stop at ten tiles and breathe, so melee walks to one and fights beside it, where it headbutts for up to 22; the overhead makes that 0 and the shield with a dose takes the close breath. Needs 43 Prayer' },
 
@@ -789,7 +790,8 @@ class SipPotion implements Task {
     private retryAt = 0;
     constructor(private readonly bot: JiveDragons) {}
     validate(): boolean {
-        return POTIONS.length > 0 && Date.now() >= this.retryAt && (Inventory.contains(EMPTY_VIAL) || sipDue() !== null);
+        // Why: a boost drunk at the bank has faded by the time the walk in ends, so a dose is sipped only inside the lair; an empty vial is dropped wherever it is.
+        return POTIONS.length > 0 && Date.now() >= this.retryAt && (Inventory.contains(EMPTY_VIAL) || (SITE.inArea(Game.tile()) && sipDue() !== null));
     }
     async execute(): Promise<void> {
         if (await dropVial(this.bot) || await this.sip()) {
@@ -1217,9 +1219,9 @@ export default class JiveDragons extends TaskBot implements CombatHost {
     eatOnce(): Promise<boolean> {
         return eatOnce(this);
     }
-    /** Mage and range never reach a dragon to spend it on, and a weapon with no specwep param has no bar to click. */
+    /** A staff has no special, and a weapon with no specwep param has no bar to click. */
     async armSpecial(): Promise<void> {
-        if (!USE_SPECIAL || STYLE !== 'melee' || Special.armed()) {
+        if (!USE_SPECIAL || STYLE === 'mage' || Special.armed()) {
             return;
         }
         if (!Special.ready(WEAPON) || !Equipment.contains(WEAPON)) {
@@ -1227,7 +1229,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         }
         if (await Special.arm()) {
             this.specials++;
-            this.vlog(`special armed (${Special.energy()} energy left)`);
+            this.log(`special armed (${Special.energy()} energy left)`);
         }
     }
     buryBones(): boolean {

@@ -384,10 +384,10 @@ function kitFor(style: Style): Kit {
         };
     }
     return {
-        pack: [['magic_shortbow', 'Magic shortbow', 1], ['rune_arrow', 'Rune arrow', 500], [FOOD.debug, FOOD.name, PACK_FOOD], ...(SITE.antipoison ? [['4dose2antipoison', 'Superantipoison(4)', 1] as const] : [])],
+        pack: [['magic_shortbow', 'Magic shortbow', 1], ['rune_arrow', 'Rune arrow', 500], ['4doserangerspotion', 'Ranging potion(4)', 1], [FOOD.debug, FOOD.name, PACK_FOOD], ...(SITE.antipoison ? [['4dose2antipoison', 'Superantipoison(4)', 1] as const] : [])],
         worn: RANGE_WORN,
-        bank: [...COMMON_BANK, { debugName: 'magic_shortbow', displayName: 'Magic shortbow', qty: 1 }, { debugName: 'rune_arrow', displayName: 'Rune arrow', qty: 5000 }],
-        settings: { ...common, combatStyle: 'range', bow: 'Magic shortbow', ammo: 'Rune arrow', rangeStyle: 'rapid', ammoWithdraw: 500 }
+        bank: [...COMMON_BANK, { debugName: 'magic_shortbow', displayName: 'Magic shortbow', qty: 1 }, { debugName: 'rune_arrow', displayName: 'Rune arrow', qty: 5000 }, { debugName: '4doserangerspotion', displayName: 'Ranging potion(4)', qty: 5 }],
+        settings: { ...common, combatStyle: 'range', bow: 'Magic shortbow', ammo: 'Rune arrow', rangeStyle: 'rapid', ammoWithdraw: 500, useSpecial: true, rangingPotion: true }
     };
 }
 
@@ -738,7 +738,8 @@ try {
     if (args.style === 'melee') { required.push('meleekills'); }
     if (args.style === 'melee' && SITE.fee > 0) { required.push('prayer'); }
     // Why: only the bow leaves anything of its own on the floor, so the arrows-come-home claim is a range claim.
-    if (args.style === 'range') { required.push('arrows'); }
+    if (args.style === 'range') { required.push('arrows', 'potion'); }
+    if (args.style !== 'mage') { required.push('special'); }
     if (args.starve) { required.push('starvebank'); }
 
     const deadline = t0 + args.minutes * 60_000;
@@ -767,6 +768,11 @@ try {
             if (/^teleported out to /i.test(line.msg)) { mark('teleport', line.msg); }
             if (SITE.fee > 0 && /^paid saniboch \d+ coins/i.test(line.msg)) { mark('fee', line.msg); }
             if (SITE.antifire && /^drank antifire potion/i.test(line.msg)) { mark('antifire', line.msg); }
+            if (args.style !== 'mage' && /^special armed/i.test(line.msg)) { mark('special', line.msg); }
+            // Why: the boost is for the fight, and a sip at the bank is the fade it used to buy; the tile of the sample that carried the line is where the sip happened.
+            if (args.style === 'range' && /^drank ranging potion/i.test(line.msg)) {
+                if (inLair(s.tile)) { mark('potion', `${line.msg} at ${s.tile?.x},${s.tile?.z}, inside the lair`); } else { fail(`the ranging potion was drunk outside the lair at ${s.tile?.x},${s.tile?.z}: ${line.msg}`); }
+            }
             if (args.style === 'melee' && SITE.fee > 0 && /^praying protect from melee/i.test(line.msg)) { mark('prayer', line.msg); }
             if (/^out of the dragon lair/i.test(line.msg)) { outOfLairSaid = true; }
         }

@@ -352,6 +352,8 @@ export class Fight implements Task {
                     continue;
                 }
                 if (performance.now() - this.engagedAt < RE_ENGAGE_MS) {
+                    // Why: the energy comes back mid-fight and only a re-click used to arm it, so a long fight spent one special; armed here, the next swing or shot takes it.
+                    await this.host.armSpecial?.();
                     await this.idle();
                     continue;
                 }
