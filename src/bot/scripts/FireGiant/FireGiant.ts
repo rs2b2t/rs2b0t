@@ -590,10 +590,22 @@ async function bankRoutine(bot: FireGiant, withdrawFood: boolean): Promise<void>
     await ensureEscapeRunes(bot);
 
     // Why: the trip back is long, so healing happens at the booth and the first giant never meets a half-health bot.
-    // Why: the food is topped back up afterwards, so eating here does not come out of the trip's supplies.
-    if (await healUp(bot) && withdrawFood) {
-        await withdrawFoodTo(bot);
+    // Why: eating is an inventory op, so the booth has to come down first or the Eat click lands on the bank panel
+    // Why: the food is topped back up afterwards, so eating here does not come out of the trip's supplies
+    if (withdrawFood && hpFrac() < BANK_HEAL_TO && hasFood()) {
+        if (await Bank.close()) {
+            await healUp(bot);
+            if (!(await Bank.openNearest('Bank booth', 'Use-quickly', m => bot.log(`  ${m}`)))) {
+                bot.log('could not reopen the bank to top off food — carrying what we have');
+            } else {
+                await withdrawFoodTo(bot);
+            }
+        }
     }
+
+    // Why: the reopen above left the booth up, and the next task hop may be Eat. With the
+    // bank panel screening the pack, that bite lands on the bank and the bot stalls on it.
+    await Bank.close();
 
     bot.countBankTrip();
     bot.setStatus('restocked — heading back to the waterfall');

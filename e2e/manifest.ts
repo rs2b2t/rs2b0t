@@ -1107,6 +1107,14 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'witchs-potion-rats-tail-live',
+        harness: 'witchs-potion-rats-tail-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'unvetted',
+        budgetMin: 8,
+        note: "seeds Rat's tail on a started Witch's Potion; passes when AIOQuester picks an onion and never attacks a Rimmington rat (#796)"
+    },
+    {
         id: 'witchs-house-226-live',
         harness: 'witchs-house-226-live.ts',
         covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
