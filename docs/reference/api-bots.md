@@ -108,6 +108,17 @@ await item.interact('Bury');
 const ok = await Execution.delayUntil(() => Inventory.used() < before, 3000);
 ```
 
+```ts
+Execution.noteProgress(): void   // work the watchdog cannot see
+```
+
+The watchdog reads progress from tile movement and xp, so a script that trades
+or reads chat from one tile looks wedged after ten minutes and is walked home
+or restarted. `noteProgress` reports work it cannot see. Call it only after
+that work was observed, as `MarketMaker` does behind
+`onStation() && !tradeStalled()`. An unconditional call per loop turns wedge
+detection off.
+
 ---
 
 ## Registering a bot

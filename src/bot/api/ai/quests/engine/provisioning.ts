@@ -117,3 +117,19 @@ export function coinFloatWithdraw(
 ): { name: string; qty: number } | null {
     return floatWithdraw(inv, bank, 'Coins', float);
 }
+
+/**
+ * Why: the provisioning block re-runs every tick while a quest is still gathering, so topping the purse after a 10gp gate sent Cook's Assistant back to Al Kharid.
+ * Why: `drawn` closes the float once the pack has held it, the same latch food already uses, and a target of 0 never withdraws.
+ */
+export function coinFloatPlan(
+    held: number,
+    banked: number,
+    target: number,
+    alreadyDrawn: boolean
+): { qty: number; drawn: boolean } {
+    if (target <= 0) {
+        return { qty: 0, drawn: true };
+    }
+    return floatDrawPlan(held, banked, target, alreadyDrawn);
+}

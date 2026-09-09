@@ -34,6 +34,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 export const sheepshearer: QuestModule = {
     record: QUESTS.find(r => r.id === 'sheep')!,
     bank: new Tile(3093, 3243, 0),
+    coinFloat: 0,
     tools: ['shears', 'wool'],
     gather: { 'ball of wool': gatherBalls },
     decide

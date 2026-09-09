@@ -37,7 +37,11 @@ class SupervisorImpl {
         this.lastProgressAt = performance.now();
     }
 
-    private sampleProgress(): void {
+    private sampleProgress(ctx: ScriptContext): void {
+        if (ctx.lastReportedProgressAt > this.lastProgressAt) {
+            this.lastProgressAt = ctx.lastReportedProgressAt;
+        }
+
         const t = reader.worldTile();
         if (t && (!this.lastTile || t.x !== this.lastTile.x || t.z !== this.lastTile.z || t.level !== this.lastTile.level)) {
             this.lastTile = t;
@@ -85,7 +89,7 @@ class SupervisorImpl {
             ctx.addLog('info', 'random event cleared — resuming script');
         }
 
-        this.sampleProgress();
+        this.sampleProgress(ctx);
         const now = performance.now();
         if (now - this.lastProgressAt > WEDGE_MS && now - this.lastRecoveryAt > RETRY_MS) {
             this.lastRecoveryAt = now;

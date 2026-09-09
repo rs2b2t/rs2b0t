@@ -12,7 +12,7 @@ quest needs **before** it starts, bank-first:
 | `depositPlan(inv, keep)` | what to drop before starting |
 | `gpShort(snap, estGp)` | how much coin is missing for a purchase |
 | `floatWithdraw(...)`, `coinFloatWithdraw(...)` | withdrawing with headroom |
-| `foodFloatPlan(...)` | how much food to draw, and whether the float is closed |
+| `floatDrawPlan(...)`, `coinFloatPlan(...)` | how much of a float to draw, and whether it is closed |
 
 ## An empty pack per quest
 
@@ -45,6 +45,15 @@ for that quest.
 Eating during the quest does not reopen it, the provisioning block re-runs every tick while a
 quest is still gathering, and topping the float up sent the bot back to the bank after every
 meal. A death reopens it, because the pack is gone.
+
+## The coin float
+
+`COIN_FLOAT` (1000) is walking-around money unless a module names another figure. The engine
+draws it once, then latches it the same way as food: a 10gp gate while a gather is still
+outstanding must not emit `withdraw Coins`. Death, complete, and skip clear the latch.
+
+Cook's Assistant and Sheep Shearer set `coinFloat: 0`. Neither spends anything, so a default
+float would still send the first provision trip to the bank for money the quest never uses.
 
 Two rules that are easy to get wrong:
 

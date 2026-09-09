@@ -20,19 +20,22 @@ import {
     DEFAULT_ALCH_ITEMS,
     customAlchItem,
     fmtGp,
+    FIRE_STAVES,
     nextAlchTarget,
+    resolveAlchSpell,
+    pickFireStaff,
     selectedAlchItems,
-    type AlchItem
+    SPELL_HIGH,
+    SPELL_OPTION_LABELS,
+    SPELL_OPTIONS,
+    type AlchItem,
+    type AlchSpell
 } from './AlcherLogic.js';
 import type Tile from '../../geometry/Tile.js';
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const MAGIC_TAB = 6;
-const ALCH_SPELL = 'High Level Alchemy';
-const FIRE_STAFF = 'Staff of fire';
 const NATURE_RUNE = 'Nature rune';
-/** High Level Alchemy unlocks at 55 Magic. */
-const ALCHEMY_REQUIRED = 55;
 // Why: the cast's p_delay(3) leaves the player delayed through tick+4's packet decode and the engine bins an op it decodes while delayed, so the server takes one cast per 5 ticks and no faster.
 const ALCH_TICKS = 5;
 /** Ticks to give the note before a cast counts as binned. */
@@ -48,6 +51,16 @@ const BAD = '#ff6b6b';
 const DIM = '#8a919a';
 
 export const ALCHER_SETTINGS: SettingsSchema = {
+    spell: {
+        type: 'string',
+        default: SPELL_HIGH,
+        options: SPELL_OPTIONS,
+        optionLabels: SPELL_OPTION_LABELS,
+        label: 'Spell',
+        help:
+            'High needs 55 Magic and pays 60% of shop cost. Low needs 21 Magic and pays 40%. '
+            + 'Saved item lists and alchs-per-trip keep working.'
+    },
     items: {
         type: 'string[]',
         default: DEFAULT_ALCH_ITEMS,
@@ -82,6 +95,7 @@ export default class Alcher extends TaskBot {
     override loopDelay = 400;
 
     private selected: AlchItem[] = [];
+    private spell: AlchSpell = resolveAlchSpell(SPELL_HIGH);
     /** Keys a loaded bank has confirmed it holds none of. */
     private empty = new Set<string>();
     private alchs = 27;
@@ -110,10 +124,11 @@ export default class Alcher extends TaskBot {
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
+        this.spell = resolveAlchSpell(this.settings.str('spell', SPELL_HIGH));
         const keys = this.settings.list('items', DEFAULT_ALCH_ITEMS);
         const customText = this.settings.str('customItem', '');
         if (keys.includes(CUSTOM_ALCH_KEY)) {
-            const custom = customAlchItem(customText);
+            const custom = customAlchItem(customText, this.spell.rate);
             if (!custom) {
                 this.log(`custom item "${customText}" is not in the item database — stopping`);
                 ScriptRunner.stop(`custom item "${customText}" is not in the item database`);
@@ -121,19 +136,19 @@ export default class Alcher extends TaskBot {
             }
             this.log(`custom item: ${custom.label} (${custom.key}, ${custom.alchValue}gp each)`);
         }
-        this.selected = selectedAlchItems(keys, customText);
+        this.selected = selectedAlchItems(keys, customText, this.spell.rate);
         this.alchs = this.settings.num('alchs', 27);
 
-        if (Skills.level('magic') < ALCHEMY_REQUIRED) {
-            this.log(`${ALCH_SPELL} needs ${ALCHEMY_REQUIRED} Magic (have ${Skills.level('magic')}) — stopping`);
-            ScriptRunner.stop(`${ALCH_SPELL} needs ${ALCHEMY_REQUIRED} Magic`);
+        if (Skills.level('magic') < this.spell.level) {
+            this.log(`${this.spell.name} needs ${this.spell.level} Magic (have ${Skills.level('magic')}) — stopping`);
+            ScriptRunner.stop(`${this.spell.name} needs ${this.spell.level} Magic`);
             return;
         }
 
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('magic');
 
-        this.log(`Alcher — ${ALCH_SPELL} on ${this.selected.length} item(s), richest first: ${this.selected.map(i => i.label).join(', ')}`);
+        this.log(`Alcher — ${this.spell.name} on ${this.selected.length} item(s), richest first: ${this.selected.map(i => i.label).join(', ')}`);
         if (!(await this.resolveBank())) {
             return;
         }
@@ -224,6 +239,16 @@ export default class Alcher extends TaskBot {
         this.status = s;
         this.statusColor = color;
     }
+
+    // Why: a count of zero can be a list that has not loaded rather than an empty bank. Before halting on "out of X", confirm the list is ready and every named item reads zero.
+    async bankTrulyOutOf(...names: string[]): Promise<boolean> {
+        const settled = await Execution.delayUntil(() => Bank.ready(), 3500);
+        if (!settled) {
+            return false;
+        }
+        return names.every(name => Bank.count(name) === 0);
+    }
+
     items(): AlchItem[] {
         return this.selected;
     }
@@ -244,6 +269,9 @@ export default class Alcher extends TaskBot {
     }
     alchTarget(): number {
         return this.alchs;
+    }
+    alchSpell(): AlchSpell {
+        return this.spell;
     }
 
     // Why: the paint asks for this on the first frame, before the obj catalogue has been scanned, so a miss falls back to the unnoted id and is retried rather than cached.
@@ -387,12 +415,12 @@ export default class Alcher extends TaskBot {
     }
 }
 
-// Why: set the staff of fire once. Deposit everything, withdraw one, close so Wield is a backpack op, wield, reopen.
+// Why: set a fire-rune staff once. Deposit everything, withdraw one, close so Wield is a backpack op, wield, reopen.
 class EnsureGear implements Task {
     constructor(private bot: Alcher) {}
 
     validate(): boolean {
-        return !Equipment.contains(FIRE_STAFF);
+        return pickFireStaff(name => Equipment.contains(name)) === undefined;
     }
 
     async execute(): Promise<void> {
@@ -403,10 +431,26 @@ class EnsureGear implements Task {
             await Bank.depositAllMatching(() => true);
             await Execution.delayTicks(1);
         }
-        if (Inventory.count(FIRE_STAFF) === 0) {
-            if (!(await Bank.withdrawX(FIRE_STAFF, 1))) {
-                this.bot.log(`no ${FIRE_STAFF} in the bank — stopping`);
-                ScriptRunner.stop(`no ${FIRE_STAFF} in the bank`);
+        let staff = pickFireStaff(name => Inventory.count(name) > 0);
+        if (!staff) {
+            staff = pickFireStaff(name => Bank.count(name) > 0);
+            if (!staff) {
+                if (!(await this.bot.bankTrulyOutOf(...FIRE_STAVES))) {
+                    this.bot.log('withdraw of a fire staff stalled but the bank list is still settling — retrying');
+                    return;
+                }
+                this.bot.log('no fire staff in the bank — stopping');
+                ScriptRunner.stop('no fire staff in the bank');
+                return;
+            }
+            this.bot.log(`withdrawing ${staff}`);
+            if (!(await Bank.withdrawX(staff, 1))) {
+                if (!(await this.bot.bankTrulyOutOf(...FIRE_STAVES))) {
+                    this.bot.log(`withdraw of ${staff} stalled but the bank list is still settling — retrying`);
+                    return;
+                }
+                this.bot.log('no fire staff in the bank — stopping');
+                ScriptRunner.stop('no fire staff in the bank');
                 return;
             }
         }
@@ -414,13 +458,18 @@ class EnsureGear implements Task {
             this.bot.log('bank would not close — retrying');
             return;
         }
-        this.bot.setStatus(`wielding ${FIRE_STAFF}`, WARN);
-        if (!(await Equipment.equip(FIRE_STAFF))) {
-            this.bot.log(`could not wield ${FIRE_STAFF} — stopping`);
-            ScriptRunner.stop(`could not wield ${FIRE_STAFF}`);
+        // Why: close leaves Deposit-* ops on the side pack for a beat, so wait for Wield before equip.
+        await Execution.delayUntil(
+            () => !Bank.isOpen() && (Inventory.first(staff)?.actions().some(o => /wield|wear|equip/i.test(o)) ?? false),
+            3000
+        );
+        this.bot.setStatus(`wielding ${staff}`, WARN);
+        if (!(await Equipment.equip(staff))) {
+            this.bot.log(`could not wield ${staff} — stopping`);
+            ScriptRunner.stop(`could not wield ${staff}`);
             return;
         }
-        this.bot.log(`wore ${FIRE_STAFF} — casts need only ${NATURE_RUNE}s now`);
+        this.bot.log(`wore ${staff} — casts need only ${NATURE_RUNE}s now`);
         await this.bot.openBank();
     }
 }
@@ -554,7 +603,7 @@ class Alch implements Task {
             return;
         }
         const before = this.bot.notesHeld(target);
-        if (!(await Game.castOnItem(ALCH_SPELL, note))) {
+        if (!(await Game.castOnItem(this.bot.alchSpell().name, note))) {
             this.bot.log('cast-on-item was rejected — retrying');
             await Execution.delayTicks(1);
             return;
