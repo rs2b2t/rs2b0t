@@ -32,7 +32,7 @@ import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import { cookSurfaceForFishCamp, resolveFishCampCookSurface } from '../../data/cookingRanges.js';
 import { resolveFishingLocation, type FishingLocation } from '../../data/fishingLocations.js';
-import { effectiveGatherLeash, isAutoLocation, NAMED_CAMP_LEASH_FLOOR } from './GatherCamp.js';
+import { effectiveGatherLeash, isAutoLocation, isCustomLocation, NAMED_CAMP_LEASH_FLOOR } from './GatherCamp.js';
 import {
     DEFAULT_CHASE_RADIUS,
     resolveCampRadius,
@@ -273,7 +273,7 @@ export const GATHERING_SETTINGS: SettingsSchema = {
     target: { type: 'string', default: 'Rocks', label: 'Target name', help: 'in-game name, e.g. Rocks / Tree / Fishing spot' },
     action: { type: 'string', default: 'Mine', label: 'Action', help: 'right-click op, e.g. Mine / Chop down / Net' },
     dropMatch: { type: 'string', default: 'ore', label: 'Drop items containing', help: 'when full, drop items whose name contains this (the gathered product)' },
-    // Named camps / None floor membership to NAMED_CAMP_LEASH_FLOOR. Auto alone keeps the setting.
+    // Named camps floor membership to NAMED_CAMP_LEASH_FLOOR. Freeform (Use Closest / Use Start / Use Custom Position) keeps the setting.
     // Named-camp fishing hops use a separate player-relative chase disk (see DEFAULT_CHASE_RADIUS).
     leashRadius: {
         type: 'number',
@@ -282,7 +282,21 @@ export const GATHERING_SETTINGS: SettingsSchema = {
         max: 64,
         label: 'Leash radius (tiles)',
         help:
-            'Camp/start membership radius (ReturnToAnchor). Only Location Auto uses this as-is (freeform and unverified chunk snaps). Named camps and None floor to 64. Fishing spots at named camps chase from the player inside the camp, not from this pin disk alone.'
+            'Camp/start membership radius (ReturnToAnchor). Only Location Use Closest / Use Start Position / Use Custom Position use this as-is (freeform and unverified chunk snaps). Named camps floor to 64. Fishing spots at named camps chase from the player inside the camp, not from this pin disk alone.'
+    },
+    customLocation: {
+        type: 'tile',
+        default: { x: 3200, z: 3200, level: 0 },
+        label: 'Custom position (x,z)',
+        help: 'when Location is Use Custom Position, gather around this tile instead of your start tile — like AutoFighter Use Custom Position',
+        showIf: { key: 'location', anyOf: ['Use Custom Position'] }
+    },
+    bank: {
+        type: 'boolean',
+        default: true,
+        label: 'Bank haul',
+        group: 'Banking',
+        help: 'true = bank when full (uses camp bank or nearest bank). false = power mode: drop haul when full, only bank for missing tools.'
     },
     muleMode: {
         type: 'string',
@@ -291,7 +305,7 @@ export const GATHERING_SETTINGS: SettingsSchema = {
         label: 'Mule mode',
         group: 'Mule',
         help:
-            'Off = bank/drop. Gatherer = trade full haul at camp meet. Mule = accept→bank (demo for ore/logs). Cooker = accept raw fish→cook→bank cooked (Fisher + cook mode). Supplier = withdraw raw from bank→trade at meet (pairs with Cooker). Needs Partner. Disabled under location None.'
+            'Off = bank/drop. Gatherer = trade full haul at camp meet. Mule = accept→bank (demo for ore/logs). Cooker = accept raw fish→cook→bank cooked (Fisher + cook mode). Supplier = withdraw raw from bank→trade at meet (pairs with Cooker). Needs Partner. Disabled when Bank=false (power mode).'
     },
     mulePartner: {
         type: 'string',
@@ -307,7 +321,7 @@ export const GATHERING_SETTINGS: SettingsSchema = {
         label: 'Bank junk on start',
         group: 'Banking',
         help:
-            'Deposit non-tool stacks at the camp bank before gathering so you can start with a junk pack. Skipped under location None, Cooker (raw pack), and Supplier.'
+            'Deposit non-tool stacks at the camp bank before gathering so you can start with a junk pack. Skipped when Bank=false (power mode), Cooker (raw pack), and Supplier.'
     },
     packJunk: {
         type: 'string',
@@ -316,7 +330,7 @@ export const GATHERING_SETTINGS: SettingsSchema = {
         label: 'Event junk while gathering',
         group: 'Banking',
         help:
-            'When random-event loot (caskets, fruit, gems, …) steals pack slots under chop-then-burn or power mode: Bank at the camp (default), Drop, or Off. Location None has no camp bank — Bank falls back to Drop. (Future: shared API helper for other scripts.)'
+            'When random-event loot (caskets, fruit, gems, …) steals pack slots under chop-then-burn or power mode: Bank at the camp (default), Drop, or Off. Bank=false has no camp bank — Bank falls back to Drop. (Future: shared API helper for other scripts.)'
     }
 };
 
@@ -341,8 +355,8 @@ export default class GatheringBot extends TaskBot {
     private pairOp = '';
     private dropMatch = 'ore';
     private leash = 10;
-    /** Raw location setting, Auto skips mob flee (expert / may-die). */
-    private locationSetting = 'None';
+    /** Raw location setting, Use Start/Custom Position skips mob flee (expert / may-die). */
+    private locationSetting = 'Use Closest';
 
     private rockIds = new Set<number>();
     private productKeywords: string[] = [];
@@ -445,7 +459,7 @@ export default class GatheringBot extends TaskBot {
         this.target = this.settings.str('target', 'Rocks');
         this.action = this.settings.str('action', 'Mine');
         this.dropMatch = this.settings.str('dropMatch', 'ore').toLowerCase();
-        // Final leash applied after location is resolved (named/None floor; Auto keeps setting).
+        // Final leash applied after location is resolved (named camps + Bank=false floor; Use Closest keeps setting).
         this.leash = this.settings.num('leashRadius', 10);
 
         if ('rocks' in this.settings.raw()) {
@@ -522,7 +536,7 @@ export default class GatheringBot extends TaskBot {
         }
 
         const here = Game.tile()!;
-        const locSetting = this.settings.str('location', 'None');
+        const locSetting = this.settings.str('location', 'Use Closest');
         this.locationSetting = locSetting;
         // Skill-branched location tables, Miner/WC must not resolve fishing piers.
         if (this.fishing) {
@@ -535,12 +549,18 @@ export default class GatheringBot extends TaskBot {
             this.location = null;
         }
 
-        // Why: a resolved camp, named or Auto-snap, takes camp geography (campRadius or the floor of 64), never the Auto UI leash, which clips the camp scan to as little as 18.
-        // Why: freeform Auto and power None take the start-tile leash from the UI, plus the None floor.
+        // Why: a resolved camp, named or Use Start Position-snap, takes camp geography (campRadius or the floor of 64), never the freeform UI leash, which clips the camp scan to as little as 18.
+        // Why: freeform Use Start Position / Use Custom Position and power None take the start/custom-tile leash from the UI, plus the None floor.
         // Why: fishing discovery for named camps is any matching spot inside membership, while freeform uses the player-relative hunt in Gather.findFishSpot.
         if (this.location?.spot) {
             this.anchor = resolveRunAnchor(new Tile(here.x, here.z, here.level), this.location.spot);
             this.leash = resolveCampRadius(this.location.campRadius, NAMED_CAMP_LEASH_FLOOR);
+        } else if (isCustomLocation(locSetting)) {
+            const fallback = Tile.from(here) ?? new Tile(here.x, here.z, here.level);
+            const custom = this.settings.tile('customLocation', fallback);
+            this.anchor = new Tile(custom.x, custom.z, custom.level);
+            this.leash = effectiveGatherLeash(this.leash, locSetting);
+            this.log(`location: Use Custom Position ${this.anchor.x},${this.anchor.z} r${this.leash}; bank nearest to custom`);
         } else {
             this.anchor = new Tile(here.x, here.z, here.level);
             this.leash = effectiveGatherLeash(this.leash, locSetting);
@@ -570,7 +590,7 @@ export default class GatheringBot extends TaskBot {
             await Execution.delayUntilTicks(() => Locs.query().results().length > 0, 9);
         }
 
-        this.powerMode = locSetting.toLowerCase() === 'none';
+        this.powerMode = !this.settings.bool('bank', true);
 
         // Mule / partner trade (NatureCrafter-style). Power mode forces Off.
         {
@@ -584,7 +604,7 @@ export default class GatheringBot extends TaskBot {
                 return;
             }
             if (this.muleMode !== 'off' && this.powerMode) {
-                this.log(`mule: '${this.muleMode}' disabled under location None (drop-only)`);
+                this.log(`mule: '${this.muleMode}' disabled when Bank=false (drop-only)`);
                 this.muleMode = 'off';
             } else if (this.muleMode !== 'off' && this.mulePartners.length === 0) {
                 this.log('mule: no partner names — falling back to Off (bank/drop)');
@@ -629,7 +649,7 @@ export default class GatheringBot extends TaskBot {
                     : 'Off';
             this.tickManip = skill ? profileForSetting(skill, rawLabel) : profileForSetting('mine', 'Off');
             if (this.tickManip.method !== 'off' && this.powerMode) {
-                this.log(`tick manip: '${this.tickManip.label}' disabled under location None`);
+                this.log(`tick manip: '${this.tickManip.label}' disabled under Bank=false (power)`);
                 this.tickManip = profileForSetting(skill ?? 'mine', 'Off');
             } else if (this.tickManip.method !== 'off') {
                 this.log(
@@ -645,7 +665,7 @@ export default class GatheringBot extends TaskBot {
         }
 
         if (this.cookMode !== 'off' && this.powerMode) {
-            this.log('cook: disabled under location None (drop-only)');
+            this.log('cook: disabled under Bank=false (power mode — drop only)');
             this.cookMode = 'off';
         }
         if (this.cookMode !== 'off' && this.fishing) {
@@ -669,7 +689,7 @@ export default class GatheringBot extends TaskBot {
             this.burnMode = parseBurnMode(this.settings.str('burnMode', 'Off'));
             this.burnLogs = logsForTree(this.target);
             if (this.burnMode !== 'off' && this.powerMode) {
-                this.log('burn: disabled under location None (drop-only)');
+                this.log('burn: disabled under Bank=false (power mode — drop only)');
                 this.burnMode = 'off';
             }
             if (this.burnMode !== 'off') {
@@ -785,13 +805,13 @@ export default class GatheringBot extends TaskBot {
             if (this.packJunkPolicy !== 'off' && (this.burnEnabled() || this.powerMode)) {
                 this.log(
                     `pack junk: ${this.packJunkPolicy}` +
-                        (this.powerMode && this.packJunkPolicy === 'bank' ? ' (None → drop if no bank)' : '')
+                        (this.powerMode && this.packJunkPolicy === 'bank' ? ' (Bank=false → drop if no bank)' : '')
                 );
             }
         }
 
         // #170, bank junk so gather can start with a full pack of trash.
-        // Skip power drop-only, Cooker (raw pack to cook), Supplier (empty/feeder).
+        // Skip power drop-only (Bank=false), Cooker (raw pack to cook), Supplier (empty/feeder).
         const purgePackOnStart = this.settings.bool('purgePackOnStart', true);
         const deferDesertPurge = purgePackOnStart && this.desertCampRoute !== null;
         if (
@@ -820,7 +840,7 @@ export default class GatheringBot extends TaskBot {
 
         // Why: tick-manip retaliate methods run Auto Retaliate ON with no FleeCombat, and may die.
         // Why: Wilderness Miner holds ground against NPCs so an aggressive camp stays mineable, but a detectable player attack still yields to FleeCombat.
-        // Why: Location Auto is expert and may-die, so combat is left alone with no flee babysitting.
+        // Why: Location Use Start Position / Use Custom Position is expert and may-die, so combat is left alone with no flee babysitting.
         // Why: named and None AFK run Auto Retaliate off with FleeCombat walking hits off.
         if (this.tickManip.allowCombat) {
             if (Game.setAutoRetaliate(true)) {
@@ -845,11 +865,11 @@ export default class GatheringBot extends TaskBot {
                 this.log('combat: could not toggle Auto Retaliate (controls missing?)');
             }
         } else {
-            this.log('combat: Location Auto — mob flee off (may die)');
+            this.log(`combat: Location ${this.locationSetting} — mob flee off (may die)`);
         }
 
         if (this.location) {
-            const auto = locSetting.toLowerCase() === 'auto' ? ' (auto)' : '';
+            const auto = isAutoLocation(locSetting) ? ` (${locSetting})` : '';
             this.log(`location: ${this.location.name}${auto}; bank ${this.location.bankStand}`);
             if (!this.location.verified) {
                 this.log(`location: ${this.location.name} coords unverified — watch first bank run`);
@@ -860,8 +880,8 @@ export default class GatheringBot extends TaskBot {
         if (this.powerMode) {
             this.log(
                 this.minerFood
-                    ? 'location: power mode — eat food for ore slots; nearest-bank restock when empty'
-                    : 'location: power mode — drop haul; bank only to fetch missing tools (nearest bank)'
+                    ? 'location: Bank=false (power) — eat food for ore slots; nearest-bank restock when empty'
+                    : 'location: Bank=false (power) — drop haul; bank only to fetch missing tools (nearest bank)'
             );
         }
         const pairNote = this.pairOp ? ` + pair '${this.pairOp}'` : '';
@@ -1538,7 +1558,7 @@ export default class GatheringBot extends TaskBot {
 
     private paintModeLabel(): string {
         if (this.powerMode) {
-            return 'drop';
+            return 'Bank=false (drop)';
         }
         if (this.tickManip.cookEatInterleave) {
             return 'tanner drop';
@@ -1559,7 +1579,7 @@ export default class GatheringBot extends TaskBot {
         if (this.location) {
             return this.location.name;
         }
-        return this.powerMode ? 'power' : 'nearest bank';
+        return this.powerMode ? 'Bank=false (power)' : 'nearest bank';
     }
 
     private paintSkillShort(skill: string): string {
@@ -1627,7 +1647,7 @@ export default class GatheringBot extends TaskBot {
             return `eating ${this.minerFood.name} for ore slots, then banking to restock`;
         }
         if (this.powerMode) {
-            return `dropping ${this.productLabel()} when full`;
+            return `Bank=false: dropping ${this.productLabel()} when full`;
         }
         if (this.tickManip.cookEatInterleave) {
             return 'tannerfishing: cook/eat on pier; drop haul when full (may die)';
@@ -1655,7 +1675,7 @@ export default class GatheringBot extends TaskBot {
             return `Full: eat ${this.minerFood.name} → bank`;
         }
         if (this.powerMode) {
-            return `Full: drop ${this.productLabel()}`;
+            return `Full: Bank=false drop ${this.productLabel()}`;
         }
         if (this.tickManip.cookEatInterleave) {
             return 'Full: tanner cook/eat · drop';

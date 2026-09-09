@@ -10,23 +10,24 @@ import {
 const bankTiles = new Set(BANK_LOCATIONS.map(b => `${b.tile.x},${b.tile.z},${b.tile.level}`));
 
 describe('resolveWoodcuttingLocation', () => {
-    test('None → null', () => {
-        expect(resolveWoodcuttingLocation('None', new Tile(3087, 3234, 0))).toBeNull();
+    test('Use Start Position and Use Custom Position are freeform (null)', () => {
+        expect(resolveWoodcuttingLocation('Use Start Position', new Tile(3087, 3234, 0))).toBeNull();
+        expect(resolveWoodcuttingLocation('Use Custom Position', new Tile(3087, 3234, 0))).toBeNull();
     });
 
-    test('Auto near Draynor willows', () => {
-        expect(resolveWoodcuttingLocation('Auto', new Tile(3087, 3234, 0))?.name).toBe(
+    test('Use Closest near Draynor willows', () => {
+        expect(resolveWoodcuttingLocation('Use Closest', new Tile(3087, 3234, 0))?.name).toBe(
             'Draynor Willows'
         );
     });
 
-    test('Auto near Seers maples', () => {
-        expect(resolveWoodcuttingLocation('Auto', new Tile(2728, 3501, 0))?.name).toBe('Seers Maples');
+    test('Use Closest near Seers maples', () => {
+        expect(resolveWoodcuttingLocation('Use Closest', new Tile(2728, 3501, 0))?.name).toBe('Seers Maples');
     });
 
-    test('Auto freeform at willows NW of Crafting Guild (outside every WC camp chunk)', () => {
-        // 2910,3328, not same 64×64 as Crafting Guild mine or any WC preset.
-        expect(resolveWoodcuttingLocation('Auto', new Tile(2910, 3328, 0))).toBeNull();
+    test('Use Closest still snaps even NW of Crafting Guild (no chunk gate)', () => {
+        // 2910,3328, not same 64x64 as Crafting Guild mine or any WC preset, now nearest not freeform.
+        expect(resolveWoodcuttingLocation('Use Closest', new Tile(2910, 3328, 0))).not.toBeNull();
     });
 
     test('named match is case-insensitive', () => {
@@ -37,11 +38,12 @@ describe('resolveWoodcuttingLocation', () => {
 });
 
 describe('WOODCUTTING_LOCATIONS table', () => {
-    test('dropdown is Auto + camps + None', () => {
+    test('dropdown is Use Closest + Use Start Position + Use Custom Position + camps', () => {
         expect(WOODCUTTING_LOCATION_OPTIONS).toEqual([
-            'Auto',
-            ...WOODCUTTING_LOCATIONS.map(l => l.name),
-            'None'
+            'Use Closest',
+            'Use Start Position',
+            'Use Custom Position',
+            ...WOODCUTTING_LOCATIONS.map(l => l.name)
         ]);
     });
 

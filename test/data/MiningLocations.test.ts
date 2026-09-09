@@ -12,22 +12,23 @@ import {
 const bankTiles = new Set(BANK_LOCATIONS.map(b => `${b.tile.x},${b.tile.z},${b.tile.level}`));
 
 describe('resolveMiningLocation', () => {
-    test('None → null', () => {
-        expect(resolveMiningLocation('None', new Tile(3181, 3371, 0))).toBeNull();
+    test('Use Start Position and Use Custom Position are freeform (null)', () => {
+        expect(resolveMiningLocation('Use Start Position', new Tile(3181, 3371, 0))).toBeNull();
+        expect(resolveMiningLocation('Use Custom Position', new Tile(3181, 3371, 0))).toBeNull();
     });
 
-    test('Auto near SW Varrock mine', () => {
-        expect(resolveMiningLocation('Auto', new Tile(3181, 3371, 0))?.name).toBe(
+    test('Use Closest near SW Varrock mine', () => {
+        expect(resolveMiningLocation('Use Closest', new Tile(3181, 3371, 0))?.name).toBe(
             'Southwest Varrock Mine'
         );
     });
 
-    test('Auto near Barbarian Village prefers Barb over distant mines', () => {
-        expect(resolveMiningLocation('Auto', new Tile(3080, 3420, 0))?.name).toBe('Barbarian Village');
+    test('Use Closest near Barbarian Village prefers Barb over distant mines', () => {
+        expect(resolveMiningLocation('Use Closest', new Tile(3080, 3420, 0))?.name).toBe('Barbarian Village');
     });
 
-    test('Auto snaps at the Wilderness Skeleton Mine', () => {
-        expect(resolveMiningLocation('Auto', new Tile(3018, 3590, 0))?.name).toBe(
+    test('Use Closest snaps at the Wilderness Skeleton Mine', () => {
+        expect(resolveMiningLocation('Use Closest', new Tile(3018, 3590, 0))?.name).toBe(
             'Wilderness Skeleton Mine'
         );
     });
@@ -43,14 +44,14 @@ describe('resolveMiningLocation', () => {
         expect(loc?.bankStand.z).toBe(3283);
     });
 
-    test('Auto and named selection resolve the Wilderness Hobgoblin Mine', () => {
+    test('Use Closest and named selection resolve the Wilderness Hobgoblin Mine', () => {
         const named = resolveMiningLocation('wilderness hobgoblin mine', new Tile(0, 0, 0));
         expect(named?.name).toBe('Wilderness Hobgoblin Mine');
         expect(named?.spot).toEqual(new Tile(3093, 3751, 0));
         expect(named?.bankStand).toEqual(new Tile(3094, 3493, 0));
         expect(named?.resources).toEqual(['iron', 'coal', 'mithril', 'adamantite']);
 
-        expect(resolveMiningLocation('Auto', new Tile(3088, 3758, 0))?.name).toBe(
+        expect(resolveMiningLocation('Use Closest', new Tile(3088, 3758, 0))?.name).toBe(
             'Wilderness Hobgoblin Mine'
         );
     });
@@ -85,11 +86,11 @@ describe('resolveMiningLocation', () => {
         expect(loc?.resources).toEqual(['copper', 'tin', 'iron', 'coal']);
     });
 
-    test('Auto snaps surface and underground desert camps from their own map squares', () => {
-        expect(resolveMiningLocation('Auto', new Tile(3293, 3016, 0))?.name).toBe(
+    test('Use Closest snaps surface and underground desert camps by distance', () => {
+        expect(resolveMiningLocation('Use Closest', new Tile(3293, 3016, 0))?.name).toBe(
             'Desert Mining Camp Surface'
         );
-        expect(resolveMiningLocation('Auto', new Tile(3323, 9458, 0))?.name).toBe('Desert Mining Camp');
+        expect(resolveMiningLocation('Use Closest', new Tile(3323, 9458, 0))?.name).toBe('Desert Mining Camp');
     });
 
     test('named Wilderness Skeleton Mine selects the verified coal field', () => {
@@ -102,17 +103,18 @@ describe('resolveMiningLocation', () => {
 });
 
 describe('MINING_LOCATIONS table', () => {
-    test('dropdown is Auto + camps + None', () => {
-        expect(MINING_LOCATION_OPTIONS[0]).toBe('Auto');
-        expect(MINING_LOCATION_OPTIONS.at(-1)).toBe('None');
-        expect(MINING_LOCATION_OPTIONS).toHaveLength(MINING_LOCATIONS.length + 2);
+    test('dropdown is Use Closest + Use Start Position + Use Custom Position + camps', () => {
+        expect(MINING_LOCATION_OPTIONS[0]).toBe('Use Closest');
+        expect(MINING_LOCATION_OPTIONS[1]).toBe('Use Start Position');
+        expect(MINING_LOCATION_OPTIONS[2]).toBe('Use Custom Position');
+        expect(MINING_LOCATION_OPTIONS).toHaveLength(MINING_LOCATIONS.length + 3);
         for (const loc of MINING_LOCATIONS) {
             expect(MINING_LOCATION_OPTIONS).toContain(loc.name);
         }
     });
 
-    test('dropdown camps are alphabetical between Auto and None', () => {
-        const camps = MINING_LOCATION_OPTIONS.slice(1, -1);
+    test('dropdown camps are alphabetical after the three freeform entries', () => {
+        const camps = MINING_LOCATION_OPTIONS.slice(3);
         expect(camps).toEqual([...camps].sort((a, b) => a.localeCompare(b)));
     });
 

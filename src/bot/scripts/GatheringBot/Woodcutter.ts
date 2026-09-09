@@ -20,11 +20,18 @@ export const WOODCUTTER_SETTINGS: SettingsSchema = {
     leashRadius: GATHERING_SETTINGS.leashRadius,
     location: {
         type: 'string',
-        default: 'Auto',
+        default: 'Use Start Position',
         options: WOODCUTTING_LOCATION_OPTIONS,
         label: 'Location / full inventory',
         help:
-            'Chop camp + full-pack behaviour. Auto = if you start in the same 64×64 map square as a known tree camp, snap to the nearest such camp and bank there; otherwise freeform (start-tile leash + nearest bank). Named camps pin trees + bank. None = power-chop (drop logs; no bank). Burn mode requires a non-None location — it is forced off under None. Fire spots stay separate from chop camps.'
+            'Chop camp + full-pack behaviour. Use Start Position = if you start in the same 64×64 map square as a known tree camp, snap to the nearest such camp and bank there; otherwise freeform (start-tile leash + nearest bank) — like AutoFighter Use Start Position. Use Custom Position = freeform around the custom tile below. Named camps pin trees + bank. Use Closest = nearest camp by distance. Bank setting controls full-pack behaviour: true = bank logs, false = power-chop (drop logs; no bank). Burn mode requires a non-power location — it is forced off when Bank=false. Fire spots stay separate from chop camps.'
+    },
+    customLocation: {
+        type: 'tile',
+        default: { x: 3200, z: 3200, level: 0 },
+        label: 'Custom position (x,z)',
+        help: 'when Location is Use Custom Position, gather around this tile instead of your start tile — like AutoFighter Use Custom Position',
+        showIf: { key: 'location', anyOf: ['Use Custom Position'] }
     },
     tickManip: {
         type: 'string',

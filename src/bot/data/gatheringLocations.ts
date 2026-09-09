@@ -69,8 +69,14 @@ export function sameMapSquare(a: WorldTile, b: WorldTile): boolean {
     );
 }
 
+export const USE_CLOSEST = 'Use Closest';
+export const USE_START_POSITION = 'Use Start Position';
+export const USE_CUSTOM_POSITION = 'Use Custom Position';
+/** Legacy alias, kept for saves that stored 'Auto'. */
+export const AUTO_LEGACY = 'Auto';
+
 export function locationOptions(table: readonly GatheringLocation[]): string[] {
-    return ['Auto', ...table.map(l => l.name), 'None'];
+    return [USE_CLOSEST, USE_START_POSITION, USE_CUSTOM_POSITION, ...table.map(l => l.name)];
 }
 
 export function boothFields(loc: GatheringLocation | null | undefined): {
@@ -83,43 +89,35 @@ export function boothFields(loc: GatheringLocation | null | undefined): {
     };
 }
 
-/**
- * Resolve a location setting against a skill table: None → null (the only power/drop mode), a name → case-insensitive match, Auto → nearest preset whose spot shares the start tile's 64×64 map square, preferring the same level.
- * Auto outside every preset chunk also returns null (freeform: start-tile leash + nearest bank).
- */
+/** Resolve location setting: Use Closest = nearest by distance, Start/Custom = freeform null, named = case-insensitive. */
 export function resolveGatheringLocation<T extends GatheringLocation>(
     setting: string,
     startTile: WorldTile,
     table: readonly T[]
 ): T | null {
     const normalized = setting.trim().toLowerCase();
-    if (normalized === 'none' || normalized === '') {
+    if (normalized === USE_CUSTOM_POSITION.toLowerCase()) {
         return null;
     }
-    if (normalized !== 'auto') {
-        return table.find(l => l.name.toLowerCase() === normalized) ?? null;
-    }
-    if (table.length === 0) {
+    if (normalized === USE_START_POSITION.toLowerCase()) {
         return null;
     }
-
-    // Auto freeform: only snap when standing in a preset's map square.
-    const inChunk = table.filter(l => sameMapSquare(startTile, l.spot));
-    if (inChunk.length === 0) {
-        return null;
-    }
-
-    const sameLevel = inChunk.filter(l => l.spot.level === startTile.level);
-    const pool = sameLevel.length > 0 ? sameLevel : inChunk;
-    let best = pool[0]!;
-    let bestD = bankDistance(startTile, best.spot);
-    for (let i = 1; i < pool.length; i++) {
-        const loc = pool[i]!;
-        const d = bankDistance(startTile, loc.spot);
-        if (d < bestD) {
-            best = loc;
-            bestD = d;
+    if (normalized === USE_CLOSEST.toLowerCase() || normalized === 'auto' || normalized === AUTO_LEGACY.toLowerCase()) {
+        if (table.length === 0) {
+            return null;
         }
+        // Use Closest: pick nearest preset by distance to spot, no map-square restriction.
+        let best = table[0]!;
+        let bestD = bankDistance(startTile, best.spot);
+        for (let i = 1; i < table.length; i++) {
+            const loc = table[i]!;
+            const d = bankDistance(startTile, loc.spot);
+            if (d < bestD) {
+                best = loc;
+                bestD = d;
+            }
+        }
+        return best;
     }
-    return best;
+    return table.find(l => l.name.toLowerCase() === normalized) ?? null;
 }

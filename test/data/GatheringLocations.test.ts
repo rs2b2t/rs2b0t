@@ -52,9 +52,11 @@ describe('sameMapSquare', () => {
 });
 
 describe('resolveGatheringLocation', () => {
-    test('None / blank → null (power mode)', () => {
-        expect(resolveGatheringLocation('None', new Tile(3100, 3200, 0), TABLE)).toBeNull();
+    test('Use Start Position / Use Custom Position / blank → null (freeform)', () => {
+        expect(resolveGatheringLocation('Use Start Position', new Tile(3100, 3200, 0), TABLE)).toBeNull();
+        expect(resolveGatheringLocation('Use Custom Position', new Tile(3100, 3200, 0), TABLE)).toBeNull();
         expect(resolveGatheringLocation('  ', new Tile(3100, 3200, 0), TABLE)).toBeNull();
+        expect(resolveGatheringLocation('Atlantis', new Tile(3100, 3200, 0), TABLE)).toBeNull();
     });
 
     test('named match is case-insensitive', () => {
@@ -66,49 +68,53 @@ describe('resolveGatheringLocation', () => {
         expect(resolveGatheringLocation('Atlantis', new Tile(3100, 3200, 0), TABLE)).toBeNull();
     });
 
-    test('Auto snaps only when start shares a preset map square', () => {
+    test('Use Closest snaps to nearest by distance (no chunk gate)', () => {
         // Inside Near's chunk → Near (closer than NearSibling).
-        expect(resolveGatheringLocation('Auto', new Tile(3101, 3201, 0), TABLE)?.name).toBe('Near');
+        expect(resolveGatheringLocation('Use Closest', new Tile(3101, 3201, 0), TABLE)?.name).toBe('Near');
         // Inside Far's chunk (3200,3300 → mx50,mz51); 3205,3305 shares it.
-        expect(resolveGatheringLocation('Auto', new Tile(3205, 3305, 0), TABLE)?.name).toBe('Far');
-    });
-
-    test('Auto freeform when outside every preset chunk', () => {
-        // Between Near (48,50) and Far (50,51), different square.
-        expect(resolveGatheringLocation('Auto', new Tile(3150, 3250, 0), TABLE)).toBeNull();
-        // Lumbridge-ish far from both.
-        expect(resolveGatheringLocation('Auto', new Tile(3222, 3218, 0), TABLE)).toBeNull();
-    });
-
-    test('Auto prefers same level even if other level is closer in xz', () => {
-        expect(resolveGatheringLocation('Auto', new Tile(3100, 3200, 1), TABLE)?.name).toBe('Upstairs');
-    });
-
-    test('Auto does not fall back across levels when none share the start level', () => {
-        // Ground-only table: start on level 2 → freeform null (no same-chunk match).
-        const onlyGround: GatheringLocation[] = [TABLE[0]!, TABLE[1]!];
-        expect(resolveGatheringLocation('Auto', new Tile(3100, 3200, 2), onlyGround)).toBeNull();
-    });
-
-    test('Auto picks nearest among multiple same-chunk camps', () => {
-        // NearSibling is farther from 3101,3201 than Near.
+        expect(resolveGatheringLocation('Use Closest', new Tile(3205, 3305, 0), TABLE)?.name).toBe('Far');
+        // Legacy Auto alias still works.
         expect(resolveGatheringLocation('Auto', new Tile(3101, 3201, 0), TABLE)?.name).toBe('Near');
-        // Closer to NearSibling within the same chunk.
-        expect(resolveGatheringLocation('Auto', new Tile(3112, 3212, 0), TABLE)?.name).toBe(
+    });
+
+    test('Use Closest returns nearest even when outside every preset chunk', () => {
+        // Between Near (48,50) and Far (50,51), different square, now nearest not freeform.
+        expect(resolveGatheringLocation('Use Closest', new Tile(3150, 3250, 0), TABLE)?.name).toBe('NearSibling');
+        // Lumbridge-ish far from both, nearest is Far.
+        expect(resolveGatheringLocation('Use Closest', new Tile(3222, 3218, 0), TABLE)?.name).toBe('Far');
+    });
+
+    test('Use Closest ignores level (bankDistance is planar)', () => {
+        // Start on level 1 at Near xz: both Near (l0) and Upstairs (l1) are distance 0, first wins.
+        expect(resolveGatheringLocation('Use Closest', new Tile(3100, 3200, 1), TABLE)?.name).toBe('Near');
+    });
+
+    test('Use Closest falls back across levels (no chunk gate)', () => {
+        // Ground-only table: start on level 2 → still nearest in xz.
+        const onlyGround: GatheringLocation[] = [TABLE[0]!, TABLE[1]!];
+        expect(resolveGatheringLocation('Use Closest', new Tile(3100, 3200, 2), onlyGround)?.name).toBe('Near');
+    });
+
+    test('Use Closest picks nearest among multiple camps', () => {
+        // NearSibling is farther from 3101,3201 than Near.
+        expect(resolveGatheringLocation('Use Closest', new Tile(3101, 3201, 0), TABLE)?.name).toBe('Near');
+        // Closer to NearSibling.
+        expect(resolveGatheringLocation('Use Closest', new Tile(3112, 3212, 0), TABLE)?.name).toBe(
             'NearSibling'
         );
     });
 });
 
 describe('locationOptions / boothFields', () => {
-    test('options are Auto + names + None', () => {
+    test('options are Use Closest + Use Start Position + Use Custom Position + names', () => {
         expect(locationOptions(TABLE)).toEqual([
-            'Auto',
+            'Use Closest',
+            'Use Start Position',
+            'Use Custom Position',
             'Near',
             'Far',
             'Upstairs',
-            'NearSibling',
-            'None'
+            'NearSibling'
         ]);
     });
 
