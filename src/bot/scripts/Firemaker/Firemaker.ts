@@ -59,6 +59,7 @@ export default class Firemaker extends LoopingBot {
     private xpStart = 0;
     private status = 'starting';
     private startedAt = Date.now();
+    private emptyLogReads = 0;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -130,8 +131,17 @@ export default class Firemaker extends LoopingBot {
             ScriptRunner.stop('no tinderbox in the bank or pack');
             return false;
         }
+        // Why: Bank.loaded() is false for a beat after opening, when the item list reads [] and every count() is 0. Believe empty on the third consecutive read.
+        await Execution.delayUntil(() => Bank.loaded(), 3000);
+        if (Bank.count(this.logName) === 0) {
+            if (++this.emptyLogReads >= 3) {
+                ScriptRunner.stop(`no ${this.logName} left in the bank`);
+                return false;
+            }
+            return false;
+        }
+        this.emptyLogReads = 0;
         if (!(await Bank.withdrawX(this.logName, reader.inventorySize() - Inventory.used()))) {
-            ScriptRunner.stop(`no ${this.logName} left in the bank`);
             return false;
         }
 
