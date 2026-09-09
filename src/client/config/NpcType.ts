@@ -15,6 +15,7 @@ export default class NpcType {
     static recent: (NpcType | null)[] | null = null;
     static recentPos: number = 0;
     static modelCache: LruCache<Model> = new LruCache(30);
+    static readonly STRICT: boolean = process.env.STRICT_CONFIG === '1';
 
     id: number = -1;
 
@@ -160,6 +161,8 @@ export default class NpcType {
                 this.headicon = dat.g2();
             } else if (code === 103) {
                 this.turnspeed = dat.g2();
+            } else if (NpcType.STRICT) {
+                throw new Error(`NpcType ${this.id}: unknown config opcode ${code}`);
             }
         }
     }

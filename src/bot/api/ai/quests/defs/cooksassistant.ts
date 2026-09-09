@@ -129,7 +129,7 @@ export function gatherMilk(snap: QuestSnapshot): QuestStep {
     return { kind: 'useOn', item: 'Bucket', targetKind: 'npc', target: 'Cow', anchor: COW_FIELD, product: 'Bucket of milk' };
 }
 
-const gatherEgg = (): QuestStep => ({ kind: 'grabGround', item: 'Egg', anchor: EGG_PEN });
+const gatherEgg = (): QuestStep => ({ kind: 'grabGround', item: 'Egg', anchor: EGG_PEN, waitIfMissing: true });
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') { return { kind: 'done' }; }
@@ -144,6 +144,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 export const cooksassistant: QuestModule = {
     record: QUESTS.find(r => r.id === 'cook')!,
     bank: new Tile(3093, 3243, 0),
+    coinFloat: 0,
     tools: ['pot', 'grain', 'bucket', 'egg'],
     gather: {
         'egg': gatherEgg,

@@ -44,6 +44,9 @@ const define = {
     'process.env.RS2B0T_TARGET': JSON.stringify(TARGET_NAME),
     'process.env.LOGIN_RSAE': JSON.stringify(rsa.rsae),
     'process.env.LOGIN_RSAN': JSON.stringify(rsa.rsan),
+    // shipped default is OFF: Client.ts/LocType.ts/NpcType.ts/ObjType.ts/SeqType.ts gate on === '1'
+    'process.env.STRICT_PACKETS': JSON.stringify(process.env.STRICT_PACKETS ?? ''),
+    'process.env.STRICT_CONFIG': JSON.stringify(process.env.STRICT_CONFIG ?? ''),
     ...buildIdentityDefines(identity)
 };
 

@@ -22,7 +22,9 @@ export const ARROW_PER_ACTION = 15;
 export const BOW_STRING = 'Bow string';
 export const BOW_STRING_ID = 1777;
 
-export type WorkKind = 'knife' | 'attach' | 'string';
+export type WorkKind = 'knife' | 'attach' | 'string' | 'cut+string';
+export type FletchMode = 'auto' | 'cut' | 'string' | 'cut+string';
+export const FLETCH_MODES: FletchMode[] = ['auto', 'cut', 'string', 'cut+string'];
 export type WoodKey = 'normal' | 'oak' | 'willow' | 'maple' | 'yew' | 'magic';
 export type BowShape = 'short' | 'long';
 
@@ -338,6 +340,9 @@ export function keepNames(kind: WorkKind, knife: string): string[] {
     if (kind === 'knife') {
         return [knife];
     }
+    if (kind === 'cut+string') {
+        return [BOW_STRING, knife];
+    }
     return [];
 }
 
@@ -348,6 +353,11 @@ export function needsRestock(opts: {
     input0: number;
     input1: number;
 }): boolean {
+    if (opts.kind === 'cut+string') {
+        const canCut = opts.logCount > 0 && opts.knifeCount > 0;
+        const canString = opts.input0 > 0 && opts.input1 > 0;
+        return !canCut && !canString;
+    }
     if (opts.kind !== 'knife') {
         return opts.input0 === 0 || opts.input1 === 0;
     }
@@ -361,6 +371,9 @@ export function hasFletchWork(opts: {
     input0: number;
     input1: number;
 }): boolean {
+    if (opts.kind === 'cut+string') {
+        return (opts.logCount > 0 && opts.knifeCount > 0) || (opts.input0 > 0 && opts.input1 > 0);
+    }
     if (opts.kind !== 'knife') {
         return opts.input0 > 0 && opts.input1 > 0;
     }
