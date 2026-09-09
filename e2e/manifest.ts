@@ -62,6 +62,14 @@ export const CASES: readonly Case[] = [
         note: 'seeds a scrambled bank at Varrock West, sorts it cold, then tops it up and re-sorts; passes when both orders are contiguous by category and ranked by tier inside each one, the incremental pass takes one insert batch, and varp 304 comes back to where it started'
     },
     {
+        id: 'banksorter-quest-junk-live',
+        harness: 'banksorter-quest-junk-live.ts',
+        covers: { scripts: ['BankSorter'] },
+        status: 'unvetted',
+        budgetMin: 8,
+        note: "seeds a Silverlight key, Rat's tail and Stake after Demon Slayer / Witch's Potion / Vampire Slayer complete; passes when BankSorter logs all three as complete leftovers"
+    },
+    {
         id: 'ardyfighter-restock-loop-live',
         harness: 'ardyfighter-restock-loop-live.ts',
         covers: { scripts: ['ArdyFighter'] },
