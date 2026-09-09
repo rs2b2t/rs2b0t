@@ -62,6 +62,8 @@ export interface LadderHop {
     op: string;
     arrive: Tile;
     open?: string;
+    /** Long-walk dest when `stand` is behind a door the baked graph cannot pin. */
+    walk?: Tile;
 }
 
 export interface NpcStop {
@@ -112,7 +114,8 @@ async function crossHops(here: WorldTile, dest: { z: number }, hops: LadderHop[]
         log(`no hop from (${here.x},${here.z}) toward z ${dest.z} — trying the baked graph`);
         return here;
     }
-    if (hop.stand.distanceTo(here) > 2 && !(await Traversal.walkResilient(hop.stand, { radius: 2, attempts: 3, log }))) {
+    const walkTo = hop.walk ?? hop.stand;
+    if (hop.stand.distanceTo(here) > 2 && !(await Traversal.walkResilient(walkTo, { radius: 2, attempts: 3, log }))) {
         return null;
     }
     if (!(await hopLadder(hop, log))) {
