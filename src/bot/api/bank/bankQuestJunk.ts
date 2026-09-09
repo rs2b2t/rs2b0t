@@ -8,7 +8,7 @@ export interface QuestJunkEntry {
 
 // Why: only items that are dead once their quest is complete, that gate no later quest, and whose id, display name and journal name were each read out of the content.
 export const QUEST_JUNK: readonly QuestJunkEntry[] = [
-    { id: 300, name: 'Rats tail', quest: "Witch's Potion" },
+    { id: 300, name: "Rat's tail", quest: "Witch's Potion" },
     { id: 1549, name: 'Stake', quest: 'Vampire Slayer' }
 ];
 

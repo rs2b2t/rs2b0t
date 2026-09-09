@@ -44,6 +44,12 @@ describe('findQuestJunk', () => {
         expect(new Set(QUEST_JUNK.map(e => e.id)).size).toBe(QUEST_JUNK.length);
     });
 
+    test("Witch's Potion leftover is id 300 Rat's tail", () => {
+        const tail = QUEST_JUNK.find(item => item.id === 300);
+        expect(tail?.name).toBe("Rat's tail");
+        expect(tail?.quest).toBe("Witch's Potion");
+    });
+
     test('every entry names an item and a quest', () => {
         for (const item of QUEST_JUNK) {
             expect(item.id).toBeGreaterThan(0);
