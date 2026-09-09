@@ -25,8 +25,10 @@ const ONION_FIELD = new Tile(2950, 3251, 0);
 const BETTY_SHOP = { npc: 'Betty', anchor: new Tile(3011, 3260, 0) };
 const WYDIN_SHOP = { npc: 'Wydin', anchor: new Tile(3014, 3204, 0) };
 const DRAYNOR_BANK = new Tile(3093, 3243, 0);
+// Why: Content @289 renamed the obj from "Rats tail" (274) to "Rat's tail"; name match is apostrophe-exact.
+const RATS_TAIL = "Rat's tail";
 
-const INGREDIENTS = ['rats tail', 'onion', 'eye of newt', 'burnt meat'];
+const INGREDIENTS = [RATS_TAIL.toLowerCase(), 'onion', 'eye of newt', 'burnt meat'];
 
 function gpShort(snap: QuestSnapshot, estGp: number): number {
     return Math.max(0, estGp - (snap.inv.get('coins') ?? 0) - snap.bankCoins);
@@ -61,16 +63,16 @@ export const gatherBurntMeat = (snap: QuestSnapshot): QuestStep =>
             : { kind: 'buy', item: 'Raw beef', qty: 2, shop: WYDIN_SHOP, estGp: 20 });
 
 async function killRatGrabTail(log: (m: string) => void): Promise<boolean> {
-    if (Inventory.contains('Rats tail')) {
+    if (Inventory.contains(RATS_TAIL)) {
         return true;
     }
-    const drop = GroundItems.query().name('Rats tail').within(8).nearest();
+    const drop = GroundItems.query().name(RATS_TAIL).within(8).nearest();
     if (drop) {
-        log('picking up the dropped Rats tail');
+        log(`picking up the dropped ${RATS_TAIL}`);
         if (!(await drop.interact('Take'))) {
             return false;
         }
-        return Execution.delayUntil(() => Inventory.contains('Rats tail'), 6000);
+        return Execution.delayUntil(() => Inventory.contains(RATS_TAIL), 6000);
     }
     log('walking to the Rimmington rats to get a tail');
     if (!(await Traversal.walkResilient(RATS, { radius: 5, attempts: 3, timeoutMs: 120_000, log }))) {
@@ -87,7 +89,7 @@ async function killRatGrabTail(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     await Execution.delayUntil(
-        () => GroundItems.query().name('Rats tail').within(8).nearest() !== null || Npcs.query().name('Rat').within(1).nearest() === null,
+        () => GroundItems.query().name(RATS_TAIL).within(8).nearest() !== null || Npcs.query().name('Rat').within(1).nearest() === null,
         6000
     );
     return false;
@@ -157,7 +159,7 @@ async function handInAndDrink(log: (m: string) => void): Promise<boolean> {
 function gatherFor(name: string, snap: QuestSnapshot): QuestStep {
     switch (name) {
         case 'onion': return gatherOnion(snap);
-        case 'rats tail': return gatherRatsTail(snap);
+        case RATS_TAIL.toLowerCase(): return gatherRatsTail(snap);
         case 'eye of newt': return gatherEyeOfNewt(snap);
         case 'burnt meat': return gatherBurntMeat(snap);
         default: return { kind: 'wait', reason: `no gatherer for ${name}` };
@@ -182,7 +184,7 @@ export const hetty: QuestModule = {
     tools: ['coins', 'raw beef', 'cooked meat'],
     gather: {
         'onion': gatherOnion,
-        'rats tail': gatherRatsTail,
+        [RATS_TAIL.toLowerCase()]: gatherRatsTail,
         'eye of newt': gatherEyeOfNewt,
         'burnt meat': gatherBurntMeat
     },
