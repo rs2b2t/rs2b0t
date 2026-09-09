@@ -1,7 +1,8 @@
 /** Two-account MarketMaker e2e at Seers bank, against the window-is-the-transaction model.
- *  Seven legs: a sale paid by coins in the window, a mixed pile bought with no chat, a live re-price
+ *  Eight legs: a sale paid by coins in the window, a mixed pile bought with no chat, a live re-price
  *  mid-trade, a pile over the trade cap bid at the cap, coins ignored and named, the cooldown
- *  after walking out, and a second order placed while the takings sit over the float. Quotes and
+ *  after walking out, a second order placed while the takings sit over the float, and a reset that
+ *  sorts the bank. Quotes and
  *  appraisals travel over public chat, and the shop pays out in notes. */
 
 // Usage:
@@ -195,6 +196,20 @@ async function yewCount(page: Page): Promise<number> {
     return (await countById(page, YEW)) + (await countById(page, YEW_NOTE));
 }
 
+// Why: the script log is a capped list, so a line is found by counting matches rather than by its index.
+/** The newest maker log line matching, once more than `seen` of them exist, polled until the deadline. */
+async function waitForMakerLog(page: Page, re: RegExp, timeoutMs: number, seen = 0): Promise<string | null> {
+    const until = Date.now() + timeoutMs;
+    while (Date.now() < until) {
+        const hits = (await makerLogs(page)).filter(l => re.test(l));
+        if (hits.length > seen) {
+            return hits[hits.length - 1]!;
+        }
+        await page.waitForTimeout(1500);
+    }
+    return null;
+}
+
 async function makerLogs(page: Page): Promise<string[]> {
     return page.evaluate(() => ((globalThis as never as Abi).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg));
 }
@@ -366,6 +381,12 @@ try {
     await startScript(makerPage, 'MarketMaker');
     console.log(`${at()} MarketMaker started, waiting for the ledger and coin float`);
     await makerPage.waitForTimeout(25_000);
+    // Why: the shop sorts its bank on the first trip it takes, before it serves anyone, so the sort line is a startup assertion rather than a leg.
+    const sortedAtStart = await waitForMakerLog(makerPage, /^bank sort(ed|\s+stopped)/i, 90_000);
+    if (sortedAtStart === null) {
+        fail(`the shop never sorted its bank at startup: ${(await makerLogs(makerPage)).slice(-6).join(' | ')}`);
+    }
+    console.log(`${at()} startup: ${sortedAtStart}`);
 
     const state = await makerPage.evaluate(() => (globalThis as never as Abi).rs2b0t.runner.state);
     if (state !== 'running') {
@@ -589,6 +610,23 @@ try {
     }
     results.push(`served a second order placed while the takings sat over the float, with ${makerGp}gp in the pack at the window`);
     console.log(`${at()} PASS leg 7: ${results[6]}`);
+
+    // ---- leg 8: a reset sorts the bank --------------------------------------
+    if (Date.now() > deadline) {
+        fail('out of budget before the reset leg');
+    }
+    const sortsBefore8 = (await makerLogs(makerPage)).filter(l => /^bank sort(ed|\s+stopped)/i.test(l)).length;
+    const mark8 = await chatMark(custPage);
+    await say(custPage, 'reset');
+    if ((await waitForMakerLine(custPage, /resetting/i, 15_000, mark8)) === null) {
+        fail(await dump(makerPage, custPage, 'reset leg: the maker never said it was resetting'));
+    }
+    const sortedOnReset = await waitForMakerLog(makerPage, /^bank sort(ed|\s+stopped)/i, 120_000, sortsBefore8);
+    if (sortedOnReset === null) {
+        fail(await dump(makerPage, custPage, 'reset leg: the maker never sorted its bank after the reset'));
+    }
+    results.push(`sorted the bank on a reset: ${sortedOnReset}`);
+    console.log(`${at()} PASS leg 8: ${results[7]}`);
 
     console.log(`PASS: ${results.join(', ')}`);
     process.exit(0);
