@@ -585,7 +585,7 @@ try {
     }
     const mark7 = await chatMark(custPage);
     await say(custPage, 'buy 100 iron ore');
-    if ((await waitForMakerLine(custPage, /trade me/i, 120_000, mark7)) === null) {
+    if ((await waitForMakerLine(custPage, /trade me|got your/i, 120_000, mark7)) === null) {
         fail(await dump(makerPage, custPage, 'second-order leg: the maker never came back with the second order'));
     }
     const makerGp = await countById(makerPage, COINS);

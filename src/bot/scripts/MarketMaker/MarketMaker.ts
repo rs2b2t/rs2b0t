@@ -1212,14 +1212,15 @@ class Restock implements Task {
         const got = this.bot.packCount(want.itemId);
         if (got >= want.maxQty) {
             this.bot.counter().renew(want.customer, Date.now());
-            this.bot.say(`Got your ${name} ${want.customer}. Trade me.`);
+            // Why: the chat filter masks a name and the letters after it, and with the name mid-line it ate the T of Trade me; the name goes last.
+            this.bot.say(`Got your ${name}. Trade me, ${want.customer}.`);
             return;
         }
         if (got > 0) {
             // Why: the order is cut to what arrived, or Restock keeps going back for the rest and never lets Settle run.
             this.bot.counter().limitTo(want.customer, got);
             this.bot.counter().renew(want.customer, Date.now());
-            this.bot.say(`${want.customer}, I could only get ${formatGp(got)} x ${name}. Trade me.`);
+            this.bot.say(`I could only get ${formatGp(got)} x ${name}. Trade me, ${want.customer}.`);
             return;
         }
         if (this.bot.counter().missedStock(want.customer, STOCK_TRIES)) {
