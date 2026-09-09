@@ -8,7 +8,8 @@ const SEDRIDOR: NpcStop = { npc: 'Sedridor', anchor: new Tile(3103, 9572, 0), le
 const AUBURY: NpcStop = { npc: 'Aubury', anchor: new Tile(3253, 3402, 0), leash: 8, prefer: ['I have been sent here with a package for you.'] };
 
 export const WIZARD_HOPS: LadderHop[] = [
-    { stand: new Tile(3105, 3162, 0), locName: 'Ladder', op: 'Climb-down', arrive: new Tile(3104, 9576, 0) },
+    // Why: the inner door loc is unwalkable, so a long-walk to the ladder stand hangs from across the map.
+    { stand: new Tile(3105, 3162, 0), walk: new Tile(3108, 3162, 0), locName: 'Ladder', op: 'Climb-down', arrive: new Tile(3104, 9576, 0) },
     { stand: new Tile(3104, 9576, 0), locName: 'Ladder', op: 'Climb-up', arrive: new Tile(3105, 3162, 0) }
 ];
 
@@ -26,11 +27,15 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'notStarted') {
         return TALK(DUKE);
     }
-    if (snap.inv.has('notes') || snap.inv.has('air talisman')) {
+    // Why: Sedridor takes one talisman and leaves any extras; the package is the delivery to Aubury.
+    if (snap.inv.has('notes')) {
         return TALK(SEDRIDOR);
     }
     if (snap.inv.has('research package')) {
         return TALK(AUBURY);
+    }
+    if (snap.inv.has('air talisman')) {
+        return TALK(SEDRIDOR);
     }
     return TALK(RECOVER_PROBES[snap.noProgress % RECOVER_PROBES.length]);
 }

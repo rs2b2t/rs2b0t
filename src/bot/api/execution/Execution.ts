@@ -20,6 +20,11 @@ export const Execution = {
         return Scheduler.enqueue({ kind: 'cond', cond, timeoutAt: timeoutMs > 0 ? performance.now() + timeoutMs : null });
     },
 
+    /** Work the watchdog cannot see from tile or xp. Call it only after work was observed: an unconditional call per loop turns wedge detection off. */
+    noteProgress(): void {
+        Scheduler.active?.noteProgress();
+    },
+
     /**
      * Poll `cond` each game tick for up to `maxTicks` ticks.
      * Prefer this over {@link delayUntil} for action loops that run on the tick.

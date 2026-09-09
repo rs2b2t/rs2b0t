@@ -20,8 +20,11 @@ import {
     alchValueOf,
     customAlchItem,
     fmtGp,
+    FIRE_STAFF,
+    FIRE_STAVES,
     nextAlchTarget,
     resolveAlchSpell,
+    pickFireStaff,
     selectedAlchItems
 } from '#/bot/scripts/Alcher/AlcherLogic.js';
 
@@ -261,5 +264,17 @@ describe('the spell setting', () => {
         });
         expect(schema?.items?.default).toEqual(DEFAULT_ALCH_ITEMS);
         expect(schema?.alchs?.default).toBe(27);
+    });
+});
+
+describe('pickFireStaff', () => {
+    test('Staff of fire is first so a bank that has both keeps the old withdraw', () => {
+        expect(FIRE_STAVES[0]).toBe(FIRE_STAFF);
+        expect(pickFireStaff(name => name === 'Fire battlestaff' || name === 'Staff of fire')).toBe('Staff of fire');
+    });
+
+    test('accepts a Fire battlestaff on its own', () => {
+        expect(pickFireStaff(name => name === 'Fire battlestaff')).toBe('Fire battlestaff');
+        expect(pickFireStaff(() => false)).toBeUndefined();
     });
 });

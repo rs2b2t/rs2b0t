@@ -13,6 +13,8 @@ type Rs2b0t = {
             logout(): Promise<void>;
             constructor: { loopCycle: number };
             sideIcon: number[];
+            loginMes1?: string;
+            loginMes2?: string;
             out: { p1Enc(op: number): void; p1(v: number): void; pjstr(s: string): void };
         };
         reader: { varp(index: number): number; chat(n: number): { type: number; username: string | null; text: string }[] };
@@ -61,36 +63,35 @@ async function waitClientBooted(page: Page, label: string): Promise<void> {
     // loopCycle only advances once title-screen assets are loaded and the game
     // loop is running, longer than jag download alone on a cold profile.
     try {
-        await page.waitForFunction(
-            () =>
-                ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t
-                    ?.client.constructor.loopCycle ?? 0) > 10,
-            undefined,
-            { timeout: BOOT_MS }
-        );
+        await page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: BOOT_MS });
     } catch {
-        throw new Error(
-            `${label}: client never reached title loop within ${Math.round(BOOT_MS / 1000)}s ` +
-                '(still downloading cache/assets? set BOOT_MS=…)'
-        );
+        throw new Error(`${label}: client never reached title loop within ${Math.round(BOOT_MS / 1000)}s ` + '(still downloading cache/assets? set BOOT_MS=…)');
     }
 }
 
 async function waitIngame(page: Page, timeoutMs: number, label: string): Promise<void> {
     try {
-        await page.waitForFunction(
+        const handle = await page.waitForFunction(
             () => {
                 const { client } = (globalThis as never as Rs2b0t).rs2b0t;
-                return client.ingame && client.sceneState === 2;
+                const mes = `${client.loginMes1 ?? ''} ${client.loginMes2 ?? ''}`;
+                if (/has been updated/i.test(mes)) {
+                    return mes.trim();
+                }
+                return client.ingame && client.sceneState === 2 ? 'ingame' : false;
             },
             undefined,
             { timeout: timeoutMs }
         );
-    } catch {
-        throw new Error(
-            `${label}: not ingame/scene-ready within ${Math.round(timeoutMs / 1000)}s ` +
-                '(map download lag or login rejected — set LOGIN_MS=…)'
-        );
+        const value = await handle.jsonValue();
+        if (value !== 'ingame') {
+            throw new Error(`${label}: login rejected (${value}). Bake ENGINE_DIR private.pem as LOCAL_RSAE/LOCAL_RSAN; do not raise LOGIN_MS`);
+        }
+    } catch (err) {
+        if (err instanceof Error && err.message.includes('login rejected')) {
+            throw err;
+        }
+        throw new Error(`${label}: not ingame/scene-ready within ${Math.round(timeoutMs / 1000)}s ` + '(map download lag or login rejected — set LOGIN_MS=…)');
     }
 }
 
@@ -159,10 +160,7 @@ export async function relog(page: Page, user: string): Promise<void> {
             return;
         }
         if (Date.now() >= deadline) {
-            throw new Error(
-                `relog: could not log back in as '${user}' after ${attempt} attempts / ` +
-                    `${Math.round(RELOG_BUDGET_MS / 1000)}s (engine dead-connection or client still loading)`
-            );
+            throw new Error(`relog: could not log back in as '${user}' after ${attempt} attempts / ` + `${Math.round(RELOG_BUDGET_MS / 1000)}s (engine dead-connection or client still loading)`);
         }
         if (attempt === 1 || attempt % 3 === 0) {
             console.log(`  relog: attempt ${attempt} not ingame yet — retry`);
@@ -180,16 +178,19 @@ export async function cheat(page: Page, command: string): Promise<void> {
 }
 
 export async function cheatQuiet(page: Page, command: string, waitMs = 700): Promise<boolean> {
-    const sent = await page.evaluate(([c, op]) => {
-        const { client } = (globalThis as never as Rs2b0t).rs2b0t;
-        if (!client.ingame) {
-            return false;
-        }
-        client.out.p1Enc(op);
-        client.out.p1(c.length + 1);
-        client.out.pjstr(c);
-        return true;
-    }, [command, ClientProt.CLIENT_CHEAT] as const);
+    const sent = await page.evaluate(
+        ([c, op]) => {
+            const { client } = (globalThis as never as Rs2b0t).rs2b0t;
+            if (!client.ingame) {
+                return false;
+            }
+            client.out.p1Enc(op);
+            client.out.p1(c.length + 1);
+            client.out.pjstr(c);
+            return true;
+        },
+        [command, ClientProt.CLIENT_CHEAT] as const
+    );
     await page.waitForTimeout(waitMs);
     return sent;
 }
@@ -207,17 +208,20 @@ export async function getServerVar(page: Page, name: string): Promise<number | n
 }
 
 export async function getServerVarQuiet(page: Page, name: string): Promise<number | null> {
-    const sent = await page.evaluate(([n, op]) => {
-        const { client } = (globalThis as never as Rs2b0t).rs2b0t;
-        if (!client.ingame) {
-            return false;
-        }
-        const cmd = `getvar ${n}`;
-        client.out.p1Enc(op);
-        client.out.p1(cmd.length + 1);
-        client.out.pjstr(cmd);
-        return true;
-    }, [name, ClientProt.CLIENT_CHEAT] as const);
+    const sent = await page.evaluate(
+        ([n, op]) => {
+            const { client } = (globalThis as never as Rs2b0t).rs2b0t;
+            if (!client.ingame) {
+                return false;
+            }
+            const cmd = `getvar ${n}`;
+            client.out.p1Enc(op);
+            client.out.p1(cmd.length + 1);
+            client.out.pjstr(cmd);
+            return true;
+        },
+        [name, ClientProt.CLIENT_CHEAT] as const
+    );
     if (!sent) {
         return null;
     }
@@ -364,9 +368,11 @@ export async function maxmeAndClearDialogs(page: Page): Promise<void> {
     await page
         .waitForFunction(
             () => {
-                const s = (globalThis as never as {
-                    __rs2b0t: { Skills: { level(n: string): number } };
-                }).__rs2b0t.Skills;
+                const s = (
+                    globalThis as never as {
+                        __rs2b0t: { Skills: { level(n: string): number } };
+                    }
+                ).__rs2b0t.Skills;
                 return s.level('attack') >= 99 && s.level('hitpoints') >= 99;
             },
             undefined,
@@ -387,21 +393,18 @@ export function teleCheat(tile: { x: number; z: number; level: number }): string
  * Teleport and wait until within `radius` of the target world tile.
  * Returns false if the cheat never sent or arrival timed out.
  */
-export async function teleTo(
-    page: Page,
-    tile: { x: number; z: number; level: number },
-    radius = 8,
-    timeoutMs = 20_000
-): Promise<boolean> {
+export async function teleTo(page: Page, tile: { x: number; z: number; level: number }, radius = 8, timeoutMs = 20_000): Promise<boolean> {
     if (!(await cheatQuiet(page, teleCheat(tile)))) {
         return false;
     }
     const ok = await page
         .waitForFunction(
             ([x, z, level, r]) => {
-                const t = (globalThis as never as {
-                    __rs2b0t: { Game: { tile(): { x: number; z: number; level: number } | null } };
-                }).__rs2b0t.Game.tile();
+                const t = (
+                    globalThis as never as {
+                        __rs2b0t: { Game: { tile(): { x: number; z: number; level: number } | null } };
+                    }
+                ).__rs2b0t.Game.tile();
                 if (!t || t.level !== level) {
                     return false;
                 }
@@ -442,11 +445,7 @@ type SeedBankResult = { done: boolean; ok: boolean; reason: string; banked: Reco
  * Open a bank booth and read Bank.count for each expected item (no deposit).
  * Used to verify that `givebank` / `~bankitem` seeds landed.
  */
-async function verifyBankCounts(
-    page: Page,
-    bankStand: { x: number; z: number; level: number },
-    expected: readonly { name: string; qty: number }[]
-): Promise<SeedBankResult> {
+async function verifyBankCounts(page: Page, bankStand: { x: number; z: number; level: number }, expected: readonly { name: string; qty: number }[]): Promise<SeedBankResult> {
     if (!(await teleTo(page, bankStand, 6, 25_000))) {
         return { done: true, ok: false, reason: `tele to bank (${bankStand.x},${bankStand.z}) failed`, banked: {} };
     }
@@ -484,9 +483,7 @@ async function verifyBankCounts(
                     const res = g.__seedBank!;
                     try {
                         const { Bank, Execution } = abi;
-                        const opened =
-                            (await Bank.openBooth(stand, 'Bank booth', 'Use-quickly'))
-                            || (await Bank.openNearest('Bank booth', 'Use-quickly'));
+                        const opened = (await Bank.openBooth(stand, 'Bank booth', 'Use-quickly')) || (await Bank.openNearest('Bank booth', 'Use-quickly'));
                         if (!opened) {
                             res.reason = 'could not open the bank';
                             res.done = true;
@@ -538,23 +535,14 @@ async function verifyBankCounts(
     }
     await page.waitForTimeout(400);
 
-    return page.evaluate(() =>
-        (globalThis as never as { __seedBank?: SeedBankResult }).__seedBank
-        ?? { done: true, ok: false, reason: 'no result', banked: {} }
-    );
+    return page.evaluate(() => (globalThis as never as { __seedBank?: SeedBankResult }).__seedBank ?? { done: true, ok: false, reason: 'no result', banked: {} });
 }
 
 /** Seed items directly into the bank on a local engine: engine cheat `givebank <obj> <qty>` (no busy-guard), falling back to the content debugproc `~bankitem <obj> <qty>`, verified once by opening a booth and reading Bank.count.
  *  Why: seed after level-up dialogs are drained, since `~bankitem` needs p_finduid. Bulk fixtures `~bank_f2p` (no dialog), `~clearbank` and `~foodbank` exist for blunt max kits, not for realistic low-level quest seeds. */
-async function applyBankSeedCmds(
-    page: Page,
-    items: readonly BankSeedItem[],
-    mode: 'givebank' | 'bankitem'
-): Promise<void> {
+async function applyBankSeedCmds(page: Page, items: readonly BankSeedItem[], mode: 'givebank' | 'bankitem'): Promise<void> {
     for (const it of items) {
-        const cmd = mode === 'givebank'
-            ? `givebank ${it.debugName} ${it.qty}`
-            : `~bankitem ${it.debugName} ${it.qty}`;
+        const cmd = mode === 'givebank' ? `givebank ${it.debugName} ${it.qty}` : `~bankitem ${it.debugName} ${it.qty}`;
         let sent = false;
         for (let attempt = 0; attempt < 4; attempt++) {
             if (await cheatQuiet(page, cmd)) {
@@ -570,11 +558,7 @@ async function applyBankSeedCmds(
     }
 }
 
-export async function seedItemsToBank(
-    page: Page,
-    items: readonly BankSeedItem[],
-    bankStand: { x: number; z: number; level: number }
-): Promise<void> {
+export async function seedItemsToBank(page: Page, items: readonly BankSeedItem[], bankStand: { x: number; z: number; level: number }): Promise<void> {
     if (items.length === 0) {
         return;
     }
@@ -597,10 +581,7 @@ export async function seedItemsToBank(
     await applyBankSeedCmds(page, items, 'bankitem');
     res = await verifyBankCounts(page, bankStand, want);
     if (!res.ok) {
-        throw new Error(
-            `seedItemsToBank: ${res.reason || 'bank verify failed'} `
-            + '(need local engine givebank and/or content ~bankitem)'
-        );
+        throw new Error(`seedItemsToBank: ${res.reason || 'bank verify failed'} ` + '(need local engine givebank and/or content ~bankitem)');
     }
     for (const [name, n] of Object.entries(res.banked)) {
         console.log(`  banked ${name} x${n}`);
