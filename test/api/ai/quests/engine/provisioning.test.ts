@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { coinFloatWithdraw, depositPlan, floatWithdraw, gpShort, planProvisioning, floatDrawPlan, shouldFreshenPack, buyPurseTopUp, COIN_FLOAT } from '#/bot/api/ai/quests/engine/provisioning.js';
+import { coinFloatWithdraw, coinFloatPlan, depositPlan, floatWithdraw, gpShort, planProvisioning, floatDrawPlan, shouldFreshenPack, buyPurseTopUp, COIN_FLOAT } from '#/bot/api/ai/quests/engine/provisioning.js';
 import type { QuestItem } from '#/bot/api/ai/quests/types.js';
 
 const it = (name: string, qty: number, kind: 'mustHave' | 'acquirable'): QuestItem => ({ name, qty, kind });
@@ -93,6 +93,26 @@ describe('coinFloatWithdraw', () => {
     });
     test('bank dry -> null (no re-withdraw loop)', () => {
         expect(coinFloatWithdraw(...packBank(300, 0), 1000)).toBeNull();
+    });
+});
+
+describe('coinFloatPlan', () => {
+    test('a spend-nothing quest never withdraws', () => {
+        expect(coinFloatPlan(990, 5000, 0, false)).toEqual({ qty: 0, drawn: true });
+        expect(coinFloatPlan(0, 5000, 0, false)).toEqual({ qty: 0, drawn: true });
+    });
+
+    test('empty pack, bank covers -> withdraw the full float', () => {
+        expect(coinFloatPlan(0, 5000, 1000, false)).toEqual({ qty: 1000, drawn: false });
+    });
+
+    test('a pack holding the float is drawn and never revisited', () => {
+        expect(coinFloatPlan(1000, 5000, 1000, false)).toEqual({ qty: 0, drawn: true });
+    });
+
+    test('a 10gp gate after the float is drawn does not emit a withdraw', () => {
+        expect(coinFloatPlan(990, 5000, 1000, false)).toEqual({ qty: 10, drawn: false });
+        expect(coinFloatPlan(990, 5000, 1000, true)).toEqual({ qty: 0, drawn: true });
     });
 });
 

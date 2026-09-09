@@ -647,7 +647,11 @@ export const CASES: readonly Case[] = [
         id: 'maze-probe-live',
         harness: 'maze-probe-live.ts',
         covers: { subsystems: ['nav'] },
-        status: 'unvetted'
+        status: 'vetted',
+        args: ['--spawn', 'se', '--minutes', '4'],
+        budgetMin: 6,
+        provenAt: 'f3e20a70',
+        note: 'teleports to one of the four maze corners and passes when the guardian solves the route out. `--spawn se` is the 28-step leg to the door at (2936,4560) that used to read as walled off; nw, ne and sw all pass too'
     },
     {
         id: 'merlin-mordred-353-live',
@@ -999,6 +1003,14 @@ export const CASES: readonly Case[] = [
         note: 'Varrock West with iron, coal, natures and a Fire battlestaff banked (no Staff of fire); passes on wore Fire battlestaff plus steel bars'
     },
     {
+        id: 'strangebox-bank-open-live',
+        harness: 'strangebox-bank-open-live.ts',
+        covers: { subsystems: ['random-events'] },
+        status: 'unvetted',
+        budgetMin: 5,
+        note: 'Varrock West booth left open, then ::give macro_cube; passes when the solver closes the bank, Open is present, and the box is consumed (#756)'
+    },
+    {
         id: 'strangebox-repro-live',
         harness: 'strangebox-repro-live.ts',
         covers: { subsystems: ['random-events'] },
@@ -1107,12 +1119,28 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'cooksassistant-758-live',
+        harness: 'cooksassistant-758-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'unvetted',
+        budgetMin: 10,
+        note: "seeds 990 coins on a started Cook's Assistant at the Lumbridge farm; before withdraws Coins, after Takes the egg and never withdraws Coins (#758)"
+    },
+    {
         id: 'witchs-potion-rats-tail-live',
         harness: 'witchs-potion-rats-tail-live.ts',
         covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
         status: 'unvetted',
         budgetMin: 8,
         note: "seeds Rat's tail on a started Witch's Potion; passes when AIOQuester picks an onion and never attacks a Rimmington rat (#796)"
+    },
+    {
+        id: 'runemysteries-759-live',
+        harness: 'runemysteries-759-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'unvetted',
+        budgetMin: 8,
+        note: 'seeds leftover air talismans plus the research package at stage 3; passes when AIOQuester talks to Aubury and never Sedridor (#759)'
     },
     {
         id: 'witchs-house-226-live',

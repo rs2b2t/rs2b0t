@@ -78,6 +78,12 @@ export const Execution: {
      * action loops over wall-clock delayUntil.
      */
     delayUntilTicks(cond: () => boolean, maxTicks: number): Promise<boolean>;
+    /**
+     * Report work the watchdog cannot see from tile movement or xp: a trade
+     * settled, a message handled. Call it only after that work was observed.
+     * An unconditional call per loop turns wedge detection off.
+     */
+    noteProgress(): void;
 };
 
 // ---- game state ----
