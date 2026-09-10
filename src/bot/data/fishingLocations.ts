@@ -1,5 +1,7 @@
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 import Tile from '../geometry/Tile.js';
+
+export const SHILO_WATER_VENDOR = { keeper: 'Obli', stand: new Tile(2825, 2959, 0), item: 'Vial of water' } as const;
 import { cookSurfaceForFishCamp } from './cookingRanges.js';
 import {
     locationOptions,
@@ -44,7 +46,8 @@ const BANK = {
     edgeville: new Tile(3094, 3493, 0),
     seers: new Tile(2725, 3491, 0),
     faladorWest: new Tile(2946, 3369, 0),
-    grandTree: new Tile(2449, 3482, 1)
+    grandTree: new Tile(2449, 3482, 1),
+    shilo: new Tile(2852, 2954, 0)
 } as const;
 
 export const FISHING_LOCATIONS: FishingLocation[] = (
@@ -148,6 +151,30 @@ export const FISHING_LOCATIONS: FishingLocation[] = (
             verified: false,
             resources: ['trout', 'salmon'],
             notes: 'Tick manip: Tannerfishing (fly + cook/eat). Unverified seed; bank Grand Tree 1F'
+        },
+        {
+            name: 'Shilo Village',
+            spot: new Tile(2841, 2970, 0),
+            bankStand: BANK.shilo,
+            campRadius: 48,
+            chaseRadius: 28,
+            verified: false,
+            resources: ['trout', 'salmon'],
+            avoidSpots: [
+                new Tile(2850, 2976, 0),
+                new Tile(2855, 2977, 0),
+                new Tile(2860, 2976, 0),
+                new Tile(2869, 2977, 0)
+            ],
+            sweep: [
+                new Tile(2862, 2971, 0),
+                new Tile(2856, 2972, 0),
+                new Tile(2841, 2970, 0),
+                new Tile(2836, 2970, 0),
+                new Tile(2822, 2968, 0)
+            ],
+            baitVendor: { keeper: 'Fernahei', stand: new Tile(2870, 2971, 0), price: 2, item: 'Feather' },
+            notes: 'Requires Shilo Village quest; fly only, the teller banks and Fernahei sells the feathers.'
         }
     ] as FishingLocation[]
 ).map(withCampCook);
