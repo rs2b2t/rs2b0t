@@ -1795,6 +1795,20 @@ export class EnsureGatherToolEquipped implements Task {
     }
 }
 
+export class BuyShiloSupplies implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    validate(): boolean {
+        if (EventSignal.pending() || Game.inCombat()) return false;
+        return this.bot.baitVendor()?.keeper === 'Fernahei'
+            && (this.bot.shiloSupplyTrip.active || this.bot.guildFeatherTripDue());
+    }
+
+    async execute(): Promise<void> {
+        await this.bot.shiloSupplyTrip.step(this.bot);
+    }
+}
+
 export class RestockFishingGear implements Task {
     constructor(private bot: GatheringBot) {}
 
@@ -2295,6 +2309,7 @@ export class Gather implements Task {
 
     /** Whether a fishing spot is in range for this camp mode. */
     private fishSpotInRange(spotTile: Tile): boolean {
+        if (this.bot.avoidsSpot(spotTile)) return false;
         if (this.bot.isNamedCamp()) {
             return resourceWithinCamp(this.bot.getAnchor().distanceTo(spotTile), this.bot.leashRadius());
         }
@@ -2337,6 +2352,7 @@ export class Gather implements Task {
 
     validate(): boolean {
         // Combat only blocks AFK gather, retaliate tick-manip keeps gathering.
+        if (this.bot.shiloSupplyTrip.active) return false;
         if (Inventory.isFull() || EventSignal.pending()) {
             return false;
         }
@@ -2611,6 +2627,14 @@ export class Gather implements Task {
             ) {
                 this.bot.setStatus('fish: returning to camp');
                 await this.bot.walkHomeIfNeeded(m => this.bot.log(`  ${m}`));
+                return;
+            }
+            const stop = this.bot.nextSweepStop();
+            if (stop !== null) {
+                this.bot.setStatus(`fish: sweeping to ${stop}`);
+                await Traversal.walkResilient(stop, {
+                    radius: 1, attempts: 2, timeoutMs: 30_000, log: message => this.bot.log(`  ${message}`)
+                });
                 return;
             }
             // Named: membership disk from home. Freeform: hunt from player/start.

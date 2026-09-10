@@ -7,6 +7,7 @@ import {
 } from '../../api/tasks/Anchor.js';
 import { reader } from '../../adapter/ClientAdapter.js';
 import { TaskBot } from '../../api/bot/Bot.js';
+import { ShiloSupplyTrip } from './ShiloSupplyTrip.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Game } from '../../api/game/Game.js';
@@ -32,7 +33,9 @@ import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import { cookSurfaceForFishCamp, resolveFishCampCookSurface } from '../../data/cookingRanges.js';
 import { resolveFishingLocation, type FishingLocation } from '../../data/fishingLocations.js';
-import { effectiveGatherLeash, isAutoLocation, NAMED_CAMP_LEASH_FLOOR } from './GatherCamp.js';
+import type { BaitVendor } from '../../data/gatheringLocations.js';
+import { effectiveGatherLeash, isAutoLocation, spotAvoided, sweepStopFor, NAMED_CAMP_LEASH_FLOOR } from './GatherCamp.js';
+import { baitTripDue } from './GatheringBotLogic.js';
 import {
     DEFAULT_CHASE_RADIUS,
     resolveCampRadius,
@@ -210,6 +213,7 @@ import {
     MuleRequestOrWait,
     MinerEatFood,
     RepairBrokenGatherTool,
+    BuyShiloSupplies,
     RestockFishingGear,
     RestockGatherTool,
     SupplierWithdrawRaw,
@@ -322,6 +326,7 @@ export const GATHERING_SETTINGS: SettingsSchema = {
 
 
 export default class GatheringBot extends TaskBot {
+    readonly shiloSupplyTrip = new ShiloSupplyTrip();
     override loopDelay = 600;
 
     private anchor: Tile | null = null;
@@ -422,6 +427,9 @@ export default class GatheringBot extends TaskBot {
     private forgetfulBank = false;
     /** Buy/withdraw target for bait & feathers when the method needs them. */
     private baitQty = 1000;
+    private guildFeatherMinutes = 0;
+    private lastGuildFeatherAt: number | null = null;
+    private sweepIndex = 0;
 
     /** Off / gatherer (handoff) / mule (bank-side). See muleMode settings. */
     private muleMode: MuleMode = 'off';
@@ -482,6 +490,7 @@ export default class GatheringBot extends TaskBot {
             this.action = method.op;
             this.pairOp = method.pair;
             this.baitQty = Math.max(1, Math.floor(this.settings.num('baitQty', 1000)));
+            this.guildFeatherMinutes = Math.max(0, Math.floor(this.settings.num('guildFeatherMinutes', 0)));
             // Apply bait/feather target only to pieces that need them; tools stay min=1.
             this.fishMethod = { ...method, gear: withBaitTarget(method, this.baitQty).gear };
             this.fishing = true;
@@ -950,6 +959,7 @@ export default class GatheringBot extends TaskBot {
             ...(!muleSide && burnOn ? createChopBurnTasks(this) : []),
             // Mule trade owns the loop while the modal is open (movement cancels trade).
             ...(this.muleMode !== 'off' ? [new HandleGatherMuleTrade(this)] : []),
+            ...(!muleSide && this.fishing ? [new BuyShiloSupplies(this)] : []),
             ...(bankMule ? [new MuleBankHaul(this), new MuleGoMeet(this), new MuleRequestOrWait(this)] : []),
             ...(cooker ? [new MuleGoMeet(this), new MuleRequestOrWait(this)] : []),
             ...(supplier
@@ -2412,6 +2422,35 @@ export default class GatheringBot extends TaskBot {
 
     // Why: the skip uses the soft arrive disk ({@link HOME_ARRIVE_RADIUS}), not the full gather leash.
     // Why: bank stands at named camps often sit inside the leash but far from resources, the Catherby bank is ~36 from the pier.
+
+    baitVendor(): BaitVendor | null {
+        return this.location?.baitVendor ?? null;
+    }
+
+    avoidsSpot(tile: Tile): boolean {
+        return spotAvoided(tile, this.location?.avoidSpots ?? []);
+    }
+
+    nextSweepStop(): Tile | null {
+        const next = sweepStopFor(this.location?.sweep ?? [], this.sweepIndex, Game.tile());
+        this.sweepIndex = next.index;
+        return next.stop === null ? null : Tile.from(next.stop);
+    }
+
+    guildFeatherTripDue(): boolean {
+        const vendor = this.baitVendor();
+        return this.isFishing() && baitTripDue({
+            hasVendor: vendor !== null,
+            outOfBait: vendor !== null && Inventory.count(vendor.item) === 0,
+            lastAtMs: this.lastGuildFeatherAt,
+            intervalMinutes: this.guildFeatherMinutes,
+            nowMs: Date.now()
+        });
+    }
+
+    noteGuildFeatherTrip(): void {
+        this.lastGuildFeatherAt = Date.now();
+    }
 
     /** Soft return toward the gather anchor after bank, shop or repair. */
     async walkHomeIfNeeded(
