@@ -28,13 +28,17 @@ describe('Shilo Village camp', () => {
         expect(shilo?.baitVendor).toEqual({ keeper: 'Fernahei', stand: new Tile(2870, 2971, 0), price: 2, item: 'Feather' });
         expect(FISHING_LOCATIONS.filter(location => location.baitVendor).map(location => location.name)).toEqual(['Fishing Guild', 'Shilo Village']);
     });
-    test('avoids far-bank spots and sweeps only the village side inside the camp', () => {
+    test('includes both river banks in its sweep inside the unchanged camp', () => {
         const shilo = FISHING_LOCATIONS.find(location => location.name === 'Shilo Village');
-        expect(shilo?.avoidSpots?.map(tile => [tile.x, tile.z])).toEqual([[2850, 2976], [2855, 2977], [2860, 2976], [2869, 2977]]);
-        expect(shilo?.sweep?.map(tile => [tile.x, tile.z])).toEqual([[2862, 2971], [2856, 2972], [2841, 2970], [2836, 2970], [2822, 2968]]);
+        expect(shilo?.campRadius).toBe(48);
+        expect(shilo?.sweep).toEqual(expect.arrayContaining([
+            new Tile(2822, 2968, 0), new Tile(2832, 2973, 0),
+            new Tile(2834, 2975, 0), new Tile(2850, 2977, 0),
+            new Tile(2855, 2978, 0), new Tile(2860, 2977, 0), new Tile(2869, 2978, 0)
+        ]));
         for (const stop of shilo?.sweep ?? []) {
             expect(shilo?.spot.distanceTo(stop)).toBeLessThanOrEqual(shilo?.campRadius ?? 0);
-            expect(shilo?.avoidSpots?.some(tile => tile.equals(stop))).toBe(false);
+            expect(shilo?.avoidSpots?.some(tile => tile.equals(stop)) ?? false).toBe(false);
         }
     });
 });
@@ -152,13 +156,20 @@ describe('the Shilo Village camp', () => {
         expect(shilo.baitVendor).toEqual({ keeper: 'Fernahei', stand: new Tile(2870, 2971, 0), price: 2, item: 'Feather' });
     });
 
-    // Why: derived by tools/nav/shilo-fishing-stands.ts; the walk round to these is 74 to 90 tiles against 14 to 56 along the village bank.
-    test('refuses the four river tiles whose only stand is across the water', () => {
-        expect(shilo.avoidSpots?.map(t => [t.x, t.z])).toEqual([[2850, 2976], [2855, 2977], [2860, 2976], [2869, 2977]]);
+    test('accepts every stationary spawn within the 48-tile camp', () => {
+        const spawns = [[2822, 2969], [2834, 2974], [2835, 2974], [2836, 2971],
+            [2841, 2971], [2850, 2976], [2855, 2973], [2855, 2977], [2856, 2973],
+            [2857, 2973], [2860, 2976], [2862, 2972], [2869, 2977]] as const;
+        for (const [x, z] of spawns) {
+            const tile = new Tile(x, z, 0);
+            expect(shilo.avoidSpots?.some(avoided => avoided.equals(tile)) ?? false).toBe(false);
+            expect(shilo.spot.distanceTo(tile)).toBeLessThanOrEqual(48);
+            expect(shilo.sweep?.some(stop => stop.distanceTo(tile) <= 2)).toBe(true);
+        }
     });
 
-    test('sweeps the village bank east to west, and every stop is inside camp membership', () => {
-        expect(shilo.sweep?.map(t => [t.x, t.z])).toEqual([[2862, 2971], [2856, 2972], [2841, 2970], [2836, 2970], [2822, 2968]]);
+    test('preserves the healthy south sweep before crossing north', () => {
+        expect(shilo.sweep?.slice(0, 5).map(t => [t.x, t.z])).toEqual([[2862, 2971], [2856, 2972], [2841, 2970], [2836, 2970], [2822, 2968]]);
         for (const stop of shilo.sweep ?? []) {
             expect(shilo.spot.distanceTo(stop), `${stop}`).toBeLessThanOrEqual(shilo.campRadius!);
         }

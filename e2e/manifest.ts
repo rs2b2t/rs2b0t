@@ -3,6 +3,15 @@ import type { Case } from './manifestTypes.js';
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
     {
+        id: 'shilo-north-bank-live',
+        harness: 'shilo-north-bank-live.ts',
+        covers: { scripts: ['GatheringBot'] },
+        status: 'unvetted',
+        manual: true,
+        budgetMin: 18,
+        note: 'PRIVATE world only: BASE localhost:8891, HEADED=1, E2E_CLIENT_PAGE=/bot-north-green.html and NORTH_SERVER_TRACE required. Three stationary north-only NPC317 spawns; actual Fisher full catch, teller deposit, bridge return and next catch. Never run on shared 8890.'
+    },
+    {
         id: 'fisher-shilo-shopping-live',
         harness: 'fisher-shilo-shopping-live.ts',
         covers: { scripts: ['GatheringBot'] },
