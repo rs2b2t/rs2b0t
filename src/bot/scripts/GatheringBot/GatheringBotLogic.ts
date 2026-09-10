@@ -5,6 +5,25 @@
 import { wildernessLevelAt, type WildTile } from '../../event/webwalk/wilderness.js';
 import { combatBreaksGather } from './TickManipLogic.js';
 
+export function featherBuyoutDue(lastAtMs: number | null, intervalMinutes: number, nowMs: number): boolean {
+    if (intervalMinutes <= 0) return false;
+    return lastAtMs === null || nowMs - lastAtMs >= intervalMinutes * 60_000;
+}
+
+export const BAIT_RETRY_MINUTES = 1;
+
+export function baitTripDue(input: {
+    readonly hasVendor: boolean;
+    readonly outOfBait: boolean;
+    readonly lastAtMs: number | null;
+    readonly intervalMinutes: number;
+    readonly nowMs: number;
+}): boolean {
+    if (!input.hasVendor) return false;
+    if (featherBuyoutDue(input.lastAtMs, input.intervalMinutes, input.nowMs)) return true;
+    return input.outOfBait && featherBuyoutDue(input.lastAtMs, BAIT_RETRY_MINUTES, input.nowMs);
+}
+
 type GatheringCombatMode =
     | 'standard'
     | 'desert-camp-miner-npc'
