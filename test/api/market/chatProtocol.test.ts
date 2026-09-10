@@ -200,26 +200,57 @@ describe('formatting', () => {
         expect(formatGp(17)).toBe('17');
     });
 
-    test('ambiguous reply lists at most three names', () => {
-        expect(formatAmbiguous([{ name: 'Maple longbow', id: 851 }, { name: 'Yew longbow', id: 855 }])).toBe(
-            "2 matches: 'Maple longbow', 'Yew longbow'. Which?"
-        );
-        const four = [
-            { name: 'a', id: 1 },
-            { name: 'b', id: 2 },
-            { name: 'c', id: 3 },
-            { name: 'd', id: 4 }
-        ];
-        expect(formatAmbiguous(four)).toContain('4 matches');
-        expect(formatAmbiguous(four)).not.toContain("'d'");
+    test('ambiguous reply lists the names it can fit', () => {
+        expect(
+            formatAmbiguous([
+                { name: 'Maple longbow', id: 851, base: 'Maple longbow', word: null },
+                { name: 'Yew longbow', id: 855, base: 'Yew longbow', word: null }
+            ])
+        ).toBe("2 matches: 'Maple longbow', 'Yew longbow'. Which?");
     });
 
-    // Why: the strung and unstrung maple longbow are both literally "Maple longbow", so listing the
-    // Why: names alone gives the player nothing to choose between.
-    test('names that read the same are tagged with their id', () => {
-        expect(formatAmbiguous([{ name: 'Maple longbow', id: 851 }, { name: 'Maple longbow', id: 62 }])).toBe(
-            "2 matches: 'Maple longbow' #851, 'Maple longbow' #62. Which?"
-        );
+    test('a reply too long for the chat limit says how many it left out', () => {
+        const many = Array.from({ length: 12 }, (_, i) => ({
+            name: `Rune platebody ${i}`,
+            id: i,
+            base: `Rune platebody ${i}`,
+            word: null
+        }));
+        const line = formatAmbiguous(many);
+        expect(line.length).toBeLessThanOrEqual(CHAT_LIMIT);
+        expect(line).toContain('12 matches');
+        expect(line).toContain('more');
+    });
+
+    // Why: four objs are literally "Dragonhide", so listing that name four times tells the player nothing.
+    test('one repeated name is answered with the words that separate it', () => {
+        expect(
+            formatAmbiguous([
+                { name: 'Green dragonhide', id: 1753, base: 'Dragonhide', word: 'green' },
+                { name: 'Blue dragonhide', id: 1751, base: 'Dragonhide', word: 'blue' },
+                { name: 'Red dragonhide', id: 1749, base: 'Dragonhide', word: 'red' },
+                { name: 'Black dragonhide', id: 1747, base: 'Dragonhide', word: 'black' }
+            ])
+        ).toBe("4 matches: green, blue, red, black 'Dragonhide'. Which?");
+    });
+
+    test('the key halves name their halves', () => {
+        expect(
+            formatAmbiguous([
+                { name: 'Tooth half of key', id: 985, base: 'Half of a key', word: 'tooth' },
+                { name: 'Loop half of key', id: 987, base: 'Half of a key', word: 'loop' }
+            ])
+        ).toBe("2 matches: tooth, loop 'Half of a key'. Which?");
+    });
+
+    // Why: nothing separates a pair the content never named apart, so the id is the only answer left.
+    test('names that read the same with no word are tagged with their id', () => {
+        expect(
+            formatAmbiguous([
+                { name: 'Half of a key', id: 985, base: 'Half of a key', word: null },
+                { name: 'Half of a key', id: 987, base: 'Half of a key', word: null }
+            ])
+        ).toBe("2 matches: 'Half of a key' #985, 'Half of a key' #987. Which?");
     });
 
     test('price list chunks into lines under the chat limit', () => {

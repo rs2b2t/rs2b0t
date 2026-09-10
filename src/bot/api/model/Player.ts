@@ -9,7 +9,7 @@ import type { Locatable } from './Interactable.js';
  * @see docs/decisions/corridor-snap.md
  */
 export class Player implements Locatable {
-    constructor(readonly snap: PlayerSnapshot) {}
+    constructor(/** @internal */ readonly snap: PlayerSnapshot) {}
 
     get name(): string | null {
         return this.snap.name;

@@ -37,7 +37,7 @@ export const DROP_DB: Record<string, string[]> = {
     "Necromancer": ["Air rune","Blood rune","Body rune","Chaos rune","Coins","Cosmic rune","Earth rune","Fire rune","Law rune","Mind rune","Nature rune","Robe of zamorak","Staff","Staff of fire","Water rune"],
     "Oomlie Bird": ["Raw oomlie"],
     "Otherworldly being": ["Blood rune","Chaos rune","Chaos talisman","Coins","Cosmic rune","Death rune","Dragon spear","Half of a key","Herb","Law rune","Mackerel","Mithril mace","Nature rune","Nature talisman","Ruby ring","Rune javelin","Rune spear","Shield left half","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire"],
-    "Rat": ["Rats tail"],
+    "Rat": ["Rat's tail"],
     "Red dragon": ["Adamant platebody","Adamantite bar","Blood rune","Chaos talisman","Chocolate cake","Coins","Death rune","Dragon bones","Dragon spear","Dragonhide","Half of a key","Herb","Law rune","Mithril 2h sword","Mithril axe","Mithril battleaxe","Mithril javelin","Mithril kiteshield","Nature talisman","Rune arrow","Rune dart","Rune javelin","Rune longsword","Rune spear","Shield left half","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire"],
     "Rogue": ["Bolts","Bronze arrow","Bronze med helm","Cabbage","Chaos rune","Coins","Copper ore","Earth rune","Earth talisman","Fire rune","Fishing bait","Herb","Iron dagger","Mind rune"],
     "Salarin the twisted": ["Black dagger","Chaos talisman","Coins","Dragon spear","Fire rune","Half of a key","Herb","Law rune","Nature rune","Nature talisman","Rune javelin","Rune spear","Shield left half","Sinister key","Snape grass","Super defence(1)","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire","Vial of water","Water rune","White berries"],

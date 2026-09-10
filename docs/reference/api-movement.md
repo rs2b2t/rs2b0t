@@ -50,6 +50,8 @@ Traversal.withTeles  // same as NAV_WITH_TELES
 
 Traversal.preload(): void      // warm the nav worker before the first walk
 Traversal.remaining(): number  // path tiles left in the active walk
+Traversal.teleportsEnabled(): boolean   // teleport hops may be injected (Global navTeleports)
+Traversal.requestRepath(reason?: string): void   // re-plan on the next step, without waiting for a stall
 ```
 
 `Traversal.walkTo` web-walks the world (A\* over the collision pack + door/

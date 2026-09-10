@@ -99,6 +99,17 @@ test('isVisible: unconditioned always shows; showIf matches case-insensitively',
     expect(isVisible(grouped.spell, key => (key === 'style' ? 'melee' : ''))).toBe(false);
 });
 
+test('isVisible: a showIf on a chip list matches any ticked chip, not the joined string', () => {
+    const chips: SettingsSchema = {
+        items: { type: 'string[]', default: [], options: ['custom', 'yew_longbow'] },
+        customItem: { type: 'string', default: '', showIf: { key: 'items', anyOf: ['custom'] } }
+    };
+    expect(isVisible(chips.customItem, () => 'yew_longbow, custom')).toBe(true);
+    expect(isVisible(chips.customItem, () => 'Custom')).toBe(true);
+    expect(isVisible(chips.customItem, () => 'yew_longbow')).toBe(false);
+    expect(isVisible(chips.customItem, () => '')).toBe(false);
+});
+
 test('visibilityDeps: only keys referenced by a showIf', () => {
     expect(visibilityDeps(grouped)).toEqual(new Set(['style']));
 });

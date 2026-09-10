@@ -12,6 +12,8 @@ const { base } = parseArgs(process.argv.slice(2), { base: 'http://localhost:8888
 const user = process.env.USER_NAME || `bf${Date.now().toString(36).slice(-7)}`;
 const ENGINE_DIR = process.env.ENGINE_DIR ?? `${homedir()}/Documents/engine`;
 const WEST = { x: 3185, z: 3440, level: 0 };
+const DRAYNOR = { x: 3092, z: 3243, level: 0 };
+const DRAYNOR_SHOT = 'docs/e2e/bankfletcher-draynor.png';
 const KNIFE_SHOT = 'docs/e2e/bankfletcher-knife.png';
 const STRING_SHOT = 'docs/e2e/bankfletcher-string.png';
 const ARROW_SHOT = 'docs/e2e/bankfletcher-arrows.png';
@@ -22,6 +24,8 @@ const STRUNG_WILLOW_LONG = 847;
 type Snap = {
     runner: string;
     logs: string[];
+    x: number;
+    z: number;
     knife: number;
     logsHeld: number;
     string: number;
@@ -40,6 +44,7 @@ type Abi = {
             countById(id: number): number;
             used(): number;
         };
+        Game: { tile(): { x: number; z: number } | null };
     };
     rs2b0t: {
         runner: { state: string; ctx?: { log?: { msg: string }[] } | null };
@@ -49,9 +54,12 @@ type Abi = {
 async function snap(page: Page): Promise<Snap> {
     return page.evaluate(([stringId, unstrungId, strungId]) => {
         const g = globalThis as never as Abi;
+        const at = g.__rs2b0t.Game.tile();
         return {
             runner: g.rs2b0t.runner.state,
             logs: (g.rs2b0t.runner.ctx?.log ?? []).map(line => line.msg),
+            x: at?.x ?? -1,
+            z: at?.z ?? -1,
             knife: g.__rs2b0t.Inventory.count('Knife'),
             logsHeld: g.__rs2b0t.Inventory.count('Willow logs'),
             string: g.__rs2b0t.Inventory.countById(stringId),
@@ -89,6 +97,52 @@ try {
 
     await cheatQuiet(page, 'setstat fletching 40', 1200);
     await clearChatDialogs(page, 'fletching level-ups');
+
+    if (!(await teleTo(page, DRAYNOR, 4, 25_000))) {
+        fail(`could not reach Draynor (${DRAYNOR.x},${DRAYNOR.z})`);
+    }
+    await cheatQuiet(page, '~clearinv', 800);
+    await cheatQuiet(page, '~bankitem willow_logs 200');
+    await seedGive(page, 'give knife 1', async () => (await snap(page)).knife === 1);
+    await seedGive(page, 'give willow_logs 27', async () => (await snap(page)).logsHeld >= 27);
+
+    await setSettings(page, 'BankFletcher', {
+        material: 'Willow logs',
+        product: 'Long bow'
+    });
+    await startScript(page, 'BankFletcher');
+    console.log('BankFletcher started — Draynor start, Varrock West preset stand');
+
+    const localDeadline = Date.now() + 180_000;
+    let localProof: Snap | null = null;
+    while (Date.now() < localDeadline) {
+        const now = await snap(page);
+        if (Math.abs(now.x - WEST.x) <= 12 && Math.abs(now.z - WEST.z) <= 12) {
+            fail(`walked to the Varrock West preset instead of the Draynor bank (${now.x},${now.z})`);
+        }
+        const tookLocal = now.logs.some(msg => /skip long walk|instead of distant preset/.test(msg));
+        if (tookLocal && now.logs.some(msg => /withdrawing/i.test(msg))) {
+            localProof = now;
+            break;
+        }
+        if (now.runner !== 'running') {
+            fail(`Draynor leg stopped before it banked: ${now.logs.slice(-8).join(' | ')}`);
+        }
+        await page.waitForTimeout(400);
+    }
+    if (!localProof) {
+        fail('never took the local-bank route from the Draynor start');
+    }
+    if (Math.abs(localProof.x - DRAYNOR.x) > 20 || Math.abs(localProof.z - DRAYNOR.z) > 20) {
+        fail(`banked away from Draynor at (${localProof.x},${localProof.z})`);
+    }
+    await page.screenshot({ path: DRAYNOR_SHOT, fullPage: true });
+    console.log(
+        `PASS local bank wins at (${localProof.x},${localProof.z}) `
+        + `preset=(${WEST.x},${WEST.z}) screenshot=${DRAYNOR_SHOT}`
+    );
+
+    await stopScript(page);
     if (!(await teleTo(page, WEST, 4, 25_000))) {
         fail(`could not reach Varrock West (${WEST.x},${WEST.z})`);
     }

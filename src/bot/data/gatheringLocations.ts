@@ -27,7 +27,17 @@ export interface GatheringLocation {
     chaseRadius?: number;
     /** CSV-ish resource tags for docs / verify helper (not used by Gather target pick). */
     resources?: readonly string[];
+    readonly avoidSpots?: readonly Tile[];
+    readonly sweep?: readonly Tile[];
+    readonly baitVendor?: BaitVendor;
     notes?: string;
+}
+
+export interface BaitVendor {
+    readonly keeper: string;
+    readonly stand: Tile;
+    readonly price: number;
+    readonly item: string;
 }
 
 export const DEFAULT_BOOTH_NAME = 'Bank booth';

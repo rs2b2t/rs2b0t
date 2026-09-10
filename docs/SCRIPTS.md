@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 59. Categories: 19.
+- Scripts: 60. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -29,6 +29,7 @@
 - [Smithing](#smithing) — 3
 - [Thieving](#thieving) — 3
 - [Treasure Trails](#treasure-trails) — 1
+- [Utility](#utility) — 1
 - [Woodcutting](#woodcutting) — 2
 
 ## Agility
@@ -127,6 +128,7 @@ Start-or-coordinate fighter — kills any named NPC in its leash, loots selected
 | `leashRadius` | number (2–30) | `8` | Leash radius (tiles) |
 | `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage, range |
 | `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
+| `useSpecial` | boolean | `true` | Use special attacks |
 | `spell` | string | `"Fire Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–1000) | `150` | Casts of runes per bank trip |
 | `rangeStyle` | string | `"rapid"` | Ranged style — one of: accurate, rapid, longrange |
@@ -544,7 +546,8 @@ Fishes a chosen method at the spot that offers it; banks the catch, optionally c
 | `baitQty` | number (1–) | `1000` | Bait / feathers qty |
 | `leashRadius` | number (2–64) | `18` | Leash radius (tiles) |
 | `tickManip` | string | `"Off"` | Tick manip — one of: Off |
-| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Draynor Village, Catherby, Fishing Guild, Barbarian Village, Seers (fly fishing), Karamja (Musa Point), Taverley Dungeon (lava eels), Gnome Stronghold (fishing), None |
+| `guildFeatherMinutes` | number (0–120) | `0` | Shilo supply trip every (minutes) |
+| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Draynor Village, Catherby, Fishing Guild, Barbarian Village, Seers (fly fishing), Karamja (Musa Point), Taverley Dungeon (lava eels), Gnome Stronghold (fishing), Shilo Village, None |
 | `cookMode` | string | `"Off"` | Cook mode — one of: Off, Cook then bank, Bank raw then cook |
 | `cookFish` | string | `"All raw"` | Fish to cook — one of: All raw, Tuna, Swordfish, Lobster, Shark, Salmon, Trout, Shrimps, Anchovies, Custom |
 | `cookFishCustom` | string | `""` | Custom cook filter |
@@ -568,11 +571,11 @@ Bank-standing fletcher — keeps the knife (or bow string), Make-X logs into sha
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
+| `mode` | string | `"auto"` | Fletch mode — one of: auto (from product), cut logs, string bows, cut+string |
 | `material` | string | `"Logs"` | Log type — one of: Logs, Oak logs, Willow logs, Maple logs, Yew logs, Magic logs |
 | `product` | string | `"Arrow shafts"` | Fletch product — one of: Arrow shafts, Short bow, Long bow, String short bow, String long bow, Headless arrows, Bronze arrows, Iron arrows, Steel arrows, Mithril arrows, Adamant arrows, Rune arrows |
 | `bankStand` | tile | `{"x":3185,"z":3440,"level":0}` | Bank stand tile (x,z) |
 | `bankBooth` | string | `"Bank booth"` | Bank booth loc name |
-| `leashRadius` | number (2–20) | `6` | Booth search radius (tiles) |
 
 ### DartFletcher
 
@@ -658,13 +661,15 @@ Automated teleportation with intelligent banking and safety features
 
 ### Alcher
 
-High alchemy loop — withdraw the chosen item from the bank as notes, cast High Level Alchemy (fire staff + nature runes) on the stack to alch it in full, bank the coins, repeat
+Alchemy loop — tick the items to alch and the bot drains them richest first, withdrawing each as notes and casting High or Low Level Alchemy (fire staff + nature runes) until the bank is out, then moving to the next
 
-- Tags: `magic`, `high alchemy`, `alchemy`, `banking`, `noted`
+- Tags: `magic`, `high alchemy`, `low alchemy`, `alchemy`, `banking`, `noted`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `item` | string | `"Rune platebody"` | Item to alch |
+| `spell` | string | `"High"` | Spell — one of: High Level Alchemy, Low Level Alchemy |
+| `items` | string[] | `["black_dragonhide_body","red_dragonhide_body","blue_dragonhide_body","dragonhide_body","black_dragonhide_chaps","red_dragonhide_chaps","blue_dragonhide_chaps","dragonhide_chaps","magic_longbow","steel_platebody","yew_longbow"]` | Items to alch — one of: Custom item (named below), Rune platebody (39,000), Rune 2h sword (38,400), Rune platelegs (38,400), Rune kiteshield (32,640), Rune chainbody (30,000), Rune sq shield (23,040), Rune full helm (21,120), Rune scimitar (15,360), Air battlestaff (9,300), Earth battlestaff (9,300), Fire battlestaff (9,300), Water battlestaff (9,300), Black d'hide body (8,088), Adamant platebody (7,680), Red d'hide body (6,738), Blue d'hide body (5,616), Green d'hide body (4,680), Battlestaff (4,200), Adamant 2h sword (3,840), Adamant platelegs (3,840), Black d'hide chaps (3,732), Adamant kiteshield (3,264), Mithril platebody (3,120), Red d'hide chaps (3,108), Blue d'hide chaps (2,592), Green d'hide chaps (2,340), Black platebody (2,304), Mithril 2h sword (1,560), Mithril platelegs (1,560), Magic longbow (1,536), Mithril kiteshield (1,326), Steel platebody (1,200), Yew longbow (768), Steel 2h sword (600), Steel platelegs (600), Maple longbow (384) |
+| `customItem` | string | `""` | Custom item |
 | `alchs` | number (1–1000) | `27` | Alchs per trip |
 
 ## Mining
@@ -985,6 +990,20 @@ Solves the easy clue scroll (or opens the casket) in your pack — banks everyth
 | `foodWithdraw` | number (1–27) | `8` | Food to withdraw |
 | `restorePrayer` | boolean | `true` | Top up prayer between trails |
 | `useTeleports` | boolean | `true` | Use teleports |
+
+## Utility
+
+### BankSorter
+
+Walks to a bank and rewrites the slot order into categories, coins first and junk last, then stops. Optionally reports, and drops, quest items a finished quest no longer needs
+
+- Tags: `bank`, `sort`, `tidy`, `quest`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `sortBank` | boolean | `true` | Sort the bank |
+| `reportQuestJunk` | boolean | `true` | Report obsolete quest items |
+| `dropQuestJunk` | boolean | `false` | Drop what the report found |
 
 ## Woodcutting
 

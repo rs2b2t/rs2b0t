@@ -21,8 +21,12 @@ abstract class AbstractBot {
     onResume?(): void;
     onPaint?(ctx: CanvasRenderingContext2D): void; // overlay HUD, every redraw
 
+    recoveryAnchor?(): Tile | null;    // watchdog recovery walks back here when the bot is 8+ tiles away
+    grindTargets(): string[];          // NPC names this bot fights on purpose, handed to the random-event detector
+    ignoredRandoms(): string[];        // random-event names this bot never pauses for, re-read each detect
+
     log(msg: string): void;
-    protected on<K>(event, cb): void;  // event subscription, auto-removed on stop
+    on<K>(event, cb): void;            // event subscription, auto-removed on stop; public so a task can subscribe for its bot
 }
 ```
 
@@ -92,6 +96,7 @@ Stop can't unwind it and the watchdog warns.
 Execution.delay(ms: number): Promise<void>          // wall-clock
 Execution.delayTicks(n: number): Promise<void>      // n server ticks (~600ms each)
 Execution.delayUntil(cond: () => boolean, timeoutMs = 6000): Promise<boolean>
+Execution.delayUntilTicks(cond: () => boolean, maxTicks: number): Promise<boolean>   // the same, bounded in server ticks
 ```
 
 `delayUntil` resolves `true` when `cond()` holds (checked once per frame),
@@ -102,6 +107,17 @@ const before = Inventory.used();
 await item.interact('Bury');
 const ok = await Execution.delayUntil(() => Inventory.used() < before, 3000);
 ```
+
+```ts
+Execution.noteProgress(): void   // work the watchdog cannot see
+```
+
+The watchdog reads progress from tile movement and xp, so a script that trades
+or reads chat from one tile looks wedged after ten minutes and is walked home
+or restarted. `noteProgress` reports work it cannot see. Call it only after
+that work was observed, as `MarketMaker` does behind
+`onStation() && !tradeStalled()`. An unconditional call per loop turns wedge
+detection off.
 
 ---
 

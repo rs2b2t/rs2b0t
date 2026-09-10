@@ -1,7 +1,7 @@
 // Why: a runtime array makes the union checkable against the registry; a bare type union cannot be.
 export const SCRIPT_NAMES = [
     'AgilityBot', 'AIOQuester', 'AIOTeleport', 'ArdyCakes', 'ArdyFighter',
-    'ArdyThiever', 'ArravSupplier', 'AutoFighter', 'BankFletcher', 'Barcrawl', 'BoneBurier',
+    'ArdyThiever', 'ArravSupplier', 'AutoFighter', 'BankFletcher', 'BankSorter', 'Barcrawl', 'BoneBurier',
     'BrimhavenAgility', 'BrimhavenMossGiants', 'ChaosDruidKiller', 'ChickenKiller', 'ClueSolver',
     'CoalTrucks', 'CookBot', 'DartFletcher', 'DoorOpener', 'DuelArena', 'EdgevilleMonkeyBars',
     'EssMiner', 'FireGiant', 'Firemaker', 'FlaxAIO', 'FlaxPicker', 'FlaxRunner',

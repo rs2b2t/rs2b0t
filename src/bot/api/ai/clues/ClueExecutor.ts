@@ -531,7 +531,7 @@ function blockReason(step: ClueStep): string | null {
         return `needs ${extras.join('+')} (not held)`;
     }
     // Why: `start_chop_jungle` answers a missing machete, axe or map with a message box rather than a refusal
-    // Why: the walker can see, so the leg would swing at the band for its whole budget and report no progress.
+    // Why: the walker can see, so the leg would swing at the band until its budget ran out and report no progress.
     if (step.type !== 'open-casket' && KHARAZI_CLUES.has(step.id)) {
         const short = jungleKitMissing();
         if (short.length > 0) {

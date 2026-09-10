@@ -54,6 +54,7 @@ toolRestockPlan(reqs, skillLevel, invCount, bankCount)
 hasAllTools / missingToolLabels / toolKeepNames / toolKitLabel
 toolsNeedingEquip / bestHeldToolNames / surplusHeldToolNames
 bankHasBetterGatherTool / canWieldTool / toolAttackLevel
+hasToolReq(req, skillLevel, count)   // one ToolReq; hasAllTools takes the list
 ```
 
 ### Tool acquire (planning)
@@ -67,7 +68,12 @@ parseToolAcquireMode(raw)
 TOOL_ACQUIRE_SETTING / FORGETFUL_BANK_SETTING   // settingsSchema fragments
 BOB_VENDOR / NURMOF_VENDOR / GERRANT_VENDOR / HARRY_VENDOR
 PICKAXE_SHOP_COSTS / AXE_SHOP_COSTS / FISHING_SHOP_COSTS
-AXE_SMITH_LEVEL / AXE_BAR_FOR / VARROCK_ANVIL_STAND
+AXE_SMITH_LEVEL / AXE_BAR_FOR / VARROCK_ANVIL_STAND / VARROCK_ANVIL_BANK
+COINS / BROKEN_PICKAXE / BROKEN_AXE               // item names
+TOOL_ACQUIRE_OPTIONS                              // the ToolAcquireMode values, for a settings schema
+FORGETFUL_BANK_ODDS                               // 1-in-N bank visits re-open as if something was forgotten
+GERRANT_ONLY_FISHING                              // gear Harry does not stock: feather, fly fishing rod
+interface ToolVendor { keeper; stand; bankStand; hopFrom?; hopLoc?; hopAction? }
 
 type ToolAcquirePlan =
   | { kind: 'repair'; brokenName; label; vendor; prefer }
@@ -78,6 +84,11 @@ planGatherToolAcquire(reqs, world, { upgrade })
 planPickaxeAcquire / planAxeAcquire / planBrokenToolRepair
 planFishingGearBuys / fishingGearShopCart / planFishingGearAcquire
 canFundPlan / coinsToWithdraw / acquireKeepNames
+bestOwnedTier(level, tiers, count) / pickaxeShopOffers() / axeShopOffers()
+bestAffordableShopTier(level, tiers, offers, coins, owned)
+bestSmithableAxe(woodcuttingLevel, smithingLevel, owned, barCount, hasHammer)
+fishingVendorFor(name, near?) / fishingShopCost(name) / isFishingBaitPiece(piece)
+withBaitTarget(method, baitQty) / buyPlansCost(plans) / shopableMissingFishingGear(gear, count)
 ```
 
 `AcquireWorld` is a pure snapshot interface (`skillLevel`, `heldCount`,
@@ -97,10 +108,11 @@ interface GatheringLocation {
 // 64×64 map square as startTile (else freeform null)
 resolveGatheringLocation(setting, startTile, table)
 locationOptions(table)            // ['Auto', …names, 'None']
-boothFields(loc) / sameMapSquare / MAP_SQUARE / DEFAULT_BOOTH_*
+boothFields(loc) / sameMapSquare / MAP_SQUARE / DEFAULT_BOOTH_NAME / DEFAULT_BOOTH_OP
 
 FISHING_LOCATIONS / resolveFishingLocation / FISHING_LOCATION_OPTIONS
 MINING_LOCATIONS / resolveMiningLocation / MINING_LOCATION_OPTIONS
+MINING_LOCATION_OPTION_LABELS / miningLocationLabel(loc)   // option text with the recommended combat level
 WOODCUTTING_LOCATIONS / resolveWoodcuttingLocation / WOODCUTTING_LOCATION_OPTIONS
 ```
 

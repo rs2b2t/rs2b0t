@@ -6,10 +6,34 @@ import {
     gatherSpotRangeOrigin,
     isAutoLocation,
     resourceWithinCamp,
-    spotWithinGatherRange
+    spotWithinGatherRange,
+    spotAvoided,
+    sweepStopFor
 } from '#/bot/scripts/GatheringBot/GatherCamp.js';
 import { DEFAULT_CHASE_RADIUS, resolveCampRadius } from '#/bot/data/gatheringLocations.js';
 import { HOME_ARRIVE_RADIUS, shouldSoftHomeFromGatherMiss, shouldWalkHomeToGatherAnchor } from '#/bot/api/tasks/Anchor.js';
+
+describe('Shilo spot selection', () => {
+    const far = [{ x: 2855, z: 2977, level: 0 }];
+    test('refuses only the exact avoided tile and plane', () => {
+        expect(spotAvoided({ x: 2855, z: 2977, level: 0 }, far)).toBe(true);
+        expect(spotAvoided({ x: 2855, z: 2973, level: 0 }, far)).toBe(false);
+        expect(spotAvoided({ x: 2855, z: 2977, level: 1 }, far)).toBe(false);
+        expect(spotAvoided({ x: 2855, z: 2977, level: 0 }, [])).toBe(false);
+    });
+    const sweep = [{ x: 2862, z: 2971, level: 0 }, { x: 2822, z: 2968, level: 0 }];
+    test('holds the current stop until arrival, then wraps', () => {
+        expect(sweepStopFor(sweep, 0, null)).toEqual({ stop: sweep[0], index: 0 });
+        expect(sweepStopFor(sweep, 0, { x: 2841, z: 2970, level: 0 })).toEqual({ stop: sweep[0], index: 0 });
+        expect(sweepStopFor(sweep, 0, { x: 2863, z: 2972, level: 0 })).toEqual({ stop: sweep[1], index: 1 });
+        expect(sweepStopFor(sweep, 1, { x: 2822, z: 2968, level: 0 })).toEqual({ stop: sweep[0], index: 0 });
+        expect(sweepStopFor(sweep, 0, { x: 2862, z: 2971, level: 1 })).toEqual({ stop: sweep[0], index: 0 });
+    });
+    test('normalizes the index and holds the pin for camps without a sweep', () => {
+        expect(sweepStopFor(sweep, 3, null)).toEqual({ stop: sweep[1], index: 1 });
+        expect(sweepStopFor([], 4, null)).toEqual({ stop: null, index: 0 });
+    });
+});
 import Tile from '#/bot/geometry/Tile.js';
 
 describe('GatherCamp membership', () => {

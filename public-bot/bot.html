@@ -679,6 +679,30 @@
             padding: 8px 4px;
         }
 
+        .rs2b0t-pricebook-filterbar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .rs2b0t-pricebook-filter {
+            flex: 1 1 auto;
+            min-width: 0;
+            font-size: 11px;
+        }
+
+        .rs2b0t-pricebook-filter-count {
+            font-size: 10px;
+            color: #888;
+            white-space: nowrap;
+        }
+
+        /* The base button is flex:1, which would split the row with the box it sits beside. */
+        .rs2b0t-pricebook-filterbar .rs2b0t-button {
+            flex: 0 0 auto;
+            padding: 4px 10px;
+        }
+
         /* --- order book: shelves, sorting, bulk add ----------------------- */
         .rs2b0t-pricebook-shelfbar {
             display: flex;

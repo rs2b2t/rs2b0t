@@ -79,20 +79,32 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
             return talkThrough(step.stop.npc, step.stop.prefer, log, step.stop.gapMs);
         }
         case 'grabGround': {
-            const before = Inventory.count(step.item);
-            const g = GroundItems.query().name(step.item).within(12).nearest();
-            if (!g) {
-                const arrived = await ensureAt(step.anchor, 2, log);
-                if (arrived && step.waitIfMissing) {
-                    await Execution.delayTicks(2);
+            // Why: arrival at the spawn is not a take, Cook's egg logged grab success with an empty pen.
+            // Why: re-query after the walk and Take if it is there, otherwise the gather is still outstanding.
+            const tryTake = async (): Promise<boolean> => {
+                const before = Inventory.count(step.item);
+                const g = GroundItems.query().name(step.item).within(12).nearest();
+                if (!g) {
                     return false;
                 }
-                return arrived;
+                if (!(await g.interact('Take'))) {
+                    return false;
+                }
+                return Execution.delayUntil(() => Inventory.count(step.item) > before, 8000);
+            };
+            if (await tryTake()) {
+                return true;
             }
-            if (!(await g.interact('Take'))) {
+            if (!(await ensureAt(step.anchor, 2, log))) {
                 return false;
             }
-            return Execution.delayUntil(() => Inventory.count(step.item) > before, 8000);
+            if (await tryTake()) {
+                return true;
+            }
+            if (step.waitIfMissing) {
+                await Execution.delayTicks(2);
+            }
+            return false;
         }
         case 'pickLoc': {
             const before = Inventory.count(step.item);

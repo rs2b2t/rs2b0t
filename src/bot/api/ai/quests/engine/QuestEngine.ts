@@ -16,7 +16,7 @@ import { QUESTS } from '../data/quests.js';
 import { QUEST_DEFS, defById } from '../defs/index.js';
 import { executeStep } from '../exec/steps.js';
 import type { BankInventorySnapshot, PlayerState, QuestEligibility, QuestRecord } from '../types.js';
-import { COIN_FLOAT, coinFloatWithdraw, depositPlan, floatDrawPlan, planProvisioning, shouldFreshenPack } from './provisioning.js';
+import { COIN_FLOAT, coinFloatPlan, depositPlan, floatDrawPlan, planProvisioning, shouldFreshenPack } from './provisioning.js';
 
 export { COIN_FLOAT };
 import { nextQuest, queueRows, type QueueRow } from './queue.js';
@@ -114,6 +114,7 @@ export class QuestEngine implements Task {
     private readonly freshenTries = new Map<string, number>();
     private readonly foodDrawn = new Set<string>();
     private readonly potionsDrawn = new Set<string>();
+    private readonly coinsDrawn = new Set<string>();
     private readonly blocked = new Map<string, string[]>();
     /** Modules that have already emitted {@link QuestModule.warnReadiness}. */
     private readonly readinessWarned = new Set<string>();
@@ -262,6 +263,7 @@ export class QuestEngine implements Task {
             this.freshenTries.delete(id);
             this.foodDrawn.delete(id);
             this.potionsDrawn.delete(id);
+            this.coinsDrawn.delete(id);
             this.blocked.delete(id);
             this.resetWatchdog();
             this.runningId = null;
@@ -295,8 +297,19 @@ export class QuestEngine implements Task {
         }
         if (!this.provisioned.has(id)) {
             const plan = planProvisioning(module.record.items, snap.inv, this.lastBankCounts);
-            // Why: a quest that fetches coins at the point of sale wants no float, as this runs every loop while anything is outstanding and a standing balance is restored after every purchase.
-            const coinFloat = coinFloatWithdraw(snap.inv, this.lastBankCounts, module.coinFloat ?? COIN_FLOAT);
+            // Why: a 10gp gate while egg/milk/flour are still outstanding used to emit withdraw Coins every tick, because the float was restored after every purchase.
+            const coinPlan = coinFloatPlan(
+                snap.inv.get('coins') ?? 0,
+                this.lastBankCounts.get('coins') ?? 0,
+                module.coinFloat ?? COIN_FLOAT,
+                this.coinsDrawn.has(id)
+            );
+            let coinFloat: { name: string; qty: number } | null = null;
+            if (coinPlan.drawn) {
+                this.coinsDrawn.add(id);
+            } else if (coinPlan.qty > 0) {
+                coinFloat = { name: 'Coins', qty: coinPlan.qty };
+            }
             const foodItem = this.host.foodItem();
             // Only withdraw food once the bank inventory is known, guessing a
             // shortfall forces a failed booth trip and can scramble a full pack.
@@ -509,6 +522,7 @@ export class QuestEngine implements Task {
         this.deposited.delete(deadId);
         this.foodDrawn.delete(deadId);
         this.potionsDrawn.delete(deadId);
+        this.coinsDrawn.delete(deadId);
         this.resetWatchdog();
         this.stepSubLog.clear();
         this.lastStepLogged = '';
@@ -594,6 +608,7 @@ export class QuestEngine implements Task {
         this.freshenTries.delete(id);
         this.foodDrawn.delete(id);
         this.potionsDrawn.delete(id);
+        this.coinsDrawn.delete(id);
         this.retreated.delete(id);
         this.retreatTries.delete(id);
         this.waitKey = '';
@@ -714,7 +729,7 @@ export class QuestEngine implements Task {
     }
 
     private refreshBankCounts(acceptSettledEmpty = false): void {
-        if (!Bank.isOpen() || (!Bank.loaded() && !acceptSettledEmpty)) {
+        if (!Bank.isOpen() || (!Bank.ready() && !acceptSettledEmpty)) {
             return;
         }
         const next = new Map<string, number>();

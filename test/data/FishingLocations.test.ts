@@ -11,6 +11,34 @@ import {
 
 const bankTiles = new Set(BANK_LOCATIONS.map(b => `${b.tile.x},${b.tile.z},${b.tile.level}`));
 
+describe('Shilo Village camp', () => {
+    test('resolves the river camp and existing quest-gated teller', () => {
+        const shilo = resolveFishingLocation('Shilo Village', new Tile(2841, 2970, 0));
+        expect(shilo?.spot).toEqual(new Tile(2841, 2970, 0));
+        expect(shilo?.bankStand).toEqual(new Tile(2852, 2954, 0));
+        expect(shilo?.boothName).toBeUndefined();
+        expect(shilo?.boothOp).toBeUndefined();
+        const teller = BANK_LOCATIONS.find(bank => bank.name === 'Shilo Village');
+        expect(teller?.tile).toEqual(shilo?.bankStand);
+        expect(teller?.npcAccess?.op).toBe('Bank');
+        expect(teller?.requires?.quest).toBe('Shilo Village');
+    });
+    test('uses Fernahei only at Shilo, leaving every other camp without a vendor', () => {
+        const shilo = FISHING_LOCATIONS.find(location => location.name === 'Shilo Village');
+        expect(shilo?.baitVendor).toEqual({ keeper: 'Fernahei', stand: new Tile(2870, 2971, 0), price: 2, item: 'Feather' });
+        expect(FISHING_LOCATIONS.filter(location => location.baitVendor).map(location => location.name)).toEqual(['Shilo Village']);
+    });
+    test('avoids far-bank spots and sweeps only the village side inside the camp', () => {
+        const shilo = FISHING_LOCATIONS.find(location => location.name === 'Shilo Village');
+        expect(shilo?.avoidSpots?.map(tile => [tile.x, tile.z])).toEqual([[2850, 2976], [2855, 2977], [2860, 2976], [2869, 2977]]);
+        expect(shilo?.sweep?.map(tile => [tile.x, tile.z])).toEqual([[2862, 2971], [2856, 2972], [2841, 2970], [2836, 2970], [2822, 2968]]);
+        for (const stop of shilo?.sweep ?? []) {
+            expect(shilo?.spot.distanceTo(stop)).toBeLessThanOrEqual(shilo?.campRadius ?? 0);
+            expect(shilo?.avoidSpots?.some(tile => tile.equals(stop))).toBe(false);
+        }
+    });
+});
+
 describe('resolveFishingLocation', () => {
     test('None resolves to no location', () => {
         expect(resolveFishingLocation('None', new Tile(3086, 3231, 0))).toBeNull();
@@ -86,7 +114,7 @@ describe('FISHING_LOCATIONS table', () => {
     });
 
     test('core catalog entries are verified; tick-manip camps may be provisional', () => {
-        const provisional = new Set(['Gnome Stronghold (fishing)']);
+        const provisional = new Set(['Gnome Stronghold (fishing)', 'Shilo Village']);
         for (const loc of FISHING_LOCATIONS) {
             if (provisional.has(loc.name)) {
                 expect(loc.verified, loc.name).toBe(false);

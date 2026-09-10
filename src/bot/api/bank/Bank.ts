@@ -76,6 +76,23 @@ export const Bank = {
         return reader.bankItems().length > 0;
     },
 
+    // Why: `loaded()` is "the list is non-empty", which the empty bank this exists for can never satisfy; the fallback covers a bank opening with no deposit side panel to snapshot against.
+    ready(): boolean {
+        return Bank.isOpen() && (Bank.snapshotReady() || Bank.loaded());
+    },
+
+    /** Wait for the item list the open packet promises. */
+    async waitReady(timeoutMs = 4000, log?: (msg: string) => void): Promise<boolean> {
+        if (!Bank.isOpen() || Bank.ready()) {
+            return Bank.ready();
+        }
+        await Execution.delayUntil(() => !Bank.isOpen() || Bank.ready(), timeoutMs);
+        if (Bank.isOpen() && !Bank.ready()) {
+            log?.('bank: opened but the item list never arrived');
+        }
+        return Bank.ready();
+    },
+
     snapshotReady(): boolean {
         return reader.bankSnapshotReady();
     },
@@ -97,6 +114,7 @@ export const Bank = {
             && reader.bankSnapshotGeneration() > generation;
     },
 
+    /** @internal */
     normalBackpackSnapshot(): BackpackItem[] | null {
         if (Bank.isOpen() || reader.inventorySize() !== 28 || !reader.inventorySnapshotReady()) {
             return null;
@@ -104,6 +122,7 @@ export const Bank = {
         return reader.inventory().map(({ slot, id, name, count }) => ({ slot, id, name, count }));
     },
 
+    /** @internal */
     async backpackReady(
         expected: readonly BackpackItem[],
         log?: (msg: string) => void
@@ -218,7 +237,8 @@ export const Bank = {
         );
     },
 
-    async withdrawXById(id: number, count: number): Promise<boolean> {
+    // Why: in note mode the pack receives the noted obj, whose id is not the bank slot's, so `landsAsId` says what to watch for; without it the wait times out on a withdraw that worked.
+    async withdrawXById(id: number, count: number, landsAsId: number = id): Promise<boolean> {
         if (count <= 0) {
             return true;
         }
@@ -226,7 +246,7 @@ export const Bank = {
             return false;
         }
         const invCount = (): number => backpackSnapshots()
-            .filter(item => item.id === id)
+            .filter(item => item.id === landsAsId)
             .reduce((sum, item) => sum + item.count, 0);
         const item = reader.bankItems().find(i => i.id === id);
         const xOp = item?.ops.find((o): o is string => o !== null && /withdraw[\s-]*x/i.test(o));
@@ -336,8 +356,8 @@ export const Bank = {
             if (chosen) {
                 await booth.interact(chosen);
                 if (await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 8000)) {
-                    if (ChatDialog.canContinue() && await continueObjectBankDialog(log)) { return true; }
-                    if (Bank.isOpen()) { return true; }
+                    if (ChatDialog.canContinue() && await continueObjectBankDialog(log)) { return openedReady(log); }
+                    if (Bank.isOpen()) { return openedReady(log); }
                 }
             }
 
@@ -351,15 +371,15 @@ export const Bank = {
             if (adj && adjOp) {
                 await adj.interact(adjOp);
                 if (await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 4000)) {
-                    if (ChatDialog.canContinue() && await continueObjectBankDialog(log)) { return true; }
+                    if (ChatDialog.canContinue() && await continueObjectBankDialog(log)) { return openedReady(log); }
                 }
             }
         }
-        return Bank.isOpen();
+        return openedReady(log);
     },
 
     /**
-     * Open a bank that lives behind a conversation rather than a booth.
+     * @internal Open a bank that lives behind a conversation rather than a booth.
      * Why: Gundai chats, offers two options, and only runs `@openbank` once the right one is picked, so this drives the dialogue rather than waiting on a single op.
      */
     async openNpcAccess(access: BankNpcAccess, log?: (msg: string) => void): Promise<boolean> {
@@ -391,12 +411,12 @@ export const Bank = {
         if (!Bank.isOpen()) {
             log?.(`could not get ${access.name} to open the bank`);
         }
-        return Bank.isOpen();
+        return openedReady(log);
     },
 
     async openNearestAccess(access: BankObjectAccess, log?: (msg: string) => void): Promise<boolean> {
         if (Bank.isOpen()) {
-            return true;
+            return openedReady(log);
         }
 
         if (access.openFirst && !locWithAction(access.name, access.op)) {
@@ -427,7 +447,7 @@ export const Bank = {
             }
         }
 
-        return Bank.isOpen() || Bank.openNearest(access.name, access.op, log);
+        return Bank.isOpen() ? openedReady(log) : Bank.openNearest(access.name, access.op, log);
     },
 
     /** Close the bank modal so inventory ops (Wield, Use, Bury, …) hit the backpack again. */
@@ -462,8 +482,8 @@ export const Bank = {
             if (chosen) {
                 await booth.interact(chosen);
                 if (await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 8000)) {
-                    if (ChatDialog.canContinue() && await continueObjectBankDialog(log)) { return true; }
-                    if (Bank.isOpen()) { return true; }
+                    if (ChatDialog.canContinue() && await continueObjectBankDialog(log)) { return openedReady(log); }
+                    if (Bank.isOpen()) { return openedReady(log); }
                 }
             }
 
@@ -483,13 +503,22 @@ export const Bank = {
             if (adjOp) {
                 await adjacent.interact(adjOp);
                 if (await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 4000)) {
-                    if (ChatDialog.canContinue() && await continueObjectBankDialog(log)) { return true; }
+                    if (ChatDialog.canContinue() && await continueObjectBankDialog(log)) { return openedReady(log); }
                 }
             }
         }
-        return Bank.isOpen();
+        return openedReady(log);
     }
 };
+
+// Why: `isOpen()` is the component existing, and callers read counts on the next line, so the open is not done until the server has said what the bank holds.
+async function openedReady(log?: (msg: string) => void): Promise<boolean> {
+    if (!Bank.isOpen()) {
+        return false;
+    }
+    await Bank.waitReady(4000, log);
+    return Bank.isOpen();
+}
 
 function locWithAction(name: string, op: string) {
     const wanted = op.toLowerCase();

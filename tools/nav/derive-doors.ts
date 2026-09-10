@@ -81,7 +81,7 @@ function main(): void {
             'mournerstewdoor',
             // Shield of Arrav's three hideout doors. Why: the weapon store answers Open with "The door is securely locked" and yields only to an oplocu with the key, while the other two refuse until you have joined and then p_teleport you through, none is an edge the walker can step.
             'phoenixdoor', 'phoenixdoor2', 'blackarmdoor',
-            // The Legends Quest trials. Why: the outer gate answers Open with "You push on the doors, they're really shut" and yields only to a Search with a lockpick, and the inner one raises a brute-strength prompt and a roll that a walker cannot answer. Baked as edges the pathfinder routes into both and the walker loops a tile short.
+            // The Legends Quest trials. Why: the outer gate answers Open with "You push on the doors" and yields only to a Search with a lockpick, and the inner one raises a brute-strength prompt and a roll that a walker cannot answer. Baked as edges the pathfinder routes into both and the walker loops a tile short.
             'lglockpickgatebottoml', 'lglockpickgatebottomr', 'lgstrengthtrialgatel', 'lgstrengthtrialgater',
             // Khazard stronghold's front door. Why: quest_tree.rs2 opens it only for a player already north of it, so the pathfinder routed every trip to the chest through a door that answers "The door seems to be locked from the inside.", the crumbled wall is the way in, driven by defs/treegnome.
             'khazard_stronghold_door',
@@ -117,6 +117,10 @@ function main(): void {
     ]);
     // Why: gates.rs2 hits loc_add(type=-1) for this Duel Arena outer leaf and leaves Gate#3198 closed, so navigation has to detour through its paired Gate#3197 one tile north.
     const BROKEN_ENGINE_EXCLUDED = new Set(['3198@3312,3235,0']);
+    // Why: 2-tile doors sit on an unwalkable loc tile, so WALL_STRAIGHT derivation never emits them.
+    const CURATED_EXTRA: DoorEdge[] = [
+        { x: 3107, z: 3162, level: 0, locId: 1536, locName: 'Door', dir: 'E' }
+    ];
 
     const edges: DoorEdge[] = [];
     const skippedShapes = new Map<string, number>();
@@ -167,6 +171,11 @@ function main(): void {
             });
             nameCounts.set(locName, (nameCounts.get(locName) ?? 0) + 1);
         });
+    }
+
+    for (const extra of CURATED_EXTRA) {
+        edges.push(extra);
+        nameCounts.set(extra.locName, (nameCounts.get(extra.locName) ?? 0) + 1);
     }
 
     edges.sort((a, b) => a.level - b.level || a.x - b.x || a.z - b.z || a.locId - b.locId);

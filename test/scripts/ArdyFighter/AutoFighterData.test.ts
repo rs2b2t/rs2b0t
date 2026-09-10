@@ -14,7 +14,9 @@ import {
     START_POSITION,
     wantsAutoFighterLoot,
     autoRetaliateShouldEnable,
-    assertAutoRetaliateOn
+    assertAutoRetaliateOn,
+    shouldArmSpecial,
+    specialAvailable
 } from '#/bot/scripts/AutoFighter/AutoFighterData.js';
 import { matchesEntityName } from '#/bot/api/query/Query.js';
 import { resolveControl } from '#/bot/panel/paramControls.js';
@@ -143,6 +145,22 @@ describe('AutoFighter data', () => {
         expect(shouldKeepBankItem('Bones', 526, 'Trout', true, [], [], false)).toBe(false);
         expect(shouldKeepBankItem('Bones', 526, 'Trout', true, [], [], true)).toBe(true);
         expect(shouldKeepBankItem('Big bones', 532, 'Trout', true, [], [], true)).toBe(false);
+    });
+
+    test('specials need a spec weapon, the setting on, and a style that swings', () => {
+        expect(specialAvailable(true, 'melee', 250)).toBe(true);
+        expect(specialAvailable(true, 'range', 350)).toBe(true);
+        expect(specialAvailable(true, 'melee', null)).toBe(false);
+        expect(specialAvailable(false, 'melee', 250)).toBe(false);
+        expect(specialAvailable(true, 'mage', 250)).toBe(false);
+    });
+
+    test('arming waits for the energy the weapon costs and skips an already-armed special', () => {
+        expect(shouldArmSpecial(true, 'melee', 250, 250, false)).toBe(true);
+        expect(shouldArmSpecial(true, 'melee', 250, 1000, false)).toBe(true);
+        expect(shouldArmSpecial(true, 'melee', 250, 249, false)).toBe(false);
+        expect(shouldArmSpecial(true, 'melee', 250, 1000, true)).toBe(false);
+        expect(shouldArmSpecial(true, 'melee', null, 1000, false)).toBe(false);
     });
 
     test('AutoFighter turns Auto Retaliate on and fails loudly if it stays off', () => {

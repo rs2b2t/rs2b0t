@@ -5,12 +5,15 @@ import {
     decideBeat,
     Desk,
     freshChatLines,
+    listedRows,
     dealLine,
     dealOf,
     dealTotals,
     RateLimiter,
     resolveQuote,
+    floatShortfall,
     shouldSettle,
+    tradeIsStalled,
     sideSignature,
     type Intent,
     type Window
@@ -197,7 +200,7 @@ describe('decideBeat', () => {
         expect(beat).toEqual({ do: 'accept' });
     });
 
-    // Why: each re-offer costs clicks and resets both accepts, so a patient toggler could waste the whole window.
+    // Why: each re-offer costs clicks and resets both accepts, so a patient toggler could waste the window.
     test('past the re-offer cap it gives up rather than keep paying', () => {
         const beat = decideBeat({ ...base, theirSig: '440x100', window: windowAt({ reOffers: 12 }) });
         expect(beat.do).toBe('give-up');
@@ -308,6 +311,48 @@ describe('shouldSettle', () => {
 
     test('false otherwise', () => {
         expect(shouldSettle(20, 1_000, 50_000)).toBe(false);
+    });
+});
+
+// Why: Settle used to ask for the raw float, and a bank that could not fill it left that true on every loop, so the shop stood at the booth banking and re-withdrawing one stack instead of trading.
+describe('floatShortfall', () => {
+    test('the gap to the float when the bank can cover it', () => {
+        expect(floatShortfall(0, 500_000, 200_000)).toBe(200_000);
+        expect(floatShortfall(50_000, 500_000, 200_000)).toBe(150_000);
+    });
+
+    test('nothing to fetch once the pack is at the float', () => {
+        expect(floatShortfall(200_000, 500_000, 200_000)).toBe(0);
+        expect(floatShortfall(260_000, 500_000, 200_000)).toBe(0);
+    });
+
+    test('a bank short of the float is asked only for what it has', () => {
+        expect(floatShortfall(0, 50_000, 200_000)).toBe(50_000);
+    });
+
+    test('nothing left to fetch, so the trip is not worth making again', () => {
+        expect(floatShortfall(50_000, 0, 200_000)).toBe(0);
+        expect(floatShortfall(0, 0, 200_000)).toBe(0);
+    });
+});
+
+// Why: the shop reports standing still as progress so the wedge check does not restart a healthy stall, and a trade window is part of that. ServeWindow outranks Listen and only Listen calls dropExpired, so the engagement timeout cannot fire while the window is open: without this a customer who opens the confirm screen and walks away holds the shop for ever and nothing rescues it.
+describe('tradeIsStalled', () => {
+    test('no trade is not a stalled one', () => {
+        expect(tradeIsStalled(false, false, false)).toBe(false);
+        expect(tradeIsStalled(false, true, true)).toBe(false);
+    });
+
+    test('a live window inside its deadline is the shop working', () => {
+        expect(tradeIsStalled(true, true, false)).toBe(false);
+    });
+
+    test('past the deadline, nobody is advancing it', () => {
+        expect(tradeIsStalled(true, true, true)).toBe(true);
+    });
+
+    test('a trade the desk has let go of is orphaned', () => {
+        expect(tradeIsStalled(true, false, false)).toBe(true);
     });
 });
 
@@ -464,7 +509,7 @@ describe('resolveQuote', () => {
 
     test('the bow pair splits on the u suffix with no count given', () => {
         expect(quote('maple longbow', true)).toEqual({ kind: 'hit', id: 851, name: 'Maple longbow' });
-        expect(quote('maple longbow u', true)).toEqual({ kind: 'hit', id: 62, name: 'Maple longbow' });
+        expect(quote('maple longbow u', true)).toEqual({ kind: 'hit', id: 62, name: 'Maple longbow (u)' });
     });
 
     test('a partial name matching several is ambiguous, and only reachable with a count', () => {
@@ -563,5 +608,49 @@ describe('dealLine', () => {
     test('money carries its sign either way', () => {
         expect(dealLine({ clock: '00:00:00', customer: 'a', kind: 'sold', count: 1, item: 'X', gp: 10, mixed: false })).toContain('+10');
         expect(dealLine({ clock: '00:00:00', customer: 'a', kind: 'bought', count: 1, item: 'X', gp: -10, mixed: false })).toContain('-10');
+    });
+});
+
+describe('listedRows', () => {
+    const BOOK: PriceBook = {
+        name: 'shelf',
+        margin: 20,
+        maxTradeValue: 500_000,
+        rows: [
+            { id: 440, mid: 20, cap: 5_000, buying: true, selling: true },
+            { id: 1515, mid: 320, cap: 2_000, buying: true, selling: false },
+            { id: 851, mid: 640, cap: 500, buying: false, selling: true }
+        ]
+    };
+    const rows = (side: 'both' | 'buy' | 'sell', stock: Record<number, number>) =>
+        listedRows({ book: BOOK, side, stocked: id => stock[id] ?? 0 });
+
+    test('a row the shop holds none of is not listed', () => {
+        expect(rows('both', { 440: 900 }).rows.map(r => r.id)).toEqual([440]);
+    });
+
+    // Why: the operator chose to gate the buy side too, so the shop stops advertising what it wants while empty.
+    test('the gate applies to the buy side as well as the sell side', () => {
+        expect(rows('buy', { 440: 900 }).rows.map(r => r.id)).toEqual([440]);
+        expect(rows('buy', { 1515: 12 }).rows.map(r => r.id)).toEqual([1515]);
+        expect(rows('buy', {}).rows).toEqual([]);
+    });
+
+    test('each side still filters on which way the row trades', () => {
+        const stock = { 440: 900, 1515: 12, 851: 3 };
+        expect(rows('buy', stock).rows.map(r => r.id)).toEqual([440, 1515]);
+        expect(rows('sell', stock).rows.map(r => r.id)).toEqual([440, 851]);
+        expect(rows('both', stock).rows.map(r => r.id)).toEqual([440, 1515, 851]);
+    });
+
+    // Why: a shop that has sold out reads as broken unless it says so, and the two causes need different answers.
+    test('an empty book and an empty shelf are told apart', () => {
+        expect(rows('both', {}).empty).toBe('no-stock');
+        expect(listedRows({ book: { ...BOOK, rows: [] }, side: 'both', stocked: () => 0 }).empty).toBe('no-book');
+        expect(rows('both', { 440: 1 }).empty).toBeNull();
+    });
+
+    test('bank stock counts, so a row the shop would fetch is still listed', () => {
+        expect(rows('sell', { 851: 40 }).rows.map(r => r.id)).toEqual([851]);
     });
 });

@@ -9,7 +9,7 @@ import { opIndex, presentOps, type Interactable, type Locatable } from './Intera
  * @see docs/reference/api-entities.md#entity-shapes
  */
 export class GroundItem implements Interactable, Locatable {
-    constructor(readonly snap: GroundItemSnapshot) {}
+    constructor(/** @internal */ readonly snap: GroundItemSnapshot) {}
 
     get name(): string | null {
         return this.snap.name;

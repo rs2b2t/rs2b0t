@@ -34,7 +34,7 @@ import {
     countOfferMatching,
     isConfiguredPartner
 } from '../../api/trade/PartnerTrade.js';
-import { driveActivePartnerTrade } from '../../api/trade/drivePartnerTrade.js';
+import { driveActivePartnerTrade, tradeScreenState } from '../../api/trade/drivePartnerTrade.js';
 import { BROKEN_PICKAXE, GAS_ROCK_IDS, GAS_ROCK_TICKS } from '../../data/miningRocks.js';
 import { bestPickaxe } from '../../api/acquisition/Tools.js';
 import { WHIRLPOOL_IDS, fishingRestockPlan } from '../../data/fishingMethods.js';
@@ -432,18 +432,44 @@ function isFletchByproductName(name: string | null | undefined): boolean {
 
 // ── Mule / partner trade (shared policy: api/trade/PartnerTrade) ───────────────
 
+const MULE_TRADE_GRACE_MS = 2_000;
+
 export class HandleGatherMuleTrade implements Task {
     private partnerWait = 0;
+    /** Holds task ownership through the frame-wide "no screen" blips between trade screens. */
+    private ownTradeUntil = 0;
+    /** Cross-beat handshake state, for attributing why a window disappeared. */
+    private lastScreen = 'closed';
+    private openUsed = 0;
+    private sawConfirm = false;
 
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
-        return this.bot.getMuleMode() !== 'off' && Trade.active();
+        if (this.bot.getMuleMode() === 'off') {
+            this.ownTradeUntil = 0;
+            return false;
+        }
+        if (Trade.active()) {
+            this.ownTradeUntil = Date.now() + MULE_TRADE_GRACE_MS;
+            return true;
+        }
+        // Why: the offer→confirm handoff and the final teardown each report no screen for a frame; yielding there lets gathering click under a window that is still up, so hold ownership through a short grace gap.
+        return Date.now() < this.ownTradeUntil;
     }
 
     async execute(): Promise<void> {
         const receiver = this.bot.isMuleReceiver() || this.bot.isMuleCooker();
         const giver = !receiver;
+        let transferred = false;
+        const screenAtEntry = tradeScreenState();
+        if (screenAtEntry === 'offer' && this.lastScreen === 'closed') {
+            this.openUsed = Inventory.used();
+            this.sawConfirm = false;
+            this.bot.log('trade: new handshake — offer screen up');
+        } else if (screenAtEntry === 'confirm') {
+            this.sawConfirm = true;
+        }
         await driveActivePartnerTrade({
             role: receiver ? 'receiver' : 'giver',
             partners: this.bot.getMulePartners(),
@@ -458,11 +484,17 @@ export class HandleGatherMuleTrade implements Task {
             verifyGiverPartner: giver,
             onMissingPartner: () => {
                 this.partnerWait++;
+                if (this.partnerWait === 1) {
+                    this.bot.log('trade: offer screen up but the partner header is still blank — waiting');
+                }
                 if (this.partnerWait > 8) {
                     this.partnerWait = 0;
                     return 'decline';
                 }
                 return 'wait';
+            },
+            onDecline: reason => {
+                this.bot.log(`trade: we declined the trade (${reason})`);
             },
             // Bank mule / cooker must have free slots or the transfer is a no-op thrash.
             receiverCanAccept: receiver
@@ -480,6 +512,7 @@ export class HandleGatherMuleTrade implements Task {
                 ? () =>
                     countOfferMatching(Trade.myOffer(), n => this.bot.shouldDeposit(n)) > 0
                 : undefined,
+            baseline: () => this.openUsed,
             onComplete: delta => {
                 // Role-aware success: receiver gains slots used; giver loses product.
                 const ok = receiver ? delta > 0 : delta < 0;
@@ -489,6 +522,7 @@ export class HandleGatherMuleTrade implements Task {
                     );
                     return;
                 }
+                transferred = true;
                 this.bot.noteMuleTrade();
                 this.bot.log(
                     `mule: trade complete (inv Δ${delta >= 0 ? '+' : ''}${delta}, trades=${this.bot.muleTradeCount()})`
@@ -500,6 +534,42 @@ export class HandleGatherMuleTrade implements Task {
         });
         if (Trade.partner() !== null) {
             this.partnerWait = 0;
+        }
+
+        // Why: screens up at last beat end but already gone now, with no confirm and no transfer, means the partner dropped it; the driver attributes closes that happen mid-beat.
+        const screenNow = tradeScreenState();
+        if (screenAtEntry === 'closed' && this.lastScreen !== 'closed' && !this.sawConfirm && !transferred) {
+            const d = Inventory.used() - this.openUsed;
+            this.bot.log(
+                `trade: window closed between beats without reaching confirm or us declining — the partner most likely declined, walked away or logged out (inv Δ${d >= 0 ? '+' : ''}${d})`
+            );
+        }
+        if (screenNow !== 'closed') {
+            this.lastScreen = screenNow;
+        } else if (!Trade.active()) {
+            this.lastScreen = 'closed';
+        }
+
+        // Why: a closed report is not proof of a settled pack; confirm the traded items moved before gathering resumes.
+        if (transferred) {
+            if (giver) {
+                const cleared = await Execution.delayUntil(
+                    () => this.bot.depositableProductNames().length === 0,
+                    3_000
+                );
+                if (cleared) {
+                    this.bot.log('mule: verified — pack cleared of traded items');
+                } else {
+                    this.bot.log(
+                        `mule: VERIFY FAILED — still holding ${this.bot.depositableProductNames().join(', ') || 'unknown items'}`
+                    );
+                }
+            } else {
+                // Receiver: no pack-clear check possible; delta > 0 at line 518 is the proof.
+            }
+        }
+        if (Trade.active()) {
+            this.ownTradeUntil = Date.now() + MULE_TRADE_GRACE_MS;
         }
     }
 }
@@ -1725,6 +1795,20 @@ export class EnsureGatherToolEquipped implements Task {
     }
 }
 
+export class BuyShiloSupplies implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    validate(): boolean {
+        if (EventSignal.pending() || Game.inCombat()) return false;
+        return this.bot.baitVendor()?.keeper === 'Fernahei'
+            && (this.bot.shiloSupplyTrip.active || this.bot.guildFeatherTripDue());
+    }
+
+    async execute(): Promise<void> {
+        await this.bot.shiloSupplyTrip.step(this.bot);
+    }
+}
+
 export class RestockFishingGear implements Task {
     constructor(private bot: GatheringBot) {}
 
@@ -2225,6 +2309,7 @@ export class Gather implements Task {
 
     /** Whether a fishing spot is in range for this camp mode. */
     private fishSpotInRange(spotTile: Tile): boolean {
+        if (this.bot.avoidsSpot(spotTile)) return false;
         if (this.bot.isNamedCamp()) {
             return resourceWithinCamp(this.bot.getAnchor().distanceTo(spotTile), this.bot.leashRadius());
         }
@@ -2267,6 +2352,7 @@ export class Gather implements Task {
 
     validate(): boolean {
         // Combat only blocks AFK gather, retaliate tick-manip keeps gathering.
+        if (this.bot.shiloSupplyTrip.active) return false;
         if (Inventory.isFull() || EventSignal.pending()) {
             return false;
         }
@@ -2541,6 +2627,14 @@ export class Gather implements Task {
             ) {
                 this.bot.setStatus('fish: returning to camp');
                 await this.bot.walkHomeIfNeeded(m => this.bot.log(`  ${m}`));
+                return;
+            }
+            const stop = this.bot.nextSweepStop();
+            if (stop !== null) {
+                this.bot.setStatus(`fish: sweeping to ${stop}`);
+                await Traversal.walkResilient(stop, {
+                    radius: 1, attempts: 2, timeoutMs: 30_000, log: message => this.bot.log(`  ${message}`)
+                });
                 return;
             }
             // Named: membership disk from home. Freeform: hunt from player/start.
