@@ -9,7 +9,7 @@
 
 import type { Page } from 'playwright-core';
 import { deployIsolatedClient, launchBrowser, logout } from './lib/harness.js';
-import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript } from './tutorial/harness.js';
+import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript, seedItemsToBank } from './tutorial/harness.js';
 
 const BASE = process.env.BASE ?? 'http://localhost:8890';
 const SHOP = process.env.SHOP ?? 'crowdshop';
@@ -592,12 +592,12 @@ try {
 
     console.log(`${at()} seeding the shop's bank with ${STOCK.length} items`);
     await cheatQuiet(shopPage, '~clearinv');
-    // Why: bankitem adds to what is already there, so without this every restart stacks on the last one until the common items sit over their cap and the shop stops buying them.
+    // Why: bank seeding adds to what is already there, so without this every restart stacks on the last one until the common items sit over their cap and the shop stops buying them.
     await cheatQuiet(shopPage, '~clearbank');
-    await cheatQuiet(shopPage, `~bankitem coins ${BANK_COINS}`);
-    for (const s of STOCK) {
-        await cheatQuiet(shopPage, `~bankitem ${s.obj} ${s.bank}`);
-    }
+    await seedItemsToBank(shopPage, [
+        { debugName: 'coins', displayName: 'Coins', qty: BANK_COINS },
+        ...STOCK.map(s => ({ debugName: s.obj, displayName: s.name, qty: s.bank }))
+    ], { x: 3185, z: 3440, level: 0 });
 
     await writeStorage(shopPage, {
         'rs2b0t:set:PriceBooks:books': priceBook(),

@@ -1,5 +1,5 @@
 /** Live Shield of Arrav harness (#232): --gang phoenix|blackarm, --phoenix N, --blackarm N, --until N, --keep-half, base :8890.
- *  Why: the quest runs on two independent varps and the journal renders one gang's block at a time, so a single stage number reaches only half of it; the bank holds coins and food alone so the book, the bribe and the shields are sourced in the world; the :8888 sim answers neither `givebank` nor `~bankitem`.
+ *  Why: the quest runs on two independent varps and the journal renders one gang's block at a time, so a single stage number reaches only half of it; the bank holds coins and food alone so the book, the bribe and the shields are sourced in the world.
  *  Why: this harness proves one side only, a lone account cannot redeem, because the certificate needs both halves and the halves need two gangs. Use shield-of-arrav-pair-232-live.ts for a completion. */
 
 //   HEADED=1 bun e2e/shield-of-arrav-232-live.ts --gang phoenix --phoenix 0 --until 9 --tick 300 --minutes 45
@@ -210,7 +210,7 @@ try {
     console.log(`stats: ${args.stats} across the board`);
 
     // Why: a Black Arm account needs a weapon-store key it has no way to obtain alone, only Straven issues one, and joining Phoenix makes Katrine refuse you.
-    // Why: it goes through seedItemsToBank rather than a bare `givebank`, because this engine answers only `~bankitem` and a bare cheat fails silently.
+    // Why: seedItemsToBank verifies the deposited quantities before quest provisioning starts.
     const seed = args.gang === 'blackarm'
         ? [...BANK_SEED, { debugName: 'phoenixkey2', displayName: 'Key', qty: 1 }]
         : BANK_SEED;

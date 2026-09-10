@@ -38,7 +38,7 @@ Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path`
 | *(cooker pair)* | `gatheringbot-cooker-pair-test.ts`, Gatherer raw → Cooker cook+bank at Catherby |
 | *(range path)* | `gatheringbot-range-path-test.ts`, walk to every curated pier/bank cook surface |
 | `fish-cooker-solo` | Cooker mule with full raw pack → cook → bank (no partner trade needed once seeded) |
-| `fish-bank-raw-cook` | Catherby bank-raw-then-cook (`givebank raw_lobster` 973 + pot+26 raw, N=1000) |
+| `fish-bank-raw-cook` | Catherby bank-raw-then-cook (973 banked via noted raw lobsters + pot+26 raw, N=1000) |
 | `wc-bank` / `wc-bank-seers` / `wc-burn` | Draynor chop+bank; Seers trees bank; chop-then-burn |
 | `mine-path-runite` / `fish-path-shark` | long path into Lava Maze (must mine runite, XP/ore, not flee-only) / Fishing Guild |
 | `buy-pick` / `buy-axe` / `buy-net` | Buy/repair with **coins only** (no pre-granted tools) |
@@ -97,7 +97,8 @@ Fisher **Cooker** is the in-tree example of a "processor mule" for fish.
 
 Asserts XP / held products / acquired tools / bank proximity. Exit nonzero on any FAIL.
 
-Seeds use engine `give <obj> <qty>` (this Server tree has no `~item`/`~bankitem`).
+Seeds use engine `give <obj> <qty>`. Bank fixtures deposit noted items or ordinary
+stackables and verify the resulting unnoted bank counts.
 `~clearinv` still works as a content debugproc. Redeploy the bot client yourself
 when script code changes. The harness does not own engine `public/`.
 

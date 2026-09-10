@@ -40,7 +40,7 @@ interface Api {
 
 const packIds = (page: Page): Promise<number[]> => page.evaluate(() => (globalThis as never as Api).__rs2b0t.Inventory.items().map(i => i.id));
 
-/** Why: :8888 has no givebank, so leftovers go into the pack with give and then into the booth. */
+/** Why: leftovers go into the pack with give and then into the booth so BankSorter reads bank contents. */
 async function seedGive(page: Page, debugName: string, id: number): Promise<void> {
     for (let attempt = 0; attempt < 6; attempt++) {
         await cheatQuiet(page, `give ${debugName} 1`, 1500);

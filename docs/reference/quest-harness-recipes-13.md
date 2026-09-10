@@ -33,8 +33,8 @@ Four details govern this harness:
   orbs have a source in the world; seeding one would hide whether the bot can find it.
 - **Stats are 70 rather than max.** Prayer 70 covers Protect from Melee, which is what
   makes the warlord a fight the bot walks away from at full health.
-- **It runs on `:8890`.** `givebank` is inert there and every seed falls through to
-  `~bankitem`, which the helper verifies at a booth before trusting it.
+- **It runs on `:8890`.** The shared helper deposits noted items at a booth and
+  verifies each bank quantity before the quest starts.
 - **The quest is members-only, and the run deploys its own client.** A neighbouring
   harness writing `public/bot/` mid-boot would otherwise decide which branch runs.
 
@@ -76,9 +76,7 @@ Four details govern this harness:
   counter and Cromperty wanders his own house; each cost one retry per run and neither cost a
   park. Read the second attempt's timing, not the first's.
 
-It is members-only, so it needs the `:8890` world; the `:8888` sim also answers neither
-`givebank` nor `~bankitem`, so a run there starts with an empty bank and parks on the coin
-float.
+It is members-only, so it needs the `:8890` world.
 
 ## See also
 

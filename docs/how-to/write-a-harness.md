@@ -93,10 +93,10 @@ These details are not obvious from the code:
   level-93 boss. `Equipment.equip()` awaits `Execution.delayUntil`, which needs a
   running script context and throws from `page.evaluate`, drive the Wield/Wear
   held-op yourself; the direct input driver's is synchronous.
-- **`::give` → inventory; `::givebank` → bank.** Local engine cheats (no busy-guard).
-  Content debugprocs `~item` / `~bankitem` do the same but need `p_finduid` (seed after
-  dialogs, not mid-`~maxme`). Prefer engine cheats from Playwright; verify bank counts
-  with a booth open when the seed matters.
+- **`::give` adds inventory items.** For bank fixtures, `seedItemsToBank` gives
+  `cert_<obj>` notes for noteable items and ordinary stackables such as coins,
+  deposits them at a booth, and verifies the unnoted bank count by item ID.
+  Clear dialogs before seeding so the booth can open.
 - **`::bank_f2p` stocks a bulk bank** (coins, food, pickaxes, scimitars, …) with no
   dialog. Prefer it to `::bank_preset`, which first asks "This clears your bank.
   Continue?" and needs the choice answered before it does anything. It is a blunt

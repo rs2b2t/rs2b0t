@@ -14,7 +14,7 @@ stats that still clear, record fails, then later branch tactics by power level
 |---|---|---|
 | Inv seed + `statsCsv=max` | Mid-quest loop | **PASS** |
 | Bank seed + skills 20 + combat 40/40/25/40 | Low combat | **FAIL** (Water elemental death) |
-| Bank seed + skills 20 + combat 50/50/40/50 | Bare-min combat (so far) | **PASS** (~270s, `givebank` seed) |
+| Bank seed + skills 20 + combat 50/50/40/50 | Bare-min combat (so far) | **PASS** (~270s, local bank fixture) |
 | Bank seed + combat 45/45/30/45 | Next lower probe | not run yet |
 | Official skills only (20/20/20) | Server eligibility | required; combat not gated |
 
@@ -71,10 +71,8 @@ Three details govern this harness:
   problems, and nothing in Draynor Manor is aggressive anyway, the only
   guaranteed damage in the quest is the 1 hp piranha bite from searching the
   fountain before it has been poisoned.
-- **It runs on :8890 even though Ernest is free-to-play.** The quest needs
-  nothing members-only, but *bank seeding* does: the :8888 sim answers neither
-  `givebank` nor `~bankitem`, so a run there starts with an empty bank and parks
-  on the food float.
+- **The harness defaults to :8890.** Ernest is free-to-play; the shared bank
+  seed helper uses noted deposits and verifies the food float before starting.
 
 Next lower probe (update `EW_PROVEN_COMBAT_FLOOR` only if green):
 

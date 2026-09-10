@@ -15,6 +15,7 @@ import {
     clearChatDialogs,
     mainlandAccount,
     maxmeAndClearDialogs,
+    seedItemsToBank,
     startScript
 } from './tutorial/harness.js';
 
@@ -331,9 +332,11 @@ try {
     await maxmeAndClearDialogs(makerPage);
     await clearChatDialogs(makerPage);
     await cheatQuiet(makerPage, '~clearinv');
-    await cheatQuiet(makerPage, '~bankitem iron_ore 1000');
-    await cheatQuiet(makerPage, '~bankitem yew_logs 200');
-    await cheatQuiet(makerPage, '~bankitem coins 500000');
+    await seedItemsToBank(makerPage, [
+        { debugName: 'iron_ore', displayName: 'Iron ore', qty: 1000 },
+        { debugName: 'yew_logs', displayName: 'Yew logs', qty: 200 },
+        { debugName: 'coins', displayName: 'Coins', qty: 500000 }
+    ], { x: 3185, z: 3440, level: 0 });
     await teleArrive(makerPage, SPOT);
 
     await writeStorage(makerPage, {

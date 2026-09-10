@@ -2,7 +2,7 @@
  *  Why: `--stage` relogs because update_questlist only recolours the journal at login, and the run
  *  needs Plague City complete as well; the bank holds coins and food alone so the bird feed, the
  *  pigeons, the apples, the gown, the key and the priest suit are all sourced in the world.
- *  Why: the quest is members-only, so the :8888 sim answers neither the dialogue nor `~bankitem`. */
+ *  Why: the quest is members-only, so the :8888 sim lacks the quest dialogue. */
 
 //   HEADED=1 bun e2e/biohazard-234-live.ts --stage 0 --until 16 --minutes 90 --tick 100
 //   HEADED=1 bun e2e/biohazard-234-live.ts --stage 5 --until 7 --minutes 25 --tick 100

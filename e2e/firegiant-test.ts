@@ -1,10 +1,10 @@
 // Live smoke for FireGiant: [base] [user] [budget-min] [style]. PASS on reaching the dungeon (z > 9000) and landing a kill.
-// Why: `~completequests` opens two blocking p_choice2 dialogs and completes nothing; varp 65 never reaches the client so the setvar needs a relog; `~item`/`~bankitem` guard on p_finduid and return silently while busy, and `~maxme` locks the player through a flood of level-ups, seed first, max last, verify.
+// Why: `~completequests` opens two blocking p_choice2 dialogs and completes nothing; varp 65 never reaches the client so the setvar needs a relog; `~maxme` locks the player through a flood of level-ups, seed first, max last, verify.
 
 // Usage: bun e2e/firegiant-test.ts [base] [user] [budget-min] [style]
 
 import { launchBrowser, positionalArgs } from './lib/harness.js';
-import { cheatQuiet, getServerVarQuiet, mainlandAccount, relog, startScript } from './tutorial/harness.js';
+import { cheatQuiet, getServerVarQuiet, mainlandAccount, relog, startScript, seedItemsToBank } from './tutorial/harness.js';
 
 const args = positionalArgs(process.argv.slice(2), 'http://localhost:8890');
 const base = args[0];
@@ -47,11 +47,11 @@ try {
     if (qs === 'notStarted') { fail('quest journal still reports notStarted after setvar + relog'); }
     console.log(`waterfall quest seeded (server=10, journal=${qs})`);
 
-    // Why: a pre-relog seed is rolled back, and ~item/~bankitem return silently while ~maxme's 23 stat_advance calls keep the player busy, seed everything first, max last.
+    // Why: a pre-relog seed is rolled back and ~maxme raises level-up dialogs, so seed after relog and max last.
     const held = (n: string) => page.evaluate(x => (globalThis as never as R).__rs2b0t.Inventory.count(x), n);
 
     // Stackables go to the inventory, where the count is readable and the seed can be retried until it sticks.
-    // Why: ~bankitem drops are silent and unverifiable outside a script context, so only bulk food (200 slots) relies on it.
+    // Why: inventory gear and noted food deposits are each verified before the combat run starts.
     for (const [cmd, item] of [
         ['~item glarials_amulet_waterfall_quest 1', "Glarial's amulet"],
         ['~item rope 1', 'Rope'],
@@ -70,9 +70,7 @@ try {
     }
     console.log('seeded (verified, held): amulet, rope, Camelot runes, and gear');
 
-    for (let i = 0; i < 3; i++) {
-        await cheatQuiet(page, '~bankitem lobster 200');
-    }
+    await seedItemsToBank(page, [{ debugName: 'lobster', displayName: 'Lobster', qty: 600 }], { x: 2725, z: 3491, level: 0 });
 
     await cheatQuiet(page, '~maxme');
     await page.waitForTimeout(5000);

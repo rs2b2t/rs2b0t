@@ -1,6 +1,7 @@
 import type { Page } from 'playwright-core';
 
 import { ClientProt } from '../../src/client/io/ClientProt.js';
+import { MiniMenuAction } from '../../src/client/shell/MiniMenuAction.js';
 
 type Rs2b0t = {
     rs2b0t: {
@@ -434,154 +435,164 @@ export async function tutorialVarp(page: Page, i: number): Promise<number> {
 export type BankSeedItem = {
     /** Engine obj debug name (e.g. bronze_pickaxe). */
     debugName: string;
-    /** Display name for Bank.count verification (e.g. Bronze pickaxe). */
+    /** Display name for locating item metadata (e.g. Bronze pickaxe). */
     displayName: string;
     qty: number;
 };
 
 type SeedBankResult = { done: boolean; ok: boolean; reason: string; banked: Record<string, number> };
 
-/**
- * Open a bank booth and read Bank.count for each expected item (no deposit).
- * Used to verify that `givebank` / `~bankitem` seeds landed.
- */
-async function verifyBankCounts(page: Page, bankStand: { x: number; z: number; level: number }, expected: readonly { name: string; qty: number }[]): Promise<SeedBankResult> {
+/** Seed the bank with noted items (or ordinary stackables) and verify each deposit.
+ *  Why: notes fit bulk fixtures in one pack slot; Deposit-X preserves any matching items already held. */
+export async function seedItemsToBank(page: Page, items: readonly BankSeedItem[], bankStand: { x: number; z: number; level: number }): Promise<void> {
+    if (items.length === 0) {
+        return;
+    }
+    for (const item of items) {
+        if (!Number.isSafeInteger(item.qty) || item.qty <= 0) {
+            throw new Error(`seedItemsToBank: invalid quantity for ${item.debugName}: ${item.qty}`);
+        }
+    }
     if (!(await teleTo(page, bankStand, 6, 25_000))) {
-        return { done: true, ok: false, reason: `tele to bank (${bankStand.x},${bankStand.z}) failed`, banked: {} };
+        throw new Error(`seedItemsToBank: tele to bank (${bankStand.x},${bankStand.z}) failed`);
     }
     await page.waitForTimeout(500);
 
-    const token = `HarnessVerifyBank_${Date.now()}`;
+    const token = `HarnessSeedBank_${Date.now()}`;
     await page.evaluate(
-        ([stand, want, scriptName]) => {
+        ([stand, seeds, scriptName, cheatOp, depositActions]) => {
+            type Item = { id: number; slot: number; comId: number; count: number; ops: (string | null)[] };
             const g = globalThis as never as {
                 __rs2b0t: {
                     LoopingBot: new () => object;
                     registerScript(meta: { name: string; create: () => unknown }): void;
                     Bank: {
-                        isOpen(): boolean;
                         openBooth(t: unknown, name: string, op: string): Promise<boolean>;
                         openNearest(name: string, op: string): Promise<boolean>;
+                        waitReady(): Promise<boolean>;
                         close(): Promise<boolean>;
-                        count(name: string): number;
+                        countById(id: number): number;
                     };
                     Execution: { delayUntil(c: () => boolean, ms: number): Promise<boolean>; delayTicks(n: number): Promise<void> };
                 };
-                rs2b0t: { runner: { start(meta: unknown): void }; registry: { get(name: string): unknown } };
-                __seedBank?: SeedBankResult;
+                rs2b0t: {
+                    client: { ingame: boolean; out: { p1Enc(op: number): void; p1(n: number): void; pjstr(s: string): void } };
+                    reader: {
+                        bankSideItems(): Item[];
+                        countDialogOpen(): boolean;
+                        objCatalog(): { id: number; name: string; stackable: boolean; certlink: number; certtemplate: number; stackVariant?: boolean }[];
+                    };
+                    actions: { menuAction(action: number, id: number, slot: number, comId: number): boolean; answerCountDialog(n: number): boolean };
+                    runner: { start(meta: unknown): void };
+                    registry: { get(name: string): unknown };
+                };
+                __seedBank: SeedBankResult;
             };
-            const abi = g.__rs2b0t;
+            const { Bank, Execution } = g.__rs2b0t;
+            const { client, reader, actions } = g.rs2b0t;
             g.__seedBank = { done: false, ok: false, reason: '', banked: {} };
+            const held = (id: number) => reader.bankSideItems().filter(i => i.id === id).reduce((sum, i) => sum + i.count, 0);
 
-            class VerifyBankBot extends abi.LoopingBot {
+            class SeedBankBot extends g.__rs2b0t.LoopingBot {
                 private ran = false;
                 async loop(): Promise<number> {
                     if (this.ran) {
                         return 5000;
                     }
                     this.ran = true;
-                    const res = g.__seedBank!;
+                    const res = g.__seedBank;
                     try {
-                        const { Bank, Execution } = abi;
                         const opened = (await Bank.openBooth(stand, 'Bank booth', 'Use-quickly')) || (await Bank.openNearest('Bank booth', 'Use-quickly'));
-                        if (!opened) {
-                            res.reason = 'could not open the bank';
-                            res.done = true;
-                            return 5000;
+                        if (!opened || !(await Bank.waitReady())) {
+                            throw new Error('could not open a ready bank');
                         }
-                        await Execution.delayUntil(() => Bank.isOpen(), 5000);
                         await Execution.delayTicks(1);
-                        const missing: string[] = [];
-                        for (const exp of want as { name: string; qty: number }[]) {
-                            const n = Bank.count(exp.name);
-                            res.banked[exp.name] = n;
-                            if (n < exp.qty) {
-                                missing.push(`${exp.name} (have ${n}, need ${exp.qty})`);
+                        const catalog = reader.objCatalog();
+                        for (const seed of seeds) {
+                            const definitions = catalog.filter(o => o.name.toLowerCase() === seed.displayName.toLowerCase() && o.certtemplate === -1 && !o.stackVariant);
+                            if (definitions.length === 0) {
+                                throw new Error(`unknown item: ${seed.displayName}`);
                             }
+                            const stackable = definitions.every(o => o.stackable);
+                            const noted = !stackable && definitions.some(o => catalog.some(note => note.certtemplate !== -1 && note.certlink === o.id));
+                            if (!stackable && !noted && seed.qty > 28 - reader.bankSideItems().length) {
+                                throw new Error(`${seed.debugName} has no note and does not fit in the pack`);
+                            }
+                            const before = new Map(reader.bankSideItems().map(i => [i.id, held(i.id)]));
+                            if (!client.ingame) {
+                                throw new Error('logged out during bank seed');
+                            }
+                            const cmd = `give ${noted ? 'cert_' : ''}${seed.debugName} ${seed.qty}`;
+                            client.out.p1Enc(cheatOp);
+                            client.out.p1(cmd.length + 1);
+                            client.out.pjstr(cmd);
+                            const addedItem = () => reader.bankSideItems().find(i => held(i.id) > (before.get(i.id) ?? 0));
+                            if (!(await Execution.delayUntil(() => addedItem() !== undefined, 5000))) {
+                                throw new Error(`${cmd}: inventory did not increase (unknown item, unavailable cheat or full pack)`);
+                            }
+                            const item = addedItem()!;
+                            const kept = before.get(item.id) ?? 0;
+                            const added = held(item.id) - kept;
+                            if (added !== seed.qty) {
+                                throw new Error(`${cmd}: received ${added}, expected ${seed.qty}`);
+                            }
+                            const definition = catalog.find(o => o.id === item.id);
+                            if (!definition) {
+                                throw new Error(`unknown received item id: ${item.id}`);
+                            }
+                            const bankId = definition.certtemplate === -1 ? item.id : definition.certlink;
+                            if (!definitions.some(o => o.id === bankId)) {
+                                throw new Error(`${cmd}: received an unexpected item (${item.id})`);
+                            }
+                            const bankBefore = Bank.countById(bankId);
+                            const opName = kept === 0 ? /^deposit[ -]all$/i : /^deposit[ -]x$/i;
+                            const op = item.ops.findIndex(o => o !== null && opName.test(o));
+                            if (op < 0 || !actions.menuAction(depositActions[op], item.id, item.slot, item.comId)) {
+                                throw new Error(`could not deposit ${seed.debugName}`);
+                            }
+                            if (kept > 0) {
+                                if (!(await Execution.delayUntil(() => reader.countDialogOpen(), 3000)) || !actions.answerCountDialog(added)) {
+                                    throw new Error(`could not enter deposit count for ${seed.debugName}`);
+                                }
+                            }
+                            if (!(await Execution.delayUntil(() => held(item.id) === kept && Bank.countById(bankId) === bankBefore + added, 5000))) {
+                                throw new Error(`deposit not verified for ${seed.debugName} x${added}`);
+                            }
+                            res.banked[seed.debugName] = Bank.countById(bankId);
                         }
-                        await Bank.close();
-                        if (missing.length > 0) {
-                            res.reason = `bank missing: ${missing.join('; ')}`;
-                            res.ok = false;
-                        } else {
-                            res.ok = true;
-                        }
+                        res.ok = true;
                     } catch (e) {
-                        res.reason = `threw: ${String(e)}`;
+                        res.reason = String(e);
+                    } finally {
+                        try {
+                            await Bank.close();
+                        } catch (e) {
+                            res.ok = false;
+                            res.reason = `bank close failed: ${String(e)}`;
+                        }
+                        res.done = true;
                     }
-                    res.done = true;
                     return 5000;
                 }
             }
-
-            abi.registerScript({ name: scriptName, create: () => new VerifyBankBot() });
+            g.__rs2b0t.registerScript({ name: scriptName, create: () => new SeedBankBot() });
             g.rs2b0t.runner.start(g.rs2b0t.registry.get(scriptName));
         },
-        [bankStand, expected, token] as const
+        [bankStand, items, token, ClientProt.CLIENT_CHEAT, [MiniMenuAction.INV_BUTTON1, MiniMenuAction.INV_BUTTON2, MiniMenuAction.INV_BUTTON3, MiniMenuAction.INV_BUTTON4, MiniMenuAction.INV_BUTTON5]] as const
     );
 
-    await page
-        .waitForFunction(() => (globalThis as never as { __seedBank?: SeedBankResult }).__seedBank?.done === true, undefined, {
-            timeout: 60_000
-        })
-        .catch(() => undefined);
-
     try {
+        await page.waitForFunction(() => (globalThis as never as { __seedBank: SeedBankResult }).__seedBank.done, undefined, {
+            timeout: 60_000 + items.length * 15_000
+        });
+    } finally {
         await page.evaluate(() => {
             (globalThis as never as { rs2b0t: { runner: { stop(reason: string): void } } }).rs2b0t.runner.stop('harness stop');
         });
-    } catch {
-        /* already stopped */
     }
-    await page.waitForTimeout(400);
-
-    return page.evaluate(() => (globalThis as never as { __seedBank?: SeedBankResult }).__seedBank ?? { done: true, ok: false, reason: 'no result', banked: {} });
-}
-
-/** Seed items directly into the bank on a local engine: engine cheat `givebank <obj> <qty>` (no busy-guard), falling back to the content debugproc `~bankitem <obj> <qty>`, verified once by opening a booth and reading Bank.count.
- *  Why: seed after level-up dialogs are drained, since `~bankitem` needs p_finduid. Bulk fixtures `~bank_f2p` (no dialog), `~clearbank` and `~foodbank` exist for blunt max kits, not for realistic low-level quest seeds. */
-async function applyBankSeedCmds(page: Page, items: readonly BankSeedItem[], mode: 'givebank' | 'bankitem'): Promise<void> {
-    for (const it of items) {
-        const cmd = mode === 'givebank' ? `givebank ${it.debugName} ${it.qty}` : `~bankitem ${it.debugName} ${it.qty}`;
-        let sent = false;
-        for (let attempt = 0; attempt < 4; attempt++) {
-            if (await cheatQuiet(page, cmd)) {
-                sent = true;
-                break;
-            }
-            await page.waitForTimeout(300);
-        }
-        if (!sent) {
-            throw new Error(`seedItemsToBank: '${cmd}' not sent (not ingame / player busy?)`);
-        }
-        console.log(`  ${mode} ${it.debugName}:${it.qty}`);
-    }
-}
-
-export async function seedItemsToBank(page: Page, items: readonly BankSeedItem[], bankStand: { x: number; z: number; level: number }): Promise<void> {
-    if (items.length === 0) {
-        return;
-    }
-
-    const want = items.map(i => ({ name: i.displayName, qty: i.qty }));
-
-    // Prefer engine givebank (no p_finduid busy-guard). cheatQuiet only proves the
-    // packet left the client, verify with a booth open before trusting it.
-    console.log('  trying givebank (engine)…');
-    await applyBankSeedCmds(page, items, 'givebank');
-    let res = await verifyBankCounts(page, bankStand, want);
-    if (res.ok) {
-        for (const [name, n] of Object.entries(res.banked)) {
-            console.log(`  banked ${name} x${n}`);
-        }
-        return;
-    }
-
-    console.log(`  givebank verify failed (${res.reason}) — trying ~bankitem`);
-    await applyBankSeedCmds(page, items, 'bankitem');
-    res = await verifyBankCounts(page, bankStand, want);
-    if (!res.ok) {
-        throw new Error(`seedItemsToBank: ${res.reason || 'bank verify failed'} ` + '(need local engine givebank and/or content ~bankitem)');
+    const res = await page.evaluate(() => (globalThis as never as { __seedBank: SeedBankResult }).__seedBank);
+    if (!res.done || !res.ok) {
+        throw new Error(`seedItemsToBank: ${res.reason || 'bank seed did not finish'}`);
     }
     for (const [name, n] of Object.entries(res.banked)) {
         console.log(`  banked ${name} x${n}`);

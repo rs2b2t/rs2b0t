@@ -1,5 +1,5 @@
 /** Live proof, Superheater accepts a Fire battlestaff in place of Staff of fire.
- *  Why: EnsureGear used to stop unless Staff of fire was present; :8888 has no givebank so ores are given then deposited (they are unstackable). */
+ *  Why: EnsureGear used to stop unless Staff of fire was present; ores are given then deposited to exercise bank restocking. */
 
 //   ENGINE_DIR=/path/to/engine bun e2e/superheater-fire-battlestaff-live.ts --base http://localhost:8888
 import type { Page } from 'playwright-core';

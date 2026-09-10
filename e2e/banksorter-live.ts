@@ -1,6 +1,5 @@
 /** Live BankSorter harness: proves the cold sort and the incremental re-sort against a bank on a running engine.
- *  Why: base :8890, because :8888 has no `bankitem` debugproc and the seed silently banks nothing.
- *  Why: `~bankitem` ADDS rather than sets, so every run wipes with `~clearbank` before seeding. */
+ *  Why: bank seeding adds rather than sets, so every run wipes with `~clearbank` before seeding. */
 
 //   HEADED=1 bun e2e/banksorter-live.ts --tick 200
 import type { Page } from 'playwright-core';
