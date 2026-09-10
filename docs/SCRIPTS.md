@@ -560,6 +560,9 @@ Fishes a chosen method at the spot that offers it; banks the catch, optionally c
 | `forgetfulBank` | boolean | `false` | Forgetful bank exits |
 | `purgePackOnStart` | boolean | `true` | Bank junk on start |
 | `packJunk` | string | `"Bank"` | Event junk while gathering — one of: Bank, Drop, Off |
+| `withdrawCoins` | number (0–) | `0` | Coins to withdraw at bank |
+| `bankTeleport` | string | `"Off"` | Teleport runes — one of: Off, Varrock teleport, Lumbridge teleport, Falador teleport, Camelot teleport, Ardougne teleport, Watchtower teleport, Trollheim teleport |
+| `teleCasts` | number (1–) | `1` | Teleport casts to stock |
 
 ## Fletching
 
@@ -711,6 +714,9 @@ Mines the selected rock types, then banks the ore at the nearest bank or drops i
 | `forgetfulBank` | boolean | `false` | Forgetful bank exits |
 | `purgePackOnStart` | boolean | `true` | Bank junk on start |
 | `packJunk` | string | `"Bank"` | Event junk while gathering — one of: Bank, Drop, Off |
+| `withdrawCoins` | number (0–) | `0` | Coins to withdraw at bank |
+| `bankTeleport` | string | `"Off"` | Teleport runes — one of: Off, Varrock teleport, Lumbridge teleport, Falador teleport, Camelot teleport, Ardougne teleport, Watchtower teleport, Trollheim teleport |
+| `teleCasts` | number (1–) | `1` | Teleport casts to stock |
 
 ## Money making
 
@@ -1048,6 +1054,9 @@ Chops the chosen tree type, then banks logs, drops them, or burns a full load (c
 | `forgetfulBank` | boolean | `false` | Forgetful bank exits |
 | `purgePackOnStart` | boolean | `true` | Bank junk on start |
 | `packJunk` | string | `"Bank"` | Event junk while gathering — one of: Bank, Drop, Off |
+| `withdrawCoins` | number (0–) | `0` | Coins to withdraw at bank |
+| `bankTeleport` | string | `"Off"` | Teleport runes — one of: Off, Varrock teleport, Lumbridge teleport, Falador teleport, Camelot teleport, Ardougne teleport, Watchtower teleport, Trollheim teleport |
+| `teleCasts` | number (1–) | `1` | Teleport casts to stock |
 
 ## See also
 

@@ -67,6 +67,7 @@ import {
     shouldFleeCombat
 } from './GatheringBotLogic.js';
 import type GatheringBot from './GatheringBot.js';
+import { STARTUP_PROVISION_RETRIES } from './GatheringBot.js';
 
 function keyOf(t: { x: number; z: number }): string {
     return `${t.x},${t.z}`;
@@ -1107,6 +1108,8 @@ export class BankCatch implements Task {
         if (routePlan && !(await this.bot.desertCampWithdrawSuppliesAtOpenBank(routePlan))) {
             return;
         }
+        // Same bank open: top up coins and the chosen teleport runes before heading back.
+        await this.bot.withdrawTripProvisionsAtBank(log);
         // Opportunistic tool upgrade while already banking, never yank mid-chop.
         if (await this.bot.tryUpgradeGatherToolAtBank(log)) {
             return;
@@ -2267,6 +2270,29 @@ export class UpgradeGatherTool implements Task {
     async execute(): Promise<void> {
         const log = (m: string) => this.bot.log(`  ${m}`);
         await this.bot.tryUpgradeGatherToolAtBank(log);
+    }
+}
+
+/**
+ * One-shot cold-start bank visit to withdraw the configured coins and teleport runes.
+ * Why: it must run before the first camp walk (a coin-gated transport edge otherwise strands the run); gives up after 3 attempts so an empty bank does not thrash.
+ */
+export class StartupProvision implements Task {
+    constructor(private bot: GatheringBot) {}
+    private attempts = 0;
+
+    validate(): boolean {
+        return this.bot.startupProvisionNeeded();
+    }
+
+    async execute(): Promise<void> {
+        const log = (m: string) => this.bot.log(`  ${m}`);
+        if (++this.attempts > STARTUP_PROVISION_RETRIES) {
+            // Why: coins stay fatal (a coin-gated transport edge strands the run), runes are optional.
+            await this.bot.giveUpStartupProvision(log);
+            return;
+        }
+        await this.bot.runStartupProvision(log);
     }
 }
 
