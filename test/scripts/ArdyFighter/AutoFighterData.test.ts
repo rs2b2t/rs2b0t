@@ -8,8 +8,11 @@ import {
     BURIAL_BONE_NAME,
     CUSTOM_COORDINATES,
     DEFAULT_LOOT,
+    npcIsEngagedWithUs,
+    REATTACK_COOLDOWN_MS,
     resolveKillingSpot,
     shouldBuryRegularBones,
+    shouldReattackStall,
     SPOT_OPTIONS,
     START_POSITION,
     wantsAutoFighterLoot,
@@ -168,5 +171,22 @@ describe('AutoFighter data', () => {
         expect(autoRetaliateShouldEnable(true)).toBe(false);
         assertAutoRetaliateOn(true);
         expect(() => assertAutoRetaliateOn(false)).toThrow('[AutoFighter] could not enable Auto Retaliate');
+    });
+
+    test('stall re-click fires only when engaged, face target cleared, and the cooldown elapsed', () => {
+        expect(REATTACK_COOLDOWN_MS).toBe(5000);
+        expect(shouldReattackStall(true, false, 5000)).toBe(true);
+        expect(shouldReattackStall(true, true, 5000)).toBe(false);
+        expect(shouldReattackStall(false, false, 5000)).toBe(false);
+        expect(shouldReattackStall(true, false, 4999)).toBe(false);
+        // Why: four misses in a row earn no XP, so XP-based triggers would wrongly re-click; the face-target rule does not.
+    });
+
+    test('an NPC is ours when its faceEntity encodes our player slot (offset + slot)', () => {
+        expect(npcIsEngagedWithUs(32768 + 1, 1)).toBe(true);
+        expect(npcIsEngagedWithUs(32768 + 1, 2)).toBe(false);
+        expect(npcIsEngagedWithUs(0, 1)).toBe(false);
+        expect(npcIsEngagedWithUs(32767, 1)).toBe(false);
+        expect(npcIsEngagedWithUs(-1, 1)).toBe(false);
     });
 });

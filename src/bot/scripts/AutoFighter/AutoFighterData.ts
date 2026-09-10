@@ -66,6 +66,26 @@ export function shouldArmSpecial(enabled: boolean, style: string, cost: number |
     return specialAvailable(enabled, style, cost) && !armed && energy >= (cost ?? 0);
 }
 
+/** Gate between re-clicking a stalled NPC: 5s so a brief face-target flicker does not spam Attack clicks. */
+export const REATTACK_COOLDOWN_MS = 5000;
+
+/** Stall rule: re-issue Attack when the engaged NPC's face target clears, past the cooldown. XP stalls are not evidence (misses/0-damage earn none). */
+export function shouldReattackStall(
+    engaged: boolean,
+    stillAttacking: boolean,
+    lastReattackAgoMs: number
+): boolean {
+    return engaged && !stillAttacking && lastReattackAgoMs >= REATTACK_COOLDOWN_MS;
+}
+
+/** The engine encodes an NPC facing a player as slot + base, see Npc.targetsMe. */
+const NPC_SLOT_FACE_BASE = 32768;
+
+/** NPC ownership: a snapshot is "ours" when its faceEntity encodes our player slot. */
+export function npcIsEngagedWithUs(faceEntity: number, ourSlot: number): boolean {
+    return faceEntity >= NPC_SLOT_FACE_BASE && faceEntity - NPC_SLOT_FACE_BASE === ourSlot;
+}
+
 export function shouldBuryRegularBones(state: BoneBurialState): boolean {
     // A full backpack is deliberately not a blocker: burying creates the slot
     // needed to pick up the next drop.

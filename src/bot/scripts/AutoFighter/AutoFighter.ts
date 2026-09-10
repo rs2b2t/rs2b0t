@@ -30,6 +30,7 @@ import { Sustain } from '../../api/sustain/Sustain.js';
 import { nearestBank } from '../../api/bank/BankLocations.js';
 import { GroundItems } from '../../api/grounditems/GroundItems.js';
 import { Npcs, type Npc } from '../../api/npcs/Npcs.js';
+import { reader } from '../../adapter/ClientAdapter.js';
 import { matchesEntityName } from '../../api/query/Query.js';
 import { SettingsStore, type SettingsSchema } from '../../runtime/Settings.js';
 import Tile from '../../geometry/Tile.js';
@@ -49,6 +50,8 @@ import {
     assertAutoRetaliateOn,
     shouldArmSpecial,
     specialAvailable,
+    npcIsEngagedWithUs,
+    shouldReattackStall,
     SPOT_OPTIONS,
     START_POSITION,
     wantsAutoFighterLoot
@@ -249,8 +252,7 @@ export default class AutoFighter extends TaskBot {
     private startedAt = Date.now();
     private lastBankAt = Date.now();
     private xpAtStart = 0;
-    private combatXpLast = 0;
-    private combatXpGainAt = 0;
+
     private lastEatAt = 0;
     died = false;
 
@@ -338,8 +340,6 @@ export default class AutoFighter extends TaskBot {
         this.startedAt = Date.now();
         this.lastBankAt = this.startedAt;
         this.xpAtStart = COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
-        this.combatXpLast = this.combatXpTotal();
-        this.combatXpGainAt = Date.now();
         this.log(`AutoFighter starting — '${targetNames().join(', ')}' at ${spotMode} ${ANCHOR} r${LEASH}, style ${STYLE}${STYLE === 'mage' ? ` (${SPELL}, ${RUNES_WITHDRAW} casts)` : STYLE === 'range' ? ` (${RANGE_MODE === 0 ? 'accurate' : RANGE_MODE === 1 ? 'rapid' : 'longrange'}, ${AMMO}x${AMMO_WITHDRAW})` : ` (${MELEE_STYLE})`}, banking ${AUTO_BANK ? 'auto' : 'none'}${BANK_EVERY_MINUTES > 0 ? ` every ${BANK_EVERY_MINUTES}m` : ''}, food '${FOOD}'x${FOOD_WITHDRAW}, loot [${LOOT.join(', ')}]${BURY_BONES ? `, burying ${BURIAL_BONE_NAME}` : ''}`);
 
         this.on('chat.message', e => {
@@ -350,7 +350,6 @@ export default class AutoFighter extends TaskBot {
 
         this.add(
             new ContinueDialog(),
-            new CombatXpWatch(this),
             new DeathRecovery(this, {
                 anchor: ANCHOR,
                 radius: 6,
@@ -428,34 +427,12 @@ export default class AutoFighter extends TaskBot {
     }
     noteSupplyEmpty(v: boolean): void { this.supplyEmpty = v; }
     supplyKnownEmpty(): boolean { return this.supplyEmpty; }
-    private combatXpTotal(): number {
-        return COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
-    }
-    markCombatXp(): void {
-        const xp = this.combatXpTotal();
-        if (xp > this.combatXpLast) {
-            this.combatXpLast = xp;
-            this.combatXpGainAt = Date.now();
-        }
-    }
-    combatStalled(ms: number): boolean {
-        return Date.now() - this.combatXpGainAt > ms;
-    }
     markAte(): void {
         this.lastEatAt = Date.now();
     }
     ateSince(lastReattackAt: number): boolean {
         return this.lastEatAt > lastReattackAt && Date.now() - this.lastEatAt < 10_000;
     }
-}
-
-class CombatXpWatch implements Task {
-    constructor(private bot: AutoFighter) {}
-    validate(): boolean {
-        this.bot.markCombatXp();
-        return false;
-    }
-    async execute(): Promise<void> {}
 }
 
 class EnableAutoRetaliate implements Task {
@@ -873,6 +850,7 @@ class ReequipGear implements Task {
 
 class Fight implements Task {
     private lastReattackAt = 0;
+    private engagedIdx: number | null = null;
     constructor(private bot: AutoFighter) {}
     private findTarget() {
         const q = Npcs.query()
@@ -884,65 +862,71 @@ class Fight implements Task {
         }
         return q.nearest();
     }
-    private currentTarget() {
+    private findEngaged(): Npc | null {
         const names = targetNames();
         return Npcs.query()
-            .where(n => n.inCombat && n.tile().distanceTo(ANCHOR) <= LEASH + 4)
+            .where(n => n.inCombat && npcIsEngagedWithUs(n.snap.faceEntity, reader.selfSlot()) && n.tile().distanceTo(ANCHOR) <= LEASH + 4)
             .name(...names)
             .nearest();
     }
-    private track(engaged: Npc | null): Npc | null {
-        if (!engaged) {
-            return null;
-        }
+    private track(idx: number): Npc | null {
         const names = targetNames();
-        return Npcs.all().find(n => n.index === engaged.index && names.some(name => matchesEntityName(n.name, name))) ?? null;
+        return Npcs.all().find(n => n.index === idx && names.some(name => matchesEntityName(n.name, name))) ?? null;
+    }
+    /** Stall rule: our face target on the engaged NPC cleared past the re-click cooldown. */
+    private stalled(): boolean {
+        return shouldReattackStall(
+            this.engagedIdx !== null,
+            this.engagedIdx !== null && Game.attacking(this.engagedIdx),
+            Date.now() - this.lastReattackAt
+        );
     }
     validate(): boolean {
         if (needEat() || Skills.hpFraction() < PANIC_AT) {
             return false;
         }
         // Why: eating interrupts the attack animation; the status flips to "eating X" and the fight loop exits.
-        // Why: re-click the same target immediately after healing instead of waiting for the 10s stall window, even if Game.inCombat() flickers false.
+        // Why: re-click the same target immediately after healing instead of waiting for the stall window, even if Game.inCombat() flickers false.
         if (this.bot.ateSince(this.lastReattackAt) && Date.now() - this.lastReattackAt > 2_000) {
-            return (this.currentTarget() ?? this.findTarget()) !== null;
+            return (this.findEngaged() ?? this.findTarget()) !== null;
         }
         // start a fresh fight when idle
         if (!Game.inCombat()) {
             return this.findTarget() !== null;
         }
-        // Why: auto-retaliate only fires on a landed hit; if the enemy deals no damage we stay "in combat" forever, so re-click after ~10s of no XP.
-        if (this.bot.combatStalled(10_000) && Date.now() - this.lastReattackAt > 5_000) {
-            return this.currentTarget() !== null;
+        if (this.stalled()) {
+            return this.findEngaged() !== null;
         }
         return false;
     }
     async execute(): Promise<void> {
-        let target = this.findTarget() ?? this.currentTarget();
+        let target = this.findTarget();
+        if (!target) {
+            const engaged = this.findEngaged();
+            if (engaged) {
+                target = engaged;
+            }
+        }
         if (!target) {
             return;
         }
         this.bot.setStatus(`attacking ${target.name} at ${target.tile()}`);
         this.bot.log(`clicking Attack on ${target.name}`);
-        const status = await Reach.entityOp({
-            find: () => this.track(target),
-            op: 'Attack',
-            expect: () => Game.inCombat() || ChatDialog.canContinue(),
-            // a wandering target postpones the server's can't-reach verdict forever,
-            // so probe the scene and open the blocking door ourselves (#293)
-            openWhenUnreachable: true,
-            expectMs: 5000,
-            what: target.name ?? undefined,
-            log: message => this.bot.log(message)
-        });
-        if (status !== 'done' || ChatDialog.canContinue()) {
+        if (!(await target.interact('Attack'))) {
             return;
         }
+        if (!(await Execution.delayUntil(() => Game.attacking(target.index), 5_000))) {
+            return;
+        }
+        this.engagedIdx = target.index;
         this.lastReattackAt = Date.now();
         this.bot.setStatus('fighting');
         const deadline = performance.now() + 90_000;
         while (performance.now() < deadline) {
-            this.bot.markCombatXp();
+            const engagedIdx = this.engagedIdx;
+            if (engagedIdx === null) {
+                return;
+            }
             if (EventSignal.pending() || ChatDialog.canContinue() || this.bot.died) {
                 return;
             }
@@ -957,34 +941,24 @@ class Fight implements Task {
                 this.bot.log(`out of ${STYLE === 'mage' ? 'runes' : 'ammo'} — breaking off to restock`);
                 return;
             }
-            // stalled mid-fight: the enemy may be hitting us for 0 damage so
-            // auto-retaliate never fires, re-click to keep the fight alive
-            if (this.bot.combatStalled(10_000) && Date.now() - this.lastReattackAt > 5_000) {
-                const ret = this.currentTarget();
-                if (ret) {
-                    this.bot.log('in combat but no XP for ~10s, re-clicking target');
+            // Why: auto-retaliate did not fire (enemy deals 0 damage) so re-click the same NPC when our face target clears.
+            if (this.stalled()) {
+                const ret = this.track(engagedIdx);
+                if (ret && !(ret.health === 0 && ret.snap.totalHealth > 0)) {
+                    this.bot.log(`${ret.name} stalled — re-issuing the attack`);
                     this.lastReattackAt = Date.now();
-                    this.bot.log(`clicking Attack on ${ret.name}`);
-                    const re = await Reach.entityOp({
-                        find: () => this.track(ret),
-                        op: 'Attack',
-                        expect: () => Game.inCombat() || ChatDialog.canContinue(),
-                        openWhenUnreachable: true,
-                        expectMs: 5000,
-                        what: ret.name ?? undefined,
-                        log: m => this.bot.log(m)
-                    });
-                    if (re === 'done') {
-                        target = ret;
-                        await Execution.delayTicks(2);
-                        continue;
+                    if (await ret.interact('Attack')) {
+                        if (await Execution.delayUntil(() => Game.attacking(ret.index), 5_000)) {
+                            await Execution.delayTicks(2);
+                            continue;
+                        }
                     }
                 }
             }
-            const cur = this.track(target);
+            const cur = this.track(engagedIdx);
             if (!cur || (cur.health === 0 && cur.snap.totalHealth > 0)) {
-                if (cur) {
-                    await Execution.delayUntil(() => this.track(target) === null, 10_000);
+                if (cur && Game.attacking(engagedIdx)) {
+                    await Execution.delayUntil(() => this.track(engagedIdx) === null, 10_000);
                 }
                 this.bot.countKill();
                 await Execution.delayTicks(2);
