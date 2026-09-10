@@ -390,6 +390,15 @@ ScriptRegistry.register({
             group: 'Tick manip',
             help: TICK_MANIP_UNSHIPPED_HELP
         },
+        guildFeatherMinutes: {
+            type: 'number',
+            default: 0,
+            min: 0,
+            max: 120,
+            label: 'Shilo supply trip every (minutes)',
+            showIf: { key: 'location', anyOf: ['Shilo Village'] },
+            help: 'Banks the catch, buys feathers from Fernahei first, then affordable water vials from Obli, banks the vials and returns to fishing. 0 disables scheduled trips; running out of feathers still triggers a paced supply trip.'
+        },
         location: {
             type: 'string',
             default: 'Auto',
