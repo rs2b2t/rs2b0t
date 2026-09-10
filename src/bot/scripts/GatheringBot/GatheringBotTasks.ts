@@ -1810,7 +1810,8 @@ export class BuyGuildFeathers implements Task {
         if (EventSignal.pending() || Game.inCombat() || Inventory.isFull()) {
             return false;
         }
-        return this.bot.baitVendor() !== null && this.bot.guildFeatherTripDue();
+        const vendor = this.bot.baitVendor();
+        return vendor !== null && vendor.keeper !== 'Fernahei' && this.bot.guildFeatherTripDue();
     }
 
     async execute(): Promise<void> {
@@ -1865,6 +1866,20 @@ export class BuyGuildFeathers implements Task {
             : `feathers: ${keeper} had none to sell`);
         bot.setStatus('feathers: back to the water');
         await bot.walkHomeIfNeeded(log);
+    }
+}
+
+export class BuyShiloSupplies implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    validate(): boolean {
+        if (EventSignal.pending() || Game.inCombat()) return false;
+        return this.bot.baitVendor()?.keeper === 'Fernahei'
+            && (this.bot.shiloSupplyTrip.active || this.bot.guildFeatherTripDue());
+    }
+
+    async execute(): Promise<void> {
+        await this.bot.shiloSupplyTrip.step(this.bot);
     }
 }
 
@@ -2368,9 +2383,7 @@ export class Gather implements Task {
 
     /** Whether a fishing spot is in range for this camp mode. */
     private fishSpotInRange(spotTile: Tile): boolean {
-        if (this.bot.avoidsSpot(spotTile)) {
-            return false;
-        }
+        if (this.bot.avoidsSpot(spotTile)) return false;
         if (this.bot.isNamedCamp()) {
             return resourceWithinCamp(this.bot.getAnchor().distanceTo(spotTile), this.bot.leashRadius());
         }
@@ -2413,6 +2426,7 @@ export class Gather implements Task {
 
     validate(): boolean {
         // Combat only blocks AFK gather, retaliate tick-manip keeps gathering.
+        if (this.bot.shiloSupplyTrip.active) return false;
         if (Inventory.isFull() || EventSignal.pending()) {
             return false;
         }
@@ -2689,7 +2703,6 @@ export class Gather implements Task {
                 await this.bot.walkHomeIfNeeded(m => this.bot.log(`  ${m}`));
                 return;
             }
-            // Why: a camp whose river runs past the client's npc view has to go and look, or it holds a pin that will not see a spot again until one happens to land beside it.
             const stop = this.bot.nextSweepStop();
             if (stop !== null) {
                 this.bot.setStatus(`fish: sweeping to ${stop}`);

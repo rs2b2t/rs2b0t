@@ -7,6 +7,7 @@ import {
 } from '../../api/tasks/Anchor.js';
 import { reader } from '../../adapter/ClientAdapter.js';
 import { TaskBot } from '../../api/bot/Bot.js';
+import { ShiloSupplyTrip } from './ShiloSupplyTrip.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Game } from '../../api/game/Game.js';
@@ -211,6 +212,7 @@ import {
     MinerEatFood,
     RepairBrokenGatherTool,
     BuyGuildFeathers,
+    BuyShiloSupplies,
     RestockFishingGear,
     RestockGatherTool,
     SupplierWithdrawRaw,
@@ -338,6 +340,7 @@ export const GATHERING_SETTINGS: SettingsSchema = {
 
 
 export default class GatheringBot extends TaskBot {
+    readonly shiloSupplyTrip = new ShiloSupplyTrip();
     override loopDelay = 600;
 
     private anchor: Tile | null = null;
@@ -440,7 +443,6 @@ export default class GatheringBot extends TaskBot {
     private baitQty = 1000;
     private guildFeatherMinutes = 0;
     private lastGuildFeatherAt: number | null = null;
-    /** Where along the camp's sweep the search is; it wraps rather than turning at the ends. */
     private sweepIndex = 0;
 
     /** Off / gatherer (handoff) / mule (bank-side). See muleMode settings. */
@@ -502,7 +504,6 @@ export default class GatheringBot extends TaskBot {
             this.action = method.op;
             this.pairOp = method.pair;
             this.baitQty = Math.max(1, Math.floor(this.settings.num('baitQty', 1000)));
-            // Why: the location is resolved further down, so the camp gate is the vendor lookup in BuyGuildFeathers rather than a name test here, and a camp with no shop never fires whatever this reads.
             this.guildFeatherMinutes = Math.max(0, Math.floor(this.settings.num('guildFeatherMinutes', 0)));
             // Apply bait/feather target only to pieces that need them; tools stay min=1.
             this.fishMethod = { ...method, gear: withBaitTarget(method, this.baitQty).gear };
@@ -972,6 +973,7 @@ export default class GatheringBot extends TaskBot {
             ...(!muleSide && burnOn ? createChopBurnTasks(this) : []),
             // Mule trade owns the loop while the modal is open (movement cancels trade).
             ...(this.muleMode !== 'off' ? [new HandleGatherMuleTrade(this)] : []),
+            ...(!muleSide && this.fishing ? [new BuyShiloSupplies(this)] : []),
             ...(bankMule ? [new MuleBankHaul(this), new MuleGoMeet(this), new MuleRequestOrWait(this)] : []),
             ...(cooker ? [new MuleGoMeet(this), new MuleRequestOrWait(this)] : []),
             ...(supplier
@@ -2393,27 +2395,20 @@ export default class GatheringBot extends TaskBot {
     // Why: the skip uses the soft arrive disk ({@link HOME_ARRIVE_RADIUS}), not the full gather leash.
     // Why: bank stands at named camps often sit inside the leash but far from resources, the Catherby bank is ~36 from the pier.
 
-    /** Where this camp buys its bait, when it has a shop of its own. */
     baitVendor(): BaitVendor | null {
         return this.location?.baitVendor ?? null;
     }
 
-    /** Whether a spot sits on a tile this camp will not walk to. */
     avoidsSpot(tile: Tile): boolean {
         return spotAvoided(tile, this.location?.avoidSpots ?? []);
     }
 
-    // Why: the stops are walked in order and wrap, so a spot that appeared behind the bot is reached on the way back rather than only ever being searched for downstream.
-
-    /** The next stop on this camp's sweep, or null when it holds its pin instead. */
     nextSweepStop(): Tile | null {
-        const sweep = this.location?.sweep ?? [];
-        const next = sweepStopFor(sweep, this.sweepIndex, Game.tile());
+        const next = sweepStopFor(this.location?.sweep ?? [], this.sweepIndex, Game.tile());
         this.sweepIndex = next.index;
         return next.stop === null ? null : Tile.from(next.stop);
     }
 
-    /** Whether a feather run is owed. */
     guildFeatherTripDue(): boolean {
         const vendor = this.baitVendor();
         return this.isFishing() && baitTripDue({

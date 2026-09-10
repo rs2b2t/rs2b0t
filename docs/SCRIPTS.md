@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 69. Categories: 20.
+- Scripts: 68. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -16,7 +16,7 @@
 - [Cooking](#cooking) — 1
 - [Crafting](#crafting) — 8
 - [Firemaking](#firemaking) — 1
-- [Fishing](#fishing) — 2
+- [Fishing](#fishing) — 1
 - [Fletching](#fletching) — 2
 - [Herblore](#herblore) — 5
 - [Magic](#magic) — 3
@@ -670,7 +670,7 @@ Fishes a chosen method at the spot that offers it; banks the catch, optionally c
 | `baitQty` | number (1–) | `1000` | Bait / feathers qty |
 | `leashRadius` | number (2–64) | `18` | Leash radius (tiles) |
 | `tickManip` | string | `"Off"` | Tick manip — one of: Off |
-| `guildFeatherMinutes` | number (0–120) | `0` | Buy out the feather shop every (minutes) |
+| `guildFeatherMinutes` | number (0–120) | `0` | Feather supply trip every (minutes) |
 | `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Draynor Village, Catherby, Fishing Guild, Barbarian Village, Seers (fly fishing), Karamja (Musa Point), Taverley Dungeon (lava eels), Gnome Stronghold (fishing), Shilo Village, None |
 | `cookMode` | string | `"Off"` | Cook mode — one of: Off, Cook then bank, Bank raw then cook |
 | `cookFish` | string | `"All raw"` | Fish to cook — one of: All raw, Tuna, Swordfish, Lobster, Shark, Salmon, Trout, Shrimps, Anchovies, Custom |
@@ -684,17 +684,6 @@ Fishes a chosen method at the spot that offers it; banks the catch, optionally c
 | `forgetfulBank` | boolean | `false` | Forgetful bank exits |
 | `purgePackOnStart` | boolean | `true` | Bank junk on start |
 | `packJunk` | string | `"Bank"` | Event junk while gathering — one of: Bank, Drop, Off |
-
-### JiveShilo
-
-Fly fishes the river inside Shilo Village, sells the trout and salmon to Fernahei's fishing hut and spends the coins on his feathers, so a pack of fish comes back as feathers and nothing is ever banked. Needs Shilo Village complete and Fishing 20.
-
-- Tags: `fishing`, `shilo`, `shopping`, `feathers`, `members`, `afk`
-
-| Setting | Type | Default | Notes |
-|---|---|---|---|
-| `hutStand` | tile | `{"x":2870,"z":2971,"level":0}` | Fernahei's counter tile (x,z) |
-| `feathersTarget` | number (0–100000) | `0` | Stop at this many feathers (0 = keep going) |
 
 ## Fletching
 

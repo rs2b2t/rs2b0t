@@ -43,7 +43,6 @@ import JiveKBD, { SETTINGS as JIVEKBD_SETTINGS } from './JiveKBD/JiveKBD.js';
 import JiveCrafting, { SETTINGS as JIVECRAFTING_SETTINGS } from './JiveCrafting/JiveCrafting.js';
 import JiveChests, { SETTINGS as JIVECHESTS_SETTINGS } from './JiveChests/JiveChests.js';
 import JiveMarketDumper, { SETTINGS as JIVEMARKETDUMPER_SETTINGS } from './JiveMarketDumper/JiveMarketDumper.js';
-import JiveShilo, { SETTINGS as JIVESHILO_SETTINGS } from './JiveShilo/JiveShilo.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab/RockCrab.js';
 import RangingGuild, { RANGING_GUILD_SETTINGS } from './RangingGuild/RangingGuild.js';
 import ThievingBot, { SETTINGS as THIEVING_SETTINGS } from './ThievingBot/ThievingBot.js';
@@ -238,15 +237,6 @@ ScriptRegistry.register({
     tags: ['kbd', 'dragon', 'safespot', 'wilderness', 'members', 'banking'],
     settingsSchema: JIVEKBD_SETTINGS,
     create: () => new JiveKBD()
-});
-
-ScriptRegistry.register({
-    name: 'JiveShilo',
-    description: "Fly fishes the river inside Shilo Village, sells the trout and salmon to Fernahei's fishing hut and spends the coins on his feathers, so a pack of fish comes back as feathers and nothing is ever banked. Needs Shilo Village complete and Fishing 20.",
-    category: 'Fishing',
-    tags: ['fishing', 'shilo', 'shopping', 'feathers', 'members', 'afk'],
-    settingsSchema: JIVESHILO_SETTINGS,
-    create: () => new JiveShilo()
 });
 
 ScriptRegistry.register({
@@ -485,9 +475,9 @@ ScriptRegistry.register({
             default: 0,
             min: 0,
             max: 120,
-            label: 'Buy out the feather shop every (minutes)',
+            label: 'Feather supply trip every (minutes)',
             showIf: { key: 'location', anyOf: ['Fishing Guild', 'Shilo Village'] },
-            help: `walks to the camp's own feather shop on this clock, Roachey in the Fishing Guild or Fernahei in Shilo, draws what a full shelf costs out of the bank and buys every feather that covers, then goes back to the water. The price climbs 1gp per 50 bought to a 12gp ceiling, so 1500 of them run to ${FEATHER_BUYOUT_GP.toLocaleString('en-US')}gp and that is the most a trip takes; stock comes back one a tick, a full buyout ${FEATHER_RESTOCK_MINUTES} minutes. 0 turns it off`
+            help: `In the Fishing Guild, buys Roachey's feathers with up to ${FEATHER_BUYOUT_GP.toLocaleString('en-US')}gp; a full shelf restocks in ${FEATHER_RESTOCK_MINUTES} minutes. In Shilo, banks the catch, buys Fernahei's feathers first, then affordable water vials from Obli, banks the vials and returns to fishing. 0 disables scheduled trips; running out of feathers still triggers a paced supply trip.`
         },
         location: {
             type: 'string',

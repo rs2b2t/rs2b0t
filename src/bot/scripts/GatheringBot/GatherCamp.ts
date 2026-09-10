@@ -69,36 +69,27 @@ export function gatherHuntRadius(primaryDisk: number): number {
     return Math.max(L + 24, 48);
 }
 
-/** A tile the sweep and the avoid list are compared against, so this module needs no Tile. */
 export interface CampPoint {
-    x: number;
-    z: number;
-    level: number;
+    readonly x: number;
+    readonly z: number;
+    readonly level: number;
 }
 
-// Why: the spot pick is straight-line, so water across a river beats water along the bank the camp stands on and the walk round is the length of it.
-
-/** Whether a spot sits on a tile the camp refuses. */
 export function spotAvoided(spot: CampPoint, avoid: readonly CampPoint[]): boolean {
-    return avoid.some(t => t.x === spot.x && t.z === spot.z && t.level === spot.level);
+    return avoid.some(tile => tile.x === spot.x && tile.z === spot.z && tile.level === spot.level);
 }
 
-// Why: standing on a stop with nothing in view is what says the stop is spent, so arriving is what advances the index; measuring off anything else leaves the bot walking to a tile it is already on.
-
-/** The stop to walk next and the index to keep, given where the search has got to. Null stop when the camp has no sweep. */
 export function sweepStopFor(
     sweep: readonly CampPoint[],
     index: number,
     here: CampPoint | null
-): { stop: CampPoint | null; index: number } {
-    if (sweep.length === 0) {
-        return { stop: null, index: 0 };
-    }
+): { readonly stop: CampPoint | null; readonly index: number } {
+    if (sweep.length === 0) return { stop: null, index: 0 };
     const at = ((index % sweep.length) + sweep.length) % sweep.length;
-    const stop = sweep[at]!;
+    const stop = sweep[at];
     if (here !== null && here.level === stop.level && Math.max(Math.abs(here.x - stop.x), Math.abs(here.z - stop.z)) <= 1) {
         const next = (at + 1) % sweep.length;
-        return { stop: sweep[next]!, index: next };
+        return { stop: sweep[next], index: next };
     }
     return { stop, index: at };
 }
