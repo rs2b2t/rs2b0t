@@ -116,11 +116,6 @@ export const Game = {
         return facingPlayer(reader.selfFaceEntity());
     },
 
-    /** True when our face target is the NPC at the given scene index. */
-    attacking(npcIndex: number): boolean {
-        return reader.selfFaceEntity() === npcIndex;
-    },
-
     animating(): boolean {
         return reader.selfAnim() !== -1;
     },

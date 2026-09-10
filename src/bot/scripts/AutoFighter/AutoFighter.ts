@@ -30,7 +30,6 @@ import { Sustain } from '../../api/sustain/Sustain.js';
 import { nearestBank } from '../../api/bank/BankLocations.js';
 import { GroundItems } from '../../api/grounditems/GroundItems.js';
 import { Npcs, type Npc } from '../../api/npcs/Npcs.js';
-import { reader } from '../../adapter/ClientAdapter.js';
 import { matchesEntityName } from '../../api/query/Query.js';
 import { SettingsStore, type SettingsSchema } from '../../runtime/Settings.js';
 import Tile from '../../geometry/Tile.js';
@@ -50,8 +49,7 @@ import {
     assertAutoRetaliateOn,
     shouldArmSpecial,
     specialAvailable,
-    npcIsEngagedWithUs,
-    shouldReattackStall,
+    REATTACK_COOLDOWN_MS,
     SPOT_OPTIONS,
     START_POSITION,
     wantsAutoFighterLoot
@@ -851,6 +849,8 @@ class ReequipGear implements Task {
 class Fight implements Task {
     private lastReattackAt = 0;
     private engagedIdx: number | null = null;
+    private engagedAt = 0;
+    private engagedHealth = -1;
     constructor(private bot: AutoFighter) {}
     private findTarget() {
         const q = Npcs.query()
@@ -862,64 +862,51 @@ class Fight implements Task {
         }
         return q.nearest();
     }
-    private findEngaged(): Npc | null {
-        const names = targetNames();
-        return Npcs.query()
-            .where(n => n.inCombat && npcIsEngagedWithUs(n.snap.faceEntity, reader.selfSlot()) && n.tile().distanceTo(ANCHOR) <= LEASH + 4)
-            .name(...names)
-            .nearest();
-    }
     private track(idx: number): Npc | null {
         const names = targetNames();
         return Npcs.all().find(n => n.index === idx && names.some(name => matchesEntityName(n.name, name))) ?? null;
     }
-    /** Stall rule: our face target on the engaged NPC cleared past the re-click cooldown. */
+    /** FireGiant health-change pattern: re-click when the target's health has not changed for 5s. */
     private stalled(): boolean {
-        return shouldReattackStall(
-            this.engagedIdx !== null,
-            this.engagedIdx !== null && Game.attacking(this.engagedIdx),
-            Date.now() - this.lastReattackAt
-        );
+        return this.engagedIdx !== null
+            && this.engagedHealth >= 0
+            && performance.now() - this.engagedAt >= REATTACK_COOLDOWN_MS;
     }
     validate(): boolean {
         if (needEat() || Skills.hpFraction() < PANIC_AT) {
             return false;
         }
-        // Why: eating interrupts the attack animation; the status flips to "eating X" and the fight loop exits.
-        // Why: re-click the same target immediately after healing instead of waiting for the stall window, even if Game.inCombat() flickers false.
         if (this.bot.ateSince(this.lastReattackAt) && Date.now() - this.lastReattackAt > 2_000) {
-            return (this.findEngaged() ?? this.findTarget()) !== null;
+            return (this.engagedIdx !== null ? this.track(this.engagedIdx) : null) !== null || this.findTarget() !== null;
         }
-        // start a fresh fight when idle
         if (!Game.inCombat()) {
             return this.findTarget() !== null;
         }
         if (this.stalled()) {
-            return this.findEngaged() !== null;
+            return this.track(this.engagedIdx!) !== null;
         }
         return false;
     }
     async execute(): Promise<void> {
         let target = this.findTarget();
-        if (!target) {
-            const engaged = this.findEngaged();
-            if (engaged) {
-                target = engaged;
-            }
+        if (!target && this.engagedIdx !== null) {
+            target = this.track(this.engagedIdx);
         }
         if (!target) {
             return;
         }
+        const isNew = target.index !== this.engagedIdx;
         this.bot.setStatus(`attacking ${target.name} at ${target.tile()}`);
-        this.bot.log(`clicking Attack on ${target.name}`);
-        if (!(await target.interact('Attack'))) {
-            return;
+        if (isNew) {
+            this.bot.log(`clicking Attack on ${target.name}`);
+        } else {
+            this.bot.log(`${target.name} stalled — re-issuing the attack`);
         }
-        if (!(await Execution.delayUntil(() => Game.attacking(target.index), 5_000))) {
-            return;
-        }
-        this.engagedIdx = target.index;
         this.lastReattackAt = Date.now();
+        await target.interact('Attack');
+        this.engagedIdx = target.index;
+        this.engagedAt = performance.now();
+        this.engagedHealth = -1;
         this.bot.setStatus('fighting');
         const deadline = performance.now() + 90_000;
         while (performance.now() < deadline) {
@@ -941,33 +928,32 @@ class Fight implements Task {
                 this.bot.log(`out of ${STYLE === 'mage' ? 'runes' : 'ammo'} — breaking off to restock`);
                 return;
             }
-            // Why: auto-retaliate did not fire (enemy deals 0 damage) so re-click the same NPC when our face target clears.
-            if (this.stalled()) {
-                const ret = this.track(engagedIdx);
-                if (ret && !(ret.health === 0 && ret.snap.totalHealth > 0)) {
-                    this.bot.log(`${ret.name} stalled — re-issuing the attack`);
-                    this.lastReattackAt = Date.now();
-                    if (await ret.interact('Attack')) {
-                        if (await Execution.delayUntil(() => Game.attacking(ret.index), 5_000)) {
-                            await Execution.delayTicks(2);
-                            continue;
-                        }
-                    }
-                }
-            }
             const cur = this.track(engagedIdx);
             if (!cur || (cur.health === 0 && cur.snap.totalHealth > 0)) {
-                if (cur && Game.attacking(engagedIdx)) {
+                if (cur) {
                     await Execution.delayUntil(() => this.track(engagedIdx) === null, 10_000);
                 }
                 this.bot.countKill();
                 await Execution.delayTicks(2);
                 return;
             }
+            // FireGiant health-change pattern: track health, reset timer on change.
+            if (cur.snap.health !== this.engagedHealth) {
+                this.engagedHealth = cur.snap.health;
+                this.engagedAt = performance.now();
+            }
+            if (this.stalled()) {
+                if (await cur.interact('Attack')) {
+                    this.lastReattackAt = Date.now();
+                    this.engagedAt = performance.now();
+                    this.engagedHealth = -1;
+                    await Execution.delayTicks(2);
+                    continue;
+                }
+            }
             if (!Game.inCombat() && !cur.inCombat) {
                 return;
             }
-            // Why: inline, not left to the sibling task, this loop owns the bot until the target dies.
             await armSpecial(this.bot);
             await Execution.delayTicks(2);
         }
