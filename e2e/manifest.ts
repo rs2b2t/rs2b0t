@@ -3,6 +3,25 @@ import type { Case } from './manifestTypes.js';
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
     {
+        id: 'fisher-shilo-shopping-live',
+        harness: 'fisher-shilo-shopping-live.ts',
+        covers: { scripts: ['GatheringBot'] },
+        status: 'unvetted',
+        args: ['--scenario', 'all', '--minutes', '8'],
+        budgetMin: 24,
+        note: 'actual registry Fisher (GatheringBot): fresh full-pack and empty-pack Shilo fixtures; bank fish/junk before either shop, fund Obli vials plus Fernahei feathers, deposit vials before resumed Fishing XP. Evidence under out/e2e; no speed changes; --tick200 asserts an already configured engine'
+    },
+    {
+        id: 'fisher-shilo-shopping-limited',
+        harness: 'fisher-shilo-shopping-live.ts',
+        covers: { scripts: ['GatheringBot'] },
+        status: 'unvetted',
+        manual: true,
+        args: ['--scenario', 'limited', '--minutes', '8'],
+        budgetMin: 12,
+        note: 'requires Obli runtime vial stock 0..24 and Fernahei feather stock >0; records actual stock at Shop.open, buys limited stock or skips a zero shelf once, then resumes fishing; does not fabricate or mutate shared shop stock'
+    },
+    {
         id: 'aio-quest-test',
         harness: 'aio-quest-test.ts',
         covers: { scripts: ['AIOQuester'] },
