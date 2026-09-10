@@ -4,6 +4,7 @@ import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { GEM_CUTS, GEM_ROCKS, LQ_BANK, LQ_ID, LQ_ITEM, LQ_SHOP, LQ_SKILLS, LQ_TILE } from './areas.js';
 import { mineGem, smeltGoldBar } from './gather.js';
 import { MELEE_WEAPONS, bestBanked, packWeapon, wieldedWeapon } from '../../weapons.js';
+import { QUEST_ARMOUR, armourChoice, armourHeld, armourWorn } from '../../armour.js';
 
 export interface LqItem {
     id: number;
@@ -115,6 +116,7 @@ export const KEEP_IDS: readonly number[] = [
     ...PICKAXES.map(p => p.id),
     ...MELEE_WEAPONS.map(w => w.id),
     ...ARMOUR.map(a => a.id),
+    ...QUEST_ARMOUR.map(a => a.id),
     ...PRAYER_POTIONS.map(p => p.id),
     LQ_ID.COINS
 ];
@@ -274,19 +276,31 @@ export function dressForCombat(snap: QuestSnapshot, bank?: Tile): QuestStep | nu
             return withdraw([{ name: fromTheBank.name, id: fromTheBank.id, qty: 1 }], bank);
         }
     }
-    for (const piece of ARMOUR) {
-        if (worn(snap, piece.id)) {
+    for (const slot of ['torso', 'legs', 'hat', 'lefthand'] as const) {
+        const piece = armourChoice(snap, slot);
+        if (piece && armourWorn(snap, piece)) {
             continue;
         }
-        if (held(snap, piece.id) > 0) {
+        if (piece && armourHeld(snap, piece)) {
             return { kind: 'equip', item: piece.name };
         }
         if (!snap.bankKnown) {
             return scanBank(bank);
         }
-        if (banked(snap, piece.id) > 0) {
+        if (piece) {
             return withdraw([{ name: piece.name, id: piece.id, qty: 1 }], bank);
         }
+        return { kind: 'wait', reason: `no usable ${slot} armour in the pack or bank` };
+    }
+    if (armourChoice(snap, 'front')) {
+        return null;
+    }
+    const glory = { id: 1704, name: 'Amulet of glory' };
+    if (held(snap, glory.id) > 0) {
+        return { kind: 'equip', item: glory.name };
+    }
+    if (snap.bankKnown && banked(snap, glory.id) > 0) {
+        return withdraw([{ ...glory, qty: 1 }], bank);
     }
     return null;
 }

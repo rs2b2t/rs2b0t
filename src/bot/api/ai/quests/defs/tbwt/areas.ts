@@ -194,6 +194,7 @@ export const TB_ARROWS: readonly string[] = [
 
 /** Worn from the start: the monkey dodges every melee swing while TBWT is live. */
 export const TB_ARMOUR: readonly string[] = [TB_NAME.BODY, TB_NAME.LEGS, TB_NAME.HELM];
+export const TB_ARMOUR_SLOTS = ['torso', 'legs', 'hat'] as const;
 
 export const ARROW_TARGET = 200;
 export const FOOD_TARGET = FOOD_FLOAT;

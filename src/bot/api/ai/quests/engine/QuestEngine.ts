@@ -101,6 +101,8 @@ export class QuestEngine implements Task {
     private readonly records: QuestRecord[] = QUEST_DEFS.map(d => d.record);
 
     private readonly watchdog = new ProgressWatchdog();
+    private readonly failedWatchdog = new ProgressWatchdog();
+    private pendingFailedSignature: string | null = null;
     private noProgressCount = 0;
 
     private readonly parked = new Set<string>();
@@ -230,6 +232,20 @@ export class QuestEngine implements Task {
         const stage = progress ? progress.stage : await module.readStage?.();
         const snap = this.buildSnapshot(module, stage, progress);
 
+        if (this.pendingFailedSignature !== null) {
+            if (progressSignature(snap) === this.pendingFailedSignature) {
+                this.host.log(`no progress after ${this.noProgressCount} steps on ${module.record.name}`);
+                this.parkOrGiveUp(id, module.record.name);
+                this.resetWatchdog();
+                this.runningId = null;
+                return;
+            }
+            this.pendingFailedSignature = null;
+            this.failedWatchdog.reset();
+            this.noProgressCount = 0;
+            snap.noProgress = 0;
+        }
+
         // Why: a fight shaped as a step returns here every pass, so this is the only place its prayer can be held.
         // Why: the tick is yielded when the upkeep spends it, as the server runs one op per tick and a pass that prays and swings drops one of them.
         if (await prayerUpkeep()) {
@@ -345,7 +361,9 @@ export class QuestEngine implements Task {
                 }
             }
             const extras = [coinFloat, foodFloat, potionFloat].filter((w): w is { name: string; qty: number } => w !== null);
-            if (plan.blocked.length > 0 && plan.withdraw.length === 0) {
+            if (!this.bankKnown && plan.blocked.length > 0) {
+                step = { kind: 'scanBank', bank: bankFor(module) };
+            } else if (plan.blocked.length > 0 && plan.withdraw.length === 0) {
                 this.host.log(`${module.record.name} short on items: ${plan.blocked.join(', ')} — parking`);
                 this.parkedReasons.set(id, plan.blocked.map(b => `missing: ${b}`));
                 this.parkOrGiveUp(id, module.record.name);
@@ -458,12 +476,12 @@ export class QuestEngine implements Task {
             }
         }
 
-        // Why: the no-progress watchdog below only counts steps that succeeded, so a step failing forever parks nothing and, before the heartbeat above, said nothing either.
         if (ok) {
             this.failStreak = 0;
+            this.failedWatchdog.reset();
         } else if (++this.failStreak % FAIL_WARN === 0) {
             this.host.log(`WARN: '${stepDesc}' has failed ${this.failStreak}x in a row `
-                + `over ${formatDuration(this.tracker.elapsed(Date.now()))} — failures do not feed the no-progress watchdog, so this will not park itself`);
+                + `over ${formatDuration(this.tracker.elapsed(Date.now()))}`);
         }
 
         if (Bank.isOpen()) {
@@ -472,11 +490,17 @@ export class QuestEngine implements Task {
             await Modals.close();
         }
 
-        if (ok && advancesWorld(step)) {
-            const count = this.watchdog.note(progressSignature(this.buildSnapshot(module, stage, progress)));
+        if (advancesWorld(step)) {
+            const signature = progressSignature(this.buildSnapshot(module, stage, progress));
+            const count = ok
+                ? this.watchdog.note(signature)
+                : this.failedWatchdog.noteFailure(progressSignature(snap), signature);
             this.noProgressCount = count;
             if (count === NO_PROGRESS_WARN) {
                 this.host.log(`WARN: ${count} steps with no progress on ${module.record.name} — check the decide()/prefer lists`);
+            } else if (count >= NO_PROGRESS_PARK && !ok && (module.readProgress || module.readStage)) {
+                // Why: journal oracles can open/close modals; confirm on the next normal read, not with an extra post-step action.
+                this.pendingFailedSignature = signature;
             } else if (count >= NO_PROGRESS_PARK) {
                 this.host.log(`no progress after ${count} steps on ${module.record.name}`);
                 this.parkOrGiveUp(id, module.record.name);
@@ -586,6 +610,8 @@ export class QuestEngine implements Task {
 
     private resetWatchdog(): void {
         this.watchdog.reset();
+        this.failedWatchdog.reset();
+        this.pendingFailedSignature = null;
         this.noProgressCount = 0;
         this.tracker.reset();
         this.failStreak = 0;
