@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 60. Categories: 20.
+- Scripts: 61. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -21,7 +21,7 @@
 - [Herblore](#herblore) — 5
 - [Magic](#magic) — 2
 - [Mining](#mining) — 3
-- [Money making](#money-making) — 3
+- [Money making](#money-making) — 4
 - [Navigation](#navigation) — 2
 - [Prayer](#prayer) — 1
 - [Quest](#quest) — 3
@@ -714,6 +714,17 @@ Mines the selected rock types, then banks the ore at the nearest bank or drops i
 
 ## Money making
 
+### ClimbingBoots
+
+Falador West to Tenzing climbing-boot buyer. Withdraws exact gp so the last pair replaces the coin stack. Optional Falador teleport runes for the walk back. Needs Death Plateau complete.
+
+- Tags: `tenzing`, `climbing boots`, `burthorpe`, `falador`, `bank`, `teleport`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `useTeleport` | boolean | `true` | Falador teleport back to bank |
+| `runeStock` | number (1–1000) | `50` | Falador teles of runes to carry |
+
 ### MarketMaker
 
 Player shop — stands at a bank, buys and sells the items in an order book, quotes in public chat ("buy 100 iron ore"), and declines any trade that does not match what it quoted
@@ -904,7 +915,7 @@ Varrock anvil smithing — withdraw bars + a hammer, make the chosen item at the
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `bar` | string | `"Bronze"` | Bar tier — one of: Bronze, Iron, Steel, Mithril, Adamant, Rune |
+| `bar` | string | `"Bronze"` | Bar tier — one of: Bronze, Iron, Steel, Mithril, Adamantite, Runite |
 | `product` | string | `"Dagger"` | Item to smith — one of: Dagger, Sword, Scimitar, Longsword, 2h sword, Axe, Mace, Warhammer, Battleaxe, Chainbody, Platelegs, Plateskirt, Platebody, Med helm, Full helm, Sq shield, Kiteshield, Nails, Dart tip, Arrowtips, Knife, Wire, Claws |
 | `anvilStand` | tile | `{"x":3188,"z":3425,"level":0}` | Anvil stand tile (x,z) |
 | `bankStand` | tile | `{"x":3185,"z":3440,"level":0}` | Bank stand tile (x,z) |
