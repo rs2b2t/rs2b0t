@@ -68,3 +68,28 @@ export function gatherHuntRadius(primaryDisk: number): number {
     const L = Math.max(2, Math.floor(Number.isFinite(primaryDisk) ? primaryDisk : 10));
     return Math.max(L + 24, 48);
 }
+
+export interface CampPoint {
+    readonly x: number;
+    readonly z: number;
+    readonly level: number;
+}
+
+export function spotAvoided(spot: CampPoint, avoid: readonly CampPoint[]): boolean {
+    return avoid.some(tile => tile.x === spot.x && tile.z === spot.z && tile.level === spot.level);
+}
+
+export function sweepStopFor(
+    sweep: readonly CampPoint[],
+    index: number,
+    here: CampPoint | null
+): { readonly stop: CampPoint | null; readonly index: number } {
+    if (sweep.length === 0) return { stop: null, index: 0 };
+    const at = ((index % sweep.length) + sweep.length) % sweep.length;
+    const stop = sweep[at];
+    if (here !== null && here.level === stop.level && Math.max(Math.abs(here.x - stop.x), Math.abs(here.z - stop.z)) <= 1) {
+        const next = (at + 1) % sweep.length;
+        return { stop: sweep[next], index: next };
+    }
+    return { stop, index: at };
+}
