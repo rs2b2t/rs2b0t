@@ -115,7 +115,6 @@ export function decide(snap: QuestSnapshot): QuestStep {
 export const seaslug: QuestModule = {
     record: QUESTS.find(r => r.id === 'seaslug')!,
     bank: SS_TILE.BANK,
-    food: 6,
     tools: ['torch', 'damp sticks', 'dry sticks', 'broken glass', 'swamp paste', 'coins'],
     readProgress: readSeaSlugProgress,
     decide

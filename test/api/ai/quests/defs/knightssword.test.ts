@@ -159,9 +159,10 @@ describe('stage 6, the materials and the sword', () => {
         expect(talkTo(step)).toBe('Thurgo');
     });
 
-    test('stocks food before going underground', () => {
+    // Why: the quest is free and the blurite cave is walked past ice giants rather than fought through, so an empty food stack is no reason to stop at the bank.
+    test('goes for the blurite with no food, since it stocks none', () => {
         const step = at6({ invIds: [[KS_ID.IRON_BAR, 2], [BRONZE_PICKAXE, 1]], food: 0 });
-        expect(step).toMatchObject({ kind: 'withdraw' });
+        expect(step).toMatchObject({ kind: 'custom', name: 'mine blurite' });
     });
 
     test('does not walk back out of the dungeon to re-bank', () => {

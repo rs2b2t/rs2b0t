@@ -1,5 +1,5 @@
 import { afterEach, expect, test, describe } from 'bun:test';
-import { decide, GOBLIN_DIPLOMACY_COIN_TARGET, GOBLIN_DIPLOMACY_QUEST_COIN_RESERVE, GOBLIN_MAIL_FOOD_RESTOCK_FLOOR, GOBLIN_MAIL_FOOD_TARGET, goblindiplomacy, goblinMailGatherStep } from '#/bot/api/ai/quests/defs/goblindiplomacy.js';
+import { decide, GOBLIN_DIPLOMACY_COIN_TARGET, GOBLIN_DIPLOMACY_QUEST_COIN_RESERVE, goblindiplomacy, goblinMailGatherStep } from '#/bot/api/ai/quests/defs/goblindiplomacy.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 import { QuestFood } from '#/bot/api/ai/quests/food.js';
 
@@ -79,44 +79,31 @@ describe('goblindiplomacy goblin-mail survival', () => {
         expect(step.kind).toBe('scanBank');
     });
 
-    test('withdraws the AIO-selected food before buying a fallback', () => {
+    // Why: this is a free quest and the mail comes off goblins, so nothing is withdrawn or bought to eat; the coins stay, since they buy Aggie's dyes.
+    test('never withdraws food, whatever the bank holds', () => {
         QuestFood.name = 'Trout';
-        const step = goblinMailGatherStep({
+        const withSelected = goblinMailGatherStep({
             ...snap('inProgress'),
             bankKnown: true,
-            bank: new Map([['trout', 6]])
+            bank: new Map([['trout', 20]])
         });
-        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Trout', qty: 6 }]);
-    });
+        expect(withSelected.kind).not.toBe('withdraw');
 
-    test('tops up a partial carried stack instead of fighting with one food', () => {
-        QuestFood.name = 'Trout';
-        const step = goblinMailGatherStep({
-            ...snap('inProgress', [['trout', 1]]),
-            bankKnown: true,
-            bank: new Map([['trout', 19]])
-        });
-        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Trout', qty: GOBLIN_MAIL_FOOD_TARGET - 1 }]);
-    });
-
-    test('combines partial selected food with banked fallback food', () => {
-        QuestFood.name = 'Trout';
-        const step = goblinMailGatherStep({
-            ...snap('inProgress', [['trout', 6]]),
-            bankKnown: true,
-            bank: new Map([['kebab', 14]])
-        });
-        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Kebab', qty: GOBLIN_MAIL_FOOD_TARGET - 6 }]);
-    });
-
-    test('withdraws banked fallback Kebabs when the selected food is unavailable', () => {
-        QuestFood.name = 'Trout';
-        const step = goblinMailGatherStep({
+        const withFallback = goblinMailGatherStep({
             ...snap('inProgress'),
             bankKnown: true,
             bank: new Map([['kebab', 20]])
         });
-        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Kebab', qty: GOBLIN_MAIL_FOOD_TARGET }]);
+        expect(withFallback.kind).not.toBe('withdraw');
+    });
+
+    test('goes for the mail on coins alone, with no food in the pack', () => {
+        const step = goblinMailGatherStep({
+            ...snap('inProgress', [['coins', 500]]),
+            bankKnown: true,
+            freeSlots: 10
+        });
+        expect(step.kind === 'custom' && step.name).toBe('farm goblin mail');
     });
 
     test('uses banked cash before asking a level-three account to self-fund', () => {
@@ -129,141 +116,27 @@ describe('goblindiplomacy goblin-mail survival', () => {
         expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Coins', qty: 125 }]);
     });
 
-    test('earns a safe quest purse and buys food when the account is completely empty', () => {
+    test('earns the quest purse when the account is completely empty', () => {
         const step = goblinMailGatherStep({ ...snap('inProgress'), bankKnown: true, bank: new Map() });
-        expect(customName(step)).toBe(`earn ${GOBLIN_DIPLOMACY_COIN_TARGET} gp and buy combat food`);
+        expect(customName(step)).toBe(`earn ${GOBLIN_DIPLOMACY_COIN_TARGET} gp`);
     });
 
-    test('buys food directly once the safe quest purse is carried', () => {
+    test('travels to Goblin Village on the purse alone, with no batch of food to gather first', () => {
         const step = goblinMailGatherStep({
-            ...snap('inProgress', [['coins', GOBLIN_DIPLOMACY_COIN_TARGET]]),
-            bankKnown: true,
-            bank: new Map()
-        });
-        expect(customName(step)).toBe(`buy ${GOBLIN_MAIL_FOOD_TARGET} combat Kebabs`);
-    });
-
-    test('requires a full batch before travelling to Goblin Village', () => {
-        QuestFood.name = 'Trout';
-        const short = goblinMailGatherStep({
-            ...snap('inProgress', [
-                ['trout', GOBLIN_MAIL_FOOD_TARGET - 1],
-                ['coins', GOBLIN_DIPLOMACY_COIN_TARGET]
-            ]),
-            bankKnown: true,
-            bank: new Map()
-        });
-        const ready = goblinMailGatherStep({
-            ...snap('inProgress', [
-                ['trout', GOBLIN_MAIL_FOOD_TARGET],
-                ['coins', GOBLIN_DIPLOMACY_QUEST_COIN_RESERVE]
-            ]),
+            ...snap('inProgress', [['coins', GOBLIN_DIPLOMACY_QUEST_COIN_RESERVE]]),
             bankKnown: true
         });
-        expect(customName(short)).toBe('buy 1 combat Kebabs');
-        expect(customName(ready)).toBe('farm goblin mail');
+        expect(customName(step)).toBe('farm goblin mail');
     });
 
-    test('farms in one batch and restocks before the last foods become lethal', () => {
-        const field = { x: 2958, z: 3507, level: 0 };
-        const stillSafe = goblinMailGatherStep({
-            ...snap('inProgress', [
-                ['kebab', GOBLIN_MAIL_FOOD_RESTOCK_FLOOR + 1],
-                ['coins', GOBLIN_DIPLOMACY_QUEST_COIN_RESERVE]
-            ]),
+    // Why: the restock ladder went with the food; the run now goes on whatever coins it has and eats only what it happens to carry.
+    test('self-funds the quest reserve when the purse is short', () => {
+        const step = goblinMailGatherStep({
+            ...snap('inProgress', [['coins', 1]]),
             bankKnown: true,
-            tile: field
+            bank: new Map()
         });
-        const atFloor = goblinMailGatherStep({
-            ...snap('inProgress', [
-                ['kebab', GOBLIN_MAIL_FOOD_RESTOCK_FLOOR],
-                ['coins', GOBLIN_DIPLOMACY_COIN_TARGET]
-            ]),
-            bankKnown: true,
-            bank: new Map(),
-            tile: field
-        });
-        const afterOneMeal = goblinMailGatherStep({
-            ...snap('inProgress', [
-                ['kebab', GOBLIN_MAIL_FOOD_TARGET - 1],
-                ['coins', GOBLIN_DIPLOMACY_QUEST_COIN_RESERVE]
-            ]),
-            bankKnown: true,
-            tile: field
-        });
-        expect(customName(stillSafe)).toBe('farm goblin mail');
-        expect(customName(atFloor)).toBe(`buy ${GOBLIN_MAIL_FOOD_TARGET - GOBLIN_MAIL_FOOD_RESTOCK_FLOOR} combat Kebabs`);
-        expect(customName(afterOneMeal)).toBe('farm goblin mail');
+        expect(customName(step)).toBe(`earn ${GOBLIN_DIPLOMACY_COIN_TARGET} gp`);
     });
 
-    test('banks spillover before acquiring food into a full restart pack', () => {
-        const step = goblinMailGatherStep(
-            {
-                ...snap('inProgress', [['bronze dagger', 1]]),
-                bankKnown: true,
-                bank: new Map([['kebab', GOBLIN_MAIL_FOOD_TARGET]]),
-                freeSlots: 0
-            },
-            3
-        );
-        expect(step).toMatchObject({
-            kind: 'deposit',
-            keep: ['coins', 'goblin mail', 'orange goblin mail', 'blue goblin mail', 'kebab'],
-            exactKeep: true
-        });
-    });
-
-    test('rebuilds an oversized all-food pack so three mail slots remain free', () => {
-        const oversized = goblinMailGatherStep(
-            {
-                ...snap('inProgress', [['kebab', 28]]),
-                bankKnown: true,
-                freeSlots: 0
-            },
-            3
-        );
-        const cleanBatch = goblinMailGatherStep(
-            {
-                ...snap('inProgress', [
-                    ['kebab', GOBLIN_MAIL_FOOD_TARGET],
-                    ['coins', GOBLIN_DIPLOMACY_QUEST_COIN_RESERVE]
-                ]),
-                bankKnown: true,
-                freeSlots: 8
-            },
-            3
-        );
-        expect(oversized).toMatchObject({
-            kind: 'deposit',
-            keep: ['coins', 'goblin mail', 'orange goblin mail', 'blue goblin mail'],
-            exactKeep: true
-        });
-        expect(customName(cleanBatch)).toBe('farm goblin mail');
-    });
-
-    test('self-funds the quest reserve even when combat food is already full', () => {
-        const noCash = goblinMailGatherStep(
-            {
-                ...snap('inProgress', [['kebab', GOBLIN_MAIL_FOOD_TARGET]]),
-                bankKnown: true,
-                bank: new Map(),
-                freeSlots: 8
-            },
-            3
-        );
-        const funded = goblinMailGatherStep(
-            {
-                ...snap('inProgress', [
-                    ['kebab', GOBLIN_MAIL_FOOD_TARGET],
-                    ['coins', GOBLIN_DIPLOMACY_QUEST_COIN_RESERVE]
-                ]),
-                bankKnown: true,
-                bank: new Map(),
-                freeSlots: 7
-            },
-            3
-        );
-        expect(customName(noCash)).toBe(`earn ${GOBLIN_DIPLOMACY_COIN_TARGET} gp and buy combat food`);
-        expect(customName(funded)).toBe('farm goblin mail');
-    });
 });

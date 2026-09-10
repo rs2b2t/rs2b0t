@@ -2,27 +2,12 @@
  * Pure GatheringBot policy helpers (unit-tested, no live client).
  * Kept separate so task modules can import without circular deps on the bot class.
  */
+
+import { buyoutCost, shopBuyPrice } from '../../api/shop/shopPrice.js';
 import { wildernessLevelAt, type WildTile } from '../../event/webwalk/wilderness.js';
 import { combatBreaksGather } from './TickManipLogic.js';
 
-export function featherBuyoutDue(lastAtMs: number | null, intervalMinutes: number, nowMs: number): boolean {
-    if (intervalMinutes <= 0) return false;
-    return lastAtMs === null || nowMs - lastAtMs >= intervalMinutes * 60_000;
-}
-
-export const BAIT_RETRY_MINUTES = 1;
-
-export function baitTripDue(input: {
-    readonly hasVendor: boolean;
-    readonly outOfBait: boolean;
-    readonly lastAtMs: number | null;
-    readonly intervalMinutes: number;
-    readonly nowMs: number;
-}): boolean {
-    if (!input.hasVendor) return false;
-    if (featherBuyoutDue(input.lastAtMs, input.intervalMinutes, input.nowMs)) return true;
-    return input.outOfBait && featherBuyoutDue(input.lastAtMs, BAIT_RETRY_MINUTES, input.nowMs);
-}
+export { buyoutCost, shopBuyPrice };
 
 type GatheringCombatMode =
     | 'standard'
@@ -188,4 +173,55 @@ export function fishingSessionBroken(opts: {
         opts.spotMoved ||
         opts.becameWhirlpool
     );
+}
+
+// Why: Roachey restocks a feather every tick toward a baseline of 1500, which the engine's cleanup pass adds one at a time, so a full buyout is back in fifteen minutes and anything sooner takes a partial stack at 2gp each.
+/** Minutes the guild shop needs to refill a bought-out feather stack. */
+export const FEATHER_RESTOCK_MINUTES = 15;
+
+/** Feathers Roachey's shelf holds when it is full, which is every feather a trip can buy. */
+export const FEATHER_STOCK = 1500;
+/** Roachey's `shop_sell_multiplier` and `shop_delta`, which set how steeply his price climbs. */
+export const ROACHEY_SELL_MULTIPLIER = 1000;
+export const ROACHEY_DELTA = 10;
+
+/** What Roachey's full shelf of feathers costs, the ceiling on one trip's draw. */
+export const FEATHER_BUYOUT_GP = buyoutCost(2, FEATHER_STOCK, ROACHEY_SELL_MULTIPLIER, ROACHEY_DELTA);
+
+// Why: the bank is the operator's, not the trip's, so it draws what a full shelf costs and leaves the rest banked whatever the stack is.
+/** Coins to take out for a buyout, on top of what is already held. */
+export function featherCoinsToDraw(held: number, banked: number, price: number, stock = FEATHER_STOCK): number {
+    const budget = buyoutCost(price, stock, ROACHEY_SELL_MULTIPLIER, ROACHEY_DELTA);
+    return held >= budget ? 0 : Math.max(0, Math.min(banked, budget - held));
+}
+
+/** Whether the guild feather buyout is owed; the first trip is owed as soon as the run starts. */
+export function featherBuyoutDue(lastAtMs: number | null, intervalMinutes: number, nowMs: number): boolean {
+    if (intervalMinutes <= 0) {
+        return false;
+    }
+    return lastAtMs === null || nowMs - lastAtMs >= intervalMinutes * 60_000;
+}
+
+// Why: at a camp whose bait only comes from a shop, Shilo's feathers among them, the bank run finds none to withdraw and spins on 'bank has no Feather', so being out of it is a reason to go on its own rather than only the clock.
+// Why: an empty shelf or an empty purse would then retry every loop, so a need trip is paced off the same stamp the clock trip is.
+
+/** Minutes a needed bait trip waits before trying the shop again. */
+export const BAIT_RETRY_MINUTES = 1;
+
+/** Whether a trip to the camp's bait shop is owed, on the clock or on an empty pack. */
+export function baitTripDue(input: {
+    hasVendor: boolean;
+    outOfBait: boolean;
+    lastAtMs: number | null;
+    intervalMinutes: number;
+    nowMs: number;
+}): boolean {
+    if (!input.hasVendor) {
+        return false;
+    }
+    if (featherBuyoutDue(input.lastAtMs, input.intervalMinutes, input.nowMs)) {
+        return true;
+    }
+    return input.outOfBait && featherBuyoutDue(input.lastAtMs, BAIT_RETRY_MINUTES, input.nowMs);
 }

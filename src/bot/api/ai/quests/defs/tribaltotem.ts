@@ -373,7 +373,6 @@ export function decide(snap: QuestSnapshot): QuestStep {
 export const tribaltotem: QuestModule = {
     record: QUESTS.find(record => record.id === 'totem')!,
     bank: BANK,
-    food: 6,
     // Why: the mansion crate is the only source of the label, and both it and the totem have to survive the spillover deposit that opens every provisioning pass.
     tools: ['address label', 'totem', 'coins'],
     readProgress: readTribalTotemProgress,

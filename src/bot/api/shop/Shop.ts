@@ -149,6 +149,34 @@ export const Shop = {
         return sold;
     },
 
+    /** Sell every one of `name` the pack holds, ten to a click. Returns how many went. */
+    async sellAll(name: string, pick?: (i: { id: number; count: number; slot: number }) => boolean): Promise<number> {
+        let sold = 0;
+        for (let click = 0; click < SELL_STACK_CLICKS && Shop.isOpen(); click++) {
+            const matches = reader.shopInv(SHOP_PLAYER_COM).filter(s => s.name?.toLowerCase() === name.toLowerCase());
+            const it = pick ? matches.find(pick) : matches[0];
+            if (!it) {
+                break;
+            }
+            const batch = shopOpBatch(it.ops, 'sell', SELL_STACK_STEP);
+            if (batch.length === 0) {
+                break;
+            }
+            const before = countHeld(name);
+            for (const opIndex of batch) {
+                await Input.invButton(it.id, it.slot, it.comId, opIndex + 1);
+            }
+            await Execution.delayUntil(() => countHeld(name) !== before, 3000);
+            await Execution.delayTicks(1);
+            const gone = before - countHeld(name);
+            if (gone <= 0) {
+                break;
+            }
+            sold += gone;
+        }
+        return sold;
+    },
+
     async close(): Promise<void> {
         if (!Shop.isOpen()) {
             return;
@@ -171,6 +199,12 @@ function heldById(id: number): number {
 // (ClientGameProtCategory USER_EVENT), extra ops in a tick are dropped.
 const USER_OPS_PER_TICK = 5;
 const SHOP_STEPS = [10, 5, 1] as const;
+
+// Why: the engine caps a Sell 10 at what the slot holds, so a stack goes in tens and the last click takes the remainder. Working the split out instead re-reads a pack that moves under the clicks, and the shop answers the same either way.
+/** How much one click of a stack sale asks for. */
+export const SELL_STACK_STEP = 10;
+/** Clicks one sale allows itself, so a shop that stops taking the item cannot spin. */
+const SELL_STACK_CLICKS = 40;
 
 /** Why: the engine drops extra user-event packets, so 25 must sell as 10+10+5 in one tick. */
 export function shopOpBatch(ops: (string | null)[], verb: 'buy' | 'sell', remaining: number): number[] {

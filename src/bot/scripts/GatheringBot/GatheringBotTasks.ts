@@ -61,7 +61,14 @@ import {
 import { Banking } from '../../api/bank/Banking.js';
 import { parseRangeStyle } from '../../api/combat/CombatStyle.js';
 import { BROKEN_AXE, COINS, buyPlansCost, fishingGearShopCart, planGatherToolAcquire } from '../../api/acquisition/ToolAcquire.js';
+import { Shop } from '../../api/shop/Shop.js';
+
+/** Roachey's counter in the Fishing Guild, a short walk from the pier. */
+const SHOP_WALK_MS = 60_000;
+/** One hop along a camp's sweep is a few tiles, so a stop that will not arrive is a stop worth giving up on. */
+const SWEEP_WALK_MS = 30_000;
 import {
+    featherCoinsToDraw,
     fishingSessionBroken,
     hostileAttackerNearby,
     shouldFleeCombat
@@ -1795,6 +1802,73 @@ export class EnsureGatherToolEquipped implements Task {
     }
 }
 
+// Why: Roachey's feathers come back one a tick toward 1500, so a bought-out stack is fifteen minutes from full and the trip is worth taking on that clock rather than only when the pack runs dry. The shop is a short walk from the guild pier, and the run banks nothing on the way.
+export class BuyGuildFeathers implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    validate(): boolean {
+        if (EventSignal.pending() || Game.inCombat() || Inventory.isFull()) {
+            return false;
+        }
+        const vendor = this.bot.baitVendor();
+        return vendor !== null && vendor.keeper !== 'Fernahei' && this.bot.guildFeatherTripDue();
+    }
+
+    async execute(): Promise<void> {
+        const bot = this.bot;
+        const vendor = bot.baitVendor();
+        if (!vendor) {
+            return;
+        }
+        const { keeper, stand, price, item } = vendor;
+        const log = (m: string) => bot.log(`  ${m}`);
+        // Why: the clock starts on the attempt rather than the sale, or a shop that will not open is retried every loop.
+        bot.noteGuildFeatherTrip();
+
+        if (Inventory.count(COINS) < price) {
+            bot.setStatus('feathers: drawing coins');
+            if (!(await bot.openScriptBank(log))) {
+                bot.log('feathers: could not open the bank for coins, will try again next round');
+                return;
+            }
+            await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
+            await Bank.depositAllMatching(bot.restockDepositMatcher());
+            const draw = featherCoinsToDraw(Inventory.count(COINS), Bank.count(COINS), price);
+            if (draw > 0) {
+                bot.log(`feathers: drawing ${draw}gp of the ${Bank.count(COINS)}gp banked`);
+                await Bank.withdrawX(COINS, draw);
+            }
+            await bot.closeScriptBank(log, { allowForgetful: false });
+        }
+        const coins = Inventory.count(COINS);
+        if (coins < price) {
+            bot.log(`feathers: only ${coins}gp on hand or banked, skipping ${keeper} this round`);
+            return;
+        }
+        bot.setStatus(`feathers: walking to ${keeper}`);
+        if (!(await Traversal.walkResilient(stand, { radius: 2, attempts: 3, timeoutMs: SHOP_WALK_MS, log }))) {
+            bot.log(`feathers: could not reach ${keeper}, will try again next round`);
+            return;
+        }
+        if (!(await Shop.open(keeper))) {
+            bot.log(`feathers: could not open ${keeper}'s shop`);
+            return;
+        }
+        bot.setStatus('feathers: buying out the stack');
+        const before = Inventory.count(item);
+        const stock = Shop.stock().find(line => line.name === item)?.count ?? 0;
+        const room = Math.max(0, coins / price);
+        await Shop.buy(item, Math.min(stock, Math.floor(room)));
+        await Shop.close();
+        const got = Inventory.count(item) - before;
+        bot.log(got > 0
+            ? `feathers: bought ${got} from ${keeper} (holding ${Inventory.count(item)})`
+            : `feathers: ${keeper} had none to sell`);
+        bot.setStatus('feathers: back to the water');
+        await bot.walkHomeIfNeeded(log);
+    }
+}
+
 export class BuyShiloSupplies implements Task {
     constructor(private bot: GatheringBot) {}
 
@@ -2632,9 +2706,7 @@ export class Gather implements Task {
             const stop = this.bot.nextSweepStop();
             if (stop !== null) {
                 this.bot.setStatus(`fish: sweeping to ${stop}`);
-                await Traversal.walkResilient(stop, {
-                    radius: 1, attempts: 2, timeoutMs: 30_000, log: message => this.bot.log(`  ${message}`)
-                });
+                await Traversal.walkResilient(stop, { radius: 1, attempts: 2, timeoutMs: SWEEP_WALK_MS, log: m => this.bot.log(`  ${m}`) });
                 return;
             }
             // Named: membership disk from home. Freeform: hunt from player/start.

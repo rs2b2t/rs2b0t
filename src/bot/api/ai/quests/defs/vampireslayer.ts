@@ -12,7 +12,7 @@ import { QUESTS } from '../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { talkThrough, type NpcStop } from '../exec/primitives.js';
 import { GARLIC, MORGAN_STAIRS_TOP, takeGarlic } from '../exec/garlic.js';
-import { FOOD_FLOAT, QuestFood } from '../food.js';
+import { QuestFood } from '../food.js';
 import { prayerUpkeep } from '../prayer.js';
 
 export const VAMPIRE_SLAYER_STAGE = {
@@ -65,7 +65,6 @@ const ITEM = {
 const COUNT_DRAYNOR_ID = 757;
 const COFFIN_CLOSED_ID = 2614;
 
-const FOOD_TARGET = FOOD_FLOAT;
 const COIN_FLOAT = 5000;
 const COIN_RESERVE = 2000;
 
@@ -73,7 +72,6 @@ const DRAYNOR_BANK = new Tile(3093, 3243, 0);
 const JOLLY_BOAR = new Tile(3277, 3490, 0);
 const VARROCK_GENERAL = { npc: 'Shop keeper', anchor: new Tile(3218, 3415, 0) };
 const VARROCK_SWORDS = { npc: 'Shop keeper', anchor: new Tile(3203, 3397, 0) };
-const KEBAB_SELLER = new Tile(3272, 3182, 0);
 const MANOR_STAIRS_DOWN = new Tile(3115, 3357, 0);
 const CRYPT_ARRIVAL = new Tile(3077, 9771, 0);
 const CRYPT_STAIRS_UP = new Tile(3077, 9768, 0);
@@ -136,10 +134,6 @@ function foodNames(): string[] {
     const configured = QuestFood.name?.trim();
     const names = [configured, ...BANK_FOODS].filter((name): name is string => Boolean(name));
     return [...new Map(names.map(name => [name.toLowerCase(), name])).values()];
-}
-
-function foodHeld(snap: QuestSnapshot): number {
-    return foodNames().reduce((total, name) => total + heldCount(snap, name), 0);
 }
 
 function exactKeep(): string[] {
@@ -246,37 +240,6 @@ async function buyBeer(log: (message: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => Inventory.count(ITEM.BEER) > before, 6000);
 }
 
-async function buyKebabs(target: number, log: (message: string) => void): Promise<boolean> {
-    if (!(await Traversal.walkResilient(KEBAB_SELLER, { radius: 2, attempts: 3, timeoutMs: 180_000, log }))) {
-        return false;
-    }
-    while (Inventory.count(ITEM.KEBAB) < target) {
-        if (Inventory.count('Coins') < 1 || Inventory.isFull()) return false;
-        const before = Inventory.count(ITEM.KEBAB);
-        if (!(await talkThrough('Kebab seller', ['Yes please.'], log))) return false;
-        if (!(await Execution.delayUntil(() => Inventory.count(ITEM.KEBAB) > before, 5000))) return false;
-    }
-    return true;
-}
-
-function sourceFood(snap: QuestSnapshot): QuestStep | null {
-    const have = foodHeld(snap);
-    if (have >= FOOD_TARGET) return null;
-    for (const name of foodNames()) {
-        const available = banked(snap, name);
-        if (available <= 0) continue;
-        const qty = Math.min(FOOD_TARGET - have, available);
-        return makeSpace(snap, qty) ?? withdraw([{ name, qty }]);
-    }
-    const coins = sourceCoins(snap);
-    if (coins) return coins;
-    const missing = FOOD_TARGET - have;
-    const space = makeSpace(snap, missing);
-    if (space) return space;
-    const target = heldCount(snap, ITEM.KEBAB) + missing;
-    return { kind: 'custom', name: `buy ${missing} combat Kebabs`, run: log => buyKebabs(target, log) };
-}
-
 async function eatFood(): Promise<boolean> {
     const allowed = new Set(foodNames().map(name => name.toLowerCase()));
     const food = Inventory.items().find(item => item.name !== null
@@ -377,12 +340,12 @@ async function fightCount(log: (message: string) => void): Promise<boolean> {
     return false;
 }
 
+// Why: a free quest is fought at low level against low-level things, so food is not what makes the loadout complete; the run still eats whatever it happens to carry.
 function completeCombatLoadout(snap: QuestSnapshot): boolean {
     return held(snap, ITEM.STAKE)
         && held(snap, ITEM.GARLIC)
         && held(snap, ITEM.HAMMER)
-        && wornWeapon(snap)
-        && foodHeld(snap) >= FOOD_TARGET;
+        && wornWeapon(snap);
 }
 
 function stageTwo(snap: QuestSnapshot, area: VampireSlayerArea): QuestStep {
@@ -432,8 +395,6 @@ function stageTwo(snap: QuestSnapshot, area: VampireSlayerArea): QuestStep {
         return { kind: 'buy', item: ITEM.SWORD, qty: 1, shop: VARROCK_SWORDS, estGp: 1000 };
     }
 
-    const food = sourceFood(snap);
-    if (food) return food;
     return { kind: 'custom', name: 'enter the crypt and defeat Count Draynor', run: fightCount };
 }
 

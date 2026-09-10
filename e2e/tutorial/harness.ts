@@ -1,9 +1,10 @@
 import type { Page } from 'playwright-core';
 
-import { ClientProt } from '../../src/client/io/ClientProt.js';
+import { simUnreachable } from '../lib/harness.js';
 
 type Rs2b0t = {
     rs2b0t: {
+        protocol?: { version: number; clientCheat: number };
         client: {
             ingame: boolean;
             sceneState: number;
@@ -97,6 +98,10 @@ async function waitIngame(page: Page, timeoutMs: number, label: string): Promise
 
 // Why: `clientPage` is how a run opts into its own copy of the client (`deployIsolatedClient`); the default keeps every harness that has not on the shared one.
 export async function bootAndLogin(page: Page, base: string, user: string, clientPage = '/bot.html'): Promise<void> {
+    const unreachable = await simUnreachable(base, clientPage);
+    if (unreachable !== null) {
+        throw new Error(`bootAndLogin: ${unreachable}`);
+    }
     console.log(`  boot: loading ${base}${clientPage} (cache download may take a while; BOOT_MS=${Math.round(BOOT_MS / 1000)}s)`);
     await page.goto(`${base}${clientPage}?nodeid=10`);
     await waitClientBooted(page, 'bootAndLogin');
@@ -178,19 +183,16 @@ export async function cheat(page: Page, command: string): Promise<void> {
 }
 
 export async function cheatQuiet(page: Page, command: string, waitMs = 700): Promise<boolean> {
-    const sent = await page.evaluate(
-        ([c, op]) => {
-            const { client } = (globalThis as never as Rs2b0t).rs2b0t;
-            if (!client.ingame) {
-                return false;
-            }
-            client.out.p1Enc(op);
-            client.out.p1(c.length + 1);
-            client.out.pjstr(c);
-            return true;
-        },
-        [command, ClientProt.CLIENT_CHEAT] as const
-    );
+    const sent = await page.evaluate(c => {
+        const { client, protocol } = (globalThis as never as Rs2b0t).rs2b0t;
+        if (!client.ingame) {
+            return false;
+        }
+        client.out.p1Enc(protocol?.clientCheat ?? 224);
+        client.out.p1(c.length + 1);
+        client.out.pjstr(c);
+        return true;
+    }, command);
     await page.waitForTimeout(waitMs);
     return sent;
 }
@@ -208,20 +210,17 @@ export async function getServerVar(page: Page, name: string): Promise<number | n
 }
 
 export async function getServerVarQuiet(page: Page, name: string): Promise<number | null> {
-    const sent = await page.evaluate(
-        ([n, op]) => {
-            const { client } = (globalThis as never as Rs2b0t).rs2b0t;
-            if (!client.ingame) {
-                return false;
-            }
-            const cmd = `getvar ${n}`;
-            client.out.p1Enc(op);
-            client.out.p1(cmd.length + 1);
-            client.out.pjstr(cmd);
-            return true;
-        },
-        [name, ClientProt.CLIENT_CHEAT] as const
-    );
+    const sent = await page.evaluate(n => {
+        const { client, protocol } = (globalThis as never as Rs2b0t).rs2b0t;
+        if (!client.ingame) {
+            return false;
+        }
+        const cmd = `getvar ${n}`;
+        client.out.p1Enc(protocol?.clientCheat ?? 224);
+        client.out.p1(cmd.length + 1);
+        client.out.pjstr(cmd);
+        return true;
+    }, name);
     if (!sent) {
         return null;
     }

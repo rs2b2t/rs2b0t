@@ -124,7 +124,7 @@ describe('PaintFrame.list', () => {
 
         const texts = body(drawn).map(d => d.text);
         expect(texts.slice(0, 4)).toEqual(['row0', 'row1', 'row2', 'row3']);
-        expect(texts[4]).toBe('1–4 of 20');
+        expect(texts[4]).toBe('1 to 4 of 20');
     });
 
     test('a wheel notch over the list scrolls it', () => {
@@ -244,7 +244,7 @@ describe('list footer', () => {
         p.end();
 
         const counter = body(drawn).find(d => d.text.includes('of 3'))!;
-        expect(counter.text).toBe('1–2 of 3 · QP 44 · done 12');
+        expect(counter.text).toBe('1 to 2 of 3 · QP 44 · done 12');
     });
 
     test('a list that fits shows the summary on its own', () => {

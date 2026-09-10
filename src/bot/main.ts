@@ -1,3 +1,4 @@
+import { CLIENT_VERSION, ClientProt } from '../client/io/ClientProt.js';
 import { actions, reader } from './adapter/ClientAdapter.js';
 import BotClient from './runtime/BotClient.js';
 import { BotHost } from './runtime/BotHost.js';
@@ -95,6 +96,8 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
         input: Input, scheduler: Scheduler,
         renderGate: RenderGate,
         build: BUILD_INFO,
+        // Why: the harnesses send cheats as raw packets, and CLIENT_CHEAT moved from 224 to 34 at revision 289, so the number comes off the bundle rather than being copied into every harness.
+        protocol: { version: CLIENT_VERSION, clientCheat: ClientProt.CLIENT_CHEAT },
         diag: () => BotDiag.drain(),
         setRenderMode: (mode: RenderMode) => RenderGate.setMode(mode),
         setCredentials: (u: string, p: string) => AutoRelogin.setCredentials(u, p),

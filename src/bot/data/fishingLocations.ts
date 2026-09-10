@@ -87,6 +87,7 @@ export const FISHING_LOCATIONS: FishingLocation[] = (
             chaseRadius: 28,
             verified: true,
             resources: ['mackerel', 'cod', 'bass', 'tuna', 'lobster', 'swordfish', 'shark'],
+            baitVendor: { keeper: 'Roachey', stand: new Tile(2596, 3399, 0), price: 2, item: 'Feather' },
             notes: 'Bank requires Fishing 68'
         },
         {
@@ -160,18 +161,18 @@ export const FISHING_LOCATIONS: FishingLocation[] = (
             chaseRadius: 28,
             verified: false,
             resources: ['trout', 'salmon'],
-            avoidSpots: [
-                new Tile(2850, 2976, 0),
-                new Tile(2855, 2977, 0),
-                new Tile(2860, 2976, 0),
-                new Tile(2869, 2977, 0)
-            ],
             sweep: [
                 new Tile(2862, 2971, 0),
                 new Tile(2856, 2972, 0),
                 new Tile(2841, 2970, 0),
                 new Tile(2836, 2970, 0),
-                new Tile(2822, 2968, 0)
+                new Tile(2822, 2968, 0),
+                new Tile(2832, 2973, 0),
+                new Tile(2834, 2975, 0),
+                new Tile(2850, 2977, 0),
+                new Tile(2855, 2978, 0),
+                new Tile(2860, 2977, 0),
+                new Tile(2869, 2978, 0)
             ],
             baitVendor: { keeper: 'Fernahei', stand: new Tile(2870, 2971, 0), price: 2, item: 'Feather' },
             notes: 'Requires Shilo Village quest; fly only, the teller banks and Fernahei sells the feathers.'

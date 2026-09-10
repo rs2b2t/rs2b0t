@@ -21,6 +21,12 @@ export const PATH_CORRIDOR = 3;
 // Why: between the trigger and the corridor the walker would emit zero clicks and skip the hop, with only a `nearApproach` fallback saving the walk, so keeping the trigger at the arrival radius closes that band.
 export const DEFAULT_TRANSPORT_APPROACH_CHEBYSHEV = 4;
 
+// Why: the server moves a player on the tick after it decodes the click, so a step sent on the frame a door's leaf swings crosses one tick after the open, and each tick waited here is a tick spent standing in the doorway.
+// Why: 1 keeps every walker on the timing its live proofs were recorded at; a script opts into 0 per walk.
+
+/** Default server ticks between a door showing open and the step through it. */
+export const DEFAULT_DOOR_STEP_TICKS = 1;
+
 interface PathFollowConfig {
     /** Server ticks without a tile change → repath (default 5). */
     stallTicks: number;
@@ -28,12 +34,15 @@ interface PathFollowConfig {
     deviationChebyshev: number;
     /** Chebyshev to hop approach tile before executing the hop (default 4). */
     transportApproachChebyshev: number;
+    /** Server ticks between a door showing open and the step through it (default 1, 0 steps on the open frame). */
+    doorStepTicks: number;
 }
 
 export interface PathFollowOverrides {
     stallTicks?: number;
     deviationChebyshev?: number;
     transportApproachChebyshev?: number;
+    doorStepTicks?: number;
 }
 
 /** Resolve follow stickiness: walk opts → Global settings → defaults. */
@@ -54,6 +63,7 @@ export function resolvePathFollowConfig(over?: PathFollowOverrides | null): Path
         transportApproachChebyshev: Math.max(
             PATH_CORRIDOR,
             over?.transportApproachChebyshev ?? DEFAULT_TRANSPORT_APPROACH_CHEBYSHEV
-        )
+        ),
+        doorStepTicks: Math.max(0, Math.floor(over?.doorStepTicks ?? DEFAULT_DOOR_STEP_TICKS))
     };
 }

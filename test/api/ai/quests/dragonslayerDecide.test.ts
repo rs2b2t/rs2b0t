@@ -249,3 +249,66 @@ describe('Dragon Slayer decide()', () => {
         expect(decide(snapshot({ progress: undefined }))).toMatchObject({ kind: 'wait' });
     });
 });
+
+// Why: the record used to list the Oracle's charms and the hull's planks, and the engine re-walks the record on every session start and death, so a run resumed with the map in Ned's hands shopped for a map piece it already had.
+describe('Dragon Slayer sources its own shopping at the point of use', () => {
+    const CHARMS = [DS_ID.LOBSTER_POT, DS_ID.MIND_BOMB, DS_ID.UNFIRED_BOWL, DS_ID.SILK];
+    const afterMaze = [DS_ID.MAZE_KEY, DS_ID.MAP_MELZAR];
+    const boat = { progress: { stage: DRAGON_STAGE.BOUGHT_SHIP, flags: new Set<string>() } };
+
+    test("the Oracle's charms are bought only once her piece is next", () => {
+        const step = decide(snapshot({ carried: afterMaze }));
+        expect(step).toMatchObject({ kind: 'buy', item: DS_ITEM.LOBSTER_POT });
+    });
+
+    test('charms in the bank are withdrawn before any counter', () => {
+        const step = decide(snapshot({ carried: afterMaze, banked: CHARMS }));
+        expect(step.kind).toBe('withdraw');
+        const ids = (step as { items: { id?: number }[] }).items.map(i => i.id);
+        expect(ids).toEqual(CHARMS);
+    });
+
+    test('an unread bank is scanned before a charm is bought', () => {
+        expect(decide(snapshot({ carried: afterMaze, bankKnown: false }))).toMatchObject({ kind: 'scanBank' });
+    });
+
+    test('holding every charm asks the Oracle, then opens her door', () => {
+        const held = { carried: [...afterMaze, ...CHARMS] };
+        expect(decide(snapshot(held))).toMatchObject({ kind: 'talk', stop: { npc: 'Oracle' } });
+        const asked = decide(snapshot({ ...held, flags: ['asked-oracle'] }));
+        expect((asked as { name: string }).name).toContain('chest under Ice Mountain');
+    });
+
+    test('past the magic door the chest comes before any shopping', () => {
+        // Why: the door ate the charms on the way in, and the journal cannot say so.
+        const step = decide(snapshot({ carried: afterMaze, tile: { x: 3057, z: 9842, level: 0 } }));
+        expect((step as { name: string }).name).toContain('chest under Ice Mountain');
+    });
+
+    test('the hammer is bought before the anvil is visited', () => {
+        expect(decide(snapshot({ carried: [DS_ID.MAP], ...boat }))).toMatchObject({ kind: 'buy', item: DS_ITEM.HAMMER });
+    });
+
+    test('planks are fetched after the nails and before the patch', () => {
+        const step = decide(snapshot({ carried: [DS_ID.MAP, DS_ID.HAMMER, NAILS], ...boat }));
+        expect((step as { name: string }).name).toContain('fetch 3 planks');
+    });
+
+    test('a plank trip is finished before the hull is patched', () => {
+        // Why: one plank in the pack reads as one hole's worth everywhere else, and read that way at the spawns it sent the bot back to Port Sarim three times.
+        const graveyard = { x: 3171, z: 3680, level: 0 };
+        const step = decide(snapshot({ carried: [DS_ID.MAP, DS_ID.HAMMER, NAILS, DS_ID.PLANK], tile: graveyard, ...boat }));
+        expect((step as { name: string }).name).toContain('fetch 2 planks');
+        const last = decide(snapshot({ carried: [DS_ID.MAP, DS_ID.HAMMER, NAILS, [DS_ID.PLANK, 2]], tile: graveyard, ...boat }));
+        expect((last as { name: string }).name).toBe('fetch 1 plank');
+    });
+
+    test('an unread bank is scanned before a hull supply is bought', () => {
+        expect(decide(snapshot({ carried: [DS_ID.MAP], bankKnown: false, ...boat }))).toMatchObject({ kind: 'scanBank' });
+    });
+
+    test('aboard with a hull supply still to fetch, the bot goes ashore first', () => {
+        const step = decide(snapshot({ carried: [DS_ID.MAP, NAILS], tile: { x: 3047, z: 3208, level: 1 }, ...boat }));
+        expect((step as { name: string }).name).toBe('go ashore');
+    });
+});

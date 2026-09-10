@@ -37,7 +37,8 @@ export const MELEE_WEAPONS: string[] = [
     'Bronze longsword', 'Iron longsword', 'Steel longsword', 'Black longsword', 'Mithril longsword', 'Adamant longsword', 'Rune longsword',
     'Dragon longsword',
     'Bronze dagger', 'Iron dagger', 'Steel dagger', 'Black dagger', 'Mithril dagger', 'Adamant dagger', 'Rune dagger', 'Dragon dagger',
-    'Dragon dagger(p)'
+    'Dragon dagger(p)',
+    'Dragon battleaxe', 'Dragon mace'
 ];
 
 export const STAFFS: string[] = [

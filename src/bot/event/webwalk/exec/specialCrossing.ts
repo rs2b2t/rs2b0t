@@ -456,7 +456,8 @@ export async function handleSpecialCrossing(
             await Sustain.run();
             if (attempt < maxOpens) {
                 log(`${sc.label}: ${sc.retryOnGameMessage!.reason}; attempt ${attempt}/${maxOpens}; ` + `server='${retryMessage.text}' — retrying`);
-                await Execution.delayTicks(1);
+                // Why: the Brimhaven stones print the fall a tick before the telejump lands the player back on the bank, and an exact approach planned from the lava tile in between reads as unreachable.
+                await Execution.delayTicks(3);
                 continue;
             }
             log(`${sc.label}: ${sc.retryOnGameMessage!.reason}; attempt ${attempt}/${maxOpens}; ` + `server='${retryMessage.text}' — bounded retries exhausted; repathing`);

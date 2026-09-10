@@ -410,6 +410,10 @@ export async function smithNails(need: number, log: (m: string) => void): Promis
     return Inventory.count('Nails') >= need;
 }
 
+/** Within a few tiles of the Graveyard of Shadows plank spawns. */
+export const inPlankGraveyard = (t: { x: number; z: number; level: number } | null | undefined): boolean =>
+    !!t && t.level === 0 && SUPPLY_LOC.PLANK_SPAWNS.some(s => Math.abs(s.x - t.x) <= 8 && Math.abs(s.z - t.z) <= 8);
+
 /** Spawns already emptied this trip, so the walk moves on instead of circling. */
 const plankTried = new Set<string>();
 
@@ -481,7 +485,7 @@ function makeRoom(snap: QuestSnapshot, slots = 1): QuestStep | null {
         : { kind: 'wait', reason: `no room for ${slots} more item${slots === 1 ? '' : 's'} and nothing spare to bank` };
 }
 
-/** Wired into the quest module's `gather` map, keyed by item display name. */
+/** Keyed by item display name; decide() draws on these at the leg that spends the item. */
 export const SUPPLY_GATHERS: Record<string, (snap: QuestSnapshot, need: number) => QuestStep> = {
     hammer: snap => makeRoom(snap) ?? buy('Hammer', 1, SUPPLY.GENERAL_STORE, 100),
     silk: snap => makeRoom(snap) ?? buy('Silk', 1, SUPPLY.THESSALIA, 200),
@@ -489,7 +493,7 @@ export const SUPPLY_GATHERS: Record<string, (snap: QuestSnapshot, need: number) 
     "wizard's mind bomb": snap => makeRoom(snap) ?? custom('buy a mind bomb at the Rising Sun', buyMindBomb),
     // A jug, then water, then clay, then the bowl: one free slot carries the lot.
     'unfired bowl': snap => makeRoom(snap) ?? custom('make an unfired bowl', makeUnfiredBowl),
-    plank: (snap, need) => makeRoom(snap, need) ?? custom(`fetch ${need} planks`, log => grabPlanks(need, log))
+    plank: (snap, need) => makeRoom(snap, need) ?? custom(`fetch ${need} plank${need === 1 ? '' : 's'}`, log => grabPlanks(need, log))
 };
 
 

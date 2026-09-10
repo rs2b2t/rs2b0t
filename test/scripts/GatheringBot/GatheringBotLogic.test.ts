@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import { baitTripDue, featherBuyoutDue, BAIT_RETRY_MINUTES } from '#/bot/scripts/GatheringBot/GatheringBotLogic.js';
 
 describe('Shilo supply cadence', () => {
     test('starts immediately and honors the configured interval, including disabled', () => {
@@ -29,6 +28,12 @@ describe('Shilo supply cadence', () => {
 });
 import {
     DEFAULT_CHASE_RADIUS,
+    FEATHER_BUYOUT_GP,
+    FEATHER_RESTOCK_MINUTES,
+    BAIT_RETRY_MINUTES,
+    baitTripDue,
+    featherBuyoutDue,
+    featherCoinsToDraw,
     HOME_ARRIVE_RADIUS,
     LOCAL_MINE_PREFER_RADIUS,
     NAMED_CAMP_LEASH_FLOOR,
@@ -520,5 +525,88 @@ describe('fishingSessionBroken', () => {
         expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: true, spotGone: true })).toBe(true);
         expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: true, eventPending: true })).toBe(true);
         expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: true, inventoryFull: true })).toBe(true);
+    });
+});
+
+// Why: Roachey's feathers come back one a tick toward a baseline of 1500, so a full buyout is fifteen minutes of restock and anything sooner takes a partial stack.
+describe('the guild feather buyout', () => {
+    const MIN = 60_000;
+
+    test('the default interval is the shop\'s own full-recovery time', () => {
+        expect(FEATHER_RESTOCK_MINUTES).toBe(15);
+    });
+
+    test('the first trip is owed as soon as the run starts', () => {
+        expect(featherBuyoutDue(null, 15, 0)).toBe(true);
+    });
+
+    test('waits the interval out between trips', () => {
+        expect(featherBuyoutDue(0, 15, 14 * MIN)).toBe(false);
+        expect(featherBuyoutDue(0, 15, 15 * MIN)).toBe(true);
+        expect(featherBuyoutDue(0, 15, 40 * MIN)).toBe(true);
+    });
+
+    test('zero minutes turns it off, first trip included', () => {
+        expect(featherBuyoutDue(null, 0, 999 * MIN)).toBe(false);
+        expect(featherBuyoutDue(0, 0, 999 * MIN)).toBe(false);
+    });
+
+    describe('the bait trip', () => {
+        const due = (over: Partial<Parameters<typeof baitTripDue>[0]> = {}): boolean =>
+            baitTripDue({ hasVendor: true, outOfBait: false, lastAtMs: 0, intervalMinutes: 0, nowMs: 999 * MIN, ...over });
+
+        test('a camp with no shop never goes, however short it is', () => {
+            expect(due({ hasVendor: false, outOfBait: true, lastAtMs: null })).toBe(false);
+            expect(due({ hasVendor: false, intervalMinutes: 15, lastAtMs: null })).toBe(false);
+        });
+
+        // Why: the bank run at a shop-only camp finds no bait to withdraw and spins on 'bank has no Feather', so running out has to send the trip by itself.
+        test('runs out of bait and goes, even with the clock switched off', () => {
+            expect(due({ outOfBait: true })).toBe(true);
+            expect(due({ outOfBait: false })).toBe(false);
+        });
+
+        test('a needed trip still waits out the retry, so an empty shelf is not hit every loop', () => {
+            expect(due({ outOfBait: true, lastAtMs: 0, nowMs: 30_000 })).toBe(false);
+            expect(due({ outOfBait: true, lastAtMs: 0, nowMs: BAIT_RETRY_MINUTES * MIN })).toBe(true);
+        });
+
+        test('the clock still sends a trip that holds plenty of bait', () => {
+            expect(due({ outOfBait: false, intervalMinutes: 15, lastAtMs: 0, nowMs: 15 * MIN })).toBe(true);
+            expect(due({ outOfBait: false, intervalMinutes: 15, lastAtMs: 0, nowMs: 14 * MIN })).toBe(false);
+        });
+
+        test('the first trip is owed at once on the clock, and at once when out of bait', () => {
+            expect(due({ intervalMinutes: 15, lastAtMs: null })).toBe(true);
+            expect(due({ outOfBait: true, lastAtMs: null })).toBe(true);
+        });
+    });
+
+    test('a shorter interval is honoured, since a partial stack still buys', () => {
+        expect(featherBuyoutDue(0, 5, 5 * MIN)).toBe(true);
+        expect(featherBuyoutDue(0, 5, 4 * MIN)).toBe(false);
+    });
+});
+
+describe('drawing coins for the buyout', () => {
+    test('takes a shelf out of a bank that holds more', () => {
+        expect(featherCoinsToDraw(0, 5_000_000, 2)).toBe(FEATHER_BUYOUT_GP);
+    });
+
+    test('takes the whole of a bank that holds less', () => {
+        expect(featherCoinsToDraw(0, 900, 2)).toBe(900);
+    });
+
+    test('counts what is already held against the budget', () => {
+        expect(featherCoinsToDraw(250, 5_000_000, 2)).toBe(FEATHER_BUYOUT_GP - 250);
+    });
+
+    test('draws nothing when the pack already covers a shelf', () => {
+        expect(featherCoinsToDraw(FEATHER_BUYOUT_GP, 5_000_000, 2)).toBe(0);
+        expect(featherCoinsToDraw(FEATHER_BUYOUT_GP + 1, 5_000_000, 2)).toBe(0);
+    });
+
+    test('an empty bank asks for nothing', () => {
+        expect(featherCoinsToDraw(0, 0, 2)).toBe(0);
     });
 });

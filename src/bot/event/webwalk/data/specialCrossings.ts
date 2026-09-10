@@ -939,6 +939,57 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
         toTile: { x: 3098, z: 3358, level: 0 },
         arrivalRadius: 2,
         label: 'Draynor Manor alcove lever → manor (#229)'
+    },
+
+    // Why: the Brimhaven Dungeon stones and log roll agility at 210..275 of 256 and a fail is a telejump back to the bank you left, so the hop is retried on the line the fall prints rather than repathed.
+    // Why: the stones' exactmoves run from wherever the click was made, so the landing only matches the row when the jump starts on the row's own tile.
+    {
+        x: 2649,
+        z: 9562,
+        level: 0,
+        locName: 'Stepping stone',
+        action: 'Jump-from',
+        requiresSkill: { name: 'agility', level: 12 },
+        toTile: { x: 2647, z: 9557, level: 0 },
+        arrivalRadius: 1,
+        exactApproach: true,
+        retryOnGameMessage: { message: /lose your footing/i, attempts: 4, reason: 'Agility roll failed' },
+        label: 'Brimhaven Dungeon stepping stones south'
+    },
+    {
+        x: 2647,
+        z: 9557,
+        level: 0,
+        locName: 'Stepping stone',
+        action: 'Jump-from',
+        toTile: { x: 2649, z: 9562, level: 0 },
+        arrivalRadius: 1,
+        exactApproach: true,
+        retryOnGameMessage: { message: /lose your footing/i, attempts: 4, reason: 'Agility roll failed' },
+        label: 'Brimhaven Dungeon stepping stones north'
+    },
+    {
+        x: 2682,
+        z: 9506,
+        level: 0,
+        locName: 'Log balance',
+        action: 'Walk-across',
+        requiresSkill: { name: 'agility', level: 30 },
+        toTile: { x: 2687, z: 9506, level: 0 },
+        arrivalRadius: 0,
+        retryOnGameMessage: { message: /lose your footing/i, attempts: 4, reason: 'Agility roll failed' },
+        label: 'Brimhaven Dungeon log balance east'
+    },
+    {
+        x: 2687,
+        z: 9506,
+        level: 0,
+        locName: 'Log balance',
+        action: 'Walk-across',
+        toTile: { x: 2682, z: 9506, level: 0 },
+        arrivalRadius: 0,
+        retryOnGameMessage: { message: /lose your footing/i, attempts: 4, reason: 'Agility roll failed' },
+        label: 'Brimhaven Dungeon log balance west'
     }
 ];
 

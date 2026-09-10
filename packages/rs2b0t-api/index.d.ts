@@ -198,6 +198,8 @@ export class Npc implements Interactable, Locatable {
     readonly id: number;
     readonly level: number;
     readonly index: number;
+    /** Tiles along each side of the footprint; `tile()` is the one under its centre. */
+    readonly size: number;
     readonly inCombat: boolean;
     readonly health: number;
     tile(): Tile;
@@ -636,6 +638,8 @@ export const Shop: {
     buyById(id: number, n: number): Promise<number>;
     /** Sell up to `n` of `name`; resolves the units actually sold. */
     sell(name: string, n: number): Promise<number>;
+    /** Sell every one of `name` the pack holds, ten to a click; resolves the units sold. */
+    sellAll(name: string): Promise<number>;
     close(): Promise<void>;
 };
 

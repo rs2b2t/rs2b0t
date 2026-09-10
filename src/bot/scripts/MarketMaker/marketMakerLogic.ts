@@ -190,6 +190,8 @@ export function decideBeat(input: {
     oweMatched: boolean;
     wantMatched: boolean;
     oweAnything: boolean;
+    /** The owed side comes from what they asked for rather than from their side of the window. */
+    oweFixed: boolean;
     stillBeatsNeeded: number;
     reOfferCap: number;
     /** Beats of waiting on them before the window is given back. */
@@ -210,9 +212,16 @@ function beatFor(input: {
     oweMatched: boolean;
     wantMatched: boolean;
     oweAnything: boolean;
+    oweFixed: boolean;
     stillBeatsNeeded: number;
     reOfferCap: number;
 }): Beat {
+    // Why: a sale owes what the customer asked for, which nothing on their side changes, so the goods go up the beat the window opens rather than after their coins have settled; the money is still what the accept is judged on.
+    if (input.oweFixed && input.oweAnything && !input.oweMatched) {
+        return input.window.reOffers >= input.reOfferCap
+            ? { do: 'give-up', reason: 'too many changes in one trade' }
+            : { do: 'offer', reason: 'the goods asked for do not depend on their side' };
+    }
     if (input.theirSig !== input.window.lastSig) {
         return { do: 'wait', reason: 'their side moved' };
     }
@@ -251,6 +260,39 @@ export function tradeIsStalled(tradeActive: boolean, hasWindow: boolean, windowE
 
 export function shouldSettle(freeSlots: number, packCoins: number, coinFloor: number): boolean {
     return freeSlots <= FREE_SLOT_FLOOR || packCoins > coinFloor;
+}
+
+// Why: a reset is what an operator reaches for when the shop is wedged, so it owes a trip whatever the pack looks like and Settle's deposit takes everything.
+/** Whether a bank trip is owed: no room, takings over the float, or a reset asked for one. */
+export function settleDue(freeSlots: number, packCoins: number, coinFloor: number, forced: boolean): boolean {
+    return forced || shouldSettle(freeSlots, packCoins, coinFloor);
+}
+
+// Why: OpenWindow holds every window while a trip is due, so an order that held Settle back waited on a window that could not open: the customer who bought the cap and asked again had the goods fetched and no window, with the takings still in the pack. A live order now delays only a float top-up.
+/** Whether Settle takes the tick: a due trip always, a float top-up only while no order is live. */
+export function settleRuns(input: { due: boolean; floatShort: boolean; orderLive: boolean }): boolean {
+    return input.due || (input.floatShort && !input.orderLive);
+}
+
+// Why: a sale in progress has its goods fetched for one customer, and a window opened with anyone else meanwhile takes their stock into the same pack; the sale's customer is the only request answered until it settles or lapses.
+/** The requests a window may open with: the sale's customer alone while a sale is live, every request otherwise. */
+export function windowCandidates(requests: readonly string[], saleCustomer: string | null): string[] {
+    if (saleCustomer === null) {
+        return [...requests];
+    }
+    return requests.filter(name => key(name) === key(saleCustomer));
+}
+
+// Why: goods bought sit in the pack until a trip, and the operator wants them in the bank before the next customer, whatever room is left; a buy is the side where the shop's coins went out.
+/** Whether a completed trade owes a bank trip: the shop bought something. */
+export function buyOwesSettle(give: ReadonlyMap<number, number>, coinId: number): boolean {
+    return give.has(coinId);
+}
+
+// Why: OpenWindow runs above Settle, so a queue of customers dumping goods kept it opening windows on a pack with no room to take any and the shop never reached the bank; it yields the tick once a trip is due, though a bank it cannot reach must not shut the shop, so a backed-off bank leaves it serving.
+/** Whether the next window should wait for a bank trip. */
+export function bankBeforeServing(freeSlots: number, packCoins: number, coinFloor: number, bankReady: boolean, forced = false): boolean {
+    return bankReady && settleDue(freeSlots, packCoins, coinFloor, forced);
 }
 
 /** Coins worth going to the bank for: the gap up to the float, capped at what the bank holds. */

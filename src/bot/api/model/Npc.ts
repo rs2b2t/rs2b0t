@@ -27,6 +27,11 @@ export class Npc implements Interactable, Locatable {
         return this.snap.index;
     }
 
+    /** Tiles along each side of the footprint; `tile()` is the one under its centre. */
+    get size(): number {
+        return this.snap.size;
+    }
+
     get inCombat(): boolean {
         return this.snap.inCombat;
     }

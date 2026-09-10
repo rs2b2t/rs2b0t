@@ -1242,7 +1242,7 @@ class WalkExecutorImpl {
         }
 
         if (transport.toLevel === undefined && transport.toTile === undefined && chebyshev(approach, step) >= 1) {
-            const ok = await crossMultiTileDoor(approach, step, transport, log, (x, z) => this.blacklistDoor(x, z));
+            const ok = await crossMultiTileDoor(approach, step, transport, log, (x, z) => this.blacklistDoor(x, z), this.pathFollow.doorStepTicks);
             if (ok) {
                 RouteState.noteTransport(approach, step);
             }

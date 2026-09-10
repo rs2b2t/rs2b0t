@@ -29,3 +29,50 @@ describe('per-quest provisioning bank', () => {
         }
     });
 });
+
+// Why: a free quest is fought at low level against low-level things, and the pack pays for food it never eats with slots the quest items need. Dragon Slayer keeps its ration, since Elvarg is the one free fight that earns it.
+describe('food on the free quests', () => {
+    const FREE_WITH_FOOD = ['blackknight', 'demon', 'haunted', 'gobdip', 'squire', 'hunt', 'blackarmgang', 'vampire'];
+
+    test('none of the free quests carries a food float, Dragon Slayer aside', () => {
+        for (const id of FREE_WITH_FOOD) {
+            const module = QUEST_DEFS.find(m => m.record.id === id);
+            expect(module, `no module for '${id}'`).toBeDefined();
+            expect(module!.food, `${id} still asks for food`).toBeUndefined();
+        }
+    });
+
+    test('Dragon Slayer keeps its ration', () => {
+        const ds = QUEST_DEFS.find(m => m.record.id === 'dragon');
+        expect(ds?.food).toBeGreaterThan(0);
+    });
+});
+
+// Why: a members quest earns its float by fighting or by eating on the walk, and these three do neither: no grind, no combat step and no sustain list, so the withdrawal was slots the quest never used. The ones that do fight, and the two that carry a documented traversal ration, keep theirs.
+describe('food on the members quests', () => {
+    const NO_COMBAT_NO_SUSTAIN = ['cog', 'totem', 'seaslug'];
+
+    test('a quest that neither fights nor eats carries no float', () => {
+        for (const id of NO_COMBAT_NO_SUSTAIN) {
+            const module = QUEST_DEFS.find(m => m.record.id === id);
+            expect(module, `no module for '${id}'`).toBeDefined();
+            expect(module!.food, `${id} still asks for food`).toBeUndefined();
+            expect(module!.sustain, `${id} would eat it if it had it`).toBeUndefined();
+        }
+    });
+
+    test('the ones that fight keep theirs', () => {
+        for (const id of ['arena', 'ball', 'grail', 'ikov', 'priestperil']) {
+            const module = QUEST_DEFS.find(m => m.record.id === id);
+            expect(module?.food, `${id} lost the ration its fight needs`).toBeGreaterThan(0);
+        }
+    });
+
+    test('the ones that eat on the walk keep theirs', () => {
+        for (const id of ['mcannon', 'fishingcompo']) {
+            const module = QUEST_DEFS.find(m => m.record.id === id);
+            expect(module?.food).toBeGreaterThan(0);
+            expect(module?.sustain).toBeDefined();
+        }
+    });
+});

@@ -19,6 +19,14 @@ Requires repositories not published alongside this one.
 - Local player saves: harnesses leave `*.sav` under the engine `data/players/main/`.
   Wipe harness junk with `bash tools/cleanup-test-accounts.sh` (dry-run default;
   see [Testing](../how-to/write-a-harness.md)).
+- The engine reads `build.srcDir` from `data/config/world.json`, `../rs2b2t-content`,
+  so that checkout has to sit on the engine's revision (289 since PR #794). After moving
+  it, run `npm run clean && npm run build` before `quickstart`: the server-only packs
+  under `content/pack/` (`dbrow.pack`, `midi.pack` and the rest) are generated,
+  gitignored and only rebuilt by `clean`, and a stale one fails the pack with a missing
+  reference such as `musicdata,music_Fruits_de_Mer`. Then rebuild the collision pack,
+  `bun tools/nav/build-collision.ts --engine ~/code/rs2b2t-engine`, since it bakes the
+  engine's map data and a square the old revision lacked reads as unreachable.
 
 The headless harness ABI and the end-to-end smoke are documented in
 [Testing](../how-to/write-a-harness.md).

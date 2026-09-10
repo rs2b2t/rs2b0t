@@ -13,7 +13,7 @@ export function paintClueProgress(p: PaintFrame, idle = 'no clue in progress'): 
         p.text(idle, MUTED);
         return;
     }
-    p.text(`${cur.name} — leg ${cur.leg}${cur.attempt > 1 ? ` (try ${cur.attempt})` : ''}`);
+    p.text(`${cur.name}, leg ${cur.leg}${cur.attempt > 1 ? ` (try ${cur.attempt})` : ''}`);
     p.text(cur.step, MUTED);
 
     const left = tilesTo(cur.target);

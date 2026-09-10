@@ -231,6 +231,8 @@ export interface NpcSnapshot {
     anim: number;
     name: string | null;
     level: number;
+    /** Tiles along each side of the footprint. */
+    size: number;
     tile: WorldTile;
     distance: number;
     ops: (string | null)[];
@@ -382,6 +384,20 @@ export const reader = {
         return {
             x: raw.mapBuildBaseX + (raw.localPlayer.x >> 7),
             z: raw.mapBuildBaseZ + (raw.localPlayer.z >> 7),
+            level: raw.minusedlevel
+        };
+    },
+
+    // Why: `worldTile` reads the sprite, which walks 4px a frame and so reaches a tile a tick after the server put the player there (two on a 300ms sim); the route head is the tile the server holds.
+    /** The tile the server holds the player on. */
+    serverTile(): WorldTile | null {
+        if (!raw || !raw.localPlayer) {
+            return null;
+        }
+
+        return {
+            x: raw.mapBuildBaseX + raw.localPlayer.routeX[0]!,
+            z: raw.mapBuildBaseZ + raw.localPlayer.routeZ[0]!,
             level: raw.minusedlevel
         };
     },
@@ -843,6 +859,7 @@ export const reader = {
                 anim: npc.primaryAnim,
                 name: npc.type?.name ?? null,
                 level: npc.type?.vislevel ?? -1,
+                size: npc.type?.size ?? 1,
                 tile: { x, z, level: raw.minusedlevel },
                 distance: Math.max(Math.abs(x - px), Math.abs(z - pz)),
                 ops: npc.type?.op ?? [],

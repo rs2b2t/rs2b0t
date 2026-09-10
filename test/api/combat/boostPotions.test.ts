@@ -8,6 +8,8 @@ import {
     SUPER_STRENGTH,
     boostFaded,
     plannedPotions,
+    RANGING_POTION,
+    rangingPlan,
     potionToSip,
     type BoostPotion,
     type PotionPlan,
@@ -139,5 +141,25 @@ describe('the potion table', () => {
     test('each potion carries a paint label short enough for a three-column row', () => {
         expect(SUPER_ATTACK.short).toBe('Att');
         expect(SUPER_STRENGTH.short).toBe('Str');
+    });
+});
+
+// Why: a ranged run boosts its own skill, and putting the potion in BOOST_POTIONS would make every melee script carry one it never sips.
+describe('the ranging potion', () => {
+    test('lifts ranged and names the dose forms the item database uses', () => {
+        expect(RANGING_POTION.skill).toBe('ranged');
+        expect(RANGING_POTION.flask).toBe('Ranging potion(3)');
+        expect(RANGING_POTION.doses).toEqual(['Ranging potion(4)', 'Ranging potion(3)', 'Ranging potion(2)', 'Ranging potion(1)']);
+    });
+
+    test('stays out of the melee pair, so a melee loadout is unchanged', () => {
+        expect(BOOST_POTIONS).not.toContain(RANGING_POTION);
+        expect(plannedPotions([]).map(p => p.potion.skill)).toEqual(['attack', 'strength']);
+    });
+
+    test('takes its dose form and count from the loadout, falling back to one three-dose flask', () => {
+        expect(rangingPlan([])).toEqual({ potion: RANGING_POTION, flask: 'Ranging potion(3)', want: 1 });
+        expect(rangingPlan([{ item: 'Ranging potion(4)', qty: 2 }])).toEqual({ potion: RANGING_POTION, flask: 'Ranging potion(4)', want: 2 });
+        expect(rangingPlan([{ item: 'Super attack(4)', qty: 2 }])).toEqual({ potion: RANGING_POTION, flask: 'Ranging potion(3)', want: 1 });
     });
 });

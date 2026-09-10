@@ -12,7 +12,7 @@ import { gotoNpc, talkThrough, type NpcStop } from '../exec/primitives.js';
 import { executeStep } from '../exec/steps.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { QUESTS } from '../data/quests.js';
-import { FOOD_FLOAT, QuestFood } from '../food.js';
+import { QuestFood } from '../food.js';
 
 /** Named, so the step literals below get a Tile and not the module's wider type. */
 const DRAYNOR_BANK = new Tile(3093, 3243, 0);
@@ -35,8 +35,6 @@ const VARROCK_FUNDING_MAN = new Tile(3240, 3405, 0);
 const AL_KHARID_FUNDING_MAN = new Tile(3279, 3188, 0);
 const KEBAB_SELLER = new Tile(3272, 3182, 0);
 
-export const GOBLIN_MAIL_FOOD_TARGET = FOOD_FLOAT;
-export const GOBLIN_MAIL_FOOD_RESTOCK_FLOOR = 4;
 export const GOBLIN_DIPLOMACY_COIN_TARGET = 200;
 export const GOBLIN_DIPLOMACY_QUEST_COIN_RESERVE = 100;
 const FALLBACK_FOOD = 'Kebab';
@@ -77,10 +75,6 @@ const qty = (snap: QuestSnapshot, name: string): number => snap.inv.get(name) ??
 function combatFoodNames(): string[] {
     const configured = QuestFood.name?.trim();
     return [...new Map([configured, FALLBACK_FOOD].filter((name): name is string => Boolean(name)).map(name => [name.toLowerCase(), name])).values()];
-}
-
-function combatFoodCount(snap: QuestSnapshot): number {
-    return combatFoodNames().reduce((total, food) => total + qty(snap, food.toLowerCase()), 0);
 }
 
 function liveCombatFoodCount(): number {
@@ -296,24 +290,6 @@ async function earnGoblinDiplomacyCoins(log: (message: string) => void): Promise
     return farmFundingCoins(AL_KHARID_FUNDING_MAN, GOBLIN_DIPLOMACY_FUNDING_TARGET, true, log);
 }
 
-async function buyGoblinMailFood(log: (message: string) => void): Promise<boolean> {
-    if (Inventory.count('Coins') < GOBLIN_DIPLOMACY_COIN_TARGET && !(await earnGoblinDiplomacyCoins(log))) {
-        return false;
-    }
-    if (liveCombatFoodCount() >= GOBLIN_MAIL_FOOD_TARGET) {
-        return true;
-    }
-    if (!(await Traversal.walkResilient(KEBAB_SELLER, { radius: 2, attempts: 4, timeoutMs: 240_000, log }))) {
-        return false;
-    }
-    while (liveCombatFoodCount() < GOBLIN_MAIL_FOOD_TARGET) {
-        if (Inventory.count('Coins') < 1 || Inventory.isFull() || !(await buyOneKebab(log))) {
-            return false;
-        }
-    }
-    return true;
-}
-
 function foodAcquisitionSpace(snap: QuestSnapshot, slots: number): QuestStep | null {
     if (snap.freeSlots === undefined || snap.freeSlots >= slots) {
         return null;
@@ -329,40 +305,21 @@ function foodAcquisitionSpace(snap: QuestSnapshot, slots: number): QuestStep | n
     };
 }
 
+// Why: the coins buy Aggie's dyes, so they stay a requirement; the food never was one, and a free quest fought at low level against goblins pays for it in slots the mail needs.
 export function goblinMailGatherStep(snap: QuestSnapshot, need = 1): QuestStep {
-    const carriedFood = combatFoodCount(snap);
     const heldCoins = qty(snap, 'coins');
-    const foodReady = inGoblinMailField(snap.tile) ? carriedFood > GOBLIN_MAIL_FOOD_RESTOCK_FLOOR : carriedFood >= GOBLIN_MAIL_FOOD_TARGET;
-    if (!inGoblinMailField(snap.tile) || !foodReady) {
+    if (!inGoblinMailField(snap.tile)) {
         resetGoblinMailCombat();
     }
-    if (foodReady) {
-        const makeMailSpace = foodAcquisitionSpace(snap, Math.max(1, need) + (heldCoins > 0 ? 0 : 1));
-        if (makeMailSpace) {
-            return makeMailSpace;
-        }
-        if (heldCoins >= GOBLIN_DIPLOMACY_QUEST_COIN_RESERVE) {
-            return { kind: 'custom', name: 'farm goblin mail', run: farmGoblinMail };
-        }
+    const makeMailSpace = foodAcquisitionSpace(snap, Math.max(1, need) + (heldCoins > 0 ? 0 : 1));
+    if (makeMailSpace) {
+        return makeMailSpace;
+    }
+    if (heldCoins >= GOBLIN_DIPLOMACY_QUEST_COIN_RESERVE) {
+        return { kind: 'custom', name: 'farm goblin mail', run: farmGoblinMail };
     }
     if (!snap.bankKnown) {
         return { kind: 'scanBank', bank: DRAYNOR_BANK };
-    }
-
-    const missingFood = Math.max(0, GOBLIN_MAIL_FOOD_TARGET - carriedFood);
-    const makeSupplySpace = foodAcquisitionSpace(snap, missingFood + Math.max(1, need) + (heldCoins > 0 ? 0 : 1));
-    if (makeSupplySpace) {
-        return makeSupplySpace;
-    }
-    for (const food of combatFoodNames()) {
-        const banked = snap.bank?.get(food.toLowerCase()) ?? 0;
-        if (banked > 0) {
-            return {
-                kind: 'withdraw',
-                items: [{ name: food, qty: Math.min(missingFood, banked) }],
-                bank: DRAYNOR_BANK
-            };
-        }
     }
     if (heldCoins < GOBLIN_DIPLOMACY_COIN_TARGET && snap.bankCoins > 0) {
         return {
@@ -376,11 +333,7 @@ export function goblinMailGatherStep(snap: QuestSnapshot, need = 1): QuestStep {
             bank: DRAYNOR_BANK
         };
     }
-    return {
-        kind: 'custom',
-        name: heldCoins < GOBLIN_DIPLOMACY_COIN_TARGET ? `earn ${GOBLIN_DIPLOMACY_COIN_TARGET} gp and buy combat food` : `buy ${missingFood} combat Kebabs`,
-        run: buyGoblinMailFood
-    };
+    return { kind: 'custom', name: `earn ${GOBLIN_DIPLOMACY_COIN_TARGET} gp`, run: earnGoblinDiplomacyCoins };
 }
 
 async function farmGoblinMail(log: (m: string) => void): Promise<boolean> {

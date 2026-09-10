@@ -25,6 +25,7 @@ import { resolvePrices, rowValid } from '../../api/market/prices.js';
 import { normaliseOffer, offerCovers, offersMatch } from '../../api/market/driveMarketTrade.js';
 import { appraise, describeAppraisal, type Appraisal, type DeskState } from '../../api/market/appraise.js';
 import type { OfferItem } from '../../api/market/quote.js';
+import { sortBank } from '../../api/bank/bankSort.js';
 import Tile from '../../geometry/Tile.js';
 import { Paint, type PaintFrame } from '../../paint/Paint.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
@@ -40,16 +41,19 @@ import {
     dealOf,
     dealTotals,
     floatShortfall,
+    bankBeforeServing,
+    buyOwesSettle,
+    windowCandidates,
     FREE_SLOT_FLOOR,
+    settleDue,
+    settleRuns,
     freshChatLines,
     listedRows,
     RateLimiter,
     resolveQuote,
-    shouldSettle,
     tradeIsStalled,
     sideSignature,
-    type Deal
-} from './marketMakerLogic.js';
+    type Deal } from './marketMakerLogic.js';
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const COIN_NAME = 'Coins';
@@ -198,6 +202,10 @@ export default class MarketMaker extends TaskBot {
 
     private lastAdvertiseAt = 0;
     private lastResetAt = 0;
+    /** A reset owes a bank trip that empties the pack, cleared once the trip has run. */
+    private settleOwed = false;
+    /** A bank sort owed on the next trip, at startup and after every reset. */
+    private sortOwed = false;
     private advertiseCursor = 0;
     private advertCycle = 0;
 
@@ -237,6 +245,7 @@ export default class MarketMaker extends TaskBot {
             ScriptRunner.stop('no order book');
             return;
         }
+        this.sortOwed = true;
 
         const bank = nearestBank(this.spot);
         const reach = bank ? this.spot.distanceTo(Tile.from(bank.tile)) : Infinity;
@@ -375,6 +384,29 @@ export default class MarketMaker extends TaskBot {
     // Why: hardcoding "a minute" goes wrong the moment the setting is tuned, and the customer is the one who has to believe it.
     coolNote(): string {
         return this.cooldownMs <= 0 ? 'Try again.' : `Ask again in ${Math.round(this.cooldownMs / 1000)}s.`;
+    }
+
+    // Why: the sort rides the same forced trip a reset owes, so the shop sorts before it serves at startup and straight after a reset; the flag outlives a trip that never opened the bank.
+    settleForced(): boolean {
+        return this.settleOwed || this.sortOwed;
+    }
+
+    clearForcedSettle(): void {
+        this.settleOwed = false;
+    }
+
+    sortDue(): boolean {
+        return this.sortOwed;
+    }
+
+    /** Sort the open bank with the bank sorter's rules, once per owed sort. */
+    async sortBankNow(): Promise<void> {
+        this.setStatus('sorting the bank');
+        const result = await sortBank({ log: m => this.log(m) });
+        this.sortOwed = false;
+        this.log(result.sorted
+            ? `bank sorted, ${result.moves} move(s)${result.unmatched.length > 0 ? `, ${result.unmatched.length} item(s) the rules do not place` : ''}`
+            : `bank sort stopped: ${result.reason} after ${result.moves} move(s)`);
     }
 
     bankReady(nowMs: number): boolean {
@@ -562,7 +594,9 @@ export default class MarketMaker extends TaskBot {
         this.tradeRequests.clear();
         this.tradeClosedAt = null;
         this.lastTold = '';
-        this.setStatus('reset, open for business');
+        this.settleOwed = true;
+        this.sortOwed = true;
+        this.setStatus('reset, banking the pack');
     }
 
     /** Say how the shop works. */
@@ -712,8 +746,10 @@ export default class MarketMaker extends TaskBot {
                 this.ledger.add(id, qty);
             }
         }
-        if (accepted.give.has(this.coinId)) {
+        if (buyOwesSettle(accepted.give, this.coinId)) {
             this.bought++;
+            // Why: what was bought goes to the bank before anyone else is served, so the forced settle a reset uses is owed here too.
+            this.settleOwed = true;
         } else {
             this.sold++;
         }
@@ -993,6 +1029,7 @@ class ServeWindow implements Task {
             oweMatched: offersMatch(mine, a.owe),
             wantMatched: offerCovers(theirs, a.want),
             oweAnything: a.owe.size > 0,
+            oweFixed: a.kind === 'sell',
             stillBeatsNeeded: STILL_BEATS,
             reOfferCap: REOFFER_CAP,
             waitCap: WAIT_BEATS
@@ -1067,9 +1104,13 @@ class OpenWindow implements Task {
         if (this.bot.counter().current() !== null || this.bot.requests().size === 0 || Trade.active() || reader.modals().main !== -1) {
             return false;
         }
+        // Why: Settle sits below this task, so a pack with no room has to yield the tick or the queue keeps it opening windows it cannot take goods into.
+        if (bankBeforeServing(Inventory.free(), this.bot.packCoins(), this.bot.float(), this.bot.bankReady(Date.now()), this.bot.settleForced())) {
+            return false;
+        }
         // Why: this task runs ahead of Restock, so claiming the tick when every request is waiting on a bank trip starves the fetch that would let any of them open.
         const now = Date.now();
-        return [...this.bot.requests()].some(name => {
+        return this.candidates(now).some(name => {
             if (this.bot.blocked(name) || this.bot.counter().onCooldown(name, now)) {
                 return true;
             }
@@ -1078,9 +1119,28 @@ class OpenWindow implements Task {
         });
     }
 
+    // Why: a sale in progress is served before anyone else's window, or the goods fetched for it sit in a pack another customer is filling; the others keep their place in the queue and hear why once.
+    /** Whose request may open a window now. */
+    private candidates(now: number): string[] {
+        const sale = this.bot.counter().nextIntent(now, this.bot.intentTtl());
+        const names = [...this.bot.requests()];
+        const picked = windowCandidates(names, sale?.customer ?? null);
+        if (sale !== null) {
+            for (const name of names) {
+                if (!picked.includes(name) && this.toldWaiting.get(name) !== sale.customer) {
+                    this.toldWaiting.set(name, sale.customer);
+                    this.bot.say(`${name}, serving ${sale.customer} first. One moment.`);
+                }
+            }
+        }
+        return picked;
+    }
+
+    private readonly toldWaiting = new Map<string, string>();
+
     async execute(): Promise<void> {
         const now = Date.now();
-        for (const name of [...this.bot.requests()]) {
+        for (const name of this.candidates(now)) {
             if (this.bot.blocked(name) || this.bot.counter().onCooldown(name, now)) {
                 this.bot.requests().delete(name);
                 continue;
@@ -1116,7 +1176,8 @@ class Restock implements Task {
         if (Trade.active() || this.bot.counter().current() !== null) {
             return false;
         }
-        if (!this.bot.bankReady(Date.now())) {
+        // Why: a trip that is owed, after a buy, on a full pack or on takings over the float, runs before the fetch, or Settle's deposit takes the fetched goods back to the bank with the takings.
+        if (!this.bot.bankReady(Date.now()) || settleDue(Inventory.free(), this.bot.packCoins(), this.bot.float(), this.bot.settleForced())) {
             return false;
         }
         const want = this.bot.counter().nextIntent(Date.now(), this.bot.intentTtl());
@@ -1151,14 +1212,15 @@ class Restock implements Task {
         const got = this.bot.packCount(want.itemId);
         if (got >= want.maxQty) {
             this.bot.counter().renew(want.customer, Date.now());
-            this.bot.say(`Got your ${name} ${want.customer}. Trade me.`);
+            // Why: the chat filter masks a name and the letters after it, and with the name mid-line it ate the T of Trade me; the name goes last.
+            this.bot.say(`Got your ${name}. Trade me, ${want.customer}.`);
             return;
         }
         if (got > 0) {
             // Why: the order is cut to what arrived, or Restock keeps going back for the rest and never lets Settle run.
             this.bot.counter().limitTo(want.customer, got);
             this.bot.counter().renew(want.customer, Date.now());
-            this.bot.say(`${want.customer}, I could only get ${formatGp(got)} x ${name}. Trade me.`);
+            this.bot.say(`I could only get ${formatGp(got)} x ${name}. Trade me, ${want.customer}.`);
             return;
         }
         if (this.bot.counter().missedStock(want.customer, STOCK_TRIES)) {
@@ -1176,17 +1238,14 @@ class Settle implements Task {
         if (Trade.active() || this.bot.counter().current() !== null || !this.bot.bankReady(Date.now())) {
             return false;
         }
-        // Why: holding an order used to block banking outright, so a pack that filled up could never be emptied:
-        // Why: Restock kept going back for goods with no room to put them, and the shop lived at the bank.
-        const outOfRoom = Inventory.free() <= FREE_SLOT_FLOOR;
-        if (!outOfRoom && this.bot.counter().nextIntent(Date.now(), this.bot.intentTtl()) !== null) {
-            return false;
-        }
-        return shouldSettle(Inventory.free(), this.bot.packCoins(), this.bot.float())
-            || this.bot.floatShort() > 0;
+        // Why: holding an order used to block banking outright, so a pack that filled up could never be emptied and takings over the float held every window shut with the order waiting on one.
+        const due = Inventory.free() <= FREE_SLOT_FLOOR
+            || settleDue(Inventory.free(), this.bot.packCoins(), this.bot.float(), this.bot.settleForced());
+        return settleRuns({ due, floatShort: this.bot.floatShort() > 0, orderLive: this.bot.counter().nextIntent(Date.now(), this.bot.intentTtl()) !== null });
     }
 
     async execute(): Promise<void> {
+        this.bot.clearForcedSettle();
         this.bot.setStatus('banking the takings');
         if (!(await Banking.open({ stand: this.bot.standTile(), boothName: BOOTH.name, boothOp: BOOTH.op, log: m => this.bot.log(m) }))) {
             this.bot.backOffBank('could not open the bank');
@@ -1209,6 +1268,10 @@ class Settle implements Task {
 
         if (!(await this.bot.refreshLedger()) || this.bot.packCoins() < Math.min(this.bot.float(), inBank)) {
             this.bot.backOffBank(`float ${this.bot.packCoins()}/${this.bot.float()}`);
+        }
+        if (this.bot.sortDue()) {
+            await this.bot.sortBankNow();
+            await this.bot.refreshLedger();
         }
         await Bank.close();
         // Why: the modal reads closed a tick before the engine has settled it, and a trade request sent in that gap opens the window on the customer's client alone. Every purchase runs into it, since fetching the goods puts a bank trip directly in front of opening the window.
