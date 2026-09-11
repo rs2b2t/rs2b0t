@@ -4,7 +4,7 @@ import { CC_LOGOUT, finishRelog, logoutIfaceId, titleAfterLogoutPress } from '..
 
 describe('clean logout (274bot Relog)', () => {
     test('presses the CC_LOGOUT iface, not a hardcoded 2458', () => {
-        const ifaces: Array<{ clientCode: number } | null> = Array.from({ length: 10 }, () => null);
+        const ifaces: Array<{ clientCode: number } | null | undefined> = Array.from({ length: 10 }, () => null);
         ifaces[7] = { clientCode: CC_LOGOUT };
         ifaces[2458] = undefined;
         expect(logoutIfaceId(ifaces)).toBe(7);
