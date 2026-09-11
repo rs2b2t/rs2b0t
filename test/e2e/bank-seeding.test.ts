@@ -8,6 +8,8 @@ const definitions: Definition[] = [
     { id: 377, debugName: 'raw_lobster', name: 'Raw lobster', stackable: false, certlink: -1, certtemplate: -1 },
     { id: 378, debugName: 'cert_raw_lobster', name: 'Raw lobster', stackable: true, certlink: 377, certtemplate: 799 },
     { id: 995, debugName: 'coins', name: 'Coins', stackable: true, certlink: -1, certtemplate: -1 },
+    // Why: 289 names Coins on Zombie Queen fake_coins (617) as well; that namesake is not stackable.
+    { id: 617, debugName: 'fake_coins', name: 'Coins', stackable: false, certlink: -1, certtemplate: -1 },
     { id: 100, debugName: 'hide_a', name: 'Dragonhide', stackable: false, certlink: -1, certtemplate: -1 },
     { id: 101, debugName: 'cert_hide_a', name: 'Dragonhide', stackable: true, certlink: 100, certtemplate: 799 },
     { id: 102, debugName: 'hide_b', name: 'Dragonhide', stackable: false, certlink: -1, certtemplate: -1 },
@@ -29,9 +31,10 @@ afterEach(() => {
 });
 
 /** Execute the browser callbacks against an in-memory inventory and bank. */
-function fixture(options: { ignoreGive?: boolean; loseDeposit?: boolean; ready?: boolean } = {}) {
+function fixture(options: { ignoreGive?: boolean; loseDeposit?: boolean; ready?: boolean; closeLeavesOpen?: boolean } = {}) {
     const inventory = new Map<number, number>();
     const bank = new Map<number, number>();
+    let bankOpen = false;
     const commands: string[] = [];
     const countAnswers: number[] = [];
     let pending: Promise<unknown> = Promise.resolve();
@@ -116,10 +119,22 @@ function fixture(options: { ignoreGive?: boolean; loseDeposit?: boolean; ready?:
         LoopingBot: class {},
         registerScript: (meta: typeof script) => { script = meta; },
         Bank: {
-            openBooth: async () => true,
-            openNearest: async () => true,
+            isOpen: () => bankOpen,
+            openBooth: async () => {
+                bankOpen = true;
+                return true;
+            },
+            openNearest: async () => {
+                bankOpen = true;
+                return true;
+            },
             waitReady: async () => options.ready ?? true,
-            close: async () => true,
+            close: async () => {
+                if (!options.closeLeavesOpen) {
+                    bankOpen = false;
+                }
+                return !options.closeLeavesOpen;
+            },
             countById: (id: number) => bank.get(id) ?? 0
         },
         Execution: {
@@ -213,5 +228,11 @@ describe('bank fixture deposits', () => {
         const f = fixture({ ready: false });
         await expect(seedItemsToBank(f.page, lobsterSeed, stand)).rejects.toThrow('could not open a ready bank');
         expect(f.commands).toEqual([]);
+    });
+
+    test('does not finish while the bank is still open', async () => {
+        const f = fixture({ closeLeavesOpen: true });
+        await expect(seedItemsToBank(f.page, lobsterSeed, stand)).rejects.toThrow('bank still open after seed');
+        expect(f.stopped()).toBe(true);
     });
 });

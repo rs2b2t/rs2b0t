@@ -467,6 +467,7 @@ export async function seedItemsToBank(page: Page, items: readonly BankSeedItem[]
                     LoopingBot: new () => object;
                     registerScript(meta: { name: string; create: () => unknown }): void;
                     Bank: {
+                        isOpen(): boolean;
                         openBooth(t: unknown, name: string, op: string): Promise<boolean>;
                         openNearest(name: string, op: string): Promise<boolean>;
                         waitReady(): Promise<boolean>;
@@ -513,7 +514,8 @@ export async function seedItemsToBank(page: Page, items: readonly BankSeedItem[]
                             if (definitions.length === 0) {
                                 throw new Error(`unknown item: ${seed.displayName}`);
                             }
-                            const stackable = definitions.every(o => o.stackable);
+                            // Why: 289 names Coins on both coins (995, stackable) and Zombie Queen fake_coins (617, not). every() treated the name as unstackable and refused bulk coin seeds.
+                            const stackable = definitions.some(o => o.stackable);
                             const noted = !stackable && definitions.some(o => catalog.some(note => note.certtemplate !== -1 && note.certlink === o.id));
                             if (!stackable && !noted && seed.qty > 28 - reader.bankSideItems().length) {
                                 throw new Error(`${seed.debugName} has no note and does not fit in the pack`);
@@ -566,6 +568,10 @@ export async function seedItemsToBank(page: Page, items: readonly BankSeedItem[]
                     } finally {
                         try {
                             await Bank.close();
+                            // Why: BankSorter's Banking.open() returns immediately if the booth is still up, then sortBank dies on snapshot-not-ready.
+                            if (!(await Execution.delayUntil(() => !Bank.isOpen(), 3000))) {
+                                throw new Error('bank still open after seed');
+                            }
                         } catch (e) {
                             res.ok = false;
                             res.reason = `bank close failed: ${String(e)}`;
@@ -594,7 +600,21 @@ export async function seedItemsToBank(page: Page, items: readonly BankSeedItem[]
     if (!res.done || !res.ok) {
         throw new Error(`seedItemsToBank: ${res.reason || 'bank seed did not finish'}`);
     }
+    await waitUntilBankClosed(page);
     for (const [name, n] of Object.entries(res.banked)) {
         console.log(`  banked ${name} x${n}`);
+    }
+}
+
+/** Wait until the booth is shut so the next product script does not inherit an open bank. */
+export async function waitUntilBankClosed(page: Page, timeoutMs = 8000): Promise<void> {
+    try {
+        await page.waitForFunction(
+            () => (globalThis as never as { __rs2b0t: { Bank: { isOpen(): boolean } } }).__rs2b0t.Bank.isOpen() === false,
+            undefined,
+            { timeout: timeoutMs }
+        );
+    } catch {
+        throw new Error('harness: bank still open after seed');
     }
 }
