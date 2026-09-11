@@ -35,8 +35,7 @@ Four details govern this harness:
 - **`--stats 70` is the default and the quest needs none of it.** There is no combat here
   at all, the levels are for the walk through Ardougne rather than the quest.
 
-It is members-only, so it needs the `:8890` world; the `:8888` sim answers neither
-`givebank` nor `~bankitem` either.
+It is members-only, so it needs the `:8890` world.
 
 ## Shield of Arrav
 

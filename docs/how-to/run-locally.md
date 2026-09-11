@@ -20,11 +20,11 @@ Production target is [rs2b2t](https://rs2b2t.com) only.
 Engine and content are separate repos on matching branches and **must be siblings**,
 the engine resolves content as `../content`.
 
-1. Clone both at revision 274:
+1. Clone both at revision 289:
 
    ```sh
-   git clone https://github.com/LostCityRS/Engine-TS -b 274 --single-branch engine
-   git clone https://github.com/LostCityRS/Content   -b 274 --single-branch content
+   git clone https://github.com/LostCityRS/Engine-TS -b 289 --single-branch engine
+   git clone https://github.com/LostCityRS/Content   -b 289 --single-branch content
    ```
 
 2. Install and start:
@@ -137,7 +137,7 @@ Requires repositories not published alongside this one.
   rotated 1024-bit one whose public half the `local` target bakes, so no
   `LOCAL_RSAE`/`LOCAL_RSAN` is needed.
 - Cheats (staffModLevel 4 locally): `::tele 0,mx,mz,lx,lz`, `::~maxme`,
-  `::~item <objname> <count>`, `::~bankitem`, `::~spawnloc <locname>`. The level-up
+  `::give <objname> <count>` (use `cert_<objname>` for notes). The level-up
   dialogs raised by `::~maxme` swallow the next typed command, clear dialogs first.
 
 ## See also

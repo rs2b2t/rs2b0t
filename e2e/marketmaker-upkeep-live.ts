@@ -9,7 +9,7 @@
 import { readFileSync } from 'node:fs';
 import type { Page } from 'playwright-core';
 import { deployIsolatedClient, fail, launchBrowser, logout } from './lib/harness.js';
-import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript } from './tutorial/harness.js';
+import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript, seedItemsToBank } from './tutorial/harness.js';
 import { MARKET_PRICES } from '../src/bot/data/marketprices.js';
 
 const BASE = process.env.BASE ?? 'http://localhost:8890';
@@ -162,9 +162,11 @@ try {
 
     console.log(`upkeep: seeding the bank and a ${ROWS.length}-row book`);
     await cheatQuiet(page, '~clearinv');
-    await cheatQuiet(page, `~bankitem coins ${BANK_COINS}`);
-    await cheatQuiet(page, '~bankitem iron_ore 2000');
-    await cheatQuiet(page, '~bankitem yew_logs 500');
+    await seedItemsToBank(page, [
+        { debugName: 'coins', displayName: 'Coins', qty: BANK_COINS },
+        { debugName: 'iron_ore', displayName: 'Iron ore', qty: 2000 },
+        { debugName: 'yew_logs', displayName: 'Yew logs', qty: 500 },
+    ], { x: 3185, z: 3440, level: 0 });
     await seed(page);
     await teleArrive(page);
 

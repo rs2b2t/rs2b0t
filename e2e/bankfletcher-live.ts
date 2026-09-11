@@ -6,7 +6,7 @@ import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import type { Page } from 'playwright-core';
 import { deployIsolatedClient, fail, launchBrowser, parseArgs, setSettings, stopScript } from './lib/harness.js';
-import { cheatQuiet, clearChatDialogs, mainlandAccount, startScript, teleTo } from './tutorial/harness.js';
+import { cheatQuiet, clearChatDialogs, mainlandAccount, startScript, teleTo, seedItemsToBank } from './tutorial/harness.js';
 
 const { base } = parseArgs(process.argv.slice(2), { base: 'http://localhost:8888' });
 const user = process.env.USER_NAME || `bf${Date.now().toString(36).slice(-7)}`;
@@ -102,7 +102,7 @@ try {
         fail(`could not reach Draynor (${DRAYNOR.x},${DRAYNOR.z})`);
     }
     await cheatQuiet(page, '~clearinv', 800);
-    await cheatQuiet(page, '~bankitem willow_logs 200');
+    await seedItemsToBank(page, [{ debugName: 'willow_logs', displayName: 'Willow logs', qty: 200 }], DRAYNOR);
     await seedGive(page, 'give knife 1', async () => (await snap(page)).knife === 1);
     await seedGive(page, 'give willow_logs 27', async () => (await snap(page)).logsHeld >= 27);
 

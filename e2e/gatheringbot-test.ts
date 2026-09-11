@@ -1,5 +1,5 @@
 /** Live verification for GatheringBot (Miner / Fisher / Woodcutter): scenario ids as argv, BASE / HEADED / SLOWMO / BUDGET_S from the environment.
- *  Why: inventory seeds go through the engine cheat `give` and bank seeds through `givebank`; acquire scenarios purge bank tools first so a leftover withdrawal cannot false-PASS, and the bot client is redeployed by hand, tools/deploy-local.sh from this tree is not for live e2e. */
+ *  Why: inventory seeds use `give` and bank seeds deposit noted items or stackables; acquire scenarios purge bank tools first so a leftover withdrawal cannot false-PASS, and the bot client is redeployed by hand, tools/deploy-local.sh from this tree is not for live e2e. */
 
 // Usage:
 //   bun e2e/gatheringbot-test.ts
@@ -227,7 +227,7 @@ async function setSettings(page: Page, script: string, map: Record<string, strin
 }
 
 /** Seed held items via the engine cheat `give` (ClientCheatHandler).
- *  Why: Local Server engines carry no `~item`/`~bankitem`, and `~item` no-ops silently while `~clearinv` still works, which reads as an endless inventory wipe. */
+ *  Why: inventory seeds use the stock engine command `give`, and verify that the requested items arrived. */
 async function seedItem(page: Page, debugName: string, displayName: string, qty = 1): Promise<void> {
     const cmd = `give ${debugName} ${qty}`;
     for (let i = 0; i < 8; i++) {
@@ -891,7 +891,7 @@ type Scenario = {
     /** Held items to seed via `give` (debug name → display name, qty). */
     seed?: { debug: string; name: string; qty?: number }[];
     /**
-     * Direct bank seed via engine `givebank` ({@link seedItemsToBank}).
+     * Bank seed via noted items and verified deposits ({@link seedItemsToBank}).
      * Prefer this over give→deposit, bulk unstackables fill the pack and stall.
      */
     bankSeed?: { items: BankSeedItem[]; stand: Tile };
@@ -900,7 +900,7 @@ type Scenario = {
     /** Before seed: open this bank and withdraw matching tools, then clearinv. */
     purgeBank?: { stand: Tile; match: RegExp; label: string };
     /**
-     * @deprecated Prefer {@link bankSeed} (`givebank`). Kept only for rare cases
+     * @deprecated Prefer {@link bankSeed} (noted deposits). Kept only for rare cases
      * where give→deposit is intentional; bulk fixtures must use bankSeed.
      */
     depositSeedToBank?: { stand: Tile; names: string[]; label: string };
@@ -1750,7 +1750,7 @@ const SCENARIOS: Scenario[] = [
             `mule=${logHas(cur, /mule:\s*cooker/i)} distBank=${minDistToBank}`
     },
     {
-        // Bank raw then cook: givebank 973 raw + inv pot + 26 raw → catch the last → bank hits N → withdraw and cook the batch.
+        // Bank raw then cook: deposit 973 noted raw + inv pot + 26 raw → catch the last → bank hits N → withdraw and cook the batch.
         // 973 banked + 27 deposited = 1000 (explicit bankRawBeforeCook; the product default is 56).
         id: 'fish-bank-raw-cook',
         tags: ['fishing', 'fish', 'cook', 'bank', 'early'],
@@ -2513,7 +2513,7 @@ const SCENARIOS: Scenario[] = [
             leashRadius: 12
         },
         purgeBank: { stand: SPOT.varrockWestBank, match: TOOL_RE.axe, label: 'axes@varrock-w' },
-        // Bank mats via givebank so restock must withdraw (not materials-held short-circuit).
+        // Bank noted materials so restock must withdraw (not materials-held short-circuit).
         bankSeed: {
             stand: SPOT.varrockWestBank,
             items: [
@@ -2609,7 +2609,7 @@ try {
                 await purgeBankTools(page, sc.purgeBank.stand, sc.purgeBank.match, sc.purgeBank.label);
             }
 
-            // Bank fixtures first (givebank) so pack never holds bulk stackables.
+            // Bank fixtures first so their noted stacks are deposited before inventory gear is seeded.
             if (sc.bankSeed) {
                 console.log(
                     `  bankSeed @ (${sc.bankSeed.stand.x},${sc.bankSeed.stand.z}): ` +

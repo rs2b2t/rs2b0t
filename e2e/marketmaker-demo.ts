@@ -7,7 +7,7 @@
 
 import type { Page } from 'playwright-core';
 import { deployIsolatedClient, launchBrowser, logout } from './lib/harness.js';
-import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript } from './tutorial/harness.js';
+import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript, seedItemsToBank } from './tutorial/harness.js';
 
 const BASE = process.env.BASE ?? 'http://localhost:8890';
 /** Fixed, so the shop's bank and its takings survive a restart. */
@@ -180,10 +180,10 @@ try {
 
     console.log('demo: seeding the bank');
     await cheatQuiet(page, '~clearinv');
-    await cheatQuiet(page, `~bankitem coins ${BANK_COINS}`);
-    for (const s of STOCK) {
-        await cheatQuiet(page, `~bankitem ${s.obj} ${s.bank}`);
-    }
+    await seedItemsToBank(page, [
+        { debugName: 'coins', displayName: 'Coins', qty: BANK_COINS },
+        ...STOCK.map(s => ({ debugName: s.obj, displayName: s.name, qty: s.bank }))
+    ], { x: 3185, z: 3440, level: 0 });
 
     await page.evaluate(json => {
         sessionStorage.setItem('rs2b0t:set:PriceBooks:books', json);

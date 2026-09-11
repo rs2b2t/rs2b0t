@@ -13,7 +13,7 @@ Requires repositories not published alongside this one.
   the matching modulus is baked into the `local` target. A stock-key client gets login
   code 6 unless `LOCAL_RSAE` and `LOCAL_RSAN` are supplied to `deploy-local.sh`.
 - Cheats/debugprocs (staffModLevel 4 locally): `::tele 0,mx,mz,lx,lz`, `::~maxme`,
-  `::~item <objname> <count>`, `::~bankitem`, `::~spawnloc <locname>`. `::~maxme`'s
+  `::give <objname> <count>` (use `cert_<objname>` for notes). `::~maxme`'s
   level-up dialogs swallow the next typed command, do cheats on the clean post-relogin
   state, or clear dialogs first.
 - Local player saves: harnesses leave `*.sav` under the engine `data/players/main/`.

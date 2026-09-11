@@ -7,9 +7,9 @@ the screen, so a bot's packets match a human click byte for byte.
 
 | | |
 |---|---|
-| Revision | 274 (~2004 era client and content) |
+| Revision | 289 (~2004 era client and content) |
 | Supported target | [rs2b2t](https://rs2b2t.com), a 2004scape anarchy fork |
-| Local dev engine | [LostCityRS](https://github.com/LostCityRS) Engine-TS + Content, branch 274 |
+| Local dev engine | [LostCityRS](https://github.com/LostCityRS) Engine-TS + Content, branch 289 |
 | Unsupported targets | the pure Lost City and 2004scape projects |
 | Hosted client | https://w1.rs2b2t.com/rs2b0t |
 | Hosted MultiBox wall | https://w1.rs2b2t.com/rs2b0t/wall |
@@ -93,4 +93,4 @@ served the page; `live` targets the world host through a local reverse proxy. Se
 | Does it work with Lost City or 2004scape? | It builds against that engine family for local development, and the collision pack is generated from whatever engine you deploy into. Only rs2b2t is tested and supported. |
 | Does it move the mouse or read pixels? | Bots call the client's own action dispatch and read state through a typed adapter. |
 | Do I have to fork the repo to write a bot? | No. Compile against `@rs2b0t/api` and load the bundle by URL. |
-| Which RuneScape revision is this? | 274. |
+| Which RuneScape revision is this? | 289. |

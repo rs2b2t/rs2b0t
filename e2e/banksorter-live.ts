@@ -1,6 +1,5 @@
 /** Live BankSorter harness: proves the cold sort and the incremental re-sort against a bank on a running engine.
- *  Why: base :8890, because :8888 has no `bankitem` debugproc and the seed silently banks nothing.
- *  Why: `~bankitem` ADDS rather than sets, so every run wipes with `~clearbank` before seeding. */
+ *  Why: bank seeding adds rather than sets, so every run wipes with `~clearbank` before seeding. */
 
 //   HEADED=1 bun e2e/banksorter-live.ts --tick 200
 import type { Page } from 'playwright-core';
@@ -12,6 +11,7 @@ import {
     seedItemsToBank,
     startScript,
     teleTo,
+    waitUntilBankClosed,
     type BankSeedItem
 } from './tutorial/harness.js';
 import { rankWithin } from '../src/bot/api/bank/bankSortRank.js';
@@ -237,6 +237,8 @@ async function runSorter(page: Page, label: string, maxMs = 180_000): Promise<st
 async function seed(page: Page, items: readonly BankSeedItem[], label: string): Promise<void> {
     console.log(`${label}: seeding ${items.length} item type(s)`);
     await seedItemsToBank(page, [...items], VARROCK_WEST_BANK);
+    await waitUntilBankClosed(page);
+    console.log(`${label}: bank closed before BankSorter`);
 }
 
 async function main(): Promise<void> {

@@ -1,5 +1,5 @@
 /** Live proof, Alcher accepts a Fire battlestaff in place of Staff of fire.
- *  Why: EnsureGear used to stop unless Staff of fire was present; :8888 has no givebank so chainbodies are given then deposited. */
+ *  Why: EnsureGear used to stop unless Staff of fire was present; chainbodies are given then deposited to exercise bank restocking. */
 
 //   ENGINE_DIR=/path/to/engine bun e2e/alcher-fire-battlestaff-live.ts --base http://localhost:8888
 import type { Page } from 'playwright-core';

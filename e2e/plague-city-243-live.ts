@@ -1,5 +1,5 @@
 /** Live Plague City harness (#243): --stage N --until N --minutes N, base :8890.
- *  Why: `--stage` relogs since update_questlist only recolours the journal at login; the bank holds coins and food alone so the spade, buckets, berries, rope, picture and cure ingredients are sourced in the world; the quest is members-only and the :8888 sim answers neither `givebank` nor `~bankitem`. */
+ *  Why: `--stage` relogs since update_questlist only recolours the journal at login; the bank holds coins and food alone so the spade, buckets, berries, rope, picture and cure ingredients are sourced in the world; the quest is members-only. */
 
 //   HEADED=1 bun e2e/plague-city-243-live.ts --stage 0 --until 29 --minutes 120
 //   HEADED=1 bun e2e/plague-city-243-live.ts --stage 10 --until 23 --minutes 40
