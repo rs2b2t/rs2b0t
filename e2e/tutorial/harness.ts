@@ -552,8 +552,9 @@ export async function seedItemsToBank(page: Page, items: readonly BankSeedItem[]
                         try {
                             await Bank.close();
                             // Why: BankSorter's Banking.open() returns immediately if the booth is still up, then sortBank dies on snapshot-not-ready.
-                            if (!(await Execution.delayUntil(() => !Bank.isOpen(), 3000))) {
-                                throw new Error('bank still open after seed');
+                            if (Bank.isOpen() && !(await Execution.delayUntil(() => !Bank.isOpen(), 3000))) {
+                                res.ok = false;
+                                res.reason = 'bank still open after seed';
                             }
                         } catch (e) {
                             res.ok = false;
