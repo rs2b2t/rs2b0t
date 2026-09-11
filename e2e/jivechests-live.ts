@@ -44,8 +44,8 @@ const args = parse(process.argv.slice(2));
 interface Point { x: number; z: number; level: number }
 
 const BANK_STAND: Point = { x: 2946, z: 3369, level: 0 };
-// Why: forceapproach is a block mask, so the chest's north side is the one it cannot be used from; the stand is the open tile west of it, and this copy has to track logic.ts.
-const CHEST_STAND: Point = { x: 2913, z: 3452, level: 0 };
+// Why: forceapproach is a block mask, so the chest's north side is the one it cannot be used from; the stand is the open tile south of it, and this copy has to track logic.ts.
+const CHEST_STAND: Point = { x: 2914, z: 3451, level: 0 };
 /** Always in the reward, so it counts the opens the log claims. */
 const ALWAYS = 'Uncut dragonstone';
 const JUNK = ['Raw swordfish', 'Body rune', 'Spinach roll'];

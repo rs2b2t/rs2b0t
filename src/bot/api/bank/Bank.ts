@@ -1,4 +1,4 @@
-import type { InvItemSnapshot, WorldTile } from '../../adapter/ClientAdapter.js';
+import type { InvItemSnapshot, ModalCloseObservation, WorldTile } from '../../adapter/ClientAdapter.js';
 import { reader, actions } from '../../adapter/ClientAdapter.js';
 import { Input } from '../../input/Input.js';
 import type { BankNpcAccess, BankObjectAccess } from './BankLocations.js';
@@ -12,6 +12,8 @@ import { backpackCapacity, backpackSnapshots, Inventory } from '../inventory/Inv
 import { withdrawOp } from './bankOps.js';
 
 export { withdrawOp };
+
+let pendingClose: { readonly baseline: ModalCloseObservation; readonly side: number } | null = null;
 
 function backpackFull(): boolean {
     const size = backpackCapacity();
@@ -452,19 +454,44 @@ export const Bank = {
 
     /** Close the bank modal so inventory ops (Wield, Use, Bury, …) hit the backpack again. */
     async close(timeoutMs = 3000): Promise<boolean> {
-        if (!Bank.isOpen()) {
-            return true;
+        if (!pendingClose) {
+            if (!Bank.isOpen()) {
+                return true;
+            }
+            const baseline = reader.modalCloseObservation?.();
+            if (baseline === null || (baseline === undefined && reader.attached?.())) {
+                return false;
+            }
+            const side = reader.modals().side;
+            if (!actions.closeModal()) {
+                return false;
+            }
+            if (baseline === undefined) {
+                return Execution.delayUntil(
+                    () => !Bank.isOpen() && (side === -1 || reader.modals().side !== side), timeoutMs
+                );
+            }
+            pendingClose = { baseline, side };
         }
-        const bankSide = reader.modals().side;
-        if (!actions.closeModal()) {
+        const pending = pendingClose;
+        const closed = (): boolean => !Bank.isOpen() && (pending.side === -1 || reader.modals().side !== pending.side);
+        const current = reader.modalCloseObservation?.();
+        if (current?.session !== pending.baseline.session) {
+            pendingClose = null;
             return false;
         }
-        // The server closes the main and side bank components separately. The
-        // normal backpack is authoritative again only after both are gone.
-        return Execution.delayUntil(
-            () => !Bank.isOpen() && (bankSide === -1 || reader.modals().side !== bankSide),
-            timeoutMs
-        );
+        await Execution.delayUntil(() => {
+            const observation = reader.modalCloseObservation?.();
+            return observation?.session !== pending.baseline.session
+                || (observation.generation > pending.baseline.generation && closed());
+        }, timeoutMs);
+        const observation = reader.modalCloseObservation?.();
+        const sameSession = observation?.session === pending.baseline.session;
+        const acknowledged = sameSession && observation.generation > pending.baseline.generation;
+        if ((!sameSession || acknowledged) && pendingClose === pending) {
+            pendingClose = null;
+        }
+        return acknowledged && closed();
     },
 
     async openNearest(boothName: string, op: string, log?: (msg: string) => void): Promise<boolean> {

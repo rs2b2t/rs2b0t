@@ -15,9 +15,9 @@ describe('DRAGON_SITES', () => {
         expect(siteFor('nope').key).toBe('taverley-blue');
     });
 
-    test('the derived tiles match what the collision probe produced', () => {
+    test('the blue site preserves its tiles except for the requested second safespot', () => {
         const s = DRAGON_SITES['taverley-blue']!;
-        expect(s.safespots.map(t => [t.x, t.z])).toEqual([[2901, 9809], [2900, 9809], [2901, 9810]]);
+        expect(s.safespots.map(t => [t.x, t.z])).toEqual([[2901, 9809], [2904, 9808], [2901, 9810]]);
         expect([s.meleeAnchor.x, s.meleeAnchor.z]).toEqual([2900, 9808]);
         expect(s.approach.map(t => [t.x, t.z])).toEqual([[2911, 9809]]);
         expect(s.gate).toMatchObject({ locId: 2623, op: 'Open' });
@@ -75,12 +75,13 @@ describe('DRAGON_SITES', () => {
 
 // Why: the derivation needs out/collision.lcnav.gz and the rs2b2t-content maps, and CI carries neither.
 describe.skipIf(!inputsPresent())('the checked-in derivation (pack-gated)', () => {
-    test('the tool still lands on the tiles DRAGON_SITES carries', () => {
+    test('the original flanking derivation and anchor hold and the requested second tile is reachable', () => {
         const site = DRAGON_SITES['taverley-blue']!;
         const derived = derive();
         expect([derived.anchor.x, derived.anchor.z]).toEqual([site.meleeAnchor.x, site.meleeAnchor.z]);
         const flanking = derived.flanking.map(t => `${t.x},${t.z}`).sort();
-        expect(flanking).toEqual(site.safespots.map(t => `${t.x},${t.z}`).sort());
+        expect(flanking).toEqual(['2900,9809', '2901,9809', '2901,9810']);
+        expect(derived.reachable.has(`${site.safespots[1]?.x},${site.safespots[1]?.z}`)).toBe(true);
         expect(derived.spawns.filter(s => s.adult).map(s => [s.x, s.z])).toEqual([[2897, 9797], [2899, 9802], [2904, 9802]]);
     }, 60_000);
 });

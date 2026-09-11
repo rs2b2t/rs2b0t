@@ -42,6 +42,11 @@ export function trailFoodTarget(b: TrailFoodBudget): number {
     return Math.max(0, Math.min(capped, room));
 }
 
+export function hardTrailFoodTarget(b: Omit<TrailFoodBudget, 'hostWant'>): number | null {
+    const target = Math.min(20, b.heldFood + Math.max(0, b.freeSlots - b.reserveSlots));
+    return target >= 15 ? target : null;
+}
+
 /**
  * A weapon already worn is a weapon we have. Checking the backpack alone
  * withdraws a duplicate every prep, which on a full pack drops to the floor.

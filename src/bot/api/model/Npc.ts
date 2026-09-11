@@ -52,6 +52,10 @@ export class Npc implements Interactable, Locatable {
         return Tile.from(this.snap.tile);
     }
 
+    networkTile(): Tile {
+        return Tile.from(this.snap.networkTile ?? this.snap.tile);
+    }
+
     distance(): number {
         return this.snap.distance;
     }

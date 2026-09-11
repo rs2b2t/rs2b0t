@@ -2,6 +2,45 @@ import type { Case } from './manifestTypes.js';
 
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
+    ...(['missing-dds', 'missing-superanti', 'sharks14', 'guardian', 'reward'] as const).map(scenario => ({
+        id: `jive-private-${scenario}`,
+        harness: 'jive-private-live.ts',
+        covers: { scripts: ['JiveDragons'] as const, subsystems: ['clues'] as const },
+        status: 'unvetted' as const,
+        manual: true as const,
+        env: { JIVE_SCENARIO: scenario },
+        budgetMin: 12,
+        note: 'Offline-authored, not run. PRIVATE 8891 and RUNTIME_AUTHORIZED only; explicit bundle, fresh jive-private-observer stream and reward fixture hash required. Setup/cleanup: e2e/jive-private-setup.md.'
+    })),
+    {
+        id: 'jivedragons-clue-bank-live',
+        harness: 'jivedragons-clue-bank-live.ts',
+        covers: { scripts: ['JiveDragons'] },
+        status: 'unvetted',
+        manual: true,
+        budgetMin: 10,
+        note: 'PRIVATE 8891 only, explicit RUNTIME_AUTHORIZED=1 after producer handoff. Fresh attested candidate; blue dungeon clue2693/trail_status0, Falador egress before bank, actual hide deposit with clue held, then solver path progress. No combat-refill requirement.'
+    },
+    {
+        id: 'jivedragons-black-range-live',
+        harness: 'jivedragons-black-range-live.ts',
+        covers: { scripts: ['JiveDragons'] },
+        status: 'unvetted',
+        manual: true,
+        args: ['--site', 'black', '--style', 'range', '--stand', '1', '--tick', '200', '--minutes', '4', '--no-starve'],
+        budgetMin: 10,
+        note: 'PRIVATE 8891 only; ENGINE_DIR ends /shilo-private/engine, HEADED=1 SLOWMO=0, BLACK_SERVER_TRACE and candidate E2E_CLIENT_PAGE/BLACK_BUNDLE required. Full Sharks after equip; real Drop/Bury/Take, XP and NPC54 lifetimes. Closer-position safety remains a separate unvetted claim.'
+    },
+    {
+        id: 'jivedragons-blue-readiness-live',
+        harness: 'jivedragons-black-range-live.ts',
+        covers: { scripts: ['JiveDragons'] },
+        status: 'unvetted',
+        manual: true,
+        args: ['--site', 'blue', '--style', 'range', '--stand', '1', '--tick', '200', '--minutes', '3', '--no-starve'],
+        budgetMin: 8,
+        note: 'PRIVATE candidate only: same explicit environment as Black case. Blue NPC55 moving readiness at safe range6, full-food bones/bury/hide/other/return and authoritative deaths; foreign claims covered separately by unit tests.'
+    },
     {
         id: 'shilo-north-bank-live',
         harness: 'shilo-north-bank-live.ts',

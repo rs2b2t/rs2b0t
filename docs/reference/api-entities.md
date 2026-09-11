@@ -48,11 +48,16 @@ All entities are `Locatable` (`tile(): Tile`, `distance(): number`); most are
 `Interactable` (`actions(): string[]`, `interact(action): boolean | Promise<boolean>`).
 
 ```ts
-class Npc  { name; id; level; index; size; inCombat; health; valid(); targetsMe(); targetsAnotherPlayer(); /* + Locatable + Interactable */ }
+class Npc  { name; id; level; index; size; inCombat; health; networkTile(); valid(); targetsMe(); targetsAnotherPlayer(); /* + Locatable + Interactable */ }
 class Loc  { name; id; /* + Locatable + Interactable */ }
 class GroundItem { name; id; count; /* + Locatable + Interactable */ }
 class Player { name; index; inCombat; targetsMe(); /* + Locatable, actions() */ }
 ```
+
+For NPCs, `tile()` remains the centre of the rendered position. `networkTile()`
+returns the latest route-head centre carried by the optional `NpcSnapshot.networkTile`
+field. Snapshots without that field fall back to `tile()`, so adding the network
+position does not replace or alter the rendered tile.
 
 > **Note:** `interact()` sends the action in place. It does **not** walk the
 > player to a distant target. Walk first (see [Movement](api-movement.md)); the client
