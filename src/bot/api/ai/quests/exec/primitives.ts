@@ -62,7 +62,7 @@ export interface LadderHop {
     op: string;
     arrive: Tile;
     open?: string;
-    /** Long-walk dest when `stand` is behind a door the baked graph cannot pin. */
+    /** Hall tile to long-walk when `stand` is behind a door the baked graph cannot pin. `crossHops` still walks to `stand` after arriving. */
     walk?: Tile;
 }
 
@@ -116,6 +116,11 @@ async function crossHops(here: WorldTile, dest: { z: number }, hops: LadderHop[]
     }
     const walkTo = hop.walk ?? hop.stand;
     if (hop.stand.distanceTo(here) > 2 && !(await Traversal.walkResilient(walkTo, { radius: 2, attempts: 3, log }))) {
+        return null;
+    }
+    // Why: `walk` is the hall east of a door the long-walk cannot pin; the ladder is still on the other side, so we have to step to `stand` before Climb-down.
+    here = Game.tile() ?? here;
+    if (hop.walk && hop.stand.distanceTo(here) > 2 && !(await Traversal.walkResilient(hop.stand, { radius: 1, attempts: 3, log }))) {
         return null;
     }
     if (!(await hopLadder(hop, log))) {

@@ -145,13 +145,14 @@ describe('gotoNpc trapped-landing recovery', () => {
 });
 
 describe('gotoNpc wizard-tower hop walk dest', () => {
-    test('long-walks the hall east of the inner door rather than the ladder stand', async () => {
+    test('long-walks the hall east of the inner door, then the ladder stand, then climbs', async () => {
         current = new Tile(3251, 3420, 0);
         walkScript = dest => new Tile(dest.x, dest.z, dest.level);
 
         await gotoNpc(SEDRIDOR, WIZARD_HOPS, () => {});
 
         expect(walkTargets[0]).toMatchObject({ x: 3108, z: 3162, level: 0 });
-        expect(walkTargets.some(t => t.x === 3105 && t.z === 3162 && t.level === 0)).toBe(false);
+        expect(walkTargets[1]).toMatchObject({ x: 3105, z: 3162, level: 0 });
+        expect(interactOps[0]).toBe('Climb-down');
     });
 });

@@ -458,12 +458,12 @@ export class QuestEngine implements Task {
             }
         }
 
-        // Why: the no-progress watchdog below only counts steps that succeeded, so a step failing forever parks nothing and, before the heartbeat above, said nothing either.
+        // Why: a step that fails forever used to skip the watchdog, so Rune Mysteries stood at the Wizard's Tower ladder clicking Sedridor until a human stopped it.
         if (ok) {
             this.failStreak = 0;
         } else if (++this.failStreak % FAIL_WARN === 0) {
             this.host.log(`WARN: '${stepDesc}' has failed ${this.failStreak}x in a row `
-                + `over ${formatDuration(this.tracker.elapsed(Date.now()))} — failures do not feed the no-progress watchdog, so this will not park itself`);
+                + `over ${formatDuration(this.tracker.elapsed(Date.now()))}`);
         }
 
         if (Bank.isOpen()) {
@@ -472,7 +472,7 @@ export class QuestEngine implements Task {
             await Modals.close();
         }
 
-        if (ok && advancesWorld(step)) {
+        if (advancesWorld(step)) {
             const count = this.watchdog.note(progressSignature(this.buildSnapshot(module, stage, progress)));
             this.noProgressCount = count;
             if (count === NO_PROGRESS_WARN) {
