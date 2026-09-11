@@ -8,7 +8,7 @@ const SEDRIDOR: NpcStop = { npc: 'Sedridor', anchor: new Tile(3103, 9572, 0), le
 const AUBURY: NpcStop = { npc: 'Aubury', anchor: new Tile(3253, 3402, 0), leash: 8, prefer: ['I have been sent here with a package for you.'] };
 
 export const WIZARD_HOPS: LadderHop[] = [
-    // Why: the inner door loc is unwalkable, so a long-walk to the ladder stand hangs from across the map.
+    // Why: the inner door loc is unwalkable, so a long-walk to the ladder stand hangs from across the map. `walk` is the hall; `crossHops` still steps to `stand` before climbing.
     { stand: new Tile(3105, 3162, 0), walk: new Tile(3108, 3162, 0), locName: 'Ladder', op: 'Climb-down', arrive: new Tile(3104, 9576, 0) },
     { stand: new Tile(3104, 9576, 0), locName: 'Ladder', op: 'Climb-up', arrive: new Tile(3105, 3162, 0) }
 ];

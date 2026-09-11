@@ -15,8 +15,8 @@ that quest steps are built from:
 | `isUnderground(t)` / `needsHop(here, anchor)` | whether a level change is required |
 
 A `LadderHop` names `stand` for the loc find radius. Set `walk` when that stand is
-behind a door the baked graph cannot pin, so the long-walk dest is a reachable hall
-tile rather than the interior pin.
+behind a door the baked graph cannot pin: the long-walk dest is a reachable hall
+tile, then `crossHops` still walks to `stand` before climbing.
 
 [`exec/prompts.ts`](../../src/bot/api/ai/quests/exec/prompts.ts) covers the other half, the
 world, rather than a conversation:
