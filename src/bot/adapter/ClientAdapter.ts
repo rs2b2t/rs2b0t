@@ -1099,7 +1099,8 @@ export const reader = {
             && reader.bankComId() === session.mainComId
             && state !== null
             && state.transmitting
-            && state.fullGeneration > session.mainOpenedAt;
+            && state.fullGeneration > 0
+            && state.fullGeneration >= session.mainOpenedAt;
     },
 
     bankSideSnapshotReady(): boolean {
@@ -1114,7 +1115,8 @@ export const reader = {
         const state = invState(session.sideComId);
         return sideComId === session.sideComId
             && state.transmitting
-            && state.fullGeneration > session.sideOpenedAt;
+            && state.fullGeneration > 0
+            && state.fullGeneration >= session.sideOpenedAt;
     },
 
     bankSnapshotGeneration(): number {
