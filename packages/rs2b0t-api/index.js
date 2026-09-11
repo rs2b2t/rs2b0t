@@ -159,6 +159,10 @@ export const {
     WOODCUTTING_LOCATIONS,
     WOODCUTTING_LOCATION_OPTIONS,
     resolveWoodcuttingLocation,
+    ENT_NPC_IDS,
+    ENT_LIFE_TICKS,
+    isEntNpcId,
+    entNpcOnTile,
 
     // Fishing methods + mining rocks
     WHIRLPOOL_IDS,

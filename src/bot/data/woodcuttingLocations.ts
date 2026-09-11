@@ -12,6 +12,28 @@ import {
  */
 export type WoodcuttingLocation = GatheringLocation;
 
+/**
+ * Ent woodcutting random (`macro_event_ent`). pack/npc.pack 444-452; 453 is suit of armour.
+ * Why: the NPC is named Tree/Oak/Willow with Chop down, so callers match by id, never by name.
+ */
+export const ENT_NPC_IDS: Set<number> = new Set([444, 445, 446, 447, 448, 449, 450, 451, 452]);
+
+/** Ent despawn timer in ticks. Same length as a smoking rock. */
+export const ENT_LIFE_TICKS = 60;
+
+export function isEntNpcId(id: number): boolean {
+    return ENT_NPC_IDS.has(id);
+}
+
+export function entNpcOnTile(
+    npcs: readonly { id: number; tile: { x: number; z: number; level: number } }[],
+    tile: { x: number; z: number; level: number }
+): boolean {
+    return npcs.some(
+        n => isEntNpcId(n.id) && n.tile.x === tile.x && n.tile.z === tile.z && n.tile.level === tile.level
+    );
+}
+
 const BANK = {
     draynor: new Tile(3093, 3243, 0),
     seers: new Tile(2725, 3491, 0),

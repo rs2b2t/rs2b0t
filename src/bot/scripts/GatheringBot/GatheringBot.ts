@@ -266,6 +266,8 @@ export {
     gatheringCombatPolicy,
     hostileAttackerNearby,
     incomingPlayerAttacker,
+    locGatherShouldYield,
+    entAbortAction,
     shouldFleeCombat,
     shouldYieldGathering,
     wildernessMinerAt,
