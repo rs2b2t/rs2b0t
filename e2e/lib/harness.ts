@@ -5,6 +5,7 @@ import { chromium } from 'playwright-core';
 import type { Browser, Page } from 'playwright-core';
 
 import { ClientProt } from '../../src/client/io/ClientProt.js';
+import { pressCleanLogout } from './cleanLogout.js';
 import { engineLoginKey, type EngineLoginKey } from './engineLoginKey.js';
 
 export function fail(msg: string): never {
@@ -218,24 +219,19 @@ export async function cheatQuiet(page: Page, command: string, waitMs = 700): Pro
     return sent;
 }
 
-/** logout:try_logout, if_button com 2458 → ClientProt.IF_BUTTON (opcode 9) → p_logout.
+/** logout:try_logout, if_button com 2458 → ClientProt.IF_BUTTON → p_logout.
  *  Tab-rooted, so the engine accepts it without the logout tab open; ~seconds against 60s for a socket drop. */
-export const LOGOUT_BUTTON_COM = 2458;
+export { LOGOUT_BUTTON_COM } from './cleanLogout.js';
 
 /** Log out through the game's own button rather than by dropping the socket.
  *  Why: reloading the page leaves the server holding the player online for its disconnect grace period, which costs a relogin loop minutes. */
 export async function logout(page: Page, waitMs = 8000): Promise<boolean> {
-    const sent = await page.evaluate(com => {
-        const a = (globalThis as never as { rs2b0t?: { actions?: { ifButton?(c: number): boolean } } }).rs2b0t?.actions;
-        return a?.ifButton?.(com) ?? false;
-    }, LOGOUT_BUTTON_COM);
-    if (!sent) {
+    try {
+        await pressCleanLogout(page, waitMs);
+        return true;
+    } catch {
         return false;
     }
-    return page
-        .waitForFunction(() => !(globalThis as never as Rs2b0t).rs2b0t.client.ingame, undefined, { timeout: waitMs })
-        .then(() => true)
-        .catch(() => false);
 }
 
 export async function type(page: Page, text: string, waitMs?: number): Promise<void> {

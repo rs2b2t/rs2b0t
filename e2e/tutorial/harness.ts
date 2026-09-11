@@ -1,5 +1,6 @@
 import type { Page } from 'playwright-core';
 
+import { pressCleanLogout } from '../lib/cleanLogout.js';
 import { ClientProt } from '../../src/client/io/ClientProt.js';
 import { MiniMenuAction } from '../../src/client/shell/MiniMenuAction.js';
 
@@ -39,25 +40,7 @@ const RELOG_BUDGET_MS = Number(process.env.RELOG_BUDGET_MS) || 90_000;
 /** Logout via the logout UI button (if_button 2458 → ClientProt.IF_BUTTON).
  *  Falls back to client.logout() when the button packet cannot be sent. Why: 2458 is the same component id as LOGOUT_BUTTON_COM in e2e/lib/harness.ts, so the two logout paths have to move together. */
 async function cleanLogout(page: Page): Promise<'ifbutton' | 'client'> {
-    // logout:try_logout, tab-rooted; engine accepts without the logout tab open.
-    const LOGOUT_BUTTON = 2458;
-    const via = await page.evaluate(com => {
-        const g = globalThis as never as {
-            rs2b0t?: {
-                actions?: { ifButton?(c: number): boolean };
-                client?: { logout?(): Promise<void> };
-            };
-        };
-        if (g.rs2b0t?.actions?.ifButton?.(com)) {
-            return 'ifbutton' as const;
-        }
-        void g.rs2b0t?.client?.logout?.();
-        return 'client' as const;
-    }, LOGOUT_BUTTON);
-    await page.waitForFunction(() => !(globalThis as never as Rs2b0t).rs2b0t.client.ingame, undefined, {
-        timeout: 20_000
-    });
-    return via;
+    return pressCleanLogout(page);
 }
 
 async function waitClientBooted(page: Page, label: string): Promise<void> {
@@ -121,7 +104,7 @@ export async function relog(page: Page, user: string): Promise<void> {
             'RELOG_COOLDOWN_MS / RELOG_PROBE_MS / RELOG_RETRY_MS / RELOG_BUDGET_MS override)'
     );
     const how = await cleanLogout(page);
-    console.log(`  relog: logged out via ${how === 'ifbutton' ? 'IF_BUTTON 2458 (ClientProt.IF_BUTTON=9)' : 'client.logout() fallback'}`);
+    console.log(`  relog: logged out via ${how === 'ifbutton' ? `IF_BUTTON 2458 (ClientProt.IF_BUTTON=${ClientProt.IF_BUTTON})` : 'client.logout() fallback'}`);
 
     const attemptLogin = () =>
         page.evaluate(u => {
