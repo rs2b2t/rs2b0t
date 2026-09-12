@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 import type { LocSnapshot, NpcSnapshot, WorldTile } from '../src/bot/adapter/ClientAdapter.js';
-import { deployIsolatedClient, launchBrowser, logout, parseArgs, stopScript, type Rs2b0t } from './lib/harness.js';
-import { mainlandAccount, teleTo } from './tutorial/harness.js';
+import { cheatQuiet, deployIsolatedClient, launchBrowser, logout, parseArgs, setSettings, stopScript, type Rs2b0t } from './lib/harness.js';
+import { mainlandAccount, startScript, teleTo } from './tutorial/harness.js';
 
 const { base, minutes } = parseArgs(process.argv.slice(2), { minutes: 5 });
 assert(['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname), 'local engine required');
@@ -29,22 +29,13 @@ interface DoorQuery {
     where(predicate: (door: Door) => boolean): DoorQuery;
     first(): Door | null;
 }
-interface Proof {
-    done: boolean;
-    result: string;
-    logs: string[];
-    texts: string[];
-}
 type Api = Rs2b0t & {
+    rs2b0t: { runner: { pause(): void; resume(): void } };
     __rs2b0t: {
         reader: { npcs(): NpcSnapshot[]; locs(): LocSnapshot[]; chatModalTexts(): string[] };
         Locs: { query(): DoorQuery };
         Reachability: { canReach(tile: WorldTile, opts: { maxSteps: number; adjacentOk: boolean }): boolean; canStep(from: WorldTile, to: WorldTile): boolean };
-        Reach: { npcDialog(opts: { name: string; near: WorldTile; openMs: number; log(message: string): void }): Promise<string> };
-        LoopingBot: new () => { loop(): Promise<number | void> };
-        registerScript(meta: { name: string; create(): unknown }): unknown;
     };
-    __doorProof?: Proof;
 };
 const snapshot = () => page.evaluate(npcName => {
     const g = globalThis as never as Api;
@@ -56,7 +47,11 @@ const snapshot = () => page.evaluate(npcName => {
         edgeOpen: g.__rs2b0t.Reachability.canStep({ x: 2744, z: 3576, level: 1 }, { x: 2743, z: 3576, level: 1 }),
         doors: g.__rs2b0t.reader.locs().filter(loc => loc.name === 'Door' && loc.tile.level === 1 && loc.tile.x === 2744 && [3576, 3577].includes(loc.tile.z)).map(loc => ({ id: loc.id, tile: loc.tile, ops: loc.ops })),
         texts: g.__rs2b0t.reader.chatModalTexts(),
-        proof: g.__doorProof ?? null
+        inventory: g.rs2b0t.reader.inventory(),
+        chat: g.rs2b0t.reader.chat(15),
+        state: g.rs2b0t.runner.state,
+        status: g.rs2b0t.runner.bot?.status,
+        logs: g.rs2b0t.runner.ctx?.log ?? []
     };
 }, name);
 
@@ -74,6 +69,19 @@ async function doorOp(op: 'Open' | 'Close'): Promise<void> {
 
 try {
     await mainlandAccount(page, base, tag, client.page);
+    assert(await cheatQuiet(page, '~clearinv'));
+    for (const item of ['trail_clue_medium_anagram009 1', 'spade 1', 'coins 1000']) assert(await cheatQuiet(page, `give ${item}`));
+    assert((await snapshot()).inventory.some(item => item.id === 2855));
+    assert(await teleTo(page, { x: 2725, z: 3491, level: 0 }, 2));
+    await setSettings(page, 'ClueSolver', { useTeleports: false, restorePrayer: false });
+    await startScript(page, 'ClueSolver');
+    await page.waitForFunction(() => {
+        const runner = (globalThis as never as Api).rs2b0t.runner;
+        if (runner.bot?.status !== 'solving clue trail') return false;
+        runner.pause();
+        return runner.state === 'paused';
+    }, undefined, { timeout: 60_000 });
+    console.log(`PREPARED ${JSON.stringify(await snapshot())}`);
     assert(await teleTo(page, waiting, 0));
     await page.waitForFunction(npcName => (globalThis as never as Api).__rs2b0t.reader.npcs().some(npc => npc.name === npcName), name, { timeout: 15_000 });
     const deadline = Date.now() + minutes * 60_000;
@@ -99,38 +107,28 @@ try {
     assert(blocked, `Donovan never naturally entered the blocked pocket: ${JSON.stringify(await snapshot())}`);
     assert.equal((await snapshot()).texts.length, 0, 'fixture must not already have dialogue open');
     await page.screenshot({ path: 'docs/e2e/issue-771-before.png' });
-    await page.evaluate(npcName => {
+    await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.resume());
+    await page.waitForFunction(() => {
         const g = globalThis as never as Api;
-        const api = g.__rs2b0t;
-        const proof: Proof = { done: false, result: '', logs: [], texts: [] };
-        g.__doorProof = proof;
-        class Probe extends api.LoopingBot {
-            private ran = false;
-            override async loop(): Promise<number> {
-                if (this.ran) return 5000;
-                this.ran = true;
-                try {
-                    proof.result = await api.Reach.npcDialog({ name: npcName, near: { x: 2745, z: 3576, level: 1 }, openMs: 10_000, log: message => proof.logs.push(message) });
-                    proof.texts = api.reader.chatModalTexts();
-                } catch (error) {
-                    proof.result = String(error);
-                }
-                proof.done = true;
-                return 5000;
-            }
-        }
-        g.rs2b0t.runner.start(api.registerScript({ name: 'Donovan door proof', create: () => new Probe() }));
-    }, name);
-    await page.waitForFunction(() => (globalThis as never as Api).__doorProof?.done, undefined, { timeout: 60_000 });
+        if (!g.__rs2b0t.reader.chatModalTexts().some(text => /here you go/i.test(text))) return false;
+        g.rs2b0t.runner.pause();
+        return true;
+    }, undefined, { timeout: 60_000 });
     const after = await snapshot();
-    console.log(`AFTER ${JSON.stringify(after)}`);
-    assert.equal(after.proof?.result, 'done');
-    assert(after.proof.logs.some(line => line.includes("closing 'Door' at (2744,3576)")), 'Reach never closed the swung leaf');
+    console.log(`DIALOGUE ${JSON.stringify(after)}`);
+    assert(after.logs.some(line => line.msg.includes("closing 'Door' at (2744,3576)")), 'Reach never closed the swung leaf');
     assert(after.edgeOpen, 'door edge still blocks the bedroom');
-    assert(after.proof.texts.some(text => /no interest in talking to gawkers/i.test(text)), 'Donovan dialogue never arrived');
+    assert(after.texts.some(text => /here you go/i.test(text)), 'Donovan clue dialogue never arrived');
     await page.screenshot({ path: 'docs/e2e/issue-771.png' });
+    await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.resume());
+    await page.waitForFunction(() => {
+        const g = globalThis as never as Api;
+        return !g.rs2b0t.reader.inventory().some(item => item.id === 2855)
+            && g.rs2b0t.reader.chat(15).some(line => /Donovan has given you another clue scroll/i.test(line.text));
+    }, undefined, { timeout: 15_000 });
+    console.log(`PROGRESSED ${JSON.stringify(await snapshot())}`);
     assert.deepEqual(errors, [], 'browser errors');
-    console.log('PASS #771 actual swung leaf closed and Donovan dialogue reached');
+    console.log('PASS #771 ClueSolver closed the swung leaf, reached Donovan dialogue, and advanced the clue');
 } finally {
     await stopScript(page).catch(() => undefined);
     await logout(page).catch(() => false);

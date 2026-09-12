@@ -5,7 +5,7 @@ export const CASES: readonly Case[] = [
     {
         id: 'donovan-door-771-live',
         harness: 'donovan-door-771-live.ts',
-        covers: { subsystems: ['nav', 'clues'] },
+        covers: { scripts: ['ClueSolver'], subsystems: ['nav', 'clues'] },
         status: 'unvetted',
         manual: true,
         budgetMin: 10,
