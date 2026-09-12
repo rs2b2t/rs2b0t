@@ -1,9 +1,14 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 
 import { DS_ID, DS_ITEM } from '#/bot/api/ai/quests/defs/dragonslayer/areas.js';
 import { decide } from '#/bot/api/ai/quests/defs/dragonslayer/index.js';
 import { DRAGON_STAGE } from '#/bot/api/ai/quests/defs/dragonslayer/journal.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+import { Skills } from '#/bot/api/skills/Skills.js';
+
+let levels = spyOn(Skills, 'effective');
+beforeEach(() => { levels = spyOn(Skills, 'effective').mockReturnValue(99); });
+afterEach(() => levels.mockRestore());
 
 // Why: decide() reads only a snapshot, so the routing table is testable without a client.
 type Stack = number | [number, number];
@@ -30,6 +35,68 @@ function snapshot(over: Partial<QuestSnapshot> & { flags?: string[]; carried?: S
 
 /** Enough nails that the boat's smithing leg is satisfied. */
 const NAILS: Stack = [DS_ID.NAILS, 12];
+
+describe('Dragon Slayer production prerequisites', () => {
+    const boat = { progress: { stage: DRAGON_STAGE.BOUGHT_SHIP, flags: new Set<string>() } };
+    const hull: Stack[] = [DS_ID.HAMMER, [DS_ID.PLANK, 3]];
+    const charms = [DS_ID.MAZE_KEY, DS_ID.MAP_MELZAR, DS_ID.LOBSTER_POT, DS_ID.MIND_BOMB, DS_ID.SILK];
+
+    test.each([
+        { label: 'Smithing 33 with steel', smithing: 33, mining: 99, items: [['steel bar', 6]], kind: 'wait' },
+        { label: 'Smithing 34 with steel and Mining 1', smithing: 34, mining: 1, items: [['steel bar', 6]], kind: 'custom' },
+        { label: 'one steel bar with Mining 1', smithing: 34, mining: 1, items: [['steel bar', 1]], kind: 'custom' },
+        { label: 'Smithing 29 with all ore', smithing: 29, mining: 99, items: [['iron ore', 6], ['coal', 12]], kind: 'wait' },
+        { label: 'Smithing 30 still cannot hammer nails', smithing: 30, mining: 99, items: [['iron ore', 6], ['coal', 12]], kind: 'wait' },
+        { label: 'all ore with Mining 1', smithing: 34, mining: 1, items: [['iron ore', 6], ['coal', 12]], kind: 'custom' },
+        { label: 'missing iron at Mining 14', smithing: 34, mining: 14, items: [['coal', 12]], kind: 'wait' },
+        { label: 'missing iron at Mining 15', smithing: 34, mining: 15, items: [['coal', 12]], kind: 'custom' },
+        { label: 'missing coal at Mining 29', smithing: 34, mining: 29, items: [['iron ore', 6]], kind: 'wait' },
+        { label: 'missing coal at Mining 30', smithing: 34, mining: 30, items: [['iron ore', 6]], kind: 'custom' },
+        { label: 'partial coal at Mining 29', smithing: 34, mining: 29, items: [['iron ore', 6], ['coal', 11]], kind: 'wait' }
+    ] satisfies { label: string; smithing: number; mining: number; items: [string, number][]; kind: 'wait' | 'custom' }[])(
+        'selects the feasible nail stage when $label', ({ smithing, mining, items, kind }) => {
+            levels.mockImplementation(skill => skill === 'smithing' ? smithing : mining);
+            const given = snapshot({ ...boat, carried: hull, inv: new Map(items) });
+
+            const step = decide(given);
+
+            expect(step.kind).toBe(kind);
+            if (step.kind === 'wait') expect(step.reason).toMatch(/bank|obtain/i);
+        }
+    );
+
+    test('withdraws partial banked nails before checking production skills', () => {
+        levels.mockReturnValue(1);
+        const given = snapshot({ ...boat, carried: [...hull, [DS_ID.NAILS, 4]], banked: [[DS_ID.NAILS, 3]] });
+
+        const step = decide(given);
+
+        expect(step).toMatchObject({ kind: 'withdraw', items: [{ id: DS_ID.NAILS, qty: 3 }] });
+    });
+
+    test('patches a partial hull with carried supplies despite low skills', () => {
+        levels.mockReturnValue(1);
+        const given = snapshot({ ...boat, carried: [DS_ID.HAMMER, [DS_ID.PLANK, 2], [DS_ID.NAILS, 8]] });
+
+        const step = decide(given);
+
+        expect(step).toMatchObject({ kind: 'custom', name: 'patch the Lady Lumbridge' });
+    });
+
+    test.each([
+        { label: 'unknown bank', bankKnown: false, banked: [], carried: charms, kind: 'scanBank' },
+        { label: 'banked bowl', bankKnown: true, banked: [DS_ID.UNFIRED_BOWL], carried: charms, kind: 'withdraw' },
+        { label: 'carried bowl', bankKnown: true, banked: [], carried: [...charms, DS_ID.UNFIRED_BOWL], kind: 'talk' },
+        { label: 'absent bowl', bankKnown: true, banked: [], carried: charms, kind: 'wait' }
+    ] as const)('uses $label before bowl production at Crafting 7', ({ label: _label, kind, ...held }) => {
+        levels.mockReturnValue(7);
+        const given = snapshot({ ...held, carried: [...held.carried], banked: [...held.banked] });
+
+        const step = decide(given);
+
+        expect(step.kind).toBe(kind);
+    });
+});
 
 describe('Dragon Slayer decide()', () => {
     test('a banked maze key is not a missing one', () => {

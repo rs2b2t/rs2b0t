@@ -355,6 +355,14 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'dragon-slayer-669-live',
+        harness: 'dragon-slayer-669-live.ts',
+        covers: { scripts: ['AIOQuester'] },
+        status: 'unvetted',
+        args: ['--minutes', '20'],
+        budgetMin: 25
+    },
+    {
         id: 'dragon-slayer-resume-live',
         harness: 'dragon-slayer-resume-live.ts',
         covers: { scripts: ['AIOQuester'] },
@@ -1040,6 +1048,21 @@ export const CASES: readonly Case[] = [
         harness: 'princeali-solo-test.ts',
         covers: { scripts: ['AIOQuester'] },
         status: 'unvetted'
+    },
+    {
+        id: 'quest-armour-live',
+        harness: 'quest-armour-live.ts',
+        covers: { scripts: ['AIOQuester'] },
+        status: 'unvetted',
+        args: ['--armour', 'metal'],
+        budgetMin: 25
+    },
+    {
+        id: 'quest-failed-step-live',
+        harness: 'quest-failed-step-live.ts',
+        covers: { scripts: ['AIOQuester'] },
+        status: 'unvetted',
+        budgetMin: 5
     },
     {
         id: 'random-events-live',

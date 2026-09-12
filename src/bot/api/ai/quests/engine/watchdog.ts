@@ -29,6 +29,15 @@ export class ProgressWatchdog {
         return this.count;
     }
 
+    noteFailure(before: string, after: string): number {
+        if (before !== this.last) {
+            this.count = 0;
+        }
+        this.last = after;
+        this.count = before === after ? this.count + 1 : 0;
+        return this.count;
+    }
+
     reset(): void {
         this.last = '';
         this.count = 0;

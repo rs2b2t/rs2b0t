@@ -492,8 +492,9 @@ export const SUPPLY_GATHERS: Record<string, (snap: QuestSnapshot, need: number) 
     'lobster pot': snap => makeRoom(snap) ?? buy('Lobster pot', 1, SUPPLY.GERRANT, 200),
     "wizard's mind bomb": snap => makeRoom(snap) ?? custom('buy a mind bomb at the Rising Sun', buyMindBomb),
     // A jug, then water, then clay, then the bowl: one free slot carries the lot.
-    'unfired bowl': snap => makeRoom(snap) ?? custom('make an unfired bowl', makeUnfiredBowl),
+    'unfired bowl': snap => Skills.effective('crafting') < 8
+        ? { kind: 'wait', reason: 'Crafting 8 is required to make an unfired bowl; train Crafting or obtain and bank an Unfired bowl' }
+        : makeRoom(snap) ?? custom('make an unfired bowl', makeUnfiredBowl),
     plank: (snap, need) => makeRoom(snap, need) ?? custom(`fetch ${need} plank${need === 1 ? '' : 's'}`, log => grabPlanks(need, log))
 };
-
 

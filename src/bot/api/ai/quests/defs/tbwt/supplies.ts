@@ -1,4 +1,5 @@
 import { Equipment } from '../../../../equipment/Equipment.js';
+import { armourChoice, armourWorn } from '../../armour.js';
 import { QuestFood } from '../../food.js';
 import { flagValue, hasFlag, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import {
@@ -7,7 +8,7 @@ import {
     COIN_TARGET,
     FOOD_TARGET,
     onKaramja,
-    TB_ARMOUR,
+    TB_ARMOUR_SLOTS,
     TB_ARROWS,
     TB_BOWS,
     TB_ID,
@@ -173,7 +174,11 @@ const scanBank: QuestStep = { kind: 'scanBank', bank: TB_TILE.ARDOUGNE_BANK };
 
 function keepNames(snap: QuestSnapshot): string[] {
     const kit = [bowChoice(snap), arrowChoice(snap)].filter((n): n is string => Boolean(n));
-    return [...kit, ...TB_ARMOUR, ...foodNames()].map(n => n.toLowerCase());
+    const armour = TB_ARMOUR_SLOTS.flatMap(slot => {
+        const piece = armourChoice(snap, slot);
+        return piece ? [piece.name] : [];
+    });
+    return [...kit, ...armour, ...foodNames()].map(n => n.toLowerCase());
 }
 
 function wearAll(names: readonly string[]): QuestStep {
@@ -216,7 +221,10 @@ export function prepare(snap: QuestSnapshot): QuestStep | null {
     const bow = bowChoice(snap);
     const arrows = arrowChoice(snap);
     const kit = [bow, arrows].filter((n): n is string => Boolean(n));
-    const gearMissing = [...kit, ...TB_ARMOUR].filter(name => !worn(snap, name));
+    const armour = TB_ARMOUR_SLOTS.map(slot => ({ slot, piece: armourChoice(snap, slot) }));
+    const armourMissing = armour.filter(entry => !entry.piece);
+    const gearMissing = [...kit.filter(name => !worn(snap, name)),
+        ...armour.flatMap(({ piece }) => piece && !armourWorn(snap, piece) ? [piece.name] : [])];
     // Why: only an outstanding purchase justifies a crossing for coin; the ferry's own 30gp fare is covered by the float this withdraws.
     const buying = tinsayStage(snap) < TB_TINSAY.GIVEN_RUM || missing.some(s => s.fromJiminua);
     const coinsLow = buying && held(snap, TB_NAME.COINS) < 100;
@@ -224,7 +232,7 @@ export function prepare(snap: QuestSnapshot): QuestStep | null {
     const wantSpear = spearWanted(snap);
     const wantDoses = dosesWanted(snap);
 
-    if (missing.length === 0 && gearMissing.length === 0 && kit.length === 2 && !coinsLow && !starving
+    if (missing.length === 0 && gearMissing.length === 0 && armourMissing.length === 0 && kit.length === 2 && !coinsLow && !starving
         && !wantSpear && !wantDoses) {
         return null;
     }
@@ -240,7 +248,8 @@ export function prepare(snap: QuestSnapshot): QuestStep | null {
     }
 
     // Jiminua's counter is inside the quest area; only the ferry is worth avoiding.
-    if (onKaramja(snap.tile) && !coinsLow && !starving && gearMissing.length === 0) {
+    if (onKaramja(snap.tile) && !coinsLow && !starving && gearMissing.length === 0
+        && armourMissing.length === 0 && kit.length === 2) {
         const shopped = missing.find(s => s.fromJiminua && bankedId(snap, s.id) === 0);
         if (shopped) {
             return buyAtJiminua(shopped.name, shopped.qty);
@@ -252,7 +261,7 @@ export function prepare(snap: QuestSnapshot): QuestStep | null {
     }
 
     const fromBank: { name: string; qty: number; id?: number }[] = [];
-    const unavailable: string[] = [];
+    const unavailable: string[] = armourMissing.map(({ slot }) => `usable ${slot} armour`);
     for (const s of missing) {
         const stocked = bankedId(snap, s.id);
         if (stocked > 0) {
