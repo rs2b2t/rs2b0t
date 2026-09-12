@@ -37,6 +37,7 @@ import {
     workTheDolmen
 } from './rashtomb.js';
 import { startQuest, takeWampumBelt } from './start.js';
+import { combatGear, resetCombatGear } from './gear.js';
 import {
     FOOD_FALLBACKS,
     KARAMJA_PURSE,
@@ -344,6 +345,11 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'wait', reason: 'player location unavailable' };
     }
 
+    const gear = combatGear(snap);
+    if (gear) {
+        return gear.kind === 'custom' ? gear : inTheOpen(area, gear);
+    }
+
     const supplies = provision(snap, area);
     if (supplies) {
         return supplies;
@@ -382,6 +388,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const shilo: QuestModule = {
     record: QUESTS.find(record => record.id === 'zombiequeen')!,
+    onStart: resetCombatGear,
     bank: SV_TILE.ARDOUGNE_BANK,
     ownsInventory: true,
     readProgress: readShiloProgress,

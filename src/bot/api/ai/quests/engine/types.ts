@@ -102,6 +102,7 @@ export interface QuestSustain {
 
 export interface QuestModule {
     record: QuestRecord;
+    onStart?: () => void;
     hops?: LadderHop[];
     // Why: most quests sit in one town, so naming its bank beats working it out.
     // Why: `'nearest'` is for the ones that don't; a quest spread across 4 kingdoms pays for a pinned bank on every leg.

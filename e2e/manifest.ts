@@ -3,6 +3,16 @@ import type { Case } from './manifestTypes.js';
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
     {
+        id: 'shilo-gear-703-live',
+        harness: 'shilo-gear-703-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'vetted',
+        provenAt: '458d230867335cd6a7dcbe0241b43547a1e01703',
+        manual: true,
+        budgetMin: 12,
+        note: 'Fresh local accounts; actual Shilo inventory equip and full-pack bank provisioning preserve Rope and Tattered scroll. Isolated deployment; --no-deploy requires CLIENT_PAGE.'
+    },
+    {
         id: 'fisher-shilo-shopping-live',
         harness: 'fisher-shilo-shopping-live.ts',
         covers: { scripts: ['GatheringBot'] },
