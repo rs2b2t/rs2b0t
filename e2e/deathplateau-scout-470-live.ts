@@ -27,12 +27,13 @@ try {
         assert(await cheatQuiet(page, command), command);
     }
     await relog(page, tag);
-    assert(await teleTo(page, { x: 2820, z: 3558, level: 0 }, 0), 'Tenzing back-door fixture');
+    assert(await teleTo(page, { x: 2864, z: 3605, level: 0 }, 0), 'three tiles south of the scout trigger');
     assert.equal(await getServerVarQuiet(page, 'death_map'), 7, 'unscouted server state');
     const before = await snapshot();
     assert.equal(before.quest, 'inProgress');
     assert.equal(before.map, 1);
     assert.equal(before.combination, 1);
+    assert.deepEqual(before.tile, { x: 2864, z: 3605, level: 0 });
     await mkdir('docs/e2e', { recursive: true });
     await page.screenshot({ path: 'docs/e2e/issue-470-before.png', fullPage: true });
     await setSettings(page, 'AIOQuester', { quests: 'death' });

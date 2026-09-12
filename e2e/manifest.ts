@@ -8,7 +8,7 @@ export const CASES: readonly Case[] = [
         covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
         status: 'unvetted',
         budgetMin: 8,
-        note: 'starts behind Tenzing with the secret map and proves AIOQuester enters the scout zone and advances death_map from 7 to 8'
+        note: 'starts three tiles south of the scout zone with the secret map and proves AIOQuester enters the zone and advances death_map from 7 to 8'
     },
     {
         id: 'fisher-shilo-shopping-live',
