@@ -124,7 +124,8 @@ export const CASES: readonly Case[] = [
         id: 'autofighter-eat-resume-659-live',
         harness: 'autofighter-eat-resume-659-live.ts',
         covers: { scripts: ['AutoFighter'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: 'a49c73c641bb0f731ac9a269a8dda83577900b4b',
         budgetMin: 5,
         note: 'eats during combat and gains attack XP against the same guard without another damaging hit'
     },

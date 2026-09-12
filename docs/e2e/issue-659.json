@@ -1,0 +1,43 @@
+{
+  "issue": 659,
+  "testedCommit": "a49c73c641bb0f731ac9a269a8dda83577900b4b",
+  "command": "bun e2e/autofighter-eat-resume-659-live.ts --base http://localhost:8890",
+  "environment": "Local engine, isolated client and fresh account. Fixture sets skills/equipment and drains HP; real Protect from Melee remains active. AutoFighter eats and attacks through normal game actions.",
+  "result": "passed",
+  "assertions": [
+    "Food consumed after HP drain",
+    "Protection remains active",
+    "No positive damage hits across eating and recovery",
+    "New attack XP after an eight-second settling baseline against the original Guard"
+  ],
+  "fighting": {
+    "hp": 99,
+    "xp": 273746,
+    "food": 10,
+    "target": 3568,
+    "state": "running",
+    "hits": [],
+    "protected": true
+  },
+  "resumed": {
+    "afterEat": {
+      "hp": 93,
+      "xp": 273750,
+      "food": 8,
+      "target": 3568,
+      "state": "running",
+      "hits": [],
+      "protected": true
+    },
+    "settledXp": 273770,
+    "snap": {
+      "hp": 93,
+      "xp": 273774,
+      "food": 8,
+      "target": 3568,
+      "state": "running",
+      "hits": [],
+      "protected": true
+    }
+  }
+}
