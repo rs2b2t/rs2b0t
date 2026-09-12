@@ -22,7 +22,7 @@
             background-color: black;
         }
 
-        /* full-viewport row: game fills the left, panel fixed on the right */
+        /* Game on the left, fixed-width panel on the right. */
         #rs2b0t-root {
             display: flex;
             align-items: stretch;
@@ -82,14 +82,14 @@
             z-index: 2;
         }
 
-        /* ---- bot panel ---- */
+        /* bot panel */
 
         #bot-panel {
             width: 330px;
             flex: 0 0 330px;
             height: 100vh;
             overflow-y: auto;
-            /* never scroll sideways — anything wide must wrap or clip */
+            /* never scroll sideways; anything wide wraps or clips */
             overflow-x: hidden;
             box-sizing: border-box;
             background: #111;
@@ -291,7 +291,7 @@
 
         .rs2b0t-setting .rs2b0t-input {
             max-width: 150px;
-            /* long labels must wrap, not crush the input to nothing */
+            /* Leave room for the input when labels are long. */
             min-width: 64px;
         }
 
@@ -319,7 +319,7 @@
             white-space: nowrap;
         }
 
-        /* ---- script library modal ---- */
+        /* script library modal */
         .rs2b0t-modal-backdrop {
             display: none;
             position: fixed;
@@ -344,7 +344,7 @@
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
         }
 
-        /* --- loadout panel ------------------------------------------------ */
+        /* loadout panel */
         .rs2b0t-loadout-backdrop {
             display: none;
             position: fixed;
@@ -546,7 +546,7 @@
             font-size: 0;
         }
 
-        /* --- price book panel --------------------------------------------- */
+        /* price book panel */
         .rs2b0t-pricebook {
             width: min(760px, 94vw);
         }
@@ -593,7 +593,7 @@
             border: 1px solid #a83232;
         }
 
-        /* The header stays put while the rows scroll under it, so the columns stay named in an 80-item book. */
+        /* Keep column names visible while the price rows scroll. */
         .rs2b0t-pricebook-head {
             position: sticky;
             top: 0;
@@ -608,7 +608,7 @@
             letter-spacing: 0.04em;
         }
 
-        /* Mid, buy, sell and cap read as columns; the two toggles sit centred over their buttons. */
+        /* Align price columns and centre the toggles over their buttons. */
         .rs2b0t-pricebook-head .rs2b0t-pricebook-cell:nth-child(n+3):nth-child(-n+6) {
             justify-content: flex-end;
         }
@@ -642,7 +642,7 @@
             width: 100%;
             min-width: 0;
             font-size: 11px;
-            /* Why: prices are compared down the column, so the digits have to line up and share a width. */
+            /* Why: fixed-width digits line up prices for comparison. */
             text-align: right;
             font-variant-numeric: tabular-nums;
         }
@@ -697,13 +697,13 @@
             white-space: nowrap;
         }
 
-        /* The base button is flex:1, which would split the row with the box it sits beside. */
+        /* Override the base button flex:1 so it does not take half the row. */
         .rs2b0t-pricebook-filterbar .rs2b0t-button {
             flex: 0 0 auto;
             padding: 4px 10px;
         }
 
-        /* --- order book: shelves, sorting, bulk add ----------------------- */
+        /* order book: shelves, sorting, bulk add */
         .rs2b0t-pricebook-shelfbar {
             display: flex;
             flex-wrap: wrap;
@@ -918,8 +918,7 @@
 
         /* parameters: read-only panel summary */
         .rs2b0t-param-summary { display: flex; flex-wrap: wrap; gap: 3px 10px; font: 11px ui-monospace, monospace; margin-bottom: 8px; }
-        /* long list values (multi-select summaries) wrap instead of forcing a
-           horizontal scrollbar on the 330px pane */
+        /* long list values (multi-select summaries) wrap instead of forcing a horizontal scrollbar on the 330px pane */
         .rs2b0t-param-sitem { max-width: 100%; }
         .rs2b0t-param-skey { color: #7d8590; }
         .rs2b0t-param-sval { color: #fff; margin-left: 4px; overflow-wrap: anywhere; }
@@ -1000,9 +999,8 @@
             ctx.fillText('Loading...', canvas.width / 2, canvas.height / 2);
         }
 
-        // Scale the game (backing stays 765x503; the client maps mouse coords
-        // by the displayed size, so input stays correct) to the largest
-        // aspect-preserving box that fits the window. Kills the blank margins.
+        // Scale the display to fit, keeping the 765x503 backing size and aspect ratio.
+        // The client maps mouse coordinates using the displayed size.
         (function () {
             const wrap = document.getElementById('game-wrap');
             const stage = document.getElementById('game-stage');
@@ -1019,7 +1017,7 @@
         })();
     </script>
 
-    <!-- cache-bust: redeploy rewrites this query so live harnesses never stick on an old walker -->
+    <!-- Deploy changes this query to force the new client to load. -->
     <script type="module" src="./bot/botclient.js?v=nav-v2"></script>
 </body>
 

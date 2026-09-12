@@ -2,13 +2,13 @@ import fs from 'fs';
 
 import { buildIdentityDefines, resolveBuildIdentity, writeVersionJson } from './tools/lib/buildIdentity.js';
 
-// Bot client build: src/bot/main.ts → botclient.js, console always kept.
-// Why: no terser pass, so `globalThis.__rs2b0t` keeps stable property names for externally-compiled scripts and string-keyed self-tests; Bun's minifier shortens locals only.
+// Build src/bot/main.ts as botclient.js, keeping console output.
+// Why: external scripts and self-tests use ABI property names, so skip terser; Bun only shortens locals.
 
 const TARGET_NAME = process.env.TARGET ?? 'local';
 
-// Public login keys per target: 1024-bit RSA, exponent 65537, upstream's 512-bit default was rotated out.
-// Why: local is the engine repo's committed private.pem public half; LOCAL_RSAE/LOCAL_RSAN override it against an unmodified upstream engine, and live's rotated modulus arrives as LIVE_RSAN at build time.
+// 1024-bit RSA keys, exponent 65537.
+// Local matches the engine's private.pem; override with LOCAL_RSAE/LOCAL_RSAN. Live uses LIVE_RSAN.
 const TARGET_RSA: Record<string, { rsae: string; rsan: string }> = {
     local: {
         rsae: process.env.LOCAL_RSAE ?? '65537',
@@ -18,7 +18,7 @@ const TARGET_RSA: Record<string, { rsae: string; rsan: string }> = {
         rsae: '65537',
         rsan: process.env.LIVE_RSAN ?? ''
     },
-    // prod = the client hosted on the game server (same-origin, no proxy); ops/scripts/build.sh injects PROD_RSAN from the served client.js.
+    // prod runs on the game server; ops/scripts/build.sh supplies PROD_RSAN from client.js.
     prod: {
         rsae: '65537',
         rsan: process.env.PROD_RSAN ?? ''
@@ -44,7 +44,7 @@ const define = {
     'process.env.RS2B0T_TARGET': JSON.stringify(TARGET_NAME),
     'process.env.LOGIN_RSAE': JSON.stringify(rsa.rsae),
     'process.env.LOGIN_RSAN': JSON.stringify(rsa.rsan),
-    // shipped default is OFF: Client.ts/LocType.ts/NpcType.ts/ObjType.ts/SeqType.ts gate on === '1'
+    // Config decoders enable strict mode only for '1'.
     'process.env.STRICT_PACKETS': JSON.stringify(process.env.STRICT_PACKETS ?? ''),
     'process.env.STRICT_CONFIG': JSON.stringify(process.env.STRICT_CONFIG ?? ''),
     ...buildIdentityDefines(identity)

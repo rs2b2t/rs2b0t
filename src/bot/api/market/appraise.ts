@@ -4,29 +4,29 @@ import { resolvePrices, rowValid } from './prices.js';
 import { formatGp, truncateChat } from './chatProtocol.js';
 import type { OfferItem, ValuedLine } from './quote.js';
 
-/** What the customer asked to buy. Only that direction needs one. */
+/** Item requested by the buyer; sell orders omit it. */
 export interface SellIntent {
     itemId: number;
     maxQty: number;
 }
 
-/** What the bot can hand over and pay with, right now. */
+/** Current inventory available for the trade. */
 export interface DeskState {
     available(id: number): number;
     held(id: number): number;
     purse: number;
 }
 
-/** The deal: quantity times unit price, on both sides. */
+/** Total value on each side: quantity times unit price. */
 export interface Appraisal {
     kind: 'buy' | 'sell' | 'nothing';
     /** What the bot puts up. */
     owe: Map<number, number>;
-    /** What the customer must have up for the deal to be on. */
+/** Minimum offer required from the customer. */
     want: Map<number, number>;
     total: number;
     lines: ValuedLine[];
-    /** Named so the customer can take them back before the bot accepts. */
+/** Items the customer must remove before acceptance. */
     ignored: { name: string; count: number }[];
     note: string | null;
 }
@@ -66,7 +66,7 @@ function priceOf(book: PriceBook, id: number, side: 'buying' | 'selling'): numbe
 
 /**
  * The deal, given what the customer has up and what they asked for.
- * Why: derived every beat rather than remembered, so nothing can go stale and running it twice changes nothing.
+ * Why: derived every beat, so nothing can go stale and running it twice changes nothing.
  */
 export function appraise(input: {
     book: PriceBook;
@@ -162,7 +162,7 @@ function purchase(
         }
     }
 
-    // Why: the window cannot say which units of a stack it is paying for, so over the ceiling the shop bids the ceiling for the pile as it stands and the customer takes items back if they want full price.
+    // Why: the window can't say which units of a stack it's paying for, so over the ceiling the shop bids the ceiling for the pile and the customer takes items back for full price.
     const ceiling = Math.min(desk.purse, book.maxTradeValue);
     const value = lines.reduce((sum, l) => sum + l.value, 0);
     const total = Math.min(value, ceiling);
@@ -186,14 +186,14 @@ function purchase(
 
 /** One line, so the customer sees the deal before the bot accepts anything. */
 export function describeAppraisal(a: Appraisal): string {
-    // Why: the line is cut at the chat limit and two priced lines already reach it, so the reason goes first or goes unread.
+    // Why: the line is cut at the chat limit and 2 priced lines already reach it, so the reason goes first or goes unread.
     const parts = a.note === null ? [] : [`${a.note}.`];
     parts.push(...a.lines.map(l => `${l.name} x${formatGp(l.count)} = ${formatGp(l.value)}.`));
     for (const i of a.ignored) {
         parts.push(`${formatGp(i.count)} ${i.name}: not counted, keep them.`);
     }
     if (parts.length === 0) {
-        // Why: an empty window is when a customer is most likely to be lost, so it teaches rather than shrugs.
+        // Why: an empty window is where a customer is most likely lost, so the line says what to do.
         return 'Put items in and I price them as you go. To buy, say what you want first.';
     }
     if (a.kind === 'nothing') {

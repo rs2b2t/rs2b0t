@@ -1,9 +1,6 @@
-/** Live Big Chompy Bird Hunting harness (#235): --stage N --until N --stats N --minutes N --tick ms --teleports.
- *  Why: members-only, so base :8890, the :8888 sim has no `node` block and every members gate refuses.
- *  Why: `--stage` relogs, since update_questlist only recolours the journal entry at login.
- *  Why: a stage-0 run banks coins, food and a melee kit alone, the axe, the feathers, the knife, the chisel, the bellows,
- *  the arrows, the bait and all six seasonings have sources in the world, and banking one hides whether the bot finds it.
- *  Why: a mid-quest start also banks a knife and a chisel, because Bugs only sells the pair while the quest sits at stage 5. */
+/** Live Big Chompy Bird Hunting harness (#235), using the members world at :8890. */
+// Why: stage jumps need a relog; stage 0 leaves sourceable quest items out of the bank.
+// Mid-quest starts bank a knife and chisel because Bugs sells them only at stage 5.
 
 //   HEADED=1 bun e2e/chompy-bird-235-live.ts --stage 0 --until 65 --tick 200 --minutes 180
 //   HEADED=1 bun e2e/chompy-bird-235-live.ts --stage 0 --until 10 --tick 200 --minutes 60
@@ -35,9 +32,9 @@ interface Args {
     tickMs: number;
     stats: number;
     food: string;
-    /** Turn Global `navTeleports` on. */
+    /** Enable the global `navTeleports` setting. */
     teleports: boolean;
-    /** Bank the axe and feathers an established account would already own. */
+    /** Bank the axe and feathers expected on an established account. */
     stocked: boolean;
     deploy: boolean;
 }

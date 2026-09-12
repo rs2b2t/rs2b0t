@@ -29,8 +29,7 @@ import './scripts/index.js';
 export { BotClient, BotHost };
 
 if (typeof document !== 'undefined' && document.getElementById('canvas')) {
-    // Bots on a wall are same-origin iframes, so the top window is where the one
-    // shared collision pack lives; a standalone bot is its own top window.
+    // Bots on a wall are same-origin iframes, so the shared collision pack lives on the top window; a standalone bot is its own top.
     setNavPackHost(window.top ?? window);
 
     const params = new URLSearchParams(window.location.search);
@@ -72,7 +71,7 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
 
     WelcomeDismisser.enable();
 
-    // Always solve randoms when the scene is live, not only while a script loops.
+    // Solve randoms whenever the scene is live, even with no script looping.
     if (params.get('randomevents') !== '0') {
         RandomEventGuardian.enable();
     }

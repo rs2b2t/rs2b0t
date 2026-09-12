@@ -13,9 +13,9 @@ import { WH_LOC, WH_NPC, WH_OBJ, WH_TILE, inPorch } from './areas.js';
 
 const WALK_MS = 180_000;
 
-/** Both the pot and the cupboard answer this when the thing they hold already exists. */
+/** Message shared by the pot and cupboard when their item already exists. */
 const NOTHING_INTERESTING = /don't find anything interesting/i;
-/** The mouse door is already open, which is the goal, not a failure. */
+/** The mouse door is already open, which is the goal. */
 const ALREADY_UNLOCKED = /already unlocked this door/i;
 
 export function held(id: number): number {
@@ -45,7 +45,7 @@ export async function takeDoorKey(log: (m: string) => void): Promise<boolean> {
     return took && held(WH_OBJ.DOOR_KEY) > 0;
 }
 
-// Why: the cellar gate is a door edge in the baked graph, so the walk opens and crosses it, but only while the gloves are worn, since `_ball_irongate` shocks a bare hand and leaves you on the near side.
+// Why: the cellar gate is a baked door edge, so the walk opens and crosses it, but `_ball_irongate` shocks a bare hand and leaves you on the near side, so the gloves go on first.
 
 /** Search the cellar cupboard behind the electrified gate. */
 export async function fetchMagnet(log: (m: string) => void): Promise<boolean> {
@@ -78,8 +78,7 @@ export async function fetchMagnet(log: (m: string) => void): Promise<boolean> {
     return held(WH_OBJ.MAGNET) > 0;
 }
 
-// Why: `magnetcbopen` hands out a magnet only while `~obj_gettotal(magnet)` is zero, so a magnet carried
-// into stage 1 keeps the cupboard silent and the stage never reaches 2.
+// Why: `magnetcbopen` gives a magnet only when the account owns none, so remove extras before stage 1.
 
 /** Drop a magnet that stops the cupboard replacing it. */
 export async function dropStaleMagnet(log: (m: string) => void): Promise<boolean> {

@@ -31,10 +31,7 @@ export class ScriptContext {
     loopInFlight = false;
     /** Wall-clock eligibility (0 = no wall-clock gate). */
     nextLoopAt = 0;
-    /**
-     * Server-tick eligibility via `BotHost.tickCount` (0 = no tick gate).
-     * When set, both this and `nextLoopAt` must pass before the next loop runs.
-     */
+    /** Server-tick eligibility via `BotHost.tickCount` (0 = no tick gate); when set, both this and `nextLoopAt` must pass before the next loop. */
     nextLoopTick = 0;
     loopCount = 0;
 
@@ -49,10 +46,7 @@ export class ScriptContext {
 
     activeEvent: string | null = null;
 
-    /**
-     * Expected work outside this context's waiter queue.
-     * Why: the always-on random event guardian uses host-scoped Execution waits, so an in-flight script can legitimately have no local waiter while it handles the event.
-     */
+    /** Expected work on the host queue, such as random-event handling. */
     watchdogHold: string | null = null;
 
     startedAt = performance.now();

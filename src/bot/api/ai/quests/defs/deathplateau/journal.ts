@@ -5,10 +5,7 @@ import type { QuestProgress } from '../../engine/types.js';
 
 export const DEATH_PLATEAU_QUEST = 'Death Plateau';
 
-/**
- * Equip-room track mirrors `%death_equiproom` constants from the server.
- * Map track is journal flags, the client never sees the map bitfield.
- */
+/** Equip-room track mirrors the server's `%death_equiproom` constants. The map track is journal flags; the client never sees the map bitfield. */
 export const DP_STAGE = {
     NOT_STARTED: 0,
     STARTED: 10,
@@ -116,8 +113,7 @@ function readMapFlags(text: string): Set<string> {
     ) {
         flags.add(DP_FLAG.SUPPLIES);
     }
-    // "Dunstan made me the Spiked boots" appears both after supplies and when
-    // only the boots are done, given_cert is the stronger cert-hand-in signal.
+    // "Dunstan made me the Spiked boots" appears after supplies and when only the boots are done; given_cert is the stronger hand-in signal.
     if (
         text.includes('given dunstan the certificate')
         || text.includes('i have given dunstan the certificate')
@@ -185,7 +181,7 @@ function readMapFlags(text: string): Set<string> {
 
 // Why: stage is the equip-room track and the map bits are flags.
 // Why: live journals always open with the equip-room lines, but unit tests and a partial journal open may carry only map paragraphs.
-// Why: progress is still emitted at stage STARTED when those are present, rather than failing closed.
+// Why: progress is still emitted at stage STARTED when only map paragraphs are present.
 
 /** Turn journal lines into quest progress. */
 export function parseDeathPlateauJournal(lines: readonly string[] | string): QuestProgress | undefined {

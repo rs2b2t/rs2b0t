@@ -1,5 +1,5 @@
-/** Reachability probe for Horror from the Deep (#216): every tile the module names, checked against a flood from the mainland, plus the ten barcrawl bars.
- *  Why: the broken lighthouse copy, the basement and the cavern are linked by scripted teleport alone, so they are expected to be components of their own and are listed as such. */
+/** Check Horror from the Deep stands and the ten barcrawl bars against a mainland flood.
+ * Why: the broken lighthouse, basement and cavern are separate components joined by scripted teleports. */
 import fs from 'node:fs';
 import { gunzipSync } from 'fflate';
 import doorsJson from '../../src/bot/event/webwalk/data/doors.json';
@@ -47,7 +47,7 @@ function flood(p: NavPoint): Set<number> {
     return seen;
 }
 
-/** Ardougne, so the flood starts nowhere near the causeway it is testing. */
+/** Start in Ardougne, away from the causeway being tested. */
 const main = flood({ x: 2612, z: 3092, level: 0 });
 const inMain = (p: NavPoint): boolean => main.has(nodeId(p.x, p.z, p.level));
 
@@ -87,8 +87,7 @@ for (const [name, p] of stands) {
 }
 console.log(bad === 0 ? '\nall stands accounted for' : `\n${bad} stand(s) unaccounted for`);
 
-// For anything the flood could not reach, name the nearest tile it could, an
-// anchor one tile inside a wall reads like a sealed room.
+// For each miss, name the nearest mainland tile; an anchor 1 tile inside a wall reads like a sealed room.
 const NEAR: [string, NavPoint][] = stands.filter(([n, p]) =>
     !SEALED.has(n.replace(/\[\d+\]$/, '')) && !inMain(p));
 if (NEAR.length > 0) {

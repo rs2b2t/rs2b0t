@@ -10,7 +10,7 @@ import { settleScene } from '../../exec/prompts.js';
 import { UPASS_AREAS, UPASS_CROSSINGS, type UpassCrossing } from './route.js';
 import { verdictSince } from './verdict.js';
 
-// Why: the search this replaces asked twenty questions a round: how much closer, is it walled, is it spent, does it gain. It got a cage thirty tiles off reporting a crossing, because none of them is "where am I". An area answers that once, and the answer names one action.
+// Why: Resolve the current area once instead of repeatedly scoring distance, walls, and spent crossings.
 
 /** Item-uses that are crossings: the loc carries no op the client can send. */
 const USED_ON: Record<number, { item: number; name: string }> = {
@@ -23,7 +23,7 @@ const USED_ON: Record<number, { item: number; name: string }> = {
 const TABLE_LEVEL = 0;
 /** How long a crossing gets to land once its script has spoken. */
 const CROSS_MS = 12_000;
-/** What a silent op gets, three ticks covers a teleport door end to end. */
+/** What a silent op gets; 3 ticks covers a teleport door end to end. */
 const QUIET_MS = 1_800;
 
 const here = (): { x: number; z: number; level: number } | null => Game.tile();
@@ -32,10 +32,7 @@ async function routes(from: { x: number; z: number; level: number }, to: Tile): 
     return (await Navigator.findPath(from, to, { policy: { useTeleports: false } })).ok;
 }
 
-/**
- * Which area the character is standing in, or null when they are off the walkable graph.
- * Why: a sweep once walked the character ONTO the ledge column, a tile the pack calls blocked, and every later question answered nonsense from there. Off the graph is an answer worth having.
- */
+/** Current walkable area, or null on blocked tiles such as the ledge column. */
 export async function areaAt(me: { x: number; z: number; level: number }): Promise<string | null> {
     for (const area of UPASS_AREAS) {
         if (await routes(me, area.anchor)) {
@@ -97,7 +94,7 @@ async function operate(edge: UpassCrossing, log: (m: string) => void): Promise<b
 }
 
 /**
- * Take one crossing out of the area the character is standing in, toward `dest`.
+ * Take one crossing out of the current area toward `dest`.
  * Returns 'crossed' when the area changed, 'same' when it did not, and 'nowhere' when there is no chain.
  */
 export async function crossOnce(dest: Tile, log: (m: string) => void): Promise<'crossed' | 'same' | 'nowhere'> {
@@ -105,14 +102,13 @@ export async function crossOnce(dest: Tile, log: (m: string) => void): Promise<'
     if (!me) {
         return 'nowhere';
     }
-    // Why: every area in the table is level 0, the caverns. On the level-1 platforms no anchor can ever match, so the "off the walkable graph" branch fired on ground that is perfectly walkable and then walked at level-0 anchors from level 1. The table has nothing to say up there; `PLATFORM_LINKS` does.
+    // Why: every area in the table is level 0, so on the level-1 platforms no anchor matches and the "off the graph" branch would walk at level-0 anchors from level 1. `PLATFORM_LINKS` covers up there.
     if (me.level !== TABLE_LEVEL || dest.level !== TABLE_LEVEL) {
         return 'nowhere';
     }
     const from = await areaAt(me);
     if (from === null) {
-        // Why: standing on a tile the pack calls blocked. Nothing about the graph applies until the
-        // character is back on it, and the nearest anchor is the shortest way back.
+        // Why: standing on a tile the pack calls blocked, so nothing about the graph applies until the nearest anchor puts you back on it.
         log(`pass: (${me.x},${me.z}) is not on the walkable graph — stepping back onto it`);
         for (const area of UPASS_AREAS) {
             if (await Traversal.walkResilient(area.anchor, { radius: 2, attempts: 1, timeoutMs: 15_000 })) {
@@ -150,8 +146,7 @@ export async function crossOnce(dest: Tile, log: (m: string) => void): Promise<'
         log(`pass: ${edge.op} ${edge.loc} ${said} — ${GameMessages.since(mark).map(m => m.text).slice(-2).join(' / ')}`);
         return 'same';
     }
-    // Why: `delayUntil` polls every frame and cannot await, so the crossing is watched on the tile it
-    // lands on. The area is asked once, after, where the answer is the verdict.
+    // Why: `delayUntil` polls every frame and can't await, so watch the landing tile and ask the area once after.
     await Execution.delayUntil(() => {
         const t = here();
         return t !== null && t.x === edge.lands.x && t.z === edge.lands.z && t.level === edge.lands.level;

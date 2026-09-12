@@ -4,11 +4,11 @@ const TAB_MIME = 'application/x-mbx-tab';
 
 interface TabBarCallbacks {
     onSelect(name: string): void;
-    // return false to reject the name; the input stays open and is flagged
+    // Return false to keep the invalid name open and flagged.
     onAdd(name: string): boolean;
     onRename(oldName: string, newName: string): boolean;
     onRemove(name: string): void;
-    // toIndex is in full tabs() space, where Main is pinned at 0
+    // `toIndex` uses the full tab list, with Main pinned at 0.
     onMove(name: string, toIndex: number): void;
     onDropBot(botId: number, tab: string): void;
 }
@@ -30,7 +30,7 @@ export class TabBar {
         if (this.editing) {
             return;
         }
-        // rebuild only on change so the 1 Hz repaint can't eat drag markers
+        // Rebuild only on changes so the 1 Hz repaint keeps drag markers intact.
         const sig = JSON.stringify([tabs, active]);
         if (sig === this.lastSig) {
             return;
@@ -102,7 +102,7 @@ export class TabBar {
                 const rect = chip.getBoundingClientRect();
                 chip.classList.add(ev.clientX < rect.left + rect.width / 2 ? 'mbx-tabdrop-before' : 'mbx-tabdrop-after');
             } else if (dt.types.includes('text/plain')) {
-                // a bot tile drag, dropping it here files the bot into this tab
+                // Dropping a bot tile here moves it into this tab.
                 ev.preventDefault();
                 dt.dropEffect = 'move';
                 chip.classList.add('mbx-tabdrop-into');
@@ -166,8 +166,7 @@ export class TabBar {
         input.value = initial;
         const close = (): void => {
             this.editing = false;
-            // the owner re-renders inside a successful commit; when it didn't
-            // (rejected rename to the same name, plain cancel), restore the chips
+            // A successful commit rerenders through the owner; otherwise restore the chips.
             if (this.container.contains(input)) {
                 this.lastSig = null;
                 this.rebuild();

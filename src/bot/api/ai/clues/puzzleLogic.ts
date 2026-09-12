@@ -8,7 +8,7 @@ export type PuzzleBoard = (number | null)[];
 
 /**
  * Cells are placed in these batches, each batch frozen once solved.
- * Why: batching the awkward ones (a row's last two, the final 3x3) lets the search find the rotation that frees them instead of hard-coding escape sequences.
+ * Why: batching the awkward ones (a row's last 2, the final 3x3) lets the search find the rotation that frees them instead of hard-coding escape sequences.
  */
 const GROUPS: number[][] = [
     [0], [1], [2], [3, 4],
@@ -90,10 +90,7 @@ export function applyPuzzleMove(board: PuzzleBoard, slot: number): boolean {
     return true;
 }
 
-/**
- * Turn the interface's slot/id pairs into a board.
- * Why: every piece must be known and every slot but one filled, so a half-transmitted interface reads as null rather than as a board with extra gaps.
- */
+/** Convert interface slot/id pairs to a board, returning null until all pieces and all but one slot are present. */
 export function readPuzzleBoard(
     slots: { slot: number; id: number }[],
     slotOfPiece: Record<number, number>,
@@ -165,10 +162,7 @@ function search(start: number[], startGap: number, group: number[], frozen: bool
     return null;
 }
 
-/**
- * The slots to click, in order, to solve the board. Each click slides the piece
- * in that slot into the gap beside it.
- */
+/** The slots to click, in order, to solve the board. Each click slides that slot's piece into the gap beside it. */
 export function solvePuzzle(board: PuzzleBoard): number[] | null {
     if (!isValidBoard(board)) {
         return null;

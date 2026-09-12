@@ -13,16 +13,14 @@ const PINEAPPLE_PRICE = 5;
 const invById = (id: number): ReturnType<typeof Inventory.items>[number] | undefined =>
     Inventory.items().find(item => item.id === id);
 
-// Why: the knife opens a two-object chat rather than completing the action, "Slice the pineapple."
-// yields four rings, and only "Dice the pineapple." makes the chunks the parrot wants.
+// Why: the knife opens a two-object chat; "Slice the pineapple." yields 4 rings and only "Dice the pineapple." makes the chunks the parrot wants.
 
 /** Cut an uncut pineapple into chunks. */
 async function dicePineapple(log: (m: string) => void): Promise<boolean> {
     if (Inventory.countById(ER_ITEM.PINEAPPLE_CHUNKS.id) > 0) {
         return true;
     }
-    // Why: this runs the tick after Heckel Funch's counter shuts, and a use-on issued into the
-    // closing shop interface is swallowed, the first pass cost thirty seconds to nothing.
+    // Why: this runs the tick after Heckel Funch's counter shuts, and a use-on issued into the closing shop interface is swallowed.
     await Modals.closeIfOpen();
     await Execution.delayTicks(1);
     const knife = invById(ER_ITEM.KNIFE.id);
@@ -58,8 +56,7 @@ function sourcePineappleChunks(snap: QuestSnapshot): QuestStep | null {
     return sourceKnife(snap) ?? { kind: 'buy', item: ER_ITEM.PINEAPPLE.name, qty: 1, shop: HECKEL, estGp: PINEAPPLE_PRICE };
 }
 
-// Why: `make_alco_chunks` is gated on both of Parroty Pete's varbits, and neither is visible to the
-// client, so both lines are re-asked every pass, which costs two dialogues and never guesses wrong.
+// Why: `make_alco_chunks` is gated on both of Parroty Pete's varbits and neither is visible to the client, so both lines are re-asked every pass; 2 dialogues and never a wrong guess.
 
 /** Dip the chunks, bait the hatch, pocket the parrot. */
 async function catchParrot(log: (m: string) => void): Promise<boolean> {

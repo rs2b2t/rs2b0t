@@ -16,10 +16,8 @@ interface LoginCoordinatorOptions {
     cooldownMs?: number;
 }
 
-/**
- * Coordinates login handshakes across one multibox wall, holding denied clients in FIFO order until they get a permit or leave the queue.
- * Why: the server permits four attempts per client UID then rejects the fifth until that UID idles 15s, and each attempt refreshes the server-side TTL, so the cooldown runs from the latest permit.
- */
+/** FIFO login permits for one multibox wall. */
+// Why: each attempt refreshes the server's 15s UID cooldown after four attempts.
 export class LoginCoordinator implements LoginCoordinationRegistry {
     private readonly now: () => number;
     private readonly batchSize: number;

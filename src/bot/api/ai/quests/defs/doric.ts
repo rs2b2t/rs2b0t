@@ -18,7 +18,7 @@ import { QUESTS } from '../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { gotoNpc, talkStrict, type NpcStop } from '../exec/primitives.js';
 
-/** Exact server-side doricquest values, recovered from the client-visible journal. */
+/** Server-side doricquest values, read back from the journal. */
 export const DORIC_STAGE = {
     NOT_STARTED: 0,
     STARTED: 10,
@@ -169,9 +169,7 @@ function talkAtStage(stage: number, action: string): QuestStep {
 const COINS_ID = 995;
 const DORIC_REWARD_COINS = 180;
 
-// Why: Doric's server script queues the quest-complete scroll before its final dialogue and coin reward.
-// Why: a generic dialogue driver sees the chat modal close and returns, leaving the engine free to treat stage 100 as finished before the remaining queue has run.
-// Why: success is therefore withheld until the post-scroll queue has awarded the coins and drained.
+// Why: Doric's script queues the quest-complete scroll before its final dialogue and coins, and a generic driver returns when the modal closes, so success waits for the coins and a drained queue.
 
 /** Hand Doric his materials and drive the completion queue to the end. */
 async function handInMaterials(log: (message: string) => void): Promise<boolean> {
@@ -223,8 +221,7 @@ async function handInMaterials(log: (message: string) => void): Promise<boolean>
 
         const rewarded = Inventory.countById(COINS_ID) >= coinsBefore + DORIC_REWARD_COINS;
         if (rewarded && !ChatDialog.isOpen()) {
-            // Require several quiet ticks: the server can award the coins
-            // immediately before opening its final NPC chat page.
+            // Several quiet ticks: the server can pay the coins right before opening its final chat page.
             quietRewardTicks++;
             if (quietRewardTicks >= 3) {
                 log(`stage 10: reward queue drained; received ${DORIC_REWARD_COINS} coins`);
@@ -391,8 +388,8 @@ function hasDepositableItem(snap: QuestSnapshot): boolean {
 function makeSpace(snap: QuestSnapshot, needed: number, bank: Tile): QuestStep | null {
     if (snap.freeSlots === undefined || snap.freeSlots >= needed) return null;
     if (hasDepositableItem(snap)) return preserveQuestItems(bank);
-    // Why: a restored account can have all 28 slots occupied by exact Doric items such as surplus ore, redundant picks or an unusable high-tier pick, so keeping every quantity would park forever.
-    // Why: the exact set is banked too, and the next authoritative bank snapshot withdraws only the material deficits and one best usable pickaxe.
+    // Why: a restored account can have all 28 slots full of Doric items (surplus ore, spare picks, an unusable high-tier pick), so keeping every quantity would park forever.
+    // Why: the exact set is banked too, and the next bank snapshot withdraws only the material deficits and 1 best usable pickaxe.
     return {
         kind: 'deposit',
         keep: [],
@@ -439,8 +436,7 @@ function stageTen(snap: QuestSnapshot, miningLevel: number, miningXp: number): Q
         return { kind: 'withdraw', items: withdrawals, bank };
     }
 
-    // Copper above four exists only to train Mining for iron. Drop it one at a
-    // time so every engine iteration yields to the random-event supervisor.
+    // Copper above 4 only trains Mining for iron. Drop 1 at a time so each iteration yields to the random-event supervisor.
     if (heldCount(snap, DORIC_ITEM.COPPER) > DORIC_ITEM.COPPER.qty) {
         return { kind: 'custom', name: 'drop one surplus training Copper ore', run: dropOneCopper };
     }

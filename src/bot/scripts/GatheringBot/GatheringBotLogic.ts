@@ -1,7 +1,4 @@
-/**
- * Pure GatheringBot policy helpers (unit-tested, no live client).
- * Kept separate so task modules can import without circular deps on the bot class.
- */
+/** Pure GatheringBot policy shared by task modules. */
 import { wildernessLevelAt, type WildTile } from '../../event/webwalk/wilderness.js';
 import { combatBreaksGather } from './TickManipLogic.js';
 
@@ -138,8 +135,7 @@ export function hostileAttackerNearby(
     });
 }
 
-// Why: sticky `inCombat` with no face target is common after randoms and login, and it triggers blind east walks that bung gather for tens of seconds.
-// Why: the kite only runs with an attacker in play, and otherwise yields to random-event handling.
+// Why: require a live attacker so stale combat state cannot trigger a blind kite.
 
 /** Whether FleeCombat should take the loop for a multi-combat kite. */
 export function shouldFleeCombat(opts: {

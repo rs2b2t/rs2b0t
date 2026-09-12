@@ -4,11 +4,9 @@ import { BotHost } from './BotHost.js';
 import { Scheduler } from './Scheduler.js';
 import { ScriptRunner } from './ScriptRunner.js';
 
-// Why: scripted bots still yield via Supervisor / EventSignal, so this covers AFK players, paused scripts, and the gap between script loops.
-// Why: waits go through Scheduler.runHost so they settle on hostWaiters even when a script context is active, because script waiters freeze while paused or not running.
-// Why: work is tick-gated and single-flight with Supervisor.
+// Why: host-scoped waits keep random-event handling alive between loops and while scripts are paused.
 
-/** Always-on random-event solver while the scene is live (`ingame` + sceneState 2), whether or not a script is running. */
+/** Single-flight random-event solver for every live scene. */
 class RandomEventGuardianImpl {
     private enabled = false;
     private inFlight = false;
@@ -19,8 +17,7 @@ class RandomEventGuardianImpl {
             return;
         }
         this.enabled = true;
-        // Frames settle Execution waits; ticks catch events even if the tab is
-        // background-throttled and frames are sparse (packets still arrive).
+        // Frames settle waits; ticks catch events in background-throttled tabs.
         BotHost.addFrameListener(() => {
             void this.kick();
         });
@@ -52,7 +49,7 @@ class RandomEventGuardianImpl {
         }
         // Why: events only arrive on server packets, so stamping before detecting makes one scan per tick as responsive as one per frame.
         // Why: stamping after a successful detect left the guard permanently disarmed for the common case of nothing found.
-        // Why: detectRaw() is two NPC passes plus a full loc scan, and it then ran on every frame of all 27 bots.
+        // Why: detectRaw() is 2 npc passes plus a full loc scan, which used to run every frame on all 27 bots.
         this.lastKickTick = tick;
         const event = RandomEvents.detect();
         if (!event) {

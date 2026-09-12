@@ -35,7 +35,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (stage === FT_STAGE.NOT_STARTED) {
         return { kind: 'talk', stop: BRUNDT(['Do you have any quests?', 'Yes, I am interested.', 'I want to become a Fremennik!']) };
     }
-    // Why: the seventh vote is awarded by the honourable death, which leaves the character on a loft the walker has no edge off. Brundt is unreachable until that ladder is climbed.
+    // Why: the 7th vote comes from the honourable death, which leaves you on a loft the walker has no edge off, so Brundt is unreachable until that ladder is climbed.
     const loft = leaveLoftStep(snap);
     if (loft) {
         return loft;
@@ -44,8 +44,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'talk', stop: BRUNDT(['Ask about becoming a Fremennik']) };
     }
 
-    // Why: this is the order the map wants, the longhall trials first, then the two east of town, then the maze, then the trade chain.
-    // Why: the seer and the warrior come last because both are walked with an empty pack, and Peer's spell is what empties it.
+    // Why: this is the order the map wants: the longhall trials, then the 2 east of town, then the maze, then the trade chain.
+    // Why: the seer and the warrior come last because both are walked with an empty pack, and Peer's spell empties it.
     const trial = revellerStep(snap)
         ?? bardStep(snap)
         ?? hunterStep(snap)
@@ -54,7 +54,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (trial) {
         return trial;
     }
-    // Why: Peer only offers to bank your equipment while Thorvald's trial is open, and both of the last two are walked with nothing.
+    // Why: Peer only offers to bank your equipment while Thorvald's trial is open, and the last 2 trials are walked with nothing.
     if (!hasFlag(snap.progress, 'warrior-started') && !hasFlag(snap.progress, 'warrior-done')) {
         return { kind: 'talk', stop: THORVALD(['Yes']) };
     }
@@ -81,7 +81,7 @@ export const fremenniktrials: QuestModule = {
     record: QUESTS.find(r => r.id === 'viking')!,
     pray: { protect: 'melee', potions: 2 },
     bank: FT_TILE.SEERS_BANK,
-    // Why: two trials are walked with an empty pack and one is walked with a full combat kit, so the module owns every banking decision.
+    // Why: 2 trials are walked with an empty pack and one with a full combat kit, so the module owns every banking decision.
     ownsInventory: true,
     grind: ['The Draugen', 'Koschei the deathless'],
     tools: ['coins', 'knife', 'axe', 'tinderbox', 'raw shark'],

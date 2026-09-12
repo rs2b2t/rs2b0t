@@ -1,6 +1,6 @@
 /**
- * Ore rock loc type ids from Server content (`scripts/skill_mining/configs/rocks.loc` + `pack/loc.pack`). All share in-game name "Rocks" + op Mine, so ore is distinguished only by id; depleted stages become empty rocks1/rocks2 (ids 450/452) with `mining_rock_empty` and must stay out of this map so findRock ignores empties.
- * Why: Dwarven iron spans two clusters (~3032,9825 and ~3044,9770), so GatheringBot.findRock picks by player distance plus local prefer rather than camp-pin membership alone.
+ * Ore loc ids from `rocks.loc` and `loc.pack`; all render as "Rocks", so ore and depleted states are distinguished by id.
+ * Why: Dwarven iron spans two clusters, so `findRock` prefers the cluster nearest the player.
  */
 export const ROCK_TYPES: Record<string, number[]> = {
     Clay: [2108, 2109],
@@ -16,13 +16,12 @@ export const ROCK_TYPES: Record<string, number[]> = {
 };
 
 /**
- * Rocks outside the tradeable-ore block. Quest-only, and deliberately absent from `ROCK_OPTIONS`.
+ * Quest-only rocks, kept out of `ROCK_OPTIONS`.
  * Why: an empty GatheringBot ore selection falls back to every option in `ROCK_OPTIONS`, and a mining bot should never target blurite.
  */
 export const QUEST_ROCK_TYPES: Record<string, number[]> = {
     Blurite: [2110],
-    // Why: `limestone_rock1/2/3` in `mine.dbrow` name their locs as `loc_4027`-`loc_4029`, which have no
-    // debugname of their own. The quarries are the Arandar pass and Silvarea.
+    // Why: `limestone_rock1/2/3` in `mine.dbrow` name their locs `loc_4027` to `loc_4029`, which have no debugname of their own; the quarries are the Arandar pass and Silvarea.
     Limestone: [4027, 4028, 4029]
 };
 

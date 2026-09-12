@@ -62,7 +62,7 @@ async function continueObjectBankDialog(log?: (msg: string) => void): Promise<bo
 
 /**
  * The bank interface.
- * Why: `isOpen()` only means the component exists, the item list fills a beat later and the deposit side view lags the main modal by a tick, so a count of zero is not proof of an empty bank.
+ * Why: `isOpen()` only checks the component; item data and the deposit view arrive later.
  * @see docs/reference/api-items.md#bank
  */
 export const Bank = {
@@ -70,13 +70,12 @@ export const Bank = {
         return reader.bankComId() !== -1;
     },
 
-    // isOpen only says the component exists, its item list fills a beat later, and again after a
-    // deposit. Until then every count() reads 0, which is indistinguishable from an empty bank.
+    // Item data arrives after the component opens and after deposits; counts are 0 until then.
     loaded(): boolean {
         return reader.bankItems().length > 0;
     },
 
-    // Why: `loaded()` is "the list is non-empty", which the empty bank this exists for can never satisfy; the fallback covers a bank opening with no deposit side panel to snapshot against.
+    // Why: `loaded()` means "the list is non-empty", which an empty bank can never satisfy; the fallback covers a bank opening with no deposit side panel to snapshot against.
     ready(): boolean {
         return Bank.isOpen() && (Bank.snapshotReady() || Bank.loaded());
     },
@@ -237,7 +236,7 @@ export const Bank = {
         );
     },
 
-    // Why: in note mode the pack receives the noted obj, whose id is not the bank slot's, so `landsAsId` says what to watch for; without it the wait times out on a withdraw that worked.
+    // Why: in note mode the pack receives the noted obj with a different id, so `landsAsId` says what to watch for; without it the wait times out on a withdraw that worked.
     async withdrawXById(id: number, count: number, landsAsId: number = id): Promise<boolean> {
         if (count <= 0) {
             return true;
@@ -362,8 +361,8 @@ export const Bank = {
             }
 
             log?.(`booth didn't open from here — stepping near (${stand.x}, ${stand.z}, ${stand.level})`);
-            // radius 1: adjacent is enough to click the booth; exact-tile pin looks robotic.
-            // 90s, 15s was too short for long camp→bank legs (Rimmington→Fally E).
+            // radius 1: adjacent is enough to click the booth; an exact-tile pin looks robotic.
+            // 90s: 15s was too short for long camp-to-bank legs (Rimmington to Fally E).
             await Traversal.walkTo(stand, { radius: 1, timeoutMs: 90_000, log });
             await Execution.delayTicks(1);
             const adj = Locs.query().name(boothName).where(l => l.actions().length > 0 && l.distance() <= 1).nearest();
@@ -379,8 +378,8 @@ export const Bank = {
     },
 
     /**
-     * @internal Open a bank that lives behind a conversation rather than a booth.
-     * Why: Gundai chats, offers two options, and only runs `@openbank` once the right one is picked, so this drives the dialogue rather than waiting on a single op.
+     * @internal Open a bank that lives behind a conversation.
+     * Why: Gundai chats, offers 2 options, and only runs `@openbank` once the right one is picked, so this drives the dialogue.
      */
     async openNpcAccess(access: BankNpcAccess, log?: (msg: string) => void): Promise<boolean> {
         for (let attempt = 0; attempt < 3 && !Bank.isOpen(); attempt++) {
@@ -450,7 +449,7 @@ export const Bank = {
         return Bank.isOpen() ? openedReady(log) : Bank.openNearest(access.name, access.op, log);
     },
 
-    /** Close the bank modal so inventory ops (Wield, Use, Bury, …) hit the backpack again. */
+    /** Close the bank modal so inventory ops (Wield, Use, Bury, ...) hit the backpack again. */
     async close(timeoutMs = 3000): Promise<boolean> {
         if (!Bank.isOpen()) {
             return true;
@@ -459,8 +458,7 @@ export const Bank = {
         if (!actions.closeModal()) {
             return false;
         }
-        // The server closes the main and side bank components separately. The
-        // normal backpack is authoritative again only after both are gone.
+        // The server closes the main and side bank components separately; the normal backpack is authoritative again only after both are gone.
         return Execution.delayUntil(
             () => !Bank.isOpen() && (bankSide === -1 || reader.modals().side !== bankSide),
             timeoutMs
@@ -511,7 +509,7 @@ export const Bank = {
     }
 };
 
-// Why: `isOpen()` is the component existing, and callers read counts on the next line, so the open is not done until the server has said what the bank holds.
+// Why: `isOpen()` is only the component existing, and callers read counts on the next line, so the open isn't done until the server has sent the contents.
 async function openedReady(log?: (msg: string) => void): Promise<boolean> {
     if (!Bank.isOpen()) {
         return false;

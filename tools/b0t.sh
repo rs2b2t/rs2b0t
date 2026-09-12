@@ -1,12 +1,6 @@
 #!/bin/sh
-# `bun run b0t` — build the rs2b0t LIVE client and open the WALL against w1.rs2b2t.com,
-# fully local. Mirrors the legacy `wall` command: fetch rs2b2t's current login key,
-# build TARGET=live with it, start the local reverse proxy (serves your client from
-# disk + forwards /crc and the cache WebSocket to live), then open a dedicated viewer.
-# Your client is never hosted on rs2b2t; only game traffic leaves this box.
-#
-# In the wall: add bots with REGISTERED rs2b2t accounts (prod registration is on —
-# no auto-create). A single bot is just a focused 1-cell wall.
+# Build the live client with the current login key, start the local proxy, and open the bot wall.
+# Use registered rs2b2t accounts; the server does not create accounts on login.
 # Viewer env:
 #   B0T_VIEWER=electron|chrome|firefox|none (default electron)
 #   B0T_NO_OPEN=1                         legacy alias for B0T_VIEWER=none
@@ -38,9 +32,7 @@ VIEWER_PID=''
 PROXY_PID=''
 VIEWER_SCOPE_UNIT=''
 
-# Sets CHILD_STATE to running, zombie, gone, or not-owned. Checking the direct
-# parent prevents cleanup from signalling a stale PID that has been reused by a
-# process this launcher does not own. A zombie must be reaped, not signalled.
+# Set CHILD_STATE to running, zombie, gone, or not-owned; check parent PID before signalling.
 child_state() {
     CHILD_STATE=gone
     [ -n "$1" ] || return 0
@@ -85,8 +77,7 @@ reap_owned_child() {
         child_state "$REAP_PID"
         [ "$CHILD_STATE" != "running" ] || kill -KILL "$REAP_PID" 2>/dev/null || true
     fi
-    # wait either reaps the exact child or consumes the status already retained
-    # by the shell. It never signals a process that reused the numeric PID.
+    # Reap this child or read its saved status; wait cannot signal a reused PID.
     wait "$REAP_PID" 2>/dev/null || true
 }
 
@@ -104,15 +95,14 @@ cleanup() {
 
     [ -z "$RESOURCE_PID_FILE" ] || rm -f "$RESOURCE_PID_FILE"
 
-    # Signal both exact, currently-owned children before waiting on either one.
+    # Signal both owned children before waiting on either.
     [ -z "$CLEANUP_VIEWER_PID" ] || signal_owned_child "$CLEANUP_VIEWER_PID" viewer
     [ -z "$CLEANUP_PROXY_PID" ] || signal_owned_child "$CLEANUP_PROXY_PID" proxy
     [ -z "$CLEANUP_VIEWER_PID" ] || reap_owned_child "$CLEANUP_VIEWER_PID" viewer
     [ -z "$CLEANUP_PROXY_PID" ] || reap_owned_child "$CLEANUP_PROXY_PID" proxy
 
     if [ -n "$VIEWER_SCOPE_UNIT" ]; then
-        # Stop only this launcher's exact transient scope. This catches browser
-        # content children that can briefly outlive the registered root.
+        # Browser children can outlive their root; stop the launcher's cgroup too.
         systemctl --user stop "$VIEWER_SCOPE_UNIT" 2>/dev/null || true
         VIEWER_SCOPE_UNIT=''
     fi
@@ -197,15 +187,13 @@ trap 'exit 130' INT
 trap 'exit 131' QUIT
 trap 'exit 143' TERM
 
-# Deliberately omit curl -f: any valid HTTP response proves that the port is
-# already serving something and must not be rebuilt over or interrupted.
+# No curl -f: any HTTP response means the port is already serving something we must not rebuild over.
 if curl -s --max-time 1 -o /dev/null "http://localhost:$PORT/multibox.html" 2>/dev/null; then
     echo "ERROR: a wall is already running on :$PORT; refusing to rebuild or interrupt it." >&2
     exit 1
 fi
 
-# mkdir is the portable atomic lock primitive. The lock spans the build and the
-# entire launcher lifetime, so another PORT cannot rebuild this checkout's out/.
+# Why: mkdir locks this checkout's build output atomically until the launcher exits, even across different ports.
 if mkdir "$LOCK_DIR" 2>/dev/null; then
     LOCK_HELD=1
     printf '%s\n' "$$" > "$LOCK_OWNER_FILE"
@@ -225,18 +213,14 @@ if [ "$VIEWER" = "electron" ]; then
     [ -d desktop/node_modules/electron ] || { echo "→ installing the Electron wall (first run downloads Electron)…"; ( cd desktop && bun install ); }
 fi
 
-# Fetch the live login modulus from rs2b2t's served client (PUBLIC key), so a key
-# rotation never leaves us stale — the one very long digit run in the minified JS.
+# Fetch the current login modulus from the served client; it's the long digit string in the minified JS.
 echo "→ fetching rs2b2t login key + building live client…"
 MOD=$(curl -s --max-time 15 "$HTTP/client/client.js" | grep -oE '[0-9]+' | awk 'length($0) >= 250 { print; exit }')
 [ -n "$MOD" ] || { echo "ERROR: could not fetch the rs2b2t login modulus from $HTTP/client/client.js" >&2; exit 1; }
 TARGET=live LIVE_RSAN="$MOD" bun run build:bot >/dev/null
 echo "  built live client (login key fetched from $HOST)."
 
-# The nav worker needs the baked collision pack; `build:bot` does NOT produce it
-# (it's generated from the engine's map cache). A fresh checkout/worktree without
-# it would 404 the pack and every bot's navigator dies silently — build it here,
-# like deploy-local.sh does.
+# Why: build:bot does not create the collision pack; navigation needs it, so bake it from the engine cache.
 if [ ! -f out/collision.lcnav.gz ]; then
     echo "→ collision pack missing — baking it from the engine map cache…"
     bun tools/nav/build-collision.ts --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}"
@@ -269,15 +253,14 @@ reap_viewer() {
     else
         VIEWER_EXIT_STATUS=$?
     fi
-    # External telemetry PIDs are never stored here and can never reach cleanup.
+    # External telemetry PIDs are never stored here, so cleanup can't reach them.
     VIEWER_PID=''
 }
 
 supervise_managed_viewer() {
     SUPERVISED_VIEWER_KIND="$1"
     while :; do
-        # Check the proxy first: if both children exit between polls, loss of the
-        # proxy is the failure that makes every connected wall unusable.
+        # Report proxy failure first if both children exit between polls.
         child_state "$PROXY_PID"
         SUPERVISED_PROXY_STATE="$CHILD_STATE"
         if [ "$SUPERVISED_PROXY_STATE" != "running" ]; then
@@ -296,8 +279,7 @@ supervise_managed_viewer() {
             echo "→ $SUPERVISED_VIEWER_KIND viewer exited (status $VIEWER_EXIT_STATUS); CPU/RAM telemetry is unavailable."
             echo "→ proxy remains up at $URL; waiting for Ctrl-C/TERM or proxy exit."
 
-            # With no owned viewer left, blocking in wait reaps the proxy as soon
-            # as it exits. Preserve a proxy failure, then a viewer failure.
+            # Reap the proxy after the viewer exits; report proxy failure before viewer failure.
             reap_proxy
             [ "$PROXY_EXIT_STATUS" -eq 0 ] || return "$PROXY_EXIT_STATUS"
             [ "$VIEWER_EXIT_STATUS" -eq 0 ] || return "$VIEWER_EXIT_STATUS"
@@ -329,8 +311,7 @@ while [ "$i" -lt 40 ]; do
         exit "$PROXY_EXIT_STATUS"
     fi
     if curl -s --max-time 1 -o /dev/null "http://localhost:$PORT/multibox.html" 2>/dev/null; then
-        # Do not accept a response from a concurrently started/unrelated server
-        # after our own child has already lost the bind race.
+        # Don't accept a response from an unrelated server once our own child has lost the bind race.
         child_state "$PROXY_PID"
         if [ "$CHILD_STATE" = "running" ]; then
             PROXY_READY=1

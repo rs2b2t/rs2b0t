@@ -1,18 +1,7 @@
-// Optional tick-manipulation methods for GatheringBot (#160).
+// Optional GatheringBot tick manipulation, using this revision's server timings (#160).
+// The client cannot read %action_delay, so profiles infer it from XP, inventory, and tick edges.
 
-// Why: the numbers below are server ground truth for this revision and rs2b2t content, not OSRS wiki figures.
-// Why: woodcutting default action_delay = map_clock + 3.
-// Why: fly fishing (freshfish) = +4.
-// Why: mining interval = pickaxe mining_rate (mith=4, rune=2, …).
-// Why: knife + log fletch arms +2 after a Make-1 confirm, never Make-X, and product finish is incidental.
-// Why: auto-retaliate flinch = attackrate/2, rapid style −1.
-// Why: the client cannot read %action_delay, so planners use XP, inventory and tick edges.
-// Why: {@link TICK_MANIP_SHIPPED} is false until methods are ready, and while false the UI options are Off-only and {@link profileForSetting} always returns Off, ignoring saved settings.
-
-/**
- * Flip to true when tick-manip methods are ready for end users.
- * Keep false for leash/camp PRs and incomplete method work.
- */
+/** Enables tick-manip settings after the methods are ready to ship. */
 export const TICK_MANIP_SHIPPED = false;
 
 /** Inventory delay item pair (knife + one fletchable log). */
@@ -35,7 +24,7 @@ export const FLETCHABLE_LOG_NAMES = [
 /** Soft product hint for Make-1 when the menu offers shafts (normal Logs only). */
 export const KNIFE_DELAY_MAKE_MATCH = 'shaft';
 
-// ── Fisher ──────────────────────────────────────────────────────────────────
+// Fishing profiles.
 
 export const FISH_TICK_MANIP_OPTIONS = [
     'Off',
@@ -46,13 +35,13 @@ export const FISH_TICK_MANIP_OPTIONS = [
 
 type FishTickManip = 'off' | '4t-fly' | 'knife-delay' | 'tannerfish';
 
-// ── Miner ───────────────────────────────────────────────────────────────────
+// Mining profiles.
 
 export const MINE_TICK_MANIP_OPTIONS = ['Off', 'Iron cadence (pick-aware)'] as const;
 
 type MineTickManip = 'off' | 'iron-cadence';
 
-// ── Woodcutter ──────────────────────────────────────────────────────────────
+// Woodcutting profiles.
 
 export const WC_TICK_MANIP_OPTIONS = [
     'Off',
@@ -85,10 +74,7 @@ export interface TickManipProfile {
     timedReclick: boolean;
     /** Empty shortbow + rapid style for WC retaliate. */
     shortbowRapid: boolean;
-    /**
-     * Expected gather cycle length in ticks when known (server defaults).
-     * null = infer only / variable (retaliate, knife compress).
-     */
+    /** Expected server cycle length, or null for inferred and variable methods. */
     nativeCycleTicks: number | null;
     /** Farmer willows 6-tick phase machine (tree / cut / drop). */
     farmerWillowCycle: boolean;
@@ -281,9 +267,7 @@ function methodLabel(skill: TickManipSkill, method: TickManipMethod): string {
     return WC_TICK_MANIP_OPTIONS.find(o => parseWcTickManip(o) === method) ?? method;
 }
 
-/**
- * UI dropdown options for a skill. When {@link TICK_MANIP_SHIPPED} is false, only Off.
- */
+/** UI options for a skill; returns only Off until tick manipulation ships. */
 export function tickManipUiOptions(full: readonly string[]): string[] {
     if (TICK_MANIP_SHIPPED) {
         return [...full];
@@ -376,10 +360,7 @@ export function knifeDelayPhase(nowTick: number, armTick: number): KnifeDelayPha
     return 'wait';
 }
 
-/**
- * Farmer willows 6-tick cycle (issue): t1 click tree, t5 cut/process log, t6 drop/ground.
- * Phase index is (nowTick - cycleStart) mod 6, where 0 = tick 1 of the cycle.
- */
+/** Farmer willow phase: t1 click, t5 process, t6 drop; index 0 is t1. */
 type FarmerWillowPhase = 'click-tree' | 'wait' | 'cut-log' | 'drop-log';
 
 export function farmerWillowPhase(nowTick: number, cycleStartTick: number): FarmerWillowPhase {
@@ -397,10 +378,7 @@ export function farmerWillowPhase(nowTick: number, cycleStartTick: number): Farm
     return 'wait';
 }
 
-/**
- * Whether combat should break a gather wait/session.
- * When allowCombat is true (retaliate methods), inCombat alone does not yield.
- */
+/** Whether combat should interrupt a gather wait for the active profile. */
 export function combatBreaksGather(inCombat: boolean, allowCombat: boolean): boolean {
     return inCombat && !allowCombat;
 }
@@ -411,10 +389,7 @@ export function isFletchableLogName(name: string | null | undefined): boolean {
     return FLETCHABLE_LOG_NAMES.some(l => l.toLowerCase() === n);
 }
 
-/**
- * Prefer keeping one delay log in the pack.
- * Returns how many logs of `logName` to drop (extras beyond 1).
- */
+/** Number of extra delay logs to drop while keeping one. */
 export function extraDelayLogsToDrop(logCount: number, keep = 1): number {
     const k = Math.max(0, Math.floor(keep));
     const c = Math.max(0, Math.floor(logCount));
@@ -444,10 +419,7 @@ export function shouldEatForTannerfish(hpFraction: number, hasCooked: boolean): 
     return hasCooked && hpFraction < TANNERFISH_EAT_HP;
 }
 
-/**
- * Prefer cooking a raw catch when the pack is getting full or we need food soon.
- * Pure heuristic, caller still needs a Fire/Range in scene.
- */
+/** Whether to cook a raw catch for space or a small food buffer. */
 export function shouldCookForTannerfish(opts: {
     rawCount: number;
     cookedCount: number;

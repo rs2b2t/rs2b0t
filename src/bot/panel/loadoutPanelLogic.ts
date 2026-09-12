@@ -26,7 +26,7 @@ export const SUPPLY_ROWS: readonly SupplyRow[] = [
     { label: 'Super defence', hint: 'super defence' }
 ];
 
-/** Built once; a scan per rendered row is 200 a click. */
+/** Built once to avoid scanning the catalog for every rendered row. */
 const byName = new Map<string, ItemRecord>();
 
 export function recordByName(name: string): ItemRecord | null {
@@ -59,10 +59,7 @@ export function shieldDisabled(worn: Loadout['worn']): boolean {
     return isTwoHanded(worn.righthand);
 }
 
-/**
- * What the character is wearing, as a loadout.
- * Why: slots come from the catalog by name rather than the equipment interface's slot index, since the catalog already knows a rune scimitar is a righthand item and no index mapping can go wrong.
- */
+/** Build a loadout from worn items, using catalog slot metadata. */
 export function wornFromEquipment(equipped: readonly { name: string | null }[]): Loadout['worn'] {
     const out: Loadout['worn'] = {};
     for (const item of equipped) {

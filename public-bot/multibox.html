@@ -6,16 +6,14 @@
     <style>
         body { margin: 0; background: #000; color: #ddd; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; overflow: hidden; }
 
-        /* app = a big ACTIVE pane on the left + a fixed-width rail of live thumbnails on the right */
+        /* Active client on the left, fixed-width thumbnail rail on the right. */
         #mbx-app { display: flex; height: 100vh; }
         #mbx-main { flex: 1 1 auto; min-width: 0; position: relative; background: #0a0a0a; }
         /* RAIL_W below must match RAIL_W in DomSlotOps.ts (focused-slot geometry depends on it) */
         #mbx-rail { flex: 0 0 264px; width: 264px; box-sizing: border-box; height: 100vh; overflow-y: auto; overflow-x: hidden; padding: 0 12px 12px; background: #111; border-left: 1px solid #333; display: flex; flex-direction: column; gap: 10px; }
         #mbx-rail:focus { outline: 1px solid #04A800; outline-offset: -1px; }
 
-        /* tab strip: small chips pinned above the tiles, which scroll under it.
-           Slot tiles order themselves -N..-1 (DomSlotOps), so the strip needs an
-           order below any realistic bot count to stay first in the rail. */
+        /* Why: slots use order -N..-1; the tab strip needs a lower value to stay first. */
         #mbx-tabs { order: -100000; position: sticky; top: 0; z-index: 5; flex: 0 0 auto; margin: 0 -12px; padding: 8px 12px; background: #111; border-bottom: 1px solid #222; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
         .mbx-tabchip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid #2c2c2c; border-radius: 3px; background: #1a1a1a; color: #999; cursor: pointer; user-select: none; }
         .mbx-tabchip:hover { border-color: #04A800; }
@@ -33,8 +31,7 @@
         .mbx-tabmenu { position: absolute; z-index: 45; display: flex; flex-direction: column; background: #111; border: 1px solid #333; border-radius: 3px; }
         .mbx-tabmenu button { background: none; border: 0; color: #999; padding: 4px 10px; cursor: pointer; font: inherit; text-align: left; }
         .mbx-tabmenu button:hover { color: #5be05b; background: #101d11; }
-        /* a tile outside the active tab: hidden but never removed — DOM order is
-           the slot order, and reparenting an iframe would reload its client */
+        /* Why: reparenting reloads an iframe; hide inactive slots in place. */
         .mbx-slot.mbx-tab-hidden { display: none; }
 
         /* a rail tile: name + status dot over a live game frame cropped to the game viewport */
@@ -58,12 +55,10 @@
         .mbx-frame { width: 1100px; height: 620px; border: 0; display: block; }
         /* shown only for the focused bot, whose own iframe is busy filling the main pane */
         .mbx-mirror { position: absolute; inset: 0; display: none; }
-        /* the iframe swallows clicks, so this overlay is what makes a tile clickable */
+        /* Capture tile clicks before they reach the iframe. */
         .mbx-hit { position: absolute; inset: 0; z-index: 3; }
 
-        /* Focused: only the clip (holding the live iframe) is lifted over the main pane.
-           It is never reparented, so the game session survives the switch — and the tile
-           keeps its place in the rail, mirroring that canvas. */
+        /* Why: positioning the clip over the main pane avoids reloading its iframe; the rail mirrors its canvas. */
         .mbx-slot.is-focused .mbx-clip { position: fixed; top: 0; left: 0; bottom: 0; right: 264px; width: auto; height: auto; z-index: 40; }
         .mbx-slot.is-focused .mbx-mirror { display: block; }
 
@@ -77,8 +72,7 @@
         .mbx-bulk-controls button:disabled { background: #0d0d0d; border-color: #222; color: #444; cursor: default; }
         .mbx-bulk-renderers { grid-column: 1 / -1; }
         .mbx-resource-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 3px 8px; }
-        /* an author display rule beats the UA's [hidden]{display:none}, so the
-           hidden host rows need this or they stay on screen */
+        /* Why: display:flex overrides the browser's default [hidden] rule. */
         .mbx-resource-row[hidden] { display: none; }
         .mbx-resource-label { color: #666; }
         .mbx-resource-value { color: #bbb; text-align: right; white-space: nowrap; }
@@ -86,8 +80,7 @@
 
         #mbx-drawer { position: fixed; top: 12px; right: 264px; z-index: 50; width: 16px; height: 56px; display: flex; align-items: center; justify-content: center; background: #111; border: 1px solid #333; border-right: 0; border-radius: 4px 0 0 4px; color: #666; cursor: pointer; }
         #mbx-drawer:hover { color: #04A800; border-color: #04A800; }
-        /* collapse by width, NOT display:none — the focused slot's position:fixed clip
-           is a rail descendant and display:none on the rail would blank it */
+        /* Why: display:none would also hide the focused iframe; collapse the rail width instead. */
         #mbx-app.mbx-rail-hidden #mbx-rail { flex: 0 0 0px; width: 0; padding: 0; border-left: 0; overflow: hidden; }
         #mbx-app.mbx-rail-hidden #mbx-drawer { right: 0; }
         #mbx-app.mbx-rail-hidden .mbx-slot.is-focused .mbx-clip { right: 0; }

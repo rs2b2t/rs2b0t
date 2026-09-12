@@ -2,7 +2,7 @@ import type { QuestSnapshot } from '../../engine/types.js';
 
 const TIERS = ['rune', 'adamant', 'mithril', 'black', 'steel', 'iron', 'bronze'] as const;
 
-// Why: no weapon slot. Excalibur is the only sword that kills the titan, and anything else in the hand loses the fight in silence.
+// Why: no weapon slot; Excalibur is the only sword that kills the titan and anything else loses the fight in silence.
 // Why: chainbody outranks platebody, as rune plate wants Dragon Slayer complete and refuses without a message.
 const SLOTS: readonly { readonly kinds: readonly string[] }[] = [
     { kinds: ['chainbody', 'platebody'] },
@@ -14,7 +14,7 @@ const SLOTS: readonly { readonly kinds: readonly string[] }[] = [
 /** Every word a slot can pick, so the spillover deposit never banks the kit. */
 export const ARMOUR_KEEP: readonly string[] = SLOTS.flatMap(s => s.kinds);
 
-/** Refusals are silent, so a level-gated piece is remembered rather than re-picked. */
+/** Refusals are silent, so a level-gated piece is remembered and skipped. */
 export const unwearable = new Set<string>();
 
 export function resetUnwearable(): void {

@@ -1,6 +1,6 @@
-/** Live Digsite harness (#251): --stage N --until N --minutes N, base :8890.
- *  Why: `--stage` writes `%itexamlevel` and relogs, since update_questlist only recolours the journal entry at login; the errand and bit varps are cleared with it so a jumped stage matches what an uncheated run would have reached.
- *  Why: the bank holds coins and food alone, the trowel, the jar, the brush, the ropes, the tray, the opal, the charcoal and every chemical have a source in the world, and banking one would hide whether the bot can find it. */
+/** Live Digsite harness (#251), using the members world at :8890. */
+// Why: stage jumps clear companion varps and relog so the world and journal agree.
+// Only coins and food are banked; every quest item must be sourced in-world.
 
 //   HEADED=1 bun e2e/digsite-251-live.ts --stage 0 --until 9 --minutes 150 --tick 150
 //   HEADED=1 bun e2e/digsite-251-live.ts --stage 6 --until 9 --minutes 45 --tick 150

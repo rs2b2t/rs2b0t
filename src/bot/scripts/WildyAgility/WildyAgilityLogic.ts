@@ -44,7 +44,7 @@ const OBSTACLE_START: Readonly<Record<string, WorldTile>> = {
     rocks: { x: 2994, z: 3937, level: 0 }
 };
 
-// --- Chat patterns (type-0 game messages via GameMessages) ---
+// Type-0 game-message patterns.
 
 /** Clicked an obstacle from the wrong approach side (no damage). */
 export const WRONG_SIDE = /^(?:you cannot do that from here|you can't? enter the pipe from this side)/i;

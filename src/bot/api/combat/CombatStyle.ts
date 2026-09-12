@@ -14,7 +14,7 @@ const COMBAT_STYLE: Record<string, MeleeCombatStyle> = {
 
 /**
  * Melee styles a script may train.
- * Why: re-applied on every login, because the combat-mode varp is not persisted.
+ * Why: re-applied on every login, because the combat-mode varp isn't persisted.
  * @see docs/reference/api-game.md
  */
 export const COMBAT_STYLE_OPTIONS: MeleeCombatStyle[] = ['attack', 'strength', 'controlled', 'defence'];
@@ -52,7 +52,7 @@ type CombatKind = 'melee' | 'mage' | 'range';
 
 /**
  * Resolve combatStyle + meleeStyle after the melee|mage|range split.
- * Why: storage still holding a pre-split melee value in combatStyle (say "defence") is read as melee plus that training style, so it is not silently coerced to strength via the meleeStyle default (#461).
+ * Why: Preserve legacy melee values in `combatStyle` instead of applying the new strength default (#461).
  */
 export function resolveSplitCombatSettings(
     rawCombatStyle: string,
@@ -75,8 +75,8 @@ export function resolveSplitCombatSettings(
     };
 }
 
-// Why: this follows the interface's Accurate/Aggressive/Controlled/Defensive metadata, because button count and position do not imply a style and duplicate styles are valid.
-// Why: an unavailable requested style falls to the last defensive option, which covers the controlled-on-three-mode case and stays deterministic for spears and polearms.
+// Why: follows the interface's Accurate/Aggressive/Controlled/Defensive labels, because button count and position don't imply a style and duplicate styles are valid.
+// Why: an unavailable requested style falls to the last defensive option, which covers the controlled-on-3-mode case and stays deterministic for spears and polearms.
 // Why: an incomplete interface with neither an exact match nor a defensive option fails closed.
 
 /** Resolve a requested training style against the labelled buttons in the current weapon's combat interface. */

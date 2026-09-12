@@ -22,7 +22,7 @@ export const GT_STAGE = {
     COMPLETE: 160
 } as const;
 
-// Why: the four twigs all render "Twigs" and only the id says which pillar each belongs on, so every pack read here is by id.
+// Why: all 4 twigs render "Twigs" and only the id says which pillar each belongs on, so every pack read here is by id.
 
 /** `quest_grandtree.obj` ids. */
 export const GT_OBJ = {
@@ -40,7 +40,7 @@ export const GT_OBJ = {
     INVASION_PLANS: 794
 } as const;
 
-/** `quest_grandtree.loc` ids, plus the two root types. */
+/** `quest_grandtree.loc` ids, plus the 2 root types. */
 export const GT_LOC = {
     CUPBOARD_SHUT: 2434,
     CUPBOARD_OPEN: 2435,
@@ -58,7 +58,7 @@ export const GT_LOC = {
 
 export const GT_NPC = { BLACK_DEMON: 677 } as const;
 
-/** Everything the quest carries; the keep-list a spillover deposit must not bank. */
+/** Everything the quest carries, so a spillover deposit doesn't bank it. */
 export const GT_ITEMS = [
     'bark sample',
     'translation book',
@@ -80,7 +80,7 @@ export const GT_TILE = {
     /** Glough's first floor; his ladder is baked at (2476,3464). */
     glough: new Tile(2478, 3463, 1),
     gloughHouseFoot: new Tile(2476, 3464, 0),
-    /** South of the cupboard: `forceapproach=east` rotates with its angle-1 placement. */
+    /** South of the cupboard; `forceapproach=east` rotates with its angle-1 placement. */
     cupboardStand: new Tile(2477, 3464, 1),
     /** North of the chest, the side `forceapproach=north` leaves legal at angle 0. */
     chestStand: new Tile(2482, 3463, 1),
@@ -111,7 +111,7 @@ export const GT_TILE = {
     anita: new Tile(2390, 3514, 1)
 } as const;
 
-/** Twig id → the pillar it belongs on, in the order `_grandtree_pillar` checks them. */
+/** Twig id to the pillar it belongs on, in the order `_grandtree_pillar` checks them. */
 export const GT_PILLARS = [
     { obj: GT_OBJ.TWIG_T, loc: GT_LOC.PILLAR_T, stand: new Tile(2485, 3466, 2) },
     { obj: GT_OBJ.TWIG_U, loc: GT_LOC.PILLAR_U, stand: new Tile(2486, 3466, 2) },
@@ -122,7 +122,7 @@ export const GT_PILLARS = [
 // Why: `%daconia_rock_root` is `random_range(1,15)` and the client cannot read it, so the rock is found by searching every root.
 // Why: each root is a 3x3 that blocks its own footprint, and the stands below are the nearest walkable tile in the caves' own component.
 
-/** The fifteen roots of `daconia_coords`, with a stand each. */
+/** The 15 roots of `daconia_coords`, with a stand each. */
 export const GT_ROOTS: readonly { sw: Tile; stand: Tile }[] = [
     { sw: new Tile(2456, 9886, 0), stand: new Tile(2455, 9885, 0) },
     { sw: new Tile(2457, 9881, 0), stand: new Tile(2456, 9882, 0) },
@@ -141,10 +141,10 @@ export const GT_ROOTS: readonly { sw: Tile; stand: Tile }[] = [
     { sw: new Tile(2467, 9872, 0), stand: new Tile(2466, 9871, 0) }
 ];
 
-// Why: the second and third answers are the two the King only accepts in one order, so a preference list with them ahead of "None of the above." picks correctly on every page.
-// Why: the first two pages offer none of them and fall through to "None of the above.", which is what `narnode_correct_b2` and `_b3` want.
+// Why: the King only accepts the 2nd and 3rd answers in one order, so listing them ahead of "None of the above." picks right on every page.
+// Why: the first 2 pages offer none of them and fall through to "None of the above.", which is what `narnode_correct_b2` and `_b3` want.
 
-/** Hazelmere's message, translated: the five answers `narnode_correct_*` accept. */
+/** Hazelmere's message, translated: the 5 answers `narnode_correct_*` accept. */
 export const NARNODE_TRANSLATION = [
     'I think so!',
     'A man came to me with the King\'s seal.',
@@ -195,7 +195,7 @@ export const ANITA: NpcStop = {
     prefer: []
 };
 
-// Why: a wrong answer makes the foreman attack, so the list names the three `grandtree_foreman_rightans*` lines and nothing else.
+// Why: a wrong answer makes the foreman attack, so the list names the 3 `grandtree_foreman_rightans*` lines and nothing else.
 export const FOREMAN: NpcStop = {
     npc: 'Foreman',
     anchor: GT_TILE.foreman,
@@ -203,7 +203,7 @@ export const FOREMAN: NpcStop = {
     prefer: ['Sadly his wife is no longer with us!', 'He loves worm holes.', 'Anita.']
 };
 
-// Why: `%femi_help` is 0 until the gate's box-lifting conversation sets it, and both 0 and 2 ride free, only the 1 branch charges, which is what the pay option answers.
+// Why: `%femi_help` is 0 until the gate's box-lifting conversation sets it; 0 and 2 ride free, only the 1 branch charges, and the pay option answers that.
 export const FEMI: NpcStop = {
     npc: 'Femi',
     anchor: GT_TILE.femi,
@@ -218,7 +218,7 @@ export const PILOT: NpcStop = {
     prefer: ['Take me to Karamja please!']
 };
 
-// Why: `grandtree_trapdoorunder` only opens once the quest is complete, so the caves have one ungated mouth and no other and it is one-way, the way in is Glough's trapdoor, which the module drives itself.
+// Why: `grandtree_trapdoorunder` only opens once the quest is complete, so the only way in is Glough's one-way trapdoor, which the module drives itself.
 export const GT_HOPS: LadderHop[] = [
     { stand: GT_TILE.caveLadder, locName: 'Ladder', op: 'Climb-up', arrive: new Tile(2463, 3497, 0) }
 ];

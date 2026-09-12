@@ -1,11 +1,7 @@
-/** The three Regicide-gated clues (3560, 3562, 3564) through ClueSolver twice on one account:
- *  once with the quest unfinished, once with `regicide_quest` seeded complete.
- *  A pass is a solved trail. Unfinished must abandon naming Regicide; complete must walk the
- *  clue, cross Isafdar and open the casket. The gate opening is a step on the way, not the result.
- *  Isafdar has no baked nav edges, so the crossings come from REGICIDE_SEAMS via travelTirannwn.
- *  A fourth leg starts inside the elf camp holding a mainland clue, because a trail that chains
- *  out has to cross the seam graph in reverse and the palisade is directed.
- *  `--gate-only` stops at the gate verdict and reports the walk, for bisecting a regression. */
+/** Run Regicide-gated clues 3560, 3562, and 3564 before and after quest completion. */
+// Unfinished clues must name Regicide and abandon; completed clues must cross Isafdar and solve.
+// The exit leg checks reverse traversal through the directed palisade seam.
+// `--gate-only` stops after the gate verdict for regression bisection.
 
 //   ~/redeploy.sh
 //   bun e2e/clues/tirannwn-clue-gate-live.ts
@@ -111,7 +107,7 @@ const IDS = Object.keys(CLUE_GATES)
     .sort((a, b) => a - b);
 
 const rx = (literal: string): string => literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-/** The block `clueGate` writes while the quest is unfinished. */
+/** Message written by `clueGate` while Regicide is unfinished. */
 const gateLine = (id: number): RegExp => new RegExp(`${rx(CLUE_GATES[id]!.reason)}\\s*\\(${QUEST} reads`, 'i');
 const ANY_GATE_RE = new RegExp(`${QUEST} reads`, 'i');
 const ABANDON_RE = /abandoning [^:]+: (.+)$/;

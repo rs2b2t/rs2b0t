@@ -27,8 +27,8 @@ function spoken(lines: readonly string[]): string {
     return lines.join(' ').replace(/@[a-z0-9]{3}@/gi, ' ').replace(/[|\s]+/g, ' ').trim().toLowerCase();
 }
 
-// Why: `seer_looking_glass` runs `if_close` and then three `mes` lines a `p_delay(3)` apart before it reopens the chat, and the shared driver gives a shut dialogue 1.5 seconds before it calls the conversation over.
-// Why: it then reports success with the hint ungiven, so the leg re-walks to Seers' Village and bails at the same gap for as long as the engine will retry it.
+// Why: `seer_looking_glass` runs `if_close` then 3 `mes` lines a `p_delay(3)` apart before reopening chat, and the shared driver calls a dialogue over after 1.5s shut.
+// Why: it then reports success with the hint ungiven, so the leg re-walks to Seers' Village and bails at the same gap for as long as the engine retries.
 
 /** Ask a Seer where the first scorpion is, sitting through the looking-glass pauses. */
 export async function askTheSeer(log: (m: string) => void): Promise<boolean> {
@@ -72,12 +72,12 @@ export async function askTheSeer(log: (m: string) => void): Promise<boolean> {
     return heard;
 }
 
-/** The cage in the pack, whichever of the eight it is. */
+/** The cage in the pack, whichever of the 8 it is. */
 function heldCageId(): number | undefined {
     return Inventory.items().find(item => EVERY_CAGE.includes(item.id))?.id;
 }
 
-// Why: all three scorpions render "Kharid Scorpion" and the cage's own name never changes, so both sides of the use are addressed by id.
+// Why: all 3 scorpions render "Kharid Scorpion" and the cage's own name never changes, so both sides of the use are addressed by id.
 
 async function cageScorpion(key: ScorpionKey, log: (m: string) => void): Promise<boolean> {
     const cageId = heldCageId();
@@ -96,8 +96,8 @@ async function cageScorpion(key: ScorpionKey, log: (m: string) => void): Promise
         log(`scorpcatcher: no Kharid Scorpion ${npcId} within 10 tiles`);
         return false;
     }
-    // Why: a scorpion with no `wanderrange` drifts five tiles, which in the monastery is through a door into the next room, and the use-on is then queued against a walk the server cannot make, so it sits silent until its 10s runs out.
-    // Why: the walk is unconditional because tile distance counts through walls, so "already adjacent" is not "already reachable".
+    // Why: a scorpion with no `wanderrange` drifts 5 tiles (in the monastery through a door), and a use-on queued against a walk the server can't make sits silent until its 10s runs out.
+    // Why: the walk is unconditional since tile distance counts through walls, so adjacent doesn't mean reachable.
     if (!(await Traversal.walkResilient(scorpion.tile(), { radius: 1, attempts: 2, timeoutMs: 60_000, log }))) {
         log(`scorpcatcher: could not reach the ${key.toUpperCase()} scorpion at (${scorpion.tile().x},${scorpion.tile().z})`);
         return false;
@@ -107,7 +107,7 @@ async function cageScorpion(key: ScorpionKey, log: (m: string) => void): Promise
         log(`scorpcatcher: the ${key.toUpperCase()} scorpion refused the cage`);
         return false;
     }
-    // Why: the catch swaps the cage for a heavier obj rather than adding one, so the id changing is the only proof it landed.
+    // Why: the catch swaps the cage for a heavier obj, so the id changing is the only proof it landed.
     const caught = await driveUntil(() => {
         const now = heldCageId();
         return now !== undefined && caughtIn(now).has(key);
@@ -133,7 +133,7 @@ async function catchOutpostScorpion(log: (m: string) => void): Promise<boolean> 
     return cageScorpion('b', log);
 }
 
-/** Taverley: the dusty key, the dragon corridor, then the wall by the two coffins. */
+/** Taverley: the dusty key, the dragon corridor, then the wall by the 2 coffins. */
 async function catchTaverleyScorpion(log: (m: string) => void): Promise<boolean> {
     await stockAntipoison(log);
     const mark = poisonMark();

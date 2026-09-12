@@ -1,5 +1,5 @@
 #!/bin/sh
-# Refuses staged secrets independent of .gitignore, which a careless edit can silently drop.
+# Reject staged secrets even if .gitignore changes.
 
 fail=0
 note() { printf 'pre-commit: %s\n' "$1" >&2; fail=1; }

@@ -8,19 +8,16 @@ const THREAD_NEED = 1;
 /** Food withdrawn before entering so Sustain can work inside the workshop. */
 export const FOOD_WITHDRAW = 8;
 
-/**
- * Official quest skill gates (journal / wiki).
- * Combat is **not** a server gate. The workshop has aggressive elementals.
- */
+/** Official quest skill gates (journal / wiki). Combat isn't a server gate; the workshop has aggressive elementals. */
 export const EW_OFFICIAL_SKILLS = {
     mining: 20,
     smithing: 20,
     crafting: 20
 } as const;
 
-// Why: this is the lowest non-required combat profile that has completed a full headed harness, on a realistic bank seed at the official skill minimums.
-// Why: headed runs so far, max combat with an inventory seed PASS (mid-quest loop); Att/Str 40, Def 25, HP 40 on a bank seed FAIL (Water elemental death); Att/Str 50, Def 40, HP 50 on a bank seed PASS (about 270s, 2026-08-01).
-// Why: the polish goal is to push this down and branch tactics by power level, so update it when a headed run changes the floor.
+// Why: lowest non-required combat profile that has completed a full headed harness on a realistic bank seed at the official skill minimums.
+// Why: headed runs so far: max combat on an inventory seed passed (mid-quest loop); Att/Str 40, Def 25, HP 40 on a bank seed died to the Water elemental; Att/Str 50, Def 40, HP 50 on a bank seed passed (about 270s, 2026-08-01).
+// Why: the polish goal is to push this down and branch tactics by power level, so update it when a headed run moves the floor.
 export const EW_PROVEN_COMBAT_FLOOR = {
     attack: 50,
     strength: 50,
@@ -36,9 +33,7 @@ export const EW_FAILED_COMBAT = {
     hitpoints: 40
 } as const;
 
-/**
- * Next headed probe (between failed 40 and proven 50). Not a guarantee.
- */
+/** Next headed probe (between failed 40 and proven 50). Not a guarantee. */
 export const EW_PROBE_COMBAT = {
     attack: 45,
     strength: 45,
@@ -51,10 +46,7 @@ export const EW_TESTED_COMBAT = EW_PROVEN_COMBAT_FLOOR;
 /** @deprecated Prefer EW_PROVEN_COMBAT_FLOOR for "safe"; EW_PROBE_COMBAT for search. */
 export const EW_RECOMMENDED_COMBAT = EW_PROVEN_COMBAT_FLOOR;
 
-/**
- * One-shot advisory when the account is below any proven combat floor (or only
- * max is proven). Soft, does not block the queue. See docs/QUESTS.md polish goal.
- */
+/** One-shot advisory when the account is below the proven combat floor (or only max is proven). Soft; doesn't block the queue. See docs/QUESTS.md polish goal. */
 export function warnElementalWorkshopReadiness(): string | null {
     const have = {
         attack: Skills.level('attack'),
@@ -108,7 +100,6 @@ export function warnElementalWorkshopReadiness(): string | null {
     );
 }
 
-/** Melee weapons usable for the Earth elemental (and for slashing the book). */
 
 
 export function held(snap: QuestSnapshot, id: number): number {
@@ -141,7 +132,7 @@ function isSlashName(name: string): boolean {
         || n.includes('battleaxe');
 }
 
-/** Melee weapons for the Earth elemental, knife is not enough (ensureMeleeWeapon ignores it). */
+/** Melee weapons for the Earth elemental; a knife doesn't count (ensureMeleeWeapon ignores it). */
 function isCombatWeaponName(name: string): boolean {
     const n = name.toLowerCase();
     return n.includes('scimitar')
@@ -154,7 +145,7 @@ function isCombatWeaponName(name: string): boolean {
 }
 
 // Why: the book spine accepts a knife or any slash weapon, as the server checks slashattack_anim.
-// Why: this is inventory-only, since `useOn` needs a pack item, worn blades have to be removed first (see slashBookForKey) or a knife is withdrawn.
+// Why: `useOn` needs a pack item, so worn blades come off first (see slashBookForKey) or a knife is withdrawn.
 
 /** True when the pack holds something that can slash the book open. */
 export function hasHeldSlashTool(snap: QuestSnapshot): boolean {
@@ -172,10 +163,7 @@ export function hasHeldSlashTool(snap: QuestSnapshot): boolean {
     return false;
 }
 
-/**
- * Pack or worn slash tool. Used for "do we own something that can cut the book"
- * after unequip, not as a gate that skips bank withdraw while still worn-only.
- */
+/** Pack or worn slash tool, i.e. do we own something that can cut the book once unequipped. Worn-only doesn't skip the bank withdraw. */
 export function hasSlashTool(snap: QuestSnapshot): boolean {
     if (hasHeldSlashTool(snap)) {
         return true;
@@ -246,10 +234,7 @@ function bankCountByName(snap: QuestSnapshot, name: string): number {
     return snap.bank?.get(name.toLowerCase()) ?? 0;
 }
 
-/**
- * Tools and materials needed before committing to the spiral stairs.
- * Bank-first: scan → deposit junk → withdraw missing kit (including food + weapon).
- */
+/** Tools and materials needed before committing to the spiral stairs. Bank first: scan, deposit junk, withdraw the missing kit (food and weapon included). */
 export function surfaceLoadout(snap: QuestSnapshot, needBellowsFix: boolean, needSmelt: boolean): QuestStep | null {
     if (!snap.bankKnown) {
         return scanBank();
@@ -387,7 +372,7 @@ export function surfaceLoadout(snap: QuestSnapshot, needBellowsFix: boolean, nee
     }
     if (!hasHeldSlashTool(snap) && !hasSlashTool(snap)
         && banked(snap, EW_ITEM.KNIFE.id) === 0 && !bestBankWeapon(snap)) {
-        // Ground knife spawn is the last resort in sourceKnife, not a wait.
+        // sourceKnife falls back to the ground knife spawn, so no wait here.
         return null;
     }
 

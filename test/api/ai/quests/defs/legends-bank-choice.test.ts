@@ -17,7 +17,7 @@ const snap = (bankIds: [number, number][]): QuestSnapshot => ({
     bankKnown: true
 });
 
-// Why: every booth shows the same contents, so a withdrawal is owed to the nearest one and never to a named one. The tile that reaches this code is the buy leg's, which does want the counter's own bank, and pinning a withdrawal to it sailed a run from Karamja to Yanille for runes Shilo's teller was holding.
+// Why: withdrawals use the nearest booth because every booth exposes the same bank contents.
 test('a withdrawal names no bank, so the walker picks the nearest', () => {
     const step = fromBank(snap([[LQ_ID.LAW_RUNE, 20]]), { id: LQ_ID.LAW_RUNE, name: LQ_ITEM.LAW_RUNE }, 5);
 

@@ -1,6 +1,6 @@
-/** Live Shield of Arrav pair harness (#232): two accounts, one per gang, trading their way to a completion.
- *  Why: the quest cannot be finished alone. The crossbows sit behind a door only Straven's key opens, joining Phoenix makes Katrine refuse you, and the curator wants both halves in one pack. This is the only run that turns the journal green.
- *  Why: one browser context per account, because settings live in sessionStorage keyed `rs2b0t:set:<Script>:<key>` and a shared context would cross-contaminate the two bots. */
+/** Live Shield of Arrav completion with one account in each gang. */
+// Why: the curator needs both halves, which one account cannot obtain.
+// Separate browser contexts keep sessionStorage settings from crossing between bots.
 
 //   HEADED=1 bun e2e/shield-of-arrav-pair-232-live.ts --certs 2 --tick 300 --minutes 90
 //   HEADED=1 bun e2e/shield-of-arrav-pair-232-live.ts --certs 6 --tick 300 --minutes 150

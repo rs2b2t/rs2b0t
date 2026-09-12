@@ -17,8 +17,7 @@ function parseArgs(): { map: string; out: string } {
 const { map, out } = parseArgs();
 const locs = parseJm2Locs(readFileSync(map, 'utf8'));
 const g = buildMaze(locs);
-// Rendered for eyeballing only. The shipped artefact is the layout, not these
-// routes: the spawn tile varies per event, so routes are solved at runtime.
+// Preview only; spawn tiles vary, so ship the layout and solve routes at runtime.
 const routes = MAZE_SPAWNS.map(spawn => ({ spawn, doors: solveRoute(g, spawn) }));
 
 function render(spawn: { x: number; z: number }, doors: { x: number; z: number }[]): string {
@@ -43,7 +42,7 @@ for (const r of routes) {
     console.log(render(r.spawn, r.doors));
 }
 
-// Only walls and doors shape the graph; everything else in the map square is decor.
+// Only walls and doors affect the graph.
 const relevant = locs.filter(l => l.id === WALL_ID || l.id in DOOR_DIRS);
 const packed = relevant.flatMap(l => [l.lx, l.lz, l.id, l.shape, l.angle]);
 const rows: string[] = [];

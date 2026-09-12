@@ -3,7 +3,7 @@ import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 
-// Why: stages 6 and 7 render identical journal text and the same step drives both, at 6 the first Inspect flips to 7, at 7 Inspect opens the repair menu.
+// Why: stages 6 and 7 render identical journal text and the same step drives both: at 6 the first Inspect flips to 7, at 7 Inspect opens the repair menu.
 
 /** Matches content `quest_mcannon.constant`. */
 export const MC_STAGE = {
@@ -47,8 +47,7 @@ function readFlags(text: string): Set<string> {
 }
 
 function readStage(text: string): number | undefined {
-    // Newest progress first, later journal text retains earlier history, and the
-    // guard-tower page carries the railings line the stage before it also prints.
+    // Newest first; later journal text keeps earlier history, and the guard-tower page still carries the railings line.
     if (text.includes('quest complete!')) {
         return MC_STAGE.COMPLETE;
     }
@@ -86,7 +85,7 @@ function readStage(text: string): number | undefined {
 }
 
 /**
- * Map quest-list journal text to varp-aligned stages plus sub-progress flags.
+ * Journal text to varp-aligned stages plus sub-progress flags.
  * @see Server content mcannon_journal.rs2
  */
 export function parseDwarfCannonJournal(lines: readonly string[] | string): QuestProgress | undefined {

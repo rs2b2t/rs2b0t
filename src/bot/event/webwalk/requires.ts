@@ -11,10 +11,7 @@ type RequiresFailure =
     | { ok: true }
     | { ok: false; reason: string };
 
-/**
- * Whether a planned edge is usable under the given world state.
- * Unknown quest status fails closed for quest-gated edges (safer than false opens).
- */
+/** Whether a planned edge is usable under the world state; an unknown quest status fails closed. */
 export function meetsRequires(requires: TransportRequires | undefined, state: WorldState): RequiresFailure {
     if (!requires) {
         return { ok: true };
@@ -69,8 +66,7 @@ export function meetsRequires(requires: TransportRequires | undefined, state: Wo
         return { ok: false, reason: 'remove weapons/armour before Entrana' };
     }
 
-    // Web slash (content web.rs2): Knife use-on or bladed weapon. Fail open when
-    // canSlashWeb is unset (offline pack probes without a live snapshot).
+    // Web slash (web.rs2): Knife use-on or bladed weapon; fails open when canSlashWeb is unset (offline probes).
     if (requires.slashTool === true && state.canSlashWeb === false) {
         return { ok: false, reason: 'need Knife or a bladed weapon to slash webs' };
     }
@@ -99,12 +95,12 @@ export function meetsRequires(requires: TransportRequires | undefined, state: Wo
         }
     }
 
-    // essenceEntrySetsReturn is a PathFinder path-state effect, not a usability gate.
+    // essenceEntrySetsReturn is a PathFinder path-state effect and gates nothing here.
 
     return { ok: true };
 }
 
-/** True when `requires` has at least one gate (not `{}`). */
+/** True when `requires` has at least one gate. */
 export function hasGatingRequires(requires: TransportRequires | undefined): boolean {
     if (!requires) {
         return false;
@@ -123,7 +119,7 @@ export function hasGatingRequires(requires: TransportRequires | undefined): bool
     );
 }
 
-// Why: this matches search policy, no gates means allowed, while gated without state fails closed, the same as PathFinder skipping gated edges when WorldState is omitted.
+// Why: matches search policy: no gates means allowed, gated without state fails closed, same as PathFinder skipping gated edges without a WorldState.
 
 /** Convenience predicate for PathFinder filters. */
 export function isEdgeAllowed(requires: TransportRequires | undefined, state: WorldState | undefined): boolean {

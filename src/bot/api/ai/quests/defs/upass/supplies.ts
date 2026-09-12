@@ -7,13 +7,12 @@ import { ITEM_DB } from '../../../../../data/itemdb.js';
 import { UP_ITEM, UP_TILE, banked, carried, held, type UpassItem } from './areas.js';
 import { FOOD_FLOAT } from '../../food.js';
 
-/** Bronze arrows are what the fire arrow is built from, a stack covers every missed shot. */
+/** The fire arrow is built from bronze arrows; a stack covers every missed shot. */
 export const ARROW_TARGET = 50;
-// Why: the grid crossing and the orb corridor alone cost eight lobsters on the first clean run, and the traps below are timer-driven damage the module walks into rather than fights. The pass hands out food of its own, Koftik, the paladins and Nilhoof between them give a dozen, but those arrive as separate stacks that each take a slot, so the float is what has to cover the trapped stretches.
+// Why: the grid crossing and the orb corridor alone cost 8 lobsters, and the traps below are timer damage you walk into. Koftik, the paladins and Nilhoof give a dozen food between them, but as separate stacks that each take a slot, so the float covers the trapped stretches.
 export const FOOD_TARGET = FOOD_FLOAT;
 
-// Why: upass_bridge.rs2 gates the rope shot on oc_category = weapon_bow, which is thirteen items, not the
-// one id the kit used to name. A crossbow is weapon_crossbow, fires bolts and must not qualify.
+// Why: upass_bridge.rs2 gates the rope shot on oc_category = weapon_bow, which is 13 items. A crossbow is weapon_crossbow, fires bolts and must not qualify.
 
 /** Every obj in the weapon_bow category, by id. */
 export const BOW_IDS: ReadonlySet<number> = new Set(
@@ -46,8 +45,7 @@ export function bowCarried(snap: QuestSnapshot): boolean {
     return bowWorn(snap) || firstBow(snap.invIds) !== null;
 }
 
-// Why: Aemad's counter is forty tiles from the booth this quest already banks at, and Lowe is the only bow
-// counter this repo has a walked stand for. Nothing else in the kit has a shop worth the trip.
+// Why: Aemad's counter is 40 tiles from the booth this quest banks at, and Lowe is the only bow counter with a walked stand. Nothing else in the kit has a shop worth the trip.
 
 const AEMAD = { npc: 'Aemad', anchor: UP_TILE.AEMAD };
 const LOWE = { npc: 'Lowe', anchor: UP_TILE.LOWE };
@@ -56,7 +54,7 @@ const LOWE = { npc: 'Lowe', anchor: UP_TILE.LOWE };
 const ROPE_GP = 40;
 const BOW_GP = 100;
 
-/** The plain shortbow is what a bank with no bow at all is sent to buy. */
+/** What a bank with no bow is sent to buy. */
 const BOW_TO_BUY = UP_ITEM.SHORTBOW;
 
 export function scanBank(): QuestStep {
@@ -83,8 +81,7 @@ export function fromBank(snap: QuestSnapshot, item: UpassItem, qty: number): Que
     return withdraw([{ name: item.name, id: item.id, qty: Math.min(qty - have, stock) }]);
 }
 
-// Why: the pass has no bank and no shop, and every trip back out is the dungeon over again, so the
-// kit is drawn in one go before the cave mouth rather than fetched when each obstacle asks for it.
+// Why: the pass has no bank or shop and every trip back out is the dungeon over again, so the kit is drawn in one go before the cave mouth.
 
 /** Everything the pass consumes, in the order the quest reaches it. */
 export const KIT: readonly {
@@ -95,13 +92,11 @@ export const KIT: readonly {
     shop?: { npc: string; anchor: Tile };
     unitGp?: number;
 }[] = [
-    // Why: `upass_rock_ropeswing` deletes the rope before it rolls agility, so a failed swing costs one and
-    // drops the player into the swamp, one rope is a single point of failure on a roll that is not certain.
+    // Why: `upass_rock_ropeswing` deletes the rope before it rolls agility, so a failed swing costs one and drops you in the swamp.
     { item: UP_ITEM.ROPE, qty: 3, reason: 'the rock swing east, which eats one per attempt', shop: AEMAD, unitGp: ROPE_GP },
     { item: UP_ITEM.BRONZE_ARROW, qty: ARROW_TARGET, reason: 'the fire arrow' },
     { item: UP_ITEM.TINDERBOX, qty: 1, reason: 'lighting the cloth arrow and burning the tomb' },
-    // Why: a probe of the second cavern from inside the slave cages reaches one thing and no other, the mud.
-    // `upass_mud` takes a spade and nothing else, and every route south to the unicorn is behind it.
+    // Why: from inside the slave cages the only reachable thing is the mud, `upass_mud` takes a spade and nothing else, and every route south to the unicorn is behind it.
     { item: UP_ITEM.SPADE, qty: 1, reason: 'the filled-in tunnel out of the slave cages' },
     { item: UP_ITEM.BUCKET, qty: 1, reason: "the dwarf brew for Iban's tomb" },
     { item: UP_ITEM.LOBSTER, qty: FOOD_TARGET, reason: 'the demons, Kalrag and the trap falls' }
@@ -112,7 +107,7 @@ export const KEEP_IDS: readonly number[] = [
     ...BOW_IDS
 ];
 
-// Why: the buy step tops the purse up itself, so a buy emitted with no coins walks to a counter it cannot pay and retries there; falling through reaches the shortfall stop instead.
+// Why: the buy step tops the purse up itself, so a buy emitted with no coins walks to a counter it can't pay and retries there; falling through reaches the shortfall stop.
 
 /** True when pack and bank between them cover the asking price. */
 function canAfford(snap: QuestSnapshot, gp: number): boolean {
@@ -167,7 +162,7 @@ export function sourceKit(snap: QuestSnapshot): QuestStep | null {
     return sourceBow(snap);
 }
 
-/** What the kit is still short of, for an honest stop rather than a silent retry loop. */
+/** What the kit is still short of, for the stop message. */
 export function kitShortfall(snap: QuestSnapshot): string[] {
     const short = KIT.filter(({ item, qty }) => carried(snap, item) < qty)
         .map(({ item, qty, reason }) => `${qty}x ${item.name} (${reason}), have ${carried(snap, item)}`);
@@ -181,12 +176,11 @@ export function needsEquip(snap: QuestSnapshot, item: UpassItem): boolean {
     return held(snap, item) > 0;
 }
 
-// Why: the pass is not walked past, it is fought through, three paladins at level 62 for their crests, three demons for their amulets and Kalrag for the blood, and the bow in the kit is there for one arrow at a rope. Descending in what the fire arrow left on is descending unarmed.
+// Why: the pass is fought through: 3 paladins at level 62 for their crests, 3 demons for their amulets and Kalrag for the blood. The bow is for one arrow at a rope, so descending in what the fire arrow left on is descending unarmed.
 
 const TIERS = ['dragon', 'rune', 'adamant', 'mithril', 'black', 'steel', 'iron', 'bronze'] as const;
 
-// Why: daggers come poisoned, and "Dragon dagger(p)" ends in the suffix rather than in the kind, so the
-// endsWith test missed it even with dagger on the list. Poisoned dagger(p) has no tier word at all.
+// Why: "Dragon dagger(p)" ends in the poison suffix, so an endsWith test on the kind misses it. Poisoned dagger(p) has no tier word at all.
 const POISON = /\(p\+*\)$/;
 const POISONS = ['', '(p)', '(p+)', '(p++)'] as const;
 
@@ -251,7 +245,7 @@ export function plannedGear(snap: QuestSnapshot): string[] {
     return out;
 }
 
-/** Draw and wear the melee kit; refusals are shed rather than retried. */
+/** Draw and wear the melee kit; refusals are shed. */
 export function wearGear(snap: QuestSnapshot): QuestStep | null {
     const names = plannedGear(snap);
     if (names.length === 0) {
@@ -286,7 +280,7 @@ export function wearGear(snap: QuestSnapshot): QuestStep | null {
 
 const WEAPON_KINDS = GEAR_SLOTS[0]!.kinds;
 
-/** True once a melee weapon is on, the bow does not count, it is there for one arrow at one rope. */
+/** True once a melee weapon is on; the bow doesn't count. */
 export function meleeArmed(snap: QuestSnapshot): boolean {
     return wearingSlot(snap, WEAPON_KINDS);
 }
@@ -314,9 +308,9 @@ function packGear(snap: QuestSnapshot, slots: readonly { kinds: readonly string[
     return null;
 }
 
-// Why: `armFireArrow` puts the shortbow in the right hand and the melee weapon in the pack, and nothing after the bridge takes it back out, the paladins were being fought bare-handed. Armour in the pack is the same problem plus five slots the orb sweep needs, so the full set goes on rather than only the weapon.
+// Why: `armFireArrow` puts the shortbow in the right hand and the melee weapon in the pack, and nothing after the bridge takes it back out. Armour in the pack is the same plus 5 slots the orb sweep needs, so the full set goes on.
 
-// Why: a rune platebody wants Dragon Slayer, and `equip` answers a refusal the same way it answers a miss, with false, so a plain equip step retried one forever. A refusal is shed instead: the piece is written off, the step still succeeds, and the next cycle moves on to the rest of the set.
+// Why: a rune platebody wants Dragon Slayer, and `equip` answers a refusal and a miss the same way, false, so a plain equip step would retry forever. The piece is written off and the step still succeeds.
 
 /** Wear the next piece of melee kit the pack is still carrying, once the bow has had its turn. */
 export function drawGear(snap: QuestSnapshot): QuestStep | null {

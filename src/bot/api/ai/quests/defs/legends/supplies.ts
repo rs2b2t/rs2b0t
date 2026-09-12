@@ -12,23 +12,23 @@ export interface LqItem {
 
 type Shop = { npc: string; anchor: Tile };
 
-// Why: best first, since `foodTopUp` takes the first of these the bank holds and every fight in this quest is one the float has to outlast, Nezikchened three times and three aggressive guardians. The rest are fallbacks in descending heal.
+// Why: best first, since `foodTopUp` takes the first of these the bank holds and the float has to outlast Nezikchened 3 times and 3 aggressive guardians. The rest are fallbacks in descending heal.
 /** What the float is drawn from, in the order it is preferred. */
 export const LQ_FOODS = ['Shark', 'Swordfish', 'Lobster', 'Tuna'] as const;
 
 /** Enough to cross the trials, both cave fights and the walk home. */
 export const FOOD_CARRY = 14;
 
-// Why: every purchase here is a `buy` step, which tops the pack up to its own `estGp` at the booth, so this is not a shopping budget but fare money (the Brimhaven ferry at 30, Hajedy's cart at 100, and a planner that refuses a route whose fare is not in the pack), and it is small because all of it rides through three fights with a level-187 demon and a death drops it.
+// Why: Buy steps fund themselves; this smaller balance covers route fares while limiting coins lost during the demon fights.
 /** Fare money for the crossings; every counter purchase funds itself at the booth. */
 export const COIN_CARRY = 5_000;
 
-// Why: the trigger is a floor rather than half the float. Half the float sends the run to a booth with thousands still in the pack, and the fares this covers are thirty and a hundred coins, so it is only worth a trip once there is nothing left to pay one with.
+// Why: Fares cost 30 or 100 coins, so refill only near empty rather than at half the target balance.
 /** Coins below which a leg passing a booth restores the float. */
 export const COIN_FLOOR = 1_000;
 
-// Why: `calc_shop_value` returns `oc_cost` unchanged while a shop sits at its base stock, the Magic Guild's multipliers are sell 1000 / delta 10, so the divisor and the multiplier cancel, and climbs only as the shelf is emptied.
-// Why: so the guild list is two soul runes at 1250, four law at 40, two mind at 3, two earth at 4 and 150 water at 4, which is about 3.8k with the water's own depletion in it. Even bought down to the last soul rune on a shared world it is nearer 5k than 60k, and `estGp` is what the buy step tops the pack up to before it opens the counter.
+// Why: `calc_shop_value` returns `oc_cost` unchanged while a shop sits at base stock (the Magic Guild's multipliers are sell 1000 / delta 10, which cancel) and climbs only as the shelf empties.
+// Why: so the guild list is 2 soul runes at 1250, 4 law at 40, 2 mind at 3, 2 earth at 4 and 150 water at 4, about 3.8k with the water's depletion in it, and nearer 5k than 60k even bought down to the last soul rune. `estGp` is what the buy step tops the pack up to.
 export const SHOP_GP = {
     JIMINUA: 3000,
     MAGIC_GUILD: 12_000
@@ -41,8 +41,8 @@ export const PRAYER_POTIONS: readonly LqItem[] = [
     { id: 143, name: 'Prayer potion(1)' }
 ];
 
-/** Melee weapons worth wielding against the demon and the three guardians. */
-// Why: rune chainbody rather than platebody, the platebody wants Dragon Slayer as well as Defence 40, and the refusal is a bare false with no message.
+/** Melee weapons worth wielding against the demon and the 3 guardians. */
+// Why: rune chainbody, since the platebody wants Dragon Slayer as well as Defence 40 and the refusal is a bare false with no message.
 export const ARMOUR: readonly LqItem[] = [
     { id: 1113, name: 'Rune chainbody' },
     { id: 1079, name: 'Rune platelegs' },
@@ -92,7 +92,7 @@ export function withdraw(items: { name: string; qty: number; id?: number }[], ba
     return { kind: 'withdraw', items, bank };
 }
 
-// Why: every quest item this list forgets is deposited on the next bank trip and has to be re-earned, so it denies rather than allows.
+// Why: every quest item this list forgets is deposited on the next bank trip and has to be re-earned, so it's a deny list.
 export const KEEP_IDS: readonly number[] = [
     LQ_ID.MAP, LQ_ID.MAP_COMPLETE, LQ_ID.BULLROARER, LQ_ID.GOLD_BOWL_SKETCH,
     LQ_ID.GOLD_BOWL, LQ_ID.GOLD_BOWL_BLESSED, LQ_ID.GOLD_BOWL_WATER, LQ_ID.GOLD_BOWL_PURE,
@@ -106,7 +106,7 @@ export const KEEP_IDS: readonly number[] = [
     LQ_ID.TOTEM_POLE, LQ_ID.GILDED_TOTEM,
     LQ_ID.MACHETE, LQ_ID.RUNE_AXE, LQ_ID.LOCKPICK, LQ_ID.UNPOWERED_ORB,
     LQ_ID.PAPYRUS, LQ_ID.CHARCOAL, LQ_ID.GOLD_BAR, LQ_ID.HAMMER, LQ_ID.KNIFE,
-    // Why: the vial of water is kit and the empty one is what drinking the bravery potion leaves behind, the quest never fills one, since Jiminua's sells the filled vial the recipe wants.
+    // Why: the vial of water is kit and the empty one is what drinking the bravery potion leaves; the quest never fills one, since Jiminua's sells the filled vial.
     LQ_ID.ROPE, LQ_ID.CHISEL, LQ_ID.VIAL_WATER,
     LQ_ID.SOUL_RUNE, LQ_ID.MIND_RUNE, LQ_ID.EARTH_RUNE, LQ_ID.LAW_RUNE,
     LQ_ID.WATER_RUNE, LQ_ID.COSMIC_RUNE, LQ_ID.AIR_RUNE, LQ_ID.FIRE_RUNE, LQ_ID.DEATH_RUNE,
@@ -119,12 +119,12 @@ export const KEEP_IDS: readonly number[] = [
     LQ_ID.COINS
 ];
 
-// Why: the trials hand back three lumps of rock and the pack is already full to its last slot, so a top-up decided with no room fails its withdraw for ever.
+// Why: Trials return three rock items, so calculate withdrawals from available slots.
 
-/** Ids the deposit keeps by name rather than by id, so they do not read as junk. */
+/** Food ids excluded from junk deposits. */
 const FOOD_IDS: readonly number[] = [LQ_ID.SHARK, LQ_ID.SWORDFISH, LQ_ID.LOBSTER, LQ_ID.TUNA];
 
-// Why: a slot is bought with the worst food held, not the best, the opposite order to the float, since the point is to keep the heal that has to outlast the demon.
+// Why: a slot is bought with the worst food held, the opposite order to the float, to keep the heal that has to outlast the demon.
 /** The food to eat for a slot, worst first. */
 export const FOOD_FOR_SLOT: readonly { id: number; name: string }[] = [
     { id: LQ_ID.TUNA, name: LQ_ITEM.TUNA },
@@ -144,10 +144,9 @@ export function junkHeld(snap: QuestSnapshot): boolean {
     return junkIds(snap).length > 0;
 }
 
-// Why: the rock rolls opal 60/128 and diamond 4/128, so the wait for the last gem buries the pack in uncut opals that the keep list is protecting.
-// Why: the deposit keeps them by id, so a bank trip would take none of them, the surplus is a drop, not a deposit, and it is junk only once its own cut gem is in hand.
+// Why: Gem rocks produce many spare opals before a diamond; drop surplus uncut gems once their cut form is held.
 
-/** Everything the drop may shed where the character stands, spare uncut gems included. */
+/** Everything the drop may shed where you stand, spare uncut gems included. */
 export function ditchIds(snap: QuestSnapshot): number[] {
     const spare = GEM_CUTS.filter(gem => held(snap, gem.uncut) > 0 && owned(snap, gem.cut) > 0).map(gem => gem.uncut);
     return [...junkIds(snap), ...spare];
@@ -157,10 +156,10 @@ export function deposit(bank?: Tile): QuestStep {
     return { kind: 'deposit', keep: [...LQ_FOODS], keepIds: KEEP_IDS, bank };
 }
 
-// Why: `null` covers both "already carried" and "the bank cannot help", and the caller decides whether that is a shop trip or a park.
+// `null` means either the item is already owned or the bank cannot provide it; callers choose the next source.
 
 /** Withdraw a shortfall when the bank has it. */
-// Why: every booth shows the same contents, so a withdrawal is owed to the nearest one and never to a named one. The tile is threaded this far for the buy leg, which does want the counter's own bank for its coins, and pinning a withdrawal to it sailed a run from Karamja to Yanille for runes Shilo's teller was holding.
+// Why: Bank contents are global, so withdrawals use the nearest booth; the supplied bank remains only for shop funding.
 export function fromBank(snap: QuestSnapshot, item: LqItem, qty = 1): QuestStep | null {
     const short = qty - owned(snap, item.id);
     if (short <= 0) {
@@ -174,7 +173,7 @@ export function fromBank(snap: QuestSnapshot, item: LqItem, qty = 1): QuestStep 
 }
 
 /** Bank first, then the counter that stocks it. */
-// Why: `stock` is what the counter is asked for, `qty` is what the leg needs, the magic gate eats a cast on every descent and the Magic Guild is in Yanille, so buying one descent's worth walks the sea and the hill again for the next one. Runes stack, so a run's worth costs the same slot as one.
+// Why: `stock` is what the counter is asked for and `qty` what the leg needs: the magic gate eats a cast every descent and the Magic Guild is in Yanille, and runes stack, so a run's worth costs the same slot as one.
 
 export function source(snap: QuestSnapshot, item: LqItem, qty: number, shop: Shop, estGp: number, bank?: Tile, stock = qty): QuestStep | null {
     const have = owned(snap, item.id);
@@ -221,13 +220,13 @@ export function foodTopUp(snap: QuestSnapshot, want = FOOD_CARRY, bank?: Tile): 
     if (!food) {
         return null;
     }
-    // Why: a float the pack cannot hold is a withdraw that fills the last slot and asks again, after a death the kit comes back at once and ten lobsters have nowhere to go, so the ask is what fits rather than what was wanted.
+    // Why: Cap the withdrawal to free slots so the planner does not request the same overflow again.
     const room = Math.max(0, snap.freeSlots ?? 28);
     const take = Math.min(want - heldFood(snap), bankedName(snap, food), room);
     return take > 0 ? withdraw([{ name: food, qty: take }], bank) : null;
 }
 
-// Why: Nezikchened is level 187 with 150 hitpoints and casts from range, and Protect from Melee is the only thing that makes him survivable at 70, so the points have to outlast the fight rather than the walk to it.
+// Why: Prayer doses must last through the level-187 Nezikchened fight.
 
 /** Withdraw prayer potions up to `want` doses' worth of flasks. */
 /** Prayer doses in the pack. */
@@ -260,7 +259,7 @@ export function potionTopUp(snap: QuestSnapshot, want: number, bank?: Tile): Que
 
 /** Equip the best melee weapon and armour the bank can dress us in, or null. */
 export function dressForCombat(snap: QuestSnapshot, bank?: Tile): QuestStep | null {
-    // Why: the weapon is whatever tier the Attack level reaches and the account owns, so it is resolved rather than named.
+    // Why: the weapon is whatever tier the Attack level reaches and the account owns, so it's resolved at runtime.
     if (!wieldedWeapon(snap)) {
         const inPack = packWeapon(snap);
         if (inPack) {
@@ -310,7 +309,7 @@ export function sourcePickaxe(snap: QuestSnapshot, bank?: Tile): QuestStep | nul
     return { kind: 'buy', item: 'Bronze pickaxe', qty: 1, shop: LQ_SHOP.JIMINUA, estGp: SHOP_GP.JIMINUA, bank };
 }
 
-// Why: no machete on this list. Radimus keeps a free one in the cupboard and counts the bank when he decides whether to hand it over, so provisioning one is a purchase that also breaks the step that would have got it for nothing.
+// Why: no machete on this list. Radimus keeps a free one in the cupboard and counts the bank when deciding whether to hand it over, so provisioning one breaks the step that would get it for nothing.
 /** Jiminua's counter in Tai Bwo Wannai stocks everything on this list. */
 export const JIMINUA_KIT: readonly { item: LqItem; qty: number }[] = [
     { item: { id: LQ_ID.PAPYRUS, name: LQ_ITEM.PAPYRUS }, qty: 8 },
@@ -322,9 +321,9 @@ export const JIMINUA_KIT: readonly { item: LqItem; qty: number }[] = [
     { item: { id: LQ_ID.VIAL_WATER, name: LQ_ITEM.VIAL_WATER }, qty: 1 }
 ];
 
-// Why: the wall keeps its five in `%legends_bits`, so they are spent once and never again, but a death on the way down drops them, and the replacement is another trip to Yanille for the only soul rune in the game. A spare set stacks into the same slots.
+// Why: the wall keeps its 5 in `%legends_bits`, so they're spent once, but a death on the way down drops them and the replacement is another trip to Yanille for the only soul rune in the game. A spare set stacks into the same slots.
 
-/** The five the marked wall swallows, in the one order it accepts, from the Magic Guild counter. */
+/** The 5 the marked wall swallows, in the one order it accepts, from the Magic Guild counter. */
 export const RUNE_KIT: readonly { item: LqItem; qty: number; stock?: number }[] = [
     { item: { id: LQ_ID.SOUL_RUNE, name: LQ_ITEM.SOUL_RUNE }, qty: 1, stock: 2 },
     { item: { id: LQ_ID.MIND_RUNE, name: LQ_ITEM.MIND_RUNE }, qty: 1, stock: 2 },
@@ -332,8 +331,8 @@ export const RUNE_KIT: readonly { item: LqItem; qty: number; stock?: number }[] 
     { item: { id: LQ_ID.LAW_RUNE, name: LQ_ITEM.LAW_RUNE }, qty: 2, stock: 4 }
 ];
 
-// Why: the magic gate eats an orb and a cast every time it is crossed downwards, while everything else in the trials is spent once and stays spent, so the two kits are asked for separately.
-// Why: the Magic Guild counter is in Yanille, which from Karamja is the ship, the walk and the bank, so the descent's cast is bought a run's worth at a time, a rune stack is one slot whatever the count, which makes every later descent a check rather than a crossing.
+// Why: the magic gate eats an orb and a cast every downward crossing, while everything else in the trials is spent once, so the 2 kits are asked for separately.
+// Why: the Magic Guild counter is in Yanille, the ship, the walk and the bank from Karamja, so the descent's cast is bought a run's worth at a time; a rune stack is one slot whatever the count.
 
 /** How many descents one shopping trip is stocked for. */
 const DESCENTS_STOCKED = 5;
@@ -348,9 +347,9 @@ export const BANK_ONLY_KIT: readonly { item: LqItem; qty: number }[] = [
     { item: { id: LQ_ID.RUNE_AXE, name: LQ_ITEM.RUNE_AXE }, qty: 1 }
 ];
 
-// Why: the outer gate shuts behind whoever picked it and the three boulders drop back down behind whoever mined them, so the descent is paid for again in full every time it is made.
+// Why: the outer gate shuts behind whoever picked it and the 3 boulders drop back behind whoever mined them, so every descent is paid for in full.
 
-// Why: the cosmic runes sit here rather than with the water ones they are cast alongside. The Magic Guild counter stocks fire, water, air, earth, mind, body, soul, nature, chaos, blood, law and death and no cosmic at all, the only shop in the game that sells one is the Mage Arena's, which is deep Wilderness and behind a setting. Asked for at a counter that cannot sell it, the leg buys nothing and says nothing.
+// Why: the Magic Guild counter stocks fire, water, air, earth, mind, body, soul, nature, chaos, blood, law and death and no cosmic, and the only shop that sells one is the Mage Arena's, deep Wilderness and behind a setting, so the cosmic runes are bank-only. Asked for at a counter that can't sell it, the leg buys nothing and says nothing.
 
 /** The lockpick, the orb and the cast's cosmic runes, all spent on every descent, none stocked by a counter. */
 export const DESCENT_KIT: readonly { item: LqItem; qty: number }[] = [
@@ -386,9 +385,9 @@ export function sourceBankOnly(snap: QuestSnapshot, kit: readonly { item: LqItem
 }
 
 // Why: only the Falador and Al Kharid gem counters sell a cut gem at all, they hold one apiece, and neither ever stocks opal, jade or red topaz.
-// Why: the only rocks that drop all seven are north of Shilo Village, reached by Hajedy's cart out of Brimhaven, so the chain is mine-then-cut with the bank in front of it.
+// Why: the only rocks that drop all 7 are north of Shilo Village, reached by Hajedy's cart out of Brimhaven, so the chain is mine-then-cut with the bank in front.
 
-/** The next rung of the seven-gem chain, or null once all seven are carried. */
+/** The next rung of the 7-gem chain, or null once all 7 are carried. */
 export function sourceGems(snap: QuestSnapshot, bank?: Tile): QuestStep | null {
     const missing = GEM_ROCKS.filter(gem => owned(snap, gem.id) === 0);
     if (missing.length === 0) {
@@ -420,9 +419,9 @@ export function sourceGems(snap: QuestSnapshot, bank?: Tile): QuestStep | null {
     return { kind: 'custom', name: `mine a gem (${missing.length} of seven still missing)`, run: mineGem };
 }
 
-// Why: Drogo's is the only gold-bar counter and its baseline stock is zero, so the honest chain is mine at Brimhaven and smelt at the Shilo furnace next to the booth.
+// Why: Drogo's is the only gold-bar counter and its baseline stock is 0, so the chain is mine at Brimhaven and smelt at the Shilo furnace next to the booth.
 
-/** The next rung of the two-gold-bar chain, or null once both are carried. */
+/** The next rung of the 2-gold-bar chain, or null once both are carried. */
 export function sourceGoldBars(snap: QuestSnapshot, bank?: Tile): QuestStep | null {
     const bars = { id: LQ_ID.GOLD_BAR, name: LQ_ITEM.GOLD_BAR };
     if (owned(snap, bars.id) >= 2) {
@@ -442,8 +441,8 @@ export function sourceGoldBars(snap: QuestSnapshot, bank?: Tile): QuestStep | nu
     return { kind: 'mineRock', rock: 'Gold', item: 'Gold ore', qty: 1, anchor: LQ_TILE.GOLD_ROCKS };
 }
 
-// Why: every counter this quest uses is a sea crossing or a kingdom away from the next thing it needs, Jiminua's is on Karamja, the Magic Guild is upstairs in Yanille, and sourcing per leg alternated between them and the bank across the length of stage 8. Bought once, banked once, every later leg is a withdraw.
-// Why: the check is against `qty` and the purchase is against `stock`, the same split `source` makes, so a pack that already holds a descent's worth is not sent shopping for four more.
+// Why: every counter this quest uses is a sea crossing from the next thing it needs, Jiminua's on Karamja and the Magic Guild upstairs in Yanille, so buy once, bank once, and every later leg is a withdraw.
+// Why: the check is against `qty` and the purchase against `stock`, the same split `source` makes, so a pack holding a descent's worth isn't sent shopping for 4 more.
 
 /** Each counter this quest ever buys from, in one visit apiece, banked before the next. */
 const COUNTERS: readonly {
@@ -479,7 +478,7 @@ export function provision(snap: QuestSnapshot): QuestStep | null {
             const target = Math.max(short.stock ?? short.qty, short.qty);
             return { kind: 'buy', item: short.item.name, qty: target - have, shop: counter.shop, estGp: counter.estGp, bank: counter.bank };
         }
-        // Why: banked at this counter's own booth rather than carried to the next, as the two lists together are more slots than the pack has.
+        // Why: banked at this counter's own booth, as the 2 lists together are more slots than the pack has.
         if (counter.kit.some(want => held(snap, want.item.id) > 0)) {
             return provisionDeposit(counter.bank);
         }
@@ -509,12 +508,12 @@ export function warnLegendsReadiness(): string | null {
 /** The profile a headed end-to-end run has cleared. */
 export const LQ_PROVEN_COMBAT_FLOOR = 70;
 
-// Why: Shilo Village banks Karamja, which is the island's difference, Ardougne West is the Brimhaven ship and a walk each way, and the gold, the gems, Jiminua's counter and the jungle are all on this side of that crossing.
+// Why: Shilo Village banks Karamja; Ardougne West is the Brimhaven ship and a walk each way, and the gold, the gems, Jiminua's counter and the jungle are all on this side of that crossing.
 export const LEG_BANK = {
     /** Ardougne West is the nearest booth to the Legends Guild gate. */
     guild: LQ_BANK.ARDOUGNE,
-    /** Every Karamja leg, at Shilo's teller rather than across the sea. */
+    /** Every Karamja leg, at Shilo's teller. */
     karamja: LQ_BANK.SHILO,
-    /** The Magic Guild counter is upstairs in Yanille, sixty tiles from its booth. */
+    /** The Magic Guild counter is upstairs in Yanille, 60 tiles from its booth. */
     runes: LQ_BANK.YANILLE
 } as const;

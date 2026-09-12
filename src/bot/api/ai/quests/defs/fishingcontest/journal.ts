@@ -11,7 +11,7 @@ export const FC_STAGE = {
     IN_COMP: 2,
     /** The garlic has driven the stranger off the pipes; that spot is the bot's. */
     GARLIC_COMP: 3,
-    /** Three giant carp handed over; the trophy is the reward. */
+    /** 3 giant carp handed over; the trophy is the reward. */
     WON_COMP: 4,
     COMPLETE: 5
 } as const;
@@ -25,7 +25,7 @@ function normalize(lines: readonly string[] | string): string {
         .toLowerCase();
 }
 
-// Why: the page is rebuilt from scratch at each stage rather than struck through, but its first two lines are shared from `started` on, so these needles are the lines that differ.
+// Why: the page is rebuilt from scratch at each stage but its first 2 lines are shared from `started` on, so these needles are the lines that differ.
 const STAGES: readonly [string, number][] = [
     ['quest complete!', FC_STAGE.COMPLETE],
     ['i easily won the contest', FC_STAGE.WON_COMP],
@@ -43,7 +43,7 @@ export function parseFishingContestJournal(lines: readonly string[] | string): n
     return STAGES.find(([needle]) => text.includes(needle))?.[1];
 }
 
-// Why: no last-good cache here, losing the contest walks the stage back to `started`, so a stale read would send the bot to fish a spot it no longer owns.
+// Why: Losing resets the stage to `started`, so a last-good cache could retain invalid progress.
 
 export async function readFishingContestStage(): Promise<number | undefined> {
     const status = Quests.status(FC_NAME);

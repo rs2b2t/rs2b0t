@@ -9,7 +9,7 @@ export { WH_STAGE, parseWitchsHouseJournal, readWitchsHouseProgress } from './jo
 export { WH_OBJ, WH_TILE, inGarden, inShed } from './areas.js';
 export { DiaryState, resetDiaryState } from './house.js';
 
-/** The four forms carry 144 hitpoints between them, which the eight-piece default does not cover. */
+/** The 4 forms carry 144 hitpoints between them, more than the 8-piece default covers. */
 const WH_FOOD = 12;
 
 const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep => ({
@@ -58,8 +58,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         if (stage === WH_STAGE.STARTED) {
             return custom('drop the magnet the cupboard will not replace', dropStaleMagnet);
         }
-        // Why: the cheese is spent luring the mouse, so a bot caught before the magnet lands comes back
-        // holding the magnet and nothing to lure with.
+        // Why: the cheese is spent luring the mouse, so a bot caught before the magnet lands comes back holding the magnet and nothing to lure with.
         if (heldId(snap, WH_OBJ.CHEESE) === 0) {
             return { kind: 'buy', item: WH_NAME.CHEESE, qty: 1, shop: WYDIN, estGp: SHOP_GP };
         }
@@ -69,8 +68,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (heldId(snap, WH_OBJ.SHED_KEY) > 0) {
         return custom('unlock the shed and kill the experiment', killExperiment);
     }
-    // Why: the diary is read before the first garden trip and never while a shed key is being carried,
-    // as the walk back through the garden is where that key is lost.
+    // Why: the diary is read before the first garden trip and never while carrying a shed key, since the walk back through the garden is where that key is lost.
     if (diaryWanted()) {
         return heldId(snap, WH_OBJ.DIARY) > 0
             ? custom("read the witch's diary so a catch cannot relock the back door", readDiary)
@@ -98,8 +96,7 @@ export const witchshouse: QuestModule = {
     tools: ['door key', 'key', 'magnet', 'cheese', 'ball', 'diary', 'leather gloves'],
     readProgress: readWitchsHouseProgress,
     sustain: { foods: ['Lobster', 'Swordfish', 'Trout'], eatBelowHp: 0.6 },
-    // Why: neither spawns anywhere and the record calls both acquirable, so with an empty bank the
-    // engine had no route to either and blocked the quest before its first step.
+    // Why: neither spawns anywhere and the record calls both acquirable, so with an empty bank the engine had no route to either and blocked the quest.
     gather: {
         'cheese': (_snap, need) => ({ kind: 'buy', item: WH_NAME.CHEESE, qty: need, shop: WYDIN, estGp: SHOP_GP }),
         'leather gloves': (_snap, need) => ({ kind: 'buy', item: WH_NAME.GLOVES, qty: need, shop: THESSALIA, estGp: SHOP_GP })

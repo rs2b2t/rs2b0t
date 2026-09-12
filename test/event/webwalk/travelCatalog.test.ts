@@ -203,7 +203,7 @@ describe('essence / levers', () => {
     });
 });
 
-// Why: the collision pack sees the barricade and the timber defence but not the way through them, so every approach to Shilo routed through Hajedy's cart, a sea crossing and a walk, for a village with a door on the far side of the wall.
+// Why: the collision pack sees Shilo's barriers but cannot derive the crossings through them.
 describe('Shilo Village gates', () => {
     const byName = (n: string) => shiloGateEdges().find(e => e.locName === n);
 

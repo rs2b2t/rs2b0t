@@ -21,10 +21,7 @@ export function lcCoord(level: number, mx: number, mz: number, lx: number, lz: n
     return { level, x: mx * 64 + lx, z: mz * 64 + lz };
 }
 
-/**
- * Pack/unpack engine coord integers (LostCity CoordGrid).
- * layout: level << 28 | x << 14 | z  (14-bit x/z, 2-bit level)
- */
+/** Pack engine coord integers (LostCity CoordGrid): level << 28 | x << 14 | z, 14-bit x/z and 2-bit level. */
 export function packCoord(level: number, x: number, z: number): number {
     return (z & 0x3fff) | ((x & 0x3fff) << 14) | ((level & 0x3) << 28);
 }

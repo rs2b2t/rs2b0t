@@ -83,8 +83,7 @@ export const Shop = {
         return bought;
     },
 
-    // Why: a shop can stock two objects that render the same name, Thessalia's two priest-gown
-    // halves are 426 and 428, and buying by name takes the first slot twice.
+    // Why: a shop can stock two objects with the same name (Thessalia's priest-gown halves are 426 and 428), and buying by name takes the first slot twice.
 
     /** Buy by exact object id, for stock whose display name is shared. */
     async buyById(id: number, n: number): Promise<number> {
@@ -117,7 +116,7 @@ export const Shop = {
         return bought;
     },
 
-    // pick chooses among same-name pack slots (e.g. sell the noted stack, not unnoted singles)
+    // pick chooses among same-name pack slots, e.g. the noted stack over unnoted singles
     async sell(name: string, n: number, pick?: (i: { id: number; count: number; slot: number }) => boolean): Promise<number> {
         let sold = 0;
         while (sold < n && Shop.isOpen()) {
@@ -167,8 +166,7 @@ function heldById(id: number): number {
     return Inventory.items().filter(item => item.id === id).reduce((sum, item) => sum + item.count, 0);
 }
 
-// The engine processes at most this many user-event packets per player tick
-// (ClientGameProtCategory USER_EVENT), extra ops in a tick are dropped.
+// The engine handles at most this many user-event packets per player tick (ClientGameProtCategory USER_EVENT) and drops the rest.
 const USER_OPS_PER_TICK = 5;
 const SHOP_STEPS = [10, 5, 1] as const;
 

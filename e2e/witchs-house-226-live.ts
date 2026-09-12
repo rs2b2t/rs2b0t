@@ -1,5 +1,5 @@
-/** Live Witch's House harness (#226): --stage N --until N --at x,z,level --stocked --skills N --minutes N, base :8890.
- *  Why: `--stage` sets `%ballquest` and relogs, since update_questlist only recolours the journal at login; the bank holds coins, food and a melee kit, and the cheese, the gloves, the door key, the magnet, the diary, the shed key and the ball are all things the run has to source for itself. */
+/** Live Witch's House harness (#226), using the members world at :8890. */
+// Why: stage jumps relog; only coins, food, and melee gear are seeded.
 
 //   HEADED=1 bun e2e/witchs-house-226-live.ts --stage 0 --minutes 60
 //   HEADED=1 bun e2e/witchs-house-226-live.ts --stage 2 --until 3 --stocked --minutes 20   # the mouse and the magnet

@@ -1,5 +1,5 @@
-/** Bake full-world basemap assets from worldmap.jag: [--engine DIR] [--jag PATH] [--out DIR] [--revision TAG]. Emits a terrain-only basemap plus pre-baked transparent key / multi / free overlays so the picker can toggle layers without re-running MapView.
- *  worldmap.jag resolution order: --jag → $ENGINE/data/pack/mapview → out/ → download from 2004scape. */
+/** Bake terrain and transparent key, multi and free overlays from worldmap.jag.
+ * Input order: --jag, $ENGINE/data/pack/mapview, out/, then a 2004scape download. */
 
 // Usage:
 //   bun tools/map/build-basemap.ts [--engine DIR] [--jag PATH] [--out DIR] [--revision TAG]
@@ -215,7 +215,7 @@ type BakeResult = {
     terrain: Int32Array;
     /** All Key icons on one transparent sheet (optional "everything" layer). */
     keyRgba: Uint8Array;
-    /** Per mapfunction type id → transparent sheet with only that Key type. */
+    /** Per mapfunction type id, a transparent sheet with only that Key type. */
     keyTypeRgba: Record<string, Uint8Array>;
     /** Town / place-name labels (transparent; pixels that differ from terrain). */
     labelsRgba: Uint8Array;
@@ -308,7 +308,7 @@ async function bake(jagBytes: Uint8Array): Promise<BakeResult> {
         labelsRgba[o + 3] = 0xff;
     }
 
-    // Key icons: per-type transparent overlays + composite (same −7 offset as MapView).
+    // Key icons: per-type transparent overlays + composite (same -7 offset as MapView).
     const keyRgba = new Uint8Array(width * height * 4);
     const keyTypeRgba: Record<string, Uint8Array> = {};
     const placements: Record<string, [number, number][]> = {};
@@ -323,7 +323,7 @@ async function bake(jagBytes: Uint8Array): Promise<BakeResult> {
             placements[key] = [];
             keyTypeRgba[key] = new Uint8Array(width * height * 4);
         }
-        // Centre of the 1×1 tile cell (matches startX + lengthX/2 at 1 ppt).
+        // Centre of the 1x1 tile cell (matches startX + lengthX/2 at 1 ppt).
         const cx = lx;
         const cy = ly;
         placements[key].push([cx, cy]);

@@ -1,7 +1,4 @@
-/**
- * World-walker library surface, teleports, travel catalog, requires, bank plan.
- * Product docs: docs/NAV.md
- */
+/** World-walker library surface: teleports, travel catalog, requires, bank plan. Product docs: docs/NAV.md */
 
 export * from './types.js';
 export * from './edgeId.js';

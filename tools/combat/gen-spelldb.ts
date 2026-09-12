@@ -142,7 +142,7 @@ function generate(): string {
         spells.join(',\n'),
         '};',
         '',
-        '/** Staff display name → the rune(s) it provides for free while wielded. */',
+        '/** Staff display name to the rune(s) it provides for free while wielded. */',
         'export const STAFF_RUNES: Record<string, string[]> = {',
         staves.join(',\n'),
         '};',

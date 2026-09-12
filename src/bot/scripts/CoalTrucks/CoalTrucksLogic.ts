@@ -16,9 +16,7 @@ export const TRUCK_LEASH = 4;
 /** Anything inside this of the anchor counts as the working area: rocks, truck stand, walk slop. */
 export const MINE_AREA = 20;
 
-// Why: a 120 truck drains in 4 full packs plus a ~12 remainder, and that last 102-tile round trip for 12 coal is poor value.
-// Why: the remainder is not lost, it stays in the truck and the miner tops it up next cycle.
-// Why: measured per cycle, 4 pulls banks 135 over 720 tiles and 5 pulls banks 147 over 822.
+// Why: four pulls bank 135 coal over 720 tiles; a fifth adds only 12 coal and 102 tiles.
 
 /** Pulls per haul before heading back. */
 export const MAX_PULLS_PER_HAUL = 4;
@@ -125,14 +123,12 @@ export function truckEmptyAfterRemove(result: RemoveResult): boolean {
 }
 
 export function decide(view: WorldView): Action {
-    // Mining without a pickaxe fails silently with no message and no xp, so this outranks
-    // every phase. The bank is the only place to fix it.
+    // Missing pickaxes fail silently, so bank before evaluating the current phase.
     if (!view.hasPickaxe) {
         return { kind: 'bank' };
     }
 
-    // Why: the truck is capped when the run starts, so the carried pack cannot go into it.
-    // Why: banking on the way in beats touching the truck first and doubling back, mine->bank is 156, mine->truck->bank is 196.
+    // Why: when the truck starts capped, bank carried coal directly instead of doubling back.
     if (view.phase === 'run') {
         return view.coalHeld > 0 ? { kind: 'bank' } : { kind: 'travel-to-seers' };
     }
@@ -145,14 +141,12 @@ export function decide(view: WorldView): Action {
         return spent ? { kind: 'travel-to-mine' } : { kind: 'remove' };
     }
 
-    // A capped truck does not mean leave immediately: the haul costs the same six bank
-    // hops whether the pack holds 17 or 27, so top it up first and the extra coal is free.
+    // Top up the pack before a capped-truck haul; the six bank hops cost the same.
     if (view.truckFull) {
         if (view.atMine && !view.packFull && view.rockAvailable) {
             return { kind: 'mine' };
         }
-        // Same reason as the run phase: the truck is capped, so what we carry cannot go
-        // into it. Head for the bank, not the truck, or the walk in doubles back.
+        // Carried coal cannot enter a capped truck, so head straight to the bank.
         return view.coalHeld > 0 ? { kind: 'bank' } : { kind: 'travel-to-seers' };
     }
 

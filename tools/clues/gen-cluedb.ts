@@ -15,8 +15,7 @@ const MEDIUM_SCRIPT = join(CONTENT, 'scripts', 'minigames', 'game_trail', 'scrip
 
 const VAGUE003_COORD = '1_40_51_14_62';
 
-// Two hard clues keep their coord in the handler script rather than in the obj
-// params, so the generator cannot read them off trail_hard.obj.
+// Two hard clues keep their coord in the handler script, so the generator can't read them off trail_hard.obj.
 const HARD_SPECIAL_COORDS: Record<string, string> = {
     // quest_fluffs.rs2, gertrudeempty_crate switch on loc_coord
     trail_clue_hard_map001: '0_51_54_45_47',
@@ -36,8 +35,7 @@ const RIDDLE_KEY_COORDS: Record<string, string> = {
 
 const NPC_ALIAS: Record<string, string> = { _sailor: 'captain_tobias' };
 
-// Items a clue needs beyond the standard kit, which the content pack does not
-// record. Bank-only: the solver keeps and withdraws them, never fetches them.
+// Extra items the content pack doesn't record. Bank-only: the solver withdraws them and never goes to fetch them.
 const CLUE_ITEMS: Record<string, string[]> = {
     // The dig tile is on the Baxtorian Falls ledge, reached by rope.
     trail_clue_medium_sextant006: ['Rope']
@@ -88,10 +86,7 @@ function loadNpcDisplayNames(): Map<string, string> {
     return names;
 }
 
-/**
- * Sliding-puzzle pieces are all named "Sliding piece", so the board can only be
- * read by obj id. puzzle_piece_id is the slot the piece belongs in when solved.
- */
+/** Sliding-puzzle pieces are all named "Sliding piece", so the board is read by obj id. puzzle_piece_id is the slot the piece belongs in when solved. */
 function generatePieces(objIds: Map<string, number>): string {
     const text = readFileSync(join(TRAIL, 'trail.obj'), 'utf8');
     const pieces: [number, number][] = [];
@@ -120,7 +115,7 @@ function generatePieces(objIds: Map<string, number>): string {
         '// Regenerate: bun tools/clues/gen-cluedb.ts   (drift gate: --check)',
         '// docs/reference/clues-mechanics.md#puzzle-boxes',
         '',
-        '// piece obj id → the board slot it belongs in when the puzzle is solved.',
+        '// piece obj id to the board slot it belongs in when the puzzle is solved.',
         'export const PUZZLE_PIECE_SLOT: Record<number, number> = {',
         pieces.map(([id, slot]) => `    ${id}: ${slot}`).join(',\n'),
         '};',
@@ -228,7 +223,7 @@ function generate(): string {
         clueLines.join(',\n'),
         '};',
         '',
-        '// casket obj id → casket obj name; lets the solver recognise a held casket.',
+        '// casket obj id to casket obj name; lets the solver recognise a held casket.',
         'export const CASKET_IDS: Record<number, string> = {',
         casketLines.join(',\n'),
         '};',
@@ -247,7 +242,7 @@ if (process.argv.includes('--check')) {
         try {
             current = readFileSync(path, 'utf8');
         } catch {
-            // No file yet: an absent db is "stale", which is what the check should report.
+            // Missing output is stale.
         }
         if (current !== fresh) {
             console.error(`STALE: ${path} does not match the content pack — run: bun tools/clues/gen-cluedb.ts`);

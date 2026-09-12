@@ -1,6 +1,5 @@
 // docs/decisions/multibox-telemetry-honesty.md
-// Why: "a right-click takes 2 seconds" is the symptom that gets reported, so it is measured directly rather than inferred from CPU.
-// Why: Firefox has no Long Tasks API but does implement Event Timing, which reports how long an input waited plus how long its handler ran -- the number a user perceives as lag.
+// Why: Firefox Event Timing measures input queueing and handler time directly; CPU samples cannot.
 
 const DEFAULT_THRESHOLD_MS = 100;
 
@@ -32,10 +31,7 @@ export class InputLatency {
         private readonly thresholdMs: number = DEFAULT_THRESHOLD_MS
     ) {}
 
-    /**
-     * Event Timing is required, not optional: without it the wall would silently
-     * report zero input lag while the user watches a click take two seconds.
-     */
+    /** Requires Event Timing so unsupported browsers do not report a false zero. */
     start(): void {
         if (this.observer) {
             throw new Error('[rs2b0t] input latency observer is already started');
@@ -69,7 +65,7 @@ export class InputLatency {
     }
 }
 
-/** Throws rather than degrading to a blind sampler if the API is absent. */
+/** Throws when the API is absent, so the wall never runs a blind sampler. */
 export function browserObserverFactory(scope: typeof globalThis = globalThis): ObserverFactory {
     const Ctor = (scope as { PerformanceObserver?: typeof PerformanceObserver }).PerformanceObserver;
     const supported = Ctor?.supportedEntryTypes;

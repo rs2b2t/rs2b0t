@@ -17,8 +17,7 @@ import { kitStep, type Purchasable } from './shops.js';
 import { anywhere, bankedId, foodName, heldFood, heldId, wornId } from './state.js';
 import { FOOD_FLOAT } from '../../food.js';
 
-// Why: the Ice Queen is level 111 with 104 hitpoints, and the kit is Scavvo's on the Champions' Guild
-// upper floor. Each float clears the asking price of a shop below base stock, which buys at more.
+// Why: the Ice Queen is level 111 with 104 hitpoints and the kit is Scavvo's on the Champions' Guild upper floor. Each float clears the asking price of a shop below base stock, which buys at more.
 const COMBAT_KIT: readonly Purchasable[] = [
     { id: 1113, name: 'Rune chainbody', qty: 1, sources: [{ ...HERO_SHOP.SCAVVO, gp: 80_000 }] },
     { id: 1079, name: 'Rune platelegs', qty: 1, sources: [{ ...HERO_SHOP.SCAVVO, gp: 100_000 }] },
@@ -40,8 +39,7 @@ function hasEntranaSpillover(snap: QuestSnapshot): boolean {
     return [...snap.inv.keys()].some(name => !keep.includes(name));
 }
 
-// Why: the engine lowercases both `inv` and `worn`, so a display-cased comparison here reads every
-// stripped bot as still wearing something and repeats the step until the watchdog parks it.
+// Why: The engine lowercases `inv` and `worn`, so compare normalized names or stripped equipment appears present.
 function wearingAnythingElse(snap: QuestSnapshot): boolean {
     const gloves = HERO_NAMED.ICE_GLOVES.toLowerCase();
     return [...snap.worn].some(name => name !== gloves);
@@ -71,8 +69,7 @@ function glovesOnFloor(): { interact(op: string): boolean | Promise<boolean> } |
     return GroundItems.query().where(g => g.id === HERO_ID.ICE_GLOVES).within(12).nearest();
 }
 
-// Why: on the `:8890` content every entrance to the lair sits on a plateau the map flags seal, so this
-// leg says so once rather than repathing forever. See docs/decisions/quest-pitfalls-35.md.
+// Why: on the `:8890` content every entrance to the lair sits on a plateau the map flags seal, so this leg says so once and stops repathing. See docs/decisions/quest-pitfalls-35.md.
 
 /** Kill the Ice Queen and take the gloves she drops. */
 export async function killIceQueen(log: (m: string) => void): Promise<boolean> {
@@ -105,8 +102,7 @@ export async function killIceQueen(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => Inventory.countById(HERO_ID.ICE_GLOVES) > 0, 8_000);
 }
 
-// Why: every ferry lands on the deck at level 1 and the Gangplank loc is absent from the scene for a
-// tick or two after the region change, so a click too early leaves the bot aboard and `onEntrana` false.
+// Why: every ferry lands on the deck at level 1 and the Gangplank loc is absent from the scene for a tick or 2 after the region change, so an early click leaves the bot aboard with `onEntrana` false.
 
 /** Cross the gangplank off whatever deck the character is standing on. */
 async function stepOffShip(log: (m: string) => void): Promise<boolean> {
@@ -168,8 +164,7 @@ export async function sailFromEntrana(log: (m: string) => void): Promise<boolean
     return !onEntrana(Game.tile());
 }
 
-// Why: the feather burns for hitpoints/8 + 1 and stays on the floor unless the gloves are WORN, so the
-// equip is part of the pickup rather than a step before it.
+// Why: the feather burns for hitpoints/8 + 1 and stays on the floor unless the gloves are worn, so the equip is part of the pickup.
 
 /** Kill the level-2 firebird barehanded and take the feather with the gloves on. */
 export async function takeFeather(log: (m: string) => void): Promise<boolean> {
@@ -209,8 +204,7 @@ export async function takeFeather(log: (m: string) => void): Promise<boolean> {
 
 /** The feather chain: gloves from the Ice Queen, then a stripped trip to Entrana. */
 export function featherStep(snap: QuestSnapshot): QuestStep | null {
-    // Why: the island has one way off it and no walkable route home, so a bot standing on it owes the
-    // ferry before anything else, including a finished feather.
+    // Why: the island has one way off it and no walkable route home, so a bot standing on it owes the ferry before anything else, a finished feather included.
     if (onEntrana(snap.tile)) {
         if (anywhere(snap, HERO_ID.FEATHER) > 0) {
             return { kind: 'custom', name: 'sail back from Entrana', run: sailFromEntrana };

@@ -9,7 +9,7 @@ import { Npcs } from '../../../../npcs/Npcs.js';
 import { SV_ITEM, SV_LOC, SV_NPC, SV_TILE, inDolmenRoom, type ShiloArea } from './areas.js';
 import { driveChoice, heldId, here, locNear, promptLoc, settleScene, useOnLoc } from './scene.js';
 
-/** The doors hide themselves again about fifty ticks after the trees are searched. */
+/** The doors hide themselves again about 50 ticks after the trees are searched. */
 function carvedDoors(): ReturnType<typeof locNear> {
     return locNear(SV_LOC.CARVED_DOORS, 'Search', 10) ?? locNear(SV_LOC.CARVED_DOORS, 'Open', 10);
 }
@@ -34,8 +34,7 @@ async function revealDoors(log: (m: string) => void): Promise<boolean> {
     );
 }
 
-// Why: searching the doors is what teaches the bone lock, and the engine only records it while the stage is `entered_tomb_bervirius`.
-// Why: this therefore runs after the Bervirius dolmen and before the bone key is cut.
+// Why: searching the doors teaches the bone lock, and the engine only records it at stage `entered_tomb_bervirius`, so this runs after the Bervirius dolmen and before the key is cut.
 
 /** Search the carved doors to learn the bone lock. */
 export async function searchCarvedDoors(log: (m: string) => void): Promise<boolean> {
@@ -54,8 +53,7 @@ export async function searchCarvedDoors(log: (m: string) => void): Promise<boole
     if (!(await doors.interact('Search'))) {
         return false;
     }
-    // The bit lands with the message box and nothing else changes, so the journal
-    // on the next pass is the only honest confirmation.
+    // The bit lands with the message box and nothing else changes, so the next journal read confirms it.
     if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 8000))) {
         return false;
     }
@@ -85,8 +83,7 @@ export async function enterRashTomb(log: (m: string) => void): Promise<boolean> 
     if (!(await revealDoors(log))) {
         return false;
     }
-    // Why: once the bone key has been used the doors answer a plain Open and become the Hillside entrance for good.
-    // Why: a restart finds them shut again behind the palms, with nothing named "Hillside entrance" to Enter yet.
+    // Why: After using the bone key, the doors switch to plain Open but may be shut again after restart.
     if (!hillsideEntrance()) {
         const shut = locNear(SV_LOC.CARVED_DOORS, 'Open', 10);
         if (shut && (await shut.interact('Open'))) {
@@ -108,10 +105,7 @@ export async function enterRashTomb(log: (m: string) => void): Promise<boolean> 
     return ok;
 }
 
-/**
- * `zq_open_tombexit` refuses to open for anyone carrying the bone key. The key has
- * to be *used on* the door instead. That inversion is the trick of the exit.
- */
+/** `zq_open_tombexit` refuses anyone carrying the bone key; the key has to be used on the door instead. */
 export async function leaveRashTomb(log: (m: string) => void): Promise<boolean> {
     if (here() !== 'rashEntry') {
         return true;
@@ -144,8 +138,7 @@ export async function leaveRashTomb(log: (m: string) => void): Promise<boolean> 
     return ok;
 }
 
-// Why: the gate teleports across itself in whichever direction you came from, so both crossings are the same click.
-// Why: southbound it refuses anyone without the Beads of the Dead worn, and summons Rashiliyia instead of saying so.
+// Why: the gate teleports across itself in either direction, so both crossings are the same click; southbound it summons Rashiliyia for anyone without the Beads of the Dead worn.
 
 /** Cross the tomb gate in the named direction. */
 export async function passGate(dir: 'in' | 'out', log: (m: string) => void): Promise<boolean> {
@@ -184,10 +177,7 @@ export async function passGate(dir: 'in' | 'out', log: (m: string) => void): Pro
     return ok;
 }
 
-/**
- * The rocks are clicked from wherever the gate dropped us. The ledge is unwalkable
- * in the baked pack, so nothing may try to walk onto it first.
- */
+/** The rocks are clicked from wherever the gate dropped us; the ledge is unwalkable in the baked pack. */
 export async function climbRashRocks(dir: 'down' | 'up', log: (m: string) => void): Promise<boolean> {
     const want: ShiloArea = dir === 'down' ? 'rashInner' : 'rashLedge';
     if (here() === want) {
@@ -208,7 +198,7 @@ export async function climbRashRocks(dir: 'down' | 'up', log: (m: string) => voi
     return ok;
 }
 
-/** Three plain bones, one recess at a time; the third opens the doors and pushes you through. */
+/** 3 plain bones, one recess at a time; the third opens the doors and pushes you through. */
 export async function placeBone(log: (m: string) => void): Promise<boolean> {
     if (heldId(SV_ITEM.BONES.id) === 0) {
         log('no bones left for the door recesses');
@@ -224,9 +214,7 @@ export async function placeBone(log: (m: string) => void): Promise<boolean> {
     );
 }
 
-// Why: the dolmen is on the far side of the skeletal doors, and the doors revert to closed three ticks after any crossing.
-// Why: every trip through them is therefore another `Open`, which teleports rather than walks.
-// Why: nothing routes through them, as they are excluded from the door bake because three bones is the only way in.
+// Why: the skeletal doors revert to closed 3 ticks after a crossing and are excluded from the door bake, so every trip through is another `Open`, which teleports.
 
 /** Cross the skeletal doors in the named direction. */
 async function crossTombDoors(dir: 'north' | 'south', log: (m: string) => void): Promise<boolean> {
@@ -255,8 +243,7 @@ async function crossTombDoors(dir: 'north' | 'south', log: (m: string) => void):
     return ok;
 }
 
-// Why: leaving the chamber takes three moves, back through the skeletal doors, east to the foot of the climbing rocks, then up.
-// Why: nothing but the doors connects the dolmen room to the rest of the tomb.
+// Why: nothing but the skeletal doors connects the dolmen room to the rest of the tomb, so leaving is doors, east to the climbing rocks, then up.
 
 /** Walk out of the dolmen chamber. */
 export async function leaveTombChamber(log: (m: string) => void): Promise<boolean> {
@@ -274,8 +261,7 @@ export async function leaveTombChamber(log: (m: string) => void): Promise<boolea
 
 const FIGHT_MS = 240_000;
 
-// Why: searching the dolmen either summons the next Nazastarool or, once all three are down, yields the remains.
-// Why: driving both from one step keeps the state machine honest when the journal still claims kills the engine has already reset.
+// Why: searching the dolmen summons the next Nazastarool or, once all 3 are down, yields the remains; one step covers both since the journal can claim kills the engine has reset.
 
 /** Search the dolmen, fighting whatever it summons. */
 export async function workTheDolmen(log: (m: string) => void): Promise<boolean> {
@@ -295,7 +281,7 @@ export async function workTheDolmen(log: (m: string) => void): Promise<boolean> 
             op: 'Search',
             near: SV_TILE.RASH_DOLMEN,
             expect: () => heldId(SV_ITEM.RASH_CORPSE.id) > 0 || boss() !== null,
-            // The summon is deliberately delayed five to eight ticks.
+            // The summon is delayed 5 to 8 ticks.
             expectMs: 20_000
         },
         log

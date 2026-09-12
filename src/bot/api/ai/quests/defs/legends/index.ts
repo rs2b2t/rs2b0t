@@ -76,11 +76,11 @@ function step(name: string, run: (log: (m: string) => void) => Promise<boolean>)
     return { kind: 'custom', name, run };
 }
 
-// Why: every leg of this quest that is not on Karamja's open ground sits inside a sealed pocket whose only exit is a scripted crossing, so a branch that forgets to leave one sends the walker at a tile on the wrong side and spends three passes proving it unreachable.
+// Why: Each sealed Karamja pocket requires its scripted exit before normal pathfinding can resume.
 
 /** A step out of whatever pocket we are standing in, or null on open ground. */
 function escapePocket(snap: QuestSnapshot): QuestStep | null {
-    // Why: the shaman cave is underground and carries no pocket, so leaving it off this list filed it as open ground, the one area the quest never offers to climb out of, and the one a run stands in every time it goes to ask Ungadulu anything.
+    // Why: The underground shaman cave has no pocket id, so include it explicitly before treating the tile as open ground.
     const area = legendsArea(snap.tile);
     if (legendsPocket(snap.tile) !== null || area === 'viyeldiCaves' || area === 'shamanCaves') {
         return step('climb back out of the caves', leaveCaves);
@@ -96,10 +96,7 @@ function inTheOpen(snap: QuestSnapshot, whenOpen: QuestStep): QuestStep {
     return escapePocket(snap) ?? whenOpen;
 }
 
-// Why: the pack is full to the last slot through the trials, holding map, machete, axe, lockpick, pickaxe, rope, orb, five rune stacks, seven gems and the bowl, so the food float is a number per leg rather than a constant.
-// Why: the mapping leg carries six papyrus and six charcoal and neither stacks, and the trials leg carries the seven gems and the five wall runes on top of the descent kit, so both floats are what is left rather than what is comfortable.
-// Why: the descent kit is six slots and the quest carries seven more it must not bank, so ten lobsters and four flasks is what the rest holds.
-// Why: the fight float is one lobster short of the ten the demon wants, and that slot is the prayer flask. The potion is what holds Protect from Melee up, and the prayer the summon drains cannot be eaten back.
+// Why: Each leg has different fixed-slot costs, so food limits are set per leg from the remaining inventory space.
 const FOOD = { jungle: 4, trials: 3, fight: 9 } as const;
 
 const CHOP_KIT = [
@@ -131,7 +128,7 @@ function fromShop(snap: QuestSnapshot, kit: readonly { item: { id: number; name:
     return sourceFrom(snap, kit, LQ_SHOP.JIMINUA, SHOP_GP.JIMINUA, LEG_BANK.karamja);
 }
 
-// Why: `jungle_tree` boils off every filled state of the bowl, blessed or not, on any chop, so a full bowl pins the run to the island.
+// Why: `jungle_tree` empties every filled bowl state, so leave the island before filling it.
 
 /** Holding a golden bowl with anything in it. */
 function carryingWater(snap: QuestSnapshot): boolean {
@@ -139,9 +136,7 @@ function carryingWater(snap: QuestSnapshot): boolean {
         .some(id => held(snap, id) > 0);
 }
 
-// Why: Gujuo hands over a sketch, Ungadulu hands over seeds, and every one of those legs is a no-op into a pack with no room, and the mapping supplies are what is still filling it.
-
-// Why: the boulders hand back a lump of rock apiece, the finished map leaves its supplies behind and the forged bowl leaves the hammer, all worthless, and a full pack silently swallows a sketch, a spell or a set of seeds.
+// Why: Several quest rewards fail silently with a full pack, so clear spent mapping, forging, and boulder items first.
 
 /** Every state a forged bowl can be in. */
 const BOWLS: readonly number[] = [
@@ -155,16 +150,15 @@ function spentNow(snap: QuestSnapshot): number[] {
     if (held(snap, LQ_ID.MAP_COMPLETE) > 0 || (snap.stage ?? 0) >= LQ_STAGE.MAPPED_JUNGLE) {
         spent.push(LQ_ID.PAPYRUS, LQ_ID.CHARCOAL);
     }
-    // Why: the hammer's only job was the bowl, and the reed takes the machete as happily as the knife. Both are a slot the trials kit needs.
+    // Why: The hammer is done after forging, and the machete can cut the reed without the knife.
     if (held(snap, LQ_ID.GOLD_BOWL_BLESSED) > 0 || held(snap, LQ_ID.GOLD_BOWL_BLESSED_PURE) > 0) {
         spent.push(LQ_ID.HAMMER, LQ_ID.KNIFE);
     }
-    // Why: the sketch is a drawing of the vessel and nothing more, so the bowl in any state is its own receipt.
+    // Why: Any bowl state proves the sketch has served its only purpose.
     if (BOWLS.some(id => held(snap, id) > 0)) {
         spent.push(LQ_ID.GOLD_BOWL_SKETCH);
     }
-    // Why: a flask is spent only once the last demon is dead. `potsFor` answers zero the moment the bowl is blessed, which is stage 8, with three Nezikchened fights, three aggressive guardians and the trials descent still ahead of it, and this list is a DROP rather than a deposit, so a live run threw the flask on the floor while standing at a booth.
-    // Why: the slot it costs comes off the lobster count instead, which `foodFor` already gives up for it.
+    // Why: Keep Prayer potions until the final demon dies; stage 8 still has three demon fights, guardians, and the trials ahead.
     if ((snap.stage ?? 0) >= LQ_STAGE.DEFEATED_NEZI_FINAL) {
         spent.push(...PRAYER_POTIONS.map(pot => pot.id));
     }
@@ -184,7 +178,7 @@ function ditch(ids: readonly number[]): (log: (m: string) => void) => Promise<bo
     };
 }
 
-// Why: the bank and both counters are off the island, and the walk back in is a chop that boils the bowl dry, so an errand decided from the jungle leaves it first and the fill is what waits.
+// Why: Bank and shop errands leave the island, and re-entry empties the bowl, so complete them before filling it.
 
 /** A kit errand, routed back out to open ground when it was decided from inside. */
 function offIsland(snap: QuestSnapshot, kit: QuestStep | null): QuestStep | null {
@@ -203,9 +197,9 @@ function gateKit(snap: QuestSnapshot): QuestStep | null {
         ?? fromShop(snap, TRIALS_KIT);
 }
 
-// Why: the gate eats the orb as it lets you through, so a check made from below reads as "no orb" and turns a finished descent straight back round.
+// Why: The gate consumes the orb, so skip the kit check after crossing it.
 
-/** The two pockets past the magic gate, where the orb it shattered is not missing but spent. */
+/** The 2 pockets past the magic gate, where the orb it shattered is spent. */
 const PAST_GATE: readonly LegendsPocket[] = ['winchRoom', 'viyeldiLedge'];
 
 /** The descent kit, asked for anywhere the gate is still ahead of us. */
@@ -226,11 +220,11 @@ function trialsKit(snap: QuestSnapshot): QuestStep | null {
         ?? gateKit(snap);
 }
 
-// Why: Protect from Melee is what makes three aggressive guardians survivable at 70, and at seventy points it lapses every three and a half minutes, so the flasks are the armour, not the food.
-/** Three four-dose flasks, which is fourteen minutes of protection and the last slot the descent leaves. */
+// Why: At level 70, three flasks keep Protect from Melee active through the three aggressive guardians.
+/** 3 flasks of 4 doses: 14 minutes of protection and the last slot the descent leaves. */
 const FIGHT_POTS = 3;
 
-// Why: the flask is fetched before the food, not after it. Summoning Nezikchened runs `stat_sub(prayer, 0, 90)`. The fight opens on a tenth of the prayer bar, so Protect from Melee is only armour if there is a dose to put it back, and a pack topped up on lobsters first has no slot left to put one in.
+// Why: Summoning drains 90% Prayer, so reserve a potion slot before filling remaining space with food.
 
 /** Coin, prayer potions, food and a melee kit, taken only where a booth is reachable. */
 function upkeep(snap: QuestSnapshot, food: number, pots = 0): QuestStep | null {
@@ -241,37 +235,34 @@ function upkeep(snap: QuestSnapshot, food: number, pots = 0): QuestStep | null {
         ?? dressForCombat(snap, bank);
 }
 
-// Why: the trials hand back three lumps of rock and every chop leaves its logs, and the pack is already full to its last slot, so a withdraw decided with no room fails for ever.
-// Why: a step that is not going to a bank has nowhere to put them, and a random event's gift arrives whatever the step is, the reed, which wants one slot, met a full pack twice.
+// Why: Trials, chopping, and random events add items to an already tight pack, so reserve space before withdrawals.
 
 /** Free slots at or below which a bank trip empties the pack of junk on its way past. */
 const JUNK_RESERVE = 4;
 
 /** Make room: at the booth the step was going to anyway, or on the ground. */
 function makeRoom(snap: QuestSnapshot, chosen: QuestStep): QuestStep {
-    // Why: a booth is the tidiest place to shed a slot, but only for something a deposit would take, falling through is what a shop counter with nothing bankable needs.
-    // Why: the reserve, rather than the last slot, is what triggers it: a step already opening the bank pays nothing to empty the pack there, and every hand-over this quest makes, the reed, a herb, a lump of rock, the sketch, the seeds and the spell, wants a slot the pack does not have if it is shed only once full.
-    // Why: it is a reserve rather than "any junk at all" because a junk item the bank will not take leaves the count unmoved, and the deposit would then be chosen for ever in place of the withdraw.
+    // Why: Deposit before bank or shop errands when useful junk is present; otherwise the planner could repeat a no-op deposit.
     if ((chosen.kind === 'withdraw' || chosen.kind === 'buy') && (snap.freeSlots ?? 28) <= JUNK_RESERVE && junkHeld(snap)) {
         return deposit(chosen.bank ?? LEG_BANK.karamja);
     }
-    // Why: everything below sheds where the character stands, which is irreversible, so it waits for the pack to be out of room rather than trusting the keep list on every pass.
+    // Why: Dropping is irreversible, so wait until the pack is full.
     if ((snap.freeSlots ?? 1) > 0) {
         return chosen;
     }
-    // Why: a pack with spent kit in it is already being dropped by the step above, and two drops racing each other shed one item a pass.
+    // Why: a pack with spent kit in it is already being dropped by the step above, and 2 drops racing each other shed one item a pass.
     const junk = spentNow(snap).length > 0 ? [] : ditchIds(snap);
     if (junk.length > 0) {
         return step('drop what the quest has no use for', ditch(junk));
     }
-    // Why: twenty-eight wanted things still leave no slot for the reed, the herb or the lump the quest is about to hand over, and the lobster count is the only number in the pack that is a float rather than a requirement.
-    // Why: eating below the float's own top-up threshold buys a slot the next withdraw spends on another lobster, which after a death is a loop rather than a fix, so only the surplus is edible.
+    // Why: 28 wanted things still leave no slot for the reed, the herb or the lump about to be handed over, and the lobster count is the only float in the pack.
+    // Why: eating below the float's top-up threshold buys a slot the next withdraw spends on another lobster, a loop after a death, so only the surplus is edible.
     const spare = heldFood(snap) - Math.ceil(foodFor(snap, snap.stage ?? 0) / 2);
     const worst = FOOD_FOR_SLOT.find(f => held(snap, f.id) > 0);
     return spare > 0 && worst ? step(`eat a ${worst.name.toLowerCase()} to make room`, eatOne) : chosen;
 }
 
-/** Eat the worst food held, for the slot rather than the hitpoints. */
+/** Eat the worst food held, for the slot. */
 async function eatOne(log: (m: string) => void): Promise<boolean> {
     const held = Inventory.items();
     const worst = FOOD_FOR_SLOT.find(f => held.some(item => item.id === f.id));
@@ -285,21 +276,21 @@ async function eatOne(log: (m: string) => void): Promise<boolean> {
     return Inventory.free() > 0;
 }
 
-// Why: the pack is tightest through the trials and the fights want the most food, so the float is chosen by where the quest is rather than once.
-// Why: the Book of Binding in the pack is what says the trials are behind us and the octagram demon is next, which the stage alone does not. Both are stage 10.
+// Why: the pack is tightest through the trials and the fights want the most food, so the float is chosen by where the quest is.
+// Why: the Book of Binding in the pack says the trials are behind us and the octagram demon is next; both are stage 10.
 function foodFor(snap: QuestSnapshot, stage: number): number {
-    // Why: nothing after the last demon is a fight. The gilded totem is a walk to Radimus and four training sessions, so a fight float there is a bank trip for flasks the quest will never drink, and `potsFor` reads this, so it is what sent the run for prayer potions on its way to hand the totem in.
+    // Why: nothing after the last demon is a fight. The gilded totem is a walk to Radimus and 4 training sessions, so a fight float there (and `potsFor` reads this) is a bank trip for flasks the quest never drinks.
     if (stage >= LQ_STAGE.DEFEATED_NEZI_FINAL) {
         return FOOD.jungle;
     }
-    // Why: everything from the winch down is a fight, three aggressive guardians and then the demon at the source, so the trials float ends where the trials do.
+    // Why: everything from the winch down is a fight, 3 aggressive guardians then the demon at the source, so the trials float ends where the trials do.
     if (held(snap, LQ_ID.BOOK_OF_BINDING) > 0 || stage >= LQ_STAGE.ENTER_LOWER_DUNGEON) {
         return FOOD.fight;
     }
     return stage >= LQ_STAGE.ASKED_GUJUO_WATER ? FOOD.trials : FOOD.jungle;
 }
 
-// Why: the blessing is a prayer roll that takes five points on every miss and refuses below forty-two, so the leg needs a flask as much as the demon does, and the bowl in the pack is what says the blessing has not happened yet.
+// Why: the blessing is a prayer roll that takes 5 points a miss and refuses below 42, so the leg needs a flask as much as the demon does; a plain bowl in the pack says it hasn't happened yet.
 
 /** How many prayer flasks this stage's next step wants. */
 function potsFor(snap: QuestSnapshot, stage: number): number {
@@ -309,21 +300,21 @@ function potsFor(snap: QuestSnapshot, stage: number): number {
     return held(snap, LQ_ID.GOLD_BOWL) > 0 ? BLESS_POTS : 0;
 }
 
-// Why: the trance takes five points on a miss and misses about three times in five, and a forty-two bar is one dose back to full, so the doses are the throws, and one potion buys four of them.
+// Why: the trance takes 5 points a miss and misses about 3 times in 5, and a 42 bar is one dose back to full, so the doses are the throws and one potion buys 4.
 const BLESS_POTS = 2;
 
-// Why: the shopping happens before Radimus is asked for the quest, because both counters are a sea crossing from everything the quest then does, and a list bought per leg walked Karamja to Yanille to Ardougne and back across the length of stage 8.
+// Why: the shopping happens before Radimus is asked for the quest, because both counters are a sea crossing from everything the quest then does.
 
 function stageStart(snap: QuestSnapshot): QuestStep {
     return inTheOpen(snap, provision(snap) ?? step('ask Radimus Erkle for the quest', startQuest));
 }
 
-// Why: Radimus keeps a free machete in the cupboard beside his desk and refuses a second one, so the counter in Shilo is the fallback rather than the first stop.
-// Why: he counts the bank as well as the pack, `quest_legends.rs2` answers "I hear that you have enough machetes in your bank to start your own store" and hands over nothing, so one sitting in the bank turns the cupboard into a step that fails for ever. Whatever put it there, the withdraw is the way out.
+// Why: Radimus keeps a free machete in the cupboard beside his desk and refuses a second one, so the counter in Shilo is the fallback.
+// Why: The cupboard counts banked machetes but gives none, so withdraw an existing one instead of retrying the cupboard.
 
 function stageMapping(snap: QuestSnapshot): QuestStep {
-    // Why: the completed notes are the mapping's own receipt, so holding them means the leg is done whatever the varp says, `radimus_notes.rs2` only advances the stage when it swaps the notes, and it clears the three section bits as it goes, so a pack that has the copy and a stage that has not moved is a state the loop can reach.
-    // Why: without this `mapJungle` answers true in no time at all and the engine hands it straight back, which is a step that succeeds for ever and parks the quest at stage one.
+    // Why: the completed notes are the mapping's receipt, so holding them means the leg is done whatever the varp says: `radimus_notes.rs2` only advances the stage when it swaps the notes and clears the 3 section bits as it goes.
+    // Why: Without this guard, `mapJungle` returns immediate success on every stage-1 iteration.
     if (held(snap, LQ_ID.MAP_COMPLETE) > 0) {
         return stageBullroarer(snap);
     }
@@ -352,12 +343,12 @@ const GUJUO_RESCUE_PREFER = [
 
 const acceptRescue = talkGujuo(GUJUO_RESCUE_PREFER, undefined, 150_000, 'I will release Ungadulu...');
 
-/** Gujuo is still wanted, so the roarer is still kit rather than a keepsake. */
+/** Gujuo is still wanted, so the roarer is still kit. */
 function needsGujuo(stage: number): boolean {
     return stage >= LQ_STAGE.MAPPED_JUNGLE && stage < LQ_STAGE.RETURNED_TO_RADIMUS;
 }
 
-// Why: the forester wants a map to copy and the map goes the same way the roarer does, Radimus sells a replacement for thirty coins, but only while neither is held.
+// Why: the forester wants a map to copy and the map goes the same way the roarer does; Radimus sells a replacement for 30 coins, but only while neither is held.
 
 /** Get a roarer back: buy a map if that went too, redraw it, then trade it. */
 function regainRoarer(snap: QuestSnapshot): QuestStep | null {
@@ -405,9 +396,9 @@ function stageBowl(snap: QuestSnapshot): QuestStep {
     if (held(snap, LQ_ID.GOLD_BOWL) > 0) {
         return step('have Gujuo bless the golden bowl', blessBowl);
     }
-    // Why: `jungle_tree` evaporates a filled bowl on every chop, so the last errand off the island is run before the pool rather than after it.
+    // Why: `jungle_tree` evaporates a filled bowl on every chop, so the last errand off the island runs before the pool.
     // Why: the gems and the wall runes are spent by the time the book is in the pack and gone from it once the book is read, so asking for them again sends the run back for things nothing sells.
-    // Why: with the book in hand the next thing after the fill is a level-187 demon, and the bowl is still empty here, which makes this the last moment a bank trip is free.
+    // Why: with the book in hand the next thing after the fill is a level-187 demon, and the bowl is still empty here, so this is the last free bank trip.
     const errands = held(snap, LQ_ID.BOOK_OF_BINDING) > 0
         ? upkeep(snap, FOOD.fight, FIGHT_POTS)
         : (snap.stage ?? 0) >= LQ_STAGE.DEFEATED_NEZI_FIRE ? null : trialsKit(snap);
@@ -415,7 +406,7 @@ function stageBowl(snap: QuestSnapshot): QuestStep {
     if (off) {
         return off;
     }
-    // Why: `stat_sub(prayer, 0, 90)` runs as the book opens, so the demon starts the fight with nine tenths of the prayer bar already gone and Protect from Melee lapses within the minute. `potionTopUp` answers null when the bank holds no flask, which walks a filled bowl and an empty prayer book into a level-187 demon and says nothing.
+    // Why: `stat_sub(prayer, 0, 90)` runs as the book opens, so the fight starts with 90% of the prayer bar gone and Protect from Melee lapses within the minute. `potionTopUp` answers null when the bank holds no flask, which walks into a level-187 demon and says nothing.
     // Why: this is the last branch that still has a bank behind it. The fill is next and `jungle_tree` boils the bowl off on any chop back across the band.
     const flask = held(snap, LQ_ID.BOOK_OF_BINDING) > 0 && potsHeld(snap) === 0 && potsBanked(snap) === 0;
     if (flask) {
@@ -436,7 +427,7 @@ async function bookLeg(log: (m: string) => void): Promise<boolean> {
     return takeBookOfBinding(log);
 }
 
-// Why: the demon is `npc_del`ed on death, so his leaving the scene is what ends the fight, without it the loop sits out its budget and reports a win as a failure.
+// Why: the demon is `npc_del`ed on death, so his leaving the scene ends the fight; without it the loop sits out its budget and reports a win as a failure.
 
 async function summonAndFight(log: (m: string) => void): Promise<boolean> {
     if (!(await summonDemon(log))) {
@@ -453,8 +444,8 @@ function stageBook(snap: QuestSnapshot): QuestStep {
     if (held(snap, LQ_ID.GOLD_BOWL_BLESSED_PURE) === 0) {
         return stageBowl(snap);
     }
-    // Why: `stageBowl` fetches the fight kit while the bowl is still empty, which is the one moment a bank trip is free, but a run that arrives here with the bowl already filled never went through it, and `choose` only reaches its upkeep on the mainland while this is decided in the caves. Opening the book runs `stat_sub(prayer, 0, 90)`, so that is a level-187 demon met on a tenth of a prayer bar with nothing to drink.
-    // Why: the trip boils the bowl, and that is the right trade, `stageBowl` refills it on the way back, and a flask is worth a refill against this fight.
+    // Why: `stageBowl` fetches the fight kit while the bowl is empty, but a run arriving here with it filled never went through that, and `choose` only reaches its upkeep on the mainland while this is decided in the caves. Opening the book runs `stat_sub(prayer, 0, 90)`, a level-187 demon on a tenth of a prayer bar.
+    // Why: the trip boils the bowl, and `stageBowl` refills it on the way back; a flask is worth a refill against this fight.
     const fightKit = offIsland(snap, upkeep(snap, FOOD.fight, FIGHT_POTS));
     if (fightKit) {
         return fightKit;
@@ -478,7 +469,7 @@ function stageSeeds(snap: QuestSnapshot): QuestStep {
     return step('germinate the seeds in the bowl of sacred water', germinateSeeds);
 }
 
-// Why: only `gujuo_helpme` moves the varp, and it is three menus deep, pool-dried, then the source, then the offer of help.
+// Why: only `gujuo_helpme` moves the varp, and it's 3 menus deep: pool-dried, then the source, then the offer of help.
 // Why: the goodbye outranks the source question because the menu after the recipe offers both, and picking the source again walks the chain a second time.
 const GUJUO_POTION_PREFER = [
     'If I went, could you help me?',
@@ -535,7 +526,7 @@ function stagePotion(snap: QuestSnapshot): QuestStep {
     };
 }
 
-// Why: the rope refuses anyone who has not drunk the potion, and the refusal is a chat line rather than a prompt, so the drink happens before the climb rather than in answer to it.
+// Why: the rope refuses anyone who hasn't drunk the potion, and the refusal is a chat line with no prompt, so drink before the climb.
 
 async function drinkBravery(log: (m: string) => void): Promise<boolean> {
     const dose = Inventory.items().find(item => item.id === LQ_ID.BRAVERY_POTION);
@@ -545,7 +536,7 @@ async function drinkBravery(log: (m: string) => void): Promise<boolean> {
     if (!(await dose.interact('Drink'))) {
         return false;
     }
-    // Why: Drink only asks whether you are sure, the swig, and the bit the winch checks, are behind the yes.
+    // Why: Drink only asks whether you're sure; the swig and the bit the winch checks are behind the yes.
     return driveUntil(
         () => !Inventory.items().some(item => item.id === LQ_ID.BRAVERY_POTION),
         ["Yes, I'll bravely drink the bravery potion."],
@@ -564,7 +555,7 @@ async function descendLeg(log: (m: string) => void): Promise<boolean> {
     return climbDownWinch(log);
 }
 
-// Why: every leg below the winch stands on a tile the walker cannot path to from anywhere else, so a run resumed on the surface after a death, or a jump straight to the stage, climbs back down before it acts.
+// Why: every leg below the winch stands on a tile the walker can't path to from anywhere else, so a run resumed on the surface climbs back down before it acts.
 
 function viyeldiStep(snap: QuestSnapshot, name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep {
     if (legendsArea(snap.tile) !== 'viyeldiCaves') {
@@ -607,7 +598,7 @@ async function daggerToUngadulu(log: (m: string) => void): Promise<boolean> {
     if (!(await enterShamanCave(log))) {
         return false;
     }
-    // Why: the flames block a use-on as surely as they block a step, so the dagger is handed over from inside the octagram rather than across it.
+    // Why: the flames block a use-on as surely as a step, so the dagger is handed over from inside the octagram.
     if (!(await enterOctagram(log))) {
         return false;
     }
@@ -624,7 +615,7 @@ function stageSacredWater(snap: QuestSnapshot): QuestStep {
     return viyeldiStep(snap, 'shift the boulder and fill the bowl at the source', collectSacredWater);
 }
 
-// Why: the sapling is watered from the bowl and the bowl is boiled dry by the walk back into the jungle, so a bowl that arrives empty is a trip back to the source rather than a dead run.
+// Why: the sapling is watered from the bowl and the walk back into the jungle boils it dry, so a bowl that arrives empty is a trip back to the source.
 
 function stageGrow(snap: QuestSnapshot): QuestStep {
     // Why: the carve moves the varp only when the pole is lifted, so for one tick the tree is done and the stage still says it is not.
@@ -650,12 +641,12 @@ function stageReplace(snap: QuestSnapshot): QuestStep {
         return inTheOpen(snap, step('take the gilded totem to Radimus', handInTotem));
     }
     if (held(snap, LQ_ID.TOTEM_POLE) > 0) {
-        // Why: replacing the totem is what spawns Nezikchened for the last time, and the totems stand in the Kharazi jungle, where `choose` never reaches its upkeep, since that branch only runs on the mainland. So the fight kit is asked for here or the demon is met with whatever the fight before it left.
+        // Why: replacing the totem spawns Nezikchened for the last time, and the totems stand in the Kharazi jungle where `choose` never reaches its upkeep, so the fight kit is asked for here.
         const kit = offIsland(snap, upkeep(snap, FOOD.fight, FIGHT_POTS));
         if (kit) {
             return kit;
         }
-        // Why: the same silence as the octagram, `potionTopUp` answers null when the bank has no flask, and Protect from Melee cannot be raised on an empty prayer bar, so the last demon is fought with no protection and nothing says why.
+        // Why: same silence as the octagram: `potionTopUp` answers null when the bank has no flask, and Protect from Melee can't be raised on an empty prayer bar.
         if (potsHeld(snap) === 0 && potsBanked(snap) === 0) {
             return { kind: 'wait', reason: 'no prayer potion in the pack or the bank, and replacing the totem spawns Nezikchened on the spot' };
         }
@@ -690,24 +681,24 @@ function choose(snap: QuestSnapshot): QuestStep {
         return step('drop what the quest has finished with', ditch(spent));
     }
 
-    // Why: the Karamja ships and Hajedy's cart each want coin, and the walk to the jungle is "unreachable" without it, so the float comes before any leg rather than inside the ones that shop.
-    // Why: it only ever runs on open ground, as a top-up decided from inside a sealed pocket sends the walker at a booth it cannot reach.
-    // Why: and never with water in the bowl, since the only way back into the jungle is a chop and every chop boils it off.
+    // Why: the Karamja ships and Hajedy's cart each want coin, and the walk to the jungle is "unreachable" without it, so the float comes before any leg.
+    // Why: only on open ground, as a top-up decided inside a sealed pocket sends the walker at a booth it can't reach.
+    // Why: never with water in the bowl, since the only way back into the jungle is a chop and every chop boils it off.
     if (area === 'mainland' && !carryingWater(snap)) {
         const kit = upkeep(snap, foodFor(snap, stage), potsFor(snap, stage));
         if (kit) {
-            // Why: what the quest is finished with goes out before the bank hands anything over, or the top-up is capped by whatever room the junk left. A live run withdrew five lobsters into its last five slots and dropped four lumps of rock on the next pass, the float came out four short and the drop bought nothing.
+            // Why: what the quest is finished with goes out before the bank hands anything over, or the top-up is capped by whatever room the junk left.
             const finished = spentNow(snap);
             return finished.length > 0 ? step('drop what the quest has finished with', ditch(finished)) : kit;
         }
-        // Why: the machete and the axe are what open the jungle band, and every leg from the map onwards has to cross it, so a death that drops them is a dead run unless they are replaced like food.
+        // Why: the machete and the axe open the jungle band and every leg from the map onwards crosses it, so a death that drops them is a dead run unless they're replaced like food.
         // Why: stage 1 is left alone, since Radimus hands the first machete over for nothing.
         const chop = stage >= LQ_STAGE.MAPPED_JUNGLE && stage < LQ_STAGE.RETURNED_TO_RADIMUS ? fromShop(snap, CHOP_KIT) : null;
         if (chop) {
             return chop;
         }
-        // Why: the roarer is the only way to summon Gujuo, and he is wanted at the bowl, the recipe and the gilded totem, but the branch that trades for one runs at stage three and nowhere else.
-        // Why: a Jungle Savage takes a dislike to the noise it makes, and the death that follows drops the roarer and the map together at stage fourteen.
+        // Why: the roarer is the only way to summon Gujuo, wanted at the bowl, the recipe and the gilded totem, but the branch that trades for one only runs at stage 3.
+        // Why: a Jungle Savage takes a dislike to the noise, and the death that follows drops the roarer and the map together at stage 14.
         const roarer = needsGujuo(stage) && held(snap, LQ_ID.BULLROARER) === 0 ? regainRoarer(snap) : null;
         if (roarer) {
             return roarer;

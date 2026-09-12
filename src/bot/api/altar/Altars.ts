@@ -5,14 +5,13 @@ import Tile from '../../geometry/Tile.js';
 interface AltarLocation {
     name: string;
     tile: Tile;
-    /** Loc name to interact with; every altar answers to Pray-at. */
+/** Altar loc name; all use the Pray-at op. */
     loc: string;
     requires?: { skill: { name: string; level: number } };
 }
 
 /**
- * Altars that restore prayer points, picked from the Pray-at locs in the map
- * data for being close to a bank. Chaos altars are deliberately absent.
+ * Altars that restore prayer points: the Pray-at locs near a bank. No chaos altars.
  * @see docs/reference/clues-mechanics.md#prayer-between-trails
  */
 const ALTARS: AltarLocation[] = [
@@ -29,8 +28,7 @@ const ALTARS: AltarLocation[] = [
     { name: 'Canifis temple', tile: new Tile(3416, 3488, 0), loc: 'Altar' }
 ];
 
-// A staircase is walkable but costs more than the tile count suggests, so an
-// upstairs altar only wins when it is clearly closer.
+// A staircase costs more than its tile count, so an upstairs altar only wins when it's clearly closer.
 const LEVEL_CHANGE_PENALTY = 30;
 
 function usable(altar: AltarLocation): boolean {

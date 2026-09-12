@@ -111,8 +111,7 @@ export default abstract class GameShell {
             canvas.addEventListener('touchend', this.touchEndHandler, { passive: false });
         }
 
-        // suppress the browser menu over the game canvas only — the rest of the
-        // page (e.g. the bot panel) stays right-clickable for inspect/devtools
+        // Suppress the browser menu on the game canvas, but keep the panel inspectable.
         canvas.oncontextmenu = (e: MouseEvent): void => {
             e.preventDefault();
         };

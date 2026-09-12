@@ -9,7 +9,7 @@ export function progressSignature(snap: QuestSnapshot): string {
     const worn = [...snap.worn].sort().join(',');
     const wornIds = [...(snap.wornIds ?? [])].sort((a, b) => a - b).join(',');
     const tile = snap.tile ? `${snap.tile.x},${snap.tile.z},${snap.tile.level}` : '?';
-    // Why: journal sub-progress counts as progress, as reading a scroll or searching a lock moves nothing else at all.
+    // Why: journal sub-progress counts as progress, since reading a scroll or searching a lock moves nothing else.
     // Why: without it such a step burns the no-progress budget on its way to being parked.
     const flags = [...(snap.progress?.flags ?? [])].sort().join(',');
     return `${snap.journal}|stage:${snap.stage ?? '?'}|flags:${flags}|tile:${tile}|inv:${items.join(',')}|invIds:${itemIds.join(',')}|worn:${worn}|wornIds:${wornIds}`;

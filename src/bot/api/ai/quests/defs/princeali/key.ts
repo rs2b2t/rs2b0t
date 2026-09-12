@@ -17,7 +17,7 @@ function keyDone(snap: QuestSnapshot): boolean {
 }
 
 // Why: Leela only promotes to stage 30 while the key is in the pack, so from 30 on the key provably existed and prince_keystatus is no longer 0.
-// Why: Osman will not forge a second one, so every clay leg past that is dead weight.
+// Why: Osman won't forge a second one, so every clay leg past that is dead weight.
 
 /** True once the key provably existed. */
 function keyIssued(snap: QuestSnapshot): boolean {
@@ -95,8 +95,7 @@ export function collectKey(snap: QuestSnapshot): QuestStep | null {
     if (haveKey(snap)) {
         return null;
     }
-    // Leela's re-issue check reads the bank as well as the pack, so a banked key
-    // blocks its own replacement.
+    // Leela's re-issue check reads the bank as well as the pack, so a banked key blocks its own replacement.
     if (banked(snap, PA_ITEM.PRINCE_KEY.id) > 0) {
         return withdrawFrom([{ name: PA_ITEM.PRINCE_KEY.name, id: PA_ITEM.PRINCE_KEY.id, qty: 1 }]);
     }
@@ -122,7 +121,7 @@ async function collectFromLeela(log: (m: string) => void): Promise<boolean> {
 }
 
 // Why: Osman forges only while prince_keystatus is 0, and that varp is not transmitted.
-// Why: a print still in the pack after the conversation is the observable proof the key was already forged, so this goes to Leela either way.
+// Why: a print still in the pack after the conversation proves the key was already forged, so this goes to Leela either way.
 
 /** Have Osman forge the key, then take it to Leela. */
 async function forgeAndCollect(log: (m: string) => void): Promise<boolean> {

@@ -25,8 +25,7 @@ export class MultiBoxController {
     private nextId = 1;
     private customTabs: string[] = [];
     private active: string = MAIN_TAB;
-    // tab -> the bot you were last looking at there, so returning to a tab
-    // resumes that bot instead of snapping back to its top slot
+    // Restore the last selected bot when returning to a tab.
     private lastFocusByTab = new Map<string, number>();
 
     constructor(
@@ -42,7 +41,7 @@ export class MultiBoxController {
         return this.active;
     }
 
-    // A bot is added empty, its login typed into the bot's own panel; `account` is for automation and vault restores, which inject credentials only.
+    // New bots start empty; `account` is only for automation and vault restores.
     // Why: title-screen auto-login stays off unless the bot's Global checkbox (or ?autologin=1) arms it, though a running script still reconnects on its own (#215).
     add(account?: Account): SlotSnapshot | null {
         const acct: Account = account ?? { username: `bot${this.nextId}`, password: '' };

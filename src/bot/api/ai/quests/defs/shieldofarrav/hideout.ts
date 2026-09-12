@@ -8,11 +8,10 @@ import { crossTeleportDoor, settleScene } from '../../exec/prompts.js';
 import { climb, walkAndTalk } from '../../exec/legs.js';
 import type { NpcStop } from '../../exec/primitives.js';
 
-// Why: the generic legs live in exec/ so a second partner quest can use them; the hideout keeps only
-// the Shield of Arrav pockets they are pointed at.
+// Why: the generic legs live in exec/ so a second partner quest can use them; the hideout keeps only the Shield of Arrav pockets they point at.
 export { climb, openContainer, talkUntil, walkAndTalk } from '../../exec/legs.js';
 
-// Why: `isFar` is a component test, not a distance test, the two sides of a one-tile wall are two tiles apart.
+// Why: `isFar` is a component test; the two sides of a 1-tile wall are 2 tiles apart.
 
 /** A hideout door teleports you through, so landing on the far side is the only proof. */
 async function crossDoor(
@@ -35,8 +34,8 @@ export async function enterHideout(log: (m: string) => void): Promise<boolean> {
     if (inPhoenixHq(Game.tile())) {
         return true;
     }
-    // Why: Reach owns the approach. It walks, opens the building's door and retries on one budget, where a pre-walk plus its own walk spends two and wedges for minutes.
-    // Why: two attempts, because the first from outside the building routinely lands on the wrong side of that door and a retry here is far cheaper than another quest-engine round trip.
+    // Why: Reach owns the approach: it walks, opens the building's door and retries on one budget, where a pre-walk plus its own walk spends 2 and wedges for minutes.
+    // Why: 2 attempts, because the first from outside the building often lands on the wrong side of that door and a retry here is cheaper than a quest-engine round trip.
     let status = 'retry';
     for (let attempt = 0; attempt < 2 && !inPhoenixHq(Game.tile()); attempt++) {
         status = await Reach.locOp({
@@ -50,7 +49,7 @@ export async function enterHideout(log: (m: string) => void): Promise<boolean> {
         });
         await settleScene();
     }
-    // Why: the status is not the oracle, Reach reports 'retry' on a climb that landed, so where the character is standing settles it.
+    // Why: Reach reports 'retry' on a climb that landed, so where you're standing settles it.
     if (inPhoenixHq(Game.tile())) {
         return true;
     }
@@ -127,7 +126,7 @@ export async function leaveBlackArmUpper(log: (m: string) => void): Promise<bool
         && !(await climb(SOA_LOC.BLACKARM_STAIRS_TOP, 'Climb-down', SOA_TILE.BLACKARM_STAIRS_TOP, SOA_TILE.BLACKARM_STAIRS, log))) {
         return false;
     }
-    // Why: the stairs sit in a pocket the gang door seals, and that door is out of the nav graph, climbing down alone strands the character with the half, and every route out reads unreachable.
+    // Why: the gang door seals the stairs pocket and is out of the nav graph, so climbing down alone strands you with the half and every route out reads unreachable.
     if (!inBlackArmInner(Game.tile())) {
         return true;
     }
@@ -139,7 +138,7 @@ export async function leaveWeaponStore(log: (m: string) => void): Promise<boolea
         && !(await climb(SOA_LOC.STORE_LADDER_TOP, 'Climb-down', SOA_TILE.STORE_LADDER_TOP, SOA_TILE.STORE_LADDER, log))) {
         return false;
     }
-    // Why: the ground floor is a ten-tile pocket the store door seals, and that door is out of the nav graph, climbing down alone strands the character with the crossbows.
+    // Why: the store door seals the 10-tile ground floor and is out of the nav graph, so climbing down alone strands you with the crossbows.
     // Why: `unlock_weaponstore_door` lets a leaver through on op1, so no key is needed on the way out.
     if (!inStoreGround(Game.tile())) {
         return true;

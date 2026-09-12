@@ -3,11 +3,11 @@ import type { MeleeCombatStyle } from '../../api/combat/CombatStyle.js';
 
 export const TARGET = 'Moss giant';
 
-// Brimhaven moss giant island: safespot disabled, so multicombat walk-and-fight.
+// Brimhaven moss giant island, using multicombat walk-and-fight.
 export const FIELD_TILE = new Tile(2698, 3206, 0);
 // Ardougne south-east bank by Captain Barnaby's pier, the boat launch point.
 export const BANK_TILE = new Tile(2655, 3283, 0);
-// Stand tile on the Ardougne pier next to Captain Barnaby; anchoring here before sailing makes the outbound boat hop fire from a clean, in-range spot instead of mid-walk (a failed hop repaths via the wrong port).
+// Anchor beside Captain Barnaby so the outbound hop cannot repath through the wrong port.
 export const PIER_TILE = new Tile(2683, 3272, 0);
 
 export const BOAT_FARE = 30; // Ardougne <-> Brimhaven each way
@@ -20,7 +20,7 @@ export const ASSERT_RETRY_MS = 60_000;
 
 export type CombatStyle = 'melee' | 'mage' | 'range';
 
-// Mutable runtime config shared across modules so per-concern files stay decoupled.
+// Runtime config shared by the task modules.
 export interface RuntimeConfig {
     style: CombatStyle;
     meleeStyle: MeleeCombatStyle;

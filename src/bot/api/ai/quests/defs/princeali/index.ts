@@ -31,7 +31,7 @@ import { PURSE_FLOOR, PURSE_TOP, scanBank, sourceCoins } from './supplies.js';
 
 type Leg = (snap: QuestSnapshot) => QuestStep | null;
 
-// Why: read top to bottom this is the route, Al-Kharid, Lumbridge, Varrock, Rimmington and Port Sarim, Draynor, Lady Keli, Osman.
+// Why: top to bottom this is the route: Al-Kharid, Lumbridge, Varrock, Rimmington and Port Sarim, Draynor, Lady Keli, Osman.
 // Why: each leg returns null once it is satisfied, so a resumed run rejoins the tour wherever it left off.
 const PREP: readonly Leg[] = [
     sourceBronzeBar,
@@ -114,8 +114,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
             return { kind: 'custom', name: 'show Leela the disguise and collect the key', run: leelaHandover };
         }
 
-        // Dying here drops the non-tradeable quest items, so the prep legs run at these
-        // stages too rather than parking on a disguise that can be rebuilt.
+        // Dying here drops the untradeable quest items, so the prep legs run at these stages too and rebuild the disguise.
         case PRINCE_STAGE.PREP_FINISHED:
         case PRINCE_STAGE.GUARD_DRUNK:
         case PRINCE_STAGE.TIED_KELI:

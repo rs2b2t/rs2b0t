@@ -168,8 +168,7 @@ function makeSpace(snap: QuestSnapshot, slots: number): QuestStep | null {
     if ([...snap.inv.keys()].some(name => !keep.includes(name))) {
         return { kind: 'deposit', keep, bank: DRAYNOR_BANK, exactKeep: true };
     }
-    // Why: a restart can hold nothing but an oversized pile of otherwise-valid quest supplies or food, and the generic deposit step cannot retain quantities.
-    // Why: the load is banked, keeping only coins, and the state machine withdraws one clean loadout.
+    // Why: a restart can hold nothing but an oversized pile of valid supplies or food and the generic deposit can't keep quantities, so bank everything but coins and withdraw 1 clean loadout.
     return { kind: 'deposit', keep: ['coins'], bank: DRAYNOR_BANK, exactKeep: true };
 }
 
@@ -182,8 +181,7 @@ function normalizePack(snap: QuestSnapshot): QuestStep | null {
 
 function sourceCoins(snap: QuestSnapshot): QuestStep | null {
     const inPack = heldCount(snap, 'Coins');
-    // One 5k withdrawal comfortably covers the beer, hammer, sword, and kebabs. Do not walk
-    // across the map after every tiny purchase to refill one or two coins.
+    // One 5k withdrawal covers the beer, hammer, sword and kebabs; don't cross the map to refill a couple of coins.
     if (inPack >= COIN_RESERVE) return null;
     const inBank = banked(snap, 'Coins');
     if (inBank <= 0) return { kind: 'wait', reason: 'need coins for Vampire Slayer supplies' };
@@ -218,8 +216,7 @@ function bankWeapon(snap: QuestSnapshot): string | null {
 
 async function leaveMorganUpper(log: (message: string) => void): Promise<boolean> {
     if (Game.tile()?.level !== 1) return true;
-    // Why: the upper staircase's map tile is blocked by its own collision shape.
-    // Why: on a restart the staircase is already in the loaded scene, so it is interacted with before navigation is asked to route onto an impossible destination.
+    // Why: the upper staircase's map tile is blocked by its own collision shape, so on a restart the loaded staircase is clicked before navigation is asked for an impossible route.
     const visible = Locs.query().name('Staircase').action('Climb-down').within(8).nearest();
     if (visible) {
         if (!(await visible.interact('Climb-down'))) return false;

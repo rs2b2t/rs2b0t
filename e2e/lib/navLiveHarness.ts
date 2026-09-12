@@ -1,31 +1,28 @@
-/** Shared helpers for operator nav live harnesses (tools/nav-*-live.ts, nav-*-smoke.ts): cheat tele placement, energy/HP sustain, tick rate, path paint settings, inventory seed and a generic walkTo probe loop.
- *  Why: the pacing defaults below keep outer walk polls multi-second and sustain throttled, so cheats settle without sub-100ms spins. */
+/** Shared setup and probes for live navigation harnesses. */
+// Why: multi-second polling lets cheats settle without tight spins.
 import type { Page } from 'playwright-core';
 
 import { setSettings } from './harness.js';
 import { cheatQuiet } from '../tutorial/harness.js';
 
-// ── pacing (shared, do not invent tighter loops in callers) ────────────────
+// Shared pacing
 
-/** Outer mid-walk poll period (done/tile/stuck). Default 2s. */
+/** Walk-state poll period. Defaults to 2s. */
 export const DEFAULT_WALK_POLL_MS = 2000;
 
-/** Energy + HP sustain period. Default 5s (see maybeSustain). */
+/** Energy and HP sustain period. Defaults to 5s. */
 export const DEFAULT_SUSTAIN_EVERY_S = 5;
 
 /** Post-cheat / post-drop settle. */
 export const DEFAULT_SETTLE_MS = 400;
 
-/** Tele / inv-seed arrival polls (not 20–150ms spins). */
+/** Teleport and inventory-seed poll period. */
 export const DEFAULT_ARRIVAL_POLL_MS = 400;
 
 /** Runner stop wait step. */
 export const DEFAULT_STOP_POLL_MS = 500;
 
-/**
- * Outer walk poll ms from env: `WALK_POLL_MS` or `WALK_POLL_S` (seconds).
- * Floor 500ms, sub-second fleet polls are unnecessary for nav research.
- */
+/** Walk poll from `WALK_POLL_MS` or `WALK_POLL_S`, floored at 500ms. */
 export function walkPollMsFromEnv(fallback = DEFAULT_WALK_POLL_MS): number {
     const rawS = process.env.WALK_POLL_S;
     const rawMs = process.env.WALK_POLL_MS;
@@ -41,7 +38,7 @@ export function walkPollMsFromEnv(fallback = DEFAULT_WALK_POLL_MS): number {
     return Math.min(15_000, ms);
 }
 
-// ── types ───────────────────────────────────────────────────────────────────
+// Types
 
 export type NavTile = { x: number; z: number; level: number };
 
@@ -76,7 +73,7 @@ export type SeedSpec = {
     label?: string;
 };
 
-// ── env ─────────────────────────────────────────────────────────────────────
+// Environment
 
 /** True unless env is explicitly "0" or "false". */
 export function envDefaultOn(name: string): boolean {
@@ -127,7 +124,7 @@ export function pathPaintFlagsFromEnv(opts?: {
     };
 }
 
-// ── geometry / placement ────────────────────────────────────────────────────
+// Geometry and placement
 
 export function cheb(a: NavTile, b: NavTile): number {
     if (a.level !== b.level) {
@@ -784,8 +781,8 @@ export async function ensureInvItem(
     }
 }
 
-/** Ensure one charged copy of each jewellery seed is present.
- *  Why: depleted copies are dropped first, or a full pack of uncharged glories blocks `give amulet_of_glory_4` (#555 / P10). */
+/** Ensure one charged copy of each jewellery seed. */
+// Why: drop depleted copies before a full pack blocks the charged seed (#555/P10).
 export async function ensureJewellery(
     page: Page,
     opts?: { useTeleports?: boolean }
@@ -801,7 +798,7 @@ export async function ensureJewellery(
         if (j.uncharged && (await invHas(page, j.uncharged))) {
             await dropInvMatching(page, j.uncharged);
         }
-        // Pack may still be full of other uncharged jewellery, free those too.
+        // Free slots held by other uncharged jewellery too.
         if (await invIsFull(page)) {
             await dropUnchargedJewellery(page);
         }
@@ -819,7 +816,7 @@ export async function seedTeleKit(
     opts?: { useTeleports?: boolean; waitScene?: boolean }
 ): Promise<void> {
     const useTele = opts?.useTeleports ?? useTeleportsFromEnv();
-    // 377 lesson: seed after scene 2 so inv lists are populated.
+    // Seed after scene 2, once inventory lists are populated (#377).
     if (opts?.waitScene !== false) {
         const ok = await waitSceneReady(page, 30_000);
         if (!ok) {

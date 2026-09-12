@@ -21,7 +21,7 @@ export function evaluate(
             reasons.push(r.reason);
         }
     }
-    // Why: item requirements gate starting a quest, and re-imposing them mid-quest blocks a bot from ever resuming, since the items may legitimately be gone, handed over, ground up, drunk.
+    // Why: item requirements gate starting a quest; re-imposing them mid-quest blocks resuming, since the items may be gone (handed over, ground up, drunk).
     // Why: past the start, the module's decide() sources what it still needs.
     // Why: the requirements above are checked either way, as nothing consumes a skill level or a quest point.
     if (journalStatus !== 'inProgress') {

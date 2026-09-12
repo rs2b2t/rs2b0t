@@ -69,7 +69,7 @@ export const TILE = {
 
 // Why: everything past the stile is committed ground, and re-provisioning from up there means climbing back down the secret way.
 
-/** Where the character is, in the terms `decide()` cares about: whether a bank trip is still cheap. */
+/** Where you are, in the terms `decide()` cares about: whether a bank trip is still cheap. */
 export type TrollZone = 'stronghold' | 'trollPass' | 'mountain' | 'arena' | 'secretWay' | 'mainland' | 'unknown';
 
 export function trollZone(tile: QuestSnapshot['tile']): TrollZone {
@@ -77,7 +77,7 @@ export function trollZone(tile: QuestSnapshot['tile']): TrollZone {
         return 'unknown';
     }
     const { x, z, level } = tile;
-    // Stronghold interior: mapsquare 44,157 across all three levels.
+    // Stronghold interior: mapsquare 44,157 across all 3 levels.
     if (x >= 2816 && x <= 2879 && z >= 10048 && z <= 10111) {
         return 'stronghold';
     }
@@ -94,15 +94,14 @@ export function trollZone(tile: QuestSnapshot['tile']): TrollZone {
     if (x >= 2828 && x <= 2920 && z >= 3649 && z <= 3711) {
         return 'mountain';
     }
-    // Everything above the stile on the secret way, plus the north-west pocket
-    // the prison's back door opens onto.
+    // Everything above the stile on the secret way, plus the north-west pocket the prison's back door opens onto.
     if (x >= 2812 && x <= 2882 && z >= 3563 && z <= 3648) {
         return 'secretWay';
     }
     return 'mainland';
 }
 
-/** True once the character is past the stile: no more cheap bank trips. */
+/** True once you're past the stile: no more cheap bank trips. */
 export function committed(zone: TrollZone): boolean {
     return zone !== 'mainland' && zone !== 'unknown';
 }
@@ -125,8 +124,8 @@ export const DUNSTAN_FINISH: NpcStop = {
     prefer: ['Nothing, thanks.']
 };
 
-// Why: Tenzing's post-quest shop is a dialogue rather than a shop interface, and it loops, after every purchase he asks "Was there anything else?" and re-offers the same five options.
-// Why: a plain preference list matches "Can I buy some Climbing boots?" again and buys until the pack is full, so the exit is driven off what he said rather than off the options.
+// Why: Tenzing's post-quest shop is a dialogue that loops: after every purchase he asks "Was there anything else?" and re-offers the same 5 options.
+// Why: a plain preference list matches "Can I buy some Climbing boots?" again and buys until the pack is full, so the exit keys off his line.
 export const TENZING_BOOTS: NpcStop = {
     npc: 'Tenzing',
     anchor: TILE.TENZING,

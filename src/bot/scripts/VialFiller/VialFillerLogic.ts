@@ -1,7 +1,4 @@
-/**
- * Pure decisions for VialFiller, kept out of the game-touching bot so the
- * restock cadence and the buy size can be tested without a client.
- */
+/** Pure VialFiller restock cadence and buy-size decisions. */
 
 /** Empty vials do not stack, so a restock can only be as big as the free pack. */
 export function vialsToBuy(freeSlots: number, want: number): number {

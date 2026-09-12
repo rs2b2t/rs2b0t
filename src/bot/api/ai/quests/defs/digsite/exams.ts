@@ -7,8 +7,7 @@ import { DIG_ID, DIG_LOC, DIG_NPC, DIG_TILE } from './areas.js';
 import { driveUntilHeld, locByIdAction, talkToNpcId, useOnNpcId, walkTo } from './common.js';
 import { DIG_STAGE } from './journal.js';
 
-// Why: the exam presents the correct answer only for the questions whose student has been helped, so one list holds all nine and `pickPreferred` finds whichever is on screen.
-// Why: the wrong-answer variants are deliberately absent, a doomed exam falls through to the driver's last-option fallback and fails, which costs nothing.
+// Why: The exam only offers unlocked correct answers, so one preference list covers all nine questions without including wrong choices.
 
 /** Every option the Examiner ever offers that this quest wants taken. */
 export const EXAMINER_PREFER: readonly string[] = [
@@ -45,7 +44,7 @@ export function replaceTrowel(): QuestStep {
     return talkToExaminer('ask the Examiner for another trowel', TROWEL_PREFER);
 }
 
-/** The Curator stamps whatever letter is in the pack the moment the conversation opens. */
+/** The Curator stamps whatever letter is in the pack as soon as the conversation opens. */
 export function stampLetter(): QuestStep {
     return {
         kind: 'custom',
@@ -97,7 +96,7 @@ export const DELIVER_GREEN = (): QuestStep => deliver(DIG_ID.ROCK_SAMPLE_GREEN, 
 export const DELIVER_PURPLE = (): QuestStep => deliver(DIG_ID.ROCK_SAMPLE_PURPLE, DIG_NPC.STUDENT_PURPLE, 'return the purple student\'s rock sample');
 export const DELIVER_ORANGE = (): QuestStep => deliver(DIG_ID.ROCK_SAMPLE_ORANGE, DIG_NPC.STUDENT_ORANGE, 'return the orange student\'s rock sample');
 
-// Why: from the second exam on one conversation with each student is the errand, and the purple student takes the third exam's opal through her own dialogue.
+// Why: from the second exam on, the errand is one conversation with each student; the purple student takes the third exam's opal in her own dialogue.
 export function studyWithStudents(stage: number): QuestStep {
     const order = stage === DIG_STAGE.THIRD_EXAM
         ? [DIG_NPC.STUDENT_GREEN, DIG_NPC.STUDENT_ORANGE, DIG_NPC.STUDENT_PURPLE]
@@ -129,7 +128,7 @@ export function studyWithStudents(stage: number): QuestStep {
     };
 }
 
-/** Whether the journal says all three errands are answered and the exam can be taken. */
+/** Whether the journal says all 3 errands are answered and the exam can be taken. */
 export function examReady(snap: QuestSnapshot): boolean {
     return snap.progress?.flags.has('exam-ready') ?? false;
 }

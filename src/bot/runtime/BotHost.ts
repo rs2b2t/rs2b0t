@@ -60,13 +60,12 @@ class BotHostImpl {
     }
 
     private handlePacket(ptype: number): void {
-        // Mark producer caches stale *after* the client has applied the packet
-        // (listener runs post-process). Frame pump rescans only dirty families.
+        // Mark producer caches stale after the client has applied the packet (the listener runs post-process); the frame pump rescans only dirty families.
         noteProducerPacket(ptype);
 
         // Why: UPDATE_ZONE_PARTIAL_ENCLOSED wraps LOC_* opcodes that never surface here, so the enclosing types are listed too and PLAYER_INFO backstops the set.
         // Why: enumerating zone opcodes is fragile, and a missed one would leave scripts acting on a stale scene.
-        // Why: bounding the memo to a single server tick keeps that impossible while still collapsing the ~24 per-frame rebuilds within each tick down to one.
+        // Why: bounding the memo to one server tick keeps that impossible and still collapses the roughly 24 per-frame rebuilds within a tick to one.
         if (
             ptype === ServerProt.PLAYER_INFO ||
             ptype === ServerProt.UPDATE_ZONE_PARTIAL_ENCLOSED ||
@@ -116,10 +115,7 @@ class BotHostImpl {
         return () => this.drawListeners.delete(cb);
     }
 
-    /**
-     * Subscribe to PLAYER_INFO (post-process). Prefer this over polling for
-     * stand-tile updates while UI is open. Returns unsubscribe.
-     */
+    /** Subscribe to PLAYER_INFO (post-process); prefer it to polling for stand-tile updates while UI is open. Returns the unsubscribe. */
     addTickListener(cb: FrameListener): () => void {
         this.tickListeners.add(cb);
         return () => this.tickListeners.delete(cb);

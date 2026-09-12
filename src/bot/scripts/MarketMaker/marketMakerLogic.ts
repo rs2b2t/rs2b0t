@@ -40,7 +40,7 @@ function key(name: string): string {
 }
 
 /** Chat intents, cooldowns, and the one open window. */
-// Why: there is no queue and no quote. The engine allows one window per player, so the server is the mutex and the window is the transaction.
+// Why: the server permits one trade window per player, so the window is the transaction lock.
 export class Desk {
     private intents = new Map<string, Intent>();
     private cooldowns = new Map<string, number>();
@@ -48,7 +48,7 @@ export class Desk {
 
     constructor(private readonly intentCap: number) {}
 
-    // ---- intents ----
+    // Intents.
 
     remember(intent: Intent): void {
         const k = key(intent.customer);
@@ -76,10 +76,10 @@ export class Desk {
     }
 
     /** Restart an intent's clock, for the moment the customer is told the goods are ready. */
-    // Why: the wait for a bank trip and a free window is dead time the customer cannot control, and charging it against the intent loses the request they already paid attention to.
+    // Why: do not charge bank and window wait time against the customer's intent.
     renew(customer: string, nowMs: number): void {
         const i = this.intents.get(key(customer));
-        // Why: renewing every time the shop re-announces lets a request that never settles block the customer's every later trade, so the clock restarts once and then runs out.
+        // Restart once; repeated shop announcements must not keep an intent alive forever.
         if (i && i.renewed !== true) {
             i.askedAtMs = nowMs;
             i.renewed = true;
@@ -95,7 +95,7 @@ export class Desk {
     }
 
     /** Cut an order down to what the shop managed to get, so it stops trying to top it up. */
-    // Why: an unfillable order keeps Restock at the bank for ever, which is what stops the shop banking at all.
+    // Why: cap the order to available stock so Restock can leave the bank.
     limitTo(customer: string, qty: number): void {
         const i = this.intents.get(key(customer));
         if (i && qty > 0 && qty < i.maxQty) {
@@ -104,7 +104,7 @@ export class Desk {
     }
 
     /** Count a bank trip that fetched none of it, and say whether to give up on the order. */
-    // Why: the next fetch is always the oldest live intent, so an order that cannot be filled blocks every customer behind it until it is dropped.
+    // Why: drop an unfillable oldest intent so later customers can advance.
     missedStock(customer: string, limit: number): boolean {
         const i = this.intents.get(key(customer));
         if (!i) {
@@ -129,14 +129,14 @@ export class Desk {
     }
 
     /** Drop everything the desk is holding: what was asked for, who is waiting out a cooldown, and the window. */
-    // Why: a desk that has got itself into a state nobody can trade through needs one way back to empty.
+    // Reset every desk state to recover from an unusable trade flow.
     clear(): void {
         this.intents.clear();
         this.cooldowns.clear();
         this.window = null;
     }
 
-    // ---- the window ----
+    // Trade window.
 
     open(customer: string, nowMs: number): Window {
         this.window = { customer, openedAtMs: nowMs, stillBeats: 0, reOffers: 0, lastSig: '', sawOpen: false, accepted: null, waited: 0 };
@@ -156,7 +156,7 @@ export class Desk {
         return this.window !== null && nowMs - this.window.openedAtMs > windowMs;
     }
 
-    // ---- cooldowns ----
+    // Cooldowns.
 
     cool(customer: string, untilMs: number): void {
         this.cooldowns.set(key(customer), untilMs);
@@ -183,7 +183,7 @@ export type Beat =
     | { do: 'give-up'; reason: string };
 
 /** One beat of an open window, as a pure decision. */
-// Why: the bot only acts on a side that has stopped moving. Any change resets both accepts, so a bot that answers every twitch never lets the trade settle.
+// Why: wait for a stable customer side because any change resets both accepts.
 export function decideBeat(input: {
     theirSig: string;
     window: Window;
@@ -196,8 +196,7 @@ export function decideBeat(input: {
     waitCap: number;
 }): Beat {
     const beat = beatFor(input);
-    // Why: the shop serves one window at a time, so a customer sitting on an open one costs every customer
-    // Why: behind them. Waiting is capped, and the deadline stays as the backstop for a trade still moving.
+    // Why: cap idle customer time because one open window blocks every customer behind it.
     if (beat.do === 'wait' && input.window.waited >= input.waitCap) {
         return { do: 'give-up', reason: 'you left your side up too long' };
     }

@@ -1,7 +1,7 @@
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { BIO_ITEM, BIO_TILE, banked, held, owned, type BioItem } from './areas.js';
 
-/** Slots free before Elena's four-item hand-back is safe; she drops nothing that will not fit. */
+/** Slots free before Elena's 4-item hand-back is safe; she drops nothing that will not fit. */
 export const HANDBACK_SLOTS = 6;
 
 /** How much food the module carries into West Ardougne when the bank has any. */
@@ -22,8 +22,7 @@ export function withdraw(items: { name: string; id: number; qty: number }[]): Qu
     return { kind: 'withdraw', items };
 }
 
-// Why: the cupboard, the crate and the chemist all gate their re-issue on `obj_gettotal`, which
-// counts the bank, so a banked copy has to come out rather than be fetched again.
+// Why: the cupboard, the crate and the chemist all gate their re-issue on `obj_gettotal`, which counts the bank, so a banked copy has to come out.
 
 /** Withdraw a quest item the bank is holding, or null when it is not banked. */
 export function reclaim(snap: QuestSnapshot, item: BioItem, qty = 1): QuestStep | null {
@@ -40,10 +39,10 @@ export function reclaim(snap: QuestSnapshot, item: BioItem, qty = 1): QuestStep 
     return withdraw([{ name: item.name, id: item.id, qty: Math.min(qty - held(snap, item), stock) }]);
 }
 
-// Why: the float is drawn beside the Ardougne booth on the distraction leg, so the walk from Rimmington to Thessalia is one leg rather than a detour to whichever bank is nearest Rimmington.
-// Why: a draw is much larger than the trigger, or the sixty coins spent on the way to the chemist put the purse back under the threshold and buy a second bank trip.
+// Why: the float is drawn beside the Ardougne booth on the distraction leg, so the walk from Rimmington to Thessalia is one leg with no bank detour.
+// Why: a draw is much larger than the trigger, or the 60 coins spent on the way to the chemist put the purse back under the threshold and buy a second bank trip.
 
-/** What a draw takes out; the suit itself is ten. */
+/** What a draw takes out; the suit itself is 10. */
 const PURSE = 1000;
 
 /** Coins for Thessalia. `blocking` waits when the bank has none; otherwise it lets the leg run on. */

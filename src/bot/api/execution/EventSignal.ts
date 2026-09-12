@@ -3,8 +3,8 @@ let provider: (() => boolean) | null = null;
 let interrupt: (() => boolean) | null = null;
 
 /**
- * Cooperative interrupt. A long-running loop polls `pending()` and yields so a
- * random event is handled instead of walked away from.
+ * Cooperative interrupt. A long loop polls `pending()` and yields so the
+ * random event gets handled before the loop walks off.
  * @see docs/decisions/clue-host-yielding.md
  */
 export const EventSignal = {

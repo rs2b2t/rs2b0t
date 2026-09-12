@@ -29,7 +29,7 @@ import {
     takeSpecimenJar
 } from './supplies.js';
 
-/** Two, so one pickpocketing session ropes both winches. */
+/** One pickpocketing session ropes both winches. */
 const ROPE_TARGET = 2;
 
 function withdraw(name: string, qty: number, id: number): QuestStep {
@@ -77,7 +77,7 @@ function trowelStep(snap: QuestSnapshot): QuestStep | null {
     return fromBank(snap, DIG_ID.TROWEL, DIG_ITEM.TROWEL) ?? replaceTrowel();
 }
 
-// Why: the guide only steps in on a pan he objects to, so the refused attempt is what asks for the tea and the answer needs remembering for one purchase.
+// Why: the guide only steps in on a pan he objects to, so the refused attempt is what asks for the tea, and that has to be remembered for one purchase.
 
 /** The cup of tea a refused pan asked for, or null while the river is open. */
 function panningGate(snap: QuestSnapshot): QuestStep | null {
@@ -91,7 +91,7 @@ function panFor(id: number, label: string): QuestStep {
     return custom(label, log => panUntil(() => Inventory.countById(id) > 0, log));
 }
 
-/** Exam 1 is three errands: a stolen sample, a sample in a bush and a sample in the river. */
+/** Exam 1 is 3 errands: a stolen sample, a sample in a bush and a sample in the river. */
 function firstExamPlan(snap: QuestSnapshot): QuestStep {
     if (!answered(snap, 'green-answered')) {
         if (heldId(snap, DIG_ID.ROCK_SAMPLE_GREEN) > 0) {
@@ -160,7 +160,7 @@ function impressPlan(snap: QuestSnapshot): QuestStep {
         digUntil(DIG_ZONE.LEVEL3, () => Inventory.countById(DIG_ID.TALISMAN) > 0, log));
 }
 
-/** Stage 6: four chemicals, two of them out of the shaft and the river bank. */
+/** Stage 6: 4 chemicals, 2 of them out of the shaft and the river bank. */
 function compoundPlan(snap: QuestSnapshot, underground: boolean): QuestStep {
     const held = (id: number): number => heldId(snap, id);
     const mixed = held(DIG_ID.PRE_CHARCOAL) > 0 || held(DIG_ID.POST_CHARCOAL) > 0;
@@ -192,7 +192,7 @@ function compoundPlan(snap: QuestSnapshot, underground: boolean): QuestStep {
         return leaveCaveStep();
     }
 
-    // Why: the tinderbox counter is in Varrock and the vial counter is in Taverley, which is the same road, buying each at the step that needs it walks that road three times over.
+    // Why: the tinderbox counter is in Varrock and the vial counter in Taverley on the same road, so buying each at the step that needs it walks that road 3 times.
     const tinderbox = tinderboxStep(snap);
     if (tinderbox) {
         return tinderbox;
@@ -246,7 +246,7 @@ function compoundPlan(snap: QuestSnapshot, underground: boolean): QuestStep {
 }
 
 function plan(snap: QuestSnapshot, stage: number, underground: boolean): QuestStep {
-    // Why: every leg but the shaft ones starts on the surface, and a bot left down a one-way winch spends three passes proving a surface tile unreachable.
+    // Why: every leg but the shaft ones starts on the surface, and a bot left down a one-way winch spends 3 passes proving a surface tile unreachable.
     const surface = (step: QuestStep): QuestStep => (underground ? leaveCaveStep() : step);
 
     switch (stage) {
@@ -328,7 +328,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (stage === undefined) {
         return { kind: 'wait', reason: 'quest stage not readable' };
     }
-    // Why: `ownsInventory` skips the engine's provisioning, so nothing else ever opens a booth and a banked trowel or vial stays invisible until one read happens.
+    // Why: `ownsInventory` skips the engine's provisioning, so nothing else opens a booth and a banked trowel or vial stays invisible until one read happens.
     if (!snap.bankKnown) {
         return { kind: 'scanBank', bank: DIG_TILE.VARROCK_BANK };
     }
@@ -352,10 +352,10 @@ export const digsite: QuestModule = {
     record: QUESTS.find(r => r.id === 'itexam')!,
     // Why: the quest sits between Varrock and the dig site, and the east booth is the only one either end walks past.
     bank: DIG_TILE.VARROCK_BANK,
-    // Why: nine of the ten items are acquired at the stage that needs them, whether stolen, panned, dug or mixed, which the engine's up-front provisioning cannot express.
+    // Why: 9 of the 10 items are stolen, panned, dug or mixed at the stage that needs them, which the engine's up-front provisioning can't express.
     ownsInventory: true,
     tools: ['coins', 'trowel', 'specimen jar', 'specimen brush', 'panning tray', 'rope', 'vial', 'pestle and mortar', 'tinderbox', 'chisel'],
-    // Literals, not QuestFood.name: this object is built at import, when the setting still holds its default.
+    // Literals: this object is built at import, when QuestFood.name still holds its default.
     sustain: { foods: ['Lobster', 'Swordfish', 'Tuna'], eatBelowHp: 0.5 },
     readProgress: readDigsiteProgress,
     observe: (snap, step) => [

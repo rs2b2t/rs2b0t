@@ -46,7 +46,7 @@ const RAFT_OUT = new Tile(2606, 9692, 0);
 const ALOMONE_TILE = new Tile(2609, 9669, 0);
 const CUPBOARD = new Tile(2573, 3267, 1);
 
-// Why: the cave mouth is a teleport rather than a ladder and the hideout has no walking exit at all, so these two are the only crossings the walker may pick for itself.
+// Why: the cave mouth is a teleport and the hideout has no walking exit, so these 2 are the only crossings the walker may pick itself.
 const HOPS: LadderHop[] = [
     { stand: CAVE_MOUTH, locName: 'Cave entrance', op: 'Enter', arrive: SEWER_LANDING },
     { stand: SEWER_LANDING, locName: 'Stairs', op: 'Climb-up', arrive: FOREST_TOP }
@@ -59,7 +59,7 @@ const CERIL_START: NpcStop = {
     prefer: ["what's wrong", 'yes, of course']
 };
 
-// Why: "You're crazy" and "No. I won't do it." both reach `clivet_hazeel_cultist_fool`, which is what locks the Carnillean side in; "Ok, count me in" is the one answer no later step can undo.
+// Why: "You're crazy" and "No. I won't do it." both reach `clivet_hazeel_cultist_fool`, which locks the Carnillean side in; "Ok, count me in" can't be undone.
 const CLIVET: NpcStop = {
     npc: 'Clivet',
     anchor: new Tile(2566, 9682, 0),
@@ -80,7 +80,7 @@ interface Valve {
     tile: Tile;
 }
 
-// Why: `_hazeelcult_valve` sets its bit on Turn-left for `sewervalve3` alone and on Turn-right for the other four, and `count_correct_valves` counts a prefix, so all five have to be set before the raft moves at all.
+// Why: `_hazeelcult_valve` sets its bit on Turn-left for `sewervalve3` only and Turn-right for the other 4, and `count_correct_valves` counts a prefix, so all 5 must be set before the raft moves.
 const VALVES: readonly Valve[] = [
     { id: 2844, op: 'Turn-right', tile: new Tile(2562, 3247, 0) },
     { id: 2845, op: 'Turn-right', tile: new Tile(2572, 3263, 0) },
@@ -89,7 +89,7 @@ const VALVES: readonly Valve[] = [
     { id: 2848, op: 'Turn-right', tile: new Tile(2609, 3243, 0) }
 ];
 
-// Why: `%hazeelcult_valves` is `scope=perm` with no transmit, so where the raft stops is the only oracle. This holds what the last ride proved rather than what the varp says.
+// Why: `%hazeelcult_valves` is `scope=perm` with no transmit, so where the raft stops is the only oracle; this holds what the last ride proved.
 let valvesTurned = false;
 
 function normalize(lines: readonly string[] | string): string {
@@ -102,7 +102,7 @@ function normalize(lines: readonly string[] | string): string {
 
 const EVIL = 'evil';
 
-// Why: the page is cumulative, so the most advanced line has to win; the cult-side lines are read only so the module can name why it will not run.
+// Why: the page is cumulative, so the most advanced line wins; the cult-side lines are read only so the module can say why it won't run.
 const STAGE_LINES: readonly [string, number, boolean][] = [
     ['quest complete!', HC_STAGE.COMPLETE, false],
     ["i returned the armour, but ceril didn't believe", HC_STAGE.RETURNED_ARMOUR, false],
@@ -146,8 +146,7 @@ export async function readHazeelProgress(): Promise<QuestProgress | undefined> {
     return progress;
 }
 
-// Why: both boxes are the exact walkable components from the baked collision pack, because
-// the four sewer islands and the mansion cellar sit inside the same mapsquare as these two.
+// Why: both boxes are the walkable components from the baked collision pack, since the 4 sewer islands and the mansion cellar share the mapsquare.
 
 /** The cult hideout, a pocket whose only way out is the raft beside it. */
 export function inHideout(t: { x: number; z: number }): boolean {
@@ -178,7 +177,7 @@ async function boardRaft(within: number, log: (m: string) => void): Promise<bool
     if (!(await raft.interact('Board'))) {
         return false;
     }
-    // Why: with the valves wrong the raft stays put and says so in a plain chat line, so where the character ends up is what separates a ride from a refusal.
+    // Why: with the valves wrong the raft stays put and says so in chat, so where you end up separates a ride from a refusal.
     const start = Tile.from(from);
     const rode = await Execution.delayUntil(() => {
         const t = Game.tile();
@@ -191,12 +190,12 @@ async function boardRaft(within: number, log: (m: string) => void): Promise<bool
     return rode;
 }
 
-// Why: `Reach.locOp` walks and then gives up in the one call where the loc starts out of the scene, and the five valves stand twenty tiles apart, so a leg that bailed on that would walk from valve to valve and never turn one.
+// Why: `Reach.locOp` walks then gives up when the loc starts out of scene, and the 5 valves stand 20 tiles apart, so a leg that bailed there would walk valve to valve and never turn one.
 const REACH_TRIES = 3;
 
 async function turnValve(valve: Valve, log: (m: string) => void): Promise<boolean> {
     for (let attempt = 0; attempt < REACH_TRIES; attempt++) {
-        // Why: the turn's only oracle is the box it raises, so one left open by the last valve would read as this one's.
+        // Why: Close the previous valve's result box before using the next box as confirmation.
         await clearBoxes(log);
         const status = await Reach.locOp({
             name: 'Sewer valve',
@@ -254,7 +253,7 @@ async function toHideout(log: (m: string) => void): Promise<boolean> {
         }
         valvesTurned = true;
     }
-    // Why: the cave entrance is a teleport, and the walker's client-side pathfind burns five repaths on the tick its scene is still unbuilt, so the hop lands first and the last three tiles are walked after it settles.
+    // Why: the cave entrance is a teleport and the client pathfind burns 5 repaths while the scene is unbuilt, so land the hop first and walk the last 3 tiles after it settles.
     if (!(await walkWithHops(SEWER_LANDING, 5, HOPS, log))) {
         return false;
     }
@@ -319,7 +318,7 @@ async function takeArmour(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => heldId(ARMOUR_OBJ) > 0, 8000);
 }
 
-// Why: `defeat_alomone_hazeel_cultist` drops the armour again on every kill while no copy exists anywhere, so a drop that despawned is recovered by fighting him again rather than by waiting.
+// Why: `defeat_alomone_hazeel_cultist` drops the armour on every kill while no copy exists, so a despawned drop is recovered by fighting him again.
 async function slayAlomone(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(ALOMONE_TILE, { radius: 4, attempts: 3, timeoutMs: 90_000, log }))) {
         return false;
@@ -340,7 +339,7 @@ async function slayAlomone(log: (m: string) => void): Promise<boolean> {
         if (!Npcs.all().some(n => n.index === index && n.name === 'Alomone')) {
             return true;
         }
-        // Why: the host's eat hook is pumped by `Sustain.run`, not by the tick loop, so a fight held inside one custom step never eats without this.
+        // Why: `Sustain.run` pumps the host's eat hook, so a fight held inside one custom step never eats without this.
         await Sustain.run();
         await Execution.delayTicks(1);
     }
@@ -361,7 +360,7 @@ async function fetchArmour(log: (m: string) => void): Promise<boolean> {
     if (!(await slayAlomone(log))) {
         return false;
     }
-    // Why: `ai_queue3` adds the drop a few ticks after the corpse leaves the scene, so the first look at the floor is too early and the leg would report a kill it could not collect.
+    // Why: `ai_queue3` adds the drop a few ticks after the corpse leaves the scene, so the first look at the floor is too early.
     await Execution.delayUntil(() => armourOnFloor() !== null, 8000);
     return takeArmour(log);
 }
@@ -381,10 +380,10 @@ function chat(stop: NpcStop): (log: (m: string) => void) => Promise<boolean> {
 const askCeril = chat(CERIL_START);
 const refuseClivet = chat(CLIVET);
 
-// Why: `hazeelcult_fake_complete` opens the reward scroll on a main modal part-way through, so the chat driver comes back with the rest of Ceril's lines unread. The stage is already 7 by then.
+// Why: `hazeelcult_fake_complete` opens the reward scroll on a main modal part-way through, so the chat driver returns with Ceril's lines unread; the stage is already 7 by then.
 const returnArmour = chat(CERIL_RETURN);
 
-// Why: the first call climbs the stairs and finds nothing, every loc query reads empty for a tick after a level change, so the climb and the open are two of these, same as the valves.
+// Why: every loc query reads empty for a tick after a level change, so the climb and the open take 2 tries, same as the valves.
 async function openCupboard(log: (m: string) => void): Promise<boolean> {
     for (let attempt = 0; attempt < REACH_TRIES; attempt++) {
         if (locById(CUPBOARD_OPEN, 6)) {
@@ -396,7 +395,7 @@ async function openCupboard(log: (m: string) => void): Promise<boolean> {
             near: CUPBOARD,
             id: CUPBOARD_SHUT,
             within: 6,
-            // Why: a loc that transforms keeps its old id for a tick, so this polls for the open half rather than reading once.
+            // Why: a transforming loc keeps its old id for a tick, so poll for the open half.
             expect: () => locById(CUPBOARD_OPEN, 6) !== null,
             log
         });
@@ -415,10 +414,10 @@ function questDone(): boolean {
     return Quests.status(QUEST) === 'complete';
 }
 
-/** How many quiet ticks prove the accusation ran short rather than being mid-page. */
+/** Quiet ticks before the accusation counts as the short branch. */
 const CHAT_QUIET_TICKS = 4;
 
-// Why: the short branch ends in silence, so a plain `driveUntil` on the journal spends its full budget every time Ceril or Jones is out of range, the chat going quiet is what says the run was the short one.
+// Why: the short branch ends in silence, so a plain `driveUntil` on the journal burns its full budget whenever Ceril or Jones is out of range; quiet chat means the short branch.
 async function driveToComplete(log: (m: string) => void): Promise<boolean> {
     const deadline = performance.now() + 120_000;
     let quiet = 0;
@@ -440,7 +439,7 @@ async function driveToComplete(log: (m: string) => void): Promise<boolean> {
     return questDone();
 }
 
-// Why: `oploc1,hazeelcbopen` bails unless Ceril and Jones are both inside `npc_find(..., 6, 0)` of the player, and it says nothing at all when they are not, so the leg runs again.
+// Why: `oploc1,hazeelcbopen` bails silently unless Ceril and Jones are both inside `npc_find(..., 6, 0)`, so the leg runs again.
 async function searchCupboard(log: (m: string) => void): Promise<boolean> {
     if (!(await toSurface(log))) {
         return false;
@@ -472,12 +471,12 @@ function holdsArmour(snap: QuestSnapshot): boolean {
     return (snap.invIds?.get(ARMOUR_OBJ) ?? 0) > 0 || (snap.wornIds?.has(ARMOUR_OBJ) ?? false);
 }
 
-// Why: `~obj_gettotal` counts the bank as well, so a banked suit stops Alomone dropping another and the withdrawal is the only way on from there.
+// Why: `~obj_gettotal` counts the bank too, so a banked suit stops Alomone dropping another and withdrawing is the only way on.
 function armourLeg(snap: QuestSnapshot): QuestStep {
     if (holdsArmour(snap)) {
         return custom('return the armour to Ceril upstairs', returnArmour);
     }
-    // Why: no bank is reachable from inside the pocket, so the drop on the floor beside us settles it before any question about what is banked.
+    // Why: no bank is reachable from the pocket, so the drop on the floor beside us comes before any bank question.
     if (snap.tile && inHideout(snap.tile)) {
         return custom('take the Carnillean armour from the cult hideout', fetchArmour);
     }

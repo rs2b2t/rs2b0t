@@ -11,8 +11,7 @@ export function wornId(id: number): boolean {
     return Equipment.items().some(item => item.id === id);
 }
 
-// Why: both halves of the priest suit render "Priest gown", so `Equipment.equip` reports the
-// legs already on once the top is worn and never sends the second Wear.
+// Why: both halves of the priest suit render "Priest gown", so `Equipment.equip` reports the legs already on once the top is worn and never sends the second Wear.
 
 /** Wear by exact object id. */
 export async function wear(item: BioItem, log: (m: string) => void): Promise<boolean> {

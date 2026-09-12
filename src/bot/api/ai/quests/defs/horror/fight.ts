@@ -15,13 +15,12 @@ import { meleeReady, meleeWeaponName } from './supplies.js';
 
 const MAGIC_TAB = 6;
 
-/** The attackable junior. jr1..jr3 are the three ticks of its spawn animation. */
+/** The attackable junior. jr1..jr3 are the 3 ticks of its spawn animation. */
 const DAGANNOTH_JR = 1347;
 
-// Why: `npc_max_dealt` zeroes every hit that is not the one the current form is weak to.
-// Why: the form's npc id, which `npc_changetype` puts on the wire, is therefore what picks the spell.
+// Why: `npc_max_dealt` zeroes every hit the current form isn't weak to, so the form's npc id from `npc_changetype` picks the spell.
 
-// The mother's six forms.
+// The mother's 6 forms.
 export const FORM_ELEMENT: Record<number, 'Wind' | 'Water' | 'Earth' | 'Fire'> = {
     1348: 'Wind',
     1349: 'Wind',
@@ -32,8 +31,7 @@ export const FORM_ELEMENT: Record<number, 'Wind' | 'Water' | 'Earth' | 'Fire'> =
     1354: 'Earth'
 };
 
-// Why: the two forms no spell can touch are `horror_dagganoth_ranged` (1355) and `horror_dagganoth_melee` (1356), from `npc.dat`, named for the style they are weak to like the elemental forms.
-// Why: 1356 is immune only to a magic-only loadout, with a melee weapon wielded it is a fight like any other, which is thirty ticks of the cycle spent killing her instead of praying through.
+// Why: no spell touches `horror_dagganoth_ranged` (1355) or `horror_dagganoth_melee` (1356), named in `npc.dat` for the style they're weak to; a wielded melee weapon turns 1356's 30 ticks into a fight.
 export const RANGED_FORM = 1355;
 export const MELEE_FORM = 1356;
 
@@ -59,8 +57,7 @@ const byIds = (ids: readonly number[]): Npc | null =>
 const mother = (): Npc | null => byIds(MOTHER_IDS);
 const junior = (): Npc | null => byIds([DAGANNOTH_JR]);
 
-// Why: at stage 4 this queues the junior's attack and at stage 5 the mother.
-// Why: that is what makes the fight resumable after a death, as neither respawns on its own.
+// Why: at stage 4 this queues the junior and at stage 5 the mother; neither respawns on its own, so it's how a death resumes.
 
 /** Talk to Jossik to queue the next dagannoth. */
 async function pokeJossik(log: (m: string) => void): Promise<boolean> {
@@ -82,12 +79,9 @@ async function pokeJossik(log: (m: string) => void): Promise<boolean> {
     return true;
 }
 
-// Why: the two dagannoths take different prayers because they are different fights.
-// Why: `horror_dagannoth_jr4` declares no `ai_*player2` of its own, so it runs the default melee AI at `damagetype=stab_style`, Protect from Melee zeroes it and Protect from Missiles does nothing, which is why a "protected" junior fight still cost seventeen hitpoints.
-// Why: the mother overrides both, meleeing in `opplayer2` and ranging in `applayer2`, and `ai_applayer2` puts her back on melee the moment missiles are protected, so missiles forces her onto the style whose max hit is single figures.
-// Why: alternating the two is the better play only if the flip lands every tick, since each switch costs her the turn and in perfect lockstep she never attacks.
-// Why: a bot cannot promise every tick, taking damage makes the loop eat, eating spends the tick's one action, and the prayer stops flipping when it matters, half the time on the wrong one.
-// Why: holding one prayer is worse in theory and survives in practice.
+// Why: `horror_dagannoth_jr4` has no `ai_*player2`, so it runs the default melee AI at `damagetype=stab_style`; Protect from Melee zeroes it and Protect from Missiles does nothing.
+// Why: the mother melees in `opplayer2` and ranges in `applayer2`, and `ai_applayer2` puts her back on melee once missiles are protected, so missiles forces her onto the single-figure style.
+// Why: alternating prayers only wins if the flip lands every tick, and eating spends the tick's one action, so hold one prayer.
 const PROTECT = {
     melee: { name: 'protect from melee', level: 43 },
     missiles: { name: 'protect from missiles', level: 40 }
@@ -128,11 +122,10 @@ class Protection {
     }
 }
 
-/** A spell every five ticks is the cast rate; anything faster is dropped. */
+/** One spell per 5 ticks; anything faster is dropped. */
 const CAST_TICKS = 5;
 
-// Why: a tuna's worth of damage taken is enough to eat on.
-// Why: waiting for a shark's worth wastes none of the heal but spends the margin first, and the margin is what a bad thirty ticks eats through.
+// Why: eat at a tuna's worth of damage; waiting for a shark's worth spends the margin a bad 30 ticks eats through.
 const EAT_AT_MISSING = 12;
 
 function hungry(): boolean {
@@ -146,28 +139,24 @@ interface FightPlan {
     target: () => Npc | null;
     /** The element its current form takes damage from, or null while immune. */
     element: (npc: Npc) => string | null;
-    // Why: melee is one op that keeps swinging on its own, so it is issued once per form and only re-issued when the fight drops out of combat.
-    // Why: re-clicking every tick would spend the tick's one action re-targeting.
+    // Why: melee keeps swinging on its own, so it's issued once per form and re-issued only when combat drops; re-clicking spends the tick's one action.
 
     /** True while this form should be hit with the wielded weapon instead of a spell. */
     melee?: (npc: Npc) => boolean;
     won: () => boolean;
     /** Ticks to wait after re-summoning before looking again. */
     summonDelay: number;
-    /** The protection prayer that answers *this* dagannoth's attack style. */
+/** Protection prayer matching this dagannoth's attack style. */
     protect: ProtectKind;
-    // Why: `spawn_dagmother` puts the mother straight into `applayer2`, so she is ranging before the junior's corpse is cold.
-    // Why: dropping the junior's protection on the way out and re-arming inside the next step costs a quest-engine round trip, journal read and all, and she spends it hitting an unprotected character for up to twenty-four a time.
-    // Why: that window killed a full end-to-end run from 99 hitpoints.
+    // Why: `spawn_dagmother` puts the mother straight into `applayer2`, and re-arming in the next step costs a quest-engine round trip she spends ranging for up to 24 a hit.
 
-    /** Prayer to leave standing when this fight is won, instead of clearing. */
+    /** Prayer to leave standing when this fight is won. */
     handover?: ProtectKind;
     guard: number;
 }
 
-// Why: the server runs a single op per tick and silently drops the rest, so a loop that eats, prays and casts in the same breath loses two of the three, one action per tick, in the order pray, eat, cast.
-// Why: with eating first, taking damage spends every tick on food, the prayer never gets re-armed, and the fight is lost while the pack is still full.
-// Why: prayer is cheap, a no-op once the varp says it is up, so it goes first and costs nothing on the ticks it is already holding.
+// Why: the server runs one op per tick and drops the rest, so it's one action per tick in the order pray, eat, cast.
+// Why: eating first spends every damaged tick on food and the prayer never re-arms; prayer is a no-op once the varp says it's up, so it goes first.
 
 /** Run one fight to its win condition. */
 async function fightLoop(plan: FightPlan, log: (m: string) => void): Promise<boolean> {
@@ -175,11 +164,9 @@ async function fightLoop(plan: FightPlan, log: (m: string) => void): Promise<boo
     if (!prayers.usable) {
         log(`prayer below ${PROTECT[plan.protect].level} — the ${plan.what} will land hits this fight`);
     }
-    // Prayer first, tab second. Whatever is already attacking does not wait for
-    // an interface to be built.
+    // Prayer first, tab second. Whatever is already attacking doesn't wait for an interface.
     await prayers.hold();
-    // The spellbook root is only walkable once its tab has been built, and the
-    // fight is casts: open it before the first form change, not during.
+    // The spellbook root is only walkable once its tab is built, so open it before the first form change.
     await Game.openSideTab(MAGIC_TAB);
     Game.setAutoRetaliate(false);
     let casts = 0;
@@ -228,8 +215,7 @@ async function fightLoop(plan: FightPlan, log: (m: string) => void): Promise<boo
                 continue;
             }
             if (plan.melee?.(target)) {
-                // Already swinging at this form: the op stands, so spend the
-                // tick on nothing rather than re-targeting the same npc.
+                // Already swinging at this form: the op stands, so don't re-target.
                 if (target.index === meleeing && Game.inCombat()) {
                     await Execution.delayTicks(1);
                     continue;
@@ -252,8 +238,7 @@ async function fightLoop(plan: FightPlan, log: (m: string) => void): Promise<boo
                     casts++;
                     refused = 0;
                 } else if (++refused >= 5) {
-                    // A cast that never selects is silent: no message, no
-                    // animation, a fight that stands still until it loses.
+                    // A cast that never selects is silent: no message, no animation.
                     log(`could not select ${element} — magic level or runes short`);
                     return false;
                 }
@@ -269,7 +254,7 @@ async function fightLoop(plan: FightPlan, log: (m: string) => void): Promise<boo
     }
 }
 
-/** Kill the junior. It only becomes attackable on the fourth tick of its spawn. */
+/** Kill the junior. It only becomes attackable on the 4th tick of its spawn. */
 export async function fightJunior(log: (m: string) => void): Promise<boolean> {
     const magic = Skills.level('magic');
     const tier = spellTier(magic);
@@ -277,8 +262,7 @@ export async function fightJunior(log: (m: string) => void): Promise<boolean> {
         log(`magic ${magic} cannot cast any combat spell`);
         return false;
     }
-    // It takes damage from anything, so a wielded weapon is strictly better than
-    // a spell: no cast delay, no runes, and the 5-tick cast rate does not cap it.
+    // It takes damage from anything, so a wielded weapon beats a spell: no cast delay, no runes, no 5-tick cap.
     const melee = meleeReady();
     log(melee
         ? `meleeing the junior with the ${meleeWeaponName()}`
@@ -291,15 +275,13 @@ export async function fightJunior(log: (m: string) => void): Promise<boolean> {
         won: () => mother() !== null,
         summonDelay: 6,
         protect: 'melee',
-        // She is added during the junior's death tick and set ranging three
-        // ticks later, so the swap has to happen here, not in the next step.
+        // She is added on the junior's death tick and set ranging 3 ticks later, so the swap happens here.
         handover: 'missiles',
         guard: 3000
     }, log);
 }
 
-// Why: two of her six forms take no damage from anything a magic loadout carries, so the loop prays through those thirty ticks.
-// Why: the four elemental windows clear 120 hitpoints in a cycle and a half.
+// Why: 2 of her 6 forms take no damage from a magic loadout, so the loop prays through those 30 ticks; the 4 elemental windows clear 120 hp in a cycle and a half.
 
 /** Kill the Dagannoth mother. */
 export async function fightMother(log: (m: string) => void): Promise<boolean> {
@@ -324,8 +306,7 @@ export async function fightMother(log: (m: string) => void): Promise<boolean> {
             }
             return form ? `${form} ${tier}` : null;
         },
-        // Why: the casket lands in the pack and the completion teleport moves the character out of the cavern, so either one proves the win.
-        // Why: a full pack means only the teleport arrives.
+        // Why: the casket lands in the pack and the completion teleport leaves the cavern, so either proves the win; a full pack only gets the teleport.
         won: () => Inventory.countById(HD_ID.CASKET) > 0 || (Game.tile()?.z ?? 0) >= 9984,
         summonDelay: 8,
         protect: 'missiles',

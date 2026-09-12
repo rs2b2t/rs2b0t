@@ -1,7 +1,7 @@
-/** Live Fishing Contest harness (#244): --stage N --until N --minutes N, base :8890.
- *  Why: `--stage` writes `%fishingcompo` and the two companion varps together, the contest stage and the fee/catch counter have to agree or Bonzo re-seats a contest the journal says is already under way, then relogs, since update_questlist only recolours the list at login.
- *  Why: the bank holds coins and food alone, so the garlic, the spade, the rod and the worms are all sourced in the world; stats are max because the road crosses White Wolf Mountain.
- *  Why: it deploys its own copy of the client through `deployIsolatedClient`, so a neighbouring harness cannot decide mid-boot which branch this run exercises. */
+/** Live Fishing Contest harness (#244), using the members world at :8890. */
+// Why: stage and fee/catch varps must agree before relogging to refresh the journal.
+// Quest items stay unseeded; max stats cover White Wolf Mountain.
+// The isolated client prevents another harness from replacing the bundle mid-boot.
 
 //   HEADED=1 bun e2e/fishing-contest-244-live.ts --stage 0 --until 5 --minutes 90 --tick 150
 //   HEADED=1 bun e2e/fishing-contest-244-live.ts --stage 2 --until 4 --minutes 20 --tick 150

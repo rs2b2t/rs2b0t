@@ -48,8 +48,7 @@ function normalize(lines: readonly string[] | string): string {
         .toLowerCase();
 }
 
-// Why: the needs list repeats words the struck-through history also uses, so it is read from
-// the tail after "i still need to bring him:" rather than from the journal at large.
+// Why: the needs list repeats words the struck-through history also uses, so it is read from the tail after "i still need to bring him:".
 function readNeeds(text: string): Set<string> {
     const flags = new Set<string>();
     const at = text.indexOf('i still need to bring him');
@@ -155,7 +154,7 @@ async function closeJournal(): Promise<void> {
     }
 }
 
-// Why: Troll Stronghold can be finished without ever opening Mad Eadgar's cell, and an unfreed Eadgar leaves the Cave Entrance dropping the character into an empty room with nobody to talk to.
+// Why: Troll Stronghold can be finished without opening Mad Eadgar's cell, and an unfreed Eadgar leaves the Cave Entrance dropping you into an empty room.
 // Why: the completed Troll Stronghold journal still records it, "I've rescued Godric and Mad Eadgar."
 // Why: it is read once and cached, as every read opens and closes the quest-list modal.
 let freedCache: boolean | undefined;

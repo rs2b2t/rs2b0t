@@ -22,9 +22,9 @@ import {
 } from './areas.js';
 
 const WALK_MS = 180_000;
-/** Morris runs two chat pages and an objbox before the teleport lands. */
+/** Morris runs 2 chat pages and an objbox before the teleport lands. */
 const GATE_MS = 20_000;
-/** Cast, four ticks of delay, the catch line, and on the third fish, Bonzo's hand-over. */
+/** Cast, 4 ticks of delay, the catch line, and on the 3rd fish, Bonzo's hand-over. */
 const CATCH_MS = 20_000;
 /** The stash, then the stranger's complaint and his move to the willow tree. */
 const STASH_MS = 20_000;
@@ -47,14 +47,14 @@ function dwarfStop(prefer: readonly string[]): NpcStop {
     return { ...DWARF_START, anchor: nearestDwarf(Game.tile()), prefer: [...prefer] };
 }
 
-// Why: both halves run the crossing, but only the left one leaves without Bonzo's prompt on a merely-started quest, so it is asked for first and the right half is the fallback.
+// Why: both halves run the crossing, but only the left leaves without Bonzo's prompt on a merely-started quest, so it goes first.
 function gateLoc(): Loc | null {
     const find = (match: (id: number) => boolean): Loc | null =>
         Locs.query().where(l => match(l.id)).action('Open').within(5).nearest();
     return find(id => id === FC_LOC.GATE_LEFT) ?? find(id => id === FC_LOC.GATE_RIGHT);
 }
 
-// Why: leaving before the contest is won puts Bonzo's "calling it quits" in the way, and its other option leaves the gate shut, so the exit takes the reset, which costs the 5gp fee and keeps the stashed pipe.
+// Why: leaving before the win puts Bonzo's "calling it quits" in the way and its other option leaves the gate shut, so the exit takes the reset: it costs the 5gp fee and keeps the stashed pipe.
 const QUIT_CONTEST = "Yes I'll compete again another day.";
 
 async function crossGate(stand: Tile, inside: boolean, log: (m: string) => void): Promise<boolean> {
@@ -76,7 +76,7 @@ async function crossGate(stand: Tile, inside: boolean, log: (m: string) => void)
     return driveUntil(() => inCompound(Game.tile()) === inside, inside ? [] : [QUIT_CONTEST], log, GATE_MS);
 }
 
-// Why: the gate is a baked door edge, but crossing it inbound is a conversation, Morris asks for the pass, spends two continues and an objbox on it, and only then teleports the player through, which no door handler drives.
+// Why: the gate is a baked door edge but crossing inbound is a conversation: Morris asks for the pass, spends 2 continues and an objbox, then teleports you through, which no door handler drives.
 
 /** Get past Morris onto the competition ground. */
 function enterCompound(log: (m: string) => void): Promise<boolean> {
@@ -103,8 +103,8 @@ export async function payEntryFee(log: (m: string) => void): Promise<boolean> {
     return walkAndTalk(BONZO_ENTER, log);
 }
 
-// Why: the pipe is what moves the stranger off the winning spot, and Bonzo only re-seats the contest while no fish has been caught yet, so this runs before the first cast, never after.
-// Why: the stand is the pipe's own tile rather than the tile beside it, which is what `useOnLoc`'s radius-2 walk would settle for. The engine refuses a straight wall decoration from anywhere else.
+// Why: the pipe moves the stranger off the winning spot and Bonzo only re-seats the contest before any fish is caught, so this runs before the first cast.
+// Why: the stand is the pipe's own tile; `useOnLoc`'s radius-2 walk would settle beside it and the engine refuses a straight wall decoration from there.
 
 /** Push the clove into the wall pipe; the stranger smells it and swaps spots. */
 export async function stashGarlic(log: (m: string) => void): Promise<boolean> {
@@ -130,7 +130,7 @@ export async function stashGarlic(log: (m: string) => void): Promise<boolean> {
     return driveUntil(() => heldId(FC_ID.GARLIC) === 0, [], log, STASH_MS);
 }
 
-// Why: one cast per call, the third fish triggers Bonzo's hand-over inside the same script, and the trophy, not the carp, is what proves the contest is over.
+// Why: one cast per call; the 3rd fish triggers Bonzo's hand-over inside the same script, and the trophy proves the contest is over.
 
 /** Cast once at the pipes spot. */
 export async function fishAtPipes(log: (m: string) => void): Promise<boolean> {
@@ -153,7 +153,7 @@ export async function fishAtPipes(log: (m: string) => void): Promise<boolean> {
     return driveUntil(() => heldId(FC_ID.RAW_GIANT_CARP) > before || heldId(FC_ID.TROPHY) > 0, [], log, CATCH_MS);
 }
 
-// Why: sardines mean the willow spot was fished, which cannot win, handing them to Bonzo loses the round and resets the entry, and the stashed pipe seats the re-entry beside the pipes.
+// Why: sardines mean the willow spot was fished, which can't win; handing them to Bonzo loses the round and resets the entry, and the stashed pipe seats the re-entry beside the pipes.
 
 /** Lose the round on purpose, back to a payable entry. */
 export async function handOverCatch(log: (m: string) => void): Promise<boolean> {

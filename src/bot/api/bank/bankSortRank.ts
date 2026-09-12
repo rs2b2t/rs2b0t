@@ -62,7 +62,7 @@ const HERBS = [
     'avantoe', 'kwuarm', 'snapdragon', 'cadantine', 'lantadyme', 'dwarf weed', 'torstol'
 ];
 
-// Why: every unidentified herb is named "Herb", so only the id says which. Karamja's five have no noted form.
+// Why: every unidentified herb is named "Herb", so only the id says which. Karamja's 5 have no noted form.
 const UNID_HERB_IDS: readonly (readonly [string, ...number[]])[] = [
     ['guam leaf', 199, 200], ['snake weed', 1525], ['ardrigal', 1527], ['sito foil', 1529],
     ['volencia moss', 1531], ['rogues purse', 1533], ['marrentill', 201, 202], ['tarromin', 203, 204],

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import { GameMessages } from '#/bot/api/chatbox/gameMessages.js';
 import { verdictSince } from '#/bot/api/ai/quests/defs/upass/verdict.js';
 
-// Why: every obstacle in the pass says what it did, in the same tick the op resolves, and the step waited on a tile that was never going to change, paying the full crossing timeout for a refusal it had already been told about. Live: twelve cages in a row at ten to fifteen seconds each, none of which moved anyone.
+// Why: obstacle messages settle the attempt immediately instead of paying the full timeout.
 
 const say = (...lines: readonly string[]): number => {
     const mark = GameMessages.mark();

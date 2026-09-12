@@ -8,8 +8,7 @@ export interface EadgarItem {
     name: string;
 }
 
-// Why: every unfinished potion in the game displays as "Unfinished potion", so the ranarr
-// vial is only ever addressed by id, a name-keyed withdraw pulls whichever unf the bank sorted first.
+// Why: every unfinished potion displays as "Unfinished potion", so the ranarr vial is addressed by id; a name-keyed withdraw pulls the first unf the bank lists.
 export const ER_ITEM = {
     COINS: { id: 995, name: 'Coins' },
     CLIMBING_BOOTS: { id: 3105, name: 'Climbing boots' },
@@ -101,16 +100,15 @@ export const ER_TILE = {
     WISTAN: new Tile(2928, 3546, 0),
     CHICKENS: new Tile(2691, 3273, 0),
     WHEAT: new Tile(2647, 3348, 0),
-    // Why: logs are wanted twice, once beside the chickens and the wheat and once beside the
-    // Trollheim bank, and a single anchor makes one of the two a five-hundred-tile detour.
+    // Why: logs are wanted twice, beside the chickens and wheat and beside the Trollheim bank; a single anchor makes one of the two a 500-tile detour.
 
     /** The Ardougne lakeside trees, between the zoo and the bank. */
     TREES: new Tile(2605, 3320, 0),
-    /** The trees east of Falador, twenty tiles from the bank this quest climbs out of. */
+    /** The trees east of Falador, 20 tiles from the bank this quest climbs out of. */
     TREES_FALADOR: new Tile(2920, 3368, 0)
 } as const;
 
-/** The five tiles the Thistle npc hops between (`eadgar_troll_thistle_move`). */
+/** The 5 tiles the Thistle npc hops between (`eadgar_troll_thistle_move`). */
 export const THISTLE_SPOTS: readonly Tile[] = [
     new Tile(2883, 3670, 0),
     new Tile(2887, 3675, 0),
@@ -133,8 +131,7 @@ export const SANFEW_FINISH: NpcStop = {
     prefer: ['I have some more goutweed for you.', "Actually I don't need to speak to you."]
 };
 
-// Why: one stop covers every Eadgar visit, the option he offers is a function of the stage, and
-// no two stages offer two of these at once, so a single ordered list never picks the wrong branch.
+// Why: one stop covers every Eadgar visit; the option offered depends on the stage and no stage offers two of these at once, so one ordered list never picks the wrong branch.
 export const EADGAR_TALK: NpcStop = {
     npc: ER_NPC.EADGAR,
     anchor: ER_TILE.EADGAR,
@@ -162,8 +159,7 @@ export const TEGID_ROBE: NpcStop = {
     prefer: ["Sanfew won't be happy", "You'll give me those robes right now"]
 };
 
-// Why: `make_alco_chunks` needs both of Pete's varbits set, and each `opnpc1` offers only one
-// of the three lines, so the two that matter are two separate visits.
+// Why: `make_alco_chunks` needs both of Pete's varbits set and each `opnpc1` offers only one of the 3 lines, so the two that matter are 2 visits.
 export const PETE_WHEN: NpcStop = {
     npc: ER_NPC.PETE,
     anchor: ER_TILE.PETE,
@@ -178,7 +174,7 @@ export const PETE_FEED: NpcStop = {
     prefer: ['What do you feed them?']
 };
 
-/** Where the character is, in the terms `decide()` cares about. */
+/** Where you are, in the terms `decide()` cares about. */
 export type EadgarZone = 'cave' | 'stronghold' | 'trollside' | 'mainland' | 'unknown';
 
 export function eadgarZone(tile: QuestSnapshot['tile']): EadgarZone {
@@ -200,13 +196,13 @@ export function eadgarZone(tile: QuestSnapshot['tile']): EadgarZone {
     return 'trollside';
 }
 
-/** True once the character is past the stile: no more cheap bank trips. */
+/** True once you're past the stile: no more cheap bank trips. */
 export function committed(zone: EadgarZone): boolean {
     return zone !== 'mainland' && zone !== 'unknown';
 }
 
-// Why: `nearest` ranks banks by straight line, and the cave and the stronghold sit at z ≈ 10 000, where every surface bank is six thousand tiles away and the ordering is noise. One run walked past Falador and out towards Varrock.
-// Why: on that side of the map there is one answer, so the bank is pinned rather than ranked.
+// Why: `nearest` ranks banks by straight line, and from the cave and stronghold at z ~10000 every surface bank is about 6000 tiles away, so the ordering is noise.
+// Pin the only practical bank on this side of the map.
 
 /** The bank a leg should open: pinned above the stile, nearest anywhere else. */
 export function questBank(snap: QuestSnapshot): Tile | undefined {

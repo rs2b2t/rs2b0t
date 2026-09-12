@@ -1,4 +1,4 @@
-// A one-time snapshot to hydrate defaults, not a feed: median coin offers, midpointed where both sides were up.
+// One-time snapshot to hydrate defaults: median coin offers, midpointed where both sides were up.
 // From https://markets.lostcity.rs/sales on 2026-08-26, 259 listings over 132 items. Prices move; edit freely.
 
 /** What an item was changing hands for when the snapshot was taken. */
@@ -7,7 +7,7 @@ export interface MarketPrice {
     /** Display name at the time of the scrape, for reading the table.  */
     name: string;
     mid: number;
-    /** Listings behind the figure. One is a single asking price, not a market. */
+    /** Listings behind the figure; 1 means a single asking price. */
     n: number;
 }
 

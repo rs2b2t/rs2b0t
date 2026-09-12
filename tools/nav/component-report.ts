@@ -1,5 +1,5 @@
-/** Flood-fill connectivity components under the collision pack + active edges.
- *  --seed 3019,9849,0 (repeatable), or --seeds-file tools/nav/mainland-routes.json */
+/** Pairwise pathability between seed tiles under the collision pack plus the default nav edges.
+ *  --seed 3019,9849,0 (repeatable), --pack out/collision.lcnav.gz, --max 500000 expansions. */
 
 //   bun tools/nav/component-report.ts --seed 3019,9849,0 --seed 3019,9739,0
 //   bun tools/nav/component-report.ts --seeds-file tools/nav/mainland-routes.json

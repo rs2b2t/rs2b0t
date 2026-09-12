@@ -25,7 +25,7 @@ function normalize(lines: readonly string[] | string): string {
         .toLowerCase();
 }
 
-// Why: every earlier line stays on the page struck through, so an early needle still matches in a late state and this order is the only thing separating them.
+// Why: every earlier line stays on the page struck through, so an early needle still matches late and only this order separates them.
 const STAGES: readonly [string, number][] = [
     ['quest complete!', GRAIL_STAGE.COMPLETE],
     ["i honoured the fisher king's request", GRAIL_STAGE.GIVEN_WHISTLE],
@@ -38,7 +38,7 @@ const STAGES: readonly [string, number][] = [
     ['i can start this quest by speaking to', GRAIL_STAGE.NOT_STARTED]
 ];
 
-// Why: no flags, beating the titan never moves the varp and never prints a line at the stage it happens on, so the crossing is read from where the player is standing, and everything else the quest branches on is an item.
+// Why: no flags; beating the titan never moves the varp or prints a line, so the crossing is read from where you stand and everything else is an item.
 
 export function parseHolyGrailJournal(lines: readonly string[] | string): QuestProgress | undefined {
     const text = normalize(lines);
@@ -49,7 +49,7 @@ export function parseHolyGrailJournal(lines: readonly string[] | string): QuestP
     return hit ? { stage: hit[1], flags: new Set<string>() } : undefined;
 }
 
-/** A failed read is not evidence the quest went backwards. */
+/** A failed read doesn't mean the quest went backwards. */
 let lastGood: QuestProgress | undefined;
 
 export async function readHolyGrailProgress(): Promise<QuestProgress | undefined> {

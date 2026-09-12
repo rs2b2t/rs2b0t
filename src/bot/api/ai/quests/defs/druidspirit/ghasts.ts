@@ -12,14 +12,14 @@ import { pickable, standBeside } from './camp.js';
 
 const GHAST = 'Ghast';
 
-/** Pear, stem and fungus all count; three of any of them fill a pouch. */
+/** Pear, stem and fungus all count; 3 of any of them fill a pouch. */
 const POUCH_ITEMS: readonly number[] = [NS_ID.PEAR, NS_ID.STEM, NS_ID.FUNGI];
 
 const harvestHeld = (): number => POUCH_ITEMS.reduce((sum, id) => sum + heldId(id), 0);
 
-// Why: `Cast Bloom` costs prayer points and affects the eight tiles around the caster, choosing one loc at random, so the loop stands beside a bloomable and re-casts until something answers.
+// Why: `Cast Bloom` affects one random loc within eight tiles, so cast beside a valid target until one blooms.
 
-/** Bloom and harvest until the pouch has three items to eat. */
+/** Bloom and harvest until the pouch has 3 items to eat. */
 export async function bloomWithSickle(log: (m: string) => void): Promise<boolean> {
     if (Skills.level('prayer') > 0 && Skills.effective('prayer') === 0) {
         log('no prayer points left — the blessed sickle cannot bloom');
@@ -51,7 +51,7 @@ export async function bloomWithSickle(log: (m: string) => void): Promise<boolean
     return harvestHeld() >= 3;
 }
 
-/** Three blossomed items into the pouch. */
+/** 3 blossomed items into the pouch. */
 export async function fillPouch(log: (m: string) => void): Promise<boolean> {
     if (harvestHeld() < 3) {
         log(`only ${harvestHeld()} harvest item(s) held — the pouch takes three`);
@@ -70,7 +70,7 @@ export async function fillPouch(log: (m: string) => void): Promise<boolean> {
 }
 
 // Why: a ghast is invisible until a pouch charge is spent on it, and `Attack` is refused outright below the pouch stage.
-// Why: the pouch use is an `opnpcu` refused only while something else already has you in combat, so the loop pops the ghast itself rather than waiting to be hit.
+// Why: the pouch use is an `opnpcu` only refused while something else has you in combat, so the loop pops the ghast itself.
 
 /** Pop one invisible ghast with the pouch and kill what appears. */
 export async function killGhast(log: (m: string) => void): Promise<boolean> {

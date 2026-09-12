@@ -21,18 +21,15 @@ import { combine, gatherAxe, gatherKnife, gatherShark, heldId, talkUntil, walkTo
 
 const TRIAL_WON = /completed the Bard's Trial/i;
 
-// Why: Askeladden only parts with a pet rock once Lalli has named him, and no journal line separates those two states.
-// Why: the latch is process state on purpose, a fresh session re-asks Lalli, which the content treats as a no-op.
+// Why: Askeladden only parts with a pet rock once Lalli has named him, and no journal line separates those 2 states.
+// Why: the latch is process state; a fresh session re-asks Lalli, which the content treats as a no-op.
 let lalliAsked = false;
 
 export function resetBardLatch(): void {
     lalliAsked = false;
 }
 
-/**
- * Olaf's trial: cut the musical tree, carve and string a lyre, have Fossegrimen
- * enchant it, then play it on the longhall stage.
- */
+/** Olaf's trial: cut the musical tree, carve and string a lyre, have Fossegrimen enchant it, then play it on the longhall stage. */
 export function bardStep(snap: QuestSnapshot): QuestStep | null {
     if (hasFlag(snap.progress, 'bard-done')) {
         return null;
@@ -107,7 +104,7 @@ async function takePetRock(log: (m: string) => void): Promise<boolean> {
     return got;
 }
 
-/** The three rows of the field at Rellekka's south gate. */
+/** The 3 rows of the field at Rellekka's south gate. */
 const SOUP_CROPS: readonly { id: number; name: string; patch: typeof FT_TILE.CABBAGE_PATCH }[] = [
     { id: FT_ID.CABBAGE, name: 'Cabbage', patch: FT_TILE.CABBAGE_PATCH },
     { id: FT_ID.POTATO, name: 'Potato', patch: FT_TILE.POTATO_PATCH },
@@ -139,7 +136,7 @@ async function stoneSoup(log: (m: string) => void): Promise<boolean> {
     return talkUntil('Lalli', FT_TILE.TROLL_CAULDRON, [], () => Inventory.countById(FT_ID.GOLDEN_FLEECE) > 0, log, 45_000);
 }
 
-// Why: Rellekka's own wheel refuses anyone who is not yet a Fremennik, so the fleece is spun in Seers' Village.
+// Why: Rellekka's own wheel refuses anyone who isn't a Fremennik yet, so the fleece is spun in Seers' Village.
 async function spinFleece(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(FT_TILE.SPINNING_WHEEL, 2, log))) {
         return false;
@@ -188,7 +185,7 @@ async function openBackstage(log: (m: string) => void): Promise<boolean> {
 
 async function perform(log: (m: string) => void): Promise<boolean> {
     if (!onStage(Game.tile())) {
-        // Why: the approach walk sometimes lands west of the door already, and clicking Open from there fails a step the crossing has finished.
+        // Why: the approach walk can land west of the door already, and clicking Open from there fails a crossing that's done.
         if (!pastBackstage(Game.tile())) {
             if (!(await openBackstage(log))) {
                 log('the bouncer would not let the lyre past');
@@ -210,6 +207,6 @@ async function perform(log: (m: string) => void): Promise<boolean> {
     if (!(await lyre.interact('Play'))) {
         return false;
     }
-    // Why: the performance is four verses of `say` with three-tick gaps, and the vote lands only on the last one.
+    // Why: the performance is 4 verses of `say` with 3-tick gaps, and the vote lands only on the last one.
     return Execution.delayUntil(() => GameMessages.sawSince(mark, TRIAL_WON), 60_000);
 }

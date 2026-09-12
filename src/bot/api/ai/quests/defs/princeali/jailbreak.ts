@@ -10,12 +10,12 @@ import { BARTENDER, JOE_BEER, NED_ROPE, PA_ITEM, PA_LOC, PA_NPC, PA_TILE } from 
 import { PRINCE_STAGE } from './journal.js';
 import { fromBank, held, heldItem } from './supplies.js';
 
-/** joe_beer consumes one, then two more, in a single conversation. */
+/** joe_beer consumes 1, then 2 more, in a single conversation. */
 const BEERS_NEEDED = 3;
-/** One to tie her, one spare: she respawns 100 ticks later inside the door's block. */
+/** 1 to tie her, 1 spare: she respawns 100 ticks later inside the door's block. */
 const ROPES_BEFORE_TIE = 2;
 const ROPES_AFTER_TIE = 1;
-/** Her spawn is five tiles from the door and oplocu refuses inside ten. */
+/** Her spawn is 5 tiles from the door and oplocu refuses inside 10. */
 const KELI_BLOCK_RADIUS = 12;
 
 function stageOf(snap: QuestSnapshot): number {

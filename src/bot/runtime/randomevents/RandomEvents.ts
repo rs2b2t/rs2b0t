@@ -50,8 +50,7 @@ const FISHING_GEAR = [
     'feather'
 ];
 const GEAR_LOSS_WINDOW_MS = 90_000;
-/** Hostile fishing/mining randoms (river troll, rock golem, …) often open from a few tiles out.
- *  Why: detecting by id within this range when they face or attack us, rather than only when adjacent, stops fishers dying before distance<=1 fires. */
+/** Detection range for hostile gathering randoms that attack from several tiles away. */
 const HOSTILE_ENGAGE_DISTANCE = 8;
 
 export function isHostileEventNpc(
@@ -70,14 +69,14 @@ export function isHostileEventNpc(
     if (npc.distance > HOSTILE_ENGAGE_DISTANCE) {
         return false;
     }
-    // Why: these antimacro ids only exist as your own random event. They are not world mobs you walk past.
+    // Why: these antimacro ids only spawn as your own random event, never as world mobs.
     // Why: soft flags (combatCycle / faceEntity) often lag or never set for 0-damage Swarm (#422), which left walks repathing until timeout while Supervisor never intercepted, so presence within engage range is enough.
     return true;
 }
 
 /**
- * Ent `p_opnpc` hijack: only the NPC we are facing while animating, not a neighbour loc chop.
- * Why: a scene-wide Ent match would idle the grove for the event's remaining life.
+ * The active Ent chop: facing the NPC, adjacent, and animating.
+ * Why: matching every Ent would pause unrelated chopping until it despawns.
  */
 export function isEntHijack(
     npc: { id: number; index: number; distance: number },
@@ -134,11 +133,11 @@ interface DetectedEvent {
     name: string;
 }
 
-const MAX_ATTEMPTS = 4; // give up on an event we can't clear after this many tries
-const GIVE_UP_COOLDOWN_MS = 45000; // then ignore that event for this long so the bot resumes
+const MAX_ATTEMPTS = 4; // bounded retries before the script resumes
+const GIVE_UP_COOLDOWN_MS = 45000; // ignore the failed event for this long
 const PICK_WAIT_MS = 80_000;
 
-/** Why: maze/mime trap the player; box/lamp occupy a pack slot with no Drop, so keep solving. */
+/** Maze and mime trap the player; box and lamp rewards cannot be dropped. */
 const TRAPPED_KINDS: ReadonlySet<EventKind> = new Set(['maze', 'mime', 'box', 'lamp']);
 
 export function plantStrategy(ops: string[]): 'pick' | 'evade' {
@@ -195,10 +194,7 @@ class RandomEventsImpl {
     private lastCheckTick = -1;
     private lastPending = false;
 
-    /**
-     * True when a random is active and not currently being solved.
-     * Why: quiet while {@link handling} so the handler's own walks do not self-interrupt, while Supervisor / EventSignal still gate scripts between loops via detect + handling.
-     */
+    /** True when a random is active but not inside its handler. */
     pending(): boolean {
         if (this.handling) {
             return false;
@@ -382,8 +378,7 @@ class RandomEventsImpl {
         }
         this.handling = true;
         try {
-            // detect/handle must never throw into ScriptRunner, a thrown error
-            // marks the script crashed even when the maze/dialog later succeeds.
+            // detect/handle must never throw into ScriptRunner; a thrown error marks the script crashed even when the maze or dialog later succeeds.
             return await this.handleInner(log);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -711,7 +706,7 @@ class RandomEventsImpl {
 
 /**
  * Detects and resolves random events.
- * Why: events are matched by NPC id rather than name, because names collide with ordinary monsters.
+ * Why: events are matched by npc id because names collide with ordinary monsters.
  * @see docs/reference/api-events.md
  */
 export const RandomEvents = new RandomEventsImpl();

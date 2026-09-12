@@ -47,7 +47,7 @@ function custom(name: string, run: (log: (m: string) => void) => Promise<boolean
     return { kind: 'custom', name, run };
 }
 
-/** Excalibur is not consumed by Merlin's Crystal, so the bank almost always has it. */
+/** Merlin's Crystal doesn't consume Excalibur, so the bank almost always has it. */
 export function excaliburPlan(snap: QuestSnapshot): QuestStep {
     if (banked(snap, ITEM.EXCALIBUR) > 0) {
         return { kind: 'withdraw', items: [{ name: ITEM.EXCALIBUR, qty: 1 }] };
@@ -61,7 +61,7 @@ export function excaliburPlan(snap: QuestSnapshot): QuestStep {
     return { kind: 'withdraw', items: [{ name: ITEM.COINS, qty: EXCALIBUR_PRICE }] };
 }
 
-// Why: the monk's search covers held and worn alike, so the pack has to be down to coin and food before the boat is even walked to.
+// Why: the monk's search covers held and worn alike, so the pack has to be down to coin and food before walking to the boat.
 const ENTRANA_KEEP = [ITEM.COINS.toLowerCase()];
 
 function entranaSpillover(snap: QuestSnapshot, food: string | null): string[] {
@@ -69,7 +69,7 @@ function entranaSpillover(snap: QuestSnapshot, food: string | null): string[] {
     return [...snap.inv.keys()].filter(name => !keep.includes(name));
 }
 
-// Why: the gear comes off before the deposit, not after, stripping second puts it straight back in the pack and buys a second bank trip.
+// Why: the gear comes off before the deposit; stripping after puts it straight back in the pack and buys a second bank trip.
 function entranaLeg(snap: QuestSnapshot, food: string | null): QuestStep {
     if (snap.worn.size > 0) {
         return custom('remove weapons and armour for Entrana', unequipAll);
@@ -115,7 +115,7 @@ function napkinStep(snap: QuestSnapshot): QuestStep | null {
 }
 
 // Why: the whistles are the way in and the way home, and the door only drops them for a character carrying the napkin, so every leg that needs one has to check the cloth first.
-// Why: Galahad replaces a lost napkin at stages 4 and 7 alone, so past that a missing one is a park with a reason rather than a walk to Seers'.
+// Why: Galahad only replaces a lost napkin at stages 4 and 7, so past that a missing one parks with a reason.
 
 /** Withdraw the napkin if needed, then fetch whistles; null once `want` are in the pack. */
 function whistleStep(snap: QuestSnapshot, want: number): QuestStep | null {
@@ -131,7 +131,7 @@ function whistleStep(snap: QuestSnapshot, want: number): QuestStep | null {
     return custom('collect Magic whistles from Draynor Manor', log => draynorWhistles(2, log));
 }
 
-/** Stages 4 and 7 are the same errand: arm, fetch two whistles, cross, and see the Fisher King. */
+/** Stages 4 and 7 are the same errand: arm, fetch 2 whistles, cross, and see the Fisher King. */
 function crossingLeg(snap: QuestSnapshot): QuestStep {
     if (inBlightedRealm(snap.tile)) {
         // Excalibur is needed on the far side of the titan and cannot be fetched from in here.
@@ -154,7 +154,7 @@ function crossingLeg(snap: QuestSnapshot): QuestStep {
     if (arm) {
         return arm;
     }
-    // Why: two. One is spent giving Sir Percival his ride home, and the other is the only way out of the realm.
+    // Why: 2, one for Sir Percival's ride home and one for the only way out of the realm.
     return whistleStep(snap, 2) ?? custom("blow the whistle at Karamja's six heads", whistleIn);
 }
 
@@ -221,7 +221,7 @@ export function decide(snap: QuestSnapshot, food: string | null = selectedFood()
 
 export const holygrail: QuestModule = {
     record: QUESTS.find(r => r.id === 'grail')!,
-    // Why: the quest crosses Camelot, Entrana, Seers', Draynor, Karamja and the Goblin Village, no one bank is near enough to pin.
+    // Why: the quest crosses Camelot, Entrana, Seers', Draynor, Karamja and the Goblin Village, so no one bank is near enough to pin.
     bank: 'nearest',
     food: FOOD_FLOAT,
     grind: ['Black Knight Titan'],

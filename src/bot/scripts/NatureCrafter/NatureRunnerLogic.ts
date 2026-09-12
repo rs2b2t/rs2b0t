@@ -1,9 +1,9 @@
 import Tile from '../../geometry/Tile.js';
 
-export const TRADE_CAP = 25; // max essence offered per trade; the store-visit target
-export const TRADE_ADJACENT = 2; // runner is "here"; the master still only clicks Trade at TRADE_NO_WALK
-export const TRADE_NO_WALK = 1; // OPPLAYER4 walks if farther, and walking cancels the open trade
-export const RUNNER_ASK_MS = 1800; // ~3 ticks: re-ask so a cancelled request is replaced before the master moves on
+export const TRADE_CAP = 25; // essence per trade and store-visit target
+export const TRADE_ADJACENT = 2; // runner counts as nearby
+export const TRADE_NO_WALK = 1; // OPPLAYER4 walks farther than this and cancels the trade
+export const RUNNER_ASK_MS = 1800; // roughly 3 ticks between requests
 /** After the master clicks Trade-with, do not click again. A second click cancels the window. */
 export const MASTER_HANDSHAKE_MS = 3000;
 export const BUY_ONLY_STOCK = 30; // shop stock above which the runner only buys (drain mode)
@@ -11,8 +11,7 @@ export const LOW_COINS = 1000; // coin floor: below it, bank instead of shopping
 export const PICKUP_RANGE = 20; // max tiles to chase a dropped noted stack
 export const STORE_PASSES = 6; // bound on plan/act passes per store visit
 
-// a restock must leave enough over the floor to pay the fares + a buy-back, or the runner
-// drops back under LOW_COINS on the way out and ping-pongs between bank and boat
+// Keep enough above LOW_COINS for fares and a buy-back to avoid a bank-boat loop.
 export const MIN_COIN_TARGET = 3000;
 
 export interface RuneType {
@@ -114,10 +113,7 @@ export function isNear(a: { x: number; z: number }, b: { x: number; z: number },
     return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z)) <= radius;
 }
 
-/**
- * Whether a nature-route walk to the store or ruins should stop at SPIDER_SAFE first.
- * Why: the direct Karamja line walks through Jungle Spiders (#730).
- */
+/** Whether to route through SPIDER_SAFE instead of the direct Jungle Spider line (#730). */
 export function spiderSafeVia(
     here: { x: number; z: number } | null,
     dest: { x: number; z: number },
@@ -138,16 +134,10 @@ export function tradeDelivered(beforeUnnoted: number, nowUnnoted: number): boole
     return nowUnnoted < beforeUnnoted;
 }
 
-/**
- * Walk to the ruins/altar only until the master is in sight.
- * Why: walkTo(ruins) after a missed trade pulls the runner off the master while essence is still in the pack.
- */
+/** Stop the altar walk once the master is visible so a missed trade does not pull the runner away. */
 export type MasterOfferAction = 'wait' | 'accept' | 'decline';
 
-/**
- * Master first-screen policy.
- * Why: declining a blank "Trading With" header after 8 ticks cancelled live runner offers (~6s close in the wall logs).
- */
+/** Master first-screen policy; a blank header can still belong to a live runner offer. */
 export function masterOfferDecision(opts: {
     who: string | null;
     isPartner: boolean;
@@ -171,7 +161,7 @@ export function tradeWindowIsFor(partnerHeader: string | null, clicked: string):
     return partnerHeader.toLowerCase() === clicked.toLowerCase();
 }
 
-/** Why: a second Trade-with click closes the window; only an ask after the last accept is still live. */
+/** Whether the request is newer than the last accept; a second Trade-with click closes the window. */
 export function masterPickTradeTarget(opts: {
     asked: string | null;
     askedAt: number;
@@ -237,8 +227,7 @@ export function masterShouldEnterAltar(inTemple: boolean, ess: number, stayInAlt
     return stayInAltar && !bankDue;
 }
 
-// Short route only. A trade window moves at most TRADE_CAP, so anything carried beyond it
-// buys the master a second altar round trip for the remainder, cap it however big withdrawEss is.
+// Short route only: cap the load to one trade window to avoid a second altar round trip.
 export function shortRouteWithdraw(perSetting: number, banked: number, room: number): number {
     const want = perSetting > 0 ? Math.min(perSetting, TRADE_CAP) : TRADE_CAP;
     return Math.max(0, Math.min(want, banked, room > 0 ? room : TRADE_CAP));

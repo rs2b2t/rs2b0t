@@ -64,7 +64,7 @@ interface MeleeFight {
     guard: number;
 }
 
-// Why: the server decodes one player op per tick and drops the rest, so a pass that prays, eats and swings loses two of the three.
+// Why: the server decodes 1 player op per tick and drops the rest, so a pass that prays, eats and swings loses 2 of the 3.
 async function meleeFight(fight: MeleeFight, log: (m: string) => void): Promise<boolean> {
     const canPray = Skills.level('prayer') >= PROTECT_LEVEL;
     if (!canPray) {
@@ -131,7 +131,7 @@ async function meleeFight(fight: MeleeFight, log: (m: string) => void): Promise<
         log(`${fight.what}: gave up after ${fight.guard} ticks (${swings} attacks)`);
         return false;
     } finally {
-        // Why: left holding, Protect from Melee burns the bar flat over the walk to the next fight, the loop re-arms in a tick if this one is not over.
+        // Why: left on, Protect from Melee burns the bar flat over the walk to the next fight; the loop re-arms in a tick if this one isn't over.
         await dropPrayer();
     }
 }

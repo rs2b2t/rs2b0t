@@ -56,7 +56,7 @@ harness cheat-teles to `from`.
 #### Live env (operator)
 
 ```sh
-# Pure walk (no tele policy, runes only — no jewellery kit)
+# Walk only, with runes but no jewellery kit
 HEADED=0 SEGMENT=clues LIMIT=40 BUDGET_S=120 USE_TELEPORTS=0 bun e2e/nav-script-travel-live.ts
 
 # Tele + charged jewellery seed/top-up

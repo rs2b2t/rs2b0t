@@ -1,6 +1,5 @@
-// Why: curated 2004-era travel edges derived from Server content scripts, spirit trees, gnome glider, Entrana ferry, Shilo↔Brimhaven cart.
-// Why: loaded alongside transports.json (see NavWorker); stands may be refined with live probes while destinations come from content constants and p_teleport targets.
-// Why: the content root on the operator machine is experiments/Server/content/scripts/.
+// Curated travel edges derived from the 2004 server content.
+// Destinations follow content constants; live probes may refine the approach stands.
 
 import type { TransportEdgeData } from './PathFinder.js';
 import { essenceExitEdges } from './essenceExit.js';
@@ -33,10 +32,7 @@ const PORT_SARIM_FROM_ENTRANA = parseLcCoord('1_47_50_40_31');
 export const CART_BRIMHAVEN = parseLcCoord('0_43_50_24_14');
 export const CART_SHILO = parseLcCoord('0_44_46_18_7');
 
-/**
- * Essence-mine surface return stands (runecraft.constant), used as NPC stands
- * for entry edges. Mine landing is random; planner uses a representative pad.
- */
+/** Essence-mine surface return stands (runecraft.constant), also the NPC stands for entry edges; the mine landing is random so the planner uses one pad. */
 export const ESSENCE_RETURN = {
     aubury: parseLcCoord('0_50_53_53_9'),
     sedridor: parseLcCoord('0_48_149_34_36'),
@@ -54,10 +50,7 @@ export const WILDY_LEVER = {
     ardougne: parseLcCoord('0_40_51_2_47')
 } as const;
 
-/**
- * Pier / NPC stand heuristics (Talk-to range). Refine with live pack probes.
- * Pathfinder only keeps the edge if both ends are walkable in the collision pack.
- */
+/** Pier / NPC stand heuristics (Talk-to range); the pathfinder keeps an edge only if both ends are walkable in the pack. */
 export const TRAVEL_STANDS = {
     portSarimMonk: { x: 3048, z: 3236, level: 0 } as NavPoint,
     entranaMonk: { x: 2834, z: 3335, level: 0 } as NavPoint,
@@ -107,22 +100,21 @@ export function spiritTreeEdges(): TransportEdgeData[] {
     ): void => {
         out.push(edge(from, to, 'Spirit Tree', 'Talk-to', 'portal', debug, requires));
     };
-    // Stronghold tree → others
+    // Stronghold tree to the others
     link(SPIRIT_TREE.stronghold, SPIRIT_TREE.village, 'spirit_stronghold_to_village', strongholdReq);
     link(SPIRIT_TREE.stronghold, SPIRIT_TREE.varrock, 'spirit_stronghold_to_varrock', strongholdReq);
     link(SPIRIT_TREE.stronghold, SPIRIT_TREE.khazard, 'spirit_stronghold_to_khazard', strongholdReq);
-    // Village tree → others
+    // Village tree to the others
     link(SPIRIT_TREE.village, SPIRIT_TREE.khazard, 'spirit_village_to_khazard', villageReq);
     link(SPIRIT_TREE.village, SPIRIT_TREE.varrock, 'spirit_village_to_varrock', villageReq);
     link(SPIRIT_TREE.village, SPIRIT_TREE.stronghold, 'spirit_village_to_stronghold', villageReq);
-    // Young / satellite trees only offer home (village), model as return edges from known dests
-    // that talk back toward village (varrock + khazard young trees).
+    // Young trees only offer home (village), so they are return edges from the varrock and khazard pads.
     link(SPIRIT_TREE.varrock, SPIRIT_TREE.village, 'spirit_varrock_to_village', villageReq);
     link(SPIRIT_TREE.khazard, SPIRIT_TREE.village, 'spirit_khazard_to_village', villageReq);
     return out;
 }
 
-// Why: gnome_glider.rs2 forces non-hub hops via Ta Quir Priw, so only hub↔pad edges are encoded.
+// Why: gnome_glider.rs2 forces non-hub hops via Ta Quir Priw, so only hub-to-pad edges are encoded.
 // Why: execution is a Talk-to on the Gnome pilot plus a glidermap click. There is no loc named glider.
 
 /** Gnome glider pad edges. */
@@ -141,17 +133,16 @@ export function gliderEdges(): TransportEdgeData[] {
         out.push(edge(hub, p.to, 'Gnome pilot', 'Talk-to', 'ship', `glider_hub_to_${p.id}`, req));
         out.push(edge(p.to, hub, 'Gnome pilot', 'Talk-to', 'ship', `glider_${p.id}_to_hub`, req));
     }
-    // Lemanto Andra (Digsite): hub → pad only. `~calc_glidervar` has no reverse pair;
-    // `~calc_gliderstart` never treats the digsite zone as an origin. One-way sink.
+    // Lemanto Andra (Digsite) is hub to pad only: `~calc_glidervar` has no reverse pair and `~calc_gliderstart` never treats the digsite as an origin.
     out.push(
         edge(hub, GLIDER_PAD.lemantoAndra, 'Gnome pilot', 'Talk-to', 'ship', 'glider_hub_to_lemanto_andra', req)
     );
     return out;
 }
 
-/** Port Sarim ↔ Entrana (monk Talk-to + weapon search; members). */
+/** Port Sarim/Entrana ferry (monk Talk-to + weapon search; members). */
 export function entranaFerryEdges(): TransportEdgeData[] {
-    // Port Sarim → Entrana: monks refuse weapons/armour (plan + execute).
+    // Port Sarim to Entrana: monks refuse weapons/armour (plan + execute).
     const toEntrana: TransportRequires = {
         members: true,
         forbidEntranaRestricted: true
@@ -180,10 +171,10 @@ export function entranaFerryEdges(): TransportEdgeData[] {
     ];
 }
 
-// Why: the fare is 5 % of coins clamped 10–200, so the plan uses a minimum of 10 coins.
-// Why: Brimhaven → Shilo requires Shilo Village complete.
+// Why: the fare is 5% of coins clamped 10-200, so the plan uses a minimum of 10 coins.
+// Why: Brimhaven to Shilo requires Shilo Village complete.
 
-/** Shilo ↔ Brimhaven jungle cart edges (vigroy / hajedy). */
+/** Shilo/Brimhaven jungle cart edges (vigroy / hajedy). */
 export function shiloCartEdges(): TransportEdgeData[] {
     const coins10: TransportRequires = {
         members: true,
@@ -216,11 +207,10 @@ export function shiloCartEdges(): TransportEdgeData[] {
     ];
 }
 
-// Why: the cart is not the only way in and out of Shilo. A wooden gate, a metal gate and a broken cart lead east onto open Karamja, and the collision pack sees none of it, the barricade and the timber defence wall the strip in, so the pathfinder routed every approach through Hajedy and never took the door in front of it.
-// Why: `[oploc2,shilo_brokencart]` telejumps from the village side to `movecoord(loc_coord, 3, 0, 1)`, and Mosol Rei's "Yes, I'll give it a go!" telejumps to `0_44_46_50_8`, both fixed landings, so both are edges rather than walks.
-// Why: the two gates in between are already door edges out of `doors.json`; only the ends of the corridor were missing.
+// Why: add the fixed gate and cart landings because the collision pack seals Shilo's east strip.
+// Why: the 2 gates in between are already door edges out of `doors.json`; only the ends of the corridor were missing.
 
-// Why: the cart is a three-by-three loc and its own tiles are blocked, so the stand is the walkable tile beside it on the village side, which is also the side `coordx(coord) <= coordx(loc_coord)` wants for the jump out.
+// The 3x3 cart uses the walkable village-side stand expected by its coordx check.
 /** Beside the broken cart, village side; the Search telejumps out to open ground. */
 const SHILO_CART = { x: 2876, z: 2953, level: 0 } as NavPoint;
 const SHILO_CART_OUT = { x: 2880, z: 2952, level: 0 } as NavPoint;
@@ -235,18 +225,17 @@ export function shiloGateEdges(): TransportEdgeData[] {
         quests: REQ.shiloComplete.quests
     };
     return [
-        // Why: the kind is what `kindOf` reads to pick an executor, and anything it does not know falls through to `door`, which sent the walker looking for a leaf to open on a man standing in front of it. `shortcut` is a loc with an op, `ship` is a Talk-to that puts you somewhere else, the same pair Vigroy and Hajedy use.
+        // Why: classify Mosol Rei as ship so the executor talks instead of searching for a door.
         edge(SHILO_CART, SHILO_CART_OUT, 'Broken cart', 'Search', 'shortcut', 'shilo_cart_climb_out', shiloDone),
         edge(SHILO_MOSOL, SHILO_MOSOL_IN, 'Mosol Rei', 'Talk-to', 'ship', 'shilo_mosol_leads_in', shiloDone)
     ];
 }
 
-// Why: in `essence_mine.rs2` the landing is `random(enum essence_mine_teleports)` over 22 tiles across mapsquare 45_75, then `map_findsquare(..., 0, 1, lineofsight)`.
-// Why: that is not a static destination, so these rows are blacklisted from the path graph (#388) and scripts needing the mine own the wizard hop via a specialCrossings Talk-to.
-// Why: `essenceEntrySetsReturn` is kept on the audit rows so docs and tests know which wizard sets which session return; it is not plan-usable while blacklisted.
+// Why: essence-mine entry lands on one of 22 random pads, so scripts own the wizard hop (#388).
+// Why: `essenceEntrySetsReturn` stays on the audit rows so docs and tests know which wizard sets which session return; blacklisted rows never plan.
 // Why: exit edges stay routable and require the matching `essenceExitReturn` (#377).
 
-/** Rune Mysteries complete → essence mine, via the wizard Teleport. */
+/** Rune Mysteries complete, essence mine via the wizard Teleport. */
 export function essenceEntryEdges(): TransportEdgeData[] {
     const f2p: TransportRequires = { ...REQ.runeMysteriesComplete };
     const membersReq: TransportRequires = {
@@ -282,7 +271,7 @@ export function essenceEntryEdges(): TransportEdgeData[] {
     ];
 }
 
-/** Ardougne ↔ deep wilderness levers (wilderness_lever.rs2). */
+/** Ardougne/deep wilderness levers (wilderness_lever.rs2). */
 export function wildyLeverEdges(): TransportEdgeData[] {
     const members: TransportRequires = { members: true };
     return [
@@ -308,14 +297,14 @@ export function wildyLeverEdges(): TransportEdgeData[] {
 }
 
 // Why: `mage_arena.rs2` gives one placement pair for `magearena_scan` (loc 2880, map m48_61), with direction taken from the player versus the loc.
-// Why: inbound (north → south) needs `%magearena >= complete` plus no armour or weapons (`~can_enter_mage_arena`).
-// Why: the miniquest is not on the quest list, so the plan uses members + `forbidEntranaRestricted`, the same gear heuristic as Entrana; an incomplete miniquest still fails at the loc.
-// Why: outbound (south → north) is a free tele to north of the loc.
+// Why: inbound (north to south) needs `%magearena >= complete` plus no armour or weapons (`~can_enter_mage_arena`).
+// Why: the miniquest has no journal state, so planning can only check membership and Entrana gear.
+// Why: outbound (south to north) is a free tele to north of the loc.
 // Why: dual directed edges are emitted so pathfind cannot pin one approach and drop a side (#403).
 
 /** Mage Arena outdoor barrier edges. */
 export function mageArenaBarrierEdges(): TransportEdgeData[] {
-    // Placements: 0_48_61_33_49 + 0_48_61_34_49 → (3105|3106, 3953).
+    // Placements: 0_48_61_33_49 + 0_48_61_34_49, i.e. (3105|3106, 3953).
     const locX = 3105;
     const locZ = 3953;
     const north = { x: 3105, z: 3954, level: 0 };
@@ -350,7 +339,7 @@ export function mageArenaBarrierEdges(): TransportEdgeData[] {
 }
 
 // Why: `[oploc1,tribaltotemdoor]` opens only for `coordz(coord) > coordz(loc_coord)`, so the mansion's one ground-floor door lets a player out and never in.
-// Why: derive-doors.ts drops the instance rather than baking it both ways, and this restores the half that works, without it every route out of the mansion reads unreachable.
+// Why: derive-doors.ts drops the instance entirely, so this restores the half that works; without it every route out of the mansion reads unreachable.
 
 /** Handelmort Mansion's inner door (loc 0_41_51_11_57), northward side only. */
 export function handelmortDoorEdges(): TransportEdgeData[] {
@@ -369,10 +358,7 @@ export function handelmortDoorEdges(): TransportEdgeData[] {
     }];
 }
 
-/**
- * OD-relevant agility shortcuts from skill_agility/shortcuts.rs2 (not full courses).
- * Coal logs + island ropes already live in transports.json, these fill remaining OD gaps.
- */
+/** Agility shortcuts from skill_agility/shortcuts.rs2 that fill OD gaps; coal logs and island ropes already live in transports.json. */
 export function agilityShortcutEdges(): TransportEdgeData[] {
     const agi = (level: number): TransportRequires => ({
         skills: [{ name: 'agility', level }]
@@ -381,16 +367,16 @@ export function agilityShortcutEdges(): TransportEdgeData[] {
         members: true,
         skills: [{ name: 'agility', level }]
     });
-    // Outpost / castle crumbling wall: one-way west→east (loc 0_39_55_46_33).
+    // Outpost / castle crumbling wall: one-way west to east (loc 0_39_55_46_33).
     const castleLoc = parseLcCoord('0_39_55_46_33');
     const castleFrom = { x: castleLoc.x - 1, z: castleLoc.z, level: 0 };
     const castleTo = { x: castleLoc.x + 1, z: castleLoc.z, level: 0 };
-    // Shilo river log already in transports.json (zq_logbalance @ 2906↔2910,3049).
+    // Shilo river log already in transports.json (zq_logbalance at 2906-2910,3049).
     // Edgeville dungeon monkeybars (loc params).
     const mbA = parseLcCoord('0_48_155_48_44');
     const mbB = parseLcCoord('0_48_155_49_49');
     // Why: area_yanille/agility_dungeon.rs2 gives content start tiles 0_40_148_20_48 / _20_40 and dual placements (2580,9519)/(2580,9513) at Agility 40.
-    // Why: without this edge the bank → chaos-druid-warrior field is disconnected.
+    // Why: without this edge the bank to chaos-druid-warrior field is disconnected.
     const yanilleLedgeN = parseLcCoord('0_40_148_20_48'); // 2580,9520
     const yanilleLedgeS = parseLcCoord('0_40_148_20_40'); // 2580,9512
     const yanilleLedge = (from: NavPoint, to: NavPoint, locZ: number, debug: string): TransportEdgeData => ({
@@ -449,10 +435,7 @@ export function elkoyMazeEdges(): TransportEdgeData[] {
     ];
 }
 
-/**
- * Tourist Trap mining-camp barriers and cart whose handlers teleport or
- * direction-gate the player. Adjacent door rows are excluded at graph load.
- */
+/** Tourist Trap mining-camp barriers and cart whose handlers teleport or direction-gate you; the adjacent door rows are dropped at graph load. */
 export function desertMiningCampEdges(): TransportEdgeData[] {
     const complete: TransportRequires = {
         quests: [{ quest: 'The Tourist Trap', minStatus: 'complete' }]
@@ -623,8 +606,7 @@ export function curatedTravelEdges(): TransportEdgeData[] {
         ...shiloCartEdges(),
         ...shiloGateEdges(),
         ...essenceEntryEdges(),
-        // Session multiloc: portal × return, gated by WorldState.essenceExitReturn.
-        // Replaces the four hard-coded Sedridor-only rows formerly in transports.json.
+        // Session multiloc: portal x return, gated by WorldState.essenceExitReturn; replaces the 4 Sedridor-only rows transports.json used to carry.
         ...essenceExitEdges(),
         ...wildyLeverEdges(),
         ...mageArenaBarrierEdges(),
@@ -654,4 +636,3 @@ export const TRAVEL_FAMILIES = [
     'elkoy_maze',
     'desert_mining_camp'
 ] as const;
-

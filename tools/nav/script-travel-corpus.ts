@@ -1,5 +1,5 @@
-/** Scrape every travel endpoint scripts use and build directed legs for live nav: --list, --segment=fishing --write, --segment=clues --stats. Sources are in-tree, CLUE_DB coords plus NAV_TARGETS ClueSolver stands, FISHING/MINING/WOODCUTTING spot↔bank and cook stands, FIRE_SPOTS bank pins, CookingRanges fish-camp plans, every `new Tile(x, z, level)` in quest `areas.ts`, and the NAV_TARGETS residual under gathering-all.
- *  Segments: all | clues | quests | gathering-all | fishing | mining | woodcutting | firemaking | cooking. Endpoints are snapped off solid locs via out/collision.lcnav.gz when present. */
+/** Build directed travel legs from clue, gathering, cooking, quest and NAV_TARGETS catalogs.
+ * Segments: all, clues, quests, gathering-all, fishing, mining, woodcutting, firemaking, cooking. Snap endpoints using out/collision.lcnav.gz when available. */
 
 //   bun --preload ./test/setup-dom.ts tools/nav/script-travel-corpus.ts --list
 //   bun --preload ./test/setup-dom.ts tools/nav/script-travel-corpus.ts --segment=fishing --write
@@ -95,10 +95,7 @@ function endpointPathFinder(): PathFinder | null {
     return endpointFinder;
 }
 
-/**
- * Script anchors (search furniture, dig spots, rocks) are often the loc tile itself
- * and unwalkable. Travel legs must start/end on a standable tile, not on the loc.
- */
+/** Why: many script anchors are blocked loc tiles; move endpoints to a tile the player can stand on. */
 export function snapTravelEndpoint(p: NavPoint, radius = ENDPOINT_SNAP_RADIUS): NavPoint {
     const finder = endpointPathFinder();
     if (!finder) {
@@ -112,9 +109,9 @@ function asNav(t: { x: number; z: number; level?: number }): NavPoint {
 }
 
 function isIslandish(p: NavPoint): boolean {
-    // Tutorial / deep plane / far off-grid for free path stress
+    // Exclude tutorial, underground and far-off-grid tiles from unrestricted walking tests.
     if (p.z > 9000 && p.z < 9800 && p.x > 3050 && p.x < 3150) {
-        return true; // tutorial island-ish
+        return true; // Tutorial Island
     }
     return false;
 }
@@ -142,7 +139,7 @@ export function buildTravelRoutes(): TravelRoute[] {
         if (isIslandish(from) || isIslandish(to)) {
             return;
         }
-        // Skip absurd plane hops without a transport in between for stress OD
+        // Skip large coordinate or level changes that need a transport.
         if (Math.abs(from.level - to.level) > 2) {
             return;
         }
@@ -163,7 +160,7 @@ export function buildTravelRoutes(): TravelRoute[] {
         });
     };
 
-    // ── Clues ──────────────────────────────────────────────────────────────
+    // Clues
     const cluePts: { id: string; tile: NavPoint; label: string }[] = [];
     for (const [id, row] of Object.entries(CLUE_DB)) {
         const c = (row as { coord?: { x: number; z: number; level: number }; obj?: string }).coord;
@@ -189,12 +186,11 @@ export function buildTravelRoutes(): TravelRoute[] {
             label: t.label
         });
     }
-    // Hub mesh would be O(n²) huge, chain consecutive + each → bank-ish hubs.
-    // Full mesh for small sets; for large, connect each to nearest 3 + ordered chain.
+    // A full mesh is O(n^2), so chain consecutive points and link each to its nearest 3.
     const clueLimited = limitPoints(cluePts, 80);
     chainNeighbors(clueLimited, add, 'CLUE_DB', 'clues', false, 3);
 
-    // ── Gathering: fishing / mining / woodcutting ──────────────────────────
+    // Gathering: fishing / mining / woodcutting
     const gatherSeg = (
         locs: readonly { name: string; spot: { x: number; z: number; level: number }; bankStand: { x: number; z: number; level: number }; rangeStand?: { x: number; z: number; level: number } }[],
         segment: 'fishing' | 'mining' | 'woodcutting',
@@ -212,7 +208,7 @@ export function buildTravelRoutes(): TravelRoute[] {
                 add(`${segment}-cook-${i}-R`, range, bank, `${loc.name} range → bank`, source, segment, true);
             }
         }
-        // Cross-camp: consecutive camps in table (not full mesh).
+        // Cross-camp: consecutive camps in the table.
         for (let i = 0; i < locs.length - 1; i++) {
             const a = asNav(locs[i]!.spot);
             const b = asNav(locs[i + 1]!.spot);
@@ -225,7 +221,7 @@ export function buildTravelRoutes(): TravelRoute[] {
     gatherSeg(MINING_LOCATIONS, 'mining', 'MINING_LOCATIONS');
     gatherSeg(WOODCUTTING_LOCATIONS, 'woodcutting', 'WOODCUTTING_LOCATIONS');
 
-    // ── Firemaking ─────────────────────────────────────────────────────────
+    // Firemaking
     const fireNames = Object.keys(FIRE_SPOTS);
     for (let i = 0; i < fireNames.length; i++) {
         for (let j = 0; j < fireNames.length; j++) {
@@ -246,7 +242,7 @@ export function buildTravelRoutes(): TravelRoute[] {
         }
     }
 
-    // ── Cooking ────────────────────────────────────────────────────────────
+    // Cooking
     for (const [camp, plan] of Object.entries(FISH_CAMP_COOK_PLANS)) {
         const pier = plan.pier;
         if (pier?.stand) {
@@ -281,7 +277,7 @@ export function buildTravelRoutes(): TravelRoute[] {
         add(`cooking-range-${i}`, a, b, `range ${i} → ${i + 1}`, 'COOKING_RANGE_LOCS', 'cooking', true);
     }
 
-    // ── Quests: scrape areas.ts for Tile literals, ordered pairs within file ─
+    // Quests: scrape areas.ts for Tile literals, ordered pairs within a file
     const questDir = path.join(process.cwd(), 'src/bot/api/ai/quests/defs');
     const areaFiles = listAreaFiles(questDir);
     for (const file of areaFiles) {
@@ -313,7 +309,7 @@ export function buildTravelRoutes(): TravelRoute[] {
         }
     }
 
-    // ── Residual NAV_TARGETS (non-clue) under gathering-all for completeness ─
+    // Residual non-clue NAV_TARGETS under gathering-all
     const residual = NAV_TARGETS.filter(
         t => t.expected !== 'island' && t.bot !== 'ClueSolver' && t.bot !== 'AIOQuester'
     );
@@ -422,7 +418,7 @@ function chainNeighbors(
         add(`${segment}-chain-${i}`, a.tile, b.tile, `${a.label} → ${b.label}`, source, segment, gathering);
         add(`${segment}-chain-${i}-R`, b.tile, a.tile, `${b.label} → ${a.label}`, source, segment, gathering);
     }
-    // k-nearest mesh per point (small k keeps volume sane for 80 clue pts)
+    // Connect each point to k nearest neighbours to limit the route count.
     const cheb = (a: NavPoint, b: NavPoint) =>
         a.level !== b.level ? 9999 : Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
     for (let i = 0; i < points.length; i++) {

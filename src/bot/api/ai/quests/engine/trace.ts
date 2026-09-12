@@ -1,9 +1,9 @@
-// Why: this module is step tracing for the quest engine, where a quest leg keeps the same description for its run, `smith 8 nails` covers mining four iron, mining eight coal, two furnace trips and an anvil.
-// Why: a log that prints a step once and then suppresses the repeat shows one line and goes silent for minutes, which from the outside is indistinguishable from a hang.
+// Why: step tracing for the quest engine, where a leg keeps one description for its run: `smith 8 nails` covers mining 4 iron, mining 8 coal, 2 furnace trips and an anvil.
+// Why: a log that prints a step once and suppresses repeats goes silent for minutes, which looks like a hang.
 
-/** Re-announce a repeating step after this many attempts, whichever comes first. */
+/** Re-announce a repeating step after this many attempts. */
 export const HEARTBEAT_ATTEMPTS = 5;
-/** ...or after this long. */
+/** Or after this long. */
 export const HEARTBEAT_MS = 15_000;
 
 /** A failing step never reaches the no-progress watchdog, so it warns on its own. */
@@ -23,7 +23,7 @@ export function formatTile(tile: { x: number; z: number; level: number } | null 
     return tile ? `(${tile.x},${tile.z}${tile.level > 0 ? `,L${tile.level}` : ''})` : '(no tile)';
 }
 
-/** What changed in the pack across one step, the answer to "did that do anything". */
+/** Inventory delta produced by one step. */
 export function invDelta(before: Map<string, number>, after: Map<string, number>): string {
     const names = new Set([...before.keys(), ...after.keys()]);
     const parts: string[] = [];
@@ -37,7 +37,7 @@ export function invDelta(before: Map<string, number>, after: Map<string, number>
     return parts.length > 0 ? parts.join(', ') : 'no inventory change';
 }
 
-// Why: this is keyed on quest plus step description, as the engine re-decides from scratch every tick and "the same step" is only ever recognised by what it describes itself as.
+// Why: keyed on quest plus step description, since the engine re-decides from scratch every tick and "the same step" is only recognisable by its description.
 
 /** Attempt counting and elapsed time for the step currently being retried. */
 export class StepTracker {

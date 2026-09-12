@@ -35,7 +35,7 @@ function hungry(): boolean {
     return max > 0 && Skills.effective('hitpoints') <= max - EAT_AT_MISSING;
 }
 
-// Why: `Sustain.run()` returns nothing whether it ate or found an empty pack, so a fight loop that yields to it on hunger alone spins out its guard doing nothing once the food is gone, which is how the first end-to-end run stood in front of the Fire Warrior for three minutes at 30 hitpoints.
+// Why: `Sustain.run()` does not report whether it ate, so an empty pack cannot drive the loop condition.
 function canEat(): boolean {
     return IKOV_FOODS.some(food => Inventory.contains(food));
 }
@@ -45,15 +45,14 @@ function iceArrowsHeld(): number {
     return Inventory.count(IKOV_NAME.ICE_ARROWS) + (Equipment.contains(IKOV_NAME.ICE_ARROWS) ? wornArrows() : 0);
 }
 
-/** The quiver alone, which is all a bow can shoot however full the pack is. */
+/** The quiver alone, which is all a bow can shoot. */
 function wornArrows(): number {
     return Equipment.items()
         .filter(i => (i.name ?? '').toLowerCase() === IKOV_NAME.ICE_ARROWS.toLowerCase())
         .reduce((sum, i) => sum + i.count, 0);
 }
 
-// Why: a sweep drops the recovered arrows into the pack, and one stack size is one obj id, so nocking is a separate act from holding them, and the count that decides whether a shot can go out is the quiver's.
-// Why: `iceArrowsHeld` adds the two together, which is the right question for "is the leg finished" and the wrong one for "can a shot go out", reading it here left a pack full of swept arrows looking like a loaded bow.
+// Why: Recovered arrows land in inventory, but only equipped arrows can fire; track total and equipped counts separately.
 
 /** What a fight should do next, given what is nocked and what is packed. */
 export type ArrowAction = 'shoot' | 'nock' | 'sweep' | 'spent';
@@ -90,7 +89,7 @@ async function armForTheWarrior(log: (m: string) => void): Promise<boolean> {
         log('ikov: no ice arrows to nock');
         return false;
     }
-    // Why: the warrior refuses anything whose `%damagetype` is not ranged, and rapid is the fastest of the bow's three.
+    // Why: the warrior refuses any `%damagetype` but ranged, and rapid is the fastest of the bow's 3.
     Game.setCombatMode(RAPID_MODE);
     return true;
 }
@@ -122,7 +121,7 @@ async function pickUpArrows(log: (m: string) => void): Promise<void> {
     log(`ikov: recovered arrows, ${iceArrowsHeld()} held`);
 }
 
-// Why: an empty bow answers every later Attack click with "There is no ammo left in your quiver", and the hobgoblin farm two legs on is what pays for it.
+// Why: an empty bow answers every later Attack click with "There is no ammo left in your quiver", which the hobgoblin farm 2 legs on pays for.
 /** Take the bow off once the quiver behind it is empty. */
 async function stowSpentBow(log: (m: string) => void): Promise<void> {
     if (!Equipment.contains(IKOV_NAME.YEW_SHORTBOW) || iceArrowsHeld() > 0) {
@@ -146,7 +145,7 @@ function warrior(): Npc | null {
     return Npcs.query().where(n => n.id === IKOV_NPC.FIRE_WARRIOR).action('Attack').within(15).nearest();
 }
 
-// Why: opening the door below the stage does not open it, it summons the warrior on the near side and blasts you back a tile.
+// Why: opening the door below the stage summons the warrior on the near side and blasts you back a tile.
 async function summonWarrior(log: (m: string) => void): Promise<boolean> {
     if (warrior()) {
         return true;
@@ -223,9 +222,9 @@ export async function fightFireWarrior(log: (m: string) => void): Promise<boolea
     let missing = 0;
     let swings = 0;
     let refused = 0;
-    // Why: a sweep that recovers nothing must not be retried every tick, so the second empty quiver in a row is the end of the fight rather than another circuit of the floor.
+    // Why: a sweep that recovers nothing mustn't be retried every tick, so the second empty quiver in a row ends the fight.
     let swept = false;
-    // Why: auto-retaliate fights the warrior whether or not our Attack clicks land, so "did a shot go out" is the wrong test for whether the fight happened.
+    // Why: auto-retaliate fights the warrior whether or not our Attack clicks land, so "did a shot go out" can't tell whether the fight happened.
     let engaged = false;
     let lastTick = -1;
     let reported = -1;
@@ -241,7 +240,7 @@ export async function fightFireWarrior(log: (m: string) => void): Promise<boolea
         }
         lastTick = now;
         engaged = engaged || Game.inCombat();
-        // Why: every branch below can yield the tick, and a report that only prints on the shooting one leaves a stalled fight silent to the last tick of the guard.
+        // Why: every branch below can yield the tick, so a report only on the shooting one leaves a stalled fight silent.
         if (now - reported >= REPORT_TICKS) {
             reported = now;
             const target = warrior();
@@ -271,7 +270,7 @@ export async function fightFireWarrior(log: (m: string) => void): Promise<boolea
                 await stowSpentBow(log);
                 return true;
             }
-            // Why: spinning out the full guard on an empty scene costs three minutes and says nothing; the tally names what is standing there.
+            // Why: spinning out the full guard on an empty scene costs 3 minutes and says nothing; the tally names what is standing there.
             if (!engaged && missing >= NEVER_APPEARED) {
                 log(`ikov: the Fire Warrior never joined the fight — scene holds ${tallyNearby()}`);
                 return false;
@@ -280,8 +279,7 @@ export async function fightFireWarrior(log: (m: string) => void): Promise<boolea
             continue;
         }
         missing = 0;
-        // Why: 80% of every shot lands on the floor, so an empty quiver mid-fight is a sweep rather than a loss.
-        // Why: the quiver is the only count that matters here, `iceArrowsHeld` adds the pack, so a sweep that filled the pack read as armed and every Attack after it answered "There is no ammo left in your quiver" for the rest of the guard.
+        // Why: 80% of shots land on the floor, so an empty quiver mid-fight is a sweep; only the quiver counts here, since `iceArrowsHeld` adds the pack and a swept pack reads as armed.
         const next = arrowAction(wornArrows(), Inventory.count(IKOV_NAME.ICE_ARROWS), !swept);
         if (next !== 'shoot') {
             if (next === 'spent') {
@@ -393,4 +391,3 @@ export async function killLucien(log: (m: string) => void): Promise<boolean> {
     log(`ikov: Lucien outlived ${LUCIEN_GUARD} ticks`);
     return false;
 }
-

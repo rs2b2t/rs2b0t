@@ -27,7 +27,6 @@ describe('prefsKeyFromBakePrefs', () => {
     });
 
     test('default bake prefs fingerprint is terrain-only (nothing stamped)', () => {
-        // labels/key/overlays off
         expect(prefsKeyFromBakePrefs(prefs())).toBe('lbnikmf');
     });
 });
@@ -74,17 +73,13 @@ describe('bake settings snapshot/restore (settings modal discard)', () => {
     });
 
     test('post-rebuild baseline: further edits discard to last rebuilt snapshot', () => {
-        // Open settings
         let baseline = snapshotMapPickerBakeSettings();
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'true');
-        // Successful rebuild → refresh baseline (committed values stay)
         baseline = snapshotMapPickerBakeSettings();
         expect(baseline.bakeLabels).toBe('true');
 
-        // Further edit without rebuild
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'false');
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeNpcs', 'true');
-        // Close settings → restore to post-rebuild baseline
         restoreMapPickerBakeSettings(baseline);
         const after = snapshotMapPickerBakeSettings();
         expect(after.bakeLabels).toBe('true');
@@ -102,4 +97,3 @@ describe('prefs fingerprint invalidation shape', () => {
         expect(b).not.toBe(c);
     });
 });
-

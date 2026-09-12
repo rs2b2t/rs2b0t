@@ -1,7 +1,4 @@
-/**
- * Pure forward recovery on stall: prefer the furthest clickable tile ahead on
- * the same path chain instead of immediately repathing.
- */
+/** Pure forward recovery on stall: the furthest clickable tile ahead on the same path chain. */
 
 import { chebyshev, type PathTileLike } from './geometry/followMath.js';
 
@@ -31,7 +28,7 @@ export function findForwardRecoveryIndex(
         if (t.level !== me.level) {
             continue;
         }
-        // Prefer tiles still ahead: not the tile we're standing on.
+        // Skip the tile we're standing on.
         if (t.x === me.x && t.z === me.z) {
             continue;
         }
@@ -49,9 +46,8 @@ export function findForwardRecoveryIndex(
     return bestOnCorridor;
 }
 
-// Why: `recover` clicks further along the published path, `combat` holds course for a fight rather than a nav problem, and `escalate` opens a route door, dismisses a quest lock, or declares blocked/repath.
-// Why: the search window for {@link findForwardRecoveryIndex} is capped at the tile before the next hop, so `recoverIdx === -1` happens when and only when the walk has already reached that hop's approach, the door/stair case that most needs the escalation ladder.
-// Why: repathing there replans the same route and burns the repath budget until the walk reports failure, which `walkResilient` then escalates to unreachable.
+// Recovery clicks ahead, combat holds position, and escalation handles the next blocked hop.
+// Why: repathing at a hop approach repeats the same route until the retry budget expires.
 type StallPhase = 'recover' | 'combat' | 'escalate';
 
 export function stallPhase(opts: { stallRetries: number; recoverIdx: number; inCombat: boolean }): StallPhase {

@@ -51,7 +51,7 @@ export async function takeGround(ids: readonly number[], name: string, log: Log)
     return Execution.delayUntil(() => heldAny(ids) > before, 8000);
 }
 
-// Why: the shoal is an NPC with `op1=Net`, and each cast is a fresh interaction rather than a held loop.
+// Why: the shoal is an NPC with `op1=Net`, and each cast is a fresh interaction.
 
 /** Net Karambwanji until the pack holds `want` of them, or has no room left. */
 export function fishKarambwanji(want: number): (log: Log) => Promise<boolean> {
@@ -90,8 +90,7 @@ export function fishKarambwanji(want: number): (log: Log) => Promise<boolean> {
     };
 }
 
-// Why: a raw Karambwan burns three times in ten, and the shoal is a hundred and sixty tiles from
-// the Holy Lake the bait comes from, a spare caught on this visit is cheaper than a second round trip.
+// Why: a raw Karambwan burns 3 times in 10 and the shoal is 160 tiles from the Holy Lake bait, so a spare caught now is cheaper than a second round trip.
 
 /** Lower the loaded vessel at Lubufu's spot until `want` Karambwan come up, or the bait runs out. */
 export function fishKarambwan(want = 2): (log: Log) => Promise<boolean> {
@@ -155,7 +154,7 @@ export async function pickBanana(log: Log): Promise<boolean> {
     return heldId(TB_ID.BANANA) > 0;
 }
 
-// Why: three different objects render as "Karamjan rum", so the purchase is counted by id rather than by `Inventory.count`.
+// Why: 3 different objects render as "Karamjan rum", so the purchase is counted by id.
 
 /** Zambo's bar in Musa Point is the only Karamjan rum on the island. */
 export async function buyRum(log: Log): Promise<boolean> {
@@ -185,7 +184,7 @@ export function cookOnFire(itemId: number, productId: number, what: string): (lo
             log(`no ${what} in the pack to cook`);
             return false;
         }
-        // Why: a raw Karambwan burns three times in ten, so the wait ends when the input is gone, not only when the product lands.
+        // Why: a raw Karambwan burns 3 times in 10, so the wait also ends when the input is gone.
         await useOnLoc(
             itemId,
             { name: TB_LOC.FIRE, near: TB_TILE.FIRE, within: 8 },
@@ -214,8 +213,7 @@ export function grind(itemId: number, productId: number): (log: Log) => Promise<
     return log => combine(TB_ID.PESTLE, itemId, productId, log);
 }
 
-// Why: only `[opheldu,tbwt_poisonous_karambwan_paste]` answers, so the spear is the item used and
-// the paste is what it lands on, the other way round hits `_weapon_spear`'s silent default.
+// Why: only `[opheldu,tbwt_poisonous_karambwan_paste]` answers, so the spear is used on the paste; the other way round hits `_weapon_spear`'s silent default.
 
 /** Smear the poisonous paste over whichever spear the pack is carrying. */
 export function poisonSpear(spear: { id: number; kpId: number }): (log: Log) => Promise<boolean> {
@@ -230,10 +228,9 @@ export function pasteBones(log: Log): Promise<boolean> {
     return combine(TB_ID.BURNT_JOGRE_BONES, TB_ID.KARAMBWANJI_PASTE, TB_ID.PASTY_JOGRE_BONES, log);
 }
 
-// Why: the monkey deflects every melee swing while the quest is live (`opnpc2,monkey`), so the bow is worn from the start rather than swapped in here.
+// Why: the monkey deflects every melee swing while the quest is live (`opnpc2,monkey`), so the bow is worn from the start.
 
-// Why: `kills` separates a drop from a hunt. Jogre bones fall from every corpse; a spear falls 4
-// times in 129, and giving up after one kill would fail its way through thirty decide() passes.
+// Why: Jogre bones fall from every corpse but a spear falls 4 times in 129, so `kills` lets a hunt outlast one kill.
 
 /** Kill up to `kills` of one NPC, stopping as soon as one of `dropIds` is in the pack. */
 export function killFor(
@@ -251,7 +248,7 @@ export function killFor(
             if (await takeGround(dropIds, dropName, () => undefined)) {
                 return true;
             }
-            // A hunt that outlives the food is how an account dies in the jungle.
+            // A hunt that outlives the food dies in the jungle.
             if (kill > 0 && foodHeld() === 0) {
                 log(`out of food ${kill} kills into the ${npcName} hunt — banking before the next one`);
                 return false;
@@ -270,8 +267,7 @@ export function killFor(
             if (!(await victim.interact('Attack'))) {
                 return false;
             }
-            // Hold this one until it dies: `Game.inCombat()` reads our own bar, so a
-            // decoy landing a hit would otherwise end the wait.
+            // Hold this one until it dies: `Game.inCombat()` reads our own bar, so a decoy landing a hit would end the wait.
             const deadline = performance.now() + 120_000;
             while (performance.now() < deadline) {
                 await Sustain.run();
@@ -304,7 +300,7 @@ export async function burnJogreBones(log: Log): Promise<boolean> {
     if (await takeGround([TB_ID.BURNT_JOGRE_BONES], TB_NAME.BURNT_JOGRE_BONES, () => undefined)) {
         return true;
     }
-    // Why: lighting drops the bones on the floor first, so a run that lost the roll left them there rather than in the pack.
+    // Why: lighting drops the bones on the floor first, so a lost roll leaves them there.
     if (heldId(TB_ID.JOGRE_BONES) === 0) {
         await takeGround([TB_ID.JOGRE_BONES], TB_NAME.JOGRE_BONES, () => undefined);
     }
@@ -318,8 +314,7 @@ export async function burnJogreBones(log: Log): Promise<boolean> {
     if (!(await bones.useOn(tinderbox))) {
         return false;
     }
-    // Why: a tile that already carries a loc refuses with a chat line and nothing else, so the
-    // refusal is read rather than waited out, a minute and a half per attempt otherwise.
+    // Why: a tile that already carries a loc refuses with a chat line and nothing else, so read the refusal; waiting it out costs 90 seconds per attempt.
     if (await Execution.delayUntil(() => GameMessages.sawSince(mark, CANT_LIGHT), 3000)) {
         const here = Game.tile();
         log(`cannot light a fire at (${here?.x},${here?.z}) — stepping aside`);

@@ -1,7 +1,4 @@
-/**
- * Persist the map picker's basemap across sessions, invalidating on the same /crc table the client loads at login (`Client.getJagChecksums` → nine g4s + trailer) and on the bake prefs fingerprint; either mismatch is a miss and the deploy PNG is used.
- * Why: opening the picker never runs MapView, only Rebuild map… regenerates.
- */
+/** Cached basemap keyed by the nine login CRCs and bake settings; mismatches use the deploy PNG. */
 import type { BasemapManifest } from './worldMapBasemap.js';
 import { prefsFingerprint, type BasemapBakePrefs } from './basemapRegen.js';
 
@@ -11,7 +8,7 @@ const STORE = 'basemap';
 const ROW_KEY = 'current';
 
 type BasemapLocalRecord = {
-    /** Hex of the 9×u32 jag checksums from `/crc` (login CRC table). */
+    /** Hex of the 9 u32 jag checksums from `/crc` (login CRC table). */
     crcKey: string;
     prefsKey: string;
     manifest: BasemapManifest;
@@ -28,7 +25,7 @@ export type LoadedBasemap = {
     crcKey: string | null;
 };
 
-/** Same `/crc` the client fetches before jag downloads / login. */
+/** The same `/crc` fetched before jag downloads and login. */
 export async function fetchClientCrcKey(): Promise<string | null> {
     try {
         const res = await fetch(new URL('/crc', typeof location !== 'undefined' ? location.origin : 'http://localhost'));
@@ -36,7 +33,7 @@ export async function fetchClientCrcKey(): Promise<string | null> {
             return null;
         }
         const bytes = new Uint8Array(await res.arrayBuffer());
-        // Client reads 9×g4 + 1×g4 expected; key off the nine checksums (36 bytes).
+        // The client reads 9 g4s plus 1 expected; key off the 9 checksums (36 bytes).
         if (bytes.length < 36) {
             return null;
         }
@@ -157,10 +154,7 @@ export function prefsKeyFromBakePrefs(prefs: BasemapBakePrefs): string {
     return prefsFingerprint(prefs);
 }
 
-/**
- * Persist a regenerated basemap under the current client CRC key + prefs fingerprint.
- * Call after a successful manual **Rebuild map…**.
- */
+/** Cache a manually rebuilt basemap under the current CRC and settings fingerprint. */
 export async function saveRegeneratedBasemapLocally(
     crcKey: string,
     prefs: BasemapBakePrefs,

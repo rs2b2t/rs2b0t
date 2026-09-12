@@ -47,7 +47,7 @@ export async function openContainer(
     return false;
 }
 
-/** Climb a loc that changes level, proving the arrival rather than the click. */
+/** Climb a loc that changes level, proven by the arrival level. */
 export async function climb(
     locId: number,
     op: string,
@@ -83,7 +83,7 @@ export async function climb(
     return false;
 }
 
-// Why: `talkThrough` never walks, and `gotoNpc`'s shared hop calls a stand two tiles off "arrived" without moving.
+// Why: `talkThrough` never walks, and `gotoNpc`'s shared hop calls a stand 2 tiles off "arrived" without moving.
 
 /** Walk to a stop and drive its dialogue. */
 export async function walkAndTalk(
@@ -103,8 +103,7 @@ export async function walkAndTalk(
     return driveChoice([...prefer], log);
 }
 
-// Why: `opheldu` is declared on one item of a pair and the client cannot tell which, so a combine that
-// only tries one direction fails on half the recipes in the game.
+// Why: `opheldu` is declared on one item of a pair and the client can't tell which, so a one-direction combine fails on half the recipes.
 
 /** Use one carried item on another and wait for the product, trying both directions. */
 export async function combineById(
@@ -136,8 +135,7 @@ export async function combineById(
     return false;
 }
 
-// Why: a conversation that signs off with `~mesbox` leaves a main modal up, and the next leg's
-// player, npc or trade click is swallowed by it with no refusal to say why.
+// Why: a conversation that signs off with `~mesbox` leaves a main modal up, and it silently swallows the next leg's player, npc or trade click.
 
 /** Walk to a stop, drive its dialogue, and clear whatever modal it signed off with. */
 export async function talkAndClose(
@@ -152,7 +150,7 @@ export async function talkAndClose(
     return ok;
 }
 
-// Why: `~mesbox` and `~objbox` build a MAIN modal that no dialogue driver can see, and the curator and the king both use them mid-conversation, a chat-only driver stalls on the first one.
+// Why: `~mesbox` and `~objbox` build a main modal no dialogue driver can see, and the curator and the king both use them mid-conversation, so a chat-only driver stalls on the first one.
 
 /** Drive a conversation that mixes chat with mesboxes, until the goal lands. */
 export async function talkUntil(

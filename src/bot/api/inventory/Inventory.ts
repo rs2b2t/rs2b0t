@@ -57,8 +57,7 @@ export class InvItem {
     }
 
     useOn(target: InvItem | Loc | Npc | GroundItem): boolean | Promise<boolean> {
-        // The bank side backpack exposes Deposit-* component buttons, not held
-        // item actions, so it cannot start or receive a Use operation.
+        // The bank side backpack only exposes Deposit-* component buttons, so it can't start or receive a Use.
         if (this.componentOps || (target instanceof InvItem && target.componentOps)) {
             return false;
         }
@@ -73,7 +72,7 @@ export class InvItem {
         if (!local) {
             return false;
         }
-        // Why: an obj lying on the floor answers `opobju`, which no loc or npc use-on reaches, Clock Tower's red-hot cog is cooled this way and nothing else.
+        // Why: Ground-item use sends `opobju`, which loc and NPC helpers cannot express.
         if (target instanceof GroundItem) {
             return driver.useItemOnObj(this.snap.id, this.snap.slot, this.snap.comId, target.snap.id, local.lx, local.lz);
         }
@@ -122,8 +121,7 @@ export const Inventory = {
         return size > 0 && Inventory.used() >= size;
     },
 
-    // Outside the bank, 0 means the pack interface has not loaded yet. The
-    // bank side view always represents the game's fixed 28-slot backpack.
+    // Outside the bank, 0 means the pack interface hasn't loaded yet; the bank side view is always the fixed 28-slot backpack.
     free(): number {
         const size = backpackCapacity();
         return size > 0 ? Math.max(0, size - Inventory.used()) : 0;

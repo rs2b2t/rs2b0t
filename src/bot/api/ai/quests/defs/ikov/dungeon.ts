@@ -29,12 +29,12 @@ import {
 import { lightCandle } from './supplies.js';
 
 const WALK_MS = 300_000;
-/** Circuits of the six chests per invocation, before the tick goes back to the engine. */
+/** Circuits of the 6 chests per invocation, before the tick goes back to the engine. */
 const CHEST_ROUNDS = 3;
-/** What an empty chest answers with, and the only thing that separates it from a find in flight. */
+/** Empty-chest message, used to distinguish an empty chest from a pending find. */
 const CHEST_EMPTY = /search the chest, but find nothing/i;
 
-// Why: `%ikov_dungeon` is untransmitted and no journal line moves for the lever, so having stood in the ice cavern is the only evidence the client keeps that the south gate is unlocked, and that is what tells the crossing leg apart from the armoured one.
+// Why: `%ikov_dungeon` is untransmitted and no journal line moves for the lever, so having stood in the ice cavern is the only evidence the south gate is unlocked.
 
 /** Set once a walk has put the bot past the south gate. */
 let southGateSeenOpen = false;
@@ -44,7 +44,7 @@ export function southGateOpen(): boolean {
     return southGateSeenOpen;
 }
 
-// Why: the bridge is not a baked edge and its tiles are walkable, so any route the pathfinder draws across them ferries the bot to the wrong side.
+// Why: the bridge isn't a baked edge but its tiles are walkable, so a route across them ferries the bot to the wrong side.
 export function templeWalk(dest: Tile, radius: number, log: (m: string) => void): Promise<boolean> {
     return Traversal.walkResilient(dest, {
         radius,
@@ -130,7 +130,7 @@ async function climbTrapLadder(log: (m: string) => void): Promise<boolean> {
     return out;
 }
 
-// Why: the crossing is a zone timer rather than a loc, so there is no op to send, stepping onto the bridge is the action, and the far side is the only oracle.
+// Why: the crossing is a zone timer with no loc, so stepping onto the bridge is the action and the far side is the only oracle.
 async function crossBridge(goWest: boolean, log: (m: string) => void): Promise<boolean> {
     const start = goWest ? IKOV_TILE.BRIDGE_EAST : IKOV_TILE.BRIDGE_WEST;
     const step = goWest ? IKOV_TILE.BRIDGE_ZONE_EAST : IKOV_TILE.BRIDGE_ZONE_WEST;
@@ -145,7 +145,7 @@ async function crossBridge(goWest: boolean, log: (m: string) => void): Promise<b
         log('ikov: refusing the lava bridge without the boots of lightness');
         return false;
     }
-    // Why: the server tests `weight >= 0` in grams and the client is sent truncated kilograms, so anything that reads 0 could still be a hundred grams over.
+    // Why: the server tests `weight >= 0` in grams and the client gets truncated kilograms, so 0 could still be 100 grams over.
     if (Game.weight() >= 0) {
         log(`ikov: the pack reads ${Game.weight()}kg — the bridge gives way at anything but negative weight`);
         return false;
@@ -415,7 +415,7 @@ async function searchChest(chest: { loc: Tile; stand: Tile }, log: (m: string) =
         if (!(await shut.interact('Open'))) {
             return false;
         }
-        // Why: a loc that transforms keeps its old id for a tick, so the open chest has to be polled rather than read once.
+        // Why: a loc that transforms keeps its old id for a tick, so poll for the open chest.
         await Execution.delayUntil(() => openLoc() !== null, 5000);
     }
     const open = openLoc();
@@ -428,8 +428,7 @@ async function searchChest(chest: { loc: Tile; stand: Tile }, log: (m: string) =
     if (!(await open.interact('Search'))) {
         return false;
     }
-    // Why: a find raises an `~objbox`, which is a chat modal that has to be answered before anything else lands.
-    // Why: five of the six chests are empty and answer with one `mes` line and no modal, so without it as an oracle every circuit pays the full timeout five times over.
+    // Why: a find raises an `~objbox` that must be answered; 5 of the 6 chests answer with one `mes` line and no modal, so without that as an oracle every circuit pays the full timeout 5 times.
     await driveUntil(
         () => Inventory.count(IKOV_NAME.ICE_ARROWS) > before || GameMessages.sawSince(mark, CHEST_EMPTY),
         [],
@@ -444,8 +443,8 @@ async function searchChest(chest: { loc: Tile; stand: Tile }, log: (m: string) =
     return found;
 }
 
-// Why: one chest holds the arrows and it is re-rolled after every find, so the search is a circuit rather than a chest, and returning on the first find would restart the circuit from the west every time.
-// Why: `~randomize_ice_arrow_chest` is a bare `random(6)` over all six coords, so the re-roll can land back on the chest that last paid out, and re-opening the one already underfoot costs a click where walking to the next costs the same odds plus ten tiles.
+// Why: the arrow chest is re-rolled after every find, so the search is a circuit and returning on the first find would restart it from the west.
+// Why: `~randomize_ice_arrow_chest` is a bare `random(6)`, so the re-roll can land on the chest underfoot, and re-opening it costs a click where the next costs the same odds plus 10 tiles.
 async function searchIceChests(log: (m: string) => void): Promise<boolean> {
     const before = Inventory.count(IKOV_NAME.ICE_ARROWS);
     const enough = (): boolean => Inventory.count(IKOV_NAME.ICE_ARROWS) >= ARROWS_WANTED;
@@ -502,7 +501,7 @@ function crossedIntoCavern(): boolean {
     return t !== null && pastSouthGate(t);
 }
 
-// Why: a stack of two to five arrows carries its own object id, and all five share one display name, so arrows are counted by name, never by id.
+// Why: a stack of 2 to 5 arrows carries its own object id and all 5 share one display name, so arrows are counted by name.
 export function arrowsSecured(snap: QuestSnapshot): boolean {
     const key = IKOV_NAME.ICE_ARROWS.toLowerCase();
     if (snap.worn.has(key)) {
@@ -511,8 +510,7 @@ export function arrowsSecured(snap: QuestSnapshot): boolean {
     return (snap.inv.get(key) ?? 0) + (snap.bank?.get(key) ?? 0) >= ARROWS_WANTED;
 }
 
-// Why: a banked pair is not a worn pair. Reading the bank as "done" left them in the booth and sent
-// the gate check down the dark stairs for a second pair, see docs/decisions/quest-pitfalls-25.md.
+// Why: reading a banked pair as done left them in the booth and sent the gate check down the dark stairs for a second pair, see docs/decisions/quest-pitfalls-25.md.
 
 /** The boots errand on its own; it takes a leg of the descent per call and holds nothing until the last. */
 export function bootsStep(snap: QuestSnapshot): QuestStep | null {
@@ -538,7 +536,7 @@ export async function unlockSouthGate(log: (m: string) => void): Promise<boolean
     if (!wearingBoots()) {
         await fetchBoots(log);
     }
-    // Why: `fetchBoots` answers true for a leg of progress rather than for the boots, and one of those legs ends standing in the dark room, which the ice-cavern half-plane covers, so a gate check sent from there reads unlocked without a walk.
+    // Why: `fetchBoots` answers true per leg of progress, and one leg ends in the dark room, which the ice-cavern half-plane covers, so a gate check from there reads unlocked without a walk.
     if (!wearingBoots()) {
         log('ikov: the boots are not on yet — the gate check waits for them');
         return false;
@@ -560,7 +558,7 @@ export async function unlockSouthGate(log: (m: string) => void): Promise<boolean
     return false;
 }
 
-// Why: the lava is behind the bot by the time this runs, so this is the first leg of the quest that can carry weight, and the ice spiders on the circuit are what the armour is for.
+// Why: the lava is behind the bot by now, so this is the first leg that can carry weight, and the armour is for the ice spiders on the circuit.
 
 /** The chest circuit, which crosses nothing and so runs in whatever armour the bank dressed. */
 export async function stockIceArrows(log: (m: string) => void): Promise<boolean> {

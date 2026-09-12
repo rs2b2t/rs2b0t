@@ -60,7 +60,7 @@ export const nth_identifier = (() => {
     sort();
 
     function baseN(num) {
-        // comment out this code if you want stability between runs
+        // Disable this block for stable output between runs.
         if (num === 0) {
             reset();
             sort();

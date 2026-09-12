@@ -176,8 +176,7 @@ export function buildClueDb(input: BuildInput): ClueDb {
     const talkByObj = new Map(input.talk.map(t => [t.obj, t.npc]));
     const puzzleByObj = new Map((input.puzzles ?? []).map(p => [p.obj, p]));
     for (const p of input.puzzles ?? []) {
-        // A puzzle NPC is the clue's talk target even when the hand-back
-        // progress call sits in a branch parseTalkMappings cannot attribute.
+        // A puzzle NPC is the clue's talk target even when the hand-back progress call sits in a branch parseTalkMappings can't attribute.
         if (!talkByObj.has(p.obj)) {
             talkByObj.set(p.obj, p.npc);
         }
@@ -201,8 +200,7 @@ export function buildClueDb(input: BuildInput): ClueDb {
         const special = input.specials?.[obj];
         const row: ClueRow = { obj, id, type: 'talk' };
 
-        // A casket alone does not make a dig: hard riddle004 carries a casket
-        // param but no coord and is answered by talking to Gerrant.
+        // A casket alone isn't a dig: hard riddle004 has a casket param but no coord and is answered by talking to Gerrant.
         if (special) {
             row.type = special.type;
             row.coord = special.coord;

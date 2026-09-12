@@ -18,15 +18,15 @@ type Colour = 'black' | 'red' | 'blue' | 'white';
 
 const QUEST = 'Clock Tower';
 
-/** `~get_cog_progress`; the journal cannot separate the four in-progress steps, so only its endpoints are named. */
+/** `~get_cog_progress`; the journal can't separate the 4 in-progress steps, so only its endpoints are named. */
 export const COG_STAGE = { NOT_STARTED: 0, STARTED: 1, ALL_PLACED: 5, COMPLETE: 6 } as const;
 
-/** All four render "Cog", so every lookup is by object id. */
+/** All 4 render "Cog", so every lookup is by object id. */
 export const COG_OBJ: Record<Colour, number> = { white: 20, black: 21, blue: 22, red: 23 };
 
 const RAT_POISON_OBJ = 24;
 
-// Why: every spindle renders "Clock spindle" and all four colours stand within three tiles on tower level 0, so only the id separates the working one from a decoy.
+// Why: every spindle renders "Clock spindle" and all 4 colours stand within 3 tiles on tower level 0, so only the id tells the working one from a decoy.
 const SPINDLE_LOC: Record<Colour, number> = { red: 29, black: 30, white: 31, blue: 32 };
 const LEVER_SHUT = 33;
 const LEVER_OPEN = 35;
@@ -69,7 +69,7 @@ const COG_SPAWN: Record<Colour, Tile> = {
 };
 
 const POISON_SPAWN = new Tile(2564, 9662, 0);
-// Why: z 9660 and south of it is the cage itself, the lever corridor is the one row at z 9661.
+// Why: z 9660 and south is the cage; the lever corridor is the single row at z 9661.
 const LEVER_STAND = new Tile(2591, 9661, 0);
 const PEN_GATE_OUTSIDE = new Tile(2596, 9657, 0);
 const PEN_GATE_INSIDE = new Tile(2595, 9657, 0);
@@ -80,7 +80,7 @@ const WELL_STAND = new Tile(2611, 3254, 0);
 const BUCKET_SPAWN = new Tile(2616, 3255, 0);
 const BANK = new Tile(2655, 3283, 0);
 
-// Why: the cog rooms' own ladders are deliberately absent, `crossHops` picks the nearest stand by raw distance, and from the red cog the blue room's ladder is nearest and sealed, which loops the walker on "unreachable" forever.
+// Why: `crossHops` picks the nearest stand by raw distance, and from the red cog that's the sealed blue-room ladder, which loops "unreachable" forever, so the cog-room ladders are left out.
 const HOPS: LadderHop[] = [
     { stand: CELLAR_TOP, locName: 'Ladder', op: 'Climb-down', arrive: CELLAR_FOOT },
     { stand: CELLAR_FOOT, locName: 'Ladder', op: 'Climb-up', arrive: CELLAR_TOP }
@@ -103,7 +103,7 @@ export function parseClockTowerJournal(lines: readonly string[] | string): Quest
     if (text.includes('quest complete!')) {
         return { stage: COG_STAGE.COMPLETE, flags: allPlaced() };
     }
-    // Why: the reward page drops the four per-cog lines, so its own line is the only evidence they are all in.
+    // Why: the reward page drops the 4 per-cog lines, so its own line is the only evidence they are all in.
     if (text.includes('i have placed all four cogs successfully')) {
         return { stage: COG_STAGE.ALL_PLACED, flags: allPlaced() };
     }
@@ -159,7 +159,7 @@ const POCKETS: { name: Colour; inside: (t: { x: number; z: number }) => boolean;
     { name: 'blue', inside: inBlueRoom, stand: BLUE_ROOM_LADDER }
 ];
 
-// Why: a pocket ladder is only ever the right ladder from inside its own pocket, so the leg climbs it rather than leaving the choice to `crossHops`.
+// Why: a pocket ladder is only right from inside its own pocket, so the leg climbs it itself and `crossHops` never gets the choice.
 async function leavePocket(log: (m: string) => void, keep?: Colour): Promise<boolean> {
     const here = Game.tile();
     if (!here) {
@@ -204,11 +204,11 @@ async function takeCog(colour: Colour, log: (m: string) => void): Promise<boolea
     if (!(await cog.interact('Take'))) {
         return false;
     }
-    // Why: a refusal arrives as a mesbox rather than a chat line, so the wait has to drive the box shut before anything else can act.
+    // Why: a refusal arrives as a mesbox, so the wait has to drive it shut before anything else can act.
     return driveUntil(() => heldId(COG_OBJ[colour]) > 0, [], log, 8000);
 }
 
-// Why: the cog is red hot until it is cooled, and pouring is what spends the bucket, so try the Take first and let the refusal, not a guess, ask for the water.
+// Why: the cog is red hot until cooled and pouring spends the bucket, so try the Take first and let the refusal ask for the water.
 async function takeBlackCog(log: (m: string) => void): Promise<boolean> {
     if (await takeCog('black', log)) {
         return true;
@@ -252,7 +252,7 @@ async function openPenGate(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => locById(LEVER_OPEN, 8) !== null, 6000);
 }
 
-// Why: the gate is not a baked edge. The lever opens it at runtime, so the last tile is a scene step the pathfinder never sees.
+// Why: the lever opens the gate at runtime, so the last tile is a scene step the baked pathfinder never sees.
 async function enterPen(log: (m: string) => void): Promise<boolean> {
     const here = Game.tile();
     if (here && inPen(here)) {
@@ -273,7 +273,7 @@ async function enterPen(log: (m: string) => void): Promise<boolean> {
     return true;
 }
 
-// Why: the lever deletes the gate while it holds it open, so walking out comes first, the Open op, which `check_axis` grants only from the caged side, is for a gate that has already re-shut.
+// Why: the lever deletes the gate while holding it open, so walk out first; the Open op (`check_axis` grants it from the caged side only) is for a gate that has re-shut.
 async function leavePen(log: (m: string) => void): Promise<boolean> {
     const outside = (): boolean => {
         const t = Game.tile();
@@ -294,7 +294,7 @@ async function leavePen(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(outside, 6000);
 }
 
-// Why: the rats are ordinary map spawns on a 50-tick respawn, so counting them never answers "have they been poisoned", the gate's own refusal is the only client-visible test.
+// Why: the rats are map spawns on a 50-tick respawn, so counting them never says if they're poisoned; the gate's refusal is the only client-visible test.
 async function crossRatGate(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(RAT_GATE_STAND, { radius: 0, attempts: 3, timeoutMs: 60_000, log }))) {
         return false;
@@ -312,7 +312,7 @@ async function crossRatGate(log: (m: string) => void): Promise<boolean> {
         return t !== null && inWhiteRoom(t);
     }, 6000);
     if (crossed) {
-        // Why: the gate teleports rather than walks, and every obj query reads blank for about a tick after the region changes.
+        // Why: the gate teleports you, and every obj query reads blank for about a tick after the region changes.
         await settleScene();
     }
     return crossed;
@@ -341,7 +341,7 @@ async function enterWhiteRoom(log: (m: string) => void): Promise<boolean> {
     if (here && inWhiteRoom(here)) {
         return true;
     }
-    // Why: the poison spawn is in the tower's own cellar, which the cage cannot walk back to, so it is carried in rather than fetched after the gate refuses.
+    // Why: the poison spawn is in the tower cellar, which the cage can't walk back to, so carry it in before the gate refuses.
     if (!(here && inPen(here)) && !(await takePoison(log))) {
         return false;
     }
@@ -451,7 +451,7 @@ function heldCog(snap: QuestSnapshot): Colour | null {
     return null;
 }
 
-// Why: one ground spawn is the only bucket near the tower and no Ardougne shop stocks one, so a taken spawn spins the step until it respawns, the bank goes first, and an unread bank is not an empty one.
+// Why: one ground spawn is the only bucket near the tower and no Ardougne shop stocks one, so check the bank first; a taken spawn spins the step until it respawns.
 export function gatherWater(snap: QuestSnapshot): QuestStep {
     if (!snap.inv.has(BUCKET.toLowerCase())) {
         if (snap.bankKnown !== true) {

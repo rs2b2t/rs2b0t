@@ -6,11 +6,11 @@ import { SM_QUEST, SM_STAGE, SM_VARP } from './areas.js';
 
 /** Counted journal flags this module branches on, all read off transmitted varps. */
 export const SM_FLAG = {
-    /** Temple rebuild, 0–100; the fire altar appears at 100. */
+    /** Temple rebuild, 0-100; the fire altar appears at 100. */
     REPAIRED: 'repaired',
-    /** Material resource pool, 0–100. */
+    /** Material resource pool, 0-100. */
     RESOURCES: 'resources',
-    /** Sanctity, 0–100; 10 lights the altar and sanctifies oil, 20 makes the serum permanent. */
+    /** Sanctity, 0-100; 10 lights the altar and sanctifies oil, 20 makes the serum permanent. */
     SANCTITY: 'sanctity'
 } as const;
 
@@ -22,7 +22,7 @@ function normalize(lines: readonly string[] | string): string {
         .toLowerCase();
 }
 
-// Why: mortton_journal.rs2 appends, so every earlier stage's prose is still on the page, newest marker first, or an early line answers for a late stage.
+// Why: mortton_journal.rs2 appends, so earlier prose is still on the page and the newest marker goes first.
 const MARKERS: readonly [string, number][] = [
     ['quest complete!', SM_STAGE.COMPLETE],
     ['the shades spirit was released', SM_STAGE.LIT_PYRE],
@@ -52,8 +52,7 @@ export function parseMorttonJournal(lines: readonly string[] | string): number |
     return MARKERS.find(([needle]) => text.includes(needle))?.[1];
 }
 
-// Why: `%morttonquest` is server-only, but the three flamtaer meters carry `transmit=yes`, so the temple leg reads them without opening anything.
-// Why: Razmire's ai_timer only recomputes them while the player stands in the temple zone, so they are last-known values elsewhere.
+// Why: the 3 flamtaer meters are `transmit=yes`, so the temple leg reads them without opening anything; Razmire's ai_timer only recomputes them in the temple zone, so they're stale elsewhere.
 
 /** The three transmitted flamtaer meters, as counted flags. */
 export function templeFlags(): Set<string> {
@@ -64,7 +63,7 @@ export function templeFlags(): Set<string> {
     ]);
 }
 
-/** A failed read is not evidence the quest went backwards. */
+/** Stands in when a read fails. */
 let lastStage: number | undefined;
 
 export async function readMorttonProgress(): Promise<QuestProgress | undefined> {

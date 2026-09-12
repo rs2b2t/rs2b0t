@@ -18,8 +18,7 @@ function scheduleNextLoop(ctx: ScriptContext, cadence: LoopCadence): void {
     ctx.nextLoopAt = 0;
     ctx.nextLoopTick = 0;
     if (cadence.kind === 'frame') {
-        // Eligible on the next Scheduler.pump (next client frame). nextLoopAt=0 is
-        // already due; loopInFlight prevented re-entry during this iteration.
+        // Eligible on the next Scheduler.pump; nextLoopAt=0 is already due and loopInFlight blocked re-entry during this iteration.
         return;
     }
     if (cadence.kind === 'server-tick') {
@@ -88,7 +87,7 @@ function holdResumeMessage(reason: LoopHoldReason, heldMs: number): string {
 
 /**
  * Never let a blank reason read as "the script stopped for no reason".
- * Why: a missing reason is a caller bug, and throwing out of `stop()` would leave the run wedged in `running` forever, which broke every harness that calls `runner.stop()` from page context.
+ * Why: a missing reason is a caller bug, but throwing out of `stop()` would wedge the run in `running`, which broke every harness calling `runner.stop()` from page context.
  */
 export function stopReasonOf(reason: string): string {
     return (reason ?? '').trim() || 'no reason given by the caller (bug — please report)';
@@ -171,7 +170,7 @@ class ScriptRunnerImpl {
         Scheduler.active = ctx;
 
 
-        // Why: a restart (StallGuard) throws away the old context along with its log, the only place the reason the previous run ended was recorded, so it is carried over.
+        // Why: a restart (StallGuard) throws away the old context and its log, the only record of why the previous run ended, so carry it over.
         if (previous) {
             ctx.addLog('info', `previous run of '${previous.name}' ${previous.epitaph}`);
         }
@@ -249,7 +248,7 @@ class ScriptRunnerImpl {
 
         ctx.resume();
 
-        // Why: ctx.resume() re-arms the waiter a parked loop is sitting on, so that loop comes back by itself and clearing the flag would run a second body through the WalkExecutor singleton the first one is still walking.
+        // Why: ctx.resume() re-arms the waiter a parked loop sits on, so that loop comes back by itself; clearing the flag would run a second body through the WalkExecutor singleton the first is still walking.
         // Why: with no waiter the loop is blocked on a promise the scheduler does not own (#580) and nothing will wake it, so the flag is cleared to let the pump start a fresh iteration.
         if (ctx.waiters.length === 0) {
             ctx.loopInFlight = false;
@@ -307,7 +306,7 @@ class ScriptRunnerImpl {
                 this.holdReason = hold;
                 ctx.addLog('warn', holdWarnMessage(hold));
             }
-            // deliberate wait, not a stall: keep StallGuard from churn-restarting
+            // a hold is a wait; progress() keeps StallGuard from churn-restarting
             ctx.progress();
             // Wall-clock poll while paused, server ticks may not advance mid scene load.
             scheduleNextLoop(ctx, { kind: 'time', ms: 600 });
@@ -375,8 +374,7 @@ class ScriptRunnerImpl {
         ctx.state = 'stopped';
         ctx.stopReason ??= stopReasonOf('');
         ctx.addLog('info', `stopped — ${ctx.stopReason}`);
-        // Also to the console: the panel only shows the *current* context's log,
-        // so a restart would otherwise erase why the last run ended.
+        // Also to the console: the panel only shows the current context's log, so a restart would otherwise erase why the last run ended.
         console.log(`[rs2b0t] ${this.meta?.name ?? 'script'} stopped — ${ctx.stopReason}`);
         this.teardown(ctx);
     }

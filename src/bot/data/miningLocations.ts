@@ -6,12 +6,9 @@ import {
     type GatheringLocation
 } from './gatheringLocations.js';
 
-/**
- * Mining camps for GatheringBot / Miner, catalogued from rs2b2tgathering.csv and polished via live verify and visual stand checks.
- * `recommendedCombat` is 2× the highest auto-aggressive NPC combat level + 1 (King Scorpion 32 → 65), omitted when no resident aggro is expected.
- */
+/** Mining camps from rs2b2tgathering.csv and live checks. `recommendedCombat` is twice the highest local aggressive NPC level plus one. */
 export type MiningLocation = GatheringLocation & {
-    /** Combat level at which resident aggressive NPCs stop auto-attacking (2×L+1). */
+    /** Combat level at which resident aggressive npcs stop auto-attacking (2L+1). */
     recommendedCombat?: number;
 };
 
@@ -91,19 +88,19 @@ export const MINING_LOCATIONS: MiningLocation[] = [
         ['copper', 'tin', 'coal', 'iron'],
         'Underground seed; surface hop ~3019,3449',
         true,
-        // King Scorpion 32 → 2×32+1
+        // King Scorpion 32: 2*32+1
         65
     ),
     mine(
         'Edgeville Dungeon Mine',
-        // Clear west-side stand beside the 3134–3143,9868–9880 mixed-rock field.
-        // Navigation enters through the public Edgeville trapdoor when no Brass key is held, opens the two dungeon gates, and returns by the exit ladder.
+        // Clear west-side stand beside the 3134 to 3143, 9868 to 9880 mixed-rock field.
+        // Navigation enters through the public Edgeville trapdoor when no Brass key is held, opens the 2 dungeon gates, and returns by the exit ladder.
         new Tile(3132, 9874, 0),
         BANK.edgeville,
         ['copper', 'tin', 'iron', 'coal', 'silver', 'mithril', 'adamantite'],
         'Underground; public Edgeville trapdoor route, no Brass key required',
         true,
-        // Hobgoblin 42 → 2×42+1
+        // Hobgoblin 42: 2*42+1
         85
     ),
     mine(
@@ -121,7 +118,7 @@ export const MINING_LOCATIONS: MiningLocation[] = [
         ['iron', 'silver', 'mithril', 'adamantite'],
         undefined,
         true,
-        // Scorpion 14 → 2×14+1
+        // Scorpion 14: 2*14+1
         29
     ),
     mine(
@@ -146,10 +143,10 @@ export const MINING_LOCATIONS: MiningLocation[] = [
         ['coal'],
         'West of Seers; seed spot',
         true,
-        // Giant bat 27 → 2×27+1
+        // Giant bat 27: 2*27+1
         55
     ),
-    // Rocks cluster ~3086,3416–3425; 3080,3420 was unpathable object center.
+    // Rocks cluster around 3086, 3416 to 3425; 3080,3420 was an unpathable object centre.
     // bank-locations.test still uses 3080,3420 as a village-area nearest-bank probe.
     mine(
         'Barbarian Village',
@@ -175,8 +172,7 @@ export const MINING_LOCATIONS: MiningLocation[] = [
     ),
     mine(
         'West Lumbridge Swamp Mine',
-        // Why: the classic west-coast seed is blue void on this engine, so the live mineable cluster is the east-swamp rocks near Urhney (~3233–3243, 3157–3167).
-        // Stand a couple of tiles south of the rock tile to stay outside the loc.
+        // Why: the classic west-coast seed is blue void on this engine, so the live cluster is the east-swamp rocks near Urhney (about 3233 to 3243, 3157 to 3167); stand 2 tiles south of the rock tile to stay outside the loc.
         new Tile(3235, 3163, 0),
         BANK.draynor,
         ['mithril', 'adamantite'],
@@ -198,7 +194,7 @@ export const MINING_LOCATIONS: MiningLocation[] = [
         ['copper', 'tin', 'mithril', 'adamantite'],
         'Underground rocks; requires completed Tourist Trap, camp keys and slave gear',
         true,
-        // Guard/Mercenary 45 → 2×45+1. Route food mitigates damage but does not make low combat safe.
+        // Guard/Mercenary 45: 2*45+1. Route food softens the damage but doesn't make low combat safe.
         91
     ),
     mine(
@@ -209,7 +205,7 @@ export const MINING_LOCATIONS: MiningLocation[] = [
         ['copper', 'tin', 'iron', 'coal'],
         'Surface rocks inside the camp; requires completed Tourist Trap and Metal key',
         true,
-        // Guard/Mercenary 45 → 2×45+1. Same camp as the underground mine.
+        // Guard/Mercenary 45: 2*45+1. Same camp as the underground mine.
         91
     ),
     mine(
@@ -219,31 +215,29 @@ export const MINING_LOCATIONS: MiningLocation[] = [
         ['runite'],
         'Wilderness — high risk; bank out at Edgeville',
         true,
-        // Deadly red spider 34 → 2×34+1 (wildy may stay aggressive regardless)
+        // Deadly red spider 34: 2*34+1 (wildy may stay aggressive regardless)
         69
     ),
     mine(
         'Wilderness Hobgoblin Mine',
-        // Level 30 Wilderness mine. This south-east stand is on walkable ground
-        // among the broad iron/coal/mithril/adamantite rock field.
+        // Level 30 Wilderness mine; this south-east stand is walkable ground in the broad iron/coal/mithril/adamantite rock field.
         new Tile(3093, 3751, 0),
         BANK.edgeville,
         ['iron', 'coal', 'mithril', 'adamantite'],
         'Wilderness — aggressive Hobgoblins; bank out at Edgeville',
         true,
-        // Hobgoblin 28 → 2×28+1 (wildy may stay aggressive regardless)
+        // Hobgoblin 28: 2*28+1 (wildy may stay aggressive regardless)
         57
     ),
     mine(
         'Wilderness Skeleton Mine',
-        // Walkable centre stand in the level-10 Wilderness coal field. The 34
-        // coal-rock placements span 3009–3023,3586–3598 around this point.
+        // Walkable centre stand in the level-10 Wilderness coal field; the 34 coal-rock placements span 3009 to 3023, 3586 to 3598 around it.
         new Tile(3018, 3590, 0),
         BANK.edgeville,
         ['coal'],
         'Wilderness — aggressive Skeletons; bank out at Edgeville',
         true,
-        // Skeleton 22 → 2×22+1 (wildy may stay aggressive regardless)
+        // Skeleton 22: 2*22+1 (wildy may stay aggressive regardless)
         45
     ),
     mine(
@@ -256,8 +250,7 @@ export const MINING_LOCATIONS: MiningLocation[] = [
     ),
     mine(
         'South-east Ardougne Mine',
-        // Monastery mine south of East Ardougne (~2621,3212). Members-only; ring of
-        // iron/coal around the sewer entrance. Seed unverified, needs live polish.
+        // Monastery mine south of East Ardougne (about 2621,3212), members-only; a ring of iron/coal around the sewer entrance. Seed unverified.
         new Tile(2597, 3233, 0),
         BANK.ardougneEast,
         ['iron', 'coal'],
@@ -267,7 +260,7 @@ export const MINING_LOCATIONS: MiningLocation[] = [
     // Tick-manip iron camps, unpolished until live checks (#160).
     mine(
         'Legends Guild Iron (west)',
-        // Iron cluster west of Legends Guild ~2691–2697, 3328–3334.
+        // Iron cluster west of Legends Guild, about 2691 to 2697, 3328 to 3334.
         new Tile(2694, 3331, 0),
         BANK.ardougneEast,
         ['iron'],
@@ -276,7 +269,7 @@ export const MINING_LOCATIONS: MiningLocation[] = [
     ),
     mine(
         'Legends Guild Iron (east)',
-        // Iron cluster east of Legends Guild ~2710–2715, 3328–3332.
+        // Iron cluster east of Legends Guild, about 2710 to 2715, 3328 to 3332.
         new Tile(2712, 3330, 0),
         BANK.ardougneEast,
         ['iron'],
@@ -287,7 +280,7 @@ export const MINING_LOCATIONS: MiningLocation[] = [
 
 export const MINING_LOCATION_OPTIONS = locationOptions(MINING_LOCATIONS);
 
-/** Persisted option value → UI label with combat rec where set. */
+/** Persisted option value to UI label, with the combat rec where set. */
 export const MINING_LOCATION_OPTION_LABELS: Record<string, string> = Object.fromEntries(
     MINING_LOCATIONS.filter(l => l.recommendedCombat != null).map(l => [l.name, miningLocationLabel(l)])
 );

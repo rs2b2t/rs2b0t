@@ -146,10 +146,7 @@ const LAMP_SKILLS: string[] = [
     'smithing', 'fishing', 'cooking', 'firemaking', 'woodcutting', 'fletching'
 ];
 
-/**
- * Account / bot-wide settings (not nav). Shown under the panel "Global settings" button.
- * Storage namespace: `Global`.
- */
+/** Account-wide settings, shown under the panel "Global settings" button and stored under the `Global` namespace. */
 export const GLOBAL_SETTINGS_CORE: SettingsSchema = {
     lampSkill: {
         type: 'string',
@@ -191,10 +188,7 @@ export const GLOBAL_SETTINGS_CORE: SettingsSchema = {
     }
 };
 
-/**
- * World-walk / path paint settings. Shown under the panel "Nav settings" button.
- * Still stored under the `Global` namespace (same keys as before) so URL/storage stay stable.
- */
+/** World-walk and path paint settings, shown under the "Nav settings" button but still stored under `Global` so URL and storage keys stay stable. */
 export const NAV_SETTINGS: SettingsSchema = {
     navTeleports: {
         type: 'boolean',
@@ -355,7 +349,7 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
 };
 
 /**
- * Settings for the tile map picker only (in-picker Settings modal), not shown under Global settings.
+ * Settings for the tile map picker's own Settings modal, absent from Global settings.
  * Why: the storage namespace is {@link MAP_PICKER_SETTINGS_NS} and the URL form is `?MapPicker.showBasemap=false`.
  */
 export const MAP_PICKER_SETTINGS_NS = 'MapPicker';
@@ -503,10 +497,7 @@ export const MAP_PICKER_SETTINGS: SettingsSchema = {
     }
 };
 
-/**
- * Player-defined loadouts. Storage only, the Loadout panel owns editing, so
- * this never appears in a settings modal.
- */
+/** Player-defined loadouts. Storage only; the Loadout panel owns editing, so this never appears in a settings modal. */
 export const LOADOUT_SETTINGS_NS = 'Loadouts';
 
 export const LOADOUT_SETTINGS: SettingsSchema = {
@@ -518,10 +509,7 @@ export const LOADOUT_SETTINGS: SettingsSchema = {
     }
 };
 
-/**
- * Player-defined order books. Storage only, the order book panel owns editing,
- * so this never appears in a settings modal.
- */
+/** Player-defined order books. Storage only; the order book panel owns editing, so this never appears in a settings modal. */
 export const PRICE_BOOK_SETTINGS_NS = 'PriceBooks';
 
 export const PRICE_BOOK_SETTINGS: SettingsSchema = {
@@ -536,8 +524,7 @@ export const PRICE_BOOK_SETTINGS: SettingsSchema = {
 const hasSession = typeof sessionStorage !== 'undefined';
 const hasLocal = typeof localStorage !== 'undefined';
 
-// Two box-scoped layers (see box.ts): sessionStorage is the live-tab authority,
-// localStorage the durable copy a fresh instance of the same box reloads.
+// Two box-scoped layers (see box.ts): sessionStorage is the live-tab authority and localStorage the durable copy a fresh instance of the same box reloads.
 function storageKey(name: string, key: string): string {
     return boxKey(`set:${name}:${key}`);
 }
@@ -594,10 +581,7 @@ class SettingsStoreImpl {
         }
     }
 
-    /**
-     * Subscribe to SettingsStore.save (same tab). Returns unsubscribe.
-     * Used so an open map picker stays aligned with Global settings edits.
-     */
+    /** Subscribe to SettingsStore.save (same tab); an open map picker uses it to track Global settings edits. Returns the unsubscribe. */
     onChange(listener: SettingChangeListener): () => void {
         this.changeListeners.add(listener);
         return () => {

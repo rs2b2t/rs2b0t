@@ -81,13 +81,11 @@ test('resolveSplitCombatSettings migrates pre-split combatStyle saves (#461)', (
         meleeStyle: 'strength',
         legacyMigrated: 'strength'
     });
-    // explicit meleeStyle wins when both present
     expect(resolveSplitCombatSettings('defence', 'attack')).toEqual({
         kind: 'melee',
         meleeStyle: 'attack',
         legacyMigrated: null
     });
-    // modern shape unchanged
     expect(resolveSplitCombatSettings('melee', 'defence')).toEqual({
         kind: 'melee',
         meleeStyle: 'defence',

@@ -7,14 +7,11 @@ export interface MazeLoc {
 }
 
 export const MAZE_ORIGIN = { x: 45 * 64, z: 71 * 64 } as const; // (2880, 4544)
-/** SW origin of 3×3 Strange shrine (loc 3634 macro_maze_complete). */
+/** SW origin of the 3x3 Strange shrine (loc 3634 macro_maze_complete). */
 export const MAZE_SHRINE = { x: 2911, z: 4575 } as const; // local (31,31)
 /** Content pack: length=3 width=3 on macro_maze_complete. */
 const MAZE_SHRINE_SIZE = 3 as const;
-/**
- * West door into the shrine chamber (local 30,32), which routes must include.
- * Why: the south face of the shrine SW is a solid wall, so manhattan-adjacent south is not operable.
- */
+/** West shrine-chamber door (local 30,32); the south face is a solid wall. */
 export const MAZE_SHRINE_DOOR = { x: 2910, z: 4576 } as const;
 export const MAZE_SPAWNS = [
     { x: 2891, z: 4597 }, // NW  local (11,53)
@@ -113,8 +110,8 @@ export function doorPassable(door: DoorInfo, fromX: number, fromZ: number): bool
 
 const CARDINAL: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
-// Why: the shrine is 3×3 solid (content length/width=3), so only an open shared edge is a tile from which OPLOC Touch can succeed.
-// Why: the goal must not be manhattan-1 of the SW corner alone, south and west of SW are walls, which wrongly ends the route one door short of the chamber.
+// Why: the shrine is 3x3 solid (content length/width=3), so OPLOC Touch only succeeds from a tile sharing an open edge with it.
+// Why: south and west of the SW corner are walls, so a goal of manhattan-1 from that corner ends the route one door short of the chamber.
 
 /** True when (x,z) is outside the shrine footprint and shares an open (non-wall) edge with it. */
 function isShrineTouchStand(
@@ -171,8 +168,7 @@ export function solveRoute(g: MazeGraph, spawn: { x: number; z: number }, shrine
                 px = node.px; pz = node.pz;
                 node = prev.get(key(px, pz)) ?? null;
             }
-            // Standing on the west door tile is a valid touch stand, but the door
-            // edge into the 3×3 is never *crossed* by BFS, still must Open it.
+            // The west door tile is a valid touch stand, but BFS never crosses the door edge into the 3x3, so it still has to be opened.
             for (const [dx, dz] of CARDINAL) {
                 const nx = cur.x + dx;
                 const nz = cur.z + dz;

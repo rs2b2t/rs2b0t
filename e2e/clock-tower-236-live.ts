@@ -1,6 +1,6 @@
-/** Live Clock Tower harness (#236): --stage N --until N --minutes N, base :8890.
- *  Why: `--stage` counts cogs already on their spindles rather than the raw varp, because `%cogquest` and `%cog_bits` have to move together or the journal and the world disagree; it relogs since update_questlist only recolours the list at login.
- *  Why: stats are max, ogres stand over the red cog and turn aggressive under 106 combat, and the bank holds coins and food alone, so the bucket, the water and the poison are all sourced in the world. */
+/** Live Clock Tower harness (#236), using cog count as the stage. */
+// Why: `%cogquest` and `%cog_bits` must move together; relog to refresh the journal.
+// Max stats avoid red-cog ogre aggression. Quest items stay unseeded.
 
 //   HEADED=1 bun e2e/clock-tower-236-live.ts --stage 0 --until 5 --minutes 60 --tick 200
 //   HEADED=1 bun e2e/clock-tower-236-live.ts --stage 3 --until 4 --minutes 25 --tick 200
@@ -232,7 +232,7 @@ try {
     let queueChecked = false;
     while (Date.now() < deadline) {
         const last = await snapshot(page);
-        // Why: the engine serves one bundle to everyone, so a session that deploys between this deploy and the page load hands the run its own branch, and a queue without Clock Tower in it spends the budget on somebody else's quest.
+        // Why: reject a shared bundle replaced by another session during boot.
         const queue = last.logs.find(l => l.msg.startsWith('AIOQuester — queue:'));
         if (!queueChecked && queue) {
             queueChecked = true;

@@ -8,8 +8,7 @@ import { DEFAULT_TRADE_RANGE, namesMatch } from './PartnerTrade.js';
 import { Traversal } from '../walking/Traversal.js';
 import type Tile from '../../geometry/Tile.js';
 
-// Why: partner accepts are not tied to this client's tick rate, so these are wall-clock, a harness at
-// 300ms ticks makes seven ticks about 2.1s, too short for a mutual Trade.
+// Why: partner accepts aren't tied to this client's tick rate, so these are wall-clock (7 ticks at 300ms is 2.1s, too short for a mutual Trade).
 const MEET_MS = 90_000;
 const SCREEN_MS = 8_000;
 const HANDOFF_MS = 120_000;
@@ -19,8 +18,7 @@ export const OPEN_REQUEST_EVERY_MS = 3_000;
 
 export type OpenTradeAction = 'done' | 'wait' | 'request' | 'give-up';
 
-// Why: `[opplayer4,_]` opens the window on the second of the two clicks and keeps its varps with no
-// expiry, so re-sending completes a handshake whose first click was dropped.
+// Why: `[opplayer4,_]` opens the window on the second of the two clicks and keeps its varps with no expiry, so re-sending completes a handshake whose first click was dropped.
 export function decideOpenTrade(input: {
     tradeActive: boolean;
     partnerNear: boolean;
@@ -75,7 +73,7 @@ async function openTrade(partner: string, log: (m: string) => void): Promise<boo
             }
             nextRequestAt = performance.now() + OPEN_REQUEST_EVERY_MS;
         } else if (!waitedFor && !partnerNear(partner)) {
-            // Why: the giver leaves the moment its own item lands, so the taker's partner is en route rather than gone.
+            // Why: the giver leaves as soon as its own item lands, so the taker's partner is en route.
             log(`waiting for '${partner}' to come back into trade range`);
             waitedFor = true;
         }
@@ -88,7 +86,7 @@ export interface HandoffSpec {
     partner: string;
     /** Where both sides walk to meet. */
     rendezvous: Tile;
-    /** Object id being moved. Ids, never names, Key, Herb and Certificate each name several objects. */
+    /** Object id being moved. Ids, since Key, Herb and Certificate each name several objects. */
     id: number;
     /** Display name of that object, for the offer click. */
     name: string;
@@ -105,11 +103,9 @@ export interface HandoffSpec {
 export async function runHandoff(spec: HandoffSpec): Promise<boolean> {
     const { partner, id, name, giving, label, log } = spec;
     let confirmed = false;
-    // Why: an item already moved into the offer is gone from the pack view, so a give is believed only
-    // once the window is shut and the pack reads back.
+    // Why: an item moved into the offer is gone from the pack view, so a give is believed only once the window is shut and the pack reads back.
 
-    // Why: the baseline is taken with no window open, because declining an open trade to grab one kills
-    // the handshake the partner is in.
+    // Why: the baseline is taken with no window open, because declining an open trade to grab one kills the partner's handshake.
     const before = Trade.active() ? null : Inventory.countById(id);
     const packReadable = (): boolean => Inventory.used() > 0;
     const landed = (): boolean => {
@@ -132,16 +128,14 @@ export async function runHandoff(spec: HandoffSpec): Promise<boolean> {
         return false;
     }
 
-    // Why: a main modal left over from the last conversation swallows the Trade-with click, and the
-    // window then never opens for either side.
+    // Why: a main modal left over from the last conversation swallows the Trade-with click, and the window then never opens for either side.
     if (reader.modals().main !== -1) {
         await Modals.close();
     }
     if (!(await Traversal.walkResilient(spec.rendezvous, { radius: 2, attempts: 3, timeoutMs: MEET_MS, log }))) {
         return false;
     }
-    // Why: a wait step would park the quest after fifteen identical passes, so the wait for a partner
-    // lives inside the leg, openTrade owns both the wait and the clicking.
+    // Why: a wait step would park the quest after 15 identical passes, so openTrade owns both the wait for a partner and the clicking.
 
     if (!Trade.active() && !(await openTrade(partner, log))) {
         return false;
@@ -151,8 +145,7 @@ export async function runHandoff(spec: HandoffSpec): Promise<boolean> {
     let offered = false;
     let last = '';
     while (performance.now() < deadline) {
-        // Why: the engine shuts the offer screen a tick before it opens the confirm, so one frame with
-        // neither up is the handover, not the end of the trade.
+        // Why: the engine shuts the offer screen a tick before it opens the confirm, so one frame with neither up is the handover.
         if (!Trade.active()) {
             await Execution.delayTicks(3);
             if (!Trade.active()) {
@@ -200,8 +193,7 @@ export async function runHandoff(spec: HandoffSpec): Promise<boolean> {
             continue;
         }
 
-        // Why: one accept per screen. The engine sets pending on each click and opens the confirm on
-        // the second player's, so hammering it adds nothing and the re-clicks race the handover.
+        // Why: one accept per screen; the engine sets pending on each click and opens the confirm on the second player's, so re-clicks only race the handover.
         const clicked = await Trade.accept();
         log(`${label}: accept on ${screen} -> ${clicked}`);
         await Execution.delayUntil(() => Trade.onConfirmScreen() || !Trade.active(), SCREEN_MS);

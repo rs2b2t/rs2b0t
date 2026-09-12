@@ -207,8 +207,7 @@ import EntityQuery from '../api/query/Query.js';
 import { bus, type EventMap } from '../api/events/EventBus.js';
 import { DirectNavigator } from '../event/webwalk/DirectNavigator.js';
 import { EssenceSession } from '../event/webwalk/essenceSession.js';
-// Harness-only hooks, absent from packages/rs2b0t-api/index.d.ts and consumed
-// solely by e2e/merlin-mordred-353-live.ts.
+// Harness-only hooks, absent from packages/rs2b0t-api/index.d.ts and used only by e2e/merlin-mordred-353-live.ts.
 import {
     liveFortressStep,
     liveMordredBriefed,

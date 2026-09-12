@@ -4,8 +4,8 @@ interface GameMessage {
 }
 
 export const CANT_REACH = /^i can't reach that/i;
-/** The op reached the loc and the server refused the SIDE it came from, a different tile, not another try. */
-// Why: both spellings. `[oploc1,loc_2274]`, the rope swing back across the swamp, says "You cannot do that from here.", while the orb trap says "You can't do that from here.", so a pattern keyed on the contraction alone misses the swing and the step waits the refusal out as if it were a slow server.
+/** The op reached the loc and the server refused the side it came from; retry from a different tile. */
+// Why: both spellings. `[oploc1,loc_2274]` (the swamp rope swing) says "You cannot do that from here." and the orb trap says "You can't do that from here.", so keying on the contraction alone misses the swing.
 export const WRONG_SIDE = /can(?:'t|not) do that from here/i;
 
 const CAP = 64;

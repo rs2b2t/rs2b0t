@@ -18,7 +18,7 @@ import {
 import { anywhere, bankedId, foodName, heldFood, heldId, liveItem } from './state.js';
 
 const BAIT_TARGET = 60;
-/** Chaos druids are level 13, but twenty-five of them add up with no food in the pack. */
+/** Chaos druids are level 13, but 25 of them add up with no food in the pack. */
 const DRUID_FOOD = 8;
 const DRUID_MS = 600_000;
 const FISH_MS = 300_000;
@@ -49,8 +49,7 @@ function druid(): Npc | null {
     return Npcs.query().where(n => n.id === HERO_NPC.CHAOS_DRUID).nearest();
 }
 
-// Why: nothing sells harralander and it has no ground spawn, so the only source is the chaos druid herb
-// table, 46 in 128 for a herb, and 14 in 128 of that table for this one.
+// Why: nothing sells harralander and it has no ground spawn, so the only source is the chaos druid herb table: 46 in 128 for a herb, 14 in 128 of that table for this one.
 
 /** Kill chaos druids in the Taverley dungeon until one drops an unidentified harralander. */
 export async function farmHarralander(log: (m: string) => void): Promise<boolean> {
@@ -102,8 +101,7 @@ export async function farmHarralander(log: (m: string) => void): Promise<boolean
     return true;
 }
 
-// Why: `jail_doors.rs2` answers Open with "This <name> is locked" outside and opens only for an oplocu
-// with the right key, jail key for Velrak's cell, dusty key for the deep dungeon, neither consumed.
+// Why: `jail_doors.rs2` answers Open with "This <name> is locked" outside and opens only for an oplocu with the right key: jail key for Velrak's cell, dusty key for the deep dungeon, neither consumed.
 
 /** Kill the Jailer and take the jail key he drops. */
 export async function killJailer(log: (m: string) => void): Promise<boolean> {
@@ -176,8 +174,7 @@ export function leaveDeepDungeon(log: (m: string) => void): Promise<boolean> {
     return crossDeepGate(false, log);
 }
 
-// Why: the deep dungeon is a sealed pocket the navigator has no edge into, so a leg that ends inside it
-// strands every later bank, shop and range walk. This one enters, fishes and leaves in a single step.
+// Why: the deep dungeon is a sealed pocket the navigator has no edge into, so a leg that ends inside strands every later bank, shop and range walk. This one enters, fishes and leaves in one step.
 
 /** The lava spots burn every other rod, net and harpoon, and refuse without bait. */
 export async function fishLavaEel(log: (m: string) => void): Promise<boolean> {
@@ -217,8 +214,7 @@ async function fishInside(log: (m: string) => void): Promise<boolean> {
     return Inventory.countById(HERO_ID.RAW_LAVA_EEL) > 0;
 }
 
-// Why: the Taverley range sits in a pocket the baked graph has no door into, so Catherby's is the
-// nearest cooking surface the walker can reach from the dungeon ladder.
+// Why: the Taverley range sits in a pocket the baked graph has no door into, so Catherby's is the nearest cooking surface the walker can reach from the dungeon ladder.
 
 /** Cook the eel on the Catherby range, level 53, and it never burns. */
 export async function cookLavaEel(log: (m: string) => void): Promise<boolean> {
@@ -240,8 +236,7 @@ export async function cookLavaEel(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => Inventory.countById(HERO_ID.LAVA_EEL) > 0, RANGE_MS);
 }
 
-// Why: the slime lands between a `~mesbox` and a `~chatnpc`, and a chat-only driver stalls on that
-// modal, the count in the pack is the only oracle that sees past it.
+// Why: the slime lands between a `~mesbox` and a `~chatnpc` and a chat-only driver stalls on that modal, so the count in the pack is the only oracle that sees past it.
 
 /** Gerrant hands the slime over once, and only while none of slime, oil or oiled rod exists anywhere. */
 export function askGerrantForSlime(log: (m: string) => void): Promise<boolean> {

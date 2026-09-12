@@ -96,7 +96,7 @@ const RULES: readonly CategoryRule[] = [
         'feather', 'leather', 'hide', 'thread', 'bowstring', 'bow string', 'seed',
         'bait', 'shaft', 'wool', 'flax', 'molten glass', 'soda ash'
     ) },
-    // Why: an explicit junk entry is filed junk rather than counted as a rule the table is missing.
+    // Why: an explicit junk entry is filed as junk instead of counting as a rule the table is missing.
     { category: 'junk', ids: [526, 532] }
 ];
 

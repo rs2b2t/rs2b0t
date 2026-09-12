@@ -5,7 +5,7 @@ export interface StockEntry {
 
 /**
  * What the bank held at the last look, adjusted by trades since.
- * Why: the bank cannot be read while shut, and the per-item cap has to mean something between trips.
+ * Why: the bank can't be read while shut, and the per-item cap has to mean something between trips.
  */
 export class Ledger {
     private stock = new Map<number, number>();

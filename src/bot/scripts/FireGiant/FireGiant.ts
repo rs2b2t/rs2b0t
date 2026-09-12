@@ -63,8 +63,7 @@ const SHOW_MELEE = { key: 'combatStyle', anyOf: ['melee'] };
 const SHOW_SAFESPOT = { key: 'combatStyle', anyOf: ['mage', 'range'] };
 
 const DROPS: string[] = DROP_DB[TARGET] ?? [];
-// MossGiant strips arrows as junk; the fire giant table's only arrows are Rune (12
-// from the main roll, 42 from the rare) and Steel (150), so nothing here is junk
+// Fire giants drop only Rune and Steel arrows, so keep every arrow stack.
 const DEFAULT_LOOT = DROPS;
 
 export const SETTINGS: SettingsSchema = {

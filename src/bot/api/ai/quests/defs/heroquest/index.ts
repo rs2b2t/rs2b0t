@@ -29,7 +29,7 @@ import { decideHeroHandoff, heroHandoffStep } from './partner.js';
 import { phoenixArmbandStep, snipeKitStep } from './phoenix.js';
 import { anywhere, bankedId, heldId } from './state.js';
 
-/** The three the quest is graded on, all of which Achietties takes from the pack. */
+/** The 3 the quest is graded on, all taken from the pack by Achietties. */
 const HAND_IN = [
     { id: HERO_ID.FEATHER, name: HERO_NAMED.FEATHER },
     { id: HERO_ID.LAVA_EEL, name: HERO_NAMED.LAVA_EEL },
@@ -37,7 +37,7 @@ const HAND_IN = [
 ] as const;
 
 function handInStep(snap: QuestSnapshot): QuestStep {
-    // Why: `~send_quest_complete` reads `inv_total(inv, …)`, so a banked feather is not a carried one.
+    // Why: `~send_quest_complete` reads `inv_total(inv, ...)`, so a banked feather doesn't count.
     for (const item of HAND_IN) {
         if (heldId(snap, item.id) === 0) {
             if (bankedId(snap, item.id) > 0) {
@@ -54,18 +54,16 @@ function handInStep(snap: QuestSnapshot): QuestStep {
     };
 }
 
-/** The six Brimhaven pockets, every one of which the navigator has no edge out of. */
+/** The 6 Brimhaven pockets, none of which the navigator has an edge out of. */
 export function inSealedPocket(snap: QuestSnapshot): boolean {
     return inBrimhavenHq(snap.tile) || inMansion(snap.tile) || inTreasureRoom(snap.tile)
         || inKitchen(snap.tile) || inGarden(snap.tile) || inYard(snap.tile) || inSideRoom(snap.tile);
 }
 
-// Why: a bank, a shop or a booth is a walk the navigator plans, and from inside a sealed pocket every
-// such plan reads `unreachable`, the custom legs cross their own doors, these steps cannot.
+// Why: a bank, shop or booth is a walk the navigator plans, and from inside a sealed pocket every such plan reads `unreachable`. The custom legs cross their own doors; these steps can't.
 const NEEDS_STREET = new Set(['buy', 'withdraw', 'deposit', 'scanBank', 'mineRock']);
 
-// Why: `no path to (2793,3180,0): unreachable without 30x Coins`, the Ardougne ferry is 30 coins and
-// the legs between purchases carry none, so the quest holds a float at a low-water mark.
+// Why: `no path to (2793,3180,0): unreachable without 30x Coins`: the Ardougne ferry is 30 coins and the legs between purchases carry none, so the quest holds a float.
 const LOW_COINS = 200;
 const COIN_TOP_UP = 10_000;
 
@@ -80,8 +78,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (stage === undefined) {
         return { kind: 'wait', reason: 'quest stage not readable' };
     }
-    // Why: `ownsInventory` skips the engine's provisioning, so nothing else ever opens a booth, and an
-    // armband or a feather banked by an earlier run stays invisible until one read happens.
+    // Why: `ownsInventory` skips the engine's provisioning, so nothing else opens a booth and an armband or feather banked by an earlier run stays invisible until this read.
     if (!snap.bankKnown) {
         return egress(snap, { kind: 'scanBank' });
     }
@@ -100,8 +97,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     }
 
     const gang = heroGang();
-    // Why: the trades outrank the gang legs. The rival is standing at the rendezvous waiting, and every
-    // other leg on this side of the quest is blocked until the key or the candlestick has moved.
+    // Why: the trades outrank the gang legs: the rival is waiting at the rendezvous and every other leg on this side is blocked until the key or the candlestick has moved.
     const handoff = decideHeroHandoff({
         gang,
         stage,
@@ -129,16 +125,14 @@ export function decide(snap: QuestSnapshot): QuestStep {
         };
     }
 
-    // Why: Entrana is a one-ferry island with no walkable route home, so a bot standing on it settles
-    // the feather leg before the chain order gets a say.
+    // Why: Entrana is a one-ferry island with no walkable route home, so a bot standing on it settles the feather leg before the chain order gets a say.
     if (onEntrana(snap.tile)) {
         return featherStep(snap) ?? handInStep(snap);
     }
     return egress(snap, eelStep(snap) ?? featherStep(snap) ?? handInStep(snap));
 }
 
-// Why: a restart taken mid-leg can leave a bot standing in either Taverley pocket, and both of those
-// doors open from the inside without a key, the way out is never the way in.
+// Why: a restart mid-leg can leave a bot in either Taverley pocket, and both doors open from the inside without a key, so the way out is never the way in.
 function egress(snap: QuestSnapshot, step: QuestStep): QuestStep {
     if (!NEEDS_STREET.has(step.kind)) {
         return step;
@@ -158,10 +152,9 @@ function egress(snap: QuestSnapshot, step: QuestStep): QuestStep {
 export const heroquest: QuestModule = {
     record: QUESTS.find(r => r.id === 'hero')!,
     pray: { protect: 'melee', potions: 2 },
-    // Why: the quest works in six kingdoms, so no one booth is close to more than a leg of it.
+    // Why: the quest works in 6 kingdoms, so no one booth is close to more than a leg of it.
     bank: 'nearest',
-    // Why: the disguise, the bow, the herb chain and the Entrana strip are all bought or banked at the
-    // point of use, never provisioned up front.
+    // Why: the disguise, the bow, the herb chain and the Entrana strip are bought or banked at the point of use, never provisioned up front.
     ownsInventory: true,
     hops: [TAVERLEY_HOP_DOWN, TAVERLEY_HOP_UP],
     grind: ['Chaos druid', 'Grip', 'Ice Queen', 'Jailer'],
@@ -170,11 +163,10 @@ export const heroquest: QuestModule = {
         HERO_NAMED.OILY_ROD, HERO_NAMED.FISHING_BAIT, HERO_NAMED.CANDLESTICK, HERO_NAMED.MISC_KEY,
         HERO_NAMED.JAIL_KEY, HERO_NAMED.DUSTY_KEY
     ],
-    // Literals, not QuestFood.name: this object is built at import, when the setting still holds its default.
+    // Literals here: this object is built at import, when QuestFood.name still holds its default.
     sustain: { foods: ['Lobster', 'Swordfish', 'Tuna'], eatBelowHp: 0.5 },
     readProgress: readHeroQuestProgress,
-    // Why: Grip refuses a Black Arm attacker and only a Phoenix bot can shoot him, while the treasure
-    // door and the chest answer only to the Black Arm bot, neither half finishes alone.
+    // Why: Grip refuses a Black Arm attacker and only a Phoenix bot can shoot him, while the treasure door and the chest answer only to the Black Arm bot, so neither half finishes alone.
     warnReadiness: () => partnerConfigured()
         ? null
         : "Hero's Quest needs a rival-gang partner — the armband cannot be earned alone",

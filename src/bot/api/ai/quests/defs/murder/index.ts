@@ -15,7 +15,7 @@ import { POISON_PROVED, readMurderProgress } from './journal.js';
 import { provePoison } from './poison.js';
 import { accused, banked, held, heldThread } from './state.js';
 
-// Why: Arhein's pot is a gold piece and every dusting spends one load of flour, so the pack carries enough to fill the dagger and both thread-matched suspects in one visit to the barrel.
+// Why: Arhein's pot is 1gp and every dusting spends 1 load of flour, so the pack carries enough for the dagger and both thread-matched suspects in one barrel visit.
 const POT_TARGET = 3;
 const POT_GP = 100;
 
@@ -23,7 +23,7 @@ function custom(name: string, run: (log: (m: string) => void) => Promise<boolean
     return { kind: 'custom', name, run };
 }
 
-// Why: a barrel, the window and the study floor all refuse while a copy sits in the bank, so anything banked has to come back out before the leg that needs it can run at all.
+// Why: a barrel, the window and the study floor all refuse while a copy sits in the bank, so anything banked has to come back out first.
 function reclaim(snap: QuestSnapshot): QuestStep | null {
     const items = MURDER_EVIDENCE
         .filter(obj => held(snap, obj.id) === 0 && banked(snap, obj.id) > 0)

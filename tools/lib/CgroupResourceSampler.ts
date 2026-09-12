@@ -194,7 +194,7 @@ export async function resolveDedicatedCgroupDir(
 }
 
 /** Samples one dedicated cgroup-v2.
- *  Why: cpu.stat is cumulative across exited children, so ordinary browser process churn cannot invalidate a CPU interval the way a /proc tree snapshot can. */
+ *  Why: cpu.stat is cumulative across exited children, so browser process churn can't invalidate a CPU interval. */
 export class CgroupResourceSampler {
     private readonly cgroupDir: string;
     private readonly rootPid: number;
@@ -245,8 +245,7 @@ export class CgroupResourceSampler {
             return this.unavailable(null, 'registered root PID must be a positive safe integer');
         }
 
-        // Start independent reads together, but associate the timestamp with
-        // cpu.stat itself rather than charging arbitrary file latency to CPU.
+        // Start the reads together and take the timestamp right after cpu.stat, so other file latency isn't charged to CPU.
         const procsPromise = this.readCgroupFile('cgroup.procs');
         const memoryPromise = this.readCgroupFile('memory.current');
         const cpuRead = await this.readCgroupFile('cpu.stat');
@@ -339,8 +338,7 @@ export class CgroupResourceSampler {
                     cpuPercent = measuredCpuPercent;
                 }
             }
-            // A rejected interval is never published as zero, but its valid
-            // endpoint becomes the next baseline so a later interval can recover.
+            // A rejected interval's endpoint still becomes the next baseline, so a later interval can recover.
             this.previous = { sampledAtMs, usageUsec };
         } else {
             this.previous = { sampledAtMs, usageUsec };

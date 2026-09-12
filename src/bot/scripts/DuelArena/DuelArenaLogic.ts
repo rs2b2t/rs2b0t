@@ -164,10 +164,7 @@ export function canSeekFightCenter(attempts: number): boolean {
     return attempts >= 0 && attempts < MAX_CENTER_SEEK_ATTEMPTS;
 }
 
-/**
- * The server-only duelstatus varp is not transmitted to the client. Arm Fight
- * from the server's observable FIGHT overhead instead.
- */
+/** Arm Fight from the visible FIGHT overhead; the duelstatus varp is server-only. */
 export function canAttemptDuelFight(snapshot: FightAttemptSnapshot): boolean {
     const selfArena = fightArenaAt(snapshot.selfTile);
     return selfArena !== null &&
@@ -217,8 +214,7 @@ export class ChallengeCadence {
     }
 
     record(result: ChallengeResult, sentAt: number): void {
-        // Why: the server briefly closes one handshake screen before opening the next.
-        // Why: keeping the normal cadence after an interface opens stops that gap injecting a fresh Challenge into the same duel.
+    // Why: preserve cadence across the brief gap between handshake screens to avoid a duplicate Challenge.
         this.nextAt = result === 'sent' || result === 'interface'
             ? sentAt + CHALLENGE_INTERVAL_MS
             : 0;

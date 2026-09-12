@@ -11944,7 +11944,7 @@ export class Client extends GameShell {
             this.ny = e.screenY | 0;
 
             if (this.dragging) {
-                // Dragging owns the pointer — no keyboard or pan handling while it does.
+                // Dragging owns the pointer, so skip keyboard and pan handling.
             } else if (MobileKeyboard.isWithinCanvasKeyboard(x, y) && this.exceedsGrabThreshold(20)) {
                 MobileKeyboard.notifyTouchMove(x, y);
             } else if (this.startedInGame && !this.isGameObscured() && this.exceedsGrabThreshold(20)) {

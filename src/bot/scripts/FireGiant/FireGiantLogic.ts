@@ -8,25 +8,19 @@ export const LEDGE = new Tile(2511, 3463, 0);
 export const LEDGE_DOOR = new Tile(2511, 3464, 0);
 export const WASHED_OUT = new Tile(2527, 3413, 0);
 
-// Why: 9892 sees two west giants, so it kills faster.
-// Why: a 2x2 footprint fits with its origin on 9892, so a giant can occasionally reach you there.
-// Why: 9893 is the melee-proof nook, live-verified at zero pull-offs and zero food eaten, but sees one giant.
-// Why: hold 9892 and drop back to 9893 whenever a giant lands a hit.
+// Why: 9892 sees two giants but can take a hit; 9893 is the one-target melee-proof fallback.
 export const DEFAULT_SAFESPOT = new Tile(2568, 9892, 0);
 export const DEFAULT_SAFESPOT_FALLBACK = new Tile(2568, 9893, 0);
 export const DEFAULT_MELEE_TILE = new Tile(2575, 9893, 0);
 
-// Why: clicking Attack on a giant beyond weapon range makes the server walk you into range, which steps off the safespot.
-// Why: a target is only engaged once it is already close enough to hit from where you stand.
-// Why: the bow figure is the short-bow one, which is safe for long bows too, and melee needs adjacency.
+// Why: only attack targets already in weapon range so the server does not walk off the safespot.
 const ATTACK_RANGE: Record<string, number> = { melee: 1, range: 7, mage: 10 };
 
 export function attackRangeFor(style: string): number {
     return ATTACK_RANGE[style] ?? 1;
 }
 
-// Why: the giants wander up to 3 tiles, so under distance ordering the westmost one often reads as nearest while a wall blocks line of sight.
-// Why: engage east-to-west with nearest breaking ties, so the bot never picks a giant it cannot hit.
+// Why: prefer east-to-west before distance because a wall blocks the nearest west giant.
 interface TargetLike {
     x: number;
     distance: number;
@@ -36,11 +30,7 @@ export function eastFirst(a: TargetLike, b: TargetLike): number {
     return b.x - a.x || a.distance - b.distance;
 }
 
-// Why: the chambers split cleanly on x, west spawns top out at 2568, east ones start at 2573.
-// Why: from the safespot the nearest east giant is closer than two of the three west ones, so targeting is gated on room, not range.
-// Why: an NPC's faceEntity clears between its attacks, so a giant another player is mid-fight with reads as free for a tick.
-// Why: treating "in combat but not with us" as taken closes that gap.
-// Why: our own target is exempt, since its faceEntity flickers the same way and dropping it would churn targets every few ticks.
+// Why: gate targets by chamber and keep NPCs fighting someone else reserved through faceEntity gaps.
 
 /** Whether a giant already belongs to someone else's fight. */
 interface Engagement {
@@ -57,8 +47,7 @@ export function takenByAnother(e: Engagement): boolean {
     return e.targetsAnother || (e.inCombat && !e.targetsMe);
 }
 
-// Why: a Take on a corpse several tiles off walks there first, so a flat short wait reports failure while the pickup is still in flight.
-// Why: with a safespot walk-back queued behind it, the bot cancels its own pickup and trades places with the loot.
+// Why: scale pickup wait by distance so safespot recovery does not cancel an in-flight Take.
 
 /** How long to wait for a Take to land, given how far the drop is. */
 export function lootWaitMs(distance: number): number {

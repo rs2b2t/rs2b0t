@@ -1,5 +1,5 @@
-/** Pathfind to every tile the Temple of Ikov module names, and name the pockets nothing routes into.
- *  Why: the temple is five stage-gated doors, a lava bridge, a webbed alcove and a wall you push, so which tiles the baked graph reaches is the difference between a leg and a wedge. */
+/** Check Temple of Ikov stand tiles against the baked graph.
+ * Why: its quest doors, lava bridge, web and pushable wall require scripted crossings. */
 
 //   bun tools/nav/build-collision.ts --engine ~/code/rs2b2t-engine
 //   bun tools/nav/ikov-probe.ts
@@ -60,7 +60,7 @@ const TO: [string, NavPoint][] = [
     ...CHEST_STANDS.map((stand, i): [string, NavPoint] => [`ice chest ${i + 1} stand`, stand])
 ];
 
-// Why: each of these is entered by a script the graph cannot express, so "unreachable" here is the design and a route appearing would be the bug.
+// Why: these pockets require scripted crossings; a baked route into one would be a bug.
 const POCKETS: [string, NavPoint][] = [
     ['boots room (dark stairs)', point(IKOV_TILE.DARK_LANDING)],
     ['boots alcove (webbed)', point(IKOV_TILE.BOOTS_SPAWN)],
@@ -82,7 +82,7 @@ for (const [fromName, from] of FROM) {
             continue;
         }
         const last = out.waypoints[out.waypoints.length - 1];
-        // Why: findPath snapping to within five tiles is a weaker claim than walkResilient(radius 2) arriving.
+        // Why: findPath can stop five tiles short; require the two-tile arrival radius used by walkResilient.
         const snapped = Math.max(Math.abs(last.x - to.x), Math.abs(last.z - to.z));
         if (snapped > 2) {
             unreachable++;

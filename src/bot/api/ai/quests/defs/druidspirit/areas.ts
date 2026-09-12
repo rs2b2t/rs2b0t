@@ -30,7 +30,7 @@ export const NS_STAGE = {
     COMPLETE: 110
 } as const;
 
-// Why: `opheld3,silver_sickle_blessed` charges `random_range(1, 7)` and refuses outright at zero, so a bar under seven can still lose the cast it is about to pay for.
+// Why: `opheld3,silver_sickle_blessed` charges `random_range(1, 7)` and refuses at 0, so a bar under 7 can still lose the cast.
 /** The dearest a single Cast Bloom can cost. */
 export const BLOOM_MAX_COST = 7;
 
@@ -107,7 +107,7 @@ export const NS_TILE = {
     URHNEY: new Tile(3235, 3154, 0),
     DOMMIK: new Tile(3322, 3194, 0),
     BOB: new Tile(3232, 3203, 0),
-    // Why: the Al Kharid furnace is `forceapproach=east`, which its rotation puts to the south, so this is the stand rather than the loc tile.
+    // Why: the Al Kharid furnace is `forceapproach=east`, which its rotation puts to the south, so this is the stand.
     FURNACE: new Tile(3272, 3183, 0),
     SILVER_ROCKS: new Tile(3294, 3301, 0),
     VARROCK_EAST_BANK: new Tile(3253, 3420, 0),

@@ -18,11 +18,10 @@ const COMPASS: [number, number][] = [
 const MIN_FLEE_DIST = 4;
 const RING_STEP = 2;
 
-// Why: sweeps inward from `dist` rather than offering a single ring, because indoors the eight tiles at one radius nearly all land inside rock.
-// Why: measured from the Waterfall Dungeon safespot, only 2 of 8 at distance 12 are walkable against 6-7 of 8 a few tiles nearer, so a single ring leaves the bot standing there being hit while a good tile sits inside it.
+// Why: sweep inward because a single outer ring is often blocked indoors.
 // @see docs/reference/api-events.md
 
-/** Adjacent tiles, farthest from `awayFrom` first. Cancels an Ent `p_opnpc` without a 4-tile flee. */
+/** Adjacent step-off candidates, farthest from `awayFrom` first. */
 export function stepOffCandidates(from: Pt, awayFrom: { x: number; z: number }): Pt[] {
     return COMPASS.map(([dx, dz]) => ({ x: from.x + dx, z: from.z + dz, level: from.level })).sort((a, b) => {
         const da = Math.max(Math.abs(a.x - awayFrom.x), Math.abs(a.z - awayFrom.z));
@@ -31,7 +30,7 @@ export function stepOffCandidates(from: Pt, awayFrom: { x: number; z: number }):
     });
 }
 
-/** Tiles to run to when a random event has to be escaped, farthest from the threat first. */
+/** Escape candidates, farthest from the threat first. */
 export function fleeCandidates(from: Pt, threat: { x: number; z: number }, dist: number): Pt[] {
     const seen = new Set<string>();
     const out: Pt[] = [];

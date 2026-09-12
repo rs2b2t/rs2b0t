@@ -15,8 +15,7 @@ function normalize(lines: readonly string[] | string): string {
         .toLowerCase();
 }
 
-// Needles avoid anything a colour tag sits next to: stripping "@dbl@" leaves a
-// space, so "Ungadulu@dbl@." normalises to "ungadulu .".
+// Needles avoid anything a colour tag sits next to: stripping "@dbl@" leaves a space, so "Ungadulu@dbl@." normalises to "ungadulu .".
 const STAGE_LINES: readonly [string, number][] = [
     ['quest complete!', LQ_STAGE.COMPLETE],
     ['radimus has given me four training sessions as reward', LQ_STAGE.TRAINING_4],
@@ -67,8 +66,7 @@ const FLAG_LINES: readonly [string, string][] = [
     ['i told ungadulu about the spirit', 'told-ungadulu']
 ];
 
-// Why: this is the one sub-progress the stage number cannot carry, the three
-// crystal sections all live in `%legends_bits`, which never reaches the client.
+// Why: the one sub-progress the stage number can't carry: the 3 crystal sections live in `%legends_bits`, which never reaches the client.
 function crystalsPlaced(text: string): number {
     if (text.includes("i've place some crystal chunks in a lava furnace")) {
         return 2;

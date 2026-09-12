@@ -37,29 +37,28 @@ export function decidePhase(bot: BrimhavenMossGiants): Phase {
             if (atField()) {
                 return fieldGiants().length > 0 ? Phase.Fight : findLoot() !== null ? Phase.Loot : Phase.Fight;
             }
-            // Pre-conditions to sail to Brimhaven: must be able to fight on arrival.
-            // Missing food, boat fare, supplies, or a full pack means go bank first.
+            // Bank before sailing unless the bot can fight on arrival.
             if (!hasFood() || Inventory.count('Coins') < BOAT_FARE || Inventory.isFull() || needStyleSupplies()) {
                 return Phase.Bank;
             }
             return Phase.Travel;
         case Phase.Fight:
-            // Drops on the ground (a kill landed) -> go clear them.
+            // Clear drops from the last kill.
             return findLoot() !== null ? Phase.Loot : Phase.Fight;
         case Phase.Loot:
-            // Ground cleared -> bury bones (if any) then back to fighting.
+            // Bury bones after the ground is clear.
             if (findLoot() !== null) {
                 return Phase.Loot;
             }
             return cfg.buryBones && Inventory.contains('Big bones') ? Phase.Bury : Phase.Fight;
         case Phase.Bury:
-            // Bones buried -> back to fighting.
+            // Resume fighting after cleanup.
             if (!cfg.buryBones || !Inventory.contains('Big bones')) {
                 return Phase.Fight;
             }
             return Phase.Bury;
         case Phase.Bank:
-            // Restocked and back on the island -> fight (idles if no giants).
+            // Fight once restocked and back on the island.
             if (atField() && !shouldBank(bot)) {
                 return Phase.Fight;
             }

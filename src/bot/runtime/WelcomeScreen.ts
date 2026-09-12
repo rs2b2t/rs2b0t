@@ -1,15 +1,12 @@
 import { actions, reader, WELCOME_SCREEN } from '../adapter/ClientAdapter.js';
 import { BotHost } from './BotHost.js';
 
-/** Why: LAST_LOGIN_INFO opens 5993 after login; a one-shot local hide leaves it up when the first close misses. */
+/** LAST_LOGIN_INFO retry count; the modal can arrive after the first close. */
 export function welcomeNeedsDismiss(ingame: boolean, mainModal: number): boolean {
     return ingame && mainModal === WELCOME_SCREEN;
 }
 
-/**
- * Dismiss the post-login welcome modal while it is the open main modal.
- * Why: `closeMainModal` only clears local `mainModalId`. Close Window is a CLOSE_BUTTON click.
- */
+/** Dismiss the post-login modal with its CLOSE_BUTTON rather than clearing local state. */
 class WelcomeDismisserImpl {
     private enabled = false;
 

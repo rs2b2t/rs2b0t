@@ -19,10 +19,7 @@ interface QuestVarSeed {
     usedBy: string[];
 }
 
-/**
- * All quests that gate curated travel or common teleports used with them.
- * Aliases map short catalog names → journal name for WorldState lookup.
- */
+/** Quests that gate curated travel or the teleports used with them; aliases map short catalog names to the journal name. */
 export const TRANSPORT_QUEST_SEEDS: readonly QuestVarSeed[] = [
     {
         journal: 'Rune Mysteries Quest',
@@ -49,8 +46,7 @@ export const TRANSPORT_QUEST_SEEDS: readonly QuestVarSeed[] = [
         journal: 'Shilo Village',
         varp: 'zombiequeen',
         complete: 15,
-        // Cart Brimhaven→Shilo checks %zombiequeen >= complete; prereq jungle potion
-        // is content-side for quest start only, complete shilo is enough for cart.
+        // Cart Brimhaven to Shilo checks %zombiequeen >= complete; the jungle potion prereq only gates the quest start.
         usedBy: ['shilo_cart (Brimhaven→Shilo Hajedy)']
     },
     {
@@ -82,14 +78,13 @@ export const TRANSPORT_QUEST_SEEDS: readonly QuestVarSeed[] = [
     },
     {
         journal: "Eadgar's Ruse",
-        // content: %eadgar_quest (not %eadgar), quests.rs2 / teleport.rs2
+        // content: %eadgar_quest, never %eadgar (quests.rs2 / teleport.rs2)
         varp: 'eadgar_quest',
         complete: 110,
         usedBy: ['spell: Trollheim teleport']
     },
     {
-        // questlist.if text=Waterfall Quest; raft needs ≥ started (not 0).
-        // complete = 10; log raft boards for any stage ≥ 1 (FireGiant parks if notStarted).
+        // questlist.if text=Waterfall Quest; complete = 10, and the log raft boards at any stage >= 1 (FireGiant parks if notStarted).
         journal: 'Waterfall Quest',
         varp: 'waterfall_quest',
         complete: 10,
@@ -115,7 +110,7 @@ export const TRANSPORT_QUEST_SEEDS: readonly QuestVarSeed[] = [
     }
 ] as const;
 
-/** Short names used in older catalog strings → quest-list display name. */
+/** Short names used in older catalog strings to quest-list display name. */
 const TRANSPORT_QUEST_ALIASES: Readonly<Record<string, string>> = {
     'rune mysteries': 'Rune Mysteries Quest',
     'rune mysteries quest': 'Rune Mysteries Quest',

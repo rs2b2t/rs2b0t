@@ -1,7 +1,4 @@
-/**
- * Minimal PNG encoder (RGBA8, filter none) using Node zlib.
- * Avoids canvas deps for headless basemap bake.
- */
+/** Encode RGBA8 PNGs with Node zlib, without a canvas dependency. */
 import { deflateSync } from 'node:zlib';
 
 function crc32(buf: Uint8Array): number {

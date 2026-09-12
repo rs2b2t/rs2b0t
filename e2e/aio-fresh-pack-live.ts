@@ -1,5 +1,5 @@
-/** Live proof that every quest opens on an empty pack: --quest id --junk N --minutes N --tick N --no-deploy, base :8890.
- *  Why: `doric` is the default target because it declares `ownsInventory`, the flag that used to opt a quest out of every generic deposit, a full pack survived into its own withdrawal and there was nowhere to put the ore. */
+/** Live check that quests clear an unrelated full pack before starting. */
+// Why: `doric` owns its inventory and previously reached its ore withdrawal with no free slots.
 
 //   HEADED=1 bun e2e/aio-fresh-pack-live.ts --quest doric --junk 28 --minutes 8
 //   HEADED=1 bun e2e/aio-fresh-pack-live.ts --quest doric --junk 28 --resume doricquest=10 --minutes 8
@@ -103,7 +103,7 @@ try {
         console.log(`resumed: ${name}=${value}, the quest's journal now reads in progress`);
     }
 
-    // Why: cowhide does not stack, so one command fills one slot per unit, a pack no quest asked for.
+    // Why: unstackable cowhide fills one slot per unit.
     await cheatQuiet(page, `~item ${args.junkObj} ${args.junk}`);
     const seeded = (await snapshot(page)).used;
     if (seeded < args.junk) {

@@ -25,7 +25,7 @@ export const IMP_BEADS: readonly ImpBead[] = [
     { name: 'White bead', id: 1476 }
 ];
 
-// Why: the polite line is preferred first because Mizgog's third option ends with the string "Give me a quest!", and a substring match would hand that sarcastic branch the quest-start click.
+// Why: Mizgog's third option ends with "Give me a quest!", so a substring match on that alone clicks the sarcastic branch; the polite line goes first.
 export const MIZGOG: NpcStop = {
     npc: 'Wizard Mizgog',
     anchor: new Tile(3103, 3163, 2),
@@ -33,7 +33,7 @@ export const MIZGOG: NpcStop = {
     prefer: ['Give me a quest please.', 'Give me a quest!']
 };
 
-/** The nine imp spawns on the scrub south of Ardougne, from the map squares. */
+/** The 9 imp spawns on the scrub south of Ardougne, from the map squares. */
 export const IMP_SPAWNS: readonly Tile[] = [
     new Tile(2632, 3202, 0),
     new Tile(2625, 3203, 0),
@@ -48,23 +48,23 @@ export const IMP_SPAWNS: readonly Tile[] = [
 
 const FIELD_LEVEL = 0;
 
-// Why: the nine spawns lie in a 14x41 strip, so this one tile sits within 21 of every one of them and inside `SEARCH_RADIUS` of the lot, so it is where the bot returns to and where its sweeps radiate from.
+// Why: the 9 spawns lie in a 14x41 strip, so this tile is within 21 of every one and inside `SEARCH_RADIUS` of the lot.
 
 /** Where the bot stands to watch every spawn on the strip. */
 export const IMP_STAND = new Tile(2632, 3222, 0);
 
-// Why: the route between the Ardougne strip and the Wizards' Tower crosses Karamja, which has no bank, so a coin top-up there would walk the bot off the route it is in the middle of.
+// Why: the strip-to-tower route crosses Karamja, which has no bank, so a coin top-up there walks the bot off its route.
 
-/** Karamja and the water around it: the transit leg with no bank on it. */
+/** Karamja and the water around it, the bankless transit leg. */
 const KARAMJA = { minX: 2740, maxX: 2970, minZ: 3020, maxZ: 3230 };
 
 const SHIP_FARE = 30;
-/** Withdrawn in one go, so a fare paid mid-quest never triggers another bank trip. */
+/** Withdrawn in one go so a mid-quest fare never costs another bank trip. */
 const COIN_RESERVE = 200;
 const COIN_FLOOR = SHIP_FARE * 2;
 
-// Why: `wanderrange=27` plus a `map_findsquare(npc_coord, 0, 20)` teleport puts an imp anywhere in this box, and one outside it belongs to a different spawn cluster.
-// Why: the floor at z 3180 keeps the next cluster south, which tops out at z 3134, from pulling the bot 70 tiles off this one.
+// Why: `wanderrange=27` plus a `map_findsquare(npc_coord, 0, 20)` teleport puts an imp anywhere in this box; one outside it is another cluster's.
+// Why: the z 3180 floor keeps the next cluster south (tops out at z 3134) from pulling the bot 70 tiles off this one.
 
 /** The ground an imp from these spawns can be standing on. */
 export const IMP_FIELD = { minX: 2600, maxX: 2665, minZ: 3180, maxZ: 3265 };
@@ -74,13 +74,13 @@ const IMP = 'Imp';
 const SEARCH_RADIUS = 50;
 const BEAD_RADIUS = 30;
 const ENGAGE_RADIUS = 6;
-/** Past this the imp teleported out of the fight rather than moved. */
+/** Past this the imp teleported out of the fight. */
 const LOST_RADIUS = 12;
-/** Scene-BFS budget: enough open ground to answer for anything inside `SEARCH_RADIUS`. */
+/** Scene-BFS budget covering open ground within `SEARCH_RADIUS`. */
 const REACH_STEPS = 20_000;
-// Why: an imp wanders and teleports far enough that standing still watches empty ground, so an idle bot sweeps the strip rather than waiting out a respawn on one tile.
+// Why: imps wander and teleport far enough that standing still watches empty ground, so an idle bot sweeps the strip.
 
-/** How long an empty scene is given to fill before the bot sweeps. */
+/** How long an empty scene gets to fill before the bot sweeps. */
 const SEARCH_IDLE_MS = 6000;
 const SEARCH_STEP_MIN = 8;
 const SEARCH_STEP_MAX = 20;
@@ -88,9 +88,9 @@ const SEARCH_STEP_MAX = 20;
 const SEARCH_ROLLS = 6;
 const KILL_MS = 30_000;
 const TAKE_MS = 6000;
-/** The walk between the strip and the tower is cost 625 across two ship hops. */
+/** The strip-to-tower walk is cost 625 across 2 ship hops. */
 const FAR_WALK_MS = 420_000;
-/** A sweep is a short hop inside the strip, so it must not sit on a 7-minute budget. */
+/** A sweep is a short hop inside the strip; it shouldn't get the 7-minute budget. */
 const SWEEP_WALK_MS = 45_000;
 
 function heldCount(snap: QuestSnapshot, bead: ImpBead): number {
@@ -121,9 +121,9 @@ function clamp(value: number, low: number, high: number): number {
     return Math.min(high, Math.max(low, value));
 }
 
-// Why: a random point in the box would send the bot back and forth across the strip; a random heading from where it stands sweeps ground it has not already looked at.
+// Why: a random point in the box bounces the bot across the strip; a random heading from here sweeps ground it hasn't looked at yet.
 
-// Why: the field is a rectangle with no terrain in it, so a heading can aim at a tile the walker cannot reach, and one live sweep in six spent 42 seconds proving that.
+// Why: the field rectangle knows no terrain, so a heading can aim at an unreachable tile; 1 sweep in 6 burned 42s on one.
 
 /** A tile to sweep towards: a random heading from `here`, held inside the field and probed for reach. */
 export function searchTarget(
@@ -149,8 +149,8 @@ export function searchTarget(
     return IMP_STAND;
 }
 
-// Why: this result is returned as the step's own success, so a condition that holds without work being available loops the step at ~20ms and parks the quest on eight identical snapshots.
-// Why: being in combat is such a condition, an imp that `pickImp` refuses can hold the flag indefinitely, so it is deliberately not part of this.
+// Why: Returning success without available work loops this step at about 20 ms until the watchdog stops it.
+// Why: in-combat is one such condition (an imp `pickImp` refuses can hold it forever), so it's left out.
 
 /** Whether the idle wait found something for the next tick to act on. */
 export function idleProgress(target: unknown | null, eventPending: boolean): boolean {
@@ -173,9 +173,9 @@ export interface ImpCandidate extends FieldTarget {
 
 type Reachable = (tile: { x: number; z: number; level: number }) => boolean;
 
-// Why: an imp teleports up to 20 tiles on its own timer, so it dies and drops its bead behind scenery often enough that a walk at the closest drop answers "unreachable" and costs the step its budget.
+// Why: Imps teleport up to 20 tiles and may die behind scenery, so skip unreachable drops without consuming the step budget.
 
-/** The closest drop the scene can path to, skipping the nearer ones it cannot. */
+/** The closest drop the scene can path to. */
 export function nearestReachable<T extends FieldTarget>(candidates: readonly T[], reachable: Reachable): T | null {
     return [...candidates].sort((a, b) => a.distance - b.distance).find(item => reachable(item.tile)) ?? null;
 }
@@ -189,8 +189,8 @@ function shuffled<T>(items: readonly T[], random: () => number): T[] {
     return out;
 }
 
-// Why: twenty bots that each take the nearest imp queue on the same one, so the target is drawn at random instead.
-// Why: the draw is the first reachable of a shuffled list rather than a filter-then-choose, which is the same uniform pick over the reachable ones but usually costs one scene BFS instead of one per candidate.
+// Why: 20 bots each taking the nearest imp queue on the same one, so the target is drawn at random.
+// Why: first reachable of a shuffled list is the same uniform pick as filter-then-choose and usually costs a single scene BFS where a filter costs 1 per candidate.
 
 /** A random imp in the field that nobody else is fighting and the scene can path to. */
 export function pickImp<T extends ImpCandidate>(
@@ -211,7 +211,7 @@ interface ImpCensus {
     nearestRefused: number | null;
 }
 
-// Why: zero imps reads the same whether a filter ate every candidate, the spawns are dead, or the zone never streamed, and the three have different fixes.
+// Why: zero imps looks the same whether a filter ate them, the spawns are dead or the zone never streamed, and each has a different fix.
 
 /** NPC names in the scene, counted, most numerous first. */
 export function tallyNames(names: readonly (string | null)[]): string {
@@ -304,7 +304,7 @@ async function killImp(imp: Npc, log: (m: string) => void): Promise<boolean> {
         return false;
     }
 
-    // Why: `ai_queue2,imp` rolls a 1-in-10 teleport on every hit the imp survives, so a fight that stops making progress is the normal case and not a stuck step.
+    // Why: `ai_queue2,imp` rolls a 1-in-10 teleport on every hit the imp survives, so a fight that stalls is normal.
     const deadline = performance.now() + KILL_MS;
     while (performance.now() < deadline) {
         await Sustain.run();
@@ -330,7 +330,7 @@ async function killImp(imp: Npc, log: (m: string) => void): Promise<boolean> {
     return false;
 }
 
-// Why: walking the ring is the respawn wait, the volcano blocks the middle, so standing still watches one arc of it and the far spawns are never seen.
+// Why: the volcano blocks the middle, so standing still watches one arc; walking the ring is the respawn wait.
 async function searchForImps(census: ImpCensus, log: (m: string) => void): Promise<boolean> {
     const here = Game.tile();
     const neighbours = census.scene === 0
@@ -345,7 +345,7 @@ async function searchForImps(census: ImpCensus, log: (m: string) => void): Promi
         return Traversal.walkResilient(IMP_STAND, { radius: 2, attempts: 3, timeoutMs: FAR_WALK_MS, log });
     }
 
-    // Why: one short wait catches an imp that is about to respawn or wander in, which is cheaper than a walk.
+    // Why: a short wait catches an imp about to respawn or wander in, cheaper than a walk.
     await Execution.delayUntil(
         () => pickImp(impCandidates(), sceneReachable) !== null || EventSignal.pending(),
         SEARCH_IDLE_MS
@@ -389,7 +389,7 @@ export function gatherBead(snap: QuestSnapshot): QuestStep {
     if (missing.length === 0) {
         return { kind: 'wait', reason: 'every bead is already held' };
     }
-    // Why: an unread bank is not an empty bank, and a bead banked by an earlier run is 50 imp kills cheaper than another farm.
+    // Why: an unread bank may hold a bead from an earlier run, which is 50 imp kills cheaper than farming another.
     if (!snap.bankKnown) {
         return { kind: 'scanBank' };
     }
@@ -403,7 +403,7 @@ export function gatherBead(snap: QuestSnapshot): QuestStep {
             items: banked.map(bead => ({ name: bead.name, id: bead.id, qty: 1 }))
         };
     }
-    // Why: the fare is fetched before boarding and never from the island, as a top-up on Karamja sails home for the coins it has spent and never kills an imp.
+    // Why: fetch the fare before boarding; a top-up on Karamja sails home for coins and never kills an imp.
     const coins = snap.inv.get('coins') ?? 0;
     if (coins < COIN_FLOOR && !onKaramja(snap.tile) && snap.bankCoins > 0) {
         return {
@@ -425,8 +425,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
         return { kind: 'wait', reason: 'quest journal not loaded' };
     }
-    // Why: the imp drop table is unconditional, so beads can be farmed before Mizgog is ever spoken to.
-    // Why: the strip is 625 of walking and two ship fares away from him, and gathering first spends that once rather than on the way out and again on the way back.
+    // Why: the imp drop table is unconditional, so beads can be farmed before talking to Mizgog.
+    // Why: the strip is 625 of walking and 2 ship fares from him, so gathering first pays that once.
     if (missingBeads(snap).length > 0) {
         return gatherBead(snap);
     }
@@ -435,9 +435,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const impcatcher: QuestModule = {
     record: QUESTS.find(record => record.id === 'imp')!,
-    // Why: the strip is south of Ardougne and the hand-in is at the Wizards' Tower, so the useful bank depends on which leg the bot is on.
+    // Why: the strip is south of Ardougne and the hand-in is at the Wizards' Tower, so the useful bank depends on the leg.
     bank: 'nearest',
-    // Why: the engine restores its coin float on every provisioning tick, which turns the ship's 30-coin fare into a round trip across the sea and never kills an imp.
+    // Why: the engine restores its coin float every provisioning tick, which turns the 30-coin fare into a round trip across the sea.
     ownsInventory: true,
     grind: [IMP],
     gather: Object.fromEntries(IMP_BEADS.map(bead => [bead.name.toLowerCase(), gatherBead])),

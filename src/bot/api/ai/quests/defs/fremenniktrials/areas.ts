@@ -109,7 +109,7 @@ export const FT_TILE = {
     PIPE_STAND: new Tile(2664, 3674, 0),
     /** On the stage, past the bouncer's door. */
     STAGE: new Tile(2658, 3683, 0),
-    /** The tile the backstage door is clicked from, its wall is the west edge of x 2667. */
+    /** The tile the backstage door is clicked from; its wall is the west edge of x 2667. */
     BACKSTAGE_DOOR: new Tile(2667, 3683, 0),
     BACKSTAGE_INNER: new Tile(2666, 3683, 0),
 
@@ -121,9 +121,9 @@ export const FT_TILE = {
 
     MUSICAL_TREE: new Tile(2739, 3638, 0),
     TROLL_CAULDRON: new Tile(2772, 3624, 0),
-    /** North of the shrine: the altar sits on the blocked tile at the end of a one-wide jetty. */
+    /** North of the shrine; the altar sits on the blocked tile at the end of a 1-wide jetty. */
     LAKE_ALTAR: new Tile(2626, 3599, 0),
-    /** Seers' Village, first floor, the Rellekka wheel refuses anyone who is not a Fremennik. */
+    /** Seers' Village, first floor; the Rellekka wheel refuses anyone who isn't a Fremennik. */
     SPINNING_WHEEL: new Tile(2712, 3471, 1),
 
     COUNCIL_WORKMAN: new Tile(2655, 3593, 0),
@@ -163,7 +163,7 @@ export const FT_TILE = {
     WARRIOR_LOFT_LADDER: new Tile(2666, 3694, 1)
 } as const;
 
-/** The seven correct portals, in the order the maze wants them, with the tile each one lands you on. */
+/** The 7 correct portals in maze order, with the tile each one lands you on. */
 export const MAZE_ROUTE: readonly { id: number; stand: Tile; land: Tile }[] = [
     { id: FT_LOC.MAZE_PORTAL_1, stand: new Tile(2631, 10003, 0), land: new Tile(2642, 10017, 0) },
     { id: FT_LOC.MAZE_PORTAL_2, stand: new Tile(2640, 10015, 0), land: new Tile(2651, 10004, 0) },
@@ -210,14 +210,14 @@ export function inBattleground(t: WorldTile | null | undefined): boolean {
     return within(t, 2624, 2687, 10048, 10111, 2);
 }
 
-/** The level-2 puzzle rooms, which only the two ladders reach. */
+/** The level-2 puzzle rooms, which only the 2 ladders reach. */
 export function inPuzzleRoom(t: WorldTile | null | undefined): boolean {
     return within(t, 2628, 2639, 3659, 3666, 2);
 }
 
-// Why: both halves are sealed pockets in the collision pack, split by the wall at x 2634 that the mural hangs on, a flood from each door is what these boxes were measured from.
+// Why: both halves are sealed pockets in the collision pack, split by the wall at x 2634 the mural hangs on; these boxes were measured by a flood from each door.
 
-/** The half of the puzzle house behind door 1, the way in, and the way to fail out. */
+/** The half of the puzzle house behind door 1: the way in and the way to fail out. */
 export function inSeerWest(t: WorldTile | null | undefined): boolean {
     return within(t, 2629, 2633, 3659, 3666, 0);
 }

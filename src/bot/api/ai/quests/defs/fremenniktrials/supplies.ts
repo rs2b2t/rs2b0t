@@ -48,10 +48,7 @@ interface Want {
     id?: number;
 }
 
-/**
- * Top the pack up from the Seers' Village bank.
- * Returns null when everything asked for is already carried, or the bank has none of it.
- */
+/** Top the pack up from the Seers' Village bank. Null when everything is carried or the bank has none of it. */
 export function fromBank(snap: QuestSnapshot, wants: readonly Want[]): QuestStep | null {
     if (!snap.bankKnown) {
         return scanBank();
@@ -63,7 +60,7 @@ export function fromBank(snap: QuestSnapshot, wants: readonly Want[]): QuestStep
     return missing.length > 0 ? withdrawStep(missing) : null;
 }
 
-// Why: the two tools the quest cannot buy anywhere near Rellekka both have a permanent ground spawn inside the town's own map squares.
+// Why: the 2 tools the quest can't buy near Rellekka both have a permanent ground spawn inside the town's map squares.
 
 /** Bank first, then the spawn north-east of Rellekka. */
 export function gatherKnife(snap: QuestSnapshot): QuestStep | null {
@@ -97,7 +94,7 @@ export function gatherTinderbox(snap: QuestSnapshot): QuestStep | null {
         ?? { kind: 'buy', item: 'Tinderbox', qty: 1, shop: { npc: 'Arhein', anchor: FT_TILE.ARHEIN }, estGp: 200 };
 }
 
-// Why: no shop within two kingdoms of Rellekka carries a raw shark with stock, and Fishing 76 is well past what the quest asks for.
+// Why: No practical nearby shop stocks raw shark, and catching one requires Fishing 76.
 
 /** Bank first, then Rufus in Canifis, the only restocking raw shark in the game. */
 export function gatherShark(snap: QuestSnapshot): QuestStep | null {
@@ -108,7 +105,7 @@ export function gatherShark(snap: QuestSnapshot): QuestStep | null {
         ?? { kind: 'buy', item: 'Raw shark', qty: 1, shop: { npc: 'Rufus', anchor: FT_TILE.RUFUS }, estGp: 4000 };
 }
 
-// Why: the bank is a fifty-second walk from Rellekka, and the quest spends coin in five places. A lump costs one trip where exact change costs five.
+// Why: the bank is a 50s walk from Rellekka and the quest spends coin in 5 places, so a lump costs 1 trip where change for each costs 5.
 const COIN_LUMP = 20_000;
 
 export function gatherCoins(snap: QuestSnapshot, need: number): QuestStep | null {
@@ -127,7 +124,7 @@ export function gatherCoins(snap: QuestSnapshot, need: number): QuestStep | null
 
 const TIERS = ['rune', 'adamant', 'mithril', 'black', 'steel', 'iron', 'bronze'] as const;
 
-// Why: the Draugen's melee defences are all 100, so the tier matters and the damage type does not.
+// Why: the Draugen's melee defences are all 100, so only the tier matters.
 // Why: chainbody leads the body slot because rune platebody also wants Dragon Slayer, and `Equipment.equip` refuses it silently.
 const GEAR_SLOTS: readonly (readonly string[])[] = [
     ['2h sword', 'longsword', 'scimitar', 'battleaxe', 'warhammer', 'mace', 'sword'],
@@ -185,10 +182,7 @@ export function wearAll(names: readonly string[]): QuestStep {
     };
 }
 
-/**
- * Dress and feed for the Draugen. Returns null once the kit is on.
- * Missing armour is survivable; a missing weapon is not.
- */
+/** Dress and feed for the Draugen. Null once the kit is on. Missing armour is survivable, a missing weapon isn't. */
 export function combatKit(snap: QuestSnapshot): QuestStep | null {
     if (!snap.bankKnown) {
         return scanBank();
@@ -223,7 +217,7 @@ export async function walkTo(tile: Tile, radius: number, log: (m: string) => voi
     return Traversal.walkResilient(tile, { ...WALK, radius, log });
 }
 
-// Why: a conversation opened on the tick the walk lands sometimes drives to nothing, and one re-open costs a second where the engine's own retry costs the step's budget again.
+// Why: a conversation opened on the tick the walk lands sometimes drives to nothing; a re-open costs 1s where the engine's retry costs the step's budget again.
 
 /** Walk to an NPC and keep re-opening the conversation until the goal lands. */
 export async function talkUntil(

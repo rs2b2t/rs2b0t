@@ -9,7 +9,7 @@ import { QUESTS } from '../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { gotoNpc, talkStrict, type NpcStop } from '../exec/primitives.js';
 
-/** Exact server-side rjquest values, recovered from the client-visible quest journal. */
+/** Server-side rjquest values, read back from the journal. */
 export const ROMEO_JULIET_STAGE = {
     NOT_STARTED: 0,
     SPOKEN_TO_ROMEO: 10,
@@ -69,10 +69,7 @@ function journalText(lines: readonly string[] | string): string {
         .toLowerCase();
 }
 
-/**
- * Convert the server-rendered journal into the authoritative rjquest stage.
- * Entries are cumulative, so the newest milestone must always be matched first.
- */
+/** The journal as the rjquest stage. Entries are cumulative, so match the newest milestone first. */
 export function parseRomeoJulietJournal(lines: readonly string[] | string): number | undefined {
     const text = journalText(lines);
 
@@ -80,8 +77,7 @@ export function parseRomeoJulietJournal(lines: readonly string[] | string): numb
     if (text.includes('i have to find romeo') && text.includes("tell him what's happened")) {
         return ROMEO_JULIET_STAGE.JULIET_IN_CRYPT;
     }
-    // Why: content branch 274 corrected the journal's legacy "cadaver" spelling to the item spelling, "cadava".
-    // Why: matching the stable authored clause makes both deployed revisions resolve to the same server stage.
+    // Why: content branch 274 changed the journal's "cadaver" to the item spelling "cadava", so matching the stable clause resolves both revisions to the same stage.
     if (text.includes('i went to the apothecary regarding making this') && text.includes('potion, and he told me to bring him some')) {
         return ROMEO_JULIET_STAGE.SPOKEN_TO_APOTHECARY;
     }
@@ -101,8 +97,7 @@ async function readRomeoJulietStage(): Promise<number | undefined> {
     if (status === 'notStarted') return ROMEO_JULIET_STAGE.NOT_STARTED;
     if (status !== 'inProgress') return undefined;
 
-    // rjquest is server-only and is not transmitted as a client varp. The journal
-    // is rendered by the server from that same value, making it the browser's exact oracle.
+    // rjquest never reaches the client as a varp; the server renders the journal from it, which makes it the oracle.
     const lines = await Quests.journal('Romeo & Juliet');
     const stage = parseRomeoJulietJournal(lines);
     if (reader.modals().main !== -1) {
@@ -215,8 +210,7 @@ function stageTwenty(snap: QuestSnapshot): QuestStep {
     if (snap.freeSlots === 0) {
         return clearFullPack();
     }
-    // Juliet checks both inventory and bank before issuing a replacement, so a
-    // restart must establish whether the exact quest message is already banked.
+    // Juliet checks inventory and bank before issuing a replacement, so a restart has to know if the message is banked.
     if (!snap.bankKnown) {
         return { kind: 'scanBank', bank: VARROCK_WEST_BANK };
     }

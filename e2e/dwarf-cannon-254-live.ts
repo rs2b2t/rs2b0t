@@ -1,5 +1,6 @@
-/** Live Dwarf Cannon harness (#254): --stage N --until N --multi N --at x,z,level --paint --minutes N, base :8890.
- *  Why: `--stage` sets `%mcannon` and relogs since update_questlist only recolours the journal at login; `--multi` sets `%mcannonmulti`, whose bits 5-10 are the six railings and 0-3 the four cannon parts, so a leg can start with earlier work already done. The bank holds coins, food and a melee kit and nothing else, every item this quest needs is given to it, and seeding one would hide a broken dialogue. */
+/** Live Dwarf Cannon harness (#254), using the members world at :8890. */
+// `%mcannonmulti` bits 5-10 track railings and 0-3 track cannon parts.
+// Why: stage jumps relog; only coins, food, and melee gear are seeded.
 
 //   HEADED=1 bun e2e/dwarf-cannon-254-live.ts --stage 0 --minutes 90
 //   HEADED=1 bun e2e/dwarf-cannon-254-live.ts --stage 1 --multi 0 --until 2 --minutes 25

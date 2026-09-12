@@ -1,8 +1,6 @@
-/** Modal-stall probe (#265): does an open quest journal suspend the Underground Pass timer traps?
- *  Why: `Player.busy()` is `delayed || containsModalInterface()` and a NORMAL `[timer,…]` only runs under
- *  `canAccess()`, so the spiked grid should be crossable with the journal held open. Everything else in the
- *  quest is built on that, so it is proved on its own before any leg is written.
- *  A control pass walks the same tiles with no modal and is expected to fall. */
+/** Check whether an open quest journal suspends Underground Pass timer traps. */
+// Why: normal timers require `canAccess()`, while an open modal makes `Player.busy()` true.
+// The control walks the same tiles without a modal and should fall.
 
 //   HEADED=1 bun e2e/upass-stall-probe.ts
 //   HEADED=1 bun e2e/upass-stall-probe.ts --no-control --tick 200

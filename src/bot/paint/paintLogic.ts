@@ -37,10 +37,7 @@ export function toCanvasPoint(clientX: number, clientY: number, rect: { left: nu
 
 const inRect = (r: Rect, x: number, y: number): boolean => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
 
-/**
- * Wrap-around option cycle for paint steppers / selects.
- * `delta` of −1 is previous, +1 is next. Unknown `current` starts at index 0.
- */
+/** Wrap an option index; -1 moves back, +1 moves forward, and unknown values start at 0. */
 export function cycleOption(options: readonly string[], current: string, delta: number): string {
     if (options.length === 0) {
         return current;
@@ -102,10 +99,7 @@ export class PaintState {
         return this.clicks.delete(id);
     }
 
-    /**
-     * Route a wheel notch to whatever scrollable region is under the cursor.
-     * Why: true means it landed on one, so the canvas can swallow the event instead of letting the game zoom.
-     */
+    /** Queue a wheel notch for the region under the cursor; true means the canvas should consume it. */
     wheel(x: number, y: number, delta: number): boolean {
         const hit = hitRegion(this.regions, x, y);
         if (!hit || hit.kind !== 'scroll') {
@@ -152,10 +146,7 @@ export function paintCols(w: number, pad: number, charW: number): number {
     return Math.max(0, Math.floor((w - pad * 2) / charW));
 }
 
-/**
- * Word-wrap `text` to `cols` characters, indenting continuation lines by
- * `indent` spaces so a wrapped entry still reads as one entry.
- */
+/** Wrap text to `cols`, indenting continuation lines by `indent` spaces. */
 export function wrapText(text: string, cols: number, indent = 0): string[] {
     if (cols <= 0) {
         return [];

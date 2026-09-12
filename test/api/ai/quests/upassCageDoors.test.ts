@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { MUD_CAGE, MUD_CELL, doorAcross, doorStands, mudCellDoor } from '#/bot/api/ai/quests/defs/upass/doors.js';
 import Tile from '#/bot/geometry/Tile.js';
 
-// Why: the slave cages are ten identical locked railings on one corridor. `~open_and_close_door2` moves the player across the door's own edge and picks the direction on one test, `~check_axis_locactive` is true when the player shares the door's coordinate on the wall's axis, so the door's own tile is the tile to stand on, and a perpendicular neighbour opens nothing and teleports the player back onto that tile. Live: a leg picked the same two cages back and forth along the corridor for a minute, then let itself into a north cell and sat there while every other cage answered "I can't reach that!".
+// Why: `~open_and_close_door2` chooses direction from the player's position on the door's axis, so stand on the door tile.
 
 describe('a railing door', () => {
     test('names the tile its edge runs against, south for the z 9655 row', () => {

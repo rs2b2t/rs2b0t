@@ -1,19 +1,12 @@
-/**
- * Pack budgeting for a clue trail. Kept pure so the slot arithmetic is testable
- * without a bank.
- */
+/** Pack budgeting for a clue trail. Pure, so the slot arithmetic is testable without a bank. */
 
-/**
- * A trail is not a grind. Hosts size foodWithdraw() for sustained combat (20+),
- * which alone fills the pack and starves the trail kit, the runes especially.
- */
+/** Hosts size foodWithdraw() for sustained combat (20+), which fills the pack and starves the trail kit, the runes especially. */
 export const TRAIL_FOOD_CAP = 10;
 
 /** Sextant + watch + chart, fetched after banking when the bank had none. */
 export const COORD_TOOL_SLOTS = 3;
 
-// Why: runes stack, so a bigger cast budget costs the pack no extra slot, and a trail that runs dry
-// Why: mid-route walks the rest of the map on foot, which is what four casts kept doing.
+// Why: runes stack, so a bigger cast budget costs no extra slot, and a trail that runs dry mid-route walks the rest of the map (4 casts kept doing that).
 
 /** Casts of each catalogued teleport a trail carries runes for. */
 export const TELEPORT_CASTS = 12;
@@ -42,15 +35,12 @@ export function trailFoodTarget(b: TrailFoodBudget): number {
     return Math.max(0, Math.min(capped, room));
 }
 
-/**
- * A weapon already worn is a weapon we have. Checking the backpack alone
- * withdraws a duplicate every prep, which on a full pack drops to the floor.
- */
+/** Counts a worn weapon as held. Checking the backpack alone withdraws a duplicate every prep, which drops to the floor on a full pack. */
 export function weaponNeeded(weaponName: string, inBackpack: boolean, equipped: boolean): boolean {
     return weaponName !== '' && !inBackpack && !equipped;
 }
 
-// Why: the reward is rolled into a side inv and moved one slot at a time, so anything that does not fit hits the floor.
+// Why: the reward is rolled into a side inv and moved one slot at a time, so anything that doesn't fit hits the floor.
 // Why: roll counts from the engine's reward scripts are easy 2+random(3), medium 3+random(3), hard 4+random(3).
 
 /** Worst-case slots a casket needs on opening. */

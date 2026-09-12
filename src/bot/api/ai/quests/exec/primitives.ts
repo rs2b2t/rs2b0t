@@ -38,7 +38,7 @@ export function pickByLine(lines: string[], options: string[], rules: readonly L
     if (said.length === 0) {
         return null;
     }
-    // Why: longest-first matching, so an overlapping shorter phrase such as "ar cur" cannot win on a line that also contains "cur tanath".
+    // Why: longest-first matching, so an overlapping shorter phrase such as "ar cur" can't win on a line that also contains "cur tanath".
     const hit = [...rules]
         .sort((a, b) => b.whenLine.length - a.whenLine.length)
         .find(rule => said.includes(rule.whenLine.toLowerCase()));
@@ -62,7 +62,7 @@ export interface LadderHop {
     op: string;
     arrive: Tile;
     open?: string;
-    /** Long-walk dest when `stand` is behind a door the baked graph cannot pin. */
+    /** Long-walk dest when `stand` is behind a door the baked graph can't pin. */
     walk?: Tile;
 }
 
@@ -231,7 +231,7 @@ export async function openDialogue(npcName: string, log: (m: string) => void): P
         log(`no '${npcName}' nearby to talk to`);
         return false;
     }
-    // Why: an NPC who wandered behind a shut door is in the scene and inside the leash yet unreachable, so Reach opens the door rather than waiting out the talk.
+    // Why: an NPC who wandered behind a shut door is in the scene and inside the leash yet unreachable, so Reach opens the door.
     const status = await Reach.entityOp({
         find,
         op: talkOp(npc.actions())!,
@@ -255,7 +255,7 @@ export async function talkThrough(npcName: string, prefer: string[], log: (m: st
     return driveDialog(prefer, log, gapMs);
 }
 
-// Why: guessing is harmful wherever the unmatched option bites, several ogres offer "I have come to kill you" as the alternative.
+// Why: guessing bites: several ogres offer "I have come to kill you" as the alternative.
 
 /**
  * Like `talkThrough`, but abandons the dialogue instead of guessing when no preferred option matches.

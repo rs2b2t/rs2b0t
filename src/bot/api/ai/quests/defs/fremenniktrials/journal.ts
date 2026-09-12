@@ -11,7 +11,7 @@ export const TRIALS = ['navigator', 'merchant', 'hunter', 'seer', 'warrior', 're
 
 export type Trial = (typeof TRIALS)[number];
 
-/** The journal names each councillor by role, so these are the words to match, not the NPC names. */
+/** The journal names each councillor by role, so these are the words to match. */
 const ROLE: Record<Trial, string> = {
     navigator: 'navigator',
     merchant: 'merchant',
@@ -22,7 +22,7 @@ const ROLE: Record<Trial, string> = {
     bard: 'bard'
 };
 
-/** Where the flower trade has got to, newest step first, only one of these renders at a time. */
+/** Where the flower trade has got to, newest step first; only one of these renders at a time. */
 const MERCHANT_STEPS: readonly [string, string][] = [
     ['all askeladden wants is some money', 'thora'],
     ['the reveller is looking for a legendary cocktail', 'manni'],
@@ -84,7 +84,7 @@ export function parseFremennikJournal(lines: readonly string[] | string): QuestP
     return { stage: votes ? votes[1] : 0, flags };
 }
 
-/** A failed read is not evidence the quest went backwards. */
+/** Last good read, so a failed read can't look like the quest went backwards. */
 let lastGood: QuestProgress | undefined;
 
 export function resetFremennikJournalCache(): void {

@@ -34,8 +34,8 @@ export function selectClickTarget(tiles: PathTileLike[], pathIdx: number, steps:
     return -1;
 }
 
-// Why: the scan runs far→near so a failed `tryMove` falls back to a closer path tile instead of waiting for stall ticks.
-// Why: `tryWalk(i)` issues the client walk for tiles[i] and returns whether the client accepted a route (`tryMove` / `driver.walk`); its side effects are intended, since the caller uses the returned index as clickIdx.
+// Why: the scan runs far to near so a failed `tryMove` falls back to a closer path tile without waiting for stall ticks.
+// Why: `tryWalk(i)` issues the client walk for tiles[i] and reports whether the client accepted a route; the side effect is the point, the caller uses the returned index as clickIdx.
 
 /** Pick the furthest click the client walk/pathfind accepts. */
 export function selectClientWalkTarget(
@@ -74,7 +74,7 @@ export function starvedTerminalIndex(tiles: PathTileLike[], me: PathTileLike, is
     return isClickable(end) ? last : -1;
 }
 
-// Why: only the approach tile counts, proximity to the far landing, or to a nearby unrelated transport of the same type, must not snap the walker off the route.
+// Why: only the approach tile counts; proximity to the far landing or to an unrelated transport of the same type must not snap the walker off the route.
 
 /** Whether to execute a planned hop on the published path. */
 export function crossingEligible(

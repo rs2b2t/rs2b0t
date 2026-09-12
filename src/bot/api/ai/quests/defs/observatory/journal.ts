@@ -12,7 +12,7 @@ function normalize(lines: readonly string[] | string): string {
 }
 
 // Why: `itgronigen_journal.rs2` appends, so every earlier stage's text is still on the page and only the newest paragraph separates one stage from the next.
-// Why: the tests run highest-first for that reason, the completion page still lists "1 lens mould", and the lens page still says "molten glass".
+// Why: the tests run highest-first; the completion page still lists "1 lens mould" and the lens page still says "molten glass".
 const MARKERS: readonly { stage: number; text: string }[] = [
     { stage: OBS_STAGE.COMPLETE, text: 'quest complete!' },
     { stage: OBS_STAGE.SENT_TELESCOPE, text: 'gone ahead to the observatory' },

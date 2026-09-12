@@ -12,7 +12,7 @@ export type Log = (msg: string) => void;
 
 /** Long enough to sit out `if_close; p_delay(10)` in Tiadeche's catch. */
 export const LONG_GAP = 16;
-/** The Shaikahan hunt runs six camera moves with nothing on the chat interface. */
+/** The Shaikahan hunt runs 6 camera moves with nothing on the chat interface. */
 export const CUTSCENE_GAP = 34;
 
 export function walkTo(dest: Tile, radius: number, log: Log): Promise<boolean> {
@@ -21,10 +21,7 @@ export function walkTo(dest: Tile, radius: number, log: Log): Promise<boolean> {
 
 // Why: these conversations close the chat interface mid-chain (`if_close; p_delay(N)`) and re-open it several ticks later, and `driveDialog` treats the first of those gaps as the end.
 
-/**
- * Drive a conversation past the scripted gaps to where it stops re-opening.
- * Abandons rather than guessing when no preferred option matches.
- */
+/** Drive a conversation past the scripted gaps to where it stops re-opening; abandons when no preferred option matches. */
 export async function driveFully(prefer: readonly string[], log: Log, quietTicks = 6): Promise<boolean> {
     let quiet = 0;
     for (let i = 0; i < 300 && quiet < quietTicks; i++) {
@@ -53,8 +50,7 @@ export async function driveFully(prefer: readonly string[], log: Log, quietTicks
     return !ChatDialog.isOpen();
 }
 
-// Why: every one of these NPCs wanders five tiles, and the first Talk-to after an eleven-click walk
-// lands on a tile they have already left, a settle and a second try cost less than another step.
+// Why: these NPCs wander 5 tiles and the first Talk-to after a long walk lands on a tile they've left, so a settle and a second try is cheaper than another step.
 
 /** Walk to the NPC, open the dialogue, and drive it to the end. */
 export async function talkFully(

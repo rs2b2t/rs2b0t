@@ -30,7 +30,7 @@ export const SPELL_DB: Record<string, SpellRow> = {
     "Fire Wave": {"ssb":15,"level":75,"runes":[{"rune":"Blood rune","count":1},{"rune":"Fire rune","count":7},{"rune":"Air rune","count":5}]}
 };
 
-/** Staff display name → the rune(s) it provides for free while wielded. */
+/** Staff display name to the rune(s) it provides for free while wielded. */
 export const STAFF_RUNES: Record<string, string[]> = {
     "Air battlestaff": ["Air rune"],
     "Earth battlestaff": ["Earth rune"],

@@ -5,8 +5,7 @@ import type { QuestProgress } from '../../engine/types.js';
 
 export const SHILO_QUEST = 'Shilo Village';
 
-// Why: several of the engine's stage numbers render identically in the journal and are never distinguished, 1-2 (found the mound), 7-9 before the Bervirius dolmen is searched, 10-11, and 12-14.
-// Why: `decide()` separates those by area and by what is carried, which is what drives the next step.
+// Why: stages 1-2, 7-9 (before the Bervirius dolmen), 10-11 and 12-14 render identically, so `decide()` separates them by area and what is carried.
 export const SV_STAGE = {
     NOT_STARTED: 0,
     STARTED: 1,
@@ -28,8 +27,7 @@ function normalize(lines: readonly string[] | string): string {
         .toLowerCase();
 }
 
-// Needles avoid anything a colour tag sits next to: stripping "@dre@" leaves a
-// space, so "'@dre@Ah Za Rhoon@dbl@'" normalises to "' ah za rhoon '".
+// Needles avoid anything a colour tag sits next to: stripping "@dre@" leaves a space, so "'@dre@Ah Za Rhoon@dbl@'" normalises to "' ah za rhoon '".
 const STAGE_LINES: readonly [string, number][] = [
     ['quest complete!', SV_STAGE.COMPLETE],
     ["i've placed three bones", SV_STAGE.UNLOCKED_TOMBDOOR],
@@ -66,7 +64,7 @@ function readFlags(text: string): Set<string> {
     } else {
         flags.add('bones-placed:0');
     }
-    // The three kill paragraphs are cumulative rewrites, not additions.
+    // The 3 kill paragraphs are cumulative rewrites.
     if (text.includes('third and final guardian')) {
         flags.add('naza:3');
     } else if (text.includes('a skeletal nazastarool appeared')) {
