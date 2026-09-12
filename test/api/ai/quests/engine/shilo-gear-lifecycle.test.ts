@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test';
 import { QuestEngine, type QuestHost } from '#/bot/api/ai/quests/engine/QuestEngine.js';
 import { shilo } from '#/bot/api/ai/quests/defs/shilo/index.js';
+import { resetCombatGear } from '#/bot/api/ai/quests/defs/shilo/gear.js';
+import { QuestLoadout } from '#/bot/api/ai/quests/gear.js';
 import { SV_STAGE } from '#/bot/api/ai/quests/defs/shilo/journal.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
@@ -28,6 +30,7 @@ test('a new quest run retries gear rejected in the previous run', async () => {
         bankKnown: true, bankCoins: 0, bank: new Map(), tile: { x: 2809, z: 3086, level: 0 }
     };
     const restores = [
+        stubProps(QuestLoadout, { current: null }),
         stubProps(Equipment, { equip: async () => false, contains: () => false }),
         stubProps(Game, { tile: () => new Tile(2809, 3086) }),
         stubProps(Bank, { isOpen: () => false }),
@@ -57,5 +60,6 @@ test('a new quest run retries gear rejected in the previous run', async () => {
         expect(retried.kind === 'custom' && retried.name).toBe('wear Steel scimitar');
     } finally {
         for (const restore of restores.reverse()) restore();
+        resetCombatGear();
     }
 });

@@ -1,14 +1,25 @@
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
 import { combatGear, resetCombatGear } from '#/bot/api/ai/quests/defs/shilo/gear.js';
 import { stubProps } from '../../../../lib/stubSingletons.js';
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { SV_ITEM, inDolmenRoom, shiloArea } from '#/bot/api/ai/quests/defs/shilo/areas.js';
 import { SV_STAGE, parseShiloJournal } from '#/bot/api/ai/quests/defs/shilo/journal.js';
 import { decide, shilo } from '#/bot/api/ai/quests/defs/shilo/index.js';
 import { evaluate } from '#/bot/api/ai/quests/EligibilityEvaluator.js';
 import { flagValue, hasFlag } from '#/bot/api/ai/quests/engine/types.js';
 import { QuestFood } from '#/bot/api/ai/quests/food.js';
+import { QuestLoadout } from '#/bot/api/ai/quests/gear.js';
 import type { QuestProgress, QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+
+let restoreLoadout: () => void;
+beforeEach(() => {
+    restoreLoadout = stubProps(QuestLoadout, { current: null });
+    resetCombatGear();
+});
+afterEach(() => {
+    restoreLoadout();
+    resetCombatGear();
+});
 
 const at = (x: number, z: number, level = 0) => ({ x, z, level });
 
