@@ -330,7 +330,9 @@ export class MazeRun {
         }
         // Why: a coloured key exists only between its kill and its door, so it re-syncs the route; the maze key is kept for the quest and isn't a marker.
         const keyLeg = MAZE_LEGS.findIndex(l => l.kind === 'door' && l.keyId !== DS_ID.MAZE_KEY && heldById(l.keyId));
-        if (keyLeg >= 0) {
+        if (!inMaze(here)) {
+            this.index = 0;
+        } else if (keyLeg >= 0) {
             this.index = keyLeg;
         } else if (this.index < 0) {
             this.index = legFromPosition(here);
