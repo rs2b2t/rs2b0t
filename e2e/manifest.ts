@@ -6,7 +6,8 @@ export const CASES: readonly Case[] = [
         id: 'donovan-door-771-live',
         harness: 'donovan-door-771-live.ts',
         covers: { scripts: ['ClueSolver'], subsystems: ['nav', 'clues'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: '2707b229c279f1b99018ce520f6428e9c184090e',
         manual: true,
         budgetMin: 10,
         note: 'Exclusive local door run. Waits for Donovan to enter his natural pocket, opens the real bedroom door, proves collision blocks him, then Reach closes the leaf and reaches real dialogue; screenshots docs/e2e/issue-771*.png.'
