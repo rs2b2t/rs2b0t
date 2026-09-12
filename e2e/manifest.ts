@@ -3,6 +3,14 @@ import type { Case } from './manifestTypes.js';
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
     {
+        id: 'deathplateau-scout-470-live',
+        harness: 'deathplateau-scout-470-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'unvetted',
+        budgetMin: 8,
+        note: 'starts behind Tenzing with the secret map and proves AIOQuester enters the scout zone and advances death_map from 7 to 8'
+    },
+    {
         id: 'fisher-shilo-shopping-live',
         harness: 'fisher-shilo-shopping-live.ts',
         covers: { scripts: ['GatheringBot'] },
