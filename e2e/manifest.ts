@@ -3,6 +3,14 @@ import type { Case } from './manifestTypes.js';
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
     {
+        id: 'nature-runner-coins-739-live',
+        harness: 'nature-runner-coins-739-live.ts',
+        covers: { scripts: ['NatureCrafter'] },
+        status: 'unvetted',
+        budgetMin: 3,
+        note: 'drops 450 Coins outside the altar and proves the runner takes that ground stack into inventory'
+    },
+    {
         id: 'fisher-shilo-shopping-live',
         harness: 'fisher-shilo-shopping-live.ts',
         covers: { scripts: ['GatheringBot'] },
