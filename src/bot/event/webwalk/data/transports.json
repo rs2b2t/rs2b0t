@@ -863,14 +863,14 @@
       "level": 0
     },
     "locName": "A wooden log",
-    "action": "Balance",
+    "action": "Cross",
     "kind": "dungeon",
     "locId": 2332,
     "locX": 2907,
     "locZ": 3049,
     "debugName": "zq_logbalance",
     "options": [
-      "Balance"
+      "Cross"
     ]
   },
   {
@@ -885,14 +885,14 @@
       "level": 0
     },
     "locName": "A wooden log",
-    "action": "Balance",
+    "action": "Cross",
     "kind": "dungeon",
     "locId": 2332,
     "locX": 2909,
     "locZ": 3049,
     "debugName": "zq_logbalance",
     "options": [
-      "Balance"
+      "Cross"
     ]
   },
   {

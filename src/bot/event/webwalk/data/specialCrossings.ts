@@ -463,6 +463,29 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
     { x: 2598, z: 3477, level: 0, locName: 'Log balance', action: 'Walk-across', requiresSkill: { name: 'agility', level: 20 }, label: 'Coal trucks log balance' },
     { x: 2603, z: 3477, level: 0, locName: 'Log balance', action: 'Walk-across', requiresSkill: { name: 'agility', level: 20 }, label: 'Coal trucks log balance' },
 
+    {
+        x: 2906,
+        z: 3049,
+        level: 0,
+        locName: 'A wooden log',
+        action: 'Cross',
+        exactApproach: true,
+        toTile: { x: 2910, z: 3049, level: 0 },
+        arrivalRadius: 0,
+        label: 'Shilo log east'
+    },
+    {
+        x: 2910,
+        z: 3049,
+        level: 0,
+        locName: 'A wooden log',
+        action: 'Cross',
+        exactApproach: true,
+        toTile: { x: 2906, z: 3049, level: 0 },
+        arrivalRadius: 0,
+        label: 'Shilo log west'
+    },
+
     // Why: the Yanille dungeon balancing ledge is agility_dungeon.rs2 balancing_ledge3, Agility 40, and the stand tiles match the content start coords; a fail drops to the pit, recovered via the pit stairs.
     // Why: arrivalRadius is 0 because mid-ledge tiles (9513-9519) aren't walkable, and claiming "crossed" at radius 2 stranded you on the gap with repath returning unreachable.
     {
