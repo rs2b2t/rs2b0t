@@ -1,0 +1,664 @@
+{
+  "issue": 771,
+  "testedCommit": "2707b229c279f1b99018ce520f6428e9c184090e",
+  "command": "ENGINE_DIR=/Users/elliottriplett/code/rs2b2t-engine bun e2e/donovan-door-771-live.ts --base http://localhost:8890 --minutes 5",
+  "result": "PASS",
+  "observations": {
+    "PREPARED": {
+      "tile": {
+        "x": 2722,
+        "z": 3493,
+        "level": 0
+      },
+      "npc": null,
+      "reachable": null,
+      "edgeOpen": false,
+      "doors": [],
+      "texts": [],
+      "inventory": [
+        {
+          "slot": 0,
+          "id": 2855,
+          "name": "Clue scroll",
+          "count": 1,
+          "ops": [
+            "Read",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 1,
+          "id": 952,
+          "name": "Spade",
+          "count": 1,
+          "ops": [
+            "Dig",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 2,
+          "id": 995,
+          "name": "Coins",
+          "count": 1000,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        }
+      ],
+      "chat": [
+        {
+          "type": 0,
+          "username": "",
+          "text": "Inventory wiped."
+        },
+        {
+          "type": 0,
+          "username": "",
+          "text": "Welcome to RuneScape."
+        }
+      ],
+      "state": "paused",
+      "status": "solving clue trail",
+      "logs": [
+        {
+          "time": 1789228561092,
+          "level": "info",
+          "msg": "ClueSolver started"
+        },
+        {
+          "time": 1789228561107,
+          "level": "info",
+          "msg": "ClueSolver \u2014 watching the pack for easy clue scrolls/caskets, foodless"
+        },
+        {
+          "time": 1789228561131,
+          "level": "info",
+          "msg": "[clue] banking loot at the Seers bank ((2725, 3491, 0)) before solving"
+        },
+        {
+          "time": 1789228564284,
+          "level": "info",
+          "msg": "[clue] no 'Sextant' in the bank"
+        },
+        {
+          "time": 1789228566794,
+          "level": "info",
+          "msg": "[clue] no 'Watch' in the bank"
+        },
+        {
+          "time": 1789228569305,
+          "level": "info",
+          "msg": "[clue] no 'Chart' in the bank"
+        },
+        {
+          "time": 1789228569308,
+          "level": "info",
+          "msg": "[clue] no Shantay pass in the bank \u2014 Kharidian desert digs will stay closed (#371)"
+        },
+        {
+          "time": 1789228569309,
+          "level": "info",
+          "msg": "[clue] trail pack: 0 , teleports off, 25 slots free"
+        },
+        {
+          "time": 1789228569309,
+          "level": "info",
+          "msg": "[clue] leg 1 \u2014 solving trail_clue_medium_anagram009 (talk Donovan the Family Handyman) [2855]"
+        },
+        {
+          "time": 1789228569310,
+          "level": "info",
+          "msg": "[clue] nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+        },
+        {
+          "time": 1789228569311,
+          "level": "info",
+          "msg": "paused"
+        }
+      ]
+    },
+    "FIXTURE": {
+      "tile": {
+        "x": 2744,
+        "z": 3576,
+        "level": 1
+      },
+      "npc": {
+        "x": 2743,
+        "z": 3576,
+        "level": 1
+      },
+      "reachable": false,
+      "edgeOpen": false,
+      "doors": [
+        {
+          "id": 1531,
+          "tile": {
+            "x": 2744,
+            "z": 3576,
+            "level": 1
+          },
+          "ops": [
+            "Close",
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      ],
+      "texts": [],
+      "inventory": [
+        {
+          "slot": 0,
+          "id": 2855,
+          "name": "Clue scroll",
+          "count": 1,
+          "ops": [
+            "Read",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 1,
+          "id": 952,
+          "name": "Spade",
+          "count": 1,
+          "ops": [
+            "Dig",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 2,
+          "id": 995,
+          "name": "Coins",
+          "count": 1000,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        }
+      ],
+      "chat": [
+        {
+          "type": 0,
+          "username": "",
+          "text": "Inventory wiped."
+        },
+        {
+          "type": 0,
+          "username": "",
+          "text": "Welcome to RuneScape."
+        }
+      ],
+      "state": "paused",
+      "status": "solving clue trail",
+      "logs": [
+        {
+          "time": 1789228561092,
+          "level": "info",
+          "msg": "ClueSolver started"
+        },
+        {
+          "time": 1789228561107,
+          "level": "info",
+          "msg": "ClueSolver \u2014 watching the pack for easy clue scrolls/caskets, foodless"
+        },
+        {
+          "time": 1789228561131,
+          "level": "info",
+          "msg": "[clue] banking loot at the Seers bank ((2725, 3491, 0)) before solving"
+        },
+        {
+          "time": 1789228564284,
+          "level": "info",
+          "msg": "[clue] no 'Sextant' in the bank"
+        },
+        {
+          "time": 1789228566794,
+          "level": "info",
+          "msg": "[clue] no 'Watch' in the bank"
+        },
+        {
+          "time": 1789228569305,
+          "level": "info",
+          "msg": "[clue] no 'Chart' in the bank"
+        },
+        {
+          "time": 1789228569308,
+          "level": "info",
+          "msg": "[clue] no Shantay pass in the bank \u2014 Kharidian desert digs will stay closed (#371)"
+        },
+        {
+          "time": 1789228569309,
+          "level": "info",
+          "msg": "[clue] trail pack: 0 , teleports off, 25 slots free"
+        },
+        {
+          "time": 1789228569309,
+          "level": "info",
+          "msg": "[clue] leg 1 \u2014 solving trail_clue_medium_anagram009 (talk Donovan the Family Handyman) [2855]"
+        },
+        {
+          "time": 1789228569310,
+          "level": "info",
+          "msg": "[clue] nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+        },
+        {
+          "time": 1789228569311,
+          "level": "info",
+          "msg": "paused"
+        }
+      ]
+    },
+    "DIALOGUE": {
+      "tile": {
+        "x": 2744,
+        "z": 3576,
+        "level": 1
+      },
+      "npc": {
+        "x": 2743,
+        "z": 3576,
+        "level": 1
+      },
+      "reachable": true,
+      "edgeOpen": true,
+      "doors": [
+        {
+          "id": 1530,
+          "tile": {
+            "x": 2744,
+            "z": 3577,
+            "level": 1
+          },
+          "ops": [
+            "Open",
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      ],
+      "texts": [
+        "Donovan the Family Handyman",
+        "Here you go.",
+        "Click here to continue"
+      ],
+      "inventory": [
+        {
+          "slot": 0,
+          "id": 2855,
+          "name": "Clue scroll",
+          "count": 1,
+          "ops": [
+            "Read",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 1,
+          "id": 952,
+          "name": "Spade",
+          "count": 1,
+          "ops": [
+            "Dig",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 2,
+          "id": 995,
+          "name": "Coins",
+          "count": 1000,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        }
+      ],
+      "chat": [
+        {
+          "type": 0,
+          "username": "",
+          "text": "Inventory wiped."
+        },
+        {
+          "type": 0,
+          "username": "",
+          "text": "Welcome to RuneScape."
+        }
+      ],
+      "state": "paused",
+      "status": "solving clue trail",
+      "logs": [
+        {
+          "time": 1789228561092,
+          "level": "info",
+          "msg": "ClueSolver started"
+        },
+        {
+          "time": 1789228561107,
+          "level": "info",
+          "msg": "ClueSolver \u2014 watching the pack for easy clue scrolls/caskets, foodless"
+        },
+        {
+          "time": 1789228561131,
+          "level": "info",
+          "msg": "[clue] banking loot at the Seers bank ((2725, 3491, 0)) before solving"
+        },
+        {
+          "time": 1789228564284,
+          "level": "info",
+          "msg": "[clue] no 'Sextant' in the bank"
+        },
+        {
+          "time": 1789228566794,
+          "level": "info",
+          "msg": "[clue] no 'Watch' in the bank"
+        },
+        {
+          "time": 1789228569305,
+          "level": "info",
+          "msg": "[clue] no 'Chart' in the bank"
+        },
+        {
+          "time": 1789228569308,
+          "level": "info",
+          "msg": "[clue] no Shantay pass in the bank \u2014 Kharidian desert digs will stay closed (#371)"
+        },
+        {
+          "time": 1789228569309,
+          "level": "info",
+          "msg": "[clue] trail pack: 0 , teleports off, 25 slots free"
+        },
+        {
+          "time": 1789228569309,
+          "level": "info",
+          "msg": "[clue] leg 1 \u2014 solving trail_clue_medium_anagram009 (talk Donovan the Family Handyman) [2855]"
+        },
+        {
+          "time": 1789228569310,
+          "level": "info",
+          "msg": "[clue] nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+        },
+        {
+          "time": 1789228569311,
+          "level": "info",
+          "msg": "paused"
+        },
+        {
+          "time": 1789228585500,
+          "level": "info",
+          "msg": "resumed"
+        },
+        {
+          "time": 1789228585522,
+          "level": "info",
+          "msg": "[clue] path: cost 138, 86 waypoints, expanded 23178, worker 16.3ms, hops=4"
+        },
+        {
+          "time": 1789228585522,
+          "level": "info",
+          "msg": "[clue] hops:\n1. [door] Open Gate loc=1557 \u2192 2741,3556,L0 (cost 4)\n2. [door] Open Large door loc=1516 \u2192 2740,3573,L0 (cost 4)\n3. [stair] Climb-up Ladder loc=1747 \u2192 2736,3582,L1 (cost 6)\n4. [door] Open Door loc=1530 \u2192 2744,3576,L1 (cost 4)"
+        },
+        {
+          "time": 1789228585523,
+          "level": "info",
+          "msg": "[clue] arrived (0 clicks)"
+        },
+        {
+          "time": 1789228591531,
+          "level": "info",
+          "msg": "[clue] reach: closing 'Door' at (2744,3576) to reach (2743,3576)"
+        },
+        {
+          "time": 1789228591974,
+          "level": "info",
+          "msg": "paused"
+        }
+      ]
+    },
+    "PROGRESSED": {
+      "tile": {
+        "x": 2744,
+        "z": 3576,
+        "level": 1
+      },
+      "npc": {
+        "x": 2743,
+        "z": 3576,
+        "level": 1
+      },
+      "reachable": true,
+      "edgeOpen": true,
+      "doors": [
+        {
+          "id": 1530,
+          "tile": {
+            "x": 2744,
+            "z": 3577,
+            "level": 1
+          },
+          "ops": [
+            "Open",
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      ],
+      "texts": [],
+      "inventory": [
+        {
+          "slot": 0,
+          "id": 3609,
+          "name": "Clue scroll",
+          "count": 1,
+          "ops": [
+            "Read",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 1,
+          "id": 952,
+          "name": "Spade",
+          "count": 1,
+          "ops": [
+            "Dig",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 2,
+          "id": 995,
+          "name": "Coins",
+          "count": 1000,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        }
+      ],
+      "chat": [
+        {
+          "type": 0,
+          "username": "",
+          "text": "Inventory wiped."
+        },
+        {
+          "type": 0,
+          "username": "",
+          "text": "Welcome to RuneScape."
+        }
+      ],
+      "state": "running",
+      "status": "solving clue trail",
+      "logs": [
+        {
+          "time": 1789228561092,
+          "level": "info",
+          "msg": "ClueSolver started"
+        },
+        {
+          "time": 1789228561107,
+          "level": "info",
+          "msg": "ClueSolver \u2014 watching the pack for easy clue scrolls/caskets, foodless"
+        },
+        {
+          "time": 1789228561131,
+          "level": "info",
+          "msg": "[clue] banking loot at the Seers bank ((2725, 3491, 0)) before solving"
+        },
+        {
+          "time": 1789228564284,
+          "level": "info",
+          "msg": "[clue] no 'Sextant' in the bank"
+        },
+        {
+          "time": 1789228566794,
+          "level": "info",
+          "msg": "[clue] no 'Watch' in the bank"
+        },
+        {
+          "time": 1789228569305,
+          "level": "info",
+          "msg": "[clue] no 'Chart' in the bank"
+        },
+        {
+          "time": 1789228569308,
+          "level": "info",
+          "msg": "[clue] no Shantay pass in the bank \u2014 Kharidian desert digs will stay closed (#371)"
+        },
+        {
+          "time": 1789228569309,
+          "level": "info",
+          "msg": "[clue] trail pack: 0 , teleports off, 25 slots free"
+        },
+        {
+          "time": 1789228569309,
+          "level": "info",
+          "msg": "[clue] leg 1 \u2014 solving trail_clue_medium_anagram009 (talk Donovan the Family Handyman) [2855]"
+        },
+        {
+          "time": 1789228569310,
+          "level": "info",
+          "msg": "[clue] nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+        },
+        {
+          "time": 1789228569311,
+          "level": "info",
+          "msg": "paused"
+        },
+        {
+          "time": 1789228585500,
+          "level": "info",
+          "msg": "resumed"
+        },
+        {
+          "time": 1789228585522,
+          "level": "info",
+          "msg": "[clue] path: cost 138, 86 waypoints, expanded 23178, worker 16.3ms, hops=4"
+        },
+        {
+          "time": 1789228585522,
+          "level": "info",
+          "msg": "[clue] hops:\n1. [door] Open Gate loc=1557 \u2192 2741,3556,L0 (cost 4)\n2. [door] Open Large door loc=1516 \u2192 2740,3573,L0 (cost 4)\n3. [stair] Climb-up Ladder loc=1747 \u2192 2736,3582,L1 (cost 6)\n4. [door] Open Door loc=1530 \u2192 2744,3576,L1 (cost 4)"
+        },
+        {
+          "time": 1789228585523,
+          "level": "info",
+          "msg": "[clue] arrived (0 clicks)"
+        },
+        {
+          "time": 1789228591531,
+          "level": "info",
+          "msg": "[clue] reach: closing 'Door' at (2744,3576) to reach (2743,3576)"
+        },
+        {
+          "time": 1789228591974,
+          "level": "info",
+          "msg": "paused"
+        },
+        {
+          "time": 1789228592241,
+          "level": "info",
+          "msg": "resumed"
+        },
+        {
+          "time": 1789228594281,
+          "level": "info",
+          "msg": "[clue] step done"
+        },
+        {
+          "time": 1789228594281,
+          "level": "info",
+          "msg": "[clue] leg 2 \u2014 solving trail_clue_medium_riddle009 (search) at (3498,3507,0) [3609]"
+        },
+        {
+          "time": 1789228594282,
+          "level": "info",
+          "msg": "[clue] nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+        }
+      ]
+    }
+  },
+  "screenshots": [
+    "issue-771-before.png",
+    "issue-771.png"
+  ]
+}

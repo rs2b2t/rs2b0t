@@ -17,6 +17,7 @@ let walkCalls: { x: number; z: number; level: number }[];
 let walkResult: boolean;
 let _walkLastOutcome: string;
 let canReachResult: boolean;
+let canStepResult: boolean;
 let cantReach: boolean;
 let refuse: string | null;
 let locBlankQueries: number;
@@ -153,7 +154,7 @@ const restoreNpcs = stubProps(Npcs, {
         }) as never
 });
 const restoreChat = stubProps(ChatDialog, { isOpen: () => dialogOpen, canContinue: () => false });
-const restoreReach = stubProps(Reachability, { canReach: () => canReachResult });
+const restoreReach = stubProps(Reachability, { canReach: () => canReachResult, canStep: () => canStepResult });
 const restoreTraversal = stubProps(Traversal, {
     walkResilient: async (dest: { x: number; z: number; level: number }) => {
         walkCalls.push(dest);
@@ -184,6 +185,7 @@ beforeEach(() => {
     _walkLastOutcome = 'failed';
     WalkExecutor.lastOutcome = 'failed';
     canReachResult = true;
+    canStepResult = false;
     cantReach = false;
     refuse = null;
     locBlankQueries = 0;
@@ -482,5 +484,44 @@ describe('Reach.npcDialog', () => {
         dialogOpen = false;
         const r = await Reach.npcDialog({ name: 'Traiborn', near: { x: 5, z: 5, level: 0 } });
         expect(r).toBe('unreachable');
+    });
+});
+
+describe('Reach.npcDialog past a leaf swung into the way', () => {
+    const swungLeaf = { name: 'Door', ops: ['Close'], tile: { x: 0, z: 0, level: 0 }, distance: 0, interactResult: true };
+
+    test('the leaf is closed and the Talk-to then lands → done', async () => {
+        sceneNpc = { name: 'Donovan the Family Handyman', tile: { x: -1, z: 0, level: 0 }, interactResult: true };
+        sceneDoor = { ...swungLeaf };
+        canReachResult = false;
+        dialogOpen = false;
+        onDoorOpen = () => { canReachResult = true; };
+        onNpcInteract = () => { dialogOpen = canReachResult; };
+        const r = await Reach.npcDialog({ name: 'Donovan the Family Handyman', near: { x: -1, z: 0, level: 0 } });
+        expect(r).toBe('done');
+        expect(doorInteractCount).toBe(1);
+    });
+
+    test('a leaf that is not across the edge to the npc is left alone', async () => {
+        sceneNpc = { name: 'Donovan the Family Handyman', tile: { x: -1, z: 0, level: 0 }, interactResult: true };
+        sceneDoor = { ...swungLeaf };
+        canReachResult = false;
+        canStepResult = true;
+        cantReach = true;
+        dialogOpen = false;
+        const r = await Reach.npcDialog({ name: 'Donovan the Family Handyman', near: { x: -1, z: 0, level: 0 } });
+        expect(r).toBe('unreachable');
+        expect(doorInteractCount).toBe(0);
+    });
+
+    test('a reachable npc never has its door touched', async () => {
+        sceneNpc = { name: 'Donovan the Family Handyman', tile: { x: -1, z: 0, level: 0 }, interactResult: true };
+        sceneDoor = { ...swungLeaf };
+        canReachResult = true;
+        dialogOpen = false;
+        onNpcInteract = () => { dialogOpen = true; };
+        const r = await Reach.npcDialog({ name: 'Donovan the Family Handyman', near: { x: -1, z: 0, level: 0 } });
+        expect(r).toBe('done');
+        expect(doorInteractCount).toBe(0);
     });
 });
