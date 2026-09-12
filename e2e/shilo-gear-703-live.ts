@@ -99,13 +99,18 @@ try {
             await startScript(page, 'AIOQuester');
             const deadline = Date.now() + minutes * 60_000;
             let done = false;
+            let bankFoodPeak = before.bankFood;
             let nextLog = 0;
             while (Date.now() < deadline) {
                 const current = await snapshot(page);
+                if (current.bankFood > bankFoodPeak) {
+                    bankFoodPeak = current.bankFood;
+                    await page.screenshot({ path: 'docs/e2e/issue-703-bank-deposit.png' });
+                }
                 assert(protectedItems.every(name => current.inventory.some(item => item.name === name && item.count === 1)), `quest item lost: ${JSON.stringify(current)}`);
                 if (gear.every(([, name]) => current.equipment.some(item => item.name === name))) {
-                    if (scenario === 'bank-full') assert(current.bankFood > before.bankFood, 'full pack never freed room by banking food');
-                    console.log(`PASS ${scenario} ${JSON.stringify(current)}`);
+                    if (scenario === 'bank-full') assert(bankFoodPeak > before.bankFood, 'full pack never freed room by banking food');
+                    console.log(`PASS ${scenario} ${JSON.stringify({ ...current, bankFoodPeak })}`);
                     await page.screenshot({ path: `docs/e2e/issue-703-${scenario}-after.png` });
                     done = true;
                     break;
