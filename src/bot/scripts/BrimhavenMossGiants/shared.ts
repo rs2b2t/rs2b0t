@@ -14,7 +14,7 @@ import Tile from '../../geometry/Tile.js';
 import { cfg, FIELD_RADIUS, HUNT_RADIUS, TARGET } from './config.js';
 import type BrimhavenMossGiants from './BrimhavenMossGiants.js';
 
-// ── Health / food ──────────────────────────────────────────────────────────
+// Health and food.
 
 export function hpFrac(): number {
     return Skills.hpFraction();

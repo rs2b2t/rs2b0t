@@ -1,14 +1,14 @@
 import type { ItemAlias } from '../api/market/aliasTypes.js';
 
-/** Words for objs whose debugname carries nothing a customer would type. @see tools/items/gen-namecollisions.ts */
-// Why: the content gives four hides one name and splits them by id alone, so loop, tooth and green are player vocabulary that exists in no file the bot can read.
+/** User-facing aliases that cannot be derived from object debugnames. @see tools/items/gen-namecollisions.ts */
+// Why: Four hides share one display name and are distinguished only by id.
 export const ITEM_ALIASES: Readonly<Record<number, ItemAlias>> = {
     // Crystal key halves. Both objs carry the same name and the same desc, differing only in model.
-    // Why: the one place either word appears in the content is a comment on the casket drop in memberfish.rs2.
+// The loop/tooth labels appear only in a server-content comment.
     985: { words: ['tooth'], label: 'Tooth half of key' },
     987: { words: ['loop'], label: 'Loop half of key' },
 
-    // Green is the bare member of every dragonhide family, so nothing is left to derive a colour from.
+    // Green dragonhide debugnames omit the color token.
     1745: { words: ['green'], label: 'Green dragon leather' },
     1065: { words: ['green'], label: 'Green dragon vambraces' },
     1099: { words: ['green'], label: 'Green dragonhide chaps' },
@@ -28,7 +28,7 @@ export const ITEM_ALIASES: Readonly<Record<number, ItemAlias>> = {
     70: { words: ['u', 'unstrung'], label: 'Magic longbow (u)' },
     72: { words: ['u', 'unstrung'], label: 'Magic shortbow (u)' },
 
-    // Holy book pages. The debugname splits them on one letter, which nobody types.
+    // Holy book page debugnames differ by an internal single-letter code.
     3827: { words: ['saradomin', 'sara'], label: 'Saradomin torn page 1' },
     3828: { words: ['saradomin', 'sara'], label: 'Saradomin torn page 2' },
     3829: { words: ['saradomin', 'sara'], label: 'Saradomin torn page 3' },
@@ -42,7 +42,7 @@ export const ITEM_ALIASES: Readonly<Record<number, ItemAlias>> = {
     3837: { words: ['guthix'], label: 'Guthix torn page 3' },
     3838: { words: ['guthix'], label: 'Guthix torn page 4' },
 
-    // Strung and unstrung amulets share a name; the derived words are right but read backwards as a label.
+    // Strung and unstrung amulets share a name; use natural label order.
     1673: { words: ['unstrung'], label: 'Gold amulet (u)' },
     1675: { words: ['unstrung'], label: 'Sapphire amulet (u)' },
     1677: { words: ['unstrung'], label: 'Emerald amulet (u)' },
@@ -58,7 +58,7 @@ export const ITEM_ALIASES: Readonly<Record<number, ItemAlias>> = {
 };
 
 /** Shorthand a customer types instead of the display name, keyed by the lowercased name. */
-// Why: nobody types "dragonhide chaps" in a trade shop, they type "d chaps" and wait to be understood.
+// Common trade shorthand for dragonhide armor.
 export const NAME_SYNONYMS: Readonly<Record<string, readonly string[]>> = {
     dragonhide: ['dhide', 'd hide', 'hide'],
     'dragon leather': ['dleather', 'd leather'],

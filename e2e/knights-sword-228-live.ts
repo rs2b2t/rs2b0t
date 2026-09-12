@@ -1,5 +1,5 @@
-/** Live Knight's Sword harness (#228): --stage N --until N --minutes N, base :8890.
- *  Why: `--stage` sets `%squire` and relogs since update_questlist only recolours the journal entry at login; the bank holds coins and food alone, since a stage-6 run handed a pickaxe passes while the quest cannot mine, and `~bankitem` exists only in rs2b2t-content so the :8888 sim seeds nothing. */
+/** Live Knight's Sword harness (#228), using the content world at :8890. */
+// Why: stage jumps relog; only coins and food are banked so mining remains covered.
 
 //   HEADED=1 bun e2e/knights-sword-228-live.ts --stage 0 --until 7 --minutes 120
 //   HEADED=1 bun e2e/knights-sword-228-live.ts --stage 6 --until 7 --minutes 45

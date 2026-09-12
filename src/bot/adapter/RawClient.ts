@@ -62,7 +62,7 @@ export interface RawClient {
 
     doAction(optionId: number): void;
     tryMove(srcX: number, srcZ: number, dx: number, dz: number, tryNearest: boolean, locWidth: number, locLength: number, locAngle: number, locShape: number, forceapproach: number, type: number): boolean;
-    /** Set by Client after a successful tryMove, local scene tiles src→dest. */
+    /** Local scene path from the last successful `tryMove`, source through destination. */
     lastWalkPathLocal?: { x: number; z: number }[];
 
     out: Packet;
@@ -85,7 +85,7 @@ export interface RawClient {
     deltime: number;
 
     overlayPos(sceneX: number, sceneZ: number, height: number): { x: number; y: number } | null;
-    /** Scene → areaGame pixel (no +4 canvas offset). Optional on older builds. */
+    /** Scene to areaGame projection without the 4px canvas offset. Optional on older builds. */
     projectAreaGame?(sceneX: number, sceneZ: number, height: number): { x: number; y: number } | null;
 }
 

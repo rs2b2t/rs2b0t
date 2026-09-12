@@ -64,8 +64,7 @@ function outfit(snap: QuestSnapshot, area: UpassArea): QuestStep | null {
     return area === 'mainland' ? sourceKit(snap) ?? wearGear(snap) : null;
 }
 
-// Why: Koftik and the cave mouth are both inside West Ardougne, which the navigator has no edge into,
-// the wall is only crossed through the Plague City sewer, and only with the kit already in the pack.
+// Why: Koftik and the cave mouth are inside West Ardougne, which the navigator has no edge into; the wall is only crossed through the Plague City sewer with the kit already packed.
 function inWest(snap: QuestSnapshot, area: UpassArea, step: QuestStep): QuestStep {
     if (area === 'westardougne') {
         return step;
@@ -73,11 +72,10 @@ function inWest(snap: QuestSnapshot, area: UpassArea, step: QuestStep): QuestSte
     return readyToDescend(snap) ?? custom('cross the wall into West Ardougne', crossToWest);
 }
 
-// Why: the cave mouth is the last point with a bank behind it, so a pack short of the kit stops here and
-// says what is missing rather than walking a one-way dungeon and parking at an obstacle it cannot pass.
+// Why: the cave mouth is the last point with a bank behind it, so a pack short of the kit stops here and says what's missing.
 function readyToDescend(snap: QuestSnapshot): QuestStep | null {
     const missing = kitShortfall(snap);
-    // Why: three paladins at level 62, three demons and Kalrag stand between the bridge and the end of the quest, and there is no bank past the cave mouth, descending with only the fire arrow's bow is a one-way trip to a fight that cannot be won.
+    // Why: 3 paladins at level 62, 3 demons and Kalrag stand between the bridge and the end, with no bank past the cave mouth, so the fire arrow's bow alone can't win it.
     if (!meleeCarried(snap)) {
         missing.push('a melee weapon (the paladins, the demons and Kalrag), have none');
     }
@@ -86,8 +84,7 @@ function readyToDescend(snap: QuestSnapshot): QuestStep | null {
 
 function bridgeLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
     if (area === 'mainland' || area === 'westardougne') {
-        // Why: the kit is checked here too, not only at the crossing, a pack that lost something inside
-        // West Ardougne would otherwise walk into a one-way dungeon without it.
+        // Why: the kit is checked here too, since a pack that lost something inside West Ardougne would walk into a one-way dungeon without it.
         return readyToDescend(snap) ?? inWest(snap, area, custom('enter the underground pass', enterCave));
     }
     if (area !== 'area1') {
@@ -105,25 +102,23 @@ function bridgeLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
     return custom('fire the lit arrow at the bridge stay rope', shootGuiderope);
 }
 
-// Why: the four orbs are gathered before any of them is burned, because the furnace sits between the grid
-// and the well and a per-orb round trip crosses the spear-trap corridor four times over.
+// Why: all 4 orbs are gathered before any is burned, because the furnace sits between the grid and the well and a per-orb round trip crosses the spear-trap corridor 4 times.
 function orbLeg(snap: QuestSnapshot): QuestStep {
     if (!pastGridTile(snap.tile)) {
-        // Why: the crossing walks itself to the grid lip first, and the rope swing onto that shelf is part of
-        // travelTo's vocabulary, a caller choosing seams here is what drifted the route before.
+        // Why: the crossing walks itself to the grid lip first, and the rope swing onto that shelf is in travelTo's vocabulary, so the caller doesn't pick seams.
         return custom('cross the spiked grid with the journal held open', crossGrid);
     }
-    // Why: one step for the sweep end to end. A burned orb has left the pack and reads as never collected, and neither the trap nor the ground spawns will hand over a second one, so a per-site decide cycle picks the same site forever. The step keeps its own tally and ends on the well.
+    // Why: one step for the sweep. A burned orb has left the pack and reads as never collected, and no site hands over a second, so a per-site decide cycle picks the same site forever. The step keeps its own tally.
     return custom('take and burn the four orbs, then climb the well', sweepOrbs);
 }
 
-// Why: stages three and four are one leg, because the journal cannot tell them apart, both print "I must work my way deeper into these caverns" and differ only in which line is struck through. What the snapshot can see is the horn, so the crushing and the taking are one step and the horn is what ends it.
+// Why: stages 3 and 4 are one leg because the journal can't tell them apart, both print "I must work my way deeper into these caverns" and differ only in which line is struck through. The horn is what the snapshot can see, so it ends the step.
 function unicornLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
     if (held(snap, UP_ITEM.UNICORN_HORN) > 0 || badgesHeld(snap) > 0 || area !== 'area2') {
         return paladinLeg();
     }
     if (held(snap, UP_ITEM.RAILING) === 0) {
-        // Why: six crossings stand between the well's corridor and that cage, and one step covering all of them is one step the engine retries forever, it recognises "the same step" by its description alone, so the attempt counter never resets and the watchdog parks a leg that is advancing. Each crossing is its own step, named after itself.
+        // Why: 6 crossings stand between the well's corridor and that cage, and the engine recognises "the same step" by description alone, so one step for all of them never resets the attempt counter and the watchdog parks it. Each crossing is its own step.
         const next = outstandingCrossing();
         if (next !== null) {
             return custom(`cross ${next.what}`, takeNextCrossing);
@@ -133,8 +128,8 @@ function unicornLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
     return custom('crush the unicorn and take its horn', crushUnicorn);
 }
 
-// Why: the way back up to the paladins' shelf is the unicorn tunnel at the south end of the second cavern, not the mud pile, the pile climbs into the orb corridor, on the far side of the well and behind every trap already crossed. The tunnel is one of travelTo's seams, so walking is enough.
-// Why: and the crests, the well and the doors are one step, because the well eats the crests and the journal never says it did. A snapshot cannot tell "not killed yet" from "already fed", and a run killed three respawned paladins after feeding the first three.
+// Why: the way back up to the paladins' shelf is the unicorn tunnel at the south end of the second cavern; the mud pile climbs into the orb corridor behind every trap already crossed. The tunnel is one of travelTo's seams, so walking is enough.
+// Why: the crests, the well and the doors are one step, because the well eats the crests and the journal never says so, so a snapshot can't tell "not killed yet" from "already fed".
 function paladinLeg(): QuestStep {
     return custom('take the crests, feed the well and pass the temple doors', crossTheTemple);
 }
@@ -152,8 +147,8 @@ function witchLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
             ? custom('take a tinderbox from Klank', askKlank)
             : custom('climb back up out of the dwarves cave', ascendFromDwarves);
     }
-    // Why: the knock takes the cat and the journal never records it, so "no cat, no doll" reads the same before the cat is caught and after it has been left at Kardia's door. One run went back for a cat that was already there. What tells those apart is where the character is standing: the knock leaves them at her door and nothing else does.
-    // Why: three steps rather than one, because the engine recognises "the same step" by its description alone, a name covering the cat platform, the door and the chest is one step retried forever, and the walk to the cat is fifty-six tiles across four bridges. Each part names itself so finishing one resets the count for the next.
+    // Why: the knock takes the cat and the journal never records it, so "no cat, no doll" reads the same before and after the knock. Only the knock leaves you at her door, so the tile tells them apart.
+    // Why: 3 steps because the engine recognises "the same step" by description alone, and the walk to the cat is 56 tiles across 4 bridges. Each part names itself so finishing one resets the count.
     const at = snap.tile;
     const atHerDoor = at !== undefined && at !== null && at.level === UP_TILE.WITCH_DOOR.level
         && Math.max(Math.abs(at.x - UP_TILE.WITCH_DOOR.x), Math.abs(at.z - UP_TILE.WITCH_DOOR.z)) <= 6;
@@ -166,8 +161,7 @@ function witchLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
     return custom("open Kardia's chest and take the doll", lootWitchChest);
 }
 
-// Why: the four elements are ordered by where they are rather than by the doll, ashes and blood hang off
-// the two wall tunnels, shadow and conscience off the level-1 platforms, so each tunnel is used once.
+// Why: the 4 elements are ordered by where they are: ashes and blood hang off the 2 wall tunnels, shadow and conscience off the level-1 platforms, so each tunnel is used once.
 function dollLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
     if (held(snap, UP_ITEM.ASHES) > 0) {
         return custom("rub Iban's ashes into the doll", rubAshes);
@@ -178,11 +172,9 @@ function dollLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
     if (held(snap, UP_ITEM.DOVE) > 0) {
         return custom("crumble Iban's dove into the doll", rubDove);
     }
-    // Why: the four elements sit in four different pockets joined by one-way tunnels, so each one names the
-    // pocket it needs and the step that gets there, asking for the item from the wrong side finds nothing.
+    // Why: the 4 elements sit in 4 pockets joined by one-way tunnels, so each names the pocket it needs and the step that gets there.
     if (!flag(snap, UP_FLAG.ASHES_ON_DOLL)) {
-        // Why: the camp and Kalrag's cave are one pocket, so a resume that lands on her side is already down
-        // here, naming only the camp sends it back down a tunnel it is standing below.
+        // Why: the camp and Kalrag's cave are one pocket, so a resume on her side is already down here; naming only the camp sends it back down a tunnel it's standing below.
         if (area !== 'dwarves' && area !== 'kalrag') {
             return custom('climb down the wall tunnel to the dwarves', descendToDwarves);
         }
@@ -193,12 +185,12 @@ function dollLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
             ? custom('fill the bucket with dwarf brew', fillBrew)
             : custom("soak and burn Iban's tomb", burnTomb);
     }
-    // Why: a flood of the collision pack puts the dwarf camp, Iban's tomb, Kalrag and both wall-tunnel exits in one pocket, so the blood is taken while the character is already down here rather than after two more tunnel trips. Kalrag only gives it while the doll is in the pack and the stage is still `found`.
+    // Why: the collision pack floods the dwarf camp, Iban's tomb, Kalrag and both wall-tunnel exits into one pocket, so take the blood while already down here. Kalrag only gives it with the doll in the pack and the stage still `found`.
     if (!flag(snap, UP_FLAG.BLOOD_ON_DOLL) && (area === 'dwarves' || area === 'kalrag')) {
         return custom('kill Kalrag with the doll in hand', killKalrag);
     }
     if (!flag(snap, UP_FLAG.DOVE_ON_DOLL)) {
-        // Why: taking the blood leaves the character standing on Kalrag's own tile, which classifies as `kalrag` and not `dwarves`, so a guard naming only the camp walked off to a level-1 cage from level 0 and answered "unreachable" seven times. Both names are the same pocket and both climb out.
+        // Why: taking the blood leaves you on Kalrag's tile, which classifies as `kalrag`, and a guard naming only `dwarves` walks off to a level-1 cage from level 0. Both names are one pocket and both climb out.
         if (area === 'dwarves' || area === 'kalrag') {
             return custom('climb back up out of the dwarves cave', ascendFromDwarves);
         }
@@ -214,15 +206,13 @@ function dollLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
     if (!flag(snap, UP_FLAG.BLOOD_ON_DOLL)) {
         return area === 'kalrag' || area === 'dwarves'
             ? custom('kill Kalrag with the doll in hand', killKalrag)
-            // Why: a flood of the pack puts Klank, Nilhoof and Kalrag in one level-0 pocket, and the tunnel
-            // beside Kalrag is on no bridge the platform graph knows, routing at it strands the character.
+            // Why: the pack floods Klank, Nilhoof and Kalrag into one level-0 pocket, and the tunnel beside Kalrag is on no bridge the platform graph knows, so routing at it strands you.
             : custom('climb down the wall tunnel to the dwarves', descendToDwarves);
     }
     return custom("open Iban's temple doors", openIbanDoor);
 }
 
-// Why: the temple throws the player into the second cavern, which has no walkable way back up, Koftik's
-// own dialogue is the transport, so the walk out is four steps keyed on where the last one landed.
+// Why: the temple throws you into the second cavern, which has no walkable way up; Koftik's dialogue is the transport, so the walk out is 4 steps keyed on where the last one landed.
 function finishLeg(area: UpassArea): QuestStep {
     switch (area) {
         case 'area2':
@@ -239,13 +229,11 @@ function finishLeg(area: UpassArea): QuestStep {
 }
 
 function stageStep(snap: QuestSnapshot, area: UpassArea, stage: number): QuestStep {
-    // Why: the doll is lifted from a chest inside a pocket whose only exit is a door the nav pack calls
-    // blocked, so a leg that ends there has every later step answer "unreachable" until it lets itself out.
+// Why: The doll chest pocket's only exit is absent from the nav pack, so leave it explicitly.
     if (insideWitchHouse(snap.tile)) {
         return custom("let yourself out of Kardia's house", leaveWitchHouse);
     }
-    // Why: the bow owns the right hand until the stay rope is shot, so the melee kit only goes on past the bridge, and it goes on before the orb sweep, which needs the five slots the armour would otherwise sit in.
-    // Why: a complete doll means the next door wants the robes of Zamorak and nothing else at all on, so the armour has to stay off until Iban is in the pit, after which it goes back on for the walk out.
+    // Why: Keep the bow equipped through the rope shot and reserve inventory space for the orb sweep; equip melee gear only after the robe-only door.
     const bare = flag(snap, UP_FLAG.DOLL_COMPLETE) && stage < UP_STAGE.DEFEATED_IBAN;
     const gear = stage >= UP_STAGE.PASSED_BRIDGE && !bare ? drawGear(snap) : null;
     if (gear) {
@@ -306,7 +294,7 @@ export const upass: QuestModule = {
     bank: UP_TILE.ARDOUGNE_BANK,
     ownsInventory: true,
     readProgress: readUpassProgress,
-    // Why: the corridor traps are timer damage taken while standing on a chokepoint tile, not a fight, a component probe shows avoiding those tiles deletes four of the six routes through the orb corridor, because the traps sit in the only walkable squares. Surviving them is the only option, so the eat threshold is high rather than the usual half.
+    // Why: the corridor traps are timer damage on chokepoint tiles, and avoiding those tiles deletes 4 of the 6 routes through the orb corridor because the traps sit in the only walkable squares, so the eat threshold is high.
     sustain: { foods: [UP_ITEM.LOBSTER.name], eatBelowHp: 0.8 },
     decide
 };

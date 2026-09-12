@@ -5,7 +5,7 @@
 const SLASH_NAME_RE =
     /\b(scimitar|longsword|sword|dagger|battleaxe|2h\b|two.handed|claws|whip|scythe|halberd|machete|abyssal|silverlight|excalibur|darklight)\b/i;
 
-/** Exact display name of content obj `knife` (not bronze_knife etc.). */
+/** Exact display name of content obj `knife`; bronze_knife etc. don't count. */
 export const WEB_SLASH_KNIFE_NAME = 'Knife';
 
 /** Content `bigweb_slashed` display name after a successful cut. */
@@ -53,10 +53,7 @@ export function isSlashWebTransport(locName: string | undefined, action: string 
     return /^slash$/i.test(action ?? '') && /web/i.test(locName ?? '');
 }
 
-/**
- * Server chat from general_use/scripts/web.rs2 `cut_web` / slash guards.
- * Live execute must key off these, random(2) fails need immediate retry.
- */
+/** Server chat from general_use/scripts/web.rs2 `cut_web` and the slash guards; a random(2) fail wants an immediate retry. */
 export const WEB_SLASH_SUCCESS = /you slash the web apart/i;
 export const WEB_SLASH_FAIL = /you fail to cut through it/i;
 export const WEB_SLASH_NO_BLADE = /only a sharp blade can cut through this sticky web/i;

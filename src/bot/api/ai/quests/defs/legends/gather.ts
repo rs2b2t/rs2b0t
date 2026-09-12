@@ -15,8 +15,8 @@ function uncutHeld(): number {
     return GEM_CUTS.reduce((sum, gem) => sum + heldId(gem.uncut), 0);
 }
 
-// Why: the rock rolls one of seven gems, opal 60/128 down to diamond 4/128, so waiting for a named uncut gem times out on nearly every swing.
-// Why: the honest oracle is "any uncut gem landed", and `decide()` asks again for whichever is still missing.
+// Why: the rock rolls one of 7 gems, opal 60/128 down to diamond 4/128, so waiting for a named uncut gem times out on nearly every swing.
+// Why: Any uncut gem confirms one mining attempt; `decide()` handles the remaining types.
 
 /** Mine the Shilo gem rocks until one more uncut gem is in the pack. */
 export async function mineGem(log: (m: string) => void): Promise<boolean> {
@@ -56,7 +56,7 @@ export async function smeltGoldBar(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     await settleScene();
-    // Why: the furnace's own Smelt op opens the bar-picker interface and waits, so the ore goes on the furnace instead and smelts where it lands.
+    // Why: the furnace's own Smelt op opens the bar-picker interface and waits, so the ore goes on the furnace and smelts where it lands.
     return useOnLoc(
         LQ_ID.GOLD_ORE,
         { name: 'Furnace', near: LQ_TILE.FURNACE, within: 10 },

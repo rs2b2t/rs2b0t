@@ -17,8 +17,7 @@ import { travelTo } from './pass.js';
 
 const KOFTIK = 'Koftik';
 
-// Why: inside the pass every destination past an obstacle is "unreachable" to the navigator, so the shared
-// mover is the pocket-crossing one. Above ground it degrades to a plain resilient walk on its first round.
+// Why: inside the pass every destination past an obstacle is "unreachable" to the navigator, so the shared mover is the pocket-crossing one; above ground it degrades to a plain resilient walk on its first round.
 export async function walkTo(to: Tile, radius: number, log: (m: string) => void): Promise<boolean> {
     const here = Game.tile();
     if (here && here.level === to.level && to.distanceTo(here) <= radius) {
@@ -27,7 +26,7 @@ export async function walkTo(to: Tile, radius: number, log: (m: string) => void)
     return travelTo(to, radius, log);
 }
 
-// Why: `~mesbox` and `~objbox` build a MAIN modal, and `driveUntil` only answers chat, a script that opens one waits there forever, and whatever it hands over lands only once it is dismissed. Kardia's chest opens two before the doll appears, and Koftik's insane greeting one.
+// Why: `driveUntil` handles chat only; Kardia's chest and Koftik's greeting use main-modal boxes.
 
 /** `driveUntil` that also clicks through the main-modal boxes a script puts in the way. */
 export async function driveThroughBoxes(
@@ -57,7 +56,7 @@ async function talkAt(npcId: number, near: Tile, prefer: string[], log: (m: stri
         return false;
     }
     await settleScene();
-    // Why: five separate NPCs all render as "Koftik", so the guide is found by id and only then talked to by name.
+    // Why: 5 NPCs all render as "Koftik", so find the guide by id, then talk by name.
     const guide = Npcs.query().where(npc => npc.id === npcId).within(12).nearest();
     if (!guide) {
         log(`no npc ${npcId} near (${near.x},${near.z})`);
@@ -70,7 +69,7 @@ async function talkAt(npcId: number, near: Tile, prefer: string[], log: (m: stri
     return talkStrict(guide.name ?? KOFTIK, prefer, log);
 }
 
-// Why: neither of Plague City's or Biohazard's crossings survives into this quest. The garden dig is refused the moment Biohazard starts ("the ground's been filled in and packed hard"), and Omart will not re-hang the rope ladder once Biohazard is finished. What a completed Biohazard leaves behind is the city gates themselves: `west_ardougne_open_city_doors` opens them outright at `%biohazard = complete`.
+// Why: neither Plague City's nor Biohazard's crossing survives here: the garden dig is refused once Biohazard starts ("the ground's been filled in and packed hard") and Omart won't re-hang the rope ladder after it. `west_ardougne_open_city_doors` opens the city gates outright at `%biohazard = complete`.
 // Why: the navigator has no edge through them, so the crossing is walked and opened by hand.
 
 async function openWallGate(from: Tile, to: Tile, log: (m: string) => void): Promise<boolean> {
@@ -92,13 +91,12 @@ async function openWallGate(from: Tile, to: Tile, log: (m: string) => void): Pro
     }, [], log, 12_000))) {
         return false;
     }
-    // Why: the gate leaves the character in the gateway itself, which the region test counts as neither side, so the step is asked to cross again, and its second attempt walks back east at a gate that has shut. The last three tiles onto the far stand are what makes the crossing readable, and they are a plain walk with nothing in the way.
+    // Why: the gate leaves you in the gateway, which the region test counts as neither side, so a step that stopped here would be asked to cross again through a shut gate. The last 3 tiles onto the far stand are a plain walk.
     await Traversal.walkResilient(to, { radius: 1, attempts: 2, timeoutMs: 20_000, log });
     return upassArea(Game.tile()) === upassArea(to);
 }
 
-// Why: the gate teleport lands one tile short of the stand on either side, so "am I across yet" cannot be
-// a comparison against the stand's own x. It is the region test, which is what the rest of the module uses.
+// Why: the gate teleport lands 1 tile short of the stand on either side, so "am I across yet" is the region test the rest of the module uses.
 
 /** Through the Ardougne wall gates into West Ardougne. */
 export async function crossToWest(log: (m: string) => void): Promise<boolean> {
@@ -134,8 +132,7 @@ export async function enterCave(log: (m: string) => void): Promise<boolean> {
     if ((Game.tile()?.z ?? 0) > 9000) {
         return true;
     }
-    // Why: the cave mouth is a 4x2 loc, so its own origin tile sits inside the footprint and cannot be
-    // walked to. The walk fails outright. Koftik's tile is the stand, and the op-click closes the gap.
+    // Why: the cave mouth is a 4x2 loc whose origin tile sits inside the footprint and can't be walked to, so Koftik's tile is the stand and the op-click closes the gap.
     if (!(await walkTo(UP_TILE.CAVE_MOUTH, 3, log))) {
         return false;
     }
@@ -151,8 +148,7 @@ export async function enterCave(log: (m: string) => void): Promise<boolean> {
     return driveUntil(() => (Game.tile()?.z ?? 0) > 9000, [], log, 20_000);
 }
 
-// Why: the way out is not walked. Koftik leads it, `koftik_whereami` teleports the player from the second
-// cavern up to the landing chamber, and the cave exit there is the only loc that leaves the pass.
+// Why: Koftik leads the way out: `koftik_whereami` teleports you from the second cavern up to the landing chamber, and the cave exit there is the only loc that leaves the pass.
 
 /** Koftik, sane again once Iban is dead, leads the way up to the landing chamber. */
 export function leaveWithKoftik(log: (m: string) => void): Promise<boolean> {
@@ -217,7 +213,7 @@ export async function makeFireArrow(log: (m: string) => void): Promise<boolean> 
         log(`missing ${unlit ? 'the tinderbox' : 'the unlit arrow'} to light the fire arrow`);
         return false;
     }
-    // Why: `[opheldu,tinderbox]` fires off the TARGET, so the arrow is the item used and the tinderbox is the target.
+    // Why: `[opheldu,tinderbox]` fires off the target, so the arrow is the item used and the tinderbox is the target.
     if (!(await unlit.useOn(tinderbox))) {
         return false;
     }
@@ -242,8 +238,8 @@ export async function armFireArrow(log: (m: string) => void): Promise<boolean> {
     return true;
 }
 
-// Why: the shot spends the arrow whether or not it lands, since `inv_del(worn, $worn_ammo, 1)` runs before the `stat_random(ranged, 160, 300)` roll, and one damp cloth makes one and no more. Firing in a loop therefore spends every attempt after the first on an empty quiver. Koftik hands over another cloth whenever the pack holds none, so the retry is the decide() cycle rebuilding the arrow, and this step fires once.
-// Why: the trigger is `aploc1`, which the engine only runs within ten tiles AND with line of sight (`inApproachDistance`). A stand that fails either test produces no script at all: no message, no arrow spent, no movement, which is indistinguishable from a miss unless the chat is read. Line of sight is not something the map data answers, so the stands are probed until one draws a reply.
+// Why: `inv_del(worn, $worn_ammo, 1)` runs before the `stat_random(ranged, 160, 300)` roll and one damp cloth makes one arrow, so a loop fires every later shot from an empty quiver. Koftik hands over another cloth when the pack has none, so the retry is decide() rebuilding the arrow and this step fires once.
+// Why: the trigger is `aploc1`, which only runs within 10 tiles and with line of sight (`inApproachDistance`). A stand that fails either produces no script at all, which reads like a miss unless the chat is read, and the map data can't answer line of sight, so the stands are probed until one draws a reply.
 const SHOT_STANDS: readonly Tile[] = [
     new Tile(2448, 9721, 0),
     new Tile(2447, 9720, 0),
@@ -255,7 +251,7 @@ const SHOT_STANDS: readonly Tile[] = [
 /** Fire the lit arrow at the bridge stay rope; the script walks the player across on a hit. */
 export async function shootGuiderope(log: (m: string) => void): Promise<boolean> {
     for (const stand of SHOT_STANDS) {
-        // Why: these five stands are a handful of tiles apart in one pocket, so a stand that is not walkable is the next stand's turn, not a reason to go hunting seams. `walkTo` reaches for the pocket traveller, and one bad stand sent it sweeping the cavern end to end: forty-one "nowhere to stand" reports and eleven tiles of drift away from the rope, on the one run that started two tiles off.
+        // Why: these 5 stands are a few tiles apart in one pocket, so an unwalkable stand is the next stand's turn. `walkTo` reaches for the pocket traveller, and one bad stand sent it sweeping the cavern end to end.
         if (!(await Traversal.walkResilient(stand, { radius: 0, attempts: 1, timeoutMs: 20_000 }))) {
             continue;
         }
@@ -277,8 +273,7 @@ export async function shootGuiderope(log: (m: string) => void): Promise<boolean>
         }
         const replies = GameMessages.since(mark).map(m => m.text);
         const said = replies.join(' | ');
-        // Why: "I can't reach that!" is the server's own path search dead-ending, so the script never ran and
-        // no arrow was spent, it means this stand is wrong, not that the shot missed.
+        // Why: "I can't reach that!" is the server's path search dead-ending, so the script never ran and no arrow was spent; this stand is wrong.
         if (said.length === 0 || replies.some(text => CANT_REACH.test(text))) {
             log(`(${stand.x},${stand.z}) cannot reach the rope — trying the next stand`);
             continue;

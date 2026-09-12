@@ -7,9 +7,8 @@ import { talkStrict } from '../../exec/primitives.js';
 import { SV_ITEM, SV_NPC, SV_TILE } from './areas.js';
 import { driveChoice, heldId } from './scene.js';
 
-// Why: the deepest option comes first, as `pickPreferred` takes the earliest preference that appears and several of Mosol's menus re-offer an earlier one.
-// Why: listing "What can we do?" ahead of "I'll go to see the Shaman." would loop forever on his fourth menu.
-// Why: "What danger is there around here?" is deliberately absent, as it spawns one to three aggressive Undead Ones, which is why this uses `talkStrict`.
+// Why: `pickPreferred` takes the earliest preference that appears and Mosol's menus re-offer earlier ones, so the deepest option comes first or his 4th menu loops.
+// Why: "What danger is there around here?" spawns 1 to 3 aggressive Undead Ones, hence `talkStrict`.
 const MOSOL_DIALOGUE = [
     "Yes, I'm sure and I'll take the Wampum belt to Trufitus.",
     "I'll go to see the Shaman.",
@@ -39,10 +38,7 @@ export async function takeWampumBelt(log: (m: string) => void): Promise<boolean>
     return Execution.delayUntil(() => heldId(SV_ITEM.WAMPUM_BELT.id) > 0, 10_000);
 }
 
-/**
- * The quest starts from `opnpcu`, not from talking: the belt has to be used on
- * Trufitus, and only then does the Ah Za Rhoon thread appear in his options.
- */
+/** The quest starts from `opnpcu`: the belt is used on Trufitus, and only then does the Ah Za Rhoon thread appear. */
 export async function startQuest(log: (m: string) => void): Promise<boolean> {
     if (heldId(SV_ITEM.WAMPUM_BELT.id) === 0) {
         log('no Wampum belt to show Trufitus');

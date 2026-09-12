@@ -15,7 +15,7 @@ export const DEATH_ITEM = {
     BREAD: { id: 2309, name: 'Bread' },
     TROUT: { id: 333, name: 'Trout' },
     IRON_BAR: { id: 2351, name: 'Iron bar' },
-    /** Ground pile (south → north): yellow, green, purple, blue, red. */
+    /** Ground pile (south to north): yellow, green, purple, blue, red. */
     BALL_YELLOW: { id: 3111, name: 'Stone ball', ground: new Tile(2893, 3561, 0) },
     BALL_GREEN: { id: 3113, name: 'Stone ball', ground: new Tile(2893, 3562, 0) },
     BALL_PURPLE: { id: 3112, name: 'Stone ball', ground: new Tile(2893, 3563, 0) },
@@ -60,12 +60,12 @@ export const TILE = {
     SABA_EXIT: new Tile(2269, 4752, 0),
     STONE_STAND: new Tile(2894, 3563, 0),
     SCOUT: new Tile(2864, 3608, 0),
-    /** Castle large door → courtyard (level 0). */
+    /** Castle large door to the courtyard (level 0). */
     CASTLE_DOOR: new Tile(2899, 3558, 0),
-    /** Grey board-game staircase stand (Climb-up → L1 near Eohric). loc (2897,3566). */
+    /** Grey board-game staircase stand (Climb-up to L1 near Eohric). loc (2897,3566). */
     CASTLE_STAIRS_BOTTOM: new Tile(2896, 3566, 0),
     CASTLE_STAIRS_TOP: new Tile(2897, 3569, 1),
-    /** Toad and Chicken inn staircase stand (Climb-up → Harold L1). loc (2914,3539). */
+    /** Toad and Chicken inn staircase stand (Climb-up to Harold L1). loc (2914,3539). */
     INN_STAIRS_BOTTOM: new Tile(2914, 3538, 0),
     INN_STAIRS_TOP: new Tile(2914, 3542, 1)
 } as const;

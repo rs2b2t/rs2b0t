@@ -9,10 +9,7 @@ import {
     type GatheringLocation
 } from './gatheringLocations.js';
 
-/**
- * Fishing camps for GatheringBot / Fisher, catalogued from rs2b2tgathering.csv plus legacy presets and polished via live verify and visual stand checks.
- * Cook surfaces ({@link rangeStand}) come from {@link CookingRanges} when a Range/Fire is within a useful walk of the pier (Catherby, Seers fly, Barb fires, …).
- */
+/** Fishing camps from rs2b2tgathering.csv and live checks. `rangeStand` is set when a useful cook surface is near the pier. */
 export interface FishingLocation extends GatheringLocation {
     rangeStand?: Tile;
     rangeName?: string;
@@ -22,8 +19,7 @@ function withCampCook(loc: FishingLocation): FishingLocation {
     if (loc.rangeStand) {
         return loc;
     }
-    // Default pin is pier surface (cook-then-bank). bank-raw-then-cook re-resolves
-    // at runtime via resolveCookScene + CookSurfaceRole 'bank'.
+    // Default pin is the pier surface (cook-then-bank); bank-raw-then-cook re-resolves at runtime via resolveCookScene + CookSurfaceRole 'bank'.
     const cook = cookSurfaceForFishCamp(loc.name, 'pier');
     if (!cook) {
         return loc;

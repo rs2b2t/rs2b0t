@@ -26,19 +26,18 @@ import { HERO_STAGE } from './journal.js';
 import { kitOwned, kitStep, type Purchasable } from './shops.js';
 import { heldId } from './state.js';
 
-// Why: the side room is sealed from the mansion by a `snipable_wall`, which carries blockrange=no.
-// Grip is shootable through it and unreachable by every other means, so this branch needs a bow.
+// Why: the side room is sealed from the mansion by a `snipable_wall`, which carries blockrange=no, so Grip is shootable through it and unreachable by anything else. This branch needs a bow.
 const SNIPE_KIT: readonly Purchasable[] = [
     { id: HERO_ID.OAK_LONGBOW, name: HERO_NAMED.OAK_LONGBOW, qty: 1, sources: [{ ...HERO_SHOP.LOWE, gp: 1_000 }] },
     { id: HERO_ID.STEEL_ARROW, name: HERO_NAMED.STEEL_ARROW, qty: 150, sources: [{ ...HERO_SHOP.LOWE, gp: 15_000 }] }
 ];
 
 const SNIPE_MS = 180_000;
-/** An oak longbow reaches nine tiles; Grip is lured to three, which leaves the row clear. */
+/** An oak longbow reaches 9 tiles; Grip is lured to 3, which leaves the row clear. */
 const SNIPE_RANGE = 9;
 const GROUND_RANGE = 12;
 
-/** The bow and the arrows, in whatever state they are in: bought, withdrawn, then worn. */
+/** The bow and the arrows: bought, withdrawn, then worn. */
 export function snipeKitStep(snap: QuestSnapshot): QuestStep | null {
     return kitStep(snap, SNIPE_KIT);
 }
@@ -57,8 +56,7 @@ export function talkToAlfonse(log: (m: string) => void): Promise<boolean> {
 
 /** Charlie is behind the kitchen door, which only opens once Alfonse has heard the password. */
 export async function talkToCharlie(log: (m: string) => void): Promise<boolean> {
-    // Why: the kitchen is a sealed pocket in the baked graph, so walking at Charlie from the restaurant
-    // reads `unreachable`. The door is the module's to cross, not the navigator's.
+    // Why: the kitchen is a sealed pocket in the baked graph, so walking at Charlie from the restaurant reads `unreachable`; the module crosses the door itself.
     if (!(await enterKitchen(log))) {
         return false;
     }
@@ -73,8 +71,7 @@ function keyringOnFloor(): boolean {
     return GroundItems.query().where(g => g.id === HERO_ID.GRIP_KEYS).within(GROUND_RANGE).nearest() !== null;
 }
 
-// Why: Grip's spawn is six tiles from the slit, in bow range and behind three walls, so the server
-// drops every attack there, the slit's own row is the only line, and the cabinet walks him onto it.
+// Why: Grip's spawn is 6 tiles from the slit, in bow range and behind 3 walls, so the server drops every attack there. The slit's own row is the only line, and the cabinet walks him onto it.
 function gripOnTheRow(): Npc | null {
     const target = grip();
     const here = Game.tile();
@@ -101,8 +98,7 @@ export async function reachArrowSlit(log: (m: string) => void): Promise<boolean>
     return Traversal.walkResilient(HERO_TILE.ARROW_SLIT, { radius: 0, attempts: 3, timeoutMs: 30_000, log });
 }
 
-// Why: Grip only crosses onto the slit's row while the rival is opening his drinks cabinet, so this
-// loop waits rather than walking, every route to him is a wall.
+// Why: Grip only crosses onto the slit's row while the rival is opening his drinks cabinet, and every route to him is a wall, so this loop waits.
 
 /** Shoot Grip through the arrow slit whenever the rival's lure puts him in range. */
 export async function snipeGrip(log: (m: string) => void): Promise<boolean> {
@@ -118,8 +114,7 @@ export async function snipeGrip(log: (m: string) => void): Promise<boolean> {
             log('snipe: yielding to a random event');
             return false;
         }
-        // Why: the keyring is `obj_addall`ed on death, so it is the one thing this side of the wall
-        // can see that proves the kill landed.
+        // Why: the keyring is `obj_addall`ed on death, the one thing this side of the wall can see that proves the kill landed.
         if (keyringOnFloor()) {
             log(`Grip is down after ${swings} shots`);
             return true;
@@ -171,8 +166,7 @@ export function phoenixArmbandStep(snap: QuestSnapshot, stage: number): QuestSte
             return { kind: 'custom', name: 'ask Straven about the master thief armband', run: talkToStraven };
 
         case HERO_STAGE.PHOENIX_SPOKEN: {
-            // Why: the bow is bought in Varrock, where Straven already stands, buying it after the
-            // crossing costs a return ferry and a walk across two kingdoms.
+            // Why: the bow is bought in Varrock, where Straven already stands; after the crossing it costs a return ferry and a walk across 2 kingdoms.
             const kit = snipeKitOwned(snap) ? null : snipeKitStep(snap);
             if (kit) {
                 return kit;

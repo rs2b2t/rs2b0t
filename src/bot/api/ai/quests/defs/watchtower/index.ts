@@ -136,8 +136,7 @@ function stageTribes(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
     const shortOfBerries = owned(snap, WT_ITEM.JANGERBERRIES.id) < JANGERBERRY_TARGET;
     const pickBerries: QuestStep = { kind: 'custom', name: 'pick jangerberries on Grew island', run: pickJangerberries };
 
-    // Standing on the island already: take the berries now rather than swinging
-    // out to the wizard and paying another rope to come back for them.
+    // Already on the island: take the berries now, as coming back costs another rope.
     if (shortOfBerries && area === 'grewIsland') {
         return pickBerries;
     }
@@ -307,8 +306,7 @@ function stageShamans(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
             return needCaveKit(snap, area)
                 ?? provisioned({ kind: 'custom', name: 'take Nightshade for the enclave', run: takeNightshade });
         }
-        // The mining follows in the same visit, so the pickaxe rides along rather
-        // than costing a second trip through the guard.
+        // The mining follows in the same visit, so the pickaxe rides along and saves a second trip through the guard.
         const pick = area === 'enclave' ? null : sourcePickaxe(snap);
         if (pick) {
             return provisioned(at(area, 'yanille', pick));
@@ -317,7 +315,7 @@ function stageShamans(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
     }
 
     if (held(snap, WT_ITEM.CRYSTAL4.id) === 0 && banked(snap, WT_ITEM.CRYSTAL4.id) === 0) {
-        // Why: there is no area guard, as standing in the enclave without a pickaxe is the case that has to walk back out for one, and at() does the leaving.
+        // Why: no area guard here; standing in the enclave without a pickaxe is the case that has to walk back out for one, and at() does the leaving.
         const pick = sourcePickaxe(snap);
         if (pick) {
             return at(area, 'yanille', pick);
@@ -353,14 +351,12 @@ const CRYSTAL_RECOVERY: Readonly<Record<number, { name: string; run: (log: (m: s
 };
 
 function recoverCrystals(snap: QuestSnapshot): QuestStep | null {
-    // Nothing to recover once all four are carried, do not walk to the bank
-    // merely to learn what is in it.
+    // Nothing to recover once all four are carried; don't walk to the bank only to learn what's in it.
     const lost = CRYSTALS.find(crystal => held(snap, crystal.id) === 0);
     if (!lost) {
         return null;
     }
-    // Every re-issue check reads the bank as well as the pack, so a banked crystal
-    // blocks its own replacement. Withdraw before asking anyone for another.
+    // Every re-issue check reads the bank as well as the pack, so a banked crystal blocks its own replacement. Withdraw before asking for another.
     const inBank = CRYSTALS.filter(crystal => held(snap, crystal.id) === 0 && banked(snap, crystal.id) > 0);
     if (inBank.length > 0) {
         return withdrawFrom(inBank.map(crystal => ({ name: crystal.name, id: crystal.id, qty: 1 })));
@@ -400,7 +396,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'custom', name: 'climb down from the activated Watchtower', run: leaveWizardFloor };
     }
 
-    // Why: one bank trip for everything the bank can supply, rather than a trip per item as each stage reached for it; what the bank lacks still falls to the shop, the ground candle and the guard's riddle.
+    // Why: one bank trip for everything the bank can supply; what the bank lacks still falls to the shop, the ground candle and the guard's riddle.
     // Why: bounded to the collecting stages, as past the potion the kit is spent and a trip proves nothing.
     if (snap.stage > WATCHTOWER_STAGE.NOT_STARTED && snap.stage <= WATCHTOWER_STAGE.MADE_POTION) {
         const kit = questKit(snap, ENCLAVE_FOOD);
@@ -421,8 +417,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
                 ?? { kind: 'custom', name: 'search the bush by the Watchtower for evidence', run: searchEvidenceBush };
         }
 
-        // The journal renders one block for stages 2 through 5, so stage 3 reads back
-        // as stage 2. Owning the assembled relic is the only visible difference.
+        // The journal renders one block for stages 2 through 5, so stage 3 reads back as stage 2; owning the assembled relic is the only visible difference.
         case WATCHTOWER_STAGE.GIVEN_FINGERNAILS:
             return owned(snap, WT_ITEM.OGRE_RELIC.id) > 0
                 ? stageRelicGate(snap, area)

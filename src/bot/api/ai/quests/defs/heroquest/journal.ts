@@ -23,8 +23,7 @@ export const HERO_STAGE = {
     COMPLETE: 14
 } as const;
 
-// Why: colour tags become a space, so no needle may span a tag boundary, and every needle below opens
-// with one, because "she gave me" contains "he gave me".
+// Why: colour tags become a space, so no needle may span a tag boundary, and every needle below opens with one because "she gave me" contains "he gave me".
 function normalize(lines: readonly string[] | string): string {
     const body = (typeof lines === 'string' ? lines : lines.join(' '))
         .replace(/@[a-z0-9]{3}@/gi, ' ')
@@ -34,15 +33,14 @@ function normalize(lines: readonly string[] | string): string {
     return body.length === 0 ? '' : ` ${body} `;
 }
 
-// Why: the page keeps every earlier line struck through, so this order is what separates the stages,
-// each needle is that stage's own next-step line, which no later page repeats.
+// Why: the page keeps every earlier line struck through, so this order separates the stages: each needle is that stage's own next-step line, which no later page repeats.
 const STAGES: readonly [string, number][] = [
     [' quest complete!', HERO_STAGE.COMPLETE],
     [' in reward she gave me a master thief', HERO_STAGE.BLACKARM_ARMBAND],
     [' to prove my skills', HERO_STAGE.PHOENIX_ARMBAND],
     [' after rewarding the player who assisted me', HERO_STAGE.BLACKARM_LOOTED],
     [' i can move around the hideout', HERO_STAGE.BLACKARM_PAPERS_GIVEN],
-    // Why: "presented myself to" is the struck-through line at every later stage, and it does not contain this.
+    // Why: "presented myself to" is the struck-through line at every later stage, and it doesn't contain this.
     [' need to present myself to', HERO_STAGE.BLACKARM_MANSION],
     [' disguise myself as', HERO_STAGE.BLACKARM_PAPERS],
     [' speak to other gang members', HERO_STAGE.BLACKARM_HQ],
@@ -51,16 +49,14 @@ const STAGES: readonly [string, number][] = [
     [' help me get through this door', HERO_STAGE.PHOENIX_CHARLIE],
     [' speak to charlie round the back', HERO_STAGE.PHOENIX_ALFONSE],
     [' use the password he gave me at', HERO_STAGE.PHOENIX_SPOKEN],
-    // Why: the phoenix intro line renders at every phoenix stage, so it can only be read as STARTED
-    // once every later phoenix needle above has missed.
+    // Why: the phoenix intro line renders at every phoenix stage, so it only reads as STARTED once every later phoenix needle above has missed.
     [' i should visit their hideout', HERO_STAGE.STARTED],
     [' leader of the black arm gang', HERO_STAGE.STARTED],
     [' i can start this quest by speaking to', HERO_STAGE.NOT_STARTED],
     [' will let me into the', HERO_STAGE.STARTED]
 ];
 
-// Why: the three item lines are driven by `~obj_gettotal`, which counts the bank as well as the pack,
-// so they say the item exists somewhere, never that it is carried.
+// Why: the 3 item lines are driven by `~obj_gettotal`, which counts the bank as well as the pack, so they say the item exists somewhere, never that it's carried.
 const FLAGS: readonly [string, string][] = [
     [' firebird feather - i now have one', 'feather'],
     [' cooked lava eel - i now have one', 'eel'],

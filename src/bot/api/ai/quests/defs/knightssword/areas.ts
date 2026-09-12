@@ -55,15 +55,15 @@ export const KS_TILE = {
     FALADOR_BANK: new Tile(2946, 3369, 0),
     FURNACE: new Tile(2975, 3368, 0),
     // Why: this stands south of the cupboard, which spans (2984,3336)-(2985,3336).
-    // Why: `forceapproach` is all-blocked with the named side cleared, so `forceapproach=east` means east is the only approach, and the flags rotate with the loc, which is placed at rotation 1.
-    // Why: east in the loc's own frame is south in world space, and true east (2986,3336) is not pathable.
+    // Why: `forceapproach=east` clears only the east side and the flags rotate with the loc, which sits at rotation 1.
+    // Why: east in the loc's frame is south in world space, and world east (2986,3336) is not pathable.
     // Why: standing anywhere else has every op silently dropped.
     VYVIN_ROOM: new Tile(2985, 3335, 2),
-    /** Far enough to vacate both approaches and let Sir Vyvin wander off them. */
+    /** Vacates both approaches so Sir Vyvin can wander off them. */
     VYVIN_RETREAT: new Tile(2980, 3340, 2),
     GENERAL_STORE: new Tile(3218, 3415, 0),
     PIE_DISH_SPAWN: new Tile(3222, 3494, 0),
-    /** Two tiles from the pie-dish spawn, in the same palace kitchen. */
+    /** 2 tiles from the pie-dish spawn, in the same palace kitchen. */
     KITCHEN_SINK: new Tile(3224, 3494, 0),
     WYDIN: new Tile(3014, 3204, 0),
     RANGE: new Tile(3019, 3237, 0),
@@ -72,8 +72,8 @@ export const KS_TILE = {
     LADDER_BOTTOM: new Tile(3008, 9551, 0)
 } as const;
 
-// Why: the cupboard spans (2984,3336)-(2985,3336) and only its south side is legal, so these two tiles are the approach.
-// Why: standing on the one further from Sir Vyvin is often the difference between a refused search and a taken one.
+// Why: the cupboard spans (2984,3336)-(2985,3336) and only its south side is legal, so these 2 tiles are the approach.
+// Why: the one further from Sir Vyvin is the one whose search lands.
 export const VYVIN_APPROACHES: readonly Tile[] = [
     new Tile(2985, 3335, 2),
     new Tile(2984, 3335, 2)
@@ -105,7 +105,7 @@ export const RELDO: NpcStop = {
     prefer: ['What do you know about the Imcando dwarves?']
 };
 
-/** Ordered by what advances the quest soonest: the pie outranks the sword question. */
+/** Ordered by what advances the quest soonest; the pie outranks the sword question. */
 export const THURGO: NpcStop = {
     npc: 'Thurgo',
     anchor: new Tile(3001, 3144, 0),
@@ -121,5 +121,5 @@ export const THURGO: NpcStop = {
 
 export const WYDIN = { npc: 'Wydin', anchor: KS_TILE.WYDIN };
 
-/** Varrock's, not Falador's. The bucket is wanted on the Reldo leg. */
+/** Varrock's general store. The bucket is wanted on the Reldo leg. */
 export const GENERAL_STORE = { npc: 'Shop keeper', anchor: KS_TILE.GENERAL_STORE };

@@ -191,8 +191,7 @@ export default class BotPanel {
 
         host.addDrawListener(() => this.maybeRender(200));
         if (renderer) {
-            // Renderer-off clients deliberately emit no draw events. Their panel
-            // still updates at a cheap 1 Hz from the untouched logical frame loop.
+            // Renderer-off clients emit no draw events, so their panel updates at 1 Hz from the logical frame loop instead.
             host.addFrameListener(() => {
                 if (!renderer.enabled()) {
                     this.maybeRender(1000);
@@ -342,8 +341,7 @@ export default class BotPanel {
         const autoRow = el('div', 'rs2b0t-setting rs2b0t-setting-bool');
         const auto = document.createElement('input');
         auto.type = 'checkbox';
-        // Mirror runtime state (?autologin=1 / Multibox). enable() may run after the
-        // panel is built, so listen for changes instead of painting once (#215).
+        // Mirror runtime state (?autologin=1 / Multibox); enable() may run after the panel is built, so listen for changes (#215).
         auto.checked = AutoRelogin.isAutoLogin();
         auto.addEventListener('change', () => AutoRelogin.setAutoLogin(auto.checked));
         AutoRelogin.onAutoLoginChange(on => {
@@ -487,8 +485,7 @@ export default class BotPanel {
 
         const ingame = reader.ingame();
         const scene = reader.sceneState();
-        // Ready = logged in + scene fully built (2). Show partial scene so operators
-        // do not confuse "ingame" with "safe to inject" (#445).
+        // Ready means logged in with the scene fully built (2); showing a partial scene keeps "ingame" from reading as "safe to inject" (#445).
         this.stateCell.textContent = !ingame
             ? 'title screen'
             : scene === 2

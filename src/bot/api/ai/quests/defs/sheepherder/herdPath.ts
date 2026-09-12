@@ -32,7 +32,7 @@ const MARGIN = 24;
 
 const key = (x: number, z: number): number => x * 100_000 + z;
 
-// Why: `prod_sheep` walks the sheep one tile along `coord_direction(player, sheep)`, which is cardinal and points away from the player, so a push is legal only where the opposite tile is standable.
+// Why: `prod_sheep` walks the sheep 1 tile along `coord_direction(player, sheep)`, which is cardinal and points away from the player, so a push is legal only where the opposite tile is standable.
 // Why: that tile also has to be able to step onto the sheep, or the Prod op cannot reach it from there; the fence east of the second sheep's field is walkable on both sides and passable on neither.
 
 /** Whether a sheep on (x,z) can be pushed one tile in `dir`. */
@@ -47,7 +47,7 @@ export function inBox(box: HerdBox, x: number, z: number): boolean {
     return x >= box.x0 && x <= box.x1 && z >= box.z0 && z <= box.z1;
 }
 
-// Why: a walkable tile with no standable side is a trap, a wandering sheep can walk in and no prod can move it out again, and the engine frees it only by teleporting it home 500 ticks later.
+// Why: a walkable tile with no standable side is a trap: a sheep can wander in, no prod can move it, and the engine only frees it by teleporting it home 500 ticks later.
 
 /** Whether no push at all can be issued at (x,z). */
 export function pinned(grid: HerdGrid, x: number, z: number): boolean {
@@ -112,7 +112,7 @@ function search(grid: HerdGrid, box: HerdBox, goal: HerdBox, skip?: (x: number, 
 
 /**
  * Prod distances to `goal`, measured in pushes.
- * Why: searching backwards from the pen gives every tile its own next push, so a sheep that wanders mid-herd is re-routed rather than walked back to the plan.
+ * Why: searching backwards from the pen gives every tile its own next push, so a sheep that wanders mid-herd is re-routed from where it is.
  */
 export function herdDistances(grid: HerdGrid, sheep: { x: number; z: number }, goal: HerdBox): Map<number, number> {
     return search(grid, bounds(sheep, goal), goal);
@@ -125,7 +125,7 @@ export interface HerdPlan {
     any: Map<number, number>;
 }
 
-// Why: two plain searches rather than one weighted one, because a per-step penalty is not a consistent potential and the greedy follow oscillated between two tiles forever.
+// Why: 2 plain searches, since a per-step penalty isn't a consistent potential and the greedy follow oscillated between 2 tiles forever.
 
 /** Both route maps, sharing one trap lookup. */
 export function herdPlan(grid: HerdGrid, sheep: { x: number; z: number }, goal: HerdBox): HerdPlan {
@@ -147,12 +147,12 @@ export function herdPlan(grid: HerdGrid, sheep: { x: number; z: number }, goal: 
     };
 }
 
-// Why: the two maps have to be read as one number, because picking whichever map holds the sheep's own tile swaps potentials as it wanders on and off the clear network, and two potentials pushed a sheep eleven tiles east and back for 250 pushes.
+// Why: Use one potential across both maps; switching potentials at the boundary can send sheep back and forth.
 
 /** How much worse any route off the clear network is, in pushes. */
 const OFF_NETWORK = 1000;
 
-/** Pushes from (x,z) to the pen, counting a route that touches a trap as far worse than one that does not. */
+/** Pushes from (x,z) to the pen; a route that touches a trap counts as far worse. */
 export function herdCost(plan: HerdPlan, x: number, z: number): number | undefined {
     const clear = plan.clear.get(key(x, z));
     if (clear !== undefined) {

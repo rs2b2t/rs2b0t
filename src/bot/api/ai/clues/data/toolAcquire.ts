@@ -78,7 +78,7 @@ export function extraItemShop(name: string): ShopSource | null {
     return key ? EXTRA_ITEM_SHOPS[key]! : null;
 }
 
-// Why: the Kharidian desert has one baked entrance and it eats a Shantay pass, so a bot without one gets no detour. The desert leaves the graph and the leg reports `unreachable`.
+// Why: the Kharidian desert has one baked entrance and it eats a Shantay pass, so without one the desert leaves the graph and the leg reports `unreachable`.
 // Why: Shantay stocks the pass himself (`shantaypass.inv` stock16, 5gp) and his counter is north of his own gate, so the trip is payable from the side the bot is stuck on.
 
 /** Counters that sell a crossing toll, for the case where the bank had none. */

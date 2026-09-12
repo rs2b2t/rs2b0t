@@ -18,12 +18,10 @@ const TANNER_NAME = 'Tanner';
 const TANNER_STAND = new Tile(3277, 3191, 0);
 const BANK_STAND = new Tile(3269, 3167, 0);
 const DOMMIK_NAME = 'Dommik';
-// a verified-walkable tile on the street outside the shop; the shop interaction
-// walks the last few tiles itself, so we never path onto an indoor/blocked tile
+// Verified street tile; the shop interaction walks the final indoor steps.
 const DOMMIK_STAND = new Tile(3316, 3192, 0);
 
-// tanner interface id + its "tan ALL" button per hide, read off the engine's
-// interface.pack (the com_N names are not the runtime component ids)
+// Tanner interface and "tan ALL" buttons from interface.pack.
 const TANNER_IF = 679;
 const COINS = 'Coins';
 
@@ -35,8 +33,7 @@ interface TanMode {
     tanAllComId: number;
 }
 
-// every dragonhide shares the display name "Dragonhide", so this bot keys off
-// object ids throughout and only uses names for logging
+// Dragonhides share a display name, so behavior keys on ids and logs use names.
 const TAN_MODES: Record<string, TanMode> = {
     'Soft leather': { hideId: 1739, hideLabel: 'Cow hide', productId: 1741, productLabel: 'Leather', tanAllComId: 8686 },
     'Hard leather': { hideId: 1739, hideLabel: 'Cow hide', productId: 1743, productLabel: 'Hard leather', tanAllComId: 8690 },
@@ -74,7 +71,7 @@ function opIndex(ops: readonly (string | null)[], pattern: RegExp): number {
     return -1;
 }
 
-// Bank.withdrawX is name-keyed, which cannot tell the four dragonhides apart
+// Bank.withdrawX cannot distinguish the four same-named dragonhides.
 async function withdrawXById(id: number, count: number): Promise<boolean> {
     if (count <= 0) {
         return true;

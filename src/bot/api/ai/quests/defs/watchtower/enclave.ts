@@ -38,7 +38,7 @@ export async function enterEnclave(log: (m: string) => void): Promise<boolean> {
         log('could not use Nightshade on the enclave guard');
         return false;
     }
-    // Why: the dialogue the nightshade opened is driven and no fresh one is started, as both of this guard's own conversation options make him attack.
+    // Why: drive the dialogue the nightshade opened and never start a fresh one, as both of this guard's own conversation options make him attack.
     if (await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 8000)) {
         await driveDialog([], log);
     }
@@ -85,8 +85,7 @@ export async function dissolveShamans(log: (m: string) => void): Promise<boolean
         if (!(await Traversal.walkResilient(spot, { radius: 2, attempts: 2, timeoutMs: 90_000, log }))) {
             continue;
         }
-        // Never talk to a shaman and never attack one: opnpc1 is a flat 20 damage
-        // and attacking draws 30. Only the potion works.
+        // Never talk to or attack a shaman: opnpc1 is a flat 20 damage and attacking draws 30. Only the potion works.
         const shaman = Npcs.query().name(WT_NPC.SHAMAN).where(npc => npc.distance() <= 4).nearest();
         const potion = Inventory.items().find(item => item.id === WT_ITEM.MAGIC_OGRE_POTION.id);
         if (!shaman || !potion) {

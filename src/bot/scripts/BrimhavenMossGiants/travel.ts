@@ -4,7 +4,7 @@ import { Phase, getPhase } from './phase.js';
 import type { Task } from '../../api/bot/Bot.js';
 import type BrimhavenMossGiants from './BrimhavenMossGiants.js';
 
-// TRAVEL-phase task: reach the Brimhaven field via the Ardougne↔Brimhaven boat (fare withdrawn in bankRoutine).
+// Reach the Brimhaven field by boat; bankRoutine supplies the fare.
 export class TravelToField implements Task {
     constructor(private bot: BrimhavenMossGiants) {}
     validate(): boolean {

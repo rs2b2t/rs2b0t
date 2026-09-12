@@ -15,9 +15,7 @@ import { openBankLeg } from '../../exec/steps.js';
 import { QuestFood } from '../../food.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 
-// Why: of the seven things on Dragon Slayer's shopping list, four are bought outright.
-// Why: the other three are sold nowhere in free-to-play, planks only lie on the ground, and the nearest pile outside Crandor (useless before the ship sails) is the Graveyard of Shadows.
-// Why: nails are two to a steel bar at an anvil, and an unfired bowl is clay, water and a potter's wheel.
+// Why: 4 of the 7 shopping items are bought; planks only lie on the ground (nearest pile outside Crandor is the Graveyard of Shadows), nails are 2 to a steel bar, and an unfired bowl is clay, water and a potter's wheel.
 
 export const SUPPLY = {
     /** Hammers, buckets and jugs: any general store, and Falador's is by the bank. */
@@ -34,8 +32,7 @@ export const SUPPLY = {
 
 const SUPPLY_LOC = {
     FOUNTAIN: new Tile(2949, 3381, 0),
-    // Why: clay comes from the Varrock mine, which is on the shopping sweep beside Thessalia, and iron and coal come from the Dwarven Mine.
-    // Why: those two anchors sit in the mine's dense southern seams, five iron and thirteen coal inside one radius, as the three-rock outcrop by the ladder cannot keep up with six bars' worth and leaves the leg waiting on respawns.
+    // Why: clay is the Varrock mine beside Thessalia; iron and coal anchors sit in the Dwarven Mine's southern seams (5 iron, 13 coal in one radius) since the 3-rock outcrop by the ladder can't keep up with 6 bars.
     CLAY_ROCKS: new Tile(3181, 3373, 0),
     IRON_ROCKS: new Tile(3040, 9773, 0),
     COAL_ROCKS: new Tile(3042, 9760, 0),
@@ -77,7 +74,7 @@ const sceneLoaded = (): Promise<boolean> =>
 const buy = (item: string, qty: number, shop: { npc: string; anchor: Tile }, estGp: number): QuestStep =>
     ({ kind: 'buy', item, qty, shop: { npc: shop.npc, anchor: shop.anchor }, estGp });
 
-// Why: this module runs with no standing coin float, as the float is topped back up on every provisioning loop and would put a bank trip between every purchase.
+// Why: no standing coin float; it's topped up every provisioning loop and would put a bank trip between purchases.
 
 /** Fetch spending money only when a leg is about to spend it. */
 export async function ensureCoins(need: number, log: (m: string) => void): Promise<boolean> {
@@ -98,7 +95,7 @@ async function buyMindBomb(log: (m: string) => void): Promise<boolean> {
         log('no coins for a mind bomb');
         return false;
     }
-    // Why: she takes the money whatever the pack looks like, and a bomb bought into a full pack is poured onto the floor of the pub, so the snapshot check alone is not enough.
+    // Why: she takes the money regardless, and a bomb bought into a full pack lands on the floor, so check here too.
     if (Inventory.isFull()) {
         log('pack is full — she would pour the mind bomb onto the floor');
         return false;
@@ -114,8 +111,7 @@ async function buyMindBomb(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => Inventory.count("Wizard's mind bomb") > before, 5000);
 }
 
-// Why: this is a swing budget rather than a rock budget, the caller re-enters once per engine tick, so a timeout here throws away the current swing and starts another.
-// Why: it logs loudly when it fires, as a timeout shorter than the ore takes is an infinite loop that mines nothing and looks identical to a slow rock.
+// Why: a timeout throws away the current swing and the caller re-clicks, so one shorter than the ore takes loops forever and looks like a slow rock. Hence the loud log.
 const MINE_TIMEOUT_MS = 20_000;
 
 /** Mines until the pack holds `want` of the named ore. */
@@ -127,14 +123,13 @@ async function mineFor(rockIds: readonly number[], item: string, want: number, a
         log('no pickaxe in the pack');
         return false;
     }
-    // Why: a full pack does not refuse the Mine, the rock never yields, which reads like a rock that is out of ore.
+    // Why: a full pack doesn't refuse the Mine op, the rock never yields, which looks like an empty rock.
     if (Inventory.isFull()) {
         log(`pack is full — no room for ${item}`);
         return false;
     }
     const ids = new Set(rockIds);
-    // Wide enough to cross a seam: a mined rock is a different loc until it
-    // respawns, so a tight radius parks the leg on its own leftovers.
+    // Wide enough to cross a seam: a mined rock is a different loc until it respawns, so a tight radius parks the leg on its own leftovers.
     const rock = () => Locs.query().where(l => ids.has(l.id)).action('Mine').within(14).nearest();
     const seam = (): number => Locs.query().where(l => ids.has(l.id)).action('Mine').within(14).count();
     if (!rock()) {
@@ -175,8 +170,7 @@ async function mineFor(rockIds: readonly number[], item: string, want: number, a
 
 const ROCKS = { clay: [2108, 2109], iron: [2092, 2093], coal: [2096, 2097] } as const;
 
-// Why: bronze pickaxes lie on the ground for nothing, and one of them is thirteen tiles from the Falador bank.
-// Why: Nurmof is a last resort, as his shop is at the bottom of the Dwarven Mine.
+// Why: bronze pickaxes lie on the ground free, one 13 tiles from the Falador bank; Nurmof is at the bottom of the Dwarven Mine, so he's last.
 const PICKAXE_SPAWNS: readonly Tile[] = [
     new Tile(3009, 3342, 0), // Falador, south of the bank
     new Tile(3081, 3429, 0), // Barbarian Village
@@ -208,7 +202,7 @@ async function ensurePickaxe(log: (m: string) => void): Promise<boolean> {
         await sceneLoaded();
         return false;
     }
-    // Every spawn was bare, they respawn, but Nurmof always has one.
+    // Every spawn was bare; Nurmof always has one.
     log('no pickaxe on the ground anywhere — buying one from Nurmof');
     if (!(await ensureCoins(200, log)) || !(await walk(SUPPLY.NURMOF.anchor, log, 2))) {
         return false;
@@ -241,8 +235,7 @@ async function makeUnfiredBowl(log: (m: string) => void): Promise<boolean> {
         if (!(await clay.useOn(wheel))) {
             return false;
         }
-        // skill_multi3 is if_openchat. A chat make menu, not the main skill
-        // panel the anvil puts up. They are different interfaces entirely.
+        // skill_multi3 is if_openchat, a chat make menu; the anvil uses the main skill panel.
         if (!(await Execution.delayUntil(() => ChatDialog.isMakeMenu(), 6000))) {
             log('the wheel did not offer anything to make');
             return false;
@@ -298,27 +291,24 @@ async function makeUnfiredBowl(log: (m: string) => void): Promise<boolean> {
     return mineFor(ROCKS.clay, SUPPLY_ITEM.CLAY, 1, SUPPLY_LOC.CLAY_ROCKS, log);
 }
 
-/**
- * Nails are two to a steel bar, and nothing sells steel bars: one iron and two
- * coal per bar at the Falador furnace, then the Dwarven Mine anvil.
- */
+/** Nails are 2 to a steel bar and nothing sells bars: 1 iron and 2 coal per bar at the Falador furnace, then the Dwarven Mine anvil. */
 export async function smithNails(need: number, log: (m: string) => void): Promise<boolean> {
-    // `need` is the shortfall, not the total. Two nails to a bar.
+    // `need` is the shortfall. 2 nails to a bar.
     if (need <= 0) {
         return true;
     }
     const bars = Math.ceil(need / 2);
     const ore = (): number => Inventory.count(SUPPLY_ITEM.IRON_ORE);
-    // Why: three of these earn their slot by what banking them would cost, the maze key is what decide() reads as "the briefing never happened", the map is what Ned is waiting for, and the shield cannot be fetched back once the ship has sailed.
+    // Why: a banked maze key reads to decide() as "the briefing never happened", Ned waits on the map, and the shield can't be fetched once the ship has sailed.
     const KEEP = ['coins', 'pickaxe', 'hammer', 'maze key', 'crandor map', 'map part', 'dragonfire shield',
         'iron ore', 'coal', 'steel bar', 'nails',
         'shark', 'lobster', 'swordfish', 'tuna', 'salmon', 'trout'];
     const coal = (): number => Inventory.count(SUPPLY_ITEM.COAL);
     const steel = (): number => Inventory.count(SUPPLY_ITEM.STEEL_BAR);
 
-    // Why: mining, then smelting the load, then hammering the load is the order that works; reversed, the leg smelts one bar, walks to the anvil for two nails, and walks back, six round trips across half of Asgarnia.
+    // Why: mine the load, smelt the load, hammer the load; per-bar it's 6 round trips between furnace and anvil.
     if (steel() === 0 && (ore() < bars || coal() < bars * 2)) {
-        // Why: six bars is eighteen slots of ore, and the rest of the quest's shopping is already bought by now, so it goes in the bank to make room and comes back out when the ship needs it.
+        // Why: 6 bars is 18 slots of ore, so the shopping goes in the bank until the ship needs it.
         if (Inventory.items().some(i => i.name !== null && !KEEP.some(k => i.name!.toLowerCase().includes(k)))) {
             log('banking the shopping to make room for ore');
             if (!(await openBankLeg('no bank to clear the pack at', undefined, log))) {
@@ -329,8 +319,7 @@ export async function smithNails(need: number, log: (m: string) => void): Promis
                 .map(i => i.name);
             await Bank.depositAllMatching((name) => !KEEP.some(k => name.toLowerCase().includes(k)));
             log(`banked ${spare.length} items for ore room: ${spare.join(', ')}`);
-            // Why: the bank is left open deliberately, as QuestEngine only re-reads it while the interface is up.
-            // Why: a stale snapshot makes everything deposited look lost, which sent the bot back to Oziach for a maze key that was in the bank the time.
+            // Why: the bank stays open since QuestEngine only re-reads it while the interface is up; a stale snapshot makes the deposit look lost and sends the bot back to Oziach for the maze key.
             return false;
         }
         if (!(await ensurePickaxe(log))) {
@@ -346,8 +335,7 @@ export async function smithNails(need: number, log: (m: string) => void): Promis
         if (!(await walk(SUPPLY_LOC.FURNACE, log, 1)) || !(await sceneLoaded())) {
             return false;
         }
-        // Why: the furnace's own Smelt op is the one that opens the quantity panel.
-        // Why: an ore used on the furnace takes the oplocu branch instead, smelt_ore_single, one bar, no menu, and another walk in for the next.
+        // Why: the furnace's Smelt op opens the quantity panel; ore used on it takes the oplocu branch, smelt_ore_single, one bar and no menu.
         const smelter = Locs.query().name('Furnace').action('Smelt').within(5).nearest();
         const furnace = smelter ?? Locs.query().name('Furnace').within(5).nearest();
         if (!furnace) {
@@ -372,8 +360,7 @@ export async function smithNails(need: number, log: (m: string) => void): Promis
         if (!(await ChatDialog.make('Steel'))) {
             return false;
         }
-        // The make menu runs a batch. Wait for the ore to run out, not for the
-        // first bar to land, or the anvil leg starts with one bar in the pack.
+        // The make menu runs a batch. Wait for the ore to run out or the anvil leg starts with one bar.
         await Execution.delayUntil(() => ore() === 0 || coal() < 2, 180_000);
         return steel() > 0;
     }
@@ -413,7 +400,7 @@ export async function smithNails(need: number, log: (m: string) => void): Promis
 /** Spawns already emptied this trip, so the walk moves on instead of circling. */
 const plankTried = new Set<string>();
 
-// Why: `need` is the shortfall the engine still wants and not the total, as comparing it against the pack reads "2 held, 1 short" as satisfied and the third plank never gets fetched.
+// Why: `need` is the shortfall the engine still wants; compared against the pack, "2 held, 1 short" reads as satisfied and the third plank never gets fetched.
 
 /** Walk the Graveyard of Shadows picking up the plank spawns. */
 async function grabPlanks(need: number, log: (m: string) => void): Promise<boolean> {
@@ -457,16 +444,13 @@ async function grabPlanks(need: number, log: (m: string) => void): Promise<boole
 const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
     ({ kind: 'custom', name, run });
 
-// Why: the mining load is deliberately absent, as eighteen slots of ore is what fills the pack.
-// Why: `smithNails` reads its ore out of the inventory, so banking it costs a re-mine and nothing else.
+// Why: the mining load is left out since 18 slots of ore is what fills the pack, and smithNails re-mines whatever gets banked.
 const SHOPPING_KEEP: readonly string[] = [
     'coins', 'maze key', 'pickaxe', 'hammer', 'lobster pot', "wizard's mind bomb",
     'unfired bowl', 'silk', 'plank', 'jug', 'clay'
 ];
 
-// Why: a purchase into a full pack is not refused, `inv_add` drops the overflow at the player's feet and the coins are already gone.
-// Why: the leg's own "did it arrive in the pack" check can then never pass, which is an unbounded loop that pays for a new item every lap.
-// Why: every acquisition here goes through this.
+// Why: a purchase into a full pack isn't refused, `inv_add` drops the overflow at your feet and the coins are gone, so the "did it arrive" check loops and pays every lap.
 
 /** Free `slots` inventory slots before an acquisition, or null when there is room. */
 function makeRoom(snap: QuestSnapshot, slots = 1): QuestStep | null {

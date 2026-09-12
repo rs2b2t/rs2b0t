@@ -1,15 +1,8 @@
 #!/usr/bin/env python3
-"""Derive every placed LostCity ladder interaction into rs2b0t edges.
+"""Derive ladder edges from map placements and RuneScript destinations.
 
-The LostCity map tells us which loc is clicked and the RuneScript handler tells
-us where that interaction moves the player.  Deterministic destinations are
-active.  Broken, dialogue-only, choice-driven, and state-dependent handlers are
-kept as disabled rows so the inventory stays complete without inventing a route.
-
-Access requirements (levels, quests, tickets, minigame rank, and similar) are
-intentionally not modelled yet.  A deterministic edge can therefore still fail
-at execution time when the player does not meet its handler's requirements.
-"""
+Keep broken, dialogue, choice and state-dependent handlers as disabled rows.
+Access requirements are not fully modelled, so active edges can still fail at runtime."""
 
 from __future__ import annotations
 
@@ -174,7 +167,7 @@ class CollisionPack:
         return exit_bytes[(x & 0x3F) * 64 + (z & 0x3F)]
 
     def sealed(self, x: int, z: int, level: int) -> bool:
-        """Walkable but with no way off it — standing here strands the walker."""
+        """Walkable tile with no exit."""
         return self.exit_mask(x, z, level) == 0
 
 
@@ -187,9 +180,7 @@ SNAP_OFFSETS = offsets(2)
 
 
 def snap(pack: CollisionPack, target: Target) -> Target | None:
-    # A sealed tile can be reached and never left, so a ladder that lands on one
-    # strands the walker. Keep the original ordering otherwise, so every ladder
-    # that was already fine stays exactly where it was.
+    # Why: a landing with no exit strands the walker; otherwise keep the existing order.
     fallback: Target | None = None
     for dx, dz in SNAP_OFFSETS:
         x, z = target.x + dx, target.z + dz
@@ -357,8 +348,7 @@ def resolve_expression(expression: str, placement: EffectivePlacement, stand: Ta
 def destinations(debug_name: str, body: str, placement: EffectivePlacement, stand: Target) -> tuple[list[Target], str | None]:
     body = select_switch(select_switch(body, placement, "int"), placement, "coord")
 
-    # ladder_from_cellar's Zanaris placement returns somewhere other than the
-    # usual z-6400 counterpart; its source-specific branch returns early.
+    # Zanaris's ladder_from_cellar returns early with a special destination instead of z - 6400.
     if debug_name == "ladder_from_cellar":
         if coord_text(placement) == "0_50_149_22_52":
             return [Target(3201, 3169, 0)], None
@@ -367,8 +357,7 @@ def destinations(debug_name: str, body: str, placement: EffectivePlacement, stan
     expressions = call_arguments(body, ("~climb_ladder", "p_teleport", "p_telejump"))
     resolved = [target for expression in expressions if (target := resolve_expression(expression, placement, stand, body))]
 
-    # dragonshipladdertop2 calculates the normal destination in a variable and
-    # substitutes a fixed landing only when that square is blocked.
+    # dragonshipladdertop2 uses a fixed fallback only when the usual landing is blocked.
     if not resolved and "$coord" in expressions:
         assignments = re.findall(r"\$coord\s*=\s*([^;]+);", body)
         normal = resolve_expression(assignments[0], placement, stand, body) if assignments else None
@@ -385,8 +374,7 @@ def destinations(debug_name: str, body: str, placement: EffectivePlacement, stan
             return unique, "This action opens an up/down choice; use a direct Climb-up or Climb-down option instead."
         return unique, "Destination depends on player or world state; state-aware transports are deferred."
     if unique:
-        # Single tele still gated by quest/skill/inv checks must not be active edges.
-        # (Watchtower ups, Horror ladders, etc. — see review on #267.)
+        # Quest, skill or inventory checks still gate a single teleport; keep those edges disabled.
         if has_runtime_destination_guard(body) and debug_name not in ALWAYS_ACTIVE_LADDER_DEBUGS:
             return unique, (
                 "Destination is behind a runtime quest/skill/inv guard; "
@@ -402,7 +390,7 @@ def destinations(debug_name: str, body: str, placement: EffectivePlacement, stan
     return [], "LostCity has no statically identifiable movement destination for this ladder action."
 
 
-# Ladders whose single tele is always safe despite nearby script noise.
+# Ladders with an unconditional teleport despite other checks in the script.
 ALWAYS_ACTIVE_LADDER_DEBUGS = frozenset(
     {
         "ladder",
@@ -420,11 +408,8 @@ ALWAYS_ACTIVE_LADDER_DEBUGS = frozenset(
 
 
 def has_runtime_destination_guard(body: str) -> bool:
-    """True when movement is wrapped in quest/skill/inv/var conditions.
-
-    Plain `if (map_blocked(...))` fallbacks are OK (still deterministic).
-    """
-    # Strip map_blocked / coord occupancy style checks — those are collision, not quest state.
+    """Movement guarded by quest, skill, inventory or varp checks; collision-only fallbacks are allowed."""
+    # Remove collision and occupancy checks; they do not depend on quest state.
     stripped = re.sub(r"if\s*\(\s*map_blocked\s*\([^)]*\)\s*\)\s*\{[^}]*\}", "", body, flags=re.I)
     stripped = re.sub(r"if\s*\(\s*~\w*blocked\w*\s*\([^)]*\)\s*\)\s*\{[^}]*\}", "", stripped, flags=re.I)
     return bool(
@@ -447,11 +432,8 @@ def point(target: Target) -> dict[str, int]:
     return {"x": target.x, "z": target.z, "level": target.level}
 
 
-# snap() rejects only a one-tile prison, so it can anchor onto a walled-off
-# pocket that reads as unsealed. Sinclair Mansion's ladder landed on the 22-tile
-# strip along its north wall — walkable, and reachable by nothing, which left
-# Donovan (medium anagram clue) unsolvable. Keyed by loc tile plus the approach
-# level, because the up and down edges of one ladder share a loc tile.
+# Why: snap() can pick an isolated multi-tile pocket, such as the strip outside Sinclair Mansion's north wall.
+# Keyed by loc tile and approach level; both directions share the loc tile.
 APPROACH_OVERRIDES: dict[tuple[int, int, int], tuple[int, int]] = {
     (2737, 3582, 0): (2736, 3582),
 }
@@ -480,18 +462,11 @@ def make_edge(config, placement: EffectivePlacement, action: str, source: Target
 
 
 def pair_up_approaches(edges: list[dict]) -> int:
-    """Anchor each climb-up on the tile its own climb-down lands on.
+    """Use the paired climb-down landing as the climb-up approach.
 
-    snap() picks an approach by scanning tiles around the loc, so it can settle
-    on a diagonal the server will not accept — live that reads as an endless
-    ``server says can't reach Ladder`` / ``no path`` loop and the destination is
-    reported unreachable. The paired climb-down is authoritative: the engine puts
-    the player on that tile, so Climb-up is operable from it by construction.
-
-    Only applied when the landing is the ladder's own foot (within two tiles of
-    the placement) — a ladder that teleports, like the Watch Tower one, lands
-    somewhere unrelated and must keep its derived approach.
-    """
+    snap() can pick an unreachable diagonal. The reverse landing is a usable
+    approach when it is within two tiles of the ladder; distant teleport
+    landings must keep their separately derived approach."""
     downs: dict[tuple[int, int], list[dict]] = {}
     for edge in edges:
         if "locX" not in edge or "locZ" not in edge:
@@ -534,15 +509,12 @@ def edge_sort_key(edge: dict) -> tuple:
 
 
 def legacy_ladder_edge(edge: dict, ladder_ids: set[int], ladder_debugs: set[str]) -> bool:
-    # Hand-baked routes are ladder-shaped but are not in the map data, so they
-    # would be filtered here and never re-derived — a silent loss on every run.
+    # Why: curated routes may have no map placement and cannot be regenerated.
     if edge.get("curated"):
         return False
     if edge.get("locId") in ladder_ids or edge.get("debugName") in ladder_debugs:
         return True
-    # Preserve disabled non-ladder rows such as the Castle Wars auto-reverse
-    # audit records. They look ladder-like because the rejected edge inherited
-    # its forward loc name/action, but the actual destination loc is a trapdoor.
+    # Keep disabled non-ladder entries; rejected reverse edges can inherit ladder names from the forward edge.
     if edge.get("disabledReason"):
         return False
     name = enrichment.normalized(edge.get("locName"))

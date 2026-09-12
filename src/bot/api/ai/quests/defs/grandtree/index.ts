@@ -41,7 +41,7 @@ import {
 /** Lobsters to have in the pack before dropping in on the demon. */
 const DEMON_FOOD = 8;
 
-/** Gear the bank turned out not to hold; asking for it again is a bank trip a fight does not have. */
+/** Gear the bank doesn't hold, so it isn't asked for again mid-fight. */
 const unavailable = new Set<string>();
 
 function custom(name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep {
@@ -61,9 +61,9 @@ function keepList(): string[] {
     return [...GT_ITEMS, 'coins', ...(food ? [food] : [])];
 }
 
-// Why: the King hands over two items at the start and four twigs at stage 110, and each refuses outright when the pack is short.
+// Why: The King requires two free slots at the start and four at stage 110.
 
-/** Bank spare junk when the pack has no room for what the next talk hands over. */
+/** Bank junk when the next dialogue needs more free slots. */
 function roomFor(snap: QuestSnapshot, slots: number): QuestStep | null {
     if ((snap.freeSlots ?? 28) >= slots) {
         return null;
@@ -84,9 +84,9 @@ function wearAll(names: readonly string[]): QuestStep {
     });
 }
 
-// Why: the demon has 157 hitpoints and 152 defence, so what the pack is carrying sets how long the fight runs, and Family Crest's lesson is that preparation must stop at the door, or a decide() mid-fight walks the bot out to re-bank.
+// Why: the demon has 157 hitpoints and 152 defence, so the pack sets how long the fight runs; preparation stops at the door or a decide() mid-fight walks the bot out to re-bank.
 
-/** Kit and food, resolved once and only while the trapdoor is still shut. */
+/** Kit and food, resolved only while the trapdoor is still shut. */
 function demonKit(snap: QuestSnapshot): QuestStep | null {
     const want = gearOf(QuestLoadout.current)
         .filter(name => !snap.worn.has(name.toLowerCase()) && !unavailable.has(name.toLowerCase()));
@@ -117,7 +117,7 @@ function demonKit(snap: QuestSnapshot): QuestStep | null {
     return want.length > missing.length ? wearAll(want.filter(n => !unavailable.has(n.toLowerCase()))) : null;
 }
 
-// Why: the twigs are re-issued by the King whenever none is held, and one already lying on its pillar counts as neither held nor lost, so an empty pack at stage 120 is the only honest ask.
+// Why: the King re-issues twigs whenever none is held, and one already on its pillar counts as neither held nor lost, so only ask with an empty pack at stage 120.
 
 /** The next twig to lay, or null when the pack holds none. */
 function nextTwig(snap: QuestSnapshot): number | null {
@@ -125,9 +125,9 @@ function nextTwig(snap: QuestSnapshot): number | null {
     return index === -1 ? null : index;
 }
 
-// Why: Anita re-issues the key and the chest re-issues the plans whenever neither the pack nor the bank holds one, so a death between the two is a walk rather than a dead end.
+// Why: Anita re-issues the key and the chest re-issues the plans whenever neither the pack nor the bank holds one, so a death between the two only costs a walk.
 
-/** Fetch the key, unlock the chest, and take Glough's invasion plans. */
+/** Fetch the key, unlock the chest, take Glough's invasion plans. */
 function invasionPlans(snap: QuestSnapshot): QuestStep {
     return held(snap, GT_OBJ.KEY) > 0
         ? custom("unlock Glough's chest", openChest)
@@ -140,8 +140,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
     const stage = snap.stage;
     if (stage === undefined) { return { kind: 'wait', reason: 'The Grand Tree journal stage unavailable' }; }
 
-    // Why: the twig legs live on Glough's pillar floor, a seven-tile pocket with no baked way off it, so the kit is bought on the ground before the first climb rather than beside the trapdoor.
-    // Why: a run that arrives up there still owing gear climbs back down for it, a bank step decided in the pocket has no route and burns its budget down to nothing proving so.
+    // Why: the twig legs live on Glough's pillar floor, a 7-tile pocket with no baked way off it, so the kit is bought on the ground before the first climb.
+    // Why: a bank step decided in the pocket has no route and burns its budget proving so, so anyone up there still owing gear climbs back down for it.
     if ((stage === GT_STAGE.GIVEN_TWIGS || stage === GT_STAGE.UNLOCKED_TRAPDOOR) && !inCaves(snap.tile)) {
         const kit = demonKit(snap);
         if (kit) {
@@ -151,7 +151,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         }
     }
 
-    // Why: everything past the demon happens in the root caves, whose only mouth before the quest ends is Glough's trapdoor, so a death, or a run resumed on the surface, climbs back down before it can act.
+    // Why: everything past the demon happens in the root caves, whose only mouth before the quest ends is Glough's trapdoor, so a death or a surface resume climbs back down first.
     if (stage >= GT_STAGE.DEFEATED_BLACK_DEMON && stage < GT_STAGE.COMPLETE && !inCaves(snap.tile)) {
         return custom('drop back into the root caves', descendTrapdoor);
     }
@@ -160,7 +160,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         case GT_STAGE.NOT_STARTED:
             return roomFor(snap, 2) ?? custom('start the quest with King Narnode', startQuest);
         case GT_STAGE.STARTED:
-            // Why: Hazelmere hands nothing over without the sample, and `~check_narnode_items` is what replaces a lost one.
+            // Why: Hazelmere hands nothing over without the sample, and `~check_narnode_items` replaces a lost one.
             return held(snap, GT_OBJ.BARK) > 0
                 ? { kind: 'talk', stop: HAZELMERE }
                 : roomFor(snap, 2) ?? { kind: 'talk', stop: NARNODE };

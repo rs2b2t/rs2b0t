@@ -18,7 +18,7 @@ async function enterBerviriusTomb(log: (m: string) => void): Promise<boolean> {
             op: 'Search',
             near: SV_TILE.WELL_STACKED_ROCKS,
             prefer: YES_CRAWL,
-            // A failed Agility roll wedges you in the crevice and spits you back out.
+            // A failed Agility roll briefly traps the player in the crevice before returning them.
             expect: () => here() === 'berviriusTomb'
         },
         log
@@ -48,8 +48,7 @@ export async function leaveBerviriusTomb(log: (m: string) => void): Promise<bool
     return ok;
 }
 
-// Why: one search hands over the sword pommel, the locating crystal and the notes.
-// Why: the notes set `used_dolmen_paper`, the journal's own marker that this leg is done, and a second visit asks for papyrus and charcoal instead.
+// Why: The first search gives three items and sets `used_dolmen_paper`; later searches request papyrus and charcoal.
 
 /** Search the Bervirius dolmen. */
 export async function searchBerviriusDolmen(log: (m: string) => void): Promise<boolean> {

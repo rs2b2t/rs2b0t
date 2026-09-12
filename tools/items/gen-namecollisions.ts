@@ -18,8 +18,8 @@ interface Named {
     name: string;
 }
 
-/** Every obj that carries a display name and can cross a trade window. */
-// Why: certs have no name= of their own and inherit through certtemplate, so they drop out here rather than doubling every group.
+/** Named objects that can be traded. */
+// Why: certs inherit names through certtemplate; excluding them avoids duplicate entries.
 function namedTradeables(text: string): Named[] {
     const out: Named[] = [];
     let obj: string | null = null;
@@ -48,16 +48,16 @@ function namedTradeables(text: string): Named[] {
     return out;
 }
 
-/** What a debugname has left once the tokens every sibling shares are taken away. */
-// Why: `dragonhide_blue` beside `dragonhide_green` leaves blue and green, which is the word a customer would have typed anyway.
+/** Debugname tokens left after removing those shared by the group. */
+// Why: dragonhide_blue and dragonhide_green should be distinguished by blue and green.
 function distinguish(objs: readonly string[]): string[][] {
     const tokens = objs.map(o => o.split('_').filter(Boolean));
     const shared = tokens[0]!.filter(t => tokens.every(other => other.includes(t)));
     return tokens.map(t => t.filter(x => !shared.includes(x)));
 }
 
-/** A derived word a customer could plausibly type. */
-// Why: keyhalf1 and holy_book_s_page1 leave '1' and 's', which name nothing; those groups have to be written out by hand.
+/** Tokens suitable for player input. */
+// Why: leftover tokens like '1' and 's' aren't useful aliases; those groups need manual names.
 function usable(word: string): boolean {
     return word.length > 1 && !/\d/.test(word);
 }
@@ -118,7 +118,7 @@ if (process.argv.includes('--check')) {
     try {
         current = readFileSync(OUT, 'utf8');
     } catch {
-        // No file yet: an absent list is "stale", which is what the check should report.
+        // Missing output is stale.
     }
     if (current !== fresh) {
         console.error(`STALE: ${OUT} does not match the content pack — run: bun tools/items/gen-namecollisions.ts`);

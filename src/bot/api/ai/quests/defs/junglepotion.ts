@@ -78,7 +78,7 @@ export function inCaves(tile: QuestSnapshot['tile']): boolean {
     return tile !== null && tile !== undefined && tile.z >= 9400;
 }
 
-// Why: `get_*` means Trufitus has named the herb, and `found_*` means it has been picked, which is the only state in which he will accept it.
+// Why: `get_*` means Trufitus has named the herb and `found_*` means it's picked, the only state he accepts it in.
 
 // Journal stages, in the order the engine walks them.
 export const JP_STAGE = {
@@ -113,10 +113,7 @@ function normalize(lines: readonly string[] | string): string {
         .toLowerCase();
 }
 
-/**
- * The journal names the herb it wants and, once picked, says so in the past tense.
- * That pair is enough to separate every `get_`/`found_` stage without a varp.
- */
+/** The journal names the herb it wants and, once picked, says so in the past tense, which separates every `get_`/`found_` stage without a varp. */
 export function parseJungleJournal(lines: readonly string[] | string): QuestProgress | undefined {
     const text = normalize(lines);
     if (text.includes('quest complete!')) {
@@ -206,8 +203,7 @@ async function leavePothole(log: (m: string) => void): Promise<boolean> {
 
 function pickHerb(herb: JungleHerb): (log: (m: string) => void) => Promise<boolean> {
     return async log => {
-        // Only the unid is evidence of a fresh pick. A clean herb carried over from
-        // an earlier run does not advance the stage, and Trufitus refuses it.
+        // Only the unid proves a fresh pick; a clean herb from an earlier run doesn't advance the stage and Trufitus refuses it.
         if (heldId(herb.unidId) > 0) {
             return true;
         }
@@ -271,8 +267,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
         return { kind: 'wait', reason: 'quest journal not loaded' };
     }
-    // Why: a carried unid outranks the journal, as it exists only because it was picked, the state the journal cannot render.
-    // Why: at `found_snake_weed` holding the unid the journal writes no line at all, and every other `found_` stage writes the previous stage's "go and pick it" line.
+    // Why: a carried unid outranks the journal since it only exists once picked, which the journal can't render.
+    // Why: at `found_snake_weed` with the unid held the journal writes no line, and every other `found_` stage writes the previous "go and pick it" line.
     const carried = JUNGLE_HERBS.find(h => (snap.invIds?.get(h.unidId) ?? 0) > 0);
     if (carried) {
         return { kind: 'custom', name: `identify the ${carried.name}`, run: identifyHerb(carried) };
@@ -293,8 +289,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (!herb) {
         return { kind: 'wait', reason: `Jungle Potion stage ${stage} is not implemented` };
     }
-    // Picking is what advances `get_` to `found_`, and only `found_` accepts a
-    // hand-in, so a clean herb carried into a `get_` stage still has to be re-picked.
+    // Picking advances `get_` to `found_` and only `found_` accepts a hand-in, so a clean herb at a `get_` stage still gets re-picked.
     const held = snap.invIds?.get(herb.id) ?? 0;
     if (stage % 2 === 1 || held === 0) {
         return { kind: 'custom', name: `pick ${herb.name}`, run: pickHerb(herb) };
@@ -304,7 +299,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const junglepotion: QuestModule = {
     record: QUESTS.find(record => record.id === 'junglepotion')!,
-    // Why: Karamja has no bank and nothing here needs one, and Ardougne West is the nearest one to the crossing, for the engine's own bookkeeping.
+    // Why: Karamja has no bank and nothing here needs one; Ardougne West is the nearest to the crossing for the engine's bookkeeping.
     bank: ARDOUGNE_BANK,
     ownsInventory: true,
     readProgress: readJungleProgress,

@@ -21,9 +21,7 @@ function normalize(lines: readonly string[] | string): string {
         .toLowerCase();
 }
 
-// Why: `@str@` is the only oracle for the bridge, so everything else is stripped.
-// Why: `~quest_journal` runs the page through `split_init` and the wrapper re-emits the active tags at the head of every line it produces.
-// Why: the struck bridge line therefore arrives as `@str@@bla@I need to repair…`, so the strike marker is not adjacent to its own words and cannot be matched with the tags left in.
+// Why: `@str@` is the only oracle for the bridge, and `~quest_journal`'s `split_init` wrapper re-emits active tags at the head of every line, so the struck line arrives as `@str@@bla@I need to repair...` and the other tags must be stripped.
 
 /** Normalise journal lines, keeping only the `@str@` marker. */
 function struck(lines: readonly string[] | string): string {
@@ -36,10 +34,7 @@ function struck(lines: readonly string[] | string): string {
 
 const BRIDGE_DONE = /@str@\s*i need to repair the bridge/;
 
-/**
- * Newest marker first: horror_journal.rs2 appends, so every earlier stage's
- * prose is still on the scroll at the later ones.
- */
+/** Newest marker first: horror_journal.rs2 appends, so earlier prose is still on the scroll. */
 function readStage(text: string): number | undefined {
     if (text.includes('quest complete!')) return HD_STAGE.COMPLETE;
     if (text.includes('i must defeat these sea monsters')) return HD_STAGE.DEFEATED_DAGJR;
@@ -53,8 +48,7 @@ function readStage(text: string): number | undefined {
     return undefined;
 }
 
-// Why: both branches of the bridge line say the same words and only the colour tag differs, `@str@` for done against `@dbl@` for outstanding.
-// Why: that one flag is therefore read off the tagged text rather than the normalised text.
+// Why: both bridge lines say the same words, `@str@` for done and `@dbl@` for outstanding, so that flag is read off the tagged text.
 
 /** Read the journal's progress flags. */
 function readFlags(text: string, tagged: string): Set<string> {
@@ -97,7 +91,7 @@ export function parseHorrorJournal(lines: readonly string[] | string): QuestProg
     return { stage, flags };
 }
 
-/** A failed read is not evidence the quest went backwards. */
+/** Stands in when a read fails. */
 let lastGood: QuestProgress | undefined;
 
 export async function readHorrorProgress(): Promise<QuestProgress | undefined> {

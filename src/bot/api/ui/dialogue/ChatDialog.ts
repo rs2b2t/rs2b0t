@@ -3,8 +3,8 @@ import { Input } from '../../../input/Input.js';
 import { Execution } from '../../execution/Execution.js';
 
 /**
- * Chat modals: dialogue pages, option lists, and make-x menus. Server-driven
- * chains must be driven to completion.
+ * Chat modals: dialogue pages, option lists, and make-x menus. Drive a
+ * server-driven chain to completion.
  * @see docs/reference/api-dialogue.md
  * @see docs/reference/quest-primitives.md
  */
@@ -60,10 +60,7 @@ export const ChatDialog = {
         }, 3000);
     },
 
-    /**
-     * Pick Make-1 for the product whose name contains `match` (or the first).
-     * Used by knife-delay tick manip, never Make-X / count dialog.
-     */
+    /** Pick Make-1 for the product whose name contains `match` (or the first); knife-delay tick manip uses it and it never touches Make-X or the count dialog. */
     async makeOne(match?: string): Promise<boolean> {
         const products = reader.makeProducts();
         if (products.length === 0) {
@@ -90,10 +87,7 @@ export const ChatDialog = {
         }, 3000);
     },
 
-    /**
-     * Click Make-X for a product and type `count` into the amount dialog.
-     * Why: waits for the count dialog to open and to close, so callers do not race a still-open make-menu (BankFletcher thrash after #177).
-     */
+    /** Click Make-X, enter `count`, and wait for the amount dialog to close (#177). */
     async makeX(match: string, count: number): Promise<boolean> {
         const products = reader.makeProducts();
         const want = match.toLowerCase();

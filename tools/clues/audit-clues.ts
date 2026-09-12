@@ -82,7 +82,7 @@ function loadPack(pack: string): PathFinder {
         bytes = gunzipSync(bytes);
     }
     const finder = new PathFinder(bytes);
-    // Why: transports.json alone omits every curated travel edge, so the audit routed on a smaller graph than the bot walks and called reachable destinations unreachable.
+    // Why: transports.json alone omits the curated travel edges, so routing on it calls reachable destinations unreachable.
     finder.addEdges(doorsJson as DoorEdgeData[], allTransportRows(), stairsJson as TransportEdgeData[]);
     return finder;
 }

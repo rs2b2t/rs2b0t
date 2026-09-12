@@ -1,7 +1,7 @@
 // docs/decisions/multibox-telemetry-honesty.md
-// Why: an object per sample costs ~10x the bytes and adds GC pressure to the main thread being measured, so every series is a pre-allocated Float64Array and a sample is a strided write.
+// Why: an object per sample costs about 10x the bytes and adds GC pressure to the main thread being measured, so every series is a pre-allocated Float64Array and a sample is a strided write.
 
-/** Slot value meaning "the sampler did not run" -- distinct from a 0. */
+/** Slot value meaning "the sampler did not run", distinct from 0. */
 export const MISSING = Number.NaN;
 
 export class DiagRing {
@@ -54,10 +54,7 @@ export class DiagRing {
         return this.data.byteLength + this.stamps.byteLength;
     }
 
-    /**
-     * Values must be ordered as `fields`. A short or long row is a caller
-     * bug that would silently shift every later column, so it throws.
-     */
+    /** Values must be ordered as `fields`; a short or long row would shift every later column, so it throws. */
     push(at: number, values: ArrayLike<number>): void {
         if (values.length !== this.fields.length) {
             throw new RangeError(`diagnostics sample has ${values.length} values, expected ${this.fields.length}`);
@@ -98,10 +95,7 @@ export class DiagRing {
         return out;
     }
 
-    /**
-     * The newest sample at or before `at`. Answering "what did it look like an hour
-     * ago" is the point of retention, so it is a first-class read.
-     */
+    /** The newest sample at or before `at`; "what did it look like an hour ago" is the point of retention. */
     at(wallClockMs: number): Record<string, number> | null {
         const stamps = this.timestamps();
         let found = -1;

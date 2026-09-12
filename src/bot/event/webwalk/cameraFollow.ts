@@ -1,12 +1,10 @@
-// Why: optional orbit-camera path facing, client-only, with no server or LC changes.
-// Why: the yaw math matches the client's cinema look-at, yaw = (atan2(dx, dz) * -325.949) & 0x7ff.
-// Why: smoothing runs on the game frame loop rather than the walk tick, so turns ease like a human holding left/right instead of stepping once per path poll.
+// Client-only path facing, using the cinema camera yaw formula and frame-rate smoothing.
 
 import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { BotHost } from '../../runtime/BotHost.js';
 import { SettingsStore } from '../../runtime/Settings.js';
 
-/** Scene-unit / tile delta → orbit camera yaw (0–2047). */
+/** Scene-unit / tile delta to orbit camera yaw (0-2047). */
 export function yawTowardDelta(dx: number, dz: number): number {
     if (dx === 0 && dz === 0) {
         return 0;
@@ -38,10 +36,7 @@ export function stepYaw(current: number, target: number, maxStep: number): numbe
     return target & 0x7ff;
 }
 
-/**
- * Ease toward target: blend of error + velocity damping (mirrors client keycam feel).
- * Returns { yaw, velocity } after one frame.
- */
+/** Ease one frame toward the target with proportional gain and velocity damping. */
 export function easeYaw(
     current: number,
     target: number,
@@ -58,7 +53,7 @@ export function easeYaw(
         return { yaw: current & 0x7ff, velocity: 0 };
     }
 
-    // Desired velocity proportional to remaining error (client yawVelocity ±24 scale).
+    // Match the client's +/-24 yaw-velocity scale.
     let desired = err * gain;
     if (desired > maxSpeed) {
         desired = maxSpeed;
@@ -66,13 +61,13 @@ export function easeYaw(
         desired = -maxSpeed;
     }
 
-    // Blend previous velocity → desired (smooth accel/decel).
+    // Blend toward the target velocity for smooth acceleration.
     let v = velocity * damping + desired * (1 - damping);
     if (Math.abs(v) < 0.15) {
         v = 0;
     }
 
-    // Client applies velocity/2 each frame when keys are held.
+    // Key-driven camera motion applies half the velocity each frame.
     const next = (current + Math.round(v / 2)) & 0x7ff;
     return { yaw: next, velocity: v };
 }
@@ -83,10 +78,7 @@ export interface TileLike {
     level?: number;
 }
 
-/**
- * Pick a look-ahead tile on the path so the camera tracks the route, not every
- * single footstep (less twitchy on diagonals / switchbacks).
- */
+/** A look-ahead tile so the camera tracks the route; less twitchy on diagonals and switchbacks. */
 export function lookAheadTile(tiles: TileLike[], pathIdx: number, lookAhead = 12): TileLike | null {
     if (tiles.length === 0) {
         return null;
@@ -95,7 +87,7 @@ export function lookAheadTile(tiles: TileLike[], pathIdx: number, lookAhead = 12
     return tiles[i] ?? null;
 }
 
-// Why: same-plane dungeon and portal hops use large coordinate jumps (e.g. z ± 6400), and averaging past that boundary points the camera at the remote landing instead of the local ladder or object being approached (#332).
+// Why: stop at same-plane coordinate jumps so remote dungeon landings do not pull the camera.
 const TRANSPORT_JUMP_TILES = 32;
 
 function isTransportBoundary(a: TileLike, b: TileLike): boolean {
@@ -111,8 +103,7 @@ function isTransportBoundary(a: TileLike, b: TileLike): boolean {
     return Math.max(dx, dz) >= TRANSPORT_JUMP_TILES;
 }
 
-// Why: averaging is smoother than one far point on zigzags.
-// Why: the scan stops at the next transport or discontinuity so same-plane dungeon landings do not yank yaw toward the remote side.
+// Average until the next hop or discontinuity to smooth zigzags.
 
 /** Average heading from `from` across several path tiles ahead. */
 export function pathFacingYaw(
@@ -135,7 +126,7 @@ export function pathFacingYaw(
     let prev: TileLike = from;
     for (let i = start; i <= end; i++) {
         const t = tiles[i]!;
-        // Stop before including a transport landing / level hop in the average.
+        // Do not average across a transport or level hop.
         if (isTransportBoundary(prev, t)) {
             break;
         }
@@ -153,10 +144,7 @@ export function pathFacingYaw(
     return yawTowardDelta(dx, dz);
 }
 
-/**
- * Desired orbit yaw so the camera faces from `from` toward `to` (same level only).
- * Returns null when there is no horizontal direction (same tile / level hop).
- */
+/** Orbit yaw facing from `from` toward `to` on the same level; null for the same tile or a level hop. */
 export function yawTowardTiles(from: TileLike, to: TileLike): number | null {
     if (from.level !== undefined && to.level !== undefined && from.level !== to.level) {
         return null;
@@ -176,10 +164,7 @@ const TARGET_RETARGET_MIN = 28;
 /** Stop driving the camera this long after the last path sample (walk ended or stalled). */
 const STALE_MS = 3000;
 
-/**
- * Frame-driven path camera. WalkExecutor only publishes a desired heading;
- * this eases orbit yaw every client frame while Global.navCameraFollow is on.
- */
+/** Frame-driven path camera: WalkExecutor publishes a heading and this eases orbit yaw each frame while Global.navCameraFollow is on. */
 class PathCameraFollowImpl {
     private hooked = false;
     private active = false;
@@ -195,10 +180,7 @@ class PathCameraFollowImpl {
         BotHost.addFrameListener(() => this.onFrame());
     }
 
-    /**
-     * Called from the walk follow loop with the latest path-facing yaw.
-     * No-op when the setting is off.
-     */
+    /** Latest path-facing yaw from the walk follow loop; no-op when the setting is off. */
     samplePathYaw(yaw: number): void {
         if (!SettingsStore.globalBag().bool('navCameraFollow', false)) {
             this.release();
@@ -212,8 +194,7 @@ class PathCameraFollowImpl {
             this.desiredYaw = yaw & 0x7ff;
             return;
         }
-        // Only retarget when the path heading has moved enough, avoids
-        // re-aiming every tile on a nearly straight corridor.
+        // Ignore small heading changes so straight corridors do not retarget every tile.
         if (Math.abs(yawDelta(this.desiredYaw, yaw)) >= TARGET_RETARGET_MIN) {
             this.desiredYaw = yaw & 0x7ff;
         }

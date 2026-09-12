@@ -1,6 +1,4 @@
-/**
- * Derive the Underground Pass as areas and the one action each takes.  Why: the pass is not a search  problem. Every crossing in it is a scripted obstacle with a fixed stand and a fixed landing, read off  the map's own angles and the script's own arithmetic, so which pocket the character is in decides  what to do next, and nothing about distance or gain enters into it. This floods the collision pack,  names every pocket the pass is cut into, and emits the seam that joins each pair with the tile the op  is sent from.  bun tools/nav/upass-areas.ts [--stage 3]
- */
+/** Flood Underground Pass pockets and derive crossing stands and landings. Run: bun tools/nav/upass-areas.ts [--stage 3] [--emit] */
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -53,7 +51,7 @@ function seamsOf(id: number, at: NavPoint, angle: number): Seam[] {
             mk(T(at.x + 1, at.z), T(at.x - 1, at.z)), mk(T(at.x - 1, at.z), T(at.x + 1, at.z))
         ];
     }
-    // ~open_and_close_door2 moves the player across the door's own edge: its tile, or the tile beyond it.
+    // ~open_and_close_door2 moves you across the door's edge: its tile or the one beyond.
     if (id === 3266 || id === 3268) {
         const off: Record<number, [number, number]> = { 0: [-1, 0], 1: [0, 1], 2: [1, 0], 3: [0, -1] };
         const [dx, dz] = off[angle] ?? [0, 0];
@@ -64,22 +62,22 @@ function seamsOf(id: number, at: NavPoint, angle: number): Seam[] {
     if (id === 3238) {
         return [mk(T(at.x + 1, at.z), T(2374, 9638)), mk(T(at.x + 1, at.z), T(2374, 9643))];
     }
-    // [oploc1,upass_pipe6]: mod by the loc's own x, three tiles, a stage-dependent telejump, three more.
+    // [oploc1,upass_pipe6]: mod by the loc's own x, 3 tiles, a stage-dependent telejump, 3 more.
     if (id === 3237) {
         const mod = at.x < 2415 ? 1 : -1;
         const start = at.x < 2415 ? T(at.x - 1, at.z) : T(at.x + 2, at.z);
         const jump = stage >= 4 ? 26 : 1;
         return [mk(start, T(start.x + mod * (3 + jump + 3), start.z))];
     }
-    // [oploc1,upass_pipe4] crawls three tiles north from where it is used.
+    // [oploc1,upass_pipe4] crawls 3 tiles north from where it is used.
     if (id === 3235) {
         return [mk(T(at.x, at.z - 1), T(at.x, at.z + 3))];
     }
-    // @upass_rock_ropeswing forcemoves to a fixed start and swings four east.
+    // @upass_rock_ropeswing forcemoves to a fixed start and swings 4 east.
     if (id === 2275 || id === 2276) {
         return [mk(T(2462, 9699), T(2466, 9699))];
     }
-    // [oploc1,loc_2274] walks to loc+4 and swings five west.
+    // [oploc1,loc_2274] walks to loc+4 and swings 5 west.
     if (id === 2274) {
         return [mk(T(at.x + 4, at.z), T(at.x - 1, at.z))];
     }
@@ -99,7 +97,7 @@ for (const name of fs.readdirSync(MAPS)) {
     }
     const mx = Number(m[1]);
     const mz = Number(m[2]);
-    // Why: `GameMap` reads a loc's level as `level - 1` wherever the LEVEL-1 land flag carries LINK_BELOW (0x2), so every ledge and stone bridge in the pass is written at level 1 and stands at level 0. Filtering on the file's own level drops all of them, and the graph reads as a cavern with no ledges in it.
+    // Why: LINK_BELOW (0x2) moves level-1 ledges and bridges to effective level 0.
     const lines = fs.readFileSync(path.join(MAPS, name), 'utf8').split('\n');
     const linkBelow = new Set<number>();
     let land = '';
@@ -151,7 +149,7 @@ for (const name of fs.readdirSync(MAPS)) {
     }
 }
 
-// Why: an area's name has to survive a re-derivation, so it is the smallest packed tile in the pocket rather than the order the flood happened to meet it. The anchor is the tile the runtime routes to, to ask "am I here".
+// Use the smallest packed tile as a stable pocket ID; the anchor is its runtime destination.
 const anchors: NavPoint[] = [];
 const names: string[] = [];
 function canonical(seed: NavPoint): string {
@@ -216,7 +214,7 @@ for (const [name, t] of LANDMARKS) {
     console.log(`  ${name.padEnd(18)} (${t.x},${t.z})  ${areaOf(t) ?? 'BLOCKED'}`);
 }
 
-// Why: the route is what a breadth-first walk of that graph says, not what a runtime search guesses.
+// Precompute the seam route with BFS.
 function chain(from: NavPoint, to: NavPoint): string {
     const start = areaOf(from);
     const goal = areaOf(to);
@@ -251,7 +249,7 @@ for (let i = 0; i + 1 < LANDMARKS.length; i++) {
     console.log(`  ${an} → ${bn}:\n    ${chain(a, b)}`);
 }
 
-// Why: the table the runtime reads, emitted rather than hand-copied, every tile in it came from the map and the script, and a re-derivation after a content change rewrites it.
+// Emit the runtime table for regeneration after content changes.
 if (args.includes('--emit')) {
     const seen = new Set<string>();
     const lines: string[] = [];

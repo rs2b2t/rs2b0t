@@ -27,7 +27,7 @@ export const SHOP = {
     HERBLORE: { npc: 'Jatix', anchor: DIG_TILE.JATIX }
 } as const;
 
-// Why: the panning invite is a `%itexam_bits` bit the client never sees, and the guide's greeting wraps across components, so the pan attempt itself is the oracle: he steps in, or he does not.
+// Why: the panning invite is a `%itexam_bits` bit the client never sees and the guide's greeting wraps across components, so the pan attempt itself is the oracle.
 
 /** What the last refused pan taught this session. */
 export const DigsiteState = {
@@ -68,7 +68,7 @@ export function buy(item: string, qty: number, shop: { npc: string; anchor: Tile
     return { kind: 'buy', item, qty, shop: { npc: shop.npc, anchor: shop.anchor }, estGp };
 }
 
-// Why: Jatix is four hundred tiles from the site and the only counter within reach that stocks either, so both are bought on one trip rather than one per `buy` step.
+// Why: Jatix is 400 tiles from the site and the only counter in reach that stocks either, so one trip buys both.
 
 /** The vial and the pestle, from the nearest herblore counter, in a single visit. */
 export function herbloreKit(needVial: boolean, needPestle: boolean): QuestStep {
@@ -144,10 +144,10 @@ export async function takeSpecimenJar(log: (m: string) => void): Promise<boolean
 
 const STEAL_SETTLED = /you steal|you find a specimen brush|you fail to pick|stunned/i;
 const PICKPOCKET_MS = 8 * 60_000;
-// Why: a pocket hands over four pairs of gloves and six brushes on the way to two ropes, and a leg that only tidies at four free slots hands the cave legs a full pack.
+// Why: a pocket hands over 4 pairs of gloves and 6 brushes on the way to 2 ropes, and tidying only at 4 free slots hands the cave legs a full pack.
 const SPOIL_FREE = 10;
 
-// Why: the specimen brush has no other source in the game, "we have a bit of a shortage of those at the moment", and the green student's rock sample is only ever a pocket.
+// Why: the specimen brush has no other source ("we have a bit of a shortage of those at the moment") and the green student's rock sample is only ever a pocket.
 
 /** Steal from digsite workmen until the goal lands, dropping the spade-and-bucket spoil as it comes. */
 export async function pickpocketWorkman(
@@ -182,7 +182,7 @@ export async function pickpocketWorkman(
             what: 'digsite workman',
             log
         });
-        // Why: the nearest workman is often inside a fenced dig site, and the server refuses a pocket it cannot path to, walking at his own tile lets the baked graph find the gate.
+        // Why: the nearest workman is often inside a fenced dig site and the server refuses a pocket it can't path to; walking to his own tile lets the baked graph find the gate.
         if (status === 'unreachable' && target) {
             await walkTo(target.tile() as Tile, 2, log);
         }
@@ -218,7 +218,7 @@ export async function panUntil(want: () => boolean, log: (m: string) => void): P
         if (EventSignal.pending()) {
             return want();
         }
-        // Why: every pan and every search ends in an objbox, and leaving it up makes the next click's "did a dialogue open?" read the last one.
+        // Why: every pan and search ends in an objbox, and leaving it up makes the next click's "did a dialogue open?" read the last one.
         for (let i = 0; i < 4 && ChatDialog.canContinue(); i++) {
             await ChatDialog.continue();
             await Execution.delayTicks(1);
@@ -254,7 +254,7 @@ export async function panUntil(want: () => boolean, log: (m: string) => void): P
             () => Inventory.countById(DIG_ID.TRAY_MUD) > 0 || ChatDialog.isOpen() || ChatDialog.canContinue(),
             12_000
         );
-        // Why: a filled tray is the success oracle and it lands before the objbox, so the dialogue test only means anything once the tray is still empty.
+        // Why: a filled tray is the success oracle and lands before the objbox, so the dialogue test only means anything while the tray is still empty.
         if (Inventory.countById(DIG_ID.TRAY_MUD) > 0) {
             continue;
         }
@@ -290,7 +290,7 @@ export interface DigZone {
     maxZ: number;
 }
 
-// Why: `[oplocu,_digsite_soil]` picks the exam level from the SOIL's own coordinate, not the player's, so a soil loc a tile outside the zone is a different site with a different refusal.
+// Why: `[oplocu,_digsite_soil]` picks the exam level from the soil's own coordinate, so a soil loc a tile outside the zone is a different site with a different refusal.
 
 /** Use the trowel on soil inside one dig zone until the wanted object lands. */
 export async function digUntil(zone: DigZone, want: () => boolean, log: (m: string) => void): Promise<boolean> {
@@ -334,10 +334,10 @@ export async function digUntil(zone: DigZone, want: () => boolean, log: (m: stri
                 || GameMessages.sawSince(mark, DUG_THROUGH),
             15_000
         );
-        // Why: a workman within ten tiles turns every refusal into a `~chatnpcnoturn` line rather than a message, so the absence of "You dig through the earth" is what says the pack is short a jar, a brush or a certificate.
+        // Why: a workman within 10 tiles turns every refusal into a `~chatnpcnoturn` line with no game message, so a missing "You dig through the earth" is what says the pack is short a jar, a brush or a certificate.
         if (want() || GameMessages.sawSince(mark, DUG_THROUGH)) {
             refusals = 0;
-            // Why: the find lands six ticks after that message and the player is delayed until it does, so a trowel clicked on the message is dropped and the loop pays a full timeout for the next one.
+            // Why: the find lands 6 ticks after that message and you're delayed until it does, so a trowel clicked on the message is dropped and the loop pays a full timeout.
             await Execution.delayUntil(() => want() || GameMessages.sawSince(mark, DIG_SETTLED), 12_000);
         } else if (++refusals >= 3) {
             for (const line of GameMessages.since(mark)) {

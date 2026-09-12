@@ -39,8 +39,7 @@ export async function takeStoreroomKey(log: (m: string) => void): Promise<boolea
     );
 }
 
-// Why: the door reads the key out of the pack, so a spent key is the only client-visible proof the
-// unlock landed, the stage varp itself is not transmitted.
+// Why: the door reads the key out of the pack, so a spent key is the only client-visible proof the unlock landed; the stage varp is not transmitted.
 
 /** Unlock the Storeroom Door from the corridor south of it. */
 export async function unlockStoreroom(log: (m: string) => void): Promise<boolean> {
@@ -65,8 +64,7 @@ export async function unlockStoreroom(log: (m: string) => void): Promise<boolean
     );
 }
 
-// Why: eight guards patrol the crate maze and each knock costs up to six hitpoints and a teleport
-// back to the antechamber, so the walk in is expected to fail several times before it lands.
+// Why: 8 guards patrol the crate maze and each knock costs up to 6 hitpoints and a teleport back to the antechamber, so the walk in is expected to fail several times.
 
 /** Search the Goutweed Crate, riding out the patrol knockouts. */
 export async function takeGoutweed(log: (m: string) => void): Promise<boolean> {

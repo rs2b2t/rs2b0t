@@ -27,8 +27,8 @@ export interface WalkResilientOptions {
     policy?: WalkOptions['policy'];
     bankItemCounts?: WalkOptions['bankItemCounts'];
     /**
-     * Danger / no-go zones for every baked repath (same as WalkOptions.avoidZones), as known ids or ad-hoc rects.
-     * Why: automatic catalog zones are resolved by WalkExecutor from live player state.
+     * No-go zones for every baked repath (same as WalkOptions.avoidZones), as known ids or ad-hoc rects.
+     * Why: WalkExecutor resolves the automatic catalog zones from live player state.
      */
     avoidZones?: WalkOptions['avoidZones'];
 }
@@ -38,8 +38,7 @@ const DEFAULT_MAX_BUDGET = 1_200_000;
 const PROGRESS_LOG_MS = 15_000;
 
 /**
- * Force nav spell/jewellery tele inject **off** for one walk (overrides Global
- * `navTeleports`). Prefer the Global toggle (default off) for normal use.
+ * Force nav spell/jewellery teleport injection off for one walk, overriding the Global `navTeleports` toggle (default off).
  * @see docs/reference/nav-walker.md
  */
 export const NAV_PURE_WALK = {
@@ -47,10 +46,7 @@ export const NAV_PURE_WALK = {
     policy: { useTeleports: false as const }
 };
 
-/**
- * Force nav tele inject **on** for one walk (overrides Global `navTeleports`).
- * Useful for ClueSolver / harnesses when the Global toggle stays off.
- */
+/** Force nav teleport injection on for one walk, overriding Global `navTeleports`; ClueSolver and harnesses use it when the toggle stays off. */
 export const NAV_WITH_TELES = {
     useTeleportCatalog: true as const,
     policy: { useTeleports: true as const }
@@ -69,9 +65,9 @@ export const Traversal = {
     withTeles: NAV_WITH_TELES,
 
     /**
-     * Whether ordinary walks may inject teleport edges, the Global `navTeleports` toggle every walk already consults.
-     * Why: exposed because it is a provisioning question, A* only injects a hop the live inventory can pay for, so a script that wants the toggle to mean anything must put the runes in the pack before it walks.
-     */
+ * Whether ordinary walks may use teleport edges. Defaults to the global `navTeleports` setting.
+ * Why: A* only adds teleports the current inventory can pay for.
+ */
     teleportsEnabled(): boolean {
         try {
             return SettingsStore.globalBag().bool('navTeleports', false);
@@ -84,10 +80,7 @@ export const Traversal = {
         return WalkExecutor.walkTo(dest, opts);
     },
 
-    /**
-     * Force the active (or next) world walk to repath. Always honored,
-     * does not wait for stall/deviation. See path stickiness on WalkExecutor.
-     */
+    /** Force the active (or next) world walk to repath without waiting for a stall or deviation; see path stickiness on WalkExecutor. */
     requestRepath(reason?: string): void {
         WalkExecutor.requestRepath(reason);
     },

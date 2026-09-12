@@ -1,7 +1,5 @@
-/** Live proof, Alcher drains its ticked items richest first and yields the loop to a random event.
- *  Why: the cast used to run inside a while loop that held every one of a trip's casts, so Supervisor.intercept
- *  never got a turn and a Swarm chewed through the bot while it alched on. One cast per call gives
- *  the intercept a point to break in, and the drain moves to the next item once the bank is out. */
+/** Live check that Alcher drains items by value and yields to random events. */
+// Why: batching a whole trip kept `Supervisor.intercept` from handling a Swarm between casts.
 
 //   bun e2e/alcher-swarm-drain-live.ts [http://localhost:8890]
 import { cheatQuiet, deployIsolatedClient, fail, launchBrowser, positionalArgs, setSettings } from './lib/harness.js';

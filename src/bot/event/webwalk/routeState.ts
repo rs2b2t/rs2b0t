@@ -1,7 +1,4 @@
-/**
- * Session route progress for the active walk (not Global settings).
- * Shared with pathPublish for overlay + recovery.
- */
+/** Session route progress for the active walk, read by the overlay and recovery. */
 
 interface RouteStateSnapshot {
     pathIdx: number;

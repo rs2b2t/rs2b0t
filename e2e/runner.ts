@@ -1,5 +1,5 @@
-/** End-to-end runner: --level quick|smart|full, --only <names>, --gates-only, --verbose.
- *  Deploys once, runs the offline gates then the harnesses, and diffs the report against the previous run so the output names what changed. */
+/** E2E runner for offline gates and browser harnesses. */
+// Deploys once and compares the report with the previous run.
 
 // Usage:
 //   bun run e2e                     # quick: the fast harnesses
@@ -26,11 +26,11 @@ const OUT = 'out/e2e';
 const LOGS = join(OUT, 'logs');
 const LATEST = join(OUT, 'latest.json');
 
-/** Minutes for a case that names no budgetMin of its own. */
+/** Default case budget in minutes. */
 const DEFAULT_BUDGET = 12;
 
-/** `verdict` overrides the exit code where a tool reports its status in its output.
- *  Why: the generators print STALE and some then exit non-zero on an unrelated teardown crash in the vendored audio shim. */
+/** Optional output verdict that overrides the process exit code. */
+// Why: generators may report STALE before an unrelated audio-shim teardown failure.
 const DRIFT = (text: string): Status => (/\bSTALE\b|does not match/i.test(text) ? 'fail' : 'pass');
 
 interface Gate { name: string; cmd: string[]; verdict?: (text: string) => Status; }
@@ -182,10 +182,10 @@ function report(now: Run, before: Run | null): string {
 const level = (arg('level') as Level | undefined) ?? 'quick';
 const only = (arg('only') ?? '').split(',').map(s => s.trim()).filter(Boolean);
 const engine = arg('engine');
-// Why: every harness is a headless browser against one world, so the ceiling is memory and world contention rather than cores, one at a time stays the default and the number is the caller's to raise.
+// Why: browser memory and shared-world contention make one job the safe default.
 const jobs = Math.max(1, Number(arg('jobs') ?? 1) || 1);
 
-// Why: --list answers "what would run" without an engine, a deploy or a browser.
+// `--list` needs no engine, deploy, or browser.
 if (has('list')) {
     const byStatus = new Map<string, number>();
     for (const c of CASES) {
@@ -228,8 +228,8 @@ if (!has('gates-only')) {
             const { cases, why } = pick(level, only);
             console.log(`${cases.length} case(s) — ${why}${jobs > 1 ? `, ${jobs} at a time` : ''}`);
 
-            // Why: the deploy above is the one every harness shares, and each passes `--no-deploy`, so nothing rewrites `public/bot` underneath a run in flight, which is what made a pool safe to add.
-            // Why: each harness makes its own account, so the only thing they contend for is the world itself.
+            // Why: one shared deploy and `--no-deploy` prevent workers from replacing `public/bot` mid-run.
+            // Each harness owns its account; only the world is shared.
             let next = 0;
             let done = 0;
             const worker = async (): Promise<void> => {
@@ -255,7 +255,7 @@ if (!has('gates-only')) {
     }
 }
 
-// Why: a pool finishes in whatever order the harnesses happen to end, so the report is put back into manifest order. The file is diffed between runs and a shuffled one reads as change that is not there.
+// Why: stable manifest order keeps report diffs free of pool completion noise.
 const ORDER = new Map(CASES.map((c, i) => [c.id, i]));
 now.results.sort((a, b) => {
     if (a.kind !== b.kind) {

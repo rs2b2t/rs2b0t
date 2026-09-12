@@ -12,7 +12,7 @@ interface PrayerDef {
 
 /**
  * The prayer overlay's toggle buttons and the varps that mirror them.
- * Why: buttons are tab-bound and the engine treats any tab root as visible, so a prayer can be toggled without switching to the prayer tab.
+ * Why: the engine treats any tab root as visible, so you can toggle a prayer without switching to the prayer tab.
  * @see docs/reference/api-skills.md#prayer
  */
 const PRAYERS: Record<string, PrayerDef> = {
@@ -87,7 +87,7 @@ export const Prayer = {
         return Execution.delayUntil(() => this.active(name) === on, TOGGLE_MS);
     },
 
-    /** Turn off every prayer that is currently draining points. */
+    /** Turn off every active prayer. */
     async clear(): Promise<void> {
         for (const name of Object.keys(PRAYERS)) {
             if (this.active(name)) {

@@ -4,9 +4,9 @@ import Tile from '../../geometry/Tile.js';
 export { TINDERBOX } from '../acquisition/Tools.js';
 export const CANT_LIGHT = /can't light a fire here/i;
 
-/** How long (game ticks) to wait for the light attempt to start (log leaves pack / anim / blocked). */
+/** Ticks to wait for the light attempt to start (log leaves the pack, anim, or blocked). */
 export const FIRE_START_TICKS = 14;
-/** How long (game ticks) to wait for FM XP after a light attempt has started. */
+/** Ticks to wait for FM xp once the attempt has started. */
 export const FIRE_LIGHT_TICKS = 150;
 
 export interface FirePlot {
@@ -271,7 +271,7 @@ export function shouldBurnFullLoad(mode: BurnMode, inventoryFull: boolean, logCo
 /** What one light attempt did. */
 export type LightOutcome = 'lit' | 'blocked' | 'stalled';
 
-// Why: findBurnLane ranks on locs and walkability alone, neither of which knows the game refused a tile, so a refused tile stays the best candidate and the script walks back to it forever.
+// Why: findBurnLane ranks on locs and walkability alone, so a tile the game refused stays the best candidate and the script walks back to it forever.
 
 /** Tiles that answered {@link CANT_LIGHT} this session. */
 export class NoLightTiles {

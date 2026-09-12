@@ -29,8 +29,7 @@ export async function walkTo(to: Tile, radius: number, log: (m: string) => void)
     return Traversal.walkResilient(to, { radius, attempts: 3, timeoutMs: 180_000, log });
 }
 
-// Why: both wall crossings hand the player an `if_close`/`mes`/`p_delay` chain and only then
-// `p_teleport`, so polling the tile times out while the script waits on a click nobody made.
+// Why: Both wall crossings require completing an `if_close`/`mes`/`p_delay` chain before `p_teleport` runs.
 async function arrive(
     want: (a: BioArea) => boolean,
     prefer: string[],
@@ -62,7 +61,7 @@ export async function talkAt(
     return talkStrict(npc, prefer, log);
 }
 
-// Why: Omart's answer is five `if_close`/`mes`/`p_delay` beats before the choice that crosses, and every one leaves the chat modal shut, which `talkStrict` reads as the end of the conversation and returns on, so the choice belongs to the arrival poll rather than to the talk.
+// Why: Omart's answer is 5 `if_close`/`mes`/`p_delay` beats before the crossing choice, each leaving the chat modal shut, which `talkStrict` reads as the end and returns on, so the arrival poll drives the choice.
 /** Omart's rope ladder. Only offered between released_pigeons and found_distillator. */
 async function climbWithOmart(log: (m: string) => void): Promise<boolean> {
     await talkAt(BIO_NPC.OMART, BIO_TILE.OMART, OMART_CROSS, log);
@@ -75,7 +74,7 @@ async function climbWithKilron(log: (m: string) => void): Promise<boolean> {
     return arrive(a => a === 'mainland', KILRON_CROSS, log);
 }
 
-// Why: the headquarters door answers Open with "In you go doc." and only opens once that box is clicked through, which is the frame the walker's own door crossing gives up on, and both its faces stand in a corridor the mourners wander, where one on the stand tile makes the client's path search fail every click, so `Reach.locOp` owns the approach and operates the door from either side of its edge.
+// Why: the door answers Open with "In you go doc." and only opens once that box is clicked through, which the walker's door crossing gives up on; mourners wander both faces and one on the stand tile fails the client's path search, so `Reach.locOp` owns the approach from either side.
 async function crossHqDoor(near: Tile, want: (a: BioArea) => boolean, log: (m: string) => void): Promise<boolean> {
     return promptLoc({
         name: 'Door',
@@ -136,8 +135,7 @@ export async function goWest(log: (m: string) => void): Promise<boolean> {
     }
 }
 
-// Why: Kilron crosses from climbed_ladder onward and costs one dialogue, but the manhole and mud
-// pile are baked edges with no requirement eastbound, so a refused Kilron is not a dead end.
+// Why: Kilron crosses from climbed_ladder onward and costs one dialogue, but the manhole and mud pile are baked edges with no requirement eastbound, so there's a way out even when Kilron refuses.
 export async function goMainland(log: (m: string) => void): Promise<boolean> {
     switch (area()) {
         case 'mainland':

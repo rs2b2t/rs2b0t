@@ -1,6 +1,6 @@
-/** Live Sheep Herder harness (#260): --stage N --done N --until N --minutes N, base :8890.
- *  Why: `--done` seeds `%sheepherdervar` rather than the quest varp, because the journal reads its per-sheep state out of that bitfield and the two have to move together; it relogs since update_questlist only recolours the list at login.
- *  Why: the bank holds coins and food alone. The suit is bought from Doctor Orbon, the prod is taken off the barn floor and the feed comes from Halgrive, so seeding any of them would hide whether the bot can source it. */
+/** Live Sheep Herder harness (#260), using the members world at :8890. */
+// Why: `%sheepherdervar` carries per-sheep state and must match the quest stage before relogging.
+// Only coins and food are banked so the suit, prod, and feed must be sourced.
 
 //   HEADED=1 bun e2e/sheep-herder-260-live.ts --stage 0 --until 4 --minutes 90 --tick 300
 //   HEADED=1 bun e2e/sheep-herder-260-live.ts --stage 2 --done 3 --until 4 --minutes 25 --tick 300
@@ -238,7 +238,7 @@ try {
     let queueChecked = false;
     while (Date.now() < deadline) {
         const last = await snapshot(page);
-        // Why: the engine serves one bundle to everyone, so a session that deploys between this deploy and the page load hands the run its own branch, and a queue without Sheep Herder in it spends the budget on somebody else's quest.
+        // Why: reject a shared bundle replaced by another session during boot.
         const queue = last.logs.find(l => l.msg.startsWith('AIOQuester — queue:'));
         if (!queueChecked && queue) {
             queueChecked = true;

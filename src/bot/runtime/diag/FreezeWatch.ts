@@ -1,7 +1,5 @@
 // docs/decisions/multibox-telemetry-honesty.md
-// Why: a main-thread heartbeat cannot measure the freeze it is stuck inside. It is not running during the stall it wants to time.
-// Why: the wall already owns a worker-backed clock (WorkerClock) whose worker keeps its own time while the main thread is wedged, so the timer fires on schedule and the resolve waits for the main thread.
-// Why: the overshoot past the requested delay is the starvation, measured from outside the main thread with no new worker.
+// Why: a worker-backed timer keeps ticking through a main-thread freeze; its overshoot is the starvation time.
 
 interface FreezeEvent {
     /** Wall clock when the stall was detected. */
@@ -87,14 +85,12 @@ export class FreezeWatch {
         if (stallMs < this.thresholdMs) {
             return;
         }
-        // Keep the earliest evidence: the first stalls of a degradation are the
-        // interesting ones, and a late flood must not evict them silently.
+        // Keep the earliest evidence: the first stalls of a degradation matter most, and a late flood must not evict them.
         if (this.events.length >= this.capacity) {
             this.dropped++;
             return;
         }
-        // Attribution is the wall's job: a stall is only seen once it ends, so the
-        // suspect is whichever bot's phase overlapped the window (DiagSampler.blame).
+        // Attribution is the wall's job: a stall is only seen once it ends, so the suspect is whichever bot's phase overlapped the window (DiagSampler.blame).
         this.events.push({ at: this.wallClock(), stallMs });
     }
 
@@ -108,7 +104,7 @@ export class FreezeWatch {
         };
     }
 
-    /** Stall accumulated since the previous call -- the per-sample series. */
+    /** Stall accumulated since the previous call, the per-sample series. */
     drainStallMs(): number {
         const out = this.stallTotal;
         this.stallTotal = 0;

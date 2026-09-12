@@ -42,8 +42,7 @@ class AutoReloginImpl {
     setAutoLogin(on: boolean): void {
         const was = this.autoLogin;
         this.autoLogin = on;
-        // Title checkbox off stops title-only reconnects. A running/paused script
-        // still reconnects via scriptActive(), do not clear that mid-flight (#215).
+        // Title checkbox off stops title-only reconnects; a running or paused script still reconnects via scriptActive(), so don't clear that mid-flight (#215).
         if (!on && !this.scriptActive()) {
             this.clearReconnect();
         }

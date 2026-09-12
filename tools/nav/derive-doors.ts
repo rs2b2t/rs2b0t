@@ -44,58 +44,53 @@ function main(): void {
         if (!type.op || !type.op.some(op => op?.toLowerCase() === 'open')) {
             continue;
         }
-        // Doors whose script refuses the Open its ops advertise.
-        // Why: baked as ordinary edges the pathfinder routes through a wall and the walker repaths forever against "This door is completely sealed".
+        // Doors that advertise Open but require quest-specific handling.
+        // Why: routing through these doors makes the walker repeatedly retry a refused interaction.
         const SCRIPT_REFUSED = new Set([
             'closet_door', '1to2', '2to3', '4to5', '5to6', '8to9', '2to5', '3to6', '4to7', '5to8',
-            // Rashiliyia's skeletal doors: three bones, or nothing.
+            // Rashiliyia's skeletal doors open only to the 3 bones.
             'thzq_tombrooml1', 'thzq_tombrooml2', 'thzq_tombrooml3', 'thzq_tombroomr1', 'thzq_tombroomr2',
-            // Her tomb's outer gate: the Beads of the Dead, or she meets you at it.
+            // The outer tomb gate needs the Beads of the Dead.
             'zombiequeengateclosedl', 'zombiequeengateclosedr',
-            // McGrubor's Wood: locked from inside, the Forester turns you away from
-            // outside. The Loose Railing is the way in, curated in transports.json.
+            // McGrubor's Wood stays locked; use the Loose Railing edge in transports.json.
             'mcgruborgatel', 'mcgruborgater',
-            // Melzar's Maze. Each opens only to its own coloured key, which the maze hands out one kill at a time, and the key teleports you through rather than leaving the door open.
-            // Why: baked as ordinary edges the pathfinder routes straight at them and the walker loops on "This door is securely locked". funexit is the one-way way out.
+            // Melzar's Maze keys teleport through their matching doors; funexit is a one-way exit.
+
             'melzardoor', 'reddoor', 'orangedoor', 'yellowdoor', 'bluedoor', 'magentadoor', 'greendoor', 'funexit',
-            // The Oracle's door: silk, an unfired bowl, a lobster pot and a mind bomb,
-            // and only after she has been asked about the map.
+            // The Oracle's door: silk, an unfired bowl, a lobster pot and a mind bomb, and only after she's been asked about the map.
             'dragon_slayer_magic_door',
-            // Elvarg's lair, locked until the ship has sailed, and Crandor's secret
-            // door, which only opens from the island side.
+            // Elvarg's lair, locked until the ship has sailed, and Crandor's secret door, which only opens from the island side.
             'elvarg_gate_right', 'elvarg_gate_left', 'dragonsecretdoor',
-            // Family Crest's perfect-gold mine. Each answers "This door is locked" unless its own combination of the three levers is set.
-            // Why: the combination that opens one shuts another, so the quest drives the chain itself (defs/familycrest/mine.ts).
+            // Family Crest doors require different combinations of the three levers.
+            // Why: opening one door can close another; defs/familycrest/mine.ts handles the sequence.
             'famcrest_doorh2', 'famcrest_doorh2i2', 'famcrest_doorg2h1',
             'famcrest_doori2h1', 'famcrest_doorh2g1',
-            // Fight Arena's cell doors never open, and door1 teleports the player into the arena at stages 9-11 rather than opening.
-            // Why: baked as edges the pathfinder routes into a cell it cannot leave, or walks a bot mid-errand into a boss fight.
+            // Fight Arena cells don't open; door1 teleports into the arena at stages 9-11.
+            // Why: ordinary routing could strand the bot in a cell or send it into a boss fight.
             'arena_prisondoor', 'arena_jeremydoor', 'fightarena_door1',
-            // Clock Tower's rat-cage gate: jail_doors.rs2 answers "This door doesn't seem to open from here..." to anyone outside it, and ctlevera is the way in.
-            // Why: its only map placement is the cage at 2595,9657, Fight Arena's copies are loc_add, which no map derivation sees.
+            // Clock Tower's cage gate opens from inside; use ctlevera to enter.
+            // Why: only the cage at 2595,9657 is map-placed; Fight Arena copies are added at runtime.
             'ctratgatea',
-            // West Ardougne's plague house: loc_2534 answers "This door is locked." to everyone, and loc_2535 opens only for a warrant holder with a mourner in earshot, mid-conversation.
-            // Why: baked as edges the pathfinder alternates between the two and crosses neither.
+            // The plague house needs a warrant and mourner dialogue; loc_2534 never opens.
+
             'loc_2534', 'loc_2535',
-            // Why: the mourner headquarters' two doors are locked until the stew is poisoned and then open only to a worn doctor's gown behind an "In you go doc." the walker cannot answer, and baked as edges the route to the cauldron runs through the building, which is the one thing the stage needing the cauldron cannot do. The fence at 2541,3331 is the way in.
+            // Why: mourner HQ requires poisoned stew, a doctor's gown and dialogue; enter through the fence at 2541,3331.
             'mournerstewdoor',
-            // Shield of Arrav's three hideout doors. Why: the weapon store answers Open with "The door is securely locked" and yields only to an oplocu with the key, while the other two refuse until you have joined and then p_teleport you through, none is an edge the walker can step.
+            // Why: the Phoenix weapon store needs a key use-on; the other hideouts require membership and teleport through the door.
             'phoenixdoor', 'phoenixdoor2', 'blackarmdoor',
-            // The Legends Quest trials. Why: the outer gate answers Open with "You push on the doors" and yields only to a Search with a lockpick, and the inner one raises a brute-strength prompt and a roll that a walker cannot answer. Baked as edges the pathfinder routes into both and the walker loops a tile short.
+            // Why: the Legends outer gate needs Search with a lockpick; the inner gate needs a strength prompt the walker can't answer.
             'lglockpickgatebottoml', 'lglockpickgatebottomr', 'lgstrengthtrialgatel', 'lgstrengthtrialgater',
-            // Khazard stronghold's front door. Why: quest_tree.rs2 opens it only for a player already north of it, so the pathfinder routed every trip to the chest through a door that answers "The door seems to be locked from the inside.", the crumbled wall is the way in, driven by defs/treegnome.
+            // Why: the Khazard door only opens from the north; defs/treegnome enters through the crumbled wall.
             'khazard_stronghold_door',
-            // Peer the Seer's puzzle house. door1 opens only to a solved combination lock and an empty pack; door2 answers "This door is locked tightly shut." and yields to an oplocu with the key from inside.
-            // Why: baked as edges the pathfinder routes a bot into a sealed pocket it then cannot leave, which is where a Fremennik Trials run wedged.
+            // Peer's door1 needs the combination and an empty inventory; door2 needs the key used from inside.
+            // Why: ordinary routing can strand the bot inside the puzzle house.
             'viking_seers_door1', 'viking_seers_door2',
-            // Why: the longhall's backstage door stays in. The bouncer refuses only the inward crossing, and the stage behind it is a dead end nothing routes through, so removing it would seal the bard in after his performance.
+            // Why: keep the longhall backstage door; the bouncer blocks entry but the bard still needs the exit.
             // Rellekka's north fence: "Only Fremenniks may pass this gate." until the trials are over.
             'viking_fencegate_l', 'viking_fencegate_r',
-            // Hero's Quest's five Brimhaven doors. Why: each refuses until its own stage and gang, and
-            // `~open_and_close_door` teleports rather than opens, defs/heroquest/doors.ts owns them.
+            // Why: Brimhaven doors check quest stage and gang before teleporting through; defs/heroquest/doors.ts handles them.
             'grubordoor', 'garvdoor', 'herokitchendoor', 'pete_sidedoor', 'pete_treasuredoor',
-            // Taverley's two key doors. Why: jail_doors.rs2 yields only to an oplocu with the jail key
-            // or the dusty key, so defs/heroquest/eel.ts owns both crossings.
+            // Why: Taverley doors need the jail or dusty key used on them; defs/heroquest/eel.ts handles both.
             'dungeonjail', 'deepdungeondoor'
         ]);
         const label = `${type.name ?? ''} ${type.debugname ?? ''}`.toLowerCase();
@@ -108,14 +103,14 @@ function main(): void {
 
     const ONE_WAY_EXCLUDED = new Set([
         '3108,3353,0', '3109,3353,0',
-        // Handelmort Mansion's inner door: quest_totem.rs2 opens it only for a player north of it, and everything the mansion holds is reached by Cromperty's block instead.
-        // Why: baked both ways the pathfinder treats the mansion as a shortcut and the walker loops on "This door is securely locked"; the outward half is curated in travelCatalog.ts.
+        // Handelmort's inner door only opens from the north; Cromperty's teleport reaches the interior.
+        // Why: a two-way edge creates an unusable shortcut; travelCatalog.ts provides the exit edge.
         '2635,3321,0',
-        // Gu'Tanoth's east gate: the ogre guard demands a bar of gold and teleports you down the hill otherwise, and nothing in the game needs that crossing.
-        // Why: its north-west twin is left in, that guard refuses only until the relic is shown, after which the gate behaves as an ordinary door and everything west of it depends on the edge.
+        // Gu'Tanoth's east gate demands a gold bar or teleports the player away.
+        // Why: keep the north-west gate; it becomes a normal door after showing the relic and is needed to reach the west.
         '2549,3028,0', '2550,3028,0'
     ]);
-    // Why: gates.rs2 hits loc_add(type=-1) for this Duel Arena outer leaf and leaves Gate#3198 closed, so navigation has to detour through its paired Gate#3197 one tile north.
+    // Why: gates.rs2 leaves Gate#3198 closed after loc_add(type=-1); use Gate#3197 one tile north.
     const BROKEN_ENGINE_EXCLUDED = new Set(['3198@3312,3235,0']);
     // Why: 2-tile doors sit on an unwalkable loc tile, so WALL_STRAIGHT derivation never emits them.
     const CURATED_EXTRA: DoorEdge[] = [

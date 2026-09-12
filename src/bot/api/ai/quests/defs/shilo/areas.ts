@@ -6,8 +6,7 @@ export interface ShiloItem {
     name: string;
 }
 
-// Why: these are the engine's names, several are misspelled in the configs ("Rashiliya corpse", "Stone-plaque").
-// Why: the five Jungle Potion unids all render as "Unidentified herb", so every lookup here goes through the id.
+// Why: these are the engine's names, some misspelled in the configs ("Rashiliya corpse", "Stone-plaque"), and the 5 Jungle Potion unids all render "Unidentified herb", so lookups go by id.
 export const SV_ITEM = {
     COINS: { id: 995, name: 'Coins' },
     ROPE: { id: 954, name: 'Rope' },
@@ -62,10 +61,7 @@ export const SV_NPC = {
     UNDEAD_ONE: 'Undead One'
 } as const;
 
-/**
- * Stand tiles are the walkable neighbour of each loc, taken from the baked pack,
- * most of these locs are multi-tile blockers whose own coordinate is unwalkable.
- */
+/** Stand tiles are the walkable neighbour of each loc from the baked pack; most of these locs block their own coordinate. */
 export const SV_TILE = {
     ARDOUGNE_BANK: new Tile(2616, 3332, 0),
     JIMINUA: new Tile(2767, 3122, 0),
@@ -89,23 +85,18 @@ export const SV_TILE = {
     HANDHOLDS: new Tile(2764, 9376, 0),
 
     PALM_TREES: new Tile(2914, 3092, 0),
-    // Why: this is west of the doors and cardinally adjacent.
-    // Why: the pack was baked with the jungle plants that hide the doors rather than with the doors, so nothing east of (2916,3090) is a stand the walker can reach.
+    // Why: west of the doors and cardinally adjacent; the pack was baked with the jungle plants that hide the doors, so nothing east of (2916,3090) is reachable.
     CARVED_DOORS: new Tile(2915, 3090, 0),
     TOMB_EXIT: new Tile(2928, 9526, 0),
     ANCIENT_GATE: new Tile(2929, 9517, 0),
     RASH_ROCKS_BOTTOM: new Tile(2928, 9511, 0),
-    // South of the skeletal doors, which is the side the climbing rocks drop you
-    // on. The dolmen is behind them: three bones is the only way through.
+    // South of the skeletal doors, where the climbing rocks drop you. The dolmen is behind them and 3 bones is the only way through.
     TOMB_DOORS: new Tile(2892, 9479, 0),
     TOMB_DOORS_INSIDE: new Tile(2892, 9482, 0),
     RASH_DOLMEN: new Tile(2891, 9487, 0)
 } as const;
 
-/**
- * The dolmen room, behind the skeletal doors. A plain z test cannot stand in for
- * this: the corridor east of the doors runs up to z=9511 on the *southern* side.
- */
+/** The dolmen room, behind the skeletal doors. A plain z test won't do: the corridor east of the doors runs up to z=9511 on the southern side. */
 export function inDolmenRoom(tile: QuestSnapshot['tile']): boolean {
     return tile !== null && tile !== undefined
         && tile.x >= 2886 && tile.x <= 2898 && tile.z >= 9481 && tile.z <= 9492;
@@ -136,8 +127,7 @@ export type ShiloArea =
 const RASH_GATE_Z = 9516;
 const RASH_ROCKS_BOTTOM_Z = 9511;
 
-// Why: every underground area here sits in its own mapsquare, and Rashiliyia's tomb has three parts, the corridor from the hillside doors, the ledge the gate drops you onto, and the tomb below the climbing rocks.
-// Why: collapsing the ledge into either neighbour makes the gate open and re-open forever.
+// Why: Rashiliyia's tomb has 3 parts, the corridor from the hillside doors, the ledge the gate drops you onto, and the tomb below the rocks; collapsing the ledge into a neighbour makes the gate re-open forever.
 
 /** Which Shilo area a tile is in. */
 export function shiloArea(tile: QuestSnapshot['tile']): ShiloArea {

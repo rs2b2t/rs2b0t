@@ -1,5 +1,5 @@
-/** Live Eadgar's Ruse harness (#241): --stage N --until N --at x,z,level --pack --paint --unfreed --minutes N, base :8890.
- *  Why: `--stage` sets `%eadgar_quest` and relogs, since update_questlist only recolours the journal at login; the bank holds coins, food, a melee kit and a ranarr weed, and nothing else, the boots, the knife, the pineapple, the vodka, the pestle, the tinderbox, the axe, the logs, the chickens and the grain are all things the run has to source for itself. */
+/** Live Eadgar's Ruse harness (#241), using the members world at :8890. */
+// Why: stage jumps relog; only coins, food, melee gear, and ranarr are seeded.
 
 //   HEADED=1 bun e2e/eadgar-ruse-241-live.ts --stage 0 --minutes 150
 //   HEADED=1 bun e2e/eadgar-ruse-241-live.ts --stage 30 --until 50 --minutes 45   # the Ardougne parrot leg

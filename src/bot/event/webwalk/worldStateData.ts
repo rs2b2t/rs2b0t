@@ -1,6 +1,4 @@
-/**
- * Serializable world snapshot for the nav worker (no client imports).
- */
+/** Serializable world snapshot for the nav worker (no client imports). */
 
 import type { QuestProgress, WorldState } from './types.js';
 import { canonicalQuestName } from './transportQuestReqs.js';
@@ -9,26 +7,20 @@ export interface WorldStateData {
     members: boolean;
     skills: Record<string, number>;
     quests: Record<string, QuestProgress>;
-    /** Item display name → total count in backpack. */
+    /** Item display name to total count in backpack. */
     items: Record<string, number>;
-    /** Worn equipment display name → count (usually 1). */
+    /** Worn equipment display name to count (usually 1). */
     worn?: Record<string, number>;
     freeSlots: number;
     /** Live Entrana restricted-gear heuristic (weapons/armour names). */
     entranaRestrictedGear?: boolean;
-    /**
-     * Knife or slash blade available (inv/worn). Set on live snapshot + after
-     * bank virtualization. Undefined = offline / unknown → slashTool fail open.
-     */
+    /** Knife or slash blade in inv/worn, set on live snapshot and after bank virtualization; undefined means unknown and slashTool fails open. */
     canSlashWeb?: boolean;
     // Why: used for origin-aware teleport admission (#339); when omitted, planners compute it from the path start tile via `wildernessLevelAt`.
 
     /** Current wilderness combat level, 0 outside the wild. */
     wildernessLevel?: number;
-    /**
-     * Active essence-mine return id (`aubury`|`sedridor`|…) from
-     * `%exit_essence_mine_coord` (varp 64). Omitted when unknown.
-     */
+    /** Active essence-mine return id, e.g. `aubury` or `sedridor`, from varp 64; omitted when unknown. */
     essenceExitReturn?: string;
 }
 
@@ -40,7 +32,7 @@ function lookupItem(items: Record<string, number>, name: string): number {
     if (items[lower] !== undefined) {
         return items[lower]!;
     }
-    // "Law rune" ↔ "lawrune" style
+    // "Law rune" / "lawrune" style
     const compact = lower.replace(/\s+/g, '');
     for (const [k, v] of Object.entries(items)) {
         if (k.toLowerCase() === lower || k.toLowerCase().replace(/\s+/g, '') === compact) {

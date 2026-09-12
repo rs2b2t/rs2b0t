@@ -7,7 +7,7 @@ export interface CarryEntry {
 
 export interface Loadout {
     name: string;
-    /** Slot → display name. Why: display name is what scripts match on. */
+    /** Slot to display name. Why: scripts match on display names. */
     worn: Partial<Record<Slot, string>>;
     carry: CarryEntry[];
 }
@@ -42,10 +42,7 @@ function readCarry(raw: unknown): CarryEntry[] {
     return out;
 }
 
-/**
- * Total by design: this is read from inside script loops, so a value someone
- * hand-edited must read as "no loadouts", never throw.
- */
+/** Parse user-edited storage without throwing; invalid data returns no loadouts. */
 export function parseLoadouts(raw: string): Loadout[] {
     if (raw.trim().length === 0) {
         return [];

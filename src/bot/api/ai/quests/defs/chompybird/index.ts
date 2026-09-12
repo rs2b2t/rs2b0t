@@ -32,7 +32,7 @@ const hasBellows = (snap: QuestSnapshot): boolean => ANY_BELLOWS.some(id => held
 const bankHasBellows = (snap: QuestSnapshot): number | null =>
     ANY_BELLOWS.find(id => (snap.bankIds?.get(id) ?? 0) > 0) ?? null;
 
-// Why: three in the pack is a fight that runs dry with the bird alive, and the quiver has no count on the wire, so a quivered stack is trusted and the pack is what has to reach this floor.
+// Why: 3 in the pack runs dry with the bird alive, and the quiver has no count on the wire, so a quivered stack is trusted and the pack has to reach this floor.
 
 /** Enough ogre arrows to see a chompy off. */
 const HUNT_ARROWS = 6;
@@ -43,9 +43,9 @@ const hasArrows = (snap: QuestSnapshot): boolean =>
 const hasBow = (snap: QuestSnapshot): boolean =>
     heldId(snap, CB_ID.BOW) > 0 || (snap.wornIds?.has(CB_ID.BOW) ?? false);
 
-// Why: the bait clearing is fifteen tiles from Rantz, which is outside the range the npc list holds him in, a talk from there finds nobody and fails in a millisecond.
+// Why: the bait clearing is 15 tiles from Rantz, outside the range the npc list holds him in, so a talk from there finds nobody and fails at once.
 
-/** Walk to Rantz, then drive whatever his current stage answers with. */
+/** Walk to Rantz and complete the dialogue for the current stage. */
 async function talkRantz(drive: BoxDrive, log: (m: string) => void): Promise<boolean> {
     if (drive.expect?.()) {
         return true;
@@ -61,7 +61,7 @@ function startQuest(log: (m: string) => void): Promise<boolean> {
     return talkRantz({ prefer: STABBERS, ms: 60_000 }, log);
 }
 
-// Why: the hand-over runs straight into the five-option toady menu, and the answer that moves the quest to 15 is the one the menu re-offers forever.
+// Why: The handoff opens a repeating five-choice menu; select the stage-15 option once.
 
 async function giveArrows(log: (m: string) => void): Promise<boolean> {
     const before = Inventory.countById(CB_ID.ARROW);
@@ -81,7 +81,7 @@ function showToad(log: (m: string) => void): Promise<boolean> {
     return talkRantz({ prefer: [THANKS], ms: 60_000 }, log);
 }
 
-// Why: at 40 Rantz lends the bow through a two-page choice, and at 45 with no bow he sells a replacement first, one preference list covers both, and the bow in hand is the only proof either landed.
+// Why: at 40 Rantz lends the bow through a 2-page choice and at 45 with no bow he sells a replacement first; one preference list covers both, and the bow in hand is the only proof either landed.
 
 function getBow(log: (m: string) => void): Promise<boolean> {
     return talkRantz(
@@ -121,7 +121,7 @@ function kitStep(snap: QuestSnapshot): QuestStep | null {
     return withdraw(wanted.map(name => ({ name, qty: 1 })));
 }
 
-// Why: the chest is a hundred tiles from the quest and the bank is four hundred, so the chest is tried first and its refusal is what pays for the booth trip.
+// Why: the chest is 100 tiles from the quest and the bank is 400, so the chest goes first and its refusal is what pays for the booth trip.
 
 /** The rock off the ogre chest, or the pair the account already banked. */
 function bellowsStep(snap: QuestSnapshot): QuestStep | null {
@@ -143,7 +143,7 @@ function bellowsStep(snap: QuestSnapshot): QuestStep | null {
 
 /** Feathers, shafts and tips, with an axe in the pack and the melee kit on before the wolves. */
 function fletchLeg(snap: QuestSnapshot): QuestStep | null {
-    // Why: an achey tree with no axe in the pack answers nothing at all, no refusal, no message.
+    // Why: an achey tree with no axe in the pack answers nothing at all, no refusal and no message.
     const loadout = loadoutStep(snap);
     if (loadout) {
         return loadout;
@@ -161,7 +161,7 @@ function fletchLeg(snap: QuestSnapshot): QuestStep | null {
 
 // Why: Bugs answers the sale with a doubleobjbox, which suspends his script on a main modal no chat driver can see.
 
-/** Buy the knife and chisel from Bugs for ten coins. */
+/** Buy the knife and chisel from Bugs for 10 coins. */
 async function buyTools(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(CB_TILE.BUGS, 4, log))) {
         return false;
@@ -177,9 +177,9 @@ async function buyTools(log: (m: string) => void): Promise<boolean> {
     );
 }
 
-/** Everything the six ogre arrows need: tools, coin, feathers, shafts and tips. */
+/** Everything the 6 ogre arrows need: tools, coin, feathers, shafts and tips. */
 function arrowLeg(snap: QuestSnapshot): QuestStep {
-    // Why: the wolves are three hundred tiles past the bank, so the kit comes off the same booth trip as the coins rather than sending the run back for it after the shops.
+    // Why: the wolves are 300 tiles past the bank, so the kit comes off the same booth trip as the coins.
     const kit = kitStep(snap);
     if (kit) {
         return kit;
@@ -189,13 +189,13 @@ function arrowLeg(snap: QuestSnapshot): QuestStep {
         return loadout;
     }
     if (!toolsHeld(snap)) {
-        // Why: Bugs sells the pair for ten coins inside the cave, which is the only tool counter this quest walks past.
+        // Why: Bugs sells the pair for 10 coins inside the cave, which is the only tool counter this quest walks past.
         return toolStep(snap) ?? custom('buy the knife and chisel from Bugs', buyTools);
     }
     return fletchLeg(snap) ?? custom('hand Rantz the six ogre arrows', giveArrows);
 }
 
-/** The chompy has to be shot before anything else can happen; this is what makes that possible. */
+/** The bow, the arrows and the bellows, whichever is still missing before a shot. */
 function shootingLeg(snap: QuestSnapshot): QuestStep | null {
     if (!hasBow(snap)) {
         return custom('borrow the ogre bow from Rantz', getBow);
@@ -213,7 +213,7 @@ function shootingLeg(snap: QuestSnapshot): QuestStep | null {
     return bellowsStep(snap);
 }
 
-/** Ask the children, carry all six seasonings, then roast. */
+/** Ask the children, carry all 6 seasonings, then roast. */
 function cookLeg(snap: QuestSnapshot): QuestStep {
     if (!CookState.kidsAsked) {
         return custom('ask Bugs and Fycie what they want', askKids);
@@ -241,7 +241,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     }
 
     if (stage === CB_STAGE.NOT_STARTED) {
-        // Why: the kit, the axe and the feathers all come from the Lumbridge side of the map, so they are fetched before the walk to the Feldip Hills rather than after it.
+        // Why: the kit, the axe and the feathers all come from the Lumbridge side of the map, so fetch them before the walk to the Feldip Hills.
         return kitStep(snap)
             ?? loadoutStep(snap)
             ?? feathersStep(snap, feathersNeeded(snap))
@@ -250,7 +250,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (stage === CB_STAGE.STARTED) {
         return arrowLeg(snap);
     }
-    // Why: a resume past the loan finds Rantz selling the replacement bow for 500-550 coins, and he answers an empty purse with "come back when you have", a refusal no oracle here can tell from a dropped click; the axe is left out, since only the arrow leg needs one.
+    // Why: past the loan Rantz sells the replacement bow for 500-550 coins and answers an empty purse with "come back when you have", which no oracle here can tell from a dropped click; the axe is left out since only the arrow leg needs one.
     const provisions = loadoutStep(snap, false);
     if (provisions) {
         return provisions;
@@ -279,7 +279,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (stage === CB_STAGE.TOLD_TO_COOK) {
         return cookLeg(snap);
     }
-    // Why: the spit accepts a second chompy at stage 60, so a burnt or dropped one is recoverable rather than terminal.
+    // Why: the spit accepts a second chompy at stage 60, so a burnt or dropped one is recoverable.
     if (heldId(snap, CB_ID.SEASONED_CHOMPY) === 0) {
         return cookLeg(snap);
     }

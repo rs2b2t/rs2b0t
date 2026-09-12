@@ -38,7 +38,7 @@ export default class BrimhavenMossGiants extends TaskBot {
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
-        Game.setAutoRetaliate(true); // Why: this script drives the fight, so ensure auto-retaliate is on at start
+        Game.setAutoRetaliate(true); // Why: this script drives combat through auto-retaliate.
 
         cfg.style = (this.settings.str('combatStyle', 'melee') as CombatStyle);
         cfg.meleeStyle = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
@@ -112,7 +112,7 @@ export default class BrimhavenMossGiants extends TaskBot {
         return [TARGET.toLowerCase()];
     }
 
-    // ── Status / counters (consumed by tasks + paint) ───────────────────────
+    // Shared task and paint state.
 
     setStatus(s: string): void {
         this.status = s;

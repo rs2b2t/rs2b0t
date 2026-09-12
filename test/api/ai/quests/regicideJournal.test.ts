@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { RG_FLAG, RG_STAGE, parseRegicideJournal } from '#/bot/api/ai/quests/defs/regicide/journal.js';
 
-// Why: the journal is strictly additive and every earlier line comes back struck through, so a parser that matched the first line it found would answer stage 1 for a finished quest. These are the lines as `regicide_journal.rs2` writes them, colour codes and all, taken from `regicide_journal.rs2`, colour codes and all.
+// Why: the journal is additive, so later stages must win over earlier struck lines.
 const COURIER = '@str@A courier has given me a message. I have been sent for|@str@ by King Lathas. I must go to his castle in Ardougne.||';
 const LATHAS = '@str@King Lathas has asked me to re-enter the underground @str@pass. Now that the Well of Voyage is repaired I\'m to go @str@to the realm beyond.||';
 const SCOUTS = '@str@I have met a elvish scout party, who said I should go see @str@Lord Iorwerth@str@.||';

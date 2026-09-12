@@ -25,7 +25,7 @@ function normalize(lines: readonly string[] | string): string {
         .toLowerCase();
 }
 
-// Why: every earlier line stays on the page struck through, so an early needle still matches in a late state and this order is the only thing separating them.
+// Why: earlier lines stay on the page struck through, so an early needle still matches late and the order is what separates them.
 const STAGES: readonly [string, number][] = [
     ['quest complete!', IKOV_STAGE.COMPLETE],
     ['guardians of armadyl', IKOV_STAGE.HELPING_ARMADYL],
@@ -45,7 +45,7 @@ export function parseIkovJournal(lines: readonly string[] | string): number | un
     return STAGES.find(([needle]) => text.includes(needle))?.[1];
 }
 
-/** A failed read is not evidence the quest went backwards. */
+/** Stands in when a read fails. */
 let lastGood: number | undefined;
 
 export async function readIkovStage(): Promise<number | undefined> {

@@ -1,10 +1,10 @@
 import type { WorldTile } from '../../../../adapter/ClientAdapter.js';
 import Tile from '../../../../geometry/Tile.js';
 
-// Why: Alfred Grimhand's Barcrawl is a miniquest in its own right and the only way past the Barbarian Outpost gate, so its data and card parsing live here rather than inside the one quest that needs it.
+// Why: Alfred Grimhand's Barcrawl is a miniquest of its own and the only way past the Barbarian Outpost gate, so its data and card parsing live here, outside the one quest that needs it.
 // Why: {@link RunBarcrawl} drives it, and scripts and quest modules both call that.
-// Why: `%barcrawl` is `scope=perm` with no transmit, so which bars are signed is not on the wire.
-// Why: the card's Read op is the oracle, it renders one green/red line per bar into a scroll modal, the same shape as a quest journal.
+// Why: `%barcrawl` is `scope=perm` with no transmit, so which bars are signed isn't on the wire.
+// Why: the card's Read op is the oracle: it renders one green/red line per bar into a scroll modal, same shape as a quest journal.
 
 export const COINS_ID = 995;
 export const BARCRAWL_CARD = 'Barcrawl card';
@@ -47,7 +47,7 @@ export const GUARD_PREFER = [
 /** Barcrawl-first, so an ale menu never wins the pick. */
 export const BAR_PREFER = ['Alfred Grimhand', 'Barcrawl', 'Yes'];
 
-/** The card's own refusal once all ten lines are green. */
+/** The card's own refusal once all 10 lines are green. */
 export const TOO_DRUNK = /too drunk to be able to read/i;
 
 /** `outpost_guard_talk`'s greeting for `%barcrawl = ^barcrawl_complete`. */
@@ -64,10 +64,7 @@ function normalise(lines: readonly string[]): string {
     return lines.join(' ').replace(/@[a-z0-9]{3}@/gi, ' ').replace(/[|\s]+/g, ' ').trim().toLowerCase();
 }
 
-/**
- * Which bars are still red. "Completed!" and "Not Completed..." both contain
- * the happy word, so each line is matched by its negation instead.
- */
+/** Which bars are still red. "Completed!" and "Not Completed..." both contain the happy word, so each line is matched on its negation. */
 export function parseCard(lines: readonly string[]): BarcrawlProgress | null {
     const text = normalise(lines);
     if (!text.includes('barcrawl')) {
@@ -80,7 +77,7 @@ export function parseCard(lines: readonly string[]): BarcrawlProgress | null {
     return { remaining, done: remaining.length === 0 };
 }
 
-/** Nearest-first, so the tour is a rough loop rather than the list order. */
+/** Nearest-first, so the tour is a rough loop. */
 export function nextBar(remaining: readonly Bar[], here: WorldTile | null): Bar | undefined {
     if (!here) {
         return remaining[0];

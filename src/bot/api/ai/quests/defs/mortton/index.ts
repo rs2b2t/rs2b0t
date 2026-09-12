@@ -78,8 +78,7 @@ function haveOil(snap: QuestSnapshot): boolean {
         || held(snap, SM_ID.OLIVE_OIL4) + held(snap, SM_ID.OLIVE_OIL3) + held(snap, SM_ID.OLIVE_OIL2) > 0;
 }
 
-// Why: sanctity is a player varp the altar demands and only this character's own building earns, so a rebuilt temple can still owe a load of material before the flame will answer.
-// Why: the shell is world state the shades keep knocking down, so a flame leg can also arrive at a temple that has fallen back below 100%.
+// Why: sanctity is a player varp only this character's building earns, and the shell is world state the shades knock down, so a flame leg can owe material either way.
 
 /** True while the flame legs still owe the temple building work. */
 function needsTemple(snap: QuestSnapshot): boolean {
@@ -98,7 +97,7 @@ function buildReady(snap: QuestSnapshot): boolean {
     return carried > 0 || pool > 5;
 }
 
-// Why: the shelf, the table and the two vial spawns all sit in Herbi Flax's house, and the herb table is a one-shot, so the serum chain runs to completion before anything else is attempted.
+// Why: the shelf, table and 2 vial spawns all sit in Herbi Flax's house and the herb table is a one-shot, so the serum chain runs to completion first.
 
 /** The next step toward the serums this quest still owes, or null when it owes none. */
 function serumLeg(snap: QuestSnapshot, stage: number): QuestStep | null {
@@ -124,7 +123,7 @@ function serumLeg(snap: QuestSnapshot, stage: number): QuestStep | null {
     return custom('search the smashed table for herbs', searchTable);
 }
 
-// Why: five shades are killed a hundred and fifty tiles past the last bank, so the melee kit is drawn on the approach rather than at the fight.
+// Why: 5 shades are killed 150 tiles past the last bank, so the melee kit is drawn on the approach.
 
 /** Arm the account from the bank, or null once it is dressed. */
 function gearLeg(snap: QuestSnapshot): QuestStep | null {
@@ -144,8 +143,7 @@ function gearLeg(snap: QuestSnapshot): QuestStep | null {
     return banked.length > 0 ? { kind: 'withdraw', items: banked.map(name => ({ name, qty: 1 })) } : null;
 }
 
-// Why: both counters live behind Razmire's cured face, so anything missing is bought before the leg that needs it rather than found missing halfway through.
-// Why: the olive oil waits until the rebuild has spent the eleven slots of plank, brick and paste, bought alongside them it has nowhere to land.
+// Why: both counters live behind Razmire's cured face, so anything missing is bought before the leg that needs it; the olive oil waits until the rebuild has spent the 11 slots of plank, brick and paste.
 
 /** The next shopping trip at Razmire's counters, or null when the pack is stocked. */
 function shopLeg(snap: QuestSnapshot, want: { building: boolean; oil: boolean }): QuestStep | null {
@@ -164,9 +162,9 @@ function shopLeg(snap: QuestSnapshot, want: { building: boolean; oil: boolean })
     return null;
 }
 
-// Why: the flame has to be alight before either use-on will answer, and sanctifying a vial of serum costs no dose while buying the endgame conversation a villager who never reverts.
+// Why: the flame has to be alight before either use-on answers, and sanctifying a vial of serum costs no dose and buys a villager who never reverts.
 
-// Why: the lit altar is `loc_change(templefire_altar, 99)` as well, so the oil, the use-on that moves the stage, goes in first and the optional serum takes what is left of the flame.
+// Why: the lit altar is `loc_change(templefire_altar, 99)` too, so the oil, which moves the stage, goes in first and the optional serum takes what's left of the flame.
 
 /** Light the altar, sanctify the oil, and bank a permanent serum against the last conversation. */
 async function altarLeg(log: (m: string) => void): Promise<boolean> {
@@ -254,7 +252,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
                 return custom('hunt a Loar Shade', huntShade);
             }
             const wantHammer = held(snap, SM_ID.HAMMER) === 0;
-            // Why: the hammer is bought first. It is one slot, and buying it after eleven slots of material would not fit.
+            // Why: the hammer is one slot and wouldn't fit after 11 slots of material, so it's bought first.
             const orders = [
                 ...(wantHammer ? [generalOrder({ hammer: true, oil: false })] : []),
                 buildersOrder(setsThatFit((snap.freeSlots ?? 0) - (wantHammer ? 1 : 0)))
@@ -281,7 +279,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
             if (shop) {
                 return shop;
             }
-            // Why: the stage says oil was sanctified once, not that any is left, a lost vial goes back to the flame rather than parking on the log.
+            // Why: the stage only says oil was sanctified once, so a lost vial goes back to the flame.
             if (held(snap, SM_ID.PYRE_LOGS) === 0 && sacredDoses(snap) < DOSES_PER_PYRE_LOG) {
                 return custom('sanctify more oil in the flame', altarLeg);
             }

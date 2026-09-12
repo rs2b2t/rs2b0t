@@ -89,7 +89,7 @@ function baitedVessel(snap: QuestSnapshot): QuestStep | null {
     return custom('bait the Karambwan vessel', loadVessel);
 }
 
-// Why: Lubufu counts the twenty in himself, so a part-load is progress and the pack never has to hold all of them at once.
+// Why: Lubufu counts the 20 in himself, so a part-load is progress and the pack never has to hold all of them at once.
 
 function lubufuLeg(snap: QuestSnapshot, stage: number): QuestStep {
     if (stage < TB_LUBUFU.FETCH_KARAMBWANJI) {
@@ -117,8 +117,7 @@ function tiadecheCatchLeg(snap: QuestSnapshot, stage: number): QuestStep {
     return baitedVessel(snap) ?? custom('hand Tiadeche the baited vessel', tiadecheCatch);
 }
 
-// Why: only a spear both stronger than bronze and Karambwan-poisoned satisfies Tamayu, and the
-// poison is a poorly cooked Karambwan ground with a pestle, his own gift being the first of those.
+// Why: Tamayu wants a spear above bronze and Karambwan-poisoned; the poison is a poorly cooked Karambwan ground with a pestle, and his own gift is the first one.
 
 // Why: the paste is ground first and the shaft found second, so the hunt is a last resort.
 
@@ -139,7 +138,7 @@ function karambwanSpear(snap: QuestSnapshot): QuestStep | null {
     if (heldId(snap, TB_ID.RAW_KARAMBWAN) > 0) {
         return custom('cook the Karambwan on the jungle fire', cookOnFire(TB_ID.RAW_KARAMBWAN, TB_ID.POORLY_COOKED_KARAMBWAN, 'raw Karambwan'));
     }
-    // Why: two spare Karambwanji ride along, so a burn is re-cooked from this trip rather than another.
+    // Why: 2 spare Karambwanji ride along, so a burn is re-cooked from this trip.
     if (heldId(snap, TB_ID.RAW_KARAMBWANJI) < KARAMBWAN_BAIT) {
         return custom('net bait for the Karambwan shoal', fishKarambwanji(KARAMBWAN_BAIT));
     }
@@ -156,7 +155,7 @@ function tamayuLeg(snap: QuestSnapshot, stage: number): QuestStep {
     if (stage < TB_TAMAYU.WATCHED_CUTSCENE) {
         return custom("watch Tamayu's hunt", huntShaikahan);
     }
-    // Why: he counts doses and only the fourth writes a journal line, so this pours one per pass.
+    // Why: he counts doses and only the 4th writes a journal line, so this pours one per pass.
     if (!hasFlag(snap.progress, TB_FLAG.AGILITY)) {
         const bottle = TB_POTIONS.find(potion => heldId(snap, potion.id) > 0);
         if (!bottle) {
@@ -270,8 +269,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (main >= TB_MAIN.ALL_BROTHERS) {
         return custom("claim Timfraku's reward", claimReward);
     }
-    // Why: Timfraku is across a 30gp ferry each way, so the pack is filled before the first
-    // crossing rather than after it, including the coin the crossing itself is priced in.
+    // Why: Timfraku is across a 30gp ferry each way, so the pack is filled before the first crossing, ferry coin included.
     const kit = prepare(snap);
     if (kit) {
         return kit;
@@ -314,7 +312,7 @@ function observe(snap: QuestSnapshot): string[] {
 
 export const tbwt: QuestModule = {
     record: QUESTS.find(record => record.id === 'tbwt')!,
-    // Why: Karamja has no bank until Shilo Village is complete, and this quest does not require it, Ardougne West is the nearest booth to the Brimhaven ferry.
+    // Why: Karamja has no bank until Shilo Village is complete, and Ardougne West is the nearest booth to the Brimhaven ferry.
     bank: TB_TILE.ARDOUGNE_BANK,
     ownsInventory: true,
     readProgress: readTbwtProgress,

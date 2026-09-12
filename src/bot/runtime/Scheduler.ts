@@ -15,26 +15,17 @@ class SchedulerImpl {
 
     private lastPumpAt = 0;
 
-    /**
-     * Waiters from {@link Execution} when no script is active, or when {@link runHost} is nested (RandomEventGuardian).
-     * Why: settled every frame regardless of ScriptRunner state, including paused scripts.
-     */
+    /** Execution waiters that must advance even when the script is paused or stopped. */
     private hostWaiters: Waiter[] = [];
 
-    /**
-     * Nesting depth for host-scoped Execution. When > 0, every enqueue lands on
-     * {@link hostWaiters} even if a script is active (paused, mid-loop, etc.).
-     */
+    /** Nesting depth for host-scoped Execution; above 0 every enqueue lands on {@link hostWaiters} even with a script active. */
     private hostScopeDepth = 0;
 
     constructor() {
         BotHost.addFrameListener(() => this.pump());
     }
 
-    /**
-     * Run `fn` with Execution waits forced onto hostWaiters.
-     * Why: RandomEventGuardian's always-on event solving must not be bound to the script waiter queue, which is frozen while paused or not running.
-     */
+    /** Run `fn` with Execution waits on the always-pumped host queue. */
     async runHost<T>(fn: () => Promise<T>): Promise<T> {
         this.hostScopeDepth++;
         try {
@@ -45,8 +36,7 @@ class SchedulerImpl {
     }
 
     enqueue(spec: WaiterSpec): Promise<boolean> {
-        // Host scope wins even with an active script (guardian mid-handle while
-        // a bot is paused or mid long walk).
+        // Host scope wins while a guardian overlaps an active or paused script.
         if (this.hostScopeDepth > 0 || !this.active) {
             return this.enqueueHost(spec);
         }
@@ -74,7 +64,7 @@ class SchedulerImpl {
         this.lastPumpAt = now;
         const tick = BotHost.tickCount;
 
-        // Host-level waits (no script), always pump so guardian/maze can sleep.
+        // Always pump host waits used by the guardian and maze solver.
         if (this.hostWaiters.length > 0) {
             if (gap > FRAME_GAP_MS) {
                 this.shiftWaiters(this.hostWaiters, gap - NOMINAL_FRAME_MS);
@@ -114,8 +104,7 @@ class SchedulerImpl {
         }
         ctx.waiters = still;
 
-        // Both gates must pass: wall-clock (`nextLoopAt`) and optional server-tick
-        // (`nextLoopTick`). Tick-aligned loops set nextLoopAt=0 and nextLoopTick=N.
+        // Both gates must pass, wall-clock `nextLoopAt` and the optional server-tick `nextLoopTick`; tick-aligned loops set nextLoopAt=0 and nextLoopTick=N.
         const wallOk = now >= ctx.nextLoopAt;
         const tickOk = ctx.nextLoopTick === 0 || tick >= ctx.nextLoopTick;
         if (!ctx.loopInFlight && wallOk && tickOk && this.launchLoop) {

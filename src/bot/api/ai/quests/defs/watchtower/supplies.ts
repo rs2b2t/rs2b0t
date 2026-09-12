@@ -3,8 +3,8 @@ import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { WT_ITEM, WT_TILE, type WatchtowerItem } from './areas.js';
 import { QuestFood } from '../../food.js';
 
-// Why: every shop here was read out of the engine's own configs rather than a guide.
-// Why: nobody in this game is called 'Shop keeper', the shop belongs to a named NPC through param=owned_shop, and Shop.open() matches on the display name.
+// Why: every shop here was read out of the engine's own configs.
+// Why: nobody in this game is called 'Shop keeper'; the shop belongs to a named NPC through param=owned_shop, and Shop.open() matches on the display name.
 export const ARDOUGNE_ADVENTURER = { npc: 'Aemad', anchor: new Tile(2613, 3294, 0) };
 export const MAGIC_GUILD = { npc: 'Magic Store owner', anchor: new Tile(2595, 3087, 1) };
 export const OGRE_HERBLORE = { npc: 'Ogre merchant', anchor: new Tile(2528, 3048, 0) };
@@ -76,7 +76,7 @@ export function source(
     return { kind: 'buy', item: item.name, qty: missing, shop, estGp: missing * unitGp };
 }
 
-/** Bank only. Drop-only items are never bought, so an empty bank is an honest park. */
+/** Bank-only item; wait for the user when the bank has none. */
 export function bankOnly(snap: QuestSnapshot, item: WatchtowerItem, qty: number = 1): QuestStep | null {
     if (held(snap, item.id) >= qty) {
         return null;
@@ -121,7 +121,7 @@ export function sourcePestle(snap: QuestSnapshot): QuestStep | null {
     return source(snap, WT_ITEM.PESTLE, 1, OGRE_HERBLORE, PESTLE_PRICE);
 }
 
-// Why: the Rock of Dalgroth is the quest's only mining, and a rock does not respond without a pickaxe, no message, no refusal, so the step retries forever.
+// Why: the Rock of Dalgroth is the quest's only mining, and without a pickaxe the rock gives no response at all, so the step retries forever.
 // Why: Aemad stocks bronze, which is all a max-stats miner needs here.
 
 /** Source a pickaxe, or null when one is held. */
@@ -140,7 +140,7 @@ export function sourceLightSource(snap: QuestSnapshot): QuestStep | null {
     return { kind: 'grabGround', item: WT_ITEM.LIT_CANDLE.name, anchor: WT_TILE.CANDLE, waitIfMissing: true };
 }
 
-// Why: the chosen food comes first, as naming three fish meant a bank stocked with anything else read as no food at all and the enclave trip waited instead of withdrawing.
+// Why: Check the selected food first, then fallbacks, so other banked food can still provision the enclave trip.
 const FALLBACK_FOODS = ['Tuna', 'Swordfish', 'Lobster'] as const;
 
 /** The configured food, then the fish the module falls back on. */
@@ -159,7 +159,7 @@ export function carriedFood(snap: QuestSnapshot): number {
     return questFoods().reduce((total, food) => total + (snap.inv.get(food.toLowerCase()) ?? 0), 0);
 }
 
-// Why: the shamans are 99 in every combat stat and respawn about every hundred ticks, so an enclave trip without food is a death.
+// Why: the shamans are 99 in every combat stat and respawn about every 100 ticks, so an enclave trip without food is a death.
 // Why: ownsInventory means the engine's own food provisioning never runs for this quest.
 
 /** Source `want` food, or null when the pack has it. */
@@ -180,12 +180,12 @@ export function sourceFood(snap: QuestSnapshot, want: number): QuestStep | null 
     return { kind: 'wait', reason: 'no food in the bank for the shaman enclave' };
 }
 
-// Why: the bank supplies the kit in one go, where sourcing item by item paid for a trip each, from wherever the quest had got to.
-// Why: only what the bank holds is asked for, so the shop, the ground candle and the guard's riddle stay as the fallbacks and an empty bank changes nothing.
+// Why: the bank supplies the kit in one go; sourcing item by item costs a trip each from wherever the quest has got to.
+// Why: only what the bank holds is asked for, so the shop, the ground candle and the guard's riddle stay as fallbacks and an empty bank changes nothing.
 
 /** Everything the kit still needs that the bank can supply, in one withdrawal. */
 export function questKit(snap: QuestSnapshot, foodWant: number): QuestStep | null {
-    // Why: an unread bank is left to whichever stage first needs a scan, so a quest wanting nothing more from the bank never takes a trip to prove it.
+    // Why: an unread bank is left to the first stage that needs a scan, so a quest wanting nothing more from the bank never takes a trip to prove it.
     if (!snap.bankKnown) {
         return null;
     }
@@ -196,8 +196,8 @@ export function questKit(snap: QuestSnapshot, foodWant: number): QuestStep | nul
             items.push({ name: item.name, id: item.id, qty: missing });
         }
     }
-    // Why: gear is what the trip is for, as a purse 23 coins down or a lobster eaten is not a reason to walk back to Yanille and the stage sourcers refill those.
-    // Why: topping a delta up each tick spent sixteen trips on one run and fed the no-progress watchdog until it parked the quest.
+    // Why: gear is what the trip is for; a purse 23 coins down or a lobster eaten is no reason to walk back to Yanille, and the stage sourcers refill those.
+    // Why: topping a delta up each tick ran 16 bank trips and fed the no-progress watchdog until it parked the quest.
     if (items.length === 0) {
         return null;
     }

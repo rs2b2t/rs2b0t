@@ -10,8 +10,8 @@ const RAIL_W = 264;
 const TILE_W = 236;
 const TILE_H = 155;
 
-// bot.html geometry: #rs2b0t-root is a flex row [game-wrap | 8px gap | 330px panel], and
-// #game-stage is the largest 765:503 box centered in game-wrap inside the 1100x620 client.
+// bot.html uses [game-wrap | 8px gap | 330px panel] inside the 1100x620 client.
+// game-stage is the largest centered 765:503 box in game-wrap.
 const PANEL_W = 330;
 const ROOT_GAP = 8;
 const STAGE_W = 765;
@@ -23,7 +23,7 @@ const GAME_H = STAGE_H * STAGE_K;
 const GAME_X = (WRAP_W - GAME_W) / 2;
 const GAME_Y = (LOGICAL_H - GAME_H) / 2;
 
-// cover-fit that game region into a rail tile (scaler transform-origin is top-left)
+// Cover-fit the game region into a rail tile from the top-left origin.
 const CROP_K = Math.max(TILE_W / GAME_W, TILE_H / GAME_H);
 const CROP_TX = TILE_W / 2 - (GAME_X + GAME_W / 2) * CROP_K;
 const CROP_TY = TILE_H / 2 - (GAME_Y + GAME_H / 2) * CROP_K;

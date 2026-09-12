@@ -1,6 +1,5 @@
-// Why: only the HTML #overlay sits on top of the 3D canvas, so the published path is approximated by projecting each tile's four corners with the same Client.overlayPos as entities, filling and stroking diamond quads, and clipping to the 3D game viewport (512×334 at 4,4) so chat and tabs stay clean.
-// Why: colours and hop text come from Global settings (see pathPaintTheme.ts).
-// Why: the paint is depth-less against models and always draws above people and locs, fixing that needs a Client paint hook.
+// Project path tiles onto the HTML overlay and clip them to the 512x334 game viewport.
+// The overlay has no depth buffer, so tiles draw above scene models.
 
 import { reader } from '../../adapter/ClientAdapter.js';
 import { Locs } from '../../api/locs/Locs.js';
@@ -19,7 +18,7 @@ import { Game } from '../../api/game/Game.js';
 /** areaGame surface blitted at (4,4), see Client.overlayPos. */
 export const GAME_VIEW_CLIP = { x: 4, y: 4, w: 512, h: 334 } as const;
 
-/** Max tile quads to draw (far path is subsampled). Explore: denser for continuous look. */
+/** Max tile quads to draw; the far path is subsampled. */
 const MAX_DRAW_TILES = 160;
 /** Always paint this many steps ahead of pathIdx at full density. */
 const NEAR_FULL_DENSITY = 48;
@@ -43,10 +42,7 @@ export function isNavPathPaintEnabled(): boolean {
     }
 }
 
-/**
- * Indices of path tiles to paint: full density near pathIdx, then subsampled.
- * Always keeps the terminal. `force` (e.g. hop indices) is never dropped.
- */
+/** Path tile indices to paint: full density near pathIdx, then subsampled; the terminal and `force` indices are always kept. */
 export function selectDrawIndices(
     fromIdx: number,
     pathLen: number,
@@ -82,7 +78,7 @@ export function selectDrawIndices(
     return [...chosen].sort((a, b) => a - b);
 }
 
-/** Project four corners of a world tile; null if any corner fails. */
+/** Project the 4 corners of a world tile; null if any corner fails. */
 export function projectTileQuad(
     tile: PublishedPathTile,
     project: ProjectCorner
@@ -211,7 +207,7 @@ function fillQuad(
 // Why: the edge pattern matches FireGiant.outlineTarget and reader.npcBox.
 // Why: the optional translucent face fills make thin doors and ladders easier to spot.
 
-/** Wireframe AABB, 8 corners: 0–3 ground, 4–7 top. */
+/** Wireframe AABB, 8 corners: 0-3 ground, 4-7 top. */
 export function strokeLocHull(
     ctx: CanvasRenderingContext2D,
     box: { x: number; y: number }[],
@@ -281,10 +277,7 @@ export function hullFillFromStroke(stroke: string, alpha = 0.14): string {
     return `rgba(255, 220, 80, ${alpha})`;
 }
 
-/**
- * Resolve the live scenery the executor would click for a published hop.
- * Returns null for teles / NPCs / missing scene (caller draws nothing).
- */
+/** The live scenery the executor would click for a published hop; null for teles, NPCs or a missing scene. */
 export function liveTransportLoc(t: PublishedPathTile): {
     x: number;
     z: number;

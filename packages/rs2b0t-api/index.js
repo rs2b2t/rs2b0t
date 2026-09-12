@@ -1,7 +1,5 @@
-// @rs2b0t/api runtime shim: resolves the ABI the rs2b0t client installs at
-// globalThis.__rs2b0t (property names are stable — the bot bundle never
-// mangles; see ADR-0004 in the rs2b0t repo). Scripts bundle this in; it
-// only works when the bundle runs inside the bot client.
+// @rs2b0t/api reads globalThis.__rs2b0t; bundled scripts must run inside the bot client.
+// Why: the bot build preserves property names, so ABI exports keep these names.
 const SUPPORTED_API_VERSION = 1;
 
 const abi = globalThis.__rs2b0t;

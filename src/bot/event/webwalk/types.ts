@@ -1,5 +1,5 @@
 // docs/NAV.md
-// Why: the nav v2 transport contract is one edge shape (origin, destination, skills, items, quests, currency, loc id/action) for a bot that must execute every hop, not only plan it.
+// One transport shape carries everything needed to plan and execute a hop.
 
 export interface NavPoint {
     x: number;
@@ -16,7 +16,7 @@ export type TransportKind =
     | 'gangplank'
     | 'shortcut'
     | 'portal'
-    /** Originless spell/item hop (player tile → fixed landing). See PathPolicy. */
+    /** Originless spell/item hop (player tile to fixed landing). See PathPolicy. */
     | 'teleport'
     | 'other'
 
@@ -40,41 +40,31 @@ interface QuestRequirement {
     minStatus: 'started' | 'complete';
 }
 
-/** Planner-side gates. Dialog / NPC side-trips live in specialCrossings, not here. */
+/** Planner-side gates; dialog and NPC side-trips live in specialCrossings. */
 export interface TransportRequires {
     members?: boolean;
     skills?: SkillRequirement[];
     /** Any-of sets can be expressed as multiple edges; each item is ANDed. */
     items?: ItemRequirement[];
-    /**
-     * Must be worn (equipment), not merely in inventory.
-     * e.g. Chef's hat for the Cooking Guild.
-     */
+    /** Must be worn, e.g. Chef's hat for the Cooking Guild. */
     worn?: ItemRequirement[];
     quests?: QuestRequirement[];
     freeSlots?: number;
-    /**
-     * Toll / charter style cost.
-     * Equivalent to items[] but kept explicit for explain output.
-     */
+    /** Toll / charter cost; same as items[] but kept explicit for explain output. */
     currency?: { name: string; amount: number };
-    /**
-     * When true, edge is blocked if WorldState reports Entrana-restricted gear
-     * (weapons/armour heuristic matching content category bans).
-     */
+    /** Blocks the edge when WorldState reports Entrana-restricted gear (weapons/armour heuristic). */
     forbidEntranaRestricted?: boolean;
     // Why: content web.rs2 wants a plain Knife by use-on, or a slash-capable weapon worn for the menu Slash or used on the web.
-    // Why: plan time reads {@link WorldState.canSlashWeb} and the bank plan withdraws a Knife when missing; an undefined `canSlashWeb` (offline, no snapshot) fails open.
+    // Undefined fails open for offline planning; live plans may withdraw a Knife.
 
     /** Edge needs a slash tool for a web. */
     slashTool?: boolean;
-    // Why: PathFinder carries the return in the A* key, where entry hops set it via `essenceEntrySetsReturn`, and live WorldState / EssenceSession seeds the start.
-    // Why: an unset path return fails open, which is the offline-pack case.
+    // PathFinder carries the return in its A* state; unset returns fail open offline.
 
     /** Essence mine exit: usable only when the path's session return matches this id. */
     essenceExitReturn?: string;
     // Why: a wizard entry sets the server's `%exit_essence_mine_coord`, so PathFinder treats the path's session return as this id after the hop.
-    // Why: not a gate, meetsRequires and hasGatingRequires ignore it.
+    // Why: meetsRequires and hasGatingRequires ignore it; it gates nothing.
 
     /** Essence mine entry: the session return id this hop establishes. */
     essenceEntrySetsReturn?: string;
@@ -85,7 +75,7 @@ interface TransportLoc {
     action: string;
     /** Map placement / closed-state loc id. */
     locId?: number;
-    /** Action-bearing open-state id (closed trapdoor → open trapdoor). */
+    /** Action-bearing open-state id (closed trapdoor to open trapdoor). */
     openLocId?: number;
     locX: number;
     locZ: number;
@@ -121,17 +111,11 @@ export interface TransportEdge {
     requires?: TransportRequires;
     debug?: TransportDebug;
     disabledReason?: string;
-    /**
-     * Stable teleport id for policy allowlists (`varrock`, `lumbridge`, …).
-     * Aligns with `Game.teleport` / `api/map/Teleport.ts` keys when kind is teleport.
-     */
+    /** Stable teleport id for policy allowlists (`varrock`, `lumbridge`); matches the `Game.teleport` / `api/map/Teleport.ts` keys. */
     teleportId?: string;
 }
 
-/**
- * Cheap snapshot used to filter edges at search time.
- * Built from reader / Skills / Quests / Inventory, never from client internals.
- */
+/** Cheap snapshot for filtering edges at search time, built from reader / Skills / Quests / Inventory. */
 export interface WorldState {
     members: boolean;
     skills: Readonly<Record<string, number>>;
@@ -142,15 +126,12 @@ export interface WorldState {
     freeSlots: number;
     /** True when inv/worn matches Entrana restricted-gear heuristic. */
     entranaRestrictedGear: boolean;
-    /**
-     * Knife or slash-capable blade in inv/worn (web.rs2). Undefined = unknown
-     * (offline pack); meetsRequires slashTool fails open when unset.
-     */
+    /** Knife or slash-capable blade in inv/worn (web.rs2); undefined means unknown (offline pack) and slashTool fails open. */
     canSlashWeb?: boolean;
     // Why: live values come from `EssenceSession`, since server varp 64 is not client-transmitted.
     // Why: this seeds PathFinder path-state and entry hops can update the return mid-path; undefined means unknown.
 
-    /** Active essence-mine return id (`aubury` | `sedridor` | …). */
+    /** Active essence-mine return id, e.g. `aubury` or `sedridor`. */
     essenceExitReturn?: string;
 }
 
@@ -163,17 +144,11 @@ export interface PathPolicy {
     // Why: defaults to 0 when unset (`DEFAULT_DISTANCE_BEFORE_TELEPORT`), leaving A* cost to decide (`edgeCosts.ts`).
     // Why: a positive floor is set only when a caller wants a hard gate.
 
-    /** Min Chebyshev distance (start→goal, or remaining estimate) before a teleport edge may be used. */
+    /** Min Chebyshev distance (start to goal, or remaining estimate) before a teleport edge may be used. */
     distanceBeforeTeleport?: number;
-    /**
-     * If set, only these teleportId values are admissible (e.g. `['varrock']` for wildy escape).
-     * Empty/undefined = all catalogued teleports that pass requires.
-     */
+    /** Only these teleportId values are admissible (e.g. `['varrock']` for wildy escape); empty means all that pass requires. */
     allowTeleportIds?: readonly string[];
-    /**
-     * Teleport ids suppressed for this plan (e.g. server rejected mid-walk).
-     * Applied after allowlist; empty/undefined = none denied.
-     */
+    /** Teleport ids suppressed for this plan (server rejected mid-walk); applied after the allowlist. */
     denyTeleportIds?: readonly string[];
     useShips?: boolean;
     useShortcuts?: boolean;
@@ -192,7 +167,7 @@ export interface PathHop {
 /** Default edge costs (tile-equivalent time). Canonical source: `edgeCosts.ts`. */
 export { DEFAULT_EDGE_COST } from './geometry/edgeCosts.js';
 
-/** True for originless spell/item teleports (not world portals like essence exit). */
+/** True for originless spell/item teleports only; the essence exit is a portal. */
 export function isTeleportKind(kind: TransportKind): boolean {
     return kind === 'teleport';
 }

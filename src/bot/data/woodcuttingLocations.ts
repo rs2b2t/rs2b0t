@@ -6,15 +6,12 @@ import {
     type GatheringLocation
 } from './gatheringLocations.js';
 
-/**
- * Woodcutting camps for GatheringBot / Woodcutter, catalogued from rs2b2tgathering.csv and polished via live verify plus visual stand checks.
- * Why: burn strips stay in FiremakingLogic (`fireSpot`), so this table carries only the chop anchor and bank.
- */
+/** Woodcutting camps from rs2b2tgathering.csv and live checks. Burn strips remain in FiremakingLogic. */
 export type WoodcuttingLocation = GatheringLocation;
 
 /**
- * Ent woodcutting random (`macro_event_ent`). pack/npc.pack 444-452; 453 is suit of armour.
- * Why: the NPC is named Tree/Oak/Willow with Chop down, so callers match by id, never by name.
+ * Ent NPCs from macro_event_ent: IDs 444-452; 453 is a suit of armour.
+ * Why: Ents share tree names and Chop down actions, so match by ID.
  */
 export const ENT_NPC_IDS: Set<number> = new Set([444, 445, 446, 447, 448, 449, 450, 451, 452]);
 
@@ -145,7 +142,7 @@ export const WOODCUTTING_LOCATIONS: WoodcuttingLocation[] = [
     // Tick-manip camps, unpolished until live path/resource checks (#160).
     camp(
         'S Falador Oaks',
-        // Oaks south of Falador walls (~2949–3002, 3267–3314). Chickens ~2966,3346 for 2t retaliate.
+        // Oaks south of Falador walls (about 2949 to 3002, 3267 to 3314). Chickens near 2966,3346 for 2t retaliate.
         new Tile(2976, 3290, 0),
         BANK.faladorWest,
         ['oak'],
@@ -163,7 +160,7 @@ export const WOODCUTTING_LOCATIONS: WoodcuttingLocation[] = [
     ),
     camp(
         'Lumbridge Castle Willows',
-        // Castle willows ~3233–3234, 3238–3244 + rats for retaliate methods.
+        // Castle willows 3233 to 3234, 3238 to 3244, plus rats for retaliate methods.
         new Tile(3233, 3241, 0),
         BANK.draynor,
         ['willow'],

@@ -1,5 +1,5 @@
-/** Live Imp Catcher harness (#230): --stage N --until N --beads N --minutes N, base :8890.
- *  Why: `--stage` relogs since update_questlist only recolours the journal at login; `--beads` seeds part of the bead set so the withdraw and hand-in legs are testable without the ~53-kill farm; stats are 70 rather than `~maxme` so reach and damage problems stay visible; the :8888 sim answers neither `givebank` nor `~bankitem`. */
+/** Live Imp Catcher harness (#230), using the content world at :8890. */
+// Why: stage jumps relog; partial bead seeds isolate hand-in paths from the roughly 53-kill farm.
 
 //   HEADED=1 bun e2e/imp-catcher-230-live.ts --stage 1 --beads 3 --start ardougne --minutes 30
 //   HEADED=1 bun e2e/imp-catcher-230-live.ts --stage 0 --beads 0 --minutes 120

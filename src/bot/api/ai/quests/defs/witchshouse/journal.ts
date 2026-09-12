@@ -24,7 +24,7 @@ function normalize(lines: readonly string[] | string): string {
         .toLowerCase();
 }
 
-// Why: the page keeps every earlier line struck through, so the magnet line is still on the back-door page and this order is the only thing separating them.
+// Why: the page keeps every earlier line struck through, so the magnet line is still on the back-door page and only this order separates them.
 // Why: stages 3 and 5 render from one branch of `ball_journal.rs2`, so the diary read is invisible here and `DiaryState` carries it instead.
 const STAGES: readonly [string, number][] = [
     [' quest complete!', WH_STAGE.COMPLETE],
@@ -36,7 +36,7 @@ const STAGES: readonly [string, number][] = [
 ];
 
 /**
- * Turn quest-list journal text into a varp-aligned stage.
+ * Journal text to a varp-aligned stage.
  * @see Server content ball_journal.rs2
  */
 export function parseWitchsHouseJournal(lines: readonly string[] | string): QuestProgress | undefined {
@@ -45,7 +45,7 @@ export function parseWitchsHouseJournal(lines: readonly string[] | string): Ques
     return hit ? { stage: hit[1], flags: new Set<string>() } : undefined;
 }
 
-// Why: `witch.rs2` rewinds the varp from 3 to 1, so a remembered stage would outlive a catch and send the run at a back door that has relocked.
+// Why: `witch.rs2` can reset the varp from 3 to 1, so do not retain a later cached stage.
 
 export async function readWitchsHouseProgress(): Promise<QuestProgress | undefined> {
     const status = Quests.status(WITCHS_HOUSE_QUEST);

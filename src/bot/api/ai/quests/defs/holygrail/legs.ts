@@ -35,9 +35,9 @@ import {
 
 const WALK = { attempts: 4, timeoutMs: 180_000 } as const;
 
-// Why: the castle's floor plan interleaves with the ground outside it, so the only cheap way to know which side of its wall we are on is to remember the bell landing.
+// Why: the castle floor plan interleaves with the ground outside, so remembering the bell landing is the cheap way to know which side of the wall we're on.
 
-/** Latched by the bell, cleared the moment the player is outside the blighted realm. */
+/** Latched by the bell, cleared once the player is outside the blighted realm. */
 let insideCastle = false;
 
 async function walkTo(dest: Tile, radius: number, log: (m: string) => void): Promise<boolean> {
@@ -86,7 +86,7 @@ async function climbAt(stand: Tile, op: string, log: (m: string) => void): Promi
 
 // Why: `merlin2` and the `merlin` that Merlin's Crystal frees both render as "Merlin", and only the workshop one carries the Grail dialogue.
 
-/** Open the workshop door, which is what spawns Merlin, and take his advice. */
+/** Open the workshop door, which spawns Merlin, and take his advice. */
 export async function merlinLeg(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(GRAIL_TILE.MERLIN_WORKSHOP, 2, log))) {
         return false;
@@ -137,7 +137,7 @@ export async function wearArmour(names: readonly string[], log: (m: string) => v
 }
 
 // Why: the door checks the napkin and the whistle count itself, so opening it while carrying the cloth is all there is to it.
-// Why: the pair despawns after 100 ticks, a fifth of a minute on a doubled tick rate, so both are taken inside one step rather than one per engine tick.
+// Why: the pair despawns after 100 ticks, so both are taken inside one step.
 
 /** Open Draynor Manor's top-floor door and pick up the whistles it drops. */
 export async function draynorWhistles(want: number, log: (m: string) => void): Promise<boolean> {
@@ -236,7 +236,7 @@ export function shouldProtect(prayerLevel: number, points: number, up: boolean):
     return prayerLevel >= PROTECT_LEVEL && points > 0 && !up;
 }
 
-// Why: the titan full-heals and drops the stage to 7 for anyone who kills him without Excalibur worn, so the check is a refusal rather than a warning.
+// Why: the titan full-heals and drops the stage to 7 for anyone who kills him without Excalibur worn, so the check refuses.
 // Why: the win is a p_teleport past him, so leaving the pocket is the only proof the fight was the winning one.
 
 /** Kill the Black Knight Titan wearing Excalibur; the win teleports us across his crossing. */
@@ -278,7 +278,7 @@ async function fightTitan(log: (m: string) => void): Promise<boolean> {
                 await drain();
                 continue;
             }
-            // Why: the server takes one op a tick and drops the rest, so the order is pray, eat, swing, a re-arm skipped for food never comes back while the damage keeps coming.
+            // Why: the server takes 1 op a tick and drops the rest, so the order is pray, eat, swing; a re-arm skipped for food never comes back while the hits land.
             if (shouldProtect(Skills.level('prayer'), Prayer.points(), Prayer.active(PROTECT_MELEE))) {
                 await Prayer.set(PROTECT_MELEE, true);
                 continue;
@@ -311,7 +311,7 @@ async function fightTitan(log: (m: string) => void): Promise<boolean> {
         log(`titan: gave up after ${TITAN_GUARD_TICKS} ticks (${swings} attacks)`);
         return false;
     } finally {
-        // Why: the win is a teleport out of his reach, but a yield leaves him swinging, dropping the prayer there hands back the hits it was bought to stop.
+        // Why: the win teleports out of his reach but a yield leaves him swinging, so dropping the prayer there hands back the hits it was bought to stop.
         if (!Game.inCombat() && Prayer.active(PROTECT_MELEE)) {
             await Prayer.set(PROTECT_MELEE, false);
         }
@@ -323,7 +323,7 @@ const RING_ATTEMPTS = 12;
 /** Ring the Grail bell beside a maiden; the answer is a teleport into the castle. */
 async function ringBell(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(GRAIL_TILE.RING_STAND, 1, log))) {
-        // Why: the ring stand is outside the castle wall, so an unreachable verdict is the bot telling us it is already in.
+        // Why: the ring stand is outside the castle wall, so unreachable means we're already in.
         if (WalkExecutor.lastOutcome === 'unreachable') {
             log('bell: the ring stand is unreachable — already inside the castle');
             insideCastle = true;
@@ -383,7 +383,7 @@ async function takeBell(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => Inventory.contains(ITEM.BELL), 8000);
 }
 
-// Why: one step, not five, every stage inside the realm is read off the player's tile and the scene, so an interrupted run re-enters wherever it stopped.
+// Why: one step; every stage inside the realm is read off the tile and the scene, so an interrupted run re-enters where it stopped.
 
 /** Everything inside the blighted realm: the titan, the bell, and the Fisher King. */
 export async function realmLeg(log: (m: string) => void): Promise<boolean> {
@@ -454,7 +454,7 @@ export async function takeGrail(log: (m: string) => void): Promise<boolean> {
     if (Inventory.contains(ITEM.GRAIL)) {
         return true;
     }
-    // Why: radius 0. The Grail is on a round table, and only the cardinal neighbour south of it counts as adjacent.
+    // Why: radius 0, since only the cardinal neighbour south of the round table counts as adjacent.
     if (!(await walkTo(GRAIL_TILE.GRAIL_STAND, 0, log))) {
         return false;
     }

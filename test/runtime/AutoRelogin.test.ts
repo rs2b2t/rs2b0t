@@ -19,10 +19,10 @@ describe('AutoRelogin title-screen flag (#215)', () => {
         const seen: boolean[] = [];
         const off = AutoRelogin.onAutoLoginChange(on => seen.push(on));
         AutoRelogin.setAutoLogin(true);
-        AutoRelogin.setAutoLogin(true); // no-op: same value
+        AutoRelogin.setAutoLogin(true);
         AutoRelogin.setAutoLogin(false);
         off();
-        AutoRelogin.setAutoLogin(true); // unsubscribed
+        AutoRelogin.setAutoLogin(true);
         expect(seen).toEqual([true, false]);
         AutoRelogin.setAutoLogin(false);
     });

@@ -52,8 +52,7 @@ const FLAG_LINES: readonly [string, string][] = [
     ['i have mined the sacred rock', 'mined-rock']
 ];
 
-// The journal drops a tribe's "wants" line once that tribe is satisfied, so the
-// helped-* line is the only evidence left that we ever spoke to them.
+// The journal drops a tribe's "wants" line once that tribe is satisfied, so the helped-* line is the only evidence left that we spoke to them.
 const IMPLIED: readonly [string, string][] = [
     ['helped-og', 'spoken-og'],
     ['helped-grew', 'spoken-grew'],
@@ -86,8 +85,7 @@ function readStage(text: string): number | undefined {
     if (text.includes('quest complete!')) return WATCHTOWER_STAGE.COMPLETE;
     if (text.includes('i have taken the crystals to the watchtower wizard')) return WATCHTOWER_STAGE.FOUND_ALL_CRYSTALS;
     if (text.includes('he infused it into a magic ogre potion')) return WATCHTOWER_STAGE.MADE_POTION;
-    // Needles avoid punctuation that sits next to a colour tag: stripping "@dbl@"
-    // leaves a space before the mark, so "potion." normalises to "potion .".
+    // Needles avoid punctuation next to a colour tag: stripping "@dbl@" leaves a space before the mark, so "potion." normalises to "potion .".
     if (text.includes('i need to get it enchanted') || text.includes('i need to make the')) {
         return WATCHTOWER_STAGE.LEARNED_POTION;
     }

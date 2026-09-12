@@ -12,10 +12,7 @@ export { BROKEN_PICKAXE, HAMMER };
 /** Coins stack name in inventory/bank. */
 export const COINS = 'Coins';
 
-/**
- * Broken axe, not always present on every private build, but when it is we
- * prefer Bob repair over buying another.
- */
+/** Broken axe used by some private builds; repair it at Bob's before buying another. */
 export const BROKEN_AXE = 'Broken axe';
 
 export type ToolAcquireMode = 'off' | 'on';
@@ -47,10 +44,7 @@ export const TOOL_ACQUIRE_SETTING = {
         'Off = only use tools already in the bank/pack. Buy / repair = when a usable tool is missing (or a better shop tier is affordable), withdraw coins and buy/repair at Bob (axes), Nurmof (pickaxes), Gerrant/Harry (fishing gear). Broken picks/axes prefer repair at Nurmof/Bob. Mithril+ axes can be smithed when a matching bar + hammer are in the bank.'
 };
 
-/**
- * Rare humanization: after a normal bank close, ~1/N chance to walk a few tiles
- * out and re-open as if something was forgotten. Off by default.
- */
+/** One-in-N chance to wander after closing a bank, then reopen it. Disabled by default. */
 export const FORGETFUL_BANK_ODDS = 100;
 
 export const FORGETFUL_BANK_SETTING = {
@@ -78,14 +72,14 @@ export interface ShopOffer {
     vendor: ToolVendor;
 }
 
-/** Bob, Lumbridge axes (bronze–steel) + bronze pick. */
+/** Bob, Lumbridge axes (bronze to steel) + bronze pick. */
 export const BOB_VENDOR: ToolVendor = {
     keeper: 'Bob',
     stand: new Tile(3231, 3203, 0),
     bankStand: new Tile(3093, 3243, 0) // Draynor
 };
 
-/** Nurmof, dwarven mine pickaxes (bronze–rune). */
+/** Nurmof, dwarven mine pickaxes (bronze to rune). */
 export const NURMOF_VENDOR: ToolVendor = {
     keeper: 'Nurmof',
     stand: new Tile(2997, 9844, 0),
@@ -238,10 +232,7 @@ export function axeShopOffers(): ShopOffer[] {
     }));
 }
 
-/**
- * Best shop offer the player can use and afford that is strictly better than
- * `owned` (or any usable tier when owned is null). Tiers are best-first.
- */
+/** Best usable, affordable shop offer above `owned` (any usable tier when owned is null). Tiers are best-first. */
 export function bestAffordableShopTier(
     level: number,
     tiers: readonly ToolTier[],
@@ -273,9 +264,7 @@ export function bestAffordableShopTier(
     return best;
 }
 
-/**
- * Best axe we can smith from a bar already in bank/inv (mith+ or when Bob is dry).
- */
+/** Best axe smithable from a bar already in bank/inv (mith+ or when Bob is dry). */
 export function bestSmithableAxe(
     woodcuttingLevel: number,
     smithingLevel: number,
@@ -332,9 +321,7 @@ export function planBrokenToolRepair(
     return null;
 }
 
-/**
- * Plan a pickaxe buy/repair when missing or when a better Nurmof tier is affordable.
- */
+/** Plan a pickaxe buy/repair when missing or when a better Nurmof tier is affordable. */
 export function planPickaxeAcquire(w: AcquireWorld, opts: { upgrade: boolean }): ToolAcquirePlan | null {
     const repair = planBrokenToolRepair(n => w.heldCount(n) > 0);
     if (repair?.label === 'pickaxe') {
@@ -366,7 +353,7 @@ export function planPickaxeAcquire(w: AcquireWorld, opts: { upgrade: boolean }):
 
 /**
  * Plan an axe buy/smith when missing or when a better tier is available.
- * Bob covers bronze–steel; mith+ uses bank bars + hammer at Varrock anvil.
+ * Bob covers bronze to steel; mith+ uses bank bars + hammer at the Varrock anvil.
  */
 export function planAxeAcquire(w: AcquireWorld, opts: { upgrade: boolean }): ToolAcquirePlan | null {
     const repair = planBrokenToolRepair(n => w.heldCount(n) > 0);
@@ -391,7 +378,7 @@ export function planAxeAcquire(w: AcquireWorld, opts: { upgrade: boolean }): Too
         w.heldCount(HAMMER) + w.bankCount(HAMMER) > 0
     );
 
-    // Prefer the better of shop vs smith (lower tier rank = better).
+    // Better of shop vs smith (lower tier rank wins).
     type Cand = { rank: number; plan: ToolAcquirePlan };
     const cands: Cand[] = [];
     if (shop) {
@@ -432,9 +419,9 @@ export interface FishingVendorNear {
     z: number;
 }
 
-// Why: feathers and the fly fishing rod come from Gerrant only, since Harry does not stock them.
-// Why: everything else Harry stocks goes to the nearer of Harry and Gerrant by straight-line distance from `near` (Catherby lobster pot → Harry, not Port Sarim).
-// Why: with no position, bait and big net still prefer Harry while other tools default to Gerrant (F2P).
+// Why: Harry doesn't stock feathers or the fly fishing rod, so those go to Gerrant.
+// Why: everything else goes to whichever of Harry and Gerrant is nearer `near` by straight line (a Catherby lobster pot buys at Harry).
+// Why: with no position, bait and big net go to Harry and the rest to Gerrant (F2P).
 
 /** Preferred fishing vendor for a gear piece. */
 export function fishingVendorFor(name: string, near?: FishingVendorNear | null): ToolVendor {
@@ -467,10 +454,7 @@ export function isFishingBaitPiece(g: Pick<FishingGearPiece, 'name' | 'restock'>
     return n === 'fishing bait' || n === 'feather';
 }
 
-/**
- * Apply the script bait/feather target qty to method gear (tools unchanged).
- * Why: only used when the method requires bait or feathers.
- */
+/** Apply the script's bait/feather target qty to the method's bait pieces; tools are untouched. */
 export function withBaitTarget(
     method: Pick<FishingMethod, 'gear'>,
     baitQty: number
@@ -491,8 +475,8 @@ export interface PlanFishingGearOpts {
 export type FishingGearBuyPlan = Extract<ToolAcquirePlan, { kind: 'buy' }>;
 
 // Why: order follows method.gear, so tools come before bait stacks when listed that way.
-// Why: tools are bought when held+bank &lt; min (usually 1).
-// Why: bait and feathers are bought up to baitQty (or gear.restock) when total held+bank is below that target.
+// Why: tools are bought when held+bank < min (usually 1).
+// Why: bait and feathers are topped up to baitQty (or gear.restock) when held+bank is below it.
 
 /** Plan buys for every missing fishing gear piece that is buyable and affordable. */
 export function planFishingGearBuys(
@@ -502,7 +486,7 @@ export function planFishingGearBuys(
 ): FishingGearBuyPlan[] {
     const gear = withBaitTarget(method, opts.baitQty ?? 1000).gear;
     const out: FishingGearBuyPlan[] = [];
-    // Coins left after earlier lines in this cart (same bank trip / shop visit).
+    // Coins left after earlier cart lines (same bank trip).
     let coinsLeft = totalCoins(w);
     for (const g of gear) {
         const have = w.heldCount(g.name) + w.bankCount(g.name);
@@ -561,7 +545,7 @@ export function buyPlansCost(plans: readonly Pick<FishingGearBuyPlan, 'cost'>[])
 
 /**
  * All affordable missing pieces at the first piece's vendor (same keeper).
- * Fly rod + feathers → one Gerrant cart; avoids bank-between-buys thrash.
+ * Fly rod + feathers make one Gerrant cart, so no banking between buys.
  */
 export function fishingGearShopCart(
     method: Pick<FishingMethod, 'gear'>,
@@ -577,8 +561,8 @@ export function fishingGearShopCart(
 }
 
 /**
- * Plan acquire for GatheringBot tool reqs (tiered pick/axe + ignore exact like tinderbox for shop).
- * `missingOnly` = only when no usable tool owned; otherwise also upgrade.
+ * Plan a tool acquire for GatheringBot tiered reqs (pick/axe); exact reqs like tinderbox are skipped.
+ * `opts.upgrade` false = only when no usable tool is owned.
  */
 export function planGatherToolAcquire(
     reqs: readonly ToolReq[],
@@ -644,10 +628,7 @@ export function shopableMissingFishingGear(
     return gear.filter(g => count(g.name) < g.min && fishingShopCost(g.name) != null).map(g => g.name);
 }
 
-/**
- * Whether Nurmof (or another underground vendor) needs an explicit surface hop
- * before the stand walk. Pure geography, used by {@link walkToToolVendor}.
- */
+/** True when an underground vendor (Nurmof) needs the surface trapdoor hop before the stand walk. Used by {@link walkToToolVendor}. */
 function needsToolVendorSurfaceHop(
     vendor: ToolVendor,
     here: { x: number; z: number; level: number } | null
@@ -664,9 +645,8 @@ function needsToolVendorSurfaceHop(
 }
 
 // Why: Nurmof needs an explicit surface trapdoor hop when still above ground, or pathing stalls at the mine entrance.
-// Why: shared from api/ so the Miner, Woodcutter and Fisher scripts do not re-copy the hop logic.
+// Why: lives in api/ so Miner, Woodcutter and Fisher share the hop logic.
 
-/** Walk to a tool vendor. */
 export async function walkToToolVendor(
     vendor: ToolVendor,
     log: (m: string) => void = () => {}
@@ -682,7 +662,7 @@ export async function walkToToolVendor(
             return false;
         }
         here = Game.tile();
-        // Walk may have pathfind-looped underground already, go straight to stand.
+        // The walk may already have pathed underground; go straight to the stand.
         if (here && here.z > 9000) {
             log('acquire: already underground after hop walk — skipping trapdoor');
             return Traversal.walkResilient(vendor.stand, { radius: 4, timeoutMs: 120_000, log });

@@ -634,14 +634,8 @@ export default class ClientBuild {
         }
     }
 
-    // Decoding a region's loc stream to find which models it needs costs a LocType decode
-    // per loc, and the loading screen used to redo it every tick for every region on
-    // screen. The set of models a region needs never changes, so decode once and cache it.
-    //
-    // Cache the whole set, not just what was missing: mapBuild() calls Model.unload() on
-    // every scene build under lowMem, so a model present now can be gone after the next
-    // build (a floor change forces one). Re-checking every id each tick means eviction is
-    // always noticed and re-requested, exactly as the per-tick rescan used to do.
+    // Cache every model id in a region; lowMem scene builds can evict any of them.
+    // Rechecking the cached ids catches eviction without decoding every loc each tick.
     private static locModels: WeakMap<Uint8Array, { xOffset: number; zOffset: number; models: Set<number> }> = new WeakMap();
 
     static checkLocations(src: Uint8Array, xOffset: number, zOffset: number): boolean {

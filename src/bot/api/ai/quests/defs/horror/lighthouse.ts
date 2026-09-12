@@ -28,10 +28,9 @@ async function clearMesbox(): Promise<void> {
     }
 }
 
-// Why: the two spots sit on opposite banks of one gap, so the walk between them is the `Cross` op the navigator already knows about.
-// Why: success is read off the plank count, as `oplocu` deletes the plank and the nails together and the refusals ("You need 4 steel nails", "already fixed this half") delete nothing.
+// Why: the spots sit on opposite banks and the walk between is the navigator's `Cross` op; success is the plank count, since `oplocu` deletes plank and nails and the refusals ("You need 4 steel nails", "already fixed this half") delete nothing.
 
-/** Repair both halves of the storm-broken bridge, a plank and four nails each. */
+/** Repair both halves of the storm-broken bridge, a plank and 4 nails each. */
 export async function repairBridge(log: (m: string) => void): Promise<boolean> {
     const spots: readonly [string, Tile][] = [['west', HD_TILE.BRIDGE_WEST], ['east', HD_TILE.BRIDGE_EAST]];
     for (const [side, stand] of spots) {
@@ -57,8 +56,7 @@ export async function repairBridge(log: (m: string) => void): Promise<boolean> {
         const built = await Execution.delayUntil(() => Inventory.countById(HD_ID.PLANK) < before, 10_000);
         await clearMesbox();
         if (!built) {
-            // Already-built halves refuse without consuming, which is the normal
-            // resume path, carry on to the other side rather than failing.
+            // An already-built half refuses without consuming, the normal resume path, so carry on to the other side.
             log(`the ${side} half took no plank (already built, or nails short)`);
         } else {
             log(`${side} half of the bridge built`);
@@ -67,10 +65,7 @@ export async function repairBridge(log: (m: string) => void): Promise<boolean> {
     return true;
 }
 
-/**
- * Walk through the lighthouse doorway. `oploc1` teleports the player into the
- * broken copy in mapsquare 38_71. Nothing walks between the two lighthouses.
- */
+/** Walk through the lighthouse doorway; `oploc1` teleports you into the broken copy in mapsquare 38_71. */
 export async function enterLighthouse(log: (m: string) => void): Promise<boolean> {
     if (inQuestLighthouse(Game.tile())) {
         return true;
@@ -100,7 +95,7 @@ async function climb(name: string, op: string, near: Tile, arrive: () => boolean
 
 const atLevel = (level: number) => (): boolean => (Game.tile()?.level ?? -1) === level;
 
-// Why: the middle staircase's op1 raises a Climb Up / Climb Down choice whose down branch teleports two tiles sideways on the same floor once the light is repaired, so both hops take the explicit ops instead.
+// Why: the middle staircase's op1 raises a Climb Up / Climb Down choice whose down branch teleports 2 tiles sideways once the light is repaired, so both hops use the explicit ops.
 
 /** Climb from the ground floor to the lamp room of the broken copy. */
 export async function climbToLight(log: (m: string) => void): Promise<boolean> {
@@ -118,8 +113,7 @@ interface LightStep {
     done: () => boolean;
 }
 
-// Why: the torch refuses the tinderbox until it has been tarred ("The torch does not seem to be flammable..."), and whichever application is last teleports the player out into the live lighthouse.
-// Why: tar and glass are read off their own consumption, and the tinderbox is not consumed, so the only proof it caught is leaving the broken copy.
+// Why: the torch refuses the tinderbox until tarred ("The torch does not seem to be flammable..."), the last application teleports you into the live lighthouse, and the tinderbox isn't consumed, so leaving the copy is the proof it caught.
 
 /** Apply tar, glass and light to the lamp. */
 export async function repairLight(flags: ReadonlySet<string>, log: (m: string) => void): Promise<boolean> {

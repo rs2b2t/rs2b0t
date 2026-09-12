@@ -16,7 +16,7 @@ export interface Catalog {
     aliases: Map<number, ItemAlias>;
 }
 
-// Why: players type "maple longbow u", so punctuation cannot separate them from "Maple longbow (u)".
+// Why: players type "maple longbow u", so punctuation can't separate them from "Maple longbow (u)".
 function key(name: string): string {
     return name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
@@ -28,12 +28,10 @@ export function tradeable(id: number): boolean {
     return !UNTRADEABLE.has(id);
 }
 
-// Why: every piece of ammunition has a poisoned twin, and fire arrows are a lighting step rather than stock,
-// Why: so listing them multiplies the shelf with rows nobody trades in bulk. Poisoned MELEE weapons are not in
-// Why: this, because a dragon dagger(p) is an item people buy on purpose rather than a variant of one.
+// Why: every ammo has a poisoned twin and fire arrows are a lighting step, so listing them multiplies the shelf with rows nobody trades in bulk. Poisoned melee weapons stay in, since a dragon dagger(p) is bought on purpose.
 const SIDE_VARIANT = /(arrow|bolt|dart|javelin|knife)s?\(p\)$|fire arrows?$|^(un)?lit arrows?$/i;
 
-/** Whether an item is one a shop would carry, rather than a variant of one it already does. */
+/** Whether a shop would carry this item as its own row. */
 export function worthStocking(name: string): boolean {
     return !SIDE_VARIANT.test(name.trim());
 }
@@ -77,13 +75,13 @@ const SYNONYMS = new Map<string, string>(
 );
 
 /** What the shop calls an obj, which is the plain name until the content repeats it. */
-// Why: for speaking and painting only. Anything that clicks an item needs clientName, not this.
+// Why: for speaking and painting only; anything that clicks an item needs clientName.
 export function displayName(cat: Catalog, id: number): string {
     return cat.aliases.get(id)?.label ?? cat.byId.get(id)?.name ?? `item ${id}`;
 }
 
 /** What the client itself calls an obj, which is the only name a click can be aimed by. */
-// Why: Trade.offer filters the pack on the client's own name, so the shop's label finds no slot and the bot stakes nothing; undefined rather than a placeholder, so a caller refuses instead of clicking.
+// Why: Trade.offer filters the pack on the client's own name, so the shop's label finds no slot and the bot stakes nothing; undefined makes a caller refuse instead of clicking.
 export function clientName(cat: Catalog, id: number): string | undefined {
     return cat.byId.get(id)?.name;
 }
@@ -100,8 +98,7 @@ export function buildCatalog(records: readonly ObjRecord[]): Catalog {
             notedOf.set(r.certlink, r.id);
             unnotedOf.set(r.id, r.certlink);
         } else if (r.stackVariant !== true && tradeable(r.id) && worthStocking(r.name)) {
-            // Why: pile-size models and anything the content will not let through a trade window stay reachable
-            // Why: by id, they are not offered as items to put in a book.
+            // Why: pile-size models and untradeables stay reachable by id but aren't offered as book items.
             items.push(r);
         }
     }
@@ -178,7 +175,7 @@ function byLabel(cat: Catalog, q: string): ObjRecord[] {
 }
 
 /** Narrow a repeated name with the words the customer supplied. */
-// Why: four objs are called "Dragonhide" and two are "Half of a key", so the colour or the half is the only thing separating them, and it never appears in the name.
+// Why: 4 objs are called "Dragonhide" and 2 are "Half of a key", so the colour or the half is the only thing separating them, and it never appears in the name.
 function resolveAliased(cat: Catalog, q: string): ObjRecord[] {
     const spoken = byLabel(cat, q);
     if (spoken.length > 0) {
@@ -214,7 +211,7 @@ export function resolveByName(cat: Catalog, query: string, opts: { exactOnly?: b
         return [];
     }
 
-    // Why: the plain name is tried first, so "guam leaf" stays a herb rather than being read as the alias word "guam".
+    // Why: the plain name is tried first, so "guam leaf" stays a herb instead of matching the alias word "guam".
     const exact = exactish(cat, q);
     if (exact.length > 0) {
         return preferWorn(exact, false);

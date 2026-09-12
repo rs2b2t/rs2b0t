@@ -1,5 +1,4 @@
-// Out-of-tree example bot, authored ONLY against @rs2b0t/api (the Slice 7
-// exit criterion). Picks up bones near where it starts and buries them.
+// Example using only @rs2b0t/api: pick up nearby bones and bury them.
 // Try it: stand anywhere, ::give bones 25, Start.
 import { defineBot, Execution, Game, GroundItems, Inventory, LoopingBot } from '@rs2b0t/api';
 
@@ -16,8 +15,7 @@ class BoneBurier extends LoopingBot {
                 this.xpGained += e.delta;
             }
         });
-        // inventory.changed carries the slot's NEW state: an emptied slot is
-        // id -1 (previousId was the bones), that's a completed burial here
+        // An emptied slot reports id -1 and the previous bones id.
         this.on('inventory.changed', e => {
             if (e.id === -1 && e.previousId !== -1) {
                 this.buried++;

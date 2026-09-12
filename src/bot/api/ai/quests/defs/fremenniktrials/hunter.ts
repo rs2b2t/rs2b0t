@@ -26,8 +26,8 @@ const DIRECTION: Record<string, { dx: number; dz: number }> = {
 /** Locates per hunt before the step gives the tick budget back. */
 const LOCATES = 20;
 
-// Why: `draugen_locate` compares the two coordinates axis by axis, so each bearing is the sign of dx and the sign of dz, two independent bisections, not one compass stride.
-// Why: `spawn_draugen_butterfly` rolls (2688,3572), (2720,3616), (2656,3616) or (2720,3680), each scattered up to twenty tiles by `map_findsquare`, and this box is their union.
+// Why: `draugen_locate` compares the 2 coordinates axis by axis, so each bearing is the sign of dx and the sign of dz, 2 independent bisections.
+// Why: `spawn_draugen_butterfly` rolls (2688,3572), (2720,3616), (2656,3616) or (2720,3680), each scattered up to 20 tiles by `map_findsquare`, and this box is their union.
 
 interface Box {
     xlo: number;
@@ -36,13 +36,13 @@ interface Box {
     zhi: number;
 }
 
-// Why: `viking_draugen_safe` wanders off its anchor across the thousand ticks it lives, so the box is the province, not the four spawn squares.
+// Why: `viking_draugen_safe` wanders off its anchor across the 1000 ticks it lives, so the box covers the province around the 4 spawn squares.
 const ANCHORS: Box = { xlo: 2600, xhi: 2760, zlo: 3540, zhi: 3720 };
 
 /** Where an aim lands close enough that another walk tells the search nothing. */
 const SETTLED = 2;
 
-// Why: `viking_draugen_safe` is an npc and wanders, so a box that has closed on where it was reads as a contradiction, reopening around the character keeps the evidence, reopening wide is what finds it after a long drift.
+// Why: the Draugen wanders, so a box that closed on where it was contradicts itself; reopening around you keeps the evidence and reopening wide finds it after a long drift.
 const LOCAL = 12;
 
 /** Sigli's trial: track the invisible Draugen with his talisman, then kill it. */
@@ -53,13 +53,13 @@ export function hunterStep(snap: QuestSnapshot): QuestStep | null {
     if (heldId(snap, FT_ID.TALISMAN_CHARGED) > 0) {
         return { kind: 'talk', stop: SIGLI([]) };
     }
-    // Why: dressing before the first walk north costs one bank trip; dressing after Sigli hands the talisman over costs two.
+    // Why: dressing before the first walk north costs 1 bank trip; dressing after Sigli hands the talisman over costs 2.
     const kit = combatKit(snap);
     if (kit) {
         return kit;
     }
     if (!hasFlag(snap.progress, 'hunter-started') || heldId(snap, FT_ID.TALISMAN) === 0) {
-        // Sigli hands out a replacement talisman whenever the player turns up without one.
+        // Sigli replaces a missing talisman.
         return { kind: 'talk', stop: SIGLI(["What's a Draugen?", 'Yes']) };
     }
     return { kind: 'custom', name: 'track and kill the Draugen', run: hunt };
@@ -161,7 +161,7 @@ async function hunt(log: (m: string) => void): Promise<boolean> {
             box = cut;
             log(`the talisman points ${reading} — aiming for (${aim.x},${aim.z})`);
             const arrived = await Traversal.walkResilient(aim, { radius: 2, attempts: 2, timeoutMs: 60_000, log });
-            // Why: half of the box is sea and fenced field, and aiming at the same unreachable middle again reads the same bearing from the same tile forever.
+            // Why: half the box is sea and fenced field, so re-aiming at the same unreachable middle reads the same bearing from the same tile forever.
             if (!arrived) {
                 box = around(Game.tile() ?? at);
             }

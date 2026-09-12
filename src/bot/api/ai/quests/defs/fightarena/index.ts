@@ -62,7 +62,7 @@ const ASK_SERVILS = custom('ask the Servils about Khazard', log => talkById(FA_N
 const RELEASE_BEAST = custom('ask Justin what comes next', log =>
     talkAndLand(FA_NPC.JUSTIN, 'prisonCell', CUTSCENE_MS, log));
 
-// Why: the barman runs no shop, and buying a beer by mistake is what an unmatched option costs here.
+// Why: the barman runs no shop, and an unmatched option buys a beer by mistake.
 const BUY_BREW = custom('buy a Khali brew', async log => {
     if (!(await Traversal.walkResilient(FA_TILE.BARMAN, { radius: 3, attempts: 4, timeoutMs: 180_000, log }))) {
         return false;
@@ -78,7 +78,7 @@ const FIGHT_SCORPION = custom(`fight ${FA_FIGHT.scorpion.what}`, log =>
 const FIGHT_BOUNCER = custom(`fight ${FA_FIGHT.bouncer.what}`, log =>
     fightWithRelease(FA_FIGHT.bouncer, FA_NPC.JUSTIN, log));
 
-/** True once the pack holds a head or body that is not the disguise. */
+/** True once the pack holds a head or body other than the disguise. */
 function combatKitCarried(snap: QuestSnapshot): boolean {
     return combatSwap([...(snap.invIds?.keys() ?? [])]).length > 0;
 }
@@ -272,7 +272,7 @@ export const fightarena: QuestModule = {
     food: FOOD,
     grind: ['Khazard Ogre', 'Khazard Scorpion', 'Bouncer'],
     tools: ['khazard helmet', 'khazard armour', 'khazard cell keys', 'khali brew', 'coins', ...KIT_KEEP],
-    // Why: the kit is withdrawn and worn by decide(), so the engine's food float has to wait for it, 24 lobsters into an empty pack leave no room for five pieces of rune.
+    // Why: decide() withdraws and wears the kit, so the food float waits for it; 24 lobsters into an empty pack leave no room for 5 pieces of rune.
     foodReady: snap => disguised(snap) || kitWanted(snap).length === 0,
     readStage: readFightArenaStage,
     sustain: { foods: ['Lobster', 'Swordfish', 'Shark', 'Tuna'], eatBelowHp: 0.6 },

@@ -21,7 +21,7 @@ export function poisonMark(): number {
     return GameMessages.mark();
 }
 
-// Why: this is best-effort by design, an empty shop or a short purse leaves the leg to run the corridor uncured rather than parking a quest that has always finished without one.
+// Why: best-effort; the quest has always finished without a cure, so an empty shop or short purse runs the corridor uncured.
 
 /** Cross to Musa Point for a dose before the dungeon. */
 export async function stockAntipoison(log: (m: string) => void): Promise<void> {
@@ -49,7 +49,7 @@ export async function stockAntipoison(log: (m: string) => void): Promise<void> {
         : 'scorpcatcher: the Karamja general store is out of antipoison — running the spiders uncured');
 }
 
-// Why: a dose cures and then holds `%poison` negative for five poison ticks, which is 90 seconds, drunk anywhere the spiders can still reach, that window expires and they poison the run again.
+// Why: a dose cures and holds `%poison` negative for 5 poison ticks (90s); drunk where the spiders can still reach, that window expires and they poison you again.
 
 /** Drink the dose once the deep dungeon gate is shut, and only if something inside poisoned us. */
 export async function curePoison(mark: number, log: (m: string) => void): Promise<void> {

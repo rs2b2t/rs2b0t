@@ -61,8 +61,8 @@ export async function readPrinceProgress(): Promise<QuestProgress | undefined> {
     if (status !== 'inProgress') {
         return undefined;
     }
-    // Why: the journal will not open while another box is up, as Quests.journal waits for modals().main to change and the quest-list button is dropped while a chat dialogue is on screen.
-    // Why: this quest ends several steps on a mesbox, so one read can come back empty, which reads as 'stage unavailable'.
+    // Why: the journal won't open while another box is up, since Quests.journal waits for modals().main to change and the quest-list button is dropped during a chat dialogue.
+    // Why: Several steps end on a mesbox, so an empty read means unavailable rather than a stage reset.
     for (let attempt = 0; attempt < 3; attempt++) {
         await closeMainModal();
         const progress = parsePrinceJournal(await Quests.journal(PRINCE_QUEST));

@@ -50,7 +50,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
             : { kind: 'talk', stop: COMMANDER };
     }
     if (stage === MC_STAGE.FIX_CANNON) {
-        // Why: the Commander hands out another toolkit on both the stage-6 and stage-7 branches, so a lost one is a talk rather than a wedge.
+        // Why: The Commander replaces lost toolkits at stages 6 and 7.
         return heldId(snap, MC_OBJ.TOOLKIT.id) > 0
             ? custom('repair the broken multicannon', repairCannon)
             : { kind: 'talk', stop: COMMANDER };
@@ -62,7 +62,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'talk', stop: NULODION };
     }
     if (stage === MC_STAGE.RETURN_NOTES) {
-        // Why: Nulodion re-issues whichever of the two is missing, and the Commander refuses the hand-over without both.
+        // Why: Nulodion re-issues whichever of the 2 is missing, and the Commander refuses the hand-over without both.
         const complete = heldId(snap, MC_OBJ.NOTES.id) > 0 && heldId(snap, MC_OBJ.MOULD.id) > 0;
         return { kind: 'talk', stop: complete ? COMMANDER : NULODION };
     }
@@ -80,8 +80,8 @@ function warnDwarfCannonReadiness(): string | null {
     return bits.length > 0 ? `Dwarf Cannon: ${bits.join('; ')}` : null;
 }
 
-// Why: `tools` is read at one place in QuestEngine. The spillover keep list, and is never provisioned, so a resume mid-quest does not bank its own state.
-// Why: the quest buys nothing, and the float otherwise walks at the pinned bank on every activation, which from inside the goblin cave is a route that does not exist, so a resume there spends a minute and a half proving it before starting.
+// Why: QuestEngine only reads `tools` for the spillover keep list and never provisions it, so a resume mid-quest doesn't bank its own state.
+// Why: the quest buys nothing, and a float would walk to the pinned bank on every activation, which from the goblin cave is a route that doesn't exist and costs 90s to prove.
 
 export const dwarfcannon: QuestModule = {
     record: QUESTS.find(r => r.id === 'mcannon')!,

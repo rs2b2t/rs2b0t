@@ -8,20 +8,18 @@ import { Npcs } from '#/bot/api/npcs/Npcs.js';
 import { GameMessages } from '#/bot/api/chatbox/gameMessages.js';
 import type { Npc } from '#/bot/api/model/Npc.js';
 
-// npc_add drops the wizard on a line-of-sight tile beside the dig, and the
-// engine deletes it once we are more than 17 tiles away.
+// `npc_add` spawns the wizard beside the dig; the engine removes it beyond 17 tiles.
 const SPAWN_RADIUS = 12;
 const SPAWN_WAIT_MS = 6000;
 const FIGHT_MS = 180_000;
 const ENGAGE_MS = 4000;
-/** How long to ride an engaged fight before re-checking that it is still ours. */
+/** Time before rechecking ownership of an active fight. */
 const RIDE_MS = 15_000;
 const CLOSE_IN_RADIUS = 1;
 const WALK_TIMEOUT_MS = 20_000;
-// spade.rs2 refuses a guardian that is not ours with this message.
+// spade.rs2 refuses a guardian that isn't ours with this message.
 const NOT_YOURS = /not after you/i;
-// Dying respawns us in Lumbridge, which empties the scene of the guardian,
-// indistinguishable from killing it unless the death itself is read.
+// Why: Death and victory both remove the guardian from the scene, so check the death message.
 const DIED = /oh dear.*you are dead/i;
 
 interface GuardianOutcome {
@@ -63,7 +61,7 @@ export async function sustainUntil(
     }
 }
 
-/** Ours faces us; another player's is refused by the server, so skip it. */
+/** Our guardian faces us; skip guardians owned by another player. */
 function findGuardian(name: string): Npc | null {
     const candidates = Npcs.query()
         .name(name)
@@ -105,7 +103,7 @@ export async function fightGuardian(name: string, log: (m: string) => void): Pro
             }
 
             // Why: the engine takes one action per tick, so an Attack sent here lands in the same tick as the bite `Sustain.run()` sent and replaces it.
-            // Why: measured two bites logged and zero lobsters consumed while the bot was beaten from 62 to 0 in six ticks.
+            // Why: measured: 2 bites logged and 0 lobsters eaten while hp went 62 to 0 in 6 ticks.
             // Why: once the guardian is facing us the fight continues on its own and the tick belongs to food.
             if (!(Game.inCombat() && target.targetsMe())) {
                 if (target.distance() > CLOSE_IN_RADIUS && !Game.inCombat()) {
@@ -131,7 +129,7 @@ export async function fightGuardian(name: string, log: (m: string) => void): Pro
             }
 
             // Why: our own combat bar is set by taking hits too, so exiting on it spun this loop into the re-attack above every tick.
-            // Why: bounded in slices rather than one long park, so food keeps going in.
+            // Why: bounded in slices so food keeps going in.
             await sustainUntil(
                 () => findGuardian(name) === null || GameMessages.sawSince(fightMark, DIED),
                 Math.min(RIDE_MS, Math.max(0, deadline - Date.now()))

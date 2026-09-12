@@ -1,4 +1,4 @@
-// Why: the cupboard on Morgan's upper floor is the only garlic in the world, no shop stocks it and no map square spawns it, so every quest that needs a clove walks to this tile.
+// Why: the cupboard on Morgan's upper floor is the only garlic in the world (no shop, no spawn), so every quest that needs a clove walks here.
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
 import Tile from '../../../../geometry/Tile.js';
@@ -28,7 +28,7 @@ async function climbMorganStairs(log: (message: string) => void): Promise<boolea
     return false;
 }
 
-// Why: the cupboard restocks, so the leg is repeatable and a second clove costs another Search rather than a walk.
+// Why: the cupboard restocks, so the leg is repeatable and a second clove is one more Search.
 
 /** Take one clove from Morgan's cupboard. False until the clove is in the pack, the climb and the Open each cost a pass. */
 export async function takeGarlic(log: (message: string) => void): Promise<boolean> {

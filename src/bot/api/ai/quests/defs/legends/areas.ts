@@ -54,7 +54,7 @@ export const LQ_SKILLS = {
     prayer: 42
 } as const;
 
-// Why: display names collide all over this quest, with three "Crystal" chunks, two golden bowls per fill state and "Rocks" for both the cave mouth and every ore vein, so every check goes through the id.
+// Why: display names collide all over this quest, 3 "Crystal" chunks, 2 golden bowls per fill state and "Rocks" for both the cave mouth and every ore vein, so every check goes through the id.
 export const LQ_ID = {
     COINS: 995,
 
@@ -148,7 +148,7 @@ export const LQ_ID = {
     SWAMP_ROCK: 594
 } as const;
 
-// Why: both Radimus notes render the same name, both Yommi seed states render the same name, and five golden-bowl states share "Golden bowl", every lookup that matters goes through `LQ_ID`.
+// Why: both Radimus notes render the same name, both Yommi seed states too, and 5 golden-bowl states share "Golden bowl", so every lookup that matters goes through `LQ_ID`.
 /** Display names as the client renders them. */
 export const LQ_ITEM = {
     COINS: 'Coins',
@@ -217,7 +217,7 @@ export const LQ_ITEM = {
     TUNA: 'Tuna'
 } as const;
 
-// Why: an NPC's display name comes from the `.npc` config, never from a guide, every walkthrough calls him Sir Radimus Erkle and the server calls him Radimus Erkle.
+// Why: an NPC's display name comes from the `.npc` config: every walkthrough calls him Sir Radimus Erkle and the server calls him Radimus Erkle.
 export const LQ_NPC = {
     GUARD: 'Legends Guard',
     RADIMUS: 'Radimus Erkle',
@@ -280,7 +280,7 @@ export const LQ_LOC_ID = {
     GUILD_GATE_R: 2392,
     LOCKPICK_GATE_L: 2912,
     LOCKPICK_GATE_R: 2913,
-    // Why: `next_loc_stage` swings each leaf to `inac_lglockpickgatebottom*`, which is a model and nothing else, no name and no ops. A query for the shut id then finds nothing, which is indistinguishable from the gate being out of the scene unless the open ids are known too.
+    // Why: `next_loc_stage` swings each leaf to `inac_lglockpickgatebottom*`, a model with no name and no ops, so a query for the shut id finds nothing, same as the gate being out of the scene, unless the open ids are known too.
     LOCKPICK_GATE_L_OPEN: 2914,
     LOCKPICK_GATE_R_OPEN: 2915,
     STRENGTH_GATE_L: 2922,
@@ -326,15 +326,15 @@ export const LQ_LOC_ID = {
     YOMMI_TOTEM: 2954
 } as const;
 
-// Why: Shilo Village is Karamja's only bank and it has no booth. The teller is an npc with a Bank op, which is why a booth-only open read it as an icon with nothing behind it. It is eighteen tiles off Hajedy's cart and the village is gated on the Shilo Village quest, which Legends' own quest-point gate has long since passed.
+// Why: Shilo's bank is an NPC op, 18 tiles from Hajedy's cart; Legends eligibility already covers its quest gate.
 export const LQ_BANK = {
     ARDOUGNE: new Tile(2616, 3332, 0),
     YANILLE: new Tile(2612, 3092, 0),
-    /** Shilo Village's teller, no booth, an npc with a Bank op, eighteen tiles off Hajedy's cart. */
+    /** Shilo Village's teller: no booth, an npc with a Bank op, 18 tiles off Hajedy's cart. */
     SHILO: new Tile(2852, 2954, 0)
 } as const;
 
-// Why: Obli's counter in Shilo Village stocks the same list and is thirty tiles from the gem rocks, but Jiminua's is the one Tai Bwo Wannai leg already passes.
+// Why: Obli's counter in Shilo Village stocks the same list and is 30 tiles from the gem rocks, but Jiminua's is the one the Tai Bwo Wannai leg already passes.
 export const LQ_SHOP = {
     /** Jiminua's Jungle Store, Tai Bwo Wannai, papyrus, charcoal, machete, knife, rope, vials, chisel, hammer, pickaxe. */
     JIMINUA: { npc: 'Jiminua', anchor: new Tile(2767, 3122, 0) },
@@ -355,12 +355,12 @@ export const LQ_TILE = {
 
     /** The one mainland tile the dense-jungle band can be chopped south from. */
     JUNGLE_MOUTH: new Tile(2816, 2940, 0),
-    /** Two chops south of the mouth, inside the jungle component. */
+    /** 2 chops south of the mouth, inside the jungle component. */
     JUNGLE_INSIDE: new Tile(2816, 2936, 0),
     /** Nearest forester to the jungle mouth. */
     FORESTER: new Tile(2817, 2942, 0),
 
-    /** One tile inside each of the three map sections. */
+    /** One tile inside each of the 3 map sections. */
     MAP_WEST: new Tile(2790, 2910, 0),
     MAP_MIDDLE: new Tile(2840, 2910, 0),
     MAP_EAST: new Tile(2900, 2910, 0),
@@ -378,7 +378,7 @@ export const LQ_TILE = {
     OCTAGRAM_OUTSIDE: new Tile(2785, 9328, 0),
     OCTAGRAM_INSIDE: new Tile(2790, 9328, 0),
     UNGADULU: new Tile(2792, 9327, 0),
-    /** The west wall's own tile, outside the flames and four from Ungadulu. */
+    /** The west wall's own tile, outside the flames and 4 from Ungadulu. */
     FIRE_WALL_WEST: new Tile(2788, 9325, 0),
 
     SHAMAN_BOOKCASE: new Tile(2795, 9338, 0),
@@ -412,15 +412,15 @@ export const LQ_TILE = {
     HEART_RECESS: new Tile(2422, 4692, 0),
     BARRIER_NORTH: new Tile(2421, 4691, 0),
     BARRIER_SOUTH: new Tile(2421, 4689, 0),
-    /** The middle source boulder, which is an NPC rather than a loc. */
+    /** The middle source boulder, which is an NPC. */
     SOURCE_BOULDER: new Tile(2386, 4689, 0),
-    /** Two tiles east of it: the only side it can be pushed from. */
+    /** 2 tiles east of it: the only side it can be pushed from. */
     SOURCE_STAND: new Tile(2389, 4689, 0),
 
     SACRED_POOL: new Tile(2837, 2917, 0),
     TALL_REEDS: new Tile(2836, 2917, 0),
 
-    /** The seven gem rocks north of Shilo Village, past Hajedy's cart. */
+    /** The 7 gem rocks north of Shilo Village, past Hajedy's cart. */
     GEM_ROCKS: new Tile(2825, 2997, 0),
     /** Brimhaven's gold rocks: the only ones on Karamja. */
     GOLD_ROCKS: new Tile(2733, 3225, 0),
@@ -433,7 +433,7 @@ export const LQ_TILE = {
     ARDRIGAL: new Tile(2869, 3115, 0)
 } as const;
 
-/** The seven carved rocks, in the order the gems are named on them. */
+/** The 7 carved rocks, in the order the gems are named on them. */
 export const GEM_ROCKS: readonly { id: number; name: string; rock: Tile }[] = [
     { id: LQ_ID.OPAL, name: LQ_ITEM.OPAL, rock: new Tile(2764, 9309, 0) },
     { id: LQ_ID.JADE, name: LQ_ITEM.JADE, rock: new Tile(2771, 9303, 0) },
@@ -455,7 +455,7 @@ export const GEM_CUTS: readonly { uncut: number; uncutName: string; cut: number;
     { uncut: LQ_ID.UNCUT_DIAMOND, uncutName: 'Uncut diamond', cut: LQ_ID.DIAMOND, name: LQ_ITEM.DIAMOND }
 ];
 
-/** The five runes the marked wall wants, in the only order it accepts. */
+/** The 5 runes the marked wall wants, in the only order it accepts. */
 export const WALL_RUNES: readonly { id: number; name: string }[] = [
     { id: LQ_ID.SOUL_RUNE, name: LQ_ITEM.SOUL_RUNE },
     { id: LQ_ID.MIND_RUNE, name: LQ_ITEM.MIND_RUNE },
@@ -464,7 +464,7 @@ export const WALL_RUNES: readonly { id: number; name: string }[] = [
     { id: LQ_ID.LAW_RUNE, name: LQ_ITEM.LAW_RUNE }
 ];
 
-/** The three Viyeldi guardians, each holding one third of the dragon heart. */
+/** The 3 Viyeldi guardians, each holding one third of the dragon heart. */
 export const HEROES: readonly { npc: string; section: number }[] = [
     { npc: LQ_NPC.SAN_TOJALON, section: LQ_ID.CRYSTAL_CHUNK },
     { npc: LQ_NPC.IRVIG_SENAY, section: LQ_ID.CRYSTAL_HUNK },
@@ -490,8 +490,8 @@ export const FERTILE_SOILS: readonly Tile[] = [
     new Tile(2911, 2905, 0)
 ];
 
-// Why: each of these complexes is a chain of sealed pockets joined only by scripted crossings, and their component bounding boxes overlap, the trials corridor runs straight over the gem room's box, and every Viyeldi descent ledge sits inside the main cave's.
-// Why: `decide()` therefore branches on the complex, and each crossing inside one is a custom step that probes the scene for the loc it needs.
+// Why: each complex is a chain of sealed pockets joined only by scripted crossings, and their bounding boxes overlap: the trials corridor runs over the gem room's box and every Viyeldi descent ledge sits inside the main cave's.
+// Why: `decide()` branches on the complex, and each crossing inside one is a custom step that probes the scene for the loc it needs.
 
 /** The z of the last open jungle tile and of the first open mainland tile north of the band. */
 export const JUNGLE_BAND = { south: 2936, north: 2940 } as const;
@@ -520,14 +520,14 @@ export function legendsArea(tile: QuestSnapshot['tile']): LegendsArea {
         return 'unknown';
     }
     // The Kharazi Jungle: the southern strip of Karamja, sealed behind the dense band.
-    // Why: the band's own three rows count as jungle, so a chop that lands halfway through it never has a mainland step decided against it. There is no walkable path out of a band tile in either direction.
+    // Why: the band's own 3 rows count as jungle, so a chop that lands halfway through never has a mainland step decided against it; no band tile has a walkable path out either way.
     if (x >= 2757 && x <= 3006 && z >= 2882 && z < JUNGLE_BAND.north) {
         return 'jungle';
     }
     return 'mainland';
 }
 
-// Why: transcribed from `legends_fire_wall_correct`. The octagram is three overlapping rectangles rather than a square, and the fourth row the content lists is an acknowledged server bug that the checks disagree about.
+// Why: transcribed from `legends_fire_wall_correct`. The octagram is 3 overlapping rectangles, and the 4th row the content lists is an acknowledged server bug the checks disagree about.
 
 /** Inside Ungadulu's flaming octagram. */
 export function inOctagram(tile: QuestSnapshot['tile']): boolean {
@@ -550,7 +550,7 @@ export function pastBarrier(tile: QuestSnapshot['tile']): boolean {
     return tile.z <= 4690 || (tile.z <= 4701 && tile.x <= 2400);
 }
 
-/** On the eleven-tile ledge the winch rope drops onto. */
+/** On the 11-tile ledge the winch rope drops onto. */
 export function onViyeldiLedge(tile: QuestSnapshot['tile']): boolean {
     return tile !== null && tile !== undefined && tile.level === 0
         && tile.x >= 2377 && tile.x <= 2379 && tile.z >= 4712 && tile.z <= 4717;

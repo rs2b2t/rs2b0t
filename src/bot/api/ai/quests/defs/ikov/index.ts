@@ -53,7 +53,7 @@ const IKOV_TOOLS = [
     ...IKOV_GEAR_NAMES
 ];
 
-/** Lobsters the bot takes to the Fire Warrior's door, and the pack size that sends it back for more. */
+/** Lobster target and refill threshold for the Fire Warrior leg. */
 const WARRIOR_FOOD = 8;
 const WARRIOR_FOOD_FLOOR = 2;
 
@@ -69,10 +69,10 @@ function bridgeTrimStep(snap: QuestSnapshot): QuestStep | null {
     return trimStep(snap, BRIDGE_KEEP);
 }
 
-/** Winelda's twenty roots are twenty slots; only coins, food and the pendant ride with them. */
+/** Winelda's 20 roots are 20 slots; only coins, food and the pendant ride with them. */
 const ROOTS_KEEP = ['coins', 'pendant', 'limpwurt root', ...IKOV_FOODS];
 
-// Why: the farm's own food is what fills the pack, and keeping it leaves nineteen slots for a twenty-root withdraw that then retries for as long as the watchdog allows, the fight it was for is over by the time this runs.
+// Why: keeping the farm's food leaves 19 slots for a 20-root withdraw, which retries until the watchdog fires.
 /** Nothing rides to Winelda but her roots and the pendant. */
 const FERRY_KEEP = ['coins', 'pendant', 'limpwurt root'];
 
@@ -121,7 +121,7 @@ function warKitStep(snap: QuestSnapshot): QuestStep | null {
     if (bow) {
         return bow;
     }
-    // Why: the ice-chest circuit is four minutes of hobgoblin-free but not damage-free dungeon and it eats the engine's one-shot float, so the bot reaches the Fire Warrior's door on an empty pack unless this leg refills it, and the walk from the door back is nothing beside dying at it.
+    // Why: the ice-chest circuit is 4 minutes of damage that eats the engine's one-shot float, so the bot reaches the Fire Warrior's door on an empty pack unless this leg refills it.
     const food = restockStep(snap, WARRIOR_FOOD, WARRIOR_FOOD_FLOOR);
     if (food) {
         return food;
@@ -142,7 +142,7 @@ function haveFearPendant(snap: QuestSnapshot): boolean {
     return heldOrBanked(snap, IKOV_OBJ.PENDANT_LUCIEN) > 0 || snap.wornIds?.has(IKOV_OBJ.PENDANT_LUCIEN) === true;
 }
 
-// Why: `gotoNpc` walks without the bridge exclusion, and the ledge is four stage-gated doors deep, so the approach is the module's own walk.
+// Why: `gotoNpc` walks without the bridge exclusion, and the ledge is 4 stage-gated doors deep, so the approach is the module's own walk.
 async function talkToWinelda(log: (m: string) => void): Promise<boolean> {
     if (!(await escapePocket(log))) {
         return false;
@@ -189,8 +189,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'custom', name: 'join the Guardians of Armadyl', run: joinTheGuardians };
     }
 
-    // Why: Lucien re-issues the pendant to anyone who lost it, and the Door of Fear is shut without it.
-    // Why: this branch sits below the stage-60 return, so it can never fire on the far side of the lava, which has no walk back to him.
+    // Why: Lucien re-issues the pendant and the Door of Fear is shut without it; this sits below the stage-60 return so it can't fire on the far side of the lava, which has no walk back.
     if (!haveFearPendant(snap)) {
         return { kind: 'talk', stop: LUCIEN_START };
     }
@@ -206,7 +205,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
                 return roots;
             }
         }
-        // Why: twenty unstackable roots plus coins and food fill the pack, so anything else has to go before the withdraw can land.
+        // Why: 20 unstackable roots plus coins and food fill the pack, so anything else has to go before the withdraw can land.
         const gathered = heldOrBanked(snap, IKOV_OBJ.LIMPWURT_ROOT) >= ROOTS_WANTED;
         const room = rootsTrimStep(snap, gathered ? FERRY_KEEP : ROOTS_KEEP);
         if (room) {
@@ -223,7 +222,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'custom', name: 'ask Winelda for the ferry across the lava', run: talkToWinelda };
     }
 
-    // Why: the candle exists to light the stairs down to the boots, so once the boots are had it stops being part of the kit.
+    // Why: the candle only lights the stairs down to the boots, so it leaves the kit once the boots are had.
     const needBoots = !wearingBoots() && heldOrBanked(snap, IKOV_OBJ.BOOTS) === 0;
     const supplies = suppliesStep(snap, { candle: needBoots, bow: true, roots: false });
     if (supplies) {
@@ -241,14 +240,14 @@ export function decide(snap: QuestSnapshot): QuestStep {
             if (kit) {
                 return kit;
             }
-            // Why: `fetchBoots` answers true for a leg of the descent rather than for the boots, so it owns a step of its own, chained straight into the gate check it runs that check from the boots room, which the ice-cavern half-plane covers.
+            // Why: `fetchBoots` completes one descent leg at a time, so keep it as a separate step before checking the gate.
             const boots = bootsStep(snap);
             if (boots) {
                 return boots;
             }
             return { kind: 'custom', name: 'unlock the south gate', run: unlockSouthGate };
         }
-        // Why: past the lever the ice cavern needs no crossing, so this is the first leg that can wear anything, and nine level-61 ice spiders stand on the circuit.
+        // Why: past the lever the ice cavern needs no crossing, so this is the first leg that can wear anything, and 9 level-61 ice spiders stand on the circuit.
         const armour = rangedArmourStep(snap);
         if (armour) {
             return armour;
@@ -271,11 +270,11 @@ export const ikov: QuestModule = {
     record: QUESTS.find(r => r.id === IKOV_ID)!,
     // Why: the quest touches Ardougne, Catherby, Seers and the temple, so no one booth is close to every leg.
     bank: 'nearest',
-    // Why: Winelda's twenty unstackable roots plus coins and the pendant leave seven slots, and the float has to fit inside them.
+    // Why: Winelda's 20 unstackable roots plus coins and the pendant leave 7 slots for the float.
     food: 6,
     grind: ['Hobgoblin', 'Fire Warrior of Lesarkus', 'Lucien'],
     tools: IKOV_TOOLS,
-    // Why: the ice cavern and the hobgoblin camp are both crowds and the bank may dress neither, so it eats at three quarters rather than at half, 0.55 left 38 hitpoints against three level-42 attackers and the bot died at twelve roots.
+    // Why: the ice cavern and the hobgoblin camp are crowds the bank may not dress for; 0.55 left 38 hp against 3 level-42 attackers and the bot died at 12 roots.
     sustain: { foods: ['Lobster', 'Swordfish', 'Tuna'], eatBelowHp: 0.75 },
     readStage: readIkovStage,
     warnReadiness: sourcingShortfall,

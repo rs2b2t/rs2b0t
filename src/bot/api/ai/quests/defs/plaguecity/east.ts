@@ -99,8 +99,7 @@ export async function pourWater(log: (m: string) => void): Promise<boolean> {
     return poured > 0;
 }
 
-// Why: both spawns sit behind two shut doors, and a plain ground grab clicks Take from
-// the garden, where the server's own path search dead-ends and nothing happens at all.
+// Why: both spawns sit behind 2 shut doors, and a plain ground grab clicks Take from the garden, where the server's path search dead-ends and nothing happens.
 export async function takeFromHouse(item: PlagueItem, log: (m: string) => void): Promise<boolean> {
     if (heldId(item.id) > 0) {
         return true;
@@ -120,7 +119,7 @@ export async function takeFromHouse(item: PlagueItem, log: (m: string) => void):
     return Execution.delayUntil(() => heldId(item.id) > 0, 8000);
 }
 
-// Why: Alrena hides a spare mask in the cupboard, and it is the only re-issue in the quest for a mask that was dropped or destroyed.
+// Why: Alrena's cupboard holds a spare mask, the quest's only re-issue for a dropped or destroyed one.
 export async function searchCupboard(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(PC_TILE.CUPBOARD, 1, log))) {
         return false;

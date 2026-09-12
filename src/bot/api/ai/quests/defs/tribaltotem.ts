@@ -27,7 +27,7 @@ export const TOTEM_STAGE = {
 export const LABEL_OBJ = 1858;
 export const TOTEM_OBJ = 1857;
 
-// Why: the depot stacks five locs all called "Crate", and the mansion holds a sixth once the parcel lands, so every lookup here is by id.
+// Why: the depot has 5 locs called "Crate" and the mansion a 6th once the parcel lands, so every lookup is by id.
 const HORN_CRATE = 2707;
 const TELEPORT_CRATE = 2708;
 const COMBO_DOOR = 2705;
@@ -56,17 +56,17 @@ const RPDT: NpcStop = {
     prefer: ['So, when are you going to deliver this crate?']
 };
 
-// Why: the crates are ordinary walking distance from the Ardougne bank, so only the mansion leg needs Cromperty's block. This is also where it lands before the parcel is delivered.
+// Why: the crates are walking distance from the Ardougne bank, so only the mansion leg needs Cromperty's block; it lands here before delivery.
 /** The R.P.D.T. depot's crate room. */
 const DEPOT_STAND = new Tile(2649, 3271, 0);
 const COMBO_STAND = new Tile(2635, 3323, 0);
-/** `[oploc1,totemtrapstairs]` walks the player here itself, three tiles north of the loc. */
+/** `[oploc1,totemtrapstairs]` walks the player here itself, 3 tiles north of the loc. */
 const STAIRS_STAND = new Tile(2631, 3325, 0);
 const CHEST_STAND = new Tile(2638, 3323, 1);
 const BANK = new Tile(2655, 3283, 0);
 
-// Why: the mansion is a sealed component, the inner door opens only outward and the way in is Cromperty's block, so a resume outside it has to be teleported back rather than walked.
-/** Boxes covering everything the inner door seals, excluding the porch and the two garden alcoves. */
+// Why: the mansion is sealed, the inner door only opens outward and the way in is Cromperty's block, so a resume outside gets teleported back.
+/** Boxes covering everything the inner door seals, excluding the porch and the 2 garden alcoves. */
 const MANSION_BOXES: readonly { level: number; x0: number; x1: number; z0: number; z1: number }[] = [
     { level: 0, x0: 2627, x1: 2643, z0: 3322, z1: 3325 },
     { level: 0, x0: 2627, x1: 2628, z0: 3320, z1: 3321 },
@@ -110,7 +110,7 @@ export function parseTribalTotemJournal(lines: readonly string[] | string): Ques
     if (text.includes('quest complete!')) {
         return { stage: TOTEM_STAGE.COMPLETE, flags: new Set(['combo']) };
     }
-    // Why: every stage from here down repeats the ones above it, so the newest sentence has to be tested first.
+    // Why: every stage from here down repeats the ones above, so test the newest sentence first.
     if (text.includes('teleported myself inside')) {
         const flags = new Set<string>();
         if (text.includes('i worked out the combination for the door')) {
@@ -191,7 +191,7 @@ function dialLetter(index: number): string | null {
     return letter >= 'A' && letter <= 'Z' ? letter : null;
 }
 
-// Why: the arrows step one letter per click and the interface echoes the server's own value back, so reading the dial after every click is what keeps a dropped click from shifting every letter after it.
+// Why: the arrows step 1 letter per click and the interface echoes the server's value, so read the dial after every click or a dropped click shifts every letter after it.
 async function setDial(index: number, target: string, log: (m: string) => void): Promise<boolean> {
     for (let clicks = 0; clicks <= LETTERS; clicks++) {
         const current = dialLetter(index);
@@ -250,7 +250,7 @@ async function solveCombination(log: (m: string) => void): Promise<boolean> {
     return accepted;
 }
 
-// Why: `[oploc2,totemtrapstairs]` re-shows its box whether or not the trap is already noted, so this is safe to repeat and there is no client-visible bit to skip it on.
+// Why: `[oploc2,totemtrapstairs]` re-shows its box whether or not the trap is noted, so this is safe to repeat and no client-visible bit can skip it.
 async function disarmTrap(log: (m: string) => void): Promise<boolean> {
     let found = false;
     const noted = (): boolean => {
@@ -294,7 +294,7 @@ async function climbStairs(log: (m: string) => void): Promise<boolean> {
 
 async function emptyChest(log: (m: string) => void): Promise<boolean> {
     if (locById(CHEST_OPEN, 8) === null) {
-        // Why: the shut chest and the open chest are two locs, and the shut one lingers for a tick after the Open lands.
+        // Why: the shut chest and the open chest are 2 locs, and the shut one lingers for a tick after the Open lands.
         const opened = await promptLoc({
             name: 'Chest',
             op: 'Open',
@@ -328,7 +328,7 @@ async function takeTotem(log: (m: string) => void): Promise<boolean> {
     if (!here) {
         return false;
     }
-    // Why: the climb is driven rather than walked because the undisarmed stairs drop the player into the Ardougne sewers for a fifth of their hitpoints.
+    // Why: the undisarmed stairs drop you into the Ardougne sewers for 20% of your hitpoints, so the climb is driven by hand.
     if (here.level === 0) {
         if (!(await disarmTrap(log))) {
             return false;
@@ -348,7 +348,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     const progress = snap.progress;
     if (progress === undefined) { return { kind: 'wait', reason: 'Tribal Totem journal stage unavailable' }; }
 
-    // Why: the chest refuses a second totem while one sits in the pack or the bank, so carrying it is the same thing as the quest being over bar the walk.
+    // Why: the chest refuses a second totem while one is in the pack or bank, so holding it means the quest is over bar the walk.
     if ((snap.invIds?.get(TOTEM_OBJ) ?? 0) > 0) { return { kind: 'talk', stop: KANGAI }; }
 
     switch (progress.stage) {

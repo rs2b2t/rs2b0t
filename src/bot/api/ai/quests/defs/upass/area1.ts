@@ -27,9 +27,10 @@ export function orbsHeld(snap: QuestSnapshot): number {
     return countHeld(snap, UP_ORBS);
 }
 
-// Why: `[timer,upass_trap]` is set to one tick across map squares 0_37_151 and 0_38_151 and hits for `hp/10 + 1` on a spear and `base_hp*8/100 + 1` on a spring whenever the player ends a tick on one. Routing round them is not open: a probe of every corridor route against the twenty trap tiles shows each tile alone severs one. The corridor is a single tile wide at every trap. So the corridor is crossed the same way as the spiked grid, on an op-click with the quest journal held open, which suspends the timer. Nothing may be a plain walk down here: `MoveClickHandler` clears the modal on any move that is not an op-click, and the walker re-clicks every few tiles.
+// Why: `[timer,upass_trap]` is set to 1 tick across map squares 0_37_151 and 0_38_151 and hits for `hp/10 + 1` on a spear and `base_hp*8/100 + 1` on a spring whenever you end a tick on one, and the corridor is a single tile wide at every one of the 20 trap tiles.
+// Why: so the corridor is crossed like the spiked grid, on an op-click with the journal held open, which suspends the timer. No plain walks: `MoveClickHandler` clears the modal on any move that isn't an op-click, and the walker re-clicks every few tiles.
 
-// Why: an op-click can only name what the client already holds in its build area, and that area lags the player by up to two zones, a target forty tiles off reads as absent and the click never sends. So the corridor is walked over stepping stones: the traps' own `Search` and the two stone tablets, which are the only ops down here and happen to sit at every chokepoint. Standing on a trap costs nothing while the journal is up, so the journey holds it from the first leg to the last.
+// Why: Op-clicks require a loc in the build area, so traverse the long corridor through its stepping stones, traps, and tablets.
 const STONES: readonly { id: number; op: string }[] = [
     { id: UP_LOC.SPEARTRAP, op: 'Search' },
     { id: UP_LOC.SPRINGTRAP, op: 'Search' },
@@ -38,7 +39,7 @@ const STONES: readonly { id: number; op: string }[] = [
     { id: UP_LOC.TABLET_WEST, op: 'Read' }
 ];
 
-/** How near a stepping stone's target must bring the player before the leg is worth taking. */
+/** How much nearer a stepping stone must bring you before the leg is worth taking. */
 const STONE_GAIN = 3;
 const STONE_SEARCH = 40;
 
@@ -103,10 +104,10 @@ async function corridorHop(
     });
 }
 
-// Why: the disarm is a `stat_random(thieving, 160, 300)` roll and a failed one springs the log, meaning a stun, a forced move and damage, so it is retried inside the step rather than once per decide cycle, which would walk back across the corridor between every roll.
+// Why: the disarm is a `stat_random(thieving, 160, 300)` roll and a fail springs the log (stun, forced move, damage), so retry inside the step; once per decide cycle would walk the corridor between every roll.
 const DISARM_ATTEMPTS = 5;
 
-/** The hanging-log trap yields the first orb when it is disarmed rather than sprung. */
+/** The hanging-log trap yields the first orb once disarmed. */
 export async function takeTrappedOrb(log: (m: string) => void): Promise<boolean> {
     if (heldId(UP_ITEM.ORB1.id) > 0) {
         return true;
@@ -125,16 +126,14 @@ export async function takeTrappedOrb(log: (m: string) => void): Promise<boolean>
         log
     );
     if (!arrived) {
-        // Why: the trigger is deleted for fifty ticks once its orb is taken, so absent while standing on
-        // top of it means burned, absent from across the corridor only means out of the build area.
+        // Why: the trigger is deleted for 50 ticks once its orb is taken, so absent while standing on it means burned; absent from across the corridor only means out of the build area.
         if (near(UP_TILE.LOGTRAP, 8) && findTrigger() === null) {
             log('no hanging-log trigger rock at the orb — already burned');
             return true;
         }
         return false;
     }
-    // Why: springing the log blows the player five tiles west and no further, which is clear of every trap
-    // tile, so the retries stay local and never pay another corridor crossing.
+    // Why: springing the log blows you 5 tiles west, clear of every trap tile, so the retries stay local.
     for (let attempt = 0; attempt < DISARM_ATTEMPTS; attempt++) {
         if (attempt > 0) {
             const trigger = findTrigger();
@@ -144,14 +143,14 @@ export async function takeTrappedOrb(log: (m: string) => void): Promise<boolean>
                 return false;
             }
         }
-        // Why: the trap opens with `~mesbox`, which is a MAIN modal, not a chat line, `driveDialog` cannot dismiss one and waits out its timeout, so the "do you want to disarm it?" choice underneath is never answered and the disarm never runs. The modal is closed first, then the choice is driven.
+        // Why: the trap opens with `~mesbox`, a main modal `driveDialog` can't dismiss, so the "do you want to disarm it?" choice underneath is never answered. Close the modal first, then drive the choice.
         const mark = GameMessages.mark();
         await Modals.closeIfOpen();
         await driveDialog(["Yes, I'll give it a go"], log);
         if (await driveUntil(() => heldId(UP_ITEM.ORB1.id) > 0, [], log, 12_000)) {
             return true;
         }
-        // Why: the trap keeps its orb once that orb's bit is set, and answers "you hear it resetting" instead, the only way to tell "already burned" from "the roll failed", since the bit is not on the wire and the trap respawns fifty ticks after it is taken.
+        // Why: once the orb's bit is set the trap answers "you hear it resetting" instead, which is the only way to tell "already burned" from "the roll failed": the bit isn't on the wire and the trap respawns 50 ticks after it's taken.
         if (GameMessages.sawSince(mark, /resetting/i)) {
             log('the log trap has already given up its orb');
             return true;
@@ -162,12 +161,12 @@ export async function takeTrappedOrb(log: (m: string) => void): Promise<boolean>
     return false;
 }
 
-// Why: nothing records which orbs are already dark. The varp is untransmitted and the journal only says "after destroying four orbs" once the well has been used. An orb that is neither in the pack nor on its own floor tile has therefore already gone into the furnace, and the sweep steps past it.
+// Why: nothing records which orbs are dark: the varp is untransmitted and the journal only says "after destroying four orbs" once the well has been used. An orb neither in the pack nor on its floor tile has gone into the furnace.
 export async function takeGroundOrb(orb: UpassItem, tile: Tile, log: (m: string) => void): Promise<boolean> {
     if (heldId(orb.id) > 0) {
         return true;
     }
-    // Why: all four orbs display as "Orb of light", so the ground pile is matched on the exact id.
+    // Why: all 4 orbs display as "Orb of light", so the ground pile is matched on id.
     const findDrop = () => GroundItems.query().where(item => item.id === orb.id).within(STONE_SEARCH).nearest();
     const took = await corridorHop(
         tile,
@@ -183,8 +182,7 @@ export async function takeGroundOrb(orb: UpassItem, tile: Tile, log: (m: string)
     if (took) {
         return true;
     }
-    // Why: an orb absent from its own floor tile has already gone into the furnace, absent from across
-    // the corridor only means the client has not loaded that far.
+    // Why: an orb absent from its floor tile has gone into the furnace; absent from across the corridor only means the client hasn't loaded that far.
     if (near(tile, 8) && findDrop() === null) {
         log(`no Orb of light on the floor at (${tile.x},${tile.z}) — already burned`);
         return true;
@@ -192,8 +190,8 @@ export async function takeGroundOrb(orb: UpassItem, tile: Tile, log: (m: string)
     return false;
 }
 
-// Why: `destroy_orboflight` is four ticks of messages before the orb leaves the pack, so a one-tick gap between uses fires the next one into a script still running and the loop drops out after a single orb.
-// Why: the first orb doubles as the trip, using it on the furnace from across the corridor is an op-click, so the walk stalls, and the rest are thrown once the player is already standing there.
+// Why: `destroy_orboflight` is 4 ticks of messages before the orb leaves the pack, so a 1-tick gap fires the next use into a running script and the loop drops out after one orb.
+// Why: the first orb doubles as the trip: using it on the furnace from across the corridor is an op-click, so the walk stalls, and the rest go in from there.
 
 /** Every orb in the pack, thrown into the furnace one at a time. */
 export async function burnOrbs(log: (m: string) => void): Promise<boolean> {
@@ -229,7 +227,7 @@ export async function burnOrbs(log: (m: string) => void): Promise<boolean> {
     return left === 0;
 }
 
-// Why: which orbs are already dark is not answerable from a snapshot. The bit is not on the wire, a burned orb has left the pack, and both the trap and the ground spawns refuse a second one silently. So the sweep is one step from end to end that keeps its own tally, rather than one site per decide cycle re-picking the orb it has burned. The well at the end is the oracle: it descends only once all four are dark.
+// Why: a snapshot can't say which orbs are dark: the bit isn't on the wire, a burned orb has left the pack, and the trap and ground spawns refuse a second one silently. So the sweep is one step with its own tally, and the well is the oracle: it only descends once all 4 are dark.
 
 /** Take every orb the pack can hold, then burn the lot in one trip, then climb the well. */
 export async function sweepOrbs(log: (m: string) => void): Promise<boolean> {
@@ -241,10 +239,9 @@ export async function sweepOrbs(log: (m: string) => void): Promise<boolean> {
             log(`could not settle the orb at (${site.tile.x},${site.tile.z})`);
             return false;
         }
-        // Why: two runs died mid-sweep with no sign of it in the log, the corridor traps are the only
-        // damage source down here, so the sweep says what it has left after each site.
+        // Why: the corridor traps are the only damage source down here and a death mid-sweep leaves no sign in the log, so say what's left after each site.
         log(`orb sweep: ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp, ${Inventory.free()} free`);
-        // Why: a full pack cannot take the next orb, so the furnace trip happens early rather than losing one.
+        // Why: a full pack can't take the next orb, so the furnace trip happens early.
         if (Inventory.free() === 0 && !(await burnOrbs(log))) {
             return false;
         }
@@ -255,7 +252,7 @@ export async function sweepOrbs(log: (m: string) => void): Promise<boolean> {
     return enterWell(log);
 }
 
-/** The well only takes the player down once all four orbs are dark. */
+/** The well only takes you down once all 4 orbs are dark. */
 export async function enterWell(log: (m: string) => void): Promise<boolean> {
     const down = () => (Game.tile()?.z ?? 9999) < 9664;
     const findWell = () => locById(UP_LOC.WELL, null, STONE_SEARCH);
@@ -271,8 +268,7 @@ export async function enterWell(log: (m: string) => void): Promise<boolean> {
         down,
         log
     );
-    // Why: `cave_well` runs three zero-tick delays before the teleport, so the descent can land a tick after
-    // the journey has given up, reporting the timeout as "an orb is still lit" was a lie on a passing run.
+    // Why: `cave_well` runs 3 zero-tick delays before the teleport, so the descent can land a tick after the journey has given up.
     if (climbed || (await Execution.delayUntilTicks(down, 6))) {
         return true;
     }

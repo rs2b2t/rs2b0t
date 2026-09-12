@@ -34,7 +34,7 @@ export function parseLostCityJournal(lines: readonly string[] | string): number 
         .trim()
         .toLowerCase();
 
-    // Why: later journal entries repeat earlier history, so the newest progress is checked first.
+    // Why: later journal entries repeat earlier history, so check the newest first.
     if (text.includes('quest complete!')) return LOST_CITY_STAGE.COMPLETE;
     if (text.includes('crafted a dramen staff')) return LOST_CITY_STAGE.STAFF_MADE;
     if (text.includes('i should craft the branch from the tree into a staff')) return LOST_CITY_STAGE.BRANCH_CUT;
@@ -255,10 +255,7 @@ function sourceCombatFood(snap: QuestSnapshot): QuestStep | null {
     return withdraw([{ name: food, qty: missing }]);
 }
 
-/**
- * Top up toward `target` HP fraction before a fight. Keep this well below 1.0,
- * the old 0.9 target burned food for tiny heal scraps (#393).
- */
+/** Top up toward `target` HP fraction before a fight. Keep it under 1.0; the old 0.9 burned food on tiny heals (#393). */
 async function restoreWithSelectedFood(target: number): Promise<void> {
     for (let i = 0; i < LOST_CITY_FOOD_TARGET && Skills.hpFraction() < target; i++) {
         const beforeHp = Skills.effective('hitpoints');
@@ -292,7 +289,7 @@ async function waitOutCombat(timeoutMs: number, opts?: { protectMelee?: boolean 
     }
     const deadline = performance.now() + timeoutMs;
     while (Game.inCombat() && performance.now() < deadline) {
-        // Sustain respects AIO eatBelowHp (Lost City policy is 50%, not 90%).
+        // Sustain respects AIO eatBelowHp (Lost City policy is 50%).
         await Sustain.run();
         if (opts?.protectMelee) {
             await sipPrayerIfNeeded();
@@ -446,7 +443,7 @@ async function defeatTreeSpirit(log: (m: string) => void): Promise<boolean> {
     if (!spirit) {
         return false;
     }
-    // Heal into the fight, not to 90% every scrap of HP (#393).
+    // Heal to 70% into the fight (#393).
     await restoreWithSelectedFood(0.7);
     if (!Game.inCombat() && !(await spirit.interact('Attack'))) {
         return false;
@@ -454,9 +451,9 @@ async function defeatTreeSpirit(log: (m: string) => void): Promise<boolean> {
     if (!(await Execution.delayUntil(() => Game.inCombat() || !spirit!.valid(), 5000))) {
         return false;
     }
-    // Melee crush spirit, Protect from Melee + optional prayer pots when prayer ≥ 43.
+    // Melee crush spirit: Protect from Melee plus optional prayer pots at prayer 43+.
     await waitOutCombat(180_000, { protectMelee: true });
-    // The next journal read verifies that this player, rather than another attacker, got credit.
+    // The next journal read confirms this player got the credit.
     return true;
 }
 
@@ -492,8 +489,7 @@ async function leaveDungeon(log: (m: string) => void): Promise<boolean> {
         await Execution.delayUntil(() => !Game.inCombat(), 120_000);
         return false;
     }
-    // Walk to the reachable tile west of the portal, then interact explicitly. Targeting the
-    // portal tile itself makes the navigator treat its one-way teleport as a normal door edge.
+    // Walk to the tile west of the portal then interact; targeting the portal tile makes the navigator treat its one-way teleport as a door edge.
     if (!(await Traversal.walkResilient(MAGIC_DOOR_APPROACH, { radius: 0, attempts: 3, timeoutMs: 120_000, log }))) {
         return false;
     }
@@ -639,8 +635,7 @@ function finishFiveStaves(snap: QuestSnapshot, stage: number, area: LostCityArea
         return travelToDungeon(snap);
     }
 
-    // A normal run leaves the dungeon with all five local. Do not add a long bank
-    // detour merely to discover that no recovery material is needed.
+    // A normal run leaves the dungeon with all 5 local, so skip the bank detour that would only confirm nothing is needed.
     if (localStaffMaterials(snap) >= LOST_CITY_STAFF_TARGET) {
         if (held(snap, BRANCH)) {
             return craftHeldBranch(snap, area);

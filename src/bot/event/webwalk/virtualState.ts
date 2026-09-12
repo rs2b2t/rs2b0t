@@ -1,6 +1,4 @@
-/**
- * Clone WorldStateData with virtual inventory counts (e.g. bank items assumed held).
- */
+/** Clone WorldStateData with virtual inventory counts (bank items assumed held). */
 
 import { recordsHaveSlashTool } from './slashTool.js';
 import type { WorldStateData } from './worldStateData.js';

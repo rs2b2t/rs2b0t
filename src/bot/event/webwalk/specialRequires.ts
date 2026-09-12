@@ -1,15 +1,9 @@
-/**
- * Map specialCrossings skill/item gates onto TransportRequires for plan-time filter.
- * Also door-only skill gates (not transport rows) e.g. Fishing Guild.
- */
+/** Plan-time TransportRequires for specialCrossings skill/item gates and door-only skill gates like the Fishing Guild. */
 
 import { SPECIAL_CROSSINGS } from './data/specialCrossings.js';
 import type { TransportRequires } from './types.js';
 
-/**
- * Door tiles with skill / worn gates that live in doors.json (not transports.json).
- * Levels from Server content scripts (skill_*_guild / magic_guild / fishing_guild / ranging).
- */
+/** Door tiles with skill / worn gates from doors.json; levels from Server content (skill_*_guild / magic_guild / fishing_guild / ranging). */
 const DOOR_SKILL_GATES: readonly {
     x: number;
     z: number;
@@ -40,15 +34,11 @@ const DOOR_SKILL_GATES: readonly {
         worn: [{ name: "Chef's hat", count: 1 }],
         note: "chef's hat worn"
     },
-    // ranging_guild_door.rs2, ranged 40 (map loc 2658,3438). doors.json uses loc tile;
-    // transports.json uses diagonal stands, gate both so PathFinder from-tile attach works.
+    // ranging_guild_door.rs2, ranged 40 (map loc 2658,3438); doors.json keys the loc tile and transports.json the diagonal stands, so both are gated.
     { x: 2658, z: 3438, level: 0, skill: 'ranged', levelReq: 40 }
 ];
 
-/**
- * Transport from-tiles (transports.json) with skill gates, same attach path as
- * doors via specialRequiresAt(edge.from). Exit ladders (climb-up from cellar) stay open.
- */
+/** Transport from-tiles (transports.json) with skill gates, attached via specialRequiresAt(edge.from); exit ladders stay open. */
 const TRANSPORT_SKILL_GATES: readonly {
     x: number;
     z: number;
@@ -56,8 +46,7 @@ const TRANSPORT_SKILL_GATES: readonly {
     skill: string;
     levelReq: number;
 }[] = [
-    // mining_guild.rs2 miningguildladder, mining 60 to descend into guild
-    // All four surface from-tiles in transports.json (locId 2113)
+    // mining_guild.rs2 miningguildladder, mining 60 to descend; all 4 surface from-tiles in transports.json (locId 2113)
     { x: 3018, z: 3340, level: 0, skill: 'mining', levelReq: 60 },
     { x: 3019, z: 3339, level: 0, skill: 'mining', levelReq: 60 },
     { x: 3019, z: 3341, level: 0, skill: 'mining', levelReq: 60 },
@@ -71,18 +60,14 @@ const TRANSPORT_SKILL_GATES: readonly {
     { x: 2659, z: 3437, level: 0, skill: 'ranged', levelReq: 40 }
 ];
 
-// Why: these are crossings whose content handler checks a quest varp, keyed by the edge origin, doors by loc tile, transports by `from`, the two ways `specialRequiresAt` is called.
-// Why: without them A* plans a route the player can never walk and the walker only finds out standing at the barrier; seven Morytania clue destinations spent their eight-minute budget at the Paterdomus gate before this existed.
-// Why: the journal is the only quest state on the wire, so a stage check maps to `started` or `complete` and never finer.
-// Why: a crossing needing a post-quest step, as the Salve barrier wants stage 61 and one Drezel conversation past complete, is gated on complete here and unlocked at execute time.
-// Why: offline probes carry no WorldState, so these fail open and pack-tool parity is unchanged.
+// Why: key quest gates by edge origin, defer hidden post-quest stages to execution, and fail open without WorldState.
 const CROSSING_GATES: readonly {
     x: number;
     z: number;
     level: number;
     quest?: string;
     minStatus?: 'started' | 'complete';
-    /** Worn item the same handler demands (gas mask, …). */
+    /** Worn item the same handler demands (gas mask). */
     worn?: { name: string; count: number }[];
     /** Inventory item the handler checks without consuming. */
     items?: { name: string; count: number }[];
@@ -96,8 +81,7 @@ const CROSSING_GATES: readonly {
     // area_mausoleum/holy_barrier.rs2, %priestperil = ^priestperil_access_holy_barrier (61),
     // which is one Drezel conversation past ^priestperil_complete (60).
     { x: 3440, z: 9887, level: 0, quest: 'Priest in Peril', minStatus: 'complete', note: 'pip_underground_wall_side_withportal needs %priestperil = 61' },
-    // quest_elena/sewerpipe.rs2, %elenaquest >= ^quest_elena_opened_pipe AND the
-    // gas mask *worn* (the pack only asked for one in the pack).
+    // quest_elena/sewerpipe.rs2, %elenaquest >= ^quest_elena_opened_pipe and the gas mask worn; the pack only asked for one carried.
     {
         x: 2530, z: 9703, level: 0, quest: 'Plague City', minStatus: 'started',
         worn: [{ name: 'Gas mask', count: 1 }],
@@ -135,13 +119,12 @@ const CROSSING_GATES: readonly {
     }
 ];
 
-// Why: specialCrossings match on the same level first, then on x/z alone, because ships often key the crossing at deck L1 while the transports.json stand is the pier at L0.
-// Why: `freeSlots` on unlockQuest is execute-only (Drezel's pies when starting Nature Spirit) and must never reach plan requires, or a full pack fails the gate forever.
+// Match level first, then x/z for ships whose crossing is on deck L1 and stand on pier L0.
+// Keep unlockQuest free-slot checks at execution time so a full pack can still plan the gate.
 
 /** Plan-time requires for an edge origin tile. */
 export function specialRequiresAt(x: number, z: number, level: number): TransportRequires | undefined {
-    // A tile can carry more than one gate, the sewer pipe wants Plague City
-    // *and* the gas mask worn, so collect rather than return on the first hit.
+    // A tile can carry more than one gate (the sewer pipe wants Plague City and the gas mask worn), so collect them all.
     const requires: TransportRequires = {};
     let gated = false;
 
@@ -160,8 +143,7 @@ export function specialRequiresAt(x: number, z: number, level: number): Transpor
             requires.skills = [{ name: sc.requiresSkill.name, level: sc.requiresSkill.level }];
             gated = true;
         }
-        // unlockQuest-only rows (Mort Myre) contribute nothing at plan time, never
-        // attach their freeSlots, or a full pack fails the gate forever.
+        // unlockQuest-only rows (Mort Myre) contribute nothing at plan time; attaching their freeSlots would fail a full pack forever.
     }
 
     const door = DOOR_SKILL_GATES.find(d => d.x === x && d.z === z && d.level === level);

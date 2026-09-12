@@ -14,7 +14,7 @@ import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { QUESTS } from '../data/quests.js';
 import { FOOD_FLOAT, QuestFood } from '../food.js';
 
-/** Named, so the step literals below get a Tile and not the module's wider type. */
+/** Named so the step literals below get a Tile type. */
 const DRAYNOR_BANK = new Tile(3093, 3243, 0);
 
 const BARTENDER: NpcStop = { npc: 'Bartender', anchor: new Tile(3045, 3257, 0), leash: 8, prefer: ['Not very busy in here today, is it?'] };

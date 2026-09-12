@@ -1,13 +1,13 @@
 /** What the search knows about a seam before it tries it. */
 export interface SeamRank {
-    /** Crossing it would leave the character closer to the target than standing still does. */
+    /** Crossing it would leave you closer to the target than standing still. */
     gains: boolean;
-    /** This pocket can walk to it, the scene's own collision flags, not the straight line. */
+    /** This pocket can walk to it, by the scene's collision flags. */
     open: boolean;
 }
 
-// Why: reachability outranks gain. `gains` is a straight line across a pocket graph, and the pass is the one map where that lies most: the mud pocket's only exit is a ledge eighteen tiles WEST while the target lies south, so the ledge reads as no gain at all, while seven stone bridges behind a wall read as twenty tiles of it. Ordering gain first put every one of those bridges, and ten cages in another cell, ahead of the one seam the character was standing next to. `open` is a fact about the pocket the character is in; `gains` is a guess about a map that is not a plane.
-// Why: still an ordering and not a veto. The scene called a bridge the character had walked a hundred and forty tiles to stand beside "walled off", so a seam the flood refuses keeps its turn. It takes it last.
+// Why: Reachability outranks straight-line gain, which can favor blocked bridges over a necessary detour to an open exit.
+// Why: still an ordering. The scene can call a bridge you walked 140 tiles to stand beside "walled off", so a seam the flood refuses keeps its turn, last.
 export function seamBucket(seam: SeamRank): number {
     if (seam.gains && seam.open) {
         return 0;
@@ -20,7 +20,7 @@ export function seamBucket(seam: SeamRank): number {
 
 /**
  * Order seams by what the pocket can reach first, then by what gains, then by distance.
- * Why: `byDistance` alone cannot separate a seam in this pocket from one behind a wall, and both are in the list because neither test is allowed to veto.
+ * Why: `byDistance` alone can't separate a seam in this pocket from one behind a wall, and both are in the list because neither test vetoes.
  */
 export function orderSeams<T>(seams: readonly T[], rank: (seam: T) => SeamRank, dist: (seam: T) => number): T[] {
     return [...seams].sort((a, b) => (seamBucket(rank(a)) - seamBucket(rank(b))) || (dist(a) - dist(b)));

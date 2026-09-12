@@ -72,9 +72,7 @@ export interface AlchItem {
     alchValue: number;
 }
 
-// Why: green, blue, red and black dragonhide all read as "Dragonhide body" in the client, so a
-// Why: by-name withdraw takes whichever sits earliest in the bank. Every item is chosen by id, and
-// Why: the label is what the chip and the paint show.
+// Why: dragonhide colors share a display name, so select by id and show the unique label.
 const FODDER: { obj: string; label?: string }[] = [
     { obj: 'maple_longbow' },
     { obj: 'yew_longbow' },

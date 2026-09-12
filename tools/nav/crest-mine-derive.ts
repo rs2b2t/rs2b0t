@@ -1,5 +1,5 @@
-/** Derive the Family Crest gold-mine route from the baked collision pack. defs/familycrest/mine.ts is written against both outputs: the shortest levers-and-doors chain from the ladder landing to the perfect gold, BFS'd over (tile, 3 lever bits), and the four rooms the doors cut the mine into, flooded with the doors removed.
- *  Why: the three levers and four doors interlock, the combination that opens one shuts another, so no walkthrough gives the chain in a form the walker can use; the room z-ranges are disjoint and only the gold room lies east of x=2727, which lets `mineRegion()` name a room from a tile alone. The doors sit in derive-doors.ts SCRIPT_REFUSED, so they are absent from doors.json and the navigator never routes through one. */
+/** Derive the shortest lever/door route to the Family Crest gold and the four room regions, for defs/familycrest/mine.ts.
+ * Why: the three lever bits affect four interlocking doors excluded from the nav graph; disjoint room bounds let mineRegion classify tiles. */
 
 //   bun tools/nav/crest-mine-derive.ts
 import fs from 'node:fs';

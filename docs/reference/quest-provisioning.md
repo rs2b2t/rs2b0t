@@ -1,4 +1,4 @@
-<!-- Assembling a quest's pack: what to withdraw, when the pack is emptied, and the coin and food floats. -->
+<!-- Quest supplies: withdrawals, inventory clearing, coins and food. -->
 
 # Quest provisioning
 

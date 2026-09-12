@@ -1,6 +1,4 @@
-/**
- * Special crossings: tolls, ships, quest unlock, use-item gates (extracted from WalkExecutor).
- */
+/** Special crossings: tolls, ships, quest unlocks, use-item gates. */
 
 import type { WorldTile } from '../../../adapter/ClientAdapter.js';
 import { actions, reader } from '../../../adapter/ClientAdapter.js';
@@ -34,8 +32,8 @@ const DIALOGUE_STEPS = 24;
 const SHIP_DIALOGUE_STEPS = 40;
 const GATE_REOPENS = 2;
 
-// Why: a hop fires from `DEFAULT_TRANSPORT_APPROACH_CHEBYSHEV` of its stand and a spirit tree is a 4x4 whose scene handle is the far corner, so a player-relative radius can miss a tree it is standing beside.
-// Why: the op carries the loc's own coordinates and the server walks us in, so the net costs nothing but a longer reach.
+// Why: a hop fires within `DEFAULT_TRANSPORT_APPROACH_CHEBYSHEV` of its stand and a spirit tree is a 4x4 with its scene handle on the far corner, so a player-relative radius can miss the tree you're beside.
+// Why: the op carries the loc's own coordinates and the server walks us in, so a wider net costs nothing.
 
 /** Chebyshev around the crossing's stand tile to resolve a hub loc. */
 const HUB_LOC_RADIUS = 10;
@@ -85,10 +83,7 @@ type WalkToFn = (
     opts?: { radius?: number; timeoutMs?: number; log?: (msg: string) => void }
 ) => Promise<boolean>;
 
-/**
- * Approx content category bans for Entrana (monk_of_entrana.rs2 has_entrana_restricted_items).
- * Pure helper so plan-time WorldState can reuse the same heuristic.
- */
+/** Approximate Entrana gear bans (monk_of_entrana.rs2 has_entrana_restricted_items); pure so plan-time WorldState can reuse it. */
 export const ENTRANA_RESTRICTED_GEAR_RE =
     /\b(sword|dagger|scimitar|longsword|2h|two.handed|mace|warhammer|battleaxe|axe|pickaxe|spear|hasta|halberd|maul|claws|whip|bow|crossbow|javelin|dart|thrownaxe|knife|staff|wand|battlestaff|halberd|cannon|helmet|full helm|med helm|coif|platebody|chainbody|platelegs|plateskirt|skirt of|kiteshield|square shield|sq shield|dragon square|god cape|fire cape|obsidian cape|defender)\b/i;
 
@@ -127,7 +122,7 @@ export async function handleSpecialCrossing(
         return false;
     }
 
-    // Port Sarim → Entrana: monks refuse weapons/armour (content category check).
+    // Port Sarim to Entrana: monks refuse weapons/armour (content category check).
     if (/port sarim.*entrana/i.test(sc.label) && hasEntranaRestrictedGear()) {
         log(`${sc.label}: remove weapons/armour before boarding Entrana`);
         return false;
@@ -148,7 +143,7 @@ export async function handleSpecialCrossing(
         const find = (): Loc | null =>
             Locs.query().name(sc.locName).action(sc.action).withinOf(stand, HUB_LOC_RADIUS).nearest()
             ?? Locs.query().name(sc.locName).withinOf(stand, HUB_LOC_RADIUS).nearest();
-        // Why: a landing rebuilds the scene, and the hop out of a tree we have this moment landed under is decided in that window, so an empty query is waited out rather than believed.
+        // Why: a landing rebuilds the scene and the hop out of a tree we landed under a tick ago is decided in that window, so an empty query gets waited out.
         let loc = find();
         if (!loc) {
             await Execution.delayUntil(() => find() !== null, SCENE_REBUILD_MS);
@@ -182,14 +177,14 @@ export async function handleSpecialCrossing(
     }
 
     if (sc.npc) {
-        // Prefer the crossing action when it is a NPC op (Teleport, Pay-fare, …).
+        // Prefer the crossing action when it is an NPC op (Teleport, Pay-fare).
         const preferred =
             sc.action && sc.action !== 'Open' && sc.action !== 'Go-through' && sc.action !== 'Pull'
                 ? sc.action
                 : 'Talk-to';
         const tryActs = preferred === 'Talk-to' ? (['Talk-to'] as const) : ([preferred, 'Talk-to'] as const);
-        // Why: keying on the specialCrossing stand tile rather than the NPC type alone matters because one type serves several routes, a Customs officer with coordx(npc) < 2815 goes to Ardougne, else Port Sarim.
-        // Why: a global nearest() would work while piers are far apart, but the instance at this pier is preferred so a wrong officer can never steal the hop (#404).
+        // Why: keyed on the stand tile because one NPC type serves several routes; a Customs officer with coordx(npc) < 2815 goes to Ardougne, else Port Sarim.
+        // Why: the instance at this pier is preferred so a wrong officer can never steal the hop (#404).
         const stand = { x: sc.x, z: sc.z, level: sc.level };
         let interacted = false;
         for (const act of tryActs) {
@@ -227,8 +222,9 @@ export async function handleSpecialCrossing(
                     await Execution.delayTicks(1);
                 }
             } else if (reader.modals().main !== -1) {
-                // Why: Mosol Rei's `~mesbox("Mosol leads you into the village.")` sits between the choice and the `p_telejump`, and a box suspends the script until it is clicked, so waiting for the arrival it gates is waiting for a teleport that cannot run. Placed under `mapChoice` so a glidermap is still answered as a map rather than closed as a box.
-                // Why: the tick is not optional. This loop is bounded by passes rather than by time, so a branch that returns without yielding spends the budget in a moment, the Brimhaven ship stopped being waited for and reported itself unresolved while it was still sailing.
+                // Why: Mosol Rei's `~mesbox("Mosol leads you into the village.")` sits between the choice and the `p_telejump`, and a box suspends the script until clicked, so the arrival never comes while it's up.
+                // Why: checked after `mapChoice` so a glidermap is still answered as a map.
+                // Why: the loop is bounded by passes, so a branch that doesn't yield a tick burns the budget at once; the Brimhaven ship reported unresolved while still sailing.
                 await Modals.close();
                 await Execution.delayTicks(1);
             } else {
@@ -236,8 +232,7 @@ export async function handleSpecialCrossing(
             }
         }
         if (arrived()) {
-            // Ship/tele landings rebuild the scene (gangplanks on deck). Wait so
-            // Locs.query can see the disembark plank before the next hop.
+            // Ship/tele landings rebuild the scene, so wait for Locs.query to see the disembark plank before the next hop.
             if (sc.toTile && approach.level !== sc.toTile.level) {
                 await Execution.delayTicks(2);
             } else if (sc.toTile) {
@@ -251,7 +246,7 @@ export async function handleSpecialCrossing(
     }
 
     const crossed = (): boolean => {
-        // useItem hops (rope on rock/tree) land on toTile via animation, not a door far-side.
+        // useItem hops (rope on rock/tree) land on toTile via animation.
         if (sc.toTile) {
             const me = reader.worldTile();
             const rad = sc.arrivalRadius ?? 2;
@@ -259,7 +254,7 @@ export async function handleSpecialCrossing(
         }
         return isOnFarSide(reader.worldTile(), approach, step);
     };
-    // Already-open gate (Close leaf only): do not fail "not found", walk through.
+    // Already-open gate (Close leaf only) is walked through; a missing shut leaf is no failure.
     if (/^open$/i.test(sc.action) && !sc.useItem) {
         const shutProbe = findTransportLoc(transport);
         if (!shutProbe) {
@@ -306,8 +301,7 @@ export async function handleSpecialCrossing(
                 }
             }
         }
-        // useItem (e.g. rope on Rock) must not require a menu action that is not
-        // the use-with target, content often only exposes Swim-to / no Climb.
+        // useItem (rope on Rock) can't demand a menu action; content often exposes only Swim-to.
         const loc = sc.useItem
             ? Locs.query()
                 .name(sc.locName)
@@ -318,7 +312,7 @@ export async function handleSpecialCrossing(
                 .nearest()
             : findTransportLoc(transport);
         if (!loc) {
-            // Open leaf mid-loop: succeed if we can pass rather than repath-fail.
+            // Open leaf mid-loop: succeed if we can pass.
             if (
                 /^open$/i.test(sc.action)
                 && (crossed() || Reachability.canStep(approach, step))
@@ -331,8 +325,7 @@ export async function handleSpecialCrossing(
         }
         const messageMark = GameMessages.mark();
         if (sc.useItem) {
-            // FireGiant: walk to exact throw/tree stand before rope (content aplocu range
-            // is ~10; from raft landing "I can't reach that!" / bad shot).
+            // FireGiant: walk to the exact throw/tree stand first; aplocu range is ~10 and the raft landing gets "I can't reach that!" or a bad shot.
             if (/Baxtorian rope → rock/i.test(sc.label)) {
                 const stand = { x: 2512, z: 3477, level: 0 };
                 const atStand = await walkTo(stand, {
@@ -377,8 +370,7 @@ export async function handleSpecialCrossing(
                 log(`${sc.label}: could not use ${sc.useItem.name} on ${sc.locName}`);
                 return false;
             }
-            // Baxtorian rock/tree: forcewalk + throw + swim/tele takes many ticks
-            // (FireGiant waits ~12s for PastRock / AtLedge).
+            // Baxtorian rock/tree: forcewalk + throw + swim/tele takes many ticks (FireGiant waits ~12s for PastRock / AtLedge).
             if (sc.toTile) {
                 const rad = sc.arrivalRadius ?? 2;
                 const landed = await Execution.delayUntil(() => {

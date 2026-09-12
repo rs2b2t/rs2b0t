@@ -4,7 +4,7 @@ import { chainFrom } from '#/bot/api/ai/quests/defs/upass/cross.js';
 import { UPASS_AREAS, UPASS_CROSSINGS } from '#/bot/api/ai/quests/defs/upass/route.js';
 import Tile from '#/bot/geometry/Tile.js';
 
-// Why: the search this replaces picked a seam by how much closer it looked, which in a cavern cut into forty-nine sealed pockets is a straight line across walls. It offered five ledge locs whose stand is in another pocket before the one the character was standing beside, and reported a cage thirty tiles away as crossed. Which pocket the character is in has one answer and it names one action.
+// Why: straight-line ranking crosses walls; each pocket has one valid exit action.
 
 /** The mud pocket the spade dig lands in, and the pocket the loose railings sit in. */
 const MUD_POCKET = '94725ac';

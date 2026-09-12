@@ -1,9 +1,7 @@
-// A wrong p1/p2/psmart does not throw — it leaves the read position short or long and
-// silently corrupts whatever decodes next. Every fully-dispatched packet must consume
-// exactly the byte count its header declared.
+// A wrong p1/p2/psmart silently shifts the read position and corrupts the next decode.
+// Every dispatched packet must consume exactly the byte count in its header.
 //
-// Opcodes here legitimately ignore trailing bytes. Add one only with a comment naming
-// the engine encoder that justifies it; never widen the condition to silence a failure.
+// Allow trailing bytes only for a named engine encoder that requires them.
 const ALLOWLIST = new Set<number>([
     -1 // sentinel: no packet was dispatched on this call
 ]);

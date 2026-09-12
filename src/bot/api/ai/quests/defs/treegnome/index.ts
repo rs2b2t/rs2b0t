@@ -43,8 +43,8 @@ function logsLeg(snap: QuestSnapshot): QuestStep {
 
 const CEREMONY_RANGE = 12;
 
-// Why: the chest and the warlord both refuse while a copy sits in the bank, so a banked orb has to come back out rather than be re-earned.
-// Why: Bolren deletes the orbs a tick before the queue that finishes the quest, and an empty pack at his feet is that gap rather than a loss.
+// Why: the chest and the warlord both refuse while a copy sits in the bank, so a banked orb has to come back out.
+// Why: Bolren deletes the orbs a tick before the queue that finishes the quest, so an empty pack at his feet is that gap.
 function reclaim(snap: QuestSnapshot, item: TgItem, earn: QuestStep): QuestStep {
     if (held(snap, item) > 0) {
         return { kind: 'talk', stop: BOLREN };
@@ -89,7 +89,7 @@ function chestBusiness(snap: QuestSnapshot, stage: number): boolean {
     if (stage === TG_STAGE.BALLISTA_FIRED) {
         return true;
     }
-    // Why: the chest refuses while a copy sits in the bank, so a banked orb is a walk out rather than a search.
+    // Why: the chest refuses while a copy sits in the bank, so a banked orb means walk out.
     return stage === TG_STAGE.RETRIEVED_ORB
         && held(snap, TG_ITEM.ORB) === 0
         && (snap.bankIds?.get(TG_ITEM.ORB.id) ?? 0) === 0;
@@ -109,7 +109,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (inStronghold(snap.tile)) {
         return chestBusiness(snap, stage) ? TAKE_ORB : LEAVE;
     }
-    // Why: the kit comes out on the opening bank trip, armed at the first fight instead, the bot walks the battlefield back to Ardougne for it.
+    // Why: the kit comes out on the opening bank trip; arming at the first fight walks the battlefield back to Ardougne for it.
     return armForTheWarlord(snap) ?? stageStep(snap, stage);
 }
 

@@ -104,8 +104,8 @@ interface GatheringLocation {
     boothName?; boothOp?; obstacles?; resources?; notes?;
 }
 
-// resolution: "None" → null; named → match; "Auto" → nearest camp in the same
-// 64×64 map square as startTile (else freeform null)
+// "None" returns null; a name selects a camp. "Auto" uses the nearest camp
+// in startTile's 64x64 map square, or null if there is none.
 resolveGatheringLocation(setting, startTile, table)
 locationOptions(table)            // ['Auto', …names, 'None']
 boothFields(loc) / sameMapSquare / MAP_SQUARE / DEFAULT_BOOTH_NAME / DEFAULT_BOOTH_OP

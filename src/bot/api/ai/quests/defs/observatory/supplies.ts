@@ -10,7 +10,7 @@ import { OBS_ID, OBS_ITEM, OBS_LOC_NAME, OBS_TILE, PLANKS_NEEDED } from './areas
 /** A bronze pickaxe is 1gp; this covers it with room to spare. */
 const SHOP_GP = 200;
 
-/** Port Khazard's counter, the only shop within fifty tiles of the copper and tin. */
+/** Port Khazard's counter, the only shop within 50 tiles of the copper and tin. */
 export const KHAZARD_SHOP = { npc: 'Shop keeper', anchor: new Tile(2641, 3171, 0) };
 
 export function heldId(snap: QuestSnapshot, id: number): number {
@@ -26,7 +26,7 @@ const withdraw = (items: { name: string; qty: number; id?: number }[]): QuestSte
 
 const scanBank: QuestStep = { kind: 'scanBank' };
 
-// Why: `snap.bankIds` is empty until a booth has been opened, so a bare `banked(...) > 0` answers "no" on the first decide tick and sends the bot mining for something it already owns.
+// Why: `snap.bankIds` is empty before the first bank scan, so do not start mining from unknown state.
 
 /** Withdraw from the bank when it can help, before any trip to fetch one. */
 export function fromBank(snap: QuestSnapshot, id: number, name: string, qty: number): QuestStep | null {
@@ -40,7 +40,7 @@ export function fromBank(snap: QuestSnapshot, id: number, name: string, qty: num
     return withdraw([{ name, qty: Math.min(qty, banked), id }]);
 }
 
-/** Four spawns lie in a five-tile square, so the nearest bare one is still the right walk. */
+/** 4 spawns lie in a 5-tile square, so the nearest bare one is still the right walk. */
 function nearestPlankSpawn(): Tile {
     const here = Game.tile();
     if (!here) {
@@ -49,7 +49,7 @@ function nearestPlankSpawn(): Tile {
     return [...OBS_TILE.PLANK_SPAWNS].sort((a, b) => a.distanceTo(here) - b.distanceTo(here))[0];
 }
 
-/** The tripod's three planks: the Barbarian Outpost spawns, as no shop sells one. */
+/** The tripod's 3 planks: the Barbarian Outpost spawns, as no shop sells one. */
 export function planks(snap: QuestSnapshot): QuestStep {
     const need = PLANKS_NEEDED - heldId(snap, OBS_ID.PLANK);
     return fromBank(snap, OBS_ID.PLANK, OBS_ITEM.PLANK, need)
@@ -75,7 +75,7 @@ export function oreShort(snap: QuestSnapshot): boolean {
 }
 
 // Why: both the Range and the Furnace carry `forceapproach=east`, which names the only side that works and rotates with the placement.
-// Why: standing anywhere else has the use-on silently dropped, no refusal, no message, a loc that never answers, which is what a radius-2 walk turns into a coin flip.
+// Why: from anywhere else the use-on is silently dropped, so a radius-2 walk is a coin flip.
 
 /** Use a held item on a loc from an exact tile. */
 async function useOnLocFrom(
@@ -105,7 +105,7 @@ async function useOnLocFrom(
     return Execution.delayUntil(done, 12_000);
 }
 
-// Why: an ore used on a furnace runs `smelt_ore_single`, which reads the bar off the ore's own `smeltsto` param, one bar, no quantity panel, and copper and tin each name bronze.
+// Why: an ore used on a furnace runs `smelt_ore_single`, which reads the bar off the ore's `smeltsto` param (1 bar, no quantity panel), and copper and tin each name bronze.
 const smeltBronzeRun = (log: (m: string) => void): Promise<boolean> => useOnLocFrom(
     OBS_TILE.FURNACE,
     OBS_ID.COPPER_ORE,
@@ -116,7 +116,7 @@ const smeltBronzeRun = (log: (m: string) => void): Promise<boolean> => useOnLocF
 
 export const smeltBronze: QuestStep = { kind: 'custom', name: 'smelt a bronze bar', run: smeltBronzeRun };
 
-/** The `bucket_sand` spawn twenty-five tiles from the reception, which skips both the bucket and the Yanille pit. */
+/** The `bucket_sand` spawn 25 tiles from the reception, which skips both the bucket and the Yanille pit. */
 export function sand(snap: QuestSnapshot): QuestStep {
     return fromBank(snap, OBS_ID.BUCKET_OF_SAND, OBS_ITEM.BUCKET_OF_SAND, 1)
         ?? { kind: 'grabGround', item: OBS_ITEM.BUCKET_OF_SAND, anchor: OBS_TILE.SAND_SPAWN, waitIfMissing: true };
@@ -131,7 +131,7 @@ const cookSeaweed = (log: (m: string) => void): Promise<boolean> => useOnLocFrom
     log
 );
 
-// Why: nothing in the game sells soda ash or seaweed, and the shore Horror from the Deep already walks to is the nearest that is not on an islet.
+// Why: nothing sells soda ash or seaweed, and the shore Horror from the Deep walks to is the nearest one off an islet.
 // Why: it cooks down on the Ardougne range the furnace leg passes on the way home.
 
 /** Seaweed off the shore, then the range that turns it into soda ash. */

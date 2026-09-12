@@ -9,7 +9,7 @@ export function heldId(snap: QuestSnapshot, id: number): number {
     return snap.invIds?.get(id) ?? 0;
 }
 
-// Why: an unread bank is not an empty bank, and a bare count sends the bot to a booth for something it never saw.
+// Why: Keep unread bank state distinct from an empty bank.
 export function bankedId(snap: QuestSnapshot, id: number): number {
     return snap.bankKnown ? (snap.bankIds?.get(id) ?? 0) : 0;
 }

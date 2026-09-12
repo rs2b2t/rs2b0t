@@ -28,14 +28,13 @@ import {
 export const BOOT_COST = 12;
 /** Covers every purchase this quest makes several times over. */
 export const COIN_FLOAT = 1000;
-// Why: the float is drawn once and spent down, topping it back up after every 5gp price walks the
-// character to a bank between the pineapple, the vodka and the knife.
+// Why: the float is drawn once and spent down; topping up after every 5gp price walks you to a bank between the pineapple, the vodka and the knife.
 
 /** Below this the purse is refilled to {@link COIN_FLOAT}. */
 export const COIN_FLOOR = 200;
 export const FOOD_TARGET = FOOD_FLOAT;
-// Why: the scarecrow is sixteen slots of grain and chicken, so the float shrinks to make room, but only while that load is still being gathered.
-// Why: holding it down across stages 60 and 70 sent the character up the thrower gauntlet on four lobsters and it died three times.
+// Why: the scarecrow is 16 slots of grain and chicken, so the float shrinks to make room while that load is still being gathered.
+// Why: holding it down across stages 60 and 70 means crossing the thrower gauntlet on 4 lobsters, which killed 3 runs.
 
 /** Food carried while the scarecrow load is still being gathered. */
 export const SCARECROW_FOOD_TARGET = 6;
@@ -52,8 +51,7 @@ const PRICE = {
     VIAL: 10
 } as const;
 
-// Why: nobody in this game is called 'Shop keeper', Shop.open matches the display name of the
-// NPC that owns the stock.
+// Why: `Shop.open` requires the stock owner's display name; no NPC is named "Shop keeper".
 export const HECKEL = { npc: 'Heckel Funch', anchor: ER_TILE.HECKEL };
 export const GULLUCK = { npc: 'Gulluck', anchor: ER_TILE.GULLUCK };
 export const AEMAD = { npc: 'Aemad', anchor: ER_TILE.AEMAD };
@@ -108,20 +106,18 @@ function source(
 export const sourcePestle = (snap: QuestSnapshot): QuestStep | null =>
     source(snap, ER_ITEM.PESTLE, 1, JATIX, PRICE.PESTLE);
 
-// Why: the tinderbox is only ever wanted on the mountain, and Burthorpe Supplies is the counter
-// the route already passes, Aemad's is four hundred tiles the wrong way.
+// Why: the tinderbox is only wanted on the mountain and Burthorpe Supplies is on the route; Aemad's is 400 tiles the wrong way.
 export const sourceTinderbox = (snap: QuestSnapshot): QuestStep | null =>
     source(snap, ER_ITEM.TINDERBOX, 1, WISTAN, PRICE.TINDERBOX);
 
 export const sourceKnife = (snap: QuestSnapshot): QuestStep | null =>
     source(snap, ER_ITEM.KNIFE, 1, HECKEL, PRICE.KNIFE);
 
-// Why: Gulluck is one ladder above Heckel Funch, so the axe rides the trip the fruit and the
-// vodka already pay for.
+// Why: Gulluck is one ladder above Heckel Funch, so the axe rides the trip the fruit and the vodka already pay for.
 export const sourceAxe = (snap: QuestSnapshot): QuestStep | null =>
     source(snap, ER_ITEM.AXE, 1, GULLUCK, PRICE.AXE);
 
-/** Any of the four liquors the aviary accepts, bank first. */
+/** Any of the 4 liquors the aviary accepts, bank first. */
 export function sourceLiquor(snap: QuestSnapshot): QuestStep | null {
     if (LIQUORS.some(liquor => held(snap, liquor) > 0)) {
         return null;
@@ -161,7 +157,7 @@ async function buyBoots(log: (m: string) => void): Promise<boolean> {
         log(`need ${BOOT_COST} coins for Climbing boots`);
         return false;
     }
-    // One, not four: Tenzing is inside his hut and a wider radius is satisfied on the doorstep.
+    // Radius 1: Tenzing is inside his hut and a wider radius is satisfied on the doorstep.
     if (!(await Traversal.walkResilient(ER_TILE.TENZING, { radius: 1, attempts: 3, timeoutMs: 180_000, log }))) {
         return false;
     }
@@ -170,14 +166,12 @@ async function buyBoots(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => Inventory.count(ER_ITEM.CLIMBING_BOOTS.name) > before, 8000);
 }
 
-// Why: this runs on every decide() tick while the character is still off the mountain, so each
-// branch has to be idempotent, a step that does not change the snapshot spins here forever.
+// Why: this runs on every decide() tick while you're still off the mountain, so each branch has to be idempotent; a step that leaves the snapshot unchanged spins here forever.
 
 /** The loadout in one pure pass; null once the pack is ready to travel. */
 export function prepare(snap: QuestSnapshot, zone: EadgarZone, foodWant = FOOD_TARGET): QuestStep | null {
     const bootsReady = held(snap, ER_ITEM.CLIMBING_BOOTS) > 0 || worn(snap, ER_ITEM.CLIMBING_BOOTS);
-    // Past the stile a bank trip means climbing back down the secret way. Only a spent pack or
-    // missing boots is worth that; anything less rides on.
+    // Past the stile a bank trip means climbing back down the secret way, so only a spent pack or missing boots is worth it.
     if (committed(zone) && bootsReady && foodHeld(snap) >= FOOD_FLOOR) {
         if (!worn(snap, ER_ITEM.CLIMBING_BOOTS)) {
             return wearAll([ER_ITEM.CLIMBING_BOOTS.name]);
@@ -206,8 +200,7 @@ export function prepare(snap: QuestSnapshot, zone: EadgarZone, foodWant = FOOD_T
     if (!bootsReady && banked(snap, ER_ITEM.CLIMBING_BOOTS) > 0) {
         fromVault.push({ name: ER_ITEM.CLIMBING_BOOTS.name, id: ER_ITEM.CLIMBING_BOOTS.id, qty: 1 });
     }
-    // A loadout names what the player wants, not what the bank has; anything missing is skipped
-    // rather than waited on, as this quest fights nothing it cannot walk away from.
+    // A loadout names what you want; anything the bank lacks is skipped, as this quest fights nothing it can't walk away from.
     for (const name of plannedGear(snap)) {
         const inPack = snap.inv.get(name.toLowerCase()) ?? 0;
         if (inPack === 0 && (snap.bank?.get(name.toLowerCase()) ?? 0) > 0) {
@@ -259,8 +252,7 @@ async function takeGround(name: string, log: (m: string) => void): Promise<boole
     return (await drop.interact('Take')) && Execution.delayUntil(() => Inventory.contains(name), 8000);
 }
 
-// Why: logs are wanted twice, with the chickens and the grain in Ardougne, and again beside the
-// Falador bank for the drying fire, and one anchor makes the other trip five hundred tiles longer.
+// Why: logs are wanted twice, with the chickens and grain in Ardougne and again beside the Falador bank for the drying fire; one anchor makes the other trip 500 tiles longer.
 function nearestTrees(): Tile {
     const here = Game.tile();
     if (!here) {
@@ -298,8 +290,7 @@ async function chopLogs(qty: number, log: (m: string) => void): Promise<boolean>
     return false;
 }
 
-// Why: a chicken is a level-1 drop, not a fight, arming a protection prayer for one burns a bar
-// the stronghold walk still needs, so this is a plain attack-and-loot loop.
+// Why: arming a protection prayer for a level-1 chicken burns a bar the stronghold walk still needs, so this is a plain attack-and-loot loop.
 
 /** Kill chickens at the Ardougne farm until the pack holds `qty` raw chicken. */
 async function huntChickens(qty: number, log: (m: string) => void): Promise<boolean> {
@@ -362,8 +353,7 @@ export function sourceChickens(snap: QuestSnapshot, qty: number): QuestStep | nu
         ?? { kind: 'custom', name: `kill chickens for ${qty} raw chicken`, run: log => huntChickens(qty, log) };
 }
 
-// Why: the field behind the stile is the closest wheat to the zoo, the trees and the chicken farm,
-// which is where the rest of the scarecrow comes from.
+// Why: the field behind the stile is the closest wheat to the zoo, the trees and the chicken farm, where the rest of the scarecrow comes from.
 
 /** Bank, then the Ardougne wheat field, one sheaf per pass. */
 export function sourceGrain(snap: QuestSnapshot, qty: number): QuestStep | null {

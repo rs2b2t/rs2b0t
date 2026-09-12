@@ -12,7 +12,7 @@ function normalize(lines: readonly string[] | string): string {
         .toLowerCase();
 }
 
-// Why: chompybird_journal.rs2 appends, so every earlier stage's prose is still on the page, newest marker first, or an early line answers for a late stage.
+// Why: `chompybird_journal.rs2` appends earlier text, so test stage markers newest-first.
 // Why: 15/20, 30/35 and 40/45 render identically; the step each pair wants is the same one, and the bow in the pack separates 40 from 45 where it matters.
 const MARKERS: readonly [string, number][] = [
     ['quest complete!', CB_STAGE.COMPLETE],
@@ -35,7 +35,7 @@ export function parseChompyJournal(lines: readonly string[] | string): QuestProg
     return hit ? { stage: hit[1], flags: new Set<string>() } : undefined;
 }
 
-/** A failed read is not evidence the quest went backwards. */
+/** A failed read doesn't mean the quest went backwards. */
 let lastGood: QuestProgress | undefined;
 
 export async function readChompyProgress(): Promise<QuestProgress | undefined> {

@@ -87,10 +87,7 @@ const PROGRESS_WINDOW = 26;
 const CORRIDOR = PATH_CORRIDOR;
 const STALL_REACH_STEPS = 256;
 const TRIGGER_REACH_STEPS = 256;
-/**
- * Idle ticks before clearing an unreachable walk-click target (re-pick only,
- * does not run stall recovery). Keeps scene-load blips from thrashing clicks.
- */
+/** Idle ticks before an unreachable walk-click target is re-picked without stall recovery; absorbs scene-load blips. */
 const UNREACH_CLICK_IDLE_TICKS = 3;
 const MAX_REPATHS = 5;
 /** Skip another follow attempt if less than this remains on the overall budget. */
@@ -99,7 +96,7 @@ const PATH_REQUEST_TIMEOUT_MS = 30_000;
 const TRANSPORT_WAIT_MS = 8000;
 /** Ceiling on the client scene rebuild after a landing, before a hop's loc counts as absent. */
 const SCENE_REBUILD_MS = 3000;
-// Why: the same rebuild that hides a hop's loc also empties `toLocal` for the tiles ahead, so every click candidate fails and the follow repaths with nothing clicked, five times inside the window, then the walk starts over from the top.
+// Why: the scene rebuild after a landing also empties `toLocal` for the tiles ahead, so every click candidate fails and the follow burns its 5 repaths on nothing.
 /** All-candidate misses to sit out before repathing, while nothing has been clicked yet. */
 const CANDIDATE_SETTLE_TRIES = 3;
 const SCENE_STEP_MS = 8000;
@@ -118,7 +115,7 @@ export interface WalkOptions {
     timeoutMs?: number;
     log?: (msg: string) => void;
     maxExpansions?: number;
-    /** Path policy (tele toggles, distanceBeforeTeleport, deny lists, …). */
+    /** Path policy (tele toggles, distanceBeforeTeleport, deny lists). */
     policy?: PathPolicy;
     // Why: defaults to Global `navTeleports` (off); an explicit true/false overrides Global, and `policy.useTeleports: false` forces off regardless.
 
@@ -128,7 +125,7 @@ export interface WalkOptions {
 
     /** Known bank item counts for the bank planner (tests, or when the bank is not open). */
     bankItemCounts?: Record<string, number>;
-    // Why: entries are catalog ids (`'white-wolf-mountain'`) or ad-hoc rects, and automatic catalog zones are resolved from live player state on top of whatever is passed.
+    // Why: entries are catalog ids (`'white-wolf-mountain'`) or ad-hoc rects; automatic catalog zones from live player state are added on top.
 
     /** Danger / no-go zones the pathfinder must not enter (idea credit: @lolwut). */
     avoidZones?: readonly (string | import('./data/dangerZones.js').DangerZoneRect)[];
@@ -164,9 +161,7 @@ function expandWaypoints(waypoints: Waypoint[]): PathStep[] {
     return expandWaypointsDense(waypoints as PathStep[], scene) as PathStep[];
 }
 
-/**
- * Per-walk tele inject: explicit opts win; else Global `navTeleports` (default off).
- */
+/** Explicit opts win, else Global `navTeleports` (default off). */
 function resolveWalkUseTeleports(opts?: WalkOptions): boolean {
     if (opts?.useTeleportCatalog === false || opts?.policy?.useTeleports === false) {
         return false;
@@ -186,7 +181,7 @@ class WalkExecutorImpl {
 
     lastOutcome: 'arrived' | 'closest' | 'blocked' | 'budget' | 'interrupted' | 'failed' | 'unreachable' | null = null;
 
-    // Why: non-empty means the destination sits behind a toll the player cannot pay rather than off the graph, so a caller that can shop may buy them and walk again.
+    // Why: non-empty means the destination is behind a toll you can't pay, so a caller that can shop buys it and walks again.
 
     /** Items that would have opened the last failed route. */
     lastMissingGateItems: MissingItem[] = [];
@@ -201,7 +196,7 @@ class WalkExecutorImpl {
     /** Post-quest unlock talks already spent this run (see data/postQuestTalks.ts). */
     private sessionPostQuestTalks = new Set<string>();
 
-    /** Teleport ids rejected this walk (server fail / no land), not re-planned (#339). */
+    /** Teleport ids rejected this walk (server fail / no land) and kept out of replans (#339). */
     private sessionSuppressedTeleports = new Set<string>();
 
     /** Nest depth for walkTo (special crossings re-enter); only outer clears suppress. */
@@ -257,15 +252,13 @@ class WalkExecutorImpl {
         const outer = this.walkDepth === 0;
         this.walkDepth++;
         if (outer) {
-            // Nested walkTo (special crossings) must keep suppress so outer repath
-            // does not re-pick a failed tele (#339).
+            // Nested walkTo (special crossings) keeps suppress so the outer repath can't re-pick a failed tele (#339).
             this.sessionSuppressedTeleports.clear();
         }
         const walkStartedAt = performance.now();
         const deadline = walkStartedAt + timeoutMs;
         this.lastOutcome = null;
-        // Stale from the previous walk would send a caller shopping for a toll
-        // this route never needed.
+        // Stale entries from the last walk would send a caller shopping for a toll this route never needed.
         this.lastMissingGateItems = [];
         this.resetAvoids();
         RouteState.reset();
@@ -276,7 +269,7 @@ class WalkExecutorImpl {
         }
 
         try {
-            // Why: one budget for the walk, so a landing costs a settle once rather than once per repath.
+            // Why: one budget per walk, so a landing costs one settle across all repaths.
             const settleBudget = { left: CANDIDATE_SETTLE_TRIES };
             for (let repaths = 0; repaths <= MAX_REPATHS; repaths++) {
                 const me = reader.worldTile();
@@ -331,8 +324,7 @@ class WalkExecutorImpl {
                     return true;
                 }
 
-                // Shared overall deadline across repaths (caller timeoutMs). Each
-                // follow uses remaining time only, never extends past deadline.
+                // One deadline across repaths (caller timeoutMs); each follow gets the remaining time.
                 const remaining = deadline - performance.now();
                 if (remaining < MIN_FOLLOW_REMAINING_MS) {
                     log(
@@ -384,10 +376,7 @@ class WalkExecutorImpl {
         }
     }
 
-    /**
-     * Experimental debug: paint the route the client took on the last walk click.
-     * Prefer tryMove's recorded path; fall back to scene BFS. Never throws into followPath.
-     */
+    /** Debug paint of the route the client took on the last walk click: tryMove's recorded path, else scene BFS. Never throws. */
     private publishClientWalkSegment(
         from: WorldTile,
         to: { x: number; z: number; level: number }
@@ -465,10 +454,7 @@ class WalkExecutorImpl {
         }
     }
 
-    /**
-     * Publish desired path-facing yaw; PathCameraFollow eases on the frame loop
-     * while Global.navCameraFollow is on (smooth, not walk-tick snap).
-     */
+    /** Publish the path-facing yaw; PathCameraFollow eases toward it on the frame loop while Global.navCameraFollow is on. */
     private maybeFacePathCamera(me: WorldTile, tiles: PathStep[], pathIdx: number): void {
         const yaw = pathFacingYaw(me, tiles, pathIdx, 12);
         if (yaw === null) {
@@ -477,7 +463,7 @@ class WalkExecutorImpl {
         PathCameraFollow.samplePathYaw(yaw);
     }
 
-    // Why: one extra path request, only on failure, and only for the verdict A* gives when a gated crossing was pruned, a budget or off-graph failure is not a shopping problem.
+    // Why: one extra path request, only on an `unreachable` failure; a budget or off-graph failure has no shopping list.
 
     /** Turn a bare `unreachable` into the shopping list that would fix it. */
     private async explainUnreachablePath(
@@ -503,7 +489,7 @@ class WalkExecutorImpl {
         return this.lastMissingGateItems;
     }
 
-    /** Walk to a bank once and withdraw only path-scoped missing items when bank stock unlocks a cheaper tele/toll route; true means walkTo should repath. */
+    /** Bank once for the path-scoped missing items when bank stock unlocks a cheaper route; true means walkTo should repath. */
     private async maybeBankForRoute(
         from: WorldTile,
         dest: WorldTile,
@@ -516,7 +502,7 @@ class WalkExecutorImpl {
         }
 
         const knownBank = this.readBankItemCounts();
-        // Why: WalkTo does not pass a bank snapshot, so a Varrock→Ardougne walk never withdrew the second 30gp fare unless a caller had already opened the bank (#709).
+        // Why: WalkTo passes no bank snapshot, so a Varrock to Ardougne walk never withdrew the second 30gp fare unless a caller had opened the bank (#709).
         const bankItems = knownBank && Object.keys(knownBank).length > 0 ? knownBank : gateItemCandidates();
 
         let state: WorldStateData | undefined;
@@ -538,7 +524,7 @@ class WalkExecutorImpl {
         }
 
         if (!pathHasTeleport(pathVirtual.waypoints) && missing.every(m => !/rune|coins/i.test(m.name))) {
-            // Why: deliberately empty, toll coins and other specials already reach `missing` via bankPlan, so nothing is filtered out here.
+            // Why: empty on purpose; toll coins and other specials already reach `missing` via bankPlan.
         }
 
         const bank = nearestBank(from);
@@ -584,7 +570,7 @@ class WalkExecutorImpl {
             return false;
         }
 
-        // Why: `MissingItem.count` is the shortage (required − held at plan time), so it is withdrawn directly rather than having inventory subtracted from it again (#336).
+        // Why: `MissingItem.count` is already the shortage (required minus held at plan time), so withdraw it as is (#336).
         for (const item of plan.missing) {
             const take = item.count;
             if (take <= 0) {
@@ -601,7 +587,7 @@ class WalkExecutorImpl {
             await Bank.close().catch(() => undefined);
         }
         await Execution.delayTicks(1);
-        // Why: the live avoid list was built pre-bank from an empty inventory, so the item/skill gates are recomputed and the post-bank repath can use newly affordable tolls (#338).
+        // Why: the avoid list was built pre-bank, so recompute the item/skill gates before the repath can use the new tolls (#338).
         this.refreshSpecialCrossingAvoids();
         return true;
     }
@@ -668,7 +654,7 @@ class WalkExecutorImpl {
         stateOverride?: WorldStateData
     ): Promise<PathResult> {
         let result: PathResult | null = null;
-        // Why: virtual bank planning recomputes item-gated crossing avoids against the virtual inventory, live-item blacklists would hide the tolls banking is meant to unlock (#338).
+        // Why: a virtual bank plan recomputes item-gated avoids against the virtual inventory, or the live blacklist would hide the tolls banking unlocks (#338).
         // Why: session-failed doors and skill gates stay in the avoid list either way.
         const avoid = stateOverride
             ? this.avoidListForState(stateOverride)
@@ -680,8 +666,7 @@ class WalkExecutorImpl {
                 })
             ];
 
-        // Snapshot WorldState so requirements-gated transports
-        // (agility shortcuts, quest doors, tolls) are evaluated for the live player.
+        // Snapshot WorldState so gated transports (shortcuts, quest doors, tolls) are judged for the live player.
         let state: WorldStateData | undefined;
         if (stateOverride) {
             state = stateOverride;
@@ -787,7 +772,7 @@ class WalkExecutorImpl {
         this.avoidDoors.push({ x, z });
     }
 
-    // Why: past {@link DOOR_SESSION_STRIKES} the placement is treated as shut for the rest of the run, otherwise the next ladder pass plans straight back through it and the walk never terminates.
+    // Why: past {@link DOOR_SESSION_STRIKES} the placement counts as shut for the run, or the next repath plans straight back through it.
 
     /** Record that a crossing was attempted and the player is still on the near side. */
     private noteDoorRefusal(hop: PathStep, log: (msg: string) => void): void {
@@ -839,7 +824,7 @@ class WalkExecutorImpl {
         let clicks = 0;
         let warnedCombat = false;
         let lastTile: WorldTile | null = null;
-        /** GameMessages watermark after the last *successful* walk click. */
+        /** GameMessages watermark after the last successful walk click. */
         let walkClickMark: number | null = null;
         /** Player tile when that walk was issued. CANT_REACH only counts if still here. */
         let walkClickAt: WorldTile | null = null;
@@ -941,8 +926,7 @@ class WalkExecutorImpl {
 
             const idleTicks = BotHost.tickCount - lastMoveTick;
 
-            // Next hop = first transport at or after pathIdx (pathIdx can sit ON the hop
-            // tile after locateOnPath; scanning from pathIdx+1 would skip it forever).
+            // Next hop is the first transport at or after pathIdx; locateOnPath can leave pathIdx on the hop tile, and pathIdx+1 would skip it.
             let nextCrossingIdx = -1;
             for (let i = Math.max(1, pathIdx); i < tiles.length; i++) {
                 if (tiles[i]!.transport) {
@@ -951,8 +935,7 @@ class WalkExecutorImpl {
                 }
             }
 
-            // Only the **next** planned hop, never scan nearby transports or pathIdx-5.
-            // Engage at the approach tile when path progress has reached that hop.
+            // Only the next planned hop; engage at its approach tile once path progress reaches it.
             const approachable = (t: WorldTile): boolean =>
                 Reachability.canReach(t, { maxSteps: TRIGGER_REACH_STEPS, adjacentOk: true });
             if (nextCrossingIdx !== -1 && pathIdx >= nextCrossingIdx - 1) {
@@ -970,7 +953,7 @@ class WalkExecutorImpl {
                             );
                             return 'repath';
                         }
-                        // Landed on hop tile, snap index to the hop, not approach.
+                        // Landed on the hop tile, snap the index to it.
                         pathIdx = Math.max(pathIdx, nextCrossingIdx);
                         lastMoveTick = BotHost.tickCount;
                         stallRetries = 0;
@@ -983,7 +966,7 @@ class WalkExecutorImpl {
                 }
             }
 
-            // Why: an unreachable walk-click re-picks without running stall recovery, live smokes spammed "stall recovery (2 ticks idle)" when canReach failed on the mid-path click long before the stickiness stall.
+            // Why: an unreachable walk-click re-picks without stall recovery; live smokes spammed "stall recovery (2 ticks idle)" when canReach failed on a mid-path click.
             if (
                 clickIdx !== -1
                 && !moved
@@ -1010,8 +993,8 @@ class WalkExecutorImpl {
                             limitIdx: recoverLimit
                         })
                         : -1;
-                // Why: no forward tile to click means we are already standing at the next hop's approach, the door/stair case.
-                // Why: escalating in this same pass avoids replanning the identical route until the walk fails.
+                // Why: no forward tile to click means we're already at the next hop's approach (the door/stair case).
+                // Why: escalating in the same pass avoids replanning the identical route until the walk fails.
                 const phase = stallPhase({ stallRetries, recoverIdx: recover, inCombat: reader.inCombat() });
                 if (phase === 'recover') {
                     const local = reader.toLocal(tiles[recover]!.x, tiles[recover]!.z);
@@ -1148,15 +1131,15 @@ class WalkExecutorImpl {
                 if (chosen !== -1) {
                     clickIdx = chosen;
                     clicks++;
-                    // Why: only tile movement, plus hop landings and stall-recovery clicks, clears the stall clock, so `lastMoveTick` is not reset on a click.
-                    // Why: resetting here alongside unreach re-picks starved the 9-tick stall and left walks thrashing until the wall-clock "walk timed out".
+                    // Why: only tile movement, hop landings and stall-recovery clicks reset `lastMoveTick`; a plain click never does.
+                    // Why: resetting it here on top of the unreach re-picks starved the 9-tick stall and walks thrashed until "walk timed out".
                     this.publishPath(tiles, pathIdx, clickIdx);
                 } else {
                     walkClickMark = null;
                     walkClickAt = null;
                     PathPublish.setClientSegment(null);
-                    // Why: walk tiles before a door often fail client tryMove while the approach stand is still a few tiles away, so this radius is looser than approachR.
-                    // Why: only the next planned hop is executed, scanning other transports would take a crossing the route never planned.
+                    // Why: tiles before a door often fail client tryMove while the approach is still a few tiles off, so this radius is looser than approachR.
+                    // Why: only the next planned hop runs; another transport nearby would be a crossing the route never planned.
                     if (nextCrossingIdx !== -1) {
                         const appr = tiles[nextCrossingIdx - 1]!;
                         const hop = tiles[nextCrossingIdx]!;
@@ -1187,8 +1170,8 @@ class WalkExecutorImpl {
                             return 'repath';
                         }
                     }
-                    // Why: a walk that has clicked nothing yet is one the scene may not have caught up with, and repathing inside that window burns the five-repath budget on an identical path.
-                    // Why: the budget spans the walk rather than the follow, so a destination that was never reachable still fails in about the time it used to.
+                    // Why: with nothing clicked yet the scene may still be loading, and repathing inside that window burns the 5-repath budget on the same path.
+                    // Why: the budget spans the walk across follows, so a destination that was never reachable still fails in about the same time.
                     if (clicks === 0 && settleBudget.left > 0) {
                         settleBudget.left--;
                         await Execution.delayTicks(2);
@@ -1231,7 +1214,7 @@ class WalkExecutorImpl {
             const ok = await handleSpecialCrossing(approach, step, special, log, (d, o) => this.walkTo(d, o));
             if (ok) {
                 RouteState.noteTransport(approach, step);
-                // Server does not transmit exit_essence_mine_coord, remember return for plan filters.
+                // The server never sends exit_essence_mine_coord, so remember the return for plan filters.
                 const ess = EssenceSession.noteEntryFromCrossingLabel(special.label)
                     ?? EssenceSession.noteEntryFromNpc(special.npc ?? special.locName);
                 if (ess) {
@@ -1326,8 +1309,8 @@ class WalkExecutorImpl {
                     && here.x === approach.x
                     && here.z === approach.z;
                 if (!atApproach && attempt === 0) {
-                    // Why: the server ran its own path search and gave up from where we stand, and the planned approach is the tile the pack says this hop works from.
-                    // Why: a stair fires from up to the trigger radius away and clicks from wherever the player happens to be, which is how a staircase two tiles behind a wall reads as an unreachable destination.
+                    // Why: the server pathed from where we stand and gave up; the planned approach is the tile the pack says the hop works from.
+                    // Why: a stair fires from up to the trigger radius away, so a staircase 2 tiles behind a wall reads as unreachable from the wrong side.
                     log(
                         `server can't reach ${transport.locName} from (${here?.x},${here?.z}) — stepping onto the planned approach (${approach.x},${approach.z})`
                     );
@@ -1366,8 +1349,8 @@ class WalkExecutorImpl {
         return false;
     }
 
-    // Why: a vault can park the character on the loc's own tile, Gertrude's lumber-yard fence teleports onto the fence and stops there, and the planner refuses to route out of a tile the pack calls solid, so every repath plans the same crossing again and the two take turns forever.
-    // Why: the raw walk packet is the way out, as the server pathfinds from where the character stands rather than from what the pack believes.
+    // Why: a vault can leave you on the loc's own tile (Gertrude's lumber-yard fence does), and the planner won't route out of a tile the pack calls solid, so every repath plans the same crossing.
+    // Why: the raw walk packet gets you off it, since the server pathfinds from where you stand.
 
     /** Walk from a shortcut's landing tile onto the one its edge planned. */
     private async settleShortcutLanding(transport: TransportInfo, step: PathStep, log: (msg: string) => void): Promise<void> {
@@ -1383,7 +1366,7 @@ class WalkExecutorImpl {
         await DirectNavigator.walkTo({ x: landing.x, z: landing.z, level: step.level }, 0, SHORTCUT_LANDING_MS);
     }
 
-    // Why: a short hop has to land on its planned tile, or every frame of a stile's animation reads as crossed, so the one crossing that ends mid-span is recognised by where it stopped rather than by loosening that rule.
+    // Why: a short hop must land on its planned tile or every frame of a stile's animation reads as crossed, so a crossing that ends on the loc tile is recognised by where it stopped.
 
     /** True once a crossing that ended on the loc's own tile has been walked off it. */
     private async stepOffTransportLoc(transport: TransportInfo, step: PathStep, log: (msg: string) => void): Promise<boolean> {
@@ -1396,8 +1379,8 @@ class WalkExecutorImpl {
         return true;
     }
 
-    // Why: some crossings open only after a conversation the journal cannot show, the Salve barrier wants `%priestperil` one stage past complete.
-    // Why: nothing is testable beforehand, so this runs only once the crossing has already refused, and only once per placement per run.
+    // Why: some crossings open only after a talk the journal can't show; the Salve barrier wants `%priestperil` one stage past complete.
+    // Why: nothing is testable up front, so this runs only after the crossing refused, once per placement per run.
 
     /** Talk an NPC through the conversation that unlocks a crossing which already refused. */
     private async runPostQuestTalk(
@@ -1430,7 +1413,7 @@ class WalkExecutorImpl {
                 log(`${talk.label}: '${talk.npc}' not talkable at the stand`);
                 return false;
             }
-            // Why: the dialogue takes a tick to arrive, and breaking on the first closed frame reads as "he said nothing" while the unlock silently no-ops.
+            // Why: the dialogue takes a tick to arrive; breaking on the first closed frame logs "said nothing" and the unlock no-ops.
             const dialogueUp = (): Promise<boolean> =>
                 Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), TALK_OPEN_MS);
             if (!(await dialogueUp())) {

@@ -14,7 +14,7 @@ export function bankedId(snap: QuestSnapshot, id: number): number {
 }
 
 // Why: `ownsInventory` opts the module out of the engine's food withdrawal, so it is drawn here.
-// Why: nothing in the manor is aggressive, so the float covers random events rather than the quest.
+// Why: nothing in the manor is aggressive, so the food float is for random events.
 
 /** The module's own spade and food withdrawal, or null when the pack is ready. */
 export function kit(snap: QuestSnapshot): QuestStep | null {

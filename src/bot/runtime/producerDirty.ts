@@ -1,5 +1,4 @@
-// Why: scans are expensive, especially the 300 varps plus the inventory component walk.
-// Why: the server already says when state changes via packets, so a cache of last snapshots is re-diffed per family only after a relevant opcode, a login seed, or a safety resync.
+// Why: only rescan producer families after a relevant packet, login seed, or safety resync.
 
 // Which producer tables need a rescan.
 import { ServerProt } from '#/client/io/ServerProt.js';
@@ -21,10 +20,7 @@ export function anyDirty(d: ProducerDirtyFlags): boolean {
     return d.skills || d.inventory || d.varps || d.chat;
 }
 
-/**
- * Map a server packet opcode to dirty families; null when the packet does not affect producer tables (most traffic).
- * Why: {@link ServerProt} member access only, because const enums cannot be cast to objects.
- */
+/** Map a server packet opcode to dirty families, or null for unrelated traffic. */
 export function dirtyFamiliesForPacket(ptype: number): ProducerFamily[] | 'reset' | null {
     if (ptype === ServerProt.LOGOUT) {
         return 'reset';

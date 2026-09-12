@@ -20,7 +20,7 @@ function firstCage(counts: ReadonlyMap<number, number> | undefined): number | un
     return undefined;
 }
 
-// Why: Thormac hands out a replacement only when there is no cage in the pack AND none in the bank, so a banked cage has to come home before he is asked for anything.
+// Why: Thormac replaces a cage only when none exists in inventory or bank, so withdraw banked cages first.
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') {
@@ -52,7 +52,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (progress === undefined) {
         return { kind: 'wait', reason: 'Scorpion Catcher journal stage unavailable' };
     }
-    // Why: the seer's first hint is what makes the Taverley wall searchable, and the other two scorpions are already where they will be.
+    // Why: the seer's first hint is what makes the Taverley wall searchable, and the other 2 scorpions are already where they will be.
     if (progress.stage < SC_STAGE.FIRST_HINT) {
         return { kind: 'custom', name: 'ask the Seer where the scorpions are', run: askTheSeer };
     }
@@ -85,7 +85,7 @@ export const scorpcatcher: QuestModule = {
     // Why: the quest is spread over the Sorcerer's Tower, the Barbarian Outpost, Taverley Dungeon and the monastery, so the nearest bank beats any one of them pinned.
     bank: SC_TILE.BANK,
     food: FOOD_FLOAT,
-    // Why: the ten-bar barcrawl is the only way past the outpost gate, and the Karamja antipoison is two ferry fares on top of it, both are bought with the engine's coin float.
+    // Why: the 10-bar barcrawl is the only way past the outpost gate and the Karamja antipoison is 2 ferry fares on top, both from the engine's coin float.
     coinFloat: Math.max(1000, BARCRAWL_GP * 2 + ANTIPOISON_GP),
     tools: [CAGE_NAME, SC_ITEM.DUSTY_KEY, SC_ITEM.JAIL_KEY, BARCRAWL_CARD, ...ANTIPOISON_DOSES],
     sustain: { foods: ['Lobster', 'Swordfish', 'Tuna'], eatBelowHp: 0.6 },

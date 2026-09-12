@@ -76,7 +76,7 @@ export const HD_LOC = {
     STAIRS: 'Staircase',
     LADDER: 'Iron ladder',
     BOOKCASE: 'Bookcase',
-    /** The broken cog carries **no ops at all**. It is a use-on target only. */
+    /** The broken cog has no ops; it's a use-on target only. */
     LIGHT: 'Lighting mechanism',
     WALL: 'Strange wall',
     SAND_PIT: 'Sand pit',
@@ -84,9 +84,8 @@ export const HD_LOC = {
     FURNACE: 'Furnace'
 } as const;
 
-// Why: the lighthouse exists twice, during the quest its interior is the broken copy in mapsquare 38_71.
-// Why: repairing the light teleports the player by (+64,-960) into the live one in 39_56, and every staircase from there routes back into the copy.
-// Why: nothing walks between them, as the doorway and the stairs teleport.
+// Why: during the quest the lighthouse interior is the broken copy in mapsquare 38_71; repairing the light teleports you (+64,-960) into the live one in 39_56.
+// Why: the doorway and stairs teleport, so nothing walks between them and every staircase from the live one routes back into the copy.
 export const HD_TILE = {
     /** South shore of the causeway, one tile before the first basalt gap. */
     CAUSEWAY_SOUTH: new Tile(2522, 3594, 0),
@@ -137,18 +136,13 @@ export const HD_TILE = {
 
     /** Lumbridge swamp tar patch, the nearest spawns outside Morytania. */
     SWAMP_TAR: new Tile(3173, 3178, 0),
-    // Why: Rellekka's north-east shore has nine seaweed spawns and is by a long way the nearest to the lighthouse.
-    // Why: Catherby's beach spawns sit on an islet the walker cannot reach.
+    // Why: Rellekka's north-east shore has 9 seaweed spawns and is nearest to the lighthouse; Catherby's are on an islet the walker can't reach.
     SEAWEED: new Tile(2708, 3728, 0),
-    /** Yanille: the sand pit and a Range stand seven tiles apart. */
+    /** Yanille: the sand pit and a Range stand 7 tiles apart. */
     SAND_PIT: new Tile(2541, 3103, 0),
-    /**
-     * East of the Yanille range, which is `forceapproach=east` at angle 0, so
-     * east is east here, and the west side answers nothing at all.
-     */
+    /** East side of the Yanille range, required by `forceapproach=east` at angle 0. */
     YANILLE_RANGE: new Tile(2550, 3099, 0),
-    // Why: Rellekka's furnace is nearer to everything this quest does and refuses anyone who has not finished The Fremennik Trials, so this is East Ardougne's.
-    // Why: it is `forceapproach=east` placed at angle 2, so the only legal side is west in world space, the furnace itself spans (2601-2603,3310-3312).
+    // Why: Rellekka's furnace refuses anyone without The Fremennik Trials, so this is East Ardougne's: `forceapproach=east` at angle 2, so the legal side is west of its (2601-2603,3310-3312) footprint.
     FURNACE: new Tile(2600, 3310, 0),
 
     VARROCK_SWORDSHOP: new Tile(3203, 3395, 0),
@@ -162,10 +156,6 @@ export const ARCHERY_SHOP = { npc: 'Lowe', anchor: HD_TILE.VARROCK_ARCHERY };
 export const RUNE_SHOP = { npc: 'Aubury', anchor: HD_TILE.VARROCK_RUNES };
 export const GENERAL_SHOP = { npc: 'Shop keeper', anchor: HD_TILE.VARROCK_GENERAL };
 
-// Why: every bartender in the game renders "Bartender", so they are found by npc id.
-// Why: `line` is the fragment of the card's own scroll for that bar, which is the only readable progress there is, as `%barcrawl` is not on the wire.
-
-// The ten bars of Alfred Grimhand's barcrawl.
 export const LARRISSA: NpcStop = {
     npc: 'Larrissa',
     anchor: HD_TILE.LARRISSA,
@@ -193,4 +183,3 @@ export const JOSSIK: NpcStop = {
     leash: 8,
     prefer: []
 };
-

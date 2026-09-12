@@ -10,8 +10,7 @@ onmessage = (e) => {
 };
 `;
 
-// One parent-owned timer serves every renderer-off subframe. Firefox can
-// suspend a worker owned by a subframe once that frame stops painting.
+// One parent-owned timer serves every renderer-off subframe, since Firefox can suspend a subframe's worker once that frame stops painting.
 const SHARED_WORKER_SRC = `
 const due = new Map();
 let timer = null;

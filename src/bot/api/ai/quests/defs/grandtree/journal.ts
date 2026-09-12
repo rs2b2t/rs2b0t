@@ -14,10 +14,10 @@ function normalize(lines: readonly string[] | string): string {
         .toLowerCase();
 }
 
-// Why: every finished stage stays on the page as a `@str@` line, and several of them are word-for-word the `@dbl@` line of the stage before, so the needles are matched newest-first.
-// Why: none of them spans a colour tag, because stripping one leaves a space where it stood.
+// Why: every finished stage stays on the page as a `@str@` line, several word-for-word the `@dbl@` line of the stage before, so needles match newest-first.
+// Why: no needle spans a colour tag, because stripping one leaves a space where it stood.
 
-/** Journal needles, highest stage first, the first hit is the stage. */
+/** Journal needles, highest stage first; the first hit is the stage. */
 const NEEDLES: readonly [number, string][] = [
     [GT_STAGE.COMPLETE, 'quest complete!'],
     [GT_STAGE.SEARCHING_DACONIA, 'king narnode has seen the light'],
@@ -48,10 +48,10 @@ export function parseGrandTreeJournal(lines: readonly string[] | string): number
     return undefined;
 }
 
-// Why: reading the journal opens a main modal, and the demon fight is the one place where standing still to do that is punished, so the last reading is kept and only ever moves forward.
+// Why: reading the journal opens a main modal, which the demon fight punishes, so the last reading is kept and only moves forward.
 let lastStage: number | undefined;
 
-/** Test hook: the cached floor survives between quests inside one bundle. */
+/** Test hook; the cached floor survives between quests inside one bundle. */
 export function resetGrandTreeStage(): void {
     lastStage = undefined;
 }

@@ -4,7 +4,7 @@ import { CATHERBY_RANGE } from '../../../../../data/cookingRanges.js';
 
 export const OBS_QUEST = 'Observatory Quest';
 
-/** Exact `%itgronigen` values from quest_itgronigen.constant + quest.constant. */
+/** `%itgronigen` values from quest_itgronigen.constant + quest.constant. */
 export const OBS_STAGE = {
     NOT_STARTED: 0,
     STARTED: 1,
@@ -47,15 +47,15 @@ export const OBS_ITEM = {
     BRONZE_PICKAXE: 'Bronze pickaxe'
 } as const;
 
-/** Three planks, one bar, one glass, the professor counts each hand-over himself. */
+/** 3 planks, 1 bar, 1 glass; the professor counts each hand-over himself. */
 export const PLANKS_NEEDED = 3;
 
-// Why: eight of the cavern's locs render "Chest" and six of them are `shutdungeonchest`, which spawns a poisonous spider on Search, so every lookup down here is by id.
+// Why: 8 of the cavern's locs render "Chest" and 6 of them are `shutdungeonchest`, which spawns a poisonous spider on Search, so every lookup down here is by id.
 export const OBS_LOC = {
     RECEPTION_LADDER: 2187,
     KEY_CHEST_SHUT: 2197,
     KEY_CHEST_OPEN: 2198,
-    /** `keepgate_closed` and its mirrored left half; both answer `_observatory_dungeon_gate`. */
+    /** `keepgate_closed` and its mirrored half; both use `_observatory_dungeon_gate`. */
     GATE_RIGHT: 2199,
     GATE_LEFT: 2200,
     SACK: 2212,
@@ -72,13 +72,13 @@ export const OBS_LOC_NAME = {
     FURNACE: 'Furnace'
 } as const;
 
-// Why: the reception, the cavern and the dome are three pockets of one map, the dome is walled off from the surface, so its only door is the cavern below it.
+// Why: the reception, the cavern and the dome are 3 pockets of one map; the dome is walled off from the surface, so its only door is the cavern below.
 export const OBS_TILE = {
     /** Observatory reception: the professor takes every hand-over here. */
     PROFESSOR: new Tile(2438, 3186, 0),
     /** North of the reception's Climb-down ladder at (2444,3191). */
     RECEPTION_LADDER: new Tile(2444, 3192, 0),
-    /** Where `p_telejump` drops the player, one north of the cavern's exit ladder. */
+    /** Where `p_telejump` drops the player, 1 north of the cavern's exit ladder. */
     DUNGEON_LANDING: new Tile(2420, 9459, 0),
 
     /** South of `loc_2197`, the one chest in the cavern that holds the keep key. */
@@ -94,12 +94,12 @@ export const OBS_TILE = {
     DOME_LADDER_FOOT: new Tile(2423, 9440, 0),
     /** Where that ladder arrives, inside the dome's walls. */
     DOME_ARRIVE: new Tile(2440, 3165, 0),
-    /** North of the telescope at (2440,3157) and four tiles from the professor's dome copy. */
+    /** North of the telescope at (2440,3157) and 4 tiles from the professor's dome copy. */
     TELESCOPE_STAND: new Tile(2440, 3159, 0),
 
-    /** The lone `bucket_sand` spawn, twenty-five tiles east of the reception. */
+    /** The lone `bucket_sand` spawn, 25 tiles east of the reception. */
     SAND_SPAWN: new Tile(2461, 3178, 0),
-    // Why: these two are Horror from the Deep's, already walked live, four plank spawns north-east of the Barbarian Outpost, and the nine-spawn seaweed shore.
+    // Why: these 2 are Horror from the Deep's, already walked live: 4 plank spawns north-east of the Barbarian Outpost and the 9-spawn seaweed shore.
     PLANK_SPAWNS: [
         new Tile(2552, 3574, 0),
         new Tile(2553, 3575, 0),
@@ -112,8 +112,8 @@ export const OBS_TILE = {
     MINE: new Tile(2631, 3146, 0),
     // Why: `furnace1` is `forceapproach=east` placed at angle 2, so the only legal side is west in world space, the furnace spans (2601-2603,3310-3312).
     FURNACE: new Tile(2600, 3310, 0),
-    // Why: Catherby rather than the Fishing Guild range, whose stand sits inside the fence and reports `no path`, and rather than Yanille's, which is 629 tiles from the seaweed shore against Catherby's 284 and then doubles back past Ardougne.
-    // Why: the pair comes from `CATHERBY_RANGE` so the stand cannot drift from the one the cook loops already walk, `useOnLocFrom` stands on that tile, and a wrong side is dropped in silence.
+    // Why: Catherby; the Fishing Guild range's stand sits inside the fence and reports `no path`, and Yanille's is 629 tiles from the seaweed shore against Catherby's 284.
+    // Why: the pair comes from `CATHERBY_RANGE` so the stand can't drift from the one the cook loops walk; `useOnLocFrom` stands on that tile and a wrong side is dropped in silence.
     RANGE_LOC: CATHERBY_RANGE.loc,
     RANGE_STAND: CATHERBY_RANGE.stand,
 
@@ -130,7 +130,7 @@ export const PROFESSOR: NpcStop = {
     ]
 };
 
-/** The dome copy of the professor, the telescope only answers while he is within seven tiles. */
+/** Dome professor position required within seven tiles of the telescope. */
 export const PROFESSOR_DOME = 'Observatory professor';
 
 /** Everything the module ever wants to keep through a spillover deposit. */

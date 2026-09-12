@@ -13,7 +13,7 @@ tools/nav/script-routes.generated.json
 tools/nav/script-routes.hardest.json
 tools/nav/script-travel.generated.json
 
-# secrets & local env — never commit (keys live in ~/code/claude-workspace/.env)
+# secrets and local env; keys live in ~/code/claude-workspace/.env
 .env
 .env.*
 *.pem
@@ -27,7 +27,7 @@ tools/nav/script-travel.generated.json
 # brainstorm visual-companion mockups
 .superpowers/
 
-# specs and implementation plans — written, never committed
+# local specs and implementation plans
 docs/superpowers/
 
 # python bytecode from the nav derivation tools
@@ -37,21 +37,21 @@ __pycache__/
 # local Claude tooling scratch (agents, worktrees, session state)
 .claude/
 
-# recovered farm logins — plaintext, never commit
+# recovered farm logins (plaintext)
 multibox-accounts.recovered.json
 
-# bot wall lockfiles — local state, never commit
+# local bot wall lockfiles
 .b0t-launch.lock/
-# live-harness proof shots — attach to PRs, do not commit multi-MB PNGs
+# live-harness screenshots; attach to PRs
 screenshots/
 
-# operator-only notes (not for token-hungry upstream clones)
+# local operator notes
 docs/local/
 tools/nav/transport-heavy.routes.json
 
-# Local test convenience — soundfont lives in the engine public/, not this repo
+# local test soundfont; the source lives in the engine's public/
 src/3rdparty/SCC1_Florestan.sf2
 
-# Personal agent rules (always-read locally; never upstream)
+# personal agent rules
 CLAUDE.local.md
 

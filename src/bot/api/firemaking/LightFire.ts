@@ -29,7 +29,7 @@ export async function lightFire(logName: string): Promise<LightOutcome> {
     const lit = (): boolean => Skills.xp('firemaking') > xp;
     const blocked = (): boolean => GameMessages.sawSince(mark, CANT_LIGHT);
 
-    // Use tinderbox → logs (same order as working quest/FM paths). Logs→tinderbox is a no-op.
+    // Use tinderbox on logs; logs on tinderbox is a no-op.
     if (!(await tinder.useOn(logs))) {
         return 'stalled';
     }

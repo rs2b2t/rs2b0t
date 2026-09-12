@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { CHEST_FORMS, chestForm } from '#/bot/api/ai/quests/defs/upass/chest.js';
 import { UP_LOC } from '#/bot/api/ai/quests/defs/upass/areas.js';
 
-// Why: `[oploc1,cavewitchchest]` runs `loc_change(cavewitchchestopen, 20)` BEFORE it searches, so for twenty ticks Kardia's chest is loc 3273 carrying `Search` rather than 3272 carrying `Open`. A step that only knows the closed form asks for a loc that is not in the scene, reports the house as unreachable, and spends its round without sending an op, three rounds of that is a leg. Both forms run the same `@search_cavewitch_chest`.
+// Why: the chest changes from loc 3272 `Open` to loc 3273 `Search` for 20 ticks; both run the same script.
 
 const inScene = (...ids: readonly number[]) => (id: number, op: string): boolean =>
     ids.includes(id) && (id === UP_LOC.WITCH_CHEST ? op === 'Open' : op === 'Search');

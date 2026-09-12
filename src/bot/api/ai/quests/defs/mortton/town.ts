@@ -66,7 +66,7 @@ export async function driveOnce(script: readonly string[], log: (m: string) => v
     return !ChatDialog.isOpen();
 }
 
-/** Either face of a villager: the afflicted one, or the one a dose of serum bought a couple of minutes of. */
+/** Either face of a villager: afflicted, or cured for a couple of minutes by a dose of serum. */
 export function villager(cured: string, afflicted: string): Npc | null {
     return Npcs.query().where(n => n.name === cured || n.name === afflicted).within(12).nearest();
 }
@@ -140,8 +140,8 @@ export async function takeDiary(log: (m: string) => void): Promise<boolean> {
     return took || Inventory.countById(SM_ID.DIARY) > 0;
 }
 
-// Why: the quest only starts once the reader reaches page 25, so the book has to be paged all the way through rather than merely opened.
-// Why: `[opheld1,serum_book]` puts an `~objbox` in front of the book, and `~objbox` ends in `p_pausebutton`. The script sits on that chat box until it is clicked, so the book opens after the continue rather than after the Read.
+// Why: the quest only starts once the reader reaches page 25, so the book has to be paged all the way through.
+// Why: `[opheld1,serum_book]` puts an `~objbox` in front of the book, which ends in `p_pausebutton`, so the book opens after the continue.
 
 /** Read the diary to its last page. */
 export async function readDiary(log: (m: string) => void): Promise<boolean> {
@@ -179,9 +179,9 @@ export async function readDiary(log: (m: string) => void): Promise<boolean> {
     return read;
 }
 
-// Why: the table hands out its three herbs once per player and never again, so a search that finds nothing is a dead end rather than a retry.
+// Why: the table hands out its 3 herbs once per player, so a search that finds nothing is a dead end.
 
-/** Search the smashed table for the two tarromin the serums need. */
+/** Search the smashed table for the 2 tarromin the serums need. */
 export async function searchTable(log: (m: string) => void): Promise<boolean> {
     const before = Inventory.countById(SM_ID.UNID_TARROMIN);
     const found = await promptLoc({
@@ -215,7 +215,7 @@ export async function identifyTarromin(log: (m: string) => void): Promise<boolea
 
 const vialSpawn = () => GroundItems.query().where(g => g.id === SM_ID.VIAL_EMPTY).within(8).nearest();
 
-// Why: the two empty-vial spawns in the experiment house are the only source of glass inside Morytania, and they come back on their own timer.
+// Why: the 2 empty-vial spawns in the experiment house are the only glass inside Morytania, and they come back on their own timer.
 
 /** Take an empty vial from the spawns beside the shelf. */
 export async function takeVial(log: (m: string) => void): Promise<boolean> {
@@ -303,7 +303,7 @@ async function fillOrder(order: ShopOrder, log: (m: string) => void): Promise<bo
     return true;
 }
 
-// Why: Razmire's two counters are `opnpc3` and `opnpc4` rather than a plain Trade, and neither op exists while he is afflicted, the dialogue's store menu is the way in that a fresh dose buys.
+// Why: Razmire's counters are `opnpc3` and `opnpc4`, and neither op exists while he is afflicted, so a fresh dose buys the dialogue's store menu as the way in.
 
 /** Open one of Razmire's counters, curing him first if his ops have gone, and buy the order out. */
 export function shopAtRazmire(order: ShopOrder): (log: (m: string) => void) => Promise<boolean> {
@@ -334,7 +334,7 @@ export function shopAtRazmire(order: ShopOrder): (log: (m: string) => void) => P
 
 // Why: the stage-40 conversation ends in the store menu, so the handover, the builders counter and the general counter all fit inside the one dose it costs.
 
-/** Hand Razmire the five sets of remains, then stock both counters on the same visit. */
+/** Hand Razmire the 5 sets of remains, then stock both counters on the same visit. */
 export function handoverAndStock(orders: readonly ShopOrder[]): (log: (m: string) => void) => Promise<boolean> {
     return async (log: (m: string) => void): Promise<boolean> => {
         const [first, ...rest] = orders;
@@ -357,7 +357,7 @@ export function handoverAndStock(orders: readonly ShopOrder[]): (log: (m: string
     };
 }
 
-// Why: the temple loadout fills twenty-seven slots, and the swamp crossing arrives holding a diary that has done its job and whatever the ghasts turned the food into.
+// Why: the temple loadout fills 27 slots, and the swamp crossing arrives holding a spent diary and whatever the ghasts turned the food into.
 
 /** Drop the read diary and the ghasts' leavings. */
 export const dropJunk = (log: (m: string) => void): Promise<boolean> => dropDown(JUNK_IDS.map(id => ({ id, keep: 0 })), log);
@@ -392,8 +392,7 @@ export const ULSQUIRE_TEMPLE_SCRIPT: readonly string[] = ['What can you tell me 
 const SHOP_GENERAL = 'Trade-General-Store';
 const SHOP_BUILDERS = 'Trade-Builders-Store';
 
-// Why: a set is a plank, a brick and five paste, and each one is 800 points into a rebuild that spends about 2600.
-// Why: five is what the stage-45 loadout can carry; a pack with less room buys fewer sets and comes back, which the empty-pool branch already handles.
+// Why: a set is a plank, a brick and 5 paste, worth 800 points of a rebuild that spends about 2600; 5 is what the stage-45 loadout can carry, and a smaller pack buys fewer and comes back.
 export const BUILD_SETS = 5;
 export const PASTE_PER_SET = 6;
 

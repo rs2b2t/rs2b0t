@@ -3,7 +3,7 @@ import type { CarryEntry } from '../loadout/loadouts.js';
 export interface BoostPotion {
     /** The skill the dose lifts. */
     skill: string;
-    /** Paint label, kept to three characters so a boost row still fits three columns. */
+    /** Paint label, kept to 3 characters so a boost row still fits 3 columns. */
     short: string;
     /** The dose form drawn when the loadout names none. */
     flask: string;
@@ -18,7 +18,7 @@ function superPotion(skill: string, short: string, label: string): BoostPotion {
 export const SUPER_ATTACK: BoostPotion = superPotion('attack', 'Att', 'Super attack');
 export const SUPER_STRENGTH: BoostPotion = superPotion('strength', 'Str', 'Super strength');
 
-// Why: the server runs one op per tick and drops the rest, so a fixed order is what makes "one sip per tick" a decision rather than a race.
+// Why: the server runs one op per tick and drops the rest, so a fixed order makes "one sip per tick" deterministic.
 
 /** Checked in this order; attack wins a tick both could use. */
 export const BOOST_POTIONS: readonly BoostPotion[] = [SUPER_ATTACK, SUPER_STRENGTH];
@@ -45,7 +45,7 @@ export interface PotionPlan {
     want: number;
 }
 
-/** The potions to carry, taking the dose form and count from the loadout and falling back to one three-dose flask of each. */
+/** The potions to carry, taking the dose form and count from the loadout and falling back to one 3-dose flask of each. */
 export function plannedPotions(carry: readonly CarryEntry[]): PotionPlan[] {
     return BOOST_POTIONS.map(potion => {
         for (const entry of carry) {

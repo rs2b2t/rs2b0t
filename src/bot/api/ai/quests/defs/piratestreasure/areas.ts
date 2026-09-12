@@ -36,14 +36,14 @@ export const PT_NAME = {
     BANANA: 'Banana'
 } as const;
 
-// Why: ordinary `crate` and `crate3` also render "Crate" with op1=Search, and four of them stand within six tiles of Wydin's grocery crate. The nearest is rarely the one the quest means.
+// Why: ordinary `crate` and `crate3` also render "Crate" with op1=Search, and 4 of them stand within 6 tiles of Wydin's grocery crate, so the nearest is rarely the right one.
 export const PT_LOC = {
     GROCERY_CRATE: 2071,
     BANANA_CRATE: 2072,
     PIRATE_CHEST: 2079
 } as const;
 
-// Why: a tree keeps the name "Banana Tree" and its Search op through every stage down to empty, so matching by name re-picks a bare tree forever, 2078 is the empty one and the five that still bear fruit are the only valid targets.
+// Why: a tree keeps the name "Banana Tree" and its Search op down to empty, so matching by name re-picks a bare tree forever; 2078 is the empty one and the 5 with fruit are the only targets.
 export const BANANA_TREE_IDS: readonly number[] = [2073, 2074, 2075, 2076, 2077];
 
 export const PT_TILE = {

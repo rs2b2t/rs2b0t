@@ -1,6 +1,4 @@
-/**
- * Apply curated state-aware activations: strip disabledReason and attach requires.
- */
+/** Apply curated state-aware activations: strip disabledReason and attach requires. */
 
 import type { TransportEdgeData } from './PathFinder.js';
 import { activationForEdge, isStateDeferredReason } from './stateAwareRequires.js';
@@ -8,10 +6,7 @@ import type { TransportRequires } from './types.js';
 
 type EdgeWithRequires = TransportEdgeData & { requires?: TransportRequires };
 
-/**
- * Map pipeline rows → routable edges with optional requires.
- * State-deferred rows with a curated activation become active.
- */
+/** Pipeline rows to routable edges; a state-deferred row with a curated activation becomes active with its requires. */
 export function activateTransportRows(rows: readonly TransportEdgeData[]): EdgeWithRequires[] {
     const out: EdgeWithRequires[] = [];
     for (const edge of rows) {

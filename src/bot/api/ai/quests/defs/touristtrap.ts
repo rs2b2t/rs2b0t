@@ -21,10 +21,9 @@ import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { earnQuestCoinsStep } from '../exec/fundCoins.js';
 import { QuestFood } from '../food.js';
 
-// Why: the journal deliberately collapses the hidden transport stages 19..26 and reward choices 27..29.
-// Why: those ranges are resolved through authoritative world and inventory probes below rather than guessed varps.
+// Why: the journal collapses the hidden transport stages 19..26 and reward choices 27..29, so the world and inventory probes below resolve those ranges.
 
-// The client-visible Tourist Trap oracle.
+// Stages the client can see.
 export const TOURIST_TRAP_STAGE = {
     NOT_STARTED: 0,
     STARTED: 1,
@@ -60,7 +59,7 @@ function journalText(lines: readonly string[] | string): string {
 export function parseTouristTrapJournal(lines: readonly string[] | string): number | undefined {
     const text = journalText(lines);
 
-    // The journal is cumulative. Always test the newest visible milestone first.
+    // The journal is cumulative, so test the newest milestone first.
     if (text.includes('quest complete!')) return TOURIST_TRAP_STAGE.COMPLETE;
     if (text.includes('talk to irena') && text.includes('for my reward')) return TOURIST_TRAP_STAGE.REWARD;
     if (text.includes('get ana') && text.includes('her barrel') && text.includes('out of this mine camp')) {
@@ -90,7 +89,7 @@ export function parseTouristTrapJournal(lines: readonly string[] | string): numb
 }
 
 async function readTouristTrapStage(): Promise<number | undefined> {
-    // The 2004 journal title is "Tourist Trap" while some quest-list revisions use "The".
+    // The 2004 journal calls it "Tourist Trap"; some quest-list revisions add "The".
     const names = ['The Tourist Trap', 'Tourist Trap'];
     const statuses = names.map(name => ({ name, status: Quests.status(name) }));
     if (statuses.some(entry => entry.status === 'complete')) return TOURIST_TRAP_STAGE.COMPLETE;
@@ -126,7 +125,7 @@ type TouristTrapArea =
 export function touristTrapArea(tile: QuestSnapshot['tile']): TouristTrapArea {
     if (!tile) return 'unknown';
 
-    // These cells are contained by the broader camp/mine rectangles, so test them first.
+    // The cells sit inside the camp/mine rectangles, so test them first.
     const inSurfaceCell = tile.level === 0 && tile.x >= 3284 && tile.x <= 3286 && tile.z >= 3032 && tile.z <= 3036;
     const escapeTiles = new Set(['3283,3032', '3282,3037', '3279,3038', '3277,3039', '3275,3040']);
     const onSurfaceEscapeRocks = tile.level === 0 && escapeTiles.has(`${tile.x},${tile.z}`);
@@ -137,8 +136,7 @@ export function touristTrapArea(tile: QuestSnapshot['tile']): TouristTrapArea {
         return tile.level === 1 ? 'campUpper' : 'campSurface';
     }
     if (tile.level === 0 && tile.x >= 3264 && tile.x <= 3327 && tile.z >= 9408 && tile.z <= 9471) {
-        // These ordered predicates were checked against every walkable tile in m51_147. The
-        // cave wall, punishment gate, and cart each divide otherwise adjacent map coordinates.
+        // Order checked against every walkable tile in m51_147; the cave wall, punishment gate and cart each split adjacent coordinates.
         if (tile.x <= 3282) return 'mineEntrance';
         if (tile.x >= 3285 && tile.x <= 3292 && tile.z >= 9429 && tile.z <= 9452) return 'undergroundJail';
         if (tile.x >= 3315 || tile.z >= 9428) return 'mineDeep';
@@ -173,12 +171,10 @@ const CAPTAIN = new Tile(3270, 3029, 0);
 const CAMP_GATE = new Tile(3273, 3029, 0);
 const SLAVE = new Tile(3302, 3016, 0);
 const MINE_ENTRANCE = new Tile(3301, 3036, 0);
-// Source-authored reverse cave landing, on the guards' reachable west-mine component. The nearby
-// (3279, 9420) tile is visually plausible but belongs to a sealed collision component.
+// Source reverse-cave landing on the guards' west-mine component. (3279,9420) looks right but is a sealed collision component.
 const CAVE_GUARD = new Tile(3278, 9415, 0);
 const AL_SHABIM = new Tile(3171, 3025, 0);
-// Why: interior tent tiles such as (3169,3046) are a sealed collision component, and a walk stops as "unreachable" from Shantay or Irena with best about 135.
-// Why: the approach is one tile south of the door, then Walk-through into the tent for the anvil.
+// Why: interior tent tiles like (3169,3046) are a sealed collision component (walks from Shantay or Irena stop "unreachable", best about 135), so stand 1 south of the door and Walk-through.
 const BEDABIN_TENT_APPROACH = new Tile(3169, 3045, 0);
 const EXPERIMENTAL_ANVIL = new Tile(3171, 3048, 0);
 const CAMP_LADDER = new Tile(3290, 3036, 0);
@@ -195,14 +191,11 @@ const CAVE_OUTER_LANDING = new Tile(3278, 9415, 0);
 const CAVE_INNER_LANDING = new Tile(3286, 9415, 0);
 const MINE_EXIT_DOOR = new Tile(3278, 9426, 0);
 const MINE_EXIT_INSIDE_STAND = new Tile(3278, 9427, 0);
-// The two-tile winch loc starts at (3279,3017); that origin is occupied collision. Approach it
-// from the source-map's open south-east tile instead of asking the walker to enter the loc.
+// The winch loc's origin (3279,3017) is occupied collision, so approach from the open south-east tile.
 const SURFACE_WINCH_APPROACH = new Tile(3280, 3018, 0);
-// This walkable tile is three tiles from only the quest's upper barrel at (3278,3017), keeping
-// the other decorative full barrel outside locAt's coordinate filter.
+// 3 tiles from the quest's upper barrel at (3278,3017) only; the decorative full barrel stays outside locAt's filter.
 const SURFACE_BARREL_APPROACH = new Tile(3281, 3017, 0);
-// The cart's (3287,3023) origin is occupied by its 2x3 footprint. Its clear west edge also keeps
-// the driver at (3287,3022) inside the strict dialogue leash.
+// The cart's origin (3287,3023) is inside its 2x3 footprint; the west edge keeps the driver at (3287,3022) within the dialogue leash.
 const SURFACE_CART_APPROACH = new Tile(3286, 3023, 0);
 const SURFACE_JAIL = new Tile(3285, 3034, 0);
 const UNDERGROUND_JAIL = new Tile(3288, 9437, 0);
@@ -347,7 +340,7 @@ export function strictTouristTrapChoice(options: readonly string[], prefer: read
     return options.find(option => allowed.has(normalizeChoice(option))) ?? null;
 }
 
-/** Strict, quest-local dialogue driver. It never guesses when a menu changes. */
+/** Strict quest-local dialogue driver; it never guesses when a menu changes. */
 async function driveStrictDialog(
     prefer: readonly string[],
     log: (m: string) => void,
@@ -375,8 +368,7 @@ async function driveStrictDialog(
         }
         if (!ChatDialog.isOpen()) {
             if (!until || reachedUntil) return true;
-            // Some source-authored conversations deliberately close the modal for several ticks
-            // before continuing. An item/stage predicate distinguishes that gap from completion.
+            // Some source conversations close the modal for a few ticks mid-flow; the until predicate tells that gap from completion.
             await Execution.delayTicks(1);
             continue;
         }
@@ -459,8 +451,7 @@ async function interactLoc(
     until?: () => boolean
 ): Promise<boolean> {
     if (!(await walk(anchor, 3, log))) return false;
-    // World-walk may execute a transport edge while approaching the loc. Honor the exact
-    // postcondition before looking for an object that is now in the previous scene.
+    // The walk may take a transport edge on the way, so check the postcondition before looking for a loc that's now in the previous scene.
     if (until?.()) return true;
     const loc = locAt(ids, op, anchor, 10);
     if (!loc) {
@@ -551,7 +542,7 @@ function outfitCopies(snap: QuestSnapshot, outfit: readonly string[]): number {
 }
 
 function bankStep(items: { name: string; qty: number }[]): QuestStep {
-    // Nearest bank, mid-desert recovery must not walk to Draynor from Al Kharid.
+    // Nearest bank; mid-desert recovery shouldn't walk from Al Kharid to Draynor.
     return { kind: 'withdraw', items };
 }
 
@@ -663,7 +654,7 @@ async function buyKebabs(target: number, log: (m: string) => void): Promise<bool
         if (EventSignal.pending()) return false;
         if (Inventory.count(ITEM.COINS) < 1 || Inventory.isFull()) return false;
         const before = Inventory.count(ITEM.KEBAB);
-        // Kebab seller has no shop interface; this strict path is the canonical purchase.
+        // The Kebab seller has no shop interface, only this dialogue.
         const seller = Npcs.query().name('Kebab seller').within(8).nearest();
         if (!seller) return false;
         const op = talkAction(seller.actions());
@@ -716,7 +707,7 @@ function preparationAcquisitionStep(snap: QuestSnapshot): QuestStep | null {
 
     const alreadySouth = ['irena', 'desert', 'bedabin'].includes(touristTrapArea(snap.tile));
 
-    // This single explicit funding step covers every known purchase and the driver's bribe.
+    // One funding step covers every purchase and the driver's bribe.
     if (!alreadySouth && heldCount(snap, ITEM.COINS) < 1000) {
         const coins = withdrawBankedShortage(snap, ITEM.COINS, 1000);
         if (coins) return coins;
@@ -745,8 +736,7 @@ function preparationAcquisitionStep(snap: QuestSnapshot): QuestStep | null {
     }
 
     for (const target of INITIAL_SHANTAY_TARGETS) {
-        // Crossing south consumes the pass. Once the player is already in the desert, buying a
-        // replacement would route straight back north and prevent the quest from ever starting.
+        // Crossing south consumes the pass; buying another from the desert would route you back north and the quest would never start.
         if (target.name === ITEM.PASS && alreadySouth) {
             continue;
         }
@@ -780,8 +770,7 @@ function preparationStep(snap: QuestSnapshot): QuestStep | null {
 }
 
 async function ensureEquipment(required: readonly string[], allowed: readonly string[], log: (m: string) => void): Promise<boolean> {
-    // Equip replacements first: an item in the same slot swaps atomically and avoids needing a
-    // spare pack slot merely to remove the old garment.
+    // Equip first: a same-slot swap is atomic and needs no spare pack slot for the old garment.
     for (const item of required) {
         if (!Equipment.contains(item) && !(await Equipment.equip(item))) {
             log(`could not equip required Tourist Trap item '${item}'`);
@@ -807,7 +796,7 @@ async function wearDesertOutfitForSpace(log: (m: string) => void): Promise<boole
 }
 
 async function wearSlaveLoadout(log: (m: string) => void): Promise<boolean> {
-    // A pickaxe is the one weapon category explicitly allowed by the camp equipment search.
+    // A pickaxe is the one weapon the camp equipment search allows.
     return ensureEquipment([...SLAVE_OUTFIT, ITEM.PICKAXE], [...SLAVE_OUTFIT, ITEM.PICKAXE], log);
 }
 
@@ -826,8 +815,7 @@ async function waitOutCombat(timeoutMs: number): Promise<boolean> {
 }
 
 async function crossShantayPass(log: (m: string) => void): Promise<boolean> {
-    // Why: the pass loc is on the south side of its own closed collision barrier, so walking to it from the mainland asks the web walker for an impossible pre-interaction route.
-    // Why: the approach is therefore made from the side the player is on before dispatching Go-through.
+    // Why: the pass loc sits south of its own closed collision barrier, so walk to the near side first and then send Go-through.
     if (!(await walk(SHANTAY_NORTH_APPROACH, 1, log))) return false;
     const pass = locAt([LOC.SHANTAY_PASS], 'Go-through', SHANTAY_PASS, 6);
     if (!pass || !(await pass.interact('Go-through'))) return false;
@@ -860,8 +848,7 @@ async function challengeCaptain(log: (m: string) => void): Promise<boolean> {
 }
 
 async function provokeAndDefeatCaptain(log: (m: string) => void): Promise<boolean> {
-    // Stage 3 can be resumed after a client restart before combat begins. The captain refuses a
-    // cold Attack (and nearby guards may intervene), so always replay the guaranteed solo taunt.
+    // Stage 3 can resume after a restart before combat; the captain refuses a cold Attack and guards may join, so replay the taunt.
     if (!Game.inCombat() && !(await challengeCaptain(log))) return false;
     await Execution.delayUntil(() => Game.inCombat(), 5000);
     if (Game.inCombat()) {
@@ -881,8 +868,7 @@ async function enterCamp(log: (m: string) => void): Promise<boolean> {
 }
 
 async function leaveCamp(log: (m: string) => void): Promise<boolean> {
-    // Why: the outer gate only rejects slave clothing and does not require a complete desert outfit.
-    // Why: an atomic swap is preferred when the full outfit survived, with recovery after a missing desert piece by stripping the slave disguise before leaving.
+    // Why: the outer gate only rejects slave clothing, so swap to the full desert outfit if it survived and otherwise strip the slave disguise before leaving.
     const hasFullDesertOutfit = DESERT_OUTFIT.every(item => Equipment.contains(item) || Inventory.contains(item));
     const safelyDressed = hasFullDesertOutfit
         ? await ensureEquipment(DESERT_OUTFIT, [...DESERT_OUTFIT, ITEM.PICKAXE], log)
@@ -900,8 +886,7 @@ async function leaveCamp(log: (m: string) => void): Promise<boolean> {
 }
 
 async function enterMine(log: (m: string) => void): Promise<boolean> {
-    // The doors require only the three slave garments. A pickaxe is useful preparation but must
-    // not strand rescue recovery if it was lost; the punishment cell has its own spawn.
+    // The doors need only the 3 slave garments. A lost pickaxe shouldn't block rescue recovery; the punishment cell spawns its own.
     if (!(await wearSlaveDisguiseOnly(log))) return false;
     if (!(await interactLoc(LOC.SURFACE_MINE_DOOR, 'Open', MINE_ENTRANCE, log))) return false;
     return Execution.delayUntil(() => {
@@ -914,8 +899,7 @@ async function leaveMine(log: (m: string) => void): Promise<boolean> {
     if (!(await wearSlaveDisguiseOnly(log))) return false;
     if (touristTrapArea(Game.tile()) === 'mineLower' && !(await crossMineCave(false, log))) return false;
     if (touristTrapArea(Game.tile()) !== 'mineEntrance') return false;
-    // The loc origin is across the closed door. Targeting it makes world-walk execute the door
-    // transport and then chase a stale underground destination after arriving on the surface.
+    // The loc origin is across the closed door; targeting it makes the walker take the door transport and then chase a stale underground tile from the surface.
     if (!(await walk(MINE_EXIT_INSIDE_STAND, 0, log))) {
         log('could not reach the inside stand for the underground mine exit');
         return false;
@@ -938,8 +922,7 @@ async function climbCampLadder(up: boolean, log: (m: string) => void): Promise<b
 }
 
 async function slaveUnlockAndTrade(log: (m: string) => void): Promise<boolean> {
-    // Success, failure/retry, and the immediate trade are one bounded interaction. This keeps a
-    // random lockpick result from leaving a choice menu open between engine ticks.
+    // Success, retry and the trade are one bounded interaction, so a random lockpick result can't leave a choice menu open between ticks.
     return talkStrict(
         [NPC.SLAVE, NPC.ESCAPED_SLAVE],
         SLAVE,
@@ -1007,8 +990,7 @@ async function givePineapple(log: (m: string) => void): Promise<boolean> {
 }
 
 async function crossMineCave(toInnerMine: boolean, log: (m: string) => void): Promise<boolean> {
-    // Approach the directional cave pair from its source-authored landing tile. The cave loc
-    // tiles themselves are wall-separated collision slivers and are not valid walk targets.
+    // Approach from the source landing tile; the cave loc tiles are wall-separated collision slivers and can't be walked to.
     const anchor = toInnerMine ? CAVE_OUTER_LANDING : CAVE_INNER_LANDING;
     const landing = toInnerMine ? CAVE_INNER_LANDING : CAVE_OUTER_LANDING;
     const atLanding = (): boolean => {
@@ -1025,8 +1007,7 @@ async function crossMineCave(toInnerMine: boolean, log: (m: string) => void): Pr
             await Execution.delayTicks(1);
         }
     }
-    // The broad mine regions overlap approach tiles, so only the source-authored landing proves
-    // that the delayed cave transport completed.
+    // The mine regions overlap the approach tiles, so only the source landing proves the delayed transport ran.
     log(`mine cave transit did not reach (${landing.x},${landing.z}) after 3 attempts`);
     return false;
 }
@@ -1056,7 +1037,7 @@ async function escapeSurfaceJail(log: (m: string) => void): Promise<boolean> {
             continue;
         }
 
-        // The fourth, westernmost rock is a distinct one-way descent, not another Climb-to.
+        // The 4th, westernmost rock is a one-way Climb down.
         const descent = Locs.query()
             .where(loc => loc.id === 2697 && loc.tile().x < tile.x)
             .action('Climb down')
@@ -1102,8 +1083,7 @@ async function dropPunishmentJunkUntil(slots: number, log: (m: string) => void):
 }
 
 function punishmentRockCount(): number {
-    // Common Rock (968) has the same display name, but the gate accepts only thpunishrock
-    // (1855). Counting by name can therefore stop the mining loop before the gate will open.
+    // Common Rock (968) shares the display name but the gate only takes thpunishrock (1855), so count by id.
     return Inventory.items()
         .filter(item => item.id === PUNISHMENT_ROCK_ID)
         .reduce((sum, item) => sum + item.count, 0);
@@ -1116,8 +1096,7 @@ function liveHasSlaveOutfit(): boolean {
 async function recoverSlaveOutfitFromRowdy(log: (m: string) => void): Promise<boolean> {
     if (liveHasSlaveOutfit()) return true;
 
-    // Why: the live Rowdy-slave death script checks the backpack only.
-    // Why: every surviving worn piece moves into the pack before the first kill, so its deterministic shirt, robe, boots sequence cannot repeat an earlier piece.
+    // Why: the live Rowdy-slave death script checks the backpack only, so every surviving worn piece goes into the pack first or its shirt, robe, boots sequence repeats a piece.
     const requiredSlots = SLAVE_OUTFIT.filter(item => !Inventory.contains(item)).length;
     if (Inventory.free() < requiredSlots && !(await dropPunishmentJunkUntil(requiredSlots, log))) {
         return false;
@@ -1198,8 +1177,7 @@ async function escapeUndergroundJail(log: (m: string) => void): Promise<boolean>
     }
     while (punishmentRockCount() < 15) {
         const before = punishmentRockCount();
-        // Why: identically named punishment rocks stand across the closed gate, so once the nearby veins are depleted a distance-only query clicks one in the other component forever.
-        // Why: the interaction stays on a rock whose tile or cardinal interaction edge is reachable from the live jail component, waiting for a local vein to respawn if needed.
+        // Why: identical punishment rocks stand across the closed gate and a distance-only query clicks those forever once the near veins are gone, so stay on a reachable rock and wait for respawns.
         const rock = Locs.query()
             .where(loc => loc.id === LOC.PUNISHMENT_ROCK
                 && Reachability.canReach(loc.tile(), { adjacentOk: true }))
@@ -1233,8 +1211,7 @@ async function askAlForLostKeyAndPlans(log: (m: string) => void): Promise<boolea
 }
 
 async function askAlForLostPlansAndTip(log: (m: string) => void): Promise<boolean> {
-    // At stage 14 this is still the menu label; the plans/tips wording appears only in the
-    // automatic player chat after selecting it.
+    // At stage 14 this is still the menu label; the plans/tips wording only appears in the player chat after picking it.
     return talkStrict(NPC.AL_SHABIM, AL_SHABIM, ["I've lost the key and the plans!"], log, 10, () => Inventory.contains(ITEM.BEDABIN_KEY));
 }
 
@@ -1248,8 +1225,7 @@ async function stealTechnicalPlans(log: (m: string) => void): Promise<boolean> {
     if (!(await interactLoc([LOC.BOOKCASE], 'Search', SIAD_BOOKCASE, log))) return false;
     if (!(await talkStrict(NPC.SIAD, new Tile(3291, 3032, 1), SIAD_DISTRACTION, log, 8))) return false;
 
-    // The distraction is consumed by the next chest attempt. Approach from the north so pathing
-    // cannot wander back through Siad's line of sight before opening it.
+    // The next chest attempt consumes the distraction, so approach from the north and stay out of Siad's line of sight.
     const northOfChest = new Tile(3292, 3034, 1);
     if (!(await walk(northOfChest, 0, log))) return false;
     const chest = locAt([LOC.CHEST], 'Open', SIAD_CHEST, 5);
@@ -1307,16 +1283,14 @@ async function forgePrototypeTip(log: (m: string) => void): Promise<boolean> {
     const bar = Inventory.first(ITEM.BAR);
     const anvil = Locs.query().where(loc => loc.id === LOC.ANVIL).within(8).nearest();
     if (!bar || !anvil) return false;
-    // A prior unlucky attempt remains in the chatbox; only a message emitted after this bar
-    // was submitted can terminate this attempt as wasted.
+    // An earlier unlucky line is still in the chatbox; only a message after this bar goes in counts as wasted.
     const forgeMark = GameMessages.mark();
     if (!(await bar.useOn(anvil))) return false;
     if (!(await Execution.delayUntil(
         () => ChatDialog.isOpen() || ChatDialog.canContinue() || Inventory.contains(ITEM.DART_TIP),
         8000
     ))) return false;
-    // The source consumes the bar well before its final success roll and item award. Keep
-    // pumping the exact anvil dialogue until the tip exists, or the unlucky-waste line fires.
+    // The source consumes the bar before the success roll, so keep driving the anvil dialogue until the tip exists or the waste line fires.
     const forged = await driveStrictDialog(
         ANVIL_DIALOG,
         log,
@@ -1336,8 +1310,7 @@ async function fletchPrototypeDart(log: (m: string) => void): Promise<boolean> {
     if (!feathers || !tip || Inventory.count(ITEM.FEATHER) < 10) return false;
     if (!(await feathers.useOn(tip))) return false;
     if (!(await drainInteractionDialog([], log))) return false;
-    // A failed attempt consumes feathers without producing the dart. Only the product itself is
-    // an authoritative success signal; the next engine pass can source another ten feathers.
+    // A failed attempt eats the feathers with no dart, so only the dart proves success; the next pass can buy 10 more.
     return Execution.delayUntil(() => Inventory.contains(ITEM.DART), 12_000);
 }
 
@@ -1362,8 +1335,7 @@ async function returnFromDeepMine(log: (m: string) => void): Promise<boolean> {
 async function returnToPunishmentMineForOutfit(log: (m: string) => void): Promise<boolean> {
     let area = touristTrapArea(Game.tile());
     if (area === 'mineDeep') {
-        // The cart refuses a player carrying Ana. Preserve the canonical rescue state by
-        // sending her barrel first; the collapsed-stage probe recovers it again later.
+        // The cart refuses you while carrying Ana, so send her barrel first; the collapsed-stage probe picks her up later.
         if (Inventory.contains(ITEM.ANA_BARREL)) {
             if (!(await useItemOnLoc(ITEM.ANA_BARREL, [LOC.MINE_CART], DEEP_CART, log))) return false;
             if (!(await Execution.delayUntil(() => !Inventory.contains(ITEM.ANA_BARREL), 8000))) return false;
@@ -1372,19 +1344,16 @@ async function returnToPunishmentMineForOutfit(log: (m: string) => void): Promis
         area = touristTrapArea(Game.tile());
     }
     if (area === 'mineLower' && Inventory.contains(ITEM.ANA_BARREL)) {
-        // Why: a guard capture deletes Ana's barrel without establishing a recovery transport bit.
-        // Why: she goes on the source-authored lift first, so the collapsed-stage probe can retrieve her after the disguise has been restored.
+        // Why: a guard capture deletes Ana's barrel without setting a recovery transport bit, so she goes on the lift first and the collapsed-stage probe fetches her once the disguise is back.
         if (!(await useItemOnLoc(ITEM.ANA_BARREL, [LOC.LIFT_BUCKET], LIFT_BUCKET, log, LIFT_GUARD_DIALOG))) return false;
         if (!(await Execution.delayUntil(() => !Inventory.contains(ITEM.ANA_BARREL), 8000))) return false;
     }
     if (area !== 'mineLower' && area !== 'mineEntrance') return false;
 
-    // Approaching either side of the guarded cave without the complete worn disguise invokes
-    // the source-authored search/capture path and puts the player beside the Rowdy slave.
+    // Approaching the guarded cave without the full worn disguise triggers the search/capture and puts you beside the Rowdy slave.
     const anchor = area === 'mineLower' ? new Tile(3286, 9415, 0) : new Tile(3281, 9415, 0);
     if (!(await interactLoc(LOC.MINE_CAVE, 'Walk through', anchor, log))) return false;
-    // Before the pineapple milestone the same search goes to the surface cell; from stage 17
-    // onward it goes to the underground punishment mine beside the Rowdy slave.
+    // Before the pineapple milestone the search sends you to the surface cell; from stage 17 it's the underground punishment mine.
     return Execution.delayUntil(() => {
         const destination = touristTrapArea(Game.tile());
         return destination === 'surfaceJail' || destination === 'undergroundJail';
@@ -1500,8 +1469,7 @@ function sourceConsumable(snap: QuestSnapshot, name: string, target: number): Qu
 
 async function freeOneRescueSlot(log: (m: string) => void): Promise<boolean> {
     if (Inventory.free() >= 1) return true;
-    // At stage 17+ the prototype is complete. These are expendable surplus only; never drop a
-    // key, disguise, rescue barrel, coins, or the pickaxe needed by punishment recovery.
+    // From stage 17 the prototype is done, so these are surplus. Never drop a key, disguise, rescue barrel, coins or the pickaxe.
     for (const name of ['Waterskin(0)', ITEM.HAMMER, ITEM.BAR, ITEM.FEATHER, ITEM.PASS, ITEM.KEBAB]) {
         const item = Inventory.first(name);
         if (!item) continue;
@@ -1550,7 +1518,7 @@ async function searchSurfaceBarrel(log: (m: string) => void): Promise<boolean> {
         8000
     );
     if (!anaResponse) {
-        // The source intentionally sends no message when this exact barrel has no Ana bit.
+        // The source sends no message when this barrel has no Ana bit.
         log('lift checkpoint: top barrel contained no Ana response');
         return false;
     }
@@ -1597,8 +1565,7 @@ async function rideMineCart(anchor: Tile, log: (m: string) => void): Promise<boo
 
 async function catchAnaInBarrel(log: (m: string) => void): Promise<boolean> {
     if (Inventory.contains(ITEM.ANA_BARREL)) return true;
-    // Re-catching Ana with stale transport bits inserts two delayed messages before the catch.
-    // Her final complaint is the source-authored acknowledgement that every gap was driven.
+    // Re-catching Ana with stale transport bits adds 2 delayed messages before the catch; her final complaint means every gap was driven.
     const completed = await useItemOnNpc(
         ITEM.BARREL,
         NPC.ANA,
@@ -1650,8 +1617,7 @@ async function deepToLowerCheckpoint(log: (m: string) => void): Promise<boolean>
     }
     if (!(await rideMineCart(DEEP_CART, log))) return false;
     if (!(await searchLowerBarrel(false, log))) return false;
-    // In hidden stage 20 this exact barrel returns Ana (stage 21). If it offered an ordinary
-    // barrel, choosing No is a non-mutating proof that Ana has already moved to the lift.
+    // At hidden stage 20 this barrel returns Ana (stage 21). If it offers an ordinary barrel, No changes nothing and proves Ana is already on the lift.
     return Inventory.contains(ITEM.ANA_BARREL) || touristTrapArea(Game.tile()) === 'mineLower';
 }
 
@@ -1698,8 +1664,7 @@ async function retrieveFromSurfaceLift(log: (m: string) => void): Promise<boolea
         log('lift checkpoint: surface winch interaction could not be dispatched');
         return false;
     }
-    // Empty and Ana-bearing lift results use different protocols after the same server delay:
-    // the former is a game message, while the latter is a multi-page modal dialogue.
+    // After the same server delay an empty lift gives a game message and an Ana lift gives a multi-page modal.
     const followedUp = await Execution.delayUntil(
         () => GameMessages.sawSince(winchMark, emptyWinchFollowup) || dialogMatches(anaWinchFollowup),
         8000
@@ -1731,11 +1696,9 @@ async function bribeDriverAndEscape(log: (m: string) => void): Promise<boolean> 
         }
     }
 
-    // A reload may occur after the driver was paid but before boarding. Search first: when the
-    // ready bit is set this is the authoritative, coin-free completion action.
+    // A reload can land after paying the driver but before boarding, so Search first; with the ready bit set it boards for free.
     if (await interactLoc([LOC.SURFACE_CART], 'Search', SURFACE_CART_APPROACH, log, ["Yes, I'll get on."])) {
-        // Boarding closes its choice modal for p_delay(1) before teleporting and returning Ana.
-        // Wait for that exact result so a driver interaction cannot cancel an authorized ride.
+        // Boarding closes its choice modal for p_delay(1) before teleporting with Ana; wait for that so a driver click can't cancel the ride.
         const escaped = await Execution.delayUntil(
             () => touristTrapArea(Game.tile()) === 'desert' && Inventory.contains(ITEM.ANA_BARREL),
             8000
@@ -1747,8 +1710,7 @@ async function bribeDriverAndEscape(log: (m: string) => void): Promise<boolean> 
     }
     log('surface cart: ready-state boarding was not available');
 
-    // On a restart with the quest's coins banked, use the source-authored prison-riot appeal.
-    // The clean run still takes the exact 100-Coin bribe path.
+    // With the coins banked after a restart use the prison-riot appeal; a clean run pays the 100-coin bribe.
     const coinsSufficient = Inventory.count(ITEM.COINS) >= 100;
     const coinsBefore = Inventory.count(ITEM.COINS);
     const dialog = coinsSufficient ? DRIVER_DIALOG : DRIVER_NO_COIN_DIALOG;
@@ -1775,8 +1737,7 @@ async function bribeDriverAndEscape(log: (m: string) => void): Promise<boolean> 
 }
 
 async function lowerRescueCheckpoint(log: (m: string) => void): Promise<boolean> {
-    // A failed lower-cart Agility roll leaves this exact state. Retry beside the cart; taking
-    // the lift/surface recovery route here discards a ready barrel and can loop for minutes.
+    // A failed lower-cart Agility roll leaves this state. Retry beside the cart; the lift/surface route would throw away a ready barrel and loop for minutes.
     if (Inventory.contains(ITEM.BARREL)) {
         log('lower checkpoint: empty barrel ready after a failed cart roll; retrying the cart in place');
         return rideMineCart(LOWER_CART, log);
@@ -1785,7 +1746,7 @@ async function lowerRescueCheckpoint(log: (m: string) => void): Promise<boolean>
         if (!(await searchLowerBarrel(false, log))) return false;
         if (Inventory.contains(ITEM.ANA_BARREL)) return true;
     }
-    // A no-item ordinary-barrel probe authoritatively identifies hidden stage 22.
+    // An ordinary-barrel probe with no item means hidden stage 22.
     return retrieveFromSurfaceLift(log);
 }
 
@@ -1806,14 +1767,12 @@ export async function runSurfaceRescueCheckpoint(
     await operations.maintainSurvival();
     if (EventSignal.pending()) return false;
     if (!operations.hasAnaBarrel()) {
-        // Safe at hidden stages 22, 23, and 25: repeated winch use is harmless, and the exact
-        // top barrel only yields Ana when its transport bit is set.
+        // Safe at hidden stages 22, 23 and 25: the winch is harmless to repeat and the top barrel only yields Ana with its transport bit set.
         if (await operations.retrieveLift(log)) return true;
         await operations.maintainSurvival();
         if (EventSignal.pending()) return false;
     }
-    // Hidden stage 25 has Ana on this cart. Retry the full strict driver sequence before
-    // concluding that every transport bit is clear.
+    // Hidden stage 25 has Ana on this cart, so retry the full driver sequence before treating every transport bit as clear.
     for (let attempt = 1; attempt <= 3; attempt++) {
         await operations.maintainSurvival();
         if (EventSignal.pending()) return false;
@@ -1826,14 +1785,12 @@ export async function runSurfaceRescueCheckpoint(
             if (EventSignal.pending()) return false;
         }
     }
-    // A transient cart/driver failure must not send the player back underground while Ana is
-    // still safely held. Leave the state intact and retry this surface checkpoint next pass.
+    // A transient cart/driver failure shouldn't send you back underground while holding Ana; leave the state and retry next pass.
     if (operations.hasAnaBarrel()) {
         log('surface cart unresolved while carrying Ana; retrying this checkpoint in place');
         return false;
     }
-    // Cleared-bits/lost-barrel recovery: take the canonical lower barrel, catch original Ana
-    // (which clears all transport bits server-side), then resume from that visible checkpoint.
+    // Cleared bits or lost barrel: take the lower barrel and catch original Ana, which clears every transport bit server-side.
     await operations.maintainSurvival();
     if (EventSignal.pending()) return false;
     log('surface lift/cart state is clear; starting the canonical deep-mine replay');
@@ -1861,15 +1818,13 @@ async function surfaceRescueCheckpoint(log: (m: string) => void): Promise<boolea
 }
 
 async function returnAnaToIrena(log: (m: string) => void): Promise<boolean> {
-    // Returning Ana flows directly into both reward-choice menus without a stable dialogue
-    // boundary. Permit the selected skill here as well as in restart-at-reward.
+    // Returning Ana runs straight into both reward menus with no dialogue boundary, so allow the skill choice here too.
     if (!(await talkStrict(NPC.IRENA, IRENA, ['Agility.'], log))) return false;
     return Execution.delayUntil(() => !Inventory.contains(ITEM.ANA_BARREL), 8000);
 }
 
 async function claimReward(log: (m: string) => void): Promise<boolean> {
-    // The same skill may be selected twice. The strict driver makes the one permitted
-    // choice at both menus and drains the quest-complete dialogue.
+    // The same skill can be picked at both menus; the driver picks it twice and drains the quest-complete dialogue.
     return talkStrict(NPC.IRENA, IRENA, ['Agility.'], log);
 }
 
@@ -2069,7 +2024,7 @@ function ensureDesertExteriorLoadout(snap: QuestSnapshot): QuestStep | null {
     return null;
 }
 
-/** Blank configured food opts into Kebabs as the quest's explicit survival ration. */
+/** Blank configured food means Kebabs. */
 function sourceKebabs(snap: QuestSnapshot, target = 8): QuestStep | null {
     if (heldCount(snap, ITEM.KEBAB) >= target) return null;
     const route = safeRecoveryRoute(touristTrapArea(snap.tile));
@@ -2124,8 +2079,7 @@ function ensureMineEntrance(snap: QuestSnapshot): QuestStep | null {
     const pickaxe = sourcePickaxe(snap);
     if (pickaxe) return pickaxe;
     if (!hasOutfit(snap, SLAVE_OUTFIT)) {
-        // The late-stage re-trade atomically replaces worn desert pieces, so one complete set is
-        // sufficient and leaves room for the rescue supplies that keep this recovery alive.
+        // The late re-trade swaps worn desert pieces in place, so 1 set is enough and leaves room for rescue supplies.
         const desert = sourceDesertOutfitCopies(snap, 1);
         if (desert) return desert;
     }
@@ -2248,10 +2202,7 @@ function stepLabel(step: QuestStep): string {
     }
 }
 
-/**
- * Copy-pasteable context for stuck Tourist Trap runs (engine logs these via observe).
- * Keep dense, operators paste the log into agents.
- */
+/** Dense context for stuck runs; the engine logs it via observe and operators paste it into agents. */
 export function observeTouristTrap(snap: QuestSnapshot, step: QuestStep): readonly string[] {
     const area = touristTrapArea(snap.tile);
     const tile = snap.tile ? `(${snap.tile.x},${snap.tile.z}${snap.tile.level ? `,L${snap.tile.level}` : ''})` : '(no tile)';
@@ -2291,15 +2242,13 @@ export function decide(snap: QuestSnapshot): QuestStep {
     const stage = snap.stage;
     const area = touristTrapArea(snap.tile);
 
-    // Capture, lockpick, equipment-search, and deliberate guard dialogue can all put the player
-    // in one of these cells at any journal stage. Location therefore takes precedence.
+    // Capture, lockpick, equipment search and guard dialogue can all jail you at any stage, so location wins over stage.
     if (area === 'surfaceJail') return custom('escape the surface jail through the rocks', escapeSurfaceJail);
     if (area === 'undergroundJail') return custom('mine 15 punishment rocks and escape', escapeUndergroundJail);
     if (stage >= TOURIST_TRAP_STAGE.TRADED_CLOTHES
         && (area === 'mineEntrance' || area === 'mineLower' || area === 'mineDeep')
         && !hasOutfit(snap, SLAVE_OUTFIT)) {
-        // The ordinary supply route cannot leave this component without the disguise it is
-        // trying to replace. Recover the outfit locally before any mainland restock decision.
+        // The supply route can't leave this component without the disguise it wants to replace, so recover the outfit here first.
         return custom('return to the punishment mine to recover the slave disguise', returnToPunishmentMineForOutfit);
     }
     if (stage >= TOURIST_TRAP_STAGE.STARTED
@@ -2314,8 +2263,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
             || (!held(snap, ITEM.ANA_BARREL) && !hasOutfit(snap, SLAVE_OUTFIT)))
         && (area === 'campSurface' || area === 'campUpper')
         && !held(snap, ITEM.METAL_KEY)) {
-        // The desk awards a cell key first, then the Metal key, so a restart without either
-        // needs two free slots before searching it.
+        // The desk gives a cell key then the Metal key, so a restart with neither needs 2 free slots.
         const slots = held(snap, ITEM.CELL_KEY) ? 1 : 2;
         if ((snap.freeSlots ?? slots) < slots) {
             return custom('free a slot for mining-camp key recovery', freeOneRescueSlot);
@@ -2491,8 +2439,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         }
         if (area === 'mineDeep') {
             if (held(snap, ITEM.BARREL)) {
-                // This source-authored operation clears every stale rescue transport bit before
-                // catching Ana, making it the canonical replay reset at any hidden rescue stage.
+                // Catching Ana clears every stale transport bit first, so it resets the rescue at any hidden stage.
                 return custom('reset the rescue state by catching original Ana', catchAnaInBarrel);
             }
             return custom('move Ana through the deep-to-lower cart checkpoint', deepToLowerCheckpoint);

@@ -1,7 +1,6 @@
-/** Range-path smoke for every fishing camp with a curated cook surface: tele to the pier, seed raw fish, start Fisher, pass on reaching the range stand or gaining cook XP.
- *  Why: the case list mirrors CookingRanges FISH_CAMP_COOK_PLANS and must be kept in sync, and nothing here may import from src/bot, the client graphics init breaks under plain Bun. */
-
-// Why: it catches door/approach regressions (Seers Large door) without a full bank-home loop.
+/** Range-path smoke for every fishing camp with a curated cooking surface. */
+// Why: keep cases aligned with `FISH_CAMP_COOK_PLANS` and catch door regressions without a full bank loop.
+// Avoid `src/bot` imports because client graphics initialization breaks under plain Bun.
 
 // Usage:
 //   HEADED=1 bun e2e/gatheringbot-range-path-test.ts
@@ -44,14 +43,11 @@ type Case = {
     bank: Tile;
     fishMethod: string;
     rawDebug: string;
-    /** Gear give so RestockFishingGear does not thrash (unused under Cooker mode). */
+    /** Gear seed used outside Cooker mode. */
     toolDebug: string;
 };
 
-/**
- * Keep aligned with src/bot/api/catalogs/CookingRanges.ts FISH_CAMP_COOK_PLANS +
- * FishingLocations camp spots. Unit test listFishCampRangePathCases guards API side.
- */
+/** Mirrors `FISH_CAMP_COOK_PLANS` and FishingLocations camp spots. */
 const CASES_ALL: Case[] = [
     {
         id: 'range-path-catherby-pier',

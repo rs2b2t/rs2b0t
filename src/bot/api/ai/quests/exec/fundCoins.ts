@@ -28,7 +28,7 @@ const FUNDING_REGEN_WAIT_MS = 60_000;
 const KEBAB = 'Kebab';
 
 export function inAlKharidFundingArea(tile: ReturnType<typeof Game.tile>): boolean {
-    // Town proper around the Man + kebab shop, not Shantay Pass (z≈3116–3124).
+    // Town proper around the Man + kebab shop; Shantay Pass (z 3116 to 3124) is excluded.
     return tile !== null
         && tile.level === 0
         && tile.x >= 3260
@@ -99,7 +99,7 @@ async function pickpocketFundingMan(anchor: Tile, log: (m: string) => void): Pro
     }
     if (!(await clearFundingDialog())) return false;
     if (Skills.effective('hitpoints') < hpBefore) {
-        // Failed level-1 Man pickpocket stuns for eight server ticks.
+        // Failed level-1 Man pickpocket stuns for 8 server ticks.
         await Execution.delayTicks(8);
     }
     return true;
@@ -237,7 +237,7 @@ export async function fundQuestCoins(
     const here = Game.tile();
 
     if (!inAlKharidFundingArea(here)) {
-        // Only farm the Varrock Man when we still need the western→eastern toll.
+        // Only farm the Varrock Man when we still need the toll to get east.
         if (!eastOfAlKharidGate(here) && Inventory.count('Coins') < AL_KHARID_ENTRY_CASH) {
             log(`earning ${AL_KHARID_ENTRY_CASH} gp (Al Kharid toll + food reserve) from a Varrock Man`);
             if (!(await farmFundingCoins(VARROCK_FUNDING_MAN, AL_KHARID_ENTRY_CASH, false, log, label))) {

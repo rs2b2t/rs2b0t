@@ -18,13 +18,13 @@ import { pocketAt, travelTirannwn } from './pockets.js';
 const IORWERTH = 'Lord Iorwerth';
 const TRACKER = 'Elf Tracker';
 const MESSENGER = 'Kings messenger';
-/** How long the soldier gets before the step gives the decide cycle its turn back. */
+/** How long the soldier gets before the decide cycle takes its turn back. */
 const FIGHT_MS = 240_000;
 /** How long one attack is left to run before it is renewed. */
 const RENEW_MS = 6_000;
 /** Below this, with an empty pack, the fight is not worth the walk back. */
 const BAIL_HP = 0.4;
-/** Idris, Essyllt and Morvran, the three elves of the scout ambush. */
+/** Idris, Essyllt and Morvran, the 3 elves of the scout ambush. */
 const SCOUT_IDS = [1186, 1187, 1188];
 
 /** Walk anywhere in Tirannwn, crossing whatever seals the target's pocket off. */
@@ -52,7 +52,7 @@ function findMessenger(): Npc | null {
     return Npcs.query().where(npc => npc.id === RG_NPC.MESSENGER).within(14).nearest();
 }
 
-// Why: `start_king_messenger_timer` is armed at login and fires 400-1200 ticks later, so the messenger comes to the player wherever they stand. There is nowhere to walk to, and his own `ai_opplayer2` opens the conversation and hands over the scroll before the player has clicked anything.
+// Why: `start_king_messenger_timer` is armed at login and fires 400-1200 ticks later, so the messenger comes to you wherever you stand and there's nowhere to walk to. His `ai_opplayer2` opens the conversation and hands over the scroll before you click anything.
 
 /** Wait for the King's messenger and take his scroll. */
 export async function takeSummons(log: (m: string) => void): Promise<boolean> {
@@ -68,7 +68,7 @@ export async function takeSummons(log: (m: string) => void): Promise<boolean> {
     if (await driveUntil(() => heldId(RG_ITEM.SUMMONS.id) > 0, [], log, 30_000)) {
         return true;
     }
-    // Why: he only opens the dialogue himself once; after that the scroll is asked for by hand.
+    // Why: he only opens the dialogue himself once, so after that the scroll is asked for by hand.
     return talkStrict(MESSENGER, [], log);
 }
 
@@ -81,7 +81,7 @@ export async function briefFromLathas(log: (m: string) => void): Promise<boolean
     return talkStrict('King Lathas', [], log);
 }
 
-// Why: the scout ambush is a `[timer,spawn_idris]` armed by walking into mapsquare 35_49, 35_50 or 36_50, and NORMAL timers only run under `canAccess()`, so this step must not open the quest journal while it waits, and it must not walk away either, because `spawn_evil_elves` delays whenever the player is more than one tile from Idris.
+// Why: the scout ambush is a `[timer,spawn_idris]` armed by walking into mapsquare 35_49, 35_50 or 36_50, and normal timers only run under `canAccess()`, so this step keeps the quest journal shut while it waits. It must not walk away either, since `spawn_evil_elves` delays whenever you're more than 1 tile from Idris.
 
 /** Stand still in the forest until the elf scouts stage their ambush, then hear them out. */
 export async function meetScouts(log: (m: string) => void): Promise<boolean> {
@@ -93,7 +93,7 @@ export async function meetScouts(log: (m: string) => void): Promise<boolean> {
             return false;
         }
     }
-    // Why: the ambush is one long scripted chain. Idris hails, is shot, and the pair who shot him then speak, with `p_delay`s between the beats that outlast a dialogue-driver's own idle gap. The goal is the elves leaving, which is what the last line queues.
+    // Why: the ambush is one scripted chain: Idris hails, is shot, and the pair who shot him speak, with `p_delay`s between the beats that outlast a dialogue driver's idle gap. The last line queues the elves leaving, so that's the goal.
     return driveUntil(() => !elfNear() && !ChatDialog.isOpen(), [], log, 120_000);
 }
 
@@ -128,8 +128,8 @@ function soldierNear(): Npc | null {
         .nearest();
 }
 
-// Why: the soldier is level 110 with 110 hitpoints, 95 strength and a halberd, against an account this quest only asks 56 Agility of. Two runs died to it in under a minute wearing the full rune set, because `Sustain.run()` is not a background task, `Traversal` calls it on every walk and a step that stands still fighting calls it never, so the character fought from start to finish without eating once.
-// Why: and one `Attack` click is not enough either. A halberd out-ranges the player, so the walk in and every knockback break the interaction off, and a fight left un-renewed is a character being hit for free.
+// Why: the soldier is level 110 with 110 hitpoints, 95 strength and a halberd, against an account this quest only asks 56 Agility of. `Sustain.run()` is not a background task: `Traversal` calls it on every walk and a step that stands still fighting never does, so the fight runs start to finish without eating.
+// Why: one `Attack` click isn't enough either. A halberd out-ranges you, so the walk in and every knockback break the interaction off, and an un-renewed fight is a character being hit for free.
 
 /** Fight until the soldier is gone, eating every tick and renewing the attack whenever it lapses. */
 async function fightSoldier(log: (m: string) => void): Promise<boolean> {
@@ -142,7 +142,7 @@ async function fightSoldier(log: (m: string) => void): Promise<boolean> {
             return true;
         }
         await Sustain.run();
-        // Why: a pack with nothing left in it is the one thing this step has to notice for itself, carrying on from here is how a run ends at a Lumbridge grave with its kit on the far side of the palisade, and there is no walking back for it.
+        // Why: an empty pack is the one thing this step has to notice for itself: carrying on from here ends the run at a Lumbridge grave with its kit on the far side of the palisade.
         if (Skills.hpFraction() < BAIL_HP && Inventory.count(RG_ITEM.SHARK.name) === 0) {
             log(`breaking off the fight at ${Math.round(Skills.hpFraction() * 100)}% with no food left`);
             return false;
@@ -158,7 +158,7 @@ async function fightSoldier(log: (m: string) => void): Promise<boolean> {
     return soldierNear() === null;
 }
 
-// Why: two different soldiers can carry this stage. `spawn_tyras_guard` posts the old camp's one only the once, it latches `^regicide_seen_guard`, while the camp entrance posts a fresh `regicide_tyras_camp_guard` on every crossing attempt, so the entrance is the fallback that always works.
+// Why: 2 different soldiers can carry this stage. `spawn_tyras_guard` posts the old camp's one once, latching `^regicide_seen_guard`, while the camp entrance posts a fresh `regicide_tyras_camp_guard` on every crossing attempt, so the entrance is the fallback that always works.
 
 /** Kill the soldier that stands between the tracks and Tyras's camp. */
 export async function killSoldier(log: (m: string) => void): Promise<boolean> {
@@ -190,7 +190,7 @@ export async function killSoldier(log: (m: string) => void): Promise<boolean> {
     return fightSoldier(log);
 }
 
-// Why: the stage moves on the crossing itself, not on reaching the tents, `_regicide_cross_over` sets `^regicide_entered_camp` as it puts the player down on the far side. Walking on to the king's pavilion would be four more crossings there and four back for a stage already banked.
+// Why: the stage moves on the crossing itself: `_regicide_cross_over` sets `^regicide_entered_camp` as it puts you down on the far side. Walking on to the king's pavilion is 4 more crossings there and 4 back for a stage already banked.
 
 /** Squeeze past the camp guard's post, which is what the journal counts as finding the camp. */
 export async function enterCamp(log: (m: string) => void): Promise<boolean> {

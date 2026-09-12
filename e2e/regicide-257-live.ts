@@ -1,12 +1,7 @@
-/** Live Regicide harness (#257): --stage N --until N --minutes N, base :8890.
- *  Why: `%regicide_quest` and `%regicide_bits` are both `scope=perm` with no `transmit`, so the bot reads its
- *  own stage off the journal, the harness seeds the varp and relogs, because `~update_questlist` only
- *  recolours the list at login.
- *  Why: Underground Pass is seeded complete varp AND bits. The bits matter as much as the stage: `cave_well`
- *  only descends with all four orb bits set and the temple doors only open with the three badges and the
- *  horn thrown, and this quest walks back through both of them to reach the Well of Voyage.
- *  Why: stats are 70 across the board and the bank holds coins, Sharks and armour alone, the wool, the
- *  pickaxe and the pestle are bought by the module, and every quest item is sourced in the world. */
+/** Live Regicide harness (#257), using the members world at :8890. */
+// Why: stage and bit varps do not transmit, so stage jumps relog and read the journal.
+// Underground Pass needs both its completed stage and traversal bits for the return route.
+// Skills start at 70; the bank holds only coins, sharks, and armour.
 
 //   HEADED=1 bun e2e/regicide-257-live.ts --stage 0 --until 2 --minutes 25 --tick 150
 //   HEADED=1 bun e2e/regicide-257-live.ts --stage 3 --until 8 --minutes 30 --tick 150
@@ -37,16 +32,15 @@ interface Args {
     stats: number;
     tele: boolean;
     deploy: boolean;
-    /** `--give obj:qty,obj:qty`, extra pack items, for starting a leg mid-chain. */
+    /** Extra pack items for a mid-chain start. */
     give: { debugName: string; qty: number }[];
-    /** `--start x,z,level`, overrides the stage's own start tile. */
+    /** Optional start tile override. */
     start: { x: number; z: number; level: number } | null;
-    // Why: the bomb is a dozen steps that move no varp at all, the stage only advances when the catapult
-    // fires. An obj id is what a leg in the middle of the chain can be judged on.
+    // Why: the bomb chain does not advance the stage until the catapult fires.
 
-    /** `--until-obj <id>`, pass as soon as this obj id is in the pack. */
+    /** Pass when this object ID reaches the pack. */
     untilObj: number | null;
-    /** `--no-pack`, skip the standing kit, for a leg that brings its own with `--give`. */
+    /** Skip the standard kit when `--give` supplies the leg. */
     pack: boolean;
 }
 

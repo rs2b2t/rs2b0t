@@ -121,7 +121,7 @@ export async function ensureExtraItems(names: readonly string[], log: (m: string
     return bought;
 }
 
-// Why: `missing` comes from the walker's own diagnosis, so this fires only for a crossing the bot planned to use, no speculative shopping trips.
+// Why: `missing` comes from the walker's own diagnosis, so this only fires for a crossing the bot planned to use.
 // Why: coins are skipped because no counter sells them.
 
 /** Buy the crossing tolls the navigator says a route is short of. */

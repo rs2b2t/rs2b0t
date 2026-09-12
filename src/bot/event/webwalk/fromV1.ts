@@ -1,6 +1,4 @@
-/**
- * Adapters that lift doors / stairs / transports JSON into TransportEdge.
- */
+/** Adapters that lift doors / stairs / transports JSON into TransportEdge. */
 
 import { ensureEdgeId } from './edgeId.js';
 import { DEFAULT_EDGE_COST, type NavPoint, type TransportEdge, type TransportKind } from './types.js';
@@ -106,7 +104,7 @@ export function v1TransportToEdge(raw: V1TransportEdge, source = 'v1-transport')
         },
         landing: {
             toLevel: raw.to.level !== raw.from.level ? raw.to.level : undefined,
-            // same-plane dungeon hops still need landing awareness for z±6400
+            // same-plane dungeon hops still need landing awareness for z+/-6400
             toTile: raw.to
         },
         debug: {

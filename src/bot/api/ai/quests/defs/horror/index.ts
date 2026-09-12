@@ -21,8 +21,7 @@ import {
 const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
     ({ kind: 'custom', name, run });
 
-// Why: Gunnjorn stands inside the Barbarian Outpost agility course, behind the outpost gate and then the obstacle pipe.
-// Why: the ten-bar barcrawl is therefore a hard prerequisite, as the gate's guard intercepts anyone who has not finished it.
+// Why: Gunnjorn is inside the Barbarian Outpost course behind the gate and the pipe, and the gate's guard intercepts anyone without the 10-bar barcrawl.
 
 /** Fetch Larrissa's spare key from her cousin Gunnjorn. */
 async function fetchKey(log: (m: string) => void): Promise<boolean> {
@@ -43,24 +42,21 @@ async function fetchKey(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => Inventory.countById(HD_ID.KEY) > 0, 8000);
 }
 
-// Why: this runs after the nails, as `smithNails` banks everything outside its KEEP list to make room for four iron and eight coal.
-// Why: runes are not on that list, so a rune bought before the nails leg is deposited and re-withdrawn forever.
+// Why: `smithNails` banks everything outside its KEEP list for 4 iron and 8 coal, and runes aren't on it, so this runs after the nails.
 
 /** Runes, when hops are on and the pack is short. */
 function teleportRunes(snap: QuestSnapshot): QuestStep | null {
     return Traversal.teleportsEnabled() ? runeKit(snap) : null;
 }
 
-// Why: every step banks before it shops, as the ordinary account already owns most of this, a hammer and eight steel nails are not exotic, and the detour collapses to nothing when they are in the bank.
-// Why: hammer, nails and runes are three Varrock errands, and the planks are ground spawns at the Barbarian Outpost, which is the last stop before the lighthouse.
+// Why: every step banks before it shops since most accounts own a hammer and nails; hammer, nails and runes are Varrock errands and the planks are outpost spawns on the way to the lighthouse.
 
 /** Everything the bridge repair consumes, in the order the map wants it. */
 function bridgeKit(snap: QuestSnapshot): QuestStep | null {
     if (heldId(snap, HD_ID.HAMMER) === 0) {
         return hammer(snap);
     }
-    // Nails strictly before planks: the smithing leg banks the pack to make
-    // room for ore, and a plank banked mid-leg is a plank fetched twice.
+    // Nails before planks: the smithing leg banks the pack for ore, and a plank banked mid-leg is fetched twice.
     if (heldId(snap, HD_ID.NAILS) < NAILS_NEEDED) {
         return nails(snap);
     }
@@ -74,20 +70,20 @@ function bridgeKit(snap: QuestSnapshot): QuestStep | null {
     return null;
 }
 
-// Why: the lighthouse load is assembled here rather than at stage 2, so the causeway is crossed once instead of three times.
+// Why: assembling the lighthouse load here crosses the causeway once; at stage 2 it's 3 times.
 
 /** Everything Larrissa wants before she opens the lighthouse, plus the load inside it. */
 function beforeTheDoor(snap: QuestSnapshot): QuestStep {
     if (!hasFlag(snap.progress, HD_FLAG.BRIDGE)) {
         return bridgeKit(snap) ?? custom('repair the bridge', repairBridge);
     }
-    // Why: a resume that starts past the bridge never enters `bridgeKit`, and would otherwise walk the ten-bar tour, the one leg hops pay for, with an empty pouch.
+    // Why: a resume past the bridge never enters `bridgeKit` and would walk the 10-bar tour, the leg hops pay for, with an empty pouch.
     const runes = teleportRunes(snap);
     if (runes) {
         return runes;
     }
     if (heldId(snap, HD_ID.KEY) === 0) {
-        // Why: a banked card is the one state the guard cannot resolve. He answers "You need to take it with you", hands nothing over, and the tour reads as already finished when the gate is still shut.
+        // Why: The guard refuses a banked card, leaving the tour complete but the gate closed.
         if (heldId(snap, HD_ID.BARCRAWL_CARD) === 0 && bankedId(snap, HD_ID.BARCRAWL_CARD) > 0) {
             return {
                 kind: 'withdraw',
@@ -103,8 +99,7 @@ function beforeTheDoor(snap: QuestSnapshot): QuestStep {
     return { kind: 'talk', stop: LARRISSA };
 }
 
-// Why: the lighthouse, the basement and the cavern are three sealed pockets linked only by scripted teleports, and the nearest bank is the far side of the causeway.
-// Why: every branch therefore starts by working out which pocket the character is in, as a death drops it back on the mainland mid-stage.
+// Why: the lighthouse, basement and cavern are sealed pockets linked by scripted teleports, and a death drops you on the mainland mid-stage, so every branch starts by locating the pocket.
 
 /** Route a branch by which sealed pocket the character is in. */
 function inside(snap: QuestSnapshot, needLight: boolean, atDepth: () => QuestStep): QuestStep {
@@ -155,7 +150,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (stage === undefined) {
         return { kind: 'wait', reason: 'quest stage not readable' };
     }
-    // Why: coin and food upkeep never runs inside a pocket a bank trip cannot start from, preparation stops at the door, or a mid-fight top-up walks the character back out of the cavern.
+    // Why: upkeep never runs inside a sealed pocket, or a mid-fight top-up walks you back out of the cavern.
     if (!sealedArea(snap.tile)) {
         const float = kit(snap, foodWant(snap, stage));
         if (float) {
@@ -164,10 +159,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
     }
     switch (stage) {
         case HD_STAGE.NOT_STARTED:
-            // Why: the bridge kit comes before the first word with Larrissa, as starting the quest first costs a crossing of the map for nothing.
-            // Why: she is at the lighthouse in the far north-west, the hammer, nails and runes all come from Varrock, and the planks from the outpost on the way back, so a bot that talks first walks Rellekka → lighthouse → Varrock → outpost → lighthouse instead of Varrock → outpost → lighthouse.
-            // Why: nothing here is quest-gated, the ore, the anvil, the shop and the plank spawns are all open before the journal has a single line in it.
-            // Why: for an account that already owns the nails this branch is free, as every step of `bridgeKit` reads the bank first, so the common case is one walk to the lighthouse and straight into the bridge.
+            // Why: the bridge kit comes before Larrissa since the kit is Varrock and the outpost, on the way to the lighthouse, and nothing in it is quest-gated.
+            // Why: `bridgeKit` checks the bank first and skips sourcing nails already owned.
             return bridgeKit(snap) ?? { kind: 'talk', stop: LARRISSA };
         case HD_STAGE.STARTED:
             return beforeTheDoor(snap);
@@ -186,13 +179,11 @@ export function decide(snap: QuestSnapshot): QuestStep {
 export const horror: QuestModule = {
     record: QUESTS.find(r => r.id === 'horror')!,
     pray: { protect: 'melee', potions: 2 },
-    // Four kingdoms and a ten-bar barcrawl: pinning one booth would cost a
-    // kingdom-crossing on every leg that touches it.
+    // 4 kingdoms and a 10-bar barcrawl: pinning one booth costs a kingdom-crossing per leg.
     bank: 'nearest',
     tools: [...HORROR_TOOLS],
     ownsInventory: true,
-    // Literals, not QuestFood.name: this object is built at import, when the
-    // setting still holds its default. The host merges the configured food in.
+    // This object is built at import, before QuestFood.name is set; the host merges the configured food in.
     sustain: { foods: ['Shark', 'Swordfish', 'Lobster', 'Tuna'], eatBelowHp: 0.6 },
     warnReadiness: warnHorrorReadiness,
     readProgress: readHorrorProgress,

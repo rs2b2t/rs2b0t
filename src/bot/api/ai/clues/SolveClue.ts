@@ -57,7 +57,7 @@ function heldClueScrollId(): number | null {
     return it ? it.id : null;
 }
 
-/** Hard riddle drawers on Entrana (issue #368), boat refuses weapons/armour. */
+/** Hard-riddle drawers on Entrana; the boat refuses weapons and armour (#368). */
 function isEntranaClueCoord(c: { x: number; z: number; level: number } | undefined): boolean {
     if (!c || c.level !== 0) {
         return false;
@@ -87,14 +87,12 @@ export interface SolveClueHost {
     useTeleports?(): boolean;
 }
 
-// Why: nearestBank from inside the elf camp answers the Grand Tree, and the walk there crosses
-// Why: Isafdar, which the baked pack cannot route. The bank stop runs before every trail, so a clue
-// Why: that leads into Tirannwn strands the bot on its own prep rather than on the clue.
+// Why: The nearest bank from the elf camp routes across unsupported Isafdar terrain, so leave Tirannwn first.
 export function walkToBank(tile: NavPoint, log: (m: string) => void): Promise<boolean> {
     if (crossesTirannwn(tile)) {
         return walkAcrossTirannwn(tile, 3, log);
     }
-    // Why: a trail that dug in the Kharazi Jungle has to cut back out before any bank is on the graph at all.
+    // Why: a trail that dug in the Kharazi Jungle has to cut back out before any bank is on the graph.
     if (crossesKharazi(tile)) {
         return walkAcrossKharazi(tile, 3, log);
     }
@@ -109,7 +107,7 @@ export class SolveClue implements Task {
 
     private abandonedClueId: number | null = null;
 
-    /** What the Entrana monk search made us bank, so the trail can give it back. */
+    /** Equipment banked for Entrana and restored afterward. */
     private strippedGear: string[] = [];
 
     private status = 'idle';
@@ -135,11 +133,7 @@ export class SolveClue implements Task {
         return id !== null && id !== this.abandonedClueId;
     }
 
-    /**
-     * Why: a trail runs inside this one task call, so a host's own Eat task never gets a turn between legs.
-     * Why: `Sustain.run()` is a no-op unless a hook is installed, so trail upkeep is owned here rather than by the host.
-     * Why: hard-clue dig guardians are level-65 mages that keep hitting through Protect from Magic, so a trail without upkeep dies on a full pack.
-     */
+    /** Why: A trail owns one task call, so install upkeep here to eat between legs and during guardian fights. */
     private async eatIfHurt(): Promise<void> {
         const held = (): { name: string | null; interact(a: string): boolean | Promise<boolean> }[] =>
             Inventory.items().filter(i => this.host.isFood(i.name ?? ''));
@@ -153,8 +147,8 @@ export class SolveClue implements Task {
         await food[0].interact('Eat');
         // Why: a guardian's hit lands in the same tick as the heal, so hp can end below where it started and an hp-only check waits out its full budget.
         // Why: Sustain.running is set for the duration of that wait, blanking every other pump while damage is heaviest.
-        // Why: measured 3s of no bites at 8/70 hp with seven lobsters in the pack; at three seconds the four-tick blackout took a guardian from 45 hp to 2.
-        // Why: two ticks, not five, a bite that lands confirms on the next tick, and one the server dropped must be re-sent.
+        // Why: measured: a 3s confirm at 8/70 hp with 7 lobsters held gave a 4-tick blackout that dropped 45 hp to 2.
+        // Why: 2 ticks: a bite that lands confirms on the next tick, and one the server dropped needs re-sending.
         const landed = await Execution.delayUntilTicks(
             () => held().length < food.length || Skills.effective('hitpoints') > hp,
             EAT_CONFIRM_TICKS
@@ -175,9 +169,9 @@ export class SolveClue implements Task {
     }
 
     /**
-     * Why: a trail banks once at the start, so a long one runs dry and walks the rest of the way, often through the Wilderness, with nothing to eat.
-     * Why: `Sustain` is pumped on every walk pass but an empty pack has no bite to take, so upkeep alone cannot cover a long trail.
-     * Why: bounded to one restock trip per dry spell, so an empty bank cannot put the bot in a bank-walk loop.
+     * Why: a trail banks once at the start, so a long one runs dry and walks the rest (often Wilderness) with nothing to eat.
+     * Why: `Sustain` runs on every walk pass but can't bite from an empty pack.
+     * Why: one restock trip per dry spell, so an empty bank can't cause a bank-walk loop.
      */
     private needsFood(): boolean {
         if ((this.host.foodName() ?? '') === '') {
@@ -283,8 +277,8 @@ export class SolveClue implements Task {
 
     /**
      * Why: `start_chop_jungle` wants a machete, an axe and Radimus's notes, and the bank is the only source.
-     * Why: `~woodcutting_axe_checker` reads the pack and the right hand, never the bank, so the axe has to come out.
-     * Why: without them the trail spends its budget swinging at a band that will not open.
+     * Why: `~woodcutting_axe_checker` reads the pack and the right hand, so the axe has to come out of the bank.
+     * Why: without them the trail burns its budget swinging at a band that won't open.
      */
     private async stockJungleKit(): Promise<void> {
         const want: string[] = [];
@@ -360,14 +354,12 @@ export class SolveClue implements Task {
         const coordItems = new Set(['sextant', 'watch', 'chart']);
         const rowItems = scrollId !== null ? (CLUE_DB[scrollId]?.items ?? []) : [];
         const rowItemNames = new Set(rowItems.map(n => n.toLowerCase()));
-        // Why: one snapshot per bank stop, a spell this account cannot cast must not reserve a pack slot.
+        // Why: one snapshot per bank stop; a spell this account can't cast shouldn't reserve a pack slot.
         const kit = teleportKitFor(snapshotWorldState());
         const keepTeleports = this.host.useTeleports?.() ?? true;
-        // Southbound Shantay Pass is baked but consumes a pass (#371). Keep/withdraw
-        // one so desert digs (3552/3554) can plan the requires-gated edge.
+        // Southbound Shantay Pass is baked but consumes a pass (#371); keep one so desert digs (3552/3554) can plan the gated edge.
         const SHANTAY_PASS = 'Shantay pass';
-        // Why: the machete, an axe and Radimus's notes are what `start_chop_jungle` checks, and a bot arriving
-        // Why: from a grind is holding none of them, so they are kept through the deposit and withdrawn below.
+        // Why: `start_chop_jungle` checks for the machete, an axe and Radimus's notes, so they survive the deposit and get withdrawn below.
         const jungleClue = scrollId !== null && KHARAZI_CLUES.has(scrollId);
         const jungleKeep = new Set(jungleClue ? jungleKeepNames().map(n => n.toLowerCase()) : []);
         const isKeep = (name: string): boolean => {
@@ -375,7 +367,7 @@ export class SolveClue implements Task {
             if (entranaStrip && ENTRANA_RESTRICTED_GEAR_RE.test(name)) {
                 return false;
             }
-            // Why: a bot arriving from a grind holds a grind-sized food load that fills the pack, so food is banked here and comes back capped below.
+            // Why: a grind-sized food load fills the pack, so food is banked here and comes back capped below.
             return protectedNames.has(n) || n.includes('clue') || n.includes('casket')
                 || n === SPADE_NAME.toLowerCase() || n === 'coins' || n === SHANTAY_PASS.toLowerCase()
                 || coordItems.has(n) || rowItemNames.has(n) || jungleKeep.has(n)
@@ -434,8 +426,7 @@ export class SolveClue implements Task {
         const scrollIsCoord = scrollId !== null && CLUE_DB[scrollId]?.needsSextant === true;
         const fetchingCoordTools = scrollIsCoord && !hasAllTrio() && hasCoordClueHeld();
 
-        // Runes before food: both loops stop on a full pack, and food is the
-        // bulky item, so it must be last or the trail leaves with no teleports.
+        // Runes before food: both loops stop on a full pack and food is the bulky one.
         await this.stockTeleports(kit);
 
         const food = this.host.foodName();
@@ -486,9 +477,9 @@ export class SolveClue implements Task {
     }
 
     /**
-     * Why: only spells this account can cast are stocked, a hard casket needs six free slots, so runes for an unlearned spell are dead weight.
+     * Why: only castable spells are stocked; a hard casket needs 6 free slots, so runes for an unlearned spell are dead weight.
      * Why: jewellery is kept when already carried but never fetched, since charges make the names inexact.
-     * Why: a missing rune is not fatal. The router walks instead.
+     * Why: a missing rune isn't fatal, the router walks instead.
      */
     private async stockTeleports(kit: TeleportKit): Promise<void> {
         if (!(this.host.useTeleports?.() ?? true)) {
@@ -511,7 +502,7 @@ export class SolveClue implements Task {
 
     /**
      * Top up prayer at an altar before a hard trail starts, since any of its legs can be a guarded dig.
-     * Why: low prayer never blocks a trail. The fight runs without a protection prayer.
+     * Why: low prayer never blocks a trail; the fight runs without a protection prayer.
      */
     private async topUpPrayer(scrollId: number | null): Promise<void> {
         const hardTrail = scrollId !== null && (CLUE_DB[scrollId]?.obj.includes('_hard_') ?? false);

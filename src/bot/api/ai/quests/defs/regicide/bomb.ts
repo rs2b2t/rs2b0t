@@ -16,7 +16,7 @@ import { walkTo } from './isafdar.js';
 
 const GRIND_MS = 12_000;
 
-// Why: cardinal first, because `reachRectangle` takes a cardinal side and nothing else, and a ground-decor loc sits on a tile the pack calls blocked so the server cannot path onto it. The coal-tar seep is three `forcedecor` locs shoulder to shoulder and `nearest()` ranks a diagonal the same as the one due south, it picked the same unreachable one forty-five times, and the refusal never showed because the step only ever reported "no inventory change".
+// Why: `reachRectangle` requires a cardinal side; nearest otherwise ties the usable seep with an unreachable diagonal one.
 // @see docs/decisions/quest-pitfalls-30.md
 function reachableLoc(locIds: readonly number[]): Loc | null {
     const here = Game.tile();
@@ -43,7 +43,7 @@ async function useHeldOnLoc(itemId: number, locIds: readonly number[], expect: (
     if (await driveUntil(expect, [], log, GRIND_MS)) {
         return true;
     }
-    // Why: "I can't reach that!" is the server saying the pair is wrong, not the action. Swallowing it is what made a reach failure read as a recipe that did nothing.
+    // Why: "I can't reach that!" is the server saying the pair is wrong, so swallowing it makes a reach failure read as a recipe that did nothing.
     const said = GameMessages.since(mark).map(m => m.text).slice(-2).join(' / ');
     const at = target.tile();
     const me = Game.tile();
@@ -69,7 +69,7 @@ export async function takeBarrel(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => heldId(RG_ITEM.BARREL.id) > before, 10_000);
 }
 
-/** A pot off the floor of the elf camp, the quicklime dust has to be stored in something. */
+/** A pot off the floor of the elf camp; the quicklime dust needs somewhere to go. */
 export async function takePot(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(RG_TILE.POT_SPAWN, 4, RG_STAGE.SPOKEN_IORWERTH2, log))) {
         return false;
@@ -84,9 +84,9 @@ export async function takePot(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => heldId(RG_ITEM.POT.id) > before, 10_000);
 }
 
-// Why: `[oplocu,regicide_loom]` takes the wool four at a time and answers "You don't have enough of that item" for anything less, so the weave is one action rather than a loop.
+// Why: `[oplocu,regicide_loom]` consumes four wool at once and rejects smaller amounts.
 
-/** Four balls of wool woven into the strip of cloth that becomes the fuse. */
+/** 4 balls of wool woven into the strip of cloth that becomes the fuse. */
 export async function weaveCloth(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(RG_TILE.LOOM, 2, RG_STAGE.SPOKEN_IORWERTH2, log))) {
         return false;
@@ -118,7 +118,7 @@ export async function takeSulphur(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => heldId(RG_ITEM.SULPHUR.id) > before, 10_000);
 }
 
-// Why: `[opheldu,regicide_sulphar]` and `[opheldu,regicide_quicklime]` are declared on the lump, so the pestle is the item used and the lump the target. The client cannot tell which way round a pair was declared, so a refusal is answered by sending the other direction rather than by retrying the same one.
+// Why: `[opheldu,regicide_sulphar]` and `[opheldu,regicide_quicklime]` are declared on the lump, so the pestle is the item used and the lump the target. The client can't tell which way round a pair was declared, so a refusal sends the other direction.
 
 async function grind(fromId: number, toId: number, log: (m: string) => void): Promise<boolean> {
     const pestle = Inventory.items().find(item => item.id === RG_ITEM.PESTLE.id);
@@ -147,7 +147,7 @@ export function grindQuicklime(log: (m: string) => void): Promise<boolean> {
     return grind(RG_ITEM.QUICKLIME.id, RG_ITEM.QUICKLIME_DUST.id, log);
 }
 
-// Why: `regicide_heat_quicklime` is reached through the generic `use_furnace` switch, so any furnace does. The camp has one, but reaching it is six crossings deeper into the forest and six back, East Ardougne's is sixty tiles from the bank the run passes through anyway on its way to the still.
+// Why: `regicide_heat_quicklime` goes through the generic `use_furnace` switch, so any furnace does. The camp's is 6 crossings deeper into the forest and 6 back, and East Ardougne's is 60 tiles from the bank the run passes anyway.
 // Why: it costs 8 damage without gloves (`inv_totalcat(worn, armour_hands)`), which the food float covers.
 
 /** Limestone burned to quicklime at the East Ardougne furnace. */
@@ -172,7 +172,7 @@ function rabbitNear(): Npc | null {
         .nearest();
 }
 
-/** How long the rabbit gets before the step gives the decide cycle its turn back. */
+/** How long the rabbit gets before the decide cycle takes its turn back. */
 const RABBIT_MS = 45_000;
 /** How long one attack is left to run before it is renewed. */
 const RABBIT_RENEW_MS = 4_000;
@@ -181,8 +181,8 @@ function rabbitMeat(): GroundItem | null {
     return GroundItems.query().where(item => item.id === RG_ITEM.RAW_RABBIT.id).within(12).nearest();
 }
 
-// Why: the meat never enters the pack. `[ai_queue3,_rabbit]` is `obj_add(npc_coord, raw_rabbit, 1, …)`. It drops on the floor under the rabbit, gated on `npc_findhero`, so waiting for the pack to change is waiting for something that cannot happen. A minute of it ran thirty-nine times over thirty-eight minutes and the step never once said why.
-// Why: and one `Attack` click is not enough. The rabbit has `wanderrange=5` and five hitpoints, so it walks out of the interaction as often as it dies in it. The attack is renewed until the meat is on the ground.
+// Why: the meat never enters the pack. `[ai_queue3,_rabbit]` is `obj_add(npc_coord, raw_rabbit, 1, ...)`, which drops it on the floor under the rabbit, gated on `npc_findhero`, so waiting on the pack waits for something that can't happen.
+// Why: one `Attack` click isn't enough either: the rabbit has `wanderrange=5` and 5 hitpoints, so it walks out of the interaction as often as it dies in it, and the attack is renewed until the meat is on the ground.
 
 /** A rabbit out of the forest, for the guard who cannot catch one himself. */
 export async function catchRabbit(log: (m: string) => void): Promise<boolean> {
@@ -246,14 +246,14 @@ export async function cookRabbit(log: (m: string) => void): Promise<boolean> {
     return useHeldOnLoc(RG_ITEM.RAW_RABBIT.id, [RANGE_LOC], () => heldId(RG_ITEM.COOKED_RABBIT.id) > before, log);
 }
 
-/** The plain `range` loc, the nearest one to the bank is a dozen tiles from it. */
+/** The plain `range` loc; the nearest to the bank is a dozen tiles from it. */
 const RANGE_LOC = 2728;
 
 // The fractionalising still
 
-// Why: `%regicide_still_total` and `%regicide_still_settings` are the two varps in this quest with `transmit=yes`, so the still is the one part of it the bot can read directly. `%temp` is not among them, which is why the control law reads the heat needle rather than the temperature.
+// Why: `%regicide_still_total` and `%regicide_still_settings` are the 2 varps in this quest with `transmit=yes`, so the still is the one part the bot reads directly. `%temp` isn't among them, so the control law reads the heat needle.
 
-// Why: resolved by the label the client puts in its own menu, not by the id in `interface.pack`. The packed ids are the server's, and pressing one the client does not agree with is silent, the first live run sent `com_130` six hundred times and the pressure valve never moved off bit 26.
+// Why: resolved by the label the client puts in its own menu. The packed ids in `interface.pack` are the server's, and pressing one the client disagrees with is silent: `com_130` sent 600 times and the pressure valve never moved off bit 26.
 const STILL_LABELS = {
     valveShut: 'Turn pressure valve down',
     valveOpen: 'Turn pressure valve up',
@@ -276,10 +276,10 @@ const VARP_STILL_TOTAL = 330;
 const VARP_STILL_SETTINGS = 331;
 /** `if_close` hands over the naphtha at this tally. */
 const STILL_TARGET = 26;
-// Why: the tar regulator at full flow is +2 pressure a tick and the valve one step open is -2, which is the only pairing that holds the gauge still, shut is +2 a tick and blows in six, wide open falls to zero and the regulator has to come back down.
+// Why: the tar regulator at full flow is +2 pressure a tick and the valve one step open is -2, the only pairing that holds the gauge still: shut is +2 a tick and blows in 6, wide open falls to 0 and the regulator has to come back down.
 const VALVE_HOLD = 1;
 const REGULATOR_FULL = 2;
-// Why: the needle climbs one step a tick while `%temp` is 51-79 and three while it is over 80, and passing bit 25 resets the tally to zero. Coal at six or below therefore peaks at nine, two clear of the ceiling, and the four-tick gap is what stops two lumps landing inside one softtimer period and stacking the jump.
+// Why: the needle climbs 1 step a tick while `%temp` is 51-79 and 3 while it's over 80, and passing bit 25 resets the tally to 0. Coal at 6 or below peaks at 9, 2 clear of the ceiling, and the 4-tick gap stops 2 lumps landing inside one softtimer period.
 const COAL_BELOW = 6;
 const COAL_GAP_TICKS = 4;
 /** Green zone for the progress check, heat needle bits 19 to 24. */
@@ -380,14 +380,14 @@ export async function distilNaphtha(log: (m: string) => void): Promise<boolean> 
             }
             actions.ifButton(comId);
         }
-        // Why: the gauges are the only feedback this has, and a run that makes no progress is indistinguishable from a run that never opened without them.
+        // Why: the gauges are the only feedback here, and without them a run that makes no progress looks like one that never opened.
         if (tick % STILL_TRACE_TICKS === 0) {
             log(`still: total ${view.total}/${STILL_TARGET} heat ${view.heat} valve ${view.valve} reg ${view.regulator} → button ${button}`);
         }
         await Execution.delayTicks(1);
     }
     const finished = readStill().total >= STILL_TARGET;
-    // Why: `[if_close,regicide_still]` is what swaps the empty barrel for the naphtha, the tally alone hands over nothing, so the run is only finished once the interface has been shut.
+    // Why: `[if_close,regicide_still]` swaps the empty barrel for the naphtha and the tally alone hands over nothing, so the run finishes once the interface is shut.
     if (!(await closeStill())) {
         log('the still interface would not close');
         return false;
@@ -403,7 +403,7 @@ async function closeStill(): Promise<boolean> {
     if (await Modals.close()) {
         return true;
     }
-    // Why: the generic close is a CLOSE_BUTTON menu action, and this root's own shut is `com_89`, `[if_button,regicide_still:com_89] if_close`.
+    // Why: the generic close is a CLOSE_BUTTON menu action and this root's own shut is `com_89`, `[if_button,regicide_still:com_89] if_close`.
     const close = stillButtonId('close');
     if (close !== -1) {
         actions.ifButton(close);
@@ -411,7 +411,7 @@ async function closeStill(): Promise<boolean> {
     return Execution.delayUntil(() => reader.modals().main !== STILL_ROOT, 5_000);
 }
 
-// Why: the two powders go into the naphtha in either order and the barrel seals itself on the second, so this is one step that pours whichever it still has rather than two that have to be sequenced.
+// Why: the 2 powders go into the naphtha in either order and the barrel seals itself on the second, so one step pours whatever it still has and nothing needs sequencing.
 
 /** Both powders into the naphtha, which seals the barrel into a bomb. */
 export async function mixBomb(log: (m: string) => void): Promise<boolean> {
@@ -428,7 +428,7 @@ export async function mixBomb(log: (m: string) => void): Promise<boolean> {
             return false;
         }
         if (!powder) {
-            // Why: the barrel seals on the SECOND powder, so a pack with one of them retries this step forever without saying which one the forest still owes.
+            // Why: the barrel seals on the second powder, so a pack with one of them retries this step forever without saying which one the forest still owes.
             log(`no ${dust.name} to mix in — the bomb needs both powders`);
             return false;
         }

@@ -1,5 +1,5 @@
-/** Live Ernest the Chicken harness (#229): --stage N --until N --minutes N, base :8890.
- *  Why: `--stage` relogs since update_questlist only recolours the journal at login; stats are 70 rather than `~maxme` so reach and damage problems stay visible; the bank holds coins and food alone so the spade, poison, fish food and closet key are sourced in the world; the :8888 sim answers neither `givebank` nor `~bankitem`. */
+/** Live Ernest the Chicken harness (#229), using the content world at :8890. */
+// Why: stage jumps relog; level 70 keeps combat meaningful and quest items stay unseeded.
 
 //   HEADED=1 bun e2e/ernest-chicken-229-live.ts --stage 0 --until 3 --minutes 90
 //   HEADED=1 bun e2e/ernest-chicken-229-live.ts --stage 2 --until 3 --minutes 60

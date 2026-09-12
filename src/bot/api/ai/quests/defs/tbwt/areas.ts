@@ -4,8 +4,8 @@ import { FOOD_FLOAT } from '../../food.js';
 
 export const TBWT_QUEST = 'Tai Bwo Wannai Trio';
 
-// Why: `tbwt_main` and `tbwt_tiadeche` are the two `transmit=yes` varps this quest owns, so they are on the wire and exact, see docs/decisions/quest-state-not-varps.md, which names TBWT as the exception.
-// Why: the other four (`tbwt_tinsay`, `tbwt_tamayu`, `tbwt_lubufu`, `tbwt_flags`) are `scope=perm` only and read back 0, so they come off the journal page instead.
+// Why: `tbwt_main` and `tbwt_tiadeche` are `transmit=yes`, so they're on the wire and exact, see docs/decisions/quest-state-not-varps.md, which names TBWT as the exception.
+// Why: `tbwt_tinsay`, `tbwt_tamayu`, `tbwt_lubufu` and `tbwt_flags` are `scope=perm` only and read back 0, so they come off the journal page.
 
 /** Transmitted varp indices, from content/pack/varp.pack. */
 export const TB_VARP = { MAIN: 320, TIADECHE: 321 } as const;
@@ -77,7 +77,7 @@ export const KARAMBWANJI_WANTED = 20;
 /** Bait carried to the Karambwan shoal: each lower spends one, and a burnt Karambwan costs another round trip. */
 export const KARAMBWAN_BAIT = 4;
 
-// Why: "Karambwan vessel", "Karamjan rum" and "Karambwan paste" each name three different objects, so every one of them is matched by id.
+// Why: "Karambwan vessel", "Karamjan rum" and "Karambwan paste" each name 3 different objects, so every one of them is matched by id.
 export const TB_ID = {
     COINS: 995,
     NET: 303,
@@ -127,8 +127,7 @@ export const TB_NAME = {
     HELM: 'Rune full helm'
 } as const;
 
-// Why: `tbwt_tamayu` re-reads all three spear bits from the last spear it was handed, so that
-// spear has to be both above bronze and Karambwan poisoned, see docs/decisions/quest-pitfalls-14.md.
+// Why: `tbwt_tamayu` re-reads all 3 spear bits from the last spear it was handed, so that spear has to be above bronze and Karambwan poisoned, see docs/decisions/quest-pitfalls-14.md.
 
 // Why: cheapest first, `inv_del(inv, $spear, 1)` means Tamayu keeps whatever he is given.
 
@@ -144,8 +143,7 @@ export const TB_SPEARS: readonly { name: string; id: number; kpName: string; kpI
 /** Jogres drop one 4 times in 129, and their patch is already on this quest's route. */
 export const SPEAR_HUNT_KILLS = 40;
 
-// Why: the (p) tiers are absent because `make_tbwt_poisoned_weapon` reads a `tbwt_weapon_poisoned`
-// param that only the unpoisoned spears carry, so paste never lands on one.
+// Why: the (p) tiers are absent because `make_tbwt_poisoned_weapon` reads a `tbwt_weapon_poisoned` param only the unpoisoned spears carry, so paste never lands on one.
 
 /** Every spear this leg may end up holding, for the deposit keep-list. */
 export const TB_SPEAR_IDS: readonly number[] = TB_SPEARS.flatMap(s => [s.id, s.kpId]);
@@ -153,10 +151,10 @@ export const TB_SPEAR_IDS: readonly number[] = TB_SPEARS.flatMap(s => [s.id, s.k
 /** Bare spears the jungle hunt will pick up, cheapest first. */
 export const TB_SPEAR_DROPS: readonly number[] = TB_SPEARS.map(s => s.id);
 
-/** Doses Tamayu drinks before he can match the Shaikahan; the journal only says so at the fourth. */
+/** Doses Tamayu drinks before he can match the Shaikahan; the journal only says so at the 4th. */
 export const AGILITY_DOSES = 4;
 
-/** Agility potions, fullest first: `~set_tbwt_tamayu_agility_count` adds doses, so any mix of four does. */
+/** Agility potions, fullest first: `~set_tbwt_tamayu_agility_count` adds doses, so any mix of 4 does. */
 export const TB_POTIONS: readonly { name: string; id: number; doses: number }[] = [
     { name: 'Agility potion(4)', id: 3032, doses: 4 },
     { name: 'Agility potion(3)', id: 3034, doses: 3 },
@@ -166,7 +164,7 @@ export const TB_POTIONS: readonly { name: string; id: number; doses: number }[] 
 
 export const TB_POTION_IDS: readonly number[] = TB_POTIONS.map(p => p.id);
 
-// Why: the bow is worn rather than spent, so the best one the account can draw is the right one.
+// Why: the bow isn't spent, so the best one the account can draw is the right one.
 
 /** Bows, best first, with the Ranged level each needs to be wielded. */
 export const TB_BOWS: readonly { name: string; ranged: number }[] = [
@@ -184,8 +182,7 @@ export const TB_BOWS: readonly { name: string; ranged: number }[] = [
     { name: 'Longbow', ranged: 1 }
 ];
 
-// Why: `player_ranged_check_ammo` only asks for the `arrows` category, so any arrow fires from any
-// bow. Adamant leads because the live run is proven on it and 200 rune arrows outprice the reward.
+// Why: Any arrow works with any bow in this revision; prefer tested adamant arrows because 200 rune arrows exceed the reward value.
 
 /** Arrows, in the order this quest spends them. */
 export const TB_ARROWS: readonly string[] = [
@@ -216,11 +213,10 @@ export const TB_TILE = {
     /** Zambo's bar in Musa Point, the only Karamjan rum on the island. */
     ZAMBO: new Tile(2925, 3143, 0),
     BANANA_PLANTATION: new Tile(2916, 3161, 0),
-    /** Why: both Brimhaven ranges are out. One is inside the Shrimp and Parrot kitchen behind Heroes' Quest, the other in a room the baked graph has no door into.
-     *  The permanent jungle fire south of the village is the only cooking source this quest can reach. */
+    /** Why: both Brimhaven ranges are out, one behind Heroes' Quest in the Shrimp and Parrot kitchen, the other in a room the baked graph has no door into, so the jungle fire south of the village is the only cooking source. */
     FIRE: new Tile(2789, 3049, 0),
     MONKEYS: new Tile(2833, 3031, 0),
-    /** Why: the jungle edge the Jogres wander from, their own spawn tiles are outside the baked graph, and a walk aimed at one never arrives. */
+    /** Why: the jungle edge the Jogres wander from; their spawn tiles are outside the baked graph, so a walk aimed at one never arrives. */
     JOGRES: new Tile(2916, 3053, 0)
 } as const;
 
@@ -267,7 +263,7 @@ interface Pos {
     level: number;
 }
 
-// Why: the bank is Ardougne, across a 30gp ferry, so "am I still on the island" is what decides whether a missing item is worth a crossing.
+// Why: the bank is Ardougne, across a 30gp ferry, so "am I still on the island" decides whether a missing item is worth a crossing.
 
 /** Karamja, Brimhaven and the ferry decks. */
 export function onKaramja(t: Pos | null | undefined): boolean {

@@ -32,10 +32,7 @@ async function takeSpawn(id: number, name: string, at: Tile, log: (m: string) =>
     return Execution.delayUntil(() => held(id) > 0, 8000);
 }
 
-/**
- * Dig the compost heap. `op1=Search` answers "I'm not looking through that with
- * my hands!". The key is an oplocu with a spade, re-issued whenever none is held.
- */
+/** Dig the compost heap. `op1=Search` answers "I'm not looking through that with my hands!". The key is an oplocu with a spade, re-issued whenever none is held. */
 async function digClosetKey(log: (m: string) => void): Promise<boolean> {
     if (held(EC_ID.CLOSET_KEY) > 0) {
         return true;
@@ -49,7 +46,7 @@ async function digClosetKey(log: (m: string) => void): Promise<boolean> {
     );
 }
 
-/** The ten walkable tiles behind the closet door, from a flood of the pack. */
+/** The 10 walkable tiles behind the closet door, from a flood of the pack. */
 const CLOSET_BOX = { minX: 3108, maxX: 3112, minZ: 3366, maxZ: 3368 };
 
 /** Pure, so `decide()` can branch on the snapshot tile without a client. */
@@ -59,8 +56,8 @@ export function inCloset(tile: { x: number; z: number; level: number } | null | 
         && tile!.z >= CLOSET_BOX.minZ && tile!.z <= CLOSET_BOX.maxZ;
 }
 
-// Why: the closet is a sealed ten-tile room, `open_and_close_door2` shuts the door behind whoever crosses it and `op1=Open` answers "The door is locked".
-// Why: the key is therefore the only way in and the only way back out, and it is never consumed.
+// Why: the closet is a sealed 10-tile room, `open_and_close_door2` shuts the door behind whoever crosses it and `op1=Open` answers "The door is locked".
+// Why: the key is the only way in and out, and it is never consumed.
 
 /** Cross the closet door in the named direction. */
 async function crossClosetDoor(want: 'in' | 'out', log: (m: string) => void): Promise<boolean> {
@@ -110,20 +107,19 @@ export async function fetchRubberTube(log: (m: string) => void): Promise<boolean
     }
     await settleScene();
     if (!(await takeSpawn(EC_ID.RUBBER_TUBE, EC_NAME.RUBBER_TUBE, EC_TILE.RUBBER_TUBE_SPAWN, log))) {
-        // Leaving matters more than the tube: stranded in here, every later leg
-        // spends its budget proving the world unreachable.
+        // Leaving matters more than the tube; stranded in here, every later leg burns its budget failing to walk out.
         await crossClosetDoor('out', log);
         return false;
     }
     return crossClosetDoor('out', log);
 }
 
-// Why: `[oploc1,hauntedfountain]` runs two `~chatplayer` lines before the `inv_add`, so the gauge only lands once the dialogue has been continued twice.
+// Why: `[oploc1,hauntedfountain]` runs 2 `~chatplayer` lines before the `inv_add`, so the gauge only lands once the dialogue has been continued twice.
 // Why: waiting on the item without driving the box never sees it, hence `promptLoc` over a bare op.
 const BITTEN = /something in the water bites you/i;
 
-// Why: `bitten` is the only proof the piranhas are alive, as a search that never landed looks identical to one that did and hurt.
-// Why: reading the first as the second is how a reach refusal became "poison the fountain again".
+// Why: `bitten` is the only proof the piranhas are alive; a search that never landed looks the same as one that did.
+// Why: mistaking a reach refusal for a bite re-poisons the fountain.
 
 /** Search the fountain; `bitten` means the piranhas are still alive. */
 async function searchFountain(log: (m: string) => void): Promise<'gauge' | 'bitten' | 'unknown'> {
@@ -176,7 +172,7 @@ async function poisonFountain(log: (m: string) => void): Promise<boolean> {
         }
     }
     await Sustain.run();
-    // The pour runs a five-tick message chain before the varp flips.
+    // The pour runs a 5-tick message chain before the varp flips.
     return useOnLoc(
         EC_ID.POISONED_FISH_FOOD,
         { name: 'Fountain', near: EC_TILE.FOUNTAIN_STAND },
@@ -206,14 +202,13 @@ export async function fetchPressureGauge(log: (m: string) => void): Promise<bool
     if (!(await poisonFountain(log))) {
         return held(EC_ID.PRESSURE_GAUGE) > 0;
     }
-    // Why: the pour runs a five-tick message chain before the varp flips, and a search that races it comes back bitten.
-    // Why: the report is on the gauge rather than on the op, as a false with the gauge in the pack sends the bot round again.
+    // Why: the pour runs a 5-tick message chain before the varp flips, and a search that races it comes back bitten.
+    // Why: the return reads the gauge; a false with the gauge in the pack sends the bot round again.
     await Execution.delayTicks(6);
     for (let attempt = 0; attempt < 3 && held(EC_ID.PRESSURE_GAUGE) === 0; attempt++) {
         await searchFountain(log);
     }
-    // The gauge can land a tick after the op returns, so read it on a wait
-    // rather than instantaneously, otherwise a leg that worked reports failure.
+    // The gauge can land a tick after the op returns; without the wait a leg that worked reports failure.
     await Execution.delayUntil(() => held(EC_ID.PRESSURE_GAUGE) > 0, 5000);
     return held(EC_ID.PRESSURE_GAUGE) > 0;
 }

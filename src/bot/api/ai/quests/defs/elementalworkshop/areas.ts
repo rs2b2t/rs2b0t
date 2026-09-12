@@ -42,12 +42,12 @@ export const BOOKCASE = new Tile(2716, 3481, 0);
 export const KNIFE_SPAWN = new Tile(2714, 3477, 0);
 // Outside the Seers smithy, walkable stand; the odd-looking wall tile itself is blocked.
 export const SMITHY = new Tile(2709, 3499, 0);
-// Spiral stairs land at 0_42_54_21_41 → (2709, 3497). Approach from the west.
+// Spiral stairs land at 0_42_54_21_41, i.e. (2709, 3497). Approach from the west.
 export const STAIRS_TOP = new Tile(2708, 3497, 0);
 
-// Spiral stairs land at 0_42_154_28_32 → (2716, 9888).
+// Spiral stairs land at 0_42_154_28_32, i.e. (2716, 9888).
 export const WORKSHOP_ARRIVAL = new Tile(2716, 9888, 0);
-// West chamber approach, not the rock loc tile (that is unwalkable).
+// West chamber approach; the rock loc tile itself is unwalkable.
 export const ROCK_STAND = new Tile(2705, 9888, 0);
 export const WATER_STAND = new Tile(2719, 9904, 0);
 export const BELLOWS_STAND = new Tile(2734, 9884, 0);

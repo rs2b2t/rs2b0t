@@ -1,19 +1,14 @@
 // docs/decisions/multibox-telemetry-honesty.md
-// Why: aggregate loop counts show the wall is busy, and only a per-phase bucket breakdown shows which subsystem to optimise.
-// Why: one accumulator lives per iframe (one bot per frame), and the wall reads and clears it on each sample tick, so a bucket is always "cost since the last sample".
+// Per-phase costs for one iframe, cleared whenever the wall samples them.
 
 export type Phase = 'logic' | 'draw';
 
 export const PHASES: readonly Phase[] = ['logic', 'draw'];
 
-/**
- * A single phase that ran long enough to be a freeze suspect, recorded with its window.
- * Why: asking "what is running now" cannot attribute a stall that has already ended, so the wall matches the window against a stall it detected after the fact.
- */
+/** A long phase with its wall-clock window, used to attribute a completed stall. */
 export interface SlowSpan {
     phase: Phase;
-    /** Wall clock, not performance.now(): every iframe has its own time origin,
-     *  so only a shared clock lets the wall line a span up with a stall. */
+    /** Wall clock: every iframe has its own performance.now() origin, so only a shared clock lets the wall line a span up with a stall. */
     start: number;
     end: number;
 }
@@ -53,7 +48,7 @@ export class PhaseTimer {
         private readonly wallClock: () => number = () => Date.now()
     ) {}
 
-    // Why: deliberately synchronous, wrapping an async body measured the span's wall time including every yield to other bots, measured 4-13x higher than the true cost.
+    // Why: synchronous on purpose; wrapping an async body counted every yield to other bots and read 4-13x above the true cost.
     // Why: only an uninterrupted synchronous run is main-thread occupancy.
     // Why: phases must not nest, since a nested span would be counted in both buckets.
 

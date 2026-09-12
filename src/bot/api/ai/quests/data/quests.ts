@@ -222,8 +222,7 @@ export const QUESTS: QuestRecord[] = [
     {
         id: 'biohazard', name: 'Biohazard', questPoints: 3,
         requirements: { quests: ['elena'] },
-        // The vials, the sample, the gown, the key and the priest suit are all
-        // sourced per stage by the module, which owns its own inventory.
+        // The module owns its inventory and sources the vials, sample, gown, key and priest suit per stage.
         items: []
     },
     {
@@ -238,12 +237,12 @@ export const QUESTS: QuestRecord[] = [
     {
         id: 'cog', name: 'Clock Tower', questPoints: 1,
         requirements: {},
-        // Why: the bucket of water that cools the black cog is a quest-internal consumable, so the module fetches it on the leg that needs it rather than the provisioner fetching one on every resume.
+        // Why: the bucket of water for the black cog is consumed mid-quest, so the module fetches it on the leg that needs it and the provisioner leaves it alone.
         items: []
     },
     {
         id: 'crest', name: 'Family Crest', questPoints: 1,
-        // Why: journal gates, Magic 59 is Fire Blast, the last of the four spells Chronozon has to be hit with.
+        // Why: journal gates; Magic 59 is Fire Blast, the last of the 4 spells Chronozon has to be hit with.
         // Why: crafting 40 is the perfect ruby necklace.
         requirements: { skills: [
             { skill: 'mining', level: 40 },
@@ -251,12 +250,7 @@ export const QUESTS: QuestRecord[] = [
             { skill: 'smithing', level: 40 },
             { skill: 'magic', level: 59 }
         ] },
-        // Why: the module owns its inventory and sources per leg, so this list is the dashboard's view rather than an up-front loadout.
-        // Why: no shop in the game sells cooked bass or shrimp, so Caleb's five come from the bank.
-        // Why: the Ardougne gem merchant restocks one ruby every 60k ticks, so the second ruby usually does too.
-        // Why: the perfect jewellery is made during the quest.
-        // Why: every entry is `acquirable` because eligibility is evaluated before the bot has opened a bank, so its item snapshot is empty and any `mustHave` would block the quest at startup instead of after a bank scan.
-        // Why: the module parks with the exact shortfall instead.
+        // Why: Eligibility runs before the bank scan, so the module sources these per leg and reports any remaining shortfall.
         items: [
             { name: 'Tuna', qty: 1, kind: 'acquirable' },
             { name: 'Bass', qty: 1, kind: 'acquirable' },
@@ -272,8 +266,8 @@ export const QUESTS: QuestRecord[] = [
     {
         id: 'death', name: 'Death Plateau', questPoints: 1,
         requirements: {},
-        // Why: Bread ×10, Trout ×10 and Iron bar ×1 are mid-quest Tenzing/Dunstan supplies the deathplateau module withdraws when the map track needs them.
-        // Why: listing them as mustHave here parks the queue before Denulth even starts (the Tourist Trap pattern).
+        // Why: Bread x10, Trout x10 and Iron bar x1 are mid-quest Tenzing/Dunstan supplies the deathplateau module withdraws when the map track needs them.
+        // Why: Listing these as `mustHave` would block the queue before Denulth starts the quest.
         items: []
     },
     {
@@ -283,21 +277,21 @@ export const QUESTS: QuestRecord[] = [
             { skill: 'smithing', level: 20 }
         ] },
         // Why: the quest module owns its restart-safe loadout and sources every item.
-        // Why: listing the smithing supplies as mustHave here makes the generic eligibility pass reject a fresh account before that module can buy them.
+        // Why: smithing supplies as mustHave here would make eligibility reject a fresh account before the module can buy them.
         items: []
     },
     {
         id: 'dragon', name: 'Dragon Slayer', questPoints: 2,
         requirements: { minQuestPoints: 32 },
         items: [
-            // Why: 1 is deliberate against the quest's 12k bill, since provisioning re-checks every mustHave each loop while anything is outstanding.
-            // Why: a coin requirement of any size then sends the bot back to the bank after every purchase, a Dwarven Mine round trip to collect one coin, in the run that found this.
+            // Why: 1, against a 12k bill, since provisioning re-checks every mustHave each loop while anything is outstanding.
+            // Why: A larger coin requirement triggers a bank trip after every purchase.
             // Why: the float covers the shopping, and the module withdraws Wormbrain's 10k and the ship's 2k when it needs them.
             { name: 'Coins', qty: 1, kind: 'mustHave' },
-            // Why: provisioning walks this list in order, so it is ordered as a geographic sweep of Port Sarim, Falador, Varrock then the wilderness, or the bot crosses Asgarnia between each item.
-            // Why: nails are deliberately absent, as six steel bars is eighteen slots of ore that will not fit behind the rest of the shopping.
-            // Why: that nails leg runs from decide() once provisioning is done, late enough to bank the shopping first without the engine withdrawing it straight back.
-            // Why: melee kit is absent too, what the player fights in is their own business, and the quest takes the account as it finds it.
+            // Why: provisioning walks this list in order, so it sweeps Port Sarim, Falador, Varrock then the wilderness instead of crossing Asgarnia between items.
+            // Why: nails are left out, since 6 steel bars is 18 slots of ore that won't fit behind the rest of the shopping.
+            // Why: the nails leg runs from decide() after provisioning, so the shopping can be banked first without the engine withdrawing it straight back.
+            // Why: melee kit is left out too; the quest takes the account as it finds it.
             { name: 'Lobster pot', qty: 1, kind: 'acquirable' },   // Gerrant, Port Sarim
             { name: 'Hammer', qty: 1, kind: 'acquirable' },        // Falador general store
             { name: "Wizard's mind bomb", qty: 1, kind: 'acquirable' }, // Rising Sun, Falador
@@ -363,21 +357,19 @@ export const QUESTS: QuestRecord[] = [
     {
         id: 'elena', name: 'Plague City', questPoints: 1,
         requirements: {},
-        // The rope, spade, buckets, berries and cure ingredients are sourced per
-        // stage by the module, which owns its own inventory.
+        // The module owns its inventory and sources the rope, spade, buckets, berries and cure ingredients per stage.
         items: []
     },
     {
         id: 'fishingcompo', name: 'Fishing Contest', questPoints: 1,
         requirements: { skills: [{ skill: 'fishing', level: 10 }] },
-        // The garlic, rod, spade and worms are sourced per stage by the module, which
-        // walks Draynor → Falador → Catherby → McGrubor's Wood in that order anyway.
+        // The module sources the garlic, rod, spade and worms per stage; it walks Draynor, Falador, Catherby, McGrubor's Wood in that order anyway.
         items: []
     },
     {
         id: 'fluffs', name: "Gertrude's Cat", questPoints: 1,
         requirements: {},
-        // Why: the milk, the doogle leaves and the sardine are all fed to Fluffs mid-quest, so the module sources each on the leg that needs it rather than the provisioner refetching all three on every resume.
+        // Why: the milk, doogle leaves and sardine are all fed to Fluffs mid-quest, so the module sources each on the leg that needs it and the provisioner would refetch all 3 on every resume.
         items: []
     },
     {
@@ -406,7 +398,7 @@ export const QUESTS: QuestRecord[] = [
         id: 'horror', name: 'Horror from the Deep', questPoints: 2,
         requirements: { skills: [{ skill: 'agility', level: 35 }] },
         items: [
-            // Why: all five have a source the module walks to, the plank spawns by the outpost, nails off the Dwarven Mine anvil, a 1gp hammer, the Lumbridge swamp tar patch and Catherby seaweed for the glass.
+            // Why: all 5 have a source the module walks to: the plank spawn by the outpost, nails off the Dwarven Mine anvil, a 1gp hammer, the Lumbridge swamp tar patch and Catherby seaweed for the glass.
             { name: 'Plank', qty: 2, kind: 'acquirable' },
             { name: 'Nails', qty: 8, kind: 'acquirable' },
             { name: 'Hammer', qty: 1, kind: 'acquirable' },
@@ -430,9 +422,9 @@ export const QUESTS: QuestRecord[] = [
     },
     {
         id: 'itgronigen', name: 'Observatory Quest', questPoints: 2,
-        // Why: the server gates nothing, `craft_telescope_disc` carries no level check, but the quest is listed at Crafting 10 and the eligibility view should say so.
+        // Why: the server gates nothing (`craft_telescope_disc` has no level check), but the quest is listed at Crafting 10 and the eligibility view should say so.
         requirements: { skills: [{ skill: 'crafting', level: 10 }] },
-        // Why: the professor takes the planks, the bar, the glass and the mould one stage at a time and deletes each as it lands, so a provisioning list would re-fetch items the quest has already spent.
+        // Why: the professor takes the planks, bar, glass and mould one stage at a time and deletes each, so a provisioning list would re-fetch items already spent.
         // Why: the module sources every one of them itself, bank first.
         items: []
     },
@@ -462,10 +454,10 @@ export const QUESTS: QuestRecord[] = [
             ],
             quests: ['hero', 'crest', 'zombiequeen', 'upass', 'waterfall']
         },
-        // Why: every entry is `acquirable` because eligibility runs before the bot has opened a booth, so its item snapshot is empty and any `mustHave` would block the quest at startup rather than after a bank scan.
-        // Why: papyrus, charcoal, the machete, the knife, the rope, the runes and the gold bars all have a counter or a rock the module walks to; everything below has neither, so the module parks with the exact shortfall.
+        // Why: every entry is `acquirable` because eligibility runs before any bank is opened, so a `mustHave` would block the quest at startup on an empty snapshot.
+        // Why: The module can source the listed supplies; any remaining shortfall must wait for the user.
         // Why: no shop sells a rune axe (smithing 86), a lockpick (a rogue's pocket), an unpowered orb (a glassblower's pipe) or a cosmic rune outside the Mage Arena.
-        // Why: the seven gems are listed because no counter stocks opal, jade or red topaz, and the only rocks that drop them are the Shilo ones past Hajedy's cart, the module mines and cuts them when the bank is empty.
+        // Why: the 7 gems are listed because no counter stocks opal, jade or red topaz and only the Shilo rocks past Hajedy's cart drop them; the module mines and cuts them when the bank is empty.
         items: [
             { name: 'Rune axe', qty: 1, kind: 'acquirable' },
             { name: 'Lockpick', qty: 1, kind: 'acquirable' },
@@ -607,8 +599,7 @@ export const QUESTS: QuestRecord[] = [
         requirements: {
             quests: ['biohazard']
         },
-        // Why: the plank only crosses the double spring trap, and the module walks that with the journal
-        // held open instead, so requiring one would block a quest it no longer needs.
+        // Why: the plank only crosses the double spring trap and the module walks that with the journal held open, so requiring one would block a quest that doesn't need it.
         items: [
             { name: 'Rope', qty: 1, kind: 'acquirable' }
         ]
@@ -625,8 +616,7 @@ export const QUESTS: QuestRecord[] = [
             ]
         },
         items: [
-            // Why: the axe and the knife have permanent spawns inside Rellekka, the tinderbox comes off Arhein in Catherby,
-            // Why: and the shark is bought from Rufus in Canifis, the only shop in the game that restocks one.
+            // Why: the axe and knife have permanent spawns in Rellekka, the tinderbox comes off Arhein in Catherby, and the shark is bought from Rufus in Canifis, the only shop that restocks one.
             { name: 'Bronze axe', qty: 1, kind: 'acquirable' },
             { name: 'Knife', qty: 1, kind: 'acquirable' },
             { name: 'Tinderbox', qty: 1, kind: 'acquirable' },
@@ -667,8 +657,7 @@ export const QUESTS: QuestRecord[] = [
             ],
             quests: ['junglepotion']
         },
-        // Karamja has no bank until this quest opens Shilo's, so the module sources
-        // its loadout from Jiminua's rather than provisioning from a bank.
+        // Karamja has no bank until this quest opens Shilo's, so the module sources its loadout from Jiminua's.
         items: []
     }
 ];

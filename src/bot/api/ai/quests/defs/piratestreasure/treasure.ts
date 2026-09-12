@@ -11,8 +11,8 @@ import { PT_ID, PT_LOC, PT_TILE } from './areas.js';
 
 const held = (id: number): number => Inventory.countById(id);
 
-// Why: `[oploc1,grocerycrate]` hands the rum back before it raises a Yes/No banana prompt, so the answer has to be driven or the modal sits there.
-// Why: the `store-job` journal page also renders while the rum is still in the plantation crate, and an empty back room is the only thing that tells the two apart, so a miss crosses to Karamja rather than reporting a failure the engine would retry forever.
+// Why: `[oploc1,grocerycrate]` returns the rum, then opens a Yes/No prompt that must be continued.
+// Why: the `store-job` page also renders while the rum is still in the plantation crate and only an empty back room tells them apart, so a miss crosses to Karamja; a failure would retry forever.
 
 /** Search Wydin's back-room crate for the shipped rum. */
 export async function collectRum(log: (m: string) => void): Promise<boolean> {
@@ -39,7 +39,7 @@ export async function collectRum(log: (m: string) => void): Promise<boolean> {
     return false;
 }
 
-// Why: the chest consumes the key and hands over the message in one script, so the message is the only honest oracle for the leg.
+// Why: The chest consumes the key and gives the message in one script, so the message confirms success.
 
 /** Unlock the Blue Moon chest with the key. */
 export async function openChest(log: (m: string) => void): Promise<boolean> {
@@ -60,7 +60,7 @@ export async function openChest(log: (m: string) => void): Promise<boolean> {
     );
 }
 
-// Why: `~scroll_pirate_message` is an `if_settext` main modal, not a chat box, leaving it up makes every later journal read come back empty.
+// Why: `~scroll_pirate_message` is an `if_settext` main modal, and leaving it up makes every later journal read come back empty.
 
 /** Read the pirate message, then close the scroll it opens. */
 export async function readMessage(log: (m: string) => void): Promise<boolean> {
@@ -110,7 +110,7 @@ async function clearGardener(log: (m: string) => void): Promise<void> {
 }
 
 // Why: `dig.rs2` aborts on `npc_find(coord, falador_gardener, 10, 0)` and his `maxrange` keeps him permanently inside that radius, so he cannot be waited out.
-// Why: proximity is a hint that saves a wasted click, never a gate, the dig message is the oracle and the pair is retried.
+// Why: proximity is a hint that saves a wasted click; the dig message is the oracle and the pair is retried.
 
 /** Dig at the X in Falador park. */
 export async function digTreasure(log: (m: string) => void): Promise<boolean> {
@@ -126,7 +126,7 @@ export async function digTreasure(log: (m: string) => void): Promise<boolean> {
         }
         await settleScene();
         await clearGardener(log);
-        // Why: the attack walks the character to the gardener, and `spade.rs2` fires only within one tile of the X, digging where the fight ended answers "Nothing interesting happens." and the retry kills and walks away again.
+        // Why: the attack walks you to the gardener and `spade.rs2` only fires within 1 tile of the X, so digging where the fight ended answers "Nothing interesting happens."
         if (!(await Traversal.walkResilient(PT_TILE.DIG_SITE, { radius: 0, attempts: 3, timeoutMs: 60_000, log }))) {
             log('could not get back onto the dig tile after the gardener');
             continue;
@@ -140,7 +140,7 @@ export async function digTreasure(log: (m: string) => void): Promise<boolean> {
             continue;
         }
         if (await Execution.delayUntil(() => GameMessages.sawSince(mark, DUG), 8000)) {
-            // Why: `queue(hunt_quest_complete, 0, 0)` lands four ticks after the dig line, so the leg is not finished when the message is.
+            // Why: `queue(hunt_quest_complete, 0, 0)` lands 4 ticks after the dig line, so the leg is not finished when the message is.
             await Execution.delayTicks(8);
             return true;
         }

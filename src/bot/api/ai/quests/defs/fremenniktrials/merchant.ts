@@ -25,7 +25,7 @@ const ASKELADDEN_FEE = 5000;
 
 // Why: every trade is one item in, one item out, so what is carried names the next councillor without any journal read.
 
-/** The flower chain, carried backwards: hold this, hand it to that councillor. */
+/** Flower exchanges in reverse order: held item to recipient. */
 const HANDOVER: readonly { id: number; label: string; to: (prefer: string[]) => NpcStop }[] = [
     { id: FT_ID.FLOWER, label: 'Exotic flower', to: SIGMUND },
     { id: FT_ID.BALLAD, label: 'Fremennik ballad', to: SAILOR },
@@ -65,7 +65,7 @@ function merchantAt(progress: QuestProgress | undefined): string | undefined {
     return undefined;
 }
 
-/** Sigmund's trial: trade a promissory note up eleven hands into the exotic flower. */
+/** Sigmund's trial: trade a promissory note up 11 hands into the exotic flower. */
 export function merchantStep(snap: QuestSnapshot): QuestStep | null {
     if (hasFlag(snap.progress, 'merchant-done')) {
         return null;
@@ -94,7 +94,7 @@ export function merchantStep(snap: QuestSnapshot): QuestStep | null {
     return { kind: 'talk', stop: next(MERCHANT_FIRST) };
 }
 
-// Why: `sigmund_started` and `sigmund_spoke_sailor` render the same journal page, so the two openings are one step rather than two the module cannot tell apart.
+// Why: `sigmund_started` and `sigmund_spoke_sailor` render the same journal page, so the 2 openings are one step.
 async function openChain(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(SAILOR([]).anchor, 2, log))) {
         return false;

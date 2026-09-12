@@ -1,7 +1,4 @@
-/**
- * GatheringBot task implementations (combat, mule, bank, cook, tools, gather).
- * Separated from the bot class for maintainability; behavior is unchanged.
- */
+/** GatheringBot task implementations for combat, mule, bank, cooking, tools, and gathering. */
 import { beyondLeash, shouldSoftHomeFromGatherMiss, tileWithinLeash } from '../../api/tasks/Anchor.js';
 import type { Task } from '../../api/bot/Bot.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
@@ -1215,7 +1212,7 @@ export class FishCookLoad implements Task {
                     this.bot.log(`cook: walking to approach ${approach}${why ? ` — ${why}` : ''}`);
                     await walkOpening(approach, 1, obs, m => this.bot.log(m));
                 }
-                // Proactively open Large door / house Door at the approach tile.
+                // Open a Large door or house Door from its approach tile.
                 const shut = Locs.query()
                     .where(l => isOpenableObstacle(l.name, l.actions(), obs))
                     .where(l => l.distance() <= 3)
@@ -2280,7 +2277,7 @@ export class Gather implements Task {
     /** NPC index of the spot we last successfully started fishing on (null = no active session). */
     private activeFishIndex: number | null = null;
 
-    /** Loc tile of the tree/rock we last clicked. Ent abort is scoped to this tile only. */
+    /** Last clicked tree or rock tile; only abort an Ent on this tile. */
     private activeChopTile: Tile | null = null;
 
     /**
@@ -2483,8 +2480,7 @@ export class Gather implements Task {
     }
 
     /**
-     * Cancel leftover Ent swings, then chop a neighbour, walk to one, or step one tile.
-     * Why: returning from the anim ride is not a cancel; p_opnpc keeps feeding the break counter.
+     * Why: leaving the animation wait does not cancel p_opnpc; send a new action to stop Ent swings.
      */
     private async abortEnt(key: string, tile: Tile): Promise<void> {
         this.bot.log(`gather: ent @ ${tile} — switching tree`);

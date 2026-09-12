@@ -9,8 +9,8 @@ import { PathFinder, type NavPoint, type TransportEdgeData } from '#/bot/event/w
 import { Reader, bridgedLevel, forEachLoc, loadLocTypes, loadMapsquares, parseLands } from './lib.js';
 import { parseSwitchStairs } from './stairsParse.js';
 
-// First stage of transport generation; emits bare source edges by design.
-// Follow it with tools/nav/derive-transports.sh for full ladder derivation and exact LostCity loc enrichment, in that order.
+// First stage of transport generation: bare source edges only.
+// tools/nav/derive-transports.sh runs this, then ladder derivation, then LostCity loc enrichment.
 
 function argVal(name: string): string | undefined {
     const i = process.argv.indexOf(name);
@@ -24,8 +24,8 @@ const packPath = argVal('--pack') ?? 'out/collision.lcnav.gz';
 
 const LADDER_LOC_IDS = new Set([1746, 1747, 1748, 1749, 1750]);
 
-// These destinations hold Castle Wars spawn trapdoors rather than a Climb-down ladder.
-// Why: the rejected auto-reverses stay in stairEdges.json as documentation, but PathFinder must not route through them.
+// The Castle Wars spawn trapdoors have no Climb-down, and the Handelmort stairs are trapped.
+// Why: the rejected auto-reverses stay in stairEdges.json as documentation, and PathFinder must not route through them.
 const DISABLED_AUTO_REVERSES = new Map<string, string>([
     ['2370,3134,2>2370,3134,1', 'Castle Wars Zamorak spawn trapdoor (loc 4472) only offers Open; revision 274 has no Climb-down loc or handler.'],
     ['2429,3075,2>2429,3075,1', 'Castle Wars Saradomin spawn trapdoor (loc 4471) only offers Open; revision 274 has no Climb-down loc or handler.'],
@@ -63,8 +63,8 @@ function reverseAction(action: string): string {
     return action;
 }
 
-// Underground is not another level, the engine p_telejumps you to the same level 6400 squares north (`movecoord(coord, 0, 0, 6400)`).
-// Why: a cellar hop therefore looks like a same-level walk to anything that only inspects `level`, which is why these were never auto-reversed and every cellar could be climbed out of but not into.
+// Underground tiles use the same level with z + 6400, via movecoord(coord, 0, 0, 6400).
+// Why: these hops still change floors; checking level alone misses their reverse edges.
 const UNDERGROUND_SHIFT = 6400;
 
 function underground(p: NavPoint): boolean {
@@ -76,14 +76,13 @@ function changesFloor(e: TransportEdgeData): boolean {
     return e.from.level !== e.to.level || underground(e.from) !== underground(e.to);
 }
 
-/** Same-level underground hops must be `dungeon` rather than `stair`.
- *  Why: PathFinder only hands the executor a `toTile` for dungeon-kind edges, and without one it has no arrival condition and cannot drive the Open-then-descend two-step a shut trapdoor or manhole needs. */
+/** Why: dungeon edges pass toTile to the executor, which needs it to open and descend a trapdoor or manhole. */
 function edgeKind(e: TransportEdgeData): TransportEdgeData['kind'] {
     return e.from.level === e.to.level && underground(e.from) !== underground(e.to) ? 'dungeon' : e.kind;
 }
 
-// Walkable is not reachable: build-collision leaves sealed tiles behind, a lone square with no exits at all, or a one-tile-wide strip whose only exits run along itself.
-// Why: snapping a ladder onto one lands the walker somewhere it can never leave, and the local component size tells them apart without a-map flood.
+// The collision pack can contain walkable tiles with no way out.
+// Why: local component size catches isolated tiles and strips before a ladder landing strands the bot.
 const LOCAL_FLOOD_CAP = 192;
 const DX8 = [0, 1, 0, -1, 1, 1, -1, -1];
 const DZ8 = [1, 0, -1, 0, 1, -1, -1, 1];
@@ -119,7 +118,7 @@ function snapWalkable(finder: PathFinder, x: number, z: number, level: number): 
             continue;
         }
         fallback ??= p;
-        // Why: a tile with no exits at all can be stood on and never left, so a ladder landed there strands the walker; the first ordinary candidate still wins, leaving every other ladder untouched.
+        // Why: prefer a tile with a neighbour; fall back to the nearest walkable tile if none qualify.
         if (localComponentSize(finder, p) > 1) {
             return p;
         }
@@ -127,8 +126,8 @@ function snapWalkable(finder: PathFinder, x: number, z: number, level: number): 
     return fallback;
 }
 
-// Why: the server accepts a Climb from a tile cardinally beside the loc with no wall between the two, the rule `PathFinder.cardinalGoals` already walks a player in on.
-// Why: a staircase blocks its own tiles, so the footprint is read back off the collision rather than the loc config, which carries a size but no rotation on this path.
+// Climb works from a cardinal neighbour with no intervening wall.
+// Why: collision reveals the rotated staircase footprint; the config only provides its size.
 const FOOTPRINT_RADIUS = 1;
 const SIDES: readonly [number, number, number][] = [
     [0, 1, 1 << 2],
@@ -179,10 +178,7 @@ function operableTiles(finder: PathFinder, p: NavPoint): Set<string> {
     return tiles;
 }
 
-// Why: snapWalkable takes the nearest walkable tile and never asks which side of a wall it lies on. Around
-// Why: Falador's eastern houses that is the square west of the staircase, outside the house, so the walker
-// Why: arrived there and clicked a staircase the server would not let it reach, one tile through the wall.
-// Why: Only an anchor with no wall-free approach moves, so every flight that already worked keeps its tile.
+// Why: snapWalkable can choose the other side of a wall; move the anchor only when it has no wall-free approach.
 function snapApproach(finder: PathFinder, p: NavPoint, nearest: NavPoint | null): NavPoint | null {
     const operable = operableTiles(finder, p);
     if (operable.size === 0 || (nearest && operable.has(`${nearest.x},${nearest.z}`))) {
@@ -206,8 +202,7 @@ function pivotBoth(finder: PathFinder, x: number, z: number, a: number, b: numbe
             continue;
         }
         fallback ??= { x: px, z: pz };
-        // Same rule as snapWalkable: a tile with no exits on either floor is a
-        // place the walker can reach and never leave.
+        // Same rule as snapWalkable: a tile with no exits on either floor strands the walker.
         if (localComponentSize(finder, { x: px, z: pz, level: a }) > 1 && localComponentSize(finder, { x: px, z: pz, level: b }) > 1) {
             return { x: px, z: pz };
         }
@@ -216,10 +211,7 @@ function pivotBoth(finder: PathFinder, x: number, z: number, a: number, b: numbe
 }
 
 function snapAndReverse(finder: PathFinder, curated: TransportEdgeData[], raw: TransportEdgeData[]): { edges: TransportEdgeData[]; dropped: number; supersededDropped: number } {
-    // Why: an auto-reverse keeps landing on the plain snap. Nothing in the scripts says where a derived
-    // Why: climb-down drops the player, a stair hop only waits on the level to change, and moving those
-    // Why: landings with the approach sealed off the Yanille and south Falador pockets they were the only
-    // Why: graph edge into.
+    // Why: reverse landing tiles are unknown; moving them to the approach side can disconnect pockets such as Yanille and south Falador.
     const snapped: { edge: TransportEdgeData; landing: NavPoint }[] = [];
     let dropped = 0;
     for (const e of raw) {

@@ -10,7 +10,7 @@ export const TB_FLAG = {
     TINSAY: 'tinsay',
     TAMAYU: 'tamayu',
     LUBUFU: 'lubufu',
-    /** Tamayu has drunk his four doses of agility potion. */
+    /** Tamayu has drunk his 4 doses of agility potion. */
     AGILITY: 'agility',
     /** Tamayu is holding a spear that is both strong enough and Karambwan-poisoned. */
     SPEAR: 'spear'
@@ -26,7 +26,7 @@ function normalize(lines: readonly string[] | string): string {
 
 const LABELS = ['tiadeche', 'tinsay', 'tamayu', 'lubufu'] as const;
 
-// Why: every brother's block is appended to the same page in a fixed order, and "Nothing of interest." is the intro line for three of them, so a marker is only meaningful inside its own section.
+// Why: every brother's block is appended in a fixed order and "Nothing of interest." is the intro line for 3 of them, so a marker only counts inside its own section.
 
 /** The slice of the page between one brother's heading and the next. */
 function section(text: string, label: string): string {
@@ -78,12 +78,12 @@ const LUBUFU_MARKERS: readonly [string, number][] = [
 ];
 
 /**
- * Sub-progress for the three brothers the client has no varp for; `main` and `tiadeche` come from their transmitted varps.
- * Why: undefined marks a page that did not render, which a quest at zero would otherwise be read as.
+ * Sub-progress for the 3 brothers the client has no varp for; `main` and `tiadeche` come from their transmitted varps.
+ * Why: undefined marks a page that did not render, so it isn't mistaken for a quest at zero.
  */
 export function parseTbwtJournal(lines: readonly string[] | string): Set<string> | undefined {
     const text = normalize(lines);
-    // Every in-progress page opens by naming the three sons; a blank read is a modal that never opened.
+    // Every in-progress page opens by naming the 3 sons; a blank read is a modal that never opened.
     if (!text.includes('sons of')) {
         return undefined;
     }
@@ -101,27 +101,27 @@ export function parseTbwtJournal(lines: readonly string[] | string): Set<string>
     if (tamayuText.includes('karambwan poisoned spear')) {
         flags.add(TB_FLAG.SPEAR);
     }
-    // Why: the two lines are only written while he is still hunting; past the kill the page states them unconditionally, and both are then facts.
+    // Why: the 2 lines are only written while he is still hunting; past the kill both are facts.
     if (tamayu !== null && tamayu >= TB_TAMAYU.COMPLETE) {
         flags.add(TB_FLAG.AGILITY);
         flags.add(TB_FLAG.SPEAR);
     }
 
-    // Why: the block is skipped entirely below `initial_ops`, so a missing section is "not spoken to yet", not a parse failure.
+    // Why: the block is skipped below `initial_ops`, so a missing section means "not spoken to yet".
     const lubufu = firstMatch(section(text, 'lubufu'), LUBUFU_MARKERS);
     flags.add(`${TB_FLAG.LUBUFU}:${lubufu ?? TB_LUBUFU.UNKNOWN}`);
 
     return flags;
 }
 
-/** A failed read is not evidence the quest went backwards. */
+/** Stands in when a read fails. */
 let lastGood: QuestProgress | undefined;
 
 export function resetTbwtProgressCache(): void {
     lastGood = undefined;
 }
 
-// Why: the journal is only opened during the brothers phase, before it the two varps say everything, and afterwards the quest is one talk from done.
+// Why: the journal is only opened during the brothers phase; before it the 2 varps say everything, after it the quest is one talk from done.
 
 export async function readTbwtProgress(): Promise<QuestProgress | undefined> {
     const status = Quests.status(TBWT_QUEST);
@@ -142,7 +142,7 @@ export async function readTbwtProgress(): Promise<QuestProgress | undefined> {
         actions.closeModal();
         await Execution.delayTicks(1);
     }
-    // A page that rendered nothing at all is a failed read, not a quest that went backwards.
+    // A page that rendered nothing is a failed read.
     if (!flags) {
         return lastGood;
     }

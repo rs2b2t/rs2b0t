@@ -72,7 +72,7 @@ export default class ParamsModal {
             showGlobalExtra?: boolean;
         }
     ): void {
-        // Loadout names are player data, not a schema constant.
+        // Loadout names are player data, so refresh them on open.
         for (const def of Object.values(schema)) {
             if (def.optionsFrom === 'loadouts') {
                 def.options = Loadouts.names();
@@ -130,8 +130,7 @@ export default class ParamsModal {
         if (this.scriptName === 'Global' && this.showGlobalExtra && this.globalExtra) {
             this.bodyEl.appendChild(this.globalExtra);
         }
-        // Why: mid-run schema changes desync the bot, so script params lock while a script runs.
-        // Global / Nav (same storage ns) stay live, lamp skill, run, bank junk and path paint are meant to be tweakable mid-session.
+        // Why: mid-run schema changes desync the bot, so script params lock while a script runs; Global and Nav stay live since lamp skill, run, bank junk and path paint are meant to be tweaked mid-session.
         const lockScriptParams = this.scriptName !== 'Global' && this.isActive();
         const disabled = lockScriptParams;
         if (lockScriptParams) {
@@ -212,7 +211,7 @@ export default class ParamsModal {
         }, { disabled }, valueOf);
         control.classList.add('rs2b0t-param-control');
 
-        // Why: the order book is a table, not a value, so the dropdown picks one and the button opens the editor.
+        // Why: an order book is a table of rows, so the dropdown picks one and the button opens the editor.
         if (def.optionsFrom === 'priceBooks' && this.onEditPriceBook) {
             const pair = el('div', 'rs2b0t-param-control rs2b0t-param-with-edit');
             pair.appendChild(control);

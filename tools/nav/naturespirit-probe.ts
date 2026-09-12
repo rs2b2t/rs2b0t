@@ -1,5 +1,5 @@
-/** Pathfind to every tile the Nature Spirit module names, from the banks it starts each leg at.
- *  Why: a stand tile next to an unwalkable loc is not automatically reachable, and a swamp the walker cannot enter is a nav-data problem rather than a quest one. */
+/** Check Nature Spirit stand tiles from the banks used by each leg.
+ * Why: a walkable stand beside a loc can still be disconnected from the route. */
 
 //   bun tools/nav/build-collision.ts --engine ~/code/rs2b2t-engine
 //   bun tools/nav/naturespirit-probe.ts
@@ -56,7 +56,7 @@ for (const [fromName, from] of FROM) {
             continue;
         }
         const last = out.waypoints[out.waypoints.length - 1];
-        // Why: findPath snapping to within five tiles is a weaker claim than walkResilient(radius 2) arriving.
+        // Why: findPath can stop five tiles short; require the two-tile arrival radius used by walkResilient.
         const snapped = Math.max(Math.abs(last.x - to.x), Math.abs(last.z - to.z));
         const verdict = snapped > 2 ? 'SNAPPED' : 'ok     ';
         if (snapped > 2) {
@@ -66,7 +66,7 @@ for (const [fromName, from] of FROM) {
     }
 }
 
-// Why: the grotto is entered by a scripted teleport, so no route into it exists and none should.
+// Why: the grotto requires a scripted teleport; a baked route into it would be a bug.
 console.log(`\ngrotto interior (${NS_TILE.GROTTO_INSIDE.x},${NS_TILE.GROTTO_INSIDE.z}) is a sealed pocket — entered by the loc, never walked to`);
 
 if (unreachable > 0) {

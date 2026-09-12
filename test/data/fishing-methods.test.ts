@@ -93,7 +93,6 @@ test('gear helpers: keep names, has/missing, label, restock plan', () => {
     );
     expect(plan).toEqual([{ name: 'Fishing bait', qty: 100 }]);
 
-    // Already topped up → empty plan
     expect(fishingRestockPlan(rod, () => 100, () => 50)).toEqual([]);
 });
 

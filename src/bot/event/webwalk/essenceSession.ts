@@ -1,10 +1,9 @@
-// Why: content sets `%exit_essence_mine_coord` (pack id 64) on wizard entry, but that varp has no `transmit=yes`, see docs/local/varp-transmit-inventory.md.
-// Why: the dest is mirrored bot-side when an entry hop is taken (specialCrossing or catalog edge) and fed into WorldState.essenceExitReturn for plan filters.
+// Why: server-only varp 64 is mirrored after an entry hop so the planner can select the right exit.
 
 import type { EssenceReturnId } from './essenceExit.js';
 import { essenceReturnIdFromTile } from './essenceExit.js';
 
-/** Map entry NPC / loc display names → return id. */
+/** Map entry NPC / loc display names to return id. */
 const NPC_TO_RETURN: Readonly<Record<string, EssenceReturnId>> = {
     aubury: 'aubury',
     sedridor: 'sedridor',
@@ -30,7 +29,7 @@ export const EssenceSession = {
         sessionReturn = returnId;
     },
 
-    /** Infer from NPC / loc name (Aubury, Wizard Cromperty, …). */
+    /** Infer from NPC / loc name (Aubury, Wizard Cromperty). */
     noteEntryFromNpc(name: string | undefined | null): EssenceReturnId | null {
         if (!name) {
             return null;
@@ -43,10 +42,7 @@ export const EssenceSession = {
         return null;
     },
 
-    /**
-     * Infer from a completed transport hop: entry edges land on the mine pad
-     * with action Teleport; also match ess_entry_* debug via locName heuristics.
-     */
+    /** Infer from a completed transport hop: entry edges carry action Teleport, then the NPC name or the surface stand tile. */
     noteEntryFromTransport(transport: {
         locName?: string;
         action?: string;
@@ -56,7 +52,7 @@ export const EssenceSession = {
         locZ?: number;
     }): EssenceReturnId | null {
         const action = (transport.action ?? '').toLowerCase();
-        // Only wizard Teleport hops set the session return (not mine exit Portal Use).
+        // Only wizard Teleport hops set the session return; the mine exit is Portal Use.
         if (action !== 'teleport') {
             return null;
         }
@@ -79,7 +75,7 @@ export const EssenceSession = {
         return null;
     },
 
-    /** Match specialCrossing label "Aubury → essence mine". */
+    /** Match a specialCrossing label like "Aubury -> essence mine". */
     noteEntryFromCrossingLabel(label: string | undefined): EssenceReturnId | null {
         if (!label || !/essence\s*mine/i.test(label)) {
             return null;

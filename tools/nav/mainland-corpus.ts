@@ -1,5 +1,5 @@
-/** Pack-level regression over curated mainland legs only: bun --preload ./test/setup-dom.ts tools/nav/mainland-corpus.ts [--explain].
- *  A thin filter over the shared path corpus (same builder and path dedupe as script-route-corpus, which is the tool for the full mesh / hardest precalc). */
+/** Run the curated mainland routes through the shared path corpus builder and dedupe.
+ * Use script-route-corpus for the full route mesh and hardest-route ranking. */
 
 //   bun --preload ./test/setup-dom.ts tools/nav/mainland-corpus.ts
 //   bun --preload ./test/setup-dom.ts tools/nav/mainland-corpus.ts --explain
@@ -16,8 +16,7 @@ import { buildScriptRoutes } from './script-route-corpus.js';
 const explain = process.argv.includes('--explain');
 const packPath = 'out/collision.lcnav.gz';
 
-// Mainland JSON is source of truth for these legs; buildScriptRoutes already
-// injects them first and path-dedupes anything that would shadow them.
+// buildScriptRoutes adds the curated mainland legs first, then removes duplicate journeys.
 const routes = buildScriptRoutes().filter(r => r.source === 'mainland-routes.json');
 if (routes.length === 0) {
     console.error('no mainland-routes.json legs in corpus — is tools/nav/mainland-routes.json present?');

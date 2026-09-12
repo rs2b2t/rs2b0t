@@ -1,6 +1,4 @@
-/**
- * Which collapsed bridges join which level-1 platforms, and the chain between two of them.  Why: the platforms are a graph of pockets joined by twenty identical bridges, and a runtime search over  it wanders, four crossings in thirty-five minutes, none of them toward the target. The graph is static,  so it is solved here once and the answer is baked into the module.  bun tools/nav/upass-platform-route.ts
- */
+/** Derive level-1 platform connections and bridge routes. Run: bun tools/nav/upass-platform-route.ts */
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -82,8 +80,7 @@ const idOf = (t: NavPoint): number | null => {
 console.log(`${bridges.length} bridges on the platforms`);
 const edges: { bridge: NavPoint; sides: { tile: NavPoint; pocket: number }[] }[] = [];
 for (const b of bridges) {
-    // Why: these bridges span a chasm, with the far landing three or four tiles out rather than adjacent, so a
-    // cardinal-neighbour probe only ever finds the near side and every bridge reads as joining one pocket.
+    // Why: the far landing is three or four tiles away; checking only cardinal neighbours finds one side.
     const sides: { tile: NavPoint; pocket: number }[] = [];
     const ring: [number, number][] = [];
     for (let d = 1; d <= 4; d++) {
@@ -116,7 +113,7 @@ for (const [name, tile] of LANDMARKS) {
     console.log(`  ${name.padEnd(16)} ${id === null ? 'NOT WALKABLE' : id.toString(16)}`);
 }
 
-// Why: emitted as source, because hand-copying twenty-two coordinate triples is how a map gets a typo in it.
+// Emit source to avoid copying coordinate triples by hand.
 console.log('\n// paste into areas.ts');
 console.log('export const PLATFORM_LINKS: readonly PlatformLink[] = [');
 for (const { bridge, sides } of edges) {

@@ -9,7 +9,7 @@ import { Skills } from '../../api/skills/Skills.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 
-// Define bank location type
+// Bank destination and access point.
 interface BankLocation {
     x: number;
     z: number;
@@ -27,7 +27,7 @@ interface TeleportMethod {
 }
 
 const CONFIG = {
-    // Teleport methods and their requirements
+    // Teleports and their requirements.
     teleports: {
         'varrock': {
             name: 'Varrock Teleport',
@@ -79,7 +79,7 @@ const CONFIG = {
         }
     } as { [key: string]: TeleportMethod },
     
-    // All bank locations for nearest bank detection
+    // Candidate banks for nearest-bank routing.
     allBanks: [
         { x: 3252, z: 3420, name: 'Varrock' },
         { x: 3092, z: 3245, name: 'Lumbridge' },
@@ -89,7 +89,7 @@ const CONFIG = {
         { x: 2547, z: 3111, name: 'Watchtower' }
     ] as BankLocation[],
     
-    // Progressive teleport progression (stops at Camelot)
+    // Progressive unlock order, ending at Camelot.
     progressiveProgression: [
         { level: 25, teleportKey: 'varrock' },
         { level: 31, teleportKey: 'lumbridge' },
@@ -97,7 +97,7 @@ const CONFIG = {
         { level: 45, teleportKey: 'camelot' }
     ],
     
-    // Staff rune replacements
+    // Runes supplied by elemental staves.
     staffs: {
         'Air staff': 'Air rune',
         'Staff of air': 'Air rune',
@@ -123,11 +123,11 @@ const CONFIG = {
         'Mystic earth staff': 'Earth rune'
     } as { [key: string]: string },
     
-    // Bank interaction
+    // Bank access.
     boothName: 'Bank booth',
     boothOp: 'Use-quickly',
     
-    // Magic tab
+    // Magic interface.
     magicTabIndex: 6,
 };
 
@@ -217,7 +217,7 @@ export default class AIOTeleport extends LoopingBot {
     private lawRunesRemainingInBatch: number = 0;
     private currentBankPos: BankLocation | null = null;
     
-    // Progressive teleport tracking
+    // Progressive teleport state.
     private isProgressiveMode: boolean = false;
     private currentTeleportKey: string = 'varrock';
 
@@ -229,7 +229,7 @@ export default class AIOTeleport extends LoopingBot {
         
         this.isProgressiveMode = (this.selectedTeleport === 'progressive');
         
-        // If progressive mode, determine the best teleport for current level
+        // Pick the best unlocked teleport in progressive mode.
         if (this.isProgressiveMode) {
             const bestKey = this.getBestTeleportForLevel();
             this.currentTeleportKey = bestKey;
@@ -281,7 +281,7 @@ export default class AIOTeleport extends LoopingBot {
                 this.currentTeleportKey = bestKey;
                 this.log(`🔁 Progressive switch: ${oldName} → ${newMethod.name} (level ${currentLevel})`);
                 
-                // Check if we have the required runes for the new teleport
+                // Keep the new teleport only when its runes are available.
                 if (!this.hasRequiredRunes()) {
                     this.log(`📦 Missing runes for ${newMethod.name}, banking...`);
                     this.needBanking = true;
@@ -433,7 +433,7 @@ export default class AIOTeleport extends LoopingBot {
             }
             
             if (this.needBanking) {
-                // Update bank location and check for progressive teleport upgrade
+                // Refresh the bank and progressive destination.
                 this.updateBankLocation();
                 if (this.isProgressiveMode) {
                     this.updateProgressiveTeleport();
@@ -633,7 +633,7 @@ export default class AIOTeleport extends LoopingBot {
             await Bank.depositInventory();
             await Execution.delayTicks(2);
             
-            // If in progressive mode, check if we should upgrade teleport after banking
+            // Banking may unlock the next progressive teleport.
             if (this.isProgressiveMode) {
                 this.updateProgressiveTeleport();
             }
@@ -679,7 +679,7 @@ export default class AIOTeleport extends LoopingBot {
             await this.withdrawElementalRunes();
             await Execution.delayTicks(2);
             
-            // Walk to the bank tile to close the interface
+            // Walking to the bank tile closes the interface.
             this.log('Walking to bank tile to close interface...');
             const bankTile = new Tile(this.currentBankPos.x, this.currentBankPos.z, 0);
             await Traversal.walkTo(bankTile, { radius: 0, timeoutMs: 15_000 });
@@ -868,7 +868,7 @@ export default class AIOTeleport extends LoopingBot {
         
         ctx.fillStyle = '#66ccff';
         
-        // Show destination with progressive indicator
+        // Mark progressive destinations in the paint.
         let destDisplay = this.teleportMethod ? this.teleportMethod.destination : 'Unknown';
         if (this.isProgressiveMode) {
             destDisplay = '⚡ ' + destDisplay + ' (Progressive)';

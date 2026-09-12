@@ -4,10 +4,7 @@ function pointKey(p: NavPoint): string {
     return `${p.x},${p.z},${p.level}`;
 }
 
-/**
- * Stable id for a transport edge. Prefer loc placement when present so reverse
- * hops and multi-action locs stay distinguishable.
- */
+/** Stable id for a transport edge; loc placement is preferred so reverse hops and multi-action locs stay distinct. */
 export function transportEdgeId(parts: {
     kind: TransportKind;
     from: NavPoint;

@@ -49,8 +49,7 @@ export async function climbToWizard(stage: number, log: (m: string) => void): Pr
         return true;
     }
     if (level() === 0) {
-        // The tower guard refuses the ladder until the quest is started, so the
-        // baked ground-to-first-floor edge is a lie at stage 0.
+        // The tower guard refuses the ladder until the quest is started, so the baked ground-to-first-floor edge is a lie at stage 0.
         const up = stage <= WATCHTOWER_STAGE.NOT_STARTED ? await climbWall(log) : await climbTowerLadder(log);
         if (!up) {
             return false;
@@ -121,7 +120,7 @@ export async function searchEvidenceBush(log: (m: string) => void): Promise<bool
         log('pack is full — the bush cannot hand over the fingernails');
         return false;
     }
-    // Forty-odd decoy bushes share the name, and only this one holds evidence.
+    // 40-odd decoy bushes share the name, and only this one holds evidence.
     const bush = Locs.query()
         .where(loc => loc.id === WT_LOC.BUSH_NAIL)
         .action('Search')

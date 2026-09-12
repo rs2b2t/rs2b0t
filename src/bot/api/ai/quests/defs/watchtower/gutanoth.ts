@@ -22,7 +22,7 @@ function locNear(id: number, op: string, within = 8): Loc | null {
 }
 
 // Why: an op that opens a dialogue does so a tick later.
-// Why: without this wait the driver sees no dialogue, starts a fresh conversation with the nearest NPC, and lands in whatever dead-end line that NPC offers.
+// Why: Wait for dialogue to appear before selecting an NPC, or the driver may start an unrelated conversation.
 
 /** Wait for the dialogue an op opened. */
 async function awaitDialogue(what: string, log: (m: string) => void): Promise<boolean> {
@@ -67,8 +67,7 @@ export async function showRelicToGuard(log: (m: string) => void): Promise<boolea
         await settleScene();
         return true;
     }
-    // First contact only records that he wants a sign of friendship and throws us
-    // down the hill; the crossing needs a second approach.
+    // First contact only records that he wants a sign of friendship and throws you down the hill; the crossing needs a second approach.
     log('guard threw us down the hill — returning to show the relic again');
     if (!(await offerRelic(log))) {
         return false;
@@ -82,8 +81,7 @@ export async function stealRockCake(log: (m: string) => void): Promise<boolean> 
         return true;
     }
     for (let attempt = 0; attempt < 8; attempt++) {
-        // Re-assert the stand each pass: the trader wanders, and being pushed to a
-        // tile within 3 of him turns every steal into a refusal.
+        // Re-assert the stand each pass: the trader wanders, and being pushed within 3 tiles of him turns every steal into a refusal.
         if (!(await Traversal.walkResilient(WT_TILE.ROCK_CAKE_STALL, { radius: 0, attempts: 3, timeoutMs: 300_000, log }))) {
             return false;
         }
@@ -256,8 +254,8 @@ export async function answerRiddle(log: (m: string) => void): Promise<boolean> {
 }
 
 // Why: the east gate is the only way to cave 6's side of the city, and its guard wants a bar of gold.
-// Why: like the relic gate he refuses first contact and throws you down the hill, so the crossing takes two approaches.
-// Why: the region beyond overlaps the battlement side geographically, so membership is decided by asking the pathfinder rather than by a bounding box.
+// Why: like the relic gate he refuses first contact and throws you down the hill, so the crossing takes 2 approaches.
+// Why: the region beyond overlaps the battlement side geographically, so membership is decided by asking the pathfinder.
 
 /** True once past the east gate. */
 async function pastEastGate(): Promise<boolean> {

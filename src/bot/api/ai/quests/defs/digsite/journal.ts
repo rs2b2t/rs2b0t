@@ -4,7 +4,7 @@ import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { DIG_NAME } from './areas.js';
 
-/** `%itexamlevel`, which the client never sees as a varp, these come off the rendered journal. */
+/** `%itexamlevel` never reaches the client as a varp, so these come off the rendered journal. */
 export const DIG_STAGE = {
     NOT_STARTED: 0,
     STAMPING: 1,
@@ -18,7 +18,7 @@ export const DIG_STAGE = {
     COMPLETE: 9
 } as const;
 
-// Why: the leading space is load-bearing, the purple student's "She gave me an answer" contains the green and orange students' "he gave me an answer", and without a word boundary one answered errand reads as two.
+// Why: Keep the leading space because "She gave me an answer" contains the other marker without it.
 
 /** Colour tags become a space, so no needle may span a tag boundary. */
 function normalize(lines: readonly string[] | string): string {
@@ -29,7 +29,7 @@ function normalize(lines: readonly string[] | string): string {
         .toLowerCase();
 }
 
-// Why: every earlier line stays on the page struck through, and its words do not change when it does, so this order is the only thing separating a finished leg from the current one.
+// Why: earlier lines stay on the page struck through with the same words, so this order is what separates a finished leg from the current one.
 const STAGES: readonly [string, number][] = [
     ['quest complete!', DIG_STAGE.COMPLETE],
     ['interesting find in the secret room', DIG_STAGE.REMOVED_BLOCKAGE],
@@ -85,7 +85,7 @@ export function parseDigsiteJournal(lines: readonly string[] | string): QuestPro
     return { stage: hit[1], flags };
 }
 
-/** A failed read is not evidence the quest went backwards. */
+/** A failed read doesn't mean the quest went backwards. */
 let lastGood: QuestProgress | undefined;
 
 /** Test seam: the last good page is memoised for the process. */

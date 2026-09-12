@@ -30,7 +30,7 @@ export const MF_STAGE = {
 export const BLANKET_OBJ = 90;
 const JUG_OBJ = 1935;
 const JUG_WATER_OBJ = 1937;
-/** `sink2` stands eight tiles off at (2608,3187) and shares the display name. */
+/** `sink2` stands 8 tiles off at (2608,3187) and shares the display name. */
 const SINK_LOC = 873;
 
 const BLANKET = "Child's blanket";
@@ -43,7 +43,7 @@ const AXES = ['Rune axe', 'Adamant axe', 'Mithril axe', 'Black axe', 'Steel axe'
 
 const ARDOUGNE_BANK = new Tile(2655, 3283, 0);
 
-// Why: the ladder is `loc_add`ed by the `blanket_ladder` timer once the player stands within two tiles, so the stand is a neighbour of the ladder's own tile rather than a spot the baked graph knows.
+// Why: the `blanket_ladder` timer `loc_add`s the ladder once you stand within 2 tiles, so the stand is a neighbour of the ladder's own tile.
 const RING_STAND = new Tile(2562, 3222, 0);
 const CAVE_FOOT = new Tile(2561, 9621, 0);
 const CAVE_LADDER = new Tile(2561, 9622, 0);
@@ -54,7 +54,7 @@ const TREE = new Tile(2613, 3252, 0);
 const KHAZARD_SHOP = { npc: 'Shop keeper', anchor: new Tile(2641, 3171, 0) };
 const ARDOUGNE_SHOP = { npc: 'Kortan', anchor: new Tile(2615, 3292, 0) };
 
-// Why: `ladder_cellar` stands five tiles away at (2566,3227) and also offers Climb-down, and `hopLadder` keeps it out by requiring the loc within three tiles of the stand.
+// Why: `ladder_cellar` stands 5 tiles away at (2566,3227) and also offers Climb-down; `hopLadder` keeps it out by wanting the loc within 3 tiles of the stand.
 const HOPS: LadderHop[] = [
     { stand: RING_STAND, locName: 'Ladder', op: 'Climb-down', arrive: CAVE_FOOT },
     { stand: CAVE_LADDER, locName: 'Ladder', op: 'Climb-up', arrive: new Tile(2561, 3222, 0) }
@@ -83,7 +83,7 @@ function normalize(lines: readonly string[] | string): string {
         .toLowerCase();
 }
 
-// Why: every page from stage 20 on repeats the blanket line, so the newest marker has to be tested first.
+// Why: every page from stage 20 on repeats the blanket line, so test the newest marker first.
 const JOURNAL_MARKERS: [string, number][] = [
     ['quest complete!', MF_STAGE.COMPLETE],
     ['he is on the way', MF_STAGE.FIXED_CART],
@@ -122,7 +122,7 @@ function inCave(tile: { x: number; z: number } | null | undefined): boolean {
     return tile !== null && tile !== undefined && isUnderground(tile) && tile.x >= 2555 && tile.x <= 2580;
 }
 
-/** The timer adds the ladder the tick after the player is within two tiles, so it is never in the scene on arrival. */
+/** The timer adds the ladder the tick after the player is within 2 tiles, so it is never in the scene on arrival. */
 async function enterCave(log: (m: string) => void): Promise<boolean> {
     if (inCave(Game.tile())) {
         return true;
@@ -190,7 +190,7 @@ async function fetchBlanket(log: (m: string) => void): Promise<boolean> {
     return leaveCave(log);
 }
 
-// Why: a regular tree drops one log and turns to a stump, and at 600ms ticks a `pickLoc` step's eight-second wait is short enough to lose the race.
+// Why: a regular tree gives 1 log then stumps, and at 600ms ticks a `pickLoc` step's 8s wait can lose the race.
 async function chopLogs(log: (m: string) => void): Promise<boolean> {
     if (Inventory.contains(LOGS)) {
         return true;
@@ -215,7 +215,7 @@ async function chopLogs(log: (m: string) => void): Promise<boolean> {
     return false;
 }
 
-// Why: a `useOn` step clicks as soon as the walk returns, and from the sink that lands inside the arrive window and is dropped, every attempt that walked first burned its ten-second wait, while a retry from a standstill filled the jug in 295ms.
+// Why: a `useOn` step clicks as soon as the walk returns, which from the sink lands inside the arrive window and is dropped; a retry from a standstill filled the jug in 295ms.
 function fillJug(log: (m: string) => void): Promise<boolean> {
     return useOnLoc(
         JUG_OBJ,
@@ -291,7 +291,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (stage === undefined) {
         return { kind: 'wait', reason: "Monk's Friend journal stage unavailable" };
     }
-    // Why: at stage 10 the journal still reads "find the secret cave" whether or not the blanket is in the pack, so the carried obj is the only evidence the cave has been robbed.
+    // Why: at stage 10 the journal reads "find the secret cave" with or without the blanket, so the carried obj is the only evidence the cave was robbed.
     if (stage <= MF_STAGE.SPOKEN_TO_OMAD && (snap.invIds?.get(BLANKET_OBJ) ?? 0) > 0) {
         return { kind: 'talk', stop: HAND_IN_BLANKET };
     }
@@ -323,7 +323,7 @@ export const monksfriend: QuestModule = {
     record: QUESTS.find(record => record.id === 'drunkmonk')!,
     bank: ARDOUGNE_BANK,
     hops: HOPS,
-    // Why: the thieves in the cave are `huntmode=cowardly`, so at quest-ready stats nothing here attacks. The float is traversal upkeep alone.
+    // Why: the cave thieves are `huntmode=cowardly`, so at quest-ready stats nothing attacks; the float is traversal upkeep.
     food: 6,
     tools: [BLANKET.toLowerCase(), 'jug', 'logs', 'axe', 'coins'],
     readStage: readMonksFriendStage,

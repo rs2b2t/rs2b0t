@@ -98,7 +98,7 @@ function processKey(process: CollectedProcess): string {
     return `${process.pid}:${process.identity}`;
 }
 
-/** Selects the root process and its transitive descendants, never siblings or parents. */
+/** The root process and its transitive descendants. */
 export function selectProcessTree(rootPid: number, processes: readonly CollectedProcess[]): CollectedProcess[] {
     const byPid = new Map<number, CollectedProcess>();
     const children = new Map<number, CollectedProcess[]>();
@@ -429,8 +429,7 @@ export class LinuxProcCollector implements ProcessCollector {
 
     private async resolveMemory(rootPid: number, process: CollectedProcess): Promise<ResolvedLinuxProcess> {
         const pss = await this.readPss(process.pid);
-        // Always verify the stable identity after reading PSS. A successful PSS
-        // read can race with PID reuse as a failed read can.
+        // Re-check identity after reading PSS; a successful read can race with PID reuse too.
         const current = await this.readStatResult(process.pid);
         const disappeared = current.status === 'missing';
         const reused = current.status === 'available' && current.process.startTicks !== process.identity;
@@ -442,8 +441,7 @@ export class LinuxProcCollector implements ProcessCollector {
                     reason: `root process ${rootPid} ${event} while reading memory`
                 };
             }
-            // Why: keeping the original tree node stops a vanished intermediate process disconnecting still-live descendants from the aggregate.
-            // Its unknown memory makes RAM explicitly unavailable for this pass.
+            // Why: keeping the tree node stops a vanished intermediate process disconnecting live descendants from the aggregate; its unknown memory makes RAM unavailable for this pass.
             return {
                 status: 'included',
                 process: { ...process, memoryBytes: null, memorySource: null }
@@ -457,8 +455,7 @@ export class LinuxProcCollector implements ProcessCollector {
             };
         }
 
-        // An unreadable stat is not proof that identity stayed stable. Preserve
-        // the process and report RAM unavailable rather than silently undercounting.
+        // An unreadable stat doesn't prove the identity held, so keep the process and report RAM unavailable.
         return {
             status: 'included',
             process: { ...process, memoryBytes: null, memorySource: null }

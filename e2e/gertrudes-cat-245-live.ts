@@ -1,7 +1,6 @@
-/** Live Gertrude's Cat harness (#245): --stage N --until N --minutes N, base :8890.
- *  Why: `--stage` writes `%fluffs` directly and relogs, since update_questlist only recolours the list at login.
- *  Why: a jump to stage 4 also writes `%fluffs_crate`, the server-side coord the client cannot see. It is seeded to the LAST crate the module searches, so the leg still proves all six.
- *  Why: the bank holds coins and food alone, so the milk, the doogle leaves and the sardine are all sourced in the world. */
+/** Live Gertrude's Cat harness (#245), using the members world at :8890. */
+// Why: stage jumps relog; stage 4 seeds the hidden crate to the last searched position.
+// Only coins and food are banked, so quest supplies must be sourced in-world.
 
 //   HEADED=1 bun e2e/gertrudes-cat-245-live.ts --stage 0 --until 6 --minutes 60 --tick 200
 //   HEADED=1 bun e2e/gertrudes-cat-245-live.ts --stage 4 --until 5 --minutes 20 --tick 200

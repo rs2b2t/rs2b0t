@@ -44,7 +44,7 @@ class BoneBurier extends LoopingBot {
         await Execution.delayUntil(() => Game.ingame(), 0);
         this.log('BoneBurier started');
         this.on('skill.xp', e => { if (e.name === 'prayer') this.xpGained += e.delta; });
-        // an emptied slot reports id -1 with the previous item id — a completed burial
+        // An emptied slot reports id -1 and the previous bones id.
         this.on('inventory.changed', e => {
             if (e.id === -1 && e.previousId !== -1) {
                 this.buried++;

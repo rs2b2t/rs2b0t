@@ -20,10 +20,7 @@ let wasIngame = false;
 /** Families that need a rescan before the next bus emit. */
 let dirty: ProducerDirtyFlags = emptyDirty(true);
 
-/**
- * Called from the packet path after the client has applied the opcode.
- * Marks which cached tables are stale; {@link pumpProducers} does the rescan.
- */
+/** Mark producer tables stale after the client applies an opcode. */
 export function noteProducerPacket(ptype: number): void {
     const hit = dirtyFamiliesForPacket(ptype);
     if (hit === null) {
@@ -39,10 +36,7 @@ export function noteProducerPacket(ptype: number): void {
     dirty = applyDirty(dirty, hit);
 }
 
-/**
- * Frame pump: emit tick on server-tick advance; rescan only dirty families.
- * Steady-state frames with no packets that affect producers cost ~nothing.
- */
+/** Frame pump: emit tick on a server-tick advance and rescan only dirty families, so a frame with no producer packets costs about nothing. */
 export function pumpProducers(tickCount: number): void {
     if (!reader.ingame()) {
         lastXp = lastLevel = lastInvIds = lastInvCounts = lastVarps = null;
@@ -53,7 +47,7 @@ export function pumpProducers(tickCount: number): void {
         return;
     }
 
-    // First frame after login: seed caches so subsequent diffs have a baseline.
+    // Seed caches on the first frame after login.
     if (!wasIngame) {
         wasIngame = true;
         dirty = emptyDirty(true);

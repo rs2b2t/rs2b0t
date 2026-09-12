@@ -41,8 +41,7 @@ const SEARCH_OPS = ['Search', 'Open'];
 const ARRIVE_RADIUS = 1;
 const WALK_ATTEMPTS = 4;
 const WALK_TIMEOUT_MS = 45_000;
-// Why: trails cross the map, Varrock to Feldip and Varrock to level-50 Wilderness, so they route through the teleport catalog when the kit is held.
-// Why: a tele is admitted only once the route is longer than this, so short hops stay on foot.
+// Why: Long clue legs may use affordable catalog teleports; short legs stay on foot.
 const TELEPORT_MIN_SPAN = 40;
 const STEP_ATTEMPTS = 4;
 const PROGRESS_MS = 6000;
@@ -55,11 +54,10 @@ const CHALLENGE_REPLY_MS = 3000;
 const KEY_WALK_RADIUS = 5;
 const KEY_HUNT_MS = 120_000;
 const KEY_ENGAGE_MS = 3000;
-// black_heather respawns in 100 ticks; the rest of the riddle keepers are quicker.
+// Black Heather respawns in 100 ticks; other riddle targets respawn sooner.
 const KEY_RESPAWN_MS = 70_000;
 const LOOT_WAIT_MS = 3000;
-// Why: player_combat.rs2 refuses op2 outright in single-way combat, while we are still flagged from another fight, while another player has hit the target inside the last 8 ticks, or when the target is someone else's random event.
-// Why: each refusal is a chat line and a dropped op, so the attack has to be re-sent rather than waited out.
+// Why: `player_combat.rs2` drops the attack op for several single-way ownership conflicts, so retry after its refusal message.
 const ATTACK_REFUSED = /already under attack|someone else is fighting|not after you/i;
 
 import { TALK_ANCHORS } from '#/bot/api/ai/clues/data/talkAnchors.js';
@@ -103,7 +101,7 @@ let teleportsEnabled = true;
 
 /**
  * Options for a cross-map clue leg, so the teleport policy lives in one place.
- * Why: close-in walks (stepping onto an NPC or a dropped key) do not use this, the span gate would refuse a tele at two tiles anyway.
+ * Why: close-in walks (onto an NPC or a dropped key) don't use this; the span gate would refuse a tele at 2 tiles anyway.
  */
 function walkOpts(log: (m: string) => void, radius = ARRIVE_RADIUS): Parameters<typeof Traversal.walkResilient>[1] {
     return {
@@ -117,12 +115,12 @@ function walkOpts(log: (m: string) => void, radius = ARRIVE_RADIUS): Parameters<
     };
 }
 
-/** Tolls already bought this trail, so a stuck leg cannot shop in a loop. */
+/** Tolls bought during this trail, preventing repeated shop trips. */
 const gateItemsTried = new Set<string>();
 
 /**
- * Walk a clue leg, treating an unpayable toll as a shopping trip rather than a dead end.
- * Why: the navigator names what the route was short of, the Kharidian desert has one entrance and it eats a Shantay pass, so a leg failing for want of a 5gp ticket buys one and walks again.
+ * Walk a clue leg, treating an unpayable toll as a shopping trip.
+ * Why: the navigator names what the route was short of, and the desert's one entrance eats a Shantay pass, so a leg short a 5gp ticket buys one and walks again.
  */
 async function walkLeg(dest: NavPoint, log: (m: string) => void, radius = ARRIVE_RADIUS): Promise<boolean> {
     if (crossesTirannwn(dest)) {
@@ -170,7 +168,7 @@ function heldCounts(): Map<number, number> {
     return counts;
 }
 
-// Why: only gains count, comparing the pack as a made every bite of food read as progress, so a leg that did nothing still reported `step done` and burned a leg off the trail budget.
+// Why: only gains count; comparing pack contents made every bite of food read as progress, so an idle leg reported `step done` and burned trail budget.
 // Why: a step also counts as progressed when it picks up something it needed, such as a riddle key or a tool.
 
 /** Did anything enter the pack since `before`? */
@@ -227,7 +225,7 @@ async function drainChat(): Promise<void> {
     }
 }
 
-/** Free one slot the only way a trail pack safely can. */
+/** Free one slot by eating; other trail items are retained. */
 async function eatOneForRoom(): Promise<boolean> {
     const edible = Inventory.items().find(i => i.actions().some(a => a.toLowerCase() === 'eat'));
     if (!edible) {
@@ -240,7 +238,7 @@ async function eatOneForRoom(): Promise<boolean> {
 
 /**
  * Eat food to clear casket reward space; nothing else in a trail pack is safe to shed.
- * Why: a casket rolls its reward into a side inv and moves it one slot at a time, so anything that does not fit lands on the floor.
+ * Why: a casket rolls its reward into a side inv and moves it one slot at a time, so anything that doesn't fit lands on the floor.
  */
 async function makeRoomForReward(casketObj: string, log: (m: string) => void): Promise<void> {
     const want = casketRewardSlots(casketObj);
@@ -311,7 +309,7 @@ async function answerChallengeIfOpen(step: ClueStep, log: (m: string) => void): 
 
 // Why: `Attack` is refused outright whenever the server thinks the fight belongs to somebody else, so the op is re-sent on the tick until it takes.
 // Why: riddle001's keeper stands in the Bandit Camp, where aggressive bandits keep us combat-flagged for most of the approach.
-// Why: shaped like fightGuardian rather than one fire-and-forget op, with upkeep pumped throughout.
+// Why: shaped like fightGuardian, with upkeep pumped throughout.
 
 /** Kill the keeper of a riddle key and pick the key up. */
 async function acquireRiddleKey(kf: NonNullable<ClueRow['keyFrom']>, huntTile: NavPoint, log: (m: string) => void): Promise<boolean> {
@@ -407,10 +405,7 @@ async function acquireRiddleKey(kf: NonNullable<ClueRow['keyFrom']>, huntTile: N
     return haveKey();
 }
 
-// Why: only walkLeg routes through the pocket graph, and the talk case reaches its NPC through
-// Why: Reach.npcDialog, which walks itself. That asked the baked pack for a path into the elf camp,
-// Why: which it does not have. Cross into the destination's pocket first, then let each step's own
-// Why: reach logic finish the approach inside it.
+// Why: Only `walkLeg` uses the pocket graph, so enter the elf camp before the local NPC approach.
 async function reachTirannwn(step: ClueStep, log: (m: string) => void): Promise<void> {
     const target = stepTarget(step);
     if (target === null || !crossesTirannwn(target)) {
@@ -530,8 +525,7 @@ function blockReason(step: ClueStep): string | null {
     if (extras.length > 0) {
         return `needs ${extras.join('+')} (not held)`;
     }
-    // Why: `start_chop_jungle` answers a missing machete, axe or map with a message box rather than a refusal
-    // Why: the walker can see, so the leg would swing at the band until its budget ran out and report no progress.
+    // Why: `start_chop_jungle` answers a missing machete, axe or map with a message box the walker can't see, so the leg would swing at the band until its budget ran out.
     if (step.type !== 'open-casket' && KHARAZI_CLUES.has(step.id)) {
         const short = jungleKitMissing();
         if (short.length > 0) {
@@ -545,8 +539,7 @@ async function tryAcquire(step: ClueStep, log: (m: string) => void): Promise<boo
     if (step.type === 'open-casket') {
         return false;
     }
-    // Row extras (Baxtorian's Rope) come first: the bank prep only withdraws
-    // them when the bank already has one, and without it the trail abandons.
+    // Row extras (Baxtorian's Rope) come first: bank prep only withdraws them when the bank has one, and without it the trail abandons.
     const extras = ((step as ClueRow).items ?? []).filter(n => !Inventory.first(n));
     if (extras.length > 0 && (await ensureExtraItems(extras, log))) {
         return true;
@@ -655,8 +648,7 @@ export const ClueExecutor = {
                 attempt: 0,
                 startedAt: ClueExecutor.current?.startedAt ?? Date.now(),
                 target,
-                // Keep the leg's original distance across retries so the bar
-                // does not reset every attempt.
+                // Keep the leg's original distance across retries so the bar doesn't reset every attempt.
                 startDist: sameLeg ? (ClueExecutor.current?.startDist ?? 0) : (tilesTo(target) ?? 0)
             };
 

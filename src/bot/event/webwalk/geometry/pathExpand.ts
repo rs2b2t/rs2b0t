@@ -1,6 +1,5 @@
-// Why: pack waypoints are expanded into a dense tile list for paint and corridor snap.
-// Why: explore path, not production-proven, when both endpoints of a same-level segment are in the live scene, the fill uses flag-aware BFS (`canStepLocal`) so the painted polyline matches `Client.tryMove` more closely than Chebyshev diagonals.
-// Why: it falls back to Chebyshev when scene flags are unavailable, when the ends differ by level, on transport hops, and when BFS fails or exceeds budget.
+// Expand pack waypoints for paint and corridor snap, using scene BFS when available.
+// Fall back to Chebyshev across levels, transports, missing flags, or a failed BFS.
 
 import { canStepLocal, type FlagsAt, type LocalPoint } from './localReach.js';
 
@@ -12,7 +11,7 @@ interface ExpandTile {
 }
 
 export interface ExpandWorldFns {
-    /** World tile → scene local; null if off-scene. */
+    /** World tile to scene local; null if off-scene. */
     toLocal: (x: number, z: number) => LocalPoint | null;
     /** Scene collision flags at local tile (null if out of bounds). */
     flags: FlagsAt;
@@ -31,7 +30,7 @@ const DIRS: [number, number][] = [
     [1, 1]
 ];
 
-/** Classic expand: diagonal Chebyshev steps (pack paint historically). */
+/** Classic expand: diagonal Chebyshev steps. */
 export function expandChebyshevSegment(
     prev: { x: number; z: number; level: number },
     next: { x: number; z: number; level: number }
@@ -46,10 +45,7 @@ export function expandChebyshevSegment(
     return out;
 }
 
-/**
- * Scene-local BFS path from→to (inclusive). Uses the same step rules as
- * `canStepLocal` / client walk flags. Returns null if unreachable within budget.
- */
+/** Scene-local BFS path from `from` to `to` inclusive, with `canStepLocal` step rules; null if unreachable within budget. */
 export function localBfsPath(
     flags: FlagsAt,
     from: LocalPoint,
@@ -64,7 +60,7 @@ export function localBfsPath(
     }
 
     const key = (lx: number, lz: number): number => (lx << 16) | (lz & 0xffff);
-    const parent = new Map<number, number>(); // childKey → parentKey
+    const parent = new Map<number, number>(); // childKey to parentKey
     const queue: LocalPoint[] = [from];
     const seen = new Set<number>([key(from.lx, from.lz)]);
     let expansions = 0;
@@ -97,7 +93,7 @@ export function localBfsPath(
         return null;
     }
 
-    // Reconstruct from → to
+    // Reconstruct from start to goal
     const rev: LocalPoint[] = [];
     let cx = to.lx;
     let cz = to.lz;
@@ -123,10 +119,7 @@ export function localBfsPath(
     return rev;
 }
 
-/**
- * Expand one same-level non-transport segment. Prefer scene BFS when both ends
- * are local; else Chebyshev. Returned tiles exclude `prev` (caller already has it).
- */
+/** Expand one same-level non-transport segment: scene BFS when both ends are local, else Chebyshev; `prev` is excluded. */
 export function expandSegment(
     prev: { x: number; z: number; level: number },
     next: { x: number; z: number; level: number },
@@ -145,8 +138,7 @@ export function expandSegment(
         if (a && b) {
             const path = localBfsPath(scene.flags, a, b, scene.maxBfsSteps ?? 800);
             if (path && path.length >= 2) {
-                // Drop start (prev); map local → world via delta from known world prev
-                // Local is scene-relative; world = prev + (local - a)
+                // Drop the start and map local to world: world = prev + (local - a)
                 const out: { x: number; z: number; level: number }[] = [];
                 for (let i = 1; i < path.length; i++) {
                     const p = path[i]!;
@@ -156,7 +148,7 @@ export function expandSegment(
                         level: next.level
                     });
                 }
-                // Ensure we end on next (tryNearest / rounding)
+                // Keep the rounded or nearest path anchored to `next`.
                 const last = out[out.length - 1]!;
                 if (last.x !== next.x || last.z !== next.z) {
                     out.push({ x: next.x, z: next.z, level: next.level });
@@ -169,10 +161,7 @@ export function expandSegment(
     return expandChebyshevSegment(prev, next);
 }
 
-/**
- * Drop tiles already behind the player on an ordered path (for continuous trail paint).
- * Finds the closest path index to `me` and returns that tile forward.
- */
+/** Drop tiles behind the player: the closest path index to `me` and everything after it. */
 export function remainingPathFromPlayer<T extends { x: number; z: number; level: number }>(
     path: readonly T[],
     me: { x: number; z: number; level: number }
@@ -196,9 +185,7 @@ export function remainingPathFromPlayer<T extends { x: number; z: number; level:
     return path.slice(best) as T[];
 }
 
-/**
- * Full waypoint expand (transport / level change = single tile, no interpolate).
- */
+/** Full waypoint expand; a transport or level change is a single tile with no interpolation. */
 export function expandWaypoints<T extends ExpandTile>(
     waypoints: readonly T[],
     scene?: ExpandWorldFns | null

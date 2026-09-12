@@ -50,7 +50,7 @@ interface Supply {
     name: string;
     id: number;
     qty: number;
-    /** Jiminua stocks it inside the quest area, so a shortfall is a purchase rather than a ferry crossing. */
+    /** Jiminua stocks it inside the quest area, so a shortfall is a purchase. */
     fromJiminua?: boolean;
 }
 
@@ -60,7 +60,7 @@ const PESTLE: Supply = { name: TB_NAME.PESTLE, id: TB_ID.PESTLE, qty: 1, fromJim
 const TINDERBOX: Supply = { name: TB_NAME.TINDERBOX, id: TB_ID.TINDERBOX, qty: 1, fromJiminua: true };
 const SEAWEED: Supply = { name: TB_NAME.SEAWEED, id: TB_ID.SEAWEED, qty: 1 };
 
-// Why: a supply drops off the list the moment its leg is behind us, so the quest never crosses back to Ardougne for a knife it has already used.
+// Why: a supply drops off the list once its leg is behind us, so the quest never crosses back to Ardougne for a knife it already used.
 
 /** Everything the legs still ahead of the bot consume. */
 export function outstandingSupplies(snap: QuestSnapshot): Supply[] {
@@ -88,10 +88,10 @@ export function outstandingSupplies(snap: QuestSnapshot): Supply[] {
     return out;
 }
 
-/** Kept by id, so all three "Karambwan vessel"s and all three "Karamjan rum"s survive a deposit. */
+/** Kept by id, so all 3 "Karambwan vessel"s and all 3 "Karamjan rum"s survive a deposit. */
 export const TB_KEEP_IDS: readonly number[] = [...Object.values(TB_ID), ...TB_SPEAR_IDS, ...TB_POTION_IDS];
 
-// Why: the paste is half the spear, not the spear, a pack holding paste and no shaft still needs one.
+// Why: a pack holding paste and no shaft still needs a spear.
 
 /** The Karambwan-poisoned spear the pack is carrying, 0 when there is none. */
 export function kpSpearHeld(snap: QuestSnapshot): number {
@@ -116,10 +116,9 @@ export function dosesHeld(snap: QuestSnapshot): number {
     return TB_POTIONS.reduce((total, potion) => total + heldId(snap, potion.id) * potion.doses, 0);
 }
 
-// Why: only the fourth dose shows on the page, so a part-poured Tamayu reads as an untouched one.
-// Filling to four whenever the pack holds none keeps that from meaning a crossing between bottles.
+// Why: Only the fourth dose appears in the journal, so fill all four before starting another bottle.
 
-/** True while Tamayu is still short of his four doses and the pack has nothing to pour. */
+/** True while Tamayu is still short of his 4 doses and the pack has nothing to pour. */
 export function dosesWanted(snap: QuestSnapshot): boolean {
     return tamayuStage(snap) < TB_TAMAYU.COMPLETE
         && !hasFlag(snap.progress, TB_FLAG.AGILITY)
@@ -136,7 +135,7 @@ export function spearInBank(snap: QuestSnapshot): { name: string; id: number } |
     return done ? { name: done.kpName, id: done.kpId } : null;
 }
 
-/** Bottles to draw for Tamayu's four doses, fullest first. Empty when the bank holds no agility potion. */
+/** Bottles to draw for Tamayu's 4 doses, fullest first. Empty when the bank holds no agility potion. */
 export function potionsInBank(snap: QuestSnapshot): { name: string; qty: number; id: number }[] {
     const lines: { name: string; qty: number; id: number }[] = [];
     let doses = 0;
@@ -192,8 +191,7 @@ function wearAll(names: readonly string[]): QuestStep {
     };
 }
 
-// Why: `buy` walks back to a bank whenever the pack holds less than `estGp`, so the estimate stays
-// under the float this module already carries, none of these three costs more than a hundred.
+// Why: `buy` walks back to a bank whenever the pack holds less than `estGp`, so the estimate stays under the float; none of these 3 costs more than 100.
 const buyAtJiminua = (item: string, qty: number): QuestStep => ({
     kind: 'buy',
     item,
@@ -274,7 +272,7 @@ export function prepare(snap: QuestSnapshot): QuestStep | null {
             unavailable.push(name);
         }
     }
-    // Why: an empty bank is not a dead end here, Jogres drop spears and their patch is on the route.
+    // Why: Jogres drop spears and their patch is on the route, so an empty bank isn't a dead end.
     if (wantSpear) {
         const stocked = spearInBank(snap);
         if (stocked) {

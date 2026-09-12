@@ -45,7 +45,7 @@ export interface QuestSnapshot {
     bankIds?: ReadonlyMap<number, number>;
     bankKnown?: boolean;
     tile?: WorldTile | null;
-    // Why: absent means the snapshot does not report it, and a step that needs prayer treats that as "not short" rather than guessing.
+    // Why: absent means the snapshot doesn't report it, and a step that needs prayer treats that as "not short".
     /** Current prayer points. */
     prayer?: number;
     /** Attack level, which is the tier of melee weapon the account can wield. */
@@ -62,7 +62,7 @@ export function heldId(snap: QuestSnapshot, id: number): number {
     return snap.invIds?.get(id) ?? 0;
 }
 
-// Why: an unread bank is not an empty bank, and a bare count sends the bot to a booth for something it never saw.
+// Why: Preserve unknown bank state instead of treating an unread bank as empty.
 
 /** How many of an exact object id the last bank read saw; 0 until one lands. */
 export function bankedId(snap: QuestSnapshot, id: number): number {
@@ -103,8 +103,8 @@ export interface QuestSustain {
 export interface QuestModule {
     record: QuestRecord;
     hops?: LadderHop[];
-    // Why: most quests sit in one town, where naming its bank is shorter and more predictable than working it out.
-    // Why: `'nearest'` is for the ones that do not, as a quest spread across four kingdoms pays for a pinned bank on every leg.
+    // Why: most quests sit in one town, so naming its bank beats working it out.
+    // Why: `'nearest'` is for the ones that don't; a quest spread across 4 kingdoms pays for a pinned bank on every leg.
 
     /** The bank this quest uses. */
     bank?: Tile | 'nearest';
@@ -112,13 +112,13 @@ export interface QuestModule {
     food?: number;
     gather?: Record<string, (snap: QuestSnapshot, need: number) => QuestStep>;
     tools?: string[];
-    // Why: this exists for the quests that end somewhere the navigator cannot leave on its own.
+    // Why: for the quests that end somewhere the navigator can't leave on its own.
 
     /** Walked when the quest is finished, before the retreat to a bank; true once a bank walk can start. */
     exit?: (log: (m: string) => void) => Promise<boolean>;
     /** The module owns all banking/loadout decisions, including restarts in bankless areas. */
     ownsInventory?: boolean;
-    // Why: food is the bulkiest withdrawal a quest makes, so a module that arms itself from the bank has to be dressed before the pack fills, or the gear has nowhere to land.
+    // Why: food is the bulkiest withdrawal, so a module that arms itself from the bank has to be dressed before the pack fills.
     /** False to hold the food float back this pass; absent means withdraw it as soon as the bank is known. */
     foodReady?: (snap: QuestSnapshot) => boolean;
     /** Read an exact quest stage from client-visible state. Async journals are supported. */
@@ -127,21 +127,18 @@ export interface QuestModule {
     readProgress?: () => QuestProgress | undefined | Promise<QuestProgress | undefined>;
     /** Optional quest-specific survival policy applied while this module is active. */
     sustain?: QuestSustain;
-    // Why: declared only on the quests whose fights threaten the account, a level-2 goblin is not worth the points.
+    // Why: declared only on the quests whose fights threaten the account; a level-2 goblin isn't worth the points.
     /** Protection prayer to hold through this quest's fights, and the doses it carries. */
     pray?: QuestPrayer;
     // Why: set 0 when the quest spends nothing, as a default 1000 still draws walking-around money on the first provision pass.
 
     /** Spending money to keep in the pack, default `COIN_FLOAT`. */
     coinFloat?: number;
-    // Why: this is for advisories such as "the live harness only proved X stats" rather than hard gates.
+    // Why: for advisories such as "the live harness only proved X stats", never a hard gate.
 
     /** One-shot advisory when this module becomes the active runner; null when the account looks fine. */
     warnReadiness?: () => string | null;
-    /**
-     * Extra log lines when this quest decides a step (or on death). Pilot for
-     * Tourist Trap observability, copy-pasteable context for stuck runs.
-     */
+    /** Extra log lines when this quest decides a step (or on death); context for stuck runs. Piloted on Tourist Trap. */
     observe?: (snap: QuestSnapshot, step: QuestStep) => readonly string[];
     decide(snap: QuestSnapshot): QuestStep;
 }

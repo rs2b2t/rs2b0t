@@ -53,7 +53,7 @@ import {
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const COIN_NAME = 'Coins';
-// Why: obj 617 is `fake_coins`, also named "Coins" and also stackable, so resolving the currency by name picks the Pirate's Treasure prop. Nothing on the client's ObjType separates them, so the id is pinned and checked at startup.
+// Why: fake_coins shares the "Coins" name and stackability, so pin real currency to obj 995.
 const COIN_ID = 995;
 /** Chat types the client uses for player speech (Client.ts addChat). */
 const PUBLIC_CHAT_TYPES = new Set([1, 2]);
@@ -74,7 +74,7 @@ const STOCK_TRIES = 2;
 const COMMANDS_PER_WINDOW = 3;
 const COMMAND_WINDOW_MS = 10_000;
 const COMMAND_PENALTY_MS = 30_000;
-/** Ticks between resets, at the live game's 600ms tick. One customer stuck is worth ten minutes, spam is not. */
+/** Ticks before a stuck customer resets; one tick is 600ms. */
 const RESET_EVERY_TICKS = 1000;
 const RESET_EVERY_MS = RESET_EVERY_TICKS * 600;
 
@@ -89,13 +89,13 @@ const ADVERTISE_ITEMS = 4;
 const STILL_BEATS = 3;
 /** Times the bot will re-derive its side in one window before giving up. */
 const REOFFER_CAP = 12;
-/** Beats of waiting on a customer before the window goes back. At one beat a tick, this is about 15 seconds. */
+/** Customer wait in one-tick beats, roughly 15 seconds. */
 const WAIT_BEATS = 25;
 // Why: the engine shuts the offer screen a tick before it opens the confirm screen, so a bare "not open" read drops a trade that is completing normally.
 const TRADE_GONE_MS = 3_000;
 /** How long to wait for a window we asked for to appear on this client. */
 const OPEN_WAIT_MS = 10_000;
-/** Why: a bank task that can fail and immediately re-validate is a livelock, so a failed trip backs off. */
+/** Backoff after a failed bank trip to prevent immediate revalidation. */
 const BANK_BACKOFF_MS = 30_000;
 
 export const MARKET_MAKER_SETTINGS: SettingsSchema = {
@@ -302,7 +302,7 @@ export default class MarketMaker extends TaskBot {
         }
     }
 
-    // ---- state the tasks read -------------------------------------------
+    // Shared task state.
 
     activeBook(): PriceBook {
         return this.book!;
@@ -390,7 +390,7 @@ export default class MarketMaker extends TaskBot {
         return this.tradeRequests;
     }
 
-    // ---- chat ------------------------------------------------------------
+    // Chat.
 
     spend(name: string, nowMs: number): boolean {
         return this.limiter.allow(name, nowMs);
@@ -445,7 +445,7 @@ export default class MarketMaker extends TaskBot {
         return this.blacklist.includes(name.trim().toLowerCase());
     }
 
-    // ---- pack and bank ---------------------------------------------------
+    // Inventory and bank.
 
     /** Units of one row in the pack, noted and unnoted together. */
     packCount(id: number): number {
@@ -493,7 +493,7 @@ export default class MarketMaker extends TaskBot {
         return true;
     }
 
-    // ---- chat requests ---------------------------------------------------
+    // Chat requests.
 
     handleCommand(from: string, text: string): void {
         const cmd = parseCommand(text);
@@ -619,7 +619,7 @@ export default class MarketMaker extends TaskBot {
         this.say(`${price} ${carried ? 'Trade me.' : 'Give me a moment.'}`);
     }
 
-    // ---- the window ------------------------------------------------------
+    // Trade window.
 
     /** What the bot should have on its own side, given what the customer has on theirs. */
     appraiseNow(customer: string): Appraisal {
@@ -793,7 +793,7 @@ export default class MarketMaker extends TaskBot {
         this.desk.pruneIntents(now, this.intentTtlMs);
     }
 
-    // ---- advertising -----------------------------------------------------
+    // Advertising.
 
     advertiseNow(): void {
         const book = this.activeBook();

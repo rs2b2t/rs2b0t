@@ -55,7 +55,7 @@ export const askParents = (log: (m: string) => void): Promise<boolean> =>
     talkAt(PC_NPC.TED, PC_TILE.REHNISON_TED, [], log);
 
 // Why: the journal renders stages 20 and 21 identically, so one leg covers the book hand-over and the question after it.
-// Why: a shut Rehnison door is the only state where the family refuses to talk, which is what sends this back to Jethick.
+// Why: a shut Rehnison door is the only state where the family refuses to talk, so that sends this back to Jethick.
 export async function enterRehnisons(log: (m: string) => void): Promise<boolean> {
     if (heldId(PC_ITEM.TURNIP_BOOK.id) > 0 && !(await returnBook(log))) {
         return false;
@@ -74,8 +74,7 @@ export async function askMilli(log: (m: string) => void): Promise<boolean> {
     return talkAt(PC_NPC.MILLI, PC_TILE.MILLI, [], log);
 }
 
-// Why: doors.rs2 gates every branch of this door on `npc_find(coord, mournertwb, 14, 0)`, and with
-// no mourner in range the op returns without a message, a door state or a dialogue to wait on.
+// Why: doors.rs2 gates every branch of this door on `npc_find(coord, mournertwb, 14, 0)`, and with no mourner in range the op returns with no message, door state or dialogue.
 const MOURNER_EARSHOT = 14;
 
 async function knockPlagueDoor(prefer: string[], log: (m: string) => void): Promise<boolean> {
@@ -104,8 +103,7 @@ async function knockPlagueDoor(prefer: string[], log: (m: string) => void): Prom
 export const askAboutClearance = (log: (m: string) => void): Promise<boolean> =>
     knockPlagueDoor(MOURNER_PREFER, log);
 
-// Why: the clerk calls Bravek in only while the player is within 7 tiles of him, and
-// Bravek carries no wanderrange, so he drifts the default five tiles around his desk.
+// Why: the clerk only calls Bravek in while you're within 7 tiles, and Bravek has no wanderrange, so he drifts the default 5 tiles around his desk.
 const CLERK_LEASH = 7;
 
 async function askClerk(log: (m: string) => void): Promise<boolean> {
@@ -131,8 +129,8 @@ function inBravekRoom(): boolean {
         && here.x >= 2530 && here.x <= 2539 && here.z >= 3312 && here.z <= 3316;
 }
 
-// Why: his door reverts two ticks after it lets anyone through, so walking back to the stand from inside would shut it and reopen it every leg.
-// Why: it also refuses everyone until the clerk calls him in, and the walker will otherwise spend minutes retrying the crossing.
+// Why: his door reverts 2 ticks after it lets anyone through, so walking back to the stand from inside would shut it and reopen it every leg.
+// Why: it also refuses everyone until the clerk calls him in, and the walker would spend minutes retrying the crossing.
 async function reachBravek(log: (m: string) => void): Promise<boolean> {
     if (inBravekRoom()) {
         return true;
@@ -169,8 +167,7 @@ export async function getAudience(log: (m: string) => void): Promise<boolean> {
     return askBravekForRecipe(log);
 }
 
-// Why: the door is not a baked edge. It opens for a warrant holder mid-conversation, so the last
-// tile is a scene step the pathfinder never sees.
+// Why: the door opens for a warrant holder mid-conversation, so the last tile is a scene step the baked pathfinder never sees.
 async function enterPlagueHouse(log: (m: string) => void): Promise<boolean> {
     if (!(await knockPlagueDoor([], log))) {
         return false;
@@ -183,8 +180,7 @@ async function enterPlagueHouse(log: (m: string) => void): Promise<boolean> {
     return false;
 }
 
-// Why: the house's north wall steps back a tile east of the door, so a flat box either
-// claims the doorstep as inside or the east strip as outside.
+// Why: the house's north wall steps back a tile east of the door, so a flat box either claims the doorstep as inside or the east strip as outside.
 function insidePlagueHouse(): boolean {
     const here = Game.tile();
     if (here === null || here.level !== 0 || here.x < 2532 || here.x > 2541) {

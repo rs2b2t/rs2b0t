@@ -55,16 +55,15 @@ const ITEM = {
 const RUNES = [ITEM.AIR_RUNE, ITEM.EARTH_RUNE, ITEM.WATER_RUNE] as const;
 const FOOD_TARGET = 8;
 
-// Why: refilling on any shortfall walked the run back to Ardougne for a single fish, while the walker was still following the route to the falls.
-/** Food left before a bank trip is worth making, well under the float it refills to. */
+// Why: refilling on any shortfall walked back to Ardougne for 1 fish mid-route.
+/** Food left before a bank trip is worth it, under the float it refills to. */
 const FOOD_LOW = 3;
 const RUNE_TARGET = 6;
 const RUNE_UNIT_BUDGET = 24;
 const BETTY_RETURN_FARE = 60;
 const EASTERN_SUPPLY_FARE = 60;
 const CASH_FLOAT = 500;
-// Why: the forced entry, crate, south-door route is 80 physical tiles, and at the prepared pack's roughly 9 kg 40% covers about 105 running tiles through the fire-giant lane.
-// Why: the nav cost reads 89 because three door edges are weighted.
+// Why: the entry, crate, south-door route is 80 tiles (nav cost 89 with 3 weighted door edges), and at the pack's ~9 kg 40% covers about 105 running tiles through the fire-giant lane.
 const DUNGEON_RUN_ENERGY = 40;
 
 const LOC = {
@@ -122,13 +121,11 @@ const GOLRIE_STAND = new Tile(2515, 9581, 0);
 const TOMBSTONE_STAND = new Tile(2558, 3444, 0);
 const CHEST_STAND = new Tile(2530, 9845, 0);
 const COFFIN_STAND = new Tile(2542, 9810, 0);
-// Why: directional ladder 1757 only accepts an approach from its east tile.
-// Why: the exact stand keeps the hostile approach inside Traversal's sustain loop rather than handing an opaque final route to the interaction.
+// Why: directional ladder 1757 only takes an approach from its east tile, and an exact stand keeps the hostile approach inside Traversal's sustain loop.
 const TOMB_LADDER_STAND = new Tile(2557, 9844, 0);
 const ROCK_STAND = new Tile(2512, 3477, 0);
 const ENTRY_DOOR_STAND = new Tile(2575, 9861, 0);
-// Why: the crate's south interaction tile (2589,9887) is adjacent to the level-45 giant skeleton at (2589,9886).
-// Why: its west tile stays search-capable while sitting outside that NPC's one-tile aggression range.
+// Why: the crate's south interaction tile (2589,9887) touches the level-45 giant skeleton at (2589,9886); the west tile can still search and sits outside its 1-tile aggro range.
 const BAXTORIAN_CRATE_STAND = new Tile(2588, 9888, 0);
 const SOUTH_DOOR_STAND = new Tile(2568, 9892, 0);
 const SOUTH_DOOR_NORTH_STAND = new Tile(2568, 9894, 0);
@@ -188,7 +185,7 @@ function normalizeJournal(lines: readonly string[] | string): string {
 
 export function parseWaterfallJournal(lines: readonly string[] | string): number | undefined {
     const text = normalizeJournal(lines);
-    // Later entries retain the complete earlier history, so match newest first.
+    // Later entries keep the earlier history, so match newest first.
     if (text.includes('quest complete!')) return WATERFALL_STAGE.COMPLETE;
     if (text.includes('worked out how to raise the floor') || text.includes('now i just need to retrieve the treasure')) {
         return WATERFALL_STAGE.RAISED_FLOOR;
@@ -211,8 +208,7 @@ export async function readWaterfallStage(): Promise<number | undefined> {
     if (status === 'notStarted') return WATERFALL_STAGE.NOT_STARTED;
     if (status !== 'inProgress') return undefined;
 
-    // Varp 65 is permanent server state but is not transmitted to revision-274
-    // clients. The rendered journal is the exact browser-visible stage oracle.
+    // Varp 65 never reaches a revision-274 client, so the rendered journal is the stage oracle.
     const stage = parseWaterfallJournal(await Quests.journal('Waterfall Quest'));
     if (reader.modals().main !== -1) {
         actions.closeModal();
@@ -276,13 +272,13 @@ function coinsHeld(snap: QuestSnapshot): number {
 }
 
 function remainingWaterfallCash(snap: QuestSnapshot): number {
-    // Why: the food comes out of the bank now, so the purse covers the rope, the runes and the fares alone.
+    // Why: food comes from the bank, so the purse only covers the rope, runes and fares.
     const rope = owned(snap, ITEM.ROPE) > 0 ? 0 : 20;
     const runes = RUNES.reduce(
         (total, rune) => total + Math.max(0, RUNE_TARGET - owned(snap, rune)) * RUNE_UNIT_BUDGET,
         0
     );
-    // Why: stage zero cannot buy runes yet, and even a restart beside Betty retains the later fare, as the quest first leaves and returns west.
+    // Why: stage 0 can't buy runes yet, and a restart beside Betty still needs the later fare since the quest leaves and comes back west.
     const runeFare = runes > 0 ? BETTY_RETURN_FARE : 0;
     return CASH_FLOAT + rope + runes + runeFare;
 }
@@ -346,14 +342,13 @@ async function pickpocketFundingMan(anchor: Tile, log: (message: string) => void
     );
     if (!resolved) {
         log(`pickpocketing Man at ${man.tile()} produced no coin, XP, health, or dialogue change`);
-        // A walking target can step away after the packet is accepted. This is
-        // an observed miss, not a failed funding route; re-query the live NPC.
+        // A walking target can step away after the packet is accepted; re-query the live NPC.
         await Execution.delayTicks(2);
         return true;
     }
     await clearFundingContinues();
     if (Skills.effective('hitpoints') < hpBefore) {
-        // A failed level-1 Man pickpocket stuns for eight server ticks.
+        // A failed level-1 Man pickpocket stuns for 8 ticks.
         await Execution.delayTicks(8);
     }
     return true;
@@ -470,8 +465,7 @@ async function fundWaterfallCoins(minimum: number, returnBank: Tile, log: (messa
         }
     }
 
-    // Returning to Varrock pays only the gate. Returning to the western supply
-    // bank then takes the two exact 30-gp ship edges observed on the safe route.
+    // Returning to Varrock only pays the gate; the western supply bank costs the 2 30-gp ship edges on the safe route.
     const target = waterfallFundingTarget(minimum, returnBank);
     log(`pickpocketing the Al Kharid Man to ${target} gp, buying exact Kebabs below ${SAFE_PICKPOCKET_HP} HP`);
     if (!(await farmWaterfallCoins(AL_KHARID_MAN, target, true, log))) return false;
@@ -506,8 +500,7 @@ function sourceRope(snap: QuestSnapshot, bank: Tile = ARDOUGNE_BANK): QuestStep 
     return coins ?? { kind: 'buy', item: ITEM.ROPE.name, qty: 1, shop: AEMAD_SHOP, estGp: 20 };
 }
 
-// Why: the food is whatever the player chose, drawn from the bank like every other quest, the old
-// pair of shop runs for fifteen Bread and ten Tea existed to carry a level-3 account with an empty bank.
+// Why: food is whatever the player chose, drawn from the bank; the old shop runs for 15 Bread and 10 Tea carried a level-3 account with an empty bank.
 
 /** The configured food as an id and name, or null when it names nothing the item db knows. */
 function foodItem(): WaterfallItem | null {
@@ -557,8 +550,7 @@ function nearBetty(snap: QuestSnapshot): boolean {
 function sourcePuzzleRunes(snap: QuestSnapshot): QuestStep | null {
     if (!snap.bankKnown) return scanBank();
 
-    // Empty every useful bank stack before going to Betty. Otherwise an earlier
-    // missing rune can trigger a shop trip before a later free stack is noticed.
+    // Empty every useful bank stack before Betty, or an earlier missing rune triggers a shop trip before a later free stack is seen.
     const bankWithdrawals: WithdrawItem[] = [];
     for (const rune of RUNES) {
         const missing = RUNE_TARGET - heldCount(snap, rune);
@@ -573,8 +565,8 @@ function sourcePuzzleRunes(snap: QuestSnapshot): QuestStep | null {
         .filter(entry => entry.missing > 0);
     if (missingRunes.length === 0) return null;
 
-    // Why: Betty's shared stock price rises as items are bought, and 24 gp per rune is the server's hard upper bound.
-    // Why: the normal cash float is retained after every purchase, and before departure both paid ship edges observed on the route are reserved, so later per-stack decisions never bounce back to the bank.
+    // Why: Betty's price rises as stock sells and 24 gp per rune is the server's hard cap.
+    // Why: the cash float plus both paid ship edges are reserved before departure, so later per-stack decisions never bounce back to the bank.
     const purchaseBudget = missingRunes.reduce((total, entry) => total + entry.missing * RUNE_UNIT_BUDGET, 0);
     const reserve = CASH_FLOAT + (nearBetty(snap) ? 0 : BETTY_RETURN_FARE);
     const coins = ensureCoins(snap, reserve + purchaseBudget);
@@ -642,14 +634,12 @@ async function stripAndDeposit(
             log
         );
 
-    // Clear the backpack first so every equipped slot can be removed even when
-    // a recovery account reached the bank with a full inventory.
+    // Clear the pack first so every worn slot can unequip even with a full inventory.
     if (!(await deposit(false))) return false;
     for (const item of Equipment.items()) {
         if (item.name && !(await Equipment.unequip(item.name))) return false;
     }
-    // Leave the final view open so QuestEngine refreshes both its name and
-    // exact-ID bank caches before making the next recovery decision.
+    // Leave the final view open so QuestEngine refreshes its name and id bank caches before the next decision.
     return deposit(true);
 }
 
@@ -662,8 +652,8 @@ function normalizeLoadout(
     const hasExcess = inventoryHasExcessKeptIds(snap, keepIds);
     const hasEquipment = snap.worn.size > 0 || (snap.wornIds?.size ?? 0) > 0;
     if (!hasEquipment && !inventoryHasOutsideIds(snap, keepIds) && !hasExcess) return null;
-    // Why: the bank API can keep an exact id but not a partial quantity, so an otherwise valid item over its phase limit means banking the pack and letting the stage planner withdraw the precise quantities on its next snapshot.
-    // Why: equipment needs the same empty-pack treatment, so every worn slot has room to unequip before the final deposit pass.
+    // Why: the bank API keeps an exact id but not a partial quantity, so anything over its phase limit means banking the pack and letting the planner withdraw exact quantities next snapshot.
+    // Why: equipment gets the same empty-pack treatment so every worn slot has room to unequip before the final deposit.
     const normalizedKeepIds = hasExcess || hasEquipment ? [] : keepIds;
     return { kind: 'custom', name, run: log => stripAndDeposit(normalizedKeepIds, log, bank) };
 }
@@ -702,7 +692,7 @@ async function boardRaft(log: (message: string) => void, driveHudon: boolean = f
     if (!raft || !(await raft.interact('Board'))) return false;
     if (driveHudon) {
         await Execution.delayUntil(() => ChatDialog.canContinue(), 12_000);
-        // Why: stage 2 is set partway through the forced Hudon conversation, so it is finished here and a transient gap between pages cannot let the engine walk away while the server script is still suspended at stage 1.
+        // Why: stage 2 is set partway through the forced Hudon conversation, so finish it here or a gap between pages lets the engine walk off while the script is still suspended at stage 1.
         for (let page = 0; page < 14 && ChatDialog.canContinue(); page++) {
             await ChatDialog.continue();
             await Execution.delayTicks(1);
@@ -781,8 +771,7 @@ async function tombExit(log: (message: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(TOMB_LADDER_STAND, { radius: 0, attempts: 3, timeoutMs: 90_000, log }))) {
         return false;
     }
-    // If the recovery trip spent its last food, leaving immediately is still
-    // safer than waiting in the armed-zombie corridor.
+    // Even with no food left, leaving now beats waiting in the armed-zombie corridor.
     await healToFull(log, 'Glarial tomb exit');
     const ladder = Locs.query().action('Climb-up').within(8).nearest();
     if (!ladder || !(await ladder.interact('Climb-up'))) return false;
@@ -846,8 +835,7 @@ async function crossKeyedDoor(stand: Tile, arrived: () => boolean, log: (message
 async function exitWaterfallDungeon(log: (message: string) => void): Promise<boolean> {
     let area = waterfallArea(Game.tile());
     if (area === 'raisedRoom') {
-        // Taking the treasure without using the urn is the quest's safe washout
-        // path. It deals no damage and is also an escape when the key was lost.
+        // Take treasure without the urn is the safe washout: no damage, and an exit when the key is lost.
         const chalice = Locs.query().where(loc => loc.id === LOC.CHALICE).action('Take treasure').within(12).nearest();
         if (!chalice || !(await chalice.interact('Take treasure'))) return false;
         return Execution.delayUntil(() => waterfallArea(Game.tile()) === 'mainland', 30_000);
@@ -982,8 +970,8 @@ async function solvePillars(log: (message: string) => void): Promise<boolean> {
         return false;
     }
 
-    // Why: varp 66 is server-only, and a fresh trip starts with six of each rune, so after an interrupted trip the number still held equals the number of unset pillars.
-    // Why: replaying every possible placement is therefore idempotent, set bits consume nothing and unset bits consume one.
+    // Why: varp 66 is server-only and a fresh trip starts with 6 of each rune, so after an interruption the runes held equal the unset pillars.
+    // Why: replaying every placement is idempotent; set bits consume nothing and unset bits consume 1.
     for (const pillar of pillars) {
         for (const rune of RUNES) {
             if (!(await placeRune(rune, pillar, log))) return false;
@@ -1068,7 +1056,7 @@ function prepareTombEntry(snap: QuestSnapshot): QuestStep {
     if (normalize) return normalize;
     const food = sourceFood(snap, bank);
     if (food) return food;
-    // Why: surviving relics are banked during the exposed Golrie leg and brought into the tomb, so only the missing relic is recovered.
+    // Why: surviving relics get banked on the exposed Golrie leg and brought into the tomb, so only the missing one is looted.
     const survivingRelics = withdrawBankedRelics(snap, bank);
     if (survivingRelics) return survivingRelics;
     return { kind: 'custom', name: 'loot Glarial amulet and urn', run: tombLeg };
@@ -1099,7 +1087,7 @@ function prepareDungeon(snap: QuestSnapshot, finalTrip: boolean): QuestStep | nu
     if (!snap.bankKnown) return scanBank(bank);
     const relicRecovery = recoverRelics(snap);
     if (relicRecovery) return relicRecovery;
-    // Why: a food refill first narrows the pack to travel supplies, so a mainland restart with surviving relics or runes cannot fill the pack before the food and a missing Rope are assembled.
+    // Why: refilling food first narrows the pack to travel supplies, so a restart with leftover relics or runes can't fill it before the food and Rope are in.
     const food0 = foodItem();
     const replenishingFood = food0 !== null && heldCount(snap, food0) <= FOOD_LOW;
     const travelNormalize = normalizeLoadout(

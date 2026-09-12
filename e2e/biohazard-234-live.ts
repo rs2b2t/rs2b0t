@@ -1,8 +1,5 @@
-/** Live Biohazard harness (#234): --stage N --until N --minutes N, base :8890.
- *  Why: `--stage` relogs because update_questlist only recolours the journal at login, and the run
- *  needs Plague City complete as well; the bank holds coins and food alone so the bird feed, the
- *  pigeons, the apples, the gown, the key and the priest suit are all sourced in the world.
- *  Why: the quest is members-only, so the :8888 sim answers neither the dialogue nor `~bankitem`. */
+/** Live Biohazard harness (#234), using the members world at :8890. */
+// Why: stage jumps need a relog to refresh the journal; quest items stay unseeded to test acquisition.
 
 //   HEADED=1 bun e2e/biohazard-234-live.ts --stage 0 --until 16 --minutes 90 --tick 100
 //   HEADED=1 bun e2e/biohazard-234-live.ts --stage 5 --until 7 --minutes 25 --tick 100
@@ -237,8 +234,7 @@ try {
             }
         }
 
-        // A full run waits for the journal to go green: the quest-complete recolour
-        // and the QP award land a tick behind %biohazard.
+        // The journal recolour and QP award trail `%biohazard` by one tick.
         const done = args.until >= BIOHAZARD_COMPLETE ? last.status === 'complete' : stage >= args.until;
         if (done) {
             console.log(`PASS (biohazard=${stage}, journal=${last.status}, QP=${last.qp}, ${Math.round(t / 60)}min)`);

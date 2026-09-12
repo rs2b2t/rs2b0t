@@ -1,5 +1,6 @@
-/** Live verification for GatheringBot (Miner / Fisher / Woodcutter): scenario ids as argv, BASE / HEADED / SLOWMO / BUDGET_S from the environment.
- *  Why: inventory seeds go through the engine cheat `give` and bank seeds through `givebank`; acquire scenarios purge bank tools first so a leftover withdrawal cannot false-PASS, and the bot client is redeployed by hand, tools/deploy-local.sh from this tree is not for live e2e. */
+/** Live GatheringBot scenarios for Miner, Fisher, and Woodcutter. */
+// Why: acquisition cases purge bank tools so leftovers cannot produce a false pass.
+// Inventory uses `give`, bank stock uses `givebank`, and the bot client is deployed manually.
 
 // Usage:
 //   bun e2e/gatheringbot-test.ts
@@ -1214,15 +1215,14 @@ const SCENARIOS: Scenario[] = [
             `peak=${productPeak} distCamp ${minDistToCamp}..${maxDistToCamp} ` +
             `tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
     },
-    /** Single-account mule gatherer smoke: a full pack with muleMode Gatherer must hold at the meet and wait for a partner rather than bank.
-     *  A full Gatherer↔Mule trade needs two harnesses. */
+    /** A solo Gatherer waits at the meetup with a full pack instead of banking. */
     {
         id: 'mine-mule-gatherer-meet',
         tags: ['mining', 'mine', 'mule', 'early'],
         script: 'Miner',
         start: offsetTile(SPOT.seVarrockIron, -2, -1),
         camp: SPOT.seVarrockIron,
-        bank: { x: 3253, z: 3420, level: 0 }, // Varrock East, must NOT visit for handoff
+        bank: { x: 3253, z: 3420, level: 0 }, // The handoff must not visit Varrock East.
         settings: {
             rocks: 'Iron',
             location: 'Southeast Varrock Mine',
@@ -1242,15 +1242,15 @@ const SCENARIOS: Scenario[] = [
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            // Startup log always includes mode line; waiting/trade lines are status-only.
+            // The startup mode line is durable; wait and trade lines are transient status.
             const muleOn = logHas(cur, /mule:\s*gatherer with/i);
             const nearMeet = minDistToCamp <= 4;
             const stillHolding = invMatch(cur, /ore/i) >= 20 || productPeak >= 20;
-            // Must not complete a bank deposit of the haul.
+            // A bank deposit would invalidate the handoff case.
             if (logHas(cur, /bank:\s*deposited/i) && elapsedMs >= 12_000) {
                 return 'fail';
             }
-            // Use current bank distance, minDistToBank is poisoned by start-purge bank trips.
+            // Startup purge trips make `minDistToBank` unusable here.
             if (muleOn && nearMeet && stillHolding && distToBank > 12 && elapsedMs >= 8_000) {
                 return 'pass';
             }
@@ -1262,10 +1262,7 @@ const SCENARIOS: Scenario[] = [
             `muleOn=${logHas(cur, /mule:\s*gatherer with/i)} bankedLog=${logHas(cur, /bank:\s*deposited/i)} ` +
             `tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
     },
-    /**
-     * Second mine bank loop + long soft-home: Rimmington iron → Falador East (~100+ tiles).
-     * Catches bank preference / post-deposit return regressions not covered by SW Varrock.
-     */
+    /** Rimmington to Falador East covers a 100+ tile bank and return loop. */
     {
         id: 'mine-bank-rimmington',
         tags: ['mining', 'mine', 'bank', 'camp', 'early'],
@@ -1517,8 +1514,8 @@ const SCENARIOS: Scenario[] = [
             `tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
     },
     {
-        // Cook then bank: seed cooked so one catch fills the pack with 1 raw + 26 cooked → cook the raw → bank the cooked pile at Catherby.
-        // Why: #154. The bot must also leave the bank toward the pier after depositing; Catherby bank is ~36 from the spot, inside the 64 leash, so deposit-only false-PASSed.
+        // Seed 26 cooked fish so one catch fills the pack and forces cook, bank, then return.
+        // Why: Catherby bank is inside the old 64-tile leash, so deposit alone could false-pass #154.
         id: 'fish-cook-bank',
         tags: ['fishing', 'fish', 'cook', 'bank', 'early'],
         script: 'Fisher',
@@ -1537,14 +1534,14 @@ const SCENARIOS: Scenario[] = [
             purgePackOnStart: false,
             leashRadius: 18
         },
-        // Pot + 26 cooked = 27 slots; one free → fish last raw → cook → bank → home.
+        // Pot plus 26 cooked fish leaves one slot for the final catch.
         seed: [
             { debug: 'lobster_pot', name: 'Lobster pot', qty: 1 },
             { debug: 'lobster', name: 'Lobster', qty: 26 }
         ],
         // Cooking/fishing already 99 from BASE_STATS.
         scene: 'skip',
-        // No Make-X: one last catch + one-at-a-time cook + bank/home (Catherby range≈bank).
+        // No Make-X: one catch, one cook, then bank and return.
         budgetMs: 300_000,
         check: ({
             start,
@@ -1561,8 +1558,7 @@ const SCENARIOS: Scenario[] = [
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            // Full cook→bank→home: catch → cook → deposit near bank → walk to pier.
-            // After home the bot may re-fish; do not require empty pack at pass time.
+            // The bot may fish again after returning, so the pack need not stay empty.
             if (
                 fishXp > 0
                 && cookXp > 0
@@ -1697,10 +1693,7 @@ const SCENARIOS: Scenario[] = [
             `peak=${productPeak} banked=${bankedHint} nearBank=${sawNearBank} distBank=${minDistToBank} ` +
             `tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
     },
-    /**
-     * Cooker mule solo: full raw pack + muleMode Cooker + cook-then-bank → cook at camp
-     * range and bank cooked (no partner needed once raw is held; trade tasks idle).
-     */
+    /** A solo Cooker with raw fish cooks and banks while trade tasks stay idle. */
     {
         id: 'fish-cooker-solo',
         tags: ['fishing', 'fish', 'cook', 'mule', 'early'],

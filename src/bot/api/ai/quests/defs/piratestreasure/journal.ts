@@ -22,7 +22,7 @@ function readStage(text: string): number | undefined {
     return undefined;
 }
 
-// Why: the page keeps every earlier line struck through, so an early needle still matches in a late state and this order is the only thing that separates them.
+// Why: the page keeps every earlier line struck through, so an early needle still matches late and only this order separates them.
 // Why: `rum-lost` leads because the lost-rum page is reachable with every shipping line already behind it.
 const SMUGGLE: readonly [string, string][] = [
     ['but i seem to have lost it', 'rum-lost'],
@@ -53,7 +53,7 @@ export function parsePiratesTreasureJournal(lines: readonly string[] | string): 
     return { stage, flags };
 }
 
-/** A failed read is not evidence the quest went backwards. */
+/** A failed read doesn't mean the quest went backwards. */
 let lastGood: QuestProgress | undefined;
 
 export async function readPiratesTreasureProgress(): Promise<QuestProgress | undefined> {

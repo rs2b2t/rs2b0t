@@ -8,7 +8,7 @@ interface QueryableEntity extends Locatable {
 
 /**
  * Minimal fields shared by Loc/Npc/GroundItem snapshots and adapted players.
- * Why: name, action and distance filters can run before allocating entity wrappers, matching ClientAdapter snapshot shapes, which expose `ops` rather than `actions()`.
+ * Why: name, action and distance filters run before any entity wrapper is allocated, on the snapshot's `ops`.
  */
 interface EntitySnapView {
     name: string | null;
@@ -23,8 +23,8 @@ export function matchesEntityName(actual: string | null, configured: string): bo
 }
 
 /**
- * Chainable filter over scene entities; a terminal evaluates it against the current scene.
- * Why: built via {@link EntityQuery.fromSnapshots} so name/action/within/withinOf filters run on raw snapshots and only matching rows become Loc/Npc objects, since a hot gather loop otherwise allocates a Loc per scenery tile.
+ * Chainable scene-entity filter.
+ * Why: Snapshot filters run before wrappers are allocated, avoiding one Loc/Npc allocation per scene entry.
  * @see docs/reference/api-entities.md#entityquery
  */
 export default class EntityQuery<E extends QueryableEntity> {
@@ -36,7 +36,7 @@ export default class EntityQuery<E extends QueryableEntity> {
         private readonly wrap: (s: EntitySnapView) => E
     ) {}
 
-    /** @internal Snapshot-first query: common filters run before `wrap`. `S` must expose name/actions/tile/distance (LocSnapshot etc. already do). */
+    /** @internal Snapshot-first query: common filters run before `wrap`. `S` must expose name/ops/tile/distance (LocSnapshot etc. already do). */
     static fromSnapshots<S extends EntitySnapView, E extends QueryableEntity>(
         supply: () => readonly S[],
         wrap: (s: S) => E
@@ -68,10 +68,7 @@ export default class EntityQuery<E extends QueryableEntity> {
         return this;
     }
 
-    /**
-     * Chebyshev disk around an arbitrary tile (camp pin, booth stand, furnace).
-     * Prefer this over hand-rolling `tile.distanceTo(stand) <= leash` in scripts.
-     */
+    /** Chebyshev disk around any tile (camp pin, booth stand, furnace); prefer it to hand-rolling `tile.distanceTo(stand) <= leash`. */
     withinOf(origin: WorldTile, dist: number): this {
         const r = Math.max(0, Math.floor(dist));
         this.snapFilters.push(s => {

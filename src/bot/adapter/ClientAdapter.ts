@@ -18,8 +18,7 @@ import { SELF_TEST, type RawClient } from './RawClient.js';
 
 const SCENE_SIZE = 104;
 
-// Why: locs() sweeps 104x104 tiles x 4 typecodes at a measured 1.4-1.7ms and 586-2289
-// objects per call, and frame-rate script waiters would rebuild the unchanged scene ~24x/sec per bot.
+// Why: locs() scans 104x104 tiles across four typecodes, so reuse it within a client tick.
 let locCache: LocSnapshot[] | null = null;
 let locCacheKey = '';
 
@@ -28,7 +27,7 @@ export function invalidateLocSnapshots(): void {
     locCache = null;
 }
 
-/** Releases the attached client; later reads degrade to empty rather than dereferencing a half-dead client. */
+/** Releases the client; later reads return empty state. */
 export function detach(): void {
     raw = null;
     bankInventorySession = null;
@@ -285,11 +284,11 @@ export interface ModalButton {
     comId: number;
     /** The button's own caption, as drawn. */
     label: string;
-    /** The word the right-click menu offers, which is what the client sends the option as. */
+/** The right-click menu action sent by the client. */
     menu: string;
-    /** True while the button or any layer above it is hidden, and a click on it cannot be seen. */
+/** Whether this button or an ancestor is hidden. */
     hidden: boolean;
-    /** True for a `buttontype=pause` button, which resumes a suspended script instead of firing an `if_button` trigger. */
+/** A `buttontype=pause` button resumes a suspended script instead of firing `if_button`. */
     pause: boolean;
 }
 
@@ -327,7 +326,7 @@ export function setPacketListener(cb: ((ptype: number) => void) | null): void {
 
 /** The client's own chat input cap. */
 const PUBLIC_CHAT_LIMIT = 80;
-/** Chat type 2 is a plain player line, and 150 client ticks is how long the client holds its own bubble up. */
+/** Chat type 2 is player speech; its overhead bubble lasts 150 client ticks. */
 const PUBLIC_CHAT_TYPE = 2;
 const CHAT_BUBBLE_TICKS = 150;
 
@@ -386,10 +385,7 @@ export const reader = {
         };
     },
 
-    /**
-     * Hint-arrow tile (type 2–6), or null when no tile hint is active.
-     * Used by Brimhaven Agility Arena for the active ticket pillar.
-     */
+    /** Hint-arrow tile (type 2-6), used for the active Brimhaven ticket pillar. */
     hintTile(): WorldTile | null {
         if (!raw) {
             return null;
@@ -400,7 +396,7 @@ export const reader = {
             hintTileZ?: number;
         };
         const t = c.hintType ?? 0;
-        // Client normalises types 2–6 to type 2 after reading the tile coords.
+        // The client normalizes tile hint types 2-6 to type 2.
         if (t !== 2) {
             return null;
         }
@@ -420,10 +416,7 @@ export const reader = {
         return { x: raw.mapBuildBaseX, z: raw.mapBuildBaseZ };
     },
 
-    /**
-     * Project a point on a world tile onto the bot overlay canvas (pixels).
-     * `u`/`v` are fractional offsets within the tile (0 = west/south edge, 1 = east/north), clamped to the tile interior.
-     */
+    /** Project a world-tile point onto the overlay; `u` and `v` are clamped tile fractions. */
     overlayPosWorld(x: number, z: number, height = 0, u = 0.5, v = 0.5): { x: number; y: number } | null {
         if (!raw) {
             return null;
@@ -435,10 +428,7 @@ export const reader = {
         return raw.overlayPos(scene.sceneX, scene.sceneZ, height);
     },
 
-    /**
-     * Project a world tile corner into **areaGame** pixels (512×334, no canvas +4).
-     * Call only while the client has bound Pix2D to areaGame (onAfterWorldRender).
-     */
+    /** Project a world-tile corner into areaGame pixels while Pix2D is bound there. */
     projectAreaGameWorld(x: number, z: number, height = 0, u = 0.5, v = 0.5): { x: number; y: number } | null {
         if (!raw) {
             return null;
@@ -467,16 +457,13 @@ export const reader = {
         return raw?.runenergy ?? 0;
     },
 
-    /**
-     * Orbit camera yaw 0–2047 (client-only; TS-private on Client, plain property at runtime).
-     * Used by optional nav path-facing, no server/LC dependency.
-     */
+    /** Client-only orbit yaw (0-2047) used by nav path-facing. */
     cameraYaw(): number {
         const c = raw as (RawClient & { orbitCameraYaw?: number }) | null;
         return (c?.orbitCameraYaw ?? 0) & 0x7ff;
     },
 
-    /** Orbit camera pitch 128–383. */
+    /** Orbit camera pitch (128-383). */
     cameraPitch(): number {
         const c = raw as (RawClient & { orbitCameraPitch?: number }) | null;
         return c?.orbitCameraPitch ?? 128;

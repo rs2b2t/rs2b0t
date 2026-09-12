@@ -6,8 +6,7 @@ import { join } from 'node:path';
 
 export const DEFAULT_ENGINE_DIR = process.env.ENGINE_DIR ?? join(homedir(), 'code', 'rs2b2t-engine');
 
-// rs2b0t's historical names for symbols the engine calls something else. Keys are the
-// engine's name, values are ours. Renaming ours would touch every call site in Client.ts.
+// Engine names mapped to client names; keep the existing Client.ts call sites.
 const ALIAS: Record<string, string> = {
     IF_SETTAB: 'IF_SETICON',
     IF_SETTAB_ACTIVE: 'IF_SHOWICON',

@@ -61,8 +61,7 @@ describe('parseCommand', () => {
         }
     });
 
-    // Why: the engine filters every public message before broadcasting, and reads "pric" as an obfuscated
-    // Why: slur, so a customer typing "prices" reaches the shop as "****es".
+    // Why: the engine broadcasts "prices" as "****es" after chat filtering.
     test('the censored form of prices still asks for the book', () => {
         expect(parseCommand('****es')).toEqual({ kind: 'prices' });
     });
@@ -72,7 +71,7 @@ describe('parseCommand', () => {
         expect(parseCommand('***')).toEqual({ kind: 'none' });
     });
 
-    // Why: the count is optional, so a line with none of it parses as one of them and the shop decides whether the words name anything it trades.
+    // Why: omitted counts default to one before catalog resolution.
     test('a missing count means one of them', () => {
         expect(parseCommand('buying rune scimitar')).toEqual({
             kind: 'quoteSell',
@@ -176,7 +175,7 @@ describe('parseCommand', () => {
         }
     });
 
-    // Why: it is the way out of a shop that has stopped answering, so it has to be one word and hard to mistype.
+    // Why: keep the escape command short enough to use when the shop stops responding.
     test('reset is a command, by either name', () => {
         expect(parseCommand('reset')).toEqual({ kind: 'reset' });
         expect(parseCommand('RESET')).toEqual({ kind: 'reset' });

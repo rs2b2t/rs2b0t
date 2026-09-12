@@ -15,7 +15,7 @@ import {
 import { FC_STAGE, readFishingContestStage } from './journal.js';
 import { ITEM, sourceFee, sourceGarlic, sourcePass, sourceRod, sourceSpade, sourceWorms, WORM_TARGET } from './supplies.js';
 
-// Why: the fence has one gate and crossing it outbound is a conversation, so a bank or shop leg that starts inside walks into a prompt the nav's door handler cannot answer.
+// Why: Outbound crossing opens dialogue that the generic door handler cannot continue.
 
 /** Any leg that leaves Hemenster has to go through the gate first. */
 function outside(snap: QuestSnapshot, step: QuestStep | null): QuestStep | null {
@@ -38,7 +38,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     }
 
     switch (stage) {
-        // Why: the garlic is in Draynor and the spade in Falador, both on the road to the tunnel, fetching them after the dwarf hands the pass over is the same walk twice.
+        // Why: the garlic is in Draynor and the spade in Falador, both on the road to the tunnel, so fetching them after the pass is the same walk twice.
         case FC_STAGE.NOT_STARTED:
             return sourceGarlic(snap)
                 ?? sourceSpade(snap)
@@ -52,7 +52,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
                 ?? sourceFee(snap))
                 ?? { kind: 'custom', name: 'pay Bonzo the contest entry fee', run: payEntryFee };
 
-        // Why: the willow spot yields sardines whatever the bait, so this stage never fishes, it stashes the garlic, or unwinds a round that already did.
+        // Why: the willow spot yields sardines whatever the bait, so this stage never fishes; it stashes the garlic or unwinds a round that already did.
         case FC_STAGE.IN_COMP:
             if (heldId(snap, FC_ID.GARLIC) > 0) {
                 return { kind: 'custom', name: 'stash the garlic in the wall pipe', run: stashGarlic };
@@ -63,7 +63,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
             return outside(snap, sourcePass(snap) ?? sourceGarlic(snap))
                 ?? { kind: 'wait', reason: 'the willow spot cannot win and there is no garlic to move the stranger' };
 
-        // Why: the pass is checked here too, a death or a teleport out of the fence leaves a paid-up contest that Morris will not let the bot back into.
+        // Why: the pass is checked here too; a death or teleport out of the fence leaves a paid-up contest Morris won't let the bot back into.
         case FC_STAGE.GARLIC_COMP:
             return outside(snap, sourcePass(snap) ?? sourceRod(snap) ?? sourceWorms(snap, 1))
                 ?? { kind: 'custom', name: 'fish the contest beside the pipes', run: fishAtPipes };
@@ -90,7 +90,7 @@ export const fishingcontest: QuestModule = {
     bank: 'nearest',
     food: 8,
     tools: ['fishing pass', 'garlic', 'fishing rod', 'spade', 'red vine worm', 'fishing trophy', 'raw giant carp', 'coins'],
-    // Literals, not QuestFood.name: this object is built at import, when the setting still holds its default.
+    // Literals; this object is built at import, when QuestFood.name still holds its default.
     sustain: { foods: ['Lobster', 'Swordfish', 'Tuna'], eatBelowHp: 0.5 },
     readStage: readFishingContestStage,
     warnReadiness: () =>
