@@ -6,7 +6,7 @@ import { getServerVarQuiet, mainlandAccount, relog, startScript, teleTo } from '
 
 type Api = {
     __rs2b0t: { Inventory: { count(name: string): number }; Quests: { status(name: string): string } };
-    rs2b0t: { reader: { worldTile(): { x: number; z: number; level: number } | null }; runner: { state: string; ctx: { log: { msg: string }[] } | null } };
+    rs2b0t: { reader: { worldTile(): { x: number; z: number; level: number } | null }; runner: { state: string; bot: { status: string } | null; ctx: { log: { msg: string }[] } | null } };
 };
 
 const { base, minutes } = parseArgs(process.argv.slice(2), { minutes: 6 });
@@ -18,7 +18,7 @@ const snapshot = () => page.evaluate(() => {
     const g = globalThis as never as Api;
     return { tile: g.rs2b0t.reader.worldTile(), quest: g.__rs2b0t.Quests.status('Death Plateau'),
         map: g.__rs2b0t.Inventory.count('Secret way map'), combination: g.__rs2b0t.Inventory.count('Combination'),
-        state: g.rs2b0t.runner.state, logs: g.rs2b0t.runner.ctx?.log.slice(-16).map(line => line.msg) ?? [] };
+        state: g.rs2b0t.runner.state, step: g.rs2b0t.runner.bot?.status, logs: g.rs2b0t.runner.ctx?.log.slice(-16).map(line => line.msg) ?? [] };
 });
 
 try {
@@ -37,11 +37,21 @@ try {
     await page.screenshot({ path: 'docs/e2e/issue-470-before.png', fullPage: true });
     await setSettings(page, 'AIOQuester', { quests: 'death' });
     await startScript(page, 'AIOQuester');
-    await page.waitForFunction(() => {
-        const tile = (globalThis as never as Api).rs2b0t.reader.worldTile();
-        return tile !== null && tile.level === 0 && tile.x >= 2864 && tile.x < 2872 && tile.z >= 3608 && tile.z < 3616;
-    }, undefined, { timeout: minutes * 60_000, polling: 100 });
-    const entered = await snapshot();
+    const deadline = Date.now() + minutes * 60_000;
+    let entered: Awaited<ReturnType<typeof snapshot>> | null = null;
+    let printed = 0;
+    while (Date.now() < deadline) {
+        const state = await snapshot();
+        const tile = state.tile;
+        if (tile && tile.level === 0 && tile.x >= 2864 && tile.x < 2872 && tile.z >= 3608 && tile.z < 3616) { entered = state; break; }
+        if (Date.now() - printed > 10_000) {
+            console.log('STATE', JSON.stringify({ ...state, deathMap: await getServerVarQuiet(page, 'death_map') }));
+            printed = Date.now();
+        }
+        assert.equal(state.state, 'running', 'AIOQuester stayed active');
+        await page.waitForTimeout(100);
+    }
+    assert(entered, 'AIOQuester reached the scout trigger zone');
     await stopScript(page);
     const mapStage = await getServerVarQuiet(page, 'death_map');
     assert.equal(mapStage, 8, 'walking into the secret-path zone advanced the server quest stage');
@@ -49,6 +59,11 @@ try {
     await Bun.write('docs/e2e/issue-470.json', JSON.stringify({ issue: 470, result: 'PASS', at: new Date().toISOString(),
         sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), before, entered, mapStage }, null, 2) + '\n');
     console.log('PASS', JSON.stringify({ before, entered, mapStage }));
+} catch (error) {
+    console.log('FAILURE STATE', JSON.stringify({ state: await snapshot().catch(() => null), deathMap: await getServerVarQuiet(page, 'death_map').catch(() => null) }));
+    await mkdir('out', { recursive: true });
+    await page.screenshot({ path: 'out/issue-470-failure.png', fullPage: true }).catch(() => undefined);
+    throw error;
 } finally {
     await stopScript(page).catch(() => undefined);
     await logout(page).catch(() => false);
