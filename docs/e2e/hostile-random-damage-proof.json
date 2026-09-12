@@ -1,0 +1,2240 @@
+{
+  "generatedAt": "2026-09-12T12:32:52.203Z",
+  "mode": "fixed",
+  "result": "PASS",
+  "screenshot": "docs/e2e/hostile-random-damage-success.png",
+  "harness": "e2e/hostile-random-damage-live.ts",
+  "build": {
+    "sha256": "e2c44ebd435746c4a283009e67a395c4c166de7b4810be26c724aa928b4b4e21",
+    "revision": "485bac00aa07fd19086d8afc71940bbdda72eb71",
+    "dirty": true
+  },
+  "total": 9,
+  "results": [
+    {
+      "fixture": {
+        "id": 431,
+        "key": "macro_watchman1"
+      },
+      "seed": "npcadd; ~hit 0; ~hit 2",
+      "quiet": {
+        "at": 1789216288738,
+        "cycle": 1366,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [],
+        "npcs": [
+          {
+            "index": 8325,
+            "id": 431,
+            "anim": -1,
+            "name": "Watchman",
+            "level": 14,
+            "tile": {
+              "x": 3248,
+              "z": 3252,
+              "level": 0
+            },
+            "distance": 0,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "blocked": {
+        "at": 1789216288986,
+        "cycle": 1379,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 1448
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8325,
+            "id": 431,
+            "anim": -1,
+            "name": "Watchman",
+            "level": 14,
+            "tile": {
+              "x": 3248,
+              "z": 3252,
+              "level": 0
+            },
+            "distance": 0,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "start": {
+        "at": 1789216287534,
+        "cycle": 1305,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      },
+      "movedBeforeDamage": false,
+      "maxDistance": 12,
+      "minHp": 97,
+      "walks": [
+        {
+          "destination": {
+            "x": 3248,
+            "z": 3264,
+            "level": 0
+          },
+          "startedAt": 1789216289954,
+          "ok": true,
+          "finishedAt": 1789216291954
+        },
+        {
+          "destination": {
+            "x": 3248,
+            "z": 3252,
+            "level": 0
+          },
+          "startedAt": 1789216291973,
+          "ok": true,
+          "finishedAt": 1789216293956
+        }
+      ],
+      "logs": [
+        "[rs2b0t] random event: watchman attacking — evading (it despawns once we're away)",
+        "[rs2b0t] random event: watchman despawned"
+      ],
+      "firstEvade": {
+        "at": 1789216289948,
+        "cycle": 1429,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": true,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 1448
+          },
+          {
+            "damage": 2,
+            "type": 1,
+            "expires": 1499
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8325,
+            "id": 431,
+            "anim": -1,
+            "name": "Watchman",
+            "level": 14,
+            "tile": {
+              "x": 3249,
+              "z": 3252,
+              "level": 0
+            },
+            "distance": 1,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "firstDamage": {
+        "at": 1789216289948,
+        "cycle": 1429,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": true,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 1448
+          },
+          {
+            "damage": 2,
+            "type": 1,
+            "expires": 1499
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8325,
+            "id": 431,
+            "anim": -1,
+            "name": "Watchman",
+            "level": 14,
+            "tile": {
+              "x": 3249,
+              "z": 3252,
+              "level": 0
+            },
+            "distance": 1,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "escape": {
+        "at": 1789216292335,
+        "cycle": 1551,
+        "tile": {
+          "x": 3248,
+          "z": 3264,
+          "level": 0
+        },
+        "hp": 97,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      },
+      "end": {
+        "at": 1789216293972,
+        "cycle": 1634,
+        "tile": {
+          "x": 3248,
+          "z": 3254,
+          "level": 0
+        },
+        "hp": 97,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      }
+    },
+    {
+      "fixture": {
+        "id": 391,
+        "key": "macro_rivertrollguardian_1"
+      },
+      "seed": "npcadd; ~hit 0; ~hit 2",
+      "quiet": {
+        "at": 1789216298588,
+        "cycle": 1871,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [],
+        "npcs": [
+          {
+            "index": 8326,
+            "id": 391,
+            "anim": -1,
+            "name": "River troll",
+            "level": 14,
+            "tile": {
+              "x": 3248,
+              "z": 3252,
+              "level": 0
+            },
+            "distance": 0,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "blocked": {
+        "at": 1789216298785,
+        "cycle": 1881,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 1949
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8326,
+            "id": 391,
+            "anim": -1,
+            "name": "River troll",
+            "level": 14,
+            "tile": {
+              "x": 3248,
+              "z": 3252,
+              "level": 0
+            },
+            "distance": 0,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "start": {
+        "at": 1789216297383,
+        "cycle": 1809,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      },
+      "movedBeforeDamage": false,
+      "maxDistance": 12,
+      "minHp": 97,
+      "walks": [
+        {
+          "destination": {
+            "x": 3248,
+            "z": 3264,
+            "level": 0
+          },
+          "startedAt": 1789216299547,
+          "ok": true,
+          "finishedAt": 1789216301546
+        },
+        {
+          "destination": {
+            "x": 3248,
+            "z": 3252,
+            "level": 0
+          },
+          "startedAt": 1789216301565,
+          "ok": true,
+          "finishedAt": 1789216303541
+        }
+      ],
+      "logs": [
+        "[rs2b0t] random event: river troll attacking — evading (it despawns once we're away)",
+        "[rs2b0t] random event: river troll despawned"
+      ],
+      "firstEvade": {
+        "at": 1789216299545,
+        "cycle": 1921,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": true,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 1949
+          },
+          {
+            "damage": 2,
+            "type": 1,
+            "expires": 1991
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8326,
+            "id": 391,
+            "anim": -1,
+            "name": "River troll",
+            "level": 14,
+            "tile": {
+              "x": 3248,
+              "z": 3252,
+              "level": 0
+            },
+            "distance": 0,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "firstDamage": {
+        "at": 1789216299545,
+        "cycle": 1921,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": true,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 1949
+          },
+          {
+            "damage": 2,
+            "type": 1,
+            "expires": 1991
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8326,
+            "id": 391,
+            "anim": -1,
+            "name": "River troll",
+            "level": 14,
+            "tile": {
+              "x": 3248,
+              "z": 3252,
+              "level": 0
+            },
+            "distance": 0,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "escape": {
+        "at": 1789216301935,
+        "cycle": 2042,
+        "tile": {
+          "x": 3248,
+          "z": 3264,
+          "level": 0
+        },
+        "hp": 98,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      },
+      "end": {
+        "at": 1789216303552,
+        "cycle": 2125,
+        "tile": {
+          "x": 3248,
+          "z": 3254,
+          "level": 0
+        },
+        "hp": 98,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      }
+    },
+    {
+      "fixture": {
+        "id": 408,
+        "key": "macro_triffidseed_angry"
+      },
+      "seed": "npcadd; ~hit 0; ~hit 2",
+      "quiet": {
+        "at": 1789216308164,
+        "cycle": 2362,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [],
+        "npcs": [
+          {
+            "index": 8327,
+            "id": 408,
+            "anim": -1,
+            "name": "Strange plant",
+            "level": 0,
+            "tile": {
+              "x": 3247,
+              "z": 3252,
+              "level": 0
+            },
+            "distance": 1,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "blocked": {
+        "at": 1789216308362,
+        "cycle": 2372,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 2442
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8327,
+            "id": 408,
+            "anim": -1,
+            "name": "Strange plant",
+            "level": 0,
+            "tile": {
+              "x": 3247,
+              "z": 3252,
+              "level": 0
+            },
+            "distance": 1,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "start": {
+        "at": 1789216306961,
+        "cycle": 2300,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      },
+      "movedBeforeDamage": false,
+      "maxDistance": 12,
+      "minHp": 97,
+      "walks": [
+        {
+          "destination": {
+            "x": 3248,
+            "z": 3240,
+            "level": 0
+          },
+          "startedAt": 1789216309153,
+          "ok": true,
+          "finishedAt": 1789216311543
+        },
+        {
+          "destination": {
+            "x": 3248,
+            "z": 3252,
+            "level": 0
+          },
+          "startedAt": 1789216311561,
+          "ok": true,
+          "finishedAt": 1789216313551
+        }
+      ],
+      "logs": [
+        "[rs2b0t] random event: strange plant attacking — evading (it despawns once we're away)",
+        "[rs2b0t] random event: strange plant despawned"
+      ],
+      "firstEvade": {
+        "at": 1789216309152,
+        "cycle": 2413,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": true,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 2442
+          },
+          {
+            "damage": 2,
+            "type": 1,
+            "expires": 2483
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8327,
+            "id": 408,
+            "anim": -1,
+            "name": "Strange plant",
+            "level": 0,
+            "tile": {
+              "x": 3247,
+              "z": 3253,
+              "level": 0
+            },
+            "distance": 1,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "firstDamage": {
+        "at": 1789216309152,
+        "cycle": 2413,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": true,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 2442
+          },
+          {
+            "damage": 2,
+            "type": 1,
+            "expires": 2483
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8327,
+            "id": 408,
+            "anim": -1,
+            "name": "Strange plant",
+            "level": 0,
+            "tile": {
+              "x": 3247,
+              "z": 3253,
+              "level": 0
+            },
+            "distance": 1,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "escape": {
+        "at": 1789216311912,
+        "cycle": 2554,
+        "tile": {
+          "x": 3248,
+          "z": 3240,
+          "level": 0
+        },
+        "hp": 97,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      },
+      "end": {
+        "at": 1789216313553,
+        "cycle": 2638,
+        "tile": {
+          "x": 3249,
+          "z": 3250,
+          "level": 0
+        },
+        "hp": 97,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      }
+    },
+    {
+      "fixture": {
+        "id": 411,
+        "key": "macro_swarm"
+      },
+      "seed": "npcadd; ~hit 0; ~hit 2",
+      "quiet": {
+        "at": 1789216318165,
+        "cycle": 2874,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [],
+        "npcs": [
+          {
+            "index": 8328,
+            "id": 411,
+            "anim": -1,
+            "name": "Swarm",
+            "level": 0,
+            "tile": {
+              "x": 3249,
+              "z": 3252,
+              "level": 0
+            },
+            "distance": 1,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "blocked": {
+        "at": 1789216318362,
+        "cycle": 2885,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 2954
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8328,
+            "id": 411,
+            "anim": -1,
+            "name": "Swarm",
+            "level": 0,
+            "tile": {
+              "x": 3250,
+              "z": 3252,
+              "level": 0
+            },
+            "distance": 2,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "start": {
+        "at": 1789216316961,
+        "cycle": 2813,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      },
+      "movedBeforeDamage": false,
+      "maxDistance": 12,
+      "minHp": 97,
+      "walks": [
+        {
+          "destination": {
+            "x": 3248,
+            "z": 3240,
+            "level": 0
+          },
+          "startedAt": 1789216319154,
+          "ok": true,
+          "finishedAt": 1789216321545
+        },
+        {
+          "destination": {
+            "x": 3248,
+            "z": 3252,
+            "level": 0
+          },
+          "startedAt": 1789216321558,
+          "ok": true,
+          "finishedAt": 1789216323555
+        }
+      ],
+      "logs": [
+        "[rs2b0t] random event: swarm attacking — evading (it despawns once we're away)",
+        "[rs2b0t] random event: swarm despawned"
+      ],
+      "firstEvade": {
+        "at": 1789216319153,
+        "cycle": 2926,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": true,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 2954
+          },
+          {
+            "damage": 2,
+            "type": 1,
+            "expires": 2996
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8328,
+            "id": 411,
+            "anim": -1,
+            "name": "Swarm",
+            "level": 0,
+            "tile": {
+              "x": 3251,
+              "z": 3253,
+              "level": 0
+            },
+            "distance": 3,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "firstDamage": {
+        "at": 1789216319153,
+        "cycle": 2926,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": true,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 2954
+          },
+          {
+            "damage": 2,
+            "type": 1,
+            "expires": 2996
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8328,
+            "id": 411,
+            "anim": -1,
+            "name": "Swarm",
+            "level": 0,
+            "tile": {
+              "x": 3251,
+              "z": 3253,
+              "level": 0
+            },
+            "distance": 3,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "escape": {
+        "at": 1789216321962,
+        "cycle": 3069,
+        "tile": {
+          "x": 3248,
+          "z": 3240,
+          "level": 0
+        },
+        "hp": 98,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      },
+      "end": {
+        "at": 1789216323567,
+        "cycle": 3151,
+        "tile": {
+          "x": 3249,
+          "z": 3250,
+          "level": 0
+        },
+        "hp": 98,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      }
+    },
+    {
+      "fixture": {
+        "id": 413,
+        "key": "macro_golemguardian_1"
+      },
+      "seed": "npcadd; ~hit 0; ~hit 2",
+      "quiet": {
+        "at": 1789216328179,
+        "cycle": 3388,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [],
+        "npcs": [
+          {
+            "index": 8329,
+            "id": 413,
+            "anim": -1,
+            "name": "Rock Golem",
+            "level": 14,
+            "tile": {
+              "x": 3248,
+              "z": 3252,
+              "level": 0
+            },
+            "distance": 0,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "blocked": {
+        "at": 1789216328376,
+        "cycle": 3398,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 3467
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8329,
+            "id": 413,
+            "anim": -1,
+            "name": "Rock Golem",
+            "level": 14,
+            "tile": {
+              "x": 3248,
+              "z": 3252,
+              "level": 0
+            },
+            "distance": 0,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "start": {
+        "at": 1789216326975,
+        "cycle": 3326,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      },
+      "movedBeforeDamage": false,
+      "maxDistance": 12,
+      "minHp": 97,
+      "walks": [
+        {
+          "destination": {
+            "x": 3248,
+            "z": 3264,
+            "level": 0
+          },
+          "startedAt": 1789216329149,
+          "ok": true,
+          "finishedAt": 1789216331149
+        },
+        {
+          "destination": {
+            "x": 3248,
+            "z": 3252,
+            "level": 0
+          },
+          "startedAt": 1789216331167,
+          "ok": true,
+          "finishedAt": 1789216333145
+        }
+      ],
+      "logs": [
+        "[rs2b0t] random event: rock golem attacking — evading (it despawns once we're away)",
+        "[rs2b0t] random event: rock golem despawned"
+      ],
+      "firstEvade": {
+        "at": 1789216329149,
+        "cycle": 3438,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": true,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 3467
+          },
+          {
+            "damage": 2,
+            "type": 1,
+            "expires": 3508
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8329,
+            "id": 413,
+            "anim": -1,
+            "name": "Rock Golem",
+            "level": 14,
+            "tile": {
+              "x": 3248,
+              "z": 3252,
+              "level": 0
+            },
+            "distance": 0,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "firstDamage": {
+        "at": 1789216329149,
+        "cycle": 3438,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": true,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 3467
+          },
+          {
+            "damage": 2,
+            "type": 1,
+            "expires": 3508
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8329,
+            "id": 413,
+            "anim": -1,
+            "name": "Rock Golem",
+            "level": 14,
+            "tile": {
+              "x": 3248,
+              "z": 3252,
+              "level": 0
+            },
+            "distance": 0,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "escape": {
+        "at": 1789216331526,
+        "cycle": 3560,
+        "tile": {
+          "x": 3248,
+          "z": 3264,
+          "level": 0
+        },
+        "hp": 97,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      },
+      "end": {
+        "at": 1789216333150,
+        "cycle": 3643,
+        "tile": {
+          "x": 3248,
+          "z": 3254,
+          "level": 0
+        },
+        "hp": 97,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      }
+    },
+    {
+      "fixture": {
+        "id": 419,
+        "key": "macro_zombie1"
+      },
+      "seed": "npcadd; ~hit 0; ~hit 2",
+      "quiet": {
+        "at": 1789216337763,
+        "cycle": 3879,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [],
+        "npcs": [
+          {
+            "index": 8330,
+            "id": 419,
+            "anim": -1,
+            "name": "Zombie",
+            "level": 14,
+            "tile": {
+              "x": 3248,
+              "z": 3253,
+              "level": 0
+            },
+            "distance": 1,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "blocked": {
+        "at": 1789216337962,
+        "cycle": 3889,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 3959
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8330,
+            "id": 419,
+            "anim": -1,
+            "name": "Zombie",
+            "level": 14,
+            "tile": {
+              "x": 3248,
+              "z": 3253,
+              "level": 0
+            },
+            "distance": 1,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "start": {
+        "at": 1789216336561,
+        "cycle": 3818,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      },
+      "movedBeforeDamage": false,
+      "maxDistance": 12,
+      "minHp": 97,
+      "walks": [
+        {
+          "destination": {
+            "x": 3248,
+            "z": 3240,
+            "level": 0
+          },
+          "startedAt": 1789216338749,
+          "ok": true,
+          "finishedAt": 1789216341146
+        },
+        {
+          "destination": {
+            "x": 3248,
+            "z": 3252,
+            "level": 0
+          },
+          "startedAt": 1789216341167,
+          "ok": true,
+          "finishedAt": 1789216343144
+        }
+      ],
+      "logs": [
+        "[rs2b0t] random event: zombie attacking — evading (it despawns once we're away)",
+        "[rs2b0t] random event: zombie despawned"
+      ],
+      "firstEvade": {
+        "at": 1789216338748,
+        "cycle": 3930,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": true,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 3959
+          },
+          {
+            "damage": 2,
+            "type": 1,
+            "expires": 4000
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8330,
+            "id": 419,
+            "anim": -1,
+            "name": "Zombie",
+            "level": 14,
+            "tile": {
+              "x": 3248,
+              "z": 3254,
+              "level": 0
+            },
+            "distance": 2,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "firstDamage": {
+        "at": 1789216338748,
+        "cycle": 3930,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": true,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 3959
+          },
+          {
+            "damage": 2,
+            "type": 1,
+            "expires": 4000
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8330,
+            "id": 419,
+            "anim": -1,
+            "name": "Zombie",
+            "level": 14,
+            "tile": {
+              "x": 3248,
+              "z": 3254,
+              "level": 0
+            },
+            "distance": 2,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "escape": {
+        "at": 1789216341513,
+        "cycle": 4071,
+        "tile": {
+          "x": 3248,
+          "z": 3240,
+          "level": 0
+        },
+        "hp": 97,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      },
+      "end": {
+        "at": 1789216343149,
+        "cycle": 4155,
+        "tile": {
+          "x": 3249,
+          "z": 3250,
+          "level": 0
+        },
+        "hp": 98,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      }
+    },
+    {
+      "fixture": {
+        "id": 425,
+        "key": "macro_shade1"
+      },
+      "seed": "npcadd; ~hit 0; ~hit 2",
+      "quiet": {
+        "at": 1789216347765,
+        "cycle": 4392,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [],
+        "npcs": [
+          {
+            "index": 8331,
+            "id": 425,
+            "anim": -1,
+            "name": "Shade",
+            "level": 14,
+            "tile": {
+              "x": 3249,
+              "z": 3252,
+              "level": 0
+            },
+            "distance": 1,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "blocked": {
+        "at": 1789216347963,
+        "cycle": 4402,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 4472
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8331,
+            "id": 425,
+            "anim": -1,
+            "name": "Shade",
+            "level": 14,
+            "tile": {
+              "x": 3249,
+              "z": 3252,
+              "level": 0
+            },
+            "distance": 1,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "start": {
+        "at": 1789216346563,
+        "cycle": 4330,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      },
+      "movedBeforeDamage": false,
+      "maxDistance": 12,
+      "minHp": 97,
+      "walks": [
+        {
+          "destination": {
+            "x": 3248,
+            "z": 3264,
+            "level": 0
+          },
+          "startedAt": 1789216348741,
+          "ok": true,
+          "finishedAt": 1789216350750
+        },
+        {
+          "destination": {
+            "x": 3248,
+            "z": 3252,
+            "level": 0
+          },
+          "startedAt": 1789216350770,
+          "ok": true,
+          "finishedAt": 1789216352756
+        }
+      ],
+      "logs": [
+        "[rs2b0t] random event: shade attacking — evading (it despawns once we're away)",
+        "[rs2b0t] random event: shade despawned"
+      ],
+      "firstEvade": {
+        "at": 1789216348740,
+        "cycle": 4442,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": true,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 4472
+          },
+          {
+            "damage": 2,
+            "type": 1,
+            "expires": 4512
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8331,
+            "id": 425,
+            "anim": -1,
+            "name": "Shade",
+            "level": 14,
+            "tile": {
+              "x": 3251,
+              "z": 3251,
+              "level": 0
+            },
+            "distance": 3,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "firstDamage": {
+        "at": 1789216348740,
+        "cycle": 4442,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": true,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 4472
+          },
+          {
+            "damage": 2,
+            "type": 1,
+            "expires": 4512
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8331,
+            "id": 425,
+            "anim": -1,
+            "name": "Shade",
+            "level": 14,
+            "tile": {
+              "x": 3251,
+              "z": 3251,
+              "level": 0
+            },
+            "distance": 3,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "escape": {
+        "at": 1789216351114,
+        "cycle": 4563,
+        "tile": {
+          "x": 3248,
+          "z": 3264,
+          "level": 0
+        },
+        "hp": 97,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      },
+      "end": {
+        "at": 1789216352766,
+        "cycle": 4648,
+        "tile": {
+          "x": 3248,
+          "z": 3254,
+          "level": 0
+        },
+        "hp": 97,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      }
+    },
+    {
+      "fixture": {
+        "id": 438,
+        "key": "macro_dryhadguardian_1"
+      },
+      "seed": "npcadd; ~hit 0; ~hit 2",
+      "quiet": {
+        "at": 1789216357380,
+        "cycle": 4885,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [],
+        "npcs": [
+          {
+            "index": 8332,
+            "id": 438,
+            "anim": -1,
+            "name": "Tree spirit",
+            "level": 14,
+            "tile": {
+              "x": 3248,
+              "z": 3253,
+              "level": 0
+            },
+            "distance": 1,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "blocked": {
+        "at": 1789216357577,
+        "cycle": 4895,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 4964
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8332,
+            "id": 438,
+            "anim": -1,
+            "name": "Tree spirit",
+            "level": 14,
+            "tile": {
+              "x": 3248,
+              "z": 3253,
+              "level": 0
+            },
+            "distance": 1,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "start": {
+        "at": 1789216356176,
+        "cycle": 4823,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      },
+      "movedBeforeDamage": false,
+      "maxDistance": 12,
+      "minHp": 97,
+      "walks": [
+        {
+          "destination": {
+            "x": 3248,
+            "z": 3240,
+            "level": 0
+          },
+          "startedAt": 1789216358343,
+          "ok": true,
+          "finishedAt": 1789216360742
+        },
+        {
+          "destination": {
+            "x": 3248,
+            "z": 3252,
+            "level": 0
+          },
+          "startedAt": 1789216360760,
+          "ok": true,
+          "finishedAt": 1789216362759
+        }
+      ],
+      "logs": [
+        "[rs2b0t] random event: tree spirit attacking — evading (it despawns once we're away)",
+        "[rs2b0t] random event: tree spirit despawned"
+      ],
+      "firstEvade": {
+        "at": 1789216358342,
+        "cycle": 4935,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": true,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 4964
+          },
+          {
+            "damage": 2,
+            "type": 1,
+            "expires": 5005
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8332,
+            "id": 438,
+            "anim": -1,
+            "name": "Tree spirit",
+            "level": 14,
+            "tile": {
+              "x": 3248,
+              "z": 3255,
+              "level": 0
+            },
+            "distance": 3,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "firstDamage": {
+        "at": 1789216358342,
+        "cycle": 4935,
+        "tile": {
+          "x": 3248,
+          "z": 3252,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": true,
+        "hits": [
+          {
+            "damage": 0,
+            "type": 0,
+            "expires": 4964
+          },
+          {
+            "damage": 2,
+            "type": 1,
+            "expires": 5005
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8332,
+            "id": 438,
+            "anim": -1,
+            "name": "Tree spirit",
+            "level": 14,
+            "tile": {
+              "x": 3248,
+              "z": 3255,
+              "level": 0
+            },
+            "distance": 3,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "escape": {
+        "at": 1789216361128,
+        "cycle": 5077,
+        "tile": {
+          "x": 3248,
+          "z": 3240,
+          "level": 0
+        },
+        "hp": 97,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      },
+      "end": {
+        "at": 1789216362765,
+        "cycle": 5161,
+        "tile": {
+          "x": 3249,
+          "z": 3250,
+          "level": 0
+        },
+        "hp": 98,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      }
+    },
+    {
+      "fixture": "natural Swarm attack",
+      "seed": "~macro_event 1",
+      "start": {
+        "at": 1789216366175,
+        "cycle": 5336,
+        "tile": {
+          "x": 3222,
+          "z": 3218,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      },
+      "movedBeforeDamage": false,
+      "maxDistance": 12,
+      "minHp": 98,
+      "walks": [
+        {
+          "destination": {
+            "x": 3234,
+            "z": 3218,
+            "level": 0
+          },
+          "startedAt": 1789216366550,
+          "ok": true,
+          "finishedAt": 1789216368550
+        },
+        {
+          "destination": {
+            "x": 3222,
+            "z": 3218,
+            "level": 0
+          },
+          "startedAt": 1789216370143,
+          "ok": true,
+          "finishedAt": 1789216372146
+        }
+      ],
+      "logs": [
+        "[rs2b0t] random event: swarm attacking — evading (it despawns once we're away)",
+        "[rs2b0t] random event: swarm despawned"
+      ],
+      "firstEvade": {
+        "at": 1789216366550,
+        "cycle": 5356,
+        "tile": {
+          "x": 3222,
+          "z": 3218,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": true,
+        "hits": [
+          {
+            "damage": 1,
+            "type": 1,
+            "expires": 5426
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8333,
+            "id": 411,
+            "anim": -1,
+            "name": "Swarm",
+            "level": 0,
+            "tile": {
+              "x": 3221,
+              "z": 3217,
+              "level": 0
+            },
+            "distance": 1,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": 32769
+          }
+        ]
+      },
+      "firstDamage": {
+        "at": 1789216366550,
+        "cycle": 5356,
+        "tile": {
+          "x": 3222,
+          "z": 3218,
+          "level": 0
+        },
+        "hp": 99,
+        "damage": true,
+        "hits": [
+          {
+            "damage": 1,
+            "type": 1,
+            "expires": 5426
+          }
+        ],
+        "npcs": [
+          {
+            "index": 8333,
+            "id": 411,
+            "anim": -1,
+            "name": "Swarm",
+            "level": 0,
+            "tile": {
+              "x": 3221,
+              "z": 3217,
+              "level": 0
+            },
+            "distance": 1,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": 32769
+          }
+        ]
+      },
+      "escape": {
+        "at": 1789216369027,
+        "cycle": 5482,
+        "tile": {
+          "x": 3234,
+          "z": 3218,
+          "level": 0
+        },
+        "hp": 98,
+        "damage": false,
+        "hits": [],
+        "npcs": [
+          {
+            "index": 8333,
+            "id": 411,
+            "anim": -1,
+            "name": "Swarm",
+            "level": 0,
+            "tile": {
+              "x": 3223,
+              "z": 3219,
+              "level": 0
+            },
+            "distance": 11,
+            "ops": [
+              null,
+              "Attack",
+              null,
+              null,
+              null
+            ],
+            "inCombat": false,
+            "health": 0,
+            "totalHealth": 0,
+            "faceEntity": -1
+          }
+        ]
+      },
+      "end": {
+        "at": 1789216372149,
+        "cycle": 5643,
+        "tile": {
+          "x": 3224,
+          "z": 3218,
+          "level": 0
+        },
+        "hp": 98,
+        "damage": false,
+        "hits": [],
+        "npcs": []
+      }
+    }
+  ]
+}

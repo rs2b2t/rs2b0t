@@ -25,6 +25,7 @@ const PICK_EVENT_NPCS = ['strange plant'];
 const idRange = (lo: number, hi: number): number[] => Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
 const HOSTILE_EVENT_NPC_IDS = new Set<number>([
     ...idRange(391, 396), // River troll  (macro_rivertrollguardian_1..6)
+    408,
     411,                  // Swarm        (macro_swarm)
     ...idRange(413, 418), // Rock Golem   (macro_golemguardian_1..6)
     ...idRange(419, 424), // Zombie       (macro_zombie1..6)
@@ -56,22 +57,13 @@ const HOSTILE_ENGAGE_DISTANCE = 8;
 export function isHostileEventNpc(
     npc: {
         id: number;
-        inCombat: boolean;
         distance: number;
-        faceEntity: number;
     },
-    _selfSlot: number,
-    _playerInCombat: boolean
+    playerDamaged: boolean
 ): boolean {
-    if (!HOSTILE_EVENT_NPC_IDS.has(npc.id)) {
-        return false;
-    }
-    if (npc.distance > HOSTILE_ENGAGE_DISTANCE) {
-        return false;
-    }
-    // Why: these antimacro ids only spawn as your own random event, never as world mobs.
-    // Why: soft flags (combatCycle / faceEntity) often lag or never set for 0-damage Swarm (#422), which left walks repathing until timeout while Supervisor never intercepted, so presence within engage range is enough.
-    return true;
+    return playerDamaged
+        && HOSTILE_EVENT_NPC_IDS.has(npc.id)
+        && npc.distance <= HOSTILE_ENGAGE_DISTANCE;
 }
 
 /**
@@ -140,9 +132,9 @@ const PICK_WAIT_MS = 80_000;
 /** Maze and mime trap the player; box and lamp rewards cannot be dropped. */
 const TRAPPED_KINDS: ReadonlySet<EventKind> = new Set(['maze', 'mime', 'box', 'lamp']);
 
-export function plantStrategy(ops: string[]): 'pick' | 'evade' {
-    const canPick = ops.some(a => /pick|take/i.test(a));
-    const canAttack = ops.some(a => /attack/i.test(a));
+export function plantStrategy(ops: readonly (string | null)[]): 'pick' | 'evade' {
+    const canPick = ops.some(a => a !== null && /pick|take/i.test(a));
+    const canAttack = ops.some(a => a !== null && /attack/i.test(a));
     return !canPick && canAttack ? 'evade' : 'pick';
 }
 
@@ -305,20 +297,14 @@ class RandomEventsImpl {
             if (DIALOG_EVENT_NPCS.includes(name) && npc.distance <= 6) {
                 return { kind: 'dialog', name };
             }
-            if (PICK_EVENT_NPCS.includes(name) && npc.distance <= 8) {
+            if (PICK_EVENT_NPCS.includes(name) && npc.distance <= 8 && plantStrategy(npc.ops) === 'pick') {
                 return { kind: 'pick', name };
             }
         }
 
-        const selfSlot = reader.selfSlot();
-        let playerInCombat = false;
-        try {
-            playerInCombat = Game.inCombat();
-        } catch {
-            playerInCombat = false;
-        }
+        const playerDamaged = reader.takingDamage();
         for (const npc of npcs) {
-            if (isHostileEventNpc(npc, selfSlot, playerInCombat)) {
+            if (isHostileEventNpc(npc, playerDamaged)) {
                 return { kind: 'evade', name: npc.name?.toLowerCase() ?? 'event monster' };
             }
         }
@@ -519,9 +505,13 @@ class RandomEventsImpl {
                 return true;
             }
             if (plantStrategy(plant.actions()) === 'evade') {
-                log(`random event: ${name} turned hostile — fleeing (it poisons)`);
-                return await this.handleEvade(name, log);
+                return isHostileEventNpc(plant.snap, reader.takingDamage())
+                    ? await this.handleEvade(name, log)
+                    : true;
             }
+            const plantChanged = (): boolean => !reader.npcs().some(n =>
+                n.index === plant.index && plantStrategy(n.ops) === 'pick'
+            );
             if (!announced) {
                 log(`random event: ${name} — picking the fruit as soon as it ripens`);
                 announced = true;
@@ -533,7 +523,7 @@ class RandomEventsImpl {
                 await plant.interact(op);
                 await Execution.delayUntil(
                     () => Inventory.count('Strange fruit') > before
-                        || !reader.npcs().some(n => (n.name?.toLowerCase() ?? '') === name)
+                        || plantChanged()
                         || this.plantNotOurs(sinceText),
                     6000
                 );
@@ -546,8 +536,11 @@ class RandomEventsImpl {
                     log(`random event: ${name} — fruit picked`);
                     return true;
                 }
+                if (plantChanged()) {
+                    continue;
+                }
             }
-            await Execution.delayTicks(4);
+            await Execution.delayUntil(plantChanged, 2400);
         }
         log(`random event: ${name} — fruit never ripened in this pass; will retry`);
         return true;

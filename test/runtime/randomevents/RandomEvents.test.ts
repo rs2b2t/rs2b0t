@@ -66,42 +66,35 @@ describe('GearLossTracker', () => {
 });
 
 describe('isHostileEventNpc', () => {
-    // River troll level-1 id = 391; faceEntity player encoding = 32768 + slot
-    const riverTroll = (over: Partial<{ id: number; inCombat: boolean; distance: number; faceEntity: number }> = {}) => ({
-        id: 391,
-        inCombat: false,
-        distance: 4,
-        faceEntity: -1,
-        ...over
+    const ids = [391, 392, 393, 394, 395, 396, 408, 411, 413, 414, 415, 416, 417, 418,
+        419, 420, 421, 422, 423, 424, 425, 426, 427, 428, 429, 430, 431, 432, 433, 434,
+        435, 436, 438, 439, 440, 441, 442, 443];
+    const hostile = (id: number, faceEntity = 32771, distance = 4, inCombat = false) => ({
+        id, inCombat, distance, faceEntity
     });
 
-    test('adjacent hostile is always an event', () => {
-        expect(isHostileEventNpc(riverTroll({ distance: 1 }), 3, false)).toBe(true);
+    test.each(ids)('NPC %i waits for damage even when adjacent, targeting us, or in combat', id => {
+        expect(isHostileEventNpc(hostile(id, -1, 1), false)).toBe(false);
+        expect(isHostileEventNpc(hostile(id), false)).toBe(false);
+        expect(isHostileEventNpc(hostile(id, 32771, 1, true), false)).toBe(false);
     });
 
-    test('hostile id within engage range is an event even with no combat/face flags (#422 Swarm)', () => {
-        // Soft flags lag for 0-damage Swarm; antimacro ids only exist for the victim.
-        expect(isHostileEventNpc(riverTroll({ distance: 5, faceEntity: -1, inCombat: false }), 3, false)).toBe(true);
-        expect(isHostileEventNpc(riverTroll({ id: 411, distance: 4, faceEntity: -1 }), 3, false)).toBe(true);
+    test.each(ids)('NPC %i triggers after damaging us without needing to receive a hit itself', id => {
+        expect(isHostileEventNpc(hostile(id), true)).toBe(true);
     });
 
-    test('hostile already in combat within engage range is an event', () => {
-        expect(isHostileEventNpc(riverTroll({ distance: 6, inCombat: true }), 3, false)).toBe(true);
+    test.each(ids)('NPC %i triggers after damage even with missing or stale facing information', id => {
+        expect(isHostileEventNpc(hostile(id, -1), true)).toBe(true);
+        expect(isHostileEventNpc(hostile(id, 32777, 1, true), true)).toBe(true);
     });
 
-    test('hostile far away is ignored until it closes', () => {
-        expect(isHostileEventNpc(riverTroll({ distance: 12, faceEntity: 32768 + 3 }), 3, false)).toBe(false);
+    test('the hostile must be within range', () => {
+        expect(isHostileEventNpc(hostile(431, 32771, 8), true)).toBe(true);
+        expect(isHostileEventNpc(hostile(431, 32771, 9), true)).toBe(false);
     });
 
-    test('non-hostile id is never an event', () => {
-        expect(isHostileEventNpc(riverTroll({ id: 1, distance: 1, inCombat: true }), 3, true)).toBe(false);
-    });
-
-    test('Ent ids are not hostiles (tree spirit stops at 443)', () => {
-        expect(isHostileEventNpc(riverTroll({ id: 443, distance: 1 }), 3, false)).toBe(true);
-        expect(isHostileEventNpc(riverTroll({ id: 444, distance: 1 }), 3, false)).toBe(false);
-        expect(isHostileEventNpc(riverTroll({ id: 452, distance: 1 }), 3, false)).toBe(false);
-        expect(isHostileEventNpc(riverTroll({ id: 453, distance: 1 }), 3, false)).toBe(false);
+    test.each([1, 407, 409, 412, 437, 444, 452, 453])('non-hostile NPC %i never triggers evasion', id => {
+        expect(isHostileEventNpc(hostile(id), true)).toBe(false);
     });
 });
 

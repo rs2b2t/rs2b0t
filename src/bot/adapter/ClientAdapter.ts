@@ -885,6 +885,17 @@ export const reader = {
         return raw?.localPlayer ? combatShowing(raw.localPlayer.combatCycle) : false;
     },
 
+    takingDamage(): boolean {
+        const player = raw?.localPlayer;
+        if (!raw?.ingame || !player) {
+            return false;
+        }
+        const cycle = loopCycleNow();
+        return player.damageValues.some((damage, i) =>
+            damage > 0 && player.damageTypes[i] === 1 && player.damageCycles[i] > cycle
+        );
+    },
+
     locs(): LocSnapshot[] {
         const out: LocSnapshot[] = [];
         if (!raw || !raw.world || !raw.localPlayer) {
