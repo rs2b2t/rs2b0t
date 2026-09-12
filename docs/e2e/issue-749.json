@@ -1,0 +1,360 @@
+{
+  "issue": 749,
+  "result": "PASS",
+  "at": "2026-09-12T15:43:44.217Z",
+  "sourceCommit": "08632baa06d5649e3aaa50004a21bd38252be086",
+  "before": {
+    "tile": {
+      "x": 3224,
+      "z": 3216,
+      "level": 0
+    },
+    "held": {
+      "Feather": 10,
+      "Fishing bait": 10,
+      "Harpoon": 1
+    },
+    "ground": [],
+    "spots": []
+  },
+  "away": {
+    "tile": {
+      "x": 3224,
+      "z": 3216,
+      "level": 0
+    },
+    "held": {
+      "Feather": 0,
+      "Fishing bait": 0,
+      "Harpoon": 0
+    },
+    "ground": [
+      {
+        "id": 313,
+        "name": "Fishing bait",
+        "count": 10,
+        "ops": [
+          null,
+          null,
+          "Take",
+          null,
+          null
+        ],
+        "tile": {
+          "x": 3224,
+          "z": 3216,
+          "level": 0
+        },
+        "distance": 0
+      },
+      {
+        "id": 314,
+        "name": "Feather",
+        "count": 10,
+        "ops": [
+          null,
+          null,
+          "Take",
+          null,
+          null
+        ],
+        "tile": {
+          "x": 3224,
+          "z": 3216,
+          "level": 0
+        },
+        "distance": 0
+      },
+      {
+        "id": 311,
+        "name": "Harpoon",
+        "count": 1,
+        "ops": [
+          null,
+          null,
+          "Take",
+          null,
+          null
+        ],
+        "tile": {
+          "x": 3224,
+          "z": 3216,
+          "level": 0
+        },
+        "distance": 0
+      }
+    ],
+    "spots": []
+  },
+  "near": {
+    "tile": {
+      "x": 3224,
+      "z": 3200,
+      "level": 0
+    },
+    "held": {
+      "Feather": 0,
+      "Fishing bait": 0,
+      "Harpoon": 1
+    },
+    "ground": [
+      {
+        "id": 313,
+        "name": "Fishing bait",
+        "count": 10,
+        "ops": [
+          null,
+          null,
+          "Take",
+          null,
+          null
+        ],
+        "tile": {
+          "x": 3224,
+          "z": 3200,
+          "level": 0
+        },
+        "distance": 0
+      },
+      {
+        "id": 314,
+        "name": "Feather",
+        "count": 10,
+        "ops": [
+          null,
+          null,
+          "Take",
+          null,
+          null
+        ],
+        "tile": {
+          "x": 3224,
+          "z": 3200,
+          "level": 0
+        },
+        "distance": 0
+      }
+    ],
+    "spots": [
+      {
+        "index": 8334,
+        "id": 405,
+        "anim": -1,
+        "name": "Fishing spot",
+        "level": 0,
+        "tile": {
+          "x": 3232,
+          "z": 3200,
+          "level": 0
+        },
+        "distance": 8,
+        "ops": [
+          "Cage",
+          null,
+          "Harpoon",
+          null,
+          null
+        ],
+        "inCombat": false,
+        "health": 0,
+        "totalHealth": 0,
+        "faceEntity": -1
+      }
+    ]
+  },
+  "lost": {
+    "tile": {
+      "x": 3224,
+      "z": 3200,
+      "level": 0
+    },
+    "held": {
+      "Feather": 0,
+      "Fishing bait": 0,
+      "Harpoon": 0
+    },
+    "ground": [
+      {
+        "id": 313,
+        "name": "Fishing bait",
+        "count": 10,
+        "ops": [
+          null,
+          null,
+          "Take",
+          null,
+          null
+        ],
+        "tile": {
+          "x": 3224,
+          "z": 3200,
+          "level": 0
+        },
+        "distance": 0
+      },
+      {
+        "id": 314,
+        "name": "Feather",
+        "count": 10,
+        "ops": [
+          null,
+          null,
+          "Take",
+          null,
+          null
+        ],
+        "tile": {
+          "x": 3224,
+          "z": 3200,
+          "level": 0
+        },
+        "distance": 0
+      },
+      {
+        "id": 311,
+        "name": "Harpoon",
+        "count": 1,
+        "ops": [
+          null,
+          null,
+          "Take",
+          null,
+          null
+        ],
+        "tile": {
+          "x": 3224,
+          "z": 3200,
+          "level": 0
+        },
+        "distance": 0
+      }
+    ],
+    "spots": [
+      {
+        "index": 8334,
+        "id": 405,
+        "anim": -1,
+        "name": "Fishing spot",
+        "level": 0,
+        "tile": {
+          "x": 3232,
+          "z": 3200,
+          "level": 0
+        },
+        "distance": 8,
+        "ops": [
+          "Cage",
+          null,
+          "Harpoon",
+          null,
+          null
+        ],
+        "inCombat": false,
+        "health": 0,
+        "totalHealth": 0,
+        "faceEntity": -1
+      }
+    ]
+  },
+  "recovered": {
+    "tile": {
+      "x": 3224,
+      "z": 3200,
+      "level": 0
+    },
+    "held": {
+      "Feather": 0,
+      "Fishing bait": 0,
+      "Harpoon": 1
+    },
+    "ground": [
+      {
+        "id": 313,
+        "name": "Fishing bait",
+        "count": 10,
+        "ops": [
+          null,
+          null,
+          "Take",
+          null,
+          null
+        ],
+        "tile": {
+          "x": 3224,
+          "z": 3200,
+          "level": 0
+        },
+        "distance": 0
+      },
+      {
+        "id": 314,
+        "name": "Feather",
+        "count": 10,
+        "ops": [
+          null,
+          null,
+          "Take",
+          null,
+          null
+        ],
+        "tile": {
+          "x": 3224,
+          "z": 3200,
+          "level": 0
+        },
+        "distance": 0
+      }
+    ],
+    "spots": [
+      {
+        "index": 8334,
+        "id": 405,
+        "anim": -1,
+        "name": "Fishing spot",
+        "level": 0,
+        "tile": {
+          "x": 3232,
+          "z": 3200,
+          "level": 0
+        },
+        "distance": 8,
+        "ops": [
+          "Cage",
+          null,
+          "Harpoon",
+          null,
+          null
+        ],
+        "inCombat": false,
+        "health": 0,
+        "totalHealth": 0,
+        "faceEntity": -1
+      }
+    ]
+  },
+  "logs": [
+    "[rs2b0t] random event: recovering our harpoon (big fish)",
+    "[rs2b0t] random event: harpoon recovered"
+  ],
+  "command": "bun e2e/fishing-gear-749-live.ts --base http://localhost:8890",
+  "exitCode": 0,
+  "build": {
+    "commit": "08632baa06d5649e3aaa50004a21bd38252be086",
+    "short": "08632ba",
+    "dirty": false,
+    "builtAt": "2026-09-12T15:42:57.695Z",
+    "label": "08632ba",
+    "sha256": "47473038fc853e2b9e1fb1456605cc03add834c182381e3ca7107b18fe5b9ddd"
+  },
+  "scope": "Actual dropped Harpoon recovery near a spawned whirlpool NPC, with away and consumable controls; the theft animation is not exercised.",
+  "screenshots": [
+    {
+      "path": "docs/e2e/issue-749-before.png",
+      "sha256": "b3d994bddab209c867c9622d3f1cca9fb0b680d5ecb9629e880781a4df459e63"
+    },
+    {
+      "path": "docs/e2e/issue-749.png",
+      "sha256": "fd142df7fbb1216ace09a52adc9e783507df6e8ad6f4cf466416b776e8cd167f"
+    }
+  ]
+}
