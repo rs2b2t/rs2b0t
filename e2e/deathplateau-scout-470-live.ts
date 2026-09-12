@@ -5,7 +5,7 @@ import { cheatQuiet, deployIsolatedClient, launchBrowser, logout, parseArgs, set
 import { getServerVarQuiet, mainlandAccount, relog, startScript, teleTo } from './tutorial/harness.js';
 
 type Api = {
-    __rs2b0t: { Inventory: { count(name: string): number }; Quests: { status(name: string): string }; Skills: { effective(name: string): number }; Game: { inCombat(): boolean } };
+    __rs2b0t: { Inventory: { count(name: string): number }; Quests: { status(name: string): string }; Skills: { effective(name: string): number }; Game: { inCombat(): boolean }; Prayer: { set(name: string, on: boolean): Promise<boolean>; active(name: string): boolean } };
     rs2b0t: { reader: { worldTile(): { x: number; z: number; level: number } | null; npcs(): { name: string | null; distance: number }[] }; runner: { state: string; bot: { status: string } | null; ctx: { log: { msg: string }[] } | null } };
 };
 
@@ -17,21 +17,23 @@ const page = await browser.newPage();
 const snapshot = () => page.evaluate(() => {
     const g = globalThis as never as Api;
     return { tile: g.rs2b0t.reader.worldTile(), quest: g.__rs2b0t.Quests.status('Death Plateau'),
-        hp: g.__rs2b0t.Skills.effective('hitpoints'), combat: g.__rs2b0t.Game.inCombat(), npcs: g.rs2b0t.reader.npcs().filter(npc => npc.distance <= 8),
+        hp: g.__rs2b0t.Skills.effective('hitpoints'), prayer: g.__rs2b0t.Skills.effective('prayer'), protected: g.__rs2b0t.Prayer.active('Protect from Missiles'), combat: g.__rs2b0t.Game.inCombat(), npcs: g.rs2b0t.reader.npcs().filter(npc => npc.distance <= 8),
         map: g.__rs2b0t.Inventory.count('Secret way map'), combination: g.__rs2b0t.Inventory.count('Combination'),
         state: g.rs2b0t.runner.state, step: g.rs2b0t.runner.bot?.status, logs: g.rs2b0t.runner.ctx?.log.slice(-16).map(line => line.msg) ?? [] };
 });
 
 try {
     await mainlandAccount(page, base, tag, client.page);
-    for (const command of ['~clearinv', 'setvar death_equiproom 70', 'setvar death_map 7', 'give death_secretwaymap 1', 'give death_combination 1']) {
+    for (const command of ['setstat hitpoints 99', 'setstat defence 99', 'setstat prayer 99', '~clearinv', 'setvar death_equiproom 70', 'setvar death_map 7', 'give death_secretwaymap 1', 'give death_combination 1']) {
         assert(await cheatQuiet(page, command), command);
     }
     await relog(page, tag);
+    assert(await page.evaluate(() => (globalThis as never as Api).__rs2b0t.Prayer.set('Protect from Missiles', true)), 'protection from the thrower trolls');
     assert(await teleTo(page, { x: 2864, z: 3605, level: 0 }, 0), 'three tiles south of the scout trigger');
     assert.equal(await getServerVarQuiet(page, 'death_map'), 7, 'unscouted server state');
     const before = await snapshot();
     assert.equal(before.quest, 'inProgress');
+    assert(before.hp > 0 && before.protected, 'survivable scouting fixture');
     assert.equal(before.map, 1);
     assert.equal(before.combination, 1);
     assert.deepEqual(before.tile, { x: 2864, z: 3605, level: 0 });
