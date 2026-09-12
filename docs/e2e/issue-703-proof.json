@@ -1,0 +1,1595 @@
+{
+  "issue": 703,
+  "result": "PASS",
+  "exitCode": 0,
+  "generatedAt": "2026-09-12T15:24:13.733527+00:00",
+  "command": "bun e2e/shilo-gear-703-live.ts --base http://localhost:8890",
+  "build": {
+    "commit": "458d230867335cd6a7dcbe0241b43547a1e01703",
+    "short": "458d230",
+    "dirty": false,
+    "builtAt": "2026-09-12T15:21:00.122Z",
+    "label": "458d230",
+    "sha256": "07232595c6df9ccf44148416c9dd20d8abe64e839745ff2fa6bcbc5179e6c753"
+  },
+  "collisionSha256": "04ef48054324935f7eca00efa76f9744b77d00a5824d43b7544f067ab4d7715a",
+  "assertions": [
+    "Both fresh accounts have Shilo Village in progress at zombiequeen 7 and combat stats at least 60.",
+    "Both cases begin with all 28 inventory slots occupied and the five Steel gear pieces unequipped.",
+    "AIOQuester equips all five Steel pieces in each case.",
+    "Rope and Tattered scroll remain in inventory throughout gearing.",
+    "The bank-full case records 26 Lobsters deposited while the bank is open.",
+    "Neither browser context reports a page error."
+  ],
+  "results": [
+    {
+      "case": "inventory",
+      "result": "PASS",
+      "before": {
+        "state": "idle",
+        "tile": {
+          "x": 2616,
+          "z": 3332,
+          "level": 0
+        },
+        "inventory": [
+          {
+            "slot": 0,
+            "id": 1325,
+            "name": "Steel scimitar",
+            "count": 1,
+            "ops": [
+              null,
+              "Wield",
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 1,
+            "id": 1105,
+            "name": "Steel chainbody",
+            "count": 1,
+            "ops": [
+              null,
+              "Wear",
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 2,
+            "id": 1069,
+            "name": "Steel platelegs",
+            "count": 1,
+            "ops": [
+              null,
+              "Wear",
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 3,
+            "id": 1157,
+            "name": "Steel full helm",
+            "count": 1,
+            "ops": [
+              null,
+              "Wear",
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 4,
+            "id": 1193,
+            "name": "Steel kiteshield",
+            "count": 1,
+            "ops": [
+              null,
+              "Wear",
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 5,
+            "id": 954,
+            "name": "Rope",
+            "count": 1,
+            "ops": [
+              null,
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 6,
+            "id": 607,
+            "name": "Tattered scroll",
+            "count": 1,
+            "ops": [
+              "Read",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 7,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 8,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 9,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 10,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 11,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 12,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 13,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 14,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 15,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 16,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 17,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 18,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 19,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 20,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 21,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 22,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 23,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 24,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 25,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 26,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 27,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          }
+        ],
+        "equipment": [],
+        "bankFood": 0,
+        "bankGear": [
+          [
+            "Steel scimitar",
+            0
+          ],
+          [
+            "Steel chainbody",
+            0
+          ],
+          [
+            "Steel platelegs",
+            0
+          ],
+          [
+            "Steel full helm",
+            0
+          ],
+          [
+            "Steel kiteshield",
+            0
+          ]
+        ],
+        "logs": []
+      },
+      "after": {
+        "state": "running",
+        "tile": {
+          "x": 2898,
+          "z": 9401,
+          "level": 0
+        },
+        "inventory": [
+          {
+            "slot": 5,
+            "id": 954,
+            "name": "Rope",
+            "count": 1,
+            "ops": [
+              null,
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 6,
+            "id": 607,
+            "name": "Tattered scroll",
+            "count": 1,
+            "ops": [
+              "Read",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 7,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 8,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 9,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 10,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 11,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 12,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 13,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 14,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 15,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 16,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 17,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 18,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 19,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 20,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 21,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 22,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 23,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 24,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 25,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 26,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 27,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          }
+        ],
+        "equipment": [
+          {
+            "slot": 0,
+            "id": 1157,
+            "name": "Steel full helm",
+            "count": 1,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          },
+          {
+            "slot": 3,
+            "id": 1325,
+            "name": "Steel scimitar",
+            "count": 1,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          },
+          {
+            "slot": 4,
+            "id": 1105,
+            "name": "Steel chainbody",
+            "count": 1,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          },
+          {
+            "slot": 5,
+            "id": 1193,
+            "name": "Steel kiteshield",
+            "count": 1,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          },
+          {
+            "slot": 7,
+            "id": 1069,
+            "name": "Steel platelegs",
+            "count": 1,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          }
+        ],
+        "bankFood": 0,
+        "bankGear": [
+          [
+            "Steel scimitar",
+            0
+          ],
+          [
+            "Steel chainbody",
+            0
+          ],
+          [
+            "Steel platelegs",
+            0
+          ],
+          [
+            "Steel full helm",
+            0
+          ],
+          [
+            "Steel kiteshield",
+            0
+          ]
+        ],
+        "logs": [
+          {
+            "time": 1789226519401,
+            "level": "info",
+            "msg": "AIOQuester started"
+          },
+          {
+            "time": 1789226519409,
+            "level": "info",
+            "msg": "AIOQuester, queue: Shilo Village"
+          },
+          {
+            "time": 1789226519764,
+            "level": "info",
+            "msg": "[t1] Shilo Village: wear Steel scimitar, Steel chainbody, Steel platelegs, Steel full helm, Steel kiteshield \u00b7 stage 7 \u00b7 (2898,9401) \u00b7 0 free"
+          },
+          {
+            "time": 1789226520810,
+            "level": "info",
+            "msg": "  \u2192 ok in 1.0s \u00b7 steel chainbody 1\u21920, steel full helm 1\u21920, steel kiteshield 1\u21920, steel platelegs 1\u21920, steel scimitar 1\u21920"
+          }
+        ],
+        "bankFoodPeak": 0
+      },
+      "screenshots": [
+        "docs/e2e/issue-703-inventory-before.png",
+        "docs/e2e/issue-703-inventory-after.png"
+      ]
+    },
+    {
+      "case": "bank-full",
+      "result": "PASS",
+      "before": {
+        "state": "stopped",
+        "tile": {
+          "x": 2615,
+          "z": 3332,
+          "level": 0
+        },
+        "inventory": [
+          {
+            "slot": 0,
+            "id": 954,
+            "name": "Rope",
+            "count": 1,
+            "ops": [
+              null,
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 1,
+            "id": 607,
+            "name": "Tattered scroll",
+            "count": 1,
+            "ops": [
+              "Read",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 2,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 3,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 4,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 5,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 6,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 7,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 8,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 9,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 10,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 11,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 12,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 13,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 14,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 15,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 16,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 17,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 18,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 19,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 20,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 21,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 22,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 23,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 24,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 25,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 26,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 27,
+            "id": 379,
+            "name": "Lobster",
+            "count": 1,
+            "ops": [
+              "Eat",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          }
+        ],
+        "equipment": [],
+        "bankFood": 0,
+        "bankGear": [
+          [
+            "Steel scimitar",
+            0
+          ],
+          [
+            "Steel chainbody",
+            0
+          ],
+          [
+            "Steel platelegs",
+            0
+          ],
+          [
+            "Steel full helm",
+            0
+          ],
+          [
+            "Steel kiteshield",
+            0
+          ]
+        ],
+        "logs": [
+          {
+            "time": 1789226590707,
+            "level": "info",
+            "msg": "previous run of 'HarnessVerifyBank_1789226585021' ended (stopped) \u2014 harness stop"
+          },
+          {
+            "time": 1789226590707,
+            "level": "info",
+            "msg": "HarnessVerifyBank_1789226590704 started"
+          },
+          {
+            "time": 1789226591384,
+            "level": "info",
+            "msg": "stopping \u2014 harness stop"
+          },
+          {
+            "time": 1789226591384,
+            "level": "info",
+            "msg": "stopped \u2014 harness stop"
+          }
+        ]
+      },
+      "after": {
+        "state": "running",
+        "tile": {
+          "x": 2615,
+          "z": 3332,
+          "level": 0
+        },
+        "inventory": [
+          {
+            "slot": 0,
+            "id": 954,
+            "name": "Rope",
+            "count": 1,
+            "ops": [
+              null,
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          },
+          {
+            "slot": 1,
+            "id": 607,
+            "name": "Tattered scroll",
+            "count": 1,
+            "ops": [
+              "Read",
+              null,
+              null,
+              null,
+              "Drop"
+            ],
+            "comId": 3214
+          }
+        ],
+        "equipment": [
+          {
+            "slot": 0,
+            "id": 1157,
+            "name": "Steel full helm",
+            "count": 1,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          },
+          {
+            "slot": 3,
+            "id": 1325,
+            "name": "Steel scimitar",
+            "count": 1,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          },
+          {
+            "slot": 4,
+            "id": 1105,
+            "name": "Steel chainbody",
+            "count": 1,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          },
+          {
+            "slot": 5,
+            "id": 1193,
+            "name": "Steel kiteshield",
+            "count": 1,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          },
+          {
+            "slot": 7,
+            "id": 1069,
+            "name": "Steel platelegs",
+            "count": 1,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          }
+        ],
+        "bankFood": 0,
+        "bankGear": [
+          [
+            "Steel scimitar",
+            0
+          ],
+          [
+            "Steel chainbody",
+            0
+          ],
+          [
+            "Steel platelegs",
+            0
+          ],
+          [
+            "Steel full helm",
+            0
+          ],
+          [
+            "Steel kiteshield",
+            0
+          ]
+        ],
+        "logs": [
+          {
+            "time": 1789226593961,
+            "level": "info",
+            "msg": "previous run of 'HarnessVerifyBank_1789226590704' ended (stopped) \u2014 harness stop"
+          },
+          {
+            "time": 1789226593961,
+            "level": "info",
+            "msg": "AIOQuester started"
+          },
+          {
+            "time": 1789226593967,
+            "level": "info",
+            "msg": "AIOQuester, queue: Shilo Village"
+          },
+          {
+            "time": 1789226594359,
+            "level": "info",
+            "msg": "[t1] Shilo Village: check the bank \u00b7 stage 7 \u00b7 (2615,3332) \u00b7 0 free"
+          },
+          {
+            "time": 1789226594360,
+            "level": "info",
+            "msg": "  bank: booth within 14 \u2014 opening here (skip long walk)"
+          },
+          {
+            "time": 1789226594574,
+            "level": "info",
+            "msg": "  \u2192 ok in 215ms \u00b7 no inventory change"
+          },
+          {
+            "time": 1789226595360,
+            "level": "info",
+            "msg": "[t2] Shilo Village: bank all but 2 kept item type(s) \u00b7 stage 7 \u00b7 (2615,3332) \u00b7 0 free"
+          },
+          {
+            "time": 1789226595360,
+            "level": "info",
+            "msg": "  bank: booth within 14 \u2014 opening here (skip long walk)"
+          },
+          {
+            "time": 1789226595754,
+            "level": "info",
+            "msg": "  \u2192 ok in 394ms \u00b7 lobster 26\u21920"
+          },
+          {
+            "time": 1789226596563,
+            "level": "info",
+            "msg": "[t3] Shilo Village: withdraw Steel scimitar\u00d71, Steel chainbody\u00d71, Steel platelegs\u00d71, Steel full helm\u00d71, Steel kiteshield\u00d71 \u00b7 stage 7 \u00b7 (2615,3332) \u00b7 26 free"
+          },
+          {
+            "time": 1789226596563,
+            "level": "info",
+            "msg": "  bank: booth within 14 \u2014 opening here (skip long walk)"
+          },
+          {
+            "time": 1789226598753,
+            "level": "info",
+            "msg": "  \u2192 ok in 2.2s \u00b7 steel chainbody 0\u21921, steel full helm 0\u21921, steel kiteshield 0\u21921, steel platelegs 0\u21921, steel scimitar 0\u21921"
+          },
+          {
+            "time": 1789226599573,
+            "level": "info",
+            "msg": "[t4] Shilo Village: wear Steel scimitar, Steel chainbody, Steel platelegs, Steel full helm, Steel kiteshield \u00b7 stage 7 \u00b7 (2615,3332) \u00b7 21 free"
+          },
+          {
+            "time": 1789226600636,
+            "level": "info",
+            "msg": "  \u2192 ok in 1.1s \u00b7 steel chainbody 1\u21920, steel full helm 1\u21920, steel kiteshield 1\u21920, steel platelegs 1\u21920, steel scimitar 1\u21920"
+          }
+        ],
+        "bankFoodPeak": 26
+      },
+      "screenshots": [
+        "docs/e2e/issue-703-bank-full-before.png",
+        "docs/e2e/issue-703-bank-full-after.png"
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "docs/e2e/issue-703-bank-deposit.png",
+      "sha256": "14680e699df08629d61ff6dc93f8354b905d599ed4892810167c0c323098cdf6"
+    },
+    {
+      "path": "docs/e2e/issue-703-bank-full-after.png",
+      "sha256": "fc803364855e82a14b2f6f84ab3a3a747890eab93f6d012f72db4ac5dc3a7309"
+    },
+    {
+      "path": "docs/e2e/issue-703-bank-full-before.png",
+      "sha256": "1e41e97d83c6eaa91acb56cb0576586664c062a1130eb27ccad86f8a1e9d15eb"
+    },
+    {
+      "path": "docs/e2e/issue-703-inventory-after.png",
+      "sha256": "c3a9469a96559bf652ff1d8d50c6ed25d430bbec2713c4e113d3600748c93301"
+    },
+    {
+      "path": "docs/e2e/issue-703-inventory-before.png",
+      "sha256": "d4a97b2a8a477fae37f076b8a5db85fb0f8e76a313fe84187a98f741702e2fc9"
+    }
+  ]
+}
