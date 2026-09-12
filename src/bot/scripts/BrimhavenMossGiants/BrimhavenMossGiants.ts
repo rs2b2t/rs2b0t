@@ -1,3 +1,4 @@
+import { rangedItem } from '../../api/combat/rangedSettings.js';
 import { TaskBot } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
@@ -44,9 +45,9 @@ export default class BrimhavenMossGiants extends TaskBot {
         cfg.meleeStyle = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
         cfg.rangeMode = parseRangeStyle(this.settings.str('rangeStyle', 'rapid'));
         cfg.spell = this.settings.str('spell', 'Wind Strike');
-        cfg.ammo = this.settings.str('ammo', 'Iron arrow');
+        cfg.ammo = cfg.style === 'range' ? rangedItem(this.settings, 'ammo', 'Iron arrow') : '';
         cfg.weapon = cfg.style === 'mage' ? this.settings.str('staff', 'Staff of air')
-            : cfg.style === 'range' ? this.settings.str('bow', 'Maple shortbow') : '';
+            : cfg.style === 'range' ? rangedItem(this.settings, 'bow', 'Maple shortbow') : '';
         cfg.foodName = this.settings.str('food', 'Lobster');
 
         cfg.panicHp = this.settings.num('panicHp', 25) / 100;

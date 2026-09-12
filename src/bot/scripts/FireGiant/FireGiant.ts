@@ -1,3 +1,5 @@
+import { RANGED_WEAPONS, rangeLoadoutOf } from '../../api/combat/ranged.js';
+import { CUSTOM_RANGED_SETTINGS, rangedItem } from '../../api/combat/rangedSettings.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
@@ -17,7 +19,7 @@ import { Autocast } from '../../api/magic/Autocast.js';
 import { castsAvailable, runeWithdrawList } from '../../api/combat/CombatStyleLogic.js';
 import { SPELL_DB } from '../../data/spelldb.js';
 import { DROP_DB } from '../../data/dropdb.js';
-import { BOWS, STAFFS } from '../../api/combat/equipment.js';
+import { STAFFS } from '../../api/combat/equipment.js';
 import { foodForms, foodCount as foodCountIn, foodHealAmount, shouldEatToUseFood } from '../../api/combat/food.js';
 import { combatKeepNames } from '../../api/combat/keepList.js';
 import { depositAllExcept, matchesCommonBankLoot } from '../../api/bank/Banking.js';
@@ -73,9 +75,10 @@ export const SETTINGS: SettingsSchema = {
     spell: { type: 'string', default: 'Wind Strike', options: Object.keys(SPELL_DB), label: 'Autocast spell', group: 'Combat', showIf: SHOW_MAGE },
     runesWithdraw: { type: 'number', default: 150, min: 1, max: 2000, label: 'Casts of runes per bank trip', group: 'Combat', showIf: SHOW_MAGE },
     runeBuffer: { type: 'number', default: 500, min: 0, max: 2000, label: 'Spare runes per type', group: 'Combat', showIf: SHOW_MAGE, help: 'withdrawn on top of the cast budget. Looted runes (fire giants drop chaos) let the trip cast past its planned count and drain whichever rune is scarcest — if that rune is also the escape teleport\'s, the bot cannot leave. Runes stack, so this costs no extra slots' },
-    bow: { type: 'string', default: 'Maple shortbow', options: BOWS, label: 'Bow', group: 'Combat', showIf: SHOW_RANGE, help: 'wielded bow, withdrawn from bank when missing' },
+    bow: { type: 'string', default: 'Maple shortbow', options: [...RANGED_WEAPONS, 'Other'], label: 'Ranged weapon', group: 'Combat', showIf: SHOW_RANGE, help: 'bows use the selected ammo; darts are both the weapon and the projectile stack' },
     rangeStyle: { type: 'string', default: 'rapid', options: RANGE_STYLE_OPTIONS, label: 'Ranged style', group: 'Combat', showIf: SHOW_RANGE },
-    ammo: { type: 'string', default: 'Iron arrow', options: ['Bronze arrow', 'Iron arrow', 'Steel arrow', 'Mithril arrow', 'Adamant arrow', 'Rune arrow'], label: 'Ammo', group: 'Combat', showIf: SHOW_RANGE },
+    ammo: { type: 'string', default: 'Iron arrow', options: ['Bronze arrow', 'Iron arrow', 'Steel arrow', 'Mithril arrow', 'Adamant arrow', 'Rune arrow', 'Other'], label: 'Ammo', group: 'Combat', showIf: SHOW_RANGE },
+    ...CUSTOM_RANGED_SETTINGS,
     ammoWithdraw: { type: 'number', default: 500, min: 1, max: 5000, label: 'Ammo per bank trip', group: 'Combat', showIf: SHOW_RANGE },
 
     loadout: { ...LOADOUT_SETTING, group: 'Food & healing' },
@@ -152,6 +155,16 @@ function castsLeft(): number {
 function quiverCount(): number {
     return Equipment.items().find(i => (i.name ?? '').toLowerCase() === AMMO.toLowerCase())?.count ?? 0;
 }
+async function equipProjectiles(): Promise<boolean> {
+    if (Bank.isOpen() && !(await Bank.close())) return false;
+    const item = Inventory.first(AMMO);
+    const op = item?.actions().find(action => /wield|wear|equip/i.test(action));
+    if (!item || !op) return false;
+    const before = quiverCount();
+    if (!(await item.interact(op))) return false;
+    return Execution.delayUntil(() => quiverCount() > before, 3000);
+}
+
 function ammoLeft(): number {
     return quiverCount() + Inventory.count(AMMO);
 }
@@ -396,7 +409,8 @@ class GearEquip implements Task {
     private fails = 0;
     constructor(private bot: FireGiant) {}
     private needWeapon(): boolean {
-        return WEAPON !== '' && !Equipment.contains(WEAPON) && Inventory.first(WEAPON) !== null;
+        return !(STYLE === 'range' && rangeLoadoutOf(WEAPON, AMMO).thrown)
+            && WEAPON !== '' && !Equipment.contains(WEAPON) && Inventory.first(WEAPON) !== null;
     }
     private needQuiver(): boolean {
         return STYLE === 'range' && Inventory.count(AMMO) > 0;
@@ -409,6 +423,7 @@ class GearEquip implements Task {
             this.bot.setStatus(`wielding ${WEAPON}`);
             if (await Equipment.equip(WEAPON)) {
                 this.bot.log(`wielded ${WEAPON}`);
+                if (!needStyleSupplies()) this.bot.noteSupplyEmpty(false);
                 this.fails = 0;
             } else {
                 this.fails++;
@@ -416,7 +431,7 @@ class GearEquip implements Task {
             return;
         }
         this.bot.setStatus(`equipping ${AMMO}`);
-        if (await Equipment.equip(AMMO)) {
+        if (await equipProjectiles()) {
             this.bot.log(`equipped ${AMMO}`);
             this.fails = 0;
         } else {
@@ -689,11 +704,11 @@ async function withdrawEntryKit(bot: FireGiant): Promise<void> {
 }
 
 async function withdrawStyleSupplies(bot: FireGiant): Promise<void> {
-    if (STYLE !== 'melee' && WEAPON !== '' && !Equipment.contains(WEAPON) && Inventory.first(WEAPON) === null) {
+    if (STYLE !== 'melee' && !(STYLE === 'range' && rangeLoadoutOf(WEAPON, AMMO).thrown)
+        && WEAPON !== '' && !Equipment.contains(WEAPON) && Inventory.first(WEAPON) === null) {
         bot.setStatus(`withdrawing ${WEAPON}`);
         if ((await withdrawTo(WEAPON, 1)) > 0) {
-            await Equipment.equip(WEAPON);
-            bot.log(`withdrew and wielded ${WEAPON}`);
+            bot.log(`withdrew ${WEAPON}`);
         } else {
             bot.log(`WARNING: no '${WEAPON}' in the bank — carrying on with current gear.`);
         }
@@ -720,7 +735,6 @@ async function withdrawStyleSupplies(bot: FireGiant): Promise<void> {
         bot.setStatus(`withdrawing ${AMMO}`);
         const got = await withdrawTo(AMMO, AMMO_WITHDRAW);
         if (got > 0) {
-            await Equipment.equip(AMMO);
             bot.log(`withdrew ${got} ${AMMO}`);
             bot.noteSupplyEmpty(false);
         } else if (ammoLeft() === 0) {
@@ -1058,7 +1072,7 @@ class Fight implements Task {
                 return;
             }
 
-            if (usesSafespot() && target.distance() > attackRangeFor(STYLE)) {
+            if (usesSafespot() && target.distance() > attackRangeFor(STYLE, WEAPON)) {
                 if (!(await this.leash(target.index))) {
                     this.skip.set(target.index, performance.now() + LEASH_SKIP_MS);
                 }
@@ -1123,7 +1137,7 @@ class Fight implements Task {
             if (!giant) {
                 return true;
             }
-            if (giant.distance() <= attackRangeFor(STYLE)) {
+            if (giant.distance() <= attackRangeFor(STYLE, WEAPON)) {
                 return true;
             }
             await Execution.delayTicks(1);
@@ -1168,9 +1182,10 @@ export default class FireGiant extends TaskBot {
         MELEE_STYLE = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
         RANGE_MODE = parseRangeStyle(this.settings.str('rangeStyle', 'rapid'));
         SPELL = this.settings.str('spell', 'Wind Strike');
-        AMMO = this.settings.str('ammo', 'Iron arrow');
+        AMMO = STYLE === 'range' ? rangedItem(this.settings, 'ammo', 'Iron arrow') : '';
         WEAPON = STYLE === 'mage' ? this.settings.str('staff', 'Staff of air')
-            : STYLE === 'range' ? this.settings.str('bow', 'Maple shortbow') : '';
+            : STYLE === 'range' ? rangedItem(this.settings, 'bow', 'Maple shortbow') : '';
+        if (STYLE === 'range') AMMO = rangeLoadoutOf(WEAPON, AMMO).projectile;
         FOOD_NAME = scriptFood(this.settings, 'Lobster');
 
         PANIC_HP = this.settings.num('panicHp', 25) / 100;

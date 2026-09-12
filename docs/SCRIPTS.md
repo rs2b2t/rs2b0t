@@ -162,9 +162,11 @@ Brimhaven moss giant island: range/mage/melee walk-and-fight (multicombat, safes
 | `staff` | string | `"Staff of air"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
 | `spell` | string | `"Wind Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–1000) | `150` | Casts of runes per bank trip |
-| `bow` | string | `"Maple shortbow"` | Ranged weapon — one of: Shortbow, Longbow, Oak shortbow, Oak longbow, Willow shortbow, Willow longbow, Maple shortbow, Maple longbow, Yew shortbow, Yew longbow, Magic shortbow, Magic longbow, Bronze dart, Iron dart, Steel dart, Black dart, Mithril dart, Adamant dart, Rune dart, Crossbow, Bronze crossbow, Iron crossbow, Steel crossbow, Black crossbow, Mithril crossbow, Adamant crossbow, Rune crossbow, Dorgeshuun crossbow, Karil's crossbow |
+| `bow` | string | `"Maple shortbow"` | Ranged weapon — one of: Shortbow, Longbow, Oak shortbow, Oak longbow, Willow shortbow, Willow longbow, Maple shortbow, Maple longbow, Yew shortbow, Yew longbow, Magic shortbow, Magic longbow, Bronze dart, Iron dart, Steel dart, Black dart, Mithril dart, Adamant dart, Rune dart, Crossbow, Bronze crossbow, Iron crossbow, Steel crossbow, Black crossbow, Mithril crossbow, Adamant crossbow, Rune crossbow, Dorgeshuun crossbow, Karil's crossbow, Other |
 | `rangeStyle` | string | `"rapid"` | Ranged style — one of: accurate, rapid, longrange |
-| `ammo` | string | `"Iron arrow"` | Ammo (arrows / bolts) — one of: Bronze arrow, Iron arrow, Steel arrow, Mithril arrow, Adamant arrow, Rune arrow, Dragon arrow, Bronze bolts, Iron bolts, Steel bolts, Black bolts, Mithril bolts, Adamant bolts, Rune bolts, Broad bolts, Bone bolts |
+| `ammo` | string | `"Iron arrow"` | Ammo (arrows / bolts) — one of: Bronze arrow, Iron arrow, Steel arrow, Mithril arrow, Adamant arrow, Rune arrow, Dragon arrow, Bronze bolts, Iron bolts, Steel bolts, Black bolts, Mithril bolts, Adamant bolts, Rune bolts, Broad bolts, Bone bolts, Other |
+| `customBow` | string | `""` | Custom ranged weapon |
+| `customAmmo` | string | `""` | Custom ammunition |
 | `ammoWithdraw` | number (1–5000) | `500` | Projectiles per bank trip |
 | `lootAmmo` | boolean | `true` | Loot & re-equip ammo |
 | `food` | string | `"Lobster"` | Food — one of: Shark, Lobster, Swordfish, Tuna, Salmon, Trout, Pike, Bass, Herring, Sardine, Anchovies, Shrimps, Cooked meat, Cooked chicken, Bread, Stew, Cake, Chocolate cake, Plain pizza, Meat pizza, Anchovy pizza, Pineapple pizza, Redberry pie, Meat pie, Apple pie |
@@ -271,9 +273,11 @@ Waterfall Dungeon fire giants: range/mage safespot or melee, enters by raft + ro
 | `spell` | string | `"Wind Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–2000) | `150` | Casts of runes per bank trip |
 | `runeBuffer` | number (0–2000) | `500` | Spare runes per type |
-| `bow` | string | `"Maple shortbow"` | Bow — one of: Shortbow, Longbow, Oak shortbow, Oak longbow, Willow shortbow, Willow longbow, Maple shortbow, Maple longbow, Yew shortbow, Yew longbow, Magic shortbow, Magic longbow |
+| `bow` | string | `"Maple shortbow"` | Ranged weapon — one of: Shortbow, Longbow, Oak shortbow, Oak longbow, Willow shortbow, Willow longbow, Maple shortbow, Maple longbow, Yew shortbow, Yew longbow, Magic shortbow, Magic longbow, Bronze dart, Iron dart, Steel dart, Black dart, Mithril dart, Adamant dart, Rune dart, Other |
 | `rangeStyle` | string | `"rapid"` | Ranged style — one of: accurate, rapid, longrange |
-| `ammo` | string | `"Iron arrow"` | Ammo — one of: Bronze arrow, Iron arrow, Steel arrow, Mithril arrow, Adamant arrow, Rune arrow |
+| `ammo` | string | `"Iron arrow"` | Ammo — one of: Bronze arrow, Iron arrow, Steel arrow, Mithril arrow, Adamant arrow, Rune arrow, Other |
+| `customBow` | string | `""` | Custom ranged weapon |
+| `customAmmo` | string | `""` | Custom ammunition |
 | `ammoWithdraw` | number (1–5000) | `500` | Ammo per bank trip |
 | `loadout` | string | `""` | Loadout — one of:  |
 | `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
@@ -348,9 +352,11 @@ Moss giants N of Ardougne: range/mage safespot or melee, banks all loot
 | `staff` | string | `"Staff of air"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
 | `spell` | string | `"Wind Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–1000) | `150` | Casts of runes per bank trip |
-| `bow` | string | `"Maple shortbow"` | Ranged weapon — one of: Shortbow, Longbow, Oak shortbow, Oak longbow, Willow shortbow, Willow longbow, Maple shortbow, Maple longbow, Yew shortbow, Yew longbow, Magic shortbow, Magic longbow, Bronze dart, Iron dart, Steel dart, Black dart, Mithril dart, Adamant dart, Rune dart |
+| `bow` | string | `"Maple shortbow"` | Ranged weapon — one of: Shortbow, Longbow, Oak shortbow, Oak longbow, Willow shortbow, Willow longbow, Maple shortbow, Maple longbow, Yew shortbow, Yew longbow, Magic shortbow, Magic longbow, Bronze dart, Iron dart, Steel dart, Black dart, Mithril dart, Adamant dart, Rune dart, Other |
 | `rangeStyle` | string | `"rapid"` | Ranged style — one of: accurate, rapid, longrange |
-| `ammo` | string | `"Iron arrow"` | Bow ammo — one of: Bronze arrow, Iron arrow, Steel arrow, Mithril arrow, Adamant arrow, Rune arrow |
+| `ammo` | string | `"Iron arrow"` | Bow ammo — one of: Bronze arrow, Iron arrow, Steel arrow, Mithril arrow, Adamant arrow, Rune arrow, Other |
+| `customBow` | string | `""` | Custom ranged weapon |
+| `customAmmo` | string | `""` | Custom ammunition |
 | `ammoWithdraw` | number (1–5000) | `500` | Projectiles per bank trip |
 | `loadout` | string | `""` | Loadout — one of:  |
 | `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
@@ -373,10 +379,12 @@ Rellekka rock crabs: aggro-stack-kill-reset, loots key halves
 | `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
 | `rangeStyle` | string | `"rapid"` | Ranged style — one of: accurate, rapid, longrange |
 | `staff` | string | `"Staff of air"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
-| `bow` | string | `"Maple shortbow"` | Ranged weapon — one of: Shortbow, Longbow, Oak shortbow, Oak longbow, Willow shortbow, Willow longbow, Maple shortbow, Maple longbow, Yew shortbow, Yew longbow, Magic shortbow, Magic longbow, Bronze dart, Iron dart, Steel dart, Black dart, Mithril dart, Adamant dart, Rune dart |
+| `bow` | string | `"Maple shortbow"` | Ranged weapon — one of: Shortbow, Longbow, Oak shortbow, Oak longbow, Willow shortbow, Willow longbow, Maple shortbow, Maple longbow, Yew shortbow, Yew longbow, Magic shortbow, Magic longbow, Bronze dart, Iron dart, Steel dart, Black dart, Mithril dart, Adamant dart, Rune dart, Other |
 | `spell` | string | `"Wind Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–1000) | `150` | Casts of runes per bank trip |
-| `ammo` | string | `"Bronze arrow"` | Bow ammo — one of: Bronze arrow, Iron arrow, Steel arrow, Mithril arrow, Adamant arrow, Rune arrow, Ogre arrow, Bolts, Barbed bolts |
+| `ammo` | string | `"Bronze arrow"` | Bow ammo — one of: Bronze arrow, Iron arrow, Steel arrow, Mithril arrow, Adamant arrow, Rune arrow, Ogre arrow, Bolts, Barbed bolts, Other |
+| `customBow` | string | `""` | Custom ranged weapon |
+| `customAmmo` | string | `""` | Custom ammunition |
 | `ammoWithdraw` | number (1–1000) | `200` | Projectiles per bank trip |
 | `minStack` | number (1–50) | `1` | Ignore projectile stacks smaller than |
 | `collectRange` | number (2–30) | `12` | Projectile sweep range (tiles) |
