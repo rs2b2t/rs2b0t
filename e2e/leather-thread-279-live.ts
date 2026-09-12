@@ -20,31 +20,36 @@ mkdirSync('docs/e2e', { recursive: true });
 type Api = Rs2b0t & {
     __rs2b0t: {
         Inventory: { count(name: string): number };
-        Bank: { count(name: string): number; isOpen(): boolean };
+        Bank: { count(name: string): number; isOpen(): boolean; ready(): boolean };
+        Locs: { query(): { name(name: string): { nearest(): { interact(op: string): boolean | Promise<boolean> } | null } } };
         Skills: { xp(name: string): number; level(name: string): number };
         Shop: { isOpen(): boolean; stock(): { name: string; count: number }[] };
     };
 };
 
-const snapshot = () => page.evaluate(() => {
-    const g = globalThis as never as Api;
-    return {
-        state: g.rs2b0t.runner.state,
-        tile: g.rs2b0t.reader.worldTile(),
-        inventory: g.rs2b0t.reader.inventory(),
-        thread: g.__rs2b0t.Inventory.count('Thread'),
-        leather: g.__rs2b0t.Inventory.count('Leather'),
-        coins: g.__rs2b0t.Inventory.count('Coins'),
-        bankCoins: g.__rs2b0t.Bank.count('Coins'),
-        bankThread: g.__rs2b0t.Bank.count('Thread'),
-        bankLeather: g.__rs2b0t.Bank.count('Leather'),
-        bankOpen: g.__rs2b0t.Bank.isOpen(),
-        shopOpen: g.__rs2b0t.Shop.isOpen(),
-        stock: g.__rs2b0t.Shop.stock(),
-        xp: g.__rs2b0t.Skills.xp('crafting'),
-        logs: (g.rs2b0t.runner.ctx?.log ?? []).slice(-15)
-    };
-});
+const snapshot = async () => {
+    const current = await page.evaluate(() => {
+        const g = globalThis as never as Api;
+        return {
+            state: g.rs2b0t.runner.state,
+            tile: g.rs2b0t.reader.worldTile(),
+            inventory: g.rs2b0t.reader.inventory(),
+            thread: g.__rs2b0t.Inventory.count('Thread'),
+            leather: g.__rs2b0t.Inventory.count('Leather'),
+            coins: g.__rs2b0t.Inventory.count('Coins'),
+            bankCoins: g.__rs2b0t.Bank.count('Coins'),
+            bankThread: g.__rs2b0t.Bank.count('Thread'),
+            bankLeather: g.__rs2b0t.Bank.count('Leather'),
+            bankOpen: g.__rs2b0t.Bank.isOpen(),
+            bankReady: g.__rs2b0t.Bank.ready(),
+            shopOpen: g.__rs2b0t.Shop.isOpen(),
+            stock: g.__rs2b0t.Shop.stock(),
+            xp: g.__rs2b0t.Skills.xp('crafting'),
+            logs: (g.rs2b0t.runner.ctx?.log ?? []).slice(-15)
+        };
+    });
+    return current;
+};
 const distance = (tile: { x: number; z: number } | null, target: { x: number; z: number }) => tile ? Math.max(Math.abs(tile.x - target.x), Math.abs(tile.z - target.z)) : Infinity;
 
 try {
@@ -59,6 +64,8 @@ try {
         { debugName: 'coins', displayName: 'Coins', qty: 500 }
     ], bank);
     assert(await teleTo(page, bank, 2));
+    assert(await page.evaluate(() => (globalThis as never as Api).__rs2b0t.Locs.query().name('Bank booth').nearest()?.interact('Use-quickly')));
+    await page.waitForFunction(() => (globalThis as never as Api).__rs2b0t.Bank.ready(), undefined, { timeout: 10_000 });
     const before = await snapshot();
     assert.equal(before.thread + before.bankThread, 0, 'fixture must have no thread');
     assert.equal(before.bankLeather, 40);
@@ -70,7 +77,7 @@ try {
     const deadline = Date.now() + minutes * 60_000;
     let sawShop = false;
     let purchased = false;
-    let returned = false;
+    let returned: Awaited<ReturnType<typeof snapshot>> | null = null;
     let nextLog = 0;
     let done = false;
     while (Date.now() < deadline) {
@@ -81,11 +88,12 @@ try {
             console.log(`PURCHASE ${JSON.stringify(current)}`);
             await page.screenshot({ path: 'docs/e2e/issue-279-shop.png' });
         }
-        returned ||= purchased && current.bankOpen && distance(current.tile, bank) <= 6 && current.leather > 0;
+        if (purchased && current.bankReady && distance(current.tile, bank) <= 6 && current.leather > 0) returned = current;
         if (returned && current.xp > before.xp && distance(current.tile, bank) <= 6) {
-            assert(current.coins + current.bankCoins < before.bankCoins, 'thread purchase did not spend coins');
-            assert(current.bankLeather < before.bankLeather, 'no banked leather withdrawn');
-            console.log(`PASS #279 purchased=${purchased} returned=${returned} craftingXp=${current.xp - before.xp} ${JSON.stringify(current)}`);
+            assert(returned.coins + returned.bankCoins < before.bankCoins, 'thread purchase did not spend coins');
+            assert(returned.bankLeather < before.bankLeather, 'no banked leather withdrawn');
+            console.log(`RETURNED ${JSON.stringify(returned)}`);
+            console.log(`PASS #279 purchased=${purchased} returned=true craftingXp=${current.xp - before.xp} ${JSON.stringify(current)}`);
             await page.screenshot({ path: 'docs/e2e/issue-279.png' });
             done = true;
             break;
