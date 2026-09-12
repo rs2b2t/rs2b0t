@@ -5,10 +5,11 @@ type Api = {
     __rs2b0t: {
         Inventory: { count(name: string): number; first(name: string): { actions(): string[]; interact(op: string): unknown } | null };
         Skills: { xp(name: string): number; effective(name: string): number };
+        Prayer: { active(name: string): boolean };
         Npcs: { all(): { index: number; name: string | null; targetsMe(): boolean }[] };
     };
     __damageWatch?: { hits: number[]; timer: number; sample(): void };
-    rs2b0t: { client: { localPlayer: { damageValues: Int32Array; damageTypes: Int32Array; damageCycles: Int32Array } | null }; runner: { state: string; ctx: { log: { msg: string }[] } | null } };
+    rs2b0t: { actions: { ifButton(com: number): boolean }; client: { localPlayer: { damageValues: Int32Array; damageTypes: Int32Array; damageCycles: Int32Array } | null }; runner: { state: string; ctx: { log: { msg: string }[] } | null } };
 };
 
 const { base } = parseArgs(process.argv.slice(2));
@@ -25,12 +26,13 @@ const snapshot = () => page.evaluate(() => {
         food: g.__rs2b0t.Inventory.count('Trout'),
         target: g.__rs2b0t.Npcs.all().find(n => n.name === 'Guard' && n.targetsMe())?.index ?? null,
         state: g.rs2b0t.runner.state,
-        hits: g.__damageWatch?.hits ?? []
+        hits: g.__damageWatch?.hits ?? [],
+        protected: g.__rs2b0t.Prayer.active('Protect from Melee')
     };
 });
 try {
     await mainlandAccount(page, base, tag, client.page);
-    for (const [stat, level] of [['attack', 60], ['strength', 1], ['defence', 99], ['hitpoints', 99]] as const) {
+    for (const [stat, level] of [['attack', 60], ['strength', 1], ['defence', 99], ['hitpoints', 99], ['prayer', 99]] as const) {
         await cheatQuiet(page, `setstat ${stat} ${level}`);
     }
     await clearChatDialogs(page);
@@ -47,6 +49,8 @@ try {
     await cheatQuiet(page, 'give trout 10');
     if (!(await teleTo(page, { x: 2661, z: 3306, level: 0 }))) throw new Error('guard seed failed');
     await setSettings(page, 'AutoFighter', { target: 'Guard', spot: 'Start position', leashRadius: 14, combatStyle: 'melee', meleeStyle: 'attack', food: 'Trout', foodWithdraw: 0, banking: 'None', buryBones: false, solveClues: false, useSpecial: false });
+    await page.evaluate(() => (globalThis as never as Api).rs2b0t.actions.ifButton(5623));
+    await page.waitForFunction(() => (globalThis as never as Api).__rs2b0t.Prayer.active('Protect from Melee'), undefined, { timeout: 5000 });
     await startScript(page, 'AutoFighter');
     const start = await snapshot();
     await page.waitForFunction(xp => {
@@ -77,16 +81,22 @@ try {
     await page.waitForFunction(food => (globalThis as never as Api).__rs2b0t.Inventory.count('Trout') < food, fighting.food, { timeout: 20_000 });
     let afterEat = await snapshot();
     let resumed = false;
+    let settledAt = Date.now();
+    let settledXp: number | null = null;
     const deadline = Date.now() + 45_000;
     while (Date.now() < deadline) {
         await page.waitForTimeout(200);
         const snap = await snapshot();
         if (snap.food < afterEat.food) {
             afterEat = snap;
+            settledAt = Date.now();
+            settledXp = null;
         }
-        if (snap.xp > afterEat.xp && snap.target === fighting.target) {
+        if (!snap.protected) throw new Error('protection prayer stopped');
+        if (settledXp === null && Date.now() - settledAt >= 8000) settledXp = snap.xp;
+        if (settledXp !== null && snap.xp > settledXp && snap.target === fighting.target) {
             if (snap.hits.length > 0) throw new Error(`combat resumed after damaging hits: ${snap.hits}; zero-damage case not proven`);
-            console.log('RESUMED', JSON.stringify({ afterEat, snap }));
+            console.log('RESUMED', JSON.stringify({ afterEat, settledXp, snap }));
             resumed = true;
             break;
         }
