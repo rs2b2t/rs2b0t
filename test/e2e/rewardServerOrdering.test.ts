@@ -4,10 +4,11 @@ import { resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 
-const engine = resolve(import.meta.dir, '../../../shilo-private/engine');
+const engine = process.env.REWARD_ENGINE_DIR;
+const serverTest = test.skipIf(!engine);
 
 function methods(file: string, names: readonly string[]): string {
-    const source = ts.createSourceFile(file, readFileSync(resolve(engine, file), 'utf8'), ts.ScriptTarget.Latest, true);
+    const source = ts.createSourceFile(file, readFileSync(resolve(engine!, file), 'utf8'), ts.ScriptTarget.Latest, true);
     const found = source.statements.filter(ts.isClassDeclaration).flatMap(declaration => declaration.members)
         .filter(ts.isMethodDeclaration).filter(method => names.includes(method.name.getText(source)));
     expect(found).toHaveLength(names.length);
@@ -58,14 +59,14 @@ function replay(closeBeforeReward: boolean): unknown {
     return runInNewContext(ts.transpile(program), {}, { timeout: 1000 });
 }
 
-test('deferred CLOSE_MODAL removes the reward listener before updateInvs when casket Open shares its input batch', () => {
+serverTest('deferred CLOSE_MODAL removes the reward listener before updateInvs when casket Open shares its input batch', () => {
     expect(replay(false)).toEqual({
         modal: -1, listenersAtUpdateInvs: [], deliveryEligible: true,
         packets: [{ kind: 'UPDATE_INV_STOPTRANSMIT', id: 6963 }, { kind: 'IF_CLOSE' }]
     });
 });
 
-test('reward UI survives when the server processes the earlier close before casket Open', () => {
+serverTest('reward UI survives when the server processes the earlier close before casket Open', () => {
     expect(replay(true)).toEqual({
         modal: 6960, listenersAtUpdateInvs: [6963], deliveryEligible: false, packets: [{ kind: 'IF_OPENMAIN', id: 6960 }]
     });

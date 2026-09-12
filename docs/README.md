@@ -33,7 +33,6 @@ pure Lost City or 2004scape projects and is not maintained for those targets.
 | [Loc identity](decisions/loc-identity-model.md) | why a loc is a placement, not an ID |
 | [Loc state in the client](reference/loc-identity.md) | what the client does with locs that change state, and the gaps |
 | [Nav operator tools](nav/README.md) | transport coverage, client-vs-pack path paint, live nav harnesses |
-| [Doc migration](MIGRATION.md) | in-progress rewrite of this manual to one-type-per-file; delete when the table is all ✅ |
 
 ---
 

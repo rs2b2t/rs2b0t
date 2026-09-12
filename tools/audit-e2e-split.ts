@@ -54,14 +54,7 @@ function outboundInto(consumers: Map<string, string>, sources: Map<string, strin
     return out;
 }
 
-/** The bidirectional import closure around `entry`: consumers, their ABI, minus ABI shared with offline code.
- *  `offlineTests` names consumers outside the scanned tree, a unit test proves its target runs without a browser. */
-export function liveClosure(
-    entry: string,
-    sources: Map<string, string>,
-    offlineTests: Map<string, string> = new Map()
-): { move: string[]; heldBack: string[] } {
-    const dep = depGraph(sources);
+function graphConsumers(entry: string, dep: Map<string, Set<string>>): string[] {
     const reaches = (file: string, seen: Set<string>): boolean => {
         if (seen.has(file)) {
             return false;
@@ -74,14 +67,21 @@ export function liveClosure(
         }
         return false;
     };
+    return [...dep.keys()].filter(f => reaches(f, new Set())).sort();
+}
+
+/** The bidirectional import closure around `entry`: consumers, their ABI, minus ABI shared with offline code.
+ *  `offlineTests` names consumers outside the scanned tree, a unit test proves its target runs without a browser. */
+export function liveClosure(
+    entry: string,
+    sources: Map<string, string>,
+    offlineTests: Map<string, string> = new Map()
+): { move: string[]; heldBack: string[] } {
+    const dep = depGraph(sources);
     // Why: the entry joins the closure only when it is inside the scanned tree, so pointing the audit
     // at the post-move entry over tools/ reports an empty closure rather than the entry itself.
     const core = new Set<string>(sources.has(entry) ? [entry] : []);
-    for (const file of sources.keys()) {
-        if (reaches(file, new Set())) {
-            core.add(file);
-        }
-    }
+    for (const file of graphConsumers(entry, dep)) core.add(file);
     const abi = new Set<string>();
     const frontier = [...core];
     while (frontier.length) {
@@ -161,20 +161,7 @@ export function playwrightUnder(prefix: string, sources: Map<string, string>): s
 
 /** Files transitively importing `entry`. This is the violation set; ABI modules `entry` imports are not. */
 export function consumersOf(entry: string, sources: Map<string, string>): string[] {
-    const dep = depGraph(sources);
-    const reaches = (file: string, seen: Set<string>): boolean => {
-        if (seen.has(file)) {
-            return false;
-        }
-        seen.add(file);
-        for (const d of dep.get(file) ?? []) {
-            if (d === entry || reaches(d, seen)) {
-                return true;
-            }
-        }
-        return false;
-    };
-    return [...sources.keys()].filter(f => reaches(f, new Set())).sort();
+    return graphConsumers(entry, depGraph(sources));
 }
 
 export function misnamedUnder(prefix: string, files: string[]): string[] {
@@ -202,7 +189,7 @@ export function readTree(dir: string): Map<string, string> {
 }
 
 if (import.meta.main) {
-    const entry = process.argv.includes('--after') ? 'e2e/lib/harness.ts' : 'e2e/lib/harness.ts';
+    const entry = 'e2e/lib/harness.ts';
     const sources = readTree('tools');
     const { move, heldBack } = liveClosure(entry, sources, readTree('test'));
     if (process.argv.includes('--plan')) {

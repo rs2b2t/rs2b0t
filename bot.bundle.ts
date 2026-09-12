@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-import { buildIdentityDefines, resolveBuildIdentity, writeVersionJson } from './tools/lib/buildIdentity.js';
+import { buildIdentityDefines, buildIdentityLabel, resolveBuildIdentity, writeVersionJson } from './tools/lib/buildIdentity.js';
 
 // Bot client build: src/bot/main.ts → botclient.js, console always kept.
 // Why: no terser pass, so `globalThis.__rs2b0t` keeps stable property names for externally-compiled scripts and string-keyed self-tests; Bun's minifier shortens locals only.
@@ -92,5 +92,5 @@ for (const [entry, output] of entrypoints) {
 
 writeVersionJson('out/version.json', identity);
 console.log(
-    `bot bundle built (${prod ? 'prod' : 'dev'}): out/botclient.js  git=${identity.dirty ? `${identity.short}-dirty` : identity.short}`
+    `bot bundle built (${prod ? 'prod' : 'dev'}): out/botclient.js  git=${buildIdentityLabel(identity)}`
 );

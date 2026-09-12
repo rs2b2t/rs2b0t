@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../journalText.js';
 // docs/QUESTS.md
 import { actions, reader } from '../../../../adapter/ClientAdapter.js';
 import Tile from '../../../../geometry/Tile.js';
@@ -96,14 +97,6 @@ export const COMBINATION = 'KURT';
 const LETTERS = 26;
 const CORRECT = /combination seems correct/i;
 const TRAP_FOUND = /trap in these stairs/i;
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 export function parseTribalTotemJournal(lines: readonly string[] | string): QuestProgress | undefined {
     const text = normalize(lines);

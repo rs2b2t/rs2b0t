@@ -307,23 +307,6 @@ export function paintSkillShort(skill: string): string {
     }
 }
 
-export function paintSkillTitle(skill: string): string {
-    switch (skill) {
-        case 'woodcutting':
-            return 'Woodcutting';
-        case 'firemaking':
-            return 'Firemaking';
-        case 'fishing':
-            return 'Fishing';
-        case 'cooking':
-            return 'Cooking';
-        case 'mining':
-            return 'Mining';
-        default:
-            return skill;
-    }
-}
-
 /** Clip to `cols` characters with a trailing ellipsis, keeping leading spaces so padded columns stay aligned. */
 export function clipText(text: string, cols: number): string {
     if (cols <= 0) {
@@ -338,16 +321,6 @@ export function clipText(text: string, cols: number): string {
 /** Truncate paint text with an ellipsis (chatbox rows are tight). */
 export function paintClip(text: string, max = 52): string {
     return clipText(text.trim(), max);
-}
-
-export function fmtXpGained(n: number): string {
-    if (n <= 0) {
-        return '+0';
-    }
-    if (n >= 1000) {
-        return `+${(n / 1000).toFixed(1)}k`;
-    }
-    return `+${n}`;
 }
 
 export function fmtXpHr(gained: number, mins: number): string {

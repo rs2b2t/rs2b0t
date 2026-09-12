@@ -16,15 +16,8 @@ type PrivateQuestSession = {
 export async function seedPrivateQuest(scenario: PrivateScenario, session: PrivateQuestSession) {
     const f = privateScenario(scenario);
     for (const command of [`setvar zanaris ${f.lostCity ? 6 : 0}`, `setvar trail_status ${f.trailStatus}`]) assert(await session.cheat(command));
-    if (scenario === 'guardian') {
-        for (const command of ['setvar priestperil 61', 'setvar druidspirit 5']) assert(await session.cheat(command));
-    }
     await session.relog();
     await session.waitForQuest(f.lostCity ? 'complete' : 'notStarted');
-    if (scenario === 'guardian') {
-        await session.waitForQuest('complete', 'Priest in Peril');
-        await session.waitForQuest('inProgress', 'Nature Spirit');
-    }
 }
 
 export async function seedPrivateClue(page: Page, scenario: PrivateScenario, account: Omit<PrivateObservation, 'since'>) {

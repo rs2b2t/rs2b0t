@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -21,15 +22,6 @@ export const SOA_STAGE = {
     BLACKARM_JOINED: 23,
     COMPLETE: 30
 } as const;
-
-/** Colour tags become a space, so no needle may span a tag boundary. */
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 // Why: the page keeps every earlier line struck through, so an early needle still matches in a late state and this order is the only thing separating them.
 const STAGES: readonly [string, number][] = [

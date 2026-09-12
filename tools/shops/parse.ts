@@ -1,3 +1,4 @@
+import { blocks, field } from '../lib/content.js';
 import type { ShopRecord } from '#/bot/api/shop/types.js';
 
 export interface ParsedInv {
@@ -18,30 +19,6 @@ export interface ParsedKeeper {
 }
 
 export interface ParsedObj { name: string; cost: number; stackable: boolean; members: boolean }
-
-interface Block { id: string; lines: string[] }
-
-function blocks(text: string): Block[] {
-    const out: Block[] = [];
-    let cur: Block | null = null;
-    for (const raw of text.split('\n')) {
-        const line = raw.trim();
-        const head = /^\[([a-z0-9_]+)\]$/.exec(line);
-        if (head) {
-            cur = { id: head[1], lines: [] };
-            out.push(cur);
-        } else if (cur && line.length > 0 && !line.startsWith('//')) {
-            cur.lines.push(line);
-        }
-    }
-    return out;
-}
-
-function field(lines: string[], key: string): string | undefined {
-    const prefix = `${key}=`;
-    const hit = lines.find(l => l.startsWith(prefix));
-    return hit?.slice(prefix.length);
-}
 
 export function parseInvShops(text: string): ParsedInv[] {
     const out: ParsedInv[] = [];

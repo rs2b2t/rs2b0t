@@ -14,7 +14,6 @@ import { readPrivateFrames } from './jive-private-server.js';
 import type { PrivateEvent } from './jive-private-types.js';
 import { privateRunOutput } from './jive-private-boundary.mjs';
 import { cleanupPrivate, confirmPrivateDisconnect, privateMainland, privateMutation, privatePage } from './jive-private-session.js';
-import { startAcceptanceTelemetry } from '../out/acceptance-telemetry.mjs';
 
 export function privateRunFailed(events: readonly Pick<PrivateEvent, 'kind' | 'status' | 'hp'>[]) {
     return events.some(e => e.hp <= 0 || e.status.startsWith('reward blocked:')
@@ -53,9 +52,7 @@ export async function runPrivateClue() {
     const events: PrivateEvent[] = [];
     try {
         const page = await privatePage(browser);
-        let stopTelemetry: () => void = () => {};
         try {
-            stopTelemetry = await startAcceptanceTelemetry(page, out);
             await privateMainland(page, { user, pagePath: c.pagePath, server: c.server });
             const timing = await privateMutation(c.server, user, () => cadence(page, true));
             assert(timing.after >= 150 && timing.after <= 250);
@@ -85,7 +82,6 @@ export async function runPrivateClue() {
             catch (captureError) { console.error('private failure screenshot failed', captureError); }
             throw error;
         } finally {
-            stopTelemetry();
             try { await stopScript(page); }
             finally {
                 events.push(...await page.evaluate(() => {

@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../journalText.js';
 // docs/QUESTS.md
 import { actions, reader } from '../../../../adapter/ClientAdapter.js';
 import Tile from '../../../../geometry/Tile.js';
@@ -91,14 +92,6 @@ const VALVES: readonly Valve[] = [
 
 // Why: `%hazeelcult_valves` is `scope=perm` with no transmit, so where the raft stops is the only oracle. This holds what the last ride proved rather than what the varp says.
 let valvesTurned = false;
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 const EVIL = 'evil';
 

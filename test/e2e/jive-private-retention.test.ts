@@ -5,8 +5,8 @@ import { parsePrivateFrame } from '../../e2e/jive-private-server.js';
 import type { PrivateEvent, PrivateFrame } from '../../e2e/jive-private-types.js';
 
 const user = 'jc-retention';
-function episode() {
-    const clue = { id: 3544, count: 1 };
+function episode(clueId = 3544) {
+    const clue = { id: clueId, count: 1 };
     const base: PrivateEvent = { at: 1000, tick: 1, kind: 'solver-start', action: '', itemId: -1,
         inventory: [clue, { id: 2448, count: 1 }, { id: 385, count: 20 }], bank: [], bankConfirmed: true,
         hp: 77, maxHp: 77, sharks: 20, used: 22, weaponId: 861, special: 1000, antipoisonDoses: 4,
@@ -86,4 +86,13 @@ test('does not count an owned ground clue as bank retention', () => {
     const { events, frames } = episode();
     const ground = frames.map(f => ({ ...f, players: f.players.map(p => ({ ...p, inventory: [], bank: [], ground: [{ id: 3544, count: 1, owned: true }] })) }));
     expect(privateHardCapture(events, ground, user).passed).toBe(false);
+});
+
+test.each(['retained', 'lost', 'dropped'] as const)('uses the guardian clue ID for %s evidence before a spawn', mode => {
+    const { events, frames } = episode(3548);
+    const observed = mode === 'lost' ? frames.map(f => ({ ...f, players: f.players.map(p => ({ ...p, inventory: [], bank: [] })) })) : frames;
+    if (mode === 'dropped') events.push({ ...events[3], kind: 'inventory-action', action: 'Drop', itemId: 3548 });
+    const report = privateReport({ scenario: 'guardian', user, events, frames: observed });
+    expect(report.hard?.violations.includes('blocked-clue-disposal')).toBe(mode !== 'retained');
+    expect(report.passed).toBe(false);
 });

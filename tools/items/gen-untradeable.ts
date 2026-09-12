@@ -1,4 +1,5 @@
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { filesUnder } from '../lib/content.js';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { parseObjPack } from './parse.js';
@@ -6,12 +7,6 @@ import { parseObjPack } from './parse.js';
 const CONTENT = process.env.CONTENT_DIR ?? join(homedir(), 'code', 'rs2b2t-content');
 const OUT = 'src/bot/data/untradeable.ts';
 
-function filesUnder(root: string, ext: string): string[] {
-    return (readdirSync(root, { recursive: true }) as string[])
-        .filter(f => f.endsWith(ext))
-        .map(f => join(root, f))
-        .sort();
-}
 
 /** Debugnames the content marks as untradeable, either outright or by being a dummy. */
 // Why: the engine defaults every obj to tradeable (off only via opcode 15 or a dummyitem), so absence means yes.

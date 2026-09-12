@@ -1,4 +1,5 @@
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { filesUnder } from '../lib/content.js';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -43,12 +44,6 @@ const CLUE_ITEMS: Record<string, string[]> = {
     trail_clue_medium_sextant006: ['Rope']
 };
 
-function filesUnder(root: string, ext: string): string[] {
-    return (readdirSync(root, { recursive: true }) as string[])
-        .filter(f => f.endsWith(ext))
-        .map(f => join(root, f))
-        .sort();
-}
 
 function loadObjIds(): Map<string, number> {
     const text = readFileSync(join(CONTENT, 'pack', 'obj.pack'), 'utf8');

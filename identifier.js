@@ -1,29 +1,3 @@
-function mergeSort(array, cmp) {
-    if (array.length < 2) return array.slice();
-    function merge(a, b) {
-        var r = [],
-            ai = 0,
-            bi = 0,
-            i = 0;
-        while (ai < a.length && bi < b.length) {
-            cmp(a[ai], b[bi]) <= 0 ? (r[i++] = a[ai++]) : (r[i++] = b[bi++]);
-        }
-        if (ai < a.length) r.push.apply(r, a.slice(ai));
-        if (bi < b.length) r.push.apply(r, b.slice(bi));
-        return r;
-    }
-    function _ms(a) {
-        if (a.length <= 1) return a;
-        var m = Math.floor(a.length / 2),
-            left = a.slice(0, m),
-            right = a.slice(m);
-        left = _ms(left);
-        right = _ms(right);
-        return merge(left, right);
-    }
-    return _ms(array);
-}
-
 function shuffle(arr) {
     for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -53,7 +27,7 @@ export const nth_identifier = (() => {
         return frequency.get(b) - frequency.get(a);
     }
     function sort() {
-        chars = mergeSort(leading, compare).concat(mergeSort(digits, compare));
+        chars = leading.slice().sort(compare).concat(digits.slice().sort(compare));
     }
 
     reset();

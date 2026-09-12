@@ -24,8 +24,8 @@ export default class ClientStream {
     }
 
     constructor(socket: WebSocket) {
-        socket.onclose = this.onclose;
-        socket.onerror = this.onerror;
+        socket.onclose = this.remoteClose;
+        socket.onerror = this.remoteClose;
         this.wsin = new WebSocketReader(socket, 30000);
         this.wsout = new WebSocketWriter(socket, 5000);
         this.socket = socket;
@@ -98,27 +98,15 @@ export default class ClientStream {
         this.wsout.close();
     }
 
-    private onclose = (_event: CloseEvent): void => {
+    private remoteClose = (): void => {
         if (this.dummy) {
             return;
         }
 
-        this.remoteClose();
-    };
-
-    private onerror = (_event: Event): void => {
-        if (this.dummy) {
-            return;
-        }
-
-        this.remoteClose();
-    };
-
-    private remoteClose(): void {
         this.remoteClosed = true;
         this.wsin.close();
         this.wsout.close();
-    }
+    };
 }
 
 class WebSocketWriter {
@@ -157,10 +145,6 @@ class WebSocketWriter {
 
     close(): void {
         this.closed = true;
-    }
-
-    fail(): void {
-        this.ioerror = true;
     }
 }
 
@@ -281,14 +265,6 @@ class WebSocketReader {
         this.event = null;
         this.queue = [];
         this.queueRead = 0;
-    }
-
-    fail(): void {
-        this.closed = true;
-        this.callback = null;
-        this.clearTimeout();
-        this.rejectRead?.();
-        this.rejectRead = null;
     }
 
     private nextEvent(): WebSocketEvent | null {

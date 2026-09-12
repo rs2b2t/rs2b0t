@@ -1,6 +1,6 @@
 import { actions, reader } from '../adapter/ClientAdapter.js';
 import { BotHost } from './BotHost.js';
-import { Credentials, type Creds } from './Credentials.js';
+import { Credentials } from './Credentials.js';
 import { LoginBackoff } from './LoginBackoff.js';
 import type {
     LoginCoordination,
@@ -99,12 +99,8 @@ class AutoReloginImpl {
         }
     }
 
-    private creds(): Creds | null {
-        return Credentials.get();
-    }
-
     loginNow(): boolean {
-        const c = this.creds();
+        const c = Credentials.get();
         if (!c || reader.ingame()) {
             return false;
         }
@@ -140,8 +136,7 @@ class AutoReloginImpl {
         if (reader.ingame()) {
             this.cancelQueuedLogin();
             const live = actions.loginCredentials();
-            const saved = this.creds();
-            if (live.username.length > 0 && (!saved || live.username !== saved.username || live.password !== saved.password)) {
+            if (live.username.length > 0) {
                 this.setCredentials(live.username, live.password);
             }
 
@@ -161,7 +156,7 @@ class AutoReloginImpl {
             return;
         }
 
-        const c = this.creds();
+        const c = Credentials.get();
         // Why: title-screen auto-login is checkbox-only, and a running or paused script still reconnects after a disconnect so unattended scripts survive a DC (#215).
         // Why: mid-reconnect must not keep logging in once the script is stopped and the checkbox is off, which read as "cannot turn off autologin" in Multibox.
         const wantLogin = c !== null && (this.autoLogin || this.scriptActive());

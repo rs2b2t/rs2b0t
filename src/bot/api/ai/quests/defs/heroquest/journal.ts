@@ -1,3 +1,4 @@
+import { normalizeJournal } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -26,11 +27,7 @@ export const HERO_STAGE = {
 // Why: colour tags become a space, so no needle may span a tag boundary, and every needle below opens
 // with one, because "she gave me" contains "he gave me".
 function normalize(lines: readonly string[] | string): string {
-    const body = (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
+    const body = normalizeJournal(lines);
     return body.length === 0 ? '' : ` ${body} `;
 }
 

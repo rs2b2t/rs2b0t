@@ -1,3 +1,4 @@
+import { normalizeJournal } from '../journalText.js';
 import { actions, reader } from '../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
@@ -176,14 +177,6 @@ export function waterfallDungeonEntryReadiness(
     if (currentHp < baseHp) return 'heal';
     if (!runEnabled) return 'enableRun';
     return 'ready';
-}
-
-function normalizeJournal(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
 }
 
 export function parseWaterfallJournal(lines: readonly string[] | string): number | undefined {

@@ -1,4 +1,5 @@
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { filesUnder } from '../lib/content.js';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { joinShopDb, parseInvShops, parseNpcKeepers, parseObjDefs, type ParsedInv, type ParsedKeeper, type ParsedObj } from './parse.js';
@@ -6,12 +7,6 @@ import { joinShopDb, parseInvShops, parseNpcKeepers, parseObjDefs, type ParsedIn
 const CONTENT = process.env.CONTENT_DIR ?? join(homedir(), 'code', 'rs2b2t-engine', '..', 'rs2b2t-content');
 const OUT = 'src/bot/data/shopdb.ts';
 
-function filesUnder(root: string, ext: string): string[] {
-    return (readdirSync(root, { recursive: true }) as string[])
-        .filter(f => f.endsWith(ext))
-        .map(f => join(root, f))
-        .sort();
-}
 
 function generate(): string {
     const scripts = join(CONTENT, 'scripts');

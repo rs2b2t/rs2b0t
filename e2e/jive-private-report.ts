@@ -1,11 +1,12 @@
 import { assessReward, type RewardCapture } from './jive-reward-contract.js';
 import { privateHardCapture } from './jive-private-hard.js';
-import type { PrivateScenario } from './jive-private-config.js';
+import { privateScenario, type PrivateScenario } from './jive-private-config.js';
 import type { PrivateEvent, PrivateFrame } from './jive-private-types.js';
 
 export function privateReport(input: { readonly scenario: PrivateScenario; readonly user: string;
     readonly events: readonly PrivateEvent[]; readonly frames: readonly PrivateFrame[] }) {
     const { scenario, user } = input;
+    const fixture = privateScenario(scenario);
     const events = [...input.events].sort((a, b) => a.at - b.at);
     const first = events[0], last = events.at(-1);
     const frames = input.frames.filter(f => first && last && f.at >= first.at - 500 && f.at <= last.at + 500);
@@ -14,9 +15,9 @@ export function privateReport(input: { readonly scenario: PrivateScenario; reado
         || frames[frames.length - 1].at < last.at || frames.some((f, i) => i > 0 && f.at - frames[i - 1].at > 500)) violations.push('authoritative-stream-gap');
     if (frames.some(f => f.players.some(p => p.username !== user))) violations.push('private-account-isolation');
     if (!frames.some(f => f.players.some(p => p.username === user))) violations.push('account-not-observed');
-    const hard = scenario === 'reward' ? null : privateHardCapture(events, frames, user);
+    const hard = scenario === 'reward' ? null : privateHardCapture(events, frames, user, fixture.clueId);
     if (scenario !== 'guardian' && scenario !== 'reward' && frames.some(f => f.guardians.some(n => n.active))) violations.push('guardian-in-blocked-scenario');
-    const open = events.find(e => e.kind === 'inventory-action' && e.action === 'Open' && e.itemId === 3545);
+    const open = events.find(e => e.kind === 'inventory-action' && e.action === 'Open' && e.itemId === fixture.casketId);
     const rewardEvents = open ? events.filter(e => e.at >= open.at) : [];
     const manifest = rewardEvents.find(e => e.modalId === 6960 && e.manifest.length > 0);
     const rewardCapture: RewardCapture = {

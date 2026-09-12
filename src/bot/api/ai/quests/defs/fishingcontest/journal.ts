@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -15,15 +16,6 @@ export const FC_STAGE = {
     WON_COMP: 4,
     COMPLETE: 5
 } as const;
-
-/** Colour tags become a space, so no needle may span a tag boundary. */
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 // Why: the page is rebuilt from scratch at each stage rather than struck through, but its first two lines are shared from `started` on, so these needles are the lines that differ.
 const STAGES: readonly [string, number][] = [

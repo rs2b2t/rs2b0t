@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../journalText.js';
 // docs/QUESTS.md
 import { actions, reader } from '../../../../adapter/ClientAdapter.js';
 import { DirectNavigator } from '../../../../event/webwalk/DirectNavigator.js';
@@ -116,14 +117,6 @@ const SEASON_ATTEMPTS = 3;
 const OFFER_ATTEMPTS = 3;
 /** `p_delay(1) + p_delay(0) + p_delay(1) + p_delay(4)` in the hand-over, plus a tick of slack. */
 const CUTSCENE_TICKS = 8;
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 // Why: the pages are cumulative, so the newest sentence has to be tested before the ones it was appended to.
 export function parseGertrudesCatJournal(lines: readonly string[] | string): QuestProgress | undefined {

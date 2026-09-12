@@ -1,3 +1,4 @@
+import { normalizeJournal } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -20,13 +21,8 @@ export const DIG_STAGE = {
 
 // Why: the leading space is load-bearing, the purple student's "She gave me an answer" contains the green and orange students' "he gave me an answer", and without a word boundary one answered errand reads as two.
 
-/** Colour tags become a space, so no needle may span a tag boundary. */
 function normalize(lines: readonly string[] | string): string {
-    return ' ' + (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
+    return ' ' + normalizeJournal(lines);
 }
 
 // Why: every earlier line stays on the page struck through, and its words do not change when it does, so this order is the only thing separating a finished leg from the current one.

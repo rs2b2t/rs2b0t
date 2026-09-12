@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../journalText.js';
 // docs/QUESTS.md
 import { actions, reader } from '../../../../adapter/ClientAdapter.js';
 import { DirectNavigator } from '../../../../event/webwalk/DirectNavigator.js';
@@ -85,14 +86,6 @@ const HOPS: LadderHop[] = [
     { stand: CELLAR_TOP, locName: 'Ladder', op: 'Climb-down', arrive: CELLAR_FOOT },
     { stand: CELLAR_FOOT, locName: 'Ladder', op: 'Climb-up', arrive: CELLAR_TOP }
 ];
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 function allPlaced(): Set<string> {
     return new Set(COLOURS.map(c => `placed-${c}`));

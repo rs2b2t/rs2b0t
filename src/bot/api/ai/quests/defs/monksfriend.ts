@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../journalText.js';
 // docs/QUESTS.md
 import { actions, reader } from '../../../../adapter/ClientAdapter.js';
 import Tile from '../../../../geometry/Tile.js';
@@ -74,14 +75,6 @@ const CEDRIC: NpcStop = {
 const START = omad(["Why can't you sleep, what's wrong?", 'Can I help at all?']);
 const HAND_IN_BLANKET = omad([]);
 const ASK_FOR_CEDRIC = omad(["Who's Brother Cedric?", 'Where should I look?']);
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 // Why: every page from stage 20 on repeats the blanket line, so the newest marker has to be tested first.
 const JOURNAL_MARKERS: [string, number][] = [

@@ -1,7 +1,7 @@
 import { assessHardClue, type HardClueSample } from './jive-hard-clue-contract.js';
 import type { PrivateEvent, PrivateFrame } from './jive-private-types.js';
 
-export function privateHardCapture(events: readonly PrivateEvent[], frames: readonly PrivateFrame[], user: string) {
+export function privateHardCapture(events: readonly PrivateEvent[], frames: readonly PrivateFrame[], user: string, clueId = 3544) {
     const first = events.find(e => e.kind === 'solver-start') ?? events[0];
     const all = first ? [...first.inventory, ...first.bank] : [];
     const prep = { bankConfirmed: first?.bankConfirmed ?? false, attack: first?.attack ?? 0, lostCity: first?.lostCity ?? false,
@@ -16,7 +16,7 @@ export function privateHardCapture(events: readonly PrivateEvent[], frames: read
     const retainedIn = (frame: PrivateFrame) => {
         const player = frame.players.find(p => p.username === user);
         return frame.players.length === 1 && player !== undefined
-            && [...player.inventory, ...player.bank].filter(i => i.id === 3544).reduce((n, i) => n + i.count, 0) === 1;
+            && [...player.inventory, ...player.bank].filter(i => i.id === clueId).reduce((n, i) => n + i.count, 0) === 1;
     };
     const retainedAt = (at: number) => {
         const frame = orderedFrames.findLast(f => f.at <= at);
@@ -49,7 +49,7 @@ export function privateHardCapture(events: readonly PrivateEvent[], frames: read
     const resume = events.find(e => e.kind === 'host-resume');
     if (spawn && (!resume || !restored || restored.at > resume.at || resume.weaponId !== prep.hostWeaponId)) violations.push('restoration-before-host-resume');
     const observedFrames = orderedFrames.filter(f => f.at >= (events[0]?.at ?? Infinity) && f.at <= (events.at(-1)?.at ?? -Infinity));
-    if (!spawn && (events.some(e => !retainedAt(e.at) || (e.kind === 'inventory-action' && e.action === 'Drop' && e.itemId === 3544))
+    if (!spawn && (events.some(e => !retainedAt(e.at) || (e.kind === 'inventory-action' && e.action === 'Drop' && e.itemId === clueId))
         || observedFrames.some(f => !retainedIn(f)))) violations.push('blocked-clue-disposal');
     return { capture, ...report, violations, passed: report.passed && violations.length === 0 };
 }

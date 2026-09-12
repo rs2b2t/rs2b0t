@@ -1,4 +1,5 @@
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { filesUnder } from '../lib/content.js';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -12,12 +13,6 @@ const SSB_ORDER = [
     'wind_wave', 'water_wave', 'earth_wave', 'fire_wave'
 ];
 
-function filesUnder(root: string, ext: string): string[] {
-    return (readdirSync(root, { recursive: true }) as string[])
-        .filter(f => f.endsWith(ext))
-        .map(f => join(root, f))
-        .sort();
-}
 
 function loadObjDisplayNames(): Map<string, string> {
     const files = filesUnder(join(CONTENT, 'scripts'), '.obj');
