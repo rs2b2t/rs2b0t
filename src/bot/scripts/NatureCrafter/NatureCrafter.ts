@@ -137,7 +137,7 @@ export default class NatureCrafter extends TaskBot {
                 new DropLitter(this, false),
                 new GoBankPark(this),
                 // the note legs only exist on the long route; the short one carries unnoted essence
-                ...(this.conf.unnote ? [new PickupNotedEssence(this)] : []),
+                ...(this.conf.unnote ? [new PickupRunnerSupplies(this)] : []),
                 new DeliverEssence(this),
                 new ExitAltarForRestock(this),
                 ...(this.conf.unnote ? [new UnNoteEssence(this)] : []),
@@ -683,40 +683,42 @@ class GoBankPark implements Task {
     }
 }
 
-function groundNotedEss(): GroundItem | null {
+function groundRunnerSupplies(): GroundItem | null {
     return GroundItems.query()
-        .where(g => (g.name ?? '').toLowerCase() === ESSENCE.toLowerCase() && g.id !== ESSENCE_ID)
+        .where(g => g.id === 995 || ((g.name ?? '').toLowerCase() === ESSENCE.toLowerCase() && g.id !== ESSENCE_ID))
         .within(PICKUP_RANGE)
         .nearest();
 }
 
-class PickupNotedEssence implements Task {
+class PickupRunnerSupplies implements Task {
     private fails = 0;
     private blockedUntil = 0;
     constructor(private bot: NatureCrafter) {}
     validate(): boolean {
-        return !inTemple() && unnotedEssence() === 0 && !Trade.active() && Date.now() >= this.blockedUntil && groundNotedEss() !== null;
+        return !inTemple() && unnotedEssence() === 0 && !Trade.active() && Date.now() >= this.blockedUntil && groundRunnerSupplies() !== null;
     }
     async execute(): Promise<void> {
-        const drop = groundNotedEss();
+        const drop = groundRunnerSupplies();
         if (!drop) {
             return;
         }
-        this.bot.setStatus('picking up dropped noted essence');
-        this.bot.log(`noted essence on the ground (${drop.count}) — another runner died? picking it up`);
-        const before = notedEssence();
+        const label = drop.id === 995 ? 'coins' : 'noted essence';
+        const count = () => Inventory.items().filter(item => item.id === drop.id).reduce((sum, item) => sum + item.count, 0);
+        this.bot.setStatus(`picking up dropped ${label}`);
+        this.bot.log(`${label} on the ground (${drop.count}), picking it up`);
+        const before = count();
         const clicked = await drop.interact('Take');
         if (clicked) {
-            await Execution.delayUntil(() => notedEssence() > before, 8000);
+            await Execution.delayUntil(() => count() > before, 8000);
         }
-        if (notedEssence() > before) {
-            this.bot.log(`picked up ${notedEssence() - before} noted essence`);
+        if (count() > before) {
+            this.bot.log(`picked up ${count() - before} ${label}`);
             this.fails = 0;
             return;
         }
         // an unreachable/unpickable stack must not starve deliveries forever
         if (++this.fails >= 3) {
-            this.bot.log('could not pick the noted stack up (full pack? out of reach) — ignoring it for a while');
+            this.bot.log('could not pick the stack up (full pack? out of reach), ignoring it for a while');
             this.fails = 0;
             this.blockedUntil = Date.now() + 120_000;
         }
