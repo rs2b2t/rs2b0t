@@ -3,6 +3,16 @@ import type { Case } from './manifestTypes.js';
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
     {
+        id: 'flour-collector-310-live',
+        harness: 'flour-collector-310-live.ts',
+        covers: { scripts: ['FlourCollector'] },
+        status: 'vetted',
+        provenAt: '2624b0c7561ed0e91a5500184e72bf89ff3b23c3',
+        manual: true,
+        budgetMin: 12,
+        note: 'Fresh local account with Murder Mystery started and 30 banked pots. Withdraws unnoted pots, fills 28, banks flour at Seers and fills the next load; screenshots docs/e2e/issue-310*.png.'
+    },
+    {
         id: 'fisher-shilo-shopping-live',
         harness: 'fisher-shilo-shopping-live.ts',
         covers: { scripts: ['GatheringBot'] },

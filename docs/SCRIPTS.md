@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 61. Categories: 20.
+- Scripts: 62. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -13,7 +13,7 @@
 
 - [Agility](#agility) — 4
 - [Combat](#combat) — 12
-- [Cooking](#cooking) — 1
+- [Cooking](#cooking) — 2
 - [Crafting](#crafting) — 7
 - [Firemaking](#firemaking) — 1
 - [Fishing](#fishing) — 1
@@ -421,6 +421,12 @@ Bank cook loop — withdraw raw fish, cook it one at a time on the range nearest
 | `bankBooth` | string | `"Bank booth"` | Bank booth loc name |
 | `obstacle` | string | `"door, gate"` | Openable obstacles (contains) |
 | `leashRadius` | number (2–20) | `8` | Cook surface search radius (tiles) |
+
+### FlourCollector
+
+Fills banked empty pots at Sinclair Mansion and banks the flour at Seers. Requires Murder Mystery started.
+
+- Tags: `flour`, `supplies`, `banking`, `members`
 
 ## Crafting
 

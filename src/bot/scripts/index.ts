@@ -55,6 +55,7 @@ import BankFletcher, { SETTINGS as BANKFLETCHER_SETTINGS } from './BankFletcher/
 import BankSorter, { BANKSORTER_SETTINGS } from './BankSorter/BankSorter.js';
 import DartFletcher, { DART_FLETCHER_SETTINGS } from './DartFletcher/DartFletcher.js';
 import BoneBurier, { BONE_BURIER_SETTINGS } from './BoneBurier/BoneBurier.js';
+import FlourCollector from './FlourCollector/FlourCollector.js';
 import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker/FlaxPicker.js';
 import FlaxSpinner, { SETTINGS as FLAXSPINNER_SETTINGS } from './FlaxSpinner/FlaxSpinner.js';
 import FlaxAIO, { SETTINGS as FLAXAIO_SETTINGS } from './FlaxAIO/flaxaio.js';
@@ -557,6 +558,14 @@ ScriptRegistry.register({
     tags: ['prayer', 'bones', 'banking', 'afk'],
     settingsSchema: BONE_BURIER_SETTINGS,
     create: () => new BoneBurier()
+});
+
+ScriptRegistry.register({
+    name: 'FlourCollector',
+    description: 'Fills banked empty pots at Sinclair Mansion and banks the flour at Seers. Requires Murder Mystery started.',
+    category: 'Cooking',
+    tags: ['flour', 'supplies', 'banking', 'members'],
+    create: () => new FlourCollector()
 });
 
 ScriptRegistry.register({
