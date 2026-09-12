@@ -250,6 +250,7 @@ export default class AutoFighter extends TaskBot {
     private lastBankAt = Date.now();
     private xpAtStart = 0;
     died = false;
+    resumeAttack = false;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -323,6 +324,7 @@ export default class AutoFighter extends TaskBot {
                 if (food) {
                     const before = Skills.effective('hitpoints');
                     if (await food.interact('Eat')) {
+                        this.resumeAttack = true;
                         await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
                     }
                 }
@@ -500,6 +502,7 @@ class EatFood implements Task {
             if (!(await food.interact('Eat'))) {
                 return;
             }
+            this.bot.resumeAttack = true;
             await Execution.delayUntil(() => Skills.effective('hitpoints') > before || foodCount() === 0, 3000);
             if (Skills.effective('hitpoints') > before) {
                 this.bot.countEat();
@@ -831,19 +834,21 @@ class Fight implements Task {
     private findTarget() {
         const q = Npcs.query()
             .action('Attack')
-            .where(n => !n.inCombat && n.tile().distanceTo(ANCHOR) <= LEASH);
+            .where(n => (n.targetsMe() || !n.inCombat) && !n.targetsAnotherPlayer() && n.tile().distanceTo(ANCHOR) <= LEASH);
         const names = targetNames();
         if (names.length > 0) {
             q.name(...names);
         }
-        return q.nearest();
+        const targets = q.results().sort((a, b) => a.distance() - b.distance());
+        return targets.find(n => n.targetsMe()) ?? targets[0] ?? null;
     }
     private track(engaged: Npc): Npc | null {
         const names = targetNames();
         return Npcs.all().find(n => n.index === engaged.index && names.some(name => matchesEntityName(n.name, name))) ?? null;
     }
     validate(): boolean {
-        return !Game.inCombat() && !needEat() && this.findTarget() !== null;
+        const target = this.findTarget();
+        return !needEat() && target !== null && (!Game.inCombat() || (this.bot.resumeAttack && target.targetsMe()));
     }
     async execute(): Promise<void> {
         const target = this.findTarget();
@@ -851,6 +856,10 @@ class Fight implements Task {
             return;
         }
         this.bot.setStatus(`attacking ${target.name} at ${target.tile()}`);
+        if (this.bot.resumeAttack && target.targetsMe()) {
+            if (!(await target.interact('Attack'))) return;
+            this.bot.resumeAttack = false;
+        }
         const status = await Reach.entityOp({
             find: () => this.track(target),
             op: 'Attack',
@@ -865,6 +874,7 @@ class Fight implements Task {
         if (status !== 'done' || ChatDialog.canContinue()) {
             return;
         }
+        this.bot.resumeAttack = false;
         this.bot.setStatus('fighting');
         const deadline = performance.now() + 90_000;
         while (performance.now() < deadline) {
