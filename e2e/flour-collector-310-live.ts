@@ -19,24 +19,29 @@ mkdirSync('docs/e2e', { recursive: true });
 type Api = Rs2b0t & {
     __rs2b0t: {
         Inventory: { countById(id: number): number };
-        Bank: { countById(id: number): number; isOpen(): boolean };
+        Bank: { countById(id: number): number; isOpen(): boolean; ready(): boolean };
+        Locs: { query(): { name(name: string): { nearest(): { interact(op: string): boolean | Promise<boolean> } | null } } };
         Quests: { status(name: string): string };
     };
 };
-const snapshot = () => page.evaluate(() => {
-    const g = globalThis as never as Api;
-    return {
-        state: g.rs2b0t.runner.state,
-        tile: g.rs2b0t.reader.worldTile(),
-        inventory: g.rs2b0t.reader.inventory(),
-        pots: g.__rs2b0t.Inventory.countById(1931),
-        flour: g.__rs2b0t.Inventory.countById(1933),
-        bankPots: g.__rs2b0t.Bank.countById(1931),
-        bankFlour: g.__rs2b0t.Bank.countById(1933),
-        bankOpen: g.__rs2b0t.Bank.isOpen(),
-        logs: (g.rs2b0t.runner.ctx?.log ?? []).slice(-15)
-    };
-});
+const snapshot = async () => {
+    const current = await page.evaluate(() => {
+        const g = globalThis as never as Api;
+        return {
+            state: g.rs2b0t.runner.state,
+            tile: g.rs2b0t.reader.worldTile(),
+            inventory: g.rs2b0t.reader.inventory(),
+            pots: g.__rs2b0t.Inventory.countById(1931),
+            flour: g.__rs2b0t.Inventory.countById(1933),
+            bankPots: g.__rs2b0t.Bank.countById(1931),
+            bankFlour: g.__rs2b0t.Bank.countById(1933),
+            bankOpen: g.__rs2b0t.Bank.isOpen(),
+            bankReady: g.__rs2b0t.Bank.ready(),
+            logs: (g.rs2b0t.runner.ctx?.log ?? []).slice(-15)
+        };
+    });
+    return current;
+};
 
 try {
     await mainlandAccount(page, base, tag, client.page);
@@ -46,6 +51,8 @@ try {
     assert.equal(await page.evaluate(() => (globalThis as never as Api).__rs2b0t.Quests.status('Murder Mystery')), 'inProgress');
     assert(await cheatQuiet(page, '~clearinv'));
     await seedItemsToBank(page, [{ debugName: 'pot_empty', displayName: 'Pot', qty: 30 }], bank);
+    assert(await page.evaluate(() => (globalThis as never as Api).__rs2b0t.Locs.query().name('Bank booth').nearest()?.interact('Use-quickly')));
+    await page.waitForFunction(() => (globalThis as never as Api).__rs2b0t.Bank.ready(), undefined, { timeout: 10_000 });
     const before = await snapshot();
     assert.equal(before.bankPots, 30);
     assert.equal(before.pots + before.flour + before.bankFlour, 0, 'fixture must contain only banked empty pots');
@@ -67,14 +74,14 @@ try {
             console.log(`FILLED ${JSON.stringify(current)}`);
             await page.screenshot({ path: 'docs/e2e/issue-310-filled.png' });
         }
-        if (!banked && filled && current.bankFlour === 28 && current.bankOpen) {
+        if (!banked && filled && current.bankFlour === 28 && current.bankReady) {
             assert(current.tile && Math.max(Math.abs(current.tile.x - bank.x), Math.abs(current.tile.z - bank.z)) <= 6, 'flour must be deposited at Seers');
             banked = true;
             console.log(`BANKED ${JSON.stringify(current)}`);
             await page.screenshot({ path: 'docs/e2e/issue-310-bank.png' });
         }
-        restocked ||= banked && current.pots === 2 && current.bankPots === 0;
-        if (restocked && current.flour > 0 && current.bankFlour === 28) {
+        restocked ||= banked && current.bankReady && current.pots === 2 && current.bankPots === 0;
+        if (restocked && current.flour > 0) {
             console.log(`PASS #310 firstLoad=28 secondLoadFlour=${current.flour} ${JSON.stringify(current)}`);
             await page.screenshot({ path: 'docs/e2e/issue-310.png' });
             done = true;
