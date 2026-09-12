@@ -80,7 +80,7 @@ try {
             console.log(`BANKED ${JSON.stringify(current)}`);
             await page.screenshot({ path: 'docs/e2e/issue-310-bank.png' });
         }
-        restocked ||= banked && current.bankReady && current.pots === 2 && current.bankPots === 0;
+        restocked ||= banked && current.pots === 2 && current.flour === 0;
         if (restocked && current.flour > 0) {
             console.log(`PASS #310 firstLoad=28 secondLoadFlour=${current.flour} ${JSON.stringify(current)}`);
             await page.screenshot({ path: 'docs/e2e/issue-310.png' });
