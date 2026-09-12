@@ -771,7 +771,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'LeatherCrafter',
-    description: 'Needle-and-thread crafting loop — banks for leather and makes the best item your Crafting level allows for it',
+    description: 'Crafts the best leather item your Crafting level allows at the nearest bank. Buys missing thread from Dommik, Rommik, or the Fancy dress shop owner and returns to the same bank.',
     category: 'Crafting',
     tags: ['crafting', 'leather', 'dragonhide', 'banking', 'afk'],
     settingsSchema: CRAFTER_SETTINGS,
