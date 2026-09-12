@@ -5,8 +5,8 @@ import { cheatQuiet, deployIsolatedClient, launchBrowser, logout, parseArgs, set
 import { getServerVarQuiet, mainlandAccount, relog, startScript, teleTo } from './tutorial/harness.js';
 
 type Api = {
-    __rs2b0t: { Inventory: { count(name: string): number }; Quests: { status(name: string): string } };
-    rs2b0t: { reader: { worldTile(): { x: number; z: number; level: number } | null }; runner: { state: string; bot: { status: string } | null; ctx: { log: { msg: string }[] } | null } };
+    __rs2b0t: { Inventory: { count(name: string): number }; Quests: { status(name: string): string }; Skills: { effective(name: string): number }; Game: { inCombat(): boolean } };
+    rs2b0t: { reader: { worldTile(): { x: number; z: number; level: number } | null; npcs(): { name: string | null; distance: number }[] }; runner: { state: string; bot: { status: string } | null; ctx: { log: { msg: string }[] } | null } };
 };
 
 const { base, minutes } = parseArgs(process.argv.slice(2), { minutes: 6 });
@@ -17,6 +17,7 @@ const page = await browser.newPage();
 const snapshot = () => page.evaluate(() => {
     const g = globalThis as never as Api;
     return { tile: g.rs2b0t.reader.worldTile(), quest: g.__rs2b0t.Quests.status('Death Plateau'),
+        hp: g.__rs2b0t.Skills.effective('hitpoints'), combat: g.__rs2b0t.Game.inCombat(), npcs: g.rs2b0t.reader.npcs().filter(npc => npc.distance <= 8),
         map: g.__rs2b0t.Inventory.count('Secret way map'), combination: g.__rs2b0t.Inventory.count('Combination'),
         state: g.rs2b0t.runner.state, step: g.rs2b0t.runner.bot?.status, logs: g.rs2b0t.runner.ctx?.log.slice(-16).map(line => line.msg) ?? [] };
 });
@@ -50,6 +51,7 @@ try {
             printed = Date.now();
         }
         assert.equal(state.state, 'running', 'AIOQuester stayed active');
+        assert(tile && tile.x >= 2800 && tile.x <= 2920 && tile.z >= 3500 && tile.z <= 3650, 'scouting left the Death Plateau fixture area');
         await page.waitForTimeout(100);
     }
     assert(entered, 'AIOQuester reached the scout trigger zone');
