@@ -3,6 +3,14 @@ import type { Case } from './manifestTypes.js';
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
     {
+        id: 'catherby-sweep-687-live',
+        harness: 'catherby-sweep-687-live.ts',
+        covers: { scripts: ['GatheringBot'] },
+        status: 'unvetted',
+        budgetMin: 7,
+        note: 'starts within 28 tiles of camp with no visible fishing NPC and proves a shoreline sweep produces a real catch and Fishing XP'
+    },
+    {
         id: 'fisher-shilo-shopping-live',
         harness: 'fisher-shilo-shopping-live.ts',
         covers: { scripts: ['GatheringBot'] },
