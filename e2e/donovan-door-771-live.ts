@@ -89,6 +89,14 @@ try {
     let blocked = false;
     while (Date.now() < deadline) {
         const current = await snapshot();
+        if (current.npc && current.npc.z > 3576) {
+            if (current.doors.some(door => door.tile.z === 3577 && door.ops.includes('Open'))) await doorOp('Open');
+            assert(await teleTo(page, waiting, 0));
+            await page.waitForFunction(npcName => (globalThis as never as Api).__rs2b0t.reader.npcs().some(npc => npc.name === npcName
+                && npc.tile.z <= 3576 && npc.tile.level === 1), name, { timeout: Math.min(30_000, Math.max(1, deadline - Date.now())) }).catch(() => undefined);
+            console.log(`WAIT Donovan corridor ${JSON.stringify(await snapshot())}`);
+            continue;
+        }
         if (current.doors.some(door => door.tile.z === 3576 && door.ops.includes('Close'))) await doorOp('Close');
         assert(await teleTo(page, waiting, 0));
         const entered = await page.waitForFunction(npcName => (globalThis as never as Api).__rs2b0t.reader.npcs().some(npc => npc.name === npcName
