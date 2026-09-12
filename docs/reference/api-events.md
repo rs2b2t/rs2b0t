@@ -23,6 +23,13 @@ interface EventMap {
 this.on('skill.xp', e => { if (e.name === 'prayer') this.xp += e.delta; });
 ```
 
+## Hostile random events
+
+The shared random-event handler only flees when a nearby hostile is targeting our
+player and the player has a visible, positive combat damage splat. Nearby spawns,
+zero-damage hits, poison ticks, and attacks on other players do not trigger evasion.
+This includes angry strange plants; pickable plants are still handled normally.
+
 ---
 
 ## Settings
