@@ -21,6 +21,10 @@ export function openOp(actions: string[]): string | null {
     return actions.find(a => /^open/i.test(a)) ?? null;
 }
 
+export function closeOp(actions: string[]): string | null {
+    return actions.find(a => /^close/i.test(a)) ?? null;
+}
+
 export function towardDest(door: WorldTile, here: WorldTile, dest: WorldTile): boolean {
     const cheb = (a: WorldTile, b: WorldTile): number => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
     return cheb(door, dest) <= cheb(here, dest) + TOWARD_SLACK;
