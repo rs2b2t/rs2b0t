@@ -53,7 +53,8 @@ afterEach(() => {
     while (restores.length) restores.pop()!();
 });
 
-test('a Watchman facing us does not interrupt until a damaging hit arrives', async () => {
+test.each([-1, 32771, 32777])('a Watchman with faceEntity %i waits for damage then evades', async faceEntity => {
+    npcs[0].faceEntity = faceEntity;
     expect(RandomEvents.detect()).toBeNull();
     expect(await RandomEvents.handle(() => {})).toBe(false);
     expect(walks).toEqual([]);

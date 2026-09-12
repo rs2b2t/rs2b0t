@@ -74,28 +74,27 @@ describe('isHostileEventNpc', () => {
     });
 
     test.each(ids)('NPC %i waits for damage even when adjacent, targeting us, or in combat', id => {
-        expect(isHostileEventNpc(hostile(id, -1, 1), 3, false)).toBe(false);
-        expect(isHostileEventNpc(hostile(id), 3, false)).toBe(false);
-        expect(isHostileEventNpc(hostile(id, 32771, 1, true), 3, false)).toBe(false);
+        expect(isHostileEventNpc(hostile(id, -1, 1), false)).toBe(false);
+        expect(isHostileEventNpc(hostile(id), false)).toBe(false);
+        expect(isHostileEventNpc(hostile(id, 32771, 1, true), false)).toBe(false);
     });
 
     test.each(ids)('NPC %i triggers after damaging us without needing to receive a hit itself', id => {
-        expect(isHostileEventNpc(hostile(id), 3, true)).toBe(true);
+        expect(isHostileEventNpc(hostile(id), true)).toBe(true);
     });
 
-    test.each(ids)('NPC %i does not inherit damage from an unrelated fight', id => {
-        expect(isHostileEventNpc(hostile(id, -1), 3, true)).toBe(false);
-        expect(isHostileEventNpc(hostile(id, 32777, 1, true), 3, true)).toBe(false);
+    test.each(ids)('NPC %i triggers after damage even with missing or stale facing information', id => {
+        expect(isHostileEventNpc(hostile(id, -1), true)).toBe(true);
+        expect(isHostileEventNpc(hostile(id, 32777, 1, true), true)).toBe(true);
     });
 
-    test('the attacker must be within range and the local slot must be known', () => {
-        expect(isHostileEventNpc(hostile(431, 32771, 8), 3, true)).toBe(true);
-        expect(isHostileEventNpc(hostile(431, 32771, 9), 3, true)).toBe(false);
-        expect(isHostileEventNpc(hostile(431, 32767), -1, true)).toBe(false);
+    test('the hostile must be within range', () => {
+        expect(isHostileEventNpc(hostile(431, 32771, 8), true)).toBe(true);
+        expect(isHostileEventNpc(hostile(431, 32771, 9), true)).toBe(false);
     });
 
     test.each([1, 407, 409, 412, 437, 444, 452, 453])('non-hostile NPC %i never triggers evasion', id => {
-        expect(isHostileEventNpc(hostile(id), 3, true)).toBe(false);
+        expect(isHostileEventNpc(hostile(id), true)).toBe(false);
     });
 });
 

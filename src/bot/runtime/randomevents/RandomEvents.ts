@@ -58,16 +58,12 @@ export function isHostileEventNpc(
     npc: {
         id: number;
         distance: number;
-        faceEntity: number;
     },
-    selfSlot: number,
     playerDamaged: boolean
 ): boolean {
     return playerDamaged
-        && selfSlot >= 0
         && HOSTILE_EVENT_NPC_IDS.has(npc.id)
-        && npc.distance <= HOSTILE_ENGAGE_DISTANCE
-        && npc.faceEntity === 32768 + selfSlot;
+        && npc.distance <= HOSTILE_ENGAGE_DISTANCE;
 }
 
 /**
@@ -306,10 +302,9 @@ class RandomEventsImpl {
             }
         }
 
-        const selfSlot = reader.selfSlot();
         const playerDamaged = reader.takingDamage();
         for (const npc of npcs) {
-            if (isHostileEventNpc(npc, selfSlot, playerDamaged)) {
+            if (isHostileEventNpc(npc, playerDamaged)) {
                 return { kind: 'evade', name: npc.name?.toLowerCase() ?? 'event monster' };
             }
         }
@@ -510,7 +505,7 @@ class RandomEventsImpl {
                 return true;
             }
             if (plantStrategy(plant.actions()) === 'evade') {
-                return isHostileEventNpc(plant.snap, reader.selfSlot(), reader.takingDamage())
+                return isHostileEventNpc(plant.snap, reader.takingDamage())
                     ? await this.handleEvade(name, log)
                     : true;
             }
@@ -554,7 +549,7 @@ class RandomEventsImpl {
     private async handleEvade(name: string, log: (msg: string) => void): Promise<boolean> {
         const me = Game.tile();
         const threat = Npcs.query()
-            .where(n => (n.name?.toLowerCase() ?? '') === name && n.targetsMe())
+            .where(n => (n.name?.toLowerCase() ?? '') === name)
             .nearest();
         if (!me || !threat) {
             return false;

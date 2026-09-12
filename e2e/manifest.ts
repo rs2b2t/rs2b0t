@@ -912,6 +912,15 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'hostile-random-damage-live',
+        harness: 'hostile-random-damage-live.ts',
+        covers: { subsystems: ['random-events'] },
+        status: 'documented',
+        documentedIn: 'docs/how-to/verify-hostile-randoms.md',
+        budgetMin: 8,
+        note: 'eight hostile families ignore spawns and zero hits, then escape and return after positive damage with no target information; includes a natural Swarm attack'
+    },
+    {
         id: 'random-events-live',
         harness: 'random-events-live.ts',
         covers: { subsystems: ['random-events'] },
