@@ -1,4 +1,8 @@
 import { expect, test } from 'bun:test';
+import { existsSync, readFileSync } from 'node:fs';
+import { gunzipSync } from 'fflate';
+import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
+import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 import { decide } from '#/bot/api/ai/quests/defs/deathplateau/index.js';
 import { DP_FLAG, DP_STAGE } from '#/bot/api/ai/quests/defs/deathplateau/journal.js';
 import { DEATH_ITEM, TILE } from '#/bot/api/ai/quests/defs/deathplateau/areas.js';
@@ -40,4 +44,17 @@ test('scouting enters the trigger zone instead of stopping south of it', async (
     } finally {
         for (const restore of restores.reverse()) restore();
     }
+});
+
+const pack = 'out/collision.lcnav.gz';
+
+test.skipIf(!existsSync(pack))('scout anchor is reachable inside the trigger through the stile', () => {
+    const finder = new PathFinder(gunzipSync(readFileSync(pack)));
+    loadDefaultNavEdges(finder);
+    expect(finder.walkable(TILE.SCOUT.x, TILE.SCOUT.z, TILE.SCOUT.level)).toBe(true);
+    const route = finder.findPath(TILE.TENZING_BACK, TILE.SCOUT, undefined, 100_000);
+    expect(route.ok).toBe(true);
+    if (!route.ok) throw new Error('scout route unavailable');
+    expect(route.waypoints.at(-1)).toEqual({ x: TILE.SCOUT.x, z: TILE.SCOUT.z, level: TILE.SCOUT.level });
+    expect(route.hops.some(hop => hop.kind === 'shortcut' && hop.locId === 3730)).toBe(true);
 });

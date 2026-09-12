@@ -59,7 +59,7 @@ export const TILE = {
     SABA_INSIDE: new Tile(2270, 4759, 0),
     SABA_EXIT: new Tile(2269, 4752, 0),
     STONE_STAND: new Tile(2894, 3563, 0),
-    SCOUT: new Tile(2864, 3608, 0),
+    SCOUT: new Tile(2864, 3609, 0),
     /** Castle large door to the courtyard (level 0). */
     CASTLE_DOOR: new Tile(2899, 3558, 0),
     /** Grey board-game staircase stand (Climb-up to L1 near Eohric). loc (2897,3566). */
