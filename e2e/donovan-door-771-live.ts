@@ -120,12 +120,15 @@ try {
     assert(after.logs.some(line => line.msg.includes("closing 'Door' at (2744,3576)")), 'Reach never closed the swung leaf');
     assert(after.edgeOpen, 'door edge still blocks the bedroom');
     assert(after.texts.some(text => /here you go/i.test(text)), 'Donovan clue dialogue never arrived');
+    await page.mouse.click(620, 489);
+    await page.waitForTimeout(200);
     await page.screenshot({ path: 'docs/e2e/issue-771.png' });
     await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.resume());
     await page.waitForFunction(() => {
         const g = globalThis as never as Api;
         return !g.rs2b0t.reader.inventory().some(item => item.id === 2855)
-            && g.rs2b0t.reader.chat(15).some(line => /Donovan has given you another clue scroll/i.test(line.text));
+            && g.rs2b0t.reader.inventory().some(item => item.name === 'Clue scroll' && item.id !== 2855)
+            && g.rs2b0t.runner.ctx?.log.some(line => line.msg === '[clue] step done');
     }, undefined, { timeout: 15_000 });
     console.log(`PROGRESSED ${JSON.stringify(await snapshot())}`);
     assert.deepEqual(errors, [], 'browser errors');
