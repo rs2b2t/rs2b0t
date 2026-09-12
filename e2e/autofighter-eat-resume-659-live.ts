@@ -7,7 +7,7 @@ type Api = {
         Skills: { xp(name: string): number; effective(name: string): number };
         Npcs: { all(): { index: number; name: string | null; targetsMe(): boolean }[] };
     };
-    __damageWatch?: { hits: number[]; timer: number };
+    __damageWatch?: { hits: number[]; timer: number; sample(): void };
     rs2b0t: { client: { localPlayer: { damageValues: Int32Array; damageTypes: Int32Array; damageCycles: Int32Array } | null }; runner: { state: string; ctx: { log: { msg: string }[] } | null } };
 };
 
@@ -18,6 +18,7 @@ const browser = await launchBrowser();
 const page = await browser.newPage();
 const snapshot = () => page.evaluate(() => {
     const g = globalThis as never as Api;
+    g.__damageWatch?.sample();
     return {
         hp: g.__rs2b0t.Skills.effective('hitpoints'),
         xp: g.__rs2b0t.Skills.xp('attack'),
@@ -54,21 +55,23 @@ try {
     }, start.xp, { timeout: 90_000 });
     const fighting = await snapshot();
     console.log('FIGHTING', JSON.stringify(fighting));
+    await page.screenshot({ path: 'docs/e2e/issue-659-before.png' });
     await page.evaluate(() => {
         const g = globalThis as never as Api;
         const player = g.rs2b0t.client.localPlayer;
         if (!player) throw new Error('missing local player');
         const seen = new Set(Array.from(player.damageCycles, (cycle, i) => `${i}:${cycle}`));
         const hits: number[] = [];
-        const timer = window.setInterval(() => {
+        const sample = () => {
             for (let i = 0; i < player.damageCycles.length; i++) {
                 const stamp = `${i}:${player.damageCycles[i]}`;
                 if (seen.has(stamp)) continue;
                 seen.add(stamp);
                 if (player.damageTypes[i] === 1 && player.damageValues[i] > 0) hits.push(player.damageValues[i]);
             }
-        }, 50);
-        g.__damageWatch = { hits, timer };
+        };
+        const timer = window.setInterval(sample, 50);
+        g.__damageWatch = { hits, timer, sample };
     });
     await cheatQuiet(page, '~stat_drain hitpoints 21 0', 0);
     await page.waitForFunction(food => (globalThis as never as Api).__rs2b0t.Inventory.count('Trout') < food, fighting.food, { timeout: 20_000 });
@@ -90,6 +93,7 @@ try {
         if (snap.state !== 'running') throw new Error(`AutoFighter stopped: ${snap.state}`);
     }
     if (!resumed) throw new Error('no attack XP against the original guard after eating');
+    await page.screenshot({ path: 'docs/e2e/issue-659-after.png' });
     console.log('PASS: AutoFighter ate and resumed attacking without another damaging hit');
 } finally {
     await page.evaluate(() => window.clearInterval((globalThis as never as Api).__damageWatch?.timer)).catch(() => undefined);
