@@ -6,7 +6,8 @@ export const CASES: readonly Case[] = [
         id: 'nature-runner-coins-739-live',
         harness: 'nature-runner-coins-739-live.ts',
         covers: { scripts: ['NatureCrafter'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: '39e3095468c329823aabd554db5455c2cef02401',
         budgetMin: 3,
         note: 'drops 450 Coins outside the altar and proves the runner takes that ground stack into inventory'
     },
