@@ -3,6 +3,15 @@ import type { Case } from './manifestTypes.js';
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
     {
+        id: 'donovan-door-771-live',
+        harness: 'donovan-door-771-live.ts',
+        covers: { subsystems: ['nav', 'clues'] },
+        status: 'unvetted',
+        manual: true,
+        budgetMin: 10,
+        note: 'Exclusive local door run. Waits for Donovan to enter his natural pocket, opens the real bedroom door, proves collision blocks him, then Reach closes the leaf and reaches real dialogue; screenshots docs/e2e/issue-771*.png.'
+    },
+    {
         id: 'fisher-shilo-shopping-live',
         harness: 'fisher-shilo-shopping-live.ts',
         covers: { scripts: ['GatheringBot'] },
