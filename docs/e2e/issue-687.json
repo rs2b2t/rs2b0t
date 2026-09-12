@@ -1,0 +1,210 @@
+{
+  "issue": 687,
+  "result": "PASS",
+  "at": "2026-09-12T15:42:48.998Z",
+  "sourceCommit": "adeab3c5186429fcd01479bb1180b488a552dbf5",
+  "before": {
+    "tile": {
+      "x": 2819,
+      "z": 3437,
+      "level": 0
+    },
+    "tick": 58,
+    "xp": 737627,
+    "fish": 0,
+    "tool": 1,
+    "spots": [],
+    "state": "idle",
+    "logs": []
+  },
+  "sweep": {
+    "tile": {
+      "x": 2819,
+      "z": 3437,
+      "level": 0
+    },
+    "tick": 59,
+    "xp": 737627,
+    "fish": 0,
+    "tool": 1,
+    "spots": [],
+    "state": "running",
+    "status": "fish: sweeping to (2845, 3431, 0)",
+    "logs": [
+      "Fisher started",
+      "combat: Auto Retaliate off (gather — flee, do not fight)",
+      "location: Catherby; bank (2809, 3441, 0)",
+      "gather: 'Fishing spot' (Harpoon + pair 'Cage') leash 80 @ (2845, 3431, 0); banking raw when full",
+      "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+      "  path: cost 26, 14 waypoints, expanded 818, worker 2.3ms, hops=0"
+    ]
+  },
+  "caught": {
+    "tile": {
+      "x": 2853,
+      "z": 3424,
+      "level": 0
+    },
+    "tick": 100,
+    "xp": 737727,
+    "fish": 1,
+    "tool": 1,
+    "spots": [
+      {
+        "index": 2177,
+        "id": 322,
+        "anim": -1,
+        "name": "Fishing spot",
+        "level": 0,
+        "tile": {
+          "x": 2838,
+          "z": 3431,
+          "level": 0
+        },
+        "distance": 15,
+        "ops": [
+          "Net",
+          null,
+          "Harpoon",
+          null,
+          null
+        ],
+        "inCombat": false,
+        "health": 0,
+        "totalHealth": 0,
+        "faceEntity": -1
+      },
+      {
+        "index": 2170,
+        "id": 320,
+        "anim": -1,
+        "name": "Fishing spot",
+        "level": 0,
+        "tile": {
+          "x": 2844,
+          "z": 3429,
+          "level": 0
+        },
+        "distance": 9,
+        "ops": [
+          "Net",
+          null,
+          "Bait",
+          null,
+          null
+        ],
+        "inCombat": false,
+        "health": 0,
+        "totalHealth": 0,
+        "faceEntity": -1
+      },
+      {
+        "index": 2174,
+        "id": 322,
+        "anim": -1,
+        "name": "Fishing spot",
+        "level": 0,
+        "tile": {
+          "x": 2845,
+          "z": 3429,
+          "level": 0
+        },
+        "distance": 8,
+        "ops": [
+          "Net",
+          null,
+          "Harpoon",
+          null,
+          null
+        ],
+        "inCombat": false,
+        "health": 0,
+        "totalHealth": 0,
+        "faceEntity": -1
+      },
+      {
+        "index": 2175,
+        "id": 321,
+        "anim": -1,
+        "name": "Fishing spot",
+        "level": 0,
+        "tile": {
+          "x": 2853,
+          "z": 3423,
+          "level": 0
+        },
+        "distance": 1,
+        "ops": [
+          "Cage",
+          null,
+          "Harpoon",
+          null,
+          null
+        ],
+        "inCombat": false,
+        "health": 0,
+        "totalHealth": 0,
+        "faceEntity": -1
+      },
+      {
+        "index": 2173,
+        "id": 321,
+        "anim": -1,
+        "name": "Fishing spot",
+        "level": 0,
+        "tile": {
+          "x": 2855,
+          "z": 3423,
+          "level": 0
+        },
+        "distance": 2,
+        "ops": [
+          "Cage",
+          null,
+          "Harpoon",
+          null,
+          null
+        ],
+        "inCombat": false,
+        "health": 0,
+        "totalHealth": 0,
+        "faceEntity": -1
+      },
+      {
+        "index": 2171,
+        "id": 320,
+        "anim": -1,
+        "name": "Fishing spot",
+        "level": 0,
+        "tile": {
+          "x": 2860,
+          "z": 3426,
+          "level": 0
+        },
+        "distance": 7,
+        "ops": [
+          "Net",
+          null,
+          "Bait",
+          null,
+          null
+        ],
+        "inCombat": false,
+        "health": 0,
+        "totalHealth": 0,
+        "faceEntity": -1
+      }
+    ],
+    "state": "running",
+    "status": "Harpoon Fishing spot at (2853, 3423, 0)",
+    "logs": [
+      "Fisher started",
+      "combat: Auto Retaliate off (gather — flee, do not fight)",
+      "location: Catherby; bank (2809, 3441, 0)",
+      "gather: 'Fishing spot' (Harpoon + pair 'Cage') leash 80 @ (2845, 3431, 0); banking raw when full",
+      "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+      "  path: cost 26, 14 waypoints, expanded 818, worker 2.3ms, hops=0",
+      "  arrived (4 clicks)"
+    ]
+  }
+}

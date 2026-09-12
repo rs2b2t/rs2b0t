@@ -67,6 +67,7 @@ export const FISHING_LOCATIONS: FishingLocation[] = (
             // Long shore hops: spots reach past ~72, beyond the old pin-disk radius.
             campRadius: 80,
             chaseRadius: 28,
+            sweep: [new Tile(2845, 3431, 0), new Tile(2855, 3428, 0)],
             verified: true,
             resources: ['mackerel', 'cod', 'bass', 'tuna', 'lobster', 'swordfish', 'shark'],
             // rangeStand filled by withCampCook (Catherby bank-house Range)
