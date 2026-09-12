@@ -282,13 +282,13 @@ describe('LeatherCrafter bank withdrawals', () => {
         expect(logs).toContain('bank inventory view not ready — retrying');
     });
 
-    test('stops only when a loaded bank proves thread is missing', async () => {
+    test('stops when neither thread nor coins are available', async () => {
         inventoryCounts.set(NEEDLE, 1);
         bankContents = [snapshot(LEATHER, 500, 3)];
 
         await runBankLeg();
 
-        expect(stops).toEqual(['no thread in the bank']);
+        expect(stops).toEqual(['no thread or coins in the bank']);
         expect(clickedIds).toEqual([]);
     });
 });

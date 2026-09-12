@@ -3,6 +3,16 @@ import type { Case } from './manifestTypes.js';
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
     {
+        id: 'leather-thread-279-live',
+        harness: 'leather-thread-279-live.ts',
+        covers: { scripts: ['LeatherCrafter'] },
+        status: 'vetted',
+        provenAt: '5b423ccaa000b99bbb0b9a900e337755c6684d4e',
+        manual: true,
+        budgetMin: 10,
+        note: 'Fresh local account; no thread, banked leather and coins at Varrock West. Actual nearest-shop purchase, original-bank return and Crafting XP; screenshots docs/e2e/issue-279*.png.'
+    },
+    {
         id: 'fisher-shilo-shopping-live',
         harness: 'fisher-shilo-shopping-live.ts',
         covers: { scripts: ['GatheringBot'] },
