@@ -121,6 +121,14 @@ export const CASES: readonly Case[] = [
         note: 'pauses and resumes in the middle of a walk and proves one loop body comes back, not two (#580 regression)'
     },
     {
+        id: 'autofighter-eat-resume-659-live',
+        harness: 'autofighter-eat-resume-659-live.ts',
+        covers: { scripts: ['AutoFighter'] },
+        status: 'unvetted',
+        budgetMin: 5,
+        note: 'eats during combat and gains attack XP against the same guard without another damaging hit'
+    },
+    {
         id: 'autofighter-bank-resume-live',
         harness: 'autofighter-bank-resume-live.ts',
         covers: { scripts: ['AutoFighter'] },
