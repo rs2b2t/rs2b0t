@@ -1,0 +1,79 @@
+{
+  "issue": 593,
+  "result": "PASS",
+  "at": "2026-09-12T15:44:42.021Z",
+  "sourceCommit": "2773b993e38a40c737beb2c34901238f28632dbb",
+  "before": {
+    "held": {
+      "Air rune": 0,
+      "Earth rune": 0,
+      "Fire rune": 0,
+      "Law rune": 0,
+      "Water rune": 0
+    },
+    "bank": {
+      "Air rune": 0,
+      "Earth rune": 0,
+      "Fire rune": 0,
+      "Law rune": 0,
+      "Water rune": 0
+    },
+    "bankOpen": false,
+    "magic": 45,
+    "food": 0,
+    "slots": 1,
+    "state": "stopped",
+    "logs": [
+      "previous run of 'HarnessVerifyBank_1789227863917' ended (stopped) \u2014 harness stop",
+      "HarnessVerifyBank_1789227874416 started",
+      "stopping \u2014 harness stop",
+      "stopped \u2014 harness stop"
+    ]
+  },
+  "after": {
+    "held": {
+      "Air rune": 100,
+      "Earth rune": 20,
+      "Fire rune": 20,
+      "Law rune": 20,
+      "Water rune": 20
+    },
+    "bank": {
+      "Air rune": 400,
+      "Earth rune": 480,
+      "Fire rune": 480,
+      "Law rune": 480,
+      "Water rune": 480
+    },
+    "bankOpen": true,
+    "magic": 45,
+    "food": 10,
+    "slots": 22,
+    "state": "running",
+    "logs": [
+      "previous run of 'HarnessVerifyBank_1789227874416' ended (stopped) \u2014 harness stop",
+      "ClueSolver started",
+      "ClueSolver \u2014 watching the pack for easy clue scrolls/caskets, food 'Trout'",
+      "[clue] banking loot at the Varrock West bank ((3185, 3440, 0)) before solving",
+      "[clue] taking 10 Trout for the trail (a grind load is 20)",
+      "[clue] trail pack: 10 Trout, 5/5 runes for varrock/lumbridge/falador/camelot, 6 slots free",
+      "[clue] leg 1 \u2014 solving trail_clue_hard_riddle012 (talk Hans) [2792]",
+      "[clue] nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+    ]
+  },
+  "verifiedSeedBank": {
+    "Air rune": 500,
+    "Earth rune": 500,
+    "Fire rune": 500,
+    "Law rune": 500,
+    "Water rune": 500,
+    "Coins": 5000,
+    "Trout": 30,
+    "Spade": 1,
+    "Sextant": 1,
+    "Watch": 1,
+    "Chart": 1,
+    "Shantay pass": 1
+  },
+  "seedVerification": "seedItemsToBank opened the real bank and verified these counts before closing it. The before snapshot was taken with the bank closed."
+}

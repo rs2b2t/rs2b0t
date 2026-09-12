@@ -6,7 +6,8 @@ export const CASES: readonly Case[] = [
         id: 'clue-rune-budget-593-live',
         harness: 'clue-rune-budget-593-live.ts',
         covers: { scripts: ['ClueSolver'], subsystems: ['clues'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: '2773b993e38a40c737beb2c34901238f28632dbb',
         budgetMin: 6,
         note: 'prepares a Hans clue from a real bank and proves 20 Law, 100 Air, 20 Earth, 20 Fire and 20 Water runes plus the ten-food cap'
     },
