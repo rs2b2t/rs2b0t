@@ -1,8 +1,9 @@
 import * as RealInventory from '#/bot/api/inventory/Inventory.js';
-import { expect, test, describe, beforeEach, afterAll } from 'bun:test';
+import { expect, test, describe, beforeEach, afterEach, afterAll } from 'bun:test';
 
 import { actions, reader } from '#/bot/adapter/ClientAdapter.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
+import { EventSignal } from '#/bot/api/execution/EventSignal.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
 import { ChatDialog } from '#/bot/api/ui/dialogue/ChatDialog.js';
@@ -172,5 +173,78 @@ describe('per-clue required items (2811 Baxtorian Falls rope)', () => {
         invNames = ['Spade', 'Sextant', 'Watch', 'Chart', 'Rope'];
         await ClueExecutor.solveHeldClue(() => {});
         expect(walks).toContain('walk 2512,3467');
+    });
+});
+
+describe('opening a casket', () => {
+    const CASKET = 3549;
+    const NEXT_SCROLL = 2722;
+    const SHARK = 385;
+    const RUNE = 561;
+    const HERE = { x: 2394, z: 3488, level: 0 };
+    let ground: { id: number; name: string; taken: boolean }[];
+    let dropped: number;
+    let onOpen: () => void;
+    let yieldNow: boolean;
+    let restoreGroundHere: () => void;
+    let restoreEvents: () => void;
+    const nameOf = (id: number): string => (id === SHARK ? 'Shark' : id === CASKET ? 'Casket' : id === RUNE ? 'Nature rune' : id === NEXT_SCROLL ? 'Clue scroll' : 'Loot');
+    const packItem = (id: number) => ({
+        id, count: 1, name: nameOf(id),
+        interact: async (op: string): Promise<boolean> => {
+            if (op === 'Open') { inv = inv.filter(i => i !== CASKET); onOpen(); }
+            if (op === 'Drop') { inv.splice(inv.indexOf(id), 1); dropped++; ground.push({ id: SHARK, name: 'Shark', taken: false }); }
+            return true;
+        }
+    });
+    const groundItem = (g: { id: number; name: string; taken: boolean }) => ({
+        id: g.id, name: g.name, count: 1, tile: () => HERE,
+        interact: async (): Promise<boolean> => { g.taken = true; inv.push(g.id); return true; }
+    });
+    beforeEach(() => {
+        Object.assign(RealInventory.Inventory, {
+            items: () => inv.map(packItem),
+            first: () => null,
+            isFull: () => inv.length >= 28,
+            used: () => inv.length,
+            count: (name: string) => inv.filter(id => nameOf(id) === name).length
+        });
+        ground = []; dropped = 0; yieldNow = false; onOpen = () => {};
+        countDialog = false; pages = []; answered = []; continues = 0; walks = [];
+        restoreGroundHere = stubProps(GroundItems, {
+            query: () => ({ where: (fn: (g: unknown) => boolean) => ({ nearest: () => ground.filter(g => !g.taken).map(groundItem).find(g => fn(g)) ?? null }) }) as never
+        });
+        restoreEvents = stubProps(EventSignal, { pending: () => yieldNow });
+    });
+    afterEach(() => { restoreGroundHere(); restoreEvents(); });
+
+    test('a casket that hands back a scroll is the next leg, not a reward', async () => {
+        inv = [CASKET, SHARK, SHARK];
+        onOpen = () => { inv.push(NEXT_SCROLL); yieldNow = true; };
+        expect(await ClueExecutor.solveHeldClue(() => {})).toBe('yield');
+        expect(inv).toContain(NEXT_SCROLL);
+        expect(dropped).toBe(0);
+        expect(walks).toEqual([]);
+    });
+    test('the last casket is opened in place, Sharks make room and the spill comes off our tile', async () => {
+        inv = [CASKET, ...Array<number>(27).fill(SHARK)];
+        onOpen = () => { inv.push(RUNE); ground.push({ id: 995, name: 'Coins', taken: false }, { id: 1615, name: 'Uncut dragonstone', taken: false }); };
+        const log: string[] = [];
+        expect(await ClueExecutor.solveHeldClue(m => log.push(m))).toBe('done');
+        expect(ground.filter(g => g.id !== SHARK).every(g => g.taken)).toBe(true);
+        expect(ground.filter(g => g.id === SHARK).some(g => g.taken)).toBe(false);
+        expect(dropped).toBe(2);
+        expect(inv).toContain(995);
+        expect(inv).toContain(1615);
+        expect(walks).toEqual([]);
+        expect(log.some(m => /took 'Coins'/.test(m))).toBe(true);
+    });
+    test('a full pack with no Shark leaves the spill and still finishes', async () => {
+        inv = [CASKET, ...Array<number>(27).fill(RUNE)];
+        onOpen = () => { inv.push(RUNE); ground.push({ id: 995, name: 'Coins', taken: false }); };
+        const log: string[] = [];
+        expect(await ClueExecutor.solveHeldClue(m => log.push(m))).toBe('done');
+        expect(ground[0].taken).toBe(false);
+        expect(log.some(m => /WARNING: 'Coins' is left on the ground/.test(m))).toBe(true);
     });
 });

@@ -465,6 +465,15 @@ export const CASES: readonly Case[] = [
         note: '`--site blue|black|heroes|gutanoth|iron|steel` picks the lair. The black run seeds Sharks and a Superantipoison and passes on the corridor stand, both spawns in view, with no health lost on a safespot. The heroes run sets heroquest itself and asserts no key leg: it casts through the pen fence and walks the drops out through the gate. The gutanoth run sets itwatchtower itself, talks past the Enclave guard, banks at Yanille on the Watchtower spell, and claims it held the stand rather than that nothing hit it, since the cave reaches the tile at range; `--stand n` picks one of its six, one per dragon, and the run also requires a greater demon killed off the same stand while a dragon was respawning. The iron and steel runs need the 289 sim: they set elenaquest for the Ardougne teleport, seed coins, a Rune axe, Antifire potions and the shield, and require Saniboch paid, the walk through the vines, stones, log and pipe, a dose drunk, a kill and a bank trip through Ardougne; the stands are open camps that each see most of one dragon\'s wander, since the breath is 0 through the shield with a dose up, and `--stand 2` is the south-west. `--style melee` there chases the dragon from the camp under Protect from Melee with the Dragon longsword on its stab style, and requires the overhead to go up'
     },
     {
+        id: 'jivedragons-clue-guardian-live',
+        harness: 'jivedragons-live.ts',
+        covers: { scripts: ['JiveDragons'], subsystems: ['clues'] },
+        status: 'unvetted',
+        args: ['--clue', 'guardian', '--minutes', '30', '--no-starve'],
+        budgetMin: 35,
+        note: 'The trail alone, on a hard coordinate clue guarded by a Saradomin Wizard on dry land at Feldip (2581,3030). Seeds the hard kit, Lost City with a relog, a Dragon dagger(p), Superantipoison and Sharks, and requires a dose drunk before the wizard shows, the casket dug up after it, and that casket opened where it stands with the trail moving on. The wizard melees under Protect from Magic and nineteen hits in twenty poison, so this is the antidote proof.'
+    },
+    {
         id: 'jivedemons-live',
         harness: 'jivedemons-live.ts',
         covers: { scripts: ['JiveDemons'] },

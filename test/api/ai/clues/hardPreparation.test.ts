@@ -95,7 +95,7 @@ test('stocks a bank-only kit and equips DDS before the executor', async () => {
     await new SolveClue(host).execute();
     expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
     expect(worn[0].id).toBe(1231);
-    expect(pack.filter(i => i.id === 385).length).toBe(20);
+    expect(pack.filter(i => i.id === 385).length).toBe(15);
     expect(pack.some(i => i.id === 2448)).toBe(true);
     expect(pack.some(i => i.id === bow.id)).toBe(true);
 });
@@ -129,9 +129,9 @@ test('casket-only execution needs no hard kit', async () => {
 
 test.each([
     { runeSlots: 5, stock: 30, food: 15, bankBow: true },
-    { runeSlots: 0, stock: 30, food: 20, bankBow: true },
-    { runeSlots: 0, stock: 20, food: 20, bankBow: true },
-    { runeSlots: 0, stock: 19, food: 19, bankBow: false }
+    { runeSlots: 0, stock: 30, food: 15, bankBow: false },
+    { runeSlots: 0, stock: 20, food: 15, bankBow: false },
+    { runeSlots: 0, stock: 19, food: 15, bankBow: false }
 ])('preserves restoration and mandatory items when preparing %j', async ({ runeSlots, stock, food, bankBow }) => {
     pack.push(item(995, 'Coins', 1000), item(1854, 'Shantay pass'));
     bank = bank.map(i => i.id === 385 ? { ...i, count: stock } : i);
@@ -166,6 +166,7 @@ test('allows an Entrana strip and equips again for a later guardian', async () =
     expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(2);
 });
 test('gives supply-needed one restock attempt and preserves the held clue', async () => {
+    bank = bank.map(i => i.id === 385 ? { ...i, count: 20 } : i);
     const task = new SolveClue(host);
     await task.execute();
     pack = pack.filter(i => i.id !== 385);

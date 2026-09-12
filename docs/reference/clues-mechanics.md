@@ -47,7 +47,7 @@ Some clues do not resolve to a location:
 
 ## Hard trail preparation
 
-Before starting a hard clue scroll, [`SolveClue.ts`](../../src/bot/api/ai/clues/SolveClue.ts) prepares at the host's initial bank when supplied, or the nearest known bank otherwise. The ready snapshot needs Attack 60, Lost City, an eligible DDS (item id 1231 or 1215), at least one Superantipoison dose and 15 Sharks. It equips the DDS, remembers the original weapon, takes the best available Superantipoison dose and stocks toward 20 Sharks while reserving required tool and teleport slots. A confirmed shortage stays blocked until the kit changes or the host explicitly retries.
+Before starting a hard clue scroll, [`SolveClue.ts`](../../src/bot/api/ai/clues/SolveClue.ts) prepares at the host's initial bank when supplied, or the nearest known bank otherwise. The ready snapshot needs Attack 60, Lost City, an eligible DDS (item id 1231 or 1215), at least one Superantipoison dose and 15 Sharks. It equips the DDS, remembers the original weapon, takes the best available Superantipoison dose and stocks 15 Sharks while reserving required tool and teleport slots. A confirmed shortage stays blocked until the kit changes or the host explicitly retries.
 
 The generic bank and Entrana rules remain in force: no reachable known bank blocks a hard trail, while an Entrana clue banks restricted gear and records it for restoration. A held casket without a clue scroll bypasses combat-kit preparation, but a hard casket still follows the reward bank flow before opening.
 
@@ -78,9 +78,7 @@ to pump, not park.
 
 ## Caskets and reward completion
 
-A hard casket uses the preferred preparation bank, or the nearest known bank when none was recorded. Before opening, the solver deposits other items while retaining Sharks, clues and caskets, then tracks the reward manifest across inventory and ground delivery, event yields and a nearby overflow bank trip. Completion is reported only after every manifest item is accounted for and gear banked for preparation or Entrana is restored. A terminal open, manifest, food, pickup or bank failure remains blocked with rewards pending; no automatic retry is promised, so the host must use its explicit retry path.
-
-These mechanics have source-level and automated-suite evidence. Private-server runtime acceptance is pending, so this section does not claim live acceptance.
+A hard trail is four to six caskets deep and the count lives in a varp the client never receives, so the solver opens every casket where it stands. A scroll coming back is the next leg. No scroll means the trail is done: the server delivers the reward in the same tick, into the pack and onto the tile for whatever does not fit, so the solver closes the reward interface, drops Sharks for room and takes every non-Shark item off its own tile.
 
 ## Puzzle boxes
 

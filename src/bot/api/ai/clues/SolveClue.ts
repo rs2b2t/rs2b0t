@@ -26,7 +26,7 @@ import { Bank } from '#/bot/api/bank/Bank.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
 import { Inventory } from '#/bot/api/inventory/Inventory.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
-import { ClueExecutor } from '#/bot/api/ai/clues/ClueExecutor.js';
+import { ClueExecutor, trailWalkOpts } from '#/bot/api/ai/clues/ClueExecutor.js';
 import { CASKET_IDS, CLUE_DB } from '#/bot/api/ai/clues/data/cluedb.js';
 import { ensureCoordTools, hasAllTrio, hasCoordClueHeld } from '#/bot/api/ai/clues/AcquireTools.js';
 import { SPADE_NAME, trailKit } from '#/bot/api/ai/clues/data/toolAcquire.js';
@@ -40,7 +40,6 @@ import { snapshotWorldState } from '#/bot/event/webwalk/worldStateLive.js';
 import { hardClueKit, DDS_IDS, SHARK_ID } from './hardClueKit.js';
 import { hardKitSnapshot, hardKitFingerprint, stockHardWeapon, stockHardSupplies } from './hardCluePreparation.js';
 import { sustainUntil } from './Guardian.js';
-import { distance } from './rewardAccounting.js';
 
 const BANK_NAME = 'Bank booth';
 const BANK_OP = 'Use-quickly';
@@ -104,7 +103,7 @@ export function walkToBank(tile: NavPoint, log: (m: string) => void): Promise<bo
     if (crossesKharazi(tile)) {
         return walkAcrossKharazi(tile, 3, log);
     }
-    return Traversal.walkResilient(tile, { radius: 3, attempts: 6, timeoutMs: 300_000, log });
+    return Traversal.walkResilient(tile, { ...trailWalkOpts(log, 3), attempts: 6, timeoutMs: 300_000 });
 }
 
 export class SolveClue implements Task {
@@ -115,9 +114,6 @@ export class SolveClue implements Task {
     private restoring = false;
     private retreatPending = false;
     private initialBankVisited = false;
-    private preferredRewardBank: NavPoint | null = null;
-    private rewardBank: NavPoint | null = null;
-    private rewardBlocked: string | null = null;
     private completionPending = false;
 
     private async retreatFromGuardian(): Promise<boolean> {
@@ -144,7 +140,6 @@ export class SolveClue implements Task {
     }
 
     retry(): void {
-        this.rewardBlocked = null;
         ClueExecutor.retryGuardian();
         this.blockedKit = null;
         this.blockedBankKit = null;
@@ -182,7 +177,7 @@ export class SolveClue implements Task {
     }
 
     validate(): boolean {
-        if (ClueExecutor.reward || this.rewardBlocked || this.completionPending) return true;
+        if (this.completionPending) return true;
         if (this.retreatPending) return true;
         if (this.strippedGear.length > 0 && (this.restoring || heldClueLikeId() === null)) return true;
         if (this.deathBlocked) return false;
@@ -206,7 +201,6 @@ export class SolveClue implements Task {
      * Why: hard-clue dig guardians are level-65 mages that keep hitting through Protect from Magic, so a trail without upkeep dies on a full pack.
      */
     private async eatIfHurt(): Promise<void> {
-        if (ClueExecutor.reward) return;
         const held = (): { name: string | null; interact(a: string): boolean | Promise<boolean> }[] =>
             Inventory.items().filter(i => this.hardTrail ? i.id === SHARK_ID : this.host.isFood(i.name ?? ''));
         const food = held();
@@ -231,8 +225,7 @@ export class SolveClue implements Task {
     }
 
     async execute(): Promise<void> {
-        if (this.rewardBlocked) return;
-        if (!ClueExecutor.reward && (this.completionPending || this.retreatPending || (this.strippedGear.length > 0 && (this.restoring || heldClueLikeId() === null)))) {
+        if (this.completionPending || this.retreatPending || (this.strippedGear.length > 0 && (this.restoring || heldClueLikeId() === null))) {
             const upkeep = Sustain.hook;
             Sustain.set(() => this.eatIfHurt());
             try {
@@ -307,11 +300,7 @@ export class SolveClue implements Task {
 
         this.status = 'solving';
         this.host.setStatus('solving clue trail');
-        const rewards = {
-            prepare: (id: number) => this.prepareReward(id),
-            food: (item: { name: string | null }) => this.host.isFood(item.name ?? '')
-        };
-        let outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`), rewards);
+        let outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`));
         if (outcome === 'supplies-needed') {
             this.bankedThisSolve = false;
             this.retreatPending = Game.inCombat();
@@ -319,7 +308,7 @@ export class SolveClue implements Task {
             if (await this.bankFirst()) {
                 this.retreatPending = false;
                 this.bankedThisSolve = true;
-                outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`), rewards);
+                outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`));
             } else if (this.blockedKit === null) {
                 this.status = 'waiting for hard kit bank';
                 return;
@@ -353,10 +342,6 @@ export class SolveClue implements Task {
             return;
         }
 
-        if (outcome === 'reward-pending') {
-            await this.continueReward();
-            return;
-        }
         if (outcome === 'yield') {
             this.status = 'event: yielding';
             return;
@@ -382,93 +367,10 @@ export class SolveClue implements Task {
 
     private finishTrail(): void {
         this.completionPending = false;
-        this.rewardBank = null;
-        this.preferredRewardBank = null;
         this.hardTrail = false;
         this.status = 'idle';
         this.host.setStatus('clue solved');
         this.host.log('[clue] trail complete');
-    }
-
-    private blockReward(reason: string): false {
-        this.rewardBlocked = reason;
-        this.status = `reward blocked: ${reason}`;
-        this.host.setStatus(`clue: ${this.status}`);
-        this.host.log(`[clue] ${this.status}; rewards remain pending`);
-        return false;
-    }
-
-    private async prepareReward(casketId: number): Promise<boolean> {
-        if (!CASKET_IDS[casketId]?.includes('_hard_')) return true;
-        const here = Game.tile();
-        const bank = this.preferredRewardBank ?? (here ? nearestBank(here)?.tile : null);
-        if (!bank || !(await walkToBank(bank, m => this.host.log(`[clue] ${m}`)))) {
-            return this.blockReward('no bank reached before opening');
-        }
-        if (!(await Bank.openNearest(BANK_NAME, BANK_OP)) || !(await Bank.waitReady())) {
-            return this.blockReward('bank not ready before opening');
-        }
-        const deposit = (_name: string, id: number): boolean => id !== SHARK_ID && CLUE_DB[id] === undefined && CASKET_IDS[id] === undefined;
-        await Bank.depositAllMatching(deposit);
-        if (!Bank.isOpen() || Inventory.items().some(i => deposit(i.name ?? '', i.id))) {
-            return this.blockReward('pre-open deposit incomplete');
-        }
-        this.rewardBank = Game.tile();
-        if (!this.rewardBank || !(await Bank.close()) || !(await Execution.delayUntil(() => !Bank.isOpen(), 3000))) {
-            return this.blockReward('bank did not close before opening');
-        }
-        return true;
-    }
-
-    private async continueReward(): Promise<void> {
-        const result = ClueExecutor.rewardResult;
-        if (!result || this.rewardBlocked) return;
-        this.status = 'collecting reward';
-        switch (result.kind) {
-            case 'complete': return;
-            case 'blocked':
-                this.blockReward(result.reason);
-                return;
-            case 'yield':
-                if (result.reason === 'return-to-tile' && result.tile) {
-                    if (!(await Traversal.walkResilient(result.tile, { radius: 0, attempts: 2, timeoutMs: 6000 }))) {
-                        this.blockReward('return to reward tile failed');
-                    }
-                }
-                return;
-            case 'needs-space': {
-                const tile = result.tile;
-                const bank = this.rewardBank ?? (tile ? nearestBank(tile)?.tile : null);
-                if (!tile || !bank || distance(tile, bank) > 8) {
-                    this.blockReward('no nearby bank for remaining rewards');
-                    return;
-                }
-                if (!(await walkToBank(bank, m => this.host.log(`[clue] ${m}`)))
-                    || !(await Bank.openNearest(BANK_NAME, BANK_OP)) || !(await Bank.waitReady())) {
-                    this.blockReward('reward bank unavailable');
-                    return;
-                }
-                const before = Inventory.free();
-                await Bank.depositAllMatching((_name, id) => CLUE_DB[id] === undefined && CASKET_IDS[id] === undefined);
-                if (!(await Execution.delayUntil(() => Bank.isOpen() && Inventory.free() > before, 3000))) {
-                    this.blockReward('reward deposit made no space');
-                    return;
-                }
-                if (!(await Bank.close()) || !(await Execution.delayUntil(() => !Bank.isOpen() && Inventory.free() > before, 3000))) {
-                    this.blockReward('reward bank close or space confirmation failed');
-                    return;
-                }
-                ClueExecutor.reward?.resumeAfterBank();
-                if (!(await Traversal.walkResilient(tile, { radius: 0, attempts: 2, timeoutMs: 6000 }))) {
-                    this.blockReward('return to reward tile failed');
-                }
-                return;
-            }
-            default: {
-                const exhaustive: never = result;
-                return exhaustive;
-            }
-        }
     }
 
     /**
@@ -607,7 +509,6 @@ export class SolveClue implements Task {
             this.host.setStatus('clue: initial bank is not ready');
             return false;
         }
-        if (initialBankPrepared) this.preferredRewardBank = Game.tile();
         if (this.hardTrail && hardClueKit(hardKitSnapshot(true)) !== 'ready') {
             this.status = `hard kit: ${hardClueKit(hardKitSnapshot(true))}`;
             this.blockHardKit();
@@ -817,10 +718,9 @@ export class SolveClue implements Task {
         this.host.log(`[clue] prayer ${Prayer.points()}/${Prayer.max()} — praying at the ${altar.name} altar (${altar.tile})`);
 
         const walked = await Traversal.walkResilient(altar.tile, {
-            radius: ALTAR_RADIUS,
+            ...trailWalkOpts(m => this.host.log(`  ${m}`), ALTAR_RADIUS),
             attempts: 4,
-            timeoutMs: ALTAR_WALK_MS,
-            log: m => this.host.log(`  ${m}`)
+            timeoutMs: ALTAR_WALK_MS
         });
         if (!walked) {
             this.host.log('[clue] could not reach the altar — starting the trail with the prayer we have');

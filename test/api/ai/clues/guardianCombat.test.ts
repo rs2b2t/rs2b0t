@@ -49,7 +49,7 @@ beforeEach(() => {
     spyOn(Game, 'inCombat').mockReturnValue(false);
     spyOn(Execution, 'delayUntil').mockImplementation(async fn => fn());
     spyOn(Execution, 'delayUntilTicks').mockImplementation(async fn => fn());
-    spyOn(Execution, 'delayTicks').mockImplementation(async () => { tick++; advance(); });
+    spyOn(Execution, 'delayTicks').mockImplementation(async n => { tick += n; advance(); });
     spyOn(Equipment, 'equip').mockImplementation(async name => {
         const dds = pack.find(i => i.name === name);
         if (!dds) return false;
@@ -236,4 +236,8 @@ test('accepts a guardian appearing on the final spawn-wait tick', async () => {
     const result = await fightGuardian('Saradomin Wizard', () => {}, protection);
 
     expect(result).toBe('killed');
+});
+test('holds the dig back until the potion delay has cleared on the server', async () => {
+    await new GuardianProtection().prepare();
+    expect(tick).toBe(3);
 });

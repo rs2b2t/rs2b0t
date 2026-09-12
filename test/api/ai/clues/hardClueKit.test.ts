@@ -29,6 +29,6 @@ test('allows the unpoisoned local DDS but no substitute', () => {
 });
 test('reserves the mandatory thirteen slots without lowering the minimum', () => {
     expect(hardTrailFoodTarget({ heldFood: 0, freeSlots: 15, reserveSlots: 0 })).toBe(15);
-    expect(hardTrailFoodTarget({ heldFood: 0, freeSlots: 21, reserveSlots: 1 })).toBe(20);
+    expect(hardTrailFoodTarget({ heldFood: 0, freeSlots: 21, reserveSlots: 1 })).toBe(15);
     expect(hardTrailFoodTarget({ heldFood: 0, freeSlots: 14, reserveSlots: 0 })).toBeNull();
 });

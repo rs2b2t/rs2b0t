@@ -765,6 +765,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
     }
 
     if (stage === DRAGON_STAGE.SPOKEN_OZIACH) {
+        if (inOracleChestRoom(snap.tile) && heldId(snap, DS_ID.MAP_ORACLE) > 0) {
+            return custom('leave the oracle chest room', log => openOracleMagicDoor(log, false));
+        }
         if (aboard(snap.tile)) {
             return custom('go ashore', leaveShip);
         }

@@ -352,6 +352,27 @@ describe('Dragon Slayer sources its own shopping at the point of use', () => {
         expect((step as { name: string }).name).toContain('chest under Ice Mountain');
     });
 
+    test.each([
+        { label: 'coins for Wormbrain', carried: [...afterMaze, DS_ID.MAP_ORACLE] },
+        { label: 'a banked maze key', carried: [DS_ID.MAP_MELZAR, DS_ID.MAP_ORACLE], banked: [DS_ID.MAZE_KEY] },
+        { label: 'an unread bank', carried: [DS_ID.MAP_ORACLE], bankKnown: false },
+        { label: 'the Oziach briefing', carried: [DS_ID.MAP_ORACLE], flags: ['needs-briefing'] },
+        { label: 'joining the map', carried: [...afterMaze, DS_ID.MAP_ORACLE, DS_ID.MAP_WORMBRAIN] }
+    ])('leaves the chest room before $label after looting', ({ label: _label, ...held }) => {
+        const step = decide(snapshot({ ...held, tile: { x: 3056, z: 9841, level: 0 } }));
+
+        expect(step).toMatchObject({ kind: 'custom', name: 'leave the oracle chest room' });
+    });
+
+    test('withdraws coins once the map piece is west of the magic door', () => {
+        const step = decide(snapshot({
+            carried: [...afterMaze, DS_ID.MAP_ORACLE],
+            tile: { x: 3050, z: 9840, level: 0 }
+        }));
+
+        expect(step).toMatchObject({ kind: 'withdraw', items: [{ name: 'Coins' }] });
+    });
+
     test('the hammer is bought before the anvil is visited', () => {
         expect(decide(snapshot({ carried: [DS_ID.MAP], ...boat }))).toMatchObject({ kind: 'buy', item: DS_ITEM.HAMMER });
     });

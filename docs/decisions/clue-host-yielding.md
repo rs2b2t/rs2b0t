@@ -10,7 +10,6 @@ type ClueOutcome =
   | 'done'
   | 'abandon'
   | 'yield'
-  | 'reward-pending'
   | 'supplies-needed'
   | 'dead'
   | 'guardian-lost';
@@ -35,11 +34,6 @@ executor session after the event clears. A guardian yield also retains its
 ownership and range instead of digging again to spawn another guardian. Failed
 revalidation returns `'dead'` or `'guardian-lost'`, and an exhausted combat kit
 returns `'supplies-needed'`.
-
-`'reward-pending'` keeps casket delivery and overflow collection in the clue task.
-A terminal reward failure remains blocked, with the pending rewards and completion
-state retained. No automatic retry is promised; the host must explicitly clear the
-block through its retry path.
 
 `Sustain.run()` is called every pass, so eating and other upkeep continue during a
 trail.

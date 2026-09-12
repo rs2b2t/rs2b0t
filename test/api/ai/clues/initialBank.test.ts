@@ -153,18 +153,3 @@ test('blocks the initial handoff when the bank opens without a ready snapshot', 
     expect(task['bankedThisSolve']).toBe(false);
     expect(pack[0]).toEqual(clue);
 });
-
-test('returns hard reward preparation to the initial Falador bank without repeating its hook', async () => {
-    spyOn(Bank, 'close').mockImplementation(async () => { open = false; return true; });
-    spyOn(ClueExecutor, 'solveHeldClue').mockImplementation(async (_log, rewards) => {
-        pack = [{ ...clue, id: 2724, name: 'Casket' }];
-        here = new Tile(3200, 3200, 0);
-        expect(await rewards?.prepare?.(2724)).toBe(true);
-        return 'yield';
-    });
-    const task = new SolveClue({ ...host, prepareInitialBank });
-    await task.execute();
-    expect(events).toEqual(['exit', 'open:2946,3369', 'deposit', 'walk:2946,3369', 'open:2946,3369', 'deposit']);
-    expect(pack.map(i => i.id)).toEqual([2724]);
-    expect(Sustain.hook).toBe(upkeep);
-});

@@ -28,7 +28,8 @@ export class GuardianProtection {
         if (!confirmed) return false;
         this.drankAt = tick;
         this.poisonMark = GameMessages.mark();
-        await Execution.delayTicks(1);
+        // Why: the potion's message_delay runs p_delay(1), which holds the player until tick+2, and OpHeldHandler drops a held op while delayed, so a Dig sent the tick after the dose lands never fires.
+        await Execution.delayTicks(3);
         return true;
     }
 

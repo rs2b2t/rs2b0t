@@ -43,7 +43,7 @@ export function trailFoodTarget(b: TrailFoodBudget): number {
 }
 
 export function hardTrailFoodTarget(b: Omit<TrailFoodBudget, 'hostWant'>): number | null {
-    const target = Math.min(20, b.heldFood + Math.max(0, b.freeSlots - b.reserveSlots));
+    const target = Math.min(15, b.heldFood + Math.max(0, b.freeSlots - b.reserveSlots));
     return target >= 15 ? target : null;
 }
 

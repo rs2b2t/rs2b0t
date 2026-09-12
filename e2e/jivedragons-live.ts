@@ -1,14 +1,14 @@
 /** Live proof for JiveDragons at the Taverley dragons, the Heroes' Guild pen, the Gu'Tanoth Enclave and the Brimhaven Dungeon metal dragons: --site --style --minutes --dusty --clue --leave --tick --no-starve.
  *  Why: supply.ts and combat.ts carry no unit tests because every function in them drives a live client, so this run is the only proof either of them works. */
 
-// Usage: [RUN_TAG=name] HEADED=1 bun e2e/jivedragons-live.ts [--base url] [--site blue|black|heroes|gutanoth|iron|steel] [--stand n] [--style melee|mage|range] [--minutes n] [--tick ms] [--dusty] [--clue] [--leave teleport|walk] [--no-starve]
+// Usage: [RUN_TAG=name] HEADED=1 bun e2e/jivedragons-live.ts [--base url] [--site blue|black|heroes|gutanoth|iron|steel] [--stand n] [--style melee|mage|range] [--minutes n] [--tick ms] [--dusty] [--clue [guardian]] [--leave teleport|walk] [--no-starve]
 import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 
 import type { Page } from 'playwright-core';
 
 import { deployIsolatedClient, launchBrowser, logout, setSettings, stopScript } from './lib/harness.js';
-import { cheatQuiet, clearChatDialogs, getServerVarQuiet, mainlandAccount, seedItemsToBank, startScript, teleTo, type BankSeedItem } from './tutorial/harness.js';
+import { cheatQuiet, clearChatDialogs, getServerVarQuiet, mainlandAccount, relog, seedItemsToBank, startScript, teleTo, type BankSeedItem } from './tutorial/harness.js';
 
 type Style = 'melee' | 'mage' | 'range';
 const STYLES: Style[] = ['melee', 'mage', 'range'];
@@ -18,8 +18,14 @@ type SiteArg = 'blue' | 'black' | 'heroes' | 'gutanoth' | 'iron' | 'steel';
 const SITES: SiteArg[] = ['blue', 'black', 'heroes', 'gutanoth', 'iron', 'steel'];
 const LEAVES: Leave[] = ['teleport', 'walk'];
 
+type ClueMode = 'off' | 'map' | 'guardian';
+interface ClueCase { debug: string; id: number; guardian: { casketId: number; wizard: string } | null }
 /** A hard map clue: the tier blue dragons drop, and one dig rather than a trail no run is long enough to finish. */
-const CLUE = { debug: 'trail_clue_hard_map001', id: 2722 };
+const MAP_CLUE: ClueCase = { debug: 'trail_clue_hard_map001', id: 2722, guardian: null };
+/** A hard coordinate clue with a Saradomin Wizard on it, on dry land at Feldip, so the trail meets the poisoned melee the wizard falls back to under Protect from Magic. */
+const GUARDIAN_CLUE: ClueCase = { debug: 'trail_clue_hard_sextant025', id: 3548, guardian: { casketId: 3549, wizard: 'Saradomin Wizard' } };
+/** Superantipoison doses by item id, so a drink shows as the weighted count going down. */
+const SUPERANTI_DOSES: readonly (readonly [number, number])[] = [[2448, 4], [181, 3], [183, 2], [185, 1]];
 
 interface Args {
     base: string;
@@ -31,7 +37,7 @@ interface Args {
     starve: boolean;
     deploy: boolean;
     leave: Leave;
-    clue: boolean;
+    clue: ClueMode;
     site: SiteArg;
     stand: number;
 }
@@ -51,7 +57,7 @@ function parse(argv: readonly string[]): Args {
         starve: true,
         deploy: true,
         leave: 'teleport',
-        clue: false,
+        clue: 'off',
         site: 'blue',
         stand: 1
     };
@@ -60,7 +66,11 @@ function parse(argv: readonly string[]): Args {
         if (flag === '--no-deploy') { out.deploy = false; continue; }
         if (flag === '--no-starve') { out.starve = false; continue; }
         if (flag === '--dusty') { out.dusty = true; continue; }
-        if (flag === '--clue') { out.clue = true; continue; }
+        if (flag === '--clue') {
+            out.clue = 'map';
+            if (argv[i + 1] === 'guardian') { out.clue = 'guardian'; i++; }
+            continue;
+        }
         const value = argv[++i];
         if (value === undefined) { break; }
         if (flag === '--base') { out.base = value; }
@@ -82,6 +92,9 @@ function parse(argv: readonly string[]): Args {
 }
 
 const args = parse(process.argv.slice(2));
+const CLUES_ON = args.clue !== 'off';
+const GUARDIAN = args.clue === 'guardian';
+const CLUE = GUARDIAN ? GUARDIAN_CLUE : MAP_CLUE;
 
 interface Point { x: number; z: number; level: number }
 
@@ -275,7 +288,9 @@ const BRIMHAVEN_KILL_MS = 720_000;
 const BANK_MS = 900_000;
 const SOAK_MS = 120_000;
 /** How long a hard trail can take before the milestones behind it are judged late. */
-const CLUE_DETOUR_MS = 900_000;
+const CLUE_DETOUR_MS = 1_500_000;
+/** The guardian trail's own legs: the prep bank, the walk to Feldip ending in the drink, the spawn on the dig, the fight and the second dig, then the casket opened where it stands. */
+const GUARDIAN_LEGS: [string, number][] = [['clue', 180_000], ['antidote', 1_200_000], ['guardian', 120_000], ['guardiankill', 300_000], ['casketopened', 180_000]];
 const STARVE_WAIT_MS = 180_000;
 const STARVE_BANK_MS = 900_000;
 /** How long after the harness sends its own ~hit a drop of that size is the harness rather than a breath. */
@@ -354,13 +369,17 @@ const CLUE_TOOLS: BankSeedItem[] = [
     { debugName: 'trail_sextant', displayName: 'Sextant', qty: 1 },
     { debugName: 'trail_watch', displayName: 'Watch', qty: 1 },
     { debugName: 'trail_chart', displayName: 'Chart', qty: 1 },
-    { debugName: 'coins', displayName: 'Coins', qty: 10_000 }
+    { debugName: 'coins', displayName: 'Coins', qty: 10_000 },
+    // Why: a hard trail is refused at the bank without Lost City, a Dragon dagger(p), a Superantipoison dose and 15 Sharks, the kit the Saradomin Wizard's poisoned melee under Protect from Magic demands.
+    { debugName: 'dragon_dagger_p', displayName: 'Dragon dagger(p)', qty: 1 },
+    { debugName: '4dose2antipoison', displayName: 'Superantipoison(4)', qty: 3 },
+    { debugName: 'shark', displayName: 'Shark', qty: 60 }
 ];
 
 // Why: the pack starts stocked so the first task is the key leg rather than a restock, which is what makes "one bank stop for a cold key" a number worth counting.
 // Why: leaveVia and solveClues both follow the flags rather than sitting on a fixed value, because the script ships with teleport and clues ON and the harness used to pin both to the opposite, so the shipped defaults were the two settings no run ever exercised.
 function kitFor(style: Style): Kit {
-    const common = { foodWithdraw: PACK_FOOD, panicHp: PANIC_PCT, foodReserve: 4, healTo: 90, site: SITE.key, stand: args.stand, teleStock: 2, buryBones: false, solveClues: args.clue, bankCommonJunk: false, [SITE.lootKey]: LOOT.join(', '), logDetail: 'Verbose', usePotions: false, leaveVia: args.leave, ...(SITE.antifire ? { antifireDoses: 3 } : {}), ...(SITE.axe !== null ? { axe: SITE.axe } : {}) };
+    const common = { foodWithdraw: PACK_FOOD, panicHp: PANIC_PCT, foodReserve: 4, healTo: 90, site: SITE.key, stand: args.stand, teleStock: 2, buryBones: false, solveClues: CLUES_ON, bankCommonJunk: false, [SITE.lootKey]: LOOT.join(', '), logDetail: 'Verbose', usePotions: false, leaveVia: args.leave, ...(SITE.antifire ? { antifireDoses: 3 } : {}), ...(SITE.axe !== null ? { axe: SITE.axe } : {}) };
     // Why: on a fee site melee chases the dragon and prays through the headbutts, so the trip carries Prayer flasks, wears the rune set, and swings the Dragon longsword on its stab style, which the pack's own rolls make the best one-handed damage against stab defence 50.
     if (style === 'melee') {
         const fee = SITE.fee > 0;
@@ -398,7 +417,7 @@ const WIELDED = kit.wielded ?? String(kit.settings['weapon'] ?? kit.settings['bo
 const bankSeed: BankSeedItem[] = [
     ...kit.bank,
     ...(args.dusty ? [{ debugName: 'dusty_key', displayName: 'Dusty key', qty: 1 }] : []),
-    ...(args.clue ? CLUE_TOOLS : [])
+    ...(CLUES_ON ? CLUE_TOOLS : [])
 ];
 
 function inLair(t: Point | null): boolean {
@@ -441,6 +460,12 @@ interface Sample {
     trips: number;
     looted: number;
     cluesSolved: number;
+    clueStatus: string;
+    /** Superantipoison doses held, every potion stage weighted. */
+    superanti: number;
+    wizards: { count: number; near: number };
+    casket: number;
+    scrolls: number;
     keyState: string;
     spotIdx: number;
     bankOpen: boolean;
@@ -457,7 +482,7 @@ interface Sample {
 }
 
 // Why: the black room has no baby dragon, so the roll list is empty rather than the site sharing a name with its adults.
-interface Probe { dustyId: number; jailKeyId: number; food: string; law: string; target: string; baby: string | null; filler: string | null }
+interface Probe { dustyId: number; jailKeyId: number; food: string; law: string; target: string; baby: string | null; filler: string | null; superanti: readonly (readonly [number, number])[]; casketId: number; wizard: string | null }
 
 interface Api {
     __rs2b0t: {
@@ -497,6 +522,14 @@ function sample(page: Page, probe: Probe): Promise<Sample> {
             trips: num('bankTrips'),
             looted: num('looted'),
             cluesSolved: num('cluesSolved'),
+            clueStatus: String((bot?.solveClue as { clueStatus?(): string } | undefined)?.clueStatus?.() ?? ''),
+            superanti: p.superanti.reduce((sum, [id, doses]) => sum + a.Inventory.countById(id) * doses, 0),
+            wizards: (() => {
+                const w = p.wizard === null ? [] : npcs.filter(n => n.name === p.wizard);
+                return { count: w.length, near: w.length === 0 ? -1 : Math.min(...w.map(n => n.distance())) };
+            })(),
+            casket: p.casketId === 0 ? 0 : a.Inventory.countById(p.casketId),
+            scrolls: a.Inventory.count('Clue scroll'),
             keyState: String(bot?.keyState ?? ''),
             spotIdx: num('safespotIdx'),
             bankOpen: a.Bank.isOpen(),
@@ -611,6 +644,7 @@ let bankReads = 0;
 let jailerFights = 0;
 let jailKeyPickups = 0;
 let deaths = 0;
+let superantiPeak = 0;
 let bothEndsDrops = 0;
 let harnessCredit = 0;
 let engagingLines = 0;
@@ -691,12 +725,14 @@ try {
         console.log(`${SITE.quest.name}=${set}, the guild doors will open`);
     }
     // Why: the dragon longsword and dagger are gated on Lost City in levelrequire, and the run is made to wield one.
-    if (args.style === 'melee' && SITE.fee > 0) {
+    if (CLUES_ON || (args.style === 'melee' && SITE.fee > 0)) {
         await cheatQuiet(page, 'setvar zanaris 6');
         const set = await getServerVarQuiet(page, 'zanaris');
-        if (set !== 6) { fail(`setvar zanaris 6 did not take (read back ${set}), so the dragon longsword cannot be wielded`); }
-        console.log('zanaris=6, Lost City complete for the dragon longsword');
+        if (set !== 6) { fail(`setvar zanaris 6 did not take (read back ${set}), so the dragon dagger and longsword cannot be wielded`); }
+        console.log('zanaris=6, Lost City complete for the dragon dagger and longsword');
     }
+    // Why: the cheat writes the varp and nothing else, and the quest tab the solver reads Lost City off is only painted at login, so the clue kit relogs before its bank check.
+    if (CLUES_ON) { await relog(page, args.user); }
 
     await command(page, '~clearinv inv');
     await command(page, '~clearinv worn');
@@ -705,7 +741,7 @@ try {
     await seedPack(page);
     await setLevels(page);
     await seedWorn(page);
-    if (args.clue) { await seedClue(page); }
+    if (CLUES_ON) { await seedClue(page); }
     await clearChatDialogs(page, 'seed dialog(s)');
     if (!(await teleTo(page, BANK, 6, 30_000))) { fail(`could not stand at the bank (${BANK.x},${BANK.z})`); }
 
@@ -713,34 +749,38 @@ try {
     await startScript(page, 'JiveDragons');
     console.log(`JiveDragons started; watching ${SITE.keyed ? 'the key, ' : ''}the walk in, ${args.style === 'melee' ? 'the melee anchor' : `the safespot at ${SAFESPOTS[0].x},${SAFESPOTS[0].z}`}, a kill and a bank trip`);
 
-    const probe: Probe = { dustyId: DUSTY_ID, jailKeyId: JAIL_KEY_ID, food: FOOD.name, law: 'Law rune', target: TARGET, baby: BABY, filler: SITE.alsoHunt ?? null };
+    const probe: Probe = { dustyId: DUSTY_ID, jailKeyId: JAIL_KEY_ID, food: FOOD.name, law: 'Law rune', target: TARGET, baby: BABY, filler: SITE.alsoHunt ?? null, superanti: SUPERANTI_DOSES, casketId: CLUE.guardian?.casketId ?? 0, wizard: CLUE.guardian?.wizard ?? null };
     const guardsSafespot = args.style !== 'melee';
     const spotAssert = args.style === 'melee' ? 'meleeanchor' : 'safespot';
     // Why: SolveClue sits above AcquireKey in the task order, so a run holding a scroll walks the trail before it ever goes for the key. That is the right order and it costs the key leg a trail's worth of clock, which the budget has to allow rather than call late.
-    const clueDetour = args.clue ? CLUE_DETOUR_MS : 0;
+    const clueDetour = args.clue === 'map' ? CLUE_DETOUR_MS : 0;
     // Why: a keyless site has no key leg at all, so its chain starts at the walk in and the gate budget absorbs the clock the key leg used to spend.
     const keyLeg: [string, number][] = SITE.keyed ? [['key', KEY_MS + clueDetour]] : [];
     // Why: a fee site's first act is the payment, and its stand and its kill are further off than any other site's.
     const feeLeg: [string, number][] = SITE.fee > 0 ? [['fee', FEE_MS + clueDetour]] : [];
     const spotMs = SITE.fee > 0 ? BRIMHAVEN_SPOT_MS : SPOT_MS;
     const killMs = SITE.fee > 0 ? BRIMHAVEN_KILL_MS : KILL_MS;
-    const chain: [string, number][] = [...keyLeg, ...feeLeg, ['gate', GATE_MS + clueDetour], [spotAssert, spotMs + clueDetour], ['kill', killMs + clueDetour], ['banktrip', BANK_MS + clueDetour]];
+    // Why: the guardian case is the trail on its own, so its chain is the trail's legs and the lair's milestones stay out of it.
+    const chain: [string, number][] = GUARDIAN ? GUARDIAN_LEGS : [...keyLeg, ...feeLeg, ['gate', GATE_MS + clueDetour], [spotAssert, spotMs + clueDetour], ['kill', killMs + clueDetour], ['banktrip', BANK_MS + clueDetour]];
     // Why: melee passed a full run on 2 kills and 0 pickups, because a kill did not end the fight call and the drops rotted inside it, so every style now has to bring something home.
     const exitAssert = args.leave === 'walk' ? 'walkout' : 'teleport';
     const keyAsserts = SITE.keyed ? ['key', args.dusty ? 'bankedkey' : 'coldkey'] : [];
-    const required = [...keyAsserts, ...(SITE.fee > 0 ? ['fee'] : []), 'gate', spotAssert, 'kill', 'banktrip', exitAssert, 'wielded', 'loot'];
-    // Why: the dose is what makes the far breath 0, so a metal run has to be seen drinking one before it claims the stand.
-    if (SITE.antifire) { required.push('antifire'); }
-    // Why: the trail is what the clue case is for, and a run that picks a scroll up and never starts it would otherwise pass on the pickup alone.
-    if (args.clue) { required.push('clue', 'cluedone'); }
-    if (args.style !== 'melee') { required.push(SITE.rangedThreat ? 'spotheld' : 'hpheld'); }
-    if (SITE.alsoHunt !== undefined) { required.push('filler'); }
-    if (args.style === 'melee') { required.push('meleekills'); }
-    if (args.style === 'melee' && SITE.fee > 0) { required.push('prayer'); }
-    // Why: only the bow leaves anything of its own on the floor, so the arrows-come-home claim is a range claim.
-    if (args.style === 'range') { required.push('arrows', 'potion'); }
-    if (args.style !== 'mage') { required.push('special'); }
-    if (args.starve) { required.push('starvebank'); }
+    const required = GUARDIAN ? ['wielded', ...GUARDIAN_LEGS.map(([id]) => id)] : [...keyAsserts, ...(SITE.fee > 0 ? ['fee'] : []), 'gate', spotAssert, 'kill', 'banktrip', exitAssert, 'wielded', 'loot'];
+    if (!GUARDIAN) {
+        // Why: the dose is what makes the far breath 0, so a metal run has to be seen drinking one before it claims the stand.
+        if (SITE.antifire) { required.push('antifire'); }
+        // Why: the trail is what the clue case is for, and a run that picks a scroll up and never starts it would otherwise pass on the pickup alone.
+        if (args.clue === 'map') { required.push('clue', 'cluedone'); }
+        if (args.style !== 'melee') { required.push(SITE.rangedThreat ? 'spotheld' : 'hpheld'); }
+        if (SITE.alsoHunt !== undefined) { required.push('filler'); }
+        if (args.style === 'melee') { required.push('meleekills'); }
+        if (args.style === 'melee' && SITE.fee > 0) { required.push('prayer'); }
+        // Why: only the bow leaves anything of its own on the floor, so the arrows-come-home claim is a range claim.
+        // Why: the trail's bank prep deposits the seeded Ranging potion and this run restocks no potions, so a clue run cannot be asked to sip one.
+        if (args.style === 'range') { required.push('arrows'); if (!CLUES_ON) { required.push('potion'); } }
+        if (args.style !== 'mage') { required.push('special'); }
+        if (args.starve) { required.push('starvebank'); }
+    }
 
     const deadline = t0 + args.minutes * 60_000;
     let lastState = 0;
@@ -775,6 +815,9 @@ try {
             }
             if (args.style === 'melee' && SITE.fee > 0 && /^praying protect from melee/i.test(line.msg)) { mark('prayer', line.msg); }
             if (/^out of the dragon lair/i.test(line.msg)) { outOfLairSaid = true; }
+            // Why: the casket is opened where it stands within a tick of the dig, so a pack poll never sees it and the solver's own leg lines are the record.
+            if (GUARDIAN && met['guardian'] !== undefined && /^\[clue\] leg \d+ .*solving \S+_casket \(open-casket\)/.test(line.msg)) { mark('guardiankill', `the casket came up on the dig after the wizard: ${line.msg}`); }
+            if (GUARDIAN && met['guardiankill'] !== undefined && (/^\[clue\] leg \d+ .*solving (?!\S+_casket)/.test(line.msg) || /^\[clue\] trail complete/.test(line.msg))) { mark('casketopened', `the casket opened in place and the trail moved on: ${line.msg}`); }
         }
 
         if (s.runner === 'crashed') { fail(`the runner crashed: ${s.logs.slice(-8).map(l => l.msg).join(' | ')}`); }
@@ -854,8 +897,19 @@ try {
         if (WIELDED !== '' && s.worn.includes(WIELDED)) { mark('wielded', `${WIELDED} is worn`); }
         if (s.kills > 0 && met['wielded'] === undefined) { fail(`a kill landed with no ${WIELDED} worn, only ${s.worn.filter(w => w !== '?').join('/') || 'nothing'}`); }
         if (s.looted > 0) { mark('loot', `${s.looted} pickup(s) reached the pack after ${s.kills} kill(s)`); }
-        if (args.clue && /clue/i.test(s.status)) { mark('clue', `the trail started, status '${s.status}'`); }
-        if (args.clue && s.cluesSolved > 0) { mark('cluedone', `${s.cluesSolved} clue(s) solved`); }
+        if (CLUES_ON && /clue/i.test(s.status)) { mark('clue', `the trail started, status '${s.status}'`); }
+        if (CLUES_ON && s.cluesSolved > 0) { mark('cluedone', `${s.cluesSolved} clue(s) solved`); }
+        // Why: a refused kit and a blocked reward both wait on the host's retry, so the run names the reason now rather than timing out on the trail.
+        if (CLUES_ON && /^(hard kit: |guardian-lost|dead|abandoned)|blocked/.test(s.clueStatus)) { fail(`the trail stopped on '${s.clueStatus}' at ${s.tile?.x},${s.tile?.z}`); }
+        if (GUARDIAN && CLUE.guardian !== null) {
+            if (s.superanti > superantiPeak) { superantiPeak = s.superanti; }
+            if (superantiPeak > 0 && s.superanti < superantiPeak) { mark('antidote', `a Superantipoison dose went down at ${s.tile?.x},${s.tile?.z}, ${s.superanti} left`); }
+            // Why: the wizard's melee poisons on nineteen hits in twenty, so a spawn with no dose up is the death this case exists to rule out.
+            if (s.wizards.count > 0 && met['antidote'] === undefined) { fail(`the ${CLUE.guardian.wizard} came up at gap ${s.wizards.near} before a Superantipoison dose was drunk`); }
+            if (s.wizards.count > 0) { mark('guardian', `${CLUE.guardian.wizard} up at gap ${s.wizards.near}, ${s.hp}/${s.maxHp} hp`); }
+            // Why: a hard trail is four to six random caskets, so the case ends at the casket opened in place and the trail moving on rather than at a finish it cannot bound.
+            if (met['guardiankill'] !== undefined && s.casket === 0 && (s.scrolls > 0 || s.cluesSolved > 0)) { mark('casketopened', `the casket opened at ${s.tile?.x},${s.tile?.z} and the trail ${s.cluesSolved > 0 ? 'finished' : 'moved on to the next scroll'}`); }
+        }
         if (s.kills > 0) {
             if (tripsAtKill < 0) { tripsAtKill = s.trips; }
             mark('kill', `${s.kills} ${TARGET.toLowerCase()}(s) down`);
@@ -931,7 +985,7 @@ try {
         if (Date.now() - lastState >= 15_000) {
             lastState = Date.now();
             const aims = [...babyRoll.entries()].map(([index, roll]) => `${index}@${roll.nearest}x${roll.seen}`).join(' ') || 'none';
-            console.log(`${stamp()} STATE ${JSON.stringify({ tile: s.tile, hp: `${s.hp}/${s.maxHp}`, status: s.status, kills: s.kills, trips: s.trips, food: s.food, law: s.law, spot: s.spotIdx, adults: s.adults, filler: s.filler, worn: s.worn.filter(w => w !== '?').join('/'), anchorMax: maxAnchorDist, babies: aims })}`);
+            console.log(`${stamp()} STATE ${JSON.stringify({ tile: s.tile, hp: `${s.hp}/${s.maxHp}`, status: s.status, ...(CLUES_ON ? { clue: s.clueStatus, doses: s.superanti, casket: s.casket } : {}), kills: s.kills, trips: s.trips, food: s.food, law: s.law, spot: s.spotIdx, adults: s.adults, filler: s.filler, worn: s.worn.filter(w => w !== '?').join('/'), anchorMax: maxAnchorDist, babies: aims })}`);
         }
 
         if (required.every(id => met[id] !== undefined)) { break; }
@@ -960,6 +1014,7 @@ try {
         username: args.user,
         style: args.style,
         dusty: args.dusty,
+        clue: { mode: args.clue, seeded: CLUES_ON ? CLUE.debug : null },
         tickMs: args.tickMs,
         minutes: args.minutes,
         bundleSha256,

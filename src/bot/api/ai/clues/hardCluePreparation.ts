@@ -58,7 +58,7 @@ export async function stockHardSupplies(reserveSlots: number, originalGear: read
         if (!(await Execution.delayUntil(() => Inventory.items().some(i => i.id === dose.id), 2500))) return false;
     }
     const target = (): number | null => hardTrailFoodTarget({ heldFood: Inventory.count('Shark'), freeSlots: Inventory.free(), reserveSlots });
-    const availableTarget = Math.min(20, Inventory.count('Shark') + Bank.countById(SHARK_ID));
+    const availableTarget = Math.min(15, Inventory.count('Shark') + Bank.countById(SHARK_ID));
     if ((target() ?? 0) < availableTarget) {
         await Bank.depositAllMatching(name => originalGear.includes(name));
     }
