@@ -903,7 +903,8 @@ export const CASES: readonly Case[] = [
         id: 'west-ardougne-373-live',
         harness: 'west-ardougne-373-live.ts',
         covers: { subsystems: ['nav'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: '83ff1932',
         budgetMin: 15,
         note: 'live sewer quest and worn-mask gates, mud-pile return, and both city-gate directions after Biohazard; screenshots and state proof under docs/e2e'
     },

@@ -1,0 +1,373 @@
+{
+  "generatedAt": "2026-09-12T15:10:23.471Z",
+  "mode": "fixed",
+  "result": "PASS",
+  "screenshot": "docs/e2e/issue-373-success.png",
+  "issue": 373,
+  "build": {
+    "revision": "83ff1932613d37efff3d05f924751a298fd72b25",
+    "dirty": false,
+    "sha256": "0a2613e74ddf4cebdb177477c57a7dc618c048d8d30d6752027f7fb4606e8265"
+  },
+  "results": [
+    {
+      "label": "pipe-quest-locked",
+      "before": {
+        "tile": {
+          "x": 2530,
+          "z": 9703,
+          "level": 0
+        },
+        "plagueCity": "notStarted",
+        "biohazard": "notStarted",
+        "maskCarried": 0,
+        "maskWorn": true
+      },
+      "destination": {
+        "x": 2529,
+        "z": 3304,
+        "level": 0
+      },
+      "allowed": false,
+      "ok": false,
+      "tile": {
+        "x": 2530,
+        "z": 9703,
+        "level": 0
+      },
+      "logs": [
+        "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+        "no path to (2529,3304,0): unreachable"
+      ],
+      "after": {
+        "tile": {
+          "x": 2530,
+          "z": 9703,
+          "level": 0
+        },
+        "plagueCity": "notStarted",
+        "biohazard": "notStarted",
+        "maskCarried": 0,
+        "maskWorn": true
+      },
+      "screenshot": "docs/e2e/issue-373-pipe-quest-locked.png"
+    },
+    {
+      "label": "pipe-mask-carried",
+      "before": {
+        "tile": {
+          "x": 2530,
+          "z": 9703,
+          "level": 0
+        },
+        "plagueCity": "complete",
+        "biohazard": "notStarted",
+        "maskCarried": 1,
+        "maskWorn": false
+      },
+      "destination": {
+        "x": 2529,
+        "z": 3304,
+        "level": 0
+      },
+      "allowed": false,
+      "ok": false,
+      "tile": {
+        "x": 2530,
+        "z": 9703,
+        "level": 0
+      },
+      "logs": [
+        "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+        "no path to (2529,3304,0): unreachable"
+      ],
+      "after": {
+        "tile": {
+          "x": 2530,
+          "z": 9703,
+          "level": 0
+        },
+        "plagueCity": "complete",
+        "biohazard": "notStarted",
+        "maskCarried": 1,
+        "maskWorn": false
+      },
+      "screenshot": "docs/e2e/issue-373-pipe-mask-carried.png"
+    },
+    {
+      "label": "pipe-worn-arrival",
+      "before": {
+        "tile": {
+          "x": 2530,
+          "z": 9703,
+          "level": 0
+        },
+        "plagueCity": "complete",
+        "biohazard": "notStarted",
+        "maskCarried": 0,
+        "maskWorn": true
+      },
+      "destination": {
+        "x": 2488,
+        "z": 3308,
+        "level": 0
+      },
+      "allowed": true,
+      "ok": true,
+      "tile": {
+        "x": 2488,
+        "z": 3308,
+        "level": 0
+      },
+      "logs": [
+        "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+        "path: cost 49, 31 waypoints, expanded 4007, worker 1.9ms, hops=1",
+        "hops:\n1. [dungeon] Search Sewer pipe loc=2541 → 2529,3304,L0 (cost 8)",
+        "Plague City sewer pipe → West Ardougne (#366): dialogue did not resolve — repathing",
+        "path: cost 42, 25 waypoints, expanded 3567, worker 4.1ms, hops=0 (repath 1)",
+        "arrived (6 clicks)"
+      ],
+      "after": {
+        "tile": {
+          "x": 2488,
+          "z": 3308,
+          "level": 0
+        },
+        "plagueCity": "complete",
+        "biohazard": "notStarted",
+        "maskCarried": 0,
+        "maskWorn": true
+      },
+      "screenshot": "docs/e2e/issue-373-pipe-worn-arrival.png"
+    },
+    {
+      "label": "sewer-garden-return",
+      "before": {
+        "tile": {
+          "x": 2488,
+          "z": 3308,
+          "level": 0
+        },
+        "plagueCity": "complete",
+        "biohazard": "notStarted",
+        "maskCarried": 0,
+        "maskWorn": true
+      },
+      "destination": {
+        "x": 2566,
+        "z": 3330,
+        "level": 0
+      },
+      "allowed": true,
+      "ok": true,
+      "tile": {
+        "x": 2566,
+        "z": 3330,
+        "level": 0
+      },
+      "logs": [
+        "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+        "path: cost 98, 45 waypoints, expanded 5936, worker 2.9ms, hops=2",
+        "hops:\n1. [dungeon] Climb-down Manhole loc=2544 → 2530,9703,L0 (cost 8)\n2. [dungeon] Climb Mud pile loc=2533 → 2566,3330,L0 (cost 8)",
+        "West Ardougne manhole → sewer (#366): crossed at (2530,9703,0)",
+        "stall recovery (6 ticks idle, stall=5) → path idx 83 (2562,9737)",
+        "Climb Mud pile at (2562,9737) ok",
+        "stuck at (2566,3331) after 6 idle ticks (stall=5) — repathing (8 clicks)",
+        "path: cost 1, 2 waypoints, expanded 3, worker 0.0ms, hops=0 (repath 1)",
+        "arrived (1 clicks)"
+      ],
+      "after": {
+        "tile": {
+          "x": 2566,
+          "z": 3330,
+          "level": 0
+        },
+        "plagueCity": "complete",
+        "biohazard": "notStarted",
+        "maskCarried": 0,
+        "maskWorn": true
+      },
+      "screenshot": "docs/e2e/issue-373-sewer-garden-return.png"
+    },
+    {
+      "label": "gate-quest-locked",
+      "before": {
+        "tile": {
+          "x": 2559,
+          "z": 3300,
+          "level": 0
+        },
+        "plagueCity": "complete",
+        "biohazard": "inProgress",
+        "maskCarried": 0,
+        "maskWorn": false
+      },
+      "destination": {
+        "x": 2556,
+        "z": 3300,
+        "level": 0
+      },
+      "allowed": false,
+      "ok": false,
+      "tile": {
+        "x": 2559,
+        "z": 3300,
+        "level": 0
+      },
+      "logs": [
+        "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+        "no path to (2556,3300,0): unreachable"
+      ],
+      "after": {
+        "tile": {
+          "x": 2559,
+          "z": 3300,
+          "level": 0
+        },
+        "plagueCity": "complete",
+        "biohazard": "inProgress",
+        "maskCarried": 0,
+        "maskWorn": false
+      },
+      "screenshot": "docs/e2e/issue-373-gate-quest-locked.png"
+    },
+    {
+      "label": "gate-clue-arrival",
+      "before": {
+        "tile": {
+          "x": 2616,
+          "z": 3332,
+          "level": 0
+        },
+        "plagueCity": "complete",
+        "biohazard": "complete",
+        "maskCarried": 0,
+        "maskWorn": false
+      },
+      "destination": {
+        "x": 2488,
+        "z": 3308,
+        "level": 0
+      },
+      "allowed": true,
+      "ok": true,
+      "tile": {
+        "x": 2488,
+        "z": 3308,
+        "level": 0
+      },
+      "logs": [
+        "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+        "path: cost 187, 128 waypoints, expanded 51580, worker 24.6ms, hops=1",
+        "hops:\n1. [shortcut] Open Door loc=2049 → 2556,3300,L0 (cost 10)",
+        "Open Door at (2558,3300) ok",
+        "Door landed at (2558,3300) — stepping onto the planned (2556,3300)",
+        "arrived (14 clicks)"
+      ],
+      "after": {
+        "tile": {
+          "x": 2488,
+          "z": 3308,
+          "level": 0
+        },
+        "plagueCity": "complete",
+        "biohazard": "complete",
+        "maskCarried": 0,
+        "maskWorn": false
+      },
+      "screenshot": "docs/e2e/issue-373-gate-clue-arrival.png"
+    },
+    {
+      "label": "gate-bank-return",
+      "before": {
+        "tile": {
+          "x": 2488,
+          "z": 3308,
+          "level": 0
+        },
+        "plagueCity": "complete",
+        "biohazard": "complete",
+        "maskCarried": 0,
+        "maskWorn": false
+      },
+      "destination": {
+        "x": 2616,
+        "z": 3332,
+        "level": 0
+      },
+      "allowed": true,
+      "ok": true,
+      "tile": {
+        "x": 2616,
+        "z": 3332,
+        "level": 0
+      },
+      "logs": [
+        "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+        "path: cost 187, 118 waypoints, expanded 22442, worker 16.1ms, hops=1",
+        "hops:\n1. [shortcut] Open Door loc=2049 → 2559,3299,L0 (cost 10)",
+        "Open Door at (2557,3299) ok",
+        "Door landed at (2557,3299) — stepping onto the planned (2559,3299)",
+        "arrived (13 clicks)"
+      ],
+      "after": {
+        "tile": {
+          "x": 2616,
+          "z": 3332,
+          "level": 0
+        },
+        "plagueCity": "complete",
+        "biohazard": "complete",
+        "maskCarried": 0,
+        "maskWorn": false
+      },
+      "screenshot": "docs/e2e/issue-373-gate-bank-return.png"
+    },
+    {
+      "label": "gate-from-filled-garden",
+      "before": {
+        "tile": {
+          "x": 2566,
+          "z": 3330,
+          "level": 0
+        },
+        "plagueCity": "complete",
+        "biohazard": "complete",
+        "maskCarried": 0,
+        "maskWorn": true
+      },
+      "destination": {
+        "x": 2488,
+        "z": 3308,
+        "level": 0
+      },
+      "allowed": true,
+      "ok": true,
+      "tile": {
+        "x": 2488,
+        "z": 3308,
+        "level": 0
+      },
+      "logs": [
+        "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+        "path: cost 134, 80 waypoints, expanded 25665, worker 11.9ms, hops=1",
+        "hops:\n1. [shortcut] Open Door loc=2048 → 2556,3299,L0 (cost 10)",
+        "Open Door at (2558,3299) ok",
+        "Door landed at (2558,3299) — stepping onto the planned (2556,3299)",
+        "arrived (11 clicks)"
+      ],
+      "after": {
+        "tile": {
+          "x": 2488,
+          "z": 3308,
+          "level": 0
+        },
+        "plagueCity": "complete",
+        "biohazard": "complete",
+        "maskCarried": 0,
+        "maskWorn": true
+      },
+      "screenshot": "docs/e2e/issue-373-gate-from-filled-garden.png"
+    }
+  ]
+}
