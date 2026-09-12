@@ -8,7 +8,7 @@ const { base, minutes } = parseArgs(process.argv.slice(2), { minutes: 5 });
 assert(['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname), 'local engine required');
 const name = 'Donovan the Family Handyman';
 const stand = { x: 2744, z: 3576, level: 1 };
-const waiting = { x: 2746, z: 3576, level: 1 };
+const waiting = { x: 2747, z: 3578, level: 1 };
 const tag = `dd771${Date.now().toString(36).slice(-6)}`;
 const pagePath = process.env.CLIENT_PAGE;
 if (process.argv.includes('--no-deploy')) assert(pagePath && /^\/bot-[\w-]+\.html$/.test(pagePath), '--no-deploy requires an isolated CLIENT_PAGE');
@@ -129,6 +129,9 @@ try {
     console.log(`PROGRESSED ${JSON.stringify(await snapshot())}`);
     assert.deepEqual(errors, [], 'browser errors');
     console.log('PASS #771 ClueSolver closed the swung leaf, reached Donovan dialogue, and advanced the clue');
+} catch (error) {
+    console.log(`FAIL ${JSON.stringify(await snapshot())}`);
+    throw error;
 } finally {
     await stopScript(page).catch(() => undefined);
     await logout(page).catch(() => false);
