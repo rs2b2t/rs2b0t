@@ -1,7 +1,5 @@
 import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
-import type { Loc } from '../src/bot/api/model/Loc.js';
-import type EntityQuery from '../src/bot/api/query/Query.js';
 import { cheatQuiet, deployIsolatedClient, launchBrowser, logout, parseArgs, stopScript, type Rs2b0t } from './lib/harness.js';
 import { getServerVarQuiet, mainlandAccount, relog, seedItemsToBank, startScript } from './tutorial/harness.js';
 
@@ -19,10 +17,10 @@ page.on('pageerror', error => errors.push(String(error)));
 mkdirSync('docs/e2e', { recursive: true });
 
 type Api = Rs2b0t & {
+    rs2b0t: { runner: { pause(): void; resume(): void } };
     __rs2b0t: {
         Inventory: { countById(id: number): number };
         Bank: { countById(id: number): number; isOpen(): boolean; ready(): boolean };
-        Locs: { query(): EntityQuery<Loc> };
         Quests: { status(name: string): string };
     };
 };
@@ -53,18 +51,19 @@ try {
     assert.equal(await page.evaluate(() => (globalThis as never as Api).__rs2b0t.Quests.status('Murder Mystery')), 'inProgress');
     assert(await cheatQuiet(page, '~clearinv'));
     await seedItemsToBank(page, [{ debugName: 'pot_empty', displayName: 'Pot', qty: 30 }], bank);
-    assert(await page.evaluate(() => {
-        const booth = (globalThis as never as Api).__rs2b0t.Locs.query().name('Bank booth').where(loc => loc.actions().length > 0).nearest();
-        const op = booth?.actions().find(action => /^use|^bank/i.test(action));
-        return booth && op ? booth.interact(op) : false;
-    }));
-    await page.waitForFunction(() => (globalThis as never as Api).__rs2b0t.Bank.ready(), undefined, { timeout: 10_000 });
+    await startScript(page, 'FlourCollector');
+    await page.waitForFunction(() => {
+        const g = globalThis as never as Api;
+        if (!g.__rs2b0t.Bank.ready() || g.__rs2b0t.Bank.countById(1931) !== 30) return false;
+        g.rs2b0t.runner.pause();
+        return true;
+    }, undefined, { timeout: 30_000 });
     const before = await snapshot();
     assert.equal(before.bankPots, 30);
     assert.equal(before.pots + before.flour + before.bankFlour, 0, 'fixture must contain only banked empty pots');
     console.log(`BEFORE ${JSON.stringify(before)}`);
     await page.screenshot({ path: 'docs/e2e/issue-310-before.png' });
-    await startScript(page, 'FlourCollector');
+    await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.resume());
     const deadline = Date.now() + minutes * 60_000;
     let withdrew = false;
     let filled = false;
@@ -102,6 +101,9 @@ try {
     }
     assert(done, `withdrew=${withdrew} filled=${filled} banked=${banked} restocked=${restocked}: ${JSON.stringify(await snapshot())}`);
     assert.deepEqual(errors, [], 'browser errors');
+} catch (error) {
+    console.log(`FAIL ${JSON.stringify(await snapshot())}`);
+    throw error;
 } finally {
     await stopScript(page).catch(() => undefined);
     await logout(page).catch(() => false);
