@@ -8,6 +8,7 @@ const { base, minutes } = parseArgs(process.argv.slice(2), { minutes: 5 });
 assert(['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname), 'local engine required');
 const name = 'Donovan the Family Handyman';
 const stand = { x: 2744, z: 3576, level: 1 };
+const waiting = { x: 2746, z: 3576, level: 1 };
 const tag = `dd771${Date.now().toString(36).slice(-6)}`;
 const pagePath = process.env.CLIENT_PAGE;
 if (process.argv.includes('--no-deploy')) assert(pagePath && /^\/bot-[\w-]+\.html$/.test(pagePath), '--no-deploy requires an isolated CLIENT_PAGE');
@@ -66,18 +67,21 @@ async function doorOp(op: 'Open' | 'Close'): Promise<void> {
             && loc.tile().z === (action === 'Open' ? 3577 : 3576) && loc.actions().includes(action)).first();
         return door?.interact(action) ?? false;
     }, op), `bedroom door ${op} not sent`);
-    await page.waitForTimeout(1000);
+    await page.waitForFunction(action => (globalThis as never as Api).__rs2b0t.reader.locs().some(loc => loc.name === 'Door'
+        && loc.tile.level === 1 && loc.tile.x === 2744 && loc.tile.z === (action === 'Open' ? 3576 : 3577)
+        && loc.ops.includes(action === 'Open' ? 'Close' : 'Open')), op, { timeout: 10_000 });
 }
 
 try {
     await mainlandAccount(page, base, tag, client.page);
-    assert(await teleTo(page, stand, 0));
+    assert(await teleTo(page, waiting, 0));
     await page.waitForFunction(npcName => (globalThis as never as Api).__rs2b0t.reader.npcs().some(npc => npc.name === npcName), name, { timeout: 15_000 });
     const deadline = Date.now() + minutes * 60_000;
     let blocked = false;
     while (Date.now() < deadline) {
         const current = await snapshot();
         if (current.doors.some(door => door.tile.z === 3576 && door.ops.includes('Close'))) await doorOp('Close');
+        assert(await teleTo(page, waiting, 0));
         const entered = await page.waitForFunction(npcName => (globalThis as never as Api).__rs2b0t.reader.npcs().some(npc => npc.name === npcName
             && npc.tile.x === 2743 && npc.tile.z === 3576 && npc.tile.level === 1), name, { timeout: Math.min(30_000, Math.max(1, deadline - Date.now())) }).then(() => true).catch(() => false);
         if (!entered) {
