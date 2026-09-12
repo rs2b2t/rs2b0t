@@ -8,6 +8,7 @@ import { Execution } from '#/bot/api/execution/Execution.js';
 import { EventSignal } from '#/bot/api/execution/EventSignal.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
 import { Sustain } from '#/bot/api/sustain/Sustain.js';
+import { SettingsBag } from '#/bot/runtime/Settings.js';
 import { stubProps } from '../../lib/stubSingletons.js';
 import Tile from '#/bot/geometry/Tile.js';
 
@@ -51,6 +52,7 @@ beforeEach(async () => {
         })
     ];
     bot = new Fighter();
+    bot.settings = new SettingsBag({ food: 'Trout' });
     bot.bindLog(() => {});
     await bot.onStart();
     fight = bot.registered.find(task => task.constructor.name === 'Fight')!;
