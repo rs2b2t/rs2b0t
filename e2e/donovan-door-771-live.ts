@@ -56,6 +56,7 @@ const snapshot = () => page.evaluate(npcName => {
 }, name);
 
 async function doorOp(op: 'Open' | 'Close'): Promise<void> {
+    assert(await teleTo(page, stand, 0));
     assert(await page.evaluate(action => {
         const g = globalThis as never as Api;
         const door = g.__rs2b0t.Locs.query().where(loc => loc.name === 'Door' && loc.tile().level === 1 && loc.tile().x === 2744
