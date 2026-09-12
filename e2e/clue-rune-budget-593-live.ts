@@ -34,13 +34,13 @@ try {
     assert(await cheatQuiet(page, 'setstat magic 45'), 'magic fixture');
     await clearChatDialogs(page);
     await seedItemsToBank(page, [
-        ...targets.map(([name]) => ({ debugName: name.toLowerCase().replaceAll(' ', '_'), displayName: name, qty: 500 })),
+        ...targets.map(([name]) => ({ debugName: name.toLowerCase().replaceAll(' ', ''), displayName: name, qty: 500 })),
         { debugName: 'coins', displayName: 'Coins', qty: 5000 },
         { debugName: 'trout', displayName: 'Trout', qty: 30 },
         { debugName: 'spade', displayName: 'Spade', qty: 1 },
-        { debugName: 'sextant', displayName: 'Sextant', qty: 1 },
-        { debugName: 'watch', displayName: 'Watch', qty: 1 },
-        { debugName: 'chart', displayName: 'Chart', qty: 1 },
+        { debugName: 'trail_sextant', displayName: 'Sextant', qty: 1 },
+        { debugName: 'trail_watch', displayName: 'Watch', qty: 1 },
+        { debugName: 'trail_chart', displayName: 'Chart', qty: 1 },
         { debugName: 'shantay_pass', displayName: 'Shantay pass', qty: 1 }
     ], { x: 3185, z: 3440, level: 0 });
     assert(await cheatQuiet(page, '~clearinv'), 'empty trail inventory');
