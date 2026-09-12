@@ -61,11 +61,11 @@ describe('casketRewardSlots', () => {
 });
 
 describe('teleportRuneTarget', () => {
-    test('a trail carries twelve casts of each teleport it can make', () => {
-        expect(TELEPORT_CASTS).toBe(12);
+    test('a trail carries twenty casts of each teleport it can make', () => {
+        expect(TELEPORT_CASTS).toBe(20);
         // Law + 3 air is one Varrock teleport.
-        expect(teleportRuneTarget(1)).toBe(12);
-        expect(teleportRuneTarget(3)).toBe(36);
+        expect(teleportRuneTarget(1)).toBe(20);
+        expect(teleportRuneTarget(3)).toBe(60);
     });
 
     // Why: runes stack, so tripling the cast budget costs the pack nothing and the food target does not move.
