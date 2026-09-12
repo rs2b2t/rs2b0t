@@ -24,6 +24,7 @@ try {
     }));
     if (start.coins !== 0) throw new Error(`expected no coins, got ${start.coins}`);
     console.log('START', JSON.stringify(start));
+    await page.screenshot({ path: 'docs/e2e/issue-755-before.png' });
     await setSettings(page, 'WalkTo', { destination: 'Map pick', customTile: '3093,3243,0', arriveRadius: 3 });
     await startScript(page, 'WalkTo');
     let paid = false;
@@ -37,13 +38,17 @@ try {
         });
         for (const line of snap.logs.filter(l => l.time > seen)) console.log(line.msg);
         seen = Math.max(seen, ...snap.logs.map(l => l.time));
-        paid ||= snap.coins >= 30;
+        if (!paid && snap.coins >= 30) {
+            paid = true;
+            await page.screenshot({ path: 'docs/e2e/issue-755-fare.png' });
+        }
         arrived = snap.tile?.level === destination.level && Math.max(Math.abs(snap.tile.x - destination.x), Math.abs(snap.tile.z - destination.z)) <= 3;
         if (arrived) break;
         if (snap.state !== 'running') throw new Error(`WalkTo stopped at ${JSON.stringify(snap.tile)}`);
         await page.waitForTimeout(1000);
     }
     if (!paid || !arrived) throw new Error(`fare recovery incomplete: paid=${paid}, arrived=${arrived}`);
+    await page.screenshot({ path: 'docs/e2e/issue-755-after.png' });
     console.log('PASS: earned the 30gp fare and reached Draynor from Brimhaven');
 } finally {
     await stopScript(page).catch(() => undefined);
