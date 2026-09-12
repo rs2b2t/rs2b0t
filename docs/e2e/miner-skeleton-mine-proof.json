@@ -1,0 +1,6311 @@
+{
+  "result": "PASS",
+  "command": "bun e2e/miner-skeleton-mine-live.ts --base http://localhost:8890 --minutes 8",
+  "fixture": {
+    "account": "skmtxr4t0y",
+    "mining": 99,
+    "hitpoints": 99,
+    "defence": 60,
+    "tool": "Rune pickaxe",
+    "location": "Wilderness Skeleton Mine",
+    "tickMsObserved": 200,
+    "cheatsDuringMeasurement": false,
+    "rng": "native Math.random, observed without changing returned values"
+  },
+  "summary": {
+    "build": {
+      "commit": "2c03f6e859f03a3da50e3db6c229451fb6f163d6",
+      "short": "2c03f6e",
+      "dirty": false,
+      "builtAt": "2026-09-12T02:14:15.583Z",
+      "label": "2c03f6e"
+    },
+    "startedAt": "2026-09-12T02:14:44.954Z",
+    "seconds": 50.395,
+    "miningXp": 1000,
+    "coalPeak": 20,
+    "damageTaken": 32,
+    "skeletonAttackTicks": 237,
+    "retaliateOnTicks": 0,
+    "choices": 25,
+    "randomChoices": 5,
+    "randomNonNearest": 5,
+    "wrongNearestChoices": 0,
+    "clicksDuringCombatAnimation": 14,
+    "retargets": 20,
+    "combatRetargets": 18,
+    "maxSelectionTicks": 1,
+    "maxSelectionMs": 220,
+    "completedRetargets": 20,
+    "nearbyClicks": 14,
+    "maxNearbyClickTicks": 1,
+    "maxNearbyClickMs": 216,
+    "maxClickTicksIncludingWalks": 11,
+    "pendingRetargets": 0
+  },
+  "proof": {
+    "build": {
+      "commit": "2c03f6e859f03a3da50e3db6c229451fb6f163d6",
+      "short": "2c03f6e",
+      "dirty": false,
+      "builtAt": "2026-09-12T02:14:15.583Z",
+      "label": "2c03f6e"
+    },
+    "startedAt": "2026-09-12T02:14:44.954Z",
+    "samples": [
+      {
+        "at": 1789179284954,
+        "tick": 56,
+        "tile": {
+          "x": 3018,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 0,
+        "hp": 99,
+        "xp": 13034431,
+        "coal": 0,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179285162,
+        "tick": 57,
+        "tile": {
+          "x": 3018,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 0,
+        "hp": 99,
+        "xp": 13034431,
+        "coal": 0,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179285350,
+        "tick": 58,
+        "tile": {
+          "x": 3018,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 0,
+        "hp": 99,
+        "xp": 13034431,
+        "coal": 0,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179285545,
+        "tick": 59,
+        "tile": {
+          "x": 3018,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 0,
+        "hp": 99,
+        "xp": 13034431,
+        "coal": 0,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179285740,
+        "tick": 60,
+        "tile": {
+          "x": 3018,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 0,
+        "hp": 99,
+        "xp": 13034431,
+        "coal": 0,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179285953,
+        "tick": 61,
+        "tile": {
+          "x": 3018,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 0,
+        "hp": 99,
+        "xp": 13034431,
+        "coal": 0,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179286150,
+        "tick": 62,
+        "tile": {
+          "x": 3018,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 0,
+        "hp": 99,
+        "xp": 13034431,
+        "coal": 0,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179286351,
+        "tick": 63,
+        "tile": {
+          "x": 3017,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 0,
+        "hp": 99,
+        "xp": 13034481,
+        "coal": 1,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179286540,
+        "tick": 64,
+        "tile": {
+          "x": 3017,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 0,
+        "hp": 99,
+        "xp": 13034481,
+        "coal": 1,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179286756,
+        "tick": 65,
+        "tile": {
+          "x": 3017,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 99,
+        "xp": 13034481,
+        "coal": 1,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179286953,
+        "tick": 66,
+        "tile": {
+          "x": 3017,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 99,
+        "xp": 13034481,
+        "coal": 1,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179287148,
+        "tick": 67,
+        "tile": {
+          "x": 3017,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 99,
+        "xp": 13034481,
+        "coal": 1,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179287344,
+        "tick": 68,
+        "tile": {
+          "x": 3016,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 99,
+        "xp": 13034481,
+        "coal": 1,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179287553,
+        "tick": 69,
+        "tile": {
+          "x": 3016,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 96,
+        "xp": 13034481,
+        "coal": 1,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179287751,
+        "tick": 70,
+        "tile": {
+          "x": 3016,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 96,
+        "xp": 13034481,
+        "coal": 1,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179287945,
+        "tick": 71,
+        "tile": {
+          "x": 3016,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 96,
+        "xp": 13034481,
+        "coal": 1,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179288144,
+        "tick": 72,
+        "tile": {
+          "x": 3016,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 96,
+        "xp": 13034481,
+        "coal": 1,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179288340,
+        "tick": 73,
+        "tile": {
+          "x": 3016,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 94,
+        "xp": 13034481,
+        "coal": 1,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179288556,
+        "tick": 74,
+        "tile": {
+          "x": 3016,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 94,
+        "xp": 13034481,
+        "coal": 1,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179288753,
+        "tick": 75,
+        "tile": {
+          "x": 3016,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 94,
+        "xp": 13034481,
+        "coal": 1,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179288949,
+        "tick": 76,
+        "tile": {
+          "x": 3016,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 94,
+        "xp": 13034481,
+        "coal": 1,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179289142,
+        "tick": 77,
+        "tile": {
+          "x": 3016,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 91,
+        "xp": 13034531,
+        "coal": 2,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179289353,
+        "tick": 78,
+        "tile": {
+          "x": 3016,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 91,
+        "xp": 13034531,
+        "coal": 2,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179289546,
+        "tick": 79,
+        "tile": {
+          "x": 3016,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 91,
+        "xp": 13034531,
+        "coal": 2,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179289744,
+        "tick": 80,
+        "tile": {
+          "x": 3016,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 91,
+        "xp": 13034531,
+        "coal": 2,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179289938,
+        "tick": 81,
+        "tile": {
+          "x": 3017,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 88,
+        "xp": 13034531,
+        "coal": 2,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179290150,
+        "tick": 82,
+        "tile": {
+          "x": 3017,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 88,
+        "xp": 13034531,
+        "coal": 2,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179290352,
+        "tick": 83,
+        "tile": {
+          "x": 3017,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 88,
+        "xp": 13034581,
+        "coal": 3,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179290544,
+        "tick": 84,
+        "tile": {
+          "x": 3017,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 88,
+        "xp": 13034581,
+        "coal": 3,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179290744,
+        "tick": 85,
+        "tile": {
+          "x": 3017,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 87,
+        "xp": 13034581,
+        "coal": 3,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179290940,
+        "tick": 86,
+        "tile": {
+          "x": 3016,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 87,
+        "xp": 13034581,
+        "coal": 3,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179291153,
+        "tick": 87,
+        "tile": {
+          "x": 3015,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 87,
+        "xp": 13034581,
+        "coal": 3,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179291349,
+        "tick": 88,
+        "tile": {
+          "x": 3015,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 87,
+        "xp": 13034581,
+        "coal": 3,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179291541,
+        "tick": 89,
+        "tile": {
+          "x": 3015,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 87,
+        "xp": 13034581,
+        "coal": 3,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179291759,
+        "tick": 90,
+        "tile": {
+          "x": 3015,
+          "z": 3587,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 86,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179291953,
+        "tick": 91,
+        "tile": {
+          "x": 3015,
+          "z": 3587,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 86,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179292142,
+        "tick": 92,
+        "tile": {
+          "x": 3015,
+          "z": 3587,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 86,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179292354,
+        "tick": 93,
+        "tile": {
+          "x": 3015,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 85,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179292545,
+        "tick": 94,
+        "tile": {
+          "x": 3015,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 85,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179292757,
+        "tick": 95,
+        "tile": {
+          "x": 3015,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 85,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179292939,
+        "tick": 96,
+        "tile": {
+          "x": 3015,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 85,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179293154,
+        "tick": 97,
+        "tile": {
+          "x": 3015,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 82,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179293345,
+        "tick": 98,
+        "tile": {
+          "x": 3015,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 82,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179293555,
+        "tick": 99,
+        "tile": {
+          "x": 3015,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 82,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179293756,
+        "tick": 100,
+        "tile": {
+          "x": 3015,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 82,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179293951,
+        "tick": 101,
+        "tile": {
+          "x": 3015,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179294148,
+        "tick": 102,
+        "tile": {
+          "x": 3015,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179294360,
+        "tick": 103,
+        "tile": {
+          "x": 3015,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179294555,
+        "tick": 104,
+        "tile": {
+          "x": 3015,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179294751,
+        "tick": 105,
+        "tile": {
+          "x": 3015,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179294951,
+        "tick": 106,
+        "tile": {
+          "x": 3015,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179295150,
+        "tick": 107,
+        "tile": {
+          "x": 3015,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179295342,
+        "tick": 108,
+        "tile": {
+          "x": 3015,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179295553,
+        "tick": 109,
+        "tile": {
+          "x": 3015,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034681,
+        "coal": 5,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179295750,
+        "tick": 110,
+        "tile": {
+          "x": 3015,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034681,
+        "coal": 5,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179295946,
+        "tick": 111,
+        "tile": {
+          "x": 3015,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034681,
+        "coal": 5,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179296158,
+        "tick": 112,
+        "tile": {
+          "x": 3014,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034681,
+        "coal": 5,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179296354,
+        "tick": 113,
+        "tile": {
+          "x": 3014,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034681,
+        "coal": 5,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179296554,
+        "tick": 114,
+        "tile": {
+          "x": 3014,
+          "z": 3592,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034681,
+        "coal": 5,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179296754,
+        "tick": 115,
+        "tile": {
+          "x": 3014,
+          "z": 3592,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034681,
+        "coal": 5,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179296946,
+        "tick": 116,
+        "tile": {
+          "x": 3015,
+          "z": 3592,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034731,
+        "coal": 6,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179297142,
+        "tick": 117,
+        "tile": {
+          "x": 3015,
+          "z": 3592,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034731,
+        "coal": 6,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179297354,
+        "tick": 118,
+        "tile": {
+          "x": 3015,
+          "z": 3592,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 81,
+        "xp": 13034731,
+        "coal": 6,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179297545,
+        "tick": 119,
+        "tile": {
+          "x": 3015,
+          "z": 3592,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 81,
+        "xp": 13034731,
+        "coal": 6,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179297742,
+        "tick": 120,
+        "tile": {
+          "x": 3015,
+          "z": 3592,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 80,
+        "xp": 13034731,
+        "coal": 6,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179297942,
+        "tick": 121,
+        "tile": {
+          "x": 3014,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 80,
+        "xp": 13034731,
+        "coal": 6,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179298154,
+        "tick": 122,
+        "tile": {
+          "x": 3014,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 80,
+        "xp": 13034731,
+        "coal": 6,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179298345,
+        "tick": 123,
+        "tile": {
+          "x": 3014,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 81,
+        "xp": 13034731,
+        "coal": 6,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179298541,
+        "tick": 124,
+        "tile": {
+          "x": 3014,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 81,
+        "xp": 13034731,
+        "coal": 6,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179298758,
+        "tick": 125,
+        "tile": {
+          "x": 3014,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 81,
+        "xp": 13034731,
+        "coal": 6,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179298952,
+        "tick": 126,
+        "tile": {
+          "x": 3014,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 81,
+        "xp": 13034731,
+        "coal": 6,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179299152,
+        "tick": 127,
+        "tile": {
+          "x": 3014,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 81,
+        "xp": 13034731,
+        "coal": 6,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179299341,
+        "tick": 128,
+        "tile": {
+          "x": 3014,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179299540,
+        "tick": 129,
+        "tile": {
+          "x": 3014,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179299754,
+        "tick": 130,
+        "tile": {
+          "x": 3014,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179299952,
+        "tick": 131,
+        "tile": {
+          "x": 3016,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179300143,
+        "tick": 132,
+        "tile": {
+          "x": 3017,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179300340,
+        "tick": 133,
+        "tile": {
+          "x": 3017,
+          "z": 3592,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179300557,
+        "tick": 134,
+        "tile": {
+          "x": 3018,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179300746,
+        "tick": 135,
+        "tile": {
+          "x": 3019,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179300942,
+        "tick": 136,
+        "tile": {
+          "x": 3019,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179301155,
+        "tick": 137,
+        "tile": {
+          "x": 3019,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179301349,
+        "tick": 138,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179301546,
+        "tick": 139,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179301742,
+        "tick": 140,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179301957,
+        "tick": 141,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179302150,
+        "tick": 142,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179302340,
+        "tick": 143,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179302543,
+        "tick": 144,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179302753,
+        "tick": 145,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179302950,
+        "tick": 146,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179303140,
+        "tick": 147,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 76,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179303339,
+        "tick": 148,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 76,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179303552,
+        "tick": 149,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 76,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179303743,
+        "tick": 150,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 76,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179303955,
+        "tick": 151,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 76,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179304150,
+        "tick": 152,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 76,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179304344,
+        "tick": 153,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 76,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179304544,
+        "tick": 154,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 76,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179304757,
+        "tick": 155,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 73,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179304949,
+        "tick": 156,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 73,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179305145,
+        "tick": 157,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 73,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179305340,
+        "tick": 158,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 73,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179305557,
+        "tick": 159,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179305754,
+        "tick": 160,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179305947,
+        "tick": 161,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179306146,
+        "tick": 162,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179306346,
+        "tick": 163,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179306543,
+        "tick": 164,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179306743,
+        "tick": 165,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179306952,
+        "tick": 166,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179307148,
+        "tick": 167,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179307340,
+        "tick": 168,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179307554,
+        "tick": 169,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179307752,
+        "tick": 170,
+        "tile": {
+          "x": 3020,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179307952,
+        "tick": 171,
+        "tile": {
+          "x": 3020,
+          "z": 3592,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179308146,
+        "tick": 172,
+        "tile": {
+          "x": 3020,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179308343,
+        "tick": 173,
+        "tile": {
+          "x": 3020,
+          "z": 3594,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179308556,
+        "tick": 174,
+        "tile": {
+          "x": 3020,
+          "z": 3594,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179308753,
+        "tick": 175,
+        "tile": {
+          "x": 3019,
+          "z": 3595,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179308944,
+        "tick": 176,
+        "tile": {
+          "x": 3019,
+          "z": 3595,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179309141,
+        "tick": 177,
+        "tile": {
+          "x": 3018,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179309355,
+        "tick": 178,
+        "tile": {
+          "x": 3018,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179309554,
+        "tick": 179,
+        "tile": {
+          "x": 3018,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179309748,
+        "tick": 180,
+        "tile": {
+          "x": 3018,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179309941,
+        "tick": 181,
+        "tile": {
+          "x": 3018,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179310150,
+        "tick": 182,
+        "tile": {
+          "x": 3018,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034881,
+        "coal": 9,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179310350,
+        "tick": 183,
+        "tile": {
+          "x": 3018,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034881,
+        "coal": 9,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179310556,
+        "tick": 184,
+        "tile": {
+          "x": 3018,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034881,
+        "coal": 9,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179310756,
+        "tick": 185,
+        "tile": {
+          "x": 3018,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034881,
+        "coal": 9,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179310954,
+        "tick": 186,
+        "tile": {
+          "x": 3018,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034881,
+        "coal": 9,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179311149,
+        "tick": 187,
+        "tile": {
+          "x": 3018,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034931,
+        "coal": 10,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179311340,
+        "tick": 188,
+        "tile": {
+          "x": 3018,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034931,
+        "coal": 10,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179311557,
+        "tick": 189,
+        "tile": {
+          "x": 3018,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034931,
+        "coal": 10,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179311752,
+        "tick": 190,
+        "tile": {
+          "x": 3018,
+          "z": 3595,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034931,
+        "coal": 10,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179311947,
+        "tick": 191,
+        "tile": {
+          "x": 3016,
+          "z": 3595,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034931,
+        "coal": 10,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179312158,
+        "tick": 192,
+        "tile": {
+          "x": 3016,
+          "z": 3595,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034931,
+        "coal": 10,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179312356,
+        "tick": 193,
+        "tile": {
+          "x": 3016,
+          "z": 3595,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034931,
+        "coal": 10,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179312549,
+        "tick": 194,
+        "tile": {
+          "x": 3016,
+          "z": 3595,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 72,
+        "xp": 13034931,
+        "coal": 10,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179312761,
+        "tick": 195,
+        "tile": {
+          "x": 3016,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 72,
+        "xp": 13034931,
+        "coal": 10,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179312960,
+        "tick": 196,
+        "tile": {
+          "x": 3016,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 72,
+        "xp": 13034931,
+        "coal": 10,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179313154,
+        "tick": 197,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 72,
+        "xp": 13034931,
+        "coal": 10,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179313352,
+        "tick": 198,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 72,
+        "xp": 13034981,
+        "coal": 11,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179313547,
+        "tick": 199,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 72,
+        "xp": 13034981,
+        "coal": 11,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179313738,
+        "tick": 200,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 72,
+        "xp": 13034981,
+        "coal": 11,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179313956,
+        "tick": 201,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 72,
+        "xp": 13034981,
+        "coal": 11,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179314148,
+        "tick": 202,
+        "tile": {
+          "x": 3015,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 72,
+        "xp": 13034981,
+        "coal": 11,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179314344,
+        "tick": 203,
+        "tile": {
+          "x": 3015,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 72,
+        "xp": 13034981,
+        "coal": 11,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179314558,
+        "tick": 204,
+        "tile": {
+          "x": 3015,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 72,
+        "xp": 13035031,
+        "coal": 12,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179314759,
+        "tick": 205,
+        "tile": {
+          "x": 3015,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 72,
+        "xp": 13035031,
+        "coal": 12,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179314949,
+        "tick": 206,
+        "tile": {
+          "x": 3015,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 72,
+        "xp": 13035031,
+        "coal": 12,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179315143,
+        "tick": 207,
+        "tile": {
+          "x": 3015,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035031,
+        "coal": 12,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179315340,
+        "tick": 208,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035031,
+        "coal": 12,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179315557,
+        "tick": 209,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035031,
+        "coal": 12,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179315748,
+        "tick": 210,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035031,
+        "coal": 12,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179315945,
+        "tick": 211,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035031,
+        "coal": 12,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179316160,
+        "tick": 212,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035031,
+        "coal": 12,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179316357,
+        "tick": 213,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035031,
+        "coal": 12,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179316555,
+        "tick": 214,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035031,
+        "coal": 12,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179316750,
+        "tick": 215,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035031,
+        "coal": 12,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179316945,
+        "tick": 216,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035081,
+        "coal": 13,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179317161,
+        "tick": 217,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035081,
+        "coal": 13,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179317355,
+        "tick": 218,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035081,
+        "coal": 13,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179317551,
+        "tick": 219,
+        "tile": {
+          "x": 3015,
+          "z": 3598,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035081,
+        "coal": 13,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179317748,
+        "tick": 220,
+        "tile": {
+          "x": 3015,
+          "z": 3599,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035081,
+        "coal": 13,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179317945,
+        "tick": 221,
+        "tile": {
+          "x": 3015,
+          "z": 3599,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035081,
+        "coal": 13,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179318154,
+        "tick": 222,
+        "tile": {
+          "x": 3015,
+          "z": 3599,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035081,
+        "coal": 13,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179318347,
+        "tick": 223,
+        "tile": {
+          "x": 3015,
+          "z": 3599,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 71,
+        "xp": 13035081,
+        "coal": 13,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179318541,
+        "tick": 224,
+        "tile": {
+          "x": 3015,
+          "z": 3599,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 71,
+        "xp": 13035081,
+        "coal": 13,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179318753,
+        "tick": 225,
+        "tile": {
+          "x": 3015,
+          "z": 3599,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 71,
+        "xp": 13035081,
+        "coal": 13,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179318951,
+        "tick": 226,
+        "tile": {
+          "x": 3015,
+          "z": 3599,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 71,
+        "xp": 13035081,
+        "coal": 13,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179319147,
+        "tick": 227,
+        "tile": {
+          "x": 3016,
+          "z": 3599,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179319340,
+        "tick": 228,
+        "tile": {
+          "x": 3016,
+          "z": 3599,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179319552,
+        "tick": 229,
+        "tile": {
+          "x": 3017,
+          "z": 3599,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179319745,
+        "tick": 230,
+        "tile": {
+          "x": 3016,
+          "z": 3599,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179319961,
+        "tick": 231,
+        "tile": {
+          "x": 3014,
+          "z": 3598,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179320156,
+        "tick": 232,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179320349,
+        "tick": 233,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179320547,
+        "tick": 234,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179320757,
+        "tick": 235,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179320956,
+        "tick": 236,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179321145,
+        "tick": 237,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179321341,
+        "tick": 238,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179321557,
+        "tick": 239,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179321749,
+        "tick": 240,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179321945,
+        "tick": 241,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179322141,
+        "tick": 242,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179322356,
+        "tick": 243,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179322552,
+        "tick": 244,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179322749,
+        "tick": 245,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179322946,
+        "tick": 246,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179323156,
+        "tick": 247,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179323353,
+        "tick": 248,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179323547,
+        "tick": 249,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179323742,
+        "tick": 250,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035181,
+        "coal": 15,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179323956,
+        "tick": 251,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035181,
+        "coal": 15,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179324154,
+        "tick": 252,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035181,
+        "coal": 15,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179324349,
+        "tick": 253,
+        "tile": {
+          "x": 3012,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035181,
+        "coal": 15,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179324540,
+        "tick": 254,
+        "tile": {
+          "x": 3012,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035181,
+        "coal": 15,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179324757,
+        "tick": 255,
+        "tile": {
+          "x": 3011,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035181,
+        "coal": 15,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179324949,
+        "tick": 256,
+        "tile": {
+          "x": 3011,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035231,
+        "coal": 16,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179325147,
+        "tick": 257,
+        "tile": {
+          "x": 3011,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035231,
+        "coal": 16,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179325356,
+        "tick": 258,
+        "tile": {
+          "x": 3011,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 71,
+        "xp": 13035231,
+        "coal": 16,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179325546,
+        "tick": 259,
+        "tile": {
+          "x": 3012,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 71,
+        "xp": 13035231,
+        "coal": 16,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179325747,
+        "tick": 260,
+        "tile": {
+          "x": 3012,
+          "z": 3595,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 71,
+        "xp": 13035231,
+        "coal": 16,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179325957,
+        "tick": 261,
+        "tile": {
+          "x": 3012,
+          "z": 3594,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 71,
+        "xp": 13035231,
+        "coal": 16,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179326156,
+        "tick": 262,
+        "tile": {
+          "x": 3012,
+          "z": 3594,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 71,
+        "xp": 13035231,
+        "coal": 16,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179326355,
+        "tick": 263,
+        "tile": {
+          "x": 3012,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 71,
+        "xp": 13035231,
+        "coal": 16,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179326547,
+        "tick": 264,
+        "tile": {
+          "x": 3012,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 71,
+        "xp": 13035231,
+        "coal": 16,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179326742,
+        "tick": 265,
+        "tile": {
+          "x": 3012,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035231,
+        "coal": 16,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179326956,
+        "tick": 266,
+        "tile": {
+          "x": 3012,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035231,
+        "coal": 17,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179327151,
+        "tick": 267,
+        "tile": {
+          "x": 3012,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035281,
+        "coal": 17,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179327345,
+        "tick": 268,
+        "tile": {
+          "x": 3012,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035281,
+        "coal": 17,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179327556,
+        "tick": 269,
+        "tile": {
+          "x": 3012,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035281,
+        "coal": 17,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179327753,
+        "tick": 270,
+        "tile": {
+          "x": 3012,
+          "z": 3592,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035281,
+        "coal": 17,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179327945,
+        "tick": 271,
+        "tile": {
+          "x": 3012,
+          "z": 3592,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035281,
+        "coal": 17,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179328145,
+        "tick": 272,
+        "tile": {
+          "x": 3012,
+          "z": 3592,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035281,
+        "coal": 17,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179328359,
+        "tick": 273,
+        "tile": {
+          "x": 3011,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035331,
+        "coal": 18,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179328555,
+        "tick": 274,
+        "tile": {
+          "x": 3011,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035331,
+        "coal": 18,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179328748,
+        "tick": 275,
+        "tile": {
+          "x": 3011,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035331,
+        "coal": 18,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179328939,
+        "tick": 276,
+        "tile": {
+          "x": 3011,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035331,
+        "coal": 18,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179329157,
+        "tick": 277,
+        "tile": {
+          "x": 3011,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035331,
+        "coal": 18,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179329355,
+        "tick": 278,
+        "tile": {
+          "x": 3011,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035331,
+        "coal": 18,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179329552,
+        "tick": 279,
+        "tile": {
+          "x": 3011,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035331,
+        "coal": 18,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179329749,
+        "tick": 280,
+        "tile": {
+          "x": 3011,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035331,
+        "coal": 18,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179329943,
+        "tick": 281,
+        "tile": {
+          "x": 3011,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035331,
+        "coal": 18,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179330156,
+        "tick": 282,
+        "tile": {
+          "x": 3011,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035331,
+        "coal": 18,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179330354,
+        "tick": 283,
+        "tile": {
+          "x": 3011,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035331,
+        "coal": 18,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179330550,
+        "tick": 284,
+        "tile": {
+          "x": 3011,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035331,
+        "coal": 18,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179330744,
+        "tick": 285,
+        "tile": {
+          "x": 3011,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035381,
+        "coal": 19,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179330955,
+        "tick": 286,
+        "tile": {
+          "x": 3011,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035381,
+        "coal": 19,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179331153,
+        "tick": 287,
+        "tile": {
+          "x": 3011,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035381,
+        "coal": 19,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179331345,
+        "tick": 288,
+        "tile": {
+          "x": 3011,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035381,
+        "coal": 19,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179331562,
+        "tick": 289,
+        "tile": {
+          "x": 3011,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035381,
+        "coal": 19,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179331760,
+        "tick": 290,
+        "tile": {
+          "x": 3011,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035381,
+        "coal": 19,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179331955,
+        "tick": 291,
+        "tile": {
+          "x": 3011,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035381,
+        "coal": 19,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179332147,
+        "tick": 292,
+        "tile": {
+          "x": 3011,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035381,
+        "coal": 19,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179332361,
+        "tick": 293,
+        "tile": {
+          "x": 3011,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035381,
+        "coal": 19,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179332554,
+        "tick": 294,
+        "tile": {
+          "x": 3011,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035381,
+        "coal": 19,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179332752,
+        "tick": 295,
+        "tile": {
+          "x": 3011,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 624,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035381,
+        "coal": 19,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179332948,
+        "tick": 296,
+        "tile": {
+          "x": 3011,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035381,
+        "coal": 19,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179333162,
+        "tick": 297,
+        "tile": {
+          "x": 3011,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035431,
+        "coal": 20,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179333355,
+        "tick": 298,
+        "tile": {
+          "x": 3011,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035431,
+        "coal": 20,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179333549,
+        "tick": 299,
+        "tile": {
+          "x": 3011,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035431,
+        "coal": 20,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179333747,
+        "tick": 300,
+        "tile": {
+          "x": 3012,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035431,
+        "coal": 20,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179333959,
+        "tick": 301,
+        "tile": {
+          "x": 3013,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035431,
+        "coal": 20,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179334156,
+        "tick": 302,
+        "tile": {
+          "x": 3013,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035431,
+        "coal": 20,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179334357,
+        "tick": 303,
+        "tile": {
+          "x": 3013,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035431,
+        "coal": 20,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179334545,
+        "tick": 304,
+        "tile": {
+          "x": 3014,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035431,
+        "coal": 20,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179334745,
+        "tick": 305,
+        "tile": {
+          "x": 3014,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035431,
+        "coal": 20,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179334960,
+        "tick": 306,
+        "tile": {
+          "x": 3014,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035431,
+        "coal": 20,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179335151,
+        "tick": 307,
+        "tile": {
+          "x": 3014,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035431,
+        "coal": 20,
+        "full": false,
+        "state": "running"
+      },
+      {
+        "at": 1789179335349,
+        "tick": 308,
+        "tile": {
+          "x": 3014,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035431,
+        "coal": 20,
+        "full": false,
+        "state": "running"
+      }
+    ],
+    "choices": [
+      {
+        "at": 1789179285165,
+        "tick": 57,
+        "tile": {
+          "x": 3016,
+          "z": 3591,
+          "level": 0
+        },
+        "distance": 2,
+        "nearest": 2,
+        "candidates": 34,
+        "rolls": [
+          0.6971504174128011
+        ]
+      },
+      {
+        "at": 1789179286353,
+        "tick": 63,
+        "tile": {
+          "x": 3016,
+          "z": 3587,
+          "level": 0
+        },
+        "distance": 4,
+        "nearest": 1,
+        "candidates": 33,
+        "rolls": [
+          0.0619310197118258,
+          0.4217640516511926
+        ]
+      },
+      {
+        "at": 1789179289144,
+        "tick": 77,
+        "tile": {
+          "x": 3017,
+          "z": 3587,
+          "level": 0
+        },
+        "distance": 1,
+        "nearest": 1,
+        "candidates": 32,
+        "rolls": [
+          0.940435113509701
+        ]
+      },
+      {
+        "at": 1789179290354,
+        "tick": 83,
+        "tile": {
+          "x": 3015,
+          "z": 3586,
+          "level": 0
+        },
+        "distance": 2,
+        "nearest": 2,
+        "candidates": 31,
+        "rolls": [
+          0.5242730593557872
+        ]
+      },
+      {
+        "at": 1789179291761,
+        "tick": 90,
+        "tile": {
+          "x": 3015,
+          "z": 3591,
+          "level": 0
+        },
+        "distance": 4,
+        "nearest": 3,
+        "candidates": 30,
+        "rolls": [
+          0.06145104028495163,
+          0.35758159188033756
+        ]
+      },
+      {
+        "at": 1789179295555,
+        "tick": 109,
+        "tile": {
+          "x": 3016,
+          "z": 3592,
+          "level": 0
+        },
+        "distance": 2,
+        "nearest": 2,
+        "candidates": 29,
+        "rolls": [
+          0.9910367051408073
+        ]
+      },
+      {
+        "at": 1789179296948,
+        "tick": 116,
+        "tile": {
+          "x": 3014,
+          "z": 3594,
+          "level": 0
+        },
+        "distance": 2,
+        "nearest": 2,
+        "candidates": 28,
+        "rolls": [
+          0.18467639497693544
+        ]
+      },
+      {
+        "at": 1789179299343,
+        "tick": 128,
+        "tile": {
+          "x": 3021,
+          "z": 3589,
+          "level": 0
+        },
+        "distance": 7,
+        "nearest": 3,
+        "candidates": 27,
+        "rolls": [
+          0.05742122482352974,
+          0.6797232632974215
+        ]
+      },
+      {
+        "at": 1789179302342,
+        "tick": 143,
+        "tile": {
+          "x": 3020,
+          "z": 3588,
+          "level": 0
+        },
+        "distance": 1,
+        "nearest": 1,
+        "candidates": 27,
+        "rolls": [
+          0.8094341582469137
+        ]
+      },
+      {
+        "at": 1789179305342,
+        "tick": 158,
+        "tile": {
+          "x": 3021,
+          "z": 3589,
+          "level": 0
+        },
+        "distance": 1,
+        "nearest": 1,
+        "candidates": 26,
+        "rolls": [
+          0.30974091357377487
+        ]
+      },
+      {
+        "at": 1789179307150,
+        "tick": 167,
+        "tile": {
+          "x": 3018,
+          "z": 3597,
+          "level": 0
+        },
+        "distance": 8,
+        "nearest": 1,
+        "candidates": 27,
+        "rolls": [
+          0.06892691814637508,
+          0.6131421068427708
+        ]
+      },
+      {
+        "at": 1789179310152,
+        "tick": 182,
+        "tile": {
+          "x": 3017,
+          "z": 3596,
+          "level": 0
+        },
+        "distance": 1,
+        "nearest": 1,
+        "candidates": 28,
+        "rolls": [
+          0.6518459389635871
+        ]
+      },
+      {
+        "at": 1789179311151,
+        "tick": 187,
+        "tile": {
+          "x": 3017,
+          "z": 3597,
+          "level": 0
+        },
+        "distance": 1,
+        "nearest": 1,
+        "candidates": 28,
+        "rolls": [
+          0.13145670161781542
+        ]
+      },
+      {
+        "at": 1789179313354,
+        "tick": 198,
+        "tile": {
+          "x": 3015,
+          "z": 3596,
+          "level": 0
+        },
+        "distance": 1,
+        "nearest": 1,
+        "candidates": 27,
+        "rolls": [
+          0.413945970312934
+        ]
+      },
+      {
+        "at": 1789179314560,
+        "tick": 204,
+        "tile": {
+          "x": 3016,
+          "z": 3598,
+          "level": 0
+        },
+        "distance": 1,
+        "nearest": 1,
+        "candidates": 26,
+        "rolls": [
+          0.5280356587616082
+        ]
+      },
+      {
+        "at": 1789179316557,
+        "tick": 214,
+        "tile": {
+          "x": 3016,
+          "z": 3598,
+          "level": 0
+        },
+        "distance": 1,
+        "nearest": 1,
+        "candidates": 28,
+        "rolls": [
+          0.7052606108911263
+        ]
+      },
+      {
+        "at": 1789179316946,
+        "tick": 216,
+        "tile": {
+          "x": 3017,
+          "z": 3598,
+          "level": 0
+        },
+        "distance": 1,
+        "nearest": 1,
+        "candidates": 27,
+        "rolls": [
+          0.8344467092538252
+        ]
+      },
+      {
+        "at": 1789179319149,
+        "tick": 227,
+        "tile": {
+          "x": 3013,
+          "z": 3596,
+          "level": 0
+        },
+        "distance": 3,
+        "nearest": 3,
+        "candidates": 27,
+        "rolls": [
+          0.7781275735073596
+        ]
+      },
+      {
+        "at": 1789179321947,
+        "tick": 241,
+        "tile": {
+          "x": 3013,
+          "z": 3596,
+          "level": 0
+        },
+        "distance": 1,
+        "nearest": 1,
+        "candidates": 27,
+        "rolls": [
+          0.9279632322559315
+        ]
+      },
+      {
+        "at": 1789179323743,
+        "tick": 250,
+        "tile": {
+          "x": 3011,
+          "z": 3595,
+          "level": 0
+        },
+        "distance": 2,
+        "nearest": 2,
+        "candidates": 26,
+        "rolls": [
+          0.5862992179200598
+        ]
+      },
+      {
+        "at": 1789179324951,
+        "tick": 256,
+        "tile": {
+          "x": 3011,
+          "z": 3593,
+          "level": 0
+        },
+        "distance": 3,
+        "nearest": 3,
+        "candidates": 26,
+        "rolls": [
+          0.7534388728576781
+        ]
+      },
+      {
+        "at": 1789179327153,
+        "tick": 267,
+        "tile": {
+          "x": 3010,
+          "z": 3591,
+          "level": 0
+        },
+        "distance": 2,
+        "nearest": 2,
+        "candidates": 25,
+        "rolls": [
+          0.24513477042789433
+        ]
+      },
+      {
+        "at": 1789179328361,
+        "tick": 273,
+        "tile": {
+          "x": 3010,
+          "z": 3590,
+          "level": 0
+        },
+        "distance": 1,
+        "nearest": 1,
+        "candidates": 24,
+        "rolls": [
+          0.8520734467931488
+        ]
+      },
+      {
+        "at": 1789179330746,
+        "tick": 285,
+        "tile": {
+          "x": 3010,
+          "z": 3589,
+          "level": 0
+        },
+        "distance": 1,
+        "nearest": 1,
+        "candidates": 25,
+        "rolls": [
+          0.25700337889219593
+        ]
+      },
+      {
+        "at": 1789179333164,
+        "tick": 297,
+        "tile": {
+          "x": 3015,
+          "z": 3591,
+          "level": 0
+        },
+        "distance": 4,
+        "nearest": 1,
+        "candidates": 25,
+        "rolls": [
+          0.021519473294908886,
+          0.21506234653495437
+        ]
+      }
+    ],
+    "clicks": [
+      {
+        "at": 1789179285165,
+        "tick": 57,
+        "tile": {
+          "x": 3018,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 0,
+        "hp": 99,
+        "xp": 13034431,
+        "coal": 0,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3016,
+          "z": 3591,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179287556,
+        "tick": 69,
+        "tile": {
+          "x": 3016,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 96,
+        "xp": 13034481,
+        "coal": 1,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3016,
+          "z": 3587,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179289144,
+        "tick": 77,
+        "tile": {
+          "x": 3016,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 91,
+        "xp": 13034531,
+        "coal": 2,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3017,
+          "z": 3587,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179290354,
+        "tick": 83,
+        "tile": {
+          "x": 3017,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 88,
+        "xp": 13034581,
+        "coal": 3,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3015,
+          "z": 3586,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179293347,
+        "tick": 98,
+        "tile": {
+          "x": 3015,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 82,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3015,
+          "z": 3591,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179295555,
+        "tick": 109,
+        "tile": {
+          "x": 3015,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034681,
+        "coal": 5,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3016,
+          "z": 3592,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179296948,
+        "tick": 116,
+        "tile": {
+          "x": 3015,
+          "z": 3592,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034731,
+        "coal": 6,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3014,
+          "z": 3594,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179301352,
+        "tick": 138,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3021,
+          "z": 3589,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179302342,
+        "tick": 143,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 78,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3020,
+          "z": 3588,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179305342,
+        "tick": 158,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 73,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3021,
+          "z": 3589,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179309144,
+        "tick": 177,
+        "tile": {
+          "x": 3018,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3018,
+          "z": 3597,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179310152,
+        "tick": 182,
+        "tile": {
+          "x": 3018,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034881,
+        "coal": 9,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3017,
+          "z": 3596,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179311151,
+        "tick": 187,
+        "tile": {
+          "x": 3018,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034931,
+        "coal": 10,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3017,
+          "z": 3597,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179313354,
+        "tick": 198,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 72,
+        "xp": 13034981,
+        "coal": 11,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3015,
+          "z": 3596,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179314560,
+        "tick": 204,
+        "tile": {
+          "x": 3015,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 72,
+        "xp": 13035031,
+        "coal": 12,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3016,
+          "z": 3598,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179316557,
+        "tick": 214,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035031,
+        "coal": 12,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3016,
+          "z": 3598,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179316946,
+        "tick": 216,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035081,
+        "coal": 13,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3017,
+          "z": 3598,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179320351,
+        "tick": 233,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3013,
+          "z": 3596,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179321947,
+        "tick": 241,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3013,
+          "z": 3596,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179323743,
+        "tick": 250,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035181,
+        "coal": 15,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3011,
+          "z": 3595,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179326158,
+        "tick": 262,
+        "tile": {
+          "x": 3012,
+          "z": 3594,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 71,
+        "xp": 13035231,
+        "coal": 16,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3011,
+          "z": 3593,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179327153,
+        "tick": 267,
+        "tile": {
+          "x": 3012,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035281,
+        "coal": 17,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3010,
+          "z": 3591,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179328361,
+        "tick": 273,
+        "tile": {
+          "x": 3011,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035331,
+        "coal": 18,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3010,
+          "z": 3590,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179330746,
+        "tick": 285,
+        "tile": {
+          "x": 3011,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035381,
+        "coal": 19,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3010,
+          "z": 3589,
+          "level": 0
+        }
+      },
+      {
+        "at": 1789179334747,
+        "tick": 305,
+        "tile": {
+          "x": 3014,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035431,
+        "coal": 20,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3015,
+          "z": 3591,
+          "level": 0
+        }
+      }
+    ],
+    "depletions": [
+      {
+        "at": 1789179286310,
+        "tick": 62,
+        "tile": {
+          "x": 3017,
+          "z": 3591,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 0,
+        "hp": 99,
+        "xp": 13034481,
+        "coal": 1,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3016,
+          "z": 3591,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 33,
+        "selectionTicks": 1,
+        "selectionMs": 43,
+        "nextDistance": 4,
+        "clickTicks": 7,
+        "clickMs": 1246
+      },
+      {
+        "at": 1789179289142,
+        "tick": 77,
+        "tile": {
+          "x": 3016,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": 424,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 91,
+        "xp": 13034531,
+        "coal": 2,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3016,
+          "z": 3587,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 32,
+        "selectionTicks": 0,
+        "selectionMs": 2,
+        "nextDistance": 1,
+        "clickTicks": 0,
+        "clickMs": 2
+      },
+      {
+        "at": 1789179290150,
+        "tick": 82,
+        "tile": {
+          "x": 3017,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 88,
+        "xp": 13034531,
+        "coal": 2,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3017,
+          "z": 3587,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 31,
+        "selectionTicks": 1,
+        "selectionMs": 204,
+        "nextDistance": 2,
+        "clickTicks": 1,
+        "clickMs": 204
+      },
+      {
+        "at": 1789179291541,
+        "tick": 89,
+        "tile": {
+          "x": 3015,
+          "z": 3588,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 87,
+        "xp": 13034581,
+        "coal": 3,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3015,
+          "z": 3586,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 30,
+        "selectionTicks": 1,
+        "selectionMs": 220,
+        "nextDistance": 4,
+        "clickTicks": 9,
+        "clickMs": 1806
+      },
+      {
+        "at": 1789179295342,
+        "tick": 108,
+        "tile": {
+          "x": 3015,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034631,
+        "coal": 4,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3015,
+          "z": 3591,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 29,
+        "selectionTicks": 1,
+        "selectionMs": 213,
+        "nextDistance": 2,
+        "clickTicks": 1,
+        "clickMs": 213
+      },
+      {
+        "at": 1789179296754,
+        "tick": 115,
+        "tile": {
+          "x": 3014,
+          "z": 3592,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 81,
+        "xp": 13034681,
+        "coal": 5,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3016,
+          "z": 3592,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 28,
+        "selectionTicks": 1,
+        "selectionMs": 194,
+        "nextDistance": 2,
+        "clickTicks": 1,
+        "clickMs": 194
+      },
+      {
+        "at": 1789179299152,
+        "tick": 127,
+        "tile": {
+          "x": 3014,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 81,
+        "xp": 13034731,
+        "coal": 6,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3014,
+          "z": 3594,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 27,
+        "selectionTicks": 1,
+        "selectionMs": 191,
+        "nextDistance": 7,
+        "clickTicks": 11,
+        "clickMs": 2200
+      },
+      {
+        "at": 1789179305145,
+        "tick": 157,
+        "tile": {
+          "x": 3020,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 73,
+        "xp": 13034781,
+        "coal": 7,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3020,
+          "z": 3588,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 26,
+        "selectionTicks": 1,
+        "selectionMs": 197,
+        "nextDistance": 1,
+        "clickTicks": 1,
+        "clickMs": 197
+      },
+      {
+        "at": 1789179309941,
+        "tick": 181,
+        "tile": {
+          "x": 3018,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034831,
+        "coal": 8,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3018,
+          "z": 3597,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 28,
+        "selectionTicks": 1,
+        "selectionMs": 211,
+        "nextDistance": 1,
+        "clickTicks": 1,
+        "clickMs": 211
+      },
+      {
+        "at": 1789179310954,
+        "tick": 186,
+        "tile": {
+          "x": 3018,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 72,
+        "xp": 13034881,
+        "coal": 9,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3017,
+          "z": 3596,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 27,
+        "selectionTicks": 1,
+        "selectionMs": 197,
+        "nextDistance": 1,
+        "clickTicks": 1,
+        "clickMs": 197
+      },
+      {
+        "at": 1789179313154,
+        "tick": 197,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 72,
+        "xp": 13034931,
+        "coal": 10,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3017,
+          "z": 3597,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 27,
+        "selectionTicks": 1,
+        "selectionMs": 200,
+        "nextDistance": 1,
+        "clickTicks": 1,
+        "clickMs": 200
+      },
+      {
+        "at": 1789179314344,
+        "tick": 203,
+        "tile": {
+          "x": 3015,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 72,
+        "xp": 13034981,
+        "coal": 11,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3015,
+          "z": 3596,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 26,
+        "selectionTicks": 1,
+        "selectionMs": 216,
+        "nextDistance": 1,
+        "clickTicks": 1,
+        "clickMs": 216
+      },
+      {
+        "at": 1789179316750,
+        "tick": 215,
+        "tile": {
+          "x": 3016,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 70,
+        "xp": 13035031,
+        "coal": 12,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3016,
+          "z": 3598,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 27,
+        "selectionTicks": 1,
+        "selectionMs": 196,
+        "nextDistance": 1,
+        "clickTicks": 1,
+        "clickMs": 196
+      },
+      {
+        "at": 1789179318951,
+        "tick": 226,
+        "tile": {
+          "x": 3015,
+          "z": 3599,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 2,
+        "hp": 71,
+        "xp": 13035081,
+        "coal": 13,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3017,
+          "z": 3598,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 27,
+        "selectionTicks": 1,
+        "selectionMs": 198,
+        "nextDistance": 3,
+        "clickTicks": 7,
+        "clickMs": 1400
+      },
+      {
+        "at": 1789179323547,
+        "tick": 249,
+        "tile": {
+          "x": 3013,
+          "z": 3597,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035131,
+        "coal": 14,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3013,
+          "z": 3596,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 26,
+        "selectionTicks": 1,
+        "selectionMs": 196,
+        "nextDistance": 2,
+        "clickTicks": 1,
+        "clickMs": 197
+      },
+      {
+        "at": 1789179324757,
+        "tick": 255,
+        "tile": {
+          "x": 3011,
+          "z": 3596,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 3,
+        "hp": 71,
+        "xp": 13035181,
+        "coal": 15,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3011,
+          "z": 3595,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 25,
+        "selectionTicks": 1,
+        "selectionMs": 194,
+        "nextDistance": 3,
+        "clickTicks": 7,
+        "clickMs": 1401
+      },
+      {
+        "at": 1789179326956,
+        "tick": 266,
+        "tile": {
+          "x": 3012,
+          "z": 3593,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035231,
+        "coal": 17,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3011,
+          "z": 3593,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 25,
+        "selectionTicks": 1,
+        "selectionMs": 197,
+        "nextDistance": 2,
+        "clickTicks": 1,
+        "clickMs": 197
+      },
+      {
+        "at": 1789179328145,
+        "tick": 272,
+        "tile": {
+          "x": 3012,
+          "z": 3592,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035281,
+        "coal": 17,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3010,
+          "z": 3591,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 24,
+        "selectionTicks": 1,
+        "selectionMs": 216,
+        "nextDistance": 1,
+        "clickTicks": 1,
+        "clickMs": 216
+      },
+      {
+        "at": 1789179330550,
+        "tick": 284,
+        "tile": {
+          "x": 3011,
+          "z": 3590,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": true,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035331,
+        "coal": 18,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3010,
+          "z": 3590,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 24,
+        "selectionTicks": 1,
+        "selectionMs": 196,
+        "nextDistance": 1,
+        "clickTicks": 1,
+        "clickMs": 196
+      },
+      {
+        "at": 1789179332948,
+        "tick": 296,
+        "tile": {
+          "x": 3011,
+          "z": 3589,
+          "level": 0
+        },
+        "anim": -1,
+        "combat": false,
+        "retaliate": false,
+        "skeletons": 1,
+        "hp": 69,
+        "xp": 13035381,
+        "coal": 19,
+        "full": false,
+        "state": "running",
+        "rock": {
+          "x": 3010,
+          "z": 3589,
+          "level": 0
+        },
+        "nearby": true,
+        "available": 25,
+        "selectionTicks": 1,
+        "selectionMs": 216,
+        "nextDistance": 4,
+        "clickTicks": 9,
+        "clickMs": 1799
+      }
+    ]
+  },
+  "logs": [
+    {
+      "time": 1789179284870,
+      "level": "info",
+      "msg": "Miner started"
+    },
+    {
+      "time": 1789179284881,
+      "level": "info",
+      "msg": "rocks: Coal \u2192 2 loc id(s)"
+    },
+    {
+      "time": 1789179284883,
+      "level": "info",
+      "msg": "combat: Wilderness Miner holds ground against NPCs; player attacks still flee"
+    },
+    {
+      "time": 1789179284883,
+      "level": "info",
+      "msg": "location: Wilderness Skeleton Mine; bank (3094, 3493, 0)"
+    },
+    {
+      "time": 1789179284883,
+      "level": "info",
+      "msg": "gather: 'Rocks' (Mine) leash 64 @ (3018, 3590, 0); banking coal when full"
+    },
+    {
+      "time": 1789179284904,
+      "level": "info",
+      "msg": "combat: Miner re-asserted Auto Retaliate off"
+    },
+    {
+      "time": 1789179286353,
+      "level": "info",
+      "msg": "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+    },
+    {
+      "time": 1789179286449,
+      "level": "info",
+      "msg": "  path: cost 3, 4 waypoints, expanded 34, worker 0.6ms, hops=0"
+    },
+    {
+      "time": 1789179287556,
+      "level": "info",
+      "msg": "  arrived (3 clicks)"
+    },
+    {
+      "time": 1789179291761,
+      "level": "info",
+      "msg": "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+    },
+    {
+      "time": 1789179291799,
+      "level": "info",
+      "msg": "  path: cost 3, 4 waypoints, expanded 19, worker 0.1ms, hops=0"
+    },
+    {
+      "time": 1789179293346,
+      "level": "info",
+      "msg": "  arrived (4 clicks)"
+    },
+    {
+      "time": 1789179299343,
+      "level": "info",
+      "msg": "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+    },
+    {
+      "time": 1789179299383,
+      "level": "info",
+      "msg": "  path: cost 7, 5 waypoints, expanded 133, worker 0.4ms, hops=0"
+    },
+    {
+      "time": 1789179301351,
+      "level": "info",
+      "msg": "  arrived (4 clicks)"
+    },
+    {
+      "time": 1789179307150,
+      "level": "info",
+      "msg": "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+    },
+    {
+      "time": 1789179307190,
+      "level": "info",
+      "msg": "  path: cost 7, 8 waypoints, expanded 123, worker 0.2ms, hops=0"
+    },
+    {
+      "time": 1789179309143,
+      "level": "info",
+      "msg": "  arrived (4 clicks)"
+    },
+    {
+      "time": 1789179319149,
+      "level": "info",
+      "msg": "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+    },
+    {
+      "time": 1789179319186,
+      "level": "info",
+      "msg": "  path: cost 3, 3 waypoints, expanded 25, worker 0.2ms, hops=0"
+    },
+    {
+      "time": 1789179320351,
+      "level": "info",
+      "msg": "  arrived (3 clicks)"
+    },
+    {
+      "time": 1789179324951,
+      "level": "info",
+      "msg": "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+    },
+    {
+      "time": 1789179324988,
+      "level": "info",
+      "msg": "  path: cost 4, 3 waypoints, expanded 47, worker 0.2ms, hops=0"
+    },
+    {
+      "time": 1789179326158,
+      "level": "info",
+      "msg": "  arrived (3 clicks)"
+    },
+    {
+      "time": 1789179333164,
+      "level": "info",
+      "msg": "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+    },
+    {
+      "time": 1789179333203,
+      "level": "info",
+      "msg": "  path: cost 3, 3 waypoints, expanded 18, worker 0.0ms, hops=0"
+    },
+    {
+      "time": 1789179334746,
+      "level": "info",
+      "msg": "  arrived (4 clicks)"
+    }
+  ],
+  "errors": []
+}
