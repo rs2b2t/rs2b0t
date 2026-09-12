@@ -831,6 +831,14 @@ export const CASES: readonly Case[] = [
         note: 'a full ore pack at the Fight Arena Mine has to reach the Yanille booth, and the run fails if the walk drifts to East Ardougne'
     },
     {
+        id: 'miner-skeleton-mine-live',
+        harness: 'miner-skeleton-mine-live.ts',
+        covers: { scripts: ['GatheringBot'] },
+        status: 'unvetted',
+        budgetMin: 12,
+        note: 'coal depletion retarget latency under Skeleton attacks, Auto Retaliate off, and native random rock choices'
+    },
+    {
         id: 'mossgiant-dart-test',
         harness: 'mossgiant-dart-test.ts',
         covers: { scripts: ['MossGiant'] },
