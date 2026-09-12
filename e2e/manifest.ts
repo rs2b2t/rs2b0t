@@ -870,7 +870,8 @@ export const CASES: readonly Case[] = [
         id: 'karamja-fare-755-live',
         harness: 'karamja-fare-755-live.ts',
         covers: { scripts: ['WalkToBot'], subsystems: ['nav'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: '26a714e489b30919f98293af8a41380bd8d0a8f1',
         budgetMin: 10,
         note: 'starts in Brimhaven without coins, earns the Luthas fare and reaches Draynor'
     },
