@@ -20,7 +20,7 @@ export const MC_TILE = {
     NULODION: new Tile(3011, 3453, 0)
 } as const;
 
-/** Server loc ids, six broken railings, twenty-four intact ones and both cannon locs all render the same names. */
+/** Server loc ids; 6 broken railings, 24 intact ones and both cannon locs all render the same names. */
 export const MC_LOC = {
     CRATE: 1,
     CAVE: 2,
@@ -39,7 +39,7 @@ export const MC_OBJ = {
     RAILING: { id: 14, name: 'Railing' }
 } as const;
 
-/** The six broken railings, walked in this order. The `%mcannonmulti` bit is the loc id minus ten. */
+/** The 6 broken railings, walked in this order. The `%mcannonmulti` bit is the loc id minus 10. */
 export const RAILINGS: readonly { id: number; at: Tile }[] = [
     { id: 15, at: new Tile(2556, 3475, 0) },
     { id: 16, at: new Tile(2558, 3472, 0) },
@@ -49,10 +49,10 @@ export const RAILINGS: readonly { id: number; at: Tile }[] = [
     { id: 20, at: new Tile(2572, 3460, 0) }
 ];
 
-/** The repair menu's four damaged components, in the order the module tries them. */
+/** The repair menu's 4 damaged components, in the order the module tries them. */
 export const CANNON_PARTS: readonly string[] = ['Pipe', 'Barrel', 'Axle', 'Shaft'];
 
-// Why: one stop covers every Commander conversation, as the three accept lines never share a page and `driveDialog` otherwise takes the last option, which at stage 5 is the refusal.
+// Why: one stop covers every Commander conversation, as the 3 accept lines never share a page and `driveDialog` otherwise takes the last option, which at stage 5 is the refusal.
 
 export const COMMANDER: NpcStop = {
     npc: 'Dwarf Commander',
@@ -61,8 +61,7 @@ export const COMMANDER: NpcStop = {
     prefer: ["Yeah, I'd love to help.", "Ok, I'll see what I can do.", 'Ok then, just for you!']
 };
 
-// Why: told the cannon is fixed, the Commander walks to it and inspects it before the next page, and the
-// default lull tolerance ended the drive in that gap, the quest then chose another step and talked over him.
+// Why: told the cannon is fixed, the Commander walks over and inspects it before the next page, and the default lull tolerance ended the drive in that gap.
 
 /** The same Commander, for the one stage where he leaves the conversation to go and look. */
 export const COMMANDER_INSPECT: NpcStop = { ...COMMANDER, gapMs: 20_000 };

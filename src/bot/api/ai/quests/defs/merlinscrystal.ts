@@ -28,7 +28,7 @@ const TINDERBOX = 'Tinderbox';
 const WEAPON = 'Rune mace';
 
 const KING_ARTHUR: NpcStop = { npc: 'King Arthur', anchor: new Tile(2764, 3515, 0), leash: 6, prefer: ['I want to become a Knight of the Round Table!'] };
-// Content strings from sir_gawain.rs2 / sir_lancelot.rs2, prefer fragments must match.
+// Prefer fragments must match the strings in sir_gawain.rs2 / sir_lancelot.rs2.
 const GAWAIN: NpcStop = {
     npc: 'Sir Gawain',
     anchor: new Tile(2761, 3508, 0),
@@ -63,7 +63,7 @@ const MORDRED_TILE = new Tile(2769, 3403, 2);
 const KEEP_STAIR_L0 = new Tile(2769, 3404, 0);
 const KEEP_STAIR_L1_UP = new Tile(2769, 3398, 1);
 const KEEP_STAIR_L2_DOWN = new Tile(2769, 3399, 2);
-/** keep_crate_coord = 0_43_53_26_9 → ground-floor Arhein crate inside Mordred's keep */
+/** keep_crate_coord = 0_43_53_26_9, the ground-floor Arhein crate inside Mordred's keep. */
 const RETURN_CRATE_STAND = new Tile(2778, 3401, 0);
 const MAGIC_SYMBOL = new Tile(2780, 3515, 0);
 const CHAOS_ALTAR_STAND = new Tile(3239, 3607, 0);
@@ -95,8 +95,7 @@ function buyOrWait(snap: QuestSnapshot, step: Extract<QuestStep, { kind: 'buy' }
     return step;
 }
 
-// East Ardougne Baker's stall stocks cake/chocolate, not bread (rev 274).
-// Beggar needs actual Bread, so always buy from Wydin's (Port Sarim).
+// The East Ardougne Baker's stall has no bread in rev 274 and the beggar needs Bread, so buy from Wydin's in Port Sarim.
 export function breadPlan(snap: QuestSnapshot, _thievingLevel = 0, _passesUsed = 0): QuestStep {
     return buyOrWait(snap, { kind: 'buy', item: 'Bread', qty: 1, shop: WYDIN_SHOP, estGp: 20 });
 }
@@ -247,8 +246,7 @@ async function candleMakerStageFour(log: (m: string) => void): Promise<boolean> 
         }
         await Execution.delayTicks(1);
     }
-    // Only succeed once Morgan has been briefed and the black-candle option appears.
-    // Treating a failed/empty dialogue as success used to skip the fortress entirely.
+    // Only succeed once Morgan is briefed and the black-candle option appears; treating an empty dialogue as success skipped the fortress.
     return stage4;
 }
 
@@ -333,8 +331,7 @@ async function fortress(log: (m: string) => void): Promise<boolean> {
             await Traversal.walkResilient(mordred.tile(), { radius: 1, attempts: 2, timeoutMs: 20_000, log });
         }
         await mordred.interact('Attack');
-        // Why: the wait covers the Morgan dialogue or combat ending, so a combat that ended without dialogue does not re-Attack next tick, the flag stays false and the next call may re-engage once.
-        // Why: dialogue detection is preferred on every tick.
+        // Why: the wait watches for dialogue every tick and covers combat ending too, so a fight that ended with no dialogue leaves the flag false and the next call may re-engage once.
         for (let i = 0; i < 40 && !mordredBriefed; i++) {
             if (ChatDialog.isOpen() || ChatDialog.canContinue()) {
                 await driveDialogue(MORGAN_OR_CRATE, log);
@@ -342,7 +339,7 @@ async function fortress(log: (m: string) => void): Promise<boolean> {
                 break;
             }
             if (!Game.inCombat() && i > 4) {
-                // Combat ended without dialog yet, give Morgan a moment to spawn dialog
+                // Combat ended with no dialog yet; give Morgan a moment.
                 await Execution.delayTicks(2);
                 if (ChatDialog.isOpen() || ChatDialog.canContinue()) {
                     continue;
@@ -391,7 +388,7 @@ async function leaveKeep(log: (m: string) => void): Promise<boolean> {
     if (!insideKeep(here)) {
         return true;
     }
-    // Prefer the Arhein crate ride home (mesbox + Yes/No header, not multi-option chat).
+    // Prefer the Arhein crate ride home (a mesbox plus a Yes/No header).
     if (RETURN_CRATE_STAND.distanceTo(here) > 2) {
         await Traversal.walkResilient(RETURN_CRATE_STAND, { radius: 2, attempts: 2, timeoutMs: 45_000, log });
     }
@@ -429,8 +426,7 @@ async function leaveKeep(log: (m: string) => void): Promise<boolean> {
         }
         log('leaveKeep: crate Hide-in did not leave the keep');
     }
-    // Front door is the west Large door (same one the crate entry uses), not south into the sea.
-    // Keep box is x 2762–2782, exit must be west of 2762.
+    // The front door is the west Large door the crate entry uses; the keep box is x 2762..2782, so the exit is west of 2762.
     log('leaveKeep: walking west out the keep door');
     const KEEP_WEST_EXIT = new Tile(2758, 3401, 0);
     for (let attempt = 0; attempt < 8; attempt++) {
@@ -455,8 +451,7 @@ async function openingLeg(log: (m: string) => void): Promise<boolean> {
         return fortress(log);
     }
     if (mordredBriefed) {
-        // Keep is done. Do not thrash the candle maker every tick, wax exchange
-        // happens later via decide() once bones/wax are in the pack.
+        // Keep is done. Don't thrash the candle maker every tick; decide() does the wax exchange once bones/wax are in the pack.
         return killGiantBat(log);
     }
     if (t && BAT_ANCHOR.distanceTo(t) <= 25) {

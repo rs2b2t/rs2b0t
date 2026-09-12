@@ -43,11 +43,11 @@ export function decide(snap: QuestSnapshot): QuestStep {
     }
 
     const mine = gang();
-    // Why: `ownsInventory` skips the engine's provisioning, so nothing else ever opens a booth, and a certificate or a traded store key sitting in the bank stays invisible until one read happens.
+    // Why: `ownsInventory` skips the engine's provisioning, so nothing else opens a booth and a banked certificate or traded store key stays invisible until one read.
     if (!snap.bankKnown) {
         return { kind: 'scanBank' };
     }
-    // Why: minting outranks every trade, a bot holding both halves must never hand one back.
+    // Why: minting outranks every trade; a bot holding both halves must never hand one back.
     const curator = curatorStep(snap, mine);
     if (curator) {
         return curator;
@@ -75,7 +75,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return certs;
     }
 
-    // Why: one half in the pack and no way to a second is the dead end `warnReadiness` names, and only a `wait` parks it. A `custom` step that fails forever parks nothing.
+    // Why: one half and no way to a second is the dead end `warnReadiness` names; only a `wait` parks it, a failing `custom` step never does.
     if (ArravConfig.partner.trim().length === 0
         && certsHeld(snap) + certsBanked(snap) === 0
         && heldId(snap, ownHalf(mine)) > 0) {
@@ -87,17 +87,17 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const shieldofarrav: QuestModule = {
     record: QUESTS.find(r => r.id === 'blackarmgang')!,
-    // Why: the quest never leaves Varrock, which has two booths.
+    // Why: the quest never leaves Varrock, which has 2 booths.
     bank: 'nearest',
-    // Why: the bribe and the certificate are acquired at the stage that needs them, not up front.
+    // Why: the bribe and the certificate get acquired at the stage that needs them.
     ownsInventory: true,
     hops: [...SOA_HOPS],
     grind: ['Jonny the beard', 'Weaponsmaster'],
     tools: ['coins', 'broken shield', 'certificate', 'key', 'scroll', 'phoenix crossbow', 'book'],
-    // Literals, not QuestFood.name: this object is built at import, when the setting still holds its default.
+    // Built at import, when the QuestFood setting still holds its default, so these stay literals.
     sustain: { foods: ['Lobster', 'Swordfish', 'Tuna'], eatBelowHp: 0.5 },
     readProgress: readShieldOfArravProgress,
-    // Why: the quest is not finishable alone. The crossbows sit behind a door only Straven's key opens, and joining Phoenix makes Katrine refuse you.
+    // Why: the crossbows sit behind a door only Straven's key opens and joining Phoenix makes Katrine refuse you, so nobody finishes this alone.
     warnReadiness: () =>
         ArravConfig.partner.trim().length > 0
             ? null

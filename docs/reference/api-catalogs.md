@@ -104,8 +104,8 @@ interface GatheringLocation {
     boothName?; boothOp?; obstacles?; resources?; notes?;
 }
 
-// resolution: "None" → null; named → match; "Auto" → nearest camp in the same
-// 64×64 map square as startTile (else freeform null)
+// "None" returns null; a name selects a camp. "Auto" uses the nearest camp
+// in startTile's 64x64 map square, or null if there is none.
 resolveGatheringLocation(setting, startTile, table)
 locationOptions(table)            // ['Auto', …names, 'None']
 boothFields(loc) / sameMapSquare / MAP_SQUARE / DEFAULT_BOOTH_NAME / DEFAULT_BOOTH_OP
@@ -114,6 +114,7 @@ FISHING_LOCATIONS / resolveFishingLocation / FISHING_LOCATION_OPTIONS
 MINING_LOCATIONS / resolveMiningLocation / MINING_LOCATION_OPTIONS
 MINING_LOCATION_OPTION_LABELS / miningLocationLabel(loc)   // option text with the recommended combat level
 WOODCUTTING_LOCATIONS / resolveWoodcuttingLocation / WOODCUTTING_LOCATION_OPTIONS
+ENT_NPC_IDS / ENT_LIFE_TICKS / isEntNpcId(id) / entNpcOnTile(npcs, tile)
 ```
 
 ## See also

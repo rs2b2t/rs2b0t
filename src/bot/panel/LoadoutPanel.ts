@@ -34,10 +34,7 @@ const SLOT_LABEL: Record<Slot, string> = {
     quiver: 'Ammo'
 };
 
-/**
- * Editor for the player's named loadouts.
- * Why: every mutation goes through the store and re-renders, so no in-memory copy can drift from what is saved.
- */
+/** Editor for the player's named loadouts; the store remains the source of truth. */
 export class LoadoutPanel {
     /** Full-screen backdrop; the window inside it is what the player sees. */
     readonly root = el('div', 'rs2b0t-loadout-backdrop');
@@ -46,7 +43,7 @@ export class LoadoutPanel {
     private selected: string | null = null;
     private picker: Target | null = null;
     private query = '';
-    /** Supply row label → the item that row holds. See {@link supplyRow}. */
+    /** Supply row label to the item that row holds. See {@link supplyRow}. */
     private readonly supplyItem = new Map<string, string>();
     private renaming = false;
     private iconTries = 0;
@@ -74,10 +71,7 @@ export class LoadoutPanel {
         this.render();
     }
 
-    /**
-     * Never sit on nothing.
-     * Why: every slot and supply click needs a loadout to write into, and with none selected they are silent no-ops that make the panel look broken rather than empty.
-     */
+    /** Keep a loadout selected so slot and supply clicks always have a target. */
     private ensureLoadout(): void {
         if (Loadouts.names().length === 0) {
             Loadouts.save([{ name: 'loadout', worn: {}, carry: [] }]);
@@ -90,10 +84,7 @@ export class LoadoutPanel {
         this.stopIconFill();
     }
 
-    /**
-     * The client streams item models on demand, so `getSprite` returns null until the one asked about arrives; a freshly-logged-in client has no icon for anything it has not seen.
-     * Why: re-rendering would blow away the search box mid-type, so icons are patched in place a few times before giving up and leaving the names showing.
-     */
+    /** Retry streamed sprites in place so an update does not reset the active search box. */
     private scheduleIconFill(): void {
         this.stopIconFill();
         if (this.iconTries >= ICON_FILL_TRIES) {
@@ -135,10 +126,7 @@ export class LoadoutPanel {
         return missing;
     }
 
-    /**
-     * Give each saved carry entry a row to live on, so a reopened panel shows
-     * what was saved. Entries past the six named rows are left unclaimed.
-     */
+    /** Restore saved carry entries; entries after the six named rows stay unclaimed. */
     private adoptCarry(): void {
         const loadout = this.current();
         if (!loadout) {
@@ -203,7 +191,7 @@ export class LoadoutPanel {
             if (!target) {
                 return;
             }
-            // Why: supplies are not on the character's back, so wiping them because someone wanted their armour copied would be a surprise.
+            // Why: supplies aren't on the character's back, so wiping them because someone copied their armour would be a surprise.
             this.commit({ ...target, worn: wornFromEquipment(Equipment.items()) });
         }));
         bar.appendChild(this.action('rename', 'rename', () => {
@@ -370,10 +358,7 @@ export class LoadoutPanel {
         return box;
     }
 
-    /**
-     * A supply row is keyed on the item it holds, not on a position in `carry`.
-     * Why: `carry` drops empty entries, so setting the second row while the first is empty would renumber it onto the first.
-     */
+    /** Why: key supply rows by item because `carry` omits empty positions. */
     private supplyRow(row: SupplyRow, loadout: Loadout | null): HTMLElement {
         const line = el('div', 'rs2b0t-loadout-supply');
         line.dataset.supply = row.label;

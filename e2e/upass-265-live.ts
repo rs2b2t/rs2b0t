@@ -1,9 +1,7 @@
-/** Live Underground Pass harness (#265): --stage N --until N --minutes N, base :8890.
- *  Why: `%upass` and `%ibanmulti` are both `scope=perm` with no `transmit`, so the bot reads its own stage
- *  off the journal, the harness seeds the varps and relogs, because `~update_questlist` only recolours the
- *  list at login. Biohazard is seeded complete: it gates the cave mouth and King Lathas, and has no module yet.
- *  Why: stats are 70 across the board and the bank holds coins and Lobsters alone, so the bow, arrows,
- *  tinderbox and bucket are all sourced by the module rather than handed to it. */
+/** Live Underground Pass harness (#265), using the members world at :8890. */
+// Why: `%upass` and `%ibanmulti` do not transmit, so stage jumps relog and read the journal.
+// Biohazard is seeded complete because it gates the entrance and has no module yet.
+// Skills start at 70; only coins and lobsters are banked.
 
 //   HEADED=1 bun e2e/upass-265-live.ts --stage 0 --until 2 --minutes 30 --tick 200
 //   HEADED=1 bun e2e/upass-265-live.ts --stage 2 --until 3 --minutes 25 --tick 200
@@ -332,8 +330,7 @@ try {
     let queueChecked = false;
     while (Date.now() < deadline) {
         const last = await snapshot(page);
-        // Why: the engine serves one bundle to everyone, so a session that redeploys inside this run's boot
-        // window hands it their branch, and a queue without this quest spends the budget on somebody else's.
+        // Why: reject a shared bundle replaced by another session during boot.
         const queue = last.logs.find(l => l.msg.startsWith('AIOQuester — queue:'));
         if (!queueChecked && queue) {
             queueChecked = true;

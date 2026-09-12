@@ -1,5 +1,5 @@
-/** Derive the Ernest the Chicken basement route from the baked collision pack. defs/ernest/basement.ts is written against both outputs: the shortest levers-and-doors chain from the ladder landing to the oil can, BFS'd over (tile, 6 lever bits), and the seven regions the doors cut the basement into.
- *  Why: six levers interlock nine doors and the combination that opens one shuts another, so no walkthrough gives the chain in a form the walker can use; the region boxes are pairwise disjoint, which lets a tile alone name a room. A set bit means the lever is DOWN, transcribed from [oploc1,_haunted_door]; the nine doors sit in derive-doors.ts SCRIPT_REFUSED, so the navigator never routes through one. */
+/** Derive the shortest lever/door route to the oil can and the seven basement regions, for defs/ernest/basement.ts.
+ * Why: six levers control nine interlocking doors excluded from the nav graph; set bits mean down, and disjoint region bounds identify rooms. */
 
 //   bun tools/nav/ernest-basement-derive.ts
 import fs from 'node:fs';
@@ -26,7 +26,7 @@ if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
 const finder = new PathFinder(bytes);
 
 const A = 1 << 0, B = 1 << 1, C = 1 << 2, D = 1 << 3, E = 1 << 4, F = 1 << 5;
-/** True when the lever is DOWN. */
+/** True when the lever is down. */
 const down = (bits: number, mask: number): boolean => (bits & mask) !== 0;
 
 const BOX = { minX: 3086, maxX: 3124, minZ: 9740, maxZ: 9775 };

@@ -8,8 +8,8 @@ const CONTENT = process.env.CONTENT_DIR ?? join(homedir(), 'code', 'rs2b2t-conte
 const OUT = 'src/bot/data/untradeable.ts';
 
 
-/** Debugnames the content marks as untradeable, either outright or by being a dummy. */
-// Why: the engine defaults every obj to tradeable (off only via opcode 15 or a dummyitem), so absence means yes.
+/** Debugnames marked untradeable or dummy. */
+// Why: objects are tradeable by default; only opcode 15 or dummyitem disables trading.
 function untradeableNames(text: string): string[] {
     const out: string[] = [];
     let id: string | null = null;
@@ -65,7 +65,7 @@ if (process.argv.includes('--check')) {
     try {
         current = readFileSync(OUT, 'utf8');
     } catch {
-        // No file yet: an absent list is "stale", which is what the check should report.
+        // Missing output is stale.
     }
     if (current !== fresh) {
         console.error(`STALE: ${OUT} does not match the content pack — run: bun tools/items/gen-untradeable.ts`);

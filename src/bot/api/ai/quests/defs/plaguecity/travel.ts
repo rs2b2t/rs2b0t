@@ -26,8 +26,7 @@ export async function walkTo(to: Tile, radius: number, log: (m: string) => void)
     return Traversal.walkResilient(to, { radius, attempts: 3, timeoutMs: 180_000, log });
 }
 
-// Why: the garden dig hands the spade objbox before it teleports, so a plain tile poll
-// times out while the crossing waits on a click nobody made.
+// Why: the garden dig hands the spade objbox before it teleports, so a plain tile poll times out while the crossing waits on a click nobody made.
 export async function arrive(want: PlagueArea, log: (m: string) => void, ms = 20_000): Promise<boolean> {
     const landed = await driveUntil(() => area() === want, [], log, ms);
     if (landed) {
@@ -92,7 +91,7 @@ async function squeezePipe(log: (m: string) => void): Promise<boolean> {
     return arrive('west', log);
 }
 
-// Why: the manhole reverts to its cover 500 ticks after the pipe opened it, and the closed loc offers Open rather than Climb-down.
+// Why: the manhole reverts to its cover 500 ticks after the pipe opened it, and the closed loc only offers Open.
 async function dropManhole(log: (m: string) => void): Promise<boolean> {
     if (area() === 'sewer') {
         return true;

@@ -5,10 +5,7 @@ import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { SOA_NAME } from './areas.js';
 
-/**
- * One ladder folding both gang varps. Values below 20 are `%phoenixgang`,
- * values from 21 up are `%blackarmgang`, and 30 is either one complete.
- */
+/** One ladder folding both gang varps: below 20 is `%phoenixgang`, 21 up is `%blackarmgang`, 30 is either one complete. */
 export const SOA_STAGE = {
     NOT_STARTED: 0,
     TOLD_OF_BOOK: 1,
@@ -23,7 +20,8 @@ export const SOA_STAGE = {
     COMPLETE: 30
 } as const;
 
-// Why: the page keeps every earlier line struck through, so an early needle still matches in a late state and this order is the only thing separating them.
+/** Colour tags become a space, so no needle may span a tag boundary. */
+// Why: earlier lines stay on the page struck through, so an early needle still matches late and only this order separates them.
 const STAGES: readonly [string, number][] = [
     ['quest complete!', SOA_STAGE.COMPLETE],
     ['allowed me to join the black arm gang', SOA_STAGE.BLACKARM_JOINED],
@@ -39,7 +37,7 @@ const STAGES: readonly [string, number][] = [
     ['i can start this quest by speaking to', SOA_STAGE.NOT_STARTED]
 ];
 
-// Why: one stage renders several pages depending on what is carried, and the flag is the only thing that tells them apart.
+// Why: one stage renders several pages depending on what you carry, and the flag is what tells them apart.
 const FLAGS: readonly [string, string][] = [
     ['i should now give one to a fellow adventurer', 'two-certificates'],
     ['collect my reward', 'certificate'],
@@ -65,14 +63,14 @@ export function parseShieldOfArravJournal(lines: readonly string[] | string): Qu
             flags.add(flag);
         }
     }
-    // Why: the killed-Jonny line stays on the page struck through after the hand-in, so it is evidence only while the mission is still the stage.
+    // Why: the killed-Jonny line stays struck through after the hand-in, so it only counts while KILL_JONNY is the stage.
     if (hit[1] !== SOA_STAGE.KILL_JONNY) {
         flags.delete('report-held');
     }
     return { stage: hit[1], flags };
 }
 
-/** A failed read is not evidence the quest went backwards. */
+/** A failed read doesn't mean the quest went backwards. */
 let lastGood: QuestProgress | undefined;
 
 export async function readShieldOfArravProgress(): Promise<QuestProgress | undefined> {

@@ -12,14 +12,14 @@ Banking.open(opts?: {
     boothOp?: string;             // default 'Use-quickly'
     obstacles?: string[];         // doors/gates on the way to stand (e.g. ['door','gate'])
     destination?: BankDestination;// force a bank when no booth in scene
-    preferNearby?: boolean;       // default true — local booth beats distant stand
+    preferNearby?: boolean;       // default true; prefer a nearby bank
     nearbyRadius?: number;        // default NEARBY_BANK_RADIUS (14)
     log?: (msg: string) => void;
 }): Promise<boolean>
-// Does NOT deposit or walk back — caller owns the session.
+// The caller handles deposits and the return trip.
 
-NEARBY_BANK_RADIUS                // snap radius for "bank underfoot"
-resolveBankOpenRoute(input)       // pure router (unit-tested)
+NEARBY_BANK_RADIUS                // radius for a nearby bank
+resolveBankOpenRoute(input)       // choose the bank route
 
 Banking.bankNearest(opts: {
     deposit: (name: string) => boolean;
@@ -88,7 +88,7 @@ await Banking.open({
 });
 await Bank.depositAllMatching(depositAllExcept(['Small fishing net']));
 
-// No preset — web-walk nearest bank, dump loot, walk back
+// Use the nearest bank, deposit loot, then walk back.
 await Banking.bankNearest({
     deposit: depositAllExcept(['Lobster pot']),
     returnTo: this.anchor,
@@ -103,7 +103,7 @@ Higher-level helpers for "make sure I have these items":
 ```ts
 type ItemNeed = { name: string; count: number; source: ItemSource };
 
-held(name: string): number          // count of an item across backpack slots (worn gear NOT included)
+held(name: string): number          // item count across backpack slots, excluding worn gear
 hasAll(needs: ItemNeed[]): boolean  // every need satisfied by current holdings
 class AcquireTask implements Task { constructor(bot, needs: ItemNeed[]); } // obtains items
 ```

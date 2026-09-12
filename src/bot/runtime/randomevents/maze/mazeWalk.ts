@@ -9,7 +9,7 @@ export interface MazeWalkWorld {
     ticks(n: number): Promise<void>;
 }
 
-// Why: a leg ends once the player is 2 tiles along, so capping legs caps walking distance; standing still, not distance, is what proves a door walled off.
+// Why: a leg ends once you're 2 tiles along, so capping legs caps walking distance; standing still is what proves a door walled off.
 const MAX_LEGS = 40;
 const MAX_STILL_LEGS = 3;
 

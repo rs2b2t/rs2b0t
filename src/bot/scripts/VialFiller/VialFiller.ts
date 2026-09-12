@@ -18,8 +18,7 @@ const EMPTY_VIAL = 'Vial';
 const WATER_VIAL = 'Vial of water';
 const COINS = 'Coins';
 
-// The only Falador fountain sits beside the WEST bank; the east bank has no
-// water source in its scene, so an east-bank trip walks ~64 tiles each way.
+// Falador's only fountain is beside the west bank; the east bank adds roughly 64 tiles each way.
 const FOUNTAIN = new Tile(2949, 3381, 0);
 const JATIX_STAND = new Tile(2899, 3427, 0);
 const JATIX = 'Jatix';

@@ -3,7 +3,7 @@ import type { NpcStop } from '../../exec/primitives.js';
 
 export const MURDER_NAME = 'Murder Mystery';
 
-// Why: every floured item renders the same name as its clean form, all three threads render "Criminals' thread", and "Pot" has twins, so nothing here is matched by name.
+// Why: every floured item renders the same name as its clean form, all 3 threads render "Criminals' thread", and "Pot" has twins, so nothing here is matched by name.
 
 /** Object ids. */
 export const MURDER_OBJ = {
@@ -139,9 +139,9 @@ export const SUSPECTS: readonly Suspect[] = [
     }
 ];
 
-// Why: the thread left on the window is cut from the murderer's own clothes, so its colour halves the field before a single print is lifted.
+// Why: the window thread is cut from the murderer's own clothes, so its colour halves the field before any print is lifted.
 
-/** The two whose clothes match the thread, then the rest as a fallback. */
+/** The 2 whose clothes match the thread, then the rest as a fallback. */
 export function suspectOrder(thread: number): readonly Suspect[] {
     const matched = SUSPECTS.filter(s => s.thread === thread);
     return [...matched, ...SUSPECTS.filter(s => !matched.includes(s))];

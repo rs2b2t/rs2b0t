@@ -24,10 +24,10 @@ const JONNY_NPC = 645;
 const KILL_MS = 60_000;
 const WALK_MS = 120_000;
 
-// Why: both land as a main modal from `~objbox` / `~mesbox`, never as a chat line.
+// Why: the chest lines land as a main modal from `~objbox` / `~mesbox`, so they never reach the chat.
 const CHEST_EMPTY = /the chest is empty/i;
 
-/** The bookcase answers Check with a player line and a mesbox before the book lands, which no item-count wait survives on its own. */
+/** Check the bookcase and continue its line and mesbox before waiting for the book. */
 export async function takeBook(log: (m: string) => void): Promise<boolean> {
     if (Inventory.countById(SOA_ID.BOOK) > 0) {
         return true;
@@ -112,7 +112,7 @@ export async function joinPhoenixGang(log: (m: string) => void): Promise<boolean
     return talkInHideout(STRAVEN_JOIN, STRAVEN_JOIN.prefer, log);
 }
 
-/** Straven takes the report by dialogue and hands back the weapon-store key, which is what proves the join. */
+/** Straven takes the report by dialogue and hands back the weapon-store key; that proves the join. */
 export async function handInReport(log: (m: string) => void): Promise<boolean> {
     if (!(await talkInHideout(STRAVEN_HANDIN, [], log))) {
         return false;
@@ -129,7 +129,7 @@ export async function takePhoenixHalf(log: (m: string) => void): Promise<boolean
         log('could not get through the gang door to the chest');
         return false;
     }
-    // Why: the chest renders as two locs and only the open one carries Search.
+    // Why: the chest renders as 2 locs and only the open one carries Search.
     if (!(await openContainer('Chest', SOA_LOC.CHEST_SHUT, SOA_LOC.CHEST_OPEN, SOA_TILE.CHEST_STAND, log))) {
         await leaveHideout(log);
         return false;
@@ -153,14 +153,14 @@ export async function takePhoenixHalf(log: (m: string) => void): Promise<boolean
         await leaveHideout(log);
         return false;
     }
-    // Why: the half in the pack is the work; a failed climb out is retried by the next pass's early branch, and reporting failure here would throw away a shield half the pack is holding.
+    // Why: the half in the pack is the work; the next pass's early branch retries a failed climb out, and failing here would throw away a half you're holding.
     if (!(await leaveHideout(log))) {
         log('half taken, but the climb back to the surface did not land — retrying next pass');
     }
     return true;
 }
 
-// Why: every conversation goes through Reach rather than the shared `talk` step, whose gotoNpc approaches on a leash and calls a stand two tiles off "arrived".
+// Why: every conversation goes through Reach; the shared `talk` step's gotoNpc approaches on a leash and calls a stand 2 tiles off "arrived".
 function say(stop: typeof RELDO, name: string): QuestStep {
     return { kind: 'custom', name, run: log => walkAndTalk(stop, stop.prefer, log) };
 }
@@ -190,7 +190,7 @@ export function phoenixStep(snap: QuestSnapshot): QuestStep {
             if (heldId(snap, SOA_ID.BOOK) > 0) {
                 return { kind: 'custom', name: 'read The Shield of Arrav', run: readBook };
             }
-            // Why: nine other Bookcase locs stand within four tiles, and only this one carries Check.
+            // Why: 9 other Bookcase locs stand within 4 tiles, and only this one carries Check.
             return { kind: 'custom', name: 'check the palace bookcase', run: takeBook };
 
         case SOA_STAGE.READ_BOOK:
@@ -202,7 +202,7 @@ export function phoenixStep(snap: QuestSnapshot): QuestStep {
             }
             return say(BARAEK, 'bribe Baraek for the hideout');
 
-        // Why: Straven lives in a sealed underground pocket, and the shared hop walks to a stand two tiles off, calls it arrived, and never climbs.
+        // Why: Straven lives in a sealed underground pocket, and the shared hop walks to a stand 2 tiles off, calls it arrived, and never climbs.
         case SOA_STAGE.FIND_STRAVEN:
             return { kind: 'custom', name: 'offer Straven your services', run: joinPhoenixGang };
 
@@ -213,8 +213,8 @@ export function phoenixStep(snap: QuestSnapshot): QuestStep {
             return { kind: 'custom', name: 'kill Jonny the beard for the report', run: killJonny };
 
         case SOA_STAGE.PHOENIX_JOINED: {
-            // Why: `[oploc1,phoenixopenchest]` and `~obj_gettotal` both count the bank, so a banked half or key is never re-issued. Only a withdraw gets it back.
-            // Why: the guard is the pack rather than the split, so a stale bank read cannot make this and a deposit undo each other.
+            // Why: `[oploc1,phoenixopenchest]` and `~obj_gettotal` both count the bank, so a banked half or key is never re-issued and only a withdraw gets it back.
+            // Why: the guard reads the pack, so a stale bank read can't make this and a deposit undo each other.
             const recover = bankedRecovery(snap);
             if (recover.length > 0) {
                 return { kind: 'withdraw', items: recover };

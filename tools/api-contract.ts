@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// Drift gate: globalThis.__rs2b0t versus packages/rs2b0t-api/index.d.ts over the names index.js re-exports; --check exits 1 on drift.
+// Compare the runtime ABI with index.d.ts for each index.js export; --check fails on drift.
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 
@@ -12,7 +12,7 @@ export interface Member {
     type: string;
     optional: boolean;
 }
-/** Member name -> member. null: the export carries no members (a function, an array or a primitive). */
+/** Members by name; null for functions, arrays and primitives. */
 export type Members = Map<string, Member> | null;
 export type Surface = Map<string, Members>;
 

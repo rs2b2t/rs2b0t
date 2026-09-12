@@ -50,10 +50,7 @@ function fieldPath(node: Element): string | null {
     return row ? `[data-item="${row.dataset.item}"] [data-role="${role}"]` : `[data-role="${role}"]`;
 }
 
-/**
- * Editor for the player's named order books.
- * Why: every mutation goes through the store and re-renders, so no in-memory copy can drift from what is saved.
- */
+/** Editor for the player's named order books; the store remains the source of truth. */
 export class PriceBookPanel {
     readonly root = el('div', 'rs2b0t-loadout-backdrop');
     private readonly window = el('div', 'rs2b0t-loadout-panel rs2b0t-pricebook');
@@ -71,7 +68,7 @@ export class PriceBookPanel {
 
     constructor() {
         this.root.style.display = 'none';
-        // Why: the Edit… button opens this from inside the params modal, which shares z-index 1000.
+        // Why: the Edit button opens this from inside the params modal, which shares z-index 1000.
         this.root.style.zIndex = '1001';
         this.window.dataset.scroll = 'panel';
         this.root.appendChild(this.window);
@@ -108,10 +105,7 @@ export class PriceBookPanel {
         return this.root.style.display === 'flex';
     }
 
-    /**
-     * Never sit on nothing.
-     * Why: every field writes into a book, and with none selected they are silent no-ops that make the panel look broken rather than empty.
-     */
+    /** Keep a book selected so every field has a write target. */
     private ensureBook(): void {
         if (PriceBooks.all().length === 0) {
             PriceBooks.save([{ name: 'prices', margin: DEFAULT_MARGIN, maxTradeValue: DEFAULT_MAX_TRADE, rows: [] }]);
@@ -128,7 +122,7 @@ export class PriceBookPanel {
         this.render();
     }
 
-    // Why: every edit commits through the store and rebuilds the panel, which threw away the scroll position and the caret, so a change to the eightieth row sent the operator back to the first.
+    // Why: every edit commits through the store and rebuilds the panel, which would drop the scroll position and caret and send an edit on row 80 back to row 1.
     private render(): void {
         const held = this.hold();
         this.window.replaceChildren();
@@ -181,7 +175,7 @@ export class PriceBookPanel {
             }
         }
 
-        // Why: focusing a field scrolls it into view, and it does that against a layout the rebuilt rows have not had yet, which lands the table near the top. The offset goes back after the focus so it is the one that wins.
+        // Why: focusing a field scrolls it into view against a layout the rebuilt rows haven't had yet, which lands the table near the top, so the offset is restored after the focus.
         for (const box of this.scrollers()) {
             const was = held.scroll.get(box.dataset.scroll!);
             if (was !== undefined) {
@@ -557,7 +551,7 @@ export class PriceBookPanel {
         input.addEventListener('change', () => {
             const parsed = parsePrice(input.value);
             if (parsed === null) {
-                // Why: writing what cannot be read would store NaN, so an unreadable edit is put back instead.
+                // Why: an unreadable edit would store NaN, so the box goes back to the old value.
                 input.value = formatPrice(value);
                 return;
             }

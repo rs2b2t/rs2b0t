@@ -1,7 +1,4 @@
-/**
- * GatheringBot task implementations (combat, mule, bank, cook, tools, gather).
- * Separated from the bot class for maintainability; behavior is unchanged.
- */
+/** GatheringBot task implementations for combat, mule, bank, cooking, tools, and gathering. */
 import { beyondLeash, shouldSoftHomeFromGatherMiss, tileWithinLeash } from '../../api/tasks/Anchor.js';
 import type { Task } from '../../api/bot/Bot.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
@@ -20,6 +17,7 @@ import { Npcs } from '../../api/npcs/Npcs.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { isOpenableObstacle, openOp, walkOpening } from '../../event/webwalk/walkOpening.js';
 import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
+import { stepOffCandidates } from '../../runtime/randomevents/eventEvade.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import {
     gatherHuntRadius,
@@ -36,6 +34,7 @@ import {
 } from '../../api/trade/PartnerTrade.js';
 import { driveActivePartnerTrade, tradeScreenState } from '../../api/trade/drivePartnerTrade.js';
 import { BROKEN_PICKAXE, GAS_ROCK_IDS, GAS_ROCK_TICKS } from '../../data/miningRocks.js';
+import { ENT_LIFE_TICKS, ENT_NPC_IDS } from '../../data/woodcuttingLocations.js';
 import { bestPickaxe } from '../../api/acquisition/Tools.js';
 import { WHIRLPOOL_IDS, fishingRestockPlan } from '../../data/fishingMethods.js';
 import {
@@ -71,6 +70,8 @@ import {
     featherCoinsToDraw,
     fishingSessionBroken,
     hostileAttackerNearby,
+    locGatherShouldYield,
+    entAbortAction,
     shouldFleeCombat
 } from './GatheringBotLogic.js';
 import type GatheringBot from './GatheringBot.js';
@@ -1218,7 +1219,7 @@ export class FishCookLoad implements Task {
                     this.bot.log(`cook: walking to approach ${approach}${why ? ` — ${why}` : ''}`);
                     await walkOpening(approach, 1, obs, m => this.bot.log(m));
                 }
-                // Proactively open Large door / house Door at the approach tile.
+                // Open a Large door or house Door from its approach tile.
                 const shut = Locs.query()
                     .where(l => isOpenableObstacle(l.name, l.actions(), obs))
                     .where(l => l.distance() <= 3)
@@ -2350,6 +2351,7 @@ export class Gather implements Task {
     /** NPC index of the spot we last successfully started fishing on (null = no active session). */
     private activeFishIndex: number | null = null;
 
+    /** Last clicked tree or rock tile; used to preserve the active target and abort an Ent on that tile. */
     private activeMineTile: Tile | null = null;
 
     /**
@@ -2500,6 +2502,15 @@ export class Gather implements Task {
         );
     }
 
+    private entAt(t: Tile): boolean {
+        return (
+            Npcs.query()
+                .withinOf(t, 0)
+                .where(n => ENT_NPC_IDS.has(n.id))
+                .nearest() !== null
+        );
+    }
+
     private spotByIndex(index: number) {
         return Npcs.query()
             .where(n => n.index === index)
@@ -2527,20 +2538,16 @@ export class Gather implements Task {
 
     /** Short-circuits cheap checks before scene queries. */
     private shouldYieldMine(tile: Tile): boolean {
-        if (EventSignal.pending() || Inventory.isFull() || ChatDialog.canContinue()) {
-            return true;
-        }
-        if (this.bot.minerFoodEnabled() && this.bot.shouldEatMinerFood()) {
-            return true;
-        }
-        if (combatBreaksGather(Game.inCombat(), this.bot.allowCombatGather())) {
-            return true;
-        }
-        // Gas is cheaper/more local than a full camp rock scan.
-        if (this.gasAt(tile)) {
-            return true;
-        }
-        return this.findRock(tile) === null;
+        return locGatherShouldYield({
+            eventPending: EventSignal.pending(),
+            inventoryFull: Inventory.isFull(),
+            dialogPending: ChatDialog.canContinue(),
+            inCombat: Game.inCombat(),
+            allowCombatGather: this.bot.allowCombatGather(),
+            shouldEatMinerFood: this.bot.minerFoodEnabled() && this.bot.shouldEatMinerFood(),
+            clickedTileHazard: this.gasAt(tile) || this.entAt(tile),
+            noResourceInCamp: this.findRock(tile) === null
+        });
     }
 
     private async fleeGas(key: string, tile: Tile): Promise<void> {
@@ -2557,6 +2564,46 @@ export class Gather implements Task {
         this.bot.setStatus('fish: whirlpool');
         this.bot.cooldown(keyOf(tile), 70);
         DirectNavigator.walk(this.bot.getAnchor());
+        await Execution.delayTicks(2);
+    }
+
+    /**
+     * Why: leaving the animation wait does not cancel p_opnpc; send a new action to stop Ent swings.
+     */
+    private async abortEnt(key: string, tile: Tile): Promise<void> {
+        this.bot.log(`gather: ent @ ${tile} — switching tree`);
+        this.bot.setStatus('gather: ent');
+        this.bot.cooldown(key, ENT_LIFE_TICKS + 10);
+
+        const neighbour = this.findRock();
+        const here = Game.tile();
+        const neighbourTile = neighbour?.tile() ?? null;
+        const inReach =
+            neighbourTile !== null && here !== null && Tile.from(here).distanceTo(neighbourTile) <= 1;
+        const action = entAbortAction({
+            neighbourInReach: inReach,
+            neighbourExists: neighbour !== null
+        });
+
+        if (action === 'chop-neighbour' && neighbour && neighbourTile) {
+            await neighbour.interact(this.bot.actionName());
+            this.activeMineTile = neighbourTile;
+            return;
+        }
+        if (action === 'walk-to-neighbour' && neighbourTile) {
+            this.activeMineTile = null;
+            DirectNavigator.walk(neighbourTile);
+            await Execution.delayTicks(2);
+            return;
+        }
+
+        this.activeMineTile = null;
+        if (here) {
+            const step = stepOffCandidates(here, tile)[0];
+            if (step) {
+                DirectNavigator.walk(step);
+            }
+        }
         await Execution.delayTicks(2);
     }
 
@@ -2839,8 +2886,17 @@ export class Gather implements Task {
             return;
         }
 
+        if (this.activeMineTile && Game.animating() && this.entAt(this.activeMineTile)) {
+            await this.abortEnt(keyOf(this.activeMineTile), this.activeMineTile);
+            return;
+        }
+
         let target = this.activeMineTile ? this.findRock(this.activeMineTile) : null;
         if (!target) {
+            if (this.activeMineTile && this.entAt(this.activeMineTile)) {
+                await this.abortEnt(keyOf(this.activeMineTile), this.activeMineTile);
+                return;
+            }
             this.activeMineTile = null;
             target = this.pickRock();
         }
@@ -2920,7 +2976,12 @@ export class Gather implements Task {
             await Execution.delayUntilTicks(() => Inventory.used() > before || Game.animating() || this.shouldYieldMine(tile), 20);
             await Sustain.run();
             if (this.gasAt(tile)) {
+                this.activeMineTile = null;
                 await this.fleeGas(key, tile);
+                return;
+            }
+            if (this.entAt(tile)) {
+                await this.abortEnt(key, tile);
                 return;
             }
             if (Inventory.used() > before) {
@@ -2948,7 +3009,10 @@ export class Gather implements Task {
             if (this.shouldYieldMine(tile)) {
                 this.activeMineTile = null;
                 if (this.gasAt(tile)) {
+                    this.activeMineTile = null;
                     await this.fleeGas(key, tile);
+                } else if (this.entAt(tile)) {
+                    await this.abortEnt(key, tile);
                 }
                 return;
             }
@@ -2956,7 +3020,12 @@ export class Gather implements Task {
             await Execution.delayUntilTicks(() => Inventory.used() > mark || !Game.animating() || this.shouldYieldMine(tile), 14);
             await Sustain.run();
             if (this.gasAt(tile)) {
+                this.activeMineTile = null;
                 await this.fleeGas(key, tile);
+                return;
+            }
+            if (this.entAt(tile)) {
+                await this.abortEnt(key, tile);
                 return;
             }
             if (Inventory.used() > mark) {
@@ -2983,6 +3052,10 @@ export class Gather implements Task {
     /** Farmer willows 6-tick cycle. */
     private async executeFarmerWillow(): Promise<void> {
         if (EventSignal.pending() || Inventory.isFull() || ChatDialog.canContinue()) {
+            return;
+        }
+        if (this.activeMineTile && Game.animating() && this.entAt(this.activeMineTile)) {
+            await this.abortEnt(keyOf(this.activeMineTile), this.activeMineTile);
             return;
         }
 
@@ -3022,15 +3095,21 @@ export class Gather implements Task {
                 await Execution.delayTicks(1);
                 return;
             }
+            this.activeMineTile = tile;
             // Brief wait for anim/log; do not AFK the full cut, t5 will process.
             await Execution.delayUntilTicks(
                 () =>
                     Inventory.used() > before
                     || Game.animating()
                     || EventSignal.pending()
-                    || Inventory.isFull(),
+                    || Inventory.isFull()
+                    || this.entAt(tile),
                 3
             );
+            if (this.entAt(tile)) {
+                await this.abortEnt(keyOf(tile), tile);
+                return;
+            }
             if (Inventory.used() > before) {
                 this.bot.noteGatherRoll();
             }
@@ -3112,10 +3191,16 @@ export class Gather implements Task {
                 if (EventSignal.pending() || Inventory.isFull() || ChatDialog.canContinue()) {
                     return true;
                 }
+                if (this.activeMineTile && this.entAt(this.activeMineTile)) {
+                    return true;
+                }
                 const p = farmerWillowPhase(Game.tick(), this.bot.farmerCycleStartTick());
                 return p !== 'wait';
             },
             7
         );
+        if (this.activeMineTile && this.entAt(this.activeMineTile)) {
+            await this.abortEnt(keyOf(this.activeMineTile), this.activeMineTile);
+        }
     }
 }

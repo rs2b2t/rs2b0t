@@ -1,7 +1,7 @@
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { PT_ID, PT_NAME, PT_TILE, THESSALIA_SHOP } from './areas.js';
 
-// Why: the crossing costs 30gp each way and Karamja has no bank, so the float is a threshold rather than a target, topping up to an exact balance puts a booth trip between every purchase.
+// Why: the crossing costs 30gp each way and Karamja has no bank, so the float is a threshold; topping up to an exact balance puts a booth trip between every purchase.
 export const COIN_TARGET = 2000;
 export const COIN_LOW = 300;
 const APRON_GP = 50;

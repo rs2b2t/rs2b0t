@@ -22,8 +22,7 @@ function fissure(): ReturnType<typeof locNear> {
     return locNear(SV_LOC.FISSURE, 'Search', 10);
 }
 
-// Why: the fissure is a 50-tick `loc_change` over the mound, so it evaporates between visits.
-// Why: looking at the mound re-creates whichever fissure the stage has earned, so every fissure step goes through here first.
+// Why: the fissure is a 50-tick `loc_change` over the mound, and looking at the mound re-creates whichever fissure the stage has earned.
 
 /** Make sure the stage's fissure exists before acting on it. */
 async function ensureFissure(log: (m: string) => void): Promise<boolean> {
@@ -115,10 +114,7 @@ export async function enterFissure(log: (m: string) => void): Promise<boolean> {
     return ok;
 }
 
-/**
- * Getting to the south room from the surface is two crossings, not one, a death or
- * a restart puts us back on Karamja and every harvest step has to climb in again.
- */
+/** The south room is 2 crossings from the surface, and a death or restart puts us back on Karamja. */
 async function inSouthRoom(log: (m: string) => void): Promise<boolean> {
     if (!inCaves() && !(await enterFissure(log))) {
         return false;
@@ -149,7 +145,7 @@ export async function takeTatteredScroll(log: (m: string) => void): Promise<bool
     if (!(await inSouthRoom(log))) {
         return false;
     }
-    // Why: a failed Agility roll drops the ceiling on you instead of yielding the scroll, and the step runs again.
+    // Why: a failed Agility roll drops the ceiling on you, and the step runs again.
     return promptLoc(
         {
             name: SV_LOC.LOOSE_ROCKS,
@@ -199,8 +195,7 @@ export async function takeZadimusCorpse(log: (m: string) => void): Promise<boole
     );
 }
 
-// Why: reading sets the two bits that gate the Bervirius tomb and the necklace craft, and it is idempotent.
-// Why: the journal stops rendering those flags once the Bervirius dolmen is searched, so the module reads on sight rather than on demand.
+// Why: reading sets the bits that gate the Bervirius tomb and the necklace craft, and the journal stops rendering them once the dolmen is searched, so read on sight.
 
 /** Read a scroll, setting the tomb and necklace bits. */
 export function readScroll(itemId: number): (log: (m: string) => void) => Promise<boolean> {
@@ -217,8 +212,7 @@ export function readScroll(itemId: number): (log: (m: string) => void) => Promis
         if (!(await driveChoice(YES_READ, log))) {
             return false;
         }
-        // Why: the scroll body is a main modal built with if_settext rather than a chat box, so driveChoice cannot see it.
-        // Why: while it is up every journal read comes back empty, which reads as "stage unavailable" and parks the quest.
+        // Why: the scroll body is a main modal built with if_settext, so driveChoice can't see it, and every journal read comes back empty while it's up.
         await Execution.delayUntil(() => reader.modals().main !== -1, 6000);
         if (reader.modals().main !== -1) {
             actions.closeModal();
@@ -273,7 +267,6 @@ export async function buryZadimus(log: (m: string) => void): Promise<boolean> {
     if (!(await corpse.interact('Bury'))) {
         return false;
     }
-    // Dig, apparition, speech, shard, closing box, a chain with gaps in it, so the
-    // shard rather than a closed dialogue is what ends the step.
+    // Dig, apparition, speech, shard, closing box: a chain with gaps, so the shard ends the step.
     return driveUntil(() => heldId(SV_ITEM.BONE_SHARD.id) > 0, [], log, 60_000);
 }

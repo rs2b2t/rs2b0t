@@ -55,7 +55,7 @@ use `Bank.*` once the interface is open.
 
 ```ts
 Bank.isOpen(): boolean
-Bank.ready(): boolean                     // the bank has said what it holds, empty included
+Bank.ready(): boolean                     // a bank snapshot has arrived, including an empty one
 Bank.waitReady(timeoutMs?, log?): Promise<boolean>
 Bank.snapshotGeneration(): number         // take before a deposit
 Bank.snapshotReady(): boolean             // the bank-side view has been captured
@@ -78,7 +78,7 @@ Bank.openBooth(stand, boothName, op, log?): Promise<boolean>
 Bank.openNearest(boothName, op, log?): Promise<boolean>
 Bank.openNearestAccess(access, log?): Promise<boolean>
 
-// Pick a real withdraw label from item.ops ("Withdraw-All" vs "Withdraw All")
+// Pick a withdraw label from item.ops ("Withdraw-All" vs "Withdraw All")
 withdrawOp(ops, amount: 'all' | '10' | '5' | '1' | 'x' | 'any'): string | null
 ```
 

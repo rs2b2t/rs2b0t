@@ -1,6 +1,5 @@
-/** Live proof, AutoFighter finishes a bank run and goes back to fighting with the bank shut.
- *  Why: the bank side of the inventory has Deposit ops, not Eat, so a hurt bot with the booth still
- *  open spun on the sustain loop instead of healing. Empty pack plus banked food forces the trip. */
+/** Live check that AutoFighter closes the bank and resumes fighting after restocking. */
+// Why: a hurt bot previously spun on sustain because the bank inventory has no Eat op.
 
 //   bun e2e/autofighter-bank-resume-live.ts [http://localhost:8890]
 import { cheatQuiet, deployIsolatedClient, fail, launchBrowser, positionalArgs, setSettings } from './lib/harness.js';

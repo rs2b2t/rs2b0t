@@ -8,7 +8,7 @@ export interface DisplayRow {
     id: number;
     name: string;
     category: Category;
-    /** Popular overlaps the other shelves, so it is carried alongside the category rather than in it. */
+    /** Popular overlaps the other shelves, so it's carried alongside the category. */
     popular: boolean;
     mid: number;
     buy: number;
@@ -21,8 +21,7 @@ export interface DisplayRow {
     valid: boolean;
 }
 
-// Why: an override shows verbatim, even when it is invalid. resolvePrices clamps sell to buy+1 for the
-// Why: trading path, and echoing that clamp back would silently replace the number the operator typed.
+// Why: an override shows verbatim even when invalid; resolvePrices clamps sell to buy+1 for the trading path, and echoing that clamp back would replace the number the operator typed.
 export function displayRows(book: PriceBook, cat: Catalog): DisplayRow[] {
     return book.rows.map(row => {
         const { buy, sell } = resolvePrices(book, row);
@@ -124,13 +123,13 @@ export function pickerRows(
 export type SortKey = 'name' | 'category' | 'buy' | 'sell' | 'cap';
 export type SortDir = 'asc' | 'desc';
 
-/** Letters and digits, with everything else a gap, so an apostrophe is not something you have to type. */
+/** Letters and digits, everything else a gap, so you never have to type an apostrophe. */
 function loose(text: string): string {
     return text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
 /** Shortest query that may match on its letters alone. */
-// Why: measured over the 132-item price snapshot, three letters in order still spray: 'ore' took 22 names including Zamorak monk's robe, and 'aro' took 16. Four cuts those to 4 and 0 while keeping 'rnplt' on the Rune plates.
+// Why: over the 132-item price snapshot 3 letters in order still spray ('ore' matched 22 names, 'aro' 16); 4 cuts those to 4 and 0 and still lands 'rnplt' on the Rune plates.
 const SUBSEQUENCE_FLOOR = 4;
 
 function subsequence(haystack: string, needle: string): boolean {
@@ -207,7 +206,7 @@ export function formatPrice(n: number): string {
     const sign = value < 0 ? '-' : '';
     const size = Math.abs(value);
     if (size >= MILLION) {
-        // Why: two places is what separates 1.25M from 1.3M, and trailing zeros only add width.
+        // Why: 2 places separate 1.25M from 1.3M, and trailing zeros only add width.
         return `${sign}${(size / MILLION).toFixed(2).replace(/\.?0+$/, '')}M`;
     }
     if (size >= SHORTEN_FROM) {

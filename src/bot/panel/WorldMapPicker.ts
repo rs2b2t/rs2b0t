@@ -1,7 +1,5 @@
-/**
- * Walkable-tile map picker for `type: 'tile'` settings: loads the bot collision pack (same `collision.lcnav.gz` as the nav worker), draws a zoomable dot grid of walkable tiles under an optional worldmap basemap, and snaps a click to the nearest walkable tile. Public API: `WorldMapPicker.open()` → `{ x, z, level } | null`.
- * Why: there is no continuous render loop, paint runs only on user input or setting change, coalesced to one `requestAnimationFrame`, and basemap rebuild is manual only, so opening the picker never runs MapView.
- */
+/** Tile-setting picker backed by collision.lcnav.gz, with an optional worldmap basemap. */
+// Why: paint only runs on input or a setting change, coalesced into one requestAnimationFrame, and basemap rebuild is manual, so opening the picker never spins MapView.
 import { gunzipSync } from 'fflate';
 import { PathFinder } from '../event/webwalk/PathFinder.js';
 import { WALK_DESTINATIONS } from '../api/map/WalkDestinations.js';
@@ -46,7 +44,7 @@ import ParamsModal from './ParamsModal.js';
 
 type PickedTile = { x: number; z: number; level: number };
 
-/** Mainland-ish default centre (Varrock). */
+/** Default center near Varrock. */
 const DEFAULT_CENTRE = { x: 3213, z: 3424 };
 const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 12;
@@ -114,7 +112,7 @@ async function loadDeployBasemap(): Promise<LoadedBasemap | null> {
     }
     const blob = await imgRes.blob();
     const image = await blobToImage(blob);
-    // Pre-baked overlays (schema ≥ 2), free toggles at paint time.
+    // Pre-baked overlays (schema 2+), free toggles at paint time.
     const typeEntries = Object.entries(json.keyTypeOverlayUrls ?? {});
     const [keyOverlay, multiOverlay, freeOverlay, labelsOverlay, playerMarker, ...typeImgs] = await Promise.all([
         fetchOptionalImage(manUrl, json.keyOverlayUrl),
@@ -149,7 +147,7 @@ export type LoadedBasemap = {
     image: CanvasImageSource;
     /** All Key icons (optional; prefer keyTypeOverlays). */
     keyOverlay?: CanvasImageSource;
-    /** Per mapfunction type id → transparent overlay of that Key type only. */
+    /** Per mapfunction type id, a transparent overlay of that Key type only. */
     keyTypeOverlays?: Map<string, CanvasImageSource>;
     multiOverlay?: CanvasImageSource;
     freeOverlay?: CanvasImageSource;
@@ -157,10 +155,7 @@ export type LoadedBasemap = {
     labelsOverlay?: CanvasImageSource;
     /** Classic media mapmarker pin (you-are-here). */
     playerMarker?: CanvasImageSource;
-    /**
-     * Optional UI hint when the image is still usable but not a perfect cache hit.
-     * Never set for a clean CRC+prefs hit.
-     */
+    /** UI hint when the image is usable but not a clean CRC+prefs hit. */
     hint?: 'stale-crc' | 'prefs-mismatch' | 'crc-unverified';
 };
 
@@ -168,10 +163,7 @@ function tileKey(t: { x: number; z: number; level: number } | null): string {
     return t ? `${t.x},${t.z},${t.level}` : '';
 }
 
-/**
- * You Are Here marker.
- * Basemap mode draws the classic media `mapmarker` pin when available, else a yellow X; classic dots mode draws a soft yellow glow with a "You Are Here" label.
- */
+/** You Are Here marker: basemap mode draws the classic media `mapmarker` pin when available, else a yellow X; classic dots mode draws a yellow glow with a "You Are Here" label. */
 function paintYouAreHere(
     ctx: CanvasRenderingContext2D,
     sx: number,
@@ -180,7 +172,7 @@ function paintYouAreHere(
     marker: CanvasImageSource | null
 ): void {
     if (basemapMode && marker) {
-        // mapmarker pin: tip sits near bottom-center of the 15×30 cell.
+        // mapmarker pin: tip sits near bottom-centre of the 15x30 cell.
         const mw = 15;
         const mh = 30;
         const scale = Math.max(1, Math.min(2.2, 18 / mw));
@@ -202,7 +194,7 @@ function paintYouAreHere(
     }
 
     if (basemapMode) {
-        // Fallback yellow X (era minimap vibe when marker PNG missing).
+        // Fallback yellow X when the marker PNG is missing.
         ctx.save();
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 4;
@@ -245,10 +237,7 @@ function paintYouAreHere(
     ctx.restore();
 }
 
-/**
- * Load basemap once per page, never running MapView: an IndexedDB hit on matching CRC + bake prefs wins, then local marked `crc-unverified` when `/crc` is unavailable, then the deploy PNG plus a Rebuild hint when CRC or prefs mismatch, then the deploy PNG/manifest next to the bot bundle.
- * Manual Rebuild always regenerates and overwrites the local entry.
- */
+/** Load the basemap once per page without running MapView: an IndexedDB hit on matching CRC + bake prefs wins, then the local copy marked `crc-unverified` when `/crc` is unavailable, then the deploy PNG with a Rebuild hint when CRC or prefs mismatch. Manual Rebuild always regenerates and overwrites the local entry. */
 async function loadBasemap(): Promise<LoadedBasemap | null> {
     if (!basemapPromise) {
         basemapPromise = (async () => {
@@ -271,7 +260,7 @@ async function loadBasemap(): Promise<LoadedBasemap | null> {
                 }
             };
 
-            // Clean hit: same login CRC + same bake prefs → reuse (no MapView).
+            // Clean hit: same login CRC and bake prefs, so reuse without MapView.
             if (local && crcKey && local.crcKey === crcKey && local.prefsKey === prefsKey) {
                 const hit = await tryLocal();
                 if (hit) {
@@ -287,8 +276,7 @@ async function loadBasemap(): Promise<LoadedBasemap | null> {
                 }
             }
 
-            // Stale CRC or prefs: do **not** auto-regen (would freeze the tab on open).
-            // Show deploy PNG and surface a rebuild hint on the picker status line.
+            // Stale CRC or prefs: never auto-regen (it would freeze the tab on open); show the deploy PNG and a rebuild hint on the status line.
             const deploy = await loadDeployBasemap();
             if (deploy) {
                 let hint: LoadedBasemap['hint'];
@@ -360,7 +348,7 @@ export function nearestWalkable(
     return null;
 }
 
-/** Step size for sampling walkable dots given zoom (higher zoom → denser). */
+/** Step size for sampling walkable dots at a zoom; higher zoom samples denser. */
 export function sampleStep(zoom: number): number {
     if (zoom >= 6) {
         return 1;
@@ -388,10 +376,7 @@ export function cappedSampleStep(zoom: number, tilesAcross: number, tilesHigh: n
 }
 
 export class WorldMapPicker {
-    /**
-     * Opens an interactive walkable-map modal. Resolves with the picked tile or null on cancel.
-     * Optional `initial` centres the view (defaults to Varrock).
-     */
+    /** Opens the walkable-map modal and resolves with the picked tile, or null on cancel; `initial` centres the view (default Varrock). */
     public static open(initial?: Partial<PickedTile>): Promise<PickedTile | null> {
         return new Promise(resolve => {
             const level0 = initial?.level ?? 0;
@@ -429,8 +414,7 @@ export class WorldMapPicker {
                 backgroundColor: 'rgba(0, 0, 0, 0.85)',
                 // Above .rs2b0t-modal-backdrop (1000); nothing else in bot UI is higher.
                 zIndex: '1100',
-                // Column that always fits the client (1100×620 in multibox). Fixed 540px
-                // canvas used to push toolbar/confirm off-screen and get clipped.
+                // A column that always fits the client (1100x620 in multibox); a fixed 540px canvas pushed the toolbar and confirm off-screen.
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -497,8 +481,7 @@ export class WorldMapPicker {
                 maxWidth: '100%'
             });
 
-            // .rs2b0t-button defaults to flex:1 (panel rows), that shrinks toolbar
-            // chips and word-wraps "Rebuild map…". Keep them natural width, one line.
+            // .rs2b0t-button defaults to flex:1 for panel rows, which shrinks toolbar chips and wraps "Rebuild map"; keep them natural width on one line.
             const toolbarBtnStyle = {
                 flex: '0 0 auto',
                 whiteSpace: 'nowrap',
@@ -604,7 +587,7 @@ export class WorldMapPicker {
             const worldToScreen = (wx: number, wz: number): { sx: number; sy: number } => {
                 const ppt = pxPerTile();
                 const sx = canvas.width / 2 + (wx - centreX) * ppt;
-                // World +z is north; screen +y is down → flip z.
+                // World +z is north and screen +y is down, so flip z.
                 const sy = canvas.height / 2 - (wz - centreZ) * ppt;
                 return { sx, sy };
             };
@@ -634,7 +617,7 @@ export class WorldMapPicker {
                 let bm = 'basemap off';
                 if (getMapPickerShowBasemap()) {
                     if (basemapState === 'ready') {
-                        // worldmap.jag is surface art only, not L1–L3 floor plans
+                        // worldmap.jag is surface art only, with no L1 to L3 floor plans
                         bm =
                             level === 0
                                 ? `surface basemap ${basemap?.manifest.fingerprint.slice(0, 8) ?? ''}`
@@ -675,8 +658,7 @@ export class WorldMapPicker {
                 );
                 const theme = resolveMapPickerDotTheme();
                 ctx.save();
-                // Surface map art only (worldmap.jag has no L1–L3 floor rasters).
-                // Dim when selecting upper levels so walkable dots for that plane read clearly.
+                // worldmap.jag has no L1 to L3 floor rasters, so dim it on upper levels and let that plane's walkable dots read.
                 ctx.globalAlpha = level === 0 ? 1 : 0.32;
                 try {
                     ctx.drawImage(image, src.sx, src.sy, src.sw, src.sh, 0, 0, w, h);
@@ -687,8 +669,7 @@ export class WorldMapPicker {
                     if (theme.showMultiTint && basemap.multiOverlay) {
                         ctx.drawImage(basemap.multiOverlay, src.sx, src.sy, src.sw, src.sh, 0, 0, w, h);
                     }
-                    // Per-type Key overlays (classic Key legend). Fall back to all-icons sheet if
-                    // only that is present and every type is selected (unlikely).
+                    // Per-type Key overlays (classic Key legend), falling back to the all-icons sheet when only that is present.
                     if (theme.keyIconTypes.length > 0) {
                         if (basemap.keyTypeOverlays && basemap.keyTypeOverlays.size > 0) {
                             for (const name of theme.keyIconTypes) {
@@ -748,7 +729,7 @@ export class WorldMapPicker {
                 const minZ = Math.floor(centreZ - halfH) - step;
                 const maxZ = Math.ceil(centreZ + halfH) + step;
 
-                // Walkable dots: always with basemap off (classic picker), on L1–L3 with basemap on, never on L0 with basemap on (clean map look).
+                // Walkable dots: always with basemap off (classic picker), on L1 to L3 with basemap on, never on L0 with basemap on (clean map look).
                 // Why: the surface basemap is L0 art only, so the dots are what prove the level changed.
                 syncBasemapChrome();
                 const theme = resolveMapPickerDotTheme();
@@ -848,7 +829,7 @@ export class WorldMapPicker {
 
             /**
              * Fit canvas bitmap to leftover space under chrome.
-             * Why: the multibox client is 1100×620, where a fixed 720×540 map pushes the toolbar and confirm off-screen and gets clipped.
+             * Why: the multibox client is 1100x620, where a fixed 720x540 map pushes the toolbar and confirm off-screen and gets clipped.
              */
             const sizeCanvas = (): void => {
                 if (closed) {
@@ -974,7 +955,7 @@ export class WorldMapPicker {
                 });
             });
 
-            // Manual rebuild only (in-app Yes/No + Don't ask again). Never silent on open.
+            // Manual rebuild only, behind an in-app Yes/No with Don't ask again.
             rebuildBtn.addEventListener('click', () => {
                 if (rebuildBtn.disabled || !getMapPickerShowBasemap()) {
                     return;
@@ -1013,8 +994,7 @@ export class WorldMapPicker {
                         if (closed) {
                             return;
                         }
-                        // New baseline for draft discard = post-rebuild bake keys.
-                        // Further toggles without another rebuild still discard on close.
+                        // The post-rebuild bake keys become the discard baseline, so later toggles without a rebuild still discard on close.
                         bakeSettingsSnapshot = snapshotMapPickerBakeSettings();
                         const crcKey = await fetchClientCrcKey();
                         if (crcKey) {
@@ -1138,14 +1118,13 @@ export class WorldMapPicker {
             canvas.addEventListener('pointercancel', onPointerUp);
             canvas.addEventListener('click', onClick);
 
-            // Escape: settings first (ParamsModal stops propagation when it consumes Escape);
-            // confirm dialog uses capture. Only close the picker when nothing nested is open.
+            // Escape: settings first (ParamsModal stops propagation when it consumes it), the confirm dialog uses capture, and the picker only closes when nothing nested is open.
             const onKey = (e: KeyboardEvent): void => {
                 if (e.key !== 'Escape') {
                     return;
                 }
                 if (settingsModal.isOpen()) {
-                    // Belt-and-suspenders if ParamsModal order ever changes.
+                    // Covers a future change to ParamsModal's handler order.
                     e.preventDefault();
                     e.stopPropagation();
                     settingsModal.close();
@@ -1175,8 +1154,7 @@ export class WorldMapPicker {
                     requestPaint();
                 });
 
-            // Cache / deploy PNG only (never MapView on open). Rebuild is a separate button.
-            // Fetch even when basemap is hidden so enabling it mid-session is free.
+            // Cache or deploy PNG only, never MapView on open; fetch even when the basemap is hidden so enabling it mid-session is free.
             void loadBasemap()
                 .then(bm => {
                     if (closed) {

@@ -54,7 +54,7 @@ async function chopAchey(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => held(CB_ID.ACHEY_LOGS) > before, 40_000);
 }
 
-// Why: a wolf is not aggressive to a quest-ready account, so the fight has to be started rather than waited for.
+// Why: a wolf isn't aggressive to a quest-ready account, so you have to start the fight.
 
 /** Kill one wolf and pick its bones up. */
 async function killWolfForBones(log: (m: string) => void): Promise<boolean> {
@@ -93,7 +93,7 @@ async function killWolfForBones(log: (m: string) => void): Promise<boolean> {
 const useOn = (item: string, target: string, product: string): QuestStep =>
     ({ kind: 'useOn', item, targetKind: 'item', target, anchor: CB_TILE.ACHEY, product });
 
-// Why: every fletch action caps at six, so a target above six is two passes and the decide() loop is what repeats them.
+// Why: every fletch action caps at 6, so a target above 6 is 2 passes and the decide() loop repeats them.
 
 /** Feathers this pack still has to spend to reach `ARROW_TARGET`. */
 export function feathersNeeded(snap: QuestSnapshot): number {
@@ -123,7 +123,7 @@ export function arrowStep(snap: QuestSnapshot): QuestStep | null {
             ? useOn(CB_NAME.CHISEL, CB_NAME.WOLF_BONES, CB_NAME.ARROWTIPS)
             : { kind: 'custom', name: 'kill a wolf for bones', run: killWolfForBones };
     }
-    // Why: flighting spends four feathers per shaft and caps at six arrows, so the shafts are banked up first, feathering three at a time wastes twelve of the twenty-five Fycie sells.
+    // Why: flighting spends 4 feathers per shaft and caps at 6 arrows, so build the shafts up first; feathering 3 at a time wastes 12 of the 25 Fycie sells.
     const batch = Math.min(6, remaining);
     if (shafts < batch) {
         return logs > 0

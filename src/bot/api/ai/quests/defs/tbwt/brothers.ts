@@ -6,12 +6,11 @@ import { CUTSCENE_GAP, LONG_GAP, type Log, talkFully, useOnNpc } from './talk.js
 
 const heldId = (id: number): number => Inventory.items().filter(i => i.id === id).reduce((n, i) => n + i.count, 0);
 
-// Why: every list is matched by preference rather than index, and the entries are ordered so that the
-// first one that appears anywhere in a menu is the one this leg wants.
+// Why: every list is matched by preference, ordered so the first entry that appears in a menu is the one this leg wants.
 
 /**
  * The Lubufu introduction: name yourself, then work the menu round to the bait offer.
- * Why: the first refusal arms a ten-tick "go away" queue that re-arms on every talk inside it, so the second attempt waits it out.
+ * Why: the first refusal arms a 10-tick "go away" queue that re-arms on every talk inside it, so the second attempt waits it out.
  */
 const LUBUFU_MEET = [
     "What's a whippersnapper?",
@@ -21,7 +20,7 @@ const LUBUFU_MEET = [
     'You sound like you could do with the help.'
 ] as const;
 
-/** Three questions past the hand-in and he offers the apprenticeship himself. */
+/** 3 questions past the hand-in and he offers the apprenticeship himself. */
 const LUBUFU_APPRENTICE = ['What is a Karambwan?', 'Yes!'] as const;
 
 const LUBUFU_SPARE_VESSEL = ["Actually, I've lost my Karambwan vessel.", 'a shark ate it!'] as const;
@@ -31,8 +30,7 @@ const TIADECHE_ACCEPT = ['Yes'] as const;
 
 const TAMAYU_HUNT = ['When will you succeed?', 'Take me on your next hunt', 'Yes'] as const;
 
-// Why: the queue itself is ten ticks, but a talk that the reach layer had to re-click has already
-// armed it once before the module's own conversation starts, so the wait carries margin.
+// Why: the queue is 10 ticks, but a talk the reach layer re-clicked has already armed it once, so the wait carries margin.
 
 /** The queue Lubufu arms on a brush-off, in ticks. */
 const LUBUFU_QUEUE_TICKS = 16;
@@ -54,7 +52,7 @@ export async function meetLubufu(log: Log): Promise<boolean> {
     return talkFully(TB_NPC.LUBUFU, TB_TILE.LUBUFU, LUBUFU_MEET, log);
 }
 
-/** Hand over whatever Karambwanji the pack holds; he counts them in himself. */
+/** Give over all held Karambwanji; the NPC counts them. */
 export async function giveKarambwanji(log: Log): Promise<boolean> {
     const before = heldId(TB_ID.RAW_KARAMBWANJI);
     if (before === 0) {
@@ -94,10 +92,7 @@ export function meetTiadeche(log: Log): Promise<boolean> {
     return talkFully(TB_NPC.TIADECHE, TB_TILE.TIADECHE, TIADECHE_INTRO, log);
 }
 
-/**
- * Hand him the baited vessel. He lands his first Karambwan, offers it, and the
- * "Yes" is what puts the raw Karambwan the poisoned spear needs into the pack.
- */
+/** Hand him the baited vessel; the "Yes" to his first catch puts the raw Karambwan the poisoned spear needs into the pack. */
 export async function tiadecheCatch(log: Log): Promise<boolean> {
     if (!(await useOnNpc(TB_ID.VESSEL_LOADED, TB_NPC.TIADECHE, TB_TILE.TIADECHE, TIADECHE_ACCEPT, log, LONG_GAP))) {
         return false;
@@ -121,10 +116,9 @@ export function meetTamayu(log: Log): Promise<boolean> {
     return talkFully(TB_NPC.TAMAYU, TB_TILE.TAMAYU, [], log, LONG_GAP);
 }
 
-// Why: the hunt is a scripted cutscene. The player is teleported into an instance for six camera
-// moves with nothing on the chat interface, then teleported back beside Tamayu for his verdict.
+// Why: the hunt is a cutscene, 6 camera moves in an instance with nothing on the chat interface, then a teleport back beside Tamayu for his verdict.
 
-/** Follow Tamayu on a hunt. With four doses and a poisoned spear given, this is the kill. */
+/** Follow Tamayu on a hunt. With 4 doses and a poisoned spear given, this is the kill. */
 export function huntShaikahan(log: Log): Promise<boolean> {
     return talkFully(TB_NPC.TAMAYU, TB_TILE.TAMAYU, TAMAYU_HUNT, log, CUTSCENE_GAP);
 }

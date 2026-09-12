@@ -123,8 +123,7 @@ export function hostileAttackerNearby(
     });
 }
 
-// Why: sticky `inCombat` with no face target is common after randoms and login, and it triggers blind east walks that bung gather for tens of seconds.
-// Why: the kite only runs with an attacker in play, and otherwise yields to random-event handling.
+// Why: require a live attacker so stale combat state cannot trigger a blind kite.
 
 /** Whether FleeCombat should take the loop for a multi-combat kite. */
 export function shouldFleeCombat(opts: {
@@ -151,6 +150,44 @@ export function shouldYieldGathering(
         targetGone ||
         combatBreaksGather(inCombat, allowCombat)
     );
+}
+
+export function locGatherShouldYield(opts: {
+    eventPending: boolean;
+    inventoryFull: boolean;
+    dialogPending: boolean;
+    inCombat: boolean;
+    allowCombatGather: boolean;
+    shouldEatMinerFood: boolean;
+    /** Smoking rock or Ent on the loc tile we clicked. */
+    clickedTileHazard: boolean;
+    noResourceInCamp: boolean;
+}): boolean {
+    if (opts.eventPending || opts.inventoryFull || opts.dialogPending) {
+        return true;
+    }
+    if (opts.shouldEatMinerFood) {
+        return true;
+    }
+    if (combatBreaksGather(opts.inCombat, opts.allowCombatGather)) {
+        return true;
+    }
+    if (opts.clickedTileHazard) {
+        return true;
+    }
+    return opts.noResourceInCamp;
+}
+
+export type EntAbortAction = 'chop-neighbour' | 'walk-to-neighbour' | 'step-off';
+
+export function entAbortAction(opts: { neighbourInReach: boolean; neighbourExists: boolean }): EntAbortAction {
+    if (opts.neighbourInReach) {
+        return 'chop-neighbour';
+    }
+    if (opts.neighbourExists) {
+        return 'walk-to-neighbour';
+    }
+    return 'step-off';
 }
 
 export function fishingSessionBroken(opts: {

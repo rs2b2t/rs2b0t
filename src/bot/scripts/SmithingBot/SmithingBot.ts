@@ -22,7 +22,7 @@ const ANVIL = 'Anvil';
 const OPENABLE_OBSTACLES = ['door', 'gate'];
 // Why: the step through a door goes out on the frame its leaf swings, so the crossing lands the tick after the open instead of one tick later.
 const DOORS: WalkOpeningOptions = { doorStepTicks: 0 };
-const BAR_OPTIONS = ['Bronze', 'Iron', 'Steel', 'Mithril', 'Adamant', 'Rune'];
+const BAR_OPTIONS = ['Bronze', 'Iron', 'Steel', 'Mithril', 'Adamantite', 'Runite'];
 
 const PRODUCT_OPTIONS = ['Dagger', 'Sword', 'Scimitar', 'Longsword', '2h sword', 'Axe', 'Mace', 'Warhammer', 'Battleaxe', 'Chainbody', 'Platelegs', 'Plateskirt', 'Platebody', 'Med helm', 'Full helm', 'Sq shield', 'Kiteshield', 'Nails', 'Dart tip', 'Arrowtips', 'Knife', 'Wire', 'Claws'];
 

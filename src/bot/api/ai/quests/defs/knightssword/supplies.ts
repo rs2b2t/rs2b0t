@@ -12,14 +12,14 @@ import { GENERAL_STORE, KS_ID, KS_NAME, KS_TILE, WYDIN } from './areas.js';
 
 const COINS_ID = 995;
 
-// Why: the float is a threshold rather than a target, as `buy` withdraws `estGp` when the pack is short, so topping up to an exact balance sends the bot back to a booth after every item bought.
+// Why: `buy` withdraws `estGp` per shortfall, so fixed-balance top-ups would add a bank trip after every item.
 export const COIN_FLOAT = 1000;
 export const COIN_LOW = 200;
 
-/** Comfortably over any price here, comfortably under the float. */
+/** Over any price here, under the float. */
 const SHOP_GP = 30;
 
-/** All four fields are required: a defaulted low-water mark is a branch that never fires. */
+/** All 4 fields are required; a defaulted low-water mark is a branch that never fires. */
 export interface FoodWant {
     name: string;
     held: number;
@@ -40,11 +40,11 @@ function withdraw(items: { name: string; qty: number; id?: number }[]): QuestSte
 }
 
 // Why: no bank is pinned, as the quest runs across Falador, Varrock, Port Sarim and Rimmington.
-// Why: bank contents are global and only the walk differs, so naming one booth costs a kingdom-crossing on every leg that touches it.
+// Why: bank contents are global, so naming one booth costs a kingdom-crossing on every leg that touches it.
 const scanBank: QuestStep = { kind: 'scanBank' };
 
 // Why: `ownsInventory` opts this quest out of the engine's coin and food withdrawal, so the module draws both itself.
-// Why: food is only ever asked for above ground, as preparation has to stop at the door or a top-up mid-dungeon walks the bot back out of it.
+// Why: food is only asked for above ground; a top-up mid-dungeon walks the bot back out.
 
 /** The module's own coin and food withdrawal, or null when the pack is ready. */
 export function kit(snap: QuestSnapshot, food?: FoodWant | null): QuestStep | null {
@@ -62,7 +62,7 @@ export function kit(snap: QuestSnapshot, food?: FoodWant | null): QuestStep | nu
     return snap.bankKnown ? withdraw(items) : scanBank;
 }
 
-/** The palace-kitchen sink, two tiles from the pie-dish spawn. */
+/** The palace-kitchen sink, 2 tiles from the pie-dish spawn. */
 async function fillBucket(log: (m: string) => void): Promise<boolean> {
     return useOnLoc(
         KS_ID.BUCKET,
@@ -91,8 +91,8 @@ async function mixDough(log: (m: string) => void): Promise<boolean> {
     );
 }
 
-// Why: the Range carries no ops at all, cooking is `[oplocu,_cooking_oven]`, a use-on, the same shape as filling the bucket.
-// Why: a fire will not do, as cooking_generic_redberry_pie answers "You need a proper oven to cook that."
+// Why: the Range carries no ops; cooking is `[oplocu,_cooking_oven]`, a use-on like filling the bucket.
+// Why: Redberry pie requires an oven; a fire is rejected.
 
 /** Bake the redberry pie on a range. */
 async function cookPie(log: (m: string) => void): Promise<boolean> {
@@ -144,8 +144,7 @@ export function pie(snap: QuestSnapshot): QuestStep {
     if (bankedId(snap, KS_ID.REDBERRY_PIE) > 0) {
         return withdraw([{ name: KS_NAME.REDBERRY_PIE, qty: 1, id: KS_ID.REDBERRY_PIE }]);
     }
-    // A burn holds the dish hostage inside the ruined pie; emptying it is a
-    // free op, where re-deriving would walk all the way back to Varrock.
+    // Why: the burnt pie still holds the dish and Empty Dish is a free op; re-deriving would walk back to Varrock.
     if (heldId(snap, KS_ID.BURNT_PIE) > 0) {
         return { kind: 'custom', name: 'empty the burnt dish', run: emptyBurntPie };
     }
@@ -162,8 +161,8 @@ export function pie(snap: QuestSnapshot): QuestStep {
             ? combine(KS_NAME.PASTRY_DOUGH, KS_NAME.PIE_DISH, KS_NAME.PIE_SHELL)
             : pieDish(snap);
     }
-    // Why: everything water-side is a Varrock errand and everything else a Port Sarim one, so the bucket and the sink come first and the town is left once.
-    // Why: buying the bucket in Port Sarim's reach instead cost a 360-tile round trip back to Falador between the berries and the range.
+    // Why: the water side is a Varrock errand and the rest is Port Sarim, so the bucket and sink come first and each town is left once.
+    // Why: buying the bucket from Port Sarim's reach costs a 360-tile round trip back to Falador between the berries and the range.
     if (heldId(snap, KS_ID.BUCKET_OF_WATER) === 0) {
         return heldId(snap, KS_ID.BUCKET) > 0
             ? { kind: 'custom', name: 'fill the bucket', run: fillBucket }
@@ -182,7 +181,7 @@ export function pie(snap: QuestSnapshot): QuestStep {
 }
 
 // Why: smelting.rs2 loses half of every batch, "The ore is too impure and you fail to refine it."
-// Why: eight ore leaves a 9-in-256 chance of not clearing two bars, and a short batch is a no-op as the loop re-derives from the bar count.
+// Why: 8 ore leaves a 9-in-256 chance of not clearing 2 bars, and a short batch is a no-op as the loop re-derives from the bar count.
 export const ORE_PER_TRIP = 8;
 
 type Pickaxe = (typeof DORIC_PICKAXES)[number];
@@ -231,10 +230,7 @@ async function smeltIron(log: (m: string) => void): Promise<boolean> {
     return Inventory.countById(KS_ID.IRON_BAR) > before;
 }
 
-/**
- * Nothing sells iron bars, Drogo's Mining Emporium stocks zero and the only
- * ground spawn is deep in the Wilderness, so they are smelted.
- */
+/** Nothing sells iron bars, Drogo's Mining Emporium stocks zero and the only ground spawn is deep in the Wilderness, so smelt them. */
 export function ironBarsAt(snap: QuestSnapshot, miningLevel: number): QuestStep {
     const held = heldId(snap, KS_ID.IRON_BAR);
     if (held >= 2) {
@@ -248,7 +244,7 @@ export function ironBarsAt(snap: QuestSnapshot, miningLevel: number): QuestStep 
         return withdraw([{ name: KS_NAME.IRON_BAR, qty: Math.min(2 - held, banked), id: KS_ID.IRON_BAR }]);
     }
     // Why: `mineRock` ignores its qty and mines one ore per invocation, so the batch is counted here.
-    // Why: smelting on the first ore would walk the 130 tiles between Rimmington and the furnace eight times over.
+    // Why: smelting on the first ore would walk the 130 tiles between Rimmington and the furnace 8 times.
     if (heldId(snap, KS_ID.IRON_ORE) >= ORE_PER_TRIP) {
         return { kind: 'custom', name: 'smelt iron bars', run: smeltIron };
     }

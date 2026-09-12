@@ -1,8 +1,4 @@
-/**
- * Browser JPEG decode via canvas. Lazy DOM setup so importing Pix32/ClientAdapter
- * in Node (bun test tools, corpus scripts without happy-dom) does not throw at
- * module load — only decodeJpeg requires document.
- */
+/** Browser JPEG decoder with lazy DOM setup for headless imports. */
 let jpegCanvas: HTMLCanvasElement | null = null;
 let jpegImg: HTMLImageElement | null = null;
 let jpeg2d: CanvasRenderingContext2D | null = null;

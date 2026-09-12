@@ -19,13 +19,11 @@ export interface Purchasable {
     sources: readonly ShopSource[];
 }
 
-// Why: `World.restock` skips a null slot, so a shared shop that sells its last unit never gets it back,
-// two stockists is what makes an `allstock=no` item dependable.
+// Why: `World.restock` skips a null slot, so a shared shop that sells its last unit never gets it back; 2 stockists is what makes an `allstock=no` item dependable.
 
 /** Buy from the first stockist that still has one. */
 export async function buyFromAny(item: Purchasable, log: (m: string) => void): Promise<boolean> {
-    // Why: five of the six rooms this quest works in are pockets the navigator has no edge out of, so a
-    // shop walk planned from inside one reads `unreachable` before it takes a step.
+    // Why: 5 of the 6 rooms this quest works in are pockets the navigator has no edge out of, so a shop walk planned from inside one reads `unreachable` before it takes a step.
     if (!(await returnToStreet(log))) {
         return false;
     }

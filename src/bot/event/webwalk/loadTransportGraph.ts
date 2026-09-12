@@ -1,7 +1,4 @@
-/**
- * Shared graph load: doors + transports.json + curated 2004 travel + stairs.
- * Keep NavWorker and offline tools in sync.
- */
+/** Shared graph load (doors + transports.json + curated travel + stairs) so NavWorker and offline tools match. */
 import doorsJson from './data/doors.json';
 import transportsJson from './data/transports.json';
 import stairsJson from './data/stairEdges.json';

@@ -15,7 +15,7 @@ export const WH_OBJ = {
     SHED_KEY: 2411
 } as const;
 
-/** Display names for the two steps the engine executes by name. */
+/** Display names for the 2 steps the engine executes by name. */
 export const WH_NAME = {
     GLOVES: 'Leather gloves',
     CHEESE: 'Cheese'
@@ -37,7 +37,7 @@ export const WH_NPC = {
     MOUSE: 901
 } as const;
 
-/** The shapeshifter's four forms, in the order `witches_experiement.rs2` spawns them. */
+/** The shapeshifter's 4 forms, in the order `witches_experiement.rs2` spawns them. */
 export const EXPERIMENT_IDS: readonly number[] = [897, 898, 899, 900];
 
 export const EXPERIMENT_NAMES: readonly string[] = [
@@ -53,7 +53,7 @@ export const WH_TILE = {
     POT: new Tile(2899, 3474, 0),
     /** East of the cupboard, the side `forceapproach=east` leaves legal at angle 0. */
     CUPBOARD: new Tile(2899, 9873, 0),
-    /** Beside the mouse hole, inside the back porch's four tiles. */
+    /** Beside the mouse hole, inside the back porch's 4 tiles. */
     PORCH: new Tile(2902, 3466, 0),
     /** East of the diary, which lies on a blocked tile in the upstairs bedroom. */
     DIARY: new Tile(2901, 3473, 1),
@@ -85,7 +85,7 @@ function within(t: WorldTile | null | undefined, x0: number, x1: number, z0: num
     return !!t && t.level === level && t.x >= x0 && t.x <= x1 && t.z >= z0 && t.z <= z1;
 }
 
-// Why: a flood over the collision pack puts the walkable garden in three strips. The hedges seal everything between them, and the witch's own patrol lane is a fourth strip nothing can reach.
+// Why: a flood over the collision pack puts the walkable garden in 3 strips; the hedges seal everything between them, and the witch's patrol lane is a 4th strip nothing can reach.
 
 /** Past the back door: the ring corridor and the fountain yard it leads to. */
 export function inGarden(t: WorldTile | null | undefined): boolean {
@@ -99,7 +99,7 @@ export function inShed(t: WorldTile | null | undefined): boolean {
     return within(t, 2934, 2937, 3459, 3467, 0);
 }
 
-/** The four porch tiles the mouse hole is reachable from. */
+/** The 4 porch tiles the mouse hole is reachable from. */
 export function inPorch(t: WorldTile | null | undefined): boolean {
     return within(t, 2901, 2902, 3466, 3467, 0);
 }

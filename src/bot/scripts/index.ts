@@ -77,6 +77,7 @@ import HerbloreSecondaries, { HERBLORE_SECONDARIES_SETTINGS } from './HerbloreSe
 import HerbCleaner, { HERB_CLEANER_SETTINGS } from './HerbCleaner/HerbCleaner.js';
 import PotionMaker, { POTION_MAKER_SETTINGS } from './PotionMaker/PotionMaker.js';
 import MarketMaker, { MARKET_MAKER_SETTINGS } from './MarketMaker/MarketMaker.js';
+import ClimbingBoots, { CLIMBING_BOOTS_SETTINGS } from './ClimbingBoots/ClimbingBoots.js';
 import ShopBuyout, { SHOPBUYOUT_SETTINGS } from './ShopBuyout/ShopBuyout.js';
 import FlaxRunner, { SETTINGS as FLAXRUNNER_SETTINGS } from './FlaxRunner/FlaxRunner.js';
 import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner/ShopRunner.js';
@@ -764,6 +765,16 @@ ScriptRegistry.register({
     tags: ['trading', 'shop', 'bank', 'chat', 'afk'],
     settingsSchema: MARKET_MAKER_SETTINGS,
     create: () => new MarketMaker()
+});
+
+ScriptRegistry.register({
+    name: 'ClimbingBoots',
+    description:
+        'Falador West to Tenzing climbing-boot buyer. Withdraws exact gp so the last pair replaces the coin stack. Optional Falador teleport runes for the walk back. Needs Death Plateau complete.',
+    category: 'Money making',
+    tags: ['tenzing', 'climbing boots', 'burthorpe', 'falador', 'bank', 'teleport'],
+    settingsSchema: CLIMBING_BOOTS_SETTINGS,
+    create: () => new ClimbingBoots()
 });
 
 ScriptRegistry.register({

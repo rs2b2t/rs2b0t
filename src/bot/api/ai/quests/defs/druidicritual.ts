@@ -28,7 +28,7 @@ export function parseDruidicRitualJournal(lines: readonly string[] | string): nu
         .trim()
         .toLowerCase();
 
-    // Later entries retain earlier history, so match the newest progress first.
+    // Later entries keep earlier history, so match the newest first.
     if (text.includes('quest complete!')) return DRUIDIC_RITUAL_STAGE.COMPLETE;
     if (text.includes('gave them to sanfew') || text.includes('claim my reward')) return DRUIDIC_RITUAL_STAGE.GIVEN_INGREDIENTS;
     if (text.includes('sanfew told me for the ritual')) return DRUIDIC_RITUAL_STAGE.SPOKEN_TO_SANFEW;
@@ -43,7 +43,7 @@ async function readDruidicRitualStage(): Promise<number | undefined> {
     if (status === 'notStarted') return DRUIDIC_RITUAL_STAGE.NOT_STARTED;
     if (status !== 'inProgress') return undefined;
 
-    // Why: druidquest is a server-only permanent varp and is not transmitted to the client, so the server-rendered quest journal is the browser-visible stage oracle.
+    // Why: druidquest is a server-only varp, so the rendered journal is the stage oracle.
     const lines = await Quests.journal('Druidic Ritual');
     const stage = parseDruidicRitualJournal(lines);
     if (reader.modals().main !== -1) {
@@ -99,8 +99,7 @@ interface RitualMeat {
     anchor: Tile;
 }
 
-// All four source NPCs have a guaranteed raw-meat drop on this content pack.
-// The order makes one continuous route from Falador through the Lumbridge area.
+// All 4 NPCs have a guaranteed raw-meat drop; the order is one continuous route from Falador through Lumbridge.
 const RITUAL_MEATS: readonly RitualMeat[] = [
     { raw: 'Raw bear meat', enchanted: 'Enchanted bear', npc: 'Bear', npcId: 105, anchor: new Tile(3159, 3233, 0) },
     { raw: 'Raw rat meat', enchanted: 'Enchanted rat', npc: 'Giant rat', npcId: 87, anchor: new Tile(3206, 3175, 0) },
@@ -133,8 +132,7 @@ function acquisitionSpace(snap: QuestSnapshot, slots: number): QuestStep | null 
     const hasSpillover = [...snap.inv.keys()].some(name => !KEEP_ITEMS.includes(name));
     return {
         kind: 'deposit',
-        // If only ritual items fill the pack, bank every form and withdraw one
-        // per species on the next pass instead of parking on harmless duplicates.
+        // If only ritual items fill the pack, bank every form and withdraw 1 per species next pass.
         keep: hasSpillover ? KEEP_ITEMS : [],
         bank: FALADOR_WEST_BANK,
         exactKeep: true
@@ -258,7 +256,7 @@ async function enterCauldronRoom(log: (message: string) => void): Promise<boolea
             return false;
         }
 
-        // Why: the double-door script first moves an outside player onto the threshold, and the open leaf closes three server ticks later.
+        // Why: the double-door script first moves an outside player onto the threshold, and the open leaf closes 3 server ticks later.
         await DirectNavigator.walkTo(CAULDRON_DOOR_INSIDE, 0, 3000);
         return inCauldronRoom();
     }

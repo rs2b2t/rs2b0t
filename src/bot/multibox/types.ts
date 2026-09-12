@@ -7,15 +7,14 @@ export interface Account {
     username: string;
     password: string;
     label?: string;
-    // rail tab this bot belongs to; set by vault restores, absent = active tab
+    // Rail tab restored for this bot; absent means the active tab.
     tab?: string;
 }
 
 export interface SlotStatus {
     ready: boolean;
     ingame: boolean;
-    // the logged-in character, once known. A bot is added empty and gets its
-    // account typed into its own panel, so this is what the rail tile shows
+    // Logged-in character shown on the rail tile once known.
     player: string | null;
     loopCycle: number;
     drawn: number;

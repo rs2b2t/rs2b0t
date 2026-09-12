@@ -44,8 +44,7 @@ function localBotAsset(pathname: string): string | null {
     return existsSync(p) ? p : null;
 }
 
-// Cross-origin isolation is what lets every bot's nav worker map one shared
-// copy of the collision pack instead of decompressing its own 12 MB.
+// Cross-origin isolation lets every bot's nav worker share one copy of the collision pack instead of decompressing its own 12 MB.
 const ISOLATION_HEADERS: Record<string, string> = {
     'cross-origin-opener-policy': 'same-origin',
     'cross-origin-embedder-policy': 'require-corp'
@@ -84,8 +83,7 @@ async function configuredResourcePid(): Promise<number | null> {
 async function resourceResponse(): Promise<Response> {
     const pid = await configuredResourcePid();
     if (pid === null) {
-        // Registration is authoritative. Forget the sampler as soon as the
-        // viewer disappears so reusing the same PID starts a fresh CPU window.
+        // Forget the sampler when the viewer goes away, so a reused PID starts a fresh CPU window.
         resourceRootPid = null;
         resourceSampler = null;
         return json(unavailableResourcePayload('no dedicated bot browser is registered', trafficCounter.snapshot()));

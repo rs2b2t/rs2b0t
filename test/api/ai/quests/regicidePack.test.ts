@@ -44,7 +44,7 @@ describe('regicide pack planning', () => {
         expect(step?.kind).toBe('scanBank');
     });
 
-    // Why: the kit is what the forest leg carried out, and none of it belongs on a coal run.
+    // Why: the forest kit does not belong on the coal run.
     test('anything the leg has no use for is banked', () => {
         const step = managePack(snapshot({ carried: [[RG_ITEM.SPADE.id, 1], [RG_ITEM.BARREL_TAR.id, 1]] }), PLAN);
         expect(step?.kind).toBe('deposit');
@@ -52,7 +52,7 @@ describe('regicide pack planning', () => {
         expect(step?.kind === 'deposit' && step.keepIds).not.toContain(RG_ITEM.SPADE.id);
     });
 
-    // Why: the deposit is all-or-nothing per item, so an over-count is shed outright and drawn back at its target on the next cycle. Keeping it in the list would leave the surplus in the pack forever.
+    // Why: deposits are all-or-nothing, so shed surplus and redraw the target count.
     test('an item over its cap is left out of the keep list entirely', () => {
         const step = managePack(snapshot({ carried: [[RG_ITEM.SHARK.id, 11]] }), PLAN);
         expect(step?.kind).toBe('deposit');
@@ -74,7 +74,7 @@ describe('regicide pack planning', () => {
         expect(managePack(snap, PLAN)).toBeNull();
     });
 
-    // Why: shed, draw, done, three cycles and no fourth, because a plan that never settles is a bank trip every tick.
+    // Why: the plan must settle after shed, draw, and done.
     test('shedding a surplus and drawing it back settles', () => {
         let carried: [number, number][] = [[RG_ITEM.SPADE.id, 1], [RG_ITEM.SHARK.id, 11], [RG_ITEM.BARREL_TAR.id, 1]];
         const banked: [number, number][] = [[RG_ITEM.SHARK.id, 40]];
@@ -105,7 +105,7 @@ describe('regicide pack planning', () => {
     });
 });
 
-// Why: a plan is a whitelist, so anything it forgets to name is banked. All of this can be had again, since Iorwerth reissues the scroll and the messenger's timer re-arms, but the cheapest replacement is the pass walked end to end, so it is kept unless a plan names it.
+// Why: plans are whitelists, so keep costly quest items unless a leg spends them.
 describe('what a plan keeps without being asked', () => {
     const BARE: PackPlan = { what: 'a plan that names nothing', allow: [] };
 
@@ -124,7 +124,7 @@ describe('what a plan keeps without being asked', () => {
         expect(managePack(snapshot({ carried: [[item.id, 1]] }), BARE)).toBeNull();
     });
 
-    // Why: `regicide_kings_messenger.rs2` sets `%regicide_quest` on the same line it adds the scroll and nothing in the content ever reads it back, so keeping it is one dead slot for the life of the account.
+    // Why: the messenger scroll is never read after it advances `%regicide_quest`.
     test('the King\'s message is banked by a plan that does not name it', () => {
         const step = managePack(snapshot({ carried: [[RG_ITEM.SUMMONS.id, 1]] }), BARE);
         expect(step?.kind).toBe('deposit');
@@ -140,7 +140,7 @@ describe('what a plan keeps without being asked', () => {
     });
 });
 
-// Why: the scroll is owed to King Lathas and nothing after him, so a leg that is finished with it says so and the slot comes back. Keeping it forever is the same mistake as banking it too early, one slot the other way.
+// Why: release the scroll slot after King Lathas consumes it.
 describe('shedding what a leg is finished with', () => {
     test('a plan that sheds the letter banks it', () => {
         const snap = snapshot({ carried: [[RG_ITEM.MESSAGE.id, 1], [RG_ITEM.SHARK.id, 1]] });
@@ -155,7 +155,7 @@ describe('shedding what a leg is finished with', () => {
     });
 });
 
-// Why: `[oplocu,regicide_catapult]` returns silently unless `^regicide_given_rabbit` is set, and only the lazy guard beside the catapult sets it. A plan that banks the rabbit walks the bomb across the pass with nothing to open the catapult.
+// Why: the catapult silently requires both the rabbit and the guard-set flag.
 describe('the rabbit is the catapult gate, not food', () => {
     test.each([['raw', RG_ITEM.RAW_RABBIT], ['cooked', RG_ITEM.COOKED_RABBIT]] as [string, { id: number }][])(
         'a %s rabbit survives a plan that does not name it',

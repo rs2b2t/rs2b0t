@@ -3,8 +3,8 @@ import { bankDistance } from '../geometry/distance.js';
 import Tile from '../geometry/Tile.js';
 
 /**
- * Shared gather camp: home pin + bank stand for Fisher / Miner / Woodcutter. Membership (ReturnToAnchor / soft wander bound) uses {@link campRadius}, while fishing hop chase inside camp uses {@link chaseRadius} measured from the player.
- * `verified` marks camps confirmed via live pathability and resource checks (`bun e2e/verify-gathering-locations.ts` plus visual stand polish).
+ * Shared Fisher, Miner, and Woodcutter camp with home and bank stands.
+ * `campRadius` bounds wandering; `chaseRadius` bounds fishing-spot hops; `verified` marks live-checked camps.
  */
 export interface GatheringLocation {
     name: string;
@@ -15,15 +15,9 @@ export interface GatheringLocation {
     boothName?: string;
     boothOp?: string;
     obstacles?: string[];
-    /**
-     * Camp membership radius from {@link spot} (Chebyshev).
-     * Player outside this disk → ReturnToAnchor. Defaults to 64 when omitted.
-     */
+    /** Camp membership radius from {@link spot} (Chebyshev); outside it ReturnToAnchor fires. Defaults to 64. */
     campRadius?: number;
-    /**
-     * Player-relative fishing-spot / hop disk while in camp.
-     * Defaults to 24 when omitted. Loc gather (rocks/trees) still uses campRadius from home.
-     */
+    /** Player-relative fishing-spot hop disk while in camp, default {@link DEFAULT_CHASE_RADIUS}; loc gather (rocks/trees) still uses campRadius from home. */
     chaseRadius?: number;
     /** CSV-ish resource tags for docs / verify helper (not used by Gather target pick). */
     resources?: readonly string[];
@@ -46,10 +40,7 @@ export const DEFAULT_BOOTH_OP = 'Use-quickly';
 /** Default camp membership when a named location omits {@link GatheringLocation.campRadius}. */
 export const DEFAULT_CAMP_RADIUS = 64;
 
-/**
- * Soft prefer-near-player radius for named camps, not a hard exclusion.
- * Any matching spot inside camp membership stays valid; this only ranks nearby hops first when both exist.
- */
+/** Soft prefer-near-player radius for named camps; any matching spot inside camp membership stays valid and this only ranks nearby hops first. */
 export const DEFAULT_CHASE_RADIUS = 40;
 
 export function resolveCampRadius(campRadius: number | null | undefined, fallback = DEFAULT_CAMP_RADIUS): number {
@@ -62,10 +53,7 @@ export function resolveChaseRadius(chaseRadius: number | null | undefined, fallb
     return Math.max(2, Math.floor(raw));
 }
 
-/**
- * Engine map-square edge length.
- * Auto snaps to a preset only when the start tile shares this 64×64 chunk with the camp spot; otherwise freeform (location null, nearest bank, start-tile leash).
- */
+/** Engine map-square edge length. Auto snaps to a preset only when the start tile shares this 64x64 chunk with the camp spot; otherwise freeform (location null, nearest bank, start-tile leash). */
 export const MAP_SQUARE = 64;
 
 /** True when both tiles sit in the same level + map square (chunk). */
@@ -93,10 +81,7 @@ export function boothFields(loc: GatheringLocation | null | undefined): {
     };
 }
 
-/**
- * Resolve a location setting against a skill table: None → null (the only power/drop mode), a name → case-insensitive match, Auto → nearest preset whose spot shares the start tile's 64×64 map square, preferring the same level.
- * Auto outside every preset chunk also returns null (freeform: start-tile leash + nearest bank).
- */
+/** Resolve a location name, or select the nearest preset in the start tile's map square for Auto. None and freeform Auto return null. */
 export function resolveGatheringLocation<T extends GatheringLocation>(
     setting: string,
     startTile: WorldTile,

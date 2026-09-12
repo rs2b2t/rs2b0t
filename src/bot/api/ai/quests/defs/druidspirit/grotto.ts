@@ -23,7 +23,7 @@ function grottoSpirit(): { name: string } | null {
     return null;
 }
 
-// Why: the grotto is a pocket the walker has no route into, `Enter` teleports the character, and past the ritual stage that is all the op does.
+// Why: the walker has no route into the grotto; `Enter` teleports you, and past the ritual stage that's all the op does.
 
 export async function enterGrotto(log: (m: string) => void): Promise<boolean> {
     if (inside()) {
@@ -60,7 +60,7 @@ export async function leaveGrotto(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => !inside(), 15_000);
 }
 
-// Why: the spirit inside is npc_add'ed by searching the grotto pool and despawns on a timer, so an empty grotto is answered by searching rather than by waiting.
+// Why: searching the grotto pool npc_adds the spirit and he despawns on a timer, so an empty grotto means search.
 
 /** Talk to the spirit inside the grotto, summoning it if it has gone. */
 export async function talkInGrotto(prefer: string[], log: (m: string) => void): Promise<boolean> {
@@ -108,8 +108,7 @@ export async function blessSickle(log: (m: string) => void): Promise<boolean> {
     return driveUntil(() => heldId(NS_ID.SICKLE_BLESSED) > 0, [], log);
 }
 
-// Why: the grotto's Altar of nature sits on level 1 of (3441,9740) and the door only teleports there
-// once the quest is over, so mid-quest there is no altar below the camp at all, see quest-pitfalls-6.
+// Why: the grotto's Altar of nature is on level 1 at (3441,9740) and the door only teleports there after the quest, so mid-quest there is no altar below the camp (quest-pitfalls-6).
 
 /** Top the prayer bar up at Paterdomus, the temple this quest already walks through. */
 export async function rechargePrayer(log: (m: string) => void): Promise<boolean> {

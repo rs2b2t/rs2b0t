@@ -9,20 +9,14 @@ interface NamedStack {
 
 export const THIEVER_BANKING_OPTIONS = ['None', 'Auto'];
 
-/**
- * Combat ticks a failed pickpocket stun locks movement for (Ardy / Thiever).
- * Engine stun is 9 ticks, wait the full lock so the next click can path.
- */
+/** Ticks a failed pickpocket stun locks movement for; wait the full 9 so the next click can path. */
 export const STUN_COMBAT_TICKS = 9;
 
 type WithdrawChunk =
     | { kind: 'x'; count: number }
     | { kind: 'op'; op: 'Withdraw-10' | 'Withdraw-5' | 'Withdraw-1' };
 
-/**
- * Choose the next bulk bank withdraw step for `need` more items.
- * Prefer Withdraw-X when need > 10; else 10 / 5 / 1 ladder (FireGiant withdrawTo).
- */
+/** Next bulk withdraw step for `need` more items: Withdraw-X above 10, else the 10 / 5 / 1 ladder. */
 export function nextWithdrawChunk(need: number): WithdrawChunk | null {
     if (need <= 0) {
         return null;
@@ -39,10 +33,7 @@ export function nextWithdrawChunk(need: number): WithdrawChunk | null {
     return { kind: 'op', op: 'Withdraw-1' };
 }
 
-/**
- * Bulk-withdraw `name` until inventory holds `target` or bank/inv blocks progress.
- * Mirrors FireGiant/RockCrab withdrawTo (X when need>10, else 10/5/1).
- */
+/** Bulk-withdraw `name` until the pack holds `target` or the bank or pack blocks progress. */
 export async function withdrawTo(
     name: string,
     target: number,
@@ -81,7 +72,7 @@ export async function withdrawTo(
     return countInInv() - start;
 }
 
-/** Close both bank panes and prove the same backpack count is visible afterward. */
+/** Close the bank and wait until the backpack shows at least `expected`. */
 export async function closeBankAndConfirmCount(expected: number, count: () => number): Promise<boolean> {
     if (!(await Bank.close())) {
         return false;
@@ -111,7 +102,7 @@ export function safeToSteal(hpFraction: number, eatAt: number, foodCount: number
     return hpFraction >= eatAt || foodCount > 0;
 }
 
-/** Why: suicide thieving keeps pickpocketing instead of idling for regen when the pack is empty. */
+/** Why: suicide mode keeps pickpocketing on an empty pack and skips the regen idle. */
 export function canStealNow(foodCount: number, hp: number, minEatHp: number, suicide: boolean): boolean {
     return suicide || foodCount > 0 || hp > minEatHp;
 }

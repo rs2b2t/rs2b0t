@@ -41,7 +41,7 @@ export function parseTradePartnerHeader(header: string): string | null {
 }
 
 // Why: both players must "Trade with" each other to open the screen, then both accept the offer and confirm.
-// Why: any movement or combat closes the modal, so a trade needs a dedicated task to own the loop while it is open.
+// Why: Movement or combat closes the modal, so one task must control the trade until completion.
 
 /**
  * Player-to-player trading.
@@ -89,7 +89,7 @@ export const Trade = {
         return Input.interactPlayer(target.index, TRADE_OP);
     },
 
-    // pick chooses among same-name slots (e.g. offer only unnoted essence, not the noted stack)
+    // pick chooses among same-name slots (e.g. only the unnoted essence stack)
     async offerAll(itemName: string, pick?: (i: { count: number; id: number; slot: number }) => boolean): Promise<boolean> {
         if (!reader.tradeOfferOpen()) {
             return false;
@@ -129,7 +129,7 @@ export const Trade = {
     },
 
     /** Take everything back off your own side. */
-    // Why: re-deriving an offer from scratch is two operations and cannot drift, where nudging it item by item has to reason about what is already up.
+    // Why: re-deriving an offer from scratch is 2 operations and can't drift; nudging it item by item has to reason about what's already up.
     async removeAll(): Promise<boolean> {
         if (!reader.tradeOfferOpen()) {
             return false;
@@ -158,7 +158,7 @@ export const Trade = {
         return false;
     },
 
-    // Why: rs2b2t content wires declining to [if_close,trademain] / [if_close,tradeconfirm], which is what returns the offered items and tells the partner. `trademain:decline` (3422) carries no if_button trigger there, so clicking it alone answers "No trigger for [if_button,trademain:decline]" and leaves the window open with the goods in it.
+    // Why: Decline is wired to `if_close`; component 3422 has no `if_button` trigger and leaves the trade open.
     async decline(): Promise<void> {
         if (!Trade.active()) {
             return;

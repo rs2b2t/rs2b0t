@@ -4,7 +4,11 @@ import Tile from '#/bot/geometry/Tile.js';
 import {
     WOODCUTTING_LOCATIONS,
     WOODCUTTING_LOCATION_OPTIONS,
-    resolveWoodcuttingLocation
+    resolveWoodcuttingLocation,
+    ENT_NPC_IDS,
+    ENT_LIFE_TICKS,
+    isEntNpcId,
+    entNpcOnTile
 } from '#/bot/data/woodcuttingLocations.js';
 
 const bankTiles = new Set(BANK_LOCATIONS.map(b => `${b.tile.x},${b.tile.z},${b.tile.level}`));
@@ -81,5 +85,25 @@ describe('WOODCUTTING_LOCATIONS table', () => {
             expect(loc.spot).toBeDefined();
             expect(loc.bankStand).toBeDefined();
         }
+    });
+});
+
+describe('ENT_NPC_IDS', () => {
+    test('covers pack 444-452 and stops before suit of armour', () => {
+        expect(ENT_LIFE_TICKS).toBe(60);
+        expect(ENT_NPC_IDS.size).toBe(9);
+        expect(isEntNpcId(443)).toBe(false);
+        expect(isEntNpcId(444)).toBe(true);
+        expect(isEntNpcId(452)).toBe(true);
+        expect(isEntNpcId(453)).toBe(false);
+    });
+
+    test('entNpcOnTile is the clicked loc only', () => {
+        const tree = { x: 3087, z: 3234, level: 0 };
+        const neighbour = { x: 3088, z: 3234, level: 0 };
+        const npcs = [{ id: 444, tile: tree }];
+        expect(entNpcOnTile(npcs, tree)).toBe(true);
+        expect(entNpcOnTile(npcs, neighbour)).toBe(false);
+        expect(entNpcOnTile([{ id: 443, tile: tree }], tree)).toBe(false);
     });
 });

@@ -19,7 +19,7 @@ export function onKaramja(tile: { x: number; z: number; level: number } | null |
 
 const held = (id: number): number => Inventory.countById(id);
 
-// Why: the crate answers with both varps the client cannot read, so a resumed run learns whether the rum is already stashed instead of buying a second bottle.
+// Why: Searching the crate reveals untransmitted state before a resumed run buys another rum.
 
 /** Put the rum in the plantation crate, unless it is already in there. */
 async function stashRum(log: (m: string) => void): Promise<boolean> {
@@ -75,7 +75,7 @@ async function pickBananas(want: number, log: (m: string) => void): Promise<numb
 
 // Why: the crate's own message names the count, so the loop never keeps a tally the client could be wrong about.
 
-/** Fill the plantation crate to ten bananas. */
+/** Fill the plantation crate to 10 bananas. */
 async function fillCrate(log: (m: string) => void): Promise<boolean> {
     for (let pass = 0; pass < 4; pass++) {
         const state = await searchBananaCrate(log);
@@ -112,7 +112,7 @@ async function fillCrate(log: (m: string) => void): Promise<boolean> {
     return done !== null && done.bananas >= CRATE_FULL;
 }
 
-// Why: the journal reads `store-job` throughout the re-smuggle, so nothing here is separable into steps `decide()` could sequence. The leg has to run to completion on its own.
+// Why: the journal reads `store-job` throughout the re-smuggle, so `decide()` can't sequence this; the leg runs to completion on its own.
 // Why: it ends on the mainland so the next decide tick is never stranded on the wrong side of the water.
 
 /** Read the crate, stash, fill and ship it, then cross back to Port Sarim. */
@@ -128,7 +128,7 @@ export async function shipCrate(log: (m: string) => void): Promise<boolean> {
             await Traversal.walkResilient(PT_TILE.WYDIN, { radius: 4, attempts: 3, timeoutMs: 300_000, log });
             return false;
         }
-        // Why: `banana_crate.rs2` answers "Why would I want to do that?" to anyone not employed at the plantation, and Luthas clears that bit every time he ships a crate, so a second smuggle has to re-hire first, and the crate refusing the rum is the only thing that says so.
+        // Why: `banana_crate.rs2` answers "Why would I want to do that?" once Luthas has shipped a crate and cleared the employed bit, so a second smuggle re-hires first; the refusal is the only sign.
         if (!(await stashRum(log))) {
             log('the crate refused the rum — re-hiring at the plantation');
             if (!(await Traversal.walkResilient(LUTHAS.anchor, { radius: 2, attempts: 3, timeoutMs: 120_000, log }))) {

@@ -16,14 +16,14 @@ abstract class AbstractBot {
     readonly settings: SettingsBag;    // resolved run parameters
 
     onStart?(): void | Promise<void>;  // before the first loop
-    onStop?(): void;                   // after stop AND after a crash — clean up here
+    onStop?(): void;                   // cleanup after stop or crash
     onPause?(): void;
     onResume?(): void;
     onPaint?(ctx: CanvasRenderingContext2D): void; // overlay HUD, every redraw
 
     recoveryAnchor?(): Tile | null;    // watchdog recovery walks back here when the bot is 8+ tiles away
-    grindTargets(): string[];          // NPC names this bot fights on purpose, handed to the random-event detector
-    ignoredRandoms(): string[];        // random-event names this bot never pauses for, re-read each detect
+    grindTargets(): string[];          // NPCs this bot fights; the random-event detector ignores them
+    ignoredRandoms(): string[];        // ignored random events, checked on each detection
 
     log(msg: string): void;
     on<K>(event, cb): void;            // event subscription, auto-removed on stop; public so a task can subscribe for its bot

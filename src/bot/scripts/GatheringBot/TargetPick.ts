@@ -1,17 +1,11 @@
-// Shared nearest-target selection for gather and combat-adjacent scripts.
+// Shared target selection for gathering and nearby combat scripts.
 
 // Why: a local cluster wins when any candidate is underfoot, so membership-wide nearest does not path across tunnels such as the Dwarven iron wings or multi-pad mines.
 
-/**
- * Prefer rocks/trees within this Chebyshev of the player when any match.
- * Server iron rocks (ids 2092/2093) respawn on ~6t; see skill_mining mine.dbrow.
- */
+/** Prefer rocks and trees within this range; iron respawns in roughly six ticks. */
 export const LOCAL_MINE_PREFER_RADIUS = 12;
 
-/**
- * Pick the best candidate from a pre-filtered list.
- * When any sits within {@link preferRadius} of the player, ignore the rest.
- */
+/** Pick the best candidate, ignoring distant ones when any fall inside `preferRadius`. */
 export function pickNearestPreferLocal<T>(
     candidates: readonly T[],
     distToPlayer: (c: T) => number,

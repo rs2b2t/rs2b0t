@@ -41,7 +41,7 @@ function signature(items: readonly SortableItem[]): string {
     return items.map(item => `${item.slot}:${item.id}`).join(',');
 }
 
-// Why: the server reads %bankinsert, not the packet's mode byte, so an unconfirmed varp desyncs the bank silently.
+// Why: the server reads %bankinsert and ignores the packet's mode byte, so an unconfirmed varp desyncs the bank silently.
 async function setArrangeMode(want: BankSortMode): Promise<boolean> {
     const wanted = want === 'insert' ? 1 : 0;
     if (reader.varp(BANK_INSERT_VARP) === wanted) {

@@ -55,10 +55,7 @@ export const Game = {
         return reader.ingame();
     },
 
-    /**
-     * True when the client is logged in and the local scene is fully built (`sceneState === 2`) with a known world tile.
-     * Why: injecting menu or walk packets before this returns true soft-fails or thrash-retries (#445).
-     */
+    /** True when logged in with a fully built scene and known world tile. Sending input earlier can fail silently (#445). */
     sceneReady(): boolean {
         return reader.ingame() && reader.sceneState() === 2 && reader.worldTile() !== null;
     },
@@ -76,20 +73,17 @@ export const Game = {
         return reader.energy();
     },
 
-    /** Orbit camera yaw 0–2047 (client-only). */
+    /** Orbit camera yaw 0 to 2047 (client-only). */
     cameraYaw(): number {
         return reader.cameraYaw();
     },
 
-    /** Orbit camera pitch 128–383 (client-only). */
+    /** Orbit camera pitch 128 to 383 (client-only). */
     cameraPitch(): number {
         return reader.cameraPitch();
     },
 
-    /**
-     * Snap orbit camera yaw (0–2047). Client-only; no LC/engine change.
-     * Prefer Global.navCameraFollow for path auto-facing during walks.
-     */
+    /** Snap orbit camera yaw (0 to 2047), client-only; prefer Global.navCameraFollow for auto-facing during walks. */
     setCameraYaw(yaw: number): boolean {
         return actions.setCameraYaw(yaw);
     },
@@ -110,8 +104,7 @@ export const Game = {
         return retaliateOnFromVarp(reader.varp(RETALIATE_VARP));
     },
 
-    // Our target is a player only if we attacked one or auto-retaliate did; the
-    // grind never attacks players.
+    // Grind bots never initiate PvP, so a player face target came from auto-retaliate.
     attackedByPlayer(): boolean {
         return facingPlayer(reader.selfFaceEntity());
     },
@@ -160,10 +153,7 @@ export const Game = {
         return selectCombatMode(mode);
     },
 
-    /**
-     * Toggle Auto Retaliate. Gathering / agility scripts turn this off so
-     * multi-combat pests (wildy spiders, skeletons) don't pin the bot in a fight.
-     */
+    /** Toggle Auto Retaliate. Gathering and agility disable it to avoid being held in multi-combat. */
     setAutoRetaliate(on: boolean): boolean {
         return actions.setRetaliate(on);
     },
@@ -194,7 +184,7 @@ export const Game = {
         return Input.castOnNpc(comId, npc.index);
     },
 
-    // Why: a spell aimed at scenery is `oploct`, which no op-based step can express, the Legends Quest magic gate is opened by charging an orb at it and nothing else.
+    // Why: a spell aimed at scenery is `oploct`, which no op-based step can express; the Legends Quest magic gate only opens by charging an orb at it.
 
     /** Cast a targeted spell at a piece of scenery. */
     async castOnLoc(spell: string, loc: Loc): Promise<boolean> {
@@ -224,10 +214,7 @@ export const Game = {
         return Input.castOnItem(comId, item.id, item.slot, item.snap.comId);
     },
 
-    /**
-     * Cast a standard spellbook teleport by destination name.
-     * Why: the magic root is used for live name lookup without activating its side tab, falling back to the 2004 component ID; success confirms dispatch rather than arrival.
-     */
+    /** Cast a standard spellbook teleport by name. Returns when the click is sent; the caller checks arrival. */
     async teleport(name: string): Promise<boolean> {
         const teleport = resolveTeleport(name);
         if (teleport === null) {

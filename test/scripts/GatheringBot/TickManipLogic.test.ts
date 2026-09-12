@@ -158,11 +158,11 @@ describe('cycle planners', () => {
 
     test('farmerWillowPhase 6-tick machine', () => {
         const start = 10;
-        expect(farmerWillowPhase(10, start)).toBe('click-tree'); // t1
+        expect(farmerWillowPhase(10, start)).toBe('click-tree');
         expect(farmerWillowPhase(11, start)).toBe('wait');
-        expect(farmerWillowPhase(14, start)).toBe('cut-log'); // t5
-        expect(farmerWillowPhase(15, start)).toBe('drop-log'); // t6
-        expect(farmerWillowPhase(16, start)).toBe('click-tree'); // next cycle
+        expect(farmerWillowPhase(14, start)).toBe('cut-log');
+        expect(farmerWillowPhase(15, start)).toBe('drop-log');
+        expect(farmerWillowPhase(16, start)).toBe('click-tree');
     });
 });
 

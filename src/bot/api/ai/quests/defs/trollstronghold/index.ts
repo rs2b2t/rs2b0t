@@ -71,8 +71,7 @@ const unwearable = new Set<string>();
 const TIERS = ['rune', 'adamant', 'mithril', 'black', 'steel', 'iron', 'bronze'] as const;
 
 const GEAR_SLOTS: readonly { slot: string; kinds: readonly string[] }[] = [
-    // Troll General slash defence is 60 against 35 for stab and crush, so a
-    // longsword out-damages the same tier of scimitar here.
+    // Troll General slash defence is 60 against 35 for stab and crush, so a longsword out-damages the same tier of scimitar here.
     { slot: 'weapon', kinds: ['2h sword', 'longsword', 'scimitar', 'battleaxe', 'warhammer', 'mace', 'sword'] },
     { slot: 'body', kinds: ['platebody', 'chainbody'] },
     { slot: 'legs', kinds: ['platelegs', 'plateskirt'] },
@@ -148,10 +147,7 @@ function scanBank(): QuestStep {
     return { kind: 'scanBank', bank: FALADOR_WEST_BANK };
 }
 
-/**
- * The kit in one step, a step per piece pays a task hand-off each, and
- * `equip` already waits for the item to land. Refusals are shed, not retried.
- */
+/** The kit in one step; a step per piece pays a task hand-off each, and `equip` already waits for the item to land. Refusals are shed. */
 export function wearAll(names: readonly string[]): QuestStep {
     return {
         kind: 'custom',
@@ -171,8 +167,8 @@ export function wearAll(names: readonly string[]): QuestStep {
 
 const wearOrShed = (name: string): QuestStep => wearAll([name]);
 
-// Why: the boots are not optional, so a refusal is a dead end rather than something to shed and route around.
-// Why: `opheld2,death_climbingboots` only lets them on once Death Plateau is complete, so the step says so and parks instead of retrying.
+// Why: the boots are required, so a refusal is a dead end.
+// Why: `opheld2,death_climbingboots` only lets them on once Death Plateau is complete, so the step says so and parks.
 
 /** Wear the climbing boots. */
 function wearBoots(): QuestStep {
@@ -189,14 +185,13 @@ function withdraw(items: { name: string; qty: number }[]): QuestStep {
     return { kind: 'withdraw', items, bank: FALADOR_WEST_BANK };
 }
 
-// Why: this runs on every decide() tick while the character is still on the mainland, so each branch has to be idempotent.
-// Why: a step that does not change the snapshot would spin here forever rather than progress the quest.
+// Why: this runs on every decide() tick while you're still on the mainland, so each branch has to be idempotent.
+// Why: a step that does not change the snapshot spins here forever.
 
 /** The loadout, in one pure pass; null when the pack is ready. */
 export function prepare(snap: QuestSnapshot, zone: TrollZone = 'mainland'): QuestStep | null {
     const bootsReady = held(snap, ITEM.CLIMBING_BOOTS) || worn(snap, ITEM.CLIMBING_BOOTS);
-    // Past the stile a bank trip means climbing back down the secret way. Only a
-    // spent pack or missing boots is worth that; anything less rides on.
+    // Past the stile a bank trip means climbing back down the secret way; only a spent pack or missing boots is worth that.
     if (committed(zone) && bootsReady && foodHeld(snap) >= FOOD_FLOOR) {
         if (!worn(snap, ITEM.CLIMBING_BOOTS)) {
             return wearBoots();
@@ -218,7 +213,7 @@ export function prepare(snap: QuestSnapshot, zone: TrollZone = 'mainland'): Ques
         return { kind: 'deposit', keep, bank: FALADOR_WEST_BANK, exactKeep: true };
     }
 
-    // One visit: Tenzing is forty tiles west and the bank is east.
+    // One visit: Tenzing is 40 tiles west and the bank is east.
     const fromBank: { name: string; qty: number }[] = [];
     // One purchase, a standing float would mean a bank trip for 12gp of change.
     const needsBootMoney = !bootsReady && banked(snap, ITEM.CLIMBING_BOOTS) === 0;
@@ -231,7 +226,7 @@ export function prepare(snap: QuestSnapshot, zone: TrollZone = 'mainland'): Ques
     if (!bootsReady && banked(snap, ITEM.CLIMBING_BOOTS) > 0) {
         fromBank.push({ name: ITEM.CLIMBING_BOOTS, qty: 1 });
     }
-    // A loadout names what the player wants, not what the bank has.
+    // A loadout names what you want; the bank may not have it.
     const missing: string[] = [];
     for (const name of plannedGear(snap)) {
         if (held(snap, name)) {
@@ -271,7 +266,7 @@ export function prepare(snap: QuestSnapshot, zone: TrollZone = 'mainland'): Ques
         return withdraw(fromBank);
     }
 
-    // Wear it here; the detour to Tenzing is forty tiles of carrying it.
+    // Wear it here; the detour to Tenzing is 40 tiles of carrying it.
     const toWear = plannedGear(snap).filter(name => held(snap, name));
     if (toWear.length > 0) {
         return wearAll(toWear);
@@ -318,9 +313,9 @@ const CAVE_MOUTH = new Tile(2908, 3654, 0);
 /** troll_thrower attackrange is 8; arm a little before they can start. */
 const THROWER_RANGE = 11;
 
-// Why: five thrower trolls stand between the cave exit and the stronghold door and open on sight at eight tiles, and nothing in a walk fights back, so the crossing is pure damage that Protect from Missiles refuses outright.
-// Why: the prayer drains per tick rather than per tile, held from Falador it emptied the bar before the level-113 general was in sight and killed the run.
-// Why: the crossing is therefore its own leg, with the prayer following the throwers rather than the map: up while one is in range, down the moment the last is behind us, which on this route is a good forty tiles before the door.
+// Why: 5 thrower trolls between the cave exit and the stronghold door open on sight at 8 tiles, and a walk never fights back, so the crossing is pure damage Protect from Missiles blocks outright.
+// Why: prayer drains per tick, and held from Falador it empties the bar before the level-113 general is in sight.
+// Why: the crossing is its own leg with the prayer following the throwers: up while one is in range, down once the last is behind us, about 40 tiles before the door.
 
 /** Walk to the stronghold under a threat-tracking protection prayer. */
 async function walkToStronghold(tile: Tile, radius: number, log: (m: string) => void): Promise<boolean> {
@@ -344,19 +339,18 @@ async function buyBoots(log: (m: string) => void): Promise<boolean> {
         log(`need ${BOOT_COST} coins for Climbing boots`);
         return false;
     }
-    // One, not four: Tenzing is inside his hut, and any wider radius is
-    // satisfied standing on the doorstep with the shut door still in the way.
+    // Radius 1: Tenzing is inside his hut, and any wider radius is satisfied on the doorstep with the shut door in the way.
     if (!(await walkTo(TILE.TENZING, 1, log))) {
         return false;
     }
     const before = Inventory.count(ITEM.CLIMBING_BOOTS);
-    // Why: the classification is on the boots rather than on the dialogue, as Tenzing's shop loop leaves an objbox up often enough that `talkChoosingBy` reports failure for a talk that already handed the boots over, and the retry walks the leg twice.
+    // Why: judge by the boots; Tenzing's shop loop often leaves an objbox up, so `talkChoosingBy` reports failure for a talk that already handed them over and the retry walks the leg twice.
     await talkChoosingBy(TENZING_BOOTS.npc, TENZING_DONE_RULES, TENZING_BOOTS.prefer, log);
     return Execution.delayUntil(() => Inventory.count(ITEM.CLIMBING_BOOTS) > before, 8000);
 }
 
-// Why: Dad does not die, below twenty hitpoints `defeat_dad` fires, setting the quest stage, healing him back to full and offering a forfeit dialogue.
-// Why: draining that dialogue is the win condition, and leaving it up loses the fight won.
+// Why: below 20 hitpoints `defeat_dad` fires, setting the quest stage, healing Dad to full and offering a forfeit dialogue.
+// Why: draining that dialogue is the win condition; leaving it up loses the win.
 
 /** Fight Dad to his forfeit and drain the dialogue. */
 async function fightDad(log: (m: string) => void): Promise<boolean> {
@@ -376,7 +370,7 @@ async function fightDad(log: (m: string) => void): Promise<boolean> {
         {
             what: 'Dad',
             target: find,
-            // Why: he is re-added by the Arena Exit whenever the quest is still below stage 20, which is the only reliable way to get him back after a resume, as the Arena Entrance only ever spawns him once.
+            // Why: the Arena Exit re-adds him while the quest is below stage 20, and the Arena Entrance only spawns him once, so the Exit is the way back after a resume.
             onMissing: async () => {
                 log('Dad is not in the arena — poking the Arena Exit to bring him back');
                 if (!(await walkTo(new Tile(2916, 3628, 0), 1, log))) {
@@ -389,8 +383,7 @@ async function fightDad(log: (m: string) => void): Promise<boolean> {
                 }
                 return true;
             },
-            // He forfeits rather than dies, but the death path also sets the
-            // stage, treat a Dad who has vanished after we engaged as a win.
+            // The death path also sets the stage, so a Dad who vanished after we engaged counts as a win.
             won: () => forfeited || (seen && attackable('Dad', 24) === null && !Game.inCombat()),
             onDialogue: () => {
                 forfeited = true;
@@ -432,8 +425,7 @@ async function huntGeneral(log: (m: string) => void): Promise<boolean> {
             what: 'Troll General',
             target: () => attackable('Troll General', 12),
             won: keyIsOurs,
-            // Cowardly hunt mode: they never open on us, so a missing general is
-            // a respawn wait, not a lost fight.
+            // Cowardly hunt mode: they never open on us, so a missing general is a respawn wait.
             onMissing: async () => walkToStronghold(TILE.GENERAL, 5, log),
             protect: 'melee',
             guard: 900
@@ -451,7 +443,7 @@ async function enterPrison(log: (m: string) => void): Promise<boolean> {
     return walkToStronghold(TILE.PRISON_LANDING, 3, log);
 }
 
-// Why: cell keys sit on the belts of two sleeping guards, and pickpocketing is the quiet way.
+// Why: cell keys sit on the belts of 2 sleeping guards, and pickpocketing is the quiet way.
 // Why: a failed steal wakes the guard and killing the woken guard drops the same key, so neither outcome is a dead end.
 
 /** Take a cell key off a sleeping guard. */
@@ -520,8 +512,8 @@ export async function unlockCell(key: string, door: Tile, stand: Tile, log: (m: 
 const GODRIC_DOOR = new Tile(2832, 10078, 0);
 const EADGAR_DOOR = new Tile(2832, 10082, 0);
 
-// Why: freeing Godric is what advances the stage, and once it does `decide()` walks out to Dunstan, so anything optional has to happen before it, hence Eadgar first.
-// Why: Eadgar is optional for this quest and required for Eadgar's Ruse, which is worth one pickpocket while standing here.
+// Why: freeing Godric advances the stage and `decide()` then walks out to Dunstan, so anything optional happens first.
+// Why: Eadgar is optional here and required for Eadgar's Ruse, which is worth one pickpocket while standing here.
 
 /** Free both prisoners, Eadgar before Godric. */
 async function freePrisoners(freedEadgar: boolean, log: (m: string) => void): Promise<boolean> {
@@ -582,8 +574,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
             : custom('kill a Troll General for the Prison key', huntGeneral);
     }
     if (stage === TROLL_STAGE.ENTERED_PRISON) {
-        // A resume can land here from anywhere, a death sends the character to
-        // Lumbridge, and the prison is unreachable without the boots on.
+        // A resume can land here from anywhere, a death sends you to Lumbridge, and the prison needs the boots on.
         const prep = prepare(snap, zone);
         if (prep) {
             return prep;

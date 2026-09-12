@@ -1,7 +1,5 @@
-/** Live Holy Grail harness (#246): --stage N --until N --minutes N, base :8890.
- *  Why: `--stage` writes `%grail` and relogs, since `update_questlist` only recolours the list at login and the module reads the list before the journal.
- *  Why: the bank holds coins, food and a melee kit and nothing else. Excalibur is bought back from the Lady of the Lake, the napkin comes from Galahad and the whistles from Draynor Manor, so a pass proves the bot can find all three.
- *  Why: stages from 8 up seed the napkin, as neither Galahad branch hands out a replacement once Percival is the errand. */
+/** Live Holy Grail harness (#246), using the members world at :8890. */
+// Why: stage jumps relog; quest items must be sourced except the unrecoverable napkin after stage 8.
 
 //   HEADED=1 bun e2e/holy-grail-246-live.ts --stage 0 --until 10 --minutes 120 --tick 200
 //   HEADED=1 bun e2e/holy-grail-246-live.ts --stage 4 --until 8 --minutes 45 --tick 200
@@ -245,7 +243,7 @@ try {
     let queueChecked = false;
     while (Date.now() < deadline) {
         const last = await snapshot(page);
-        // Why: the engine serves one bundle to everyone, so a session that deploys between this deploy and the page load hands the run its own branch, and a queue without Holy Grail in it spends the budget on somebody else's quest.
+        // Why: reject a shared bundle replaced by another session during boot.
         const queue = last.logs.find(l => l.msg.startsWith('AIOQuester — queue:'));
         if (!queueChecked && queue) {
             queueChecked = true;

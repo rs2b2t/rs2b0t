@@ -464,8 +464,7 @@ class FletchDialog implements Task {
             return;
         }
 
-        // Do NOT treat "make menu still open" as production started, that thrashed Make-X
-        // every tick. Wait for the menu to leave and work to begin.
+        // An open make menu means production has not started; wait before retrying Make-X.
         const started = await Execution.delayUntil(
             () =>
                 !ChatDialog.isMakeMenu()
@@ -485,7 +484,7 @@ class FletchDialog implements Task {
             if (ChatDialog.canContinue()) {
                 return;
             }
-            // Menu back = batch finished or interrupted, re-pick next tick if logs remain.
+            // A reopened menu means the batch finished or was interrupted.
             if (ChatDialog.isMakeMenu()) {
                 return;
             }

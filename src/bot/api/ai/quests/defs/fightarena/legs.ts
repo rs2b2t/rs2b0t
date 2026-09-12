@@ -46,7 +46,7 @@ async function landedIn(pocket: FaPocket, ms: number): Promise<boolean> {
     return Execution.delayUntil(() => pocketOf(Game.tile()) === pocket, ms);
 }
 
-// Why: `forceapproach=north` means the server drops every op issued from another side, with no refusal and no movement, which is indistinguishable from a missing loc.
+// Why: `forceapproach=north` means the server silently drops every op from another side, which looks like a missing loc.
 
 /** Open and search the guards' chest for the Khazard disguise. */
 export async function searchChest(log: (m: string) => void): Promise<boolean> {
@@ -145,7 +145,7 @@ async function openLocById(locId: number, near: Tile, log: (m: string) => void):
     return Boolean(await door.interact('Open'));
 }
 
-/** Cross `fightarena_door1` inwards. Needs the disguise and a guard within five tiles. */
+/** Cross `fightarena_door1` inwards. Needs the disguise and a guard within 5 tiles. */
 export async function enterBuilding(log: (m: string) => void): Promise<boolean> {
     if (!disguised()) {
         log('refusing to knock without the Khazard disguise on');
@@ -205,7 +205,7 @@ export async function unlockJeremy(log: (m: string) => void): Promise<boolean> {
     return landedIn('arena', 40_000);
 }
 
-// Why: `Reach.entityOp` lets the server walk the last stretch, and its five-second window is short for a target thirty tiles across the corridor.
+// Why: `Reach.entityOp` lets the server walk the last stretch, and its 5s window is short for a target 30 tiles across the corridor.
 
 /** Talk to an npc found by id, then drive whatever it opens. */
 export async function talkById(npcId: number, prefer: string[], log: (m: string) => void, near?: Tile): Promise<boolean> {
@@ -231,7 +231,7 @@ export async function talkById(npcId: number, prefer: string[], log: (m: string)
     return driveDialog(prefer, log);
 }
 
-// Why: `driveDialog` returns at the `if_close` that starts a cutscene, and the next decide would open the quest log on top of forty ticks of forced movement.
+// Why: `driveDialog` returns at the `if_close` that starts a cutscene, and the next decide would open the quest log on top of 40 ticks of forced movement.
 
 /** Talk to an npc whose dialogue ends in a cutscene, and wait out the ride. */
 export async function talkAndLand(
@@ -250,8 +250,8 @@ export async function talkAndLand(
     return false;
 }
 
-// Why: each beast is caged until a script lets it out, and only the entry cutscenes do that, a bot that walked back in after a death has to ask a Servil instead.
-// Why: swinging at an empty arena burns every tick of the fight's budget and then repeats, which is a wedge rather than a slow start.
+// Why: each beast is caged until a script lets it out and only the entry cutscenes do that, so a bot that walked back in after a death asks a Servil.
+// Why: swinging at an empty arena burns the fight budget and repeats, which wedges the quest.
 
 /** Make sure the beast is out, asking the Servils if it is not, then fight it. */
 export async function fightWithRelease(
@@ -260,8 +260,7 @@ export async function fightWithRelease(
     log: (m: string) => void
 ): Promise<boolean> {
     const loose = (): boolean => Npcs.query().where(n => n.id === fight.npcId).action('Attack').within(20).exists();
-    // Why: a caged beast still renders and still offers Attack, so the first pass may only
-    // learn it is caged by swinging at it, either way the Servil is what lets it out.
+    // Why: a caged beast still renders and offers Attack, so the first pass may only learn it's caged by swinging; either way the Servil lets it out.
     const result = loose() ? await runFight(fight, log) : 'unengaged';
     if (result !== 'unengaged') {
         return result === 'won';

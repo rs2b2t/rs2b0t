@@ -1,7 +1,6 @@
-/** Live Grand Tree harness (#247): --stage N --until N --minutes N, base :8890.
- *  Why: `%grandtree` is the state machine and nothing else is, so `--stage` writes it and relogs, `update_questlist` only recolours the list at login, and the module reads that colour before it reads the journal.
- *  Why: stats are 70 across the board rather than max, because the quest ends on a level-172 Black Demon and the point is to prove a 70 account can hold Protect from Melee through it.
- *  Why: the bank holds coins, lobsters and a rune melee kit, every quest item has a source in the world, and seeding one would hide whether the bot can find it. */
+/** Live Grand Tree harness (#247), using the members world at :8890. */
+// Why: stage jumps relog because the module reads the quest-list colour.
+// Level 70 exercises the Black Demon fight; quest items stay unseeded.
 
 //   HEADED=1 bun e2e/grand-tree-247-live.ts --stage 0 --until 160 --minutes 90 --tick 300
 //   HEADED=1 bun e2e/grand-tree-247-live.ts --stage 130 --until 140 --minutes 25 --tick 300
@@ -282,7 +281,7 @@ try {
     let queueChecked = false;
     while (Date.now() < deadline) {
         const last = await snapshot(page);
-        // Why: the engine serves one bundle to everyone, so a session that deploys between this deploy and the page load hands the run its own branch, and a queue without this quest in it spends the budget on somebody else's.
+        // Why: reject a shared bundle replaced by another session during boot.
         const queue = last.logs.find(l => l.msg.startsWith('AIOQuester — queue:'));
         if (!queueChecked && queue) {
             queueChecked = true;

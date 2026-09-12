@@ -5,10 +5,8 @@ import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { EC_QUEST, EC_STAGE } from './areas.js';
 
-/**
- * haunted_journal.rs2 writes one self-contained block per stage rather than
- * appending, but newest-first still holds and matches every other module.
- */
+/** Colour tags become a space, so no needle may span a tag boundary. */
+/** haunted_journal.rs2 writes one self-contained block per stage, but newest-first still holds and matches every other module. */
 function readStage(text: string): number | undefined {
     if (text.includes('we turned ernest back to normal')) return EC_STAGE.COMPLETE;
     if (text.includes('discovered ernest is a')) return EC_STAGE.SPOKEN_ODDENSTEIN;

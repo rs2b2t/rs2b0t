@@ -2,22 +2,16 @@ import Tile from '../geometry/Tile.js';
 import { COOKING_SURFACE_LOCS } from './cookSurfaceLocs.js';
 
 /**
- * Cooking surface catalog for Fisher cook loops: loc types from content `cooking_sources.loc` (category cooking_oven / cooking_fire), world placements generated into {@link COOKING_SURFACE_LOCS} by `bun run gen:cooksurfaces`.
- * Why: fishing camps pin a preferred {@link CookingSurface} only when one is within a useful walk of the pier, and GatheringBot otherwise falls back to live scene Locs.query for Range/Fire.
+ * Cooking surfaces from `cooking_sources.loc`; `bun run gen:cooksurfaces` generates their world placements.
+ * Why: Fishing camps pin nearby surfaces and otherwise query the live scene for a Range or Fire.
  */
 
 type CookSurfaceKind = 'range' | 'fire' | 'fireplace';
 
 interface CookingSurface {
-    /**
-     * Final stand next to the cook surface (path destination after any approach).
-     * FishCook walks here (via walkOpening) and then uses the Range/Fire in leash.
-     */
+    /** Final stand next to the cook surface; FishCook walks here via walkOpening and then uses the Range/Fire in leash. */
     stand: Tile;
-    /**
-     * Optional intermediate waypoint (e.g. exterior of a Large door). Walked first so
-     * pathfinding enters a building complex before aiming at the interior range tile.
-     */
+    /** Optional waypoint (e.g. outside a Large door), walked first so pathing enters the building before aiming at the interior range tile. */
     approach?: Tile;
     /** Loc query name (Range / Fire / Fireplace). */
     locName: string;
@@ -78,7 +72,7 @@ export function nearestCookingRange(
 
 /**
  * Which surface to prefer for a cook mode.
- * `pier` is cook-then-bank near the fishing spot (the full raw pack walks short); `bank` is bank-raw-then-cook near the bank (withdraw → cook → re-bank).
+ * `pier` is cook-then-bank near the fishing spot (the full raw pack walks short); `bank` is bank-raw-then-cook near the bank (withdraw, cook, re-bank).
  */
 export type CookSurfaceRole = 'pier' | 'bank';
 
@@ -100,7 +94,7 @@ export const CATHERBY_RANGE: CookingSurface = {
 
 /**
  * Curated cook surfaces for fishing camps.
- * Why: the Seers pier range stands outside the Sinclair Large door so pathing walks the gate complex instead of aiming at the interior range tile and sticking on the wrong side of doors.
+ * Why: the Seers pier range stands outside the Sinclair Large door so pathing walks the gate complex; aiming at the interior range tile sticks on the wrong side of doors.
  */
 export const FISH_CAMP_COOK_PLANS: Readonly<Record<string, FishCampCookPlan>> = {
     Catherby: {
@@ -109,8 +103,7 @@ export const FISH_CAMP_COOK_PLANS: Readonly<Record<string, FishCampCookPlan>> = 
     },
     'Seers (fly fishing)': {
         pier: {
-            // Two-step path: (1) exterior of Large door (2) stand east of range
-            // (Range forceapproach=east in cooking_sources.loc).
+            // Two-step path: outside the Large door, then the stand east of the range (Range forceapproach=east in cooking_sources.loc).
             approach: new Tile(2740, 3570, 0),
             stand: new Tile(2735, 3581, 0),
             loc: new Tile(2733, 3582, 0),
@@ -119,8 +112,7 @@ export const FISH_CAMP_COOK_PLANS: Readonly<Record<string, FishCampCookPlan>> = 
             label: 'Sinclair mansion range (Large-door approach)',
             notes: 'approach→open Large door→east-of-range stand'
         },
-        // Town range SW of Seers bank, interior of the house (south of range is street).
-        // Door@2713,3483 from the bank; stand north of the range (inside).
+        // Town range SW of Seers bank, inside the house (south of the range is street); Door@2713,3483 from the bank, stand north of the range.
         bank: {
             approach: new Tile(2713, 3484, 0),
             stand: new Tile(2716, 3477, 0),
@@ -152,8 +144,7 @@ export const FISH_CAMP_COOK_PLANS: Readonly<Record<string, FishCampCookPlan>> = 
         }
     },
     'Draynor Village': {
-        // Fireplace is inside the house; 3100,3255 (south) is street-side and useOn can't reach.
-        // Enter via Door@3101,3258 (east wall), stand north of the fireplace.
+        // Fireplace is inside the house and useOn can't reach it from 3100,3255 (street side); enter via Door@3101,3258 (east wall) and stand north of it.
         pier: {
             approach: new Tile(3102, 3258, 0),
             stand: new Tile(3100, 3257, 0),
@@ -189,10 +180,7 @@ export function cookSurfaceForFishCamp(
     return plan.pier ?? plan.bank ?? null;
 }
 
-/**
- * Prefer curated camp surface for the cook role, else nearest Range to `spot`.
- * Pass camp bank stand as `spot` when role is `bank` to prefer nearby ovens.
- */
+/** Curated camp surface for the cook role, else the nearest Range to `spot`; pass the bank stand as `spot` for the `bank` role. */
 export function resolveFishCampCookSurface(
     campName: string | null | undefined,
     spot: { x: number; z: number; level?: number },
@@ -216,10 +204,7 @@ type FishCampRangePathCase = {
     surface: CookingSurface;
 };
 
-/**
- * Expand {@link FISH_CAMP_COOK_PLANS} into pier (+ distinct bank) path cases.
- * Used by `e2e/gatheringbot-range-path-test.ts`.
- */
+/** Expand {@link FISH_CAMP_COOK_PLANS} into pier (plus distinct bank) path cases for `e2e/gatheringbot-range-path-test.ts`. */
 export function listFishCampRangePathCases(): FishCampRangePathCase[] {
     const out: FishCampRangePathCase[] = [];
     for (const [camp, plan] of Object.entries(FISH_CAMP_COOK_PLANS)) {

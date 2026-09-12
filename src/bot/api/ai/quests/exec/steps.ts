@@ -22,18 +22,18 @@ import { buyPurseTopUp } from '../engine/provisioning.js';
 /** How deep into the straight-line shortlist to look before giving up. */
 const BANK_CANDIDATES = 6;
 
-// Why: from the Lumbridge respawn the three closest banks by air, Al Kharid, Shantay Pass and the Duel Arena, sit behind the same 10gp toll gate, and the navigator prunes a fare it cannot pay.
-// Why: to a bot that has died every bank it can see is one it cannot reach, and the first it can walk to is only third on the list, so the navigator is asked for path costs.
+// Why: from the Lumbridge respawn the 3 closest banks by air, Al Kharid, Shantay Pass and the Duel Arena, sit behind the same 10gp toll gate, and the navigator prunes a fare it can't pay.
+// Why: a bot that has died can't reach any of those, and the first bank it can walk to is 3rd on the list, so the navigator is asked for path costs.
 
 /** The nearest bank measured by walking cost. */
 async function reachableBank(from: WorldTile, log: (m: string) => void): Promise<Tile | undefined> {
     const candidates = nearestBanks(from).slice(0, BANK_CANDIDATES);
     let best: { tile: Tile; cost: number } | null = null;
     for (const bank of candidates) {
-        // Why: stopping once a known route beats the next candidate's crow-flight is exact on open ground, as a walk is never shorter than the line it covers.
+        // Why: stopping once a known route beats the next candidate's crow-flight is exact on open ground, as a walk is never shorter than its straight line.
         // Why: a ladder or a ship can beat that line, so this can settle for a bank short of the cheapest.
         // Why: it can never settle for an unreachable bank, as nothing breaks the loop until a path has already been found.
-        // Why: the common case stays at one or two pathfinds instead of six.
+        // Why: the common case stays at 1 or 2 pathfinds instead of 6.
         if (best !== null && bankDistance(from, bank.tile) >= best.cost) {
             break;
         }
@@ -61,7 +61,7 @@ export async function openBankLeg(noBankMsg: string, override: Tile | undefined,
     return Banking.open({ stand: bankTile, log });
 }
 
-// Why: `distanceTo` is a plan distance, so the floor below a first-storey shop reads as four tiles from it, the Magic Guild counter sat directly overhead while the step failed in a millisecond, twenty-three times.
+// Why: `distanceTo` is a plan distance, so the floor below a first-storey shop reads as 4 tiles from it (the Magic Guild counter was directly overhead while the step failed 23 times).
 async function ensureAt(anchor: Tile, radius: number, log: (m: string) => void): Promise<boolean> {
     const here = Game.tile();
     if (here && here.level === anchor.level && anchor.distanceTo(here) <= radius) {
@@ -79,8 +79,8 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
             return talkThrough(step.stop.npc, step.stop.prefer, log, step.stop.gapMs);
         }
         case 'grabGround': {
-            // Why: arrival at the spawn is not a take, Cook's egg logged grab success with an empty pen.
-            // Why: re-query after the walk and Take if it is there, otherwise the gather is still outstanding.
+            // Why: arriving at the spawn isn't a take; Cook's egg logged grab success with an empty pen.
+            // Why: re-query after the walk and Take if it's there, otherwise the gather is still outstanding.
             const tryTake = async (): Promise<boolean> => {
                 const before = Inventory.count(step.item);
                 const g = GroundItems.query().name(step.item).within(12).nearest();
@@ -227,11 +227,11 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
             const before = Inventory.count(step.item);
             const purse = buyPurseTopUp(Inventory.count('Coins'), step.estGp);
             if (purse.need) {
-                // Why: `reachableBank` picks by walking cost, and Shilo's teller has no booth behind its map icon, `Banking.open` needs the npc access the location declares.
+                // Why: `reachableBank` picks by walking cost, and Shilo's teller has no booth behind its map icon, so `Banking.open` needs the npc access the location declares.
                 if (!(await openBankLeg('buy: no known bank for coins', step.bank, log))) {
                     return false;
                 }
-                // Why: `withdrawX` takes its count ON TOP of the pack, so asking for the full target draws it twice, Legends' float plus a guild estimate carried 110k into a quest that fights a level-187 demon three times.
+                // Why: `withdrawX` adds its count on top of the pack, so asking for the full target draws it twice (Legends' float plus a guild estimate carried 110k into a level-187 demon fight).
                 await Bank.withdrawX('Coins', purse.draw);
                 await Modals.close();
                 if (Inventory.count('Coins') < step.estGp) {

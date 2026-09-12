@@ -21,7 +21,7 @@ import {
 
 const DESCEND_MS = 15_000;
 
-/** The cave workman gives the chest key up only to a character who begs four times. */
+/** The cave workman only gives up the chest key after you beg 4 times. */
 const KEY_PREFER: readonly string[] = [
     'I have been invited to research here.',
     'Do you know where to find a chest key?',
@@ -32,9 +32,9 @@ const KEY_PREFER: readonly string[] = [
     'Please?'
 ];
 
-// Why: the rope on each winch is a `%itexam_bits` flag the client never sees, so the Operate click is the oracle, a shaft that swallows you was roped, and one that answers with a chat line was not.
+// Why: Winch-rope state is not transmitted; Operate either descends or emits the unroped message.
 
-/** Operate a winch, tying a rope to its bucket first if the shaft answers instead of swallowing you. */
+/** Operate a winch, adding a rope if the shaft reports that it is unroped. */
 export async function descendWinch(
     winchLocId: number,
     stand: Tile,
@@ -96,7 +96,7 @@ export async function descendWinch(
     return false;
 }
 
-/** The western shaft holds the cave workman with the chest key, and two arcenia roots. */
+/** The western shaft holds the cave workman with the chest key, and 2 arcenia roots. */
 export function westShaftLeg(needKey: boolean, needRoot: boolean): QuestStep {
     return {
         kind: 'custom',
@@ -216,7 +216,7 @@ export function barrelLeg(): QuestStep {
                 return false;
             }
             await settleScene();
-            // Why: the lid flag is a `%itexam_bits` bit, so the trowel goes on first every pass, a second lever is a no-op, a missing one leaves "It's not open!".
+            // Why: the lid flag is a `%itexam_bits` bit, so the trowel goes on first every pass; a second lever is a no-op and a missing one leaves "It's not open!".
             const trowel = Inventory.items().find(i => i.id === DIG_ID.TROWEL);
             const barrel = locByIds([DIG_LOC.BARREL], 6);
             if (!trowel || !barrel) {
@@ -254,7 +254,7 @@ export async function mixItems(aId: number, bId: number, productId: number, log:
         if (!(await from.useOn(to))) {
             continue;
         }
-        // Why: the last mix ends in a `~chatplayer` line and only adds the compound after it, so a wait that does not drive the dialogue times out on a mix that worked.
+        // Why: the last mix ends in a `~chatplayer` line and only adds the compound after it, so a wait that doesn't drive the dialogue times out on a mix that worked.
         if (await driveUntilHeld(() => Inventory.countById(productId) > 0, [], log, 12_000)) {
             return true;
         }
@@ -273,7 +273,7 @@ function onBrickStand(): boolean {
     return here !== null && here.level === 0 && here.x === DIG_TILE.BRICK_STAND.x && here.z === DIG_TILE.BRICK_STAND.z;
 }
 
-/** Pour the compound over the bricks and light it; the run-away sequence needs one exact tile. */
+/** Pour the compound over the bricks and light it; the run-away sequence needs one specific tile. */
 export function blastLeg(pour: boolean): QuestStep {
     return {
         kind: 'custom',

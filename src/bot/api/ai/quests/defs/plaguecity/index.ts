@@ -97,8 +97,7 @@ function inWest(snap: QuestSnapshot, area: PlagueArea, step: QuestStep): QuestSt
     return area === 'east' ? (westKit(snap) ?? TO_WEST) : TO_WEST;
 }
 
-// Why: the four buckets are gathered before the fountain, so the leg is one fill trip and one
-// pour trip, filling whatever is in the pack sends the bot back for the next three pours.
+// Why: Collect all four buckets before filling them to avoid three extra fountain trips.
 function waterLeg(snap: QuestSnapshot, area: PlagueArea): QuestStep {
     const empty = held(snap, PC_ITEM.BUCKET);
     const water = held(snap, PC_ITEM.BUCKET_WATER);
@@ -112,8 +111,7 @@ function waterLeg(snap: QuestSnapshot, area: PlagueArea): QuestStep {
     return inEast(area, more ?? { kind: 'wait', reason: 'no bucket for the garden soil' });
 }
 
-// Why: the cow field, the snape grass spawns, Taverley and Port Sarim are one eastward
-// loop, so every raw ingredient is gathered before the first mix rather than between them.
+// Why: the cow field, the snape grass spawns, Taverley and Port Sarim are one eastward loop, so every raw ingredient is gathered before the first mix.
 function cureLeg(snap: QuestSnapshot, area: PlagueArea): QuestStep | null {
     if (held(snap, PC_ITEM.HANGOVER_CURE) > 0) {
         return null;
@@ -145,8 +143,7 @@ function mix(item: { name: string }, target: { name: string }, product: { name: 
 
 function stageStep(snap: QuestSnapshot, area: PlagueArea, stage: number): QuestStep {
     switch (stage) {
-        // Why: the float comes out on the opening bank trip, so the rope, pestle and chocolate
-        // bar are bought where the walk already passes rather than off a later detour.
+        // Why: the float comes out on the opening bank trip, so the rope, pestle and chocolate bar are bought where the walk already passes.
         case PC_STAGE.NOT_STARTED:
             return inEast(area, sourceShoppingFloat(snap) ?? custom('ask Edmond about his daughter', startQuest));
         case PC_STAGE.STARTED:

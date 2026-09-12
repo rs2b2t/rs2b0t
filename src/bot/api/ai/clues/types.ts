@@ -13,10 +13,9 @@ export interface ClueRow {
     needsSextant?: boolean;
     keyFrom?: { npc: string; keyObj: string; keyId: number };
     items?: string[];
-    // Hard tier: the first dig spawns this NPC instead of the casket, and the
-    // casket only appears once it is dead.
+    // Hard tier: the first dig spawns this NPC instead of the casket, which only appears once it's dead.
     guardian?: string;
-    // Hard tier: the talk NPC hands over a sliding puzzle to solve first.
+// Hard tier: the NPC gives a sliding puzzle before the next clue.
     puzzle?: { obj: string; id: number };
 }
 

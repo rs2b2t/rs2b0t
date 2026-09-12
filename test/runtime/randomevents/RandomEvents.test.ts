@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { ENT_NPC_IDS, entHazard, PLANT_REACH, pickEventNear, GearLossTracker, handleLocation, hazardHoldTicks, isHostileEventNpc, pickSacrificial, RandomEvents } from '#/bot/runtime/randomevents/RandomEvents.js';
+import { PLANT_REACH, pickEventNear, GearLossTracker, handleLocation, isEntHijack, isHostileEventNpc, pickSacrificial, RandomEvents } from '#/bot/runtime/randomevents/RandomEvents.js';
 
 describe('handleLocation', () => {
     test('worn handle wins (the wielded-pick case the old scan missed)', () => {
@@ -66,90 +66,67 @@ describe('GearLossTracker', () => {
 });
 
 describe('isHostileEventNpc', () => {
-    // River troll level-1 id = 391; faceEntity player encoding = 32768 + slot
-    const riverTroll = (over: Partial<{ id: number; inCombat: boolean; distance: number; faceEntity: number }> = {}) => ({
-        id: 391,
-        inCombat: false,
-        distance: 4,
-        faceEntity: -1,
+    const ids = [391, 392, 393, 394, 395, 396, 408, 411, 413, 414, 415, 416, 417, 418,
+        419, 420, 421, 422, 423, 424, 425, 426, 427, 428, 429, 430, 431, 432, 433, 434,
+        435, 436, 438, 439, 440, 441, 442, 443];
+    const hostile = (id: number, faceEntity = 32771, distance = 4, inCombat = false) => ({
+        id, inCombat, distance, faceEntity
+    });
+
+    test.each(ids)('NPC %i waits for damage even when adjacent, targeting us, or in combat', id => {
+        expect(isHostileEventNpc(hostile(id, -1, 1), false)).toBe(false);
+        expect(isHostileEventNpc(hostile(id), false)).toBe(false);
+        expect(isHostileEventNpc(hostile(id, 32771, 1, true), false)).toBe(false);
+    });
+
+    test.each(ids)('NPC %i triggers after damaging us without needing to receive a hit itself', id => {
+        expect(isHostileEventNpc(hostile(id), true)).toBe(true);
+    });
+
+    test.each(ids)('NPC %i triggers after damage even with missing or stale facing information', id => {
+        expect(isHostileEventNpc(hostile(id, -1), true)).toBe(true);
+        expect(isHostileEventNpc(hostile(id, 32777, 1, true), true)).toBe(true);
+    });
+
+    test('the hostile must be within range', () => {
+        expect(isHostileEventNpc(hostile(431, 32771, 8), true)).toBe(true);
+        expect(isHostileEventNpc(hostile(431, 32771, 9), true)).toBe(false);
+    });
+
+    test.each([1, 407, 409, 412, 437, 444, 452, 453])('non-hostile NPC %i never triggers evasion', id => {
+        expect(isHostileEventNpc(hostile(id), true)).toBe(false);
+    });
+});
+
+describe('isEntHijack', () => {
+    const ent = (over: Partial<{ id: number; index: number; distance: number }> = {}) => ({
+        id: 444,
+        index: 12,
+        distance: 1,
         ...over
     });
 
-    test('adjacent hostile is always an event', () => {
-        expect(isHostileEventNpc(riverTroll({ distance: 1 }), 3, false)).toBe(true);
+    test('facing the Ent while chopping it is a hijack', () => {
+        expect(isEntHijack(ent(), 12, true)).toBe(true);
+        expect(isEntHijack(ent({ id: 452, index: 7 }), 7, true)).toBe(true);
     });
 
-    test('hostile id within engage range is an event even with no combat/face flags (#422)', () => {
-        // Soft flags lag for these; antimacro ids only exist for the victim.
-        expect(isHostileEventNpc(riverTroll({ distance: 5, faceEntity: -1, inCombat: false }), 3, false)).toBe(true);
+    test('a neighbour loc chop (not facing the Ent) is not a hijack', () => {
+        expect(isEntHijack(ent(), -1, true)).toBe(false);
+        expect(isEntHijack(ent(), 99, true)).toBe(false);
     });
 
-    // Why: the Swarm is clamped three tiles from where it spawns and hits 2s, so standing near one costs almost nothing and the walk away costs a trip; every other hostile follows and hits properly.
-    describe('the Swarm', () => {
-        const swarm = (over: Partial<{ inCombat: boolean; distance: number; faceEntity: number }> = {}) =>
-            riverTroll({ id: 411, distance: 4, faceEntity: -1, inCombat: false, ...over });
-
-        test('is left alone while it is only standing there', () => {
-            expect(isHostileEventNpc(swarm(), 3, false)).toBe(false);
-            expect(isHostileEventNpc(swarm({ distance: 1 }), 3, false)).toBe(false);
-        });
-
-        test('is an event once it faces us, which is what attacking looks like', () => {
-            expect(isHostileEventNpc(swarm({ faceEntity: 32768 + 3 }), 3, false)).toBe(true);
-        });
-
-        test('is an event once it is in combat', () => {
-            expect(isHostileEventNpc(swarm({ inCombat: true }), 3, false)).toBe(true);
-        });
-
-        test('is not woken by us fighting something else', () => {
-            expect(isHostileEventNpc(swarm(), 3, true)).toBe(false);
-        });
-
-        test('facing another player is not us being attacked', () => {
-            expect(isHostileEventNpc(swarm({ faceEntity: 32768 + 9 }), 3, false)).toBe(false);
-        });
-
-        test('still ignored past engage range however it is flagged', () => {
-            expect(isHostileEventNpc(swarm({ distance: 12, inCombat: true }), 3, false)).toBe(false);
-        });
+    test('standing next to an Ent after cancelling is not a hijack', () => {
+        expect(isEntHijack(ent(), 12, false)).toBe(false);
     });
 
-    // Why: the Tree spirit fires on a shop at the bank with a window open, and evading on its presence alone walked the shop off the customer; it attacks the moment it lands, so the flags are enough.
-    describe('the Tree spirit', () => {
-        const spirit = (over: Partial<{ id: number; inCombat: boolean; distance: number; faceEntity: number }> = {}) =>
-            riverTroll({ id: 438, distance: 2, faceEntity: -1, inCombat: false, ...over });
-
-        test('is left alone while it is only standing there, whichever of its six ids it wears', () => {
-            expect(isHostileEventNpc(spirit(), 3, false)).toBe(false);
-            expect(isHostileEventNpc(spirit({ id: 443, distance: 1 }), 3, false)).toBe(false);
-        });
-
-        test('is an event once it faces us or is in combat', () => {
-            expect(isHostileEventNpc(spirit({ faceEntity: 32768 + 3 }), 3, false)).toBe(true);
-            expect(isHostileEventNpc(spirit({ id: 443, inCombat: true }), 3, false)).toBe(true);
-        });
-
-        test('is not woken by us fighting something else, nor by it facing another player', () => {
-            expect(isHostileEventNpc(spirit(), 3, true)).toBe(false);
-            expect(isHostileEventNpc(spirit({ faceEntity: 32768 + 9 }), 3, false)).toBe(false);
-        });
-
-        test('still ignored past engage range however it is flagged', () => {
-            expect(isHostileEventNpc(spirit({ distance: 12, inCombat: true }), 3, false)).toBe(false);
-        });
+    test('an Ent more than one tile away is not our loc', () => {
+        expect(isEntHijack(ent({ distance: 2 }), 12, true)).toBe(false);
     });
 
-    test('hostile already in combat within engage range is an event', () => {
-        expect(isHostileEventNpc(riverTroll({ distance: 6, inCombat: true }), 3, false)).toBe(true);
-    });
-
-    test('hostile far away is ignored until it closes', () => {
-        expect(isHostileEventNpc(riverTroll({ distance: 12, faceEntity: 32768 + 3 }), 3, false)).toBe(false);
-    });
-
-    test('non-hostile id is never an event', () => {
-        expect(isHostileEventNpc(riverTroll({ id: 1, distance: 1, inCombat: true }), 3, true)).toBe(false);
+    test('tree spirit and suit of armour ids are outside the Ent range', () => {
+        expect(isEntHijack(ent({ id: 443 }), 12, true)).toBe(false);
+        expect(isEntHijack(ent({ id: 453 }), 12, true)).toBe(false);
     });
 });
 
@@ -170,44 +147,6 @@ describe('ignored randoms (#597)', () => {
         inArena = true;
         expect(RandomEvents.isIgnored('swarm')).toBe(true);
         RandomEvents.setIgnoredRandoms([]);
-    });
-});
-
-// Why: an ent replaces the tree you were chopping and the server queues the chop on you, so it swings on its own; the seventh swing turns the axe into a Broken axe that only Bob repairs.
-describe('the woodcutting ent', () => {
-    const ent = (over: Partial<{ id: number; distance: number }> = {}) => ({ id: 444, distance: 1, ...over });
-
-    test('every ent the content spawns is known, tree through magic', () => {
-        expect(ENT_NPC_IDS.size).toBe(9);
-        for (const id of [444, 445, 446, 447, 448, 449, 450, 451, 452]) {
-            expect(ENT_NPC_IDS.has(id)).toBe(true);
-        }
-    });
-
-    test('stops at the ids either side, so a tree spirit stays an evade and 453 is nothing', () => {
-        expect(ENT_NPC_IDS.has(443)).toBe(false);
-        expect(ENT_NPC_IDS.has(453)).toBe(false);
-    });
-
-    test('is a hazard to step away from within reach, and ignored further out', () => {
-        expect(entHazard(ent())).toBe(true);
-        expect(entHazard(ent({ id: 452, distance: 3 }))).toBe(true);
-        expect(entHazard(ent({ distance: 4 }))).toBe(false);
-        expect(entHazard(ent({ id: 411 }))).toBe(false);
-    });
-});
-
-// Why: gas, a smoking rock and a whirlpool all outlast the step away, so the hold waits them out; the ent's own tree is gone for the same 60 ticks and the run has other trees, so holding there only idles it.
-describe('hazardHoldTicks', () => {
-    test('waits the lasting hazards out', () => {
-        for (const name of ['poisonous gas', 'smoking rock', 'whirlpool']) {
-            expect(hazardHoldTicks(name)).toBe(60);
-        }
-    });
-
-    test('holds only long enough to break the chop chain on an ent', () => {
-        expect(hazardHoldTicks('ent')).toBeLessThan(10);
-        expect(hazardHoldTicks('ent')).toBeGreaterThan(0);
     });
 });
 

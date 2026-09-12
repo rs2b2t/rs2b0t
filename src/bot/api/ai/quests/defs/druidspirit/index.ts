@@ -17,14 +17,14 @@ const THANKS = ['Ok thanks.', 'Ok, thanks.'];
 const harvestHeld = (snap: QuestSnapshot): number =>
     heldId(snap, NS_ID.PEAR) + heldId(snap, NS_ID.STEM) + heldId(snap, NS_ID.FUNGI);
 
-// Why: the grotto is a sealed pocket, and a branch that acts on the surface from inside it walks at a tile with no route to it.
+// Why: the grotto is sealed, so a surface step taken from inside walks at a tile with no route.
 
 /** Leave the pocket before any step that acts outside it. */
 function outside(snap: QuestSnapshot, step: QuestStep): QuestStep {
     return inGrotto(snap.tile) ? custom('leave the grotto', leaveGrotto) : step;
 }
 
-// Why: the bloomed log reverts 25 ticks after it grows, so a resume with no fungus has to cast again rather than look for one that has gone.
+// Why: the bloomed log reverts 25 ticks after it grows, so a resume with no fungus casts again.
 
 /** A fungus in the pack, by whatever route is open. */
 function fungus(snap: QuestSnapshot): QuestStep {
@@ -45,7 +45,7 @@ function ritual(snap: QuestSnapshot): QuestStep {
     return custom('solve the ritual', solvePuzzle);
 }
 
-/** Bloom, fill, hunt, the loop the last four stages share. */
+/** Bloom, fill, hunt, the loop the last 4 stages share. */
 function ghastLoop(snap: QuestSnapshot): QuestStep {
     if (heldId(snap, NS_ID.SICKLE_BLESSED) === 0) {
         return heldId(snap, NS_ID.SICKLE) > 0
@@ -58,7 +58,7 @@ function ghastLoop(snap: QuestSnapshot): QuestStep {
     if (harvestHeld(snap) >= 3) {
         return custom('fill the druid pouch', fillPouch);
     }
-    // Why: only the bloom costs prayer, a pouch fill and a ghast kill are free, so the altar trip is taken here and nowhere else.
+    // Why: only the bloom costs prayer (pouch fills and ghast kills are free), so the altar trip is taken here only.
     if ((snap.prayer ?? BLOOM_MAX_COST) < BLOOM_MAX_COST) {
         return custom('recharge prayer at the Paterdomus altar', rechargePrayer);
     }
@@ -76,8 +76,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (stage === undefined) {
         return { kind: 'wait', reason: 'quest stage not readable' };
     }
-    // Why: without the amulet both spirits answer in gibberish and no dialogue advances, so it is worn before anything else is attempted.
-    // Why: that includes before the first word with Drezel, as nothing about the amulet is quest-gated and starting first sends the bot east to the mausoleum, west to Lumbridge for the amulet, and east again.
+    // Why: Both spirits require the amulet; equipping it before starting avoids an extra Lumbridge round trip.
     const wearing = amulet(snap);
     if (wearing) {
         return outside(snap, wearing);
@@ -98,7 +97,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
             return outside(snap, custom('offer to help', askToHelp));
         case NS_STAGE.RECEIVED_SPELL:
             return outside(snap, { kind: 'talk', stop: DREZEL });
-        // Why: a held fungus is unambiguous evidence the pick landed, and the journal read trails it by a tick, branching on the page alone sent the bot back to Filliman for a scroll it no longer needed.
+        // Why: a held fungus proves the pick landed and the journal read trails it by a tick; branching on the page alone sent the bot back to Filliman for a scroll it didn't need.
         case NS_STAGE.BLESSED:
         case NS_STAGE.CASTED_SPELL:
         case NS_STAGE.PICKED_FUNGI:

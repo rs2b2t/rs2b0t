@@ -40,7 +40,7 @@ export interface BankDestination {
     name: string;
     tile: WorldTile;
     access?: BankObjectAccess;
-    /** Set when the bank is a person (Gundai) rather than a booth. */
+    /** Set when the banker is an npc (Gundai). */
     npcAccess?: BankNpcAccess;
 }
 
@@ -57,8 +57,8 @@ function openAccess(
 }
 
 /**
- * Start-of-script pack cleanup (#170): deposit anything not on the keep list so the bot can start anywhere without a full junk pack.
- * Why: true when nothing needed banking or the purge finished; false only when junk remains and the bank could not be opened or deposited.
+ * Start-of-script pack cleanup (#170): deposit anything off the keep list so the bot can start with a junk pack.
+ * Why: true when nothing needed banking or the purge finished; false when junk remains and the bank couldn't be opened or deposited.
  */
 export async function purgePackAtBank(opts: {
     /** Exact display names to keep (case-insensitive), e.g. pickaxe / rod. */
@@ -293,8 +293,8 @@ export const Banking = {
 };
 
 /**
- * Human-ish pause between bank UI actions (open→scan, withdraw, deposit).
- * Why: tick-based at 1–2 ticks so bank load is not raced by open→scan→close on the same tick after the GatheringBot split.
+ * Human-ish pause between bank UI actions (open, scan, withdraw, deposit).
+ * Why: 1 to 2 ticks so open, scan and close can't land on the same tick and race the bank load.
  */
 export function bankPaceTicks(rand: () => number = Math.random): number {
     return rand() < 0.35 ? 2 : 1;
@@ -307,10 +307,7 @@ export async function bankPace(log?: (m: string) => void): Promise<void> {
     await Execution.delayTicks(ticks);
 }
 
-/**
- * Wait for bank item list after open. Counts stay 0 until it arrives, without a
- * human pause this looks like an instant open→scan→close.
- */
+/** Wait for the bank item list after open. Counts stay 0 until it arrives, and without a pause this looks like an instant open, scan, close. */
 export async function waitBankReady(log?: (m: string) => void): Promise<boolean> {
     if (!Bank.isOpen()) {
         return false;

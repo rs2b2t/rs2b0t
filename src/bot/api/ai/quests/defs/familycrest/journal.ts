@@ -6,9 +6,10 @@ import type { QuestProgress } from '../../engine/types.js';
 import { FC_QUEST, FC_STAGE } from './areas.js';
 
 /**
- * Newest marker first: crest_journal.rs2 appends, so every earlier stage's prose
- * is still on the scroll at the later ones.
+ * `@dbl@`-style colour tags become a space, so a needle must never span a tag boundary next to punctuation.
+ * @see docs/reference/quest-engine.md#quest-state
  */
+/** Newest marker first: crest_journal.rs2 appends, so earlier prose is still on the scroll. */
 function readStage(text: string): number | undefined {
     if (text.includes('quest complete!')) return FC_STAGE.COMPLETE;
     if (text.includes('lost his piece of the family crest to a demon')) return FC_STAGE.CURED_JOHNATHON;
@@ -32,10 +33,7 @@ export function parseFamilyCrestJournal(lines: readonly string[] | string): Ques
     return stage === undefined ? undefined : { stage, flags: new Set() };
 }
 
-/**
- * A failed read is not evidence the quest went backwards, so the last good one
- * stands in until the next success.
- */
+/** Stands in for a failed read until the next success. */
 let lastGood: QuestProgress | undefined;
 
 export interface JournalRead {

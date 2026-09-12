@@ -2,10 +2,12 @@ import { reader } from '../../adapter/ClientAdapter.js';
 import { BotHost } from '../BotHost.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { fleeCandidates } from './eventEvade.js';
+import { fleeCandidates, stepOffCandidates } from './eventEvade.js';
 import { Game } from '../../api/game/Game.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
+import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import { Traversal } from '../../api/walking/Traversal.js';
+import { ENT_LIFE_TICKS, ENT_NPC_IDS } from '../../data/woodcuttingLocations.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
@@ -33,6 +35,7 @@ export function pickEventNear(npc: { name: string | null; distance: number }): b
 const idRange = (lo: number, hi: number): number[] => Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
 const HOSTILE_EVENT_NPC_IDS = new Set<number>([
     ...idRange(391, 396), // River troll  (macro_rivertrollguardian_1..6)
+    408,
     411,                  // Swarm        (macro_swarm)
     ...idRange(413, 418), // Rock Golem   (macro_golemguardian_1..6)
     ...idRange(419, 424), // Zombie       (macro_zombie1..6)
@@ -40,29 +43,6 @@ const HOSTILE_EVENT_NPC_IDS = new Set<number>([
     ...idRange(431, 436), // Watchman     (macro_watchman1..6)
     ...idRange(438, 443)  // Tree spirit  (macro_dryhadguardian_1..6)
 ]);
-
-// Why: an ent replaces the tree you were chopping, and the spawn queues the chop on the player, so it swings without a click and the chop re-queues itself. The seventh swing turns the axe into a Broken axe only Bob repairs, and the npc is named "Tree" with the level hidden, so nothing else about it reads as a hazard.
-/** `macro_ent_tree1` through `macro_ent_magic`, the woodcutting random that eats an axe. */
-export const ENT_NPC_IDS: ReadonlySet<number> = new Set(idRange(444, 452));
-
-/** How close an ent has to be before the run steps off it. */
-const ENT_ENGAGE_DISTANCE = 3;
-
-export const ENT_HAZARD = 'ent';
-
-/** Whether this npc is an ent close enough to be chopping us. */
-export function entHazard(npc: { id: number; distance: number }): boolean {
-    return ENT_NPC_IDS.has(npc.id) && npc.distance <= ENT_ENGAGE_DISTANCE;
-}
-
-/** Ticks held after stepping off a hazard. */
-const HAZARD_HOLD_TICKS = 60;
-// Why: the gas, the rock and the whirlpool all outlast the step away, so the hold waits them out. An ent's own tree is deleted for those same 60 ticks and the run has other trees, so holding there would only idle it; the walk is what breaks the chop chain.
-const ENT_HOLD_TICKS = 3;
-
-export function hazardHoldTicks(name: string): number {
-    return name === ENT_HAZARD ? ENT_HOLD_TICKS : HAZARD_HOLD_TICKS;
-}
 
 const GAS_CHEST_LOC_ID = 2141;
 /** Whirlpool fishing-spot variants (macro). 406 is the fourth changetype id. */
@@ -81,46 +61,34 @@ const FISHING_GEAR = [
     'feather'
 ];
 const GEAR_LOSS_WINDOW_MS = 90_000;
-/** Hostile fishing/mining randoms (river troll, rock golem, …) often open from a few tiles out.
- *  Why: detecting by id within this range when they face or attack us, rather than only when adjacent, stops fishers dying before distance<=1 fires. */
+/** Detection range for hostile gathering randoms that attack from several tiles away. */
 const HOSTILE_ENGAGE_DISTANCE = 8;
-
-/** `macro_swarm`, the one hostile random that cannot follow. */
-const SWARM_NPC_ID = 411;
-
-/** `macro_dryhadguardian_1..6`, the Tree spirit. */
-// Why: it fires on a shop standing at the bank with a window open, and a pause on its presence alone walks the shop off the customer; it attacks the moment it lands, so its combat flag or face target is enough to earn the interrupt and nothing is lost by waiting for one.
-const TREE_SPIRIT_NPC_IDS: ReadonlySet<number> = new Set(idRange(438, 443));
-
-/** Whether an npc's face target is this player. */
-function facesSlot(faceEntity: number, selfSlot: number): boolean {
-    return faceEntity >= 32768 && faceEntity - 32768 === selfSlot;
-}
 
 export function isHostileEventNpc(
     npc: {
         id: number;
-        inCombat: boolean;
         distance: number;
-        faceEntity: number;
     },
-    selfSlot: number,
-    _playerInCombat: boolean
+    playerDamaged: boolean
 ): boolean {
-    if (!HOSTILE_EVENT_NPC_IDS.has(npc.id)) {
+    return playerDamaged
+        && HOSTILE_EVENT_NPC_IDS.has(npc.id)
+        && npc.distance <= HOSTILE_ENGAGE_DISTANCE;
+}
+
+/**
+ * The active Ent chop: facing the NPC, adjacent, and animating.
+ * Why: matching every Ent would pause unrelated chopping until it despawns.
+ */
+export function isEntHijack(
+    npc: { id: number; index: number; distance: number },
+    selfFaceEntity: number,
+    animating: boolean
+): boolean {
+    if (!ENT_NPC_IDS.has(npc.id) || npc.distance > 1 || !animating) {
         return false;
     }
-    if (npc.distance > HOSTILE_ENGAGE_DISTANCE) {
-        return false;
-    }
-    // Why: `macro_swarm` carries maxrange 3, so it is pinned three tiles from where it spawned and a step or two leaves it behind, and it hits 2s at attackrate 7 meanwhile. Evading one that is only sitting there costs a walk and a repath to dodge a few points of damage that never arrives.
-    // Why: it does enter opplayer2 on the player, so an actual attack shows up as its own combat flag or its face target, and those are what earn the interrupt.
-    if (npc.id === SWARM_NPC_ID || TREE_SPIRIT_NPC_IDS.has(npc.id)) {
-        return npc.inCombat || facesSlot(npc.faceEntity, selfSlot);
-    }
-    // Why: these antimacro ids only exist as your own random event. They are not world mobs you walk past.
-    // Why: soft flags (combatCycle / faceEntity) often lag or never set for the rest (#422), which left walks repathing until timeout while Supervisor never intercepted, so presence within engage range is enough.
-    return true;
+    return selfFaceEntity === npc.index;
 }
 
 export class GearLossTracker {
@@ -149,23 +117,34 @@ export class GearLossTracker {
     }
 }
 
-type EventKind = 'dialog' | 'pick' | 'evade' | 'lost-tool' | 'box' | 'lamp' | 'hazard' | 'lost-gear' | 'mime' | 'maze';
+type EventKind =
+    | 'dialog'
+    | 'pick'
+    | 'evade'
+    | 'lost-tool'
+    | 'box'
+    | 'lamp'
+    | 'hazard'
+    | 'hijack'
+    | 'lost-gear'
+    | 'mime'
+    | 'maze';
 
 interface DetectedEvent {
     kind: EventKind;
     name: string;
 }
 
-const MAX_ATTEMPTS = 4; // give up on an event we can't clear after this many tries
-const GIVE_UP_COOLDOWN_MS = 45000; // then ignore that event for this long so the bot resumes
+const MAX_ATTEMPTS = 4; // bounded retries before the script resumes
+const GIVE_UP_COOLDOWN_MS = 45000; // ignore the failed event for this long
 const PICK_WAIT_MS = 80_000;
 
-/** Why: maze/mime trap the player; box/lamp occupy a pack slot with no Drop, so keep solving. */
+/** Maze and mime trap the player; box and lamp rewards cannot be dropped. */
 const TRAPPED_KINDS: ReadonlySet<EventKind> = new Set(['maze', 'mime', 'box', 'lamp']);
 
-export function plantStrategy(ops: string[]): 'pick' | 'evade' {
-    const canPick = ops.some(a => /pick|take/i.test(a));
-    const canAttack = ops.some(a => /attack/i.test(a));
+export function plantStrategy(ops: readonly (string | null)[]): 'pick' | 'evade' {
+    const canPick = ops.some(a => a !== null && /pick|take/i.test(a));
+    const canAttack = ops.some(a => a !== null && /attack/i.test(a));
     return !canPick && canAttack ? 'evade' : 'pick';
 }
 
@@ -217,10 +196,7 @@ class RandomEventsImpl {
     private lastCheckTick = -1;
     private lastPending = false;
 
-    /**
-     * True when a random is active and not currently being solved.
-     * Why: quiet while {@link handling} so the handler's own walks do not self-interrupt, while Supervisor / EventSignal still gate scripts between loops via detect + handling.
-     */
+    /** True when a random is active but not inside its handler. */
     pending(): boolean {
         if (this.handling) {
             return false;
@@ -331,21 +307,28 @@ class RandomEventsImpl {
             if (DIALOG_EVENT_NPCS.includes(name) && npc.distance <= 6) {
                 return { kind: 'dialog', name };
             }
-            if (pickEventNear(npc)) {
+            if (pickEventNear(npc) && plantStrategy(npc.ops) === 'pick') {
                 return { kind: 'pick', name };
             }
         }
 
-        const selfSlot = reader.selfSlot();
-        let playerInCombat = false;
-        try {
-            playerInCombat = Game.inCombat();
-        } catch {
-            playerInCombat = false;
-        }
+        const playerDamaged = reader.takingDamage();
         for (const npc of npcs) {
-            if (isHostileEventNpc(npc, selfSlot, playerInCombat)) {
+            if (isHostileEventNpc(npc, playerDamaged)) {
                 return { kind: 'evade', name: npc.name?.toLowerCase() ?? 'event monster' };
+            }
+        }
+
+        let animating = false;
+        try {
+            animating = Game.animating();
+        } catch {
+            animating = false;
+        }
+        const selfFace = reader.selfFaceEntity();
+        for (const npc of npcs) {
+            if (isEntHijack(npc, selfFace, animating)) {
+                return { kind: 'hijack', name: 'ent' };
             }
         }
 
@@ -360,9 +343,6 @@ class RandomEventsImpl {
         for (const npc of npcs) {
             if (WHIRLPOOL_NPC_IDS.includes(npc.id) && npc.distance <= 3) {
                 return { kind: 'hazard', name: 'whirlpool' };
-            }
-            if (entHazard(npc)) {
-                return { kind: 'hazard', name: ENT_HAZARD };
             }
         }
 
@@ -394,8 +374,7 @@ class RandomEventsImpl {
         }
         this.handling = true;
         try {
-            // detect/handle must never throw into ScriptRunner, a thrown error
-            // marks the script crashed even when the maze/dialog later succeeds.
+            // detect/handle must never throw into ScriptRunner; a thrown error marks the script crashed even when the maze or dialog later succeeds.
             return await this.handleInner(log);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -441,6 +420,9 @@ class RandomEventsImpl {
                 break;
             case 'hazard':
                 acted = await this.handleHazard(event.name, log);
+                break;
+            case 'hijack':
+                acted = await this.handleHijack(log);
                 break;
             case 'mime':
                 acted = await performMimeStage(log);
@@ -533,9 +515,13 @@ class RandomEventsImpl {
                 return true;
             }
             if (plantStrategy(plant.actions()) === 'evade') {
-                log(`random event: ${name} turned hostile — fleeing (it poisons)`);
-                return await this.handleEvade(name, log);
+                return isHostileEventNpc(plant.snap, reader.takingDamage())
+                    ? await this.handleEvade(name, log)
+                    : true;
             }
+            const plantChanged = (): boolean => !reader.npcs().some(n =>
+                n.index === plant.index && plantStrategy(n.ops) === 'pick'
+            );
             if (!announced) {
                 log(`random event: ${name} — picking the fruit as soon as it ripens`);
                 announced = true;
@@ -547,7 +533,7 @@ class RandomEventsImpl {
                 await plant.interact(op);
                 await Execution.delayUntil(
                     () => Inventory.count('Strange fruit') > before
-                        || !reader.npcs().some(n => (n.name?.toLowerCase() ?? '') === name)
+                        || plantChanged()
                         || this.plantNotOurs(sinceText),
                     6000
                 );
@@ -560,8 +546,11 @@ class RandomEventsImpl {
                     log(`random event: ${name} — fruit picked`);
                     return true;
                 }
+                if (plantChanged()) {
+                    continue;
+                }
             }
-            await Execution.delayTicks(4);
+            await Execution.delayUntil(plantChanged, 2400);
         }
         log(`random event: ${name} — fruit never ripened in this pass; will retry`);
         return true;
@@ -602,7 +591,30 @@ class RandomEventsImpl {
         if (flee) {
             await Traversal.walkTo(flee, { radius: 1, timeoutMs: 15_000, log });
         }
-        await Execution.delayTicks(hazardHoldTicks(name));
+        await Execution.delayTicks(60);
+        return true;
+    }
+
+    private async handleHijack(log: (msg: string) => void): Promise<boolean> {
+        const me = Game.tile();
+        if (!me) {
+            return false;
+        }
+        const ent = Npcs.query()
+            .where(n => ENT_NPC_IDS.has(n.id) && n.distance() <= 1)
+            .nearest();
+        if (!ent) {
+            return false;
+        }
+        log('random event: ent — cancelling chop');
+        const candidates = stepOffCandidates(me, ent.tile());
+        const step = candidates.find(t => Reachability.canReach(t, { maxSteps: 400 })) ?? candidates[0];
+        if (step) {
+            DirectNavigator.walk(step);
+            await Execution.delayTicks(1);
+        }
+        // Why: the Ent stays for 60 ticks; pending() must not keep the grove paused after we cancel.
+        this.cooldownUntil.set('hijack:ent', performance.now() + ENT_LIFE_TICKS * 600 + 4000);
         return true;
     }
 
@@ -697,7 +709,7 @@ class RandomEventsImpl {
 
 /**
  * Detects and resolves random events.
- * Why: events are matched by NPC id rather than name, because names collide with ordinary monsters.
+ * Why: events are matched by npc id because names collide with ordinary monsters.
  * @see docs/reference/api-events.md
  */
 export const RandomEvents = new RandomEventsImpl();

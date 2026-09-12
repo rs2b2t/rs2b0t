@@ -79,7 +79,7 @@ async function killJailer(log: (m: string) => void): Promise<boolean> {
     return false;
 }
 
-// Why: `unlock_taverley_jaildoor` takes the key on the way in only, the way out is the plain Open op, so the cell is left by op and entered by use.
+// Why: `unlock_taverley_jaildoor` takes the key on the way in only; the way out is the plain Open op.
 
 async function unlockWithKey(keyId: number, locId: number, expect: () => boolean, what: string, log: (m: string) => void): Promise<boolean> {
     if (expect()) {
@@ -116,9 +116,9 @@ function inCell(): boolean {
     return at !== null && at.level === 0 && at.z <= SC_TILE.JAIL_CELL.z && at.x >= 2928 && at.x <= 2934 && at.z >= 9683;
 }
 
-// Why: Velrak has no `wanderrange`, so he drifts five tiles around a cell whose walls make that a walk rather than a step, and the shared talk primitive answers an out-of-reach NPC by opening the door in front of it, which here is the cell door, and walks the run back out.
+// Why: Velrak has no `wanderrange` and drifts 5 tiles around a walled cell, and the shared talk primitive answers an out-of-reach NPC by opening the cell door and walking back out.
 
-/** Talk to Velrak without leaving the cell: scene steps only, and no door is opened on the way. */
+/** Talk to Velrak without leaving the cell: scene steps only, no door opened. */
 async function talkInCell(log: (m: string) => void): Promise<boolean> {
     await settleScene();
     const find = (): Npc | null => Npcs.query().name(VELRAK.npc).where(npc => talkOp(npc.actions()) !== null).nearest();
@@ -176,9 +176,9 @@ async function fetchDustyKey(log: (m: string) => void): Promise<boolean> {
     return openLoc(SC_ID.JAIL_DOOR, 'Open', () => !inCell(), 'cell door', log);
 }
 
-// Why: the entrance corridor from the Taverley ladder runs x 2881-2887 up the same z band as the deep half, and only a wall of solid rock at x 2888 separates them, so a plain "west of the gate" box would read the way in as the way through.
+// Why: the entrance corridor from the Taverley ladder runs x 2881-2887 in the same z band as the deep half with only rock at x 2888 between, so a plain "west of the gate" box would count the way in.
 
-/** West of the dusty-key gate: the far half at x ≤ 2880, and the blue dragon cave east of it. */
+/** West of the dusty-key gate: the far half at x <= 2880, and the blue dragon cave east of it. */
 function inDeepDungeon(): boolean {
     const at = here();
     if (at === null || at.level !== 0 || at.z < 9700) {
@@ -188,7 +188,7 @@ function inDeepDungeon(): boolean {
 }
 
 // Why: blue dragons hit 30 through the corridor between the gate and the coffins and 50 when they roll through the defence check, which Protect from Magic caps at 10.
-// Why: nothing behind the coffin wall breathes, and the catch in there runs for minutes, so the prayer comes down at the wall rather than at the gate.
+// Why: nothing behind the coffin wall breathes and the catch in there runs for minutes, so the prayer comes down at the wall.
 
 async function dragonGuard(on: boolean, log: (m: string) => void): Promise<void> {
     if (Prayer.active(PROTECT_FROM_MAGIC) === on) {
@@ -238,9 +238,9 @@ function inSecretRoom(): boolean {
     return at !== null && at.level === 0 && at.x >= 2874 && at.x <= 2880 && at.z >= 9793 && at.z <= 9798;
 }
 
-// Why: the wall teleports rather than opens, and `check_axis` reads which side we are on, so the same Search works in both directions.
+// Why: the wall teleports and `check_axis` reads which side we're on, so the same Search works both ways.
 
-/** Search the old wall by the two coffins, in or out of the secret room. */
+/** Search the old wall by the 2 coffins, in or out of the secret room. */
 export async function crossSecretWall(inward: boolean, log: (m: string) => void): Promise<boolean> {
     if (inSecretRoom() === inward) {
         await dragonGuard(!inward, log);
@@ -250,7 +250,7 @@ export async function crossSecretWall(inward: boolean, log: (m: string) => void)
     if (!(await walkTo(stand, 0, log))) {
         return false;
     }
-    // Why: the wall teleports rather than opens, so the corridor is reached in one tick and the prayer has to be up before the Search rather than after it.
+    // Why: the wall teleports, so the corridor arrives in 1 tick and the prayer has to be up before the Search.
     if (!inward) {
         await dragonGuard(true, log);
     }

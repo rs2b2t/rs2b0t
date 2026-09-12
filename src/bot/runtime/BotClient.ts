@@ -6,9 +6,9 @@ import { BotDiag } from './diag/BotDiag.js';
 import { paintNavPathInGame } from '../event/webwalk/pathScenePaint.js';
 import { RenderGate } from './RenderGate.js';
 
-// Why: the era client runs its logic loop at 50/sec for smooth animation and instant input, but the server ticks every 600ms and a bot reads state rather than pixels, so 20/sec is still 12 logic ticks per server tick.
+// Why: the era client runs its logic loop at 50/sec, but the server ticks every 600ms and a bot reads state, so 20/sec is still 12 logic ticks per server tick.
 // Why: on a wall, every iframe spends that budget on one shared main thread.
-// Why: deltime also gates frameDelay and so caps the draw rate, at 20Hz the focused client falls to ~13 FPS and walk animations visibly crawl, so the one client being looked at keeps the era rate and the rest stay cheap.
+// Why: deltime also gates frameDelay and so caps the draw rate; at 20Hz the focused client falls to about 13 FPS and walk animations crawl, so the client being looked at keeps the era rate and the rest stay cheap.
 // Why: title and logged-out backgrounds have no world simulation that scripts care about, so 10 Hz covers AutoRelogin plus UI and halves steady-state CPU on a login wall.
 const FOCUSED_LOGIC_HZ = 50;
 const BACKGROUND_INGAME_LOGIC_HZ = 20;
@@ -22,8 +22,7 @@ export default class BotClient extends Client {
         BotHost.attach(this);
     }
 
-    /** Cycle-stamped state (combat) is read against deltime, so switching rates can
-     *  misread a stamp made at the old rate for up to one combat window. */
+    /** Cycle-stamped state (combat) is read against deltime, so a rate switch can misread a stamp made at the old rate for up to one combat window. */
     private syncLogicRate(): void {
         let hz = FOCUSED_LOGIC_HZ;
         if (RenderGate.mode !== 'focused') {
@@ -44,15 +43,14 @@ export default class BotClient extends Client {
     override async mainloop(): Promise<void> {
         this.syncLogicRate();
         await super.mainloop();
-        // Why: only the host frame is timed. It is synchronous and it is where the cost lives, since script plus producer work dwarfs the client's own loop.
-        // Why: super.mainloop() is async, so timing it would measure yields to other bots rather than occupancy.
+        // Why: only the host frame is timed; it's synchronous and script plus producer work dwarfs the client's own loop.
+        // Why: super.mainloop() is async, so timing it would count yields to other bots.
         BotDiag.measure('logic', () => BotHost.onFrame());
     }
 
     override async mainredraw(): Promise<void> {
         const now = performance.now();
-        // Measured outside the gate on purpose: a skipped draw costs nothing, and
-        // counting it would make an idle background bot look like it is drawing.
+        // Measured outside the gate: a skipped draw costs nothing, and counting it would make an idle background bot look busy drawing.
         if (!RenderGate.shouldDraw(now)) {
             return;
         }

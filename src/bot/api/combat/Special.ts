@@ -13,7 +13,7 @@ const ARM_CONFIRM_TICKS = 2;
 const WEAPON_SLOT = 3;
 
 // Why: the wielded weapon decides which combat interface the tab shows.
-// Why: the spec bars sit in their own block (7462, 7487, … spacing 25) with no fixed offset from the interface root, so the bar is looked up rather than computed.
+// Why: the spec bars sit in their own block (7462, 7487, ... spacing 25) with no fixed offset from the interface root, so the bar is a lookup.
 
 /** Combat-tab root to its spec bar component. */
 const SPECBAR_BY_ROOT = new Map<number, number>([
@@ -33,7 +33,7 @@ const SPECBAR_BY_ROOT = new Map<number, number>([
     [8460, 8481] // combat_polearm
 ]);
 
-// Why: Dragon battleaxe and Excalibur declare specwep with no cost, their specials are self-buffs with no scripted attack here, so they are deliberately absent.
+// Why: Dragon battleaxe and Excalibur declare specwep with no cost; their specials are self-buffs with no scripted attack here, so they're left out.
 
 /** `param=sa_energy` per weapon carrying `param=specwep`. */
 const SPEC_COST = new Map<string, number>([
@@ -51,8 +51,8 @@ const SPEC_COST = new Map<string, number>([
     ['magic longbow', 350]
 ]);
 
-// Why: arming is one-shot, not a mode, the spec bar flips `%sa_attack`, the next attack spends it, and `set_sa_vars` clears the flag again, so it is re-armed per special.
-// Why: `~sa_enabled` also requires a members world (`map_members`), which is a world-level flag rather than a per-area one.
+// Why: arming is one-shot: the spec bar flips `%sa_attack`, the next attack spends it, and `set_sa_vars` clears the flag, so it's re-armed per special.
+// Why: `~sa_enabled` also requires a members world (`map_members`), a world-level flag.
 
 /** Weapon special attacks. */
 export const Special = {
@@ -88,7 +88,7 @@ export const Special = {
         return root === -1 ? -1 : (SPECBAR_BY_ROOT.get(root) ?? -1);
     },
 
-    /** Arm the next attack. Idempotent: a already-armed special is left alone. */
+    /** Arm the next attack. Idempotent: an already-armed special is left alone. */
     async arm(): Promise<boolean> {
         if (Special.armed()) {
             return true;

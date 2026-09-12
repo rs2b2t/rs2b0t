@@ -13,7 +13,7 @@ import { EC_ID, EC_NAME, EC_TILE } from './areas.js';
 
 type BasementRegion = 'entry' | 'r1r4' | 'r2' | 'r5' | 'r3' | 'r6' | 'r9' | 'outside';
 
-// Why: these are the seven components the nine puzzle doors cut the basement into, from a flood over the baked collision pack with the doors closed.
+// Why: the 7 components the 9 puzzle doors cut the basement into, from a flood over the baked collision pack with the doors closed.
 // Why: the boxes are pairwise disjoint, so a tile alone names a room.
 export const REGION_BOX = {
     entry: { minX: 3100, maxX: 3118, minZ: 9745, maxZ: 9757 },
@@ -25,10 +25,7 @@ export const REGION_BOX = {
     r9: { minX: 3090, maxX: 3099, minZ: 9753, maxZ: 9757 }
 } as const;
 
-/**
- * The 36-tile pocket the bookcase teleports into, holding the puzzle ladder.
- * Its only exit is the lever, which teleports back through the same wall.
- */
+/** The 36-tile pocket the bookcase teleports into, holding the puzzle ladder. Its only exit is the lever, which teleports back through the same wall. */
 const ALCOVE_BOX = { minX: 3091, maxX: 3096, minZ: 3354, maxZ: 3363 };
 
 /** Pure, so `decide()` can branch on the snapshot tile without a client. */
@@ -52,7 +49,7 @@ export function basementRegion(tile: { x: number; z: number; level: number } | n
 
 const A = 1 << 0, B = 1 << 1, C = 1 << 2, D = 1 << 3, E = 1 << 4, F = 1 << 5;
 
-/** A set bit means the lever is DOWN. Transcribed from [oploc1,_haunted_door]. */
+/** A set bit means the lever is down. Transcribed from [oploc1,_haunted_door]. */
 export const DOOR_OPEN: Record<string, (bits: number) => boolean> = {
     '1to2': b => !(b & A) && !(b & B) && !!(b & D) && !!(b & E) && !!(b & F),
     '2to3': b => !(b & B) && !!(b & D) && !!(b & F),
@@ -67,7 +64,7 @@ export const DOOR_OPEN: Record<string, (bits: number) => boolean> = {
 
 type LeverName = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
 
-/** Wall decorations; the player operates them from their own tile. */
+/** Wall decorations; you operate them from your own tile. */
 const LEVER_TILE: Record<LeverName, Tile> = {
     A: new Tile(3108, 9745, 0),
     B: new Tile(3118, 9752, 0),
@@ -158,10 +155,7 @@ async function setLever(lever: LeverName, want: 'up' | 'down', log: (m: string) 
     return false;
 }
 
-/**
- * Cross one puzzle door. `open_and_close_door2` teleports the player through and
- * shuts it behind them, so the tell is the region change, never the door state.
- */
+/** Cross one puzzle door. `open_and_close_door2` teleports you through and shuts it behind you, so the tell is the region change. */
 async function crossDoor(
     move: Extract<ChainMove, { kind: 'door' }>,
     log: (m: string) => void
@@ -209,10 +203,7 @@ function invert(move: ChainMove): ChainMove {
     return { kind: 'door', door: move.door, stand: move.arrive, arrive: move.stand };
 }
 
-/**
- * How far into CHAIN this process has got. The only way to know which moves need
- * undoing, the lever bits are unreadable, and nothing but the ladder resets them.
- */
+/** How far into CHAIN this process got. The lever bits are unreadable and only the ladder resets them, so this is the only record of what needs undoing. */
 let executed = 0;
 
 /** Retrace the executed prefix, which lands back at the ladder with every lever up. */
@@ -248,8 +239,8 @@ async function enterBasement(log: (m: string) => void): Promise<boolean> {
     return status === 'done' && basementRegion(here()) !== 'outside';
 }
 
-// Why: `entry` and `r9` are the only rooms this can leave from, as everything else needs an unwind and only `fetchOilCan` knows how far the chain got.
-// Why: a fresh process that starts stranded mid-maze cannot know the lever bits and says so rather than looping, since the levers reset on the ladder it cannot reach.
+// Why: only `entry` and `r9` can be left from here; everything else needs an unwind and only `fetchOilCan` knows how far the chain got.
+// Why: a process that starts stranded mid-maze can't know the lever bits, and the ladder that resets them is out of reach, so it says so and stops.
 
 /** Walk out of the basement, or report that the position is unrecoverable. */
 async function leaveBasement(log: (m: string) => void): Promise<boolean> {
@@ -277,9 +268,9 @@ async function leaveBasement(log: (m: string) => void): Promise<boolean> {
     return status === 'done' && basementRegion(here()) === 'outside';
 }
 
-// Why: the nav crossing exists, but the executor gets one look at the scene and the arrival here is a scripted teleport.
-// Why: every loc query is empty for about a tick after one, so a single miss blacklists the edge and strands the bot in a pocket with no other way out.
-// Why: Reach retries, which is the difference.
+// Why: the nav crossing exists, but the executor gets one look at the scene and arriving here is a scripted teleport.
+// Why: every loc query is empty for about a tick after a teleport, so one miss blacklists the edge and strands the bot in a pocket with no other exit.
+// Why: Reach retries.
 
 /** Pull the alcove lever back into the manor. */
 async function leaveAlcove(log: (m: string) => void): Promise<boolean> {
@@ -309,7 +300,7 @@ async function leaveAlcove(log: (m: string) => void): Promise<boolean> {
     return false;
 }
 
-/** Out of the basement and out of the alcove, two pockets, one exit each. */
+/** Out of the basement and out of the alcove, 2 pockets, one exit each. */
 export async function leaveManorBasement(log: (m: string) => void): Promise<boolean> {
     if (!(await leaveBasement(log))) {
         return false;
@@ -333,10 +324,7 @@ async function takeOilCan(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => held(EC_ID.OIL_CAN) > 0, 8000);
 }
 
-/**
- * Bookcase, ladder, the fixed chain, the can, and back out. Every descent resets
- * `%ernestlever` (~reset_haunted_levers), so a pass always starts all-up.
- */
+/** Bookcase, ladder, the fixed chain, the can, and back out. Every descent resets `%ernestlever` (~reset_haunted_levers), so a pass always starts all-up. */
 export async function fetchOilCan(log: (m: string) => void): Promise<boolean> {
     if (held(EC_ID.OIL_CAN) > 0) {
         return leaveManorBasement(log);
@@ -365,7 +353,7 @@ export async function fetchOilCan(log: (m: string) => void): Promise<boolean> {
             await unwind(log);
             continue;
         }
-        // Why: the can is this step's deliverable, so the report is on the can rather than on the walk out.
+        // Why: the can is this step's deliverable, so the return value reads the can.
         // Why: a false here re-enters the maze for a leg that already succeeded, and `decide()`'s escape branch retries the way out anyway.
         await leaveManorBasement(log);
         return held(EC_ID.OIL_CAN) > 0;

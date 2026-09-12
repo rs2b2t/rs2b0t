@@ -1,7 +1,7 @@
 // Drive an already-open partner trade through offer, accept and confirm.
 
-// Why: it is used by GatheringBot mule modes and by FlaxRunner's Runner/Spinner handoff.
-// Why: policy, the partner filter and the empty-own-offer safety, stays in {@link PartnerTrade}, and this module sequences HUD actions from those decisions plus optional script hooks.
+// Why: shared by GatheringBot mule modes and FlaxRunner's Runner/Spinner handoff.
+// Why: policy (partner filter, empty-own-offer safety) stays in {@link PartnerTrade}; this module only sequences HUD actions and script hooks.
 import { Execution } from '../execution/Execution.js';
 import { Inventory } from '../inventory/Inventory.js';
 import { Trade } from './Trade.js';
@@ -24,7 +24,7 @@ interface DrivePartnerTradeOpts {
     log: (m: string) => void;
     /**
      * Called once when confirm completes and the modal closes.
-     * `metricDelta` is after − before from {@link inventoryMetric}.
+     * `metricDelta` is after minus before from {@link inventoryMetric}.
      */
     onComplete?: (metricDelta: number) => void;
     /** Called when we decline (stranger, empty haul, safety, receiver gate). */
@@ -35,13 +35,11 @@ interface DrivePartnerTradeOpts {
      */
     inventoryMetric?: () => number;
     /**
-     * When partner header is still null. Default waits one tick.
+     * When partner header is still null. Default waits 1 tick.
      * Flax declines after ~8 consecutive waits.
      */
     onMissingPartner?: () => 'wait' | 'decline';
-    /**
-     * Receiver: after their product is present, extra gate (e.g. free pack slots).
-     */
+    /** Receiver: extra gate once their product is present (e.g. free pack slots). */
     receiverCanAccept?: (
         theirProductCount: number
     ) => boolean | { ok: true } | { ok: false; reason: string };
@@ -50,7 +48,7 @@ interface DrivePartnerTradeOpts {
      * Flax uses flax units in offer.
      */
     myOfferReady?: () => boolean;
-    // Why: the metric snapshot must come from handshake start, since a giver's offered stack leaves the pack at offer time and a confirm-time baseline would read every completed trade as Δ0.
+    // Why: the metric snapshot comes from handshake start, since a giver's offered stack leaves the pack at offer time and a confirm-time baseline reads every trade as delta 0.
     baseline?: () => number;
     /**
      * Giver: decline non-partners / wait on blank header (Flax). Default false
@@ -69,8 +67,8 @@ interface DrivePartnerTradeOpts {
     };
 }
 
-// Why: partner accepts and offer sync are not tied to this client's tick rate, so {@link Execution.delayUntilTicks} is wrong here, a live harness at 300ms ticks makes 7 ticks about 2.1s, too short for a mutual Trade or confirm.
-// Why: the Flax and Nature waits these replace were 3–4s wall-clock.
+// Why: partner accepts and offer sync aren't tied to this client's tick rate, so {@link Execution.delayUntilTicks} is wrong here (7 ticks at 300ms is 2.1s, too short for a mutual accept).
+// Why: the Flax and Nature waits these replace were 3 to 4s wall-clock.
 
 /** Wall-clock waits for the multiplayer trade UI. */
 const TRADE_OFFER_WAIT_MS = 5_000;
@@ -91,7 +89,7 @@ export function tradeScreenState(): string {
     return tradeScreen();
 }
 
-// Why: the offer→confirm swap reports neither screen for a stretch, so closure needs one full tick of continuous inactivity, which also holds under uneven frame rates.
+// Why: the offer-to-confirm swap reports neither screen for a stretch, so closure needs a full tick of continuous inactivity.
 export function stableClosedPoll(minMs = 600, nowFn?: () => number): () => boolean {
     let inactiveSince = -1;
     const now = nowFn ?? (() => performance.now());
@@ -108,10 +106,7 @@ export function stableClosedPoll(minMs = 600, nowFn?: () => number): () => boole
     };
 }
 
-/**
- * One beat of an active trade. Call while {@link Trade.active} from a Task
- * that owns the loop (movement cancels the modal).
- */
+/** Process one active-trade iteration from the task controlling the modal. Movement cancels the trade. */
 export async function driveActivePartnerTrade(opts: DrivePartnerTradeOpts): Promise<void> {
     const labels = opts.labels ?? {};
     const metric = opts.inventoryMetric ?? (() => Inventory.used());
@@ -125,7 +120,7 @@ export async function driveActivePartnerTrade(opts: DrivePartnerTradeOpts): Prom
         const closed = await Execution.delayUntil(stableClosedPoll(), TRADE_CONFIRM_WAIT_MS);
         opts.log(`trade: confirm wait ${closed ? 'satisfied' : 'TIMED OUT'} after the last click — screen now ${tradeScreen()}`);
         if (!Trade.active()) {
-            // Why: this was the last click of the trade, so settle a beat after the modal reports closed; a gather click fired during teardown is swallowed and stalls the loop.
+            // Why: settle a beat after the modal reports closed; a gather click fired during teardown is swallowed and stalls the loop.
             await Execution.delayTicks(1);
             const delta = metric() - before;
             if (opts.onComplete) {

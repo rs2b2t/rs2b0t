@@ -8,8 +8,8 @@ import { openDialogue, pickByLine, pickPreferred, type LineRule } from '../../ex
 
 const CONTINUE_LABEL = 'Click here to continue';
 
-// Why: `~objbox` and `~mesbox` build a MAIN modal and suspend the script on `p_pausebutton`, and neither ChatDialog nor driveUntil can see one.
-// Why: Rantz answers half of this quest with them, so a driver that only knows the chat modal stops on the first box and waits out its timeout.
+// Why: `~objbox` and `~mesbox` build a main modal and suspend the script on `p_pausebutton`, and neither ChatDialog nor driveUntil can see one.
+// Why: Rantz uses main-modal boxes throughout the quest, which the chat-only driver cannot see.
 
 /** Click through an objbox sitting on main. False when nothing was up. */
 export async function clearBox(): Promise<boolean> {
@@ -37,16 +37,16 @@ export interface BoxDrive {
     prefer?: readonly string[];
     /** Options chosen by the NPC's last line, taking precedence over `prefer`. */
     rules?: readonly LineRule[];
-    // Why: Rantz's toady menu re-offers the same five options after every answer, so a plain preference list picks the first one forever.
+// Why: The toady menu repeats after each choice, so consume each preference once.
     /** Preferences that may be taken once, then fall through to the next. */
     once?: readonly string[];
     ms?: number;
-    /** Stop instead of guessing when nothing matches. Default true. */
+    /** Stop when nothing matches. Default true. */
     strict?: boolean;
 }
 
 // Why: several of Rantz's option lists offer a refusal first ("Er, make you're own 'stabbers'!"), so an unmatched fall-through is worse than stopping.
-// Why: a scripted chain leaves silent gaps, so quiet is only the end after several polls of it.
+// Why: a scripted chain leaves silent gaps, so quiet only counts as the end after several polls.
 
 const QUIET_POLLS = 6;
 

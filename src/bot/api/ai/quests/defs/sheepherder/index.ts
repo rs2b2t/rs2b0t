@@ -35,7 +35,7 @@ function dressed(snap: QuestSnapshot): QuestStep | null {
         if (wearing(snap, id)) {
             continue;
         }
-        // Why: the suit is untradeable and has no shop, so a lost half is re-bought from Orbon rather than withdrawn.
+        // Why: the suit is untradeable and has no shop, so a lost half is re-bought from Orbon.
         return held(snap, id) > 0 ? { kind: 'equip', item: name } : { kind: 'talk', stop: ORBON };
     }
     return null;

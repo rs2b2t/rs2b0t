@@ -180,7 +180,11 @@ import {
 import {
     WOODCUTTING_LOCATIONS,
     WOODCUTTING_LOCATION_OPTIONS,
-    resolveWoodcuttingLocation
+    resolveWoodcuttingLocation,
+    ENT_NPC_IDS,
+    ENT_LIFE_TICKS,
+    isEntNpcId,
+    entNpcOnTile
 } from '../data/woodcuttingLocations.js';
 import { GroundItem } from '../api/model/GroundItem.js';
 import { Loc } from '../api/model/Loc.js';
@@ -203,8 +207,7 @@ import EntityQuery from '../api/query/Query.js';
 import { bus, type EventMap } from '../api/events/EventBus.js';
 import { DirectNavigator } from '../event/webwalk/DirectNavigator.js';
 import { EssenceSession } from '../event/webwalk/essenceSession.js';
-// Harness-only hooks, absent from packages/rs2b0t-api/index.d.ts and consumed
-// solely by e2e/merlin-mordred-353-live.ts.
+// Harness-only hooks, absent from packages/rs2b0t-api/index.d.ts and used only by e2e/merlin-mordred-353-live.ts.
 import {
     liveFortressStep,
     liveMordredBriefed,
@@ -385,6 +388,10 @@ export function installAbi(): void {
         WOODCUTTING_LOCATIONS,
         WOODCUTTING_LOCATION_OPTIONS,
         resolveWoodcuttingLocation,
+        ENT_NPC_IDS,
+        ENT_LIFE_TICKS,
+        isEntNpcId,
+        entNpcOnTile,
 
         // Fishing methods + mining rocks
         WHIRLPOOL_IDS,

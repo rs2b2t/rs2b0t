@@ -1,6 +1,4 @@
-// Why: A* prunes an item-gated crossing when the player cannot pay for it, so the region behind it stops existing and the verdict is a bare "unreachable", the same word a nav-data island produces.
-// Why: the Kharidian desert has one baked entrance, the Shantay pass, so a bot with no pass reads as though the desert were not in the pack at all.
-// Why: re-probing with every gate item virtualized separates the two, if the route appears, the blocker is a shopping list rather than the graph.
+// Why: retry with virtual gate items to distinguish missing supplies from a gap in the nav pack.
 
 import { missingItemsForPath, type MissingItem } from './bankPlan.js';
 import { SPECIAL_CROSSINGS } from './data/specialCrossings.js';
@@ -9,7 +7,7 @@ import { WEB_SLASH_KNIFE_NAME } from './slashTool.js';
 import { virtualizeWithItems } from './virtualState.js';
 import type { WorldStateData } from './worldStateData.js';
 
-// Why: derived from the crossing table so a new toll cannot leave its item out of the diagnosis.
+// Derive this from the crossing table so new toll items are included automatically.
 
 /** Every item a baked special crossing can demand, at the largest count any one of them asks for. */
 export function gateItemCandidates(): Record<string, number> {
@@ -24,7 +22,7 @@ export function gateItemCandidates(): Record<string, number> {
     return out;
 }
 
-// Why: an empty result means the kit does not help, so the destination is off the graph rather than behind a toll.
+// Why: an empty result means the kit doesn't help, so the destination is off the graph.
 
 /** Items that would turn an `unreachable` verdict into a route; `probe` runs the same path request against a supplied state. */
 export async function explainUnreachable(

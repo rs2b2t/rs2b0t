@@ -61,8 +61,7 @@ export default class Overlay {
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.hadContent = true;
 
-        // Path *tile quads* paint into areaGame (BotClient.onAfterWorldRender).
-        // HTML overlay keeps hop labels + click caption so text stays crisp.
+        // Path tile quads paint into areaGame (BotClient.onAfterWorldRender); the HTML overlay keeps hop labels and the click caption so text stays crisp.
         if (pathLabels) {
             try {
                 ctx.save();
@@ -85,8 +84,7 @@ export default class Overlay {
             }
         }
 
-        // Script paint owns the final layer. The queue card is normally title-only,
-        // but this ordering prevents it obscuring a future script that paints there.
+        // Script paint owns the final layer, so the queue card can't obscure a script that paints there.
         if (botPaint && bot?.onPaint) {
             try {
                 ctx.save();

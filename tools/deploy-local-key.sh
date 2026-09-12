@@ -47,9 +47,8 @@ LOCAL_RSAN="$(
     bun -e "console.log(BigInt('0x$MODULUS_HEX').toString())"
 )"
 
-# Extract public exponent.
-# OpenSSL 3.x prints:  publicExponent: 65537 (0x10001)         (single line)
-# Older / LibreSSL:    publicExponent:\n    <hex bytes>        (multi line)
+# Extract the public exponent. OpenSSL 3.x prints "publicExponent: 65537 (0x10001)" on one line;
+# older OpenSSL and LibreSSL print "publicExponent:" and then hex bytes on the following lines.
 LOCAL_RSAE="$(
     openssl rsa -in "$PRIVATE_KEY" -noout -text \
     | sed -n 's/^publicExponent: \([0-9][0-9]*\).*/\1/p'

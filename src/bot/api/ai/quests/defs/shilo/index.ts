@@ -54,20 +54,18 @@ import {
     worn
 } from './supplies.js';
 
-/** Three recesses in the tomb door, one bone each. */
+/** 3 recesses in the tomb door, one bone each. */
 const TOMB_BONES = 3;
 
 /** Enough to survive a Nazastarool phase and the Undead Ones between them. */
 const TOMB_FOOD = FOOD_FLOAT;
 
-// Why: a top-up is a return crossing now the float comes from Ardougne, so a pack a few short still goes in.
-// Why: below this the tomb is not worth entering.
+// Why: a top-up is a return crossing to Ardougne, so a pack a few short still goes in; below this the tomb isn't worth entering.
 const TOMB_FOOD_MIN = 4;
 
-// Why: everything the quest needs is on the island except coins, bones and food, and there is no bank here until the quest itself opens Shilo's.
-// Why: provisioning therefore only runs while still on the mainland.
+// Why: only coins, bones and food come from off the island, and there's no bank here until the quest opens Shilo's, so provisioning only runs on the mainland.
 
-/** True while on Karamja, generously bounded. */
+/** True while on Karamja, loosely bounded. */
 function onKaramja(tile: WorldTile | null | undefined): boolean {
     if (!tile) {
         return false;
@@ -79,8 +77,7 @@ function step(name: string, run: (log: (m: string) => void) => Promise<boolean>)
     return { kind: 'custom', name, run };
 }
 
-// Why: every sealed pocket is left the way it was entered before any step that assumes open ground.
-// Why: a branch that skips this sends the walker at a tile on the wrong side of a one-way crossing and spends three passes proving it unreachable.
+// Why: a step that assumes open ground from inside a pocket sends the walker at a tile on the wrong side of a one-way crossing and spends 3 passes proving it unreachable.
 
 /** A step out of the current sealed pocket, or null when on open ground. */
 function escapePocket(area: ShiloArea): QuestStep | null {
@@ -106,16 +103,12 @@ function inTheOpen(area: ShiloArea, stepIfOpen: QuestStep): QuestStep {
     return escapePocket(area) ?? stepIfOpen;
 }
 
-/**
- * For steps that enter their own pocket. Escaping unconditionally would climb
- * straight back out of the tomb the step walked into, forever.
- */
+/** For steps that enter their own pocket; escaping unconditionally would climb straight back out of the tomb the step walked into. */
 function inTheOpenOrIn(area: ShiloArea, ownPocket: ShiloArea, stepIfOk: QuestStep): QuestStep {
     return area === ownPocket ? stepIfOk : inTheOpen(area, stepIfOk);
 }
 
-// Why: coins, bones and food are the only things this quest cannot get on Karamja, and the nearest bank is an ocean away.
-// Why: all three are therefore settled before the crossing and never mid-quest, unless something is lost.
+// Why: coins, bones and food can't be had on Karamja and the nearest bank is an ocean away, so all 3 are settled before the crossing.
 
 /** Provision coins, bones and food before the crossing, or null. */
 function provision(snap: QuestSnapshot, area: ShiloArea): QuestStep | null {
@@ -123,7 +116,7 @@ function provision(snap: QuestSnapshot, area: ShiloArea): QuestStep | null {
         return null;
     }
     const food = sourceFood(snap, TOMB_FOOD);
-    // Why: an empty larder is only fatal at the tomb door, so it waits there rather than holding up the legs before it.
+    // Why: an empty larder is only fatal at the tomb door, so it waits there.
     return sourceCoins(snap, KARAMJA_PURSE) ?? sourceBones(snap, TOMB_BONES) ?? (food?.kind === 'wait' ? null : food);
 }
 
@@ -143,10 +136,7 @@ function stageStart(snap: QuestSnapshot, area: ShiloArea): QuestStep {
         ?? inTheOpen(area, step('ask Mosol Rei for the Wampum belt', takeWampumBelt));
 }
 
-/**
- * Everything Jiminua stocks that the rest of the quest still wants, so one shop trip
- * covers the fissure sequence and both crafts instead of six island crossings.
- */
+/** Everything Jiminua stocks that the rest of the quest still wants, so one shop trip covers the fissure sequence and both crafts. */
 function toolsFrom(stage: number): ShiloItem[] {
     const need: ShiloItem[] = [];
     if (stage <= SV_STAGE.SEARCHED_MOUND) need.push(SV_ITEM.SPADE);
@@ -173,16 +163,14 @@ function stageRope(snap: QuestSnapshot, area: ShiloArea): QuestStep {
     return kit ? inTheOpen(area, kit) : inTheOpen(area, step('tie the rope to the fissure', ropeFissure));
 }
 
-// Why: engine stages 7 to 9 all render the same journal block until the Bervirius dolmen is searched.
-// Why: this branch is therefore driven by flags and by what is carried rather than by the stage number.
+// Why: stages 7 to 9 render the same journal block until the Bervirius dolmen is searched, so this branch runs on flags and what is carried.
 
 /** The next step for the stage 7-9 block. */
 function stageMiddle(snap: QuestSnapshot, area: ShiloArea): QuestStep {
     const inCaves = area === 'ahZaRhoonNorth' || area === 'ahZaRhoonSouth';
 
     if (!hasFlag(snap.progress, 'pommel-taken')) {
-        // Why: both scroll bits are read off the journal only while this block renders, and after the dolmen they vanish while the necklace craft still needs one of them.
-        // Why: reading is idempotent, so it happens the moment a scroll is held.
+        // Why: Scroll progress disappears from the journal after the dolmen, so read each scroll before that point.
         if (!hasFlag(snap.progress, 'read-tattered')) {
             if (held(snap, SV_ITEM.TATTERED_SCROLL.id) > 0) {
                 return step('read the tattered scroll', readScroll(SV_ITEM.TATTERED_SCROLL.id));
@@ -219,20 +207,15 @@ function stageMiddle(snap: QuestSnapshot, area: ShiloArea): QuestStep {
     return inTheOpen(area, step('unlock the carved doors with the bone key', unlockCarvedDoors));
 }
 
-/**
- * The necklace and the key share a chisel and both are refused until their own bit
- * is set, the crumpled scroll for the beads, the searched door for the key.
- */
+/** The necklace and the key share a chisel; the beads are refused until the crumpled scroll is read, the key until the door is searched. */
 function craftChain(snap: QuestSnapshot, area: ShiloArea, wantKey: boolean): QuestStep | null {
-    // Why: past the carved doors the key is optional, as they stay unlocked and the tomb exit refuses to open for anyone still carrying it.
-    // Why: demanding a replacement there would send the bot back to the gallows for nothing.
+    // Why: past the carved doors the key is optional, since they stay unlocked and the tomb exit refuses anyone still carrying it.
     const needKey = wantKey && held(snap, SV_ITEM.BONE_KEY.id) === 0;
     const needBeads = owned(snap, SV_ITEM.DEAD_BEADS.id) === 0 && !worn(snap, SV_ITEM.DEAD_BEADS.id);
     if (!needKey && !needBeads) {
         return null;
     }
-    // One trip: the chisel cuts both the key and the beads, and the bar and hammer
-    // are the necklace's wire.
+    // One trip: the chisel cuts both the key and the beads, and the bar and hammer are the necklace's wire.
     const need: ShiloItem[] = [SV_ITEM.CHISEL];
     if (needBeads && held(snap, SV_ITEM.BRONZE_WIRE.id) === 0) {
         need.push(SV_ITEM.BRONZE_BAR, SV_ITEM.HAMMER);
@@ -270,10 +253,7 @@ function tombSupplies(snap: QuestSnapshot, bones: number): QuestStep | null {
     return (bones > 0 ? sourceBones(snap, bones) : null) ?? food;
 }
 
-/**
- * Beads on before anything else: the gate summons Rashiliyia rather than opening
- * for anyone without them, and she does not stop at the gate.
- */
+/** Beads on before anything else: the gate summons Rashiliyia for anyone without them. */
 function needBeads(snap: QuestSnapshot, area: ShiloArea): QuestStep | null {
     if (worn(snap, SV_ITEM.DEAD_BEADS.id)) {
         return null;
@@ -297,14 +277,12 @@ function stageTomb(snap: QuestSnapshot, area: ShiloArea): QuestStep {
         return beads;
     }
     const wanted = bonesWanted(snap);
-    // Bones come from Ardougne, so being short inside the tomb means walking all
-    // the way back out rather than looping at a door that will not open.
+    // Bones come from Ardougne, so being short inside the tomb means walking back out.
     if (held(snap, SV_ITEM.BONES.id) < wanted && area !== 'karamja') {
         return escapePocket(area) ?? { kind: 'wait', reason: 'short of bones and nowhere to go' };
     }
     if (area === 'rashInner') {
-        // The third bone opens the doors and pushes us through by itself, so there
-        // is nothing left to do here once the journal has caught up.
+        // The third bone opens the doors and pushes us through, so nothing is left once the journal catches up.
         return wanted > 0
             ? step('place a bone in the tomb door', placeBone)
             : { kind: 'wait', reason: 'all three bones are placed — waiting for the journal' };
@@ -407,8 +385,7 @@ export const shilo: QuestModule = {
     bank: SV_TILE.ARDOUGNE_BANK,
     ownsInventory: true,
     readProgress: readShiloProgress,
-    // Literals, not foodNames(): this object is built at import, when the food
-    // setting still holds its default. The host merges the configured food in.
+    // This object is built at import, before the food setting is read; the host merges the configured food in.
     sustain: { foods: [...FOOD_FALLBACKS], eatBelowHp: 0.6 },
     decide
 };

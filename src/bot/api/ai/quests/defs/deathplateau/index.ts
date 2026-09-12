@@ -65,7 +65,7 @@ export {
 } from './areas.js';
 export { closeDiceIfOpen, insideHaroldRoom } from './harold.js';
 
-// ─── snapshot helpers ────────────────────────────────────────────────────────
+// snapshot helpers
 
 const heldName = (snap: QuestSnapshot, name: string): number =>
     snap.inv.get(name.toLowerCase()) ?? 0;
@@ -142,7 +142,7 @@ export function effectiveMap(snap: QuestSnapshot, progress: QuestProgress | unde
     return { saba, tenzing, smithy, entrancecert, given_cert, supplies, got_map, scouted };
 }
 
-// ─── banking / loadout ───────────────────────────────────────────────────────
+// banking / loadout
 
 const KEEP = [
     'coins',
@@ -222,7 +222,7 @@ function normalizePack(snap: QuestSnapshot): QuestStep | null {
     return [...snap.inv.keys()].some(n => !KEEP.includes(n)) ? depositKeep() : null;
 }
 
-// ─── custom runners ──────────────────────────────────────────────────────────
+// custom runners
 
 async function leaveSabaCave(log: (m: string) => void): Promise<boolean> {
     if (!inSabaCave(Game.tile())) {
@@ -278,7 +278,7 @@ async function openTenzingDoor(log: (m: string) => void): Promise<boolean> {
     if (!(await door.interact('Open'))) {
         return false;
     }
-    // After Saba: knock → "No milk today!" → auto "I'm not the milkman" → open.
+    // After Saba: knock, "No milk today!", auto "I'm not the milkman", open.
     if (await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 3000)) {
         await driveDialog(["I'm not the milkman", 'I need your help'], log);
     }
@@ -310,7 +310,7 @@ async function readIou(log: (m: string) => void): Promise<boolean> {
         log('no IOU to read');
         return false;
     }
-    // opheld1 death_iou → Read replaces IOU with Combination + chat/objbox.
+    // opheld1 death_iou: Read replaces the IOU with the Combination plus chat/objbox.
     const op = iou.actions().find(a => /read/i.test(a)) ?? iou.actions()[0];
     if (!op || !(await iou.interact(op))) {
         log(`could not ${op ?? 'use'} IOU`);
@@ -390,9 +390,9 @@ async function takeGroundBall(ballId: number, near: Tile, log: (m: string) => vo
 }
 
 // Why: the content order is blue (2894,3562), yellow (2895,3562), red (2894,3563), purple (2895,3563), green (2895,3564).
-// Why: all five are not needed in the pack at once, as they are placed one at a time from the ground or the inventory.
+// Why: the balls are placed one at a time from the ground or the pack, so all 5 needn't be held at once.
 
-/** Place the five coloured balls on the mechanism. */
+/** Place the 5 coloured balls on the mechanism. */
 async function solveStoneMechanism(log: (m: string) => void): Promise<boolean> {
     if (allPedestalsCorrect()) {
         log('all stone balls already correctly placed');
@@ -424,7 +424,7 @@ async function solveStoneMechanism(log: (m: string) => void): Promise<boolean> {
         if (ballOnTile(ped.at, ped.ballId)) {
             continue;
         }
-        // Source the ball: inv → ground pile → anywhere nearby.
+        // Source the ball: inv, then the ground pile, then anywhere nearby.
         if (liveId(ped.ballId) <= 0) {
             const pile = BALL_PICKUP.find(b => b.id === ped.ballId);
             if (!(await takeGroundBall(ped.ballId, pile?.at ?? ped.at, log))) {
@@ -449,8 +449,7 @@ async function solveStoneMechanism(log: (m: string) => void): Promise<boolean> {
             return false;
         }
         await settleScene();
-        // Exact loc_coord match, content drops the ball on the mechanism tile.
-        // nearest() within 1 was hitting the wrong pedestal (six mechanisms in a 2×3 grid).
+        // Exact loc_coord match, content drops the ball on the mechanism tile; nearest() within 1 hit the wrong pedestal (6 mechanisms in a 2x3 grid).
         const mech = Locs.query()
             .name('Stone Mechanism')
             .where(loc => {
@@ -593,8 +592,7 @@ async function getEntranceCertFromDenulth(log: (m: string) => void): Promise<boo
         if (await takeEntranceCertFromGround(log)) {
             return true;
         }
-        // Caller should have made space via decide(); refuse to talk if still full
-        // so the cert does not drop again.
+        // decide() should have made space; refuse to talk while full so the cert doesn't drop again.
         if (Inventory.isFull() || Inventory.free() < 1) {
             log('need a free inventory slot before Denulth gives the certificate');
             return false;
@@ -625,7 +623,7 @@ async function getEntranceCertFromDenulth(log: (m: string) => void): Promise<boo
     return takeEntranceCertFromGround(log);
 }
 
-/** Give cert to Dunstan → map given_cert; may immediately offer spiked boots bargain. */
+/** Give cert to Dunstan, map flag given_cert; may immediately offer the spiked boots bargain. */
 async function giveCertToDunstan(log: (m: string) => void): Promise<boolean> {
     if (liveId(DEATH_ITEM.ENTRANCE_CERT.id) <= 0) {
         return getEntranceCertFromDenulth(log);
@@ -646,16 +644,13 @@ async function giveCertToDunstan(log: (m: string) => void): Promise<boolean> {
     return liveId(DEATH_ITEM.ENTRANCE_CERT.id) < before || liveId(DEATH_ITEM.SPIKED_BOOTS.id) > 0;
 }
 
-// ─── decide ──────────────────────────────────────────────────────────────────
+// decide
 
 function custom(name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep {
     return { kind: 'custom', name, run };
 }
 
-/**
- * Pure decide from journal stage + map flags + inventory.
- * Combo (equip room) runs before the map track so inventory space is free for balls.
- */
+/** Pure decide from journal stage, map flags and inventory. The equip-room track runs before the map track so pack space is free for balls. */
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') {
         return { kind: 'done' };
@@ -676,7 +671,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
 
-    // ── finish: both tracks done ─────────────────────────────────────────────
+    // finish: both tracks done
     if (stage >= DP_STAGE.UNLOCKED_DOOR && map.scouted) {
         if (heldId(snap, DEATH_ITEM.SECRET_MAP.id) === 0 && !map.scouted) {
             // should not happen
@@ -695,7 +690,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return custom('give map and combination to Denulth', handInToDenulth);
     }
 
-    // ── equip-room track ─────────────────────────────────────────────────────
+    // equip-room track
     if (stage < DP_STAGE.UNLOCKED_DOOR) {
         if (stage === DP_STAGE.NOT_STARTED || snap.journal === 'notStarted') {
             return normalizePack(snap)
@@ -742,14 +737,13 @@ export function decide(snap: QuestSnapshot): QuestStep {
             if (heldId(snap, DEATH_ITEM.COMBINATION.id) === 0 && heldId(snap, DEATH_ITEM.IOU.id) > 0) {
                 return custom('read the IOU (combination on the back)', readIou);
             }
-            // One custom step picks+places; do not require all five held at once
-            // (balls already on correct pedestals are not in the pack).
+            // One custom step picks and places; balls already on correct pedestals aren't in the pack, so don't require all 5 held.
             return makeSpace(snap, 5)
                 ?? custom('solve the stone ball mechanism', solveStoneMechanism);
         }
     }
 
-    // ── map track ────────────────────────────────────────────────────────────
+    // map track
     if (!map.scouted) {
         if (!map.saba) {
             return custom('ask Saba about another path', async log => {

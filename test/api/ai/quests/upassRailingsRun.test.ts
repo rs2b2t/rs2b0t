@@ -4,7 +4,7 @@ import { TO_RAILINGS } from '#/bot/api/ai/quests/defs/upass/railings.js';
 import { UP_LOC } from '#/bot/api/ai/quests/defs/upass/areas.js';
 import Tile from '#/bot/geometry/Tile.js';
 
-// Why: the run from the mud pocket to the loose railings is four crossings in one order and never varies. Checked against the collision pack: every stand is walkable, every landing is walkable, and each landing reaches the next stand. Live, a search over the same ground offered five ledge locs whose stand is in another pocket and reported a cage thirty tiles away as crossed.
+// Why: this fixed four-crossing route keeps searches from selecting seams in other pockets.
 
 describe('the run from the cage corridor down to the loose railings', () => {
     test('starts in the corridor, because that is where the well drops the character', () => {

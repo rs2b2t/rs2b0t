@@ -2,15 +2,15 @@
 import Tile from '../../../../../geometry/Tile.js';
 import type { NpcStop } from '../../exec/primitives.js';
 
-/** Which of Thormac's three scorpions a cage is holding. */
+/** Which of Thormac's 3 scorpions a cage is holding. */
 export type ScorpionKey = 'a' | 'b' | 'c';
 
 /** `%scorpcatcher`, from `quest_scorpcatcher.constant`. */
 export const SC_STAGE = { NOT_STARTED: 0, STARTED: 1, FIRST_HINT: 2, SECOND_HINT: 3, COMPLETE: 6 } as const;
 
-// Why: all eight cages render "Scorpion cage", so which scorpions are inside is readable from the obj id and nothing else.
+// Why: all 8 cages render "Scorpion cage", so only the obj id says what's inside.
 
-/** The eight `scorpcage` objs, keyed by what each one holds. */
+/** The 8 `scorpcage` objs, keyed by what each one holds. */
 export const CAGE_ID = {
     EMPTY: 456,
     A: 457,
@@ -24,7 +24,7 @@ export const CAGE_ID = {
 
 export const CAGE_NAME = 'Scorpion cage';
 
-/** All three Kharid scorpion NPCs render the same name, so they are found by id. */
+/** All 3 Kharid scorpion NPCs render the same name, so they are found by id. */
 export const SCORPION_NPC: Record<ScorpionKey, number> = { a: 385, b: 386, c: 387 };
 
 export const SC_ID = {
@@ -42,8 +42,8 @@ export const SC_ID = {
 
 export const SC_ITEM = { DUSTY_KEY: 'Dusty key', JAIL_KEY: 'Jail key', ANTIPOISON: 'Antipoison(3)' } as const;
 
-// Why: eight `poisonspider` spawns sit between (2850,9799) and (2876,9806) with `wanderrange=10`, which covers the coffin corridor and the wall the secret room is behind.
-// Why: `poison_severity=27` is 6 damage every 18 seconds for eight minutes, and `%poison` is `scope=perm` with no transmit, so the only reading of it is the chat line it opens with.
+// Why: 8 `poisonspider` spawns between (2850,9799) and (2876,9806) with `wanderrange=10` cover the coffin corridor and the secret-room wall.
+// Why: `poison_severity=27` is 6 damage every 18s for 8 minutes, and `%poison` is `scope=perm` with no transmit, so its opening chat line is the only reading.
 // Why: the Karamja general store is the one shop in the content that stocks the cure, so the leg pays a 30gp ferry each way for it.
 
 /** Every dose, newest first, a drink turns (3) into (2) and leaves the rest in the pack. */
@@ -69,7 +69,7 @@ const CAGE_CONTENTS: ReadonlyMap<number, readonly ScorpionKey[]> = new Map([
 /** Every cage obj id, so a pack or bank scan can find whichever one the run is carrying. */
 export const EVERY_CAGE: readonly number[] = [...CAGE_CONTENTS.keys()];
 
-// Why: the catch order is the walk. The outpost is next door to the Seers, Taverley is on the way back east, and the monastery is the last stop before the tower.
+// Why: the catch order is the walk: the outpost is next to the Seers, Taverley is on the way back east, and the monastery is the last stop before the tower.
 
 /** The order the module catches them in. */
 export const EVERY_SCORPION: readonly ScorpionKey[] = ['b', 'a', 'c'];
@@ -96,12 +96,12 @@ export function cageWith(caught: ReadonlySet<ScorpionKey>): number | undefined {
 }
 
 export const SC_TILE = {
-    /** Thormac, three ladders up the Sorcerer's Tower. */
+    /** Thormac, 3 ladders up the Sorcerer's Tower. */
     THORMAC: new Tile(2702, 3405, 3),
     /** The ground-floor Seer in Seers' Village. */
     SEER: new Tile(2702, 3475, 0),
 
-    /** Inside Ivor's hut, one tile north of scorpion B. */
+    /** Inside Ivor's hut, 1 tile north of scorpion B. */
     OUTPOST_HUT: new Tile(2552, 3571, 0),
 
     /** The Black Knights' prison corridor, on the locked side of Velrak's cell. */
@@ -112,7 +112,7 @@ export const SC_TILE = {
 
     /** The east side of the dusty-key gate. */
     DEEP_GATE: new Tile(2924, 9803, 0),
-    /** The deep dungeon, one tile west of that gate. */
+    /** The deep dungeon, 1 tile west of that gate. */
     DEEP_DUNGEON: new Tile(2923, 9803, 0),
 
     /** The coffin corridor by the poison spiders, on the outside of the secret wall. */
@@ -146,7 +146,7 @@ export const THORMAC: NpcStop = {
     ]
 };
 
-// Why: the seer answers three different openers depending on the stage, and the wrong one costs nothing but a second walk to Seers' Village.
+// Why: The seer has three stage-specific openers; retrying the wrong one only adds another walk to Seers' Village.
 
 export const SEER: NpcStop = {
     npc: 'Seer',

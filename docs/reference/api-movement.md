@@ -26,9 +26,8 @@ Traversal.walkTo(dest: WorldTile, opts?: {
     avoidZones?: readonly (string | { minX: number; maxX: number; minZ: number; maxZ: number; level?: number })[];
 }): Promise<boolean>
 
-// Prefer for unattended walks, escalates re-path / big-budget / scene bridge
-// and by default never gives up (only random-event or Stop ends it early).
-// Forwards useTeleportCatalog / policy / bankItemCounts on every baked repath.
+// Retry with repathing, a larger search budget and scene walking. Retries forever
+// by default; Stop or random events can interrupt it. Each retry uses the same options.
 Traversal.walkResilient(dest: WorldTile, opts: {
     radius: number;
     attempts?: number;

@@ -1,6 +1,4 @@
-// Why: the Kharazi Jungle is sealed by a band of jungle plants standing on map-blocked ground, so the baked
-// Why: pack has no edge into it and never will: `chop_jungle` teleports the chopper two tiles past each plant
-// Why: it fells, which is a traversal mode rather than one crossing. Legends' Quest already cuts that band.
+// Why: the Kharazi Jungle is sealed by jungle plants on map-blocked ground, so the baked pack has no edge into it; `chop_jungle` teleports you 2 tiles past each plant felled, a traversal mode of its own. Legends' Quest already cuts that band.
 // @see docs/reference/clues-gates.md#clues-the-pack-cannot-reach
 
 import { Bank } from '#/bot/api/bank/Bank.js';
@@ -16,7 +14,7 @@ import { enterJungle, leaveJungle } from '#/bot/api/ai/quests/defs/legends/jungl
 import Tile from '#/bot/geometry/Tile.js';
 import type { NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 
-/** The three hard coordinate digs inside the jungle. */
+/** The 3 hard coordinate digs inside the jungle. */
 export const KHARAZI_CLUES: ReadonlySet<number> = new Set([3532, 3534, 3536]);
 
 export const MACHETE = LQ_ITEM.MACHETE;
@@ -62,8 +60,7 @@ const held = (name: string): boolean => Inventory.first(name) !== null || Equipm
 /** Every axe name, best first, so the bank stop knows what not to deposit. */
 export const AXE_NAMES: readonly string[] = AXES.map(a => a.name);
 
-// Why: `woodcutting_axe_checker` reads the pack and the right hand, not the bank, and this era puts no level
-// Why: on any axe, so the best one the bank holds is the one to bring.
+// Why: `woodcutting_axe_checker` reads the pack and the right hand, and this era puts no level on any axe, so the best one the bank holds is the one to bring.
 
 /** The best axe to take into the jungle, or null when neither pack nor bank has one. */
 export function jungleAxe(): string | null {
@@ -75,8 +72,7 @@ export function heldAxe(): string | null {
     return bestAxe(Skills.level('woodcutting'), held);
 }
 
-// Why: the notes are how an unfinished Legends account passes the map check, and they are Radimus Erkle's
-// Why: to give, so a bot that has not started the quest cannot be sent to cut its way in.
+// Why: the notes are how an unfinished Legends account passes the map check, and only Radimus Erkle gives them, so a bot that hasn't started the quest can't cut its way in.
 
 /** True when `start_chop_jungle` will accept the map check. */
 export function hasJungleMap(): boolean {

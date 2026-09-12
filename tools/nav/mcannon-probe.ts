@@ -1,5 +1,5 @@
-/** Probe every tile the Dwarf Cannon module names against the baked collision pack: walkability, then which of them share a component.
- *  Why: the goblin cave is entered and left by scripted telejumps that no transports edge carries, so a walk that looks fine on the map may be crossing a boundary nothing routes over. */
+/** Check Dwarf Cannon stand tiles for walkability and connected components.
+ * Why: the goblin cave uses scripted telejumps absent from the transport graph. */
 import fs from 'node:fs';
 
 import { gunzipSync } from 'fflate';

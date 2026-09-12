@@ -3,7 +3,7 @@ import type { CarryEntry } from '../loadout/loadouts.js';
 export interface BoostPotion {
     /** The skill the dose lifts. */
     skill: string;
-    /** Paint label, kept to three characters so a boost row still fits three columns. */
+    /** Paint label, kept to 3 characters so a boost row still fits 3 columns. */
     short: string;
     /** The dose form drawn when the loadout names none. */
     flask: string;

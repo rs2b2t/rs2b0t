@@ -47,8 +47,8 @@ export const COIN_FLOAT = 1000;
 const BUY_TOPUP_DIVISOR = 4;
 
 /**
- * Why: topping up to the item's own estimate left 20 gp in the purse after a loaf and the next boat fare emptied it, so Merlin's Crystal crossed, ran dry and walked back for another twenty.
- * Why: the trip refills a float rather than one purchase, and only once the purse is a quarter of it, so nothing returns to the bank between two cheap buys.
+ * Why: topping up to the item's own estimate left 20 gp after a loaf and the next boat fare emptied it, so Merlin's Crystal ran dry and walked back for another 20.
+ * Why: the trip refills a float, and only once the purse is a quarter of it, so nothing returns to the bank between 2 cheap buys.
  */
 export function buyPurseTopUp(held: number, estGp: number): { need: boolean; draw: number } {
     const target = Math.max(estGp, COIN_FLOAT);
@@ -59,7 +59,7 @@ export function buyPurseTopUp(held: number, estGp: number): { need: boolean; dra
 
 /**
  * Why: the bot starts carrying anything and the quest before this one leaves anything behind, so every quest provisions from empty.
- * Why: the journal is the only gate. A quest already underway may be carrying the only copy of something: Shield of Arrav's chest and Straven both re-check the bank, so a swept store key and shield half never come back.
+ * Why: the journal is the only gate, since a quest underway may carry the only copy of something (Shield of Arrav's chest and Straven both re-check the bank, so a swept store key and shield half never come back).
  */
 export function shouldFreshenPack(
     journal: QuestStatus,

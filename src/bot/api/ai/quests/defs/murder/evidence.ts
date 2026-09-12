@@ -7,8 +7,8 @@ import { MURDER_LOC, MURDER_OBJ, MURDER_TILE, type LocStop, type Suspect } from 
 
 const LIFT_MS = 8000;
 
-// Why: `Reach.locOp` walks when the loc is out of scene and reports `retry` without ever clicking it, so a first call from anywhere else in the mansion is the approach and the second is the op.
-// Why: one leg here visits four locs, and a step that gives up on the walk restarts the hunt at the first suspect, which never gets past the second.
+// Why: `Reach.locOp` walks when the loc is out of scene and reports `retry` without clicking, so the first call from elsewhere in the mansion is the approach and the second is the op.
+// Why: one leg visits 4 locs, and a step that gives up on the walk restarts the hunt at the first suspect and never gets past the second.
 const LOC_TRIES = 3;
 
 async function reachLoc(step: LocPrompt, log: (m: string) => void): Promise<boolean> {
@@ -65,7 +65,7 @@ function searchBarrel(barrel: LocStop, silver: number, log: (m: string) => void)
     }, log);
 }
 
-// Why: the sacks and the flour barrel each hand over one at a time and each dusting spends one of both, so a trip that takes a single sheet is three walks per suspect rather than one.
+// Why: the sacks and the flour barrel each hand over 1 at a time and each dusting spends 1 of both, so taking a single sheet is 3 walks per suspect.
 
 /** How many sheets one visit to the sacks is worth. */
 const PAPER_STOCK = 3;
@@ -149,7 +149,7 @@ async function liftPrint(dust: number, print: number, log: (m: string) => void):
     return useHeld(MURDER_OBJ.FLYPAPER, dust, () => heldId(print) > 0, log);
 }
 
-// Why: a mismatch destroys the suspect's print, but only once its mesbox is dismissed, so "the print is gone" is not readable until the box has been driven shut.
+// Why: a mismatch destroys the suspect's print only once its mesbox is dismissed, so "the print is gone" is unreadable until the box is driven shut.
 async function compare(print: number, log: (m: string) => void): Promise<boolean> {
     return useHeld(
         MURDER_OBJ.UNKNOWN_PRINT,
@@ -174,7 +174,7 @@ async function testSuspect(suspect: Suspect, log: (m: string) => void): Promise<
     return compare(suspect.print, log);
 }
 
-// Why: the loop cursor is local, so a restart re-tests a suspect it had already cleared, one pot of flour and one sheet of flypaper, against a cleared-set that no client-visible state could hold.
+// Why: the loop cursor is local, so a restart re-tests an already cleared suspect (1 pot of flour and 1 sheet of flypaper); no client-visible state could hold a cleared set.
 
 /** Lift the murderer's print off the dagger and match it, suspect by suspect. */
 export async function takePrints(order: readonly Suspect[], log: (m: string) => void): Promise<boolean> {

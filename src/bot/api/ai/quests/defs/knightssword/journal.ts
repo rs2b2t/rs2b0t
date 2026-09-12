@@ -6,9 +6,10 @@ import type { QuestProgress } from '../../engine/types.js';
 import { KS_QUEST, KS_STAGE } from './areas.js';
 
 /**
- * Newest marker first: squire_journal.rs2 appends, so every earlier stage's
- * prose is still on the scroll at the later ones.
+ * `@dbl@` colour tags become a space, so a needle must never span a tag boundary next to punctuation.
+ * @see docs/reference/quest-engine.md#quest-state
  */
+/** Newest marker first: squire_journal.rs2 appends, so earlier stages' prose is still on the scroll. */
 function readStage(text: string): number | undefined {
     if (text.includes('quest complete!')) return KS_STAGE.COMPLETE;
     if (text.includes('thurgo has now smithed me a replica')) return KS_STAGE.LOOKING_BLURITE;
@@ -27,7 +28,7 @@ export function parseKnightsSwordJournal(lines: readonly string[] | string): Que
     return stage === undefined ? undefined : { stage, flags: new Set() };
 }
 
-/** A failed read is not evidence the quest went backwards. */
+/** Last good read, so a failed read can't look like the quest went backwards. */
 let lastGood: QuestProgress | undefined;
 
 export async function readKnightsSwordProgress(): Promise<QuestProgress | undefined> {
