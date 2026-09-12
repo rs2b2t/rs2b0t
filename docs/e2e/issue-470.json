@@ -1,0 +1,232 @@
+{
+  "issue": 470,
+  "result": "PASS",
+  "at": "2026-09-12T15:43:24.574Z",
+  "sourceCommit": "baf798efe70b4d892fd232b2926e635b266e07db",
+  "before": {
+    "tile": {
+      "x": 2864,
+      "z": 3605,
+      "level": 0
+    },
+    "quest": "inProgress",
+    "hp": 99,
+    "prayer": 98,
+    "protected": true,
+    "combat": true,
+    "npcs": [
+      {
+        "index": 6724,
+        "id": 1102,
+        "anim": -1,
+        "name": "Thrower Troll",
+        "level": 67,
+        "tile": {
+          "x": 2859,
+          "z": 3600,
+          "level": 0
+        },
+        "distance": 5,
+        "ops": [
+          null,
+          "Attack",
+          null,
+          null,
+          null
+        ],
+        "inCombat": false,
+        "health": 0,
+        "totalHealth": 0,
+        "faceEntity": 32769
+      },
+      {
+        "index": 6727,
+        "id": 1103,
+        "anim": -1,
+        "name": "Thrower Troll",
+        "level": 67,
+        "tile": {
+          "x": 2863,
+          "z": 3600,
+          "level": 0
+        },
+        "distance": 5,
+        "ops": [
+          null,
+          "Attack",
+          null,
+          null,
+          null
+        ],
+        "inCombat": false,
+        "health": 0,
+        "totalHealth": 0,
+        "faceEntity": 32769
+      },
+      {
+        "index": 6731,
+        "id": 1109,
+        "anim": -1,
+        "name": "Mountain Troll",
+        "level": 69,
+        "tile": {
+          "x": 2867,
+          "z": 3598,
+          "level": 0
+        },
+        "distance": 7,
+        "ops": [
+          null,
+          "Attack",
+          null,
+          null,
+          null
+        ],
+        "inCombat": false,
+        "health": 0,
+        "totalHealth": 0,
+        "faceEntity": -1
+      },
+      {
+        "index": 6734,
+        "id": 1111,
+        "anim": -1,
+        "name": "Mountain Troll",
+        "level": 69,
+        "tile": {
+          "x": 2866,
+          "z": 3597,
+          "level": 0
+        },
+        "distance": 8,
+        "ops": [
+          null,
+          "Attack",
+          null,
+          null,
+          null
+        ],
+        "inCombat": false,
+        "health": 0,
+        "totalHealth": 0,
+        "faceEntity": -1
+      },
+      {
+        "index": 6733,
+        "id": 1104,
+        "anim": -1,
+        "name": "Thrower Troll",
+        "level": 67,
+        "tile": {
+          "x": 2867,
+          "z": 3600,
+          "level": 0
+        },
+        "distance": 5,
+        "ops": [
+          null,
+          "Attack",
+          null,
+          null,
+          null
+        ],
+        "inCombat": false,
+        "health": 0,
+        "totalHealth": 0,
+        "faceEntity": 32769
+      },
+      {
+        "index": 6736,
+        "id": 1105,
+        "anim": -1,
+        "name": "Thrower Troll",
+        "level": 67,
+        "tile": {
+          "x": 2870,
+          "z": 3600,
+          "level": 0
+        },
+        "distance": 6,
+        "ops": [
+          null,
+          "Attack",
+          null,
+          null,
+          null
+        ],
+        "inCombat": false,
+        "health": 0,
+        "totalHealth": 0,
+        "faceEntity": 32769
+      }
+    ],
+    "map": 1,
+    "combination": 1,
+    "state": "idle",
+    "logs": []
+  },
+  "entered": {
+    "tile": {
+      "x": 2864,
+      "z": 3609,
+      "level": 0
+    },
+    "quest": "inProgress",
+    "hp": 99,
+    "prayer": 47,
+    "protected": true,
+    "combat": false,
+    "npcs": [
+      {
+        "index": 6721,
+        "id": 1094,
+        "anim": -1,
+        "name": "Mountain Goat",
+        "level": 0,
+        "tile": {
+          "x": 2857,
+          "z": 3608,
+          "level": 0
+        },
+        "distance": 7,
+        "ops": [],
+        "inCombat": false,
+        "health": 0,
+        "totalHealth": 0,
+        "faceEntity": -1
+      }
+    ],
+    "map": 1,
+    "combination": 1,
+    "state": "running",
+    "step": "running Death Plateau",
+    "logs": [
+      "  hops:\n1. [door] Open Gate loc=3725 \u2192 2824,3555,L0 (cost 4)\n2. [door] Open Door loc=3745 \u2192 2822,3555,L0 (cost 4)\n3. [door] Open Door loc=3746 \u2192 2820,3558,L0 (cost 4)",
+      "  crossed 'Gate' at (2824,3555)",
+      "  crossed 'Door' at (2822,3555)",
+      "  crossed 'Door' at (2820,3557)",
+      "  arrived (5 clicks)",
+      "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+      "  path: cost 86, 35 waypoints, expanded 832, worker 1.1ms, hops=1",
+      "  hops:\n1. [shortcut] Climb-over Stile loc=3730 \u2192 2817,3564,L0 (cost 10)",
+      "  server can't reach Stile from (2820,3557) \u2014 stepping onto the planned approach (2817,3561)",
+      "  server says can't reach Stile at (2817,3562) \u2014 repathing",
+      "  path: cost 90, 33 waypoints, expanded 1161, worker 0.4ms, hops=2 (repath 1)",
+      "  hops:\n1. [door] Open Door loc=3746 \u2192 2820,3558,L0 (cost 4)\n2. [shortcut] Climb-over Stile loc=3730 \u2192 2817,3564,L0 (cost 10)",
+      "  crossed 'Door' at (2820,3557)",
+      "  Climb-over Stile at (2817,3562) ok",
+      "  Stile landed at (2817,3562) \u2014 stepping onto the planned (2817,3564)",
+      "  arrived (6 clicks)"
+    ]
+  },
+  "mapStage": 8,
+  "build": {
+    "revision": "baf798efe70b4d892fd232b2926e635b266e07db",
+    "dirty": true,
+    "untrackedAtDeploy": [
+      "docs/e2e/issue-470-before.png"
+    ],
+    "trackedSourceClean": true,
+    "trackedSourceVerification": "Before deployment git status --short listed only the untracked before PNG. After the run, git diff --quiet and git diff --cached --quiet both exited 0."
+  }
+}
