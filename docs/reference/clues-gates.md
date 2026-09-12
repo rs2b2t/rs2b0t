@@ -51,9 +51,12 @@ Southern desert clues such as 3552 do use Shantay Pass. The crossing consumes
 a pass; the solver keeps or withdraws one and can buy a missing pass from
 Shantay. See [Crossing tolls](clues-mechanics.md#crossing-tolls).
 
-West Ardougne clue 3522 uses the baked sewer route. The navigator requires
-Plague City started and a worn Gas mask, without requiring a second mask
-in inventory.
+West Ardougne clue 3522 uses the main city gate once Biohazard is complete.
+Both directions work without a Gas mask. Before Biohazard, the sewer pipe
+requires Plague City started and a worn Gas mask. The pipe still requires
+the mask after Plague City is complete; the city gate has no mask check.
+Starting Biohazard fills in the garden mud patch. The navigator stops using
+that entrance at the same point, even when carrying a spade and wearing a mask.
 
 ## Proving a gate
 

@@ -1,6 +1,126 @@
 [
   {
     "from": {
+      "x": 2559,
+      "z": 3300,
+      "level": 0
+    },
+    "to": {
+      "x": 2556,
+      "z": 3300,
+      "level": 0
+    },
+    "locName": "Door",
+    "action": "Open",
+    "kind": "shortcut",
+    "locId": 2049,
+    "locX": 2558,
+    "locZ": 3300,
+    "debugName": "ardougnewalldoor_right",
+    "options": [
+      "Open"
+    ],
+    "requires": {
+      "quests": [
+        {
+          "quest": "Biohazard",
+          "minStatus": "complete"
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2556,
+      "z": 3300,
+      "level": 0
+    },
+    "to": {
+      "x": 2559,
+      "z": 3300,
+      "level": 0
+    },
+    "locName": "Door",
+    "action": "Open",
+    "kind": "shortcut",
+    "locId": 2048,
+    "locX": 2557,
+    "locZ": 3300,
+    "debugName": "ardougnewalldoor_left",
+    "options": [
+      "Open"
+    ],
+    "requires": {
+      "quests": [
+        {
+          "quest": "Biohazard",
+          "minStatus": "complete"
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2559,
+      "z": 3299,
+      "level": 0
+    },
+    "to": {
+      "x": 2556,
+      "z": 3299,
+      "level": 0
+    },
+    "locName": "Door",
+    "action": "Open",
+    "kind": "shortcut",
+    "locId": 2048,
+    "locX": 2558,
+    "locZ": 3299,
+    "debugName": "ardougnewalldoor_left",
+    "options": [
+      "Open"
+    ],
+    "requires": {
+      "quests": [
+        {
+          "quest": "Biohazard",
+          "minStatus": "complete"
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2556,
+      "z": 3299,
+      "level": 0
+    },
+    "to": {
+      "x": 2559,
+      "z": 3299,
+      "level": 0
+    },
+    "locName": "Door",
+    "action": "Open",
+    "kind": "shortcut",
+    "locId": 2049,
+    "locX": 2557,
+    "locZ": 3299,
+    "debugName": "ardougnewalldoor_right",
+    "options": [
+      "Open"
+    ],
+    "requires": {
+      "quests": [
+        {
+          "quest": "Biohazard",
+          "minStatus": "complete"
+        }
+      ]
+    }
+  },
+  {
+    "from": {
       "x": 3205,
       "z": 3209,
       "level": 0
@@ -2187,6 +2307,12 @@
       "Dig"
     ],
     "requires": {
+      "quests": [
+        {
+          "quest": "Biohazard",
+          "maxStatus": "not_started"
+        }
+      ],
       "items": [
         {
           "name": "Spade",
