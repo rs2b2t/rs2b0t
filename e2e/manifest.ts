@@ -3,6 +3,15 @@ import type { Case } from './manifestTypes.js';
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
     {
+        id: 'fishing-gear-749-live',
+        harness: 'fishing-gear-749-live.ts',
+        covers: { subsystems: ['random-events'] },
+        status: 'vetted',
+        provenAt: '08632baa06d5649e3aaa50004a21bd38252be086',
+        budgetMin: 5,
+        note: 'leaves dropped bait and feathers down near and away from water, leaves a tool down away from water, and recovers a dropped tool beside a real whirlpool NPC'
+    },
+    {
         id: 'fisher-shilo-shopping-live',
         harness: 'fisher-shilo-shopping-live.ts',
         covers: { scripts: ['GatheringBot'] },

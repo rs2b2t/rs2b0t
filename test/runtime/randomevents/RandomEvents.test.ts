@@ -34,33 +34,67 @@ describe('pickSacrificial', () => {
 });
 
 describe('GearLossTracker', () => {
+    test('dropped consumables are never stolen fishing tools', () => {
+        const t = new GearLossTracker();
+        t.update(['Feather', 'Fishing bait'], false, 0, true, 1);
+        t.update([], false, 600, true, 2);
+        expect(t.recentlyLost('feather', 600)).toBe(false);
+        expect(t.recentlyLost('fishing bait', 600)).toBe(false);
+    });
+
+    test('tools dropped away from fishing spots are not recovered', () => {
+        const t = new GearLossTracker();
+        t.update(['Harpoon'], false, 0, false, 1);
+        t.update([], false, 600, false, 2);
+        expect(t.recentlyLost('harpoon', 600)).toBe(false);
+    });
+
+    test('a spot hop permits recovery for one game tick, including repeated scans', () => {
+        const t = new GearLossTracker();
+        t.update(['Harpoon'], false, 0, true, 1);
+        t.update([], false, 600, false, 2);
+        t.update([], false, 650, false, 2);
+        expect(t.recentlyLost('harpoon', 650)).toBe(true);
+        t.update([], false, 1200, false, 3);
+        expect(t.recentlyLost('harpoon', 1200)).toBe(false);
+    });
+
+    test('returning to water does not recover a tool dropped after the latch expired', () => {
+        const t = new GearLossTracker();
+        t.update(['Harpoon'], false, 0, true, 1);
+        t.update(['Harpoon'], false, 600, false, 2);
+        t.update([], false, 1200, false, 3);
+        t.update([], false, 1800, true, 4);
+        expect(t.recentlyLost('harpoon', 1800)).toBe(false);
+    });
+
     test('gear vanishing from the pack records a recent loss', () => {
         const t = new GearLossTracker(90_000);
-        t.update(['Harpoon', 'Big fishing net'], false, 1000);
-        t.update(['Harpoon'], false, 2000);
+        t.update(['Harpoon', 'Big fishing net'], false, 1000, true, 1000);
+        t.update(['Harpoon'], false, 2000, true, 2000);
         expect(t.recentlyLost('big fishing net', 2500)).toBe(true);
         expect(t.recentlyLost('harpoon', 2500)).toBe(false);
     });
 
     test('losses expire after the window (the ground drop despawns)', () => {
         const t = new GearLossTracker(90_000);
-        t.update(['Harpoon'], false, 0);
-        t.update([], false, 1000);
+        t.update(['Harpoon'], false, 0, true, 0);
+        t.update([], false, 1000, true, 1000);
         expect(t.recentlyLost('harpoon', 91_001)).toBe(false);
     });
 
     test('bank/shop suppression covers the open AND the following update (deposits are noticed after the bank closes)', () => {
         const t = new GearLossTracker(90_000);
-        t.update(['Lobster pot'], false, 0);
-        t.update(['Lobster pot'], true, 1000);
-        t.update([], false, 2000);
+        t.update(['Lobster pot'], false, 0, true, 0);
+        t.update(['Lobster pot'], true, 1000, true, 1000);
+        t.update([], false, 2000, true, 2000);
         expect(t.recentlyLost('lobster pot', 2500)).toBe(false);
     });
 
     test('a knock-off never seen as held records nothing (guild ground spawns)', () => {
         const t = new GearLossTracker(90_000);
-        t.update([], false, 0);
-        t.update([], false, 1000);
+        t.update([], false, 0, true, 0);
+        t.update([], false, 1000, true, 1000);
         expect(t.recentlyLost('big fishing net', 1500)).toBe(false);
     });
 });
