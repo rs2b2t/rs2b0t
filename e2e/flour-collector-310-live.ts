@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
+import type { Loc } from '../src/bot/api/model/Loc.js';
+import type EntityQuery from '../src/bot/api/query/Query.js';
 import { cheatQuiet, deployIsolatedClient, launchBrowser, logout, parseArgs, stopScript, type Rs2b0t } from './lib/harness.js';
 import { getServerVarQuiet, mainlandAccount, relog, seedItemsToBank, startScript } from './tutorial/harness.js';
 
@@ -20,7 +22,7 @@ type Api = Rs2b0t & {
     __rs2b0t: {
         Inventory: { countById(id: number): number };
         Bank: { countById(id: number): number; isOpen(): boolean; ready(): boolean };
-        Locs: { query(): { name(name: string): { nearest(): { interact(op: string): boolean | Promise<boolean> } | null } } };
+        Locs: { query(): EntityQuery<Loc> };
         Quests: { status(name: string): string };
     };
 };
@@ -51,7 +53,11 @@ try {
     assert.equal(await page.evaluate(() => (globalThis as never as Api).__rs2b0t.Quests.status('Murder Mystery')), 'inProgress');
     assert(await cheatQuiet(page, '~clearinv'));
     await seedItemsToBank(page, [{ debugName: 'pot_empty', displayName: 'Pot', qty: 30 }], bank);
-    assert(await page.evaluate(() => (globalThis as never as Api).__rs2b0t.Locs.query().name('Bank booth').nearest()?.interact('Use-quickly')));
+    assert(await page.evaluate(() => {
+        const booth = (globalThis as never as Api).__rs2b0t.Locs.query().name('Bank booth').where(loc => loc.actions().length > 0).nearest();
+        const op = booth?.actions().find(action => /^use|^bank/i.test(action));
+        return booth && op ? booth.interact(op) : false;
+    }));
     await page.waitForFunction(() => (globalThis as never as Api).__rs2b0t.Bank.ready(), undefined, { timeout: 10_000 });
     const before = await snapshot();
     assert.equal(before.bankPots, 30);
