@@ -9,7 +9,7 @@ export const COORD_TOOL_SLOTS = 3;
 // Why: runes stack, so a bigger cast budget costs no extra slot, and a trail that runs dry mid-route walks the rest of the map (4 casts kept doing that).
 
 /** Casts of each catalogued teleport a trail carries runes for. */
-export const TELEPORT_CASTS = 12;
+export const TELEPORT_CASTS = 20;
 
 /** Runes to hold for a teleport that burns `perCast` of them. */
 export function teleportRuneTarget(perCast: number): number {
