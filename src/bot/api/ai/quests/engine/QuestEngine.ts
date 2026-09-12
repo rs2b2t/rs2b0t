@@ -213,9 +213,10 @@ export class QuestEngine implements Task {
             this.runningId = null;
             return;
         }
-        if (!this.readinessWarned.has(id) && module.warnReadiness) {
+        if (!this.readinessWarned.has(id)) {
             this.readinessWarned.add(id);
-            const note = module.warnReadiness();
+            module.onStart?.();
+            const note = module.warnReadiness?.();
             if (note) {
                 this.host.log(`${module.record.name}: ${note}`);
             }
