@@ -5,7 +5,7 @@ import { cheatQuiet, deployIsolatedClient, launchBrowser, logout, parseArgs, set
 import { getServerVarQuiet, mainlandAccount, relog, startScript, teleTo } from './tutorial/harness.js';
 
 type Api = {
-    __rs2b0t: { Inventory: { count(name: string): number }; Quests: { status(name: string): string }; Skills: { effective(name: string): number }; Game: { inCombat(): boolean }; Prayer: { set(name: string, on: boolean): Promise<boolean>; active(name: string): boolean } };
+    __rs2b0t: { Inventory: { count(name: string): number }; Quests: { status(name: string): string }; Skills: { effective(name: string): number }; Game: { inCombat(): boolean; setAutoRetaliate(on: boolean): boolean }; Prayer: { set(name: string, on: boolean): Promise<boolean>; active(name: string): boolean } };
     rs2b0t: { reader: { worldTile(): { x: number; z: number; level: number } | null; npcs(): { name: string | null; distance: number }[] }; runner: { state: string; bot: { status: string } | null; ctx: { log: { msg: string }[] } | null } };
 };
 
@@ -28,6 +28,7 @@ try {
         assert(await cheatQuiet(page, command), command);
     }
     await relog(page, tag);
+    assert(await page.evaluate(() => (globalThis as never as Api).__rs2b0t.Game.setAutoRetaliate(false)), 'disable retaliation during scouting');
     assert(await page.evaluate(() => (globalThis as never as Api).__rs2b0t.Prayer.set('Protect from Missiles', true)), 'protection from the thrower trolls');
     assert(await teleTo(page, { x: 2864, z: 3605, level: 0 }, 0), 'three tiles south of the scout trigger');
     assert.equal(await getServerVarQuiet(page, 'death_map'), 7, 'unscouted server state');
