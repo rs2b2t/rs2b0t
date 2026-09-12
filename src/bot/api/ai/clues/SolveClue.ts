@@ -357,7 +357,6 @@ export class SolveClue implements Task {
         // Why: one snapshot per bank stop; a spell this account can't cast shouldn't reserve a pack slot.
         const kit = teleportKitFor(snapshotWorldState());
         const keepTeleports = this.host.useTeleports?.() ?? true;
-        // Southbound Shantay Pass is baked but consumes a pass (#371); keep one so desert digs (3552/3554) can plan the gated edge.
         const SHANTAY_PASS = 'Shantay pass';
         // Why: `start_chop_jungle` checks for the machete, an axe and Radimus's notes, so they survive the deposit and get withdrawn below.
         const jungleClue = scrollId !== null && KHARAZI_CLUES.has(scrollId);

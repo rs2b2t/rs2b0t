@@ -2204,7 +2204,7 @@
     },
     "to": {
       "x": 2566,
-      "z": 3331,
+      "z": 3330,
       "level": 0
     },
     "locName": "Mud pile",
@@ -2238,16 +2238,7 @@
     "debugName": "plaguesewerpipe",
     "options": [
       "Search"
-    ],
-    "requires": {
-      "items": [
-        {
-          "name": "Gas mask",
-          "count": 1,
-          "consumed": false
-        }
-      ]
-    }
+    ]
   },
   {
     "from": {
