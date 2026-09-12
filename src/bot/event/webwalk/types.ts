@@ -37,7 +37,8 @@ interface ItemRequirement {
 interface QuestRequirement {
     quest: string;
     /** Minimum status required for the edge to be usable. */
-    minStatus: 'started' | 'complete';
+    minStatus?: 'started' | 'complete';
+    maxStatus?: 'not_started' | 'started';
 }
 
 /** Planner-side gates; dialog and NPC side-trips live in specialCrossings. */

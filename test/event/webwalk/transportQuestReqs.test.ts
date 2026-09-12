@@ -29,6 +29,7 @@ describe('transport quest seeds', () => {
         expect(cmds).toContain('setvar zombiequeen 15');
         // read-scroll stages, not quest-complete: spell teles cast only past the scroll
         expect(cmds).toContain('setvar elenaquest 30');
+        expect(cmds).toContain('setvar biohazard 16');
         expect(cmds).toContain('setvar itwatchtower 14');
         // content %eadgar_quest, not %eadgar
         expect(cmds).toContain('setvar eadgar_quest 110');

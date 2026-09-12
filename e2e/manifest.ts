@@ -900,6 +900,15 @@ export const CASES: readonly Case[] = [
         note: 'seeds Underground Pass complete varp and bits; --stage is the %regicide_quest value, 0 to 15'
     },
     {
+        id: 'west-ardougne-373-live',
+        harness: 'west-ardougne-373-live.ts',
+        covers: { subsystems: ['nav'] },
+        status: 'vetted',
+        provenAt: '83ff1932',
+        budgetMin: 15,
+        note: 'live sewer quest and worn-mask gates, mud-pile return, and both city-gate directions after Biohazard; screenshots and state proof under docs/e2e'
+    },
+    {
         id: 'plague-pipe-366-live',
         harness: 'plague-pipe-366-live.ts',
         covers: { subsystems: ['world'] },

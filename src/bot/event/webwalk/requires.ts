@@ -74,7 +74,13 @@ export function meetsRequires(requires: TransportRequires | undefined, state: Wo
     if (requires.quests) {
         for (const q of requires.quests) {
             const status = state.questStatus(q.quest);
-            if (QUEST_RANK[status] < QUEST_RANK[q.minStatus]) {
+            if (status === 'unknown' && q.maxStatus !== undefined) {
+                return { ok: false, reason: `need known quest status for ${q.quest}` };
+            }
+            if (q.maxStatus !== undefined && QUEST_RANK[status] > QUEST_RANK[q.maxStatus]) {
+                return { ok: false, reason: `need quest ${q.quest} at most ${q.maxStatus} (have ${status})` };
+            }
+            if (q.minStatus !== undefined && QUEST_RANK[status] < QUEST_RANK[q.minStatus]) {
                 return {
                     ok: false,
                     reason: `need quest ${q.quest} ${q.minStatus} (have ${status})`

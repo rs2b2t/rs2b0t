@@ -7,15 +7,12 @@
 
 /** Clue destinations the baked nav pack can't route to, each with its stated gap. */
 export const PACK_UNREACHABLE: Record<number, string> = {
-    // NO QUEST
-    // Why: The baked crossing consumes a pass, but the offline audit has no world state and skips requirement-gated edges.
-    3554: 'Kharidian desert: baked, but entry consumes a Shantay pass — the bot must carry one',
+    3554: 'Duel Arena: obstacle arena requires an accepted duel with another player; no walking entrance',
 
     // QUEST: assume complete, then bake
     3560: 'Isafdar: Sticks [Pass] @ (2200,3169) — requires Underground Pass/Regicide',
     3562: 'Isafdar: Sticks [Pass] @ (2181,3209) — requires Underground Pass/Regicide',
     3564: 'elf camp: Dense forest [Enter] @ (2231,3248) / Log balance @ (2197,3237) — requires Regicide',
-    3522: 'West Ardougne: baked sewer pipe path — requires Plague City complete and Gas mask worn',
     // Why: death_climbingrocks_top (3722) / _bottom (3723) sit at (2880..2881, 3594..3595) on the Death Plateau, ~80 tiles south of these digs and not on the route (#365, Content @ 088ca5e).
     // Why: the crossings bordering these digs are in quest_troll.rs2, troll_mountain_shortcut_climbingrocks1/2 (3803/3804) @ (2885,3683+3684) and (2887..2888,3661), Agility 15 only, no quest and no boots.
     // Why: troll_climbingrocks (3748) @ (2910,3686+3687) needs Agility 15 and %troll_quest >= ^troll_started (Troll Stronghold started; Death Plateau doesn't count); Climbing boots are demanded only when coordz(coord) = 3611, the far southern approach.
