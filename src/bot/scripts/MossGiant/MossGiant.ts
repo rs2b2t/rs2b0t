@@ -1,3 +1,4 @@
+import { CUSTOM_RANGED_SETTINGS, rangedItem } from '../../api/combat/rangedSettings.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
@@ -58,7 +59,7 @@ export const SETTINGS: SettingsSchema = {
     bow: {
         type: 'string',
         default: 'Maple shortbow',
-        options: RANGED_WEAPONS,
+        options: [...RANGED_WEAPONS, 'Other'],
         label: 'Ranged weapon',
         group: 'Combat',
         showIf: SHOW_RANGE,
@@ -68,12 +69,13 @@ export const SETTINGS: SettingsSchema = {
     ammo: {
         type: 'string',
         default: 'Iron arrow',
-        options: ['Bronze arrow', 'Iron arrow', 'Steel arrow', 'Mithril arrow', 'Adamant arrow', 'Rune arrow'],
+        options: ['Bronze arrow', 'Iron arrow', 'Steel arrow', 'Mithril arrow', 'Adamant arrow', 'Rune arrow', 'Other'],
         label: 'Bow ammo',
         group: 'Combat',
         showIf: SHOW_RANGE,
         help: 'used by bows; ignored when the ranged weapon is a dart'
     },
+    ...CUSTOM_RANGED_SETTINGS,
     ammoWithdraw: {
         type: 'number',
         default: 500,
@@ -666,9 +668,9 @@ export default class MossGiant extends TaskBot {
         MELEE_STYLE = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
         RANGE_MODE = parseRangeStyle(this.settings.str('rangeStyle', 'rapid'));
         SPELL = this.settings.str('spell', 'Wind Strike');
-        AMMO = this.settings.str('ammo', 'Iron arrow');
+        AMMO = STYLE === 'range' ? rangedItem(this.settings, 'ammo', 'Iron arrow') : '';
         WEAPON = STYLE === 'mage' ? this.settings.str('staff', 'Staff of air')
-            : STYLE === 'range' ? this.settings.str('bow', 'Maple shortbow') : '';
+            : STYLE === 'range' ? rangedItem(this.settings, 'bow', 'Maple shortbow') : '';
         FOOD_NAME = scriptFood(this.settings, 'Lobster');
 
         PANIC_HP = this.settings.num('panicHp', 25) / 100;

@@ -1,6 +1,10 @@
+import { SettingsBag } from '#/bot/runtime/Settings.js';
+import { rangedItem } from '#/bot/api/combat/rangedSettings.js';
 import { describe, expect, test } from 'bun:test';
 import { BOWS, DARTS } from '#/bot/api/combat/equipment.js';
 import { SETTINGS as MOSS_SETTINGS } from '#/bot/scripts/MossGiant/MossGiant.js';
+import { SETTINGS as FIRE_SETTINGS } from '#/bot/scripts/FireGiant/FireGiant.js';
+import { SETTINGS as BRIM_SETTINGS } from '#/bot/scripts/BrimhavenMossGiants/settings.js';
 import { SETTINGS as ROCK_SETTINGS } from '#/bot/scripts/RockCrab/RockCrab.js';
 import { RANGED_WEAPONS, ROCK_CRAB_RANGED_WEAPONS, rangeLoadoutOf, rangeSupplyEmpty, rockCrabRangeLoadout } from '#/bot/api/combat/ranged.js';
 
@@ -14,7 +18,7 @@ describe('shared ranged loadouts (RockCrab + MossGiant)', () => {
     test('wires the persisted bow setting to the unified ranged weapon control', () => {
         for (const settings of [ROCK_SETTINGS, MOSS_SETTINGS]) {
             expect(settings.bow.label).toBe('Ranged weapon');
-            expect(settings.bow.options).toEqual(RANGED_WEAPONS);
+            expect(settings.bow.options).toEqual([...RANGED_WEAPONS, 'Other']);
             expect(settings.ammo.label).toBe('Bow ammo');
             expect(settings.ammo.help).toMatch(/ignored when the ranged weapon is a dart/i);
         }
@@ -53,4 +57,33 @@ describe('shared ranged loadouts (RockCrab + MossGiant)', () => {
         expect(rangeSupplyEmpty(0, 1, 0)).toBe(false);
         expect(rangeSupplyEmpty(0, 0, 1)).toBe(false);
     });
+});
+
+
+test('all ranged grind scripts expose custom weapon and ammunition fields', () => {
+    for (const settings of [ROCK_SETTINGS, MOSS_SETTINGS, FIRE_SETTINGS, BRIM_SETTINGS]) {
+        expect(settings.bow.options).toContain('Other');
+        expect(settings.ammo.options).toContain('Other');
+        expect(settings.customBow?.showIf).toEqual({ key: 'bow', anyOf: ['Other'] });
+        expect(settings.customAmmo?.showIf).toEqual({ key: 'ammo', anyOf: ['Other'] });
+    }
+});
+
+test('matching custom weapon and ammo use one thrown projectile stack', () => {
+    expect(rangeLoadoutOf('Rune knife', 'Rune knife')).toEqual({
+        weapon: 'Rune knife', projectile: 'Rune knife', thrown: true
+    });
+    expect(rangeLoadoutOf('Crossbow', 'Bolts')).toEqual({
+        weapon: 'Crossbow', projectile: 'Bolts', thrown: false
+    });
+});
+
+
+test('custom ranged choices reach the loadout with whitespace trimmed', () => {
+    const settings = new SettingsBag({ bow: 'Other', customBow: '  Crossbow ', ammo: 'Other', customAmmo: ' Bolts ' });
+    expect(rangeLoadoutOf(rangedItem(settings, 'bow', 'Maple shortbow'), rangedItem(settings, 'ammo', 'Iron arrow'))).toEqual({
+        weapon: 'Crossbow', projectile: 'Bolts', thrown: false
+    });
+    expect(rangedItem(new SettingsBag({ bow: 'Maple shortbow', customBow: 'Crossbow' }), 'bow', '')).toBe('Maple shortbow');
+    expect(() => rangedItem(new SettingsBag({ bow: 'Other' }), 'bow', '')).toThrow('custom ranged weapon');
 });

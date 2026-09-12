@@ -1,3 +1,4 @@
+import { CUSTOM_RANGED_SETTINGS } from '../../api/combat/rangedSettings.js';
 import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS } from '../../api/combat/CombatStyle.js';
 import { SPELL_DB } from '../../data/spelldb.js';
 import { DROP_DB } from '../../data/dropdb.js';
@@ -23,7 +24,7 @@ export const SETTINGS: SettingsSchema = {
     bow: {
         type: 'string',
         default: 'Maple shortbow',
-        options: [...RANGED_WEAPONS, ...CROSSBOWS],
+        options: [...RANGED_WEAPONS, ...CROSSBOWS, 'Other'],
         label: 'Ranged weapon',
         group: 'Combat',
         showIf: SHOW_RANGE,
@@ -33,12 +34,13 @@ export const SETTINGS: SettingsSchema = {
     ammo: {
         type: 'string',
         default: 'Iron arrow',
-        options: [...ARROWS, ...BOLTS],
+        options: [...ARROWS, ...BOLTS, 'Other'],
         label: 'Ammo (arrows / bolts)',
         group: 'Combat',
         showIf: SHOW_RANGE,
         help: 'arrows for bows, bolts for crossbows; ignored when the ranged weapon is a dart'
     },
+    ...CUSTOM_RANGED_SETTINGS,
     ammoWithdraw: {
         type: 'number',
         default: 500,

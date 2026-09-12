@@ -1,3 +1,4 @@
+import { CUSTOM_RANGED_SETTINGS, rangedItem } from '../../api/combat/rangedSettings.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
@@ -61,10 +62,11 @@ export const SETTINGS: SettingsSchema = {
     meleeStyle: { type: 'string', default: 'strength', options: COMBAT_STYLE_OPTIONS, label: 'Melee style', group: 'Combat', showIf: SHOW_MELEE, help: 'which melee stat to train; re-applied each login since com_mode is not saved' },
     rangeStyle: { type: 'string', default: 'rapid', options: RANGE_STYLE_OPTIONS, label: 'Ranged style', group: 'Combat', showIf: SHOW_RANGE, help: 'rapid trains Ranged fastest; longrange splits xp with Defence' },
     staff: { type: 'string', default: 'Staff of air', options: STAFFS, label: 'Staff', group: 'Combat', showIf: SHOW_MAGE, help: 'wielded staff, withdrawn from bank when missing' },
-    bow: { type: 'string', default: 'Maple shortbow', options: ROCK_CRAB_RANGED_WEAPONS, label: 'Ranged weapon', group: 'Combat', showIf: SHOW_RANGE, help: 'bows use the selected ammo; darts are the weapon and projectile stack' },
+    bow: { type: 'string', default: 'Maple shortbow', options: [...ROCK_CRAB_RANGED_WEAPONS, 'Other'], label: 'Ranged weapon', group: 'Combat', showIf: SHOW_RANGE, help: 'bows use the selected ammo; darts are the weapon and projectile stack' },
     spell: { type: 'string', default: 'Wind Strike', options: Object.keys(SPELL_DB), label: 'Autocast spell', group: 'Combat', showIf: SHOW_MAGE },
     runesWithdraw: { type: 'number', default: 150, min: 1, max: 1000, label: 'Casts of runes per bank trip', group: 'Combat', showIf: SHOW_MAGE },
-    ammo: { type: 'string', default: 'Bronze arrow', options: AMMO_OPTIONS, label: 'Bow ammo', group: 'Combat', showIf: SHOW_RANGE, help: 'used by bows; ignored when the ranged weapon is a dart' },
+    ammo: { type: 'string', default: 'Bronze arrow', options: [...AMMO_OPTIONS, 'Other'], label: 'Bow ammo', group: 'Combat', showIf: SHOW_RANGE, help: 'used by bows; ignored when the ranged weapon is a dart' },
+    ...CUSTOM_RANGED_SETTINGS,
     ammoWithdraw: { type: 'number', default: 200, min: 1, max: 1000, label: 'Projectiles per bank trip', group: 'Combat', showIf: SHOW_RANGE },
     minStack: { type: 'number', default: 1, min: 1, max: 50, label: 'Ignore projectile stacks smaller than', group: 'Combat', showIf: SHOW_RANGE, help: 'every kill sweeps your arrows, bolts or darts off the ground; stacks below this size are not worth the walk' },
     collectRange: { type: 'number', default: 12, min: 2, max: 30, label: 'Projectile sweep range (tiles)', group: 'Combat', showIf: SHOW_RANGE },
@@ -170,10 +172,10 @@ export default class RockCrab extends TaskBot {
         MELEE_STYLE = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
         RANGE_MODE = parseRangeStyle(this.settings.str('rangeStyle', 'rapid'));
         WEAPON = STYLE === 'mage' ? this.settings.str('staff', 'Staff of air')
-            : STYLE === 'range' ? this.settings.str('bow', 'Maple shortbow') : '';
+            : STYLE === 'range' ? rangedItem(this.settings, 'bow', 'Maple shortbow') : '';
         SPELL = this.settings.str('spell', 'Wind Strike');
         RUNES_WITHDRAW = this.settings.num('runesWithdraw', 150);
-        AMMO = this.settings.str('ammo', 'Bronze arrow');
+        AMMO = STYLE === 'range' ? rangedItem(this.settings, 'ammo', 'Bronze arrow') : '';
         AMMO_WITHDRAW = this.settings.num('ammoWithdraw', 200);
         MIN_STACK = this.settings.num('minStack', 1);
         COLLECT_RANGE = this.settings.num('collectRange', 12);
