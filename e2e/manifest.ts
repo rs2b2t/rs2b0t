@@ -3,6 +3,14 @@ import type { Case } from './manifestTypes.js';
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
     {
+        id: 'clue-rune-budget-593-live',
+        harness: 'clue-rune-budget-593-live.ts',
+        covers: { scripts: ['ClueSolver'], subsystems: ['clues'] },
+        status: 'unvetted',
+        budgetMin: 6,
+        note: 'prepares a Hans clue from a real bank and proves 20 Law, 100 Air, 20 Earth, 20 Fire and 20 Water runes plus the ten-food cap'
+    },
+    {
         id: 'fisher-shilo-shopping-live',
         harness: 'fisher-shilo-shopping-live.ts',
         covers: { scripts: ['GatheringBot'] },
