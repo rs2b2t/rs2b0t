@@ -51,7 +51,7 @@ async function pickBananas(want: number, log: (m: string) => void): Promise<numb
         log('could not reach the banana grove');
         return held(PT_ID.BANANA);
     }
-    for (let attempt = 0; attempt < 40 && held(PT_ID.BANANA) < want; attempt++) {
+    for (let attempt = 0; attempt < 40 && held(PT_ID.BANANA) < want && !Inventory.isFull(); attempt++) {
         await Sustain.run();
         await settleScene();
         const tree = Locs.query()
@@ -76,8 +76,8 @@ async function pickBananas(want: number, log: (m: string) => void): Promise<numb
 // Why: the crate's own message names the count, so the loop never keeps a tally the client could be wrong about.
 
 /** Fill the plantation crate to 10 bananas. */
-async function fillCrate(log: (m: string) => void): Promise<boolean> {
-    for (let pass = 0; pass < 4; pass++) {
+export async function fillCrate(log: (m: string) => void): Promise<boolean> {
+    for (let pass = 0; pass < CRATE_FULL; pass++) {
         const state = await searchBananaCrate(log);
         if (!state) {
             return false;

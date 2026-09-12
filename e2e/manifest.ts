@@ -867,6 +867,14 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'karamja-fare-755-live',
+        harness: 'karamja-fare-755-live.ts',
+        covers: { scripts: ['WalkToBot'], subsystems: ['nav'] },
+        status: 'unvetted',
+        budgetMin: 10,
+        note: 'starts in Brimhaven without coins, earns the Luthas fare and reaches Draynor'
+    },
+    {
         id: 'piratestreasure-231-live',
         harness: 'piratestreasure-231-live.ts',
         covers: { scripts: ['AIOQuester'] },
