@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -18,14 +19,6 @@ export const TG_STAGE = {
 } as const;
 
 const TREE_GNOME_VILLAGE = 'Tree Gnome Village';
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 // Why: every stage keeps the past-tense lines of the ones before it, so the highest match names the stage and no needle may span a colour tag.
 const STAGE_LINES: readonly [string, number][] = [

@@ -413,7 +413,7 @@ Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought throu
 | `site` | string | `"taverley-blue"` | Dragon site — one of: taverley-blue, taverley-black, heroes-blue, gutanoth-blue, brimhaven-iron, brimhaven-steel |
 | `stand` | number (1–6) | `1` | Stand |
 | `safespot1` | tile | `{"x":2901,"z":9809,"level":0}` | Safespot 1 |
-| `safespot2` | tile | `{"x":2900,"z":9809,"level":0}` | Safespot 2 |
+| `safespot2` | tile | `{"x":2904,"z":9808,"level":0}` | Safespot 2 |
 | `safespot3` | tile | `{"x":2901,"z":9810,"level":0}` | Safespot 3 |
 | `meleeTile` | tile | `{"x":2900,"z":9808,"level":0}` | Melee anchor tile |
 | `bankTile` | tile | `{"x":2946,"z":3369,"level":0}` | Bank stand tile |
@@ -725,13 +725,13 @@ Banks at the nearest bank, withdraws unidentified herbs, cleans (identifies) eve
 
 ### HerbloreSecondaries
 
-Collects one herblore secondary — red spiders' eggs, snape grass, eye of newt, chocolate dust (buy+grind), white berries (dragonfire shield), or toad's legs — with food on dangerous routes and a 5k coin cap for shops
+Collects one herblore secondary — red spiders' eggs, snape grass, eye of newt, chocolate dust (buy+grind), white berries (dragonfire shield), toad's legs, or unicorn horn dust (grinds banked horns at the nearest bank) — with food on dangerous routes and a 5k coin cap for shops
 
 - Tags: `herblore`, `secondaries`, `banking`, `shopping`, `loot`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `secondary` | string | `"Red spiders' eggs"` | Secondary — one of: Red spiders' eggs, Snape grass, Eye of newt, Chocolate dust, White berries, Toad's legs |
+| `secondary` | string | `"Red spiders' eggs"` | Secondary — one of: Red spiders' eggs, Snape grass, Eye of newt, Chocolate dust, White berries, Toad's legs, Unicorn horn dust |
 | `loadout` | string | `""` | Loadout — one of:  |
 | `foodWithdraw` | number (0–27) | `10` | Food to withdraw |
 

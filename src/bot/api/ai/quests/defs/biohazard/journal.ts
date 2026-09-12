@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -21,14 +22,6 @@ export const BIO_STAGE = {
 } as const;
 
 const BIOHAZARD = 'Biohazard';
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 // Why: the journal appends rather than replaces, so every line from an earlier stage is still
 // on the page, the most advanced match wins and the order here is the order they are tested.

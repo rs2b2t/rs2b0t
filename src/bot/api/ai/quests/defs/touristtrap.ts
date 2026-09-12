@@ -1,3 +1,4 @@
+import { normalizeJournal as journalText } from '../journalText.js';
 import { actions, reader } from '../../../../adapter/ClientAdapter.js';
 import { EventSignal } from '../../../execution/EventSignal.js';
 import { Execution } from '../../../execution/Execution.js';
@@ -48,14 +49,6 @@ export const TOURIST_TRAP_STAGE = {
     REWARD: 27,
     COMPLETE: 30
 } as const;
-
-function journalText(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 export function parseTouristTrapJournal(lines: readonly string[] | string): number | undefined {
     const text = journalText(lines);

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 export type Finding = { file: string; line: number; check: string; message: string };
 
@@ -113,10 +113,10 @@ export function checkComments(files: string[]): Finding[] {
 const CHECKS = ['doc-cap', 'why-tag', 'comment-block'];
 const DEFAULT_GATE = ['doc-cap'];
 
-function tracked(roots: string[], ext: string): string[] {
-    const out = spawnSync('git', ['ls-files', '--', ...roots], { encoding: 'utf8' });
+function workingFiles(roots: string[], ext: string): string[] {
+    const out = spawnSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', ...roots], { encoding: 'utf8' });
     if (out.status !== 0) throw new Error(`git ls-files failed: ${out.stderr.trim()}`);
-    return out.stdout.split('\n').filter(path => path.endsWith(ext));
+    return [...new Set(out.stdout.split('\0'))].filter(path => path.endsWith(ext) && existsSync(path));
 }
 
 if (import.meta.main) {
@@ -129,10 +129,10 @@ if (import.meta.main) {
     }
     const gate = new Set(names);
 
-    const markdown = tracked(['docs', 'README.md', 'templates'], '.md');
-    const sources = tracked(['src/bot', 'tools', 'test'], '.ts');
+    const markdown = workingFiles(['docs', 'README.md', 'templates'], '.md');
+    const sources = workingFiles(['src/bot', 'tools', 'test'], '.ts');
     if (markdown.length === 0 || sources.length === 0) {
-        console.error(`found no tracked files (markdown=${markdown.length} sources=${sources.length}); run this from the repository root`);
+        console.error(`found no source files (markdown=${markdown.length} sources=${sources.length}); run this from the repository root`);
         process.exit(2);
     }
 

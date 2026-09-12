@@ -1,3 +1,4 @@
+import { blocks, field } from '../lib/content.js';
 import { SLOTS, type ItemRecord, type Slot } from '#/bot/api/loadout/types.js';
 
 export interface ParsedItem {
@@ -7,29 +8,6 @@ export interface ParsedItem {
     consumable?: 'eat' | 'drink';
     cost: number;
     members: boolean;
-}
-
-interface Block { id: string; lines: string[] }
-
-function blocks(text: string): Block[] {
-    const out: Block[] = [];
-    let cur: Block | null = null;
-    for (const raw of text.split('\n')) {
-        const line = raw.trim();
-        const head = /^\[([a-z0-9_]+)\]$/.exec(line);
-        if (head) {
-            cur = { id: head[1]!, lines: [] };
-            out.push(cur);
-        } else if (cur && line.length > 0 && !line.startsWith('//')) {
-            cur.lines.push(line);
-        }
-    }
-    return out;
-}
-
-function field(lines: string[], key: string): string | undefined {
-    const prefix = `${key}=`;
-    return lines.find(l => l.startsWith(prefix))?.slice(prefix.length);
 }
 
 function isSlot(value: string | undefined): value is Slot {

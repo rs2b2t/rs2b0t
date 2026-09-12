@@ -11,13 +11,13 @@ import {
     seedItemsToBank, startScript, type BankSeedItem
 } from './tutorial/harness.js';
 
-declare global {
-    var rs2b0t: { readonly reader: typeof reader; readonly runner: {
+declare const globalThis: {
+    readonly rs2b0t: { readonly reader: typeof reader; readonly runner: {
         readonly bot: AIOQuester | null; readonly state: string; readonly ctx: ScriptContext | null
     } };
-    var __rs2b0t: { readonly Inventory: typeof Inventory; readonly Skills: typeof Skills };
-    var __seedBank: { readonly banked: Readonly<Record<string, number>> } | undefined;
-}
+    readonly __rs2b0t: { readonly Inventory: typeof Inventory; readonly Skills: typeof Skills };
+    readonly __seedBank: { readonly banked: Readonly<Record<string, number>> } | undefined;
+};
 
 const BANK = { x: 3013, z: 3355, level: 0 } as const;
 const QP = [

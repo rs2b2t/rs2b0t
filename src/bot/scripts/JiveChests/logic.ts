@@ -7,9 +7,8 @@ export const PACK = 28;
 /** What the chest gives that is not worth carrying home. */
 export const JUNK: readonly string[] = ['Raw swordfish', 'Body rune', 'Spinach roll'];
 
-// Why: forceapproach is a BLOCK mask in the engine, so the chest's forceapproach=north is the one side it cannot be used from, and a wall loc sits on that tile anyway. West and south are the open sides; west is on the chest's own row inside the nook.
 /** The chest sits at (2914, 3452); this is the tile it is opened from. */
-export const CHEST_STAND = new Tile(2913, 3452, 0);
+export const CHEST_STAND = new Tile(2914, 3451, 0);
 export const CHEST = 'Closed chest';
 
 /** Keys a trip carries. */

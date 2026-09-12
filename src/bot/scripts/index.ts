@@ -602,7 +602,7 @@ ScriptRegistry.register({
 ScriptRegistry.register({
     name: 'HerbloreSecondaries',
     description:
-        "Collects one herblore secondary — red spiders' eggs, snape grass, eye of newt, chocolate dust (buy+grind), white berries (dragonfire shield), or toad's legs — with food on dangerous routes and a 5k coin cap for shops",
+        "Collects one herblore secondary — red spiders' eggs, snape grass, eye of newt, chocolate dust (buy+grind), white berries (dragonfire shield), toad's legs, or unicorn horn dust (grinds banked horns at the nearest bank) — with food on dangerous routes and a 5k coin cap for shops",
     category: 'Herblore',
     tags: ['herblore', 'secondaries', 'banking', 'shopping', 'loot'],
     settingsSchema: HERBLORE_SECONDARIES_SETTINGS,

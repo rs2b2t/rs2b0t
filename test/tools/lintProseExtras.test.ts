@@ -1,7 +1,8 @@
 import { expect, test } from 'bun:test';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { checkComments, checkDocCap } from '../../tools/lint-prose-extras.js';
 
 function fixture(name: string, body: string): string {
@@ -219,4 +220,31 @@ test('a mixed block of tagged and untagged lines is still a comment block', () =
 test('a lint directive is never reported', () => {
     const path = fixture('directive.ts', '// eslint-disable-next-line no-restricted-imports -- the adapter is not ready\n// @ts-expect-error upstream types are wrong because the overload is missing\n// prettier-ignore\nexport const a = 1;\n');
     expect(checkComments([path])).toEqual([]);
+});
+
+test('CLI skips deleted paths and checks untracked files while respecting ignores', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'prose-cli-'));
+    try {
+        mkdirSync(join(dir, 'docs'));
+        mkdirSync(join(dir, 'tools'));
+        writeFileSync(join(dir, 'README.md'), '# Project\n');
+        writeFileSync(join(dir, 'docs/deleted.md'), 'line\n'.repeat(151));
+        writeFileSync(join(dir, 'tools/existing.ts'), 'export const value = 1;\n');
+        writeFileSync(join(dir, '.gitignore'), 'docs/ignored.md\n');
+        execFileSync('git', ['init', '-q', dir]);
+        execFileSync('git', ['-C', dir, 'add', '.']);
+        rmSync(join(dir, 'docs/deleted.md'));
+        writeFileSync(join(dir, 'docs/new file.md'), 'line\n'.repeat(151));
+        writeFileSync(join(dir, 'docs/ignored.md'), 'line\n'.repeat(151));
+        writeFileSync(join(dir, 'tools/new.ts'), '// one\n// two\n// three\nexport const value = 1;\n');
+        const result = spawnSync(process.execPath, [resolve(import.meta.dir, '../../tools/lint-prose-extras.ts')], { cwd: dir, encoding: 'utf8' });
+        expect(result.status).toBe(1);
+        expect(result.stderr).toBe('');
+        expect(result.stdout).toContain('docs/new file.md:151');
+        expect(result.stdout).toContain('tools/new.ts:1');
+        expect(result.stdout).not.toContain('deleted.md');
+        expect(result.stdout).not.toContain('ignored.md');
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
 });

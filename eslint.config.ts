@@ -46,7 +46,7 @@ export default defineConfig([
 
     // Why: the ported 2004 client is a frozen port that swallows exceptions faithfully, so an empty catch there is intent.
     {
-        files: ['src/client/**/*.ts', 'src/dash3d/**/*.ts', 'src/graphics/**/*.ts', 'src/mapview/**/*.ts', 'src/config/**/*.ts', 'src/io/**/*.{ts,js}', 'src/sound/**/*.ts', 'src/datastruct/**/*.ts', 'src/wordfilter/**/*.ts'],
+        files: ['src/client/**/*.ts'],
         rules: {
             'no-empty': ['error', { allowEmptyCatch: true }]
         }

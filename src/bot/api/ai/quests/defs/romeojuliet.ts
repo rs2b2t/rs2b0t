@@ -1,3 +1,4 @@
+import { normalizeJournal as journalText } from '../journalText.js';
 import { actions, reader } from '../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Inventory } from '../../../inventory/Inventory.js';
@@ -59,14 +60,6 @@ const BERRY_RESPAWN_MS = 70_000;
 interface ExactItem {
     readonly name: string;
     readonly id: number;
-}
-
-function journalText(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
 }
 
 /**

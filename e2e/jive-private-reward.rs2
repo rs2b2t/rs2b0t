@@ -1,0 +1,6 @@
+[proc,trail_clue_hard_reward]
+inv_clear(trail_rewardinv);
+inv_add(trail_rewardinv, 3dose2attack, 3);
+inv_add(trail_rewardinv, 3dose2strength, 3);
+inv_add(trail_rewardinv, 3dose2defense, 3);
+~trail_complete;

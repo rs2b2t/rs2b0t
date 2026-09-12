@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { afterEach, beforeAll, describe, expect, mock, spyOn, test } from 'bun:test';
+import { existsSync, readFileSync } from 'node:fs';
 import { gunzipSync } from 'fflate';
 import { reader, type NpcSnapshot, type WorldTile } from '#/bot/adapter/ClientAdapter.js';
 import { EventSignal } from '#/bot/api/execution/EventSignal.js';
@@ -17,8 +17,7 @@ import { Gather } from '#/bot/scripts/GatheringBot/GatheringBotTasks.js';
 
 afterEach(() => mock.restore());
 
-const finder = new PathFinder(gunzipSync(readFileSync('out/collision.lcnav.gz')));
-loadDefaultNavEdges(finder);
+let finder: PathFinder;
 const north = [[2850, 2976], [2855, 2977], [2860, 2976], [2869, 2977]] as const;
 const camp = FISHING_LOCATIONS.find(location => location.name === 'Shilo Village');
 if (!camp) throw new Error('Missing Shilo camp');
@@ -73,7 +72,12 @@ function fixture(tiles: readonly Tile[]) {
     return { state, click, task: new Gather(bot) };
 }
 
-describe('Shilo stationary river selection', () => {
+describe.skipIf(!existsSync('out/collision.lcnav.gz'))('Shilo stationary river selection (pack-gated)', () => {
+    beforeAll(() => {
+        finder = new PathFinder(gunzipSync(readFileSync('out/collision.lcnav.gz')));
+        loadDefaultNavEdges(finder);
+    });
+
     for (const [x, z] of north) {
         test(`approaches and clicks stationary north NPC ${x},${z} instead of sweeping`, async () => {
             const tile = new Tile(x, z, 0);

@@ -45,6 +45,12 @@ Some clues do not resolve to a location:
 - **Talk anchors** in [`data/talkAnchors.ts`](../../src/bot/api/ai/clues/data/talkAnchors.ts)
   give a starting point for NPCs that move.
 
+## Hard trail preparation
+
+Before starting a hard clue scroll, [`SolveClue.ts`](../../src/bot/api/ai/clues/SolveClue.ts) prepares at the host's initial bank when supplied, or the nearest known bank otherwise. The ready snapshot needs Attack 60, Lost City, an eligible DDS (item id 1231 or 1215), at least one Superantipoison dose and 15 Sharks. It equips the DDS, remembers the original weapon, takes the best available Superantipoison dose and stocks toward 20 Sharks while reserving required tool and teleport slots. A confirmed shortage stays blocked until the kit changes or the host explicitly retries.
+
+The generic bank and Entrana rules remain in force: no reachable known bank blocks a hard trail, while an Entrana clue banks restricted gear and records it for restoration. A held casket without a clue scroll bypasses combat-kit preparation, but a hard casket still follows the reward bank flow before opening.
+
 ## Dig guardians
 
 30 of the hard coordinate digs carry `param=trail_guardian`. The first dig at such
@@ -62,15 +68,19 @@ so the bot cannot ask whether it already killed one. It observes instead:
 if a wizard appears it turns on Protect from Magic, fights, then digs again, all
 inside one step attempt, so a level-108 fight does not consume the retry budget.
 
-The solver does **not** withdraw combat gear; it assumes the account arrives
-equipped and only takes food from the bank. A guardian the server refuses ("It's
-not after you...") belongs to another player, so the fight skips it.
+The 15-Shark threshold gates a new trail or guardian encounter, not a retained fight. An event yield keeps the same `GuardianEncounter`, which may resume below 15 Sharks without another spawn dig while the DDS remains equipped and at least one Shark remains; hard upkeep uses Sharks regardless of the host's food setting, maintains Superantipoison protection and returns `supplies-needed` when the kit is exhausted. Resume revalidates the original guardian by index, id, range and ownership. A missing, replaced, distant or other-player target returns `guardian-lost`, while a witnessed player death returns `dead`; neither starts a fresh guardian attempt.
 
 The fight waits on the tick through `sustainUntil`, which pumps `Sustain` on every
 pass. This is load-bearing: the loop used to park in a single `delayUntil` for the
 fight, so upkeep never ran and the bot traded blows with a level-108 mage
 without ever eating, dying with a full pack of food. Any wait inside a fight has
 to pump, not park.
+
+## Caskets and reward completion
+
+A hard casket uses the preferred preparation bank, or the nearest known bank when none was recorded. Before opening, the solver deposits other items while retaining Sharks, clues and caskets, then tracks the reward manifest across inventory and ground delivery, event yields and a nearby overflow bank trip. Completion is reported only after every manifest item is accounted for and gear banked for preparation or Entrana is restored. A terminal open, manifest, food, pickup or bank failure remains blocked with rewards pending; no automatic retry is promised, so the host must use its explicit retry path.
+
+These mechanics have source-level and automated-suite evidence. Private-server runtime acceptance is pending, so this section does not claim live acceptance.
 
 ## Puzzle boxes
 

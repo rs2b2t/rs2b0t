@@ -13,11 +13,12 @@ import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../geometry/Tile.js';
 import { SAFESPOT_BLIND_MS, bodyOrigin, chaseMode, engageRangeFor, gapTo, holdDue, hurtOnSpot, nextSafespot, noteSighting, retreatAim, retreatDue, settled, type Sighting, type Style } from './logic.js';
-import { huntNames, type DragonSite } from './sites.js';
+import { huntNames, TAVERLEY_BLACK, TAVERLEY_BLUE, type DragonSite } from './sites.js';
 import { waitFed, walkApproach, type JiveHost } from './supply.js';
 
 /** What a fight needs from the bot on top of what supply needs. */
 export interface CombatHost extends JiveHost {
+    readonly fight?: Fight;
     died: boolean;
     targetIdx: number | null;
     countKill(): void;
@@ -134,7 +135,7 @@ function atTile(t: Tile): boolean {
 
 /** Whether an Attack click from `spot` at this body fires without the server walking closer. */
 function sightedFrom(spot: Tile, n: Npc): boolean {
-    const o = bodyOrigin(n.tile(), n.size);
+    const o = bodyOrigin(n.networkTile(), n.size);
     return Reachability.lineOfSight(spot, { x: o.x, z: o.z, level: spot.level }, n.size);
 }
 
@@ -144,8 +145,8 @@ function huntableNear(site: DragonSite, name: string, ours: number | null, radiu
     return Npcs.query()
         .name(name)
         .action(ATTACK)
-        .within(radius)
-        .where(n => site.inArea(n.tile()) && (from === null || sightedFrom(from, n)) && !takenByAnother({
+        .where(n => (from === null ? n.distance() <= radius : gapTo(from, n.networkTile(), n.size) <= radius)
+            && site.inArea(from === null ? n.tile() : n.networkTile()) && (from === null || sightedFrom(from, n)) && !takenByAnother({
             isOurs: n.index === ours,
             inCombat: n.inCombat,
             targetsMe: n.targetsMe(),
@@ -204,12 +205,15 @@ function retreatNeeded(host: CombatHost, site: DragonSite): boolean {
 
 export class Fight implements Task {
     private engaged: number | null = null;
+    private lootTarget: number | null = null;
     /** What the engaged npc is called, so a site that fills downtime names the thing it killed. */
     private engagedName = '';
     private seenAt = 0;
     private engagedAt = 0;
     private engagedHealth = -1;
     private lastHp = -1;
+    private watchedAnchor: Tile | null = null;
+    private unattackableSince: number | null = null;
     private blindSince = 0;
     private polledAt = 0;
     private diagAt = 0;
@@ -223,6 +227,32 @@ export class Fight implements Task {
 
     constructor(private readonly host: CombatHost, private readonly site: DragonSite) {}
 
+    blocksLoot(): boolean {
+        if (!Game.sceneReady()) {
+            return true;
+        }
+        if (this.engaged !== null) {
+            return true;
+        }
+        if (this.lootTarget !== null && !stillThere(this.site, this.lootTarget)) {
+            this.lootTarget = null;
+        }
+        return this.lootTarget !== null;
+    }
+
+    reset(): void {
+        this.clearTarget();
+        this.lootTarget = null;
+        this.interruptWatch();
+    }
+
+    interruptWatch(): void {
+        this.lastHp = -1;
+        this.watchedAnchor = null;
+        this.unattackableSince = null;
+        this.blindSince = performance.now();
+    }
+
     validate(): boolean {
         const onSpot = atTile(this.anchor());
         this.watch(onSpot);
@@ -232,7 +262,7 @@ export class Fight implements Task {
         if (holdsAnchor(this.site, this.host.style()) && !onSpot) {
             return false;
         }
-        return this.field(FIELD_RADIUS).length > 0 || this.blindDue();
+        return this.engaged !== null || this.field(FIELD_RADIUS).length > 0 || this.alternate() !== undefined || this.blindDue();
     }
 
     // Why: the blind clock belongs to the tile the bot is standing on, and this task is skipped whenever anything above it runs, so a long gap between polls is time spent walking in, looting or banking rather than time the tile showed nothing.
@@ -240,9 +270,11 @@ export class Fight implements Task {
     /** Stamp the poll, restarting the blind clock unless the bot has been on the tile since the last poll. */
     private watch(onSpot: boolean): void {
         const now = performance.now();
-        if (!onSpot || now - this.polledAt > HOLD_GAP_MS) {
-            this.blindSince = now;
+        const anchor = this.anchor();
+        if (!onSpot || !this.watchedAnchor?.equals(anchor) || now - this.polledAt > HOLD_GAP_MS) {
+            this.interruptWatch();
         }
+        this.watchedAnchor = onSpot ? anchor : null;
         this.polledAt = now;
     }
 
@@ -259,11 +291,10 @@ export class Fight implements Task {
         const style = this.host.style();
         const name = label(this.site);
         this.host.setStatus(`fighting ${name}s`);
-        // Why: hp lost between two calls was lost looting or walking, so only two readings taken inside one call say anything about the tile.
-        this.lastHp = -1;
         const deadline = performance.now() + FIGHT_MS;
         for (let pass = 0; pass < FIGHT_PASSES && performance.now() < deadline; pass++) {
-            if (EventSignal.pending() || this.host.died || ChatDialog.canContinue()) {
+            if (!Game.sceneReady() || EventSignal.pending() || this.host.died || ChatDialog.canContinue()) {
+                this.interruptWatch();
                 return;
             }
             // Why: eating in dragonfire loses the race, so the fight hands the loop back at the retreat line the same way the task order puts Retreat above Eat.
@@ -289,7 +320,7 @@ export class Fight implements Task {
             if (step === 'moved') {
                 continue;
             }
-            // Why: the drop rots in the two minutes this loop may hold, and LootCorpse, BuryBones and SolveClue all sit below Fight in the list, so a kill ends the call and the next pass picks up the next dragon.
+            // Why: completion yields to the higher-priority loot tasks before acquiring another dragon.
             if (this.settleKill(name)) {
                 return;
             }
@@ -297,14 +328,25 @@ export class Fight implements Task {
                 return;
             }
 
+            if (this.site.key === TAVERLEY_BLUE.key && style === 'range' && this.engaged !== null) {
+                if (this.field(FIELD_RADIUS).some(n => n.index === this.engaged)) {
+                    this.unattackableSince = null;
+                } else {
+                    this.unattackableSince ??= performance.now();
+                    if (performance.now() - this.unattackableSince >= SAFESPOT_BLIND_MS) {
+                        this.skip.set(this.engaged, performance.now() + LEASH_SKIP_MS);
+                        this.clearTarget();
+                    }
+                }
+            }
             const field = this.field(FIELD_RADIUS);
             for (const n of field) {
-                this.seen.set(n.index, noteSighting(this.seen.get(n.index), n.tile(), performance.now()));
+                this.seen.set(n.index, noteSighting(this.seen.get(n.index), usesSafespot(style) ? n.networkTile() : n.tile(), performance.now()));
             }
             const facing = retaliationTarget(this.site);
             // Why: a chase runs with retaliate off, so the face is always its own target and adopting it re-took a dragon the stall skip had dropped.
             if (holdsAnchor(this.site, style) && facing !== null && facing.index !== this.engaged) {
-                const gap = gapTo(this.anchor(), facing.tile(), facing.size);
+                const gap = gapTo(this.anchor(), usesSafespot(style) ? facing.networkTile() : facing.tile(), facing.size);
                 // Why: a biter the field already holds is one the loop can fight from the tile; one it does not, parked a tile past the radius, walks the bot off if the client is left chasing it and drops out again next pass, so the engaged dragon is clicked again at once to cancel the walk.
                 if (field.some(n => n.index === facing.index)) {
                     const shown = (facing.name ?? name).toLowerCase();
@@ -363,8 +405,8 @@ export class Fight implements Task {
             // Why: with two dragons in view the nearest one changes as they shuffle, and a pick that follows it splits the casts between them; the one already engaged, by click or by retaliation, keeps the fight until it is down or gone.
             const target = (this.engaged === null ? undefined : field.find(n => n.index === this.engaged && (this.skip.get(n.index) ?? 0) < now))
                 ?? field
-                    .filter(n => (this.skip.get(n.index) ?? 0) < now && (!usesSafespot(style) || settled(this.seen.get(n.index), now, SETTLE_MS)))
-                    .sort((a, b) => a.distance() - b.distance())[0];
+                    .filter(n => (this.skip.get(n.index) ?? 0) < now && (!usesSafespot(style) || this.inReach(n) || settled(this.seen.get(n.index), now, SETTLE_MS)))
+                    .sort((a, b) => (holdsAnchor(this.site, style) ? Number(this.inReach(b)) - Number(this.inReach(a)) : 0) || a.distance() - b.distance())[0];
             if (!target) {
                 this.explainEmptyField(now);
                 await this.idle();
@@ -391,6 +433,20 @@ export class Fight implements Task {
         return anchorFor(this.site, this.host.style(), this.host.safespotIndex());
     }
 
+    private alternate(): number | undefined {
+        if (this.site.key !== TAVERLEY_BLACK.key || this.host.style() !== 'range' || !atTile(this.anchor()) || this.blocksLoot()) {
+            return undefined;
+        }
+        const ready = (spot: Tile): boolean => adultsNear(this.site, null, FIELD_RADIUS, spot)
+            .some(n => gapTo(spot, n.networkTile(), n.size) <= engageRangeFor('range') && (this.skip.get(n.index) ?? 0) < performance.now());
+        if (ready(this.anchor())) {
+            return undefined;
+        }
+        return this.site.safespots.map((spot, index) => ({ spot, index }))
+            .filter(({ spot }) => TAVERLEY_BLACK.safespots.some(existing => existing.equals(spot)) && ready(spot))
+            .sort((a, b) => a.spot.distanceTo(this.anchor()) - b.spot.distanceTo(this.anchor()))[0]?.index;
+    }
+
     // Why: the Brimhaven run stood a dragon's breath away from one for two minutes with no engage line, and nothing said which filter was dropping it; the lines are joined, since the harness shows only a few per poll.
 
     /** One Verbose line naming every adult near the stand and which of the field's filters it fails. */
@@ -406,7 +462,7 @@ export class Fight implements Task {
             return;
         }
         const rows = near.map(n => {
-            const t = n.tile();
+            const t = usesSafespot(this.host.style()) ? n.networkTile() : n.tile();
             const seen = this.seen.get(n.index);
             return `${n.index}@${t.x},${t.z} gap ${gapTo(spot, t, n.size)} sight ${sightedFrom(spot, n) ? 'y' : 'n'} combat ${n.inCombat ? 'y' : 'n'} me ${n.targetsMe() ? 'y' : 'n'} other ${n.targetsAnotherPlayer() ? 'y' : 'n'} settled ${settled(seen, now, SETTLE_MS) ? 'y' : 'n'} skip ${(this.skip.get(n.index) ?? 0) > now ? 'y' : 'n'}`;
         });
@@ -414,25 +470,32 @@ export class Fight implements Task {
     }
 
     private field(radius: number): Npc[] {
+        if (this.site.key === TAVERLEY_BLUE.key && this.host.style() === 'range') {
+            return adultsNear(this.site, this.engaged, Math.min(radius, engageRangeFor('range')), this.anchor())
+                .filter(n => (this.engaged === null || n.index === this.engaged) && (this.skip.get(n.index) ?? 0) < performance.now());
+        }
         return adultsNear(this.site, this.engaged, radius, usesSafespot(this.host.style()) ? this.anchor() : null);
     }
 
     /** Whether an Attack click from the anchor lands without the server walking the bot closer. */
     private inReach(n: Npc): boolean {
-        return gapTo(this.anchor(), n.tile(), n.size) <= engageRangeFor(this.host.style());
+        return gapTo(this.anchor(), usesSafespot(this.host.style()) ? n.networkTile() : n.tile(), n.size) <= engageRangeFor(this.host.style());
     }
 
     private setTarget(idx: number): void {
         if (idx !== this.engaged) {
             this.damagedAt = performance.now();
+            this.unattackableSince = null;
         }
         this.engaged = idx;
+        this.lootTarget = idx;
         this.host.targetIdx = idx;
         this.seenAt = performance.now();
     }
 
     private clearTarget(): void {
         this.engaged = null;
+        this.unattackableSince = null;
         this.reissues = 0;
         this.host.targetIdx = null;
         this.engagedHealth = -1;
@@ -440,7 +503,7 @@ export class Fight implements Task {
 
     // Why: a target index that vanished while the loop was away at the bank is a respawn rather than a kill, so a vanish only counts near the last sighting.
 
-    /** True when the engaged dragon went down on this pass. */
+    /** True when the pending engagement ended, including a stale disappearance. */
     private settleKill(name: string): boolean {
         if (this.engaged === null) {
             return false;
@@ -454,8 +517,8 @@ export class Fight implements Task {
             this.host.countKill();
             this.host.log(`${this.engagedName || name} ${this.engaged} down`);
         }
-        this.clearTarget();
-        return killed;
+        this.reset();
+        return true;
     }
 
     // Why: the safespots are derived as melee-proof, so a hit landing there means the derivation missed an angle and a blind stretch means a dragon body is parked across it.
@@ -472,6 +535,15 @@ export class Fight implements Task {
             return 'held';
         }
         const index = this.host.safespotIndex();
+        const alternate = this.alternate();
+        if (alternate !== undefined) {
+            this.host.setSafespotIndex(alternate);
+            this.blindSince = performance.now();
+            return (await this.walkBack()) ? 'moved' : 'stuck';
+        }
+        if (!hurt && style === 'range' && (this.site.key === TAVERLEY_BLACK.key || this.site.key === TAVERLEY_BLUE.key) && this.blocksLoot()) {
+            return 'held';
+        }
         if (this.field(FIELD_RADIUS).some(n => this.inReach(n))) {
             this.blindSince = performance.now();
         }
@@ -497,6 +569,7 @@ export class Fight implements Task {
         if (atTile(spot)) {
             return true;
         }
+        this.interruptWatch();
         const where = spotName(this.host.style(), this.host.safespotIndex());
         this.host.setStatus(`returning to ${where}`);
         for (let i = 0; i < HOP_ATTEMPTS && !atTile(spot) && !EventSignal.pending(); i++) {
@@ -534,7 +607,12 @@ export class Fight implements Task {
             if (!atTile(this.anchor()) && !(await this.walkBack())) {
                 return true;
             }
-            const dragon = this.field(FIELD_RADIUS).find(n => n.index === idx);
+            const field = this.field(FIELD_RADIUS);
+            if (this.engaged === null && field.some(n => n.index !== idx && this.inReach(n) && (this.skip.get(n.index) ?? 0) < performance.now())) {
+                this.host.targetIdx = null;
+                return true;
+            }
+            const dragon = field.find(n => n.index === idx);
             if (!dragon || this.inReach(dragon)) {
                 return true;
             }
@@ -547,6 +625,12 @@ export class Fight implements Task {
     /** Send the attack and watch for the drag off the safespot. False means the click was refused. */
     private async engage(target: Npc, name: string): Promise<boolean> {
         const style = this.host.style();
+        await this.host.armSpecial?.();
+        const current = usesSafespot(style) ? this.field(FIELD_RADIUS).find(n => n.index === target.index && n.id === target.id && n.name === target.name) : target;
+        if (!current || (usesSafespot(style) && (!Game.sceneReady() || EventSignal.pending() || this.host.died || current.targetsAnotherPlayer() || !atTile(this.anchor()) || !this.inReach(current) || (this.skip.get(current.index) ?? 0) > performance.now()))) {
+            await this.idle();
+            return false;
+        }
         // Why: a site that fills downtime kills more than one kind of thing, and a line that names the site's target for all of them reads as the dragon being fought when it is the demon.
         const shown = (target.name ?? name).toLowerCase();
         this.engagedName = shown;
@@ -558,11 +642,10 @@ export class Fight implements Task {
             }
         } else {
             this.reissues = 0;
-            this.host.log(`engaging ${shown} ${target.index} at ${target.tile()} (gap ${gapTo(this.anchor(), target.tile(), target.size)})`);
+            const tile = usesSafespot(style) ? current.networkTile() : current.tile();
+            this.host.log(`engaging ${shown} ${target.index} at ${tile} (gap ${gapTo(this.anchor(), tile, current.size)})`);
         }
-        // Why: arming is one-shot and the next attack spends it, so the bar is clicked against the swing that is about to go out rather than on an idle tick that may never attack.
-        await this.host.armSpecial?.();
-        if (!(await target.interact(ATTACK))) {
+        if (!(await current.interact(ATTACK))) {
             this.skip.set(target.index, performance.now() + REFUSED_SKIP_MS);
             this.host.log(`${name} ${target.index} refused the attack click. Skipping it for ${REFUSED_SKIP_MS / 1000}s.`);
             await this.idle();
@@ -602,6 +685,7 @@ export class Retreat implements Task {
     }
 
     async execute(): Promise<void> {
+        this.host.fight?.interruptWatch();
         const here = Game.tile();
         if (here === null) {
             return;
@@ -649,6 +733,7 @@ export class HoldSafespot implements Task {
     }
 
     async execute(): Promise<void> {
+        this.host.fight?.interruptWatch();
         const style = this.host.style();
         const index = this.host.safespotIndex();
         const spot = this.spot();
@@ -684,6 +769,7 @@ export class WalkToSpot implements Task {
     }
 
     async execute(): Promise<void> {
+        this.host.fight?.interruptWatch();
         this.host.setStatus('walking to the fight spot');
         const log = (m: string): void => this.host.log(`  ${m}`);
         const spot = this.anchor();

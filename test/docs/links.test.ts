@@ -3,8 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { Glob } from 'bun';
 import { extractLinks, extractPointers, extractRepoPaths, headingAnchors, resolveRelative } from '../../tools/lib/docLinks.js';
 
-// these two hold example pointers as test fixtures, not live references
-const FIXTURES = new Set(['test/tools/docLinks.test.ts', 'test/docs/links.test.ts']);
+const FIXTURES = new Set(['test/tools/docLinks.test.ts', 'test/tools/lintProseExtras.test.ts', 'test/docs/links.test.ts']);
 
 // `git check-ignore` is the authority on what is a build artifact, so the rule
 // lives in .gitignore rather than in a second hand-maintained list here.
@@ -23,7 +22,7 @@ function isGitIgnored(path: string): boolean {
 const manualPages = (): string[] => [...new Glob('docs/**/*.md').scanSync('.')].filter(p => !isGitIgnored(p)).sort();
 
 const DOCS = ['README.md', 'desktop/README.md', ...manualPages()].filter(existsSync).sort();
-const SOURCES = [...new Glob('{src,tools,test,packages}/**/*.{ts,sh}').scanSync('.')].filter(f => !f.startsWith('src/3rdparty/') && !FIXTURES.has(f)).sort();
+const SOURCES = [...new Glob('{src,tools,test,packages}/**/*.{ts,sh}').scanSync('.')].filter(f => !f.startsWith('src/client/3rdparty/') && !FIXTURES.has(f)).sort();
 
 const anchorCache = new Map<string, string[]>();
 function anchorsOf(page: string): string[] {

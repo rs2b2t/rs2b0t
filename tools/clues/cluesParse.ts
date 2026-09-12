@@ -1,3 +1,4 @@
+import { blocks } from '../lib/content.js';
 import type { NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 import type { ClueRow, ClueType } from '#/bot/api/ai/clues/types.js';
 
@@ -41,27 +42,6 @@ export interface BuildInput {
 export interface ClueDb {
     db: Record<number, ClueRow>;
     caskets: Record<number, string>;
-}
-
-interface Block {
-    id: string;
-    lines: string[];
-}
-
-function blocks(text: string): Block[] {
-    const out: Block[] = [];
-    let cur: Block | null = null;
-    for (const raw of text.split('\n')) {
-        const line = raw.trim();
-        const head = /^\[([a-z0-9_]+)\]$/.exec(line);
-        if (head) {
-            cur = { id: head[1], lines: [] };
-            out.push(cur);
-        } else if (cur && line.length > 0 && !line.startsWith('//')) {
-            cur.lines.push(line);
-        }
-    }
-    return out;
 }
 
 function param(lines: string[], key: string): string | undefined {

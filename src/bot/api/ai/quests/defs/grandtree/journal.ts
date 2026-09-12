@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 // docs/reference/quest-engine.md#how-modules-should-read-progress
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
@@ -5,14 +6,6 @@ import { Quests } from '../../../../ui/questlog/Quests.js';
 import { GT_STAGE } from './areas.js';
 
 export const QUEST = 'The Grand Tree';
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 // Why: every finished stage stays on the page as a `@str@` line, and several of them are word-for-word the `@dbl@` line of the stage before, so the needles are matched newest-first.
 // Why: none of them spans a colour tag, because stripping one leaves a space where it stood.

@@ -1,21 +1,9 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { FC_QUEST, FC_STAGE } from './areas.js';
-
-/**
- * `@dbl@`-style colour tags become a space, so a needle must never span a tag
- * boundary that sits next to punctuation.
- * @see docs/reference/quest-engine.md#quest-state
- */
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 /**
  * Newest marker first: crest_journal.rs2 appends, so every earlier stage's prose

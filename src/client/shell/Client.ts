@@ -442,6 +442,7 @@ export class Client extends GameShell {
     private statXP: Int32Array = new Int32Array(Skill.count);
     /** Login attempt that supplied each stat slot; prevents stale relog data from becoming ready. */
     private statSessionGeneration: number = 0;
+    private modalCloseGeneration: number = 0;
     private statSeenGeneration: Int32Array = new Int32Array(Skill.count);
     /** Distinguishes a complete empty inventory from stale, partial, or stopped transmission. */
     private invUpdateState: Map<number, { generation: number; fullGeneration: number; transmitting: boolean }> = new Map();
@@ -6161,6 +6162,7 @@ export class Client extends GameShell {
             }
 
             if (this.ptype === ServerProt.IF_CLOSE) {
+                this.modalCloseGeneration++;
                 if (this.sideModalId !== -1) {
                     this.sideModalId = -1;
                     this.redrawSide = true;

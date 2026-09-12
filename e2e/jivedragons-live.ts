@@ -94,7 +94,7 @@ const BLUE_SITE = {
     quest: null as { name: string; value: number } | null,
     antipoison: false,
     lair: { minX: 2888, maxX: 2923, minZ: 9769, maxZ: 9816, level: 0 },
-    safespots: [{ x: 2901, z: 9809, level: 0 }, { x: 2900, z: 9809, level: 0 }, { x: 2901, z: 9810, level: 0 }],
+    safespots: [{ x: 2901, z: 9809, level: 0 }, { x: 2904, z: 9808, level: 0 }, { x: 2901, z: 9810, level: 0 }],
     meleeAnchor: { x: 2900, z: 9808, level: 0 },
     target: 'Blue dragon',
     baby: 'Baby blue dragon',

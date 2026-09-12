@@ -1,4 +1,5 @@
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { filesUnder } from '../lib/content.js';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -8,12 +9,6 @@ const DROP_DIR = join(CONTENT, 'scripts', 'drop tables', 'scripts');
 // Why: the King Black Dragon's table is an ai_queue3 block inside its area script, not a file under drop tables.
 const AREA_DIR = join(CONTENT, 'scripts', 'areas');
 
-function filesUnder(root: string, ext: string): string[] {
-    return (readdirSync(root, { recursive: true }) as string[])
-        .filter(f => f.endsWith(ext))
-        .map(f => join(root, f))
-        .sort();
-}
 
 function loadConfigNames(ext: string, extra?: (cur: string, line: string) => void): Map<string, string> {
     const files = filesUnder(join(CONTENT, 'scripts'), ext);

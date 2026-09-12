@@ -19,11 +19,12 @@ type SecondaryId =
     | 'eye_of_newt'
     | 'chocolate_dust'
     | 'white_berries'
-    | 'toads_legs';
+    | 'toads_legs'
+    | 'unicorn_horn_dust';
 
-type SecondaryMode = 'loot' | 'buy' | 'buy_grind' | 'loot_process';
+type SecondaryMode = 'loot' | 'buy' | 'buy_grind' | 'loot_process' | 'bank_grind';
 
-interface TileRef {
+export interface TileRef {
     x: number;
     z: number;
     level: number;
@@ -34,11 +35,11 @@ export interface SecondaryDef {
     /** Inventory / ground display name. */
     name: string;
     mode: SecondaryMode;
-    /** Where to stand / search. */
-    anchor: TileRef;
+    /** Where to stand / search. Absent on bank_grind, which lives at the nearest bank. */
+    anchor?: TileRef;
     searchRadius: number;
-    bank: TileRef;
-    bankName: string;
+    bank?: TileRef;
+    bankName?: string;
     /** Dangerous route, withdraw food. */
     takeFood: boolean;
     /** Needs anti-dragon shield equipped or carried. */
@@ -133,6 +134,16 @@ export const SECONDARIES: readonly SecondaryDef[] = [
         takeFood: false,
         needShield: false,
         sourceName: 'Swamp toad'
+    },
+    {
+        id: 'unicorn_horn_dust',
+        name: 'Unicorn horn dust',
+        mode: 'bank_grind',
+        searchRadius: 6,
+        takeFood: false,
+        needShield: false,
+        toolName: 'Pestle and mortar',
+        grindFrom: 'Unicorn horn'
     }
 ];
 
@@ -141,6 +152,10 @@ export const SECONDARY_OPTIONS = SECONDARIES.map(s => s.name);
 export function secondaryByName(name: string): SecondaryDef | null {
     const want = name.trim().toLowerCase();
     return SECONDARIES.find(s => s.name.toLowerCase() === want || s.id === want) ?? null;
+}
+
+export function grinds(def: SecondaryDef): boolean {
+    return def.mode === 'buy_grind' || def.mode === 'bank_grind';
 }
 
 export function secondaryById(id: SecondaryId): SecondaryDef {
@@ -229,8 +244,13 @@ export function needsRestock(opts: {
     hasShield: boolean;
     hasTool: boolean;
     packFull: boolean;
+    grindLeft: number;
 }): boolean {
-    if (opts.packFull) {
+    const midGrind = grinds(opts.def) && opts.grindLeft > 0;
+    if (opts.packFull && !midGrind) {
+        return true;
+    }
+    if (opts.def.mode === 'bank_grind' && opts.grindLeft === 0) {
         return true;
     }
     // only restock food when empty, mid-trip eating is fine until zero

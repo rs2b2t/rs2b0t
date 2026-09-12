@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { loadQuestRecords } from '#/bot/api/ai/quests/data/index.js';
+import { QUESTS } from '#/bot/api/ai/quests/data/quests.js';
 import { evaluate, evaluateAll } from '#/bot/api/ai/quests/EligibilityEvaluator.js';
 import type { QuestRecord, PlayerState, BankInventorySnapshot } from '#/bot/api/ai/quests/types.js';
 
@@ -71,7 +71,7 @@ test('a started quest is still blocked by requirements, which are never consumed
 });
 
 test("the knight's sword cannot start below Cooking 10", () => {
-    const record = loadQuestRecords().find(q => q.id === 'squire')!;
+    const record = QUESTS.find(q => q.id === 'squire')!;
     const lowCooking = player({ skillLevels: new Map([['mining', 10], ['cooking', 9]]) });
     expect(evaluate(record, lowCooking, snap(), 'notStarted')).toMatchObject({
         status: 'BLOCKED',

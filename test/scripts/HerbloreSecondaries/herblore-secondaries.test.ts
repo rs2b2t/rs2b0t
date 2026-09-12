@@ -5,6 +5,7 @@ import {
     SHIELD_NAME,
     SHOP_COIN_CAP,
     foodHealAmount,
+    grinds,
     keepOnDeposit,
     needsRestock,
     secondaryByName,
@@ -17,7 +18,7 @@ describe('HerbloreSecondaries catalog', () => {
     test('covers every secondary the issue names', () => {
         const ids = SECONDARIES.map(s => s.id).sort();
         expect(ids as string[]).toEqual(
-            ['chocolate_dust', 'eye_of_newt', 'red_spiders_eggs', 'snape_grass', 'toads_legs', 'white_berries']
+            ['chocolate_dust', 'eye_of_newt', 'red_spiders_eggs', 'snape_grass', 'toads_legs', 'unicorn_horn_dust', 'white_berries']
         );
     });
 
@@ -25,26 +26,26 @@ describe('HerbloreSecondaries catalog', () => {
         const w = secondaryById('white_berries');
         expect(w.needShield).toBe(true);
         expect(w.takeFood).toBe(true);
-        expect(w.anchor.z).toBeGreaterThan(3700); // wilderness
+        expect(w.anchor?.z).toBeGreaterThan(3700); // wilderness
     });
 
     test('red spider eggs sit in the Edgeville dungeon', () => {
         const e = secondaryById('red_spiders_eggs');
-        expect(e.anchor.z).toBeGreaterThan(9900);
+        expect(e.anchor?.z).toBeGreaterThan(9900);
         expect(e.takeFood).toBe(true);
     });
 
     test('snape grass is west of the Crafting Guild', () => {
         const s = secondaryById('snape_grass');
-        expect(s.anchor.x).toBeGreaterThan(2900);
-        expect(s.anchor.x).toBeLessThan(2930);
+        expect(s.anchor?.x).toBeGreaterThan(2900);
+        expect(s.anchor?.x).toBeLessThan(2930);
     });
 
     test('toads process swamp toads into legs at the Grand Tree bank', () => {
         const t = secondaryById('toads_legs');
         expect(t.mode).toBe('loot_process');
         expect(t.sourceName).toBe('Swamp toad');
-        expect(t.bank.level).toBe(1);
+        expect(t.bank?.level).toBe(1);
     });
 
     test('chocolate dust buys bars and grinds with a pestle', () => {
@@ -54,6 +55,25 @@ describe('HerbloreSecondaries catalog', () => {
         expect(c.toolName).toBe('Pestle and mortar');
         expect(c.shopNpc).toBe('Wydin');
         expect(c.toolShopNpc).toBe('Jatix');
+    });
+
+    test('unicorn horn dust grinds banked horns at whichever bank is nearest', () => {
+        const u = secondaryById('unicorn_horn_dust');
+        expect(u.mode).toBe('bank_grind');
+        expect(u.grindFrom).toBe('Unicorn horn');
+        expect(u.toolName).toBe('Pestle and mortar');
+        expect(u.takeFood).toBe(false);
+        expect(u.bank).toBeUndefined();
+        expect(u.anchor).toBeUndefined();
+        expect(u.shopNpc).toBeUndefined();
+        expect(u.toolShopNpc).toBeUndefined();
+    });
+
+    test('grinds covers both grind modes and nothing else', () => {
+        expect(grinds(secondaryById('chocolate_dust'))).toBe(true);
+        expect(grinds(secondaryById('unicorn_horn_dust'))).toBe(true);
+        expect(grinds(secondaryById('eye_of_newt'))).toBe(false);
+        expect(grinds(secondaryById('toads_legs'))).toBe(false);
     });
 
     test('secondaryByName resolves display names', () => {
@@ -122,7 +142,8 @@ describe('HerbloreSecondaries decisions', () => {
                 coins: 0,
                 hasShield: true,
                 hasTool: true,
-                packFull: false
+                packFull: false,
+                grindLeft: 0
             })
         ).toBe(true);
         expect(
@@ -133,9 +154,32 @@ describe('HerbloreSecondaries decisions', () => {
                 coins: 0,
                 hasShield: true,
                 hasTool: true,
-                packFull: false
+                packFull: false,
+                grindLeft: 0
             })
         ).toBe(false);
+    });
+
+    test('bank grind restocks when the horns run out or the pack fills with dust, never for coins', () => {
+        const u = secondaryById('unicorn_horn_dust');
+        const base = { def: u, foodCount: 0, foodWant: 0, coins: 0, hasShield: false, hasTool: true };
+        expect(needsRestock({ ...base, packFull: false, grindLeft: 0 })).toBe(true);
+        expect(needsRestock({ ...base, packFull: true, grindLeft: 0 })).toBe(true);
+        expect(needsRestock({ ...base, packFull: false, grindLeft: 5 })).toBe(false);
+    });
+
+    test('a full pack mid-grind keeps grinding instead of banking one dust at a time', () => {
+        const u = secondaryById('unicorn_horn_dust');
+        const c = secondaryById('chocolate_dust');
+        const base = { foodCount: 0, foodWant: 0, coins: 500, hasShield: false, hasTool: true, packFull: true };
+        expect(needsRestock({ ...base, def: u, grindLeft: 26 })).toBe(false);
+        expect(needsRestock({ ...base, def: c, grindLeft: 3 })).toBe(false);
+        expect(needsRestock({ ...base, def: secondaryById('toads_legs'), grindLeft: 0 })).toBe(true);
+    });
+
+    test('bank grind keeps the pestle and the horns, banks dust and stray coins', () => {
+        const keep = keepOnDeposit(secondaryById('unicorn_horn_dust'), 'Lobster');
+        expect(keep).toEqual(['Pestle and mortar', 'Unicorn horn']);
     });
 });
 

@@ -65,10 +65,8 @@ describe('decide', () => {
 });
 
 describe('the chest stand', () => {
-    // Why: forceapproach is a block mask, so the chest's forceapproach=north names the one side it cannot be used from, and a wall loc sits on that tile too; the stand is the open tile west of it.
-    test('is west of the chest at (2914, 3452), never the blocked north side', () => {
-        expect([CHEST_STAND.x, CHEST_STAND.z, CHEST_STAND.level]).toEqual([2913, 3452, 0]);
-        expect(CHEST_STAND.z).not.toBe(3453);
+    test('is the requested player stand tile south of the chest at (2914, 3452)', () => {
+        expect([CHEST_STAND.x, CHEST_STAND.z, CHEST_STAND.level]).toEqual([2914, 3451, 0]);
     });
 
     test('the key is the one the chest takes', () => {

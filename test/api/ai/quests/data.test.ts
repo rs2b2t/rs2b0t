@@ -1,20 +1,20 @@
 import { expect, test } from 'bun:test';
 
 import { QUEST_ROCK_TYPES, ROCK_OPTIONS } from '#/bot/data/miningRocks.js';
-import { loadQuestRecords } from '#/bot/api/ai/quests/data/index.js';
+import { QUESTS } from '#/bot/api/ai/quests/data/quests.js';
 
 test('records have unique ids', () => {
-    const ids = loadQuestRecords().map(r => r.id);
+    const ids = QUESTS.map(r => r.id);
     expect(new Set(ids).size).toBe(ids.length);
 });
 
 test('records have unique names (name is the live journal-lookup key)', () => {
-    const names = loadQuestRecords().map(r => r.name);
+    const names = QUESTS.map(r => r.name);
     expect(new Set(names).size).toBe(names.length);
 });
 
 test('every prerequisite quest id resolves to a real record', () => {
-    const records = loadQuestRecords();
+    const records = QUESTS;
     const ids = new Set(records.map(r => r.id));
     for (const r of records) {
         for (const pre of r.requirements.quests ?? []) {
@@ -24,14 +24,14 @@ test('every prerequisite quest id resolves to a real record', () => {
 });
 
 test('every record has a non-empty name and a numeric questPoints', () => {
-    for (const r of loadQuestRecords()) {
+    for (const r of QUESTS) {
         expect(r.name.length).toBeGreaterThan(0);
         expect(Number.isFinite(r.questPoints)).toBe(true);
     }
 });
 
 test('item kinds are valid and quantities positive', () => {
-    for (const r of loadQuestRecords()) {
+    for (const r of QUESTS) {
         for (const it of r.items) {
             expect(['mustHave', 'acquirable']).toContain(it.kind);
             expect(it.qty).toBeGreaterThan(0);
@@ -40,7 +40,7 @@ test('item kinds are valid and quantities positive', () => {
 });
 
 test('the dataset covers all 63 journal quests', () => {
-    expect(loadQuestRecords().length).toBe(63);
+    expect(QUESTS.length).toBe(63);
 });
 
 test('blurite is a quest rock, and never a GatheringBot option', () => {
@@ -49,7 +49,7 @@ test('blurite is a quest rock, and never a GatheringBot option', () => {
 });
 
 test("the knight's sword requires Mining and Cooking 10 and acquires its items", () => {
-    const squire = loadQuestRecords().find(q => q.id === 'squire')!;
+    const squire = QUESTS.find(q => q.id === 'squire')!;
     expect(squire.items.every(i => i.kind === 'acquirable')).toBe(true);
     expect(squire.requirements.skills).toEqual([
         { skill: 'mining', level: 10 },

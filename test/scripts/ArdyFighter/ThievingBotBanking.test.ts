@@ -20,6 +20,7 @@ const originals = {
     inventory: reader.inventory,
     inventorySize: reader.inventorySize,
     modals: reader.modals,
+    modalCloseObservation: reader.modalCloseObservation,
     bankClose: Bank.close,
     delayTicks: Execution.delayTicks,
     delayUntil: Execution.delayUntil,
@@ -36,6 +37,7 @@ afterEach(() => {
     (reader as any).inventory = originals.inventory;
     (reader as any).inventorySize = originals.inventorySize;
     (reader as any).modals = originals.modals;
+    reader.modalCloseObservation = originals.modalCloseObservation;
     (Bank as any).close = originals.bankClose;
     (Execution as any).delayTicks = originals.delayTicks;
     (Execution as any).delayUntil = originals.delayUntil;
@@ -177,6 +179,8 @@ describe('Withdraw-X while the bank modal hides the inventory tab', () => {
     });
 
     test('bank close rejects a failed close-button action', async () => {
+        const session = Symbol();
+        reader.modalCloseObservation = () => ({ session, generation: 0 });
         (reader as any).bankComId = () => 5382;
         (reader as any).modals = () => ({ main: 5292, side: 5063, chat: -1 });
         (actions as any).closeModal = () => false;
@@ -187,6 +191,8 @@ describe('Withdraw-X while the bank modal hides the inventory tab', () => {
     test('bank close waits for both halves of the main+side modal to disappear', async () => {
         let mainOpen = true;
         let sideOpen = true;
+        const session = Symbol();
+        reader.modalCloseObservation = () => ({ session, generation: mainOpen ? 0 : 1 });
         const checks: boolean[] = [];
         (reader as any).bankComId = () => mainOpen ? 5382 : -1;
         (reader as any).modals = () => ({ main: mainOpen ? 5292 : -1, side: sideOpen ? 5063 : -1, chat: -1 });

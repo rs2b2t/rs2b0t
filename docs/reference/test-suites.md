@@ -31,6 +31,12 @@ not silent green passes (#341). Build the pack via
 [`tools/nav/build-collision.ts`](../../tools/nav/build-collision.ts) or
 [`tools/deploy-local.sh`](../../tools/deploy-local.sh), then re-run `bun test test/event/webwalk`.
 
+### Server ordering
+
+`test/e2e/rewardServerOrdering.test.ts` replays modal handling from an external
+Engine-TS checkout. Set `REWARD_ENGINE_DIR=/path/to/engine` to run it. The two tests
+skip when that variable is unset; an invalid configured path fails.
+
 ## See also
 
 - [Why this is testable](../decisions/testability.md)

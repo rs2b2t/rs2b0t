@@ -203,6 +203,7 @@ export class Npc implements Interactable, Locatable {
     readonly inCombat: boolean;
     readonly health: number;
     tile(): Tile;
+    networkTile(): Tile;
     distance(): number;
     actions(): string[];
     valid(): boolean;

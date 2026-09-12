@@ -32,7 +32,7 @@ export interface WorldStateData {
     essenceExitReturn?: string;
 }
 
-function lookupItem(items: Record<string, number>, name: string): number {
+export function lookupItem(items: Record<string, number>, name: string): number {
     if (items[name] !== undefined) {
         return items[name]!;
     }

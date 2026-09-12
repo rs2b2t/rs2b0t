@@ -1,15 +1,8 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import { OBS_QUEST, OBS_STAGE } from './areas.js';
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 // Why: `itgronigen_journal.rs2` appends, so every earlier stage's text is still on the page and only the newest paragraph separates one stage from the next.
 // Why: the tests run highest-first for that reason, the completion page still lists "1 lens mould", and the lens page still says "molten glass".

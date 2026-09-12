@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -9,14 +10,6 @@ export const NS_FLAG = {
     NATURE: 'nature',
     SPIRIT: 'spirit'
 } as const;
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 // Why: druidspirit_journal.rs2 appends, so every earlier stage's prose is still on the page, newest marker first, or an early line answers for a late stage.
 const MARKERS: readonly [string, number][] = [

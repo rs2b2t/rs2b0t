@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../journalText.js';
 import { actions, reader } from '../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
@@ -103,14 +104,6 @@ export function herbForStage(stage: number): JungleHerb | null {
         return null;
     }
     return JUNGLE_HERBS[Math.floor((stage - 1) / 2)] ?? null;
-}
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
 }
 
 /**

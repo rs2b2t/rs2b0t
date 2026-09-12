@@ -103,23 +103,16 @@ export class DiagRing {
      * ago" is the point of retention, so it is a first-class read.
      */
     at(wallClockMs: number): Record<string, number> | null {
-        const stamps = this.timestamps();
-        let found = -1;
-        for (let i = stamps.length - 1; i >= 0; i--) {
-            if (stamps[i] <= wallClockMs) {
-                found = i;
-                break;
+        for (let i = this.writes - 1; i >= this.writes - this.length; i--) {
+            const slot = i % this.capacity;
+            if (this.stamps[slot] <= wallClockMs) {
+                const row: Record<string, number> = {};
+                this.fields.forEach((name, col) => {
+                    row[name] = this.data[slot * this.fields.length + col];
+                });
+                return row;
             }
         }
-        if (found < 0) {
-            return null;
-        }
-        const start = this.writes - stamps.length;
-        const base = ((start + found) % this.capacity) * this.fields.length;
-        const row: Record<string, number> = {};
-        this.fields.forEach((name, i) => {
-            row[name] = this.data[base + i];
-        });
-        return row;
+        return null;
     }
 }

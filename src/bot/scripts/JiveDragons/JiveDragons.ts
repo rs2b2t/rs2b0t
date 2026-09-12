@@ -1,6 +1,6 @@
 import { reader } from '../../adapter/ClientAdapter.js';
 import { GameMessages } from '../../api/chatbox/gameMessages.js';
-import { SolveClue } from '../../api/ai/clues/SolveClue.js';
+import { SolveClue, walkToBank } from '../../api/ai/clues/SolveClue.js';
 import { paintClueProgress } from '../../api/ai/clues/cluePaint.js';
 import { AXES } from '../../api/acquisition/Tools.js';
 import { Bank } from '../../api/bank/Bank.js';
@@ -39,7 +39,7 @@ import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
 import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from './combat.js';
 import { ANTIFIRE_MARGIN_TICKS, ANTIFIRE_TICKS, POTION_PROTECTS, SHIELD_ABSORBS, antifireDue, antifireLapsed, keepDoses, keyStatus, lootHalts, lootReach, shieldGate, siteTileOf, chaseMode, prayerFor, prayerSipDue, styleGate, wantsDrop, type Style } from './logic.js';
 import { BRIMHAVEN_IRON, BRIMHAVEN_STEEL, GUTANOTH_BLUE, HEROES_BLUE, MAX_STANDS, SITE_OPTIONS, STAND_SITE_KEYS, TAVERLEY_BLACK, TAVERLEY_BLUE, huntNames, needsShield, siteFor, standFor, type DragonSite } from './sites.js';
-import { ANTIFIRE_DOSES, ANTIPOISON_DOSES, PRAYER_DOSES, prayerPlan, COINS, POISONED, acquireKey, antifirePlan, antipoisonPlan, bankRoutine, doseToDrink, enterLair, escapeRunesFor, feePrepaid, inCell, leaveCell, type BankOpts, type KeyState } from './supply.js';
+import { ANTIFIRE_DOSES, ANTIPOISON_DOSES, PRAYER_DOSES, prayerPlan, COINS, POISONED, acquireKey, antifirePlan, antipoisonPlan, bankRoutine, doseToDrink, enterLair, escapeRunesFor, feePrepaid, inCell, leaveCell, leaveLair, type BankOpts, type KeyState } from './supply.js';
 
 const SHIELD = 'Dragonfire shield';
 
@@ -269,6 +269,8 @@ function needCoins(): boolean {
 
 /** Take the trip, and latch what it came back with when it finished. */
 async function bankTrip(bot: JiveDragons): Promise<void> {
+    bot.fight?.reset();
+    bot.lootRun = null;
     const before = bot.bankTrips;
     await bankRoutine(bot, SITE, bankOpts());
     if (bot.bankTrips > before) {
@@ -423,12 +425,26 @@ function lootFilter() {
     return { loot: LOOT_SET, bankCommon: BANK_COMMON, solveClues: SOLVE_CLUES, buryBones: BURY_BONES, boneName: SITE.bones };
 }
 
-function findLoot(): GroundItem | null {
+function slotFoodReserve(): number {
+    return STYLE !== 'melee' && SITE.rangedThreat !== true && !tooHurtToLoot() ? 0 : FOOD_RESERVE;
+}
+
+function burialAvailable(bot: JiveDragons): boolean {
+    return BURY_BONES && Date.now() >= bot.burialRetryAt;
+}
+
+function findLoot(bot: JiveDragons): GroundItem | null {
     const now = performance.now();
+    const stacksOnly = Inventory.isFull() && foodCount() <= slotFoodReserve();
+    const priority = (g: GroundItem): number => !BURY_BONES ? 0 : g.name?.toLowerCase() === SITE.bones.toLowerCase() ? 0 : g.name?.toLowerCase() === 'dragonhide' ? 1 : 2;
     return GroundItems.query()
         .where(g => SITE.inArea(g.tile()) && (lootSkip.get(lootKey(g)) ?? 0) < now && wantsDrop({ id: g.id, name: g.name }, lootFilter()))
+        .where(g => SITE.key !== TAVERLEY_BLUE.key || STYLE !== 'range' || g.id !== 892 || g.count >= 4)
+        .where(g => !BURY_BONES || burialAvailable(bot) || g.name?.toLowerCase() !== SITE.bones.toLowerCase())
+        .where(g => !stacksOnly || lootStacksIntoPack(g.name))
         .within(lootReach(SITE.fireAtRange === true))
-        .nearest();
+        .results()
+        .sort((a, b) => priority(a) - priority(b) || a.distance() - b.distance())[0] ?? null;
 }
 
 /** Loot merging into a stack already held needs no slot. */
@@ -437,20 +453,114 @@ function lootStacksIntoPack(name: string | null): boolean {
         return false;
     }
     const held = Inventory.first(name);
-    return held !== null && held.count > 1;
+    return held !== null && (held.count > 1 || reader.objCatalog().some(item => item.id === held.id && item.stackable));
+}
+
+interface LootRun {
+    readonly food: { readonly id: number; readonly tile: Tile }[];
+    spentFood?: boolean;
+    recoveryFails?: number;
+}
+
+function recoverableFood(bot: JiveDragons): boolean {
+    return bot.lootRun?.food.some(food => GroundItems.query().where(g => g.id === food.id && g.tile().equals(food.tile)).first() !== null) ?? false;
+}
+
+function lootReady(bot: JiveDragons): boolean {
+    return !EventSignal.pending() && !bot.died && !bot.fight?.blocksLoot() && (STYLE !== 'range' || !needStyleSupplies()) && !needEat() && !tooHurtToLoot();
+}
+
+function lootCanProgress(bot: JiveDragons): boolean {
+    if (!lootReady(bot) || (burialAvailable(bot) && Inventory.contains(SITE.bones))) {
+        return false;
+    }
+    const drop = findLoot(bot);
+    return bot.lootRun !== null || (drop !== null && (!Inventory.isFull() || lootStacksIntoPack(drop.name)));
+}
+
+async function returnFromLoot(bot: JiveDragons): Promise<boolean> {
+    if (STYLE === 'melee') {
+        return true;
+    }
+    const anchor = anchorFor(SITE, STYLE, bot.safespotIndex());
+    const here = Game.tile();
+    if (here !== null && anchor.equals(here)) {
+        return true;
+    }
+    if (!lootReady(bot)) {
+        return false;
+    }
+    bot.fight?.interruptWatch();
+    await Traversal.walkResilient(anchor, { radius: 0, attempts: 3, timeoutMs: LOOT_WALK_MS });
+    const arrived = Game.tile();
+    return arrived !== null && anchor.equals(arrived) && lootReady(bot);
+}
+
+function deferLootRecovery(bot: JiveDragons): void {
+    const run = bot.lootRun;
+    if (run === null || !lootReady(bot)) {
+        return;
+    }
+    run.recoveryFails = (run.recoveryFails ?? 0) + 1;
+    if (run.recoveryFails >= ASSERT_BATCH) {
+        bot.lootRun = null;
+    }
+}
+
+async function finishLoot(bot: JiveDragons): Promise<void> {
+    const run = bot.lootRun;
+    if (run === null) {
+        return;
+    }
+    if (!(await returnFromLoot(bot)) || findLoot(bot) !== null) {
+        deferLootRecovery(bot);
+        return;
+    }
+    if (bot.gearEquip.mergeDue() && bot.gearEquip.validate()) {
+        await bot.gearEquip.execute();
+    }
+    while (run.food.length > 0) {
+        if (!lootReady(bot)) {
+            return;
+        }
+        if (Inventory.isFull()) {
+            bot.lootRun = null;
+            return;
+        }
+        const food = run.food[0];
+        if (food === undefined) {
+            break;
+        }
+        const drop = GroundItems.query().where(g => g.id === food.id && g.tile().equals(food.tile)).first();
+        if (drop === null) {
+            run.food.shift();
+            continue;
+        }
+        const here = Game.tile();
+        if (here === null || !food.tile.equals(here)) {
+            deferLootRecovery(bot);
+            return;
+        }
+        const before = Inventory.countById(food.id);
+        if (!(await drop.interact('Take')) || !(await Execution.delayUntil(() => Inventory.countById(food.id) > before, LOOT_WAIT_MS))) {
+            deferLootRecovery(bot);
+            return;
+        }
+        run.food.shift();
+    }
+    bot.lootRun = null;
 }
 
 type SlotAction = 'eat' | 'drop' | 'none';
 
 // Why: eating wins while the heal is not wasted and at full hp the food is dropped instead, so a full pack buys a loot slot rather than the walk to Falador.
-// Why: the reserve is never dug into, below it the caller falls through to its bank run.
 
 /** Trade a food slot for a loot slot. */
 function slotAction(drop: GroundItem | null): SlotAction {
     if (drop === null || !Inventory.isFull() || lootStacksIntoPack(drop.name)) {
         return 'none';
     }
-    if (foodCount() <= FOOD_RESERVE) {
+    if (foodCount() <= slotFoodReserve()) {
         return 'none';
     }
     return hpFrac() < 1 ? 'eat' : 'drop';
@@ -483,20 +593,29 @@ async function reachDrop(bot: JiveDragons, drop: GroundItem): Promise<void> {
 }
 
 async function lootOnce(bot: JiveDragons): Promise<boolean> {
-    const drop = findLoot();
-    if (drop === null) {
+    if (!lootReady(bot)) {
         return false;
     }
+    const drop = findLoot(bot);
+    if (drop === null || (Inventory.isFull() && !lootStacksIntoPack(drop.name))) {
+        return false;
+    }
+    bot.lootRun ??= { food: [] };
+    bot.fight?.interruptWatch();
     const name = drop.name ?? '';
     bot.setStatus(`looting ${name}`);
     await reachDrop(bot, drop);
-    const usedBefore = Inventory.used();
-    const countBefore = Inventory.count(name);
-    if (!(await drop.interact('Take'))) {
+    if (!lootReady(bot) || (Inventory.isFull() && !lootStacksIntoPack(drop.name))) {
         return false;
     }
+    const current = GroundItems.query().where(g => g.id === drop.id && g.tile().equals(drop.tile())).first();
+    if (current === null || (SITE.key === TAVERLEY_BLUE.key && STYLE === 'range' && current.id === 892 && current.count < 4)) {
+        return false;
+    }
+    const usedBefore = Inventory.used();
+    const countBefore = Inventory.count(name);
     // Why: a stackable drop merges into a slot already held, so used() alone never moves for the coins, runes and arrows that are most of this table.
-    if (await Execution.delayUntil(() => Inventory.used() > usedBefore || Inventory.count(name) > countBefore, LOOT_WAIT_MS)) {
+    if (await current.interact('Take') && await Execution.delayUntil(() => Inventory.used() > usedBefore || Inventory.count(name) > countBefore, LOOT_WAIT_MS)) {
         bot.countLoot(name);
         bot.log(`looted ${name}`);
         return true;
@@ -513,35 +632,73 @@ function tooHurtToLoot(): boolean {
 /** Clear the drop pile in one pass rather than one item per task hop. */
 async function lootBurst(bot: JiveDragons): Promise<void> {
     for (let i = 0; i < LOOT_BURST_MAX; i++) {
-        if (EventSignal.pending() || bot.died || Inventory.isFull() || needEat() || tooHurtToLoot() || findLoot() === null) {
+        if (!lootReady(bot) || (burialAvailable(bot) && Inventory.contains(SITE.bones))) {
             return;
         }
-        await lootOnce(bot);
+        const drop = findLoot(bot);
+        if (drop === null) {
+            break;
+        }
+        if (Inventory.isFull() && !lootStacksIntoPack(drop.name)) {
+            await freeSlot(bot);
+            if (Inventory.isFull()) {
+                break;
+            }
+        }
+        if (!(await lootOnce(bot))) {
+            break;
+        }
+        if (burialAvailable(bot) && Inventory.contains(SITE.bones)) {
+            return;
+        }
+        if (i === LOOT_BURST_MAX - 1 && findLoot(bot) !== null) {
+            return;
+        }
     }
+    await finishLoot(bot);
 }
 
 async function freeSlot(bot: JiveDragons): Promise<void> {
-    const drop = findLoot();
+    if (!lootReady(bot)) {
+        return;
+    }
+    const drop = findLoot(bot);
     const action = slotAction(drop);
     const want = drop?.name ?? 'loot';
     bot.vlog(`slot check: ${Inventory.used()} used, ${FOOD_NAME} x${foodCount()} (reserve ${FOOD_RESERVE}), hp ${Math.round(hpFrac() * 100)}%, ground '${want}' -> ${action}`);
     if (action === 'eat') {
+        const run = bot.lootRun ??= { food: [] };
         bot.log(`pack full. Eating ${FOOD_NAME} to make room for ${want}`);
-        await eatOnce(bot);
+        if (await eatOnce(bot)) {
+            run.spentFood = true;
+        }
         return;
     }
     if (action !== 'drop') {
+        return;
+    }
+    if (!(await returnFromLoot(bot)) || !lootReady(bot) || slotAction(findLoot(bot)) !== 'drop') {
         return;
     }
     const food = Inventory.items().find(i => isFoodItem(i.name, FOOD_NAME));
     if (!food) {
         return;
     }
+    const here = Game.tile();
+    if (here === null) {
+        return;
+    }
+    const tile = Tile.from(here);
+    const run = bot.lootRun ??= { food: [] };
+    const existing = GroundItems.query().where(g => g.id === food.id && g.tile().equals(tile)).results().reduce((sum, g) => sum + g.count, 0);
+    const ours = run.food.filter(g => g.id === food.id && g.tile.equals(tile)).length;
     bot.setStatus(`dropping ${food.name} for pack space`);
     bot.log(`pack full at full hp. Dropping ${food.name} to make room for ${want}`);
     const before = Inventory.used();
-    if (await food.interact('Drop')) {
-        await Execution.delayUntil(() => Inventory.used() < before, 3000);
+    if (await food.interact('Drop') && await Execution.delayUntil(() => Inventory.used() < before, 3000)) {
+        if (existing === ours) {
+            run.food.push({ id: food.id, tile });
+        }
     }
 }
 
@@ -671,9 +828,13 @@ class GearEquip implements Task {
     private fails = 0;
     private retryAt = 0;
     constructor(private readonly bot: JiveDragons) {}
+    mergeDue(): boolean {
+        return STYLE === 'range' && Equipment.contains(AMMO) && Inventory.first(AMMO) !== null
+            && (hasFood() || recoverableFood(this.bot)) && !needEat() && !tooHurtToLoot() && !this.bot.died && !EventSignal.pending();
+    }
     private missing(): string | null {
         const wear = [...(needsShield(SITE, STYLE) ? [SHIELD] : []), WEAPON, STYLE === 'range' ? AMMO : ''];
-        return wear.find(n => n !== '' && !Equipment.contains(n) && Inventory.first(n) !== null) ?? null;
+        return wear.find(n => n !== '' && !Equipment.contains(n) && Inventory.first(n) !== null) ?? (this.mergeDue() ? AMMO : null);
     }
     validate(): boolean {
         return Date.now() >= this.retryAt && this.missing() !== null;
@@ -684,7 +845,21 @@ class GearEquip implements Task {
             return;
         }
         this.bot.setStatus(`equipping ${item}`);
-        if (await Equipment.equip(item)) {
+        let equipped = false;
+        if (STYLE === 'range' && item === AMMO && Equipment.contains(AMMO)) {
+            if (!Bank.isOpen() || await Bank.close()) {
+                const ammo = Inventory.first(AMMO);
+                const op = ammo?.actions().find(action => /wield|wear|equip/i.test(action));
+                const before = Inventory.count(AMMO);
+                const worn = quiverCount();
+                if (ammo && op && this.mergeDue() && await ammo.interact(op)) {
+                    equipped = await Execution.delayUntil(() => Inventory.count(AMMO) < before && quiverCount() > worn, 3000);
+                }
+            }
+        } else {
+            equipped = await Equipment.equip(item);
+        }
+        if (equipped) {
             this.bot.log(`equipped ${item}`);
             this.fails = 0;
             return;
@@ -836,10 +1011,11 @@ class PanicBank implements Task {
 
 class BuryBones implements Task {
     private fails = 0;
-    private retryAt = 0;
-    constructor(private readonly bot: JiveDragons) {}
+    constructor(private readonly bot: JiveDragons) {
+        bot.burialRetryAt = 0;
+    }
     validate(): boolean {
-        return BURY_BONES && Date.now() >= this.retryAt && Inventory.contains(SITE.bones);
+        return burialAvailable(this.bot) && Inventory.contains(SITE.bones);
     }
     async execute(): Promise<void> {
         const bones = Inventory.first(SITE.bones);
@@ -856,7 +1032,7 @@ class BuryBones implements Task {
         await Execution.delayTicks(2);
         if (++this.fails >= ASSERT_BATCH) {
             this.fails = 0;
-            this.retryAt = Date.now() + ASSERT_RETRY_MS;
+            this.bot.burialRetryAt = Date.now() + ASSERT_RETRY_MS;
             this.bot.log(`could not bury ${SITE.bones}. Pausing burial for ${ASSERT_RETRY_MS / 1000}s.`);
         }
     }
@@ -865,7 +1041,7 @@ class BuryBones implements Task {
 class FreeSlot implements Task {
     constructor(private readonly bot: JiveDragons) {}
     validate(): boolean {
-        return slotAction(findLoot()) !== 'none';
+        return lootReady(this.bot) && slotAction(findLoot(this.bot)) !== 'none';
     }
     async execute(): Promise<void> {
         await freeSlot(this.bot);
@@ -878,7 +1054,8 @@ class BankRun implements Task {
         if (this.bot.parked) {
             return false;
         }
-        if (!hasFood() && !this.bot.bankKnownEmpty()) {
+        const returning = this.bot.lootRun !== null && (Inventory.isFull() || this.bot.lootRun.spentFood === true || recoverableFood(this.bot));
+        if (!hasFood() && !this.bot.bankKnownEmpty() && !(STYLE !== 'melee' && SITE.rangedThreat !== true && returning && lootCanProgress(this.bot))) {
             return true;
         }
         if (needStyleSupplies() && !this.bot.supplyKnownEmpty()) {
@@ -889,7 +1066,7 @@ class BankRun implements Task {
             return true;
         }
         // Why: food is a resource the run spends and FreeSlot turns it into room, so a pack full of food is no reason to walk to Falador.
-        return Inventory.isFull() && foodCount() <= FOOD_RESERVE;
+        return Inventory.isFull() && foodCount() <= slotFoodReserve() && !lootCanProgress(this.bot);
     }
     async execute(): Promise<void> {
         if (EventSignal.pending()) {
@@ -904,7 +1081,7 @@ class BankRun implements Task {
 class LootCorpse implements Task {
     constructor(private readonly bot: JiveDragons) {}
     validate(): boolean {
-        return !tooHurtToLoot() && !Inventory.isFull() && findLoot() !== null;
+        return lootCanProgress(this.bot);
     }
     async execute(): Promise<void> {
         await lootBurst(this.bot);
@@ -969,6 +1146,10 @@ export default class JiveDragons extends TaskBot implements CombatHost {
     parkReason = '';
     died = false;
     targetIdx: number | null = null;
+    fight: Fight | undefined;
+    gearEquip = new GearEquip(this);
+    lootRun: LootRun | null = null;
+    burialRetryAt = 0;
 
     private bankEmpty = false;
     private supplyEmpty = false;
@@ -1047,6 +1228,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         this.xp.begin();
         this.safespotIdx = 0;
         lootSkip.clear();
+        this.lootRun = null;
         this.keyState = SITE.keyItem === null ? 'held' : keyStatus(Inventory.countById(SITE.keyItem.id), Bank.countById(SITE.keyItem.id));
 
         this.solveClue = new SolveClue({
@@ -1061,7 +1243,8 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             foodName: () => FOOD_NAME,
             foodWithdraw: () => FOOD_WITHDRAW,
             weaponName: () => WEAPON,
-            enabled: () => SOLVE_CLUES
+            enabled: () => SOLVE_CLUES && !this.fight?.blocksLoot() && this.lootRun === null,
+            prepareInitialBank: async () => await leaveLair(this, SITE) && await walkToBank(SITE.bank, m => this.log(m))
         });
 
         // Why: Bank.count reads the last snapshot and the bank has never been open at this point, so this only catches a shield that is nowhere, and supply.ts repeats the check with the booth open.
@@ -1095,6 +1278,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             }
         });
 
+        this.fight = new Fight(this, SITE);
         this.add(
             new Parked(this),
             new ContinueDialog(),
@@ -1102,6 +1286,8 @@ export default class JiveDragons extends TaskBot implements CombatHost {
                 anchor: SITE.bank,
                 radius: 6,
                 onDeath: () => {
+                    this.fight?.reset();
+                    this.lootRun = null;
                     this.died = true;
                     this.setStatus('died, recovering');
                     this.solveClue?.noteDeath();
@@ -1117,7 +1303,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             new SipAntifire(this),
             new SipPrayer(this),
             new PrayMelee(this),
-            new GearEquip(this),
+            this.gearEquip = new GearEquip(this),
             new SetAttackStyle(this),
             new SetRetaliate(this),
             new ArmAutocast(this),
@@ -1132,7 +1318,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             new EnterLair(this),
             new WalkToSpot(this, SITE),
             new HoldSafespot(this, SITE),
-            new Fight(this, SITE)
+            this.fight
         );
     }
 

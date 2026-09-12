@@ -1,3 +1,4 @@
+import { normalizeJournal } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -33,13 +34,7 @@ export const DP_FLAG = {
     SCOUTED: 'scouted'
 } as const;
 
-export function normalizeJournal(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
+export { normalizeJournal };
 
 function readEquipStage(text: string): number | undefined {
     // Newest first: later paragraphs retain earlier history.

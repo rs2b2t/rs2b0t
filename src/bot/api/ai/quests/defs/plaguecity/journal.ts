@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -26,14 +27,6 @@ export const PC_STAGE = {
 } as const;
 
 const PLAGUE_CITY = 'Plague City';
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 // Why: stages 3 to 6 share one water line and 24/25 share one clearance line, so the parser reports the low end and the module resolves the rest from the pack.
 const STAGE_LINES: readonly [string, number][] = [

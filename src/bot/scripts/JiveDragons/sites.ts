@@ -127,7 +127,7 @@ export const TAVERLEY_BLUE: DragonSite = {
     keyItem: { name: 'Dusty key', id: 1590 },
     gate: { locId: 2623, op: 'Open', outside: new Tile(2924, 9803, 0), inside: new Tile(2923, 9803, 0) },
     approach: [new Tile(2911, 9809, 0)],
-    safespots: [new Tile(2901, 9809, 0), new Tile(2900, 9809, 0), new Tile(2901, 9810, 0)],
+    safespots: [new Tile(2901, 9809, 0), new Tile(2904, 9808, 0), new Tile(2901, 9810, 0)],
     meleeAnchor: new Tile(2900, 9808, 0),
     bank: new Tile(2946, 3369, 0),
     escapeTeleportId: 'falador',
