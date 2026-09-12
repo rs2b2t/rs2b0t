@@ -834,7 +834,8 @@ export const CASES: readonly Case[] = [
         id: 'miner-skeleton-mine-live',
         harness: 'miner-skeleton-mine-live.ts',
         covers: { scripts: ['GatheringBot'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: '2c03f6e859f03a3da50e3db6c229451fb6f163d6',
         budgetMin: 12,
         note: 'coal depletion retarget latency under Skeleton attacks, Auto Retaliate off, and native random rock choices'
     },
