@@ -13,6 +13,15 @@ export const CASES: readonly Case[] = [
         note: 'Fresh local account; no thread, banked leather and coins at Varrock West. Actual nearest-shop purchase, original-bank return and Crafting XP; screenshots docs/e2e/issue-279*.png.'
     },
     {
+        id: 'nature-runner-coins-739-live',
+        harness: 'nature-runner-coins-739-live.ts',
+        covers: { scripts: ['NatureCrafter'] },
+        status: 'vetted',
+        provenAt: '39e3095468c329823aabd554db5455c2cef02401',
+        budgetMin: 3,
+        note: 'drops 450 Coins outside the altar and proves the runner takes that ground stack into inventory'
+    },
+    {
         id: 'fisher-shilo-shopping-live',
         harness: 'fisher-shilo-shopping-live.ts',
         covers: { scripts: ['GatheringBot'] },
