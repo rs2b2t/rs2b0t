@@ -5,7 +5,8 @@ import { Game } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { Bank } from '../../api/bank/Bank.js';
-import { nearestBank } from '../../api/bank/BankLocations.js';
+import { nearestBankReachable } from '../../api/bank/BankLocations.js';
+import { Navigator } from '../../event/webwalk/Navigator.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Paint } from '../../paint/Paint.js';
 import { Shop } from '../../api/shop/Shop.js';
@@ -269,8 +270,9 @@ export default class LeatherCrafter extends LoopingBot {
 
     private async bankLeg(): Promise<void> {
         const here = Game.tile();
-        // Why: walk to whichever bank is closest rather than a fixed Al Kharid tile, so the bot crafts from wherever the player already is. Bank contents are account-wide, so nothing else changes.
-        const stand = this.restockBank ?? (here ? nearestBank(here)?.tile ?? BANK_STAND : BANK_STAND);
+        // Why: walk to whichever bank is cheapest to reach rather than an air-nearest tile, so the bot banks from wherever the player already is. Bank contents are account-wide, so nothing else changes.
+        const picked = here ? await nearestBankReachable(here, Navigator) : null;
+        const stand = this.restockBank ?? picked?.tile ?? BANK_STAND;
         if (!here || Math.max(Math.abs(here.x - stand.x), Math.abs(here.z - stand.z)) > 4) {
             this.setStatus('walking to the bank');
             if (!(await Traversal.walkResilient(stand, { radius: 3, attempts: 2, timeoutMs: 45_000, log: m => this.log(`  ${m}`) }))) {
