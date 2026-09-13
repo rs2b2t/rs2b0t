@@ -170,3 +170,48 @@ function meetsRequirement(bank: BankLocation): boolean {
 export function nearestBank(from: WorldTile): BankLocation | null {
     return nearestUsableBank(from, meetsRequirement);
 }
+
+/**
+ * Prototype: nearest bank by real nav-graph walk cost instead of straight line.
+ * Why: inside a dungeon the z-offset (~6400) dwarfs every bank difference, so
+ * straight-line ranking collapses to "closest by x only" and can pick a bank
+ * that is far from the dungeon's actual ladder exit. Path cost fixes that.
+ * `pathCost` returns the walk cost in run-tiles, or null when unreachable.
+ */
+export type BankPathCost = (from: WorldTile, to: Tile) => number | null;
+
+export function nearestWalkableBank(from: WorldTile, pathCost: BankPathCost): BankLocation | null {
+    let best: BankLocation | null = null;
+    let bestCost = Infinity;
+    for (const bank of nearestBanks(from)) {
+        const cost = pathCost(from, approachOf(bank));
+        if (cost !== null && cost < bestCost) {
+            bestCost = cost;
+            best = bank;
+        }
+    }
+    return best;
+}
+
+export interface BankPathStamp {
+    x: number;
+    z: number;
+    level: number;
+}
+
+/** Wrap a {@link PathFinder} so {@link nearestWalkableBank} can reuse it. */
+export function bankCostForFinder(
+    finder: {
+        findPath(from: BankPathStamp, to: BankPathStamp, opts?: unknown): {
+            ok: boolean;
+            cost?: number;
+            reason?: string;
+        };
+    },
+    findPathOpts?: object,
+): BankPathCost {
+    return (from, to) => {
+        const out = finder.findPath(from, to, { useTeleportCatalog: false, ...findPathOpts });
+        return out.ok && out.cost !== undefined ? out.cost : null;
+    };
+}
