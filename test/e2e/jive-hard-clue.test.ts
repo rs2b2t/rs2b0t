@@ -53,14 +53,14 @@ test('rejects a14 Shark starting inventory even when bank stock exists', () => {
     const result = assessHardClue({ ...good, samples: good.samples.map(s => s.phase === 'prepared' ? { ...s, sharks: 14 } : s) });
     expect(result.passed).toBe(false);
 });
-test('requires the20 Shark target when confirmed stock permits it', () => {
-    const result = assessHardClue({ ...good, prep: { ...good.prep, sharksAvailable: 20 } });
-    expect(result.passed).toBe(false);
-});
-test('accepts the20 Shark target when confirmed stock permits it', () => {
-    const result = assessHardClue({ ...good, prep: { ...good.prep, sharksAvailable: 30 },
-        samples: good.samples.map(s => ({ ...s, sharks: s.sharks + 5 })) });
+test.each([16, 20, 30])('accepts 15 prepared Sharks when the bank holds %i', sharksAvailable => {
+    const result = assessHardClue({ ...good, prep: { ...good.prep, sharksAvailable } });
     expect(result.passed).toBe(true);
+});
+test.each(['prepared', 'dig', 'spawn'])('rejects fewer than 15 Sharks at %s despite surplus bank stock', phase => {
+    const result = assessHardClue({ ...good, prep: { ...good.prep, sharksAvailable: 30 },
+        samples: good.samples.map(s => s.phase === phase ? { ...s, sharks: 14 } : s) });
+    expect(result.violations).toContain('pre-encounter-sharks');
 });
 for (const phase of ['dig', 'spawn', 'kill', 'post-kill-dig', 'restored'] as const) {
     test(`rejects incomplete evidence when ${phase} is absent`, () => {

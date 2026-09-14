@@ -235,6 +235,10 @@ export default class RangingGuild extends LoopingBot {
     }
 
     private async openJudge(): Promise<boolean> {
+        if (!(await this.walkTo(JUDGE_STAND, 3))) {
+            this.fail('could not reach the judge');
+            return false;
+        }
         await this.drainChat();
         const reach = await Reach.npcDialog({ name: JUDGE, near: JUDGE_STAND, log: m => this.log(`  ${m}`) });
         if (reach !== 'done') {

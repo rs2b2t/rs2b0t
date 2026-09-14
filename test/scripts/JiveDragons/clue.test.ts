@@ -5,6 +5,8 @@ import { Inventory, InvItem } from '#/bot/api/inventory/Inventory.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
+import { Equipment } from '#/bot/api/equipment/Equipment.js';
+import { EventSignal } from '#/bot/api/execution/EventSignal.js';
 import { SolveClue } from '#/bot/api/ai/clues/SolveClue.js';
 import { ClueExecutor } from '#/bot/api/ai/clues/ClueExecutor.js';
 import { Sustain } from '#/bot/api/sustain/Sustain.js';
@@ -14,8 +16,8 @@ import { scenario, restoreScenario } from './scheduler.fixture.js';
 
 afterEach(restoreScenario);
 
-async function clueScenario() {
-    const fixture = await scenario('taverley-blue', 'range', { solveClues: true });
+async function clueScenario(weapon = '') {
+    const fixture = await scenario('taverley-blue', 'range', { solveClues: true, weapon });
     const task = fixture.task('SolveClue');
     if (!(task instanceof SolveClue)) throw new Error('Missing clue task');
     spyOn(task, 'validate').mockRestore();
@@ -43,6 +45,33 @@ test('hands off after fight and loot finish without changing emergency or ammo p
     expect(tasks.indexOf(fixture.task('GearEquip'))).toBeLessThan(tasks.indexOf(fixture.clue));
     expect(tasks.indexOf(fixture.task('PanicBank'))).toBeLessThan(tasks.indexOf(fixture.clue));
     expect(tasks.indexOf(fixture.task('Retreat'))).toBeLessThan(tasks.indexOf(fixture.clue));
+});
+
+test('a yielded hard clue keeps its DDS through the host scheduler', async () => {
+    const fixture = await clueScenario('Magic shortbow');
+    const clue = new InvItem({ id: 2723, name: 'Clue scroll (hard)', count: 1, slot: 0, comId: 1, ops: ['Read'] });
+    const bow = new InvItem({ id: 861, name: 'Magic shortbow', count: 1, slot: 1, comId: 1, ops: ['Wield'] });
+    let armed = 'Magic shortbow';
+    spyOn(Inventory, 'items').mockReturnValue([clue, bow]);
+    spyOn(Equipment, 'contains').mockImplementation(name => name === armed);
+    spyOn(Equipment, 'equip').mockImplementation(async name => { armed = name; return true; });
+    fixture.clue['host'].prepareInitialBank = async () => true;
+    fixture.clue['bankFirst'] = async () => { armed = 'Dragon dagger(p)'; return true; };
+    spyOn(ClueExecutor, 'solveHeldClue').mockResolvedValue('yield');
+    await fixture.clue.execute();
+    const gear = fixture.task('GearEquip');
+    spyOn(gear, 'validate').mockRestore();
+    const style = fixture.task('SetAttackStyle');
+    spyOn(style, 'validate').mockRestore();
+    spyOn(Game, 'combatMode').mockReturnValue(-1);
+    expect(gear.validate()).toBe(false);
+    expect(style.validate()).toBe(false);
+    spyOn(EventSignal, 'pending').mockReturnValue(true);
+    expect(gear.validate()).toBe(false);
+    spyOn(EventSignal, 'pending').mockReturnValue(false);
+    await fixture.bot.loop();
+    expect(armed).toBe('Dragon dagger(p)');
+    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(2);
 });
 
 test.each(['teleport', 'missing runes', 'failed teleport', 'failed egress'])('uses existing %s egress before the preferred Falador bank', async mode => {

@@ -85,7 +85,7 @@ type WalkToFn = (
 
 /** Approximate Entrana gear bans (monk_of_entrana.rs2 has_entrana_restricted_items); pure so plan-time WorldState can reuse it. */
 export const ENTRANA_RESTRICTED_GEAR_RE =
-    /\b(sword|dagger|scimitar|longsword|2h|two.handed|mace|warhammer|battleaxe|axe|pickaxe|spear|hasta|halberd|maul|claws|whip|bow|shortbow|longbow|crossbow|javelin|dart|thrownaxe|knife|staff|wand|battlestaff|halberd|cannon|helmet|full helm|med helm|coif|platebody|chainbody|platelegs|plateskirt|skirt of|kiteshield|square shield|sq shield|dragon square|god cape|fire cape|obsidian cape|defender|body|chaps|vambraces|gauntlets?|gloves|shield|cape|cloak|snelm|cowl|hat|hood)\b/i;
+    /\b(sword|dagger|scimitar|longsword|2h|two.handed|mace|warhammer|battleaxe|axe|pickaxe|spear|hasta|halberd|maul|claws|whip|bow|shortbow|longbow|crossbow|javelin|dart|thrownaxe|knife|staff|wand|battlestaff|halberd|cannon|helmet|full helm|med helm|coif|platebody|chainbody|platelegs|plateskirt|skirt of|kiteshield|square shield|sq shield|dragon square|god cape|fire cape|obsidian cape|defender|body(?!\s+rune\b)|chaps|vambraces|gauntlets?|gloves|shield|cape|cloak|snelm|cowl|hat|hood)\b/i;
 
 /** True if any of the given item names looks like Entrana-banned gear. */
 export function namesHaveEntranaRestrictedGear(names: readonly string[]): boolean {

@@ -5,8 +5,8 @@ import { Locs } from '../../api/locs/Locs.js';
 import { Players } from '../../api/players/Players.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import type Tile from '../../geometry/Tile.js';
-import type { DragonSite } from '../JiveDragons/sites.js';
-import { escapeRunesFor, teleportOut, waitFed, type JiveHost } from '../JiveDragons/supply.js';
+import type { DragonSite } from '../../api/combat/hunting/sites.js';
+import { escapeRunesFor, teleportOut, waitFed, type JiveHost } from '../../api/combat/hunting/supply.js';
 import { doseDue } from './logic.js';
 import type { LairRoute, LocStop } from './sites.js';
 

@@ -237,7 +237,7 @@ try {
 
     // Why: the count sits at 11 for the tick between the last shot and the payout, so a 2s poll misses it and the reset plus the ticket gain are the proof of a round.
     if (judgeMisses > 0) {
-        fail(`${judgeMisses} judge talk(s) failed, so the level-up page was not clicked through: ${last.logs.slice(-6).map(l => l.msg).join(' | ')}`);
+        fail(`${judgeMisses} judge talk(s) failed after approach and dialogue cleanup: ${last.logs.slice(-6).map(l => l.msg).join(' | ')}`);
     }
     if (args.phase === 'round') {
         if (!sawReset) {

@@ -42,6 +42,7 @@ export interface QuestHost {
 const PARK_GIVE_UP = 3;
 
 const WAIT_PARK = 15;
+const COMBAT_STALL_MS = 60_000;
 
 /** Walks back to a bank to try before leaving the character where it finished. */
 const RETREAT_GIVE_UP = 4;
@@ -100,6 +101,8 @@ export class QuestEngine implements Task {
     private readonly failedWatchdog = new ProgressWatchdog();
     private pendingFailedSignature: string | null = null;
     private noProgressCount = 0;
+    private combatIdleSince: number | null = null;
+    private combatXp = 0;
 
     private readonly parked = new Set<string>();
     private readonly parkCounts = new Map<string, number>();
@@ -225,9 +228,10 @@ export class QuestEngine implements Task {
         const progress = await module.readProgress?.();
         const stage = progress ? progress.stage : await module.readStage?.();
         const snap = this.buildSnapshot(module, stage, progress);
+        const combatActive = this.combatAdvancing(snap);
 
         if (this.pendingFailedSignature !== null) {
-            if (progressSignature(snap) === this.pendingFailedSignature) {
+            if (!combatActive && progressSignature(snap) === this.pendingFailedSignature) {
                 this.host.log(`no progress after ${this.noProgressCount} steps on ${module.record.name}`);
                 this.parkOrGiveUp(id, module.record.name);
                 this.resetWatchdog();
@@ -482,8 +486,14 @@ export class QuestEngine implements Task {
         }
 
         if (advancesWorld(step)) {
-            const signature = progressSignature(this.buildSnapshot(module, stage, progress));
-            const count = ok
+            const after = this.buildSnapshot(module, stage, progress);
+            const signature = progressSignature(after);
+            const combatActive = this.combatAdvancing(after);
+            if (combatActive) {
+                this.watchdog.reset();
+                this.failedWatchdog.reset();
+            }
+            const count = combatActive ? 0 : ok
                 ? this.watchdog.note(signature)
                 : this.failedWatchdog.noteFailure(progressSignature(snap), signature);
             this.noProgressCount = count;
@@ -606,6 +616,18 @@ export class QuestEngine implements Task {
         this.noProgressCount = 0;
         this.tracker.reset();
         this.failStreak = 0;
+        this.combatIdleSince = null;
+    }
+
+    private combatAdvancing(snap: QuestSnapshot): boolean {
+        if (!Game.inCombat()) {
+            this.combatIdleSince = null;
+            return false;
+        }
+        const xp = snap.combatXp ?? 0;
+        if (this.combatIdleSince === null || xp !== this.combatXp) this.combatIdleSince = Date.now();
+        this.combatXp = xp;
+        return Date.now() - this.combatIdleSince < COMBAT_STALL_MS;
     }
 
     /**
@@ -705,7 +727,8 @@ export class QuestEngine implements Task {
             prayer: Skills.effective('prayer'),
             attack: Skills.level('attack'),
             ranged: Skills.level('ranged'),
-            freeSlots: Inventory.free()
+            freeSlots: Inventory.free(),
+            combatXp: Skills.xp('attack') + Skills.xp('strength') + Skills.xp('defence') + Skills.xp('ranged') + Skills.xp('magic') + Skills.xp('hitpoints')
         };
     }
 

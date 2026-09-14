@@ -44,7 +44,7 @@ export function assessReward(capture: RewardCapture) {
         if (sample.solved && !complete) violations.add('solved-before-accounted');
         const prior = samples[i - 1];
         if (prior && prior.hp === prior.maxHp && sample.hp === sample.maxHp && prior.used === 28
-            && sample.sharks === prior.sharks - 1 && sample.used === 27 && sample.action === 'Eat Shark') fullHpSpace = true;
+            && sample.sharks === prior.sharks - 1 && sample.used === 27 && sample.action === 'Drop Shark') fullHpSpace = true;
     }
     if (!complete) violations.add('reward-quantities-outstanding');
     if (capture.requireFullHpSpace && !fullHpSpace) violations.add('full-hp-shark-space');

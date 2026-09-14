@@ -25,11 +25,11 @@ import { COMBAT_SKILLS, XpTracker, jiveFrame, paintLevels } from '../../paint/ji
 import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
-import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from '../JiveDragons/combat.js';
-import { lootHalts, siteTileOf, wantsDrop, type Style } from '../JiveDragons/logic.js';
-import type { DragonSite } from '../JiveDragons/sites.js';
-import { SHIELD, bankRoutine, escapeRunesFor, type BankOpts } from '../JiveDragons/supply.js';
-import { LOOT_GUARD, guarded } from '../JiveDemons/logic.js';
+import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from '../../api/combat/hunting/combat.js';
+import { lootHalts, siteTileOf, wantsDrop, type Style } from '../../api/combat/hunting/logic.js';
+import type { DragonSite } from '../../api/combat/hunting/sites.js';
+import { SHIELD, bankRoutine, escapeRunesFor, type BankOpts } from '../../api/combat/hunting/supply.js';
+import { LOOT_GUARD, guarded } from '../../api/combat/hunting/guarded.js';
 import { enterKbdLair, leaveKbdLair, type EntryHost } from './entry.js';
 import { ANTIPOISON_DOSES, POISONED, antipoisonPlan, doseToDrink } from './logic.js';
 import { KBD_LAIR, KBD_ROUTE, SITE_OPTIONS, siteFor } from './sites.js';
@@ -219,10 +219,12 @@ async function eatOnce(bot: JiveKBD): Promise<boolean> {
     }
     bot.setStatus(`eating ${food.name} (${Math.round(hpFrac() * 100)}% hp)`);
     const before = Skills.effective('hitpoints');
+    const id = food.id;
+    const count = Inventory.countById(id);
     if (!(await food.interact('Eat'))) {
         return false;
     }
-    return Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
+    return Execution.delayUntilTicks(() => Inventory.countById(id) < count || Skills.effective('hitpoints') > before, 2);
 }
 
 async function lootOnce(bot: JiveKBD): Promise<boolean> {
@@ -413,6 +415,9 @@ class BankRun implements Task {
         if (this.bot.parked) {
             return false;
         }
+        if (!this.bot.shieldReady() && Inventory.count(SHIELD) === 0) {
+            return true;
+        }
         if (!hasFood() && !this.bot.bankKnownEmpty()) {
             return true;
         }
@@ -444,7 +449,7 @@ class LootCorpse implements Task {
 class EnterLair implements Task {
     constructor(private readonly bot: JiveKBD) {}
     validate(): boolean {
-        return !this.bot.parked && !SITE.inArea(Game.tile()) && hpFrac() >= PANIC_HP;
+        return !this.bot.parked && this.bot.shieldReady() && !SITE.inArea(Game.tile()) && hpFrac() >= PANIC_HP;
     }
     async execute(): Promise<void> {
         await enterKbdLair(this.bot, SITE, KBD_ROUTE);
@@ -548,6 +553,9 @@ export default class JiveKBD extends TaskBot implements CombatHost, EntryHost {
 
     override recoveryAnchor(): Tile | null {
         return SITE.bank;
+    }
+    shieldReady(): boolean {
+        return Equipment.contains(SHIELD);
     }
     override grindTargets(): string[] {
         return [SITE.target.toLowerCase()];

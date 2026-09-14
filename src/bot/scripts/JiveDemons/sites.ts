@@ -1,5 +1,5 @@
 import Tile from '../../geometry/Tile.js';
-import { TAVERLEY_BLUE, inBox, type DragonSite } from '../JiveDragons/sites.js';
+import { TAVERLEY_BLUE, inBox, type DragonSite } from '../../api/combat/hunting/sites.js';
 
 // Why: the pocket sits behind the dusty-key gate on the far side of the blue lair, so the gate, the key, the bank, the escape and the walk-out are the blue site's, and only the tiles past the passage are its own.
 // Why: the entrance corridor at x 2881..2887 runs between the blue lair and the pocket on the ladder side of the gate, so the area is three boxes that meet around it rather than one box that would swallow it.

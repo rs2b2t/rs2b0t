@@ -1,5 +1,5 @@
 import { Bank } from '../../api/bank/Bank.js';
-import { nearestBank } from '../../api/bank/BankLocations.js';
+import { nearestBank, type BankLocation } from '../../api/bank/BankLocations.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Execution } from '../../api/execution/Execution.js';
@@ -13,7 +13,7 @@ import { XpTracker, jiveFrame, paintLevels } from '../../paint/jive.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { JEWELS, JEWEL_OPTIONS, PACK, castsAffordable, decide, jewelByName, runesPerCast, staffFor, tripPlan, type Jewel, type PackState, type Step } from './logic.js';
+import { JEWELS, JEWEL_OPTIONS, PACK, castsAffordable, decide, jewelByName, jewelSlots, runesPerCast, staffFor, tripPlan, type Jewel, type PackState, type Step } from './logic.js';
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const MAGIC_TAB = 6;
@@ -40,7 +40,7 @@ export default class JiveEnchanter extends TaskBot {
     private banked = 0;
     /** The tick the last cast was clicked on; every later op is paced off it. */
     private castTick = -CAST_TICKS;
-    private bankAccess = BOOTH;
+    private bank: BankLocation | null = null;
     private bankTile: Tile | null = null;
     private bankName = 'the bank';
 
@@ -83,7 +83,7 @@ export default class JiveEnchanter extends TaskBot {
             ScriptRunner.stop('[enchanter] no reachable bank');
             return false;
         }
-        this.bankAccess = bank.access ?? BOOTH;
+        this.bank = bank;
         this.bankTile = bank.tile;
         this.bankName = bank.name;
         if (bank.tile.level === here.level && bank.tile.distanceTo(here) <= 4) {
@@ -107,7 +107,11 @@ export default class JiveEnchanter extends TaskBot {
         }
         await this.settleCast();
         this.setStatus('opening the bank');
-        if (await Bank.openNearest(this.bankAccess.name, this.bankAccess.op, m => this.log(`  ${m}`))) {
+        const log = (m: string) => this.log(`  ${m}`);
+        const opened = this.bank?.npcAccess
+            ? await Bank.openNpcAccess(this.bank.npcAccess, log)
+            : await Bank.openNearestAccess(this.bank?.access ?? BOOTH, log);
+        if (opened) {
             return true;
         }
         const here = Game.tile();
@@ -253,7 +257,6 @@ class WieldStaff implements Task {
     }
 }
 
-// Why: everything but the spell's runes and the jewel goes in, products and the old weapon included, so the withdrawal always starts from a known pack.
 class Restock implements Task {
     constructor(private bot: JiveEnchanter) {}
 
@@ -271,7 +274,8 @@ class Restock implements Task {
         const products = Inventory.count(jewel.product);
         const wielded = bot.wielded();
         const keep = new Set(runesPerCast(jewel, wielded).map(r => r.rune.toLowerCase()));
-        await Bank.depositAllMatching((name, id) => id !== jewel.id && !keep.has(name.toLowerCase()));
+        const keepJewels = bot.jewelsHeld() <= jewelSlots(jewel, wielded);
+        await Bank.depositAllMatching((name, id) => (!keepJewels || id !== jewel.id) && !keep.has(name.toLowerCase()));
         if (!(await Execution.delayUntil(() => Bank.isOpen() && Bank.loaded(), 5000))) {
             bot.log(Bank.isOpen() ? '[enchanter] the bank list has not filled in, retrying this trip' : '[enchanter] the bank window closed, retrying this trip');
             return;
@@ -322,13 +326,16 @@ class Enchant implements Task {
     constructor(private bot: JiveEnchanter) {}
 
     validate(): boolean {
-        return this.bot.staffChecked && !Bank.isOpen() && this.bot.step().kind === 'cast';
+        return this.bot.staffChecked && this.bot.step().kind === 'cast';
     }
 
     async execute(): Promise<void> {
         const bot = this.bot;
         const jewel = bot.jewel;
         await bot.settleCast();
+        if (!(await Bank.close())) {
+            return;
+        }
         if (!(await Game.openSideTab(MAGIC_TAB))) {
             bot.log('[enchanter] could not open the magic tab, retrying');
             return;

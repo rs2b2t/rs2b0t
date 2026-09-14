@@ -177,7 +177,7 @@ describe('per-clue required items (2811 Baxtorian Falls rope)', () => {
 });
 
 describe('opening a casket', () => {
-    const CASKET = 3549;
+    let CASKET = 3549;
     const NEXT_SCROLL = 2722;
     const SHARK = 385;
     const RUNE = 561;
@@ -188,12 +188,12 @@ describe('opening a casket', () => {
     let yieldNow: boolean;
     let restoreGroundHere: () => void;
     let restoreEvents: () => void;
-    const nameOf = (id: number): string => (id === SHARK ? 'Shark' : id === CASKET ? 'Casket' : id === RUNE ? 'Nature rune' : id === NEXT_SCROLL ? 'Clue scroll' : 'Loot');
+    const nameOf = (id: number): string => (id === 379 ? 'Lobster' : id === SHARK ? 'Shark' : id === CASKET ? 'Casket' : id === RUNE ? 'Nature rune' : id === NEXT_SCROLL ? 'Clue scroll' : 'Loot');
     const packItem = (id: number) => ({
         id, count: 1, name: nameOf(id),
         interact: async (op: string): Promise<boolean> => {
             if (op === 'Open') { inv = inv.filter(i => i !== CASKET); onOpen(); }
-            if (op === 'Drop') { inv.splice(inv.indexOf(id), 1); dropped++; ground.push({ id: SHARK, name: 'Shark', taken: false }); }
+            if (op === 'Drop') { inv.splice(inv.indexOf(id), 1); dropped++; ground.push({ id, name: nameOf(id), taken: false }); }
             return true;
         }
     });
@@ -202,6 +202,7 @@ describe('opening a casket', () => {
         interact: async (): Promise<boolean> => { g.taken = true; inv.push(g.id); return true; }
     });
     beforeEach(() => {
+        CASKET = 3549;
         Object.assign(RealInventory.Inventory, {
             items: () => inv.map(packItem),
             first: () => null,
@@ -246,5 +247,14 @@ describe('opening a casket', () => {
         expect(await ClueExecutor.solveHeldClue(m => log.push(m))).toBe('done');
         expect(ground[0].taken).toBe(false);
         expect(log.some(m => /WARNING: 'Coins' is left on the ground/.test(m))).toBe(true);
+    });
+    test('easy reward spill makes room from ordinary food without picking it back up', async () => {
+        CASKET = 2714;
+        inv = [CASKET, ...Array<number>(27).fill(379)];
+        onOpen = () => { inv.push(RUNE); ground.push({ id: 995, name: 'Coins', taken: false }); };
+        expect(await ClueExecutor.solveHeldClue(() => {})).toBe('done');
+        expect(inv).toContain(995);
+        expect(dropped).toBe(1);
+        expect(ground.find(g => g.id === 379)?.taken).toBe(false);
     });
 });

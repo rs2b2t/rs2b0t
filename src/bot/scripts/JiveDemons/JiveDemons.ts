@@ -26,11 +26,11 @@ import { COMBAT_SKILLS, XpTracker, jiveFrame, paintLevels } from '../../paint/ji
 import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
-import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from '../JiveDragons/combat.js';
-import { keyStatus, lootHalts, siteTileOf, wantsDrop, type Style } from '../JiveDragons/logic.js';
-import type { DragonSite } from '../JiveDragons/sites.js';
-import { acquireKey, bankRoutine, enterLair, escapeRunesFor, inCell, leaveCell, type BankOpts, type KeyState } from '../JiveDragons/supply.js';
-import { LOOT_GUARD, guarded } from './logic.js';
+import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from '../../api/combat/hunting/combat.js';
+import { keyStatus, lootHalts, siteTileOf, wantsDrop, type Style } from '../../api/combat/hunting/logic.js';
+import type { DragonSite } from '../../api/combat/hunting/sites.js';
+import { acquireKey, bankRoutine, enterLair, escapeRunesFor, inCell, leaveCell, type BankOpts, type KeyState } from '../../api/combat/hunting/supply.js';
+import { LOOT_GUARD, guarded } from '../../api/combat/hunting/guarded.js';
 import { SITE_OPTIONS, TAVERLEY_BLACK_DEMON, siteFor } from './sites.js';
 
 const LOOT_RADIUS = 10;
@@ -236,10 +236,12 @@ async function eatOnce(bot: JiveDemons): Promise<boolean> {
     }
     bot.setStatus(`eating ${food.name} (${Math.round(hpFrac() * 100)}% hp)`);
     const before = Skills.effective('hitpoints');
+    const id = food.id;
+    const count = Inventory.countById(id);
     if (!(await food.interact('Eat'))) {
         return false;
     }
-    return Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
+    return Execution.delayUntilTicks(() => Inventory.countById(id) < count || Skills.effective('hitpoints') > before, 2);
 }
 
 async function lootOnce(bot: JiveDemons): Promise<boolean> {

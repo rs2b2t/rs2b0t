@@ -12,7 +12,7 @@ import { XpTracker, jiveFrame, paintLevels } from '../../paint/jive.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { escapeRunesFor } from '../JiveDragons/supply.js';
+import { escapeRunesFor } from '../../api/combat/hunting/supply.js';
 import { CHEST, CHEST_STAND, JUNK, KEY, KEYS_PER_TRIP, PACK, decide, junkHeld, keysToWithdraw, type PackState, type Step } from './logic.js';
 
 /** The Falador West booths, the nearest bank to both the chest and the teleport. */

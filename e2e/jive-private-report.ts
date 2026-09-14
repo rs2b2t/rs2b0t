@@ -27,13 +27,13 @@ export function privateReport(input: { readonly scenario: PrivateScenario; reado
             hp: e.hp, maxHp: e.maxHp, sharks: e.sharks, used: e.used,
             left: e.kind === 'departure' || e.kind === 'host-resume' || ['Rub', 'Break', 'Teleport'].includes(e.action) || (open?.tile !== null && e.tile !== null
                 && (e.tile.x !== open?.tile.x || e.tile.z !== open?.tile.z || e.tile.level !== open?.tile.level)),
-            solved: e.kind === 'solved', action: e.kind === 'eat-confirmed' ? 'Eat Shark' : e.action }))
+            solved: e.kind === 'solved', action: e.kind === 'eat-confirmed' ? 'Eat Shark' : e.kind === 'drop-confirmed' ? 'Drop Shark' : e.action }))
     };
     const reward = scenario === 'reward' || scenario === 'guardian' ? assessReward(rewardCapture) : null;
     if (reward) {
         if (!open?.bankConfirmed || !events.some(e => e.kind === 'solved')) violations.push('reward-completion-unobserved');
         if (scenario === 'reward' && (manifest?.manifest.filter(i => [145, 157, 163].includes(i.id)).reduce((n, i) => n + i.count, 0) ?? 0) < 9) violations.push('nine-potion-units-required');
-        if (rewardEvents.some(e => e.kind === 'inventory-action' && e.action === 'Drop')) violations.push('dropped-for-reward-space');
+        if (rewardEvents.some(e => e.kind === 'inventory-action' && e.action === 'Drop' && e.itemId !== 385)) violations.push('dropped-for-reward-space');
         for (const e of rewardEvents.filter(e => e.kind === 'ground-action' && e.action === 'Take')) {
             const p = frames.findLast(f => f.at <= e.at)?.players.find(p => p.username === user);
             if (!p?.ground.some(i => i.id === e.itemId && i.owned)) violations.push('overflow-ownership-unconfirmed');

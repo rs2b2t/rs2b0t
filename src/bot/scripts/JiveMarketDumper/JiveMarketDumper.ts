@@ -68,7 +68,7 @@ export default class JiveMarketDumper extends TaskBot {
     private status = 'starting';
     private startedAt = Date.now();
     private cat: Catalog | null = null;
-    private bankAccess = BOOTH;
+    private bank: BankLocation | null = null;
     private bankTile: Tile | null = null;
     private bankName = 'the bank';
     private soldByName = new Map<string, number>();
@@ -115,7 +115,7 @@ export default class JiveMarketDumper extends TaskBot {
             ScriptRunner.stop('[dumper] no reachable bank');
             return false;
         }
-        this.bankAccess = bank.access ?? BOOTH;
+        this.bank = bank;
         this.bankTile = bank.tile;
         this.bankName = bank.name;
         if (bank.tile.level === here.level && bank.tile.distanceTo(here) <= 6) {
@@ -163,7 +163,11 @@ export default class JiveMarketDumper extends TaskBot {
             return true;
         }
         this.setStatus('opening the bank');
-        if (await Bank.openNearest(this.bankAccess.name, this.bankAccess.op, m => this.log(`  ${m}`))) {
+        const log = (m: string) => this.log(`  ${m}`);
+        const opened = this.bank?.npcAccess
+            ? await Bank.openNpcAccess(this.bank.npcAccess, log)
+            : await Bank.openNearestAccess(this.bank?.access ?? BOOTH, log);
+        if (opened) {
             return true;
         }
         this.log('[dumper] could not open the bank, will retry');

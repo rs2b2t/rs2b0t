@@ -13,13 +13,16 @@ export async function installPrivateTrace(page: Page, clueId: number) {
         const r = g.rs2b0t.reader;
         const events: PrivateEvent[] = [], restores: (() => void)[] = [];
         let bank = globalThis.__jiveBank?.items ?? [], bankConfirmed = globalThis.__jiveBank?.error === null;
-        let lastSharks = a.Inventory.count('Shark'), eaten = 0, pendingEat = false;
+        let lastSharks = a.Inventory.count('Shark'), eaten = 0;
+        let pendingShark: 'Eat' | 'Drop' | null = null;
         const capture = (kind: string, detail: { action?: string; itemId?: number } = {}) => {
             const inventory = a.Inventory.items().map(i => ({ id: i.id, count: i.count }));
             if (a.Bank.ready()) { bank = a.Bank.items().map(i => ({ id: i.id, count: i.count })); bankConfirmed = true; }
             const sharks = a.Inventory.count('Shark');
-            const consumedNow = pendingEat && sharks === lastSharks - 1;
-            if (consumedNow) { eaten++; pendingEat = false; }
+            const consumedNow = pendingShark === 'Eat' && sharks === lastSharks - 1;
+            const droppedNow = pendingShark === 'Drop' && sharks === lastSharks - 1;
+            if (consumedNow) eaten++;
+            if (consumedNow || droppedNow) pendingShark = null;
             lastSharks = sharks;
             const event: PrivateEvent = { at: Date.now(), tick: a.Game.tick(), kind, action: detail.action ?? '', itemId: detail.itemId ?? -1,
                 inventory, bank, bankConfirmed, hp: a.Skills.effective('hitpoints'), maxHp: a.Skills.level('hitpoints'), sharks,
@@ -31,13 +34,15 @@ export async function installPrivateTrace(page: Page, clueId: number) {
                 modalId: r.modals().main, ground: r.groundItems().map(i => ({ id: i.id, count: i.count })),
                 consumed: [{ id: 385, count: eaten }], progress: g.rs2b0t.clueProgress() };
             if (consumedNow) events.push({ ...event, kind: 'eat-confirmed', action: 'Eat Shark' });
+            if (droppedNow) events.push({ ...event, kind: 'drop-confirmed', action: 'Drop Shark', itemId: 385 });
             events.push(event);
         };
         const held = a.InvItem.prototype.interact;
-        a.InvItem.prototype.interact = function (action) {
+        a.InvItem.prototype.interact = async function (action) {
             capture('inventory-action', { action, itemId: this.id });
-            if (this.id === 385 && action === 'Eat') pendingEat = true;
-            return held.call(this, action);
+            const dispatched = await held.call(this, action);
+            if (this.id === 385 && (action === 'Eat' || action === 'Drop')) pendingShark = dispatched ? action : null;
+            return dispatched;
         };
         restores.push(() => { a.InvItem.prototype.interact = held; });
         const ground = a.GroundItem.prototype.interact;

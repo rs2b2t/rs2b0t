@@ -1,5 +1,5 @@
 // Why: the poison kit is the engine's, so the lair module keeps only the lever-spider clock and passes the rest through for its own importers.
-export { ANTIPOISON_DOSES, ANTIPOISON_LABEL, POISONED, antipoisonPlan, doseToDrink } from '../JiveDragons/supply.js';
+export { ANTIPOISON_DOSES, ANTIPOISON_LABEL, POISONED, antipoisonPlan, doseToDrink } from '../../api/combat/hunting/supply.js';
 
 /** Ticks a super antipoison holds the poison counter below zero. */
 export const IMMUNE_TICKS = 600;

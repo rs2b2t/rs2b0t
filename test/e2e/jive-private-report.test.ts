@@ -35,15 +35,33 @@ test('keeps an early departure failure after later reward delivery', () => {
     expect(report.reward?.violations).toContain('left-before-accounted');
 });
 
-test('accepts nine earned potion units only after full-HP Shark space and server accounting', () => {
+function rewardEpisode() {
     const manifest = [{ id: 145, count: 3 }, { id: 157, count: 3 }, { id: 163, count: 3 }];
     const events = [event({ kind: 'inventory-action', action: 'Open', itemId: 3545 }),
         event({ at: 200, inventory: [{ id: 145, count: 1 }, { id: 385, count: 27 }], manifest, modalId: 6960 }),
-        event({ at: 300, kind: 'eat-confirmed', sharks: 26, used: 27, inventory: [{ id: 145, count: 1 }, { id: 385, count: 26 }], consumed: [{ id: 385, count: 1 }] }),
-        event({ at: 400, kind: 'solved', sharks: 19, inventory: [...manifest, { id: 385, count: 19 }], consumed: [{ id: 385, count: 8 }] })];
+        event({ at: 250, kind: 'inventory-action', action: 'Drop', itemId: 385 }),
+        event({ at: 300, kind: 'drop-confirmed', sharks: 26, used: 27, inventory: [{ id: 145, count: 1 }, { id: 385, count: 26 }] }),
+        event({ at: 400, kind: 'solved', sharks: 19, inventory: [...manifest, { id: 385, count: 19 }] })];
     const frames: PrivateFrame[] = events.map(e => ({ at: e.at, tick: e.tick, fixture: 'fixture', guardians: [], players: [
         { username: 'test', hp: 77, inventory: e.inventory, bank: e.bank, trailStatus: 0, ground: [] }] }));
-    expect(privateReport({ scenario: 'reward', user: 'test', events, frames }).passed).toBe(true);
+    return { events, frames };
+}
+
+test('accepts nine earned potion units only after a full-HP Shark drop and server accounting', () => {
+    expect(privateReport({ scenario: 'reward', user: 'test', ...rewardEpisode() }).passed).toBe(true);
+});
+
+test('rejects dropping reward items even after a confirmed Shark drop', () => {
+    const { events, frames } = rewardEpisode();
+    events.splice(3, 0, event({ at: 275, kind: 'inventory-action', action: 'Drop', itemId: 145 }));
+    expect(privateReport({ scenario: 'reward', user: 'test', events, frames }).violations).toContain('dropped-for-reward-space');
+});
+
+test('rejects an unconfirmed Shark drop as full-pack space evidence', () => {
+    const { events, frames } = rewardEpisode();
+    const report = privateReport({ scenario: 'reward', user: 'test', frames,
+        events: events.map(e => e.kind === 'drop-confirmed' ? { ...e, kind: 'tick' } : e) });
+    expect(report.reward?.violations).toContain('full-hp-shark-space');
 });
 
 test('recognizes the guardian-specific casket without changing manifest requirements', () => {

@@ -1,6 +1,3 @@
-/** Live proof for JiveKBD at the King Black Dragon lair: --minutes --kill-min --tick --spell --walkout --no-starve.
- *  Why: entry.ts, combat.ts and supply.ts carry no unit tests because every function in them drives a live client, so this run is the only proof the ladder, the lever, the alcove and the teleport home hold together. */
-
 // Usage: HEADED=1 bun e2e/jivekbd-live.ts [--base url] [--minutes n] [--kill-min n] [--tick ms] [--spell name] [--walkout] [--no-starve]
 import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
@@ -9,6 +6,7 @@ import type { Page } from 'playwright-core';
 
 import { deployIsolatedClient, launchBrowser, logout, setSettings, stopScript } from './lib/harness.js';
 import { cheatQuiet, clearChatDialogs, mainlandAccount, seedItemsToBank, startScript, teleTo, type BankSeedItem } from './tutorial/harness.js';
+import { installKbdDoseTrace, type KbdDose } from './jivekbd-dose-trace.js';
 
 interface Args {
     base: string;
@@ -110,7 +108,7 @@ const LOOT = ['Dragon bones', 'Dragonhide', 'Coins', 'Rune longsword', 'Adamant 
 // Why: the staff supplies the fire runes for the spell, but the Varrock teleport's fire rune is counted in the pack, so a few ride along.
 // Why: --walkout seeds no law runes anywhere, so the first exit is the lever-and-ladder walk rather than the teleport.
 const PACK: readonly (readonly [string, string, number])[] = [
-    ['staff_of_fire', STAFF, 1], ['antidragonbreathshield', SHIELD, 1],
+    ['staff_of_fire', STAFF, 1],
     ['airrune', 'Air rune', 1200], ['deathrune', 'Death rune', 300], ['chaosrune', 'Chaos rune', 300], ['firerune', 'Fire rune', 20],
     ['4dose2antipoison', 'Superantipoison(4)', 1], [FOOD.debug, FOOD.name, PACK_FOOD],
     ...(args.walkout ? [] : [['lawrune', 'Law rune', 6] as const])
@@ -163,6 +161,7 @@ interface Sample {
     trips: number;
     looted: number;
     dosesDrunk: number;
+    confirmedDoses: KbdDose[];
     spotIdx: number;
     bankOpen: boolean;
     food: number;
@@ -182,6 +181,7 @@ interface Sample {
 interface Probe { food: string; law: string; doses: string[]; target: string; poison: string }
 
 interface Api {
+    __jiveKbdDoseTrace?: { events: KbdDose[]; restore(): void };
     __rs2b0t: {
         Bank: { isOpen(): boolean };
         Equipment: { items(): { name: string | null }[] };
@@ -223,6 +223,7 @@ function sample(page: Page, probe: Probe): Promise<Sample> {
             trips: num('bankTrips'),
             looted: num('looted'),
             dosesDrunk: num('dosesDrunk'),
+            confirmedDoses: g.__jiveKbdDoseTrace?.events ?? [],
             spotIdx: num('safespotIdx'),
             bankOpen: a.Bank.isOpen(),
             food: a.Inventory.count(p.food),
@@ -358,6 +359,7 @@ try {
 
     await setSettings(page, 'JiveKBD', SETTINGS);
     await startScript(page, 'JiveKBD');
+    await page.evaluate(installKbdDoseTrace, undefined);
     console.log(`JiveKBD started; watching the dose, the ladder, the lever, the alcove at ${SAFESPOTS[0].x},${SAFESPOTS[0].z}, a kill, a pickup and the trip home`);
 
     const probe: Probe = { food: FOOD.name, law: 'Law rune', doses: DOSE_FORMS, target: TARGET, poison: POISON_CHAT.source };
@@ -423,12 +425,16 @@ try {
             }
         }
 
-        if (doseLines > 0 && !inBox(s.tile, DUNGEON) && !inBox(s.tile, LAIR)) { mark('dose', `drank the Superantipoison on the surface, ${s.doses} dose(s) left`); }
+        const surfaceDose = s.confirmedDoses.find(dose => dose.tile !== null && !inBox(dose.tile, DUNGEON) && !inBox(dose.tile, LAIR));
+        if (surfaceDose) { mark('dose', `confirmed Superantipoison at ${surfaceDose.tile?.x},${surfaceDose.tile?.z} on tick ${surfaceDose.tick}`); }
+        if ((inBox(s.tile, DUNGEON) || inBox(s.tile, LAIR)) && !met['dose']) { fail(`reached the dungeon or lair at ${s.tile?.x},${s.tile?.z} without a confirmed surface dose`); }
         if (inBox(s.tile, DUNGEON)) {
-            if (!met['dose']) { fail(`reached the dungeon at ${s.tile?.x},${s.tile?.z} without the surface dose`); }
             mark('dungeon', `down the ladder at ${s.tile?.x},${s.tile?.z}`);
         }
-        if (inBox(s.tile, LAIR)) { mark('lair', `inside the lair at ${s.tile?.x},${s.tile?.z}`); }
+        if (inBox(s.tile, LAIR)) {
+            if (!s.worn.includes(SHIELD)) { fail(`entered the lair without the banked ${SHIELD}`); }
+            mark('lair', `inside the lair at ${s.tile?.x},${s.tile?.z}`);
+        }
         if (onSafespot(s.tile)) { mark('safespot', `standing in the alcove at ${s.tile?.x},${s.tile?.z}`); }
         if (s.worn.includes(STAFF) && s.worn.includes(SHIELD)) { mark('wielded', `${STAFF} and ${SHIELD} are worn`); }
         if (s.kills > 0 && met['wielded'] === undefined) { fail(`a kill landed without both the ${STAFF} and the ${SHIELD} worn, only ${s.worn.filter(w => w !== '?').join('/') || 'nothing'}`); }
@@ -523,6 +529,7 @@ try {
         counters: { kills: final.kills, bankTrips: final.trips, deaths, engagingLines, looted: final.looted, doseLines, curedLines, uncuredLines, poisonChatSeen, playerPolls, maxPlayers },
         safespot: { spots: SAFESPOTS, fireCap: FIRE_CAP, heldMs: safespotMs, lairMs, drops: hpDrops.length, breaths: breaths.length, violations: violations.length, hpDrops: hpDrops.slice(-300), breathDrops: breaths.slice(-100), violationDrops: violations },
         exit: { teleportSaid, walkoutSaid },
+        confirmedDoses: final.confirmedDoses,
         starve,
         final: { tick: final.tick, tile: final.tile, hp: final.hp, maxHp: final.maxHp, worn: final.worn, status: final.status, logs: final.logs.slice(-40) }
     };

@@ -2474,7 +2474,7 @@ export default class GatheringBot extends TaskBot {
         const vendor = this.baitVendor();
         return this.isFishing() && baitTripDue({
             hasVendor: vendor !== null,
-            outOfBait: vendor !== null && Inventory.count(vendor.item) === 0,
+            outOfBait: vendor !== null && this.fishMethod?.gear.some(gear => gear.name === vendor.item) === true && Inventory.count(vendor.item) === 0,
             lastAtMs: this.lastGuildFeatherAt,
             intervalMinutes: this.guildFeatherMinutes,
             nowMs: Date.now()

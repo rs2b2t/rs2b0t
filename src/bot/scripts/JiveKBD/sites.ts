@@ -1,5 +1,5 @@
 import Tile from '../../geometry/Tile.js';
-import { inBox, type AreaPoint, type DragonSite } from '../JiveDragons/sites.js';
+import { inBox, type AreaPoint, type DragonSite } from '../../api/combat/hunting/sites.js';
 
 export interface LocStop {
     tile: Tile;
@@ -40,6 +40,7 @@ export const KBD_LAIR: DragonSite = {
     bank: EDGEVILLE_BANK,
     escapeTeleportId: 'varrock',
     walkOut: EDGEVILLE_BANK,
+    fireAtRange: true,
     rangedThreat: true,
     inArea: inBox({ minX: 2688, maxX: 2751, minZ: 9792, maxZ: 9855, level: 0 })
 };

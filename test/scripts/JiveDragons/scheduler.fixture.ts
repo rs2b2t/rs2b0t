@@ -14,7 +14,7 @@ import { Traversal } from '#/bot/api/walking/Traversal.js';
 import { SettingsBag } from '#/bot/runtime/Settings.js';
 import JiveDragons from '#/bot/scripts/JiveDragons/JiveDragons.js';
 import { Fight } from '#/bot/scripts/JiveDragons/combat.js';
-import { siteFor } from '#/bot/scripts/JiveDragons/sites.js';
+import { needsShield, siteFor } from '#/bot/scripts/JiveDragons/sites.js';
 
 export async function scenario(siteId = 'taverley-black', style = 'range', settings: Record<string, string | number | boolean | string[]> = {}) {
     const site = siteFor(siteId);
@@ -37,6 +37,7 @@ export async function scenario(siteId = 'taverley-black', style = 'range', setti
     spyOn(reader, 'npcs').mockImplementation(() => state.npcs);
     spyOn(reader, 'selfFaceEntity').mockReturnValue(-1);
     spyOn(reader, 'selfSlot').mockReturnValue(1);
+    spyOn(reader, 'equipment').mockReturnValue(needsShield(site, style) ? [{ id: 1540, name: 'Dragonfire shield', slot: 5, count: 1, ops: ['Remove'], comId: 1 }] : []);
     spyOn(EventSignal, 'pending').mockReturnValue(false);
     spyOn(ChatDialog, 'canContinue').mockReturnValue(false);
     spyOn(Reachability, 'lineOfSight').mockReturnValue(true);

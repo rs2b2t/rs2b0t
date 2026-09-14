@@ -6,7 +6,7 @@ test.each(['Dragonhide body', 'Dragonhide chaps', 'Dragon vambraces', 'Coif', 'D
         expect(namesHaveEntranaRestrictedGear([name])).toBe(true);
     }
 );
-test.each(['Amulet of glory', 'Leather boots', 'Rune arrow', 'Shark', 'Clue scroll', 'Spade', 'Sextant', 'Superantipoison(4)', 'Coins'])(
+test.each(['Amulet of glory', 'Leather boots', 'Rune arrow', 'Body rune', 'Shark', 'Clue scroll', 'Spade', 'Sextant', 'Superantipoison(4)', 'Coins'])(
     'the monks let %s through', name => {
         expect(namesHaveEntranaRestrictedGear([name])).toBe(false);
     }

@@ -28,6 +28,7 @@ import { GuardianProtection } from './guardianKit.js';
 import { hardClueKit, SHARK_ID } from './hardClueKit.js';
 import { hardKitSnapshot } from './hardCluePreparation.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
+import { FOOD_OPTIONS, isFoodItem } from '#/bot/api/combat/food.js';
 import { namesHaveEntranaRestrictedGear } from '#/bot/event/webwalk/exec/specialCrossing.js';
 import { PuzzleBox } from '#/bot/api/ai/clues/PuzzleBox.js';
 import type { ClueRow, ClueStep } from '#/bot/api/ai/clues/types.js';
@@ -477,7 +478,7 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void 
             // Why: a hard trail is four to six caskets and the server keeps the count, so the only sign the trail ended is that no scroll came back.
             if (heldIds().some(id => CLUE_DB[id] !== undefined)) return;
             if (GameMessages.sawSince(mark, TRAIL_COMPLETE)) log('the trail is complete');
-            await collectReward(log);
+            await collectReward(log, step.casketObj.includes('_hard_'));
             return;
         }
     }
@@ -572,30 +573,28 @@ async function dismissRewardModal(): Promise<void> {
     }
 }
 
-/**
- * Take the reward off our own tile, dropping Sharks for room.
- * Why: the last casket delivers in one tick and what does not fit lands under us; the trail is over, so its Sharks are the room, and a dropped one must never be taken back.
- */
-async function collectReward(log: (m: string) => void): Promise<void> {
+async function collectReward(log: (m: string) => void, hard: boolean): Promise<void> {
     await dismissRewardModal();
     const here = reader.worldTile();
     if (!here) return;
+    const discarded = new Set([SHARK_ID]);
     const onTile = (g: GroundItem): boolean => {
         const t = g.tile();
-        return t.x === here.x && t.z === here.z && t.level === here.level && g.id !== SHARK_ID;
+        return t.x === here.x && t.z === here.z && t.level === here.level && !discarded.has(g.id);
     };
     for (let guard = 0; guard < 28; guard++) {
         const drop = GroundItems.query().where(onTile).nearest();
         if (!drop) return;
         const name = drop.name ?? '';
         if (Inventory.isFull()) {
-            const shark = Inventory.items().find(i => i.id === SHARK_ID);
-            if (!shark) {
-                log(`WARNING: '${name}' is left on the ground, the pack is full with no Shark to drop`);
+            const food = Inventory.items().find(i => hard ? i.id === SHARK_ID : FOOD_OPTIONS.some(name => isFoodItem(i.name, name)));
+            if (!food) {
+                log(`WARNING: '${name}' is left on the ground, the pack is full with no ${hard ? 'Shark' : 'food'} to drop`);
                 return;
             }
             const used = Inventory.used();
-            if (!(await shark.interact('Drop')) || !(await Execution.delayUntil(() => Inventory.used() < used, LOOT_WAIT_MS))) return;
+            discarded.add(food.id);
+            if (!(await food.interact('Drop')) || !(await Execution.delayUntil(() => Inventory.used() < used, LOOT_WAIT_MS))) return;
         }
         const used = Inventory.used();
         const count = Inventory.count(name);

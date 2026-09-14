@@ -257,14 +257,14 @@ export function tradeIsStalled(tradeActive: boolean, hasWindow: boolean, windowE
     return tradeActive && (!hasWindow || windowExpired);
 }
 
-export function shouldSettle(freeSlots: number, packCoins: number, coinFloor: number): boolean {
-    return freeSlots <= FREE_SLOT_FLOOR || packCoins > coinFloor;
+export function shouldSettle(freeSlots: number, packCoins: number, coinFloor: number, saleReady = false): boolean {
+    return (!saleReady && freeSlots <= FREE_SLOT_FLOOR) || packCoins > coinFloor;
 }
 
 // Why: a reset is what an operator reaches for when the shop is wedged, so it owes a trip whatever the pack looks like and Settle's deposit takes everything.
 /** Whether a bank trip is owed: no room, takings over the float, or a reset asked for one. */
-export function settleDue(freeSlots: number, packCoins: number, coinFloor: number, forced: boolean): boolean {
-    return forced || shouldSettle(freeSlots, packCoins, coinFloor);
+export function settleDue(freeSlots: number, packCoins: number, coinFloor: number, forced: boolean, saleReady = false): boolean {
+    return forced || shouldSettle(freeSlots, packCoins, coinFloor, saleReady);
 }
 
 // Why: OpenWindow holds every window while a trip is due, so an order that held Settle back waited on a window that could not open: the customer who bought the cap and asked again had the goods fetched and no window, with the takings still in the pack. A live order now delays only a float top-up.
@@ -290,8 +290,8 @@ export function buyOwesSettle(give: ReadonlyMap<number, number>, coinId: number)
 
 // Why: OpenWindow runs above Settle, so a queue of customers dumping goods kept it opening windows on a pack with no room to take any and the shop never reached the bank; it yields the tick once a trip is due, though a bank it cannot reach must not shut the shop, so a backed-off bank leaves it serving.
 /** Whether the next window should wait for a bank trip. */
-export function bankBeforeServing(freeSlots: number, packCoins: number, coinFloor: number, bankReady: boolean, forced = false): boolean {
-    return bankReady && settleDue(freeSlots, packCoins, coinFloor, forced);
+export function bankBeforeServing(freeSlots: number, packCoins: number, coinFloor: number, bankReady: boolean, forced = false, saleReady = false): boolean {
+    return bankReady && settleDue(freeSlots, packCoins, coinFloor, forced, saleReady);
 }
 
 /** Coins worth going to the bank for: the gap up to the float, capped at what the bank holds. */

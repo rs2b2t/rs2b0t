@@ -5,6 +5,7 @@ import { ClueExecutor } from '#/bot/api/ai/clues/ClueExecutor.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
+import { EventSignal } from '#/bot/api/execution/EventSignal.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
 import { Quests } from '#/bot/api/ui/questlog/Quests.js';
@@ -76,7 +77,7 @@ beforeEach(() => {
     });
     spyOn(ClueExecutor, 'solveHeldClue').mockResolvedValue('yield');
 });
-afterEach(() => { mock.restore(); Sustain.set(null); });
+afterEach(() => { mock.restore(); Sustain.set(null); ClueExecutor.retryGuardian(); });
 
 test.each([1231, 2448, 385])('keeps the clue and suppresses retries when the READY bank lacks %s', async id => {
     bank = bank.filter(i => i.id !== id);
@@ -125,6 +126,37 @@ test('casket-only execution needs no hard kit', async () => {
     await new SolveClue(host).execute();
     expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
     expect(Bank.openNearest).not.toHaveBeenCalled();
+});
+
+test('a resumed hard casket provisions the next guardian and restores the original weapon', async () => {
+    pack[0] = item(2724, 'Casket');
+    const task = new SolveClue(host);
+    spyOn(ClueExecutor, 'solveHeldClue').mockImplementationOnce(async () => {
+        expect(Bank.openNearest).not.toHaveBeenCalled();
+        pack[0] = clue;
+        return 'supplies-needed';
+    }).mockImplementation(async () => {
+        expect(worn[0].id).toBe(1231);
+        expect(pack.filter(i => i.id === 385)).toHaveLength(15);
+        pack = pack.filter(i => i.id !== clue.id);
+        return 'done';
+    });
+    await task.execute();
+    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(2);
+    expect(worn[0].id).toBe(bow.id);
+    expect(task.validate()).toBe(false);
+});
+
+test('a new solver clears a previous session guardian death without retrying the failed session', async () => {
+    const task = new SolveClue(host);
+    task.noteDeath();
+    spyOn(ClueExecutor, 'solveHeldClue').mockRestore();
+    spyOn(EventSignal, 'pending').mockReturnValue(true);
+    expect(await ClueExecutor.solveHeldClue(() => {})).toBe('dead');
+    expect(task.validate()).toBe(false);
+    new SolveClue(host);
+    expect(await ClueExecutor.solveHeldClue(() => {})).toBe('yield');
+    expect(task.validate()).toBe(false);
 });
 
 test.each([

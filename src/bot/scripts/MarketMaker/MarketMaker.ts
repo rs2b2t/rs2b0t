@@ -44,7 +44,6 @@ import {
     bankBeforeServing,
     buyOwesSettle,
     windowCandidates,
-    FREE_SLOT_FLOOR,
     settleDue,
     settleRuns,
     freshChatLines,
@@ -483,6 +482,11 @@ export default class MarketMaker extends TaskBot {
     packCount(id: number): number {
         const noted = notedId(this.cat, id);
         return Inventory.countById(id) + (noted === null ? 0 : Inventory.countById(noted));
+    }
+
+    saleReady(): boolean {
+        const want = this.desk.nextIntent(Date.now(), this.intentTtlMs);
+        return want !== null && this.packCount(want.itemId) >= want.maxQty;
     }
 
     /** Everything the shop could put on the table, whether it is carrying it or would fetch it. */
@@ -1105,7 +1109,7 @@ class OpenWindow implements Task {
             return false;
         }
         // Why: Settle sits below this task, so a pack with no room has to yield the tick or the queue keeps it opening windows it cannot take goods into.
-        if (bankBeforeServing(Inventory.free(), this.bot.packCoins(), this.bot.float(), this.bot.bankReady(Date.now()), this.bot.settleForced())) {
+        if (bankBeforeServing(Inventory.free(), this.bot.packCoins(), this.bot.float(), this.bot.bankReady(Date.now()), this.bot.settleForced(), this.bot.saleReady())) {
             return false;
         }
         // Why: this task runs ahead of Restock, so claiming the tick when every request is waiting on a bank trip starves the fetch that would let any of them open.
@@ -1177,7 +1181,7 @@ class Restock implements Task {
             return false;
         }
         // Why: a trip that is owed, after a buy, on a full pack or on takings over the float, runs before the fetch, or Settle's deposit takes the fetched goods back to the bank with the takings.
-        if (!this.bot.bankReady(Date.now()) || settleDue(Inventory.free(), this.bot.packCoins(), this.bot.float(), this.bot.settleForced())) {
+        if (!this.bot.bankReady(Date.now()) || settleDue(Inventory.free(), this.bot.packCoins(), this.bot.float(), this.bot.settleForced(), this.bot.saleReady())) {
             return false;
         }
         const want = this.bot.counter().nextIntent(Date.now(), this.bot.intentTtl());
@@ -1239,8 +1243,7 @@ class Settle implements Task {
             return false;
         }
         // Why: holding an order used to block banking outright, so a pack that filled up could never be emptied and takings over the float held every window shut with the order waiting on one.
-        const due = Inventory.free() <= FREE_SLOT_FLOOR
-            || settleDue(Inventory.free(), this.bot.packCoins(), this.bot.float(), this.bot.settleForced());
+        const due = settleDue(Inventory.free(), this.bot.packCoins(), this.bot.float(), this.bot.settleForced(), this.bot.saleReady());
         return settleRuns({ due, floatShort: this.bot.floatShort() > 0, orderLive: this.bot.counter().nextIntent(Date.now(), this.bot.intentTtl()) !== null });
     }
 

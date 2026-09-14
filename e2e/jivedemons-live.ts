@@ -9,6 +9,7 @@ import type { Page } from 'playwright-core';
 
 import { deployIsolatedClient, launchBrowser, logout, setSettings, stopScript } from './lib/harness.js';
 import { cheatQuiet, clearChatDialogs, mainlandAccount, seedItemsToBank, startScript, teleTo, type BankSeedItem } from './tutorial/harness.js';
+import { demonExposure, type NonTargetAttacker } from './jivedemons-exposure.js';
 
 type Style = 'mage' | 'range';
 const STYLES: Style[] = ['mage', 'range'];
@@ -169,6 +170,8 @@ interface Sample {
     hp: number;
     maxHp: number;
     runner: string;
+    randomEvent: string | null;
+    nonTargetAttackers: NonTargetAttacker[];
     status: string;
     parked: boolean;
     parkReason: string;
@@ -197,12 +200,12 @@ interface Api {
         Equipment: { items(): { name: string | null }[] };
         Game: { tile(): Point | null };
         Inventory: { count(name: string): number; countById(id: number): number };
-        Npcs: { all(): { name: string | null; index: number; distance(): number; targetsMe(): boolean }[] };
+        Npcs: { all(): { name: string | null; id: number; index: number; distance(): number; targetsMe(): boolean }[] };
         Skills: { effective(name: string): number; level(name: string): number };
     };
     rs2b0t: {
         host: { tickCount: number };
-        runner: { state: string; bot: Record<string, unknown> | null; ctx: { log: LogLine[] } | null };
+        runner: { state: string; bot: Record<string, unknown> | null; ctx: { log: LogLine[]; watchdogHold: string | null } | null };
     };
 }
 
@@ -214,6 +217,7 @@ function sample(page: Page, probe: Probe): Promise<Sample> {
         const bot = g.rs2b0t.runner.bot;
         const num = (key: string): number => Number(bot?.[key] ?? 0);
         const npcs = a.Npcs.all();
+        const hold = g.rs2b0t.runner.ctx?.watchdogHold ?? null;
         return {
             at: Date.now(),
             tick: g.rs2b0t.host.tickCount,
@@ -221,6 +225,9 @@ function sample(page: Page, probe: Probe): Promise<Sample> {
             hp: a.Skills.effective('hitpoints'),
             maxHp: a.Skills.level('hitpoints'),
             runner: g.rs2b0t.runner.state,
+            randomEvent: hold?.startsWith('random event:') ? hold : null,
+            nonTargetAttackers: npcs.filter(n => n.name !== p.target && n.targetsMe())
+                .map(n => ({ id: n.id, index: n.index, name: n.name, distance: n.distance() })),
             status: String(bot?.status ?? ''),
             parked: bot?.parked === true,
             parkReason: String(bot?.parkReason ?? ''),
@@ -292,7 +299,8 @@ const tag = `jm${Date.now().toString(36).slice(-6)}`;
 const client = args.deploy ? deployIsolatedClient(tag) : { page: '/bot.html', cleanup: (): void => {} };
 const bundleUrl = `${args.base}${args.deploy ? `/bot/${tag}/botclient.js` : '/bot/botclient.js'}`;
 
-interface HpDrop { at: number; from: number; to: number; adults: number; tile: Point | null; was: Point | null; bothEnds: boolean; eitherEnd: boolean; harness: boolean; explained: number; unexplained: number }
+interface HpDrop { at: number; from: number; to: number; adults: number; tile: Point | null; was: Point | null; bothEnds: boolean; eitherEnd: boolean; harness: boolean; explained: number; unexplained: number; cleanInterval: boolean; reasons: string[]; nonTargetAttackers: NonTargetAttacker[] }
+interface ExcludedInterval { fromMs: number; toMs: number; reasons: string[]; nonTargetAttackers: NonTargetAttacker[]; bothEnds: boolean }
 interface StarveRecord { at: number; hitAt: number | null; hp: number; maxHp: number; food: number; law: number; damage: number | null; hitTile: Point | null; tripsBefore: number }
 interface BlueRoll { seen: number; nearest: number; offPocket: number }
 
@@ -305,6 +313,7 @@ const pageErrors: string[] = [];
 const met: Record<string, { atMs: number; note: string }> = {};
 const hpDrops: HpDrop[] = [];
 const violations: HpDrop[] = [];
+const excludedIntervals: ExcludedInterval[] = [];
 const blueRoll = new Map<number, BlueRoll>();
 const printed = new Set<string>();
 
@@ -332,6 +341,10 @@ let outOfLairSaid = false;
 let starve: StarveRecord | null = null;
 let starveDue = 0;
 let proofWritten = false;
+let stopRequested = false;
+const requestStop = (): void => { stopRequested = true; };
+process.on('SIGUSR2', requestStop);
+console.log(`harness pid ${process.pid}: SIGUSR2 stops with proof and logout`);
 
 const t0 = Date.now();
 const stamp = (): string => `[${Math.round((Date.now() - t0) / 1000)}s]`;
@@ -382,6 +395,7 @@ try {
     let lastState = 0;
 
     while (Date.now() < deadline) {
+        if (stopRequested) { fail('stopped by harness SIGUSR2'); }
         const s = await sample(page, probe);
         finalSample = s;
         const elapsed = Date.now() - t0;
@@ -413,28 +427,37 @@ try {
         if (last !== null) {
             const step = s.at - last.at;
             if (inLair(s.tile)) { lairMs += step; }
-            // Why: a safespot with no demon in the scene to reach for it proves nothing, and a sample that moved was only partly on the tile, so the soak clock runs on the stretches that held one safespot with a demon up.
-            const parked = last.tile !== null && onSafespot(s.tile) && samePoint(s.tile, last.tile);
-            if (parked && s.adults > 0) { safespotMs += step; }
+            const fell = Math.max(0, last.hp - s.hp);
+            const inGrace = starve !== null && starve.hitAt !== null && elapsed - starve.hitAt <= HARNESS_HIT_GRACE_MS;
+            const explained = inGrace ? Math.min(fell, harnessCredit) : 0;
+            harnessCredit -= explained;
+            const exposure = demonExposure(last, s, SAFESPOTS, fell - explained);
+            safespotMs += exposure.heldMs;
+            if (!exposure.clean) {
+                excludedIntervals.push({ fromMs: last.at - t0, toMs: s.at - t0, reasons: exposure.reasons, nonTargetAttackers: exposure.attackers, bothEnds: exposure.bothEnds });
+                if (last.nonTargetAttackers.length === 0 && s.nonTargetAttackers.length > 0) {
+                    console.log(`${stamp()} EXPOSURE EXCLUDED: ${JSON.stringify(s.nonTargetAttackers)}`);
+                }
+            }
             if (s.hp < last.hp) {
-                const fell = last.hp - s.hp;
-                // Why: the ~hit takes off the damage it was given, one tick after the send, so it explains that many hp once and no more, and anything above it in the same poll is a hit the cheat cannot account for.
-                const inGrace = starve !== null && starve.hitAt !== null && elapsed - starve.hitAt <= HARNESS_HIT_GRACE_MS;
-                const explained = inGrace ? Math.min(fell, harnessCredit) : 0;
-                harnessCredit -= explained;
                 const drop: HpDrop = {
                     at: elapsed, from: last.hp, to: s.hp, adults: s.adults, tile: s.tile, was: last.tile,
-                    bothEnds: onSafespot(s.tile) && onSafespot(last.tile),
-                    eitherEnd: onSafespot(s.tile) || onSafespot(last.tile),
-                    harness: explained > 0, explained, unexplained: fell - explained
+                    bothEnds: exposure.bothEnds,
+                    eitherEnd: exposure.eitherEnd,
+                    harness: explained > 0, explained, unexplained: fell - explained,
+                    cleanInterval: exposure.clean,
+                    reasons: [...exposure.reasons, ...(explained > 0 ? ['harness-hit'] : []),
+                        ...(exposure.clean && fell > explained ? [exposure.bothEnds ? 'unexplained-safespot' : 'travel'] : [])],
+                    nonTargetAttackers: exposure.attackers
                 };
                 hpDrops.push(drop);
                 if (drop.bothEnds) { bothEndsDrops++; }
                 // Why: only a safespot at both ends says the tile failed; either-end fires on every hit taken walking off to loot or to bank, which the run has to do, and nothing in the sample tells that apart from a hit that landed on the tile.
-                if (drop.unexplained > 0 && drop.bothEnds) {
+                if (exposure.violation) {
                     violations.push(drop);
-                    console.log(`${stamp()} HP FELL ON A SAFESPOT: ${last.hp} to ${s.hp} at ${last.tile?.x},${last.tile?.z} then ${s.tile?.x},${s.tile?.z} with ${s.adults} demon(s) up (${drop.unexplained} hp the harness cannot account for)`);
+                    fail(`HP FELL ON A CLEAN SAFESPOT: ${JSON.stringify(drop)}`);
                 }
+                if (!exposure.clean) { console.log(`${stamp()} HP DROP EXCLUDED: ${JSON.stringify(drop)}`); }
                 if (drop.harness) { console.log(`${stamp()} the harness's own ~hit accounts for ${explained} of the ${fell} hp drop at ${s.tile?.x},${s.tile?.z}, leaving ${drop.unexplained}`); }
             }
         }
@@ -485,7 +508,7 @@ try {
             mark('walkout', `the gate walk-out landed outside the lair at ${walkOutTile?.x},${walkOutTile?.z} with no teleport, and trip ${s.trips} completed`);
         }
         if (violations.length === 0 && safespotMs >= SOAK_MS) {
-            mark('hpheld', `no hp lost across ${Math.round(safespotMs / 1000)}s standing on a safespot with a demon up`);
+            mark('hpheld', `no unexplained hp lost across ${Math.round(safespotMs / 1000)}s of clean demon exposure on a safespot`);
         }
 
         if (args.starve && starve === null && met['kill'] && lairMs >= SOAK_MS) {
@@ -524,7 +547,7 @@ try {
         if (Date.now() - lastState >= 15_000) {
             lastState = Date.now();
             const aims = [...blueRoll.entries()].map(([index, roll]) => `${index}@${roll.nearest}x${roll.seen}`).join(' ') || 'none';
-            console.log(`${stamp()} STATE ${JSON.stringify({ tile: s.tile, hp: `${s.hp}/${s.maxHp}`, status: s.status, kills: s.kills, trips: s.trips, food: s.food, law: s.law, spot: s.spotIdx, adults: s.adults, worn: s.worn.filter(w => w !== '?').join('/'), blues: aims })}`);
+            console.log(`${stamp()} STATE ${JSON.stringify({ tile: s.tile, hp: `${s.hp}/${s.maxHp}`, status: s.status, runner: s.runner, randomEvent: s.randomEvent, nonTargetAttackers: s.nonTargetAttackers, cleanExposureMs: safespotMs, kills: s.kills, trips: s.trips, food: s.food, law: s.law, spot: s.spotIdx, adults: s.adults, worn: s.worn.filter(w => w !== '?').join('/'), blues: aims })}`);
         }
 
         if (required.every(id => met[id] !== undefined)) { break; }
@@ -559,7 +582,7 @@ try {
         assertions: met,
         required,
         counters: { kills: final.kills, bankTrips: final.trips, bankReads, bankOpens, jailerFights, jailKeyPickups, deaths, engagingLines, waitingPolls, looted: final.looted, arrowLoots, coinLoots, ashLoots },
-        safespot: { spots: SAFESPOTS, heldMs: safespotMs, lairMs, drops: hpDrops.length, bothEndsDrops, oneEndDrops, violations: violations.length, hpDrops: hpDrops.slice(-300), violationDrops: violations },
+        safespot: { spots: SAFESPOTS, heldMs: safespotMs, cleanExposureMs: safespotMs, requiredCleanMs: SOAK_MS, excludedIntervals, lairMs, drops: hpDrops.length, bothEndsDrops, oneEndDrops, violations: violations.length, hpDrops, violationDrops: violations },
         blues: { facing: blueFacing() },
         walkOut: { sawTeleportRefused: walkOutSaid, sawGateExit: outOfLairSaid, endedOutside: walkOutTile, tripsAtWalkOut },
         starve,
@@ -589,7 +612,7 @@ try {
             elapsedMs: Date.now() - t0,
             assertions: met,
             counters: { bankReads, bankOpens, jailerFights, jailKeyPickups, deaths, engagingLines, waitingPolls, arrowLoots, coinLoots, ashLoots },
-            safespot: { heldMs: safespotMs, lairMs, drops: hpDrops.length, bothEndsDrops, violations: violations.length, hpDrops: hpDrops.slice(-300), violationDrops: violations },
+            safespot: { heldMs: safespotMs, cleanExposureMs: safespotMs, requiredCleanMs: SOAK_MS, excludedIntervals, lairMs, drops: hpDrops.length, bothEndsDrops, violations: violations.length, hpDrops, violationDrops: violations },
             blues: { facing: blueFacing() },
             walkOut: { sawTeleportRefused: walkOutSaid, sawGateExit: outOfLairSaid, endedOutside: walkOutTile, tripsAtWalkOut },
             starve,
@@ -598,6 +621,7 @@ try {
     }
     process.exitCode = 1;
 } finally {
+    process.off('SIGUSR2', requestStop);
     // Why: dropping the socket leaves the engine holding the player online for its disconnect grace period, which costs the next run a minute of "already logged in".
     try {
         await stopScript(page);

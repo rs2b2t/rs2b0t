@@ -4,6 +4,7 @@ import { QuestEngine, type QuestHost } from '#/bot/api/ai/quests/engine/QuestEng
 import type { QueueRow } from '#/bot/api/ai/quests/engine/queue.js';
 import { runemysteries } from '#/bot/api/ai/quests/defs/runemysteries.js';
 import { doric } from '#/bot/api/ai/quests/defs/doric.js';
+import { goblinMailGatherStep } from '#/bot/api/ai/quests/defs/goblindiplomacy.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
 import { Banking } from '#/bot/api/bank/Banking.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
@@ -15,6 +16,7 @@ import { Skills } from '#/bot/api/skills/Skills.js';
 import { Quests } from '#/bot/api/ui/questlog/Quests.js';
 import { Modals } from '#/bot/api/ui/widgets/Modals.js';
 import { GameMessages } from '#/bot/api/chatbox/gameMessages.js';
+import { Sustain } from '#/bot/api/sustain/Sustain.js';
 
 const restores: (() => void)[] = [];
 afterEach(() => { for (const restore of restores.splice(0).reverse()) restore(); });
@@ -22,11 +24,12 @@ afterEach(() => { for (const restore of restores.splice(0).reverse()) restore();
 function fixture() {
     const state: {
         ore: number; ok: boolean; gain: boolean; skip: boolean; death: boolean;
+        combat: boolean; xp: number; now: number;
         bankOpen: boolean; bankGain: boolean; wait: boolean;
         coins: number; bankCoins: number; bankActions: string[]; picked: Set<string>;
         rows: QueueRow[]; running: string | null; attempts: number;
     } = { ore: 0, ok: false, gain: false, skip: false, death: false, bankOpen: false, bankGain: false, wait: false, rows: [], running: null, attempts: 0,
-        coins: 0, bankCoins: 0, bankActions: [], picked: new Set(['runemysteries', 'doric']) };
+        coins: 0, bankCoins: 0, bankActions: [], picked: new Set(['runemysteries', 'doric']), combat: false, xp: 0, now: 100_000 };
     const host: QuestHost = {
         log: () => {}, verbose: () => false, foodItem: () => null,
         pickedIds: () => state.picked,
@@ -37,6 +40,9 @@ function fixture() {
         finish: () => {}
     };
     const spies = [
+        spyOn(Date, 'now').mockImplementation(() => state.now),
+        spyOn(Game, 'inCombat').mockImplementation(() => state.combat),
+        spyOn(Skills, 'xp').mockImplementation(() => state.xp),
         spyOn(EventSignal, 'pending').mockReturnValue(false),
         spyOn(reader, 'modals').mockReturnValue({ main: -1, side: -1, chat: -1 }),
         spyOn(Bank, 'isOpen').mockImplementation(() => state.bankOpen),
@@ -166,6 +172,58 @@ test('preserves false-returning retries that gain ore', async () => {
     expect(state.ore).toBe(20);
     expect(state.running).toBe('runemysteries');
     expect(engine['noProgressCount']).toBe(0);
+});
+
+test('keeps a cooperative fight active through misses while combat XP advances', async () => {
+    const { engine, state } = fixture();
+    state.combat = true;
+    for (let i = 0; i < 80; i++) {
+        state.now += 1200;
+        if (i % 10 === 0) state.xp++;
+        await engine.execute();
+    }
+    expect(state.attempts).toBe(80);
+    expect(engine['runningId']).toBe('runemysteries');
+});
+
+test('goblin mail gathering keeps fighting when its step yields before the drop', async () => {
+    const { engine, state } = fixture();
+    state.coins = 500;
+    state.combat = true;
+    let hp = 30;
+    const tile = { x: 2958, z: 3507, level: 0 };
+    const spies = [
+        spyOn(Game, 'tile').mockReturnValue(tile),
+        spyOn(Game, 'myName').mockReturnValue('quest-combat-fixture'),
+        spyOn(reader, 'worldTile').mockReturnValue(tile),
+        spyOn(reader, 'selfSlot').mockReturnValue(0),
+        spyOn(reader, 'groundItems').mockReturnValue([]),
+        spyOn(reader, 'npcs').mockImplementation(() => [{ id: 100, index: 1, name: 'Goblin', level: 2, size: 1,
+            tile: { ...tile, z: tile.z + 1 }, distance: 1, ops: ['Attack'], inCombat: true,
+            health: hp, totalHealth: 30, faceEntity: 32768, anim: -1 }]),
+        spyOn(Sustain, 'run').mockImplementation(async () => { hp--; state.xp += 4; }),
+        spyOn(runemysteries, 'decide').mockImplementation(snap => goblinMailGatherStep(snap))
+    ];
+    restores.push(...spies.map(spy => () => spy.mockRestore()));
+    await execute(engine, 12);
+    expect(hp).toBeLessThan(22);
+    expect(engine['runningId']).toBe('runemysteries');
+    expect(engine['noProgressCount']).toBe(0);
+});
+
+test('still parks a fight that makes no combat progress for over a minute', async () => {
+    const { engine, state } = fixture();
+    state.combat = true;
+    for (let i = 0; i < 45; i++) {
+        state.now += 1200;
+        await engine.execute();
+    }
+    expect(engine['runningId']).toBe('runemysteries');
+    for (let i = 0; i < 20; i++) {
+        state.now += 1200;
+        await engine.execute();
+    }
+    expect(state.rows.find(row => row.id === 'runemysteries')?.status).toBe('PARKED');
 });
 
 test('success resets the failed-attempt budget', async () => {

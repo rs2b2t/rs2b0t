@@ -158,7 +158,13 @@ export class SolveClue implements Task {
 
     private status = 'idle';
 
-    constructor(private readonly host: SolveClueHost) {}
+    constructor(private readonly host: SolveClueHost) {
+        ClueExecutor.retryGuardian();
+    }
+
+    ownsEquipment(): boolean {
+        return this.strippedGear.length > 0 || (this.hardTrail && this.bankedThisSolve);
+    }
 
     clueStatus(): string {
         return this.status;
@@ -232,14 +238,15 @@ export class SolveClue implements Task {
             return;
         }
         if (this.deathBlocked || this.kitBlocked()) return;
-        const scroll = heldClueScrollId();
-        const startingHard = !this.hardTrail && scroll !== null && CLUE_DB[scroll]?.obj.includes('_hard_') === true;
+        const held = heldClueLikeId();
+        const hard = held !== null && (CLUE_DB[held]?.obj ?? CASKET_IDS[held])?.includes('_hard_') === true;
+        const startingHard = !this.hardTrail && hard;
         if (startingHard) {
             const original = Equipment.items().find(i => i.slot === 3);
             const name = original?.name ?? this.host.weaponName?.() ?? '';
             if (name !== '' && !this.strippedGear.includes(name)) this.strippedGear.push(name);
         }
-        if (scroll !== null) this.hardTrail = CLUE_DB[scroll]?.obj.includes('_hard_') === true;
+        if (held !== null) this.hardTrail = hard;
         const prepare = !this.bankedThisSolve && !this.initialBankVisited && heldClueScrollId() !== null ? this.host.prepareInitialBank : undefined;
         if (prepare && !(await prepare.call(this.host))) {
             this.status = 'bank preparation blocked';

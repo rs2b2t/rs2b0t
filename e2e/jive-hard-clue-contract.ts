@@ -46,7 +46,7 @@ export function assessHardClue(capture: HardClueCapture) {
         return { passed: false, outcome: 'incomplete', violations: ['missing-encounter-phase'] };
     }
     if (!(prepared.at < dig.at && dig.at < spawn.at && spawn.at < kill.at && kill.at < postDig.at && postDig.at < restored.at)) violations.push('encounter-order');
-    if (prepared.sharks < Math.min(20, prep.sharksAvailable) || dig.sharks < 15 || spawn.sharks < 15) violations.push('pre-encounter-sharks');
+    if (prepared.sharks < 15 || dig.sharks < 15 || spawn.sharks < 15) violations.push('pre-encounter-sharks');
     if (prepared.antipoisonDoses <= 0 || dig.antipoisonDoses !== prepared.antipoisonDoses - 1
         || spawn.antipoisonDoses !== dig.antipoisonDoses) violations.push('antidote-before-spawn');
     if (spawn.guardianLife === null || kill.guardianLife !== spawn.guardianLife) violations.push('guardian-life');

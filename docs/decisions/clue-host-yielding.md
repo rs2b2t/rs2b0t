@@ -35,6 +35,10 @@ ownership and range instead of digging again to spawn another guardian. Failed
 revalidation returns `'dead'` or `'guardian-lost'`, and an exhausted combat kit
 returns `'supplies-needed'`.
 
+`SolveClue.ownsEquipment()` keeps the host's normal weapon and combat-style tasks
+from replacing the guardian kit during that yield. A fresh solver clears the
+previous session's guardian halt; the failed solver stays blocked until retried.
+
 `Sustain.run()` is called every pass, so eating and other upkeep continue during a
 trail.
 

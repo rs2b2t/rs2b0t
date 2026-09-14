@@ -36,10 +36,10 @@ import { COMBAT_SKILLS, XpTracker, jiveFrame, paintLevels } from '../../paint/ji
 import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
-import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from './combat.js';
-import { ANTIFIRE_MARGIN_TICKS, ANTIFIRE_TICKS, POTION_PROTECTS, SHIELD_ABSORBS, antifireDue, antifireLapsed, keepDoses, keyStatus, lootHalts, lootReach, shieldGate, siteTileOf, chaseMode, prayerFor, prayerSipDue, styleGate, wantsDrop, type Style } from './logic.js';
-import { BRIMHAVEN_IRON, BRIMHAVEN_STEEL, GUTANOTH_BLUE, HEROES_BLUE, MAX_STANDS, SITE_OPTIONS, STAND_SITE_KEYS, TAVERLEY_BLACK, TAVERLEY_BLUE, huntNames, needsShield, siteFor, standFor, type DragonSite } from './sites.js';
-import { ANTIFIRE_DOSES, ANTIPOISON_DOSES, PRAYER_DOSES, prayerPlan, COINS, POISONED, acquireKey, antifirePlan, antipoisonPlan, bankRoutine, doseToDrink, enterLair, escapeRunesFor, feePrepaid, inCell, leaveCell, leaveLair, type BankOpts, type KeyState } from './supply.js';
+import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from '../../api/combat/hunting/combat.js';
+import { ANTIFIRE_MARGIN_TICKS, ANTIFIRE_TICKS, POTION_PROTECTS, SHIELD_ABSORBS, antifireDue, antifireLapsed, keepDoses, keyStatus, lootHalts, lootReach, siteTileOf, chaseMode, prayerFor, prayerSipDue, styleGate, wantsDrop, type Style } from '../../api/combat/hunting/logic.js';
+import { BRIMHAVEN_IRON, BRIMHAVEN_STEEL, GUTANOTH_BLUE, HEROES_BLUE, MAX_STANDS, SITE_OPTIONS, STAND_SITE_KEYS, TAVERLEY_BLACK, TAVERLEY_BLUE, huntNames, needsShield, siteFor, standFor, type DragonSite } from '../../api/combat/hunting/sites.js';
+import { ANTIFIRE_DOSES, ANTIPOISON_DOSES, PRAYER_DOSES, prayerPlan, COINS, POISONED, acquireKey, antifirePlan, antipoisonPlan, bankRoutine, doseToDrink, enterLair, escapeRunesFor, feePrepaid, inCell, leaveCell, leaveLair, type BankOpts, type KeyState } from '../../api/combat/hunting/supply.js';
 
 const SHIELD = 'Dragonfire shield';
 
@@ -574,10 +574,12 @@ async function eatOnce(bot: JiveDragons): Promise<boolean> {
     }
     bot.setStatus(`eating ${food.name} (${Math.round(hpFrac() * 100)}% hp)`);
     const before = Skills.effective('hitpoints');
+    const id = food.id;
+    const count = Inventory.countById(id);
     if (!(await food.interact('Eat'))) {
         return false;
     }
-    return Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
+    return Execution.delayUntilTicks(() => Inventory.countById(id) < count || Skills.effective('hitpoints') > before, 2);
 }
 
 // Why: a Take click walks on the scene's own collision and never opens a door, so a drop behind one dies silently on the click and the skip list swallows the pile behind it. The Heroes' Guild dragon drops inside its pen, on the far side of the gate.
@@ -829,7 +831,7 @@ class GearEquip implements Task {
     private retryAt = 0;
     constructor(private readonly bot: JiveDragons) {}
     mergeDue(): boolean {
-        return STYLE === 'range' && Equipment.contains(AMMO) && Inventory.first(AMMO) !== null
+        return !this.bot.solveClue?.ownsEquipment() && STYLE === 'range' && Equipment.contains(AMMO) && Inventory.first(AMMO) !== null
             && (hasFood() || recoverableFood(this.bot)) && !needEat() && !tooHurtToLoot() && !this.bot.died && !EventSignal.pending();
     }
     private missing(): string | null {
@@ -837,7 +839,7 @@ class GearEquip implements Task {
         return wear.find(n => n !== '' && !Equipment.contains(n) && Inventory.first(n) !== null) ?? (this.mergeDue() ? AMMO : null);
     }
     validate(): boolean {
-        return Date.now() >= this.retryAt && this.missing() !== null;
+        return !this.bot.solveClue?.ownsEquipment() && Date.now() >= this.retryAt && this.missing() !== null;
     }
     async execute(): Promise<void> {
         const item = this.missing();
@@ -887,7 +889,7 @@ class SetAttackStyle implements Task {
         return STYLE === 'range' ? Game.combatMode() === RANGE_MODE : Game.hasCombatStyle(MELEE_STYLE);
     }
     validate(): boolean {
-        return STYLE !== 'mage' && !this.selected() && Date.now() >= this.retryAt;
+        return !this.bot.solveClue?.ownsEquipment() && STYLE !== 'mage' && !this.selected() && Date.now() >= this.retryAt;
     }
     async execute(): Promise<void> {
         this.bot.setStatus('setting the combat style');
@@ -917,7 +919,7 @@ class SetRetaliate implements Task {
     private retryAt = 0;
     constructor(private readonly bot: JiveDragons) {}
     validate(): boolean {
-        return SITE.fireAtRange === true && Game.autoRetaliateOn() !== retaliateWanted() && Date.now() >= this.retryAt;
+        return !this.bot.solveClue?.ownsEquipment() && SITE.fireAtRange === true && Game.autoRetaliateOn() !== retaliateWanted() && Date.now() >= this.retryAt;
     }
     async execute(): Promise<void> {
         const want = retaliateWanted();
@@ -941,7 +943,7 @@ class ArmAutocast implements Task {
     private retryAt = 0;
     constructor(private readonly bot: JiveDragons) {}
     validate(): boolean {
-        if (STYLE !== 'mage' || Autocast.armed() || Date.now() < this.retryAt || castsLeft() < 1) {
+        if (this.bot.solveClue?.ownsEquipment() || STYLE !== 'mage' || Autocast.armed() || Date.now() < this.retryAt || castsLeft() < 1) {
             return false;
         }
         return Autocast.staffTabAttached() || (WEAPON !== '' && Equipment.contains(WEAPON));
@@ -1054,6 +1056,9 @@ class BankRun implements Task {
         if (this.bot.parked) {
             return false;
         }
+        if (!this.bot.solveClue?.ownsEquipment() && !this.bot.shieldReady() && Inventory.count(SHIELD) === 0) {
+            return true;
+        }
         const returning = this.bot.lootRun !== null && (Inventory.isFull() || this.bot.lootRun.spentFood === true || recoverableFood(this.bot));
         if (!hasFood() && !this.bot.bankKnownEmpty() && !(STYLE !== 'melee' && SITE.rangedThreat !== true && returning && lootCanProgress(this.bot))) {
             return true;
@@ -1116,7 +1121,7 @@ class AcquireKey implements Task {
 class EnterLair implements Task {
     constructor(private readonly bot: JiveDragons) {}
     validate(): boolean {
-        if (this.bot.parked || SITE.inArea(Game.tile()) || hpFrac() < PANIC_HP || needCoins()) {
+        if (this.bot.parked || !this.bot.shieldReady() || SITE.inArea(Game.tile()) || hpFrac() < PANIC_HP || needCoins()) {
             return false;
         }
         return SITE.keyItem === null || Inventory.countById(SITE.keyItem.id) > 0;
@@ -1247,8 +1252,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             prepareInitialBank: async () => await leaveLair(this, SITE) && await walkToBank(SITE.bank, m => this.log(m))
         });
 
-        // Why: Bank.count reads the last snapshot and the bank has never been open at this point, so this only catches a shield that is nowhere, and supply.ts repeats the check with the booth open.
-        const gate = styleGate(STYLE, SITE.fireAtRange === true) ?? shieldGate(STYLE, SITE.fireAtRange === true, Equipment.contains(SHIELD) || Inventory.count(SHIELD) > 0 || Bank.count(SHIELD) > 0);
+        const gate = styleGate(STYLE, SITE.fireAtRange === true);
         if (gate !== null) {
             this.parkFor(gate);
         }
@@ -1350,6 +1354,9 @@ export default class JiveDragons extends TaskBot implements CombatHost {
     }
     style(): Style {
         return STYLE;
+    }
+    shieldReady(): boolean {
+        return !needsShield(SITE, STYLE) || Equipment.contains(SHIELD);
     }
     foodName(): string {
         return FOOD_NAME;

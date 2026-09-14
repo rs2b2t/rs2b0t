@@ -7,7 +7,7 @@ const good = {
     requireFullHpSpace: true,
     samples: [
         { at: 0, holdings: [{ id: 2448, count: 2 }, { id: 995, count: 1300 }], hp: 80, maxHp: 80, sharks: 20, used: 28, left: false },
-        { at: 1, holdings: [{ id: 2448, count: 2 }, { id: 995, count: 1300 }], hp: 80, maxHp: 80, sharks: 19, used: 27, left: false, action: 'Eat Shark' },
+        { at: 1, holdings: [{ id: 2448, count: 2 }, { id: 995, count: 1300 }], hp: 80, maxHp: 80, sharks: 19, used: 27, left: false, action: 'Drop Shark' },
         { at: 20, holdings: [{ id: 2448, count: 4 }, { id: 995, count: 1300 }], hp: 80, maxHp: 80, sharks: 19, used: 28, left: false },
         { at: 21, holdings: [{ id: 2448, count: 4 }, { id: 995, count: 1300 }], hp: 80, maxHp: 80, sharks: 19, used: 28, left: true }
     ]
@@ -45,13 +45,21 @@ for (const manifest of [null, { ...good.manifest, interfaceId: 6962 }, { ...good
         expect(result.passed).toBe(false);
     });
 }
-test('requires confirmed Shark consumption at full HP to prove full-pack space recovery', () => {
+test('requires a Shark count decrease at full HP to prove full-pack space recovery', () => {
     const result = assessReward({ ...good, samples: good.samples.map(s => ({ ...s, sharks: 20 })) });
     expect(result.passed).toBe(false);
 });
-test('rejects a Drop masquerading as space recovery', () => {
+test('rejects an unobserved action masquerading as space recovery', () => {
     const result = assessReward({ ...good, samples: good.samples.map(s => ({ ...s, action: undefined })) });
     expect(result.passed).toBe(false);
+});
+test('rejects an Eat action as proof of the required Shark drop', () => {
+    const result = assessReward({ ...good, samples: good.samples.map(s => s.at === 1 ? { ...s, action: 'Eat Shark' } : s) });
+    expect(result.violations).toContain('full-hp-shark-space');
+});
+test('rejects a Shark drop that did not free a slot', () => {
+    const result = assessReward({ ...good, samples: good.samples.map(s => ({ ...s, used: 28 })) });
+    expect(result.violations).toContain('full-hp-shark-space');
 });
 test('permits casket-only collection without guardian gear or food when space already exists', () => {
     const result = assessReward({ ...good, requireFullHpSpace: false,
