@@ -1,20 +1,16 @@
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { Trade } from '#/bot/api/trade/Trade.js';
 import { stableClosedPoll } from '#/bot/api/trade/drivePartnerTrade.js';
 
 const mockTradeActive = mock(() => false);
 
-mock.module('#/bot/api/trade/Trade.js', () => ({
-    Trade: {
-        active: mockTradeActive,
-        onOfferScreen: () => false,
-        onConfirmScreen: () => false
-    }
-}));
+afterEach(() => mock.restore());
 
 describe('stableClosedPoll', () => {
     beforeEach(() => {
         mockTradeActive.mockReset();
         mockTradeActive.mockReturnValue(false);
+        spyOn(Trade, 'active').mockImplementation(mockTradeActive);
     });
 
     test('returns false when Trade.active() is true', () => {
