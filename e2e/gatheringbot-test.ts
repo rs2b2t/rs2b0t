@@ -1103,7 +1103,8 @@ const SCENARIOS: Scenario[] = [
         camp: SPOT.swVarrockMine,
         settings: {
             rocks: 'Tin',
-            // location None = power-mine: drop ore when full (no bank loop).
+            // Legacy None (kept option) = power-mine: drop ore when full (no bank loop).
+            // Same loop as Bank=false; this guards the saved-settings compat path.
             // Leash is from the live start tile (not camp), product floors to 40.
             location: 'None',
             toolAcquire: 'Off',
@@ -2336,7 +2337,7 @@ const SCENARIOS: Scenario[] = [
             `distCamp=${minDistToCamp} tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'} ` +
             `inv=${cur.inv.map(i => i.name).join(',') || 'empty'}`
     },
-    // ── Auto freeform (start outside every preset 64×64 map square) ──────────
+    // ── Use Start Position freeform (start outside every preset 64×64 map square) ──
     {
         id: 'auto-freeform-wc-willows-cg',
         tags: ['freeform', 'auto', 'woodcutting', 'wc', 'early'],
@@ -2346,7 +2347,8 @@ const SCENARIOS: Scenario[] = [
         camp: SPOT.willowsNwCg,
         settings: {
             treeName: 'Willow',
-            location: 'Auto',
+            // Use Start Position (ex-Auto): freeform when the start shares no 64×64 map square with a known camp.
+            location: 'Use Start Position',
             burnMode: 'Off',
             toolAcquire: 'Off',
             forgetfulBank: false,
@@ -2382,12 +2384,12 @@ const SCENARIOS: Scenario[] = [
         id: 'mine-wilderness-skeleton',
         tags: ['known-camp', 'auto', 'mining', 'mine', 'wildy'],
         script: 'Miner',
-        // Auto now recognizes the Wilderness Skeleton Mine as a known coal camp.
+        // Use Closest recognizes the Wilderness Skeleton Mine as a known coal camp.
         start: SPOT.skelMine,
         camp: SPOT.skelMine,
         settings: {
             rocks: 'Coal',
-            location: 'Auto',
+            location: 'Use Closest',
             toolAcquire: 'Off',
             forgetfulBank: false,
             leashRadius: 40
@@ -2399,7 +2401,7 @@ const SCENARIOS: Scenario[] = [
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            const selected = logHas(cur, /location:\s*Wilderness Skeleton Mine\s*\(auto\)/i);
+            const selected = logHas(cur, /location:\s*Wilderness Skeleton Mine\s*\(Use Closest\)/i);
             const xpGain = cur.xp.mining - start.xp.mining;
             // Coal is not "* ore"; count coal + any ore product.
             const haul = invMatch(cur, /^(coal|.+ ore)$/i);
@@ -2409,7 +2411,7 @@ const SCENARIOS: Scenario[] = [
             return 'wait';
         },
         failMsg: ({ start, cur, minDistToCamp }) =>
-            `selected=${logHas(cur, /location:\s*Wilderness Skeleton Mine\s*\(auto\)/i)} ` +
+            `selected=${logHas(cur, /location:\s*Wilderness Skeleton Mine\s*\(Use Closest\)/i)} ` +
             `mineXpΔ=${cur.xp.mining - start.xp.mining} haul=${invMatch(cur, /^(coal|.+ ore)$/i)} ` +
             `distStart=${minDistToCamp} tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
     },
@@ -2450,12 +2452,13 @@ const SCENARIOS: Scenario[] = [
         id: 'auto-freeform-fish-ardy-river',
         tags: ['freeform', 'auto', 'fishing', 'fish'],
         script: 'Fisher',
-        // Ardougne river fly spots, outside every FISHING_LOCATIONS chunk.
+        // Ardougne river fly spots are outside every FISHING_LOCATIONS chunk (Use Start Position freeform).
         start: SPOT.ardyRiverFly,
         camp: SPOT.ardyRiverFly,
         settings: {
             fishMethod: 'Fly fishing — trout/salmon',
-            location: 'Auto',
+            // Use Start Position (ex-Auto): freeform outside every FISHING_LOCATIONS chunk.
+            location: 'Use Start Position',
             cookMode: 'Off',
             toolAcquire: 'Off',
             baitQty: 100,
