@@ -2241,15 +2241,14 @@ export default class GatheringBot extends TaskBot {
         });
     }
 
-    async eatMinerFood(): Promise<boolean> {
-        const config = this.minerFood;
-        if (!config || Bank.isOpen()) {
+    async eatMinerFood(foodName = this.minerFood?.name): Promise<boolean> {
+        if (!foodName || Bank.isOpen()) {
             return false;
         }
         if (this.desertCampRoute && Inventory.isFull() && this.hasDepositable()) {
             this.desertCampBankTrip = true;
         }
-        const food = Inventory.items().find(i => isFoodItem(i.name, config.name));
+        const food = Inventory.items().find(i => isFoodItem(i.name, foodName));
         if (!food) {
             return false;
         }
@@ -2286,6 +2285,66 @@ export default class GatheringBot extends TaskBot {
             this.log(`food: ${food.name} did not change the pack or HP — will retry`);
         }
         return consumed;
+    }
+
+    async healMinerAtBank(log: (message: string) => void): Promise<boolean> {
+        if (!this.mining()) return true;
+        const name = this.settings.str('food', 'Lobster').trim();
+        if (!name) return true;
+        const heal = foodHealAmount(name);
+        const missingHp = () => Skills.level('hitpoints') - Skills.effective('hitpoints');
+        const bites = Math.floor(missingHp() / heal);
+        if (bites <= 0 || Skills.effective('hitpoints') <= 0) return true;
+        const fail = (reason: string): false => {
+            this.setStatus(`${reason} - stopped`);
+            log(reason);
+            ScriptRunner.stop(reason);
+            return false;
+        };
+        const reopen = async (): Promise<boolean> => {
+            if (Bank.isOpen()) return this.waitBankReady(log);
+            await Execution.delayUntilTicks(() => Bank.normalBackpackSnapshot() !== null, 6);
+            const expected = Bank.normalBackpackSnapshot();
+            if (!expected || !(await this.openScriptBank(log))) return false;
+            return await this.waitBankReady(log) && await Bank.backpackReady(expected, log);
+        };
+        for (let eaten = 0; eaten < bites && missingHp() >= heal; eaten++) {
+            if (!Inventory.items().some(item => isFoodItem(item.name, name))) {
+                if (!(await reopen())) return fail('food: bank did not open for healing');
+                const form = foodForms(name).find(form => Bank.count(form) > 0);
+                if (!form) return fail(`food: no ${name} available for bank healing`);
+                if (Inventory.free() === 0 || !(await Bank.withdrawX(form, 1))) {
+                    return fail(`food: could not withdraw ${name} for bank healing`);
+                }
+                if (!(await Execution.delayUntilTicks(() => Inventory.items().some(item => isFoodItem(item.name, name)), 7))) {
+                    return fail(`food: ${name} withdrawal did not reach the backpack`);
+                }
+            }
+            const expectedFood = Inventory.items().filter(item => isFoodItem(item.name, name));
+            if (!(await this.closeScriptBank(log, { allowForgetful: false }))) {
+                return fail('food: bank did not close for healing');
+            }
+            if (!(await Execution.delayUntilTicks(() => Bank.normalBackpackSnapshot() !== null
+                && expectedFood.every(food => Inventory.items().some(item => item.slot === food.slot && item.id === food.id)), 6))) {
+                return fail('food: normal backpack did not update after closing the bank');
+            }
+            if (missingHp() < heal) break;
+            const hp = Skills.effective('hitpoints');
+            const food = Inventory.items().find(item => isFoodItem(item.name, name))!;
+            const held = countFood(Inventory.items(), name);
+            if (!(await this.eatMinerFood(name)) || !(await Execution.delayUntilTicks(() => Skills.effective('hitpoints') > hp
+                && (countFood(Inventory.items(), name) < held
+                    || !Inventory.items().some(item => item.slot === food.slot && item.id === food.id && item.name === food.name)), 6))) {
+                return fail(`food: ${name} did not restore HP at the bank`);
+            }
+            await Execution.delayTicks(3);
+        }
+        if (!(await reopen())) return fail('food: bank did not reopen after healing');
+        await Bank.depositAllMatching(item => this.shouldDeposit(item), log);
+        if (!(await Execution.delayUntilTicks(() => !Inventory.items().some(item => this.shouldDeposit(item.name ?? '')), 6))) {
+            return fail('food: bank did not accept healing leftovers');
+        }
+        return true;
     }
 
     /** Top up the configured Miner food while BankCatch already has the bank open. */

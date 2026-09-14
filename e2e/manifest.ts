@@ -870,6 +870,15 @@ export const CASES: readonly Case[] = [
         note: 'starts at Varrock West with the kit banked there; coming within 20 tiles of the Al Kharid booth fails the run'
     },
     {
+        id: 'miner-bank-food-live',
+        harness: 'miner-bank-food-live.ts',
+        covers: { scripts: ['GatheringBot'] },
+        status: 'documented',
+        documentedIn: 'docs/e2e/miner-bank-food-proof.json',
+        budgetMin: 5,
+        note: 'banks 27 coal at 50/80 HP, eats two lobsters with no trip food, then returns to the Wilderness Skeleton Mine and gains mining XP'
+    },
+    {
         id: 'miner-fight-arena-bank-live',
         harness: 'miner-fight-arena-bank-live.ts',
         covers: { scripts: ['GatheringBot'] },

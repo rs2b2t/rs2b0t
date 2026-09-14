@@ -1082,6 +1082,8 @@ export class BankCatch implements Task {
                 return;
             }
         }
+        if (!(await this.bot.healMinerAtBank(log))) return;
+
         const routePlan = this.bot.desertCampSupplyPlanAtOpenBank();
         if (routePlan && !routePlan.ok) {
             this.bot.stopStrictBankFailure(`desert camp: missing supplies: ${routePlan.missing.join(', ')}`);
