@@ -365,9 +365,10 @@ async function attestArtifacts(base: URL): Promise<Record<string, string>> {
 
 async function command(surface: Surface, value: string, waitMs = 700): Promise<void> {
     const sent = await surface.evaluate(command => {
-        const client = (globalThis as never as BrowserGlobal).rs2b0t.client;
+        const g = (globalThis as never as BrowserGlobal).rs2b0t;
+        const client = g.client;
         if (!client.ingame || !client.out) return false;
-        client.out.p1Enc(224);
+        client.out.p1Enc((g as { protocol?: { clientCheat: number } }).protocol?.clientCheat ?? 224);
         client.out.p1(command.length + 1);
         client.out.pjstr(command);
         return true;

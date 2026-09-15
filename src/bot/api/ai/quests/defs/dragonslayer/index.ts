@@ -4,11 +4,12 @@ import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Game } from '../../../../game/Game.js';
 import { Equipment } from '../../../../equipment/Equipment.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
+import { Skills } from '../../../../skills/Skills.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import Tile from '../../../../../geometry/Tile.js';
-import { hasFlag } from '../../engine/types.js';
+import { bankedId, hasFlag, heldId } from '../../engine/types.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { QUESTS } from '../../data/quests.js';
 import { QuestFood } from '../../food.js';
@@ -16,7 +17,7 @@ import { gotoNpc, openDialogue, talkThrough, type NpcStop } from '../../exec/pri
 import { DS_ID, DS_ITEM, DS_LOC, DS_NPC, SHIP_PRICE, SHIP_REPAIR, WORMBRAIN_PRICE } from './areas.js';
 import { DRAGON_STAGE, describeJournal, readDragonProgress } from './journal.js';
 import { MazeRun, heldById, inMaze, leaveMaze, lootChest, mazeSceneLoaded } from './maze.js';
-import { SUPPLY_GATHERS, SUPPLY_TOOLS, smithNails } from './supplies.js';
+import { SUPPLY_GATHERS, SUPPLY_TOOLS, inPlankGraveyard, smithNails } from './supplies.js';
 
 const GUILDMASTER: NpcStop = {
     npc: 'Guild master', anchor: DS_NPC.GUILDMASTER, leash: 8,
@@ -198,11 +199,16 @@ async function openOracleMagicDoor(log: (m: string) => void, wantEast: boolean):
     }, 8000);
 }
 
+/** The chest room east of the magic door; the door is the only way in or out. */
+const inOracleChestRoom = (t: { x: number; z: number; level: number } | null | undefined): boolean =>
+    !!t && t.level === 0 && t.x >= 3051 && t.x <= 3060 && t.z >= 9836 && t.z <= 9845;
+
 /** The Oracle's door eats a mind bomb, unfired bowl, lobster pot and silk. */
 async function oracleChest(log: (m: string) => void): Promise<boolean> {
     const here = Game.tile();
-    const pastDoor = here !== null && here.z >= 9800 && here.x >= 3051;
-    // #379: the room has no nav edge out, so open the door west before returning true and letting coinsShort/bank run.
+    const pastDoor = inOracleChestRoom(here);
+    // #379: after the piece is looted, the room has no nav edge out, open the
+    // door west and only then return true so coinsShort/bank can run.
     if (heldById(DS_ID.MAP_ORACLE)) {
         if (pastDoor) {
             log('map piece in hand — leaving the oracle chest room');
@@ -639,6 +645,83 @@ function gearUp(snap: QuestSnapshot): QuestStep | null {
     return null;
 }
 
+/** What a leg has to hold before it starts, and where it comes from when neither pack nor bank has it. */
+interface Want {
+    readonly id: number;
+    readonly name: string;
+    readonly qty: number;
+    readonly source: (snap: QuestSnapshot, need: number) => QuestStep;
+}
+
+const bought = (id: number, name: string, qty = 1): Want =>
+    ({ id, name, qty, source: (snap, need) => SUPPLY_GATHERS[name.toLowerCase()](snap, need) });
+
+// Why: the door eats all four on the first pass, so they are stocked only while her piece is still to come.
+/** The Oracle's price, in the order the counters fall between Port Sarim and Varrock. */
+const ORACLE_CHARMS: readonly Want[] = [
+    bought(DS_ID.LOBSTER_POT, DS_ITEM.LOBSTER_POT),
+    bought(DS_ID.MIND_BOMB, DS_ITEM.MIND_BOMB),
+    bought(DS_ID.UNFIRED_BOWL, DS_ITEM.UNFIRED_BOWL),
+    bought(DS_ID.SILK, DS_ITEM.SILK)
+];
+
+// Why: the engine's own provisioning walks record.items on every session start and after every death, so anything the quest eats is stocked here, bank first, at the leg that eats it.
+/** The step that brings the pack one item closer to `wants`, or null once it holds them all. */
+function stock(snap: QuestSnapshot, wants: readonly Want[]): QuestStep | null {
+    const short = wants.map(w => ({ ...w, need: w.qty - heldId(snap, w.id) })).filter(w => w.need > 0);
+    if (short.length === 0) {
+        return null;
+    }
+    if (!snap.bankKnown) {
+        return { kind: 'scanBank' };
+    }
+    const banked = short
+        .filter(w => bankedId(snap, w.id) > 0)
+        .map(w => ({ name: w.name, qty: Math.min(w.need, bankedId(snap, w.id)), id: w.id }));
+    if (banked.length > 0) {
+        return { kind: 'withdraw', items: banked };
+    }
+    return short[0].source(snap, short[0].need);
+}
+
+/** The next thing the hull needs that the pack lacks, or null once hammer, nails and planks are all aboard. */
+function hullErrand(snap: QuestSnapshot): QuestStep | null {
+    // Why: a hole takes one plank and four nails together, as lady_lumbridge.rs2 inv_dels both, so what is owed is four nails per plank still to be placed and never the twelve the hull costs.
+    // Why: measured against the total, the first patched hole reads as eight missing nails and the bot walks back to the Dwarven Mine with the hull still open.
+    // Why: the pack is the ruler and the bank is not, once a plank is carried it is one hole's worth of work, and a spare left in the bank must not inflate the count back to a full hull.
+    const planksHeld = heldId(snap, DS_ID.PLANK);
+    const planksWanted = planksHeld > 0 ? planksHeld : SHIP_REPAIR.planks;
+    const nails: Want = {
+        id: DS_ID.NAILS,
+        name: DS_ITEM.NAILS,
+        qty: planksWanted * SHIP_REPAIR.nailsPerPlank,
+        source: (s, need) => {
+            if (Skills.effective('smithing') < 34) {
+                return { kind: 'wait', reason: 'Smithing 34 is required to make nails; train Smithing or obtain and bank Nails' };
+            }
+            if ((s.inv.get('steel bar') ?? 0) === 0) {
+                const bars = Math.ceil(need / 2);
+                if ((s.inv.get('iron ore') ?? 0) < bars && Skills.effective('mining') < 15) {
+                    return { kind: 'wait', reason: 'Mining 15 is required for iron ore; train Mining or obtain iron ore, steel bars or Nails' };
+                }
+                if ((s.inv.get('coal') ?? 0) < bars * 2 && Skills.effective('mining') < 30) {
+                    return { kind: 'wait', reason: 'Mining 30 is required for coal; train Mining or obtain coal, steel bars or Nails' };
+                }
+            }
+            return custom(
+                `smith ${need} nails for ${planksWanted} plank${planksWanted === 1 ? '' : 's'}`
+                    + ` (${heldId(s, DS_ID.NAILS)} carried / ${bankedId(s, DS_ID.NAILS)} banked)`,
+                log => smithNails(need, log)
+            );
+        }
+    };
+    // Why: at the spawns a part-filled pack is a trip half done rather than a hull half patched, and read the other way it sent the bot back to Port Sarim after every plank.
+    const planksToFetch = inPlankGraveyard(snap.tile) ? SHIP_REPAIR.planks : planksWanted;
+    // Why: smithing belongs to the boat leg rather than the shopping, as it is eighteen slots of ore and wants the pack the map pieces and the Oracle's four charms were using.
+    // Why: the hammer comes before it, as the anvil answers nothing without one, and the planks after, as three slots the ore leg would only bank and draw again.
+    return stock(snap, [bought(DS_ID.HAMMER, DS_ITEM.HAMMER), nails, bought(DS_ID.PLANK, DS_ITEM.PLANK, planksToFetch)]);
+}
+
 export function decide(snap: QuestSnapshot): QuestStep {
     const stage = snap.progress?.stage;
     if (snap.journal === 'complete' || stage === DRAGON_STAGE.COMPLETE) {
@@ -655,6 +738,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
     }
 
     if (stage === DRAGON_STAGE.SPOKEN_OZIACH) {
+        if (inOracleChestRoom(snap.tile) && heldId(snap, DS_ID.MAP_ORACLE) > 0) {
+            return custom('leave the oracle chest room', log => openOracleMagicDoor(log, false));
+        }
         if (aboard(snap.tile)) {
             return custom('go ashore', leaveShip);
         }
@@ -690,11 +776,17 @@ export function decide(snap: QuestSnapshot): QuestStep {
                 return custom("Melzar's Maze", log => maze.step(log));
             }
             if (!anywhere(snap, DS_ID.MAP_ORACLE)) {
-                // Why: asking her sets dragon_oracle to 2 (prints the rhyme) and her door sets it to 3 (stops printing), so the journal flag can't gate this alone.
-                // Why: the door eats the 4 charms, so holding them is the test.
-                const holdsCharms = ORACLE_DOOR_ITEMS.every(id => (snap.invIds?.get(id) ?? 0) > 0);
-                if (holdsCharms && !hasFlag(snap.progress, 'asked-oracle')) {
-                    return { kind: 'talk', stop: ORACLE };
+                // Why: asking her sets dragon_oracle to 2, which is what prints the rhyme, and going through her door sets it to 3, which stops printing it.
+                // Why: the journal flag therefore goes out again the moment the door is used and cannot gate this on its own.
+                // Why: holding all four charms is the honest test, as the door eats them, and standing past it is the one place their absence proves nothing.
+                if (!inOracleChestRoom(snap.tile)) {
+                    const charms = stock(snap, ORACLE_CHARMS);
+                    if (charms) {
+                        return charms;
+                    }
+                    if (!hasFlag(snap.progress, 'asked-oracle')) {
+                        return { kind: 'talk', stop: ORACLE };
+                    }
                 }
                 return custom('the chest under Ice Mountain', oracleChest);
             }
@@ -719,29 +811,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
     }
 
     if (stage === DRAGON_STAGE.BOUGHT_SHIP) {
-        // Why: lady_lumbridge.rs2 inv_dels 1 plank and 4 nails per hole, so nails owed is 4 per plank still to place; against the hull's 12, a patched hole reads as 8 missing.
-        // Why: carried planks set the count, so a spare in the bank can't inflate it back to a full hull.
-        const planksHeld = snap.invIds?.get(DS_ID.PLANK) ?? 0;
-        const planksWanted = planksHeld > 0 ? planksHeld : SHIP_REPAIR.planks;
-        const nailsNeeded = planksWanted * SHIP_REPAIR.nailsPerPlank;
-        const nails = (snap.invIds?.get(DS_ID.NAILS) ?? 0) + (snap.bankIds?.get(DS_ID.NAILS) ?? 0);
-        const short = [
-            { id: DS_ID.NAILS, name: DS_ITEM.NAILS, qty: nailsNeeded },
-            { id: DS_ID.PLANK, name: DS_ITEM.PLANK, qty: planksWanted },
-            { id: DS_ID.HAMMER, name: DS_ITEM.HAMMER, qty: 1 }
-        ].filter(w => (snap.invIds?.get(w.id) ?? 0) < w.qty && (snap.bankIds?.get(w.id) ?? 0) > 0);
-        if ((nails < nailsNeeded || short.length > 0) && aboard(snap.tile)) {
-            return custom('go ashore', leaveShip);
-        }
-        // Why: smithing is 18 slots of ore and wants the pack the map pieces and the Oracle's 4 charms were using, so it runs on the boat leg.
-        if (nails < nailsNeeded) {
-            const have = `${snap.invIds?.get(DS_ID.NAILS) ?? 0} carried / ${snap.bankIds?.get(DS_ID.NAILS) ?? 0} banked`;
-            return custom(`smith ${nailsNeeded - nails} nails for ${planksWanted} plank${planksWanted === 1 ? '' : 's'}`
-                + ` (${have}, bank ${snap.bankKnown ? 'seen' : 'UNSEEN'})`,
-            log => smithNails(nailsNeeded - nails, log));
-        }
-        if (short.length > 0) {
-            return { kind: 'withdraw', items: short.map(w => ({ name: w.name, qty: w.qty, id: w.id })) };
+        const errand = hullErrand(snap);
+        if (errand) {
+            return aboard(snap.tile) ? custom('go ashore', leaveShip) : errand;
         }
         // Why: hiring Ned leaves no journal trace, so the repair, which the journal can confirm, gates it.
         if (!hasFlag(snap.progress, 'ship-repaired')) {
@@ -808,7 +880,6 @@ export const dragonslayer: QuestModule = {
     coinFloat: 0,
     exit: leaveCrandor,
     readProgress: readDragonProgress,
-    gather: SUPPLY_GATHERS,
     decide
 };
 

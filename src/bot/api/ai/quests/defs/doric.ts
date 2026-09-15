@@ -1,3 +1,4 @@
+import { normalizeJournal as journalText } from '../journalText.js';
 import { actions, reader } from '../../../../adapter/ClientAdapter.js';
 import { EventSignal } from '../../../execution/EventSignal.js';
 import { Execution } from '../../../execution/Execution.js';
@@ -78,14 +79,6 @@ const ORE_ANCHORS: Readonly<Record<Mineable, Tile>> = {
 const BRONZE_PICKAXE_SPAWN = new Tile(2963, 3216, 0);
 const PICKAXE_RESPAWN_MS = 70_000;
 const ROCK_RESPAWN_MS = 30_000;
-
-function journalText(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 export function parseDoricJournal(lines: readonly string[] | string): number | undefined {
     const text = journalText(lines);

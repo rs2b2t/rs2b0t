@@ -50,8 +50,7 @@ docs/local/
 tools/nav/transport-heavy.routes.json
 
 # local test soundfont; the source lives in the engine's public/
-src/3rdparty/SCC1_Florestan.sf2
+src/client/3rdparty/SCC1_Florestan.sf2
 
 # personal agent rules
 CLAUDE.local.md
-
