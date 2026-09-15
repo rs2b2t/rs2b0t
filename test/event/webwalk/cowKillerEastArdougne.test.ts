@@ -9,7 +9,7 @@ import { emptyWorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 import doors from '#/bot/event/webwalk/data/doors.json';
 
 const FIELD = { x: 2664, z: 3347, level: 0 } as const;
-const BANK = { x: 2655, z: 3283, level: 0 } as const;
+const BANK = { x: 2616, z: 3332, level: 0 } as const;
 const GATE_LEAVES = [
     { x: 2675, z: 3349, level: 0, locId: 1553, locName: 'Gate', dir: 'E' },
     { x: 2675, z: 3350, level: 0, locId: 1551, locName: 'Gate', dir: 'E' }

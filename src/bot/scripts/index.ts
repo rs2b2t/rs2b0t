@@ -144,7 +144,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'CowKiller',
-    description: 'Walks to the Lumbridge, north-west Lumbridge, south-Falador, or East Ardougne cow fields, loots hides + bones, and supports field-aware banking',
+    description: 'Walks to the Lumbridge, north-west Lumbridge, south-Falador, or East Ardougne cow fields, loots cowhide, and banks each field at its pinned bank',
     category: 'Combat',
     tags: ['lumbridge', 'falador', 'ardougne', 'cowhide', 'bones', 'banking', 'afk'],
     settingsSchema: COWKILLER_SETTINGS,

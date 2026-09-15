@@ -220,7 +220,7 @@ Kills chickens, loots and buries bones (anchor = start tile)
 
 ### CowKiller
 
-Walks to the Lumbridge, north-west Lumbridge, south-Falador, or East Ardougne cow fields, loots hides + bones, and supports field-aware banking
+Walks to the Lumbridge, north-west Lumbridge, south-Falador, or East Ardougne cow fields, loots cowhide, and banks each field at its pinned bank
 
 - Tags: `lumbridge`, `falador`, `ardougne`, `cowhide`, `bones`, `banking`, `afk`
 
@@ -232,7 +232,7 @@ Walks to the Lumbridge, north-west Lumbridge, south-Falador, or East Ardougne co
 | `fightHpGate` | number (0–100) | `45` | Stop fighting below HP% |
 | `restUntilHp` | number (0–100) | `70` | Rest until HP% |
 | `targetName` | string | `"Cow"` | Target NPC name |
-| `lootMatch` | string | `"cow hide\|bones"` | Loot name match (\| = OR) |
+| `lootMatch` | string | `"Cowhide"` | Loot name match (\| = OR) |
 | `buryBones` | boolean | `false` | Bury bones? |
 | `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage, range |
 | `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
