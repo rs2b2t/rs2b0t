@@ -7,7 +7,6 @@ import {
     VAMPIRE_SLAYER_STAGE
 } from '#/bot/api/ai/quests/defs/vampireslayer.js';
 import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
-import { FOOD_FLOAT } from '#/bot/api/ai/quests/food.js';
 
 const MAINLAND: WorldTile = { x: 3093, z: 3243, level: 0 };
 const MORGAN_UPPER: WorldTile = { x: 3096, z: 3268, level: 1 };
@@ -176,23 +175,24 @@ describe('Vampire Slayer stake and supply recovery', () => {
         expect(buy.kind === 'buy' && buy.item).toBe('Black sword');
     });
 
-    test('uses banked food before sourcing fallback Kebabs', () => {
+    // Why: this is a free quest and Count Draynor is a low-level fight, so food is neither withdrawn nor bought and the pack keeps those slots for the quest items.
+    test('never withdraws or buys food, whatever the bank or the purse holds', () => {
         const base = ['Stake', 'Garlic', 'Hammer'];
-        const food = decide(snap({ stage: 2, inv: base, worn: ['Black sword'], bank: Array(20).fill('Trout') }));
-        expect(food.kind === 'withdraw' && food.items).toEqual([{ name: 'Trout', qty: FOOD_FLOAT }]);
+        const banked = decide(snap({ stage: 2, inv: base, worn: ['Black sword'], bank: Array(20).fill('Trout') }));
+        expect(customName(banked)).toBe('enter the crypt and defeat Count Draynor');
 
-        const fallback = decide(snap({
+        const rich = decide(snap({
             stage: 2,
             inv: [...base, ...Array(5000).fill('Coins')],
             worn: ['Black sword']
         }));
-        expect(customName(fallback)).toBe(`buy ${FOOD_FLOAT} combat Kebabs`);
+        expect(customName(rich)).toBe('enter the crypt and defeat Count Draynor');
     });
 
-    test('enters the crypt only with stake, garlic, hammer, weapon, and the food float', () => {
+    test('enters the crypt on stake, garlic, hammer and a weapon, with no food among them', () => {
         const step = decide(snap({
             stage: 2,
-            inv: ['Stake', 'Garlic', 'Hammer', ...FOOD],
+            inv: ['Stake', 'Garlic', 'Hammer'],
             worn: ['Black sword']
         }));
         expect(customName(step)).toBe('enter the crypt and defeat Count Draynor');

@@ -493,7 +493,7 @@ async function scoutSecretPath(log: (m: string) => void): Promise<boolean> {
         // Still try the walk, path may already be open.
         log('tenzing back door open failed, walking scout path anyway');
     }
-    if (!(await walkTo(TILE.SCOUT, 3, log))) {
+    if (!(await walkTo(TILE.SCOUT, 0, log))) {
         return false;
     }
     await settleScene();

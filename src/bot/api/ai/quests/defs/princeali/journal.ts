@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 // docs/reference/quest-engine.md#quest-state
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
@@ -16,14 +17,6 @@ export const PRINCE_STAGE = {
     SAVED: 100,
     COMPLETE: 110
 } as const;
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 // Newest first: every entry keeps the earlier history.
 const STAGE_LINES: readonly [string, number][] = [

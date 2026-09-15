@@ -27,7 +27,7 @@ let hp: number;
 let restores: (() => void)[];
 
 const guard = (index: number, faceEntity: number, inCombat: boolean): NpcSnapshot => ({
-    index, faceEntity, inCombat, anim: -1, id: 9, name: 'Guard', level: 21,
+    index, faceEntity, inCombat, anim: -1, id: 9, name: 'Guard', level: 21, size: 1,
     tile: { x: 3201, z: 3200, level: 0 }, distance: 1,
     ops: ['Attack'], health: 10, totalHealth: 20
 });
