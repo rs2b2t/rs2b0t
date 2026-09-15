@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -10,14 +11,6 @@ export const MURDER_STAGE = { NOT_STARTED: 0, STARTED: 1, COMPLETE: 2 } as const
 export const POISON_PROVED = 'poison-proved';
 export const THREAD_FOUND = 'thread';
 export const WEAPON_TAKEN = 'weapon';
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 const STAGES: readonly [string, number][] = [
     ['quest complete!', MURDER_STAGE.COMPLETE],

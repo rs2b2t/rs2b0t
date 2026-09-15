@@ -23,7 +23,7 @@ for (const [name, id, distance, expected] of [
         let held = true;
         BotHost.tickCount = 100;
         spyOn(reader, 'worldTile').mockReturnValue(tile);
-        spyOn(reader, 'npcs').mockReturnValue([{ id, name, distance, tile, index: 1, anim: -1, level: 0, ops: [], inCombat: false, health: 0, totalHealth: 0, faceEntity: -1 }]);
+        spyOn(reader, 'npcs').mockReturnValue([{ id, name, distance, tile, index: 1, anim: -1, level: 0, size: 1, ops: [], inCombat: false, health: 0, totalHealth: 0, faceEntity: -1 }]);
         spyOn(reader, 'locs').mockReturnValue([]);
         spyOn(reader, 'selfSlot').mockReturnValue(0);
         spyOn(reader, 'selfFaceEntity').mockReturnValue(-1);
