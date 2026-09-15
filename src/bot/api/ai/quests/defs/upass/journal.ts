@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -35,14 +36,6 @@ export const UP_FLAG = {
 } as const;
 
 export const UPASS = 'Underground Pass';
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 // Why: the journal is additive, every stage keeps the earlier lines and appends its own, so the deepest matching line wins and the list runs from the end of the quest backwards.
 const STAGE_LINES: readonly [string, number][] = [

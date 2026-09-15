@@ -4,6 +4,7 @@ import { SETTINGS, shouldKeepBankItem } from '#/bot/scripts/AutoFighter/AutoFigh
 import {
     autoBankEnabled,
     BANKING_OPTIONS,
+    BANK_LOCATION_OPTIONS,
     shouldBankAfterMinutes,
     BURIAL_BONE_NAME,
     CUSTOM_COORDINATES,
@@ -20,6 +21,7 @@ import {
 } from '#/bot/scripts/AutoFighter/AutoFighterData.js';
 import { matchesEntityName } from '#/bot/api/query/Query.js';
 import { resolveControl } from '#/bot/panel/paramControls.js';
+import { BANK_LOCATIONS } from '#/bot/api/bank/BankLocations.js';
 
 describe('AutoFighter data', () => {
     test('loot defaults to exactly gems + clues (the spec set)', () => {
@@ -57,6 +59,12 @@ describe('AutoFighter data', () => {
         expect(autoBankEnabled('Auto')).toBe(true);
         expect(autoBankEnabled('auto')).toBe(true);
         expect(autoBankEnabled('None')).toBe(false);
+    });
+    test('bank location lists Nearest then every named bank, defaulting to Nearest', () => {
+        expect(BANK_LOCATION_OPTIONS).toEqual(['Nearest', ...BANK_LOCATIONS.map(b => b.name)]);
+        expect(SETTINGS.bankLocation.default).toBe('Nearest');
+        expect(SETTINGS.bankLocation.options).toEqual(BANK_LOCATION_OPTIONS);
+        expect(SETTINGS.bankLocation.group).toBe('Banking & loot');
     });
     test('timed bank matches CowKiller: Auto + interval + loot + elapsed', () => {
         expect(SETTINGS.bankEveryMinutes).toMatchObject({

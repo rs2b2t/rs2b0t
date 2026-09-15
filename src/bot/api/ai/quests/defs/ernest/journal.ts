@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -5,14 +6,6 @@ import type { QuestProgress } from '../../engine/types.js';
 import { EC_QUEST, EC_STAGE } from './areas.js';
 
 /** Colour tags become a space, so no needle may span a tag boundary. */
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
-
 /** haunted_journal.rs2 writes one self-contained block per stage, but newest-first still holds and matches every other module. */
 function readStage(text: string): number | undefined {
     if (text.includes('we turned ernest back to normal')) return EC_STAGE.COMPLETE;
