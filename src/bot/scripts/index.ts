@@ -270,7 +270,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'JiveChests',
-    description: 'Opens the Taverley crystal chest on a bank of crystal keys: withdraws seven at Falador West, walks to the chest, uses a key on it per open, drops the raw swordfish, body runes and spinach rolls the roll gives, then teleports back and banks the rest. Stops when the bank runs out of keys.',
+    description: 'Opens the Taverley crystal chest with seven keys per trip from Falador West. Drops raw swordfish, body runes, spinach rolls and adamant square shields. Collects overflow in priority order: dragonstones, key halves, runite bars, diamonds, rubies, rune legs or skirts, then other rewards. Banks when full and returns for remaining loot before opening again. Keeps and restocks Falador teleport runes. Stops after the keys are exhausted and remaining loot is collected and banked.',
     category: 'Money making',
     tags: ['chest', 'taverley', 'banking', 'looting', 'afk'],
     settingsSchema: JIVECHESTS_SETTINGS,
