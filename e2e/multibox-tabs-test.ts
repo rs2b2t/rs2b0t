@@ -129,8 +129,9 @@ try {
                 continue;
             }
             await frame.evaluate(cmd => {
-                const client = (globalThis as never as { rs2b0t: { client: { out: { p1Enc(v: number): void; p1(v: number): void; pjstr(v: string): void } } } }).rs2b0t.client;
-                client.out.p1Enc(224); // ClientProt.CLIENT_CHEAT
+                const g = (globalThis as never as { rs2b0t: { protocol?: { clientCheat: number }; client: { out: { p1Enc(v: number): void; p1(v: number): void; pjstr(v: string): void } } } }).rs2b0t;
+                const client = g.client;
+                client.out.p1Enc(g.protocol?.clientCheat ?? 224);
                 client.out.p1(cmd.length + 1);
                 client.out.pjstr(cmd);
             }, tele);
