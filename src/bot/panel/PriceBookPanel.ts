@@ -1,35 +1,12 @@
 import { PriceBooks } from '../api/market/bookStore.js';
+import { exportOrderbooks, mergeOrderbooks, parseOrderbookFile } from '../api/market/orderbook-format.js';
+import type { PriceBook as TransferBook } from '../api/market/orderbook-format.js';
 import { liveCatalog, type Catalog } from '../api/market/catalog.js';
-import {
-    DEFAULT_MARGIN,
-    DEFAULT_MAX_TRADE,
-    removeBook,
-    rowOf,
-    uniqueBookName,
-    upsertBook,
-    type PriceBook
-} from '../api/market/priceBook.js';
+import { DEFAULT_MARGIN, DEFAULT_MAX_TRADE, removeBook, rowOf, uniqueBookName, upsertBook, type PriceBook } from '../api/market/priceBook.js';
 import { CATEGORIES, shelves, type Category } from '../api/market/categories.js';
 import { el } from './dom.js';
 import { itemIconDataUrl } from './itemIcon.js';
-import {
-    addRow,
-    addRows,
-    displayRows,
-    dropRow,
-    formatPrice,
-    nextSort,
-    parsePrice,
-    pickerRows,
-    setField,
-    setMargin,
-    setMaxTradeValue,
-    toggleSide,
-    viewRows,
-    type DisplayRow,
-    type SortDir,
-    type SortKey
-} from './priceBookPanelLogic.js';
+import { addRow, addRows, displayRows, dropRow, formatPrice, nextSort, parsePrice, pickerRows, setField, setMargin, setMaxTradeValue, toggleSide, viewRows, type DisplayRow, type SortDir, type SortKey } from './priceBookPanelLogic.js';
 
 const ICON_FILL_MS = 500;
 const ICON_FILL_TRIES = 12;
@@ -65,6 +42,8 @@ export class PriceBookPanel {
     private renaming = false;
     private iconTries = 0;
     private iconTimer: ReturnType<typeof setTimeout> | null = null;
+    private stagedImport: { filename: string; books: TransferBook[]; conflicts: string[] } | null = null;
+    private importError: string | null = null;
 
     constructor() {
         this.root.style.display = 'none';
@@ -91,6 +70,8 @@ export class PriceBookPanel {
         this.query = '';
         this.filter = '';
         this.iconTries = 0;
+        this.stagedImport = null;
+        this.importError = null;
         this.render();
     }
 
@@ -133,6 +114,7 @@ export class PriceBookPanel {
             const all = displayRows(book, cat);
             const shown = viewRows(all, this.shelf, this.sort.key, this.sort.dir, this.filter);
             const onShelf = viewRows(all, this.shelf, this.sort.key, this.sort.dir);
+            this.window.appendChild(this.transferBar(book));
             this.window.appendChild(this.bookFields(book));
             this.window.appendChild(this.shelfBar(all));
             this.window.appendChild(this.filterBar(shown.length, onShelf.length));
@@ -143,6 +125,14 @@ export class PriceBookPanel {
             }
             if (this.browsing) {
                 this.window.appendChild(this.browser(book, cat));
+            }
+        }
+        if (this.stagedImport !== null) {
+            const available = new Set(['close', 'export-selected', 'export-all', 'import', 'apply-import', 'cancel-import']);
+            for (const control of Array.from(this.window.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLSelectElement>('button, input, select'))) {
+                if (!available.has(control.dataset.action ?? '') && control.dataset.role !== 'orderbook-import') {
+                    control.disabled = true;
+                }
             }
         }
         this.release(held);
@@ -198,36 +188,44 @@ export class PriceBookPanel {
 
         bar.appendChild(this.renaming ? this.nameField() : this.namePicker());
 
-        bar.appendChild(this.action('new', '+ new', () => {
-            this.commit({
-                name: uniqueBookName(PriceBooks.all(), 'prices'),
-                margin: DEFAULT_MARGIN,
-                maxTradeValue: DEFAULT_MAX_TRADE,
-                rows: []
-            });
-        }));
-        bar.appendChild(this.action('rename', 'rename', () => {
-            if (this.current()) {
-                this.renaming = true;
+        bar.appendChild(
+            this.action('new', '+ new', () => {
+                this.commit({
+                    name: uniqueBookName(PriceBooks.all(), 'prices'),
+                    margin: DEFAULT_MARGIN,
+                    maxTradeValue: DEFAULT_MAX_TRADE,
+                    rows: []
+                });
+            })
+        );
+        bar.appendChild(
+            this.action('rename', 'rename', () => {
+                if (this.current()) {
+                    this.renaming = true;
+                    this.render();
+                }
+            })
+        );
+        bar.appendChild(
+            this.action('duplicate', 'duplicate', () => {
+                const from = this.current();
+                if (from) {
+                    this.commit({ ...from, name: uniqueBookName(PriceBooks.all(), from.name), rows: [...from.rows] });
+                }
+            })
+        );
+        bar.appendChild(
+            this.action('delete', 'delete', () => {
+                if (this.selected === null) {
+                    return;
+                }
+                PriceBooks.save(removeBook(PriceBooks.all(), this.selected));
+                this.ensureBook();
+                this.selected = PriceBooks.names()[0] ?? null;
+                this.adding = false;
                 this.render();
-            }
-        }));
-        bar.appendChild(this.action('duplicate', 'duplicate', () => {
-            const from = this.current();
-            if (from) {
-                this.commit({ ...from, name: uniqueBookName(PriceBooks.all(), from.name), rows: [...from.rows] });
-            }
-        }));
-        bar.appendChild(this.action('delete', 'delete', () => {
-            if (this.selected === null) {
-                return;
-            }
-            PriceBooks.save(removeBook(PriceBooks.all(), this.selected));
-            this.ensureBook();
-            this.selected = PriceBooks.names()[0] ?? null;
-            this.adding = false;
-            this.render();
-        }));
+            })
+        );
         bar.appendChild(this.action('close', '✕', () => this.close()));
         return bar;
     }
@@ -298,28 +296,152 @@ export class PriceBookPanel {
         return btn;
     }
 
+    private transferBar(book: PriceBook): HTMLElement {
+        const box = el('div', 'rs2b0t-pricebook-addbar');
+        box.appendChild(this.action('export-selected', 'export selected', () => this.download([book], `rs2b0t-orderbook-${book.name}.json`)));
+        box.appendChild(this.action('export-all', 'export all', () => this.download(PriceBooks.all(), 'rs2b0t-orderbooks.json')));
+
+        const choose = this.action('import', 'import', () => input.click());
+        const input = el('input', '');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        input.hidden = true;
+        input.dataset.role = 'orderbook-import';
+        input.addEventListener('change', async () => {
+            const file = input.files?.[0];
+            if (file === undefined) {
+                return;
+            }
+            try {
+                const books = parseOrderbookFile(await file.text());
+                this.stagedImport = {
+                    filename: file.name,
+                    books,
+                    conflicts: this.importConflicts(books)
+                };
+                this.importError = null;
+            } catch (error) {
+                this.stagedImport = null;
+                this.importError = `Could not import ${file.name}: ${error instanceof Error ? error.message : String(error)}. Choose a valid orderbook JSON file.`;
+            }
+            this.render();
+        });
+        box.appendChild(choose);
+        box.appendChild(input);
+
+        if (this.stagedImport !== null) {
+            const preview = el('div', 'rs2b0t-pricebook-note');
+            preview.dataset.role = 'import-preview';
+            preview.textContent = `${this.stagedImport.filename}: ${this.stagedImport.books.map(incoming => `${incoming.name}: ${incoming.rows.length} ${incoming.rows.length === 1 ? 'row' : 'rows'}`).join(', ')}`;
+            box.appendChild(preview);
+            if (this.stagedImport.conflicts.length > 0) {
+                const conflicts = el('div', 'rs2b0t-pricebook-note');
+                conflicts.dataset.role = 'import-conflicts';
+                conflicts.textContent = `Will replace: ${this.stagedImport.conflicts.join(', ')}`;
+                box.appendChild(conflicts);
+            }
+            box.appendChild(
+                this.action('apply-import', 'Apply', () => {
+                    const staged = this.stagedImport;
+                    if (staged === null) {
+                        return;
+                    }
+                    try {
+                        const current = PriceBooks.all();
+                        const conflicts = this.importConflicts(staged.books, current);
+                        if (conflicts.some(name => !staged.conflicts.includes(name))) {
+                            staged.conflicts = conflicts;
+                            this.importError = 'Saved books changed. Review the replacements, then apply again.';
+                        } else {
+                            PriceBooks.save(mergeOrderbooks(current, staged.books));
+                            this.selected = staged.books[0]?.name ?? this.selected;
+                            this.stagedImport = null;
+                            this.importError = null;
+                        }
+                    } catch (error) {
+                        this.importError = `Could not apply ${staged.filename}: ${error instanceof Error ? error.message : String(error)}.`;
+                    }
+                    this.render();
+                })
+            );
+            box.appendChild(
+                this.action('cancel-import', 'Cancel', () => {
+                    this.stagedImport = null;
+                    this.importError = null;
+                    this.render();
+                })
+            );
+        }
+        if (this.importError !== null) {
+            const error = el('div', 'rs2b0t-pricebook-note');
+            error.dataset.role = 'import-error';
+            error.textContent = this.importError;
+            box.appendChild(error);
+        }
+
+        const note = el('span', 'rs2b0t-pricebook-note');
+        note.textContent = 'Restart MarketMaker after applying an import.';
+        box.appendChild(note);
+        return box;
+    }
+
+    private importConflicts(books: readonly TransferBook[], existing = PriceBooks.all()): string[] {
+        const names = new Set(existing.map(book => book.name.toLowerCase()));
+        return books.filter(book => names.has(book.name.toLowerCase())).map(book => book.name);
+    }
+
+    private download(books: readonly PriceBook[], filename: string): void {
+        try {
+            const url = URL.createObjectURL(new Blob([exportOrderbooks(books)], { type: 'application/json' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            try {
+                document.body.appendChild(link);
+                link.click();
+            } finally {
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }
+            this.importError = null;
+        } catch (error) {
+            this.importError = `Could not export ${filename}: ${error instanceof Error ? error.message : String(error)}. Reduce the selection or fix the reported values.`;
+        }
+        this.render();
+    }
+
     private bookFields(book: PriceBook): HTMLElement {
         const box = el('div', 'rs2b0t-pricebook-fields');
 
-        box.appendChild(this.numberField('Spread %', book.margin, 'margin', value => {
-            this.commit(setMargin(book, value));
-        }, 'total spread, split either side of mid'));
+        box.appendChild(
+            this.numberField(
+                'Spread %',
+                book.margin,
+                'margin',
+                value => {
+                    this.commit(setMargin(book, value));
+                },
+                'total spread, split either side of mid'
+            )
+        );
 
-        box.appendChild(this.numberField('Max trade gp', book.maxTradeValue, 'max-trade', value => {
-            this.commit(setMaxTradeValue(book, value));
-        }, 'refuse any single trade worth more than this', true));
+        box.appendChild(
+            this.numberField(
+                'Max trade gp',
+                book.maxTradeValue,
+                'max-trade',
+                value => {
+                    this.commit(setMaxTradeValue(book, value));
+                },
+                'refuse any single trade worth more than this',
+                true
+            )
+        );
 
         return box;
     }
 
-    private numberField(
-        label: string,
-        value: number,
-        role: string,
-        onChange: (value: number) => void,
-        help?: string,
-        big = false
-    ): HTMLElement {
+    private numberField(label: string, value: number, role: string, onChange: (value: number) => void, help?: string, big = false): HTMLElement {
         const wrap = el('label', 'rs2b0t-pricebook-field');
         const text = el('span', 'rs2b0t-pricebook-field-label');
         text.textContent = label;
@@ -396,10 +518,12 @@ export class PriceBookPanel {
             const count = el('span', 'rs2b0t-pricebook-filter-count');
             count.textContent = `${shown} of ${total}`;
             bar.appendChild(count);
-            bar.appendChild(this.action('clear-filter', '✕', () => {
-                this.filter = '';
-                this.render();
-            }));
+            bar.appendChild(
+                this.action('clear-filter', '✕', () => {
+                    this.filter = '';
+                    this.render();
+                })
+            );
         }
         return bar;
     }
@@ -500,7 +624,14 @@ export class PriceBookPanel {
             const add = el('button', 'rs2b0t-button rs2b0t-pricebook-shelf-add');
             add.textContent = missing.length === 0 ? '✓' : `+ add ${missing.length}`;
             add.disabled = missing.length === 0;
-            add.addEventListener('click', () => this.commit(addRows(book, missing.map(r => ({ id: r.id, cost: r.cost })))));
+            add.addEventListener('click', () =>
+                this.commit(
+                    addRows(
+                        book,
+                        missing.map(r => ({ id: r.id, cost: r.cost }))
+                    )
+                )
+            );
             line.appendChild(add);
 
             list.appendChild(line);
@@ -575,17 +706,21 @@ export class PriceBookPanel {
 
     private addBar(): HTMLElement {
         const bar = el('div', 'rs2b0t-pricebook-addbar');
-        bar.appendChild(this.action('add', this.adding ? 'done' : '+ add item', () => {
-            this.adding = !this.adding;
-            this.browsing = false;
-            this.query = '';
-            this.render();
-        }));
-        bar.appendChild(this.action('browse', this.browsing ? 'done' : 'browse categories', () => {
-            this.browsing = !this.browsing;
-            this.adding = false;
-            this.render();
-        }));
+        bar.appendChild(
+            this.action('add', this.adding ? 'done' : '+ add item', () => {
+                this.adding = !this.adding;
+                this.browsing = false;
+                this.query = '';
+                this.render();
+            })
+        );
+        bar.appendChild(
+            this.action('browse', this.browsing ? 'done' : 'browse categories', () => {
+                this.browsing = !this.browsing;
+                this.adding = false;
+                this.render();
+            })
+        );
         return bar;
     }
 

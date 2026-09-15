@@ -8,6 +8,8 @@ import type Packet from '#/client/io/Packet.js';
 
 export interface RawClient {
     ingame: boolean;
+    stream: object | null;
+    modalCloseGeneration: number;
     sceneState: number;
 
     mapBuildBaseX: number;
@@ -91,6 +93,8 @@ export interface RawClient {
 
 export const SELF_TEST = [
     'ingame',
+    'stream',
+    'modalCloseGeneration',
     'sceneState',
     'mapBuildBaseX',
     'mapBuildBaseZ',

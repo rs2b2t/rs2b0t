@@ -8532,5 +8532,495 @@
     "options": [
       "Climb-over"
     ]
+  },
+  {
+    "from": {
+      "x": 2691,
+      "z": 9564,
+      "level": 0
+    },
+    "to": {
+      "x": 2689,
+      "z": 9564,
+      "level": 0
+    },
+    "locName": "vines",
+    "action": "Chop-down",
+    "kind": "shortcut",
+    "locId": 5103,
+    "locX": 2690,
+    "locZ": 9564,
+    "debugName": "karam_dungeon_vineblocking1",
+    "options": [
+      "Chop-down"
+    ],
+    "requires": {
+      "skills": [
+        {
+          "name": "woodcutting",
+          "level": 10
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2689,
+      "z": 9564,
+      "level": 0
+    },
+    "to": {
+      "x": 2691,
+      "z": 9564,
+      "level": 0
+    },
+    "locName": "vines",
+    "action": "Chop-down",
+    "kind": "shortcut",
+    "locId": 5103,
+    "locX": 2690,
+    "locZ": 9564,
+    "debugName": "karam_dungeon_vineblocking1",
+    "options": [
+      "Chop-down"
+    ]
+  },
+  {
+    "from": {
+      "x": 2683,
+      "z": 9568,
+      "level": 0
+    },
+    "to": {
+      "x": 2683,
+      "z": 9570,
+      "level": 0
+    },
+    "locName": "Vines",
+    "action": "Chop-down",
+    "kind": "shortcut",
+    "locId": 5104,
+    "locX": 2683,
+    "locZ": 9569,
+    "debugName": "karam_dungeon_vineblocking2",
+    "options": [
+      "Chop-down"
+    ],
+    "requires": {
+      "skills": [
+        {
+          "name": "woodcutting",
+          "level": 27
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2683,
+      "z": 9570,
+      "level": 0
+    },
+    "to": {
+      "x": 2683,
+      "z": 9568,
+      "level": 0
+    },
+    "locName": "Vines",
+    "action": "Chop-down",
+    "kind": "shortcut",
+    "locId": 5104,
+    "locX": 2683,
+    "locZ": 9569,
+    "debugName": "karam_dungeon_vineblocking2",
+    "options": [
+      "Chop-down"
+    ]
+  },
+  {
+    "from": {
+      "x": 2655,
+      "z": 9566,
+      "level": 0
+    },
+    "to": {
+      "x": 2655,
+      "z": 9573,
+      "level": 0
+    },
+    "locName": "Pipe",
+    "action": "Squeeze-through",
+    "kind": "shortcut",
+    "locId": 5100,
+    "locX": 2655,
+    "locZ": 9567,
+    "debugName": "karam_dungeon_pipe2",
+    "options": [
+      "Squeeze-through"
+    ],
+    "requires": {
+      "skills": [
+        {
+          "name": "agility",
+          "level": 22
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2655,
+      "z": 9573,
+      "level": 0
+    },
+    "to": {
+      "x": 2655,
+      "z": 9566,
+      "level": 0
+    },
+    "locName": "Pipe",
+    "action": "Squeeze-through",
+    "kind": "shortcut",
+    "locId": 5100,
+    "locX": 2655,
+    "locZ": 9571,
+    "debugName": "karam_dungeon_pipe2",
+    "options": [
+      "Squeeze-through"
+    ]
+  },
+  {
+    "from": {
+      "x": 2649,
+      "z": 9562,
+      "level": 0
+    },
+    "to": {
+      "x": 2647,
+      "z": 9557,
+      "level": 0
+    },
+    "locName": "Stepping stone",
+    "action": "Jump-from",
+    "kind": "shortcut",
+    "locId": 5110,
+    "locX": 2649,
+    "locZ": 9561,
+    "debugName": "karam_dungeon_stone1",
+    "options": [
+      "Jump-from"
+    ],
+    "requires": {
+      "skills": [
+        {
+          "name": "agility",
+          "level": 12
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2647,
+      "z": 9557,
+      "level": 0
+    },
+    "to": {
+      "x": 2649,
+      "z": 9562,
+      "level": 0
+    },
+    "locName": "Stepping stone",
+    "action": "Jump-from",
+    "kind": "shortcut",
+    "locId": 5111,
+    "locX": 2647,
+    "locZ": 9558,
+    "debugName": "karam_dungeon_stone2",
+    "options": [
+      "Jump-from"
+    ]
+  },
+  {
+    "from": {
+      "x": 2672,
+      "z": 9499,
+      "level": 0
+    },
+    "to": {
+      "x": 2674,
+      "z": 9499,
+      "level": 0
+    },
+    "locName": "Vines",
+    "action": "Chop-down",
+    "kind": "shortcut",
+    "locId": 5105,
+    "locX": 2673,
+    "locZ": 9499,
+    "debugName": "karam_dungeon_vineblocking3",
+    "options": [
+      "Chop-down"
+    ],
+    "requires": {
+      "skills": [
+        {
+          "name": "woodcutting",
+          "level": 22
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2674,
+      "z": 9499,
+      "level": 0
+    },
+    "to": {
+      "x": 2672,
+      "z": 9499,
+      "level": 0
+    },
+    "locName": "Vines",
+    "action": "Chop-down",
+    "kind": "shortcut",
+    "locId": 5105,
+    "locX": 2673,
+    "locZ": 9499,
+    "debugName": "karam_dungeon_vineblocking3",
+    "options": [
+      "Chop-down"
+    ]
+  },
+  {
+    "from": {
+      "x": 2674,
+      "z": 9479,
+      "level": 0
+    },
+    "to": {
+      "x": 2676,
+      "z": 9479,
+      "level": 0
+    },
+    "locName": "Vines",
+    "action": "Chop-down",
+    "kind": "shortcut",
+    "locId": 5106,
+    "locX": 2675,
+    "locZ": 9479,
+    "debugName": "karam_dungeon_vineblocking4",
+    "options": [
+      "Chop-down"
+    ],
+    "requires": {
+      "skills": [
+        {
+          "name": "woodcutting",
+          "level": 34
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2676,
+      "z": 9479,
+      "level": 0
+    },
+    "to": {
+      "x": 2674,
+      "z": 9479,
+      "level": 0
+    },
+    "locName": "Vines",
+    "action": "Chop-down",
+    "kind": "shortcut",
+    "locId": 5106,
+    "locX": 2675,
+    "locZ": 9479,
+    "debugName": "karam_dungeon_vineblocking4",
+    "options": [
+      "Chop-down"
+    ]
+  },
+  {
+    "from": {
+      "x": 2682,
+      "z": 9506,
+      "level": 0
+    },
+    "to": {
+      "x": 2687,
+      "z": 9506,
+      "level": 0
+    },
+    "locName": "Log balance",
+    "action": "Walk-across",
+    "kind": "shortcut",
+    "locId": 5088,
+    "locX": 2683,
+    "locZ": 9506,
+    "debugName": "karam_dungeon_bamboo_logbalance1",
+    "options": [
+      "Walk-across"
+    ],
+    "requires": {
+      "skills": [
+        {
+          "name": "agility",
+          "level": 30
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2687,
+      "z": 9506,
+      "level": 0
+    },
+    "to": {
+      "x": 2682,
+      "z": 9506,
+      "level": 0
+    },
+    "locName": "Log balance",
+    "action": "Walk-across",
+    "kind": "shortcut",
+    "locId": 5090,
+    "locX": 2686,
+    "locZ": 9506,
+    "debugName": "karam_dungeon_bamboo_logbalance3",
+    "options": [
+      "Walk-across"
+    ]
+  },
+  {
+    "from": {
+      "x": 2698,
+      "z": 9500,
+      "level": 0
+    },
+    "to": {
+      "x": 2698,
+      "z": 9492,
+      "level": 0
+    },
+    "locName": "Pipe",
+    "action": "Squeeze-through",
+    "kind": "shortcut",
+    "locId": 5099,
+    "locX": 2698,
+    "locZ": 9498,
+    "debugName": "karam_dungeon_pipe",
+    "options": [
+      "Squeeze-through"
+    ],
+    "requires": {
+      "skills": [
+        {
+          "name": "agility",
+          "level": 34
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2698,
+      "z": 9492,
+      "level": 0
+    },
+    "to": {
+      "x": 2698,
+      "z": 9500,
+      "level": 0
+    },
+    "locName": "Pipe",
+    "action": "Squeeze-through",
+    "kind": "shortcut",
+    "locId": 5099,
+    "locX": 2698,
+    "locZ": 9493,
+    "debugName": "karam_dungeon_pipe",
+    "options": [
+      "Squeeze-through"
+    ]
+  },
+  {
+    "from": {
+      "x": 2693,
+      "z": 9482,
+      "level": 0
+    },
+    "to": {
+      "x": 2695,
+      "z": 9482,
+      "level": 0
+    },
+    "locName": "Vines",
+    "action": "Chop-down",
+    "kind": "shortcut",
+    "locId": 5107,
+    "locX": 2694,
+    "locZ": 9482,
+    "debugName": "karam_dungeon_vineblocking5",
+    "options": [
+      "Chop-down"
+    ],
+    "requires": {
+      "skills": [
+        {
+          "name": "woodcutting",
+          "level": 34
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2695,
+      "z": 9482,
+      "level": 0
+    },
+    "to": {
+      "x": 2693,
+      "z": 9482,
+      "level": 0
+    },
+    "locName": "Vines",
+    "action": "Chop-down",
+    "kind": "shortcut",
+    "locId": 5107,
+    "locX": 2694,
+    "locZ": 9482,
+    "debugName": "karam_dungeon_vineblocking5",
+    "options": [
+      "Chop-down"
+    ]
+  },
+  {
+    "from": {
+      "x": 2713,
+      "z": 9564,
+      "level": 0
+    },
+    "to": {
+      "x": 2745,
+      "z": 3152,
+      "level": 0
+    },
+    "locName": "Exit",
+    "action": "leave",
+    "kind": "dungeon",
+    "locId": 5084,
+    "locX": 2714,
+    "locZ": 9564,
+    "debugName": "karam_dungeon_exit",
+    "options": [
+      "leave"
+    ]
   }
 ]

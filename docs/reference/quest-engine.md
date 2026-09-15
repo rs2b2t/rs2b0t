@@ -118,6 +118,10 @@ progress is **parked with a reason** and the queue moves on, rather than looping
 step that cannot advance. `ProgressWatchdog` ([`engine/watchdog.ts`](../../src/bot/api/ai/quests/engine/watchdog.ts))
 is what notices.
 
+Combat XP also counts as progress. A cooperative fight can yield between hits
+without spending its failure budget. After 60 seconds in combat with no XP gain,
+unchanged steps count toward parking again.
+
 A step that keeps failing must eventually park. A failing step that never parks is
 the worst outcome available: the bot looks busy forever.
 

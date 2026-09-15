@@ -8,6 +8,11 @@ export interface Rect {
     h: number;
 }
 
+export interface RailRow {
+    y: number;
+    h: number;
+}
+
 export interface Region extends Rect {
     id: string;
     kind: 'panel' | 'widget' | 'scroll';
@@ -260,23 +265,34 @@ export function paintSkillShort(skill: string): string {
             return 'Cook';
         case 'mining':
             return 'Mine';
-        default:
-            return skill;
-    }
-}
-
-export function paintSkillTitle(skill: string): string {
-    switch (skill) {
-        case 'woodcutting':
-            return 'Woodcutting';
-        case 'firemaking':
-            return 'Firemaking';
-        case 'fishing':
-            return 'Fishing';
-        case 'cooking':
-            return 'Cooking';
-        case 'mining':
-            return 'Mining';
+        case 'attack':
+            return 'Att';
+        case 'strength':
+            return 'Str';
+        case 'defence':
+            return 'Def';
+        case 'hitpoints':
+            return 'HP';
+        case 'ranged':
+            return 'Range';
+        case 'magic':
+            return 'Mage';
+        case 'prayer':
+            return 'Pray';
+        case 'crafting':
+            return 'Craft';
+        case 'smithing':
+            return 'Smith';
+        case 'herblore':
+            return 'Herb';
+        case 'agility':
+            return 'Agil';
+        case 'thieving':
+            return 'Thief';
+        case 'fletching':
+            return 'Fletch';
+        case 'runecraft':
+            return 'RC';
         default:
             return skill;
     }
@@ -298,16 +314,6 @@ export function paintClip(text: string, max = 52): string {
     return clipText(text.trim(), max);
 }
 
-export function fmtXpGained(n: number): string {
-    if (n <= 0) {
-        return '+0';
-    }
-    if (n >= 1000) {
-        return `+${(n / 1000).toFixed(1)}k`;
-    }
-    return `+${n}`;
-}
-
 export function fmtXpHr(gained: number, mins: number): string {
     if (mins <= 0.5) {
         return '—';
@@ -327,4 +333,52 @@ export function gatherPaintAccent(kind: 'fish' | 'mine' | 'wc' | 'other'): strin
         default:
             return '#9be05b';
     }
+}
+
+export interface Slot {
+    x: number;
+    w: number;
+}
+
+export interface StripSegments {
+    tabs: Slot[];
+    status: Slot;
+    brand: Slot;
+}
+
+/** Title-row slots: tabs from the left, brand hard right, status filling the gap. */
+export function stripSegments(w: number, tabWidths: readonly number[], brandWidth: number, pad: number): StripSegments {
+    const tabs: Slot[] = [];
+    let x = pad;
+    for (const tw of tabWidths) {
+        tabs.push({ x, w: tw });
+        x += tw;
+    }
+    const brandX = Math.max(x, w - pad - brandWidth);
+    const statusX = x;
+    return {
+        tabs,
+        status: { x: statusX, w: Math.max(0, brandX - statusX) },
+        brand: { x: brandX, w: brandWidth }
+    };
+}
+
+/** Even vertical slices of the rail, never shorter than a pixel. */
+export function railRows(h: number, count: number): RailRow[] {
+    if (count <= 0) {
+        return [];
+    }
+    const each = Math.max(1, Math.floor(h / count));
+    return Array.from({ length: count }, (_, i) => ({ y: i * each, h: each }));
+}
+
+/** Equal columns filling the body to the right of the rail. */
+export function statColumns(panelW: number, railW: number, pad: number, columns: number): Slot[] {
+    const left = railW + pad;
+    const room = panelW - left - pad;
+    if (columns <= 0 || room <= 0) {
+        return [];
+    }
+    const each = room / columns;
+    return Array.from({ length: columns }, (_, i) => ({ x: left + i * each, w: each }));
 }
