@@ -1,7 +1,15 @@
-import { describe, expect, test } from 'bun:test';
+import fs from 'node:fs';
+import path from 'node:path';
 
-import { BANK_LOCATIONS, approachOf, bankDistance, nearestBank, nearestBanks, nearestUsableBank } from '#/bot/api/bank/BankLocations.js';
+import { describe, expect, test } from 'bun:test';
+import { gunzipSync } from 'fflate';
+
+import { BANK_LOCATIONS, approachOf, bankCostForFinder, bankDistance, nearestBank, nearestBanks, nearestUsableBank, nearestWalkableBank } from '#/bot/api/bank/BankLocations.js';
 import type { BankLocation } from '#/bot/api/bank/BankLocations.js';
+import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
+import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
+import { richTransportQuestMap } from '#/bot/event/webwalk/transportQuestReqs.js';
+import { emptyWorldStateData, type WorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 
 test('bank names are unique', () => {
     const names = BANK_LOCATIONS.map(b => b.name);
@@ -195,4 +203,71 @@ describe('nearestBanks', () => {
         expect(upstairs).toContain('Ardougne West');
         expect(upstairs.length).toBeGreaterThan(1);
     });
+});
+
+// --- nav-cost edit to nearest bank (dungeon offset) ---
+
+const NAV_SKILLS = Object.fromEntries(
+    [
+        'agility', 'prayer', 'mining', 'smithing', 'crafting', 'woodcutting', 'firemaking',
+        'ranged', 'attack', 'strength', 'defence', 'hitpoints', 'magic', 'thieving', 'fishing',
+        'cooking', 'runecraft', 'herblore', 'fletching', 'slayer', 'farming'
+    ].map(s => [s, 99])
+);
+
+function navState(): WorldStateData {
+    return {
+        ...emptyWorldStateData(),
+        members: true,
+        skills: NAV_SKILLS,
+        quests: richTransportQuestMap(),
+        items: { Coins: 200_000, 'Shantay pass': 5, Rope: 5, Spade: 1, Machete: 1, 'Climbing boots': 1 },
+        worn: { 'Climbing boots': 1 },
+        freeSlots: 14,
+        canSlashWeb: true
+    };
+}
+
+function loadFinder(): PathFinder | null {
+    const packPath = path.join(process.cwd(), 'out/collision.lcnav.gz');
+    if (!fs.existsSync(packPath)) {
+        return null;
+    }
+    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
+    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+        bytes = new Uint8Array(gunzipSync(bytes));
+    }
+    const finder = new PathFinder(bytes as Uint8Array);
+    loadDefaultNavEdges(finder);
+    return finder;
+}
+
+describe('nearestWalkableBank picks the walkable-nearest bank, not the air-nearest one', () => {
+    // Why: these run the real nav pack (~13MB cold), so they're skipped unless the pack is present.
+
+    const finder = loadFinder();
+    const state = navState();
+    if (!finder) {
+        return;
+    }
+
+    const costWalk = bankCostForFinder(finder, { state, maxExpansions: 500_000 });
+    const walkCostTo = (name: string): number | null => {
+        const bank = BANK_LOCATIONS.find(b => b.name === name)!;
+        return costWalk({ x: 3021, z: 9800, level: 0 }, approachOf(bank));
+    };
+
+    test('inside the Dwarven Mine the walk to Falador East beats the straight-nearest Edgeville, and never falls back to an unreachable bank', () => {
+        // Dwarven mine interior: surface z is ~6400 lower, so every bank sits ~6400 straight-line
+        // tiles away and straight-line ranking collapses onto the x-axis (Edgeville wins on x).
+        // miningLocations.ts already banks this seed at faladorEast; the walk-cost ranker agrees.
+        const from = { x: 3021, z: 9800, level: 0 };
+        expect(nearestBank(from)?.name).toBe('Edgeville');
+        const picked = nearestWalkableBank(from, costWalk);
+        expect(picked?.name).toBe('Falador East');
+        expect(walkCostTo('Falador East')).not.toBeNull();
+        expect(walkCostTo('Edgeville')).not.toBeNull();
+        expect(walkCostTo('Falador East')!).toBeLessThan(walkCostTo('Edgeville')!);
+        expect(walkCostTo(picked!.name)).not.toBeNull();
+    }, 120_000);
 });
