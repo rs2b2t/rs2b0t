@@ -15,3 +15,12 @@ test('every registered script is listed', () => {
     const missing = ScriptRegistry.list().filter(meta => !current.includes(`### ${meta.name}`));
     expect(missing.map(meta => meta.name)).toEqual([]);
 });
+
+test('the script documentation CLI checks the registry without browser audio', () => {
+    const result = Bun.spawnSync([process.execPath, 'tools/gen-scriptdocs.ts', '--check'], {
+        stdout: 'pipe', stderr: 'pipe', timeout: 10_000
+    });
+    expect(result.stderr.toString()).toBe('');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain('docs/SCRIPTS.md matches the registry');
+});

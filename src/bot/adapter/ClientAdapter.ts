@@ -30,6 +30,7 @@ export function invalidateLocSnapshots(): void {
 /** Releases the client; later reads return empty state. */
 export function detach(): void {
     raw = null;
+    modalCloseSession = null;
     bankInventorySession = null;
     previousBankGeneration.clear();
     invalidateLocSnapshots();
@@ -37,6 +38,12 @@ export function detach(): void {
 const SCRATCH_SLOT = 499;
 
 let raw: RawClient | null = null;
+export type ModalCloseObservation = { readonly session: symbol; readonly generation: number };
+let modalCloseSession: {
+    readonly stream: object;
+    readonly loginGeneration: number;
+    readonly token: symbol;
+} | null = null;
 let packetListener: ((ptype: number) => void) | null = null;
 let adapterLoginGeneration = -1;
 let bankInventorySession: {
@@ -230,7 +237,11 @@ export interface NpcSnapshot {
     anim: number;
     name: string | null;
     level: number;
+    /** Tiles along each side of the footprint. */
+    size: number;
     tile: WorldTile;
+    /** Latest received route-head centre, not the interpolated render position. */
+    readonly networkTile?: WorldTile;
     distance: number;
     ops: (string | null)[];
     inCombat: boolean;
@@ -295,6 +306,7 @@ export interface ModalButton {
 export function attach(client: unknown): string[] {
     const missing = SELF_TEST.filter(name => !(name in (client as Record<string, unknown>)));
     raw = client as RawClient;
+    modalCloseSession = null;
     bankInventorySession = null;
     adapterLoginGeneration = raw.statSessionGeneration;
     previousBankGeneration.clear();
@@ -361,6 +373,20 @@ export function resetObjCatalog(): void {
 }
 
 export const reader = {
+    modalCloseObservation(): ModalCloseObservation | null {
+        if (!raw?.ingame || !raw.stream || typeof raw.stream !== 'object'
+            || !Number.isSafeInteger(raw.statSessionGeneration) || raw.statSessionGeneration < 0
+            || !Number.isSafeInteger(raw.modalCloseGeneration) || raw.modalCloseGeneration < 0) {
+            modalCloseSession = null;
+            return null;
+        }
+        if (!modalCloseSession || modalCloseSession.stream !== raw.stream
+            || modalCloseSession.loginGeneration !== raw.statSessionGeneration) {
+            modalCloseSession = { stream: raw.stream, loginGeneration: raw.statSessionGeneration, token: Symbol() };
+        }
+        return { session: modalCloseSession.token, generation: raw.modalCloseGeneration };
+    },
+
     attached(): boolean {
         return raw !== null;
     },
@@ -385,7 +411,24 @@ export const reader = {
         };
     },
 
-    /** Hint-arrow tile (type 2-6), used for the active Brimhaven ticket pillar. */
+    // Why: `worldTile` reads the sprite, which walks 4px a frame and so reaches a tile a tick after the server put the player there (two on a 300ms sim); the route head is the tile the server holds.
+    /** The tile the server holds the player on. */
+    serverTile(): WorldTile | null {
+        if (!raw || !raw.localPlayer) {
+            return null;
+        }
+
+        return {
+            x: raw.mapBuildBaseX + raw.localPlayer.routeX[0]!,
+            z: raw.mapBuildBaseZ + raw.localPlayer.routeZ[0]!,
+            level: raw.minusedlevel
+        };
+    },
+
+    /**
+     * Hint-arrow tile (type 2–6), or null when no tile hint is active.
+     * Used by Brimhaven Agility Arena for the active ticket pillar.
+     */
     hintTile(): WorldTile | null {
         if (!raw) {
             return null;
@@ -830,7 +873,9 @@ export const reader = {
                 anim: npc.primaryAnim,
                 name: npc.type?.name ?? null,
                 level: npc.type?.vislevel ?? -1,
+                size: npc.type?.size ?? 1,
                 tile: { x, z, level: raw.minusedlevel },
+                networkTile: { x: raw.mapBuildBaseX + npc.routeX[0] + Math.floor((npc.type?.size ?? 1) / 2), z: raw.mapBuildBaseZ + npc.routeZ[0] + Math.floor((npc.type?.size ?? 1) / 2), level: raw.minusedlevel },
                 distance: Math.max(Math.abs(x - px), Math.abs(z - pz)),
                 ops: npc.type?.op ?? [],
                 inCombat: combatShowing(npc.combatCycle),

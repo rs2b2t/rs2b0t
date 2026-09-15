@@ -46,7 +46,7 @@ async function bunBuild(entry: string, external: string[] = [], minify = true, d
     };
 }
 
-async function applyTerser(script: BunOutput): Promise<boolean> {
+async function applyTerser(script: BunOutput): Promise<void> {
     const mini = await minify(script.source, {
         sourceMap: {
             content: script.sourcemap
@@ -139,7 +139,6 @@ async function applyTerser(script: BunOutput): Promise<boolean> {
 
     script.source = mini.code ?? '';
     script.sourcemap = mini.map?.toString() ?? '';
-    return true;
 }
 
 
@@ -162,12 +161,10 @@ for (const file of entrypoints) {
     const output = path.basename(file).replace('.ts', '.js').toLowerCase();
 
     const script = await bunBuild(file, [], prod, prod ? ['console'] : []);
-    if (script) {
-        if (prod) {
-            await applyTerser(script);
-        }
-
-        fs.writeFileSync(`out/${output}`, script.source);
-        fs.writeFileSync(`out/${output}.map`, script.sourcemap);
+    if (prod) {
+        await applyTerser(script);
     }
+
+    fs.writeFileSync(`out/${output}`, script.source);
+    fs.writeFileSync(`out/${output}.map`, script.sourcemap);
 }
