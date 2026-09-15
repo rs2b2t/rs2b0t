@@ -60,6 +60,16 @@ export const CASES: readonly Case[] = [
         note: 'drops 450 Coins outside the altar and proves the runner takes that ground stack into inventory'
     },
     {
+        id: 'ranged-ammo-483-live',
+        harness: 'ranged-ammo-483-live.ts',
+        covers: { scripts: ['FireGiant'] },
+        status: 'vetted',
+        provenAt: 'a029256ea6f047f095f908475c8c64b52355fb3e',
+        manual: true,
+        budgetMin: 18,
+        note: 'Fresh local accounts; custom Crossbow/Bolts and Rune knife must equip, merge carried refills and gain ranged XP against Fire giants. Isolated deployment; --no-deploy requires CLIENT_PAGE.'
+    },
+    {
         id: 'fisher-shilo-shopping-live',
         harness: 'fisher-shilo-shopping-live.ts',
         covers: { scripts: ['GatheringBot'] },

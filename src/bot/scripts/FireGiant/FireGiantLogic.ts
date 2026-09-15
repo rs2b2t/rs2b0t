@@ -16,7 +16,13 @@ export const DEFAULT_MELEE_TILE = new Tile(2575, 9893, 0);
 // Why: only attack targets already in weapon range so the server does not walk off the safespot.
 const ATTACK_RANGE: Record<string, number> = { melee: 1, range: 7, mage: 10 };
 
-export function attackRangeFor(style: string): number {
+export function attackRangeFor(style: string, weapon = ''): number {
+    if (style === 'range') {
+        if (/dart|knife/i.test(weapon)) return 3;
+        if (/javelin/i.test(weapon)) return 5;
+        if (/thrownaxe/i.test(weapon)) return 4;
+        if (/crossbow/i.test(weapon)) return 10;
+    }
     return ATTACK_RANGE[style] ?? 1;
 }
 
