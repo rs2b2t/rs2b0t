@@ -197,6 +197,7 @@ export class Player implements Locatable {
     /** Slot in the client's player list. */
     readonly index: number;
     readonly inCombat: boolean;
+    readonly combatLevel: number;
     tile(): Tile;
     distance(): number;
     actions(): string[];
