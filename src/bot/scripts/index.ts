@@ -381,7 +381,10 @@ ScriptRegistry.register({
         forgetfulBank: FORGETFUL_BANK_SETTING,
         // Required for harness / live control of start purge (default true).
         purgePackOnStart: GATHERING_SETTINGS.purgePackOnStart,
-        packJunk: GATHERING_SETTINGS.packJunk
+        packJunk: GATHERING_SETTINGS.packJunk,
+        withdrawCoins: GATHERING_SETTINGS.withdrawCoins,
+        bankTeleport: GATHERING_SETTINGS.bankTeleport,
+        teleCasts: GATHERING_SETTINGS.teleCasts
     },
     create: () => new GatheringBot()
 });
@@ -551,7 +554,10 @@ ScriptRegistry.register({
         forgetfulBank: FORGETFUL_BANK_SETTING,
         // Required so harness can set purgePackOnStart=false for cook seed packs.
         purgePackOnStart: GATHERING_SETTINGS.purgePackOnStart,
-        packJunk: GATHERING_SETTINGS.packJunk
+        packJunk: GATHERING_SETTINGS.packJunk,
+        withdrawCoins: GATHERING_SETTINGS.withdrawCoins,
+        bankTeleport: GATHERING_SETTINGS.bankTeleport,
+        teleCasts: GATHERING_SETTINGS.teleCasts
     },
     create: () => new GatheringBot()
 });

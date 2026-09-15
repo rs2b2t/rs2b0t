@@ -58,7 +58,10 @@ export const WOODCUTTER_SETTINGS: SettingsSchema = {
     toolAcquire: TOOL_ACQUIRE_SETTING,
     forgetfulBank: FORGETFUL_BANK_SETTING,
     purgePackOnStart: GATHERING_SETTINGS.purgePackOnStart,
-    packJunk: GATHERING_SETTINGS.packJunk
+    packJunk: GATHERING_SETTINGS.packJunk,
+    withdrawCoins: GATHERING_SETTINGS.withdrawCoins,
+    bankTeleport: GATHERING_SETTINGS.bankTeleport,
+    teleCasts: GATHERING_SETTINGS.teleCasts
 };
 
 export default class Woodcutter extends GatheringBot {}
