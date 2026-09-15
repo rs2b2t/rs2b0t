@@ -141,6 +141,9 @@ export default class PotionMaker extends TaskBot {
 
 /** First leg: withdraws the water and herb halves of a batch into an empty pack, then closes the bank. */
 class RestockIngredients implements Task {
+    private emptyVialReads = 0;
+    private emptyHerbReads = 0;
+
     constructor(private bot: PotionMaker) {}
 
     validate(): boolean {
@@ -192,14 +195,31 @@ class RestockIngredients implements Task {
             await Execution.delayTicks(1);
         }
 
-        if (!(await Bank.withdrawXById(VIAL_OF_WATER_ID, BATCH))) {
-            this.bot.log('no vials of water in the bank — stopping');
-            ScriptRunner.stop('no vials of water in the bank');
+        // Why: Bank.loaded() is false for a beat after opening, when the item list reads [] and every count() is 0. Believe empty on the third consecutive read.
+        await Execution.delayUntil(() => Bank.loaded(), 3000);
+        if (Bank.countById(VIAL_OF_WATER_ID) === 0) {
+            if (++this.emptyVialReads >= 3) {
+                this.bot.log('no vials of water in the bank — stopping');
+                ScriptRunner.stop('no vials of water in the bank');
+                return;
+            }
             return;
         }
+        this.emptyVialReads = 0;
+        if (!(await Bank.withdrawXById(VIAL_OF_WATER_ID, BATCH))) {
+            return;
+        }
+        await Execution.delayUntil(() => Bank.loaded(), 3000);
+        if (Bank.countById(herb.id) === 0) {
+            if (++this.emptyHerbReads >= 3) {
+                this.bot.log(`no ${herb.name} in the bank — stopping`);
+                ScriptRunner.stop(`no ${herb.name} in the bank`);
+                return;
+            }
+            return;
+        }
+        this.emptyHerbReads = 0;
         if (!(await Bank.withdrawXById(herb.id, BATCH))) {
-            this.bot.log(`no ${herb.name} in the bank — stopping`);
-            ScriptRunner.stop(`no ${herb.name} in the bank`);
             return;
         }
 
@@ -266,6 +286,8 @@ class MakeUnfinished implements Task {
 
 /** Third leg: withdraws the secondary, spam-uses it on the unfinished potions, then deposits the finished batch. */
 class FinishPotions implements Task {
+    private emptySecondaryReads = 0;
+
     constructor(private bot: PotionMaker) {}
 
     validate(): boolean {
@@ -309,9 +331,18 @@ class FinishPotions implements Task {
             return;
         }
 
+        // Why: Bank.loaded() is false for a beat after opening, when the item list reads [] and every count() is 0. Believe empty on the third consecutive read.
+        await Execution.delayUntil(() => Bank.loaded(), 3000);
+        if (Bank.countById(secondary.id) === 0) {
+            if (++this.emptySecondaryReads >= 3) {
+                this.bot.log(`no ${secondary.name} in the bank — stopping`);
+                ScriptRunner.stop(`no ${secondary.name} in the bank`);
+                return;
+            }
+            return;
+        }
+        this.emptySecondaryReads = 0;
         if (!(await Bank.withdrawXById(secondary.id, BATCH))) {
-            this.bot.log(`no ${secondary.name} in the bank — stopping`);
-            ScriptRunner.stop(`no ${secondary.name} in the bank`);
             return;
         }
         if (!(await Bank.close())) {
