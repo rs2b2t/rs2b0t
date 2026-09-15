@@ -1,3 +1,5 @@
+[Manual](../README.md) › [Testing](../TESTING.md) › JiveChests validation
+
 # JiveChests validation
 
 Date: 2026-09-15.
