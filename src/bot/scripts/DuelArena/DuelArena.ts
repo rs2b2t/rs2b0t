@@ -39,6 +39,7 @@ import {
     negotiationExpired,
     observeFightSignal,
     shouldCenterDuelLobby,
+    sortChallengeTargets,
     targetMeleeStyle,
     type DuelTrainingStyle,
     type FightSignalState,
@@ -52,7 +53,7 @@ export const DUEL_ARENA_SETTINGS: SettingsSchema = {
         min: 1,
         max: 99,
         label: 'Target Attack level',
-        help: 'the script trains whichever configured melee stat is further below its target'
+        help: 'trains the lower of Attack and Strength while either is below its target'
     },
     targetStrength: {
         type: 'number',
@@ -60,7 +61,7 @@ export const DUEL_ARENA_SETTINGS: SettingsSchema = {
         min: 1,
         max: 99,
         label: 'Target Strength level',
-        help: 'Attack wins a tie between equal remaining gaps'
+        help: 'Attack wins ties between equal levels'
     },
     targetDefence: {
         type: 'number',
@@ -264,10 +265,12 @@ export default class DuelArena extends TaskBot {
     }
 
     challengeTargets(): Player[] {
-        return Players.query()
-            .where(player => player.name !== null && !player.inCombat && inDuelChallengeArea(player.tile()))
-            .results()
-            .sort((a, b) => a.index - b.index);
+        return sortChallengeTargets(
+            Players.query()
+                .where(player => player.name !== null && !player.inCombat && inDuelChallengeArea(player.tile()))
+                .results(),
+            reader.combatLevel()
+        );
     }
 
     nextChallengeTarget(): Player | null {

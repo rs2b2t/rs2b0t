@@ -67,7 +67,7 @@ export function shouldCenterDuelLobby(tile: WorldTile | null, visibleTargets: nu
     ) > DUEL_LOBBY_CENTER_RADIUS;
 }
 
-/** Train the stat with the largest remaining gap; ties prefer Attack, then Strength. */
+/** Train the lower of Attack and Strength while either is below target; ties prefer Attack. Defence waits until both are done. */
 export function targetMeleeStyle(
     attackLevel: number,
     strengthLevel: number,
@@ -76,13 +76,15 @@ export function targetMeleeStyle(
     targetStrength: number,
     targetDefence: number
 ): DuelTrainingStyle {
-    const attackGap = Math.max(0, targetAttack - attackLevel);
-    const strengthGap = Math.max(0, targetStrength - strengthLevel);
-    const defenceGap = Math.max(0, targetDefence - defenceLevel);
-    if (strengthGap > attackGap && strengthGap >= defenceGap) {
+    const attackBelow = attackLevel < targetAttack;
+    const strengthBelow = strengthLevel < targetStrength;
+    if (attackBelow && (!strengthBelow || attackLevel <= strengthLevel)) {
+        return 'attack';
+    }
+    if (strengthBelow) {
         return 'strength';
     }
-    return defenceGap > attackGap ? 'defence' : 'attack';
+    return defenceLevel < targetDefence ? 'defence' : 'attack';
 }
 
 export function duelTargetsReached(
@@ -236,4 +238,10 @@ export function challengeCandidate<T>(candidates: readonly T[], cursor: number):
     }
     const index = ((Math.trunc(cursor) % candidates.length) + candidates.length) % candidates.length;
     return { candidate: candidates[index]!, nextCursor: index + 1 };
+}
+
+/** Prefer peers whose combat level is closest to the bot's, keeping index order as a tiebreak. */
+export function sortChallengeTargets<T extends { combatLevel: number; index: number }>(candidates: readonly T[], combatLevel: number): T[] {
+    return [...candidates].sort((a, b) =>
+        Math.abs(combatLevel - a.combatLevel) - Math.abs(combatLevel - b.combatLevel) || a.index - b.index);
 }

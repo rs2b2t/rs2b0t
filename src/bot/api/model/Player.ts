@@ -23,6 +23,10 @@ export class Player implements Locatable {
         return this.snap.inCombat;
     }
 
+    get combatLevel(): number {
+        return this.snap.combatLevel;
+    }
+
     targetsMe(): boolean {
         return this.snap.faceEntity >= 32768 && this.snap.faceEntity - 32768 === reader.selfSlot();
     }
