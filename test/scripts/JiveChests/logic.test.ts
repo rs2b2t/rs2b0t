@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { CHEST_STAND, JUNK, KEY, KEYS_PER_TRIP, LOOT_SLOTS, decide, junkHeld, keysToWithdraw, type PackState } from '#/bot/scripts/JiveChests/logic.js';
+import { CHEST_STAND, JUNK, KEY, KEYS_PER_TRIP, decide, junkHeld, keysToWithdraw, type PackState } from '#/bot/scripts/JiveChests/logic.js';
 
-const at = (over: Partial<PackState> = {}): PackState => ({ keys: 7, junk: 0, loot: 0, free: 20, atChest: true, ...over });
+const at = (over: Partial<PackState> = {}): PackState => ({ keys: 7, junk: 0, free: 20, atChest: true, groundLoot: false, canLoot: false, pendingLoot: false, banking: false, ...over });
 
 describe('the junk list', () => {
-    test('is the three the chest gives that are not worth a bank slot', () => {
-        expect(JUNK).toEqual(['Raw swordfish', 'Body rune', 'Spinach roll']);
+    test('includes the unwanted chest rewards', () => {
+        expect(JUNK).toEqual(['Raw swordfish', 'Body rune', 'Spinach roll', 'Adamant sq shield']);
     });
 
     test('names them as the client does, so a drop can find them', () => {
@@ -14,8 +14,8 @@ describe('the junk list', () => {
     });
 
     test('junkHeld counts every junk line in the pack', () => {
-        const counts: Record<string, number> = { 'Raw swordfish': 5, 'Body rune': 50, 'Uncut dragonstone': 3 };
-        expect(junkHeld(n => counts[n] ?? 0)).toBe(55);
+        const counts: Record<string, number> = { 'Raw swordfish': 5, 'Body rune': 50, 'Adamant sq shield': 1, 'Uncut dragonstone': 3 };
+        expect(junkHeld(n => counts[n] ?? 0)).toBe(56);
         expect(junkHeld(() => 0)).toBe(0);
     });
 });
@@ -32,10 +32,6 @@ describe('keysToWithdraw', () => {
         expect(keysToWithdraw(0, 0)).toBe(0);
     });
 
-    test('the trip is seven keys, which leaves room for the loot they turn into', () => {
-        expect(KEYS_PER_TRIP).toBe(7);
-        expect(KEYS_PER_TRIP + LOOT_SLOTS).toBeLessThanOrEqual(28);
-    });
 });
 
 describe('decide', () => {
@@ -53,14 +49,27 @@ describe('decide', () => {
     });
 
     test('goes home once the keys are spent', () => {
-        expect(decide(at({ keys: 0, loot: 4 }))).toEqual({ kind: 'bank' });
-        expect(decide(at({ keys: 0, loot: 0 }))).toEqual({ kind: 'bank' });
+        expect(decide(at({ keys: 0 }))).toEqual({ kind: 'bank' });
     });
 
-    // Why: a chest roll can be eleven rune stacks at once, so a pack too full to hold one is banked rather than opened into a loss.
-    test('banks early when the pack cannot hold another roll', () => {
-        expect(decide(at({ free: LOOT_SLOTS - 1 }))).toEqual({ kind: 'bank' });
-        expect(decide(at({ free: LOOT_SLOTS }))).toEqual({ kind: 'open' });
+    test('keeps opening after a rune reward instead of reserving twelve empty slots', () => {
+        expect(decide(at({ keys: 6, free: 11 }))).toEqual({ kind: 'open' });
+        expect(decide(at({ free: 1 }))).toEqual({ kind: 'open' });
+        expect(decide(at({ free: 0 }))).toEqual({ kind: 'bank' });
+    });
+
+    test('collects overflow before using another key or leaving after the last key', () => {
+        expect(decide(at({ groundLoot: true, canLoot: true }))).toEqual({ kind: 'loot' });
+        expect(decide(at({ keys: 0, groundLoot: true, canLoot: true }))).toEqual({ kind: 'loot' });
+        expect(decide(at({ free: 0, groundLoot: true, canLoot: false }))).toEqual({ kind: 'bank' });
+    });
+
+    test('returns for overflow even when all keys have been used', () => {
+        expect(decide(at({ keys: 0, atChest: false, pendingLoot: true }))).toEqual({ kind: 'travel' });
+    });
+
+    test('finishes banking when teleporting has freed inventory slots', () => {
+        expect(decide(at({ banking: true, atChest: false, keys: 3, free: 3, pendingLoot: true }))).toEqual({ kind: 'bank' });
     });
 });
 

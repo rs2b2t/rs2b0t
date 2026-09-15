@@ -116,6 +116,16 @@ export const CASES: readonly Case[] = [
         note: 'Fresh local account with Murder Mystery started and 30 banked pots. Withdraws unnoted pots, fills 28, banks flour at Seers and fills the next load; screenshots docs/e2e/issue-310*.png.'
     },
     {
+        id: 'donovan-door-771-live',
+        harness: 'donovan-door-771-live.ts',
+        covers: { scripts: ['ClueSolver'], subsystems: ['nav', 'clues'] },
+        status: 'vetted',
+        provenAt: '2707b229c279f1b99018ce520f6428e9c184090e',
+        manual: true,
+        budgetMin: 10,
+        note: 'Exclusive local door run. Waits for Donovan to enter his natural pocket, opens the real bedroom door, proves collision blocks him, then Reach closes the leaf and reaches real dialogue; screenshots docs/e2e/issue-771*.png.'
+    },
+    {
         id: 'fisher-shilo-shopping-live',
         harness: 'fisher-shilo-shopping-live.ts',
         covers: { scripts: ['GatheringBot'] },
@@ -1146,6 +1156,15 @@ export const CASES: readonly Case[] = [
         status: 'unvetted',
         budgetMin: 90,
         note: 'seeds Underground Pass complete varp and bits; --stage is the %regicide_quest value, 0 to 15'
+    },
+    {
+        id: 'west-ardougne-373-live',
+        harness: 'west-ardougne-373-live.ts',
+        covers: { subsystems: ['nav'] },
+        status: 'vetted',
+        provenAt: '83ff1932',
+        budgetMin: 15,
+        note: 'live sewer quest and worn-mask gates, mud-pile return, and both city-gate directions after Biohazard; screenshots and state proof under docs/e2e'
     },
     {
         id: 'plague-pipe-366-live',

@@ -69,6 +69,12 @@ export const TRANSPORT_QUEST_SEEDS: readonly QuestVarSeed[] = [
         usedBy: ['spell: Ardougne teleport (combo routes)']
     },
     {
+        journal: 'Biohazard',
+        varp: 'biohazard',
+        complete: 16,
+        usedBy: ['West Ardougne city gates']
+    },
+    {
         // questlist.if text=Watch Tower (space)
         journal: 'Watch Tower',
         varp: 'itwatchtower',
