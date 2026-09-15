@@ -108,7 +108,7 @@ try {
     if (after < before + 2) fail(`tick counter stalled: ${before} -> ${after}`);
     console.log(`ticks advanced ${before} -> ${after}`);
 
-    type RunnerGlobal = { rs2b0t: { runner: { state: string; ctx: { log: { level: string; msg: string }[]; loopCount: number } | null }; host: { tickCount: number } } };
+    type RunnerGlobal = { rs2b0t: { runner: { state: string; ctx: { log: { level: string; msg: string }[]; loopCount: number; lastProgressAt: number } | null }; host: { tickCount: number } } };
     const runnerState = (): Promise<string> => page.evaluate(() => (globalThis as never as RunnerGlobal).rs2b0t.runner.state);
     const logLength = (): Promise<number> => page.evaluate(() => (globalThis as never as RunnerGlobal).rs2b0t.runner.ctx?.log.length ?? 0);
 
@@ -152,12 +152,21 @@ try {
     console.log('AIO Teleport: paused cleanly (no progress while paused)');
 
     await page.getByRole('button', { name: 'Resume' }).click();
+    // Why: a loop body can outlast this check end to end, a fresh account's first AIO Teleport body is a bank routine whose booth retry runs a minute from Tutorial Island, so a finished iteration proves nothing about resume. Every waiter the scheduler fires marks lastProgressAt, and resume() marks it once itself, so a mark after the click is the parked body waking.
+    const resumedAt = await page.evaluate(() => (globalThis as never as RunnerGlobal).rs2b0t.runner.ctx?.lastProgressAt ?? 0);
     await page.waitForFunction(
-        n => ((globalThis as never as RunnerGlobal).rs2b0t.runner.ctx?.loopCount ?? 0) > n,
-        pausedLoops,
+        ([loops, at]) => {
+            const ctx = (globalThis as never as RunnerGlobal).rs2b0t.runner.ctx;
+            return ctx !== null && (ctx.loopCount > loops || ctx.lastProgressAt > at);
+        },
+        [pausedLoops, resumedAt] as const,
         { timeout: 15000 }
     );
-    console.log('AIO Teleport: resumed');
+    const resumed = await page.evaluate(() => {
+        const ctx = (globalThis as never as RunnerGlobal).rs2b0t.runner.ctx;
+        return { loops: ctx?.loopCount ?? 0, logs: ctx?.log.length ?? 0 };
+    });
+    console.log(`AIO Teleport: resumed (loops ${pausedLoops} -> ${resumed.loops}, log ${pausedLogLength} -> ${resumed.logs} lines, scheduler progress after resume)`);
 
     await page.getByRole('button', { name: 'Stop' }).click();
     await page.waitForFunction(() => (globalThis as never as { rs2b0t: { runner: { state: string } } }).rs2b0t.runner.state === 'stopped', undefined, { timeout: 10000 });

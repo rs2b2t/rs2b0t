@@ -10,6 +10,7 @@ import { EventSignal } from '../execution/EventSignal.js';
 import { Execution } from '../execution/Execution.js';
 import { Sustain } from '../sustain/Sustain.js';
 import { SettingsStore } from '../../runtime/Settings.js';
+import { recoverBoatFare } from './karamjaRecovery.js';
 
 /**
  * Options for a walk behind the escalation ladder.
@@ -76,8 +77,21 @@ export const Traversal = {
         }
     },
 
-    walkTo(dest: WorldTile, opts?: WalkOptions): Promise<boolean> {
-        return WalkExecutor.walkTo(dest, opts);
+    async walkTo(dest: WorldTile, opts?: WalkOptions): Promise<boolean> {
+        if (await WalkExecutor.walkTo(dest, opts)) {
+            return true;
+        }
+        const outcome = WalkExecutor.lastOutcome;
+        const missing = WalkExecutor.lastMissingGateItems;
+        if (outcome !== 'failed' && outcome !== 'unreachable') {
+            return false;
+        }
+        if (await recoverBoatFare(dest, missing, opts?.log ?? ((): void => {}))) {
+            return WalkExecutor.walkTo(dest, opts);
+        }
+        WalkExecutor.lastOutcome = EventSignal.pending() ? 'interrupted' : outcome;
+        WalkExecutor.lastMissingGateItems = missing;
+        return false;
     },
 
     /** Force the active (or next) world walk to repath without waiting for a stall or deviation; see path stickiness on WalkExecutor. */
@@ -144,7 +158,7 @@ export const Traversal = {
             }
 
             if (action.kind === 'baked') {
-                await WalkExecutor.walkTo(dest, {
+                await Traversal.walkTo(dest, {
                     radius,
                     timeoutMs: bakedTimeout,
                     log,

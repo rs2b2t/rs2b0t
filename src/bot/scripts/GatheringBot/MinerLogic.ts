@@ -8,7 +8,7 @@ export const MINER_FOOD_SETTINGS = {
         options: FOOD_OPTIONS,
         label: 'Food',
         group: 'Food & healing',
-        help: 'Food carried into the mine. It is eaten when the full heal fits, or when a full pack needs one more ore slot.'
+        help: 'Eaten at the bank or mine when its full heal fits, or at the mine when a full pack needs one more ore slot.'
     },
     foodWithdraw: {
         type: 'number',
@@ -17,7 +17,7 @@ export const MINER_FOOD_SETTINGS = {
         max: 27,
         label: 'Food to withdraw',
         group: 'Food & healing',
-        help: 'Exact food target for each trip. 0 disables food; otherwise the bot restocks from the selected camp bank before mining and whenever it runs out.'
+        help: 'Exact food target for each trip, replenished after bank healing. 0 carries no food; the selected food is still used to heal at the bank.'
     }
 } satisfies SettingsSchema;
 

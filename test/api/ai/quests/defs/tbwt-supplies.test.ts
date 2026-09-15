@@ -1,4 +1,5 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { Skills } from '#/bot/api/skills/Skills.js';
 
 import {
     TB_ARMOUR,
@@ -91,6 +92,61 @@ const DRESSED: Options = {
     worn: KIT,
     inv: [['coins', 500], ['lobster', 6]]
 };
+
+describe('tbwt flexible armour', () => {
+    afterEach(() => spyOn(Skills, 'level').mockRestore());
+    const ready: Options = { ...DRESSED, lubufu: TB_LUBUFU.COMPLETE,
+        tamayu: TB_TAMAYU.COMPLETE, tinsay: TB_TINSAY.COMPLETE };
+    const lower = ['Adamant chainbody', 'Adamant platelegs', 'Adamant full helm'];
+    const leather = ['Leather body', 'Leather chaps', 'Leather cowl'];
+
+    test('withdraws a complete banked leather kit', () => {
+        spyOn(Skills, 'level').mockReturnValue(1);
+        const step = prepare(snap({ ...ready, worn: ['Maple shortbow', 'Adamant arrow'],
+            bank: leather.map(name => [name, 1]) }));
+        expect(step?.kind === 'withdraw' ? step.items.map(item => item.name) : step).toEqual(leather);
+    });
+
+    test('equips carried leather without a bank trip', () => {
+        spyOn(Skills, 'level').mockReturnValue(1);
+        const step = prepare(snap({ ...ready, bankKnown: false, worn: ['Maple shortbow', 'Adamant arrow'],
+            inv: [...(ready.inv ?? []), ...leather.map((name): [string, number] => [name.toLowerCase(), 1])] }));
+        expect(step?.kind).toBe('custom');
+    });
+
+    test('retains worn leather even with metal armor banked', () => {
+        const step = prepare(snap({ ...ready, worn: ['Maple shortbow', 'Adamant arrow', ...leather],
+            bank: lower.map(name => [name, 1]) }));
+        expect(step).toBeNull();
+    });
+
+    test('withdraws lower armor when Rune is not owned', () => {
+        spyOn(Skills, 'level').mockReturnValue(70);
+        const step = prepare(snap({ ...ready, worn: ['Maple shortbow', 'Adamant arrow'],
+            bank: lower.map(name => [name, 1]) }));
+        expect(step?.kind === 'withdraw' ? step.items.map(item => item.name) : step).toEqual(lower);
+    });
+
+    test('skips banked Rune when Defence is insufficient', () => {
+        spyOn(Skills, 'level').mockReturnValue(30);
+        const step = prepare(snap({ ...ready, worn: ['Maple shortbow', 'Adamant arrow'],
+            bank: [...TB_ARMOUR, ...lower].map(name => [name, 1]) }));
+        expect(step?.kind === 'withdraw' ? step.items.map(item => item.name) : step).toEqual(lower);
+    });
+
+    test('keeps worn alternatives even when Rune is banked', () => {
+        spyOn(Skills, 'level').mockReturnValue(70);
+        const step = prepare(snap({ ...ready, worn: ['Maple shortbow', 'Adamant arrow', ...lower],
+            bank: TB_ARMOUR.map(name => [name, 1]) }));
+        expect(step).toBeNull();
+    });
+
+    test('waits rather than departing with empty armor slots', () => {
+        spyOn(Skills, 'level').mockReturnValue(30);
+        const step = prepare(snap({ ...ready, worn: ['Maple shortbow', 'Adamant arrow'] }));
+        expect(step?.kind).toBe('wait');
+    });
+});
 
 describe('tbwt supplies', () => {
     test('a fresh quest wants the whole kit', () => {

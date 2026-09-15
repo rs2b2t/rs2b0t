@@ -8,6 +8,7 @@ import { Bank } from '../../api/bank/Bank.js';
 import { nearestBank } from '../../api/bank/BankLocations.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Paint } from '../../paint/Paint.js';
+import { Shop } from '../../api/shop/Shop.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Input } from '../../input/Input.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
@@ -17,6 +18,13 @@ import { issueHardLeatherBurst } from './LeatherCrafterLogic.js';
 
 const NEEDLE = 1733;
 const THREAD = 1734;
+const COINS = 995;
+const THREAD_MAX_PRICE = 3;
+const THREAD_SHOPS = [
+    { npc: 'Dommik', tile: new Tile(3322, 3194, 0) },
+    { npc: 'Rommik', tile: new Tile(2946, 3205, 0) },
+    { npc: 'Fancy dress shop owner', tile: new Tile(3281, 3398, 0) }
+];
 const BANK_STAND = new Tile(3269, 3167, 0);
 
 // leather_crafting opens as a main modal, skill_multi3 as a chat one
@@ -196,6 +204,8 @@ export default class LeatherCrafter extends LoopingBot {
     private kindLabel = 'Leather';
     private recipe: Recipe | null = null;
     private threadStock = 100;
+    private threadVendor: typeof THREAD_SHOPS[number] | null = null;
+    private restockBank: Tile | null = null;
 
     private crafted = 0;
     private xpAtStart = 0;
@@ -242,6 +252,14 @@ export default class LeatherCrafter extends LoopingBot {
             return;
         }
 
+        if (this.threadVendor) {
+            await this.buyThread();
+            return;
+        }
+        if (this.restockBank) {
+            await this.bankLeg();
+            return;
+        }
         if (invById(this.kind.leatherId) >= this.recipe.qty && invById(THREAD) > 0) {
             await this.craftLeg();
             return;
@@ -252,7 +270,7 @@ export default class LeatherCrafter extends LoopingBot {
     private async bankLeg(): Promise<void> {
         const here = Game.tile();
         // Why: walk to whichever bank is closest rather than a fixed Al Kharid tile, so the bot crafts from wherever the player already is. Bank contents are account-wide, so nothing else changes.
-        const stand = here ? nearestBank(here)?.tile ?? BANK_STAND : BANK_STAND;
+        const stand = this.restockBank ?? (here ? nearestBank(here)?.tile ?? BANK_STAND : BANK_STAND);
         if (!here || Math.max(Math.abs(here.x - stand.x), Math.abs(here.z - stand.z)) > 4) {
             this.setStatus('walking to the bank');
             if (!(await Traversal.walkResilient(stand, { radius: 3, attempts: 2, timeoutMs: 45_000, log: m => this.log(`  ${m}`) }))) {
@@ -278,8 +296,16 @@ export default class LeatherCrafter extends LoopingBot {
         if (invById(NEEDLE) === 0 && !(await this.withdrawRequired(NEEDLE, 1, 'needle', 'no needle in the bank'))) {
             return;
         }
-        if (invById(THREAD) < 5 && !(await this.withdrawRequired(THREAD, this.threadStock, 'thread', 'no thread in the bank'))) {
-            return;
+        if (invById(THREAD) < 5) {
+            const result = await withdrawXById(THREAD, this.threadStock);
+            if (result === 'retry') {
+                this.log('could not withdraw thread — retrying');
+                return;
+            }
+            if (result === 'missing' && invById(THREAD) === 0) {
+                await this.fundThread(stand);
+                return;
+            }
         }
 
         const free = reader.inventorySize() - Inventory.used();
@@ -293,7 +319,46 @@ export default class LeatherCrafter extends LoopingBot {
         }
 
         actions.closeModal();
+        if (await Execution.delayUntil(() => !Bank.isOpen(), 3000)) this.restockBank = null;
+    }
+
+    private async fundThread(stand: Tile): Promise<void> {
+        if (!(await depositAllExceptIds(new Set([NEEDLE, THREAD, COINS])))) return;
+        const available = Bank.items().find(item => item.id === COINS)?.count ?? 0;
+        const needed = Math.max(0, this.threadStock * THREAD_MAX_PRICE - invById(COINS));
+        if (needed > 0 && available > 0 && await withdrawXById(COINS, Math.min(available, needed)) !== 'withdrawn') return;
+        if (invById(COINS) === 0) {
+            ScriptRunner.stop('no thread or coins in the bank');
+            return;
+        }
+        this.restockBank = stand;
+        this.threadVendor = THREAD_SHOPS.reduce((nearest, shop) => stand.distanceTo(shop.tile) < stand.distanceTo(nearest.tile) ? shop : nearest);
+        actions.closeModal();
         await Execution.delayUntil(() => !Bank.isOpen(), 3000);
+    }
+
+    private async buyThread(): Promise<void> {
+        const vendor = this.threadVendor!;
+        if (Bank.isOpen()) {
+            actions.closeModal();
+            if (!(await Execution.delayUntil(() => !Bank.isOpen(), 3000))) return;
+        }
+        this.setStatus(`buying thread from ${vendor.npc}`);
+        const here = Game.tile();
+        if (!here || vendor.tile.distanceTo(here) > 4) {
+            if (!(await Traversal.walkResilient(vendor.tile, { radius: 2, attempts: 2, timeoutMs: 45_000, log: message => this.log(message) }))) return;
+        }
+        if (!(await Shop.open(vendor.npc))) return;
+        await Shop.buy('Thread', Math.max(0, this.threadStock - invById(THREAD)));
+        await Shop.close();
+        if (invById(THREAD) > 0) {
+            this.threadVendor = null;
+        } else if (invById(COINS) === 0) {
+            ScriptRunner.stop('not enough coins to buy thread');
+        } else {
+            this.setStatus('waiting for thread stock');
+            await Execution.delayTicks(5);
+        }
     }
 
     private async withdrawRequired(id: number, count: number, label: string, stopReason: string): Promise<boolean> {

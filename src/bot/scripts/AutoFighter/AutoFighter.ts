@@ -62,7 +62,7 @@ import { Reach } from '../../api/walking/Reach.js';
 import { RANDOM_EVENT_CASKET_ID } from '../../api/bank/Banking.js';
 import { scriptFood } from '../../api/loadout/loadoutPlan.js';
 import { LOADOUT_SETTING } from '../../api/loadout/loadoutSetting.js';
-import { HERBS, HERB_OPTIONS } from '../HerbCleaner/HerbCleanerLogic.js';
+import { HERBS, HERB_OPTIONS } from '../../data/herbs.js';
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const KIT = ['spade', 'sextant', 'watch', 'chart'];
