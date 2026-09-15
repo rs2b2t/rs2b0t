@@ -98,10 +98,6 @@ export function primaryOre(recipe: Recipe): string {
     return recipe.ingredients[0].ore;
 }
 
-export function recipeNames(recipe: Recipe): string[] {
-    return recipe.ingredients.map(i => i.ore);
-}
-
 /** Full bars smeltable from the current counts, e.g. Steel = min(iron, coal/2). */
 export function barsSmeltable(recipe: Recipe, count: (ore: string) => number): number {
     return Math.min(...recipe.ingredients.map(i => Math.floor(count(i.ore) / i.perBar)));

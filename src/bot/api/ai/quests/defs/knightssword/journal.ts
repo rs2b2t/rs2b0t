@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -8,14 +9,6 @@ import { KS_QUEST, KS_STAGE } from './areas.js';
  * `@dbl@` colour tags become a space, so a needle must never span a tag boundary next to punctuation.
  * @see docs/reference/quest-engine.md#quest-state
  */
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
-
 /** Newest marker first: squire_journal.rs2 appends, so earlier stages' prose is still on the scroll. */
 function readStage(text: string): number | undefined {
     if (text.includes('quest complete!')) return KS_STAGE.COMPLETE;

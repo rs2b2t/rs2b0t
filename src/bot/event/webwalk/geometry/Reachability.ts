@@ -1,5 +1,6 @@
 import { reader, type WorldTile } from '../../../adapter/ClientAdapter.js';
 import { canReachLocal, canStepLocal, type ReachOptions } from './localReach.js';
+import { hasLineOfSightLocal } from './lineOfSight.js';
 import type { ArrivalProbe } from './arrival.js';
 import { chebyshev } from './followMath.js';
 import { CollisionFlag } from '#/client/dash3d/CollisionFlag.js';
@@ -33,6 +34,19 @@ export const Reachability = {
             return false;
         }
         return canStepLocal((lx, lz) => reader.collisionFlags(lx, lz), a.lx, a.lz, to.x - from.x, to.z - from.z);
+    },
+
+    /** Whether the server's sight ray from `from` reaches a body of `size` whose south-west tile is `to`. */
+    lineOfSight(from: WorldTile, to: WorldTile, size = 1): boolean {
+        if (from.level !== to.level) {
+            return false;
+        }
+        const a = reader.toLocal(from.x, from.z);
+        const b = reader.toLocal(to.x, to.z);
+        if (!a || !b) {
+            return false;
+        }
+        return hasLineOfSightLocal((lx, lz) => reader.collisionFlags(lx, lz), { ...a, size: 1 }, { ...b, size });
     },
 
     walkable(dest: WorldTile): boolean {

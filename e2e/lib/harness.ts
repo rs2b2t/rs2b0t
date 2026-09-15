@@ -4,12 +4,34 @@ import { homedir } from 'node:os';
 import { chromium } from 'playwright-core';
 import type { Browser, Page } from 'playwright-core';
 
-import { ClientProt } from '../../src/client/io/ClientProt.js';
 import { engineLoginKey, type EngineLoginKey } from './engineLoginKey.js';
 
 export function fail(msg: string): never {
     console.error(`FAIL: ${msg}`);
     process.exit(1);
+}
+
+const SIM_PROBE_MS = 5000;
+
+// Why: a wrong port (`:889` for `:8890`) used to cost a deploy and answer with a Playwright stack trace from the first page load.
+/** Why nothing answers at `base`, or null when the sim serves its client page. */
+export async function simUnreachable(base: string, page = '/bot.html'): Promise<string | null> {
+    const url = `${base}${page}`;
+    try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(SIM_PROBE_MS) });
+        return res.ok ? null : `${url} answered ${res.status}, so this is not a sim serving the bot client`;
+    } catch (err) {
+        const why = err instanceof Error ? err.message : String(err);
+        return `nothing answered at ${url} (${why}); the local sims are :8890 (~/code/rs2b2t-engine) and :8888 (~/code/lostcity-dev/engine)`;
+    }
+}
+
+/** Stop before deploying when `base` is not a running sim. */
+export async function requireSim(base: string): Promise<void> {
+    const why = await simUnreachable(base);
+    if (why !== null) {
+        fail(why);
+    }
 }
 
 export interface IsolatedClient {
@@ -197,23 +219,22 @@ export async function login(page: Page, user: string, pass = 'test'): Promise<bo
 }
 
 /**
- * Send a client cheat packet (CLIENT_CHEAT) without keyboard focus.
+ * Send a client cheat packet (CLIENT_CHEAT, whose opcode the bundle publishes) without keyboard focus.
  * `command` is the text after `::`, e.g. `tele 0,50,50,20,20`.
  */
 export async function cheatQuiet(page: Page, command: string, waitMs = 700): Promise<boolean> {
-    const sent = await page.evaluate(
-        ([c, op]) => {
-            const client = (globalThis as never as Rs2b0t).rs2b0t?.client;
-            if (!client?.ingame || !client.out) {
-                return false;
-            }
-            client.out.p1Enc(op);
-            client.out.p1(c.length + 1);
-            client.out.pjstr(c);
-            return true;
-        },
-        [command, ClientProt.CLIENT_CHEAT] as const
-    );
+    const sent = await page.evaluate(c => {
+        const g = (globalThis as never as Rs2b0t).rs2b0t;
+        const client = g?.client;
+        if (!client?.ingame || !client.out) {
+            return false;
+        }
+        // Why: CLIENT_CHEAT is 34 on 289 and was 224 on 274, and a bundle built before it was published falls back to the old number.
+        client.out.p1Enc(g.protocol?.clientCheat ?? 224);
+        client.out.p1(c.length + 1);
+        client.out.pjstr(c);
+        return true;
+    }, command);
     await page.waitForTimeout(waitMs);
     return sent;
 }
@@ -299,6 +320,7 @@ export async function startFromLibrary(page: Page, category: string, script: str
 
 export type Rs2b0t = {
     rs2b0t: {
+        protocol?: { version: number; clientCheat: number };
         client: {
             ingame: boolean;
             sceneState: number;

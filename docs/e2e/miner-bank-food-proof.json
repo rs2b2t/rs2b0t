@@ -1,0 +1,26 @@
+{
+  "result": "PASS",
+  "command": "bun e2e/miner-bank-food-live.ts --base http://localhost:8890",
+  "branch": "feature/jives-big-beautiful-branch",
+  "fixture": {
+    "maxHp": 80,
+    "startingHp": 50,
+    "coal": 27,
+    "food": "Lobster",
+    "bankedFood": 20,
+    "tripFoodTarget": 0,
+    "location": "Wilderness Skeleton Mine"
+  },
+  "observed": {
+    "coalDeposited": 27,
+    "lobstersConsumed": 2,
+    "bankedFoodRemaining": 18,
+    "departureHp": 75,
+    "naturalRegenHpBeforeDeparture": 1,
+    "carriedFood": 0,
+    "miningXpGainedAfterReturn": 50,
+    "coalMinedAfterReturn": 1
+  },
+  "runAt": "2026-09-13T22:51:51.993000+00:00",
+  "uncommittedChanges": true
+}
