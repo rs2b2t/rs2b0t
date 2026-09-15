@@ -171,11 +171,6 @@ export function knifeProductLevel(product: string, material: string): number | n
     return null;
 }
 
-export function isStringProduct(product: string): boolean {
-    const p = product.trim().toLowerCase();
-    return p === 'string short bow' || p === 'string long bow';
-}
-
 export function stringShape(product: string): BowShape | null {
     const p = product.trim().toLowerCase();
     if (p === 'string short bow') {
@@ -222,7 +217,7 @@ export function workKind(product: string): WorkKind {
     if (attachPlanFor(product)) {
         return 'attach';
     }
-    if (isStringProduct(product)) {
+    if (stringShape(product)) {
         return 'string';
     }
     return 'knife';

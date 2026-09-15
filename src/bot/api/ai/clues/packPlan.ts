@@ -35,7 +35,15 @@ export function trailFoodTarget(b: TrailFoodBudget): number {
     return Math.max(0, Math.min(capped, room));
 }
 
-/** Counts a worn weapon as held. Checking the backpack alone withdraws a duplicate every prep, which drops to the floor on a full pack. */
+export function hardTrailFoodTarget(b: Omit<TrailFoodBudget, 'hostWant'>): number | null {
+    const target = Math.min(15, b.heldFood + Math.max(0, b.freeSlots - b.reserveSlots));
+    return target >= 15 ? target : null;
+}
+
+/**
+ * A weapon already worn is a weapon we have. Checking the backpack alone
+ * withdraws a duplicate every prep, which on a full pack drops to the floor.
+ */
 export function weaponNeeded(weaponName: string, inBackpack: boolean, equipped: boolean): boolean {
     return weaponName !== '' && !inBackpack && !equipped;
 }

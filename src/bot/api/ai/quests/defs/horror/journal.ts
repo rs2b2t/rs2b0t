@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -12,14 +13,6 @@ export const HD_FLAG = {
     TAR: 'tar',
     LIGHT: 'light'
 } as const;
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 // Why: `@str@` is the only oracle for the bridge, and `~quest_journal`'s `split_init` wrapper re-emits active tags at the head of every line, so the struck line arrives as `@str@@bla@I need to repair...` and the other tags must be stripped.
 
