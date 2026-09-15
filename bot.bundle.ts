@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-import { buildIdentityDefines, resolveBuildIdentity, writeVersionJson } from './tools/lib/buildIdentity.js';
+import { buildIdentityDefines, buildIdentityLabel, resolveBuildIdentity, writeVersionJson } from './tools/lib/buildIdentity.js';
 
 // Build src/bot/main.ts as botclient.js, keeping console output.
 // Why: external scripts and self-tests use ABI property names, so skip terser; Bun only shortens locals.
@@ -92,5 +92,5 @@ for (const [entry, output] of entrypoints) {
 
 writeVersionJson('out/version.json', identity);
 console.log(
-    `bot bundle built (${prod ? 'prod' : 'dev'}): out/botclient.js  git=${identity.dirty ? `${identity.short}-dirty` : identity.short}`
+    `bot bundle built (${prod ? 'prod' : 'dev'}): out/botclient.js  git=${buildIdentityLabel(identity)}`
 );

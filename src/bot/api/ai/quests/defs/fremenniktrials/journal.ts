@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -47,15 +48,6 @@ const VOTES: readonly [string, number][] = [
     ['i have one vote so far', 1],
     ["i don't have any votes yet", 0]
 ];
-
-/** Colour tags become a space, so no needle may span a tag boundary. */
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 export function parseFremennikJournal(lines: readonly string[] | string): QuestProgress | undefined {
     const text = normalize(lines);

@@ -60,14 +60,14 @@ describe('Ernest kit()', () => {
         expect(kit(snap({ food: 6, bank: [['lobster', 40]] }))).toBeNull();
     });
 
-    test('tops food up once the pack drops under the low-water mark', () => {
-        const step = kit(snap({ food: 1, bank: [['lobster', 40]] }));
+    // Why: nothing in the manor is aggressive and the quest is free, so the trip carries the spade and nothing to eat.
+    test('draws the spade and never the food, however much of it the bank holds', () => {
+        const step = kit(snap({ food: 1, invIds: [], bankIds: [[EC_ID.SPADE, 1]], bank: [['lobster', 40]] }));
         expect(step?.kind).toBe('withdraw');
-        expect(step?.kind === 'withdraw' && step.items[0]).toEqual({ name: 'Lobster', qty: 7 });
+        expect(step?.kind === 'withdraw' && step.items).toEqual([{ name: 'Spade', qty: 1, id: EC_ID.SPADE }]);
     });
 
-    test('does not ask for food the bank does not have', () => {
-        // An empty bank must not park the quest on a withdrawal that can never fill.
-        expect(kit(snap({ food: 1 }))).toBeNull();
+    test('asks for nothing once the spade is held, however empty the pack is of food', () => {
+        expect(kit(snap({ food: 0, bank: [['lobster', 40]] }))).toBeNull();
     });
 });

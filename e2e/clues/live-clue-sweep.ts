@@ -53,8 +53,9 @@ async function bootWorker(browser: Browser, w: number): Promise<Page> {
     };
     const cheatBoot = async (pg: Page, t: string) => {
         await pg.evaluate(x => {
-            const c = (globalThis as never as R).rs2b0t.client as never as { out: { p1Enc(op: number): void; p1(v: number): void; pjstr(s: string): void } };
-            c.out.p1Enc(224);
+            const g = (globalThis as never as R).rs2b0t as never as { protocol?: { clientCheat: number }; client: { out: { p1Enc(op: number): void; p1(v: number): void; pjstr(s: string): void } } };
+            const c = g.client;
+            c.out.p1Enc(g.protocol?.clientCheat ?? 224);
             c.out.p1(x.length + 1);
             c.out.pjstr(x);
         }, t);
@@ -127,8 +128,9 @@ async function bootWorker(browser: Browser, w: number): Promise<Page> {
 
 const cheat = async (page: Page, text: string) => {
     await page.evaluate(t => {
-        const c = (globalThis as never as R).rs2b0t.client as never as { out: { p1Enc(op: number): void; p1(v: number): void; pjstr(s: string): void } };
-        c.out.p1Enc(224);
+        const g = (globalThis as never as R).rs2b0t as never as { protocol?: { clientCheat: number }; client: { out: { p1Enc(op: number): void; p1(v: number): void; pjstr(s: string): void } } };
+        const c = g.client;
+        c.out.p1Enc(g.protocol?.clientCheat ?? 224);
         c.out.p1(t.length + 1);
         c.out.pjstr(t);
     }, text);

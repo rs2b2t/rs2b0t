@@ -16,7 +16,7 @@ refocus. Measured here: ~51 fps while hidden.
 1. Start the engine and deploy the client (`tools/deploy-local.sh`).
 2. `cd desktop`
 3. `bun install` (once — pulls Electron)
-4. `bun run start` — opens against `http://localhost:8888`
+4. `bun run start` — opens against `http://localhost:8081`
 
 Point at another server with `bun run start -- --server=https://your-host`, or
 `LCB_SERVER=… bun run start`.
@@ -31,13 +31,13 @@ bun run package        # electron-builder --dir -> desktop/dist/
 
 | | |
 |---|---|
-| Page loaded | `<server>/bot.html` |
+| Page loaded | `<server>/multibox.html` by default; explicit `.html` URLs are preserved |
 | Rendering | Chromium, so behaviour matches the browser client |
 | Panel, scripts, settings, saved credentials, auto-login, cursor trail | identical to the browser client |
-| Multi-account | not wired into `main.cjs`; single window for now |
+| Multi-account | profiles run in the multibox wall within one window |
 | Frame-gap hardening | the Scheduler shifts pending `Execution` deadlines across large frame gaps, so waits never falsely expire — independent of this shell |
 
 ## See also
 
-- [Running locally](../docs/RUNNING.md)
+- [Running locally](../docs/how-to/run-locally.md)
 - [Manual index](../docs/README.md)

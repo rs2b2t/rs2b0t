@@ -1,3 +1,4 @@
+import { normalizeJournal } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -20,13 +21,8 @@ export const DIG_STAGE = {
 
 // Why: Keep the leading space because "She gave me an answer" contains the other marker without it.
 
-/** Colour tags become a space, so no needle may span a tag boundary. */
 function normalize(lines: readonly string[] | string): string {
-    return ' ' + (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
+    return ' ' + normalizeJournal(lines);
 }
 
 // Why: earlier lines stay on the page struck through with the same words, so this order is what separates a finished leg from the current one.
