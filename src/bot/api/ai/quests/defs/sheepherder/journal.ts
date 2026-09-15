@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 // docs/QUESTS.md
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
@@ -9,14 +10,6 @@ export const QUEST = 'Sheep Herder';
 
 /** `^sheepherder_*` from `quest.constant`. */
 export const SH_STAGE = { NOT_STARTED: 0, NEED_SUIT: 1, DISPOSING: 2, COMPLETE: 3 } as const;
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 function allBurnt(): Set<string> {
     return new Set(SHEEP.map(n => `burnt-${n}`));

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { shopOpBatch } from '#/bot/api/shop/Shop.js';
+import { SELL_STACK_STEP, shopOpBatch } from '#/bot/api/shop/Shop.js';
 
 const SELL_OPS = [null, 'Value', 'Sell 1', 'Sell 5', 'Sell 10'];
 const BUY_OPS = [null, 'Value', 'Buy 1', 'Buy 5', 'Buy 10'];
@@ -17,5 +17,21 @@ describe('shopOpBatch', () => {
 
     test('uses 1 when less than 5 remain', () => {
         expect(shopOpBatch(SELL_OPS, 'sell', 3).map(i => SELL_OPS[i])).toEqual(['Sell 1', 'Sell 1', 'Sell 1']);
+    });
+});
+
+// Why: JiveShilo sells its catch by clicking Sell 10 until the stack is gone rather than working the split out, since the engine caps the click at what the slot holds.
+describe('selling a stack in tens', () => {
+    test('one Sell 10 is what a ten-sized ask asks for', () => {
+        expect(shopOpBatch(SELL_OPS, 'sell', SELL_STACK_STEP)).toEqual([shopOpBatch(SELL_OPS, 'sell', 10)[0]]);
+        expect(shopOpBatch(SELL_OPS, 'sell', SELL_STACK_STEP)).toHaveLength(1);
+    });
+
+    test('the step is ten, the biggest the shop offers', () => {
+        expect(SELL_STACK_STEP).toBe(10);
+    });
+
+    test('a shop without a Sell 10 falls back to what it has, so the loop still moves', () => {
+        expect(shopOpBatch(['Value', 'Sell 1'], 'sell', SELL_STACK_STEP).length).toBeGreaterThan(0);
     });
 });

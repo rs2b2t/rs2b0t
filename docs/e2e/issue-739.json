@@ -1,0 +1,52 @@
+{
+  "issue": 739,
+  "result": "PASS",
+  "at": "2026-09-12T14:54:44.007Z",
+  "sourceCommit": "39e3095468c329823aabd554db5455c2cef02401",
+  "before": {
+    "coins": 0,
+    "tile": {
+      "x": 2780,
+      "z": 3050,
+      "level": 0
+    },
+    "ground": [
+      {
+        "id": 995,
+        "name": "Coins",
+        "count": 450,
+        "ops": [
+          null,
+          null,
+          "Take",
+          null,
+          null
+        ],
+        "tile": {
+          "x": 2780,
+          "z": 3050,
+          "level": 0
+        },
+        "distance": 0
+      }
+    ],
+    "state": "idle",
+    "logs": []
+  },
+  "after": {
+    "coins": 450,
+    "tile": {
+      "x": 2780,
+      "z": 3050,
+      "level": 0
+    },
+    "ground": [],
+    "state": "running",
+    "logs": [
+      "NatureCrafter started",
+      "NatureCrafter runner starting — ferrying essence for Nature runes to [fixturemaster] via the bank + ship + Jiminua",
+      "coins on the ground (450), picking it up",
+      "picked up 450 coins"
+    ]
+  }
+}

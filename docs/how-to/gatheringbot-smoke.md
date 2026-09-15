@@ -45,6 +45,7 @@ Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path`
 | `repair-axe-bob` | Seed broken steel axe → Bob item-on-NPC repair (`macro_broken_steel_hatchet`) |
 | `repair-pick-nurmof` | Seed broken steel pick → Nurmof repair (`macro_broken_steel_pickaxe`) |
 | `restock-fly-barb` | Gerrant multi-buy fly rod + feathers from Draynor bank |
+| `fish-shilo-feathers` | Shilo river fly: teller banking (an npc, no booth), out of feathers → Fernahei's shelf, full pack → deposit. Sets `zombiequeen` 15 and relogs |
 | `auto-freeform-wc-willows-cg` | Auto outside every WC camp chunk → start-tile freeform |
 | `auto-freeform-mine-skel` | Auto freeform at wilderness skeleton mine |
 | `auto-freeform-fish-ardy-river` | Auto freeform at Ardougne river fly |
