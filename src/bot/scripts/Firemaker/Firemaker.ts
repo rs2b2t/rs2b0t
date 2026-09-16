@@ -59,6 +59,7 @@ export default class Firemaker extends LoopingBot {
     private xpStart = 0;
     private status = 'starting';
     private startedAt = Date.now();
+    private failedLogWithdraws = 0;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -117,7 +118,14 @@ export default class Firemaker extends LoopingBot {
             return false;
         }
 
+        const bankGenerationBeforeDeposit = Bank.snapshotGeneration();
         await Bank.depositAllMatching(depositAllExcept(toolKeepNames(TOOLS)));
+        await Execution.delayTicks(1);
+        // Why: the counts below must see the post-deposit stock, not the stale list that was already loaded.
+        if (!(await Bank.waitSnapshotAfter(bankGenerationBeforeDeposit))) {
+            this.log('bank stock did not reload after the deposit — retrying');
+            return false;
+        }
         const plan = toolRestockPlan(TOOLS, this.skillLevel, this.invCount, name => Bank.count(name));
         for (const step of plan) {
             await Bank.withdraw(step.name);
@@ -130,10 +138,24 @@ export default class Firemaker extends LoopingBot {
             ScriptRunner.stop('no tinderbox in the bank or pack');
             return false;
         }
-        if (!(await Bank.withdrawX(this.logName, reader.inventorySize() - Inventory.used()))) {
+        // Why: Bank.open* already waited for ready(), so a count after it is the server's answer; a stocked bank must not stop on the single withdraw glitch, and a genuine shortage confesses only after three failed attempts.
+        if (!Bank.ready()) {
+            this.log('bank list not loaded yet — retrying');
+            return false;
+        }
+        if (Bank.count(this.logName) === 0) {
+            this.log(`no ${this.logName} left in the bank — stopping`);
             ScriptRunner.stop(`no ${this.logName} left in the bank`);
             return false;
         }
+        if (!(await Bank.withdrawX(this.logName, reader.inventorySize() - Inventory.used()))) {
+            if (++this.failedLogWithdraws >= 3) {
+                this.log(`withdrawing ${this.logName} failed three times — stopping`);
+                ScriptRunner.stop(`no ${this.logName} left in the bank`);
+            }
+            return false;
+        }
+        this.failedLogWithdraws = 0;
 
         actions.closeModal();
         await Execution.delayUntilTicks(() => !Bank.isOpen(), 5);

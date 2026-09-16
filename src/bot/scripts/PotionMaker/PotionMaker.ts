@@ -141,8 +141,7 @@ export default class PotionMaker extends TaskBot {
 
 /** First leg: withdraws the water and herb halves of a batch into an empty pack, then closes the bank. */
 class RestockIngredients implements Task {
-    private emptyVialReads = 0;
-    private emptyHerbReads = 0;
+    private failedWithdraws = 0;
 
     constructor(private bot: PotionMaker) {}
 
@@ -191,37 +190,43 @@ class RestockIngredients implements Task {
 
         if (Inventory.used() > 0) {
             this.bot.log('bank open, depositing inventory');
+            const bankGenerationBeforeDeposit = Bank.snapshotGeneration();
             await Bank.depositAllMatching(() => true);
             await Execution.delayTicks(1);
+            // Why: the count below must see the post-deposit stock, not the stale list that was already loaded.
+            if (!(await Bank.waitSnapshotAfter(bankGenerationBeforeDeposit))) {
+                this.bot.log('bank stock did not reload after the deposit — retrying');
+                return;
+            }
         }
 
-        // Why: Bank.loaded() is false for a beat after opening, when the item list reads [] and every count() is 0. Believe empty on the third consecutive read.
-        await Execution.delayUntil(() => Bank.loaded(), 3000);
-        if (Bank.countById(VIAL_OF_WATER_ID) === 0) {
-            if (++this.emptyVialReads >= 3) {
-                this.bot.log('no vials of water in the bank — stopping');
-                ScriptRunner.stop('no vials of water in the bank');
-                return;
-            }
+        // Why: Bank.open* already waits for ready(), so one count is the server's answer, an empty bank and a still-loading one included.
+        if (!Bank.ready()) {
             return;
         }
-        this.emptyVialReads = 0;
+        const vialCount = Bank.countById(VIAL_OF_WATER_ID);
+        const herbCount = Bank.countById(herb.id);
+        if (vialCount === 0 || herbCount === 0) {
+            const missing = vialCount === 0 ? 'vials of water' : herb.name;
+            this.bot.log(`no ${missing} in the bank — stopping`);
+            ScriptRunner.stop(`no ${missing} in the bank`);
+            return;
+        }
         if (!(await Bank.withdrawXById(VIAL_OF_WATER_ID, BATCH))) {
-            return;
-        }
-        await Execution.delayUntil(() => Bank.loaded(), 3000);
-        if (Bank.countById(herb.id) === 0) {
-            if (++this.emptyHerbReads >= 3) {
-                this.bot.log(`no ${herb.name} in the bank — stopping`);
-                ScriptRunner.stop(`no ${herb.name} in the bank`);
-                return;
+            if (++this.failedWithdraws >= 3) {
+                this.bot.log('withdrawing vials of water failed three times — stopping');
+                ScriptRunner.stop('could not withdraw vials of water');
             }
             return;
         }
-        this.emptyHerbReads = 0;
         if (!(await Bank.withdrawXById(herb.id, BATCH))) {
+            if (++this.failedWithdraws >= 3) {
+                this.bot.log(`withdrawing ${herb.name} failed three times — stopping`);
+                ScriptRunner.stop(`could not withdraw ${herb.name}`);
+            }
             return;
         }
+        this.failedWithdraws = 0;
 
         if (!(await Bank.close())) {
             this.bot.log('bank would not close — retrying the trip');
@@ -286,7 +291,7 @@ class MakeUnfinished implements Task {
 
 /** Third leg: withdraws the secondary, spam-uses it on the unfinished potions, then deposits the finished batch. */
 class FinishPotions implements Task {
-    private emptySecondaryReads = 0;
+    private failedSecondaryWithdraws = 0;
 
     constructor(private bot: PotionMaker) {}
 
@@ -331,20 +336,26 @@ class FinishPotions implements Task {
             return;
         }
 
-        // Why: Bank.loaded() is false for a beat after opening, when the item list reads [] and every count() is 0. Believe empty on the third consecutive read.
-        await Execution.delayUntil(() => Bank.loaded(), 3000);
+        // Why: with an unfinished batch held, this task's own validate and the other two refuse while the booth stays open, so every early return here closes the bank first.
+        if (!Bank.ready()) {
+            await Bank.close();
+            return;
+        }
         if (Bank.countById(secondary.id) === 0) {
-            if (++this.emptySecondaryReads >= 3) {
-                this.bot.log(`no ${secondary.name} in the bank — stopping`);
-                ScriptRunner.stop(`no ${secondary.name} in the bank`);
-                return;
+            this.bot.log(`no ${secondary.name} in the bank — stopping at the booth holding the batch`);
+            await Bank.close();
+            ScriptRunner.stop(`no ${secondary.name} in the bank`);
+            return;
+        }
+        if (!(await Bank.withdrawXById(secondary.id, BATCH))) {
+            await Bank.close();
+            if (++this.failedSecondaryWithdraws >= 3) {
+                this.bot.log(`withdrawing ${secondary.name} failed three times — stopping`);
+                ScriptRunner.stop(`could not withdraw ${secondary.name}`);
             }
             return;
         }
-        this.emptySecondaryReads = 0;
-        if (!(await Bank.withdrawXById(secondary.id, BATCH))) {
-            return;
-        }
+        this.failedSecondaryWithdraws = 0;
         if (!(await Bank.close())) {
             this.bot.log('bank would not close — retrying the trip');
             return;
@@ -377,7 +388,11 @@ class FinishPotions implements Task {
             return;
         }
         if (Inventory.used() > 0) {
+            const bankGenerationBeforeDeposit = Bank.snapshotGeneration();
             await Bank.depositAllMatching(() => true);
+            await Execution.delayTicks(1);
+            // Why: the next cycle's counts must see the post-deposit stock, so wait for the list that follows before leaving the booth open.
+            await Bank.waitSnapshotAfter(bankGenerationBeforeDeposit);
         }
     }
 
