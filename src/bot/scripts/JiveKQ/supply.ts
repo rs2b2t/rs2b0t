@@ -8,7 +8,7 @@ import { Prayer } from '../../api/prayer/Prayer.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { buyPass } from './route.js';
 import { BANK, type Supplies } from './policy.js';
-import { ARROWS, DUELING_RINGS, FOOD, GEAR, PASS, tripPack } from './loadout.js';
+import { AIR, ARROWS, DUELING_RINGS, FOOD, GEAR, LAW, PASS, tripPack } from './loadout.js';
 export { BOW, FOOD, MACE, RECOIL } from './loadout.js';
 const BOOSTS = [['defence', 'Super defence'], ['attack', 'Super attack'], ['strength', 'Super strength']];
 
@@ -59,7 +59,7 @@ export function boostsReady(): boolean {
 export function supplies(): Supplies {
     return {
         hp: Skills.effective('hitpoints'), food: Inventory.countById(FOOD), prayer: Prayer.points(), prayerDoses: doses('Prayer potion'),
-        escape: Inventory.items().some(i => DUELING_RINGS.includes(i.id)),
+        escape: Inventory.items().some(i => DUELING_RINGS.includes(i.id)) && Inventory.countById(AIR) >= 5 && Inventory.countById(LAW) >= 1,
         arrows: Equipment.items().find(i => i.id === ARROWS)?.count ?? 0
     };
 }
@@ -97,7 +97,7 @@ export async function provision(slot: number, log: (s: string) => void): Promise
 
 async function prepare(slot: number, log: (s: string) => void): Promise<boolean> {
     const pack = tripPack(slot);
-    const food = slot === 0 ? 16 : 18;
+    const food = pack.find(([id]) => id === FOOD)![1];
     await Prayer.clear();
     if (!(await open(log))) return false;
     await Bank.depositAllMatching(() => true);

@@ -2,12 +2,15 @@ import { DROP_DB } from '../../src/bot/data/dropdb.js';
 
 export interface KqItem { id: number; count: number; name?: string | null; bankId?: number }
 export interface KqTile { x: number; z: number; level: number }
+interface KqVisitor { id: number; name: string | null; tile: KqTile; targetsMe: boolean }
+interface KqEmergency { player: number; emergencyAt: number; hp: number; food: number; visitor?: KqVisitor; departedAt?: number }
 export interface KqSample {
     at: number; tile: KqTile | null; hp: number; sceneReady: boolean;
-    pack: KqItem[]; gear: KqItem[]; bank: KqItem[]; bankOpen: boolean;
+    pack: KqItem[]; gear: KqItem[]; bank: KqItem[]; bankOpen: boolean; restocking: boolean;
     mode: number; protectMagic: boolean; protectMelee?: boolean; prayers?: number[];
     xp: { melee: number; ranged: number };
     queens: { id: number; hp: number; total: number; tile: KqTile }[];
+    visitors?: KqVisitor[];
     ground: (KqItem & { tile: KqTile })[];
     ropes?: number[];
     boosts?: Record<'attack' | 'strength' | 'defence', { base: number; effective: number }>;
@@ -19,8 +22,8 @@ export const CHECKLIST = {
     corner: 'Stack near spawn with maces ready and all prayers off', participation: 'All four gain melee and ranged combat XP',
     formation: 'Hold four cardinal melee positions', ranged: 'Spread into the ranged cross', killed: 'Damage and defeat both forms',
     looted: 'Pick up a boss drop', repeatFight: 'Re-engage the respawn within six seconds', bankedLoot: 'Deposit the boss drop',
-    boosts: 'Sip super attack, strength and defence', escape: 'Use dueling rings to escape to the arena',
-    restocked: 'Restock all four accounts', reentered: 'Start another trip together', soak: 'Complete the requested trips and kills', pauseRetreat: 'Retreat when a member pauses'
+    boosts: 'Sip super attack, strength and defence', escape: 'Cast Camelot, then use a dueling ring to reach the arena', independentRestock: 'Bank one depleted member while the others keep fighting',
+    restocked: 'Restock all four accounts', reentered: 'Start another trip together', soak: 'Complete the requested trips and kills', pauseRetreat: 'Recover from the announced deliberate pause probe'
 } as const;
 export const CHECKS = Object.keys(CHECKLIST) as (keyof typeof CHECKLIST)[];
 export const count = (items: KqItem[], id: number) => items.filter(item => item.id === id).reduce((n, item) => n + item.count, 0);
@@ -32,18 +35,18 @@ const atGate = (s: KqSample | undefined, x: number, z: number, level: number) =>
 const atBank = (s: KqSample) => s.tile?.level === 0 && Math.abs(s.tile.x - 3308) <= 3 && Math.abs(s.tile.z - 3120) <= 3;
 const ringCharges = (s: KqSample) => s.pack.reduce((n, i) => n + ([2552, 2554, 2556, 2558, 2560, 2562, 2564, 2566].includes(i.id) ? (8 - (i.id - 2552) / 2) * i.count : 0), 0);
 const kit = (s: KqSample, slot: number) => atBank(s)
-    && !s.pack.some(i => [995, 556, 557, 563, 1823, 1825, 1827, 1829, 1831].includes(i.id))
+    && !s.pack.some(i => [995, 557, 1823, 1825, 1827, 1829, 1831].includes(i.id))
     && [1434, 1163, 2503, 2497, 2491, 1731, 1061, 2550].every(id => count(s.gear, id) === 1)
     && count(s.gear, 892) >= 250
     && ringCharges(s) > 0 && count(s.pack, 954) === (slot === 0 ? 2 : 0)
-    && [[861, 1], [2434, 2], [2448, 1], [2436, 1], [2440, 1], [2442, 1], [2550, 1], [1854, 1], [385, slot === 0 ? 16 : 18]].every(([id, n]) => count(s.pack, id) === n);
+    && [[861, 1], [2434, 2], [2448, 1], [2436, 1], [2440, 1], [2442, 1], [2550, 1], [1854, 1], [556, 5], [563, 1], [385, slot === 0 ? 14 : 16]].every(([id, n]) => count(s.pack, id) === n);
 
 export class KqEvidence {
     milestones: Record<string, number> = {};
     crossings = { surface: [[], [], [], []] as number[][], chamber: [[], [], [], []] as number[][] };
     kills: { at: number; entries: number[] }[] = [];
-    trips: { number: number; enteredAt: number; returnedAt: number; kills: number; minimumHp: number[]; foodRemaining: number[]; xpGains: KqSample['xp'][] }[] = [];
-    private activeTrip: { number: number; enteredAt: number; minimumHp: number[]; xpBaseline: KqSample['xp'][] } | null = null;
+    trips: { number: number; enteredAt: number; returnedAt: number; kills: number; minimumHp: number[]; foodRemaining: number[]; xpGains: KqSample['xp'][]; excusedPlayers: (KqEmergency & { departedAt: number })[] }[] = [];
+    private activeTrip: { number: number; enteredAt: number; minimumHp: number[]; xpBaseline: KqSample['xp'][]; emergencies: KqEmergency[] } | null = null;
     private respawnAt = 0;
     restarts: { spawnedAt: number; damagedAt: number }[] = [];
     ropeCounts = { surface: [] as number[], chamber: [] as number[] };
@@ -52,7 +55,10 @@ export class KqEvidence {
     passes = new Set<number>();
     private boosted = new Set<number>();
     private escaped = new Set<number>();
-    private nestRings: (number | null)[] = [null, null, null, null];
+    escapes: { player: number; camelotAt: number; arenaAt: number }[] = [];
+    private escapeSupply = new Map<number, { air: number; law: number; ring: number; camelotAt: number }>();
+    independentRestocks: { player: number; combatPlayer: number; departedAt: number; bankedAt: number; combatAt: number; xpGains: KqSample['xp']; queenDamage: number }[] = [];
+    private absences = new Map<number, { departedAt: number; bankedAt: number; witnesses: Map<number, { xp: KqSample['xp']; queenDamage: number; combatAt: number }> }>();
     xpGains = { melee: [0, 0, 0, 0], ranged: [0, 0, 0, 0] };
     loot: { player: number; id: number; bankId: number; deathAt: number; name?: string | null; count: number; inventoryBefore: number; bankBefore: number; pickedAt?: number; bankedAt?: number }[] = [];
     private previous: KqSample[] | null = null;
@@ -70,6 +76,13 @@ export class KqEvidence {
     private beforeDeath: Set<string> = new Set();
     private groundKey = (g: KqItem & { tile: KqTile }) => `${g.id}:${g.tile.x}:${g.tile.z}:${g.count}`;
 
+    readyForPause(samples: (KqSample & { stage?: string; runner?: string })[]): boolean {
+        const trip = this.activeTrip;
+        return !!trip && trip.number > 1 && samples.length === 4 && samples.every((s, i) => s.sceneReady && chamber(s)
+            && s.runner === 'running' && s.stage === 'fight' && !s.restocking
+            && s.xp.melee + s.xp.ranged > trip.xpBaseline[i].melee + trip.xpBaseline[i].ranged);
+    }
+
     observe(samples: KqSample[]): void {
         if (samples.length !== 4) throw new Error('Expected four client observations');
         const now = Math.max(...samples.map(s => s.at));
@@ -81,10 +94,16 @@ export class KqEvidence {
             if (count(s.pack, 1854) > 0 && count(s.pack, 995) === 95 && !this.purchases.has(i)) this.purchases.set(i, { change: 95, bankBefore: count(this.latestBank[i], 995) });
             const purchase = this.purchases.get(i);
             if (purchase && atBank(s) && s.bankOpen && count(s.pack, 995) === 0 && count(s.bank, 995) >= purchase.bankBefore + purchase.change) this.milestones.buyPass ??= now;
-            if (nest(s)) this.nestRings[i] = Math.max(this.nestRings[i] ?? 0, ringCharges(s));
-            if (s.tile?.level === 0 && Math.abs(s.tile.x - 3315) <= 4 && Math.abs(s.tile.z - 3235) <= 4 && this.nestRings[i] !== null && this.nestRings[i]! - ringCharges(s) === 1) {
+            if (s.sceneReady && nest(s)) {
+                const before = this.previous?.[i] && nest(this.previous[i]) ? this.escapeSupply.get(i) : undefined;
+                this.escapeSupply.set(i, { air: Math.max(before?.air ?? 0, count(s.pack, 556)), law: Math.max(before?.law ?? 0, count(s.pack, 563)), ring: Math.max(before?.ring ?? 0, ringCharges(s)), camelotAt: 0 });
+            }
+            const escape = this.escapeSupply.get(i);
+            if (escape && s.sceneReady && atGate(s, 2757, 3478, 0) && escape.air - count(s.pack, 556) === 5 && escape.law - count(s.pack, 563) === 1 && escape.ring === ringCharges(s)) escape.camelotAt ||= now;
+            if (escape?.camelotAt && s.sceneReady && atGate(s, 3315, 3235, 0) && escape.ring - ringCharges(s) === 1) {
                 this.escaped.add(i);
-                this.nestRings[i] = null;
+                this.escapes.push({ player: i, camelotAt: escape.camelotAt, arenaAt: now });
+                this.escapeSupply.delete(i);
             }
             if (nest(s) && s.boosts && Object.values(s.boosts).every(b => b.effective > b.base)
                 && [[145, 147, 149], [157, 159, 161], [163, 165, 167]].every(ids => ids.some(id => count(s.pack, id) > 0))) this.boosted.add(i);
@@ -134,7 +153,11 @@ export class KqEvidence {
                 || (this.bare.surface && surface[0] !== 1) || (this.bare.chamber && lower[0] !== surface[0] - 1)) throw new Error('Unexpected rope consumption');
             this.milestones.ropes ??= now;
         }
-        const queens = samples.flatMap(s => s.queens);
+        this.observeRestocks(samples, now);
+        const observers = samples.filter(s => s.sceneReady && chamber(s));
+        const active = samples.filter(s => !s.restocking);
+        const activeInChamber = active.length > 0 && active.every(s => s.sceneReady && chamber(s));
+        const queens = observers.flatMap(s => s.queens);
         const queen = queens.find(q => q.id === 1158 || q.id === 1160);
         if (queen) this.queenTile = queen.tile;
         if (!this.milestones.formation && samples.every((s, i) => chamber(s) && s.protectMagic && s.mode === 1 && count(s.gear, 1434) === 1
@@ -165,13 +188,13 @@ export class KqEvidence {
                 this.beforeDeath = new Set(this.previous?.flatMap(s => s.ground.map(this.groundKey)) ?? []);
             }
         }
-        if (this.deadAt && !queen && samples.every(s => s.sceneReady && chamber(s)) && this.damaged.has(1160)) {
+        if (this.deadAt && !queen && observers.length > 0 && this.damaged.has(1160)) {
             if (this.damaged.has(1158)) this.milestones.killed ??= now;
             if (!this.kills.some(k => k.at === this.deadAt)) this.kills.push({ at: this.deadAt, entries: this.crossings.chamber.map(t => t.length) });
         }
-        if (this.kills.length && !queen && samples.every(s => s.tile?.x === 3470 && s.tile.z === 9503 && s.tile.level === 0 && s.prayers?.length === 0 && count(s.gear, 1434) === 1)) this.milestones.corner ??= now;
+        if (this.kills.length && !queen && activeInChamber && active.every(s => s.tile?.x === 3470 && s.tile.z === 9503 && s.prayers?.length === 0 && count(s.gear, 1434) === 1)) this.milestones.corner ??= now;
         const lastKill = this.kills.at(-1);
-        if (lastKill && queen?.id === 1158 && this.respawnAt > lastKill.at && samples.every(chamber)
+        if (lastKill && queen?.id === 1158 && this.respawnAt > lastKill.at && activeInChamber
             && lastKill.entries.every((n, i) => n === this.crossings.chamber[i].length) && !this.restarts.some(r => r.spawnedAt === this.respawnAt)) {
             if (now - this.respawnAt > 6000) throw new Error('The team did not re-engage within six seconds of the queen respawning');
             if (this.damaged.has(1158)) {
@@ -203,20 +226,67 @@ export class KqEvidence {
         }
         const entries = Math.min(...this.crossings.chamber.map(t => t.length));
         if (!this.activeTrip && entries > this.trips.length && samples.every(chamber)) {
-            this.activeTrip = { number: entries, enteredAt: Math.min(...this.crossings.chamber.map(t => t[entries - 1])), minimumHp: samples.map(s => s.hp), xpBaseline: samples.map(s => ({ ...s.xp })) };
+            this.activeTrip = { number: entries, enteredAt: Math.min(...this.crossings.chamber.map(t => t[entries - 1])), minimumHp: samples.map(s => s.hp), xpBaseline: samples.map(s => ({ ...s.xp })), emergencies: [] };
         }
         if (this.activeTrip) {
             const trip = this.activeTrip;
             trip.minimumHp = samples.map((s, i) => Math.min(trip.minimumHp[i], s.hp));
+            samples.forEach((s, player) => {
+                if (!s.sceneReady) return;
+                const index = trip.emergencies.findIndex(e => e.player === player);
+                const emergency = trip.emergencies[index];
+                const visitor = s.visitors?.find(v => v.targetsMe && ['genie', 'mysterious old man'].includes(v.name?.toLowerCase() ?? '')
+                    && s.tile?.level === v.tile.level && Math.max(Math.abs(s.tile.x - v.tile.x), Math.abs(s.tile.z - v.tile.z)) <= 6);
+                if (chamber(s) && (s.hp <= 31 || count(s.pack, 385) <= 1 || visitor) && emergency?.departedAt === undefined) {
+                    const observed = { player, emergencyAt: s.at, hp: s.hp, food: count(s.pack, 385), ...(visitor ? { visitor: structuredClone(visitor) } : {}) };
+                    if (index < 0) trip.emergencies.push(observed);
+                    else trip.emergencies[index] = observed;
+                }
+                if (emergency && s.restocking && !chamber(s) && this.previous?.[player] && chamber(this.previous[player])
+                    && s.at - emergency.emergencyAt >= 0 && s.at - emergency.emergencyAt <= 10_000) emergency.departedAt ??= s.at;
+            });
             if (samples.every(atBank)) {
-                const { xpBaseline, ...details } = trip;
+                const { xpBaseline, emergencies, ...details } = trip;
                 const xpGains = samples.map((s, i) => ({ melee: s.xp.melee - xpBaseline[i].melee, ranged: s.xp.ranged - xpBaseline[i].ranged }));
                 const kills = this.kills.filter(k => k.entries.every(n => n === trip.number)).length;
-                this.trips.push({ ...details, returnedAt: now, kills, foodRemaining: samples.map(s => count(s.pack, 385)), xpGains });
+                const excusedPlayers = emergencies.flatMap(e => kills > 0 && e.departedAt !== undefined && xpGains[e.player].melee + xpGains[e.player].ranged <= 0 ? [{ ...e, departedAt: e.departedAt }] : []);
+                this.trips.push({ ...details, returnedAt: now, kills, foodRemaining: samples.map(s => count(s.pack, 385)), xpGains, excusedPlayers });
                 this.activeTrip = null;
-                if (kills > 0 && xpGains.some(xp => xp.melee + xp.ranged <= 0)) throw new Error(`A member did not contribute combat XP on trip ${trip.number}`);
+                if (kills > 0 && xpGains.some((xp, i) => xp.melee + xp.ranged <= 0 && !excusedPlayers.some(e => e.player === i))) throw new Error(`A member did not contribute combat XP on trip ${trip.number}`);
             }
         }
         this.previous = structuredClone(samples.map((s, i) => s.sceneReady ? s : this.previous?.[i] ?? s));
+    }
+
+    private observeRestocks(samples: KqSample[], now: number): void {
+        samples.forEach((s, player) => {
+            if (!s.restocking || chamber(s)) { this.absences.delete(player); return; }
+            let absence = this.absences.get(player);
+            if (!absence) {
+                if (!s.sceneReady || !this.previous?.[player] || !chamber(this.previous[player])) return;
+                absence = { departedAt: now, bankedAt: s.bankOpen && atBank(s) ? now : 0, witnesses: new Map() };
+                samples.forEach((other, i) => {
+                    if (other.sceneReady && chamber(other) && !other.restocking) absence!.witnesses.set(i, { xp: { ...other.xp }, queenDamage: 0, combatAt: 0 });
+                });
+                this.absences.set(player, absence);
+                return;
+            }
+            if (s.sceneReady && s.bankOpen && atBank(s)) absence.bankedAt ||= now;
+            for (const [i, witness] of absence.witnesses) {
+                const other = samples[i];
+                if (!other.sceneReady || !chamber(other) || other.restocking) { absence.witnesses.delete(i); continue; }
+                const xpGains = { melee: other.xp.melee - witness.xp.melee, ranged: other.xp.ranged - witness.xp.ranged };
+                for (const queen of other.queens) {
+                    const before = this.previous?.[i].queens.find(q => q.id === queen.id);
+                    if ([1158, 1160].includes(queen.id) && queen.total > 0 && before && before.hp > queen.hp) witness.queenDamage += before.hp - queen.hp;
+                }
+                if (xpGains.melee + xpGains.ranged > 0 || witness.queenDamage > 0) witness.combatAt ||= now;
+                if (!absence.bankedAt || !witness.combatAt) continue;
+                this.independentRestocks.push({ player, combatPlayer: i, departedAt: absence.departedAt, bankedAt: absence.bankedAt, combatAt: witness.combatAt, xpGains, queenDamage: witness.queenDamage });
+                this.milestones.independentRestock ??= now;
+                this.absences.delete(player);
+                break;
+            }
+        });
     }
 }

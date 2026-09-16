@@ -4,9 +4,9 @@ import { KqEvidence, chamber, type KqSample } from '../../e2e/lib/kqEvidence.js'
 function team(at = 1000): KqSample[] {
     return [0, 1, 2, 3].map(i => ({
         at, tile: { x: 3308, z: 3120, level: 0 }, hp: 99, sceneReady: true,
-        pack: [[861, 1], ...(i === 0 ? [[954, 2]] : []), [2434, 2], [2448, 1], [2436, 1], [2440, 1], [2442, 1], [2550, 1], [2552, 1], [1854, 1], [385, i === 0 ? 16 : 18]].map(([id, count]) => ({ id, count })),
+        pack: [[861, 1], ...(i === 0 ? [[954, 2]] : []), [2434, 2], [2448, 1], [2436, 1], [2440, 1], [2442, 1], [2550, 1], [2552, 1], [1854, 1], [556, 5], [563, 1], [385, i === 0 ? 14 : 16]].map(([id, count]) => ({ id, count })),
         gear: [1434, 1163, 2503, 2497, 2491, 1731, 1061, 2550, 892].map(id => ({ id, count: id === 892 ? 250 : 1 })),
-        bank: [], bankOpen: false, mode: 1, protectMagic: true, xp: { melee: 1000, ranged: 1000 }, queens: [], ground: []
+        bank: [], bankOpen: false, restocking: false, mode: 1, protectMagic: true, xp: { melee: 1000, ranged: 1000 }, queens: [], ground: []
     }));
 }
 
@@ -37,6 +37,18 @@ function kill(e: KqEvidence, s: KqSample[]): void {
     fight(e, s, 1160, 100); s.forEach(p => p.xp.ranged += 50); e.observe(s);
     fight(e, s, 1160, 0); e.observe(s);
     s.forEach(p => { p.at += 1000; p.queens = []; }); e.observe(s);
+}
+
+function finishWithoutFourth(e: KqEvidence, s: KqSample[]): void {
+    for (const [id, hp] of [[1158, 0], [1160, 255], [1160, 0]]) {
+        s.forEach((p, i) => {
+            p.at += 1000;
+            p.queens = chamber(p) ? [{ id, hp, total: 255, tile: { x: 3476, z: 9498, level: 0 } }] : [];
+            if (i < 3 && hp === 0) p.xp[id === 1158 ? 'melee' : 'ranged'] += 50;
+        }); e.observe(s);
+    }
+    s.forEach(p => { p.at += 1000; p.queens = []; }); e.observe(s);
+    s.forEach(p => { p.tile = { x: 3308, z: 3120, level: 0 }; });
 }
 
 test('a kit missing a charged ring or arrows cannot satisfy readiness', () => {
@@ -178,7 +190,7 @@ test('a bought pass is not ready until the change is banked and the last shark i
     const e = new KqEvidence(); const s = team();
     s[0].bankOpen = true; s[0].bank = [{ id: 995, count: 9900 }];
     s[0].pack = s[0].pack.filter(p => p.id !== 1854);
-    s[0].pack.find(p => p.id === 385)!.count = 15;
+    s[0].pack.find(p => p.id === 385)!.count = 13;
     s[0].pack.push({ id: 995, count: 100 }); e.observe(s);
     s[0].bankOpen = false; s[0].pack.push({ id: 1854, count: 1 });
     s[0].pack.find(p => p.id === 995)!.count = 95; e.observe(s);
@@ -186,7 +198,7 @@ test('a bought pass is not ready until the change is banked and the last shark i
     expect(e.milestones.buyPass).toBeUndefined();
     s[0].bankOpen = true; s[0].bank = [{ id: 995, count: 9995 }];
     s[0].pack = s[0].pack.filter(p => p.id !== 995);
-    s[0].pack.find(p => p.id === 385)!.count = 16; e.observe(s);
+    s[0].pack.find(p => p.id === 385)!.count = 14; e.observe(s);
     expect(e.milestones.buyPass).toBe(1000);
     expect(e.milestones.sharedKit).toBe(1000);
 });
@@ -281,10 +293,47 @@ test('super-potion proof needs a consumed dose and boosted stats on every client
     e.observe(s); expect(e.milestones.boosts).toBeGreaterThan(0);
 });
 
-test('dueling escape requires arena arrival and a consumed charge even if inventory updates first', () => {
+test('escape requires consumed Camelot runes followed by a charged ring even when inventory updates first', () => {
     const e = new KqEvidence(); const s = team(); kill(e, s);
+    s.forEach(p => { p.pack = p.pack.filter(i => i.id !== 556 && i.id !== 563); }); e.observe(s);
+    s.forEach(p => { p.tile = { x: 2757, z: 3478, level: 0 }; p.queens = []; }); e.observe(s);
+    expect(e.milestones.escape).toBeUndefined();
     s.forEach(p => { p.pack.find(i => i.id === 2552)!.id = 2554; }); e.observe(s);
     s.forEach(p => { p.tile = { x: 3315, z: 3235, level: 0 }; }); e.observe(s);
+    expect(e.milestones.escape).toBeGreaterThan(0);
+});
+
+test('a ring escape directly from the nest cannot satisfy the Camelot route', () => {
+    const e = new KqEvidence(); const s = team(); kill(e, s);
+    s.forEach(p => { p.pack.find(i => i.id === 2552)!.id = 2554; p.tile = { x: 3315, z: 3235, level: 0 }; p.queens = []; }); e.observe(s);
+    expect(e.milestones.escape).toBeUndefined();
+});
+
+test('visiting Camelot without consuming both rune types cannot satisfy escape', () => {
+    const e = new KqEvidence(); const s = team(); kill(e, s);
+    s.forEach(p => { p.pack = p.pack.filter(i => i.id !== 556); p.tile = { x: 2757, z: 3478, level: 0 }; p.queens = []; }); e.observe(s);
+    s.forEach(p => { p.pack.find(i => i.id === 2552)!.id = 2554; p.tile = { x: 3315, z: 3235, level: 0 }; }); e.observe(s);
+    expect(e.milestones.escape).toBeUndefined();
+});
+
+test('Camelot must be observed before the arena ring charge is consumed', () => {
+    const e = new KqEvidence(); const s = team(); kill(e, s);
+    s.forEach(p => {
+        p.pack = p.pack.filter(i => i.id !== 556 && i.id !== 563);
+        p.pack.find(i => i.id === 2552)!.id = 2554;
+        p.tile = { x: 2757, z: 3478, level: 0 }; p.queens = [];
+    }); e.observe(s);
+    s.forEach(p => { p.tile = { x: 3315, z: 3235, level: 0 }; }); e.observe(s);
+    expect(e.milestones.escape).toBeUndefined();
+});
+
+test('an unverified earlier escape cannot contaminate a later trips ring baseline', () => {
+    const e = new KqEvidence(); const s = team(); kill(e, s);
+    s.forEach(p => { p.pack.find(i => i.id === 2552)!.id = 2554; p.tile = { x: 3315, z: 3235, level: 0 }; p.queens = []; }); e.observe(s);
+    s.forEach(p => { p.tile = { x: 3308, z: 3120, level: 0 }; }); e.observe(s);
+    fight(e, s, 1158, 255); e.observe(s);
+    s.forEach(p => { p.pack = p.pack.filter(i => i.id !== 556 && i.id !== 563); p.tile = { x: 2757, z: 3478, level: 0 }; p.queens = []; }); e.observe(s);
+    s.forEach(p => { p.pack.find(i => i.id === 2554)!.id = 2556; p.tile = { x: 3315, z: 3235, level: 0 }; }); e.observe(s);
     expect(e.milestones.escape).toBeGreaterThan(0);
 });
 
@@ -361,4 +410,266 @@ test('restart evidence records latency from first visible respawn to damage', ()
     fight(e, s, 1158, 200); e.observe(s);
     expect(e.restarts).toHaveLength(1);
     expect(e.restarts[0].damagedAt - e.restarts[0].spawnedAt).toBe(1000);
+});
+
+test('the full kit requires exactly five air runes and one law rune', () => {
+    const e = new KqEvidence(); const s = team();
+    s[0].pack.find(i => i.id === 556)!.count = 4;
+    e.observe(s); expect(e.milestones.sharedKit).toBeUndefined();
+    s[0].pack.find(i => i.id === 556)!.count = 5;
+    s[0].pack.find(i => i.id === 563)!.count = 0;
+    e.observe(s); expect(e.milestones.sharedKit).toBeUndefined();
+    s[0].pack.find(i => i.id === 563)!.count = 1;
+    e.observe(s); expect(e.milestones.sharedKit).toBe(1000);
+});
+
+test('remaining members can finish a flying queen after a contributor banks', () => {
+    const e = new KqEvidence(); const s = team(); melee(e, s);
+    fight(e, s, 1160, 100); e.observe(s);
+    s[0].restocking = true; s[0].tile = { x: 3308, z: 3120, level: 0 }; s[0].queens = [];
+    e.observe(s);
+    s.slice(1).forEach(p => { p.at += 1000; p.queens[0].hp = 0; p.xp.ranged += 50; }); e.observe(s);
+    s.slice(1).forEach(p => { p.at += 1000; p.queens = []; }); e.observe(s);
+    expect(e.kills).toHaveLength(1);
+    expect(e.milestones.killed).toBeGreaterThan(0);
+    s.slice(1).forEach(p => { p.tile = { x: 3308, z: 3120, level: 0 }; });
+    expect(() => e.observe(s)).not.toThrow();
+    expect(e.trips[0].kills).toBe(1);
+    expect(e.trips[0].xpGains[0]).toEqual({ melee: 50, ranged: 0 });
+});
+
+test('a remaining observer losing sight of a living flying queen cannot count a kill', () => {
+    const e = new KqEvidence(); const s = team(); melee(e, s);
+    fight(e, s, 1160, 100); e.observe(s);
+    s.slice(0, 3).forEach(p => { p.restocking = true; p.tile = { x: 3308, z: 3120, level: 0 }; });
+    s.forEach(p => { p.queens = []; }); e.observe(s);
+    expect(e.kills).toHaveLength(0);
+});
+
+test('stale death data outside the chamber or during loading cannot prove a kill', () => {
+    for (const loading of [false, true]) {
+        const e = new KqEvidence(); const s = team(); melee(e, s);
+        fight(e, s, 1160, 100); e.observe(s);
+        s.slice(1).forEach(p => { p.queens = []; });
+        s[0].queens[0].hp = 0;
+        if (loading) s[0].sceneReady = false;
+        else s[0].tile = { x: 3308, z: 3120, level: 0 };
+        e.observe(s);
+        s[0].queens = []; s[0].sceneReady = true; e.observe(s);
+        expect(e.kills).toHaveLength(0);
+    }
+});
+
+test('flying death still needs a chamber observer for its disappearance', () => {
+    const e = new KqEvidence(); const s = team(); melee(e, s);
+    fight(e, s, 1160, 100); e.observe(s);
+    fight(e, s, 1160, 0); e.observe(s);
+    s.forEach(p => { p.queens = []; p.tile = { x: 3308, z: 3120, level: 0 }; }); e.observe(s);
+    expect(e.kills).toHaveLength(0);
+});
+
+test('independent restocking requires a real bank view and continued combat during the absence', () => {
+    for (const damageOnly of [false, true]) {
+        const e = new KqEvidence(); const s = team(); melee(e, s);
+        fight(e, s, 1160, 100); e.observe(s);
+        s[0].restocking = true; s[0].tile = { x: 2757, z: 3478, level: 0 }; s[0].queens = []; e.observe(s);
+        s.forEach(p => { p.at += 1000; });
+        if (damageOnly) s.slice(1).forEach(p => { p.queens[0].hp = 90; });
+        else s[1].xp.ranged += 25;
+        e.observe(s);
+        s[0].tile = { x: 3308, z: 3120, level: 0 }; e.observe(s);
+        expect(e.milestones.independentRestock).toBeUndefined();
+        s[0].bankOpen = true; e.observe(s);
+        expect(e.milestones.independentRestock).toBeGreaterThan(0);
+    }
+});
+
+test('earlier combat and an idle chamber party do not prove independent restocking', () => {
+    const e = new KqEvidence(); const s = team(); melee(e, s);
+    fight(e, s, 1160, 100); s[1].xp.ranged += 25; e.observe(s);
+    s[0].restocking = true; s[0].tile = { x: 3308, z: 3120, level: 0 }; s[0].bankOpen = true; s[0].queens = []; e.observe(s);
+    s.forEach(p => { p.at += 1000; }); e.observe(s);
+    expect(e.milestones.independentRestock).toBeUndefined();
+});
+
+test('a chamber member who also retreats cannot witness independent restocking', () => {
+    const e = new KqEvidence(); const s = team(); melee(e, s);
+    fight(e, s, 1160, 100); e.observe(s);
+    s[0].restocking = true; s[0].tile = { x: 2757, z: 3478, level: 0 }; s[0].queens = []; e.observe(s);
+    s.slice(1).forEach(p => { p.restocking = true; p.xp.ranged += 25; }); e.observe(s);
+    s[0].tile = { x: 3308, z: 3120, level: 0 }; s[0].bankOpen = true; e.observe(s);
+    expect(e.milestones.independentRestock).toBeUndefined();
+});
+
+test('the active party waits in the corner while a depleted member restocks', () => {
+    const e = new KqEvidence(); const s = team(); kill(e, s);
+    s[0].tile = { x: 3308, z: 3120, level: 0 };
+    s.slice(1).forEach(p => { p.tile = { x: 3470, z: 9503, level: 0 }; p.prayers = []; p.gear[0].id = 1434; });
+    e.observe(s); expect(e.milestones.corner).toBeUndefined();
+    s[0].restocking = true;
+    e.observe(s); expect(e.milestones.corner).toBeGreaterThan(0);
+});
+
+test('remaining fighters must re-engage a respawn while another member restocks', () => {
+    for (const attack of [false, true]) {
+        const e = new KqEvidence(); const s = team(); kill(e, s);
+        fight(e, s, 1158, 255);
+        s[0].restocking = true; s[0].tile = { x: 3308, z: 3120, level: 0 }; s[0].queens = []; e.observe(s);
+        if (attack) {
+            s.slice(1).forEach(p => { p.at += 1000; p.queens[0].hp = 200; }); e.observe(s);
+            expect(e.milestones.repeatFight).toBeGreaterThan(0);
+        } else {
+            s.forEach(p => { p.at += 6001; });
+            expect(() => e.observe(s)).toThrow('did not re-engage within six seconds');
+        }
+    }
+});
+
+test('a pause probe waits for all four to gain combat XP on a later chamber visit', () => {
+    const e = new KqEvidence(); const s = team();
+    s.forEach(p => Object.assign(p, { stage: 'fight', runner: 'running' }));
+    melee(e, s);
+    expect(e.readyForPause(s)).toBe(false);
+    s.forEach(p => { p.tile = { x: 3308, z: 3120, level: 0 }; p.queens = []; }); e.observe(s);
+    fight(e, s, 1158, 255); e.observe(s);
+    expect(e.readyForPause(s)).toBe(false);
+    s.slice(0, 3).forEach(p => { p.xp.melee += 50; });
+    expect(e.readyForPause(s)).toBe(false);
+    s[3].xp.ranged += 25;
+    expect(e.readyForPause(s)).toBe(true);
+});
+
+test('pause eligibility requires every member running and fighting inside the ready chamber', () => {
+    const e = new KqEvidence(); const s = team(); kill(e, s);
+    s.forEach(p => { p.tile = { x: 3308, z: 3120, level: 0 }; }); e.observe(s);
+    fight(e, s, 1158, 255); e.observe(s);
+    s.forEach(p => { Object.assign(p, { stage: 'fight', runner: 'running' }); p.xp.melee += 25; });
+    expect(e.readyForPause(s)).toBe(true);
+    for (const change of [
+        { stage: 'upper' }, { stage: 'loot' }, { runner: 'paused' }, { restocking: true }, { sceneReady: false },
+        { tile: { x: 3508, z: 9497, level: 2 } }
+    ]) {
+        const altered = structuredClone(s);
+        Object.assign(altered[3], change);
+        expect(e.readyForPause(altered)).toBe(false);
+    }
+    expect(e.readyForPause(s.slice(0, 3))).toBe(false);
+});
+
+test('observed critical HP or depleted food excuses a zero-XP emergency departure even after healing', () => {
+    for (const resource of ['hp', 'food']) {
+        const e = new KqEvidence(); const s = team(); e.observe(s);
+        fight(e, s, 1158, 255); e.observe(s);
+        if (resource === 'hp') s[3].hp = 31;
+        else s[3].pack.find(p => p.id === 385)!.count = 1;
+        e.observe(s);
+        let emergencyAt = s[3].at;
+        s[3].at += 1000; s[3].hp = 70; e.observe(s);
+        if (resource === 'food') emergencyAt = s[3].at;
+        s[3].at += 1000; s[3].restocking = true; s[3].tile = { x: 2757, z: 3478, level: 0 }; s[3].queens = []; e.observe(s);
+        const departedAt = s[3].at;
+        finishWithoutFourth(e, s);
+        expect(() => e.observe(s)).not.toThrow();
+        expect(e.trips[0].kills).toBe(1);
+        expect(e.trips[0].xpGains[3]).toEqual({ melee: 0, ranged: 0 });
+        expect(e.trips[0].excusedPlayers).toEqual([{ player: 3, emergencyAt, departedAt, hp: resource === 'hp' ? 31 : 70, food: resource === 'food' ? 1 : 16 }]);
+        expect(e.milestones.participation).toBeUndefined();
+    }
+});
+
+test('restocking without observed critical HP or depleted food cannot excuse zero combat XP', () => {
+    const e = new KqEvidence(); const s = team(); e.observe(s);
+    fight(e, s, 1158, 255); e.observe(s);
+    s[3].restocking = true; s[3].tile = { x: 2757, z: 3478, level: 0 }; s[3].queens = []; e.observe(s);
+    finishWithoutFourth(e, s);
+    expect(() => e.observe(s)).toThrow('did not contribute combat XP on trip 1');
+});
+
+test('critical HP without an observed restocking departure cannot excuse a passive member', () => {
+    const e = new KqEvidence(); const s = team(); e.observe(s);
+    fight(e, s, 1158, 255); e.observe(s);
+    s[3].hp = 30; e.observe(s);
+    s[3].hp = 70; e.observe(s);
+    finishWithoutFourth(e, s);
+    expect(() => e.observe(s)).toThrow('did not contribute combat XP on trip 1');
+});
+
+test('critical HP outside the chamber or during loading cannot excuse a later departure', () => {
+    for (const loading of [false, true]) {
+        const e = new KqEvidence(); const s = team(); e.observe(s);
+        if (loading) { fight(e, s, 1158, 255); e.observe(s); s[3].sceneReady = false; }
+        s[3].hp = 30; e.observe(s);
+        s[3].hp = 99; s[3].sceneReady = true;
+        if (!loading) fight(e, s, 1158, 255);
+        e.observe(s);
+        s[3].restocking = true; s[3].tile = { x: 2757, z: 3478, level: 0 }; s[3].queens = []; e.observe(s);
+        finishWithoutFourth(e, s);
+        expect(() => e.observe(s)).toThrow('did not contribute combat XP on trip 1');
+    }
+});
+
+test('an emergency on an earlier visit does not excuse a later zero-XP departure', () => {
+    const e = new KqEvidence(); const s = team(); melee(e, s);
+    s[3].hp = 30; e.observe(s);
+    s.forEach(p => { p.tile = { x: 3308, z: 3120, level: 0 }; p.queens = []; }); e.observe(s);
+    s[3].hp = 99;
+    fight(e, s, 1158, 255); e.observe(s);
+    s[3].restocking = true; s[3].tile = { x: 2757, z: 3478, level: 0 }; s[3].queens = []; e.observe(s);
+    finishWithoutFourth(e, s);
+    expect(() => e.observe(s)).toThrow('did not contribute combat XP on trip 2');
+});
+
+test('an old healed emergency cannot excuse a departure more than ten seconds later', () => {
+    const e = new KqEvidence(); const s = team(); e.observe(s);
+    fight(e, s, 1158, 255); e.observe(s);
+    s[3].hp = 30; e.observe(s);
+    s[3].hp = 70; e.observe(s);
+    s[3].at += 10001; s[3].restocking = true; s[3].tile = { x: 2757, z: 3478, level: 0 }; s[3].queens = []; e.observe(s);
+    finishWithoutFourth(e, s);
+    expect(() => e.observe(s)).toThrow('did not contribute combat XP on trip 1');
+});
+
+test('a fresh critical episode replaces an expired emergency before departure', () => {
+    const e = new KqEvidence(); const s = team(); e.observe(s);
+    fight(e, s, 1158, 255); e.observe(s);
+    s[3].hp = 30; e.observe(s);
+    s[3].hp = 70; e.observe(s);
+    s[3].at += 10001; s[3].hp = 31; e.observe(s);
+    const emergencyAt = s[3].at;
+    s[3].at += 1000; s[3].restocking = true; s[3].tile = { x: 2757, z: 3478, level: 0 }; s[3].queens = []; e.observe(s);
+    finishWithoutFourth(e, s);
+    expect(() => e.observe(s)).not.toThrow();
+    expect(e.trips[0].excusedPlayers[0].emergencyAt).toBe(emergencyAt);
+});
+
+test('an observed nearby own-target visitor excuses a prompt zero-XP restocking departure', () => {
+    for (const name of ['Genie', 'Mysterious old man']) {
+        const e = new KqEvidence(); const s = team(); e.observe(s);
+        fight(e, s, 1158, 255); e.observe(s);
+        const visitor = { id: 409, name, tile: { ...s[3].tile! }, targetsMe: true };
+        s[3].visitors = [visitor]; e.observe(s);
+        s[3].at += 1000; s[3].restocking = true; s[3].tile = { x: 2757, z: 3478, level: 0 }; s[3].visitors = []; s[3].queens = []; e.observe(s);
+        finishWithoutFourth(e, s);
+        expect(() => e.observe(s)).not.toThrow();
+        expect(e.trips[0].excusedPlayers[0].visitor).toEqual(visitor);
+        expect(e.trips[0].xpGains[3]).toEqual({ melee: 0, ranged: 0 });
+    }
+});
+
+test('unowned, distant, stale or unrecognized visitors cannot excuse zero combat XP', () => {
+    for (const invalid of ['unowned', 'distant', 'other level', 'stale', 'unknown', 'loading']) {
+        const e = new KqEvidence(); const s = team(); e.observe(s);
+        fight(e, s, 1158, 255); e.observe(s);
+        const visitor = { id: 409, name: 'Genie', tile: { ...s[3].tile! }, targetsMe: true };
+        if (invalid === 'unowned') visitor.targetsMe = false;
+        if (invalid === 'distant') visitor.tile.x += 7;
+        if (invalid === 'other level') visitor.tile.level = 2;
+        if (invalid === 'unknown') visitor.name = 'Guard';
+        if (invalid === 'loading') s[3].sceneReady = false;
+        s[3].visitors = [visitor]; e.observe(s);
+        s[3].at += invalid === 'stale' ? 10001 : 1000; s[3].sceneReady = true;
+        s[3].restocking = true; s[3].tile = { x: 2757, z: 3478, level: 0 }; s[3].visitors = []; s[3].queens = []; e.observe(s);
+        finishWithoutFourth(e, s);
+        expect(() => e.observe(s)).toThrow('did not contribute combat XP on trip 1');
+    }
 });

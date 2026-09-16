@@ -46,7 +46,7 @@ const seed: BankSeedItem[] = [
     ['amulet_of_power', 'Amulet of power', 1], ['leather_boots', 'Leather boots', 1], ['ring_of_recoil', 'Ring of recoil', 30],
     ['rune_arrow', 'Rune arrow', 3000], ['shark', 'Shark', 500], ['rope', 'Rope', 40], ['4doseprayerrestore', 'Prayer potion(4)', 60],
     ['4dose2antipoison', 'Superantipoison(4)', 30], ['4dose2attack', 'Super attack(4)', 30], ['4dose2strength', 'Super strength(4)', 30], ['4dose2defense', 'Super defence(4)', 30], ['ring_of_dueling_8', 'Ring of dueling(8)', 10],
-    ['coins', 'Coins', 10000]
+    ['airrune', 'Air rune', 500], ['lawrune', 'Law rune', 100], ['coins', 'Coins', 10000]
 ].map(([debugName, displayName, qty]) => ({ debugName: String(debugName), displayName: String(displayName), qty: Number(qty) }));
 
 function sample(page: Page) {
@@ -56,6 +56,7 @@ function sample(page: Page) {
         const bot = g.rs2b0t.runner.bot;
         return {
             at: Date.now(), sceneReady: a.Game.sceneReady(), tick: a.Game.tick(), tile: a.Game.tile(), hp: a.Skills.effective('hitpoints'), prayer: a.Skills.effective('prayer'),
+            serverTile: a.reader.serverTile(), animation: a.reader.selfAnim(), dialogs: a.reader.chatOptions(),
             food: a.Inventory.count('Shark'), pack: a.Inventory.items().map(i => ({ id: i.id, name: i.name, count: i.count })),
             bankOpen: a.reader.bankComId() !== -1, bank: a.reader.bankItems().map(i => ({ id: i.id, count: i.count })),
             ground: a.reader.groundItems().map(i => {
@@ -67,8 +68,9 @@ function sample(page: Page) {
             boosts: { attack: { base: a.Skills.level('attack'), effective: a.Skills.effective('attack') }, strength: { base: a.Skills.level('strength'), effective: a.Skills.effective('strength') }, defence: { base: a.Skills.level('defence'), effective: a.Skills.effective('defence') } },
             gear: a.Equipment.items().map(i => ({ id: i.id, count: i.count })), mode: a.Game.combatMode(), styles: a.Game.combatStyles(),
             protectMagic: a.reader.varp(95) === 1, protectMelee: a.reader.varp(97) === 1, prayers: Array.from({ length: 15 }, (_, i) => i + 83).filter(id => a.reader.varp(id) === 1),
-            queens: a.Npcs.all().filter(n => [1158, 1159, 1160].includes(n.id)).map(n => ({ id: n.id, hp: n.health, total: n.snap.totalHealth, tile: n.tile() })),
-            status: bot?.status, stage: bot?.stage, trip: bot?.trip ?? 0, entries: bot?.entries ?? 0,
+            queens: a.Npcs.all().filter(n => [1158, 1159, 1160].includes(n.id)).map(n => ({ id: n.id, hp: n.health, total: n.snap.totalHealth, tile: n.tile(), serverTile: n.networkTile() })),
+            visitors: a.Npcs.all().filter(n => ['genie', 'mysterious old man'].includes(n.name?.toLowerCase() ?? '')).map(n => ({ id: n.id, name: n.name, tile: n.tile(), targetsMe: n.targetsMe() })),
+            status: bot?.status, stage: bot?.stage, restocking: bot?.restocking ?? false, trip: bot?.trip ?? 0, entries: bot?.entries ?? 0,
             kills: bot?.kills ?? 0, tripKills: bot?.tripKills ?? 0, dps: bot?.stats?.dps ?? 0, damage: bot?.stats?.damage ?? 0, looted: bot?.looted ?? 0, retreats: bot?.retreats ?? 0, runner: g.rs2b0t.runner.state,
             logs: g.rs2b0t.runner.ctx?.log.slice(-25) ?? [], chat: a.reader.chat(8).map(c => c.text)
         };
@@ -81,6 +83,7 @@ const observations = Bun.file(`${output}/observations.jsonl`).writer();
 const minimumHp = names.map(() => Infinity);
 let sampleCount = 0;
 let pauseTrip: number | null = null;
+let pauseNotice = 'Pause probe: waiting for all four to fight on a later visit.';
 const soakTrips = () => evidence.trips.filter(t => t.number !== pauseTrip);
 let result = 'FAIL';
 let failure = '';
@@ -93,13 +96,13 @@ async function drawChecklist(samples: Sample[]): Promise<void> {
     await Promise.all(pages.map((page, i) => page.evaluate(({ text, title }) => {
         const box = document.getElementById('kq-checklist');
         if (box) { box.querySelector('summary')!.textContent = title; box.querySelector('pre')!.textContent = text; }
-    }, { title: `JiveKQ ${CHECKS.filter(check => milestones[check]).length}/${CHECKS.length} | ${names[i]}`, text: `${lines}\n\nTrips ${soakTrips().length}/${args.trips} | Kills ${evidence.kills.length}/${args.trips}\n${samples[i].status ?? 'Waiting to start'}` })));
+    }, { title: `JiveKQ ${CHECKS.filter(check => milestones[check]).length}/${CHECKS.length} | ${names[i]}`, text: `${pauseNotice}\n\n${lines}\n\nTrips ${soakTrips().length}/${args.trips} | Kills ${evidence.kills.length}/${args.trips}\n${samples[i].status ?? 'Waiting to start'}` })));
 }
 function capture(check: string): void {
     if (captured.has(check)) return;
     captured.add(check);
     console.log(`CHECK ${check}: PASS ${CHECKLIST[check as keyof typeof CHECKLIST] ?? check}`);
-    if (['sharedKit', 'entered', 'formation', 'ranged', 'corner', 'looted', 'repeatFight', 'restocked', 'reentered', 'pauseRetreat'].includes(check)) {
+    if (['sharedKit', 'entered', 'formation', 'ranged', 'corner', 'looted', 'repeatFight', 'independentRestock', 'escape', 'restocked', 'reentered', 'pauseRetreat'].includes(check)) {
         screenshots.push(Promise.allSettled(pages.map((page, i) => page.screenshot({ path: `${output}/${check}-${i + 1}.png` }))));
     }
 }
@@ -192,25 +195,37 @@ try {
             }
         }
         for (const check of CHECKS) if (milestones[check]) capture(check);
-        if (milestones.reentered && milestones.bankedLoot && milestones.repeatFight && samples.every(chamber) && !milestones.paused) {
+        if (milestones.reentered && milestones.bankedLoot && milestones.repeatFight && evidence.readyForPause(samples) && !milestones.paused) {
             pauseTrip = Math.min(...evidence.crossings.chamber.map(t => t.length));
+            pauseNotice = `DELIBERATE PAUSE PROBE: pausing ${names[3]} during combat on trip ${pauseTrip}. Group retreat is expected; this trip is excluded from the soak target.`;
+            console.log(pauseNotice);
+            milestones.pauseAnnounced = Date.now();
+            await drawChecklist(samples);
             await pages[3].evaluate(() => (globalThis as typeof globalThis & WindowApi).rs2b0t.runner.pause());
             milestones.paused = Date.now();
             continue;
         }
         if (milestones.paused && !milestones.resumed && samples.slice(0, 3).every(s => (s.tile?.z ?? 9999) < 9000)) {
+            pauseNotice = `PAUSE PROBE RECOVERY: three members escaped. Resuming ${names[3]} to verify its retreat.`;
+            console.log(pauseNotice);
+            await drawChecklist(samples);
             await pages[3].evaluate(() => (globalThis as typeof globalThis & WindowApi).rs2b0t.runner.resume());
             milestones.resumed = Date.now();
             continue;
         }
-        if (milestones.resumed && samples.every(s => (s.tile?.z ?? 9999) < 9000)) milestones.pauseRetreat ??= Date.now();
+        if (milestones.resumed && !milestones.pauseRetreat && samples.every(s => (s.tile?.z ?? 9999) < 9000)) {
+            milestones.pauseRetreat = Date.now();
+            pauseNotice = `PAUSE PROBE PASSED: all four escaped. Trip ${pauseTrip} remains excluded from the soak target.`;
+            console.log(pauseNotice);
+            await drawChecklist(samples);
+        }
         if (milestones.paused && !milestones.pauseRetreat && Date.now() - milestones.paused > 20_000) throw new Error('Team did not retreat after one client paused');
         if (Date.now() - lastPrint > 10_000) {
-            console.log(JSON.stringify(samples.map((s, i) => ({ name: names[i], tile: s.tile, hp: s.hp, food: s.food, status: s.status, trip: s.trip, kills: s.kills, queens: s.queens }))));
+            console.log(JSON.stringify(samples.map((s, i) => ({ name: names[i], tile: s.tile, hp: s.hp, food: s.food, status: s.status, restocking: s.restocking, trip: s.trip, kills: s.kills, queens: s.queens }))));
             lastPrint = Date.now();
             await Bun.write(`${output}/current.json`, JSON.stringify(samples, null, 2));
             await observations.flush();
-            await Bun.write(`${output}/progress.json`, JSON.stringify({ result: 'RUNNING', level: args.level, elapsedMs: Date.now() - started, targetTrips: args.trips, completedTrips: soakTrips().length, pauseTrip, trips: evidence.trips, kills: evidence.kills.length, restarts: evidence.restarts, milestones, minimumHp, sampleCount }, null, 2));
+            await Bun.write(`${output}/progress.json`, JSON.stringify({ result: 'RUNNING', level: args.level, elapsedMs: Date.now() - started, targetTrips: args.trips, completedTrips: soakTrips().length, pauseTrip, trips: evidence.trips, kills: evidence.kills.length, restarts: evidence.restarts, independentRestocks: evidence.independentRestocks, escapes: evidence.escapes, milestones, minimumHp, sampleCount }, null, 2));
         }
         if (Date.now() < deadline && CHECKS.every(check => milestones[check])) { await drawChecklist(samples); capture('pauseRetreat'); result = 'PASS'; break; }
         await pages[0].waitForTimeout(200);
@@ -240,7 +255,7 @@ try {
         result, failure, names, base: args.base, revision: CLIENT_VERSION, fixture: `${reuse ? 'reused' : 'fresh'} level-${args.level} accounts`, level: args.level, startingStats,
         elapsedMs: Date.now() - started, milestones, errors, bundleSha256, crossings: evidence.crossings, ropeCounts: evidence.ropeCounts,
         targetTrips: args.trips, timeoutMinutes: args.minutes, sampleCount, completedTrips: soakTrips().length, pauseTrip, trips: evidence.trips,
-        xpGains: evidence.xpGains, kills: evidence.kills, restarts: evidence.restarts, loot: evidence.loot, minimumHp
+        xpGains: evidence.xpGains, kills: evidence.kills, restarts: evidence.restarts, independentRestocks: evidence.independentRestocks, escapes: evidence.escapes, loot: evidence.loot, minimumHp
     };
     await Bun.write(`${output}/proof.json`, JSON.stringify({ ...summary, history }, null, 2));
     await Bun.write('out/jivekq-proof.json', JSON.stringify({ ...summary, evidenceDirectory: output }, null, 2));
@@ -254,12 +269,14 @@ try {
         `Loot banked: ${evidence.loot.filter(l => l.bankedAt).map(l => `${names[l.player]}: ${l.count} ${l.name ?? l.id}`).join('; ') || 'none'}.`, '',
         `Completed soak trips: ${soakTrips().length}/${args.trips}. Observed kills: ${evidence.kills.length}/${args.trips} minimum. Timeout: ${args.minutes} minutes after setup.`, '',
         `Respawn to first damage: ${evidence.restarts.map(r => `${((r.damagedAt - r.spawnedAt) / 1000).toFixed(2)}s`).join(', ') || 'none observed'}.`, '',
+        `Independent restocks: ${evidence.independentRestocks.map(r => `${names[r.player]} banked while ${names[r.combatPlayer]} stayed in the chamber (${r.xpGains.melee + r.xpGains.ranged} combat XP, ${r.queenDamage} observed queen HP lost)`).join('; ') || 'none observed'}.`, '',
+        `Camelot then arena escapes: ${evidence.escapes.length}, covering ${new Set(evidence.escapes.map(e => e.player)).size}/4 accounts.`, '',
         `Trip ${pauseTrip ?? 'pending'} is the pause recovery probe and is excluded from the soak target.`, '',
-        '| Trip | Chamber to bank | Kills | Minimum HP (W/E/N/S) | Food on return (W/E/N/S) |', '|---|---|---|---|---|',
-        ...evidence.trips.map(t => `| ${t.number}${t.number === pauseTrip ? ' (pause probe)' : ''} | ${Math.round((t.returnedAt - t.enteredAt) / 1000)}s | ${t.kills} | ${t.minimumHp.join('/')} | ${t.foodRemaining.join('/')} |`), '',
+        '| Trip | Chamber to bank | Kills | Minimum HP (W/E/N/S) | Food on return (W/E/N/S) | Zero-XP emergency departures |', '|---|---|---|---|---|---|',
+        ...evidence.trips.map(t => `| ${t.number}${t.number === pauseTrip ? ' (pause probe)' : ''} | ${Math.round((t.returnedAt - t.enteredAt) / 1000)}s | ${t.kills} | ${t.minimumHp.join('/')} | ${t.foodRemaining.join('/')} | ${t.excusedPlayers.map(e => `${names[e.player]}: ${e.visitor ? `own-target ${e.visitor.name}, ` : ''}HP ${e.hp}, food ${e.food}`).join('; ') || 'none'} |`), '',
         '[Team messages](team-chat-1.png) · [Team readiness and stats](team-1.png)', '',
         '[Summary and last 600 observations](proof.json) · [Full observations](observations.jsonl)', '',
-        ...[...captured].filter(check => ['formation', 'ranged', 'corner', 'looted'].includes(check)).flatMap(check => [
+        ...[...captured].filter(check => ['formation', 'ranged', 'corner', 'looted', 'independentRestock'].includes(check)).flatMap(check => [
             `## ${check}`, '', ...names.map((name, i) => `![${name}](${check}-${i + 1}.png)`), ''
         ])
     ].join('\n');

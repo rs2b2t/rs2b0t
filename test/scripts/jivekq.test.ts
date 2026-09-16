@@ -87,6 +87,30 @@ describe('KQ party', () => {
         expect(party.unsafe(1, 20_000)).toBe(true);
     });
 
+    test('a supplied team keeps fighting while one member escapes and prepares at the bank', () => {
+        const party = new Party(names, 'one', 'one');
+        names.forEach(name => party.receive(member(name, { stage: 'fight' }), 100));
+        party.receive(member('two', { stage: 'retreat', ready: false, restocking: true }), 101);
+        expect(party.unsafe(1, 101)).toBe(false);
+        party.receive(member('two', { stage: 'bank', ready: false, restocking: true }), 102);
+        expect(party.unsafe(1, 102)).toBe(false);
+        party.receive(member('two', { stage: 'bank', ready: true, restocking: true }), 103);
+        expect(party.unsafe(1, 103)).toBe(false);
+        expect(party.release('bank', 2, 103)).toBeNull();
+        expect(party.release('upper', 1, 103)).toBeNull();
+    });
+
+    test('restocking does not hide a paused or disconnected member', () => {
+        const party = new Party(names, 'one', 'one');
+        names.forEach(name => party.receive(member(name, { stage: 'fight' }), 100));
+        party.receive(member('two', { stage: 'bank', ready: true, restocking: true }), 101);
+        expect(party.unsafe(1, 7000)).toBe(true);
+        party.receive(member('two', { stage: 'bank', ready: false, restocking: false, reason: 'paused' }), 102);
+        expect(party.unsafe(1, 102)).toBe(true);
+        party.receive(member('two', { stage: 'bank', ready: true, restocking: true }), 103);
+        expect(party.unsafe(1, 103)).toBe(true);
+    });
+
     test('a retreat cancels an already-issued descent release', () => {
         const party = new Party(names, 'one', 'one');
         names.forEach(name => party.receive(member(name), 100));

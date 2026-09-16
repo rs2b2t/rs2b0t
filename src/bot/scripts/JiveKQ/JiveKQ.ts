@@ -21,7 +21,7 @@ import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import { Party, normalizeName, parseRoster, type Gate, type Member, type Release, type Stage } from './party.js';
 import { combatFormation, combatMode, inLair, inNest, lureTile, near, QueenTracker, queenPhase, retreatReason, SIDES, WAIT_CORNER, type Point } from './policy.js';
-import { descend, duelArena, gateTile, pass, placeRope, ropeReady, step, walk } from './route.js';
+import { camelot, descend, duelArena, gateTile, pass, placeRope, ropeReady, step, walk } from './route.js';
 import { BOW, FOOD, MACE, RECOIL, boost, boostsReady, doses, drink, eat, equip, provision, supplies, worn } from './supply.js';
 
 export const SETTINGS: SettingsSchema = {
@@ -38,6 +38,7 @@ export default class JiveKQ extends LoopingBot {
     looted = 0;
     entries = 0;
     retreats = 0;
+    restocking = false;
     tripKills = 0;
     stats = new CombatStats();
     private xp = new XpTracker(COMBAT_SKILLS, Skills);
@@ -69,7 +70,7 @@ export default class JiveKQ extends LoopingBot {
         const self = normalizeName(Game.myName() ?? '');
         this.slot = roster.indexOf(self);
         if (this.slot < 0) throw new Error('This account is not in the KQ team roster');
-        const requirements: [string, number][] = [['attack', 60], ['defence', 40], ['ranged', 70], ['hitpoints', 70], ['prayer', 37]];
+        const requirements: [string, number][] = [['attack', 60], ['defence', 40], ['ranged', 70], ['hitpoints', 70], ['prayer', 37], ['magic', 45]];
         for (const [skill, level] of requirements) {
             if (Skills.level(skill) < level) throw new Error(`KQ requires ${level} ${skill}`);
         }
@@ -86,7 +87,7 @@ export default class JiveKQ extends LoopingBot {
         this.on('tick', () => { this.observeDescent(); this.observeQueen(); this.observeStats(); this.checkSafety(); this.heartbeat(); });
         this.on('chat.message', line => { if (/you have been poisoned/i.test(line.text)) this.poisoned = true; });
         Game.setAutoRetaliate(false);
-        Sustain.set(async () => { this.checkSafety(); if (this.stage !== 'retreat') await this.upkeep(); });
+        Sustain.set(async () => { this.checkSafety(); if (this.stage !== 'retreat') await this.upkeep(true); });
         EventSignal.setInterrupt(() => this.stage === 'retreat');
         if (inNest(Game.tile())) this.stage = 'retreat';
         this.heartbeat();
@@ -98,6 +99,7 @@ export default class JiveKQ extends LoopingBot {
             blocked: this.blocked, lure: this.lure ?? undefined, name: this.party.self, session: this.party.session, trip: this.trip, stage: this.stage,
             tile: Game.ingame() ? Game.tile() : null,
             ready: this.prepared && !this.paused && Game.ingame() && Skills.effective('hitpoints') > 0 && this.stage !== 'retreat',
+            restocking: this.restocking && !this.paused && Game.ingame() && Skills.effective('hitpoints') > 0,
             reason: this.paused ? 'paused' : this.stage === 'retreat' ? this.status : undefined,
             stats: { hp: Math.max(0, Skills.effective('hitpoints')), prayer: Prayer.points(), food: Inventory.countById(FOOD), damage: this.stats.damage, dps: this.stats.dps, kills: this.kills }
         };
@@ -106,27 +108,33 @@ export default class JiveKQ extends LoopingBot {
         if (this.release && Date.now() - this.release.at < 12_000) this.channel?.postMessage({ release: this.release, sender: this.party.self });
     }
 
-    private retreat(reason: string): void {
+    private retreat(reason: string, restocking = false): void {
         if (this.stage === 'retreat') return;
-        this.log(`group retreat: ${reason}`);
+        this.log(`${restocking ? 'restocking' : 'group retreat'}: ${reason}`);
+        this.restocking = restocking;
         this.stage = 'retreat';
         this.descent = null;
         this.status = reason;
         this.retreats++;
         this.heartbeat();
+        const tile = reader.serverTile();
+        if (tile && inNest(tile)) step(tile);
     }
 
     private checkSafety(): boolean {
         if (this.stage === 'retreat') return true;
         if (!this.prepared || this.stage === 'bank' || !this.party || !Game.sceneReady()) return false;
-        if (this.stage === 'fight' && !inLair(Game.tile())) { this.retreat('left the queen chamber unexpectedly'); return true; }
+        if (this.stage === 'fight' && !inLair(Game.tile())) { this.retreat('left the queen chamber unexpectedly', true); return true; }
         if (!inNest(Game.tile())) return false;
+        const visitor = Npcs.query().within(6).where(n => ['genie', 'mysterious old man'].includes(n.name?.toLowerCase() ?? '') && n.targetsMe()).nearest();
+        if (visitor) { this.retreat(`${visitor.name} needs attention outside combat`, this.stage === 'fight'); return true; }
         const reason = retreatReason(supplies());
-        if (!reason && !this.party.unsafe(this.trip, Date.now())) return false;
+        if (reason) { this.retreat(reason, this.stage === 'fight'); return true; }
+        if (!this.party.unsafe(this.trip, Date.now())) return false;
         const peers = this.party.members(Date.now());
         const missing = this.party.roster.filter(name => !peers.some(m => m.name === name));
-        const unready = peers.filter(m => !m.ready || m.trip !== this.trip || m.stage === 'retreat' || m.stage === 'bank');
-        this.retreat(reason ?? (missing.length ? `missing heartbeat: ${missing.join(', ')}` : `team not ready: ${unready.map(m => `${m.name} (${m.reason ?? m.stage})`).join(', ')}`));
+        const unready = peers.filter(m => !m.restocking && (!m.ready || m.trip !== this.trip || m.stage === 'retreat' || m.stage === 'bank'));
+        this.retreat(missing.length ? `missing heartbeat: ${missing.join(', ')}` : `team not ready: ${unready.map(m => `${m.name} (${m.reason ?? m.stage})`).join(', ')}`);
         return true;
     }
 
@@ -162,7 +170,7 @@ export default class JiveKQ extends LoopingBot {
         }
     }
 
-    private async upkeep(): Promise<boolean> {
+    private async upkeep(walking = false): Promise<boolean> {
         if (!Game.sceneReady() || this.stage === 'bank') return false;
         const queen = this.stage === 'fight' && !this.queenDead ? Npcs.query().where(n => queenPhase(n.id) !== null).nearest() : null;
         if (queen && Prayer.points() > 0 && !Prayer.active(PROTECT_FROM_MAGIC)) {
@@ -172,7 +180,7 @@ export default class JiveKQ extends LoopingBot {
         const waiting = this.stage === 'fight' && this.queenTracker.killedAt > 0 && !queen;
         if (waiting) await Prayer.clear();
         const hp = Skills.effective('hitpoints');
-        if (hp < Skills.level('hitpoints') - 20 && Inventory.countById(FOOD) > 0) { this.leaveRendezvous(); return eat(); }
+        if (hp <= Math.max(Skills.level('hitpoints') - 20, 62) && Inventory.countById(FOOD) > 0) { this.leaveRendezvous(); return eat(); }
         if (inNest(Game.tile())) {
             if (Prayer.points() <= Math.min(35, Prayer.max() - 15) && doses('Prayer potion') > 0) { this.leaveRendezvous(); return drink('Prayer potion'); }
             if ((this.poisoned || Date.now() - this.lastDose > 240_000) && doses('Superantipoison') > 0) {
@@ -180,8 +188,9 @@ export default class JiveKQ extends LoopingBot {
                 if (await drink('Superantipoison')) { this.lastDose = Date.now(); this.poisoned = false; return true; }
             }
             if (!worn(RECOIL) && Inventory.countById(RECOIL) > 0) { this.leaveRendezvous(); return equip(RECOIL); }
-            if (this.stage === 'upper' || this.stage === 'fight') {
-                const melee = this.stage === 'upper' || waiting || Npcs.query().where(n => n.id === 1158).nearest() !== null;
+            const upper = Game.tile()?.level === 2;
+            if (this.stage === 'upper' || this.stage === 'fight' || walking && upper) {
+                const melee = upper || waiting || Npcs.query().where(n => n.id === 1158).nearest() !== null;
                 if (this.stage === 'upper' && !boostsReady()) this.leaveRendezvous();
                 if (await boost(melee)) return true;
             }
@@ -196,7 +205,9 @@ export default class JiveKQ extends LoopingBot {
             if (Skills.effective('hitpoints') <= 0) { this.retreat('a party member died'); return; }
             if (this.stage === 'retreat') { await this.escape(); return; }
             if (this.checkSafety()) { await this.escape(); return; }
+            if (await this.enterReleasedGate()) return;
             if (await this.upkeep()) return;
+            if (!Game.sceneReady() || this.checkSafety()) return;
             if (ChatDialog.canContinue()) { await ChatDialog.continue(); return; }
             if (this.stage === 'bank') {
                 this.status = 'banking the shared KQ loadout';
@@ -212,6 +223,7 @@ export default class JiveKQ extends LoopingBot {
                 if (trip === null) return;
                 this.trip = trip;
                 this.stage = 'travel';
+                this.restocking = false;
                 this.queenTracker = new QueenTracker();
                 this.queenDead = false;
                 this.blocked = false;
@@ -278,11 +290,20 @@ export default class JiveKQ extends LoopingBot {
             this.party.accept(release, Date.now());
             this.heartbeat();
         }
-        if (!this.party.released(gate, this.trip, Date.now()) || !ropeReady(gate)) return;
-        this.status = `descending ${gate} entrance with team`;
-        this.descent = gate;
-        await descend(gate);
-        this.observeDescent();
+        await this.enterReleasedGate();
+    }
+
+    private async enterReleasedGate(): Promise<boolean> {
+        for (const gate of ['surface', 'upper'] as const) {
+            if (!near(Game.tile(), gateTile(gate), 0) || !this.party?.released(gate, this.trip, Date.now()) || !ropeReady(gate)) continue;
+            this.stage = gate;
+            this.status = `descending ${gate} entrance with team`;
+            this.descent = gate;
+            await descend(gate);
+            this.observeDescent();
+            return true;
+        }
+        return false;
     }
 
     private observeDescent(): void {
@@ -301,7 +322,7 @@ export default class JiveKQ extends LoopingBot {
 
     private async fight(): Promise<void> {
         if (!this.party) return;
-        const peers = this.party.members(Date.now());
+        const peers = this.party.members(Date.now()).filter(m => !m.restocking);
         if (peers.some(m => m.stage !== 'fight' || !inLair(m.tile))) {
             this.status = 'waiting for the team to finish descending';
             if (Date.now() - this.entryAt > 12_000) this.retreat('the team did not arrive together');
@@ -333,16 +354,8 @@ export default class JiveKQ extends LoopingBot {
             return;
         }
         if (!(await Prayer.set(PROTECT_FROM_MAGIC, true))) { this.retreat('protection prayer failed'); return; }
+        if (this.checkSafety()) return;
         const phase = queenPhase(queen.id)!;
-        if (!(await Prayer.set('Ultimate strength', phase === 'melee')) || !(await Prayer.set('Incredible reflexes', phase === 'melee'))) { this.retreat('offensive prayers failed'); return; }
-        const weapon = phase === 'melee' ? MACE : BOW;
-        if (!worn(weapon)) {
-            if (!(await equip(weapon))) this.retreat('phase weapon unavailable');
-            return;
-        }
-        const mode = combatMode(phase, Game.combatStyles());
-        if (mode === null) { this.retreat('required crush or rapid combat style unavailable'); return; }
-        if (Game.combatMode() !== mode) { Game.setCombatMode(mode); return; }
         const formation = this.formation(queen);
         if (!formation) {
             this.blocked = true;
@@ -355,7 +368,18 @@ export default class JiveKQ extends LoopingBot {
         const tile = formation[this.slot];
         this.status = `${phase}: ${SIDES[this.slot]}`;
         if (!near(Game.tile(), tile, 0)) { step(tile); return; }
+        if (!(await Prayer.set('Ultimate strength', phase === 'melee')) || !(await Prayer.set('Incredible reflexes', phase === 'melee'))) { this.retreat('offensive prayers failed'); return; }
+        if (this.checkSafety()) return;
+        const weapon = phase === 'melee' ? MACE : BOW;
+        if (!worn(weapon)) {
+            if (!(await equip(weapon))) this.retreat('phase weapon unavailable');
+            return;
+        }
+        const mode = combatMode(phase, Game.combatStyles());
+        if (mode === null) { this.retreat('required crush or rapid combat style unavailable'); return; }
+        if (Game.combatMode() !== mode) { Game.setCombatMode(mode); return; }
         if (Special.ready(phase === 'melee' ? 'Dragon mace' : 'Magic shortbow')) await Special.arm();
+        if (this.checkSafety()) return;
         if (Game.tick() - this.lastAttack >= 4 || reader.selfFaceEntity() !== queen.index) {
             if (await queen.interact('Attack')) this.lastAttack = Game.tick();
         }
@@ -390,10 +414,16 @@ export default class JiveKQ extends LoopingBot {
     private async escape(): Promise<void> {
         this.heartbeat();
         if (inNest(Game.tile()) || (Game.tile()?.z ?? 9999) < 3117) {
-            this.status = 'teleporting to Duel Arena';
+            this.status = 'escaping to Camelot';
             await this.upkeep();
-            await duelArena();
+            if (Skills.effective('hitpoints') <= 31 && Inventory.countById(FOOD) > 0) return;
+            await camelot();
             if (inNest(Game.tile()) || (Game.tile()?.z ?? 9999) < 3117) return;
+        }
+        if (Skills.effective('hitpoints') <= 62 && Inventory.countById(FOOD) > 0) { await eat(); return; }
+        if (!near(Game.tile(), { x: 3315, z: 3235, level: 0 }, 4)) {
+            this.status = 'teleporting to Duel Arena';
+            if (!(await duelArena())) return;
         }
         await Prayer.clear();
         this.prepared = false;
@@ -405,6 +435,7 @@ export default class JiveKQ extends LoopingBot {
     override onPause(): void { this.paused = true; this.observeStats(); this.heartbeat(); }
     override onResume(): void { this.paused = false; if (inNest(Game.tile())) this.retreat('resumed after party pause'); }
     override onStop(): void {
+        this.restocking = false;
         this.stage = 'retreat';
         this.heartbeat();
         this.channel?.close();
@@ -414,6 +445,12 @@ export default class JiveKQ extends LoopingBot {
     }
 
     override recoveryAnchor() { return null; }
+
+    override ignoredRandoms(): string[] {
+        return inNest(Game.tile()) || this.stage === 'retreat'
+            ? ['genie', 'drunken dwarf', 'mysterious old man', 'sandwich lady', 'frog', 'strange plant', 'lamp', 'strange box']
+            : [];
+    }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const queen = Npcs.query().where(n => queenPhase(n.id) !== null).nearest();

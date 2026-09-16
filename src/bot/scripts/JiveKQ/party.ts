@@ -3,7 +3,7 @@ import { BANK, near, SURFACE, UPPER, type Point } from './policy.js';
 export type Gate = 'surface' | 'upper';
 export type Stage = 'bank' | 'travel' | Gate | 'fight' | 'retreat';
 export interface MemberStats { hp: number; prayer: number; food: number; damage: number; dps: number; kills: number }
-export interface Member { name: string; session: string; trip: number; stage: Stage; tile: Point | null; ready: boolean; blocked?: boolean; lure?: Point; reason?: string; stats?: MemberStats }
+export interface Member { name: string; session: string; trip: number; stage: Stage; tile: Point | null; ready: boolean; restocking?: boolean; blocked?: boolean; lure?: Point; reason?: string; stats?: MemberStats }
 type Barrier = Gate | 'bank';
 export interface Release { stage: Barrier; trip: number; sessions: string[]; at: number }
 const FRESH_MS = 6000;
@@ -49,6 +49,7 @@ export class Party {
             || !['bank', 'travel', 'surface', 'upper', 'fight', 'retreat'].includes(String(value.stage))
             || typeof value.ready !== 'boolean' || (value.tile !== null && !point(value.tile))) return;
         const member: Member = { name: value.name, session: value.session, trip: value.trip, stage: value.stage as Stage, tile: value.tile, ready: value.ready };
+        member.restocking = value.restocking === true && (member.stage === 'retreat' || member.stage === 'bank');
         member.blocked = value.blocked === true;
         if (point(value.lure)) member.lure = value.lure;
         if (typeof value.reason === 'string') member.reason = value.reason.slice(0, 120);
@@ -56,10 +57,10 @@ export class Party {
         if (record(stats) && ['hp', 'prayer', 'food', 'damage', 'dps', 'kills'].every(key => typeof stats[key] === 'number' && Number.isFinite(stats[key]) && stats[key] >= 0)) {
             member.stats = { hp: Number(stats.hp), prayer: Number(stats.prayer), food: Number(stats.food), damage: Number(stats.damage), dps: Number(stats.dps), kills: Number(stats.kills) };
         }
-        if (member.stage === 'retreat' || (!member.ready && member.stage !== 'bank')) this.aborted.add(member.trip);
+        if (member.reason === 'paused' || !member.restocking && (member.stage === 'retreat' || (!member.ready && member.stage !== 'bank'))) this.aborted.add(member.trip);
         const previous = this.peers.get(member.name)?.member;
-        if (!previous || previous.session !== member.session || previous.trip !== member.trip || previous.stage !== member.stage || previous.ready !== member.ready || previous.reason !== member.reason || previous.blocked !== member.blocked) {
-            this.report(`${member.name}: ${member.stage}, ${member.ready ? 'ready' : 'not ready'} (trip ${member.trip})${member.reason ? `: ${member.reason}` : ''}${member.blocked ? ': cross blocked' : ''}`);
+        if (!previous || previous.session !== member.session || previous.trip !== member.trip || previous.stage !== member.stage || previous.ready !== member.ready || previous.reason !== member.reason || previous.blocked !== member.blocked || previous.restocking !== member.restocking) {
+            this.report(`${member.name}: ${member.stage}, ${member.ready ? 'ready' : 'not ready'} (trip ${member.trip})${member.restocking ? ': restocking for next trip' : ''}${member.reason ? `: ${member.reason}` : ''}${member.blocked ? ': cross blocked' : ''}`);
         }
         this.peers.set(member.name, { member, seen: now });
     }
@@ -112,6 +113,6 @@ export class Party {
 
     unsafe(trip: number, now: number): boolean {
         const members = this.members(now);
-        return this.aborted.has(trip) || members.length !== 4 || members.some(m => !m.ready || m.trip !== trip || m.stage === 'retreat' || m.stage === 'bank');
+        return this.aborted.has(trip) || members.length !== 4 || members.some(m => m.trip !== trip || !m.restocking && (!m.ready || m.stage === 'retreat' || m.stage === 'bank'));
     }
 }

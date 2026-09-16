@@ -1,9 +1,10 @@
-import { reader } from '../../adapter/ClientAdapter.js';
+import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Locs } from '../../api/locs/Locs.js';
 import { Shop } from '../../api/shop/Shop.js';
+import { Skills } from '../../api/skills/Skills.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { Input } from '../../input/Input.js';
@@ -21,12 +22,31 @@ export function step(tile: Point): boolean {
     return local !== null && Input.walk(local.lx, local.lz);
 }
 
+export async function camelot(): Promise<boolean> {
+    const arrived = () => near(Game.tile(), { x: 2757, z: 3478, level: 0 }, 4);
+    if (arrived()) return true;
+    const hp = Skills.effective('hitpoints');
+    if (!(await Game.teleport('Camelot'))) return false;
+    await Execution.delayUntilTicks(() => arrived() || Skills.effective('hitpoints') < hp, 4);
+    return arrived();
+}
+
 export async function duelArena(): Promise<boolean> {
-    const ring = Inventory.items().find(i => DUELING_RINGS.includes(i.id));
-    if (!ring || !(await ring.interact('Rub'))) return false;
-    if (!(await Execution.delayUntil(() => ChatDialog.options().length > 0, 3000))) return false;
-    if (!(await ChatDialog.chooseOption('Al Kharid Duel Arena.'))) return false;
-    return Execution.delayUntil(() => near(Game.tile(), { x: 3315, z: 3235, level: 0 }, 4), 6000);
+    const arrived = () => near(Game.tile(), { x: 3315, z: 3235, level: 0 }, 4);
+    const option = () => reader.chatOptions().find(o => o.text === 'Al Kharid Duel Arena.');
+    if (arrived()) return true;
+    if (!option()) {
+        const ring = Inventory.items().find(i => DUELING_RINGS.includes(i.id));
+        const hp = Skills.effective('hitpoints');
+        if (!ring || !(await ring.interact('Rub'))) return false;
+        await Execution.delayUntilTicks(() => !!option() || Skills.effective('hitpoints') < hp, 3);
+        if (Skills.effective('hitpoints') <= 31) return false;
+    }
+    const choice = option();
+    if (!choice || !actions.ifButton(choice.comId)) return false;
+    const hp = Skills.effective('hitpoints');
+    await Execution.delayUntilTicks(() => arrived() || Skills.effective('hitpoints') < hp, 4);
+    return arrived();
 }
 
 export async function buyPass(log: (s: string) => void): Promise<boolean> {

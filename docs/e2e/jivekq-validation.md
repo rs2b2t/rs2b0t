@@ -2,32 +2,35 @@
 
 Select `JiveKQ` under Combat on four clients. Enter the same four account names, separated by commas, in the same order on each client. Keep all four clients in the same browser profile and origin, including MultiBox frames. The first account places the ropes; accounts stand west, east, north and south in roster order.
 
-Each bot banks at Shantay, uses a banked pass when available, and otherwise buys one. It banks the change and fills the last slot with a shark before waiting for all four supplied members. The group shares one rope at each entrance. After each kill, each account collects drops visible to it and stacks with the team in the northwest corner near the spawn. They turn every prayer off, ready their maces and refresh boosts while waiting. The corner is within sight of the spawn, so they restore magic protection and spread into the cross as soon as the queen appears. The group continues until a member reaches a food, health, prayer or ammo reserve, then uses rings of dueling to teleport to the Duel Arena and walks south to Shantay bank. A paused, disconnected or retreating member sends the others home. Resuming or restarting a member allows it to join the next bank rendezvous.
+Each bot banks at Shantay, uses a banked pass when available, and otherwise buys one. It banks the change and fills the last slot with a shark before waiting for all four supplied members. The group shares one rope at each entrance. After each kill, each account collects drops visible to it and stacks with the team in the northwest corner near the spawn. They turn every prayer off, ready their maces and refresh boosts while waiting. The corner is within sight of the spawn, so they restore magic protection and spread into the cross as soon as the queen appears. Each member continues until reaching a food, health, prayer or ammo reserve, then casts Camelot teleport, heals, uses a ring of dueling to reach the Duel Arena and walks south to Shantay bank. That member prepares the next kit while the others keep fighting. The next trip waits for all four at the bank. A paused or disconnected member sends the others home. Resuming or restarting a member allows it to join the next bank rendezvous.
 
 ## Coordination
 
 The four clients use the browser's `BroadcastChannel` API to exchange one heartbeat per game tick. Each heartbeat contains the account, client session, trip number, position, stage and readiness, plus combat statistics for the paint. All clients must share the same origin and browser profile; separate browsers or computers cannot join this channel.
 
-The leader releases the bank rendezvous when all four have prepared their kits. At each rope, the bots finish their potions and stack on the entrance tile before reporting ready. The leader also verifies that the other characters are physically visible nearby. The release names the trip and all four client sessions, so an old message cannot release a restarted client. Each bot handles its own movement, potions and attacks. Combat starts after all four reach the chamber; each observes the queen's form and takes its assigned cross position. If a wall prevents a safe cross, that client broadcasts the blocked formation and all four pull the queen toward open ground before spreading out again.
+The leader releases the bank rendezvous when all four have prepared their kits. After the first rope, the bots sip super potions during the walk through the upper cavern. At each rope, they verify their supplies and stack on the entrance tile before reporting ready. A teammate still walking or drinking holds the release without aborting the trip. Once released, descent takes priority over routine potion refreshes, including a boost that decays while waiting. Emergency checks still take priority. The leader also verifies that the other characters are physically visible nearby. The release names the trip and all four client sessions, so an old message cannot release a restarted client. Each bot handles its own movement, potions and attacks. Combat starts after all four reach the chamber; each observes the queen's form and takes its assigned cross position. If a wall prevents a safe cross, that client broadcasts the blocked formation and all four pull the queen toward open ground before spreading out again.
 
-A pause, retreat or missing heartbeat for six seconds aborts the trip for the group. The bots regroup at Shantay before starting the next trip. Potion preparation waits for the server action delay after each sip and retries delayed clicks within the three-minute entrance rendezvous timeout. The client log shows readiness changes, entrance releases, pauses and retreat reasons with a `team:` prefix. The paint has a Team readiness view and a Team chat page showing the latest messages. Repeated heartbeats do not create log entries.
+A pause, unexpected failure or missing heartbeat for six seconds aborts the trip for the group. A member leaving combat to restock keeps publishing heartbeats marked as restocking; the remaining fighters keep their assigned positions. Restocking players cannot release an entrance or start the next trip alone. The bots regroup at Shantay before starting the next trip. Potion preparation waits for the server action delay after each sip and retries delayed clicks within the three-minute entrance rendezvous timeout. The client log shows readiness changes, entrance releases, pauses and retreat reasons with a `team:` prefix. The paint has a Team readiness view and a Team chat page showing the latest messages. Repeated heartbeats do not create log entries.
+
+Random-event conversations, strange plants, lamps and strange boxes cannot pause eating or teleporting under the queen's attacks. A genie or mysterious old man targeting a fighter sends that member home to handle the event safely. An unexpected teleport also sends only the displaced player back through the Duel Arena to restock. Forced mime and maze events still use the client's normal recovery.
 
 ## Shared loadout
 
-Every account needs Heroes' Quest completed, 60 Attack, 40 Defence, 70 Ranged, 70 Hitpoints, 37 Prayer. Stock the following in each account's bank:
+Every account needs Heroes' Quest completed, 60 Attack, 40 Defence, 70 Ranged, 70 Hitpoints, 37 Prayer and 45 Magic on the standard spellbook. Stock the following in each account's bank:
 
 | Equipped | Inventory per trip |
 |---|---|
 | Dragon mace | Magic shortbow |
-| Rune full helm | 16 sharks for the leader; 18 for each follower |
+| Rune full helm | 14 sharks for the leader; 16 for each follower |
 | Black dragonhide body, chaps and vambraces | Two ropes for the leader only |
 | Amulet of power | Two Prayer potion(4) |
 | Leather boots | One Superantipoison(4) |
 | Ring of recoil | One spare Ring of recoil |
 | 250 rune arrows | One Super attack(4), Super strength(4) and Super defence(4) |
 | | One charged Ring of dueling and one Shantay pass |
+| | Five air runes and one law rune |
 
-Keep coins in the bank for passes, plus extra sharks and prayer potions for restoration. No coins or waterskin leave the bank. Only the leader carries two ropes; followers use those slots for food. Partially used dueling rings are reused until their last charge is consumed. The script uses exact item IDs to distinguish black dragonhide from the other colours, which share display names in this revision. All four protect from magic. The mace uses aggressive crush; the bow uses rapid. Melee uses Ultimate Strength and Incredible Reflexes. Both weapons use their special attacks when energy is available. Each member sips the three super potions before the chamber rendezvous. A bonus that falls to 10% of the base level or less gets refreshed: defence in either form, attack and strength in melee. The melee cross is three tiles from the queen's centre. The ranged cross prefers six tiles and adjusts each arm around blocked tiles while keeping every pair of players beyond her five-tile splash radius.
+Keep coins in the bank for passes, plus extra sharks and prayer potions for restoration. No coins or waterskin leave the bank. Only the leader carries two ropes; followers use those slots for food. Partially used dueling rings are reused until their last charge is consumed. The script uses exact item IDs to distinguish black dragonhide from the other colours, which share display names in this revision. All four protect from magic. Players eat at or below the greater of 62 HP and their base HP minus 20, keeping a larger reserve on lower-level accounts. The initial approach prioritizes reaching the assigned position before enabling attack prayers. The mace uses aggressive crush; the bow uses rapid. Melee uses Ultimate Strength and Incredible Reflexes. Both weapons use their special attacks when energy is available. Each member sips the three super potions while walking between the ropes, with a final boost check at the chamber rendezvous. A bonus that falls to 10% of the base level or less gets refreshed: defence in either form, attack and strength in melee. The melee cross is three tiles from the queen's centre. The ranged cross prefers six tiles and adjusts each arm around blocked tiles while keeping every pair of players beyond her five-tile splash radius.
 
 The [team guide](https://lostcity.rs/t/solo-kq-infodump-a-companion-thread/18495/4) informs the splash spacing and shared ropes. The local content supplies the actual NPC forms, object IDs and route coordinates.
 
@@ -70,18 +73,19 @@ A live checklist appears over each browser and prints at startup. The harness ex
 | Desert access | Every client carries a pass; observe both withdrawal from bank and a purchase followed by banking the 95-coin change |
 | Both rope gates | Physical tile transitions within three seconds for all four at each gate |
 | Rope use | Leader consumes each missing rope; existing shared ropes are allowed |
-| Both combat forms | Four cardinal melee positions, a wider ranged cross, Protect from Magic, rapid shortbows, boss HP loss and Strength/Ranged XP for every account |
-| Kill | A flying queen with observed positive HP reaches zero and disappears while all four remain in the chamber |
+| Both combat forms | Four cardinal melee positions, a wider ranged cross, Protect from Magic, rapid shortbows, boss HP loss and Strength/Ranged XP for every account across the run |
+| Kill | A flying queen with observed positive HP reaches zero and disappears while at least one observer remains in the chamber |
 | Boss loot | A new nearby ground stack becomes inventory, then increases the bank balance; recovered player arrows do not qualify |
-| Corner wait | All four occupy the same northwest corner tile near the spawn with maces ready and every prayer off after a kill |
+| Corner wait | All remaining fighters occupy the same northwest corner tile near the spawn with maces ready and every prayer off after a kill |
 | Repeated fights | Damage the respawned queen within six seconds of seeing her, in the same chamber visit before banking |
 | Potions | Every account has boosted attack, strength and defence with consumed doses |
-| Escape | Every account arrives at the Duel Arena with one ring charge consumed |
+| Escape | Every account reaches Camelot after consuming five air runes and one law rune, then reaches the Duel Arena with one ring charge consumed |
+| Independent restocking | One member banks while another remains in the chamber and continues combat |
 | Next trip | All four restore the full kit at Shantay and descend again |
 | Soak | At least 10 completed chamber visits followed by all four returning to Shantay, plus at least 10 observed kills; zero-kill trips remain visible in the report |
 | Group recovery | Pausing one client sends the other three home; resuming it sends that client home within a 20-second total deadline |
 
-Empty boss drops are possible. The group keeps taking trips until all checks and the trip/kill targets pass, within the timeout. Pause recovery is tested after the first successful re-entry; that interrupted trip is excluded from the ten-trip target. The group then continues the soak under the same deadline. A repeated fight must begin before banking, but two completed kills in one trip are not required. Noted drops are checked against their unnoted bank item. The assertions use observed tiles, HP, XP and items; script counters are retained only for diagnosis.
+Empty boss drops are possible. The group keeps taking trips until all checks and the trip/kill targets pass, within the timeout. Pause recovery is tested on a later visit after all four are fighting and have gained combat XP on that visit. The checklist and console announce the deliberate pause before it happens; that interrupted trip is excluded from the ten-trip target. The group then continues the soak under the same deadline. A repeated fight must begin before banking, but two completed kills in one trip are not required. Noted drops are checked against their unnoted bank item. Each completed kill trip requires combat XP from each member unless an observed emergency return ended that member's fight early. The report records those exceptions; remaining in the chamber without contributing still fails. The assertions use observed tiles, HP, XP and items; script counters are retained only for diagnosis.
 
 ## Inspect the evidence
 
@@ -101,20 +105,20 @@ The evidence tests reject incomplete kits, inherited zero HP during transformati
 
 ## Local validation result
 
-The Electron 33.4.11 messaging check passed: each of four same-origin client frames received messages from the other three. This checks coordination transport; the combat soak runs in Chrome.
+Fresh level-70 run `kq4ce21k` **passed all 23 checks**: eleven completed soak trips, ten observed kills, zero deaths and no browser errors in 38m 08s including setup. All four accounts had all 19 enabled skills verified at base/effective level 70. One visit completed two kills. The run continued beyond ten trips to reach the ten-kill target; the final kill occurred on the next visit, which is excluded from the completed-trip count.
 
-Run `kq3k23u6` passed all 22 checks: ten completed soak trips, 17 observed kills, zero deaths and no browser errors in 35m 35s including setup. The separate pause probe was trip 3 and recovered in 3.14 seconds. Counted trip kills were `0, 2, 1, 3, 2, 2, 2, 2, 2, 1`; the first trip retreated when the queen did not follow out of a blocked position.
+All thirteen chamber entries stayed synchronized, with a maximum arrival spread of 0.459 seconds; the surface maximum was 0.248 seconds. All four consumed their initial super attack, strength and defence doses near the first rope, before reaching the second. Observed respawns took damage within 1.66–4.35 seconds, with a 3.32-second median. Forty-eight complete Camelot-to-Arena escapes covered all four accounts. Trip 4 was the announced pause probe, recovered in 3.80 seconds and was excluded from the target.
 
-Across 17 respawns, observed damage began after 1.45–5.00 seconds, with a 2.91-second median. The largest arrival spread was 0.415 seconds at the surface rope and 1.043 seconds at the chamber rope. Minimum HP in west/east/north/south order was `28/44/37/52`; the final trip triggered the health retreat. The closer waiting corner took occasional 1–3 HP hits while prayers were off.
+Minimum HP in west/east/north/south order was `32/31/13/34`. North survived a burst to 13 HP, healed to 53 HP before casting Camelot, then returned to Shantay. The run passed, but those low values leave little margin at level 70.
 
-Artifacts are in `out/e2e/jivekq/kq3k23u6/`, including `report.md`, `proof.json`, the full observations, Team chat screenshots and `electron-channel.json`. The served bundle SHA-256 was `f768f5b10014cd3a86bd01c51444c26958a7c09a9e3b7a33255c526ac4607b7b`.
+Artifacts are in `out/e2e/jivekq/kq4ce21k/`, including the report, raw observations, starting stats, screenshots and bundle hash. The served bundle SHA-256 was `683b6fa9d3dd7afa01bfe7ff01c6fffc4d50fb4e72e6ad9cfc811aab2637f128`. The fixture used engine `2135d3a2`, content `8e96792ea` and the running server's approximately 200 ms ticks, with no server or boss changes.
 
-The fixture used four max-stat accounts, engine `2135d3a2`, content `8e96792ea` and the running server's approximately 200 ms ticks. The full offline suite passed 9,849 tests with one skip and no failures; typecheck, lint and both prose gates passed.
+The full offline suite passed 9,903 tests with one skip and no failures. All 138 focused KQ tests, typecheck and lint passed. Both prose gates exited successfully; the repository-wide prose check reported 15 existing warnings outside these changes.
 
-### Level 70
+The Electron 33.4.11 messaging check passed: each of four same-origin client frames received messages from the other three. Its artifact is `out/e2e/jivekq/kq3k23u6/electron-channel.json`. This checks coordination transport; the combat soak runs in Chrome.
 
-Run `kq434fb0` used `--level 70 --trips 10 --minutes 60` and failed after 3m 03s including setup. All four accounts started with all 19 enabled skills at base/effective level 70 and 737,627 XP per skill, verified in `starting-stats.json`. Gear and the existing checklist were unchanged.
+### Earlier escape failure
 
-The run passed nine checks, including both synchronized entrances and super potion boosts, but stopped on the first chamber visit after the leader died. It completed zero trips and zero kills; every account gained zero Strength and Ranged XP. The east player fell from 60 to 29 HP while the group approached the queen and triggered a group retreat. The leader ate from 39 to 59 HP, then fell to 28, 2 and 0 HP before escaping, with 15 sharks still carried. The north and south players reached the Duel Arena. All four had Protect from Magic active during the approach.
+Before the final health recheck, level-70 run `kq4ay3iu` failed after nine counted trips and seven kills. East ate at 22 HP, but damage during that action left 16 HP before the teleport cast. The player reached Camelot at 16 HP and then died to a queued hit. Escape now rechecks HP after healing and retries food while HP remains at or below 31 and sharks remain. A deterministic regression reproduces that sequence. The failed run's evidence remains in `out/e2e/jivekq/kq4ay3iu/`.
 
-This run does not validate level-70 safety or sustained DPS. The approach and escape behavior need further work before the lower-level soak can pass. Artifacts are in `out/e2e/jivekq/kq434fb0/`; the served bundle SHA-256 was `467380dae6241fa860c6f0a25eb7c14da91a0b6d2d6426ae1fc9b5091a8ad0b9`. The fixture change passed 86 focused tests, typecheck and lint.
+An earlier max-stat build, before independent restocking and Camelot escapes, passed run `kq3k23u6`: ten counted trips, 17 kills, zero deaths and 22/22 checks in 35m 35s. That result applies to the earlier build.

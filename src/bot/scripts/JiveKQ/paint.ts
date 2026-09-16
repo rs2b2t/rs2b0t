@@ -30,7 +30,7 @@ export function paintKq(ctx: CanvasRenderingContext2D, state: KqPaint): void {
         p.statGrid([
             [{ text: 'Melee: Dragon mace (crush)' }, { text: 'Range: Magic shortbow (rapid)' }],
             [{ text: `Position: ${SIDES[state.slot]}` }, { text: 'Formation: four-point cross' }],
-            [{ text: 'Trip: continue while supplied' }, { text: 'Escape: Duel Arena ring' }],
+            [{ text: 'Trip: bank independently' }, { text: 'Escape: Camelot, then Duel Arena' }],
             [{ text: 'DPS: estimated from combat XP' }, { text: 'Recoil damage excluded' }]
         ]);
     } else if (section === 'Overview') {
@@ -50,7 +50,7 @@ export function paintKq(ctx: CanvasRenderingContext2D, state: KqPaint): void {
     } else if (section === 'Team') {
         p.statGrid(state.roster.map(name => {
             const member = state.members.find(m => m.name === name);
-            return [{ text: `${name}: ${member ? member.ready ? 'ready' : 'wait' : 'offline'}` }, { text: member?.stats ? `HP ${member.stats.hp} P ${member.stats.prayer} F ${member.stats.food} | ${member.stats.dps.toFixed(1)} DPS` : 'offline / waiting' }];
+            return [{ text: `${name}: ${member ? member.restocking ? 'restocking' : member.ready ? 'ready' : 'wait' : 'offline'}` }, { text: member?.stats ? `HP ${member.stats.hp} P ${member.stats.prayer} F ${member.stats.food} | ${member.stats.dps.toFixed(1)} DPS` : 'offline / waiting' }];
         }));
     } else if (section === 'Supplies') {
         p.statGrid([
