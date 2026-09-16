@@ -18,11 +18,13 @@ function scene(npcs: NpcSnapshot[] = []) {
     const bot = new JiveKQ();
     bot.stage = 'fight';
     spyOn(Game, 'sceneReady').mockReturnValue(true);
+    spyOn(Game, 'tile').mockReturnValue({ x: 3488, z: 9496, level: 0 });
     spyOn(Skills, 'effective').mockReturnValue(50);
     spyOn(Skills, 'level').mockReturnValue(99);
     spyOn(Inventory, 'countById').mockReturnValue(10);
     spyOn(reader, 'npcs').mockReturnValue(npcs);
     spyOn(Prayer, 'points').mockReturnValue(99);
+    spyOn(Prayer, 'set').mockResolvedValue(true);
     spyOn(supply, 'eat').mockImplementation(async () => { events.push('eat'); return true; });
     spyOn(Prayer, 'clear').mockImplementation(async () => { events.push('clear'); });
     return { bot, events };
@@ -113,10 +115,13 @@ test('the transformation gap keeps protection active', async () => {
     expect(events).toEqual(['eat']);
 });
 
-test('a level-70 player eats before dropping below two queen hits', async () => {
+test('a level-70 player saves a shark until it can heal all twenty hitpoints', async () => {
     const { bot, events } = scene();
     spyOn(Skills, 'level').mockReturnValue(70);
     spyOn(Skills, 'effective').mockReturnValue(60);
+    await bot['upkeep']();
+    expect(events).toEqual([]);
+    spyOn(Skills, 'effective').mockReturnValue(50);
     await bot['upkeep']();
     expect(events).toEqual(['eat']);
 });
@@ -244,6 +249,7 @@ test('damage during escape healing must leave enough HP for another queen hit be
     let food = 10;
     spyOn(Game, 'tile').mockReturnValue({ x: 3482, z: 9493, level: 0 });
     spyOn(Skills, 'effective').mockImplementation(() => hp);
+    spyOn(Skills, 'level').mockReturnValue(70);
     spyOn(Inventory, 'countById').mockImplementation(() => food);
     const eat = spyOn(supply, 'eat').mockImplementation(async () => {
         food--;
@@ -258,6 +264,33 @@ test('damage during escape healing must leave enough HP for another queen hit be
     await bot['escape']();
     expect(hp).toBe(36);
     expect(eat).toHaveBeenCalledTimes(2);
+    expect(teleport).not.toHaveBeenCalled();
+    await bot['escape']();
+    expect(hp).toBe(56);
+    expect(teleport).toHaveBeenCalledTimes(1);
+});
+
+test('retreat retries an unconfirmed shark before locking food behind the teleport animation', async () => {
+    const { bot } = scene();
+    bot.stage = 'retreat';
+    let hp = 46;
+    let food = 1;
+    let accepted = false;
+    spyOn(Skills, 'level').mockReturnValue(70);
+    spyOn(Skills, 'effective').mockImplementation(() => hp);
+    spyOn(Inventory, 'countById').mockImplementation(() => food);
+    spyOn(supply, 'eat').mockImplementation(async () => {
+        if (accepted) { food--; hp += 20; }
+        return accepted;
+    });
+    const teleport = spyOn(route, 'camelot').mockResolvedValue(false);
+    await bot['escape']();
+    expect(teleport).not.toHaveBeenCalled();
+    accepted = true;
+    hp = 23;
+    await bot['escape']();
+    expect(hp).toBe(43);
+    expect(food).toBe(0);
     expect(teleport).toHaveBeenCalledTimes(1);
 });
 
@@ -283,7 +316,7 @@ test('a teammate banking independently does not hold the remaining fighters at t
     spyOn(Prayer, 'set').mockResolvedValue(true);
     spyOn(route, 'step').mockReturnValue(true);
     await bot['fight']();
-    expect(bot.status).toBe('looking for the queen');
+    expect(bot.status).toBe('searching the queen chamber');
 });
 
 test('approaching a visible queen spreads into formation before optional attack prayers', async () => {
@@ -325,14 +358,16 @@ test('empty prayer points allow a restore dose before trying to enable protectio
     expect(events).toEqual(['Prayer potion']);
 });
 
-test('a blocked cross pulls the queen into open space and tells the party', async () => {
+test('a blocked cross first approaches an unengaged queen instead of running out of sight', async () => {
     const { bot } = scene([{
         index: 1, id: 1160, anim: -1, name: 'Kalphite Queen', level: 333, size: 5,
         tile: { x: 3477, z: 9509, level: 0 }, distance: 6, ops: ['Attack'],
         inCombat: false, health: 200, totalHealth: 255, faceEntity: -1
     }]);
     spyOn(Game, 'tile').mockReturnValue({ x: 3480, z: 9498, level: 0 });
-    spyOn(Reachability, 'walkable').mockReturnValue(false);
+    spyOn(Reachability, 'walkable').mockImplementation(p => !(p.x > 3477 && p.z === 9509));
+    spyOn(Reachability, 'canReach').mockReturnValue(true);
+    spyOn(Reachability, 'lineOfSight').mockReturnValue(true);
     const party = new Party(['one', 'two', 'three', 'four'], 'one', 'one');
     bot['party'] = party;
     for (const name of party.roster) party.receive({ name, session: name, trip: 1, ready: true, stage: 'fight', tile: { x: 3480, z: 9498, level: 0 } }, Date.now());
@@ -341,22 +376,88 @@ test('a blocked cross pulls the queen into open space and tells the party', asyn
     await bot['fight']();
     expect(bot.stage).toBe('fight');
     expect(bot['blocked']).toBe(true);
-    expect(move).toHaveBeenCalledWith({ x: 3508, z: 9493, level: 0 });
+    const target = move.mock.calls.at(-1)?.[0];
+    expect(target).toBeDefined();
+    expect(Math.max(Math.abs(target!.x - 3477), Math.abs(target!.z - 9509))).toBe(6);
 });
 
-test('a peer with a blocked cross pulls all four even before this client sees the queen', async () => {
+test('a peer shares the last queen position with a client that cannot see her', async () => {
     const { bot } = scene();
+    bot.trip = 1;
+    spyOn(Game, 'tile').mockReturnValue({ x: 3508, z: 9493, level: 0 });
+    spyOn(Reachability, 'walkable').mockReturnValue(true);
+    spyOn(Reachability, 'canReach').mockReturnValue(true);
     const party = new Party(['one', 'two', 'three', 'four'], 'one', 'one');
     bot['party'] = party;
-    for (const name of party.roster) party.receive({ name, session: name, trip: 1, ready: true, stage: 'fight', blocked: name === 'two', tile: { x: 3480, z: 9498, level: 0 } }, Date.now());
+    for (const name of party.roster) party.receive({ name, session: name, trip: 1, ready: true, stage: 'fight', blocked: name === 'two', tile: { x: 3480, z: 9498, level: 0 }, queen: name === 'two' ? { id: 1160, tile: { x: 3478, z: 9510, level: 0 }, at: Date.now(), engaged: false } : undefined }, Date.now());
     const move = spyOn(route, 'step').mockReturnValue(true);
     await bot['fight']();
     expect(bot.stage).toBe('fight');
-    expect(move).toHaveBeenCalledWith({ x: 3508, z: 9493, level: 0 });
+    expect(bot.status).toBe('searching the last reported queen position');
+    const target = move.mock.calls.at(-1)?.[0];
+    expect(target).toBeDefined();
+    expect(Math.max(Math.abs(target!.x - 3478), Math.abs(target!.z - 9510))).toBe(6);
     expect(party.unsafe(1, Date.now())).toBe(false);
 });
 
-test('a blocked formation remains latched when the queen leaves view during the pull', () => {
+test('an engaged queen is pulled along a route wide enough for her whole body', async () => {
+    const { bot } = scene([{
+        index: 1, id: 1160, anim: -1, name: 'Kalphite Queen', level: 333, size: 5,
+        tile: { x: 3477, z: 9509, level: 0 }, distance: 6, ops: ['Attack'],
+        inCombat: true, health: 200, totalHealth: 255, faceEntity: 32769
+    }]);
+    bot.trip = 1;
+    spyOn(reader, 'selfSlot').mockReturnValue(1);
+    spyOn(Reachability, 'walkable').mockImplementation(p => !(p.x > 3477 && p.z === 9509));
+    spyOn(Reachability, 'canReach').mockReturnValue(true);
+    spyOn(Reachability, 'lineOfSight').mockReturnValue(true);
+    const body = spyOn(Reachability, 'canStep').mockReturnValue(true);
+    const party = new Party(['one', 'two', 'three', 'four'], 'one', 'one');
+    bot['party'] = party;
+    for (const name of party.roster) party.receive({ name, session: name, trip: 1, ready: true, stage: 'fight', tile: { x: 3480, z: 9498, level: 0 } }, Date.now());
+    const move = spyOn(route, 'step').mockReturnValue(true);
+    bot['observeQueen']();
+    await bot['fight']();
+    expect(bot['sighting']?.engaged).toBe(true);
+    expect(move).toHaveBeenCalledWith({ x: 3477, z: 9495, level: 0 });
+    expect(body).toHaveBeenCalledWith({ x: 3479, z: 9511, level: 0 }, { x: 3479, z: 9510, level: 0 });
+});
+
+test('reacquiring a stationary queen restarts the pull retry timer', async () => {
+    const npcs: NpcSnapshot[] = [{
+        index: 1, id: 1160, anim: -1, name: 'Kalphite Queen', level: 333, size: 5,
+        tile: { x: 3477, z: 9509, level: 0 }, distance: 6, ops: ['Attack'],
+        inCombat: true, health: 200, totalHealth: 255, faceEntity: 32769
+    }];
+    const queen = npcs[0];
+    const { bot } = scene(npcs);
+    bot.trip = 1;
+    let now = 100_000;
+    spyOn(Date, 'now').mockImplementation(() => now);
+    spyOn(reader, 'selfSlot').mockReturnValue(1);
+    spyOn(Reachability, 'walkable').mockImplementation(p => !(p.x > 3477 && p.z === 9509));
+    spyOn(Reachability, 'canReach').mockReturnValue(true);
+    spyOn(Reachability, 'lineOfSight').mockReturnValue(true);
+    spyOn(Reachability, 'canStep').mockReturnValue(true);
+    spyOn(route, 'step').mockReturnValue(true);
+    const party = new Party(['one', 'two', 'three', 'four'], 'one', 'one');
+    bot['party'] = party;
+    const heartbeat = () => { for (const name of party.roster) party.receive({ name, session: name, trip: 1, ready: true, stage: 'fight', tile: { x: 3480, z: 9498, level: 0 } }, now); };
+    heartbeat(); bot['observeQueen'](); await bot['fight']();
+    npcs.length = 0;
+    now += 9000;
+    heartbeat(); bot['observeQueen'](); await bot['fight'](); await bot['fight']();
+    expect(bot['lureAt']).toBe(0);
+    npcs.push(queen);
+    heartbeat(); bot['observeQueen'](); await bot['fight']();
+    expect(bot['lureAt']).toBe(now);
+    now += 16_000;
+    heartbeat(); bot['observeQueen'](); await bot['fight']();
+    expect(bot['lureAttempt']).toBe(1);
+    expect(bot.stage).toBe('fight');
+});
+
+test('the last observed position is retained when a blocked queen leaves view', () => {
     const npcs: NpcSnapshot[] = [{
         index: 1, id: 1160, anim: -1, name: 'Kalphite Queen', level: 333, size: 5,
         tile: { x: 3477, z: 9509, level: 0 }, distance: 6, ops: ['Attack'],
@@ -369,19 +470,73 @@ test('a blocked formation remains latched when the queen leaves view during the 
     npcs.length = 0;
     bot['observeQueen']();
     expect(bot['blocked']).toBe(true);
-    expect(bot['lure']).toEqual({ x: 3508, z: 9493, level: 0 });
+    expect(bot['sighting']?.tile).toEqual({ x: 3477, z: 9509, level: 0 });
 });
 
-test('a queen that never follows cannot hold the group in a lure forever', async () => {
+test('queen aggression recognizes a teammate outside this clients player visibility', () => {
+    const { bot } = scene([{
+        index: 1, id: 1160, anim: -1, name: 'Kalphite Queen', level: 333, size: 5,
+        tile: { x: 3477, z: 9509, level: 0 }, distance: 6, ops: ['Attack'],
+        inCombat: true, health: 200, totalHealth: 255, faceEntity: 32770
+    }]);
+    bot.trip = 1;
+    spyOn(reader, 'players').mockReturnValue([]);
+    spyOn(reader, 'selfSlot').mockReturnValue(1);
+    const party = new Party(['one', 'two', 'three', 'four'], 'one', 'one');
+    bot['party'] = party;
+    party.receive({ name: 'two', session: 'two', playerSlot: 2, trip: 1, ready: true, stage: 'fight', tile: { x: 3480, z: 9498, level: 0 } }, Date.now());
+    bot['observeQueen']();
+    expect(bot['sighting']?.engaged).toBe(true);
+});
+
+test('all followers adopt a changed pull route from the first active member', async () => {
+    const { bot } = scene();
+    bot.trip = 1;
+    const party = new Party(['one', 'two', 'three', 'four'], 'two', 'two');
+    bot['party'] = party;
+    const leader = { name: 'one', session: 'one', trip: 1, ready: true, stage: 'fight', blocked: true, tile: { x: 3480, z: 9498, level: 0 }, queen: { id: 1160, tile: { x: 3478, z: 9510, level: 0 }, at: Date.now(), engaged: true }, lure: { x: 3478, z: 9495, level: 0 } };
+    party.receive(leader, Date.now());
+    for (const name of party.roster.slice(1)) party.receive({ ...leader, name, session: name, lure: undefined }, Date.now());
+    const move = spyOn(route, 'step').mockReturnValue(true);
+    await bot['fight']();
+    expect(move).toHaveBeenLastCalledWith(leader.lure);
+    leader.lure = { x: 3495, z: 9510, level: 0 };
+    party.receive(leader, Date.now());
+    await bot['fight']();
+    expect(move).toHaveBeenLastCalledWith(leader.lure);
+    expect(bot['lure']).toEqual(leader.lure);
+});
+
+test('an unsuccessful lure retries the search instead of teleporting away', async () => {
     const { bot } = scene();
     bot.bindLog(() => {});
     const party = new Party(['one', 'two', 'three', 'four'], 'one', 'one');
     bot['party'] = party;
     bot['lureAt'] = Date.now() - 15_001;
+    spyOn(Game, 'tile').mockReturnValue({ x: 3508, z: 9493, level: 0 });
+    spyOn(Reachability, 'walkable').mockReturnValue(true);
+    spyOn(Reachability, 'canReach').mockReturnValue(true);
+    const move = spyOn(route, 'step').mockReturnValue(true);
     for (const name of party.roster) party.receive({ name, session: name, trip: 1, ready: true, stage: 'fight', blocked: name === 'two', tile: { x: 3480, z: 9498, level: 0 } }, Date.now());
     await bot['fight']();
-    expect(bot.stage).toBe('retreat');
-    expect(bot.status).toBe('queen did not follow into open space');
+    expect(bot.stage).toBe('fight');
+    expect(move).toHaveBeenCalled();
+    expect(move.mock.calls.at(-1)?.[0]).not.toEqual({ x: 3508, z: 9493, level: 0 });
+});
+
+test('an empty central search waypoint advances into the chamber instead of waiting there', async () => {
+    const { bot } = scene();
+    const tile = { x: 3488, z: 9496, level: 0 };
+    spyOn(Game, 'tile').mockReturnValue(tile);
+    spyOn(Reachability, 'walkable').mockReturnValue(true);
+    spyOn(Reachability, 'canReach').mockReturnValue(true);
+    const party = new Party(['one', 'two', 'three', 'four'], 'one', 'one');
+    bot['party'] = party;
+    for (const name of party.roster) party.receive({ name, session: name, trip: 1, ready: true, stage: 'fight', tile }, Date.now());
+    const move = spyOn(route, 'step').mockReturnValue(true);
+    await bot['fight']();
+    expect(bot.stage).toBe('fight');
+    expect(move.mock.calls.at(-1)?.[0]).not.toEqual(tile);
 });
 
 test('a member still approaching the rope cannot release the team', async () => {
@@ -429,6 +584,32 @@ test('a member eating at the upper rope stops advertising gate readiness', async
     spyOn(supply, 'eat').mockImplementation(async () => { stages.push(bot.stage); return true; });
     await bot['upkeep']();
     expect(stages).toEqual(['travel']);
+});
+
+test('a teammate delayed beyond the rope lifetime does not consume the leader ropes while waiting', async () => {
+    const { bot } = scene();
+    let now = 100_000;
+    spyOn(Date, 'now').mockImplementation(() => now);
+    bot.stage = 'surface'; bot.trip = 1; bot['prepared'] = true; bot['lastDose'] = now;
+    const tile = { x: 3226, z: 3108, level: 0 };
+    spyOn(Game, 'tile').mockReturnValue(tile);
+    spyOn(Game, 'ingame').mockReturnValue(true);
+    const party = new Party(['one', 'two', 'three', 'four'], 'one', 'one');
+    bot['party'] = party;
+    let arrived = false;
+    spyOn(reader, 'players').mockImplementation(() => party.roster.slice(1, arrived ? 4 : 3).map((name, index) => ({ name, index, tile, distance: 0, inCombat: false, faceEntity: -1 })));
+    const rope = spyOn(route, 'placeRope').mockResolvedValue(true);
+    spyOn(route, 'ropeReady').mockReturnValue(true);
+    const descend = spyOn(route, 'descend').mockResolvedValue(false);
+    const heartbeat = () => {
+        for (const name of party.roster) party.receive({ name, session: name, trip: 1, ready: true, stage: name === 'four' && !arrived ? 'travel' : 'surface', tile }, now);
+    };
+    for (let i = 0; i < 3; i++) { heartbeat(); await bot['gate']('surface'); now += 41_000; }
+    expect(rope).not.toHaveBeenCalled();
+    expect(descend).not.toHaveBeenCalled();
+    arrived = true; heartbeat(); await bot['gate']('surface');
+    expect(rope).toHaveBeenCalledTimes(1);
+    expect(descend).toHaveBeenCalledWith('surface');
 });
 
 test('a peer starting upkeep during rope placement prevents the entrance release', async () => {
@@ -550,15 +731,15 @@ test('a timed-out released descent retries before upkeep and tracks a late arriv
     expect<string>(bot.stage).toBe('fight');
 });
 
-test('critical hitpoints prevent entry despite an accepted release', async () => {
+test('low hitpoints do not abort an accepted rope release when food remains', async () => {
     const { bot, party, release, descend } = releasedGateScene();
     party.accept(release, Date.now());
     spyOn(Skills, 'effective').mockReturnValue(31);
     spyOn(supply, 'supplies').mockReturnValue({ hp: 31, food: 10, prayer: 50, prayerDoses: 6, escape: true, arrows: 200 });
     await bot.loop();
-    expect(descend).not.toHaveBeenCalled();
-    expect(bot.stage).toBe('retreat');
-    expect(bot['descent']).toBeNull();
+    expect(descend).toHaveBeenCalledWith('upper');
+    expect(bot.stage).toBe('upper');
+    expect(bot['descent']).toBe('upper');
 });
 
 test('an aborted release cannot enter after the peer advertises readiness again', async () => {

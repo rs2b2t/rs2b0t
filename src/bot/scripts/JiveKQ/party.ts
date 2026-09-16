@@ -1,9 +1,11 @@
-import { BANK, near, SURFACE, UPPER, type Point } from './policy.js';
+import { BANK, inLair, near, SURFACE, UPPER, type Point } from './policy.js';
+import type { QueenSighting } from './search.js';
+import { deathReport, type Casualty, type DeathReport } from './recovery.js';
 
 export type Gate = 'surface' | 'upper';
 export type Stage = 'bank' | 'travel' | Gate | 'fight' | 'retreat';
 export interface MemberStats { hp: number; prayer: number; food: number; damage: number; dps: number; kills: number }
-export interface Member { name: string; session: string; trip: number; stage: Stage; tile: Point | null; ready: boolean; restocking?: boolean; blocked?: boolean; lure?: Point; reason?: string; stats?: MemberStats }
+export interface Member { name: string; session: string; trip: number; stage: Stage; tile: Point | null; ready: boolean; playerSlot?: number; restocking?: boolean; blocked?: boolean; lure?: Point; queen?: QueenSighting; death?: DeathReport; recoverySpace?: number; reason?: string; stats?: MemberStats }
 type Barrier = Gate | 'bank';
 export interface Release { stage: Barrier; trip: number; sessions: string[]; at: number }
 const FRESH_MS = 6000;
@@ -33,6 +35,7 @@ export class Party {
     private peers = new Map<string, { member: Member; seen: number }>();
     private gates = new Map<Barrier, Release>();
     private aborted = new Set<number>();
+    private casualties = new Map<string, Casualty>();
     readonly messages: string[] = [];
 
     constructor(readonly roster: string[], readonly self: string, readonly session: string, private readonly log: (message: string) => void = () => {}) {}
@@ -49,9 +52,23 @@ export class Party {
             || !['bank', 'travel', 'surface', 'upper', 'fight', 'retreat'].includes(String(value.stage))
             || typeof value.ready !== 'boolean' || (value.tile !== null && !point(value.tile))) return;
         const member: Member = { name: value.name, session: value.session, trip: value.trip, stage: value.stage as Stage, tile: value.tile, ready: value.ready };
+        if (typeof value.playerSlot === 'number' && Number.isInteger(value.playerSlot) && value.playerSlot >= 0 && value.playerSlot < 2048) member.playerSlot = value.playerSlot;
+        if (typeof value.recoverySpace === 'number' && Number.isInteger(value.recoverySpace) && value.recoverySpace >= 0 && value.recoverySpace <= 28) member.recoverySpace = value.recoverySpace;
         member.restocking = value.restocking === true && (member.stage === 'retreat' || member.stage === 'bank');
+        const death = deathReport(value.death, now);
+        if (death) {
+            member.death = death;
+            const key = `${member.name}:${member.session}:${member.trip}`;
+            if (!this.casualties.has(key)) this.report(`${member.name} died at ${death.tile.x},${death.tile.z}; recovering dropped items`);
+            this.casualties.set(key, { name: member.name, session: member.session, trip: member.trip, death });
+        }
         member.blocked = value.blocked === true;
         if (point(value.lure)) member.lure = value.lure;
+        const queen = value.queen;
+        if (record(queen) && [1158, 1160].includes(Number(queen.id)) && point(queen.tile) && inLair(queen.tile)
+            && typeof queen.at === 'number' && Number.isFinite(queen.at) && queen.at <= now + 1000 && now - queen.at <= 8000 && typeof queen.engaged === 'boolean') {
+            member.queen = { id: Number(queen.id), tile: queen.tile, at: queen.at, engaged: queen.engaged };
+        }
         if (typeof value.reason === 'string') member.reason = value.reason.slice(0, 120);
         const stats = value.stats;
         if (record(stats) && ['hp', 'prayer', 'food', 'damage', 'dps', 'kills'].every(key => typeof stats[key] === 'number' && Number.isFinite(stats[key]) && stats[key] >= 0)) {
@@ -59,6 +76,7 @@ export class Party {
         }
         if (member.reason === 'paused' || !member.restocking && (member.stage === 'retreat' || (!member.ready && member.stage !== 'bank'))) this.aborted.add(member.trip);
         const previous = this.peers.get(member.name)?.member;
+        if (member.queen && (!previous?.queen || previous.queen.id !== member.queen.id)) this.report(`${member.name} spotted the ${member.queen.id === 1160 ? 'flying' : 'ground'} queen at ${member.queen.tile.x},${member.queen.tile.z}`);
         if (!previous || previous.session !== member.session || previous.trip !== member.trip || previous.stage !== member.stage || previous.ready !== member.ready || previous.reason !== member.reason || previous.blocked !== member.blocked || previous.restocking !== member.restocking) {
             this.report(`${member.name}: ${member.stage}, ${member.ready ? 'ready' : 'not ready'} (trip ${member.trip})${member.restocking ? ': restocking for next trip' : ''}${member.reason ? `: ${member.reason}` : ''}${member.blocked ? ': cross blocked' : ''}`);
         }
@@ -71,6 +89,8 @@ export class Party {
             return peer && now - peer.seen <= FRESH_MS ? [peer.member] : [];
         });
     }
+
+    deaths(trip: number): Casualty[] { return [...this.casualties.values()].filter(c => c.trip === trip); }
 
     release(stage: Barrier, trip: number, now: number): Release | null {
         const members = this.members(now);
@@ -113,6 +133,8 @@ export class Party {
 
     unsafe(trip: number, now: number): boolean {
         const members = this.members(now);
-        return this.aborted.has(trip) || members.length !== 4 || members.some(m => m.trip !== trip || !m.restocking && (!m.ready || m.stage === 'retreat' || m.stage === 'bank'));
+        const dead = new Set(this.deaths(trip).map(c => c.name));
+        return this.aborted.has(trip) || this.roster.some(name => !members.some(m => m.name === name) && !dead.has(name))
+            || members.some(m => m.trip !== trip || !m.restocking && (!m.ready || m.stage === 'retreat' || m.stage === 'bank'));
     }
 }

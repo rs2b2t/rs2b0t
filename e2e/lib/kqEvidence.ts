@@ -2,10 +2,16 @@ import { DROP_DB } from '../../src/bot/data/dropdb.js';
 
 export interface KqItem { id: number; count: number; name?: string | null; bankId?: number }
 export interface KqTile { x: number; z: number; level: number }
+export interface KqAction { kind: 'eat' | 'attack'; tick: number; at: number; food: number; hp: number; xp: number }
+export interface KqRopeClick { id: number; at: number; tile: KqTile }
 interface KqVisitor { id: number; name: string | null; tile: KqTile; targetsMe: boolean }
 interface KqEmergency { player: number; emergencyAt: number; hp: number; food: number; visitor?: KqVisitor; departedAt?: number }
+type RopeGate = 'surface' | 'chamber';
+interface RopeAttempt { departedAt: number; consumed: Record<RopeGate, number>; shared: RopeGate[]; crossings: Record<RopeGate, number[]> }
 export interface KqSample {
-    at: number; tile: KqTile | null; hp: number; sceneReady: boolean;
+    actions?: KqAction[];
+    ropeClicks?: KqRopeClick[];
+    at: number; tile: KqTile | null; serverTile?: KqTile | null; hp: number; sceneReady: boolean;
     pack: KqItem[]; gear: KqItem[]; bank: KqItem[]; bankOpen: boolean; restocking: boolean;
     mode: number; protectMagic: boolean; protectMelee?: boolean; prayers?: number[];
     xp: { melee: number; ranged: number };
@@ -18,11 +24,11 @@ export interface KqSample {
 
 export const CHECKLIST = {
     waitedForFourth: 'Wait for the fourth member', sharedKit: 'Prepare full kits; only leader carries ropes', passes: 'Carry four Shantay passes', bankPass: 'Use a pass from the bank', buyPass: 'Buy a pass and bank the change',
-    surface: 'Descend the first rope together', ropes: 'Place both missing ropes', entered: 'Enter the queen chamber together',
-    corner: 'Stack near spawn with maces ready and all prayers off', participation: 'All four gain melee and ranged combat XP',
+    surface: 'Descend the first rope together', ropes: 'Use both entrances; only the leader supplies missing ropes', entered: 'Enter the queen chamber together',
+    corner: 'Stack near spawn with maces ready and all prayers off', search: 'Find an unseen queen after moving through the chamber, then resume combat', participation: 'All four gain melee and ranged combat XP',
     formation: 'Hold four cardinal melee positions', ranged: 'Spread into the ranged cross', killed: 'Damage and defeat both forms',
     looted: 'Pick up a boss drop', repeatFight: 'Re-engage the respawn within six seconds', bankedLoot: 'Deposit the boss drop',
-    boosts: 'Sip super attack, strength and defence', escape: 'Cast Camelot, then use a dueling ring to reach the arena', independentRestock: 'Bank one depleted member while the others keep fighting',
+    boosts: 'Sip super attack, strength and defence', eatAttack: 'Each member eats and attacks in one tick, consumes food and continues combat', escape: 'Cast Camelot, then use a dueling ring to reach the arena', independentRestock: 'Bank one depleted member while the others keep fighting',
     restocked: 'Restock all four accounts', reentered: 'Start another trip together', soak: 'Complete the requested trips and kills', pauseRetreat: 'Recover from the announced deliberate pause probe'
 } as const;
 export const CHECKS = Object.keys(CHECKLIST) as (keyof typeof CHECKLIST)[];
@@ -33,6 +39,7 @@ const drops = new Set(DROP_DB['Kalphite Queen']);
 const nest = (s: KqSample) => !!s.tile && s.tile.x >= 3456 && s.tile.x < 3520 && s.tile.z >= 9472 && s.tile.z < 9536;
 const atGate = (s: KqSample | undefined, x: number, z: number, level: number) => s?.tile?.level === level && Math.abs(s.tile.x - x) <= 4 && Math.abs(s.tile.z - z) <= 4;
 const atBank = (s: KqSample) => s.tile?.level === 0 && Math.abs(s.tile.x - 3308) <= 3 && Math.abs(s.tile.z - 3120) <= 3;
+const deathWitness = (s: KqSample) => s.sceneReady && chamber({ ...s, tile: s.serverTile === undefined ? s.tile : s.serverTile });
 const ringCharges = (s: KqSample) => s.pack.reduce((n, i) => n + ([2552, 2554, 2556, 2558, 2560, 2562, 2564, 2566].includes(i.id) ? (8 - (i.id - 2552) / 2) * i.count : 0), 0);
 const kit = (s: KqSample, slot: number) => atBank(s)
     && !s.pack.some(i => [995, 557, 1823, 1825, 1827, 1829, 1831].includes(i.id))
@@ -48,8 +55,17 @@ export class KqEvidence {
     trips: { number: number; enteredAt: number; returnedAt: number; kills: number; minimumHp: number[]; foodRemaining: number[]; xpGains: KqSample['xp'][]; excusedPlayers: (KqEmergency & { departedAt: number })[] }[] = [];
     private activeTrip: { number: number; enteredAt: number; minimumHp: number[]; xpBaseline: KqSample['xp'][]; emergencies: KqEmergency[] } | null = null;
     private respawnAt = 0;
-    restarts: { spawnedAt: number; damagedAt: number }[] = [];
+    private restarting: { since: number[]; entries: number[]; attempted: boolean; attacks: Map<number, KqAction> } | null = null;
+    restarts: { spawnedAt: number; player: number; attackedAt: number; damagedAt: number }[] = [];
     ropeCounts = { surface: [] as number[], chamber: [] as number[] };
+    sharedRopes: ('surface' | 'chamber')[] = [];
+    ropeAttempts: RopeAttempt[] = [];
+    private ropePrepared = false;
+    private ropeAttempt: { proof: RopeAttempt; count: number; gate: RopeGate } | null = null;
+    eatAttacks: { player: number; input: KqAction; attackAt: number; consumedAt: number; combatAt: number }[] = [];
+    private eating = new Map<number, { input: KqAction; attackAt?: number; consumedAt?: number; consumedXp?: number }[]>();
+    searches: { player: number; startedAt: number; foundAt: number; combatAt: number; from: KqTile; queen: KqTile; xpGained: number }[] = [];
+    private searching = new Map<number, { at: number; tile: KqTile; xp: number; foundAt?: number; queen?: KqTile; moved: boolean }>();
     kits = new Set<number>();
     restocked = new Set<number>();
     passes = new Set<number>();
@@ -72,6 +88,7 @@ export class KqEvidence {
     private damaged = new Set<number>();
     private flyingAlive = false;
     private deadAt = 0;
+    private pendingDeath: { entries: number[]; witnesses: number[] } | null = null;
     private queenTile: KqTile | null = null;
     private beforeDeath: Set<string> = new Set();
     private groundKey = (g: KqItem & { tile: KqTile }) => `${g.id}:${g.tile.x}:${g.tile.z}:${g.count}`;
@@ -87,7 +104,52 @@ export class KqEvidence {
         if (samples.length !== 4) throw new Error('Expected four client observations');
         const now = Math.max(...samples.map(s => s.at));
         if (samples.some(s => s.hp <= 0)) throw new Error('A team member died');
+        this.retainDeathWitnesses(samples);
+        this.observeRopes(samples);
+        const observedQueens = samples.filter(s => s.sceneReady && chamber(s)).flatMap(s => s.queens);
+        const waiting = observedQueens.some(q => q.id === 1160 && q.hp === 0 && q.total > 0 && this.flyingAlive)
+            || this.deadAt > this.respawnAt && !observedQueens.some(q => q.id === 1158 && (q.hp > 0 || q.total === 0));
         samples.forEach((s, i) => {
+            const visible = s.queens.find(q => [1158, 1160].includes(q.id) && (q.hp > 0 || q.total === 0));
+            const previous = this.previous?.[i];
+            if (waiting || !chamber(s) || s.restocking || (!visible && s.queens.some(q => [1158, 1160].includes(q.id) && q.total > 0))) this.searching.delete(i);
+            else if (s.sceneReady && !visible && previous?.sceneReady && (!chamber(previous) || previous.queens.some(q => [1158, 1160].includes(q.id) && (q.hp > 0 || q.total === 0))) && !this.searching.has(i)) {
+                this.searching.set(i, { at: s.at, tile: { ...s.tile! }, xp: s.xp.melee + s.xp.ranged, moved: false });
+            }
+            const search = this.searching.get(i);
+            if (search && s.sceneReady && chamber(s)) {
+                if (!visible) search.moved ||= Math.max(Math.abs(s.tile!.x - search.tile.x), Math.abs(s.tile!.z - search.tile.z)) >= 4;
+                if (visible && !search.foundAt) {
+                    if (search.moved) {
+                        search.foundAt = s.at;
+                        search.queen = visible.tile;
+                        search.xp = s.xp.melee + s.xp.ranged;
+                    } else this.searching.delete(i);
+                }
+                if (search.foundAt && search.queen && s.xp.melee + s.xp.ranged > search.xp) {
+                    this.searches.push({ player: i, startedAt: search.at, foundAt: search.foundAt, combatAt: s.at, from: search.tile, queen: search.queen, xpGained: s.xp.melee + s.xp.ranged - search.xp });
+                    this.milestones.search ??= s.at;
+                    this.searching.delete(i);
+                }
+            }
+            const candidates = this.eating.get(i) ?? [];
+            for (const action of s.actions ?? []) {
+                if (action.kind === 'eat' && chamber(s)) candidates.push({ input: action });
+                const pending = candidates.at(-1);
+                if (pending && action.kind === 'attack' && action.tick === pending.input.tick && action.at >= pending.input.at) pending.attackAt = action.at;
+            }
+            this.eating.set(i, candidates.filter(eating => {
+                if (s.at - eating.input.at > 10_000 || !chamber(s)) return false;
+                if (eating.consumedAt === undefined && count(s.pack, 385) < eating.input.food) {
+                    eating.consumedAt = s.at;
+                    eating.consumedXp = s.xp.melee + s.xp.ranged;
+                }
+                if (eating.attackAt !== undefined && eating.consumedAt !== undefined && s.xp.melee + s.xp.ranged > eating.consumedXp!) {
+                    this.eatAttacks.push({ player: i, input: eating.input, attackAt: eating.attackAt, consumedAt: eating.consumedAt, combatAt: s.at });
+                    return false;
+                }
+                return true;
+            }));
             if (s.bankOpen && s.bank.length) this.latestBank[i] = structuredClone(s.bank);
             if (s.bankOpen && count(s.pack, 1854) === 0) this.passStock[i] = count(s.bank, 1854);
             if (s.bankOpen && count(s.pack, 1854) > 0 && count(s.pack, 995) === 0 && this.passStock[i] > count(s.bank, 1854)) this.milestones.bankPass ??= now;
@@ -122,15 +184,33 @@ export class KqEvidence {
             }
             if (!this.crossings.surface[i].length && s.ropes?.includes(3827)) this.bare.surface = true;
             if (!this.crossings.chamber[i].length && s.ropes?.includes(3830)) this.bare.chamber = true;
-            const previous = this.previous?.[i];
             for (const gate of ['surface', 'chamber'] as const) {
                 const crossed = gate === 'surface' ? nest(s) && s.tile?.level === 2 && atGate(previous, 3226, 3108, 0) : chamber(s) && atGate(previous, 3508, 9497, 2);
                 if (!crossed || !s.sceneReady) continue;
                 this.crossings[gate][i].push(s.at);
-                if (this.crossings[gate][i].length === 1) this.ropeCounts[gate][i] = count(s.pack, 954);
+                const attempt = this.ropeAttempt?.proof;
+                if (attempt) {
+                    attempt.crossings[gate][i] = s.at;
+                    if (i === 0 && attempt.consumed[gate] === 0) {
+                        const usable = gate === 'surface' ? 3828 : 3831;
+                        const clicked = s.ropeClicks?.some(c => c.id === usable && c.at >= attempt.departedAt && s.at >= c.at && s.at - c.at <= 4000
+                            && (gate === 'surface' ? atGate({ ...s, tile: c.tile }, 3226, 3108, 0) : atGate({ ...s, tile: c.tile }, 3508, 9497, 2)));
+                        if (!previous?.ropes?.includes(usable) && !clicked) throw new Error(`Unexpected rope consumption: unverified shared ${gate} rope`);
+                        attempt.shared.push(gate);
+                    }
+                }
+                if (this.crossings[gate][i].length === 1) {
+                    this.ropeCounts[gate][i] = count(s.pack, 954);
+                    const usable = gate === 'surface' ? 3828 : 3831;
+                    const clicked = s.ropeClicks?.some(c => c.id === usable && s.at >= c.at && s.at - c.at <= 4000
+                        && (gate === 'surface' ? atGate({ ...s, tile: c.tile }, 3226, 3108, 0) : atGate({ ...s, tile: c.tile }, 3508, 9497, 2)));
+                    if (i === 0 && count(s.pack, 954) === (gate === 'surface' ? 2 : this.ropeCounts.surface[0])
+                        && (previous?.ropes?.includes(usable) || clicked)) this.sharedRopes.push(gate);
+                }
             }
         });
         if (this.kits.size === 4) this.milestones.sharedKit ??= now;
+        if (new Set(this.eatAttacks.map(e => e.player)).size === 4) this.milestones.eatAttack ??= now;
         if (this.passes.size === 4) this.milestones.passes ??= now;
         if (this.boosted.size === 4) this.milestones.boosts ??= now;
         if (this.escaped.size === 4) this.milestones.escape ??= now;
@@ -146,11 +226,13 @@ export class KqEvidence {
             if (completed) this.milestones[gate === 'surface' ? 'surface' : 'entered'] ??= now;
             if (gate === 'chamber' && completed > 1 && this.milestones.restocked && samples.every(chamber)) this.milestones.reentered ??= now;
         }
-        if (this.milestones.entered) {
+        if (this.milestones.entered && this.milestones.surface) {
             const surface = this.ropeCounts.surface;
             const lower = this.ropeCounts.chamber;
             if (surface.slice(1).some(n => n !== 0) || lower.slice(1).some(n => n !== 0)
-                || (this.bare.surface && surface[0] !== 1) || (this.bare.chamber && lower[0] !== surface[0] - 1)) throw new Error('Unexpected rope consumption');
+                || ![0, 1].includes(2 - surface[0]) || ![0, 1].includes(surface[0] - lower[0])
+                || (this.bare.surface && surface[0] !== 1 && !this.sharedRopes.includes('surface'))
+                || (this.bare.chamber && lower[0] !== surface[0] - 1 && !this.sharedRopes.includes('chamber'))) throw new Error('Unexpected rope consumption');
             this.milestones.ropes ??= now;
         }
         this.observeRestocks(samples, now);
@@ -164,8 +246,14 @@ export class KqEvidence {
             && s.queens.some(q => q.id === 1158 && s.tile?.x === q.tile.x + [-3, 3, 0, 0][i] && s.tile.z === q.tile.z + [0, 0, 3, -3][i]))) this.milestones.formation = now;
         if (queen?.id === 1158 && this.deadAt && this.respawnAt < this.deadAt) {
             this.respawnAt = now;
+            const lastKill = this.kills.at(-1);
+            this.restarting = lastKill?.entries.every((n, i) => n === this.crossings.chamber[i].length) ? {
+                since: samples.map((s, i) => Math.max(this.deadAt, this.previous?.[i]?.at ?? s.at)),
+                entries: [...lastKill.entries], attempted: false, attacks: new Map()
+            } : null;
             this.phaseHp.clear();
             this.damaged.clear();
+            if (queen.total > 0 && queen.hp < queen.total) this.damaged.add(1158);
         }
         if (queen) {
             const before = this.phaseHp.get(queen.id);
@@ -184,25 +272,43 @@ export class KqEvidence {
             })) this.milestones.ranged ??= now;
             if (queen.id === 1160 && queen.hp === 0 && queen.total > 0 && this.flyingAlive) {
                 this.deadAt = now;
+                this.pendingDeath = { entries: this.crossings.chamber.map(t => t.length), witnesses: samples.flatMap((s, i) => deathWitness(s) && s.queens.some(q => q.id === 1160 && q.hp === 0 && q.total > 0) ? [i] : []) };
                 this.flyingAlive = false;
                 this.beforeDeath = new Set(this.previous?.flatMap(s => s.ground.map(this.groundKey)) ?? []);
             }
         }
-        if (this.deadAt && !queen && observers.length > 0 && this.damaged.has(1160)) {
+        this.retainDeathWitnesses(samples);
+        if (this.pendingDeath && !queen && this.damaged.has(1160)) {
             if (this.damaged.has(1158)) this.milestones.killed ??= now;
-            if (!this.kills.some(k => k.at === this.deadAt)) this.kills.push({ at: this.deadAt, entries: this.crossings.chamber.map(t => t.length) });
+            this.kills.push({ at: this.deadAt, entries: this.pendingDeath.entries });
+            this.pendingDeath = null;
         }
         if (this.kills.length && !queen && activeInChamber && active.every(s => s.tile?.x === 3470 && s.tile.z === 9503 && s.prayers?.length === 0 && count(s.gear, 1434) === 1)) this.milestones.corner ??= now;
-        const lastKill = this.kills.at(-1);
-        if (lastKill && queen?.id === 1158 && this.respawnAt > lastKill.at && activeInChamber
-            && lastKill.entries.every((n, i) => n === this.crossings.chamber[i].length) && !this.restarts.some(r => r.spawnedAt === this.respawnAt)) {
-            if (now - this.respawnAt > 6000) throw new Error('The team did not re-engage within six seconds of the queen respawning');
-            if (this.damaged.has(1158)) {
-                this.restarts.push({ spawnedAt: this.respawnAt, damagedAt: now });
-                this.milestones.repeatFight ??= now;
+        const restarting = this.restarting;
+        if (restarting) {
+            samples.forEach((s, player) => {
+                if (!chamber(s) || s.restocking || restarting.entries[player] !== this.crossings.chamber[player].length) {
+                    restarting.attacks.delete(player);
+                    return;
+                }
+                if (!s.sceneReady) return;
+                for (const action of s.actions ?? []) {
+                    if (action.kind !== 'attack' || action.at < restarting.since[player] || action.at > this.respawnAt + 6000 || action.at > s.at) continue;
+                    if (!restarting.attacks.has(player)) restarting.attacks.set(player, action);
+                    restarting.attempted = true;
+                }
+                const attack = restarting.attacks.get(player);
+                if (attack && s.at >= attack.at && s.xp.melee + s.xp.ranged > attack.xp && !this.restarts.some(r => r.spawnedAt === this.respawnAt)) {
+                    this.restarts.push({ spawnedAt: this.respawnAt, player, attackedAt: attack.at, damagedAt: s.at });
+                    this.milestones.repeatFight ??= now;
+                }
+            });
+            if (this.deadAt >= this.respawnAt || !samples.some(s => chamber(s) && !s.restocking)) this.restarting = null;
+            else if (queen?.id === 1158 && activeInChamber && now - this.respawnAt > 6000 && !restarting.attempted) {
+                throw new Error('The team did not re-engage within six seconds of the queen respawning');
             }
         }
-        if (this.kills.length && this.queenTile && now - this.deadAt < 5000) {
+        if (this.kills.some(k => k.at === this.deadAt) && this.queenTile && now - this.deadAt < 5000) {
             samples.forEach((s, player) => {
                 for (const item of s.ground) {
                     if (!drops.has(item.name ?? '')) continue;
@@ -237,7 +343,7 @@ export class KqEvidence {
                 const emergency = trip.emergencies[index];
                 const visitor = s.visitors?.find(v => v.targetsMe && ['genie', 'mysterious old man'].includes(v.name?.toLowerCase() ?? '')
                     && s.tile?.level === v.tile.level && Math.max(Math.abs(s.tile.x - v.tile.x), Math.abs(s.tile.z - v.tile.z)) <= 6);
-                if (chamber(s) && (s.hp <= 31 || count(s.pack, 385) <= 1 || visitor) && emergency?.departedAt === undefined) {
+                if (chamber(s) && (count(s.pack, 385) <= 1 || visitor) && emergency?.departedAt === undefined) {
                     const observed = { player, emergencyAt: s.at, hp: s.hp, food: count(s.pack, 385), ...(visitor ? { visitor: structuredClone(visitor) } : {}) };
                     if (index < 0) trip.emergencies.push(observed);
                     else trip.emergencies[index] = observed;
@@ -256,6 +362,46 @@ export class KqEvidence {
             }
         }
         this.previous = structuredClone(samples.map((s, i) => s.sceneReady ? s : this.previous?.[i] ?? s));
+    }
+
+    private retainDeathWitnesses(samples: KqSample[]): void {
+        if (!this.pendingDeath) return;
+        this.pendingDeath.witnesses = this.pendingDeath.witnesses.filter(i => deathWitness(samples[i]) && this.pendingDeath!.entries[i] === this.crossings.chamber[i].length);
+        if (this.pendingDeath.witnesses.length) return;
+        this.pendingDeath = null;
+        this.deadAt = 0;
+        this.flyingAlive = false;
+        this.phaseHp.clear();
+        this.damaged.clear();
+        this.beforeDeath.clear();
+        this.queenTile = null;
+        this.restarting = null;
+    }
+
+    private observeRopes(samples: KqSample[]): void {
+        const leader = samples[0];
+        if (leader.sceneReady && atBank(leader)) {
+            if (this.ropeAttempt) this.ropePrepared = false;
+            this.ropeAttempt = null;
+            this.ropePrepared ||= kit(leader, 0);
+        } else if (leader.sceneReady && leader.tile && this.ropePrepared) {
+            const proof: RopeAttempt = { departedAt: leader.at, consumed: { surface: 0, chamber: 0 }, shared: [], crossings: { surface: [], chamber: [] } };
+            this.ropeAttempts.push(proof);
+            this.ropeAttempt = { proof, count: 2, gate: 'surface' };
+            this.ropePrepared = false;
+        }
+        const attempt = this.ropeAttempt;
+        if (!attempt) return;
+        if (samples.slice(1).some(s => s.sceneReady && !atBank(s) && count(s.pack, 954) !== 0)) throw new Error('Unexpected rope consumption: a follower carries ropes');
+        if (!leader.sceneReady) return;
+        const remaining = count(leader.pack, 954);
+        const used = attempt.count - remaining;
+        if (used < 0) throw new Error('Unexpected rope consumption: ropes increased outside the bank');
+        attempt.proof.consumed[attempt.gate] += used;
+        if (attempt.proof.consumed[attempt.gate] > 1) throw new Error(`Unexpected rope consumption: more than one ${attempt.gate} rope used`);
+        if (used) attempt.proof.shared = attempt.proof.shared.filter(gate => gate !== attempt.gate);
+        attempt.count = remaining;
+        if (atGate(leader, 3508, 9497, 2)) attempt.gate = 'chamber';
     }
 
     private observeRestocks(samples: KqSample[], now: number): void {
@@ -280,7 +426,7 @@ export class KqEvidence {
                     const before = this.previous?.[i].queens.find(q => q.id === queen.id);
                     if ([1158, 1160].includes(queen.id) && queen.total > 0 && before && before.hp > queen.hp) witness.queenDamage += before.hp - queen.hp;
                 }
-                if (xpGains.melee + xpGains.ranged > 0 || witness.queenDamage > 0) witness.combatAt ||= now;
+                if (xpGains.melee + xpGains.ranged > 0) witness.combatAt ||= now;
                 if (!absence.bankedAt || !witness.combatAt) continue;
                 this.independentRestocks.push({ player, combatPlayer: i, departedAt: absence.departedAt, bankedAt: absence.bankedAt, combatAt: witness.combatAt, xpGains, queenDamage: witness.queenDamage });
                 this.milestones.independentRestock ??= now;

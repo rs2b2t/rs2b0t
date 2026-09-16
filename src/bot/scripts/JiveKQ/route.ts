@@ -61,7 +61,7 @@ export async function buyPass(log: (s: string) => void): Promise<boolean> {
 
 export async function pass(log: (s: string) => void): Promise<boolean> {
     const here = Game.tile();
-    if (here && here.z < 3117) return true;
+    if (here && here.z < 3117) return discardDisclaimer();
     if (Inventory.countById(PASS) === 0) throw new Error('Prepared Shantay pass missing');
     if (!(await walk({ x: 3304, z: 3120, level: 0 }, 2, log))) return false;
     const gate = Locs.query().where(l => l.id === 4031).nearest();
@@ -70,10 +70,15 @@ export async function pass(log: (s: string) => void): Promise<boolean> {
     while (Date.now() < deadline) {
         if (ChatDialog.canContinue()) await ChatDialog.continue();
         else if (ChatDialog.options().length > 0) await ChatDialog.chooseOption("Yeah, that poster doesn't scare me!");
-        else if ((Game.tile()?.z ?? 9999) < 3117) return true;
+        else if ((Game.tile()?.z ?? 9999) < 3117) return discardDisclaimer();
         else await Execution.delayTicks(1);
     }
     return false;
+}
+
+async function discardDisclaimer(): Promise<boolean> {
+    const item = Inventory.items().find(i => i.id === 1848);
+    return !item || await item.interact('Drop') && await Execution.delayUntilTicks(() => Inventory.countById(1848) === 0, 2);
 }
 
 export function ropeReady(gate: Gate): boolean {

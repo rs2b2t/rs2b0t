@@ -5,9 +5,35 @@ import { Game } from '../../src/bot/api/game/Game.js';
 import { Skills } from '../../src/bot/api/skills/Skills.js';
 import { ChatDialog } from '../../src/bot/api/ui/dialogue/ChatDialog.js';
 import { Input } from '../../src/bot/input/Input.js';
-import { camelot, descend, duelArena } from '../../src/bot/scripts/JiveKQ/route.js';
+import { camelot, descend, duelArena, pass } from '../../src/bot/scripts/JiveKQ/route.js';
 
 afterEach(() => mock.restore());
+
+test('crossing Shantay discards the disclaimer and preserves a spare pass', async () => {
+    let disclaimer = true;
+    spyOn(Game, 'tile').mockReturnValue({ x: 3304, z: 3116, level: 0 });
+    spyOn(reader, 'bankComId').mockReturnValue(-1);
+    spyOn(reader, 'inventory').mockImplementation(() => [
+        { id: 1854, count: 1, slot: 0, comId: 3214, name: 'Shantay pass', ops: [null, null, null, null, 'Drop'] },
+        ...(disclaimer ? [{ id: 1848, count: 1, slot: 1, comId: 3214, name: 'Shantay disclaimer', ops: ['Read', null, null, null, 'Drop'] }] : [])
+    ]);
+    const drop = spyOn(Input, 'heldOp').mockImplementation(id => { expect(id).toBe(1848); disclaimer = false; return true; });
+    spyOn(Execution, 'delayUntilTicks').mockImplementation(async condition => condition());
+    expect(await pass(() => {})).toBe(true);
+    expect(disclaimer).toBe(false);
+    expect(drop).toHaveBeenCalledTimes(1);
+});
+
+test('an unconfirmed disclaimer drop retries before continuing the desert route', async () => {
+    spyOn(Game, 'tile').mockReturnValue({ x: 3304, z: 3116, level: 0 });
+    spyOn(reader, 'bankComId').mockReturnValue(-1);
+    spyOn(reader, 'inventory').mockReturnValue([{ id: 1848, count: 1, slot: 1, comId: 3214, name: 'Shantay disclaimer', ops: ['Read', null, null, null, 'Drop'] }]);
+    const drop = spyOn(Input, 'heldOp').mockReturnValue(true);
+    spyOn(Execution, 'delayUntilTicks').mockImplementation(async condition => condition());
+    expect(await pass(() => {})).toBe(false);
+    expect(await pass(() => {})).toBe(false);
+    expect(drop).toHaveBeenCalledTimes(2);
+});
 
 test('the combat escape casts Camelot without opening a ring dialogue', async () => {
     let tile = { x: 3493, z: 9493, level: 0 };

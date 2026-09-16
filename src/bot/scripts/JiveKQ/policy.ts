@@ -82,7 +82,6 @@ export function combatMode(phase: Phase, styles: readonly { mode: number; label:
 export interface Supplies { hp: number; food: number; prayer: number; prayerDoses: number; escape: boolean; arrows: number }
 
 export function retreatReason(s: Supplies): string | null {
-    if (s.hp <= 31) return 'hitpoints at or below the queen max hit';
     if (s.food <= 1) return 'food reserve reached';
     if (s.prayer <= 10 && s.prayerDoses === 0) return 'prayer reserve exhausted';
     if (!s.escape) return 'escape supplies missing';

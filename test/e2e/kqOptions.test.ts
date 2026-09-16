@@ -7,7 +7,18 @@ test('trip counts do not get parsed as a minute timeout', () => {
 });
 
 test('the default is a ten-trip hour-long soak', () => {
-    expect(kqOptions([])).toMatchObject({ minutes: 60, trips: 10, level: 99, base: 'http://localhost:8890' });
+    expect(kqOptions([])).toMatchObject({ minutes: 60, trips: 10, level: 99, recoveryProbe: false, base: 'http://localhost:8890' });
+});
+
+test('the recovery probe is an explicit mode independent of soak flags', () => {
+    for (const argv of [['--recovery-probe', '--level', '70', '--minutes', '10'], ['--level', '70', '--minutes', '10', '--recovery-probe']]) {
+        expect(kqOptions(argv)).toMatchObject({ recoveryProbe: true, level: 70, minutes: 10 });
+    }
+});
+
+test('the gate delay is an explicit optional fixture compatible with recovery mode', () => {
+    expect(kqOptions([])).toMatchObject({ gateDelayProbe: false });
+    expect(kqOptions(['--gate-delay-probe', '--recovery-probe', '--level', '70', '--minutes', '15'])).toMatchObject({ gateDelayProbe: true, recoveryProbe: true, level: 70, minutes: 15 });
 });
 
 test('level fixtures preserve the trip count and timeout in either flag order', () => {

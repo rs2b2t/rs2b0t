@@ -205,10 +205,11 @@ describe('KQ combat policy', () => {
         }
     });
 
-    test('retreats before another max hit when food or protection is exhausted', () => {
+    test('low HP heals in place; exhausted supplies still require a return', () => {
         const healthy = { hp: 80, food: 10, prayer: 40, prayerDoses: 4, escape: true, arrows: 100 };
         expect(retreatReason(healthy)).toBeNull();
-        expect(retreatReason({ ...healthy, hp: 31 })).toBeTruthy();
+        expect(retreatReason({ ...healthy, hp: 31 })).toBeNull();
+        expect(retreatReason({ ...healthy, hp: 1 })).toBeNull();
         expect(retreatReason({ ...healthy, food: 0 })).toBeTruthy();
         expect(retreatReason({ ...healthy, prayer: 8, prayerDoses: 0 })).toBeTruthy();
         expect(retreatReason({ ...healthy, escape: false })).toBeTruthy();

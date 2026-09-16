@@ -8,7 +8,7 @@ import { Prayer } from '../../api/prayer/Prayer.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { buyPass } from './route.js';
 import { BANK, type Supplies } from './policy.js';
-import { AIR, ARROWS, DUELING_RINGS, FOOD, GEAR, LAW, PASS, tripPack } from './loadout.js';
+import { AIR, ARROWS, BOW, DUELING_RINGS, FOOD, GEAR, LAW, PASS, tripPack } from './loadout.js';
 export { BOW, FOOD, MACE, RECOIL } from './loadout.js';
 const BOOSTS = [['defence', 'Super defence'], ['attack', 'Super attack'], ['strength', 'Super strength']];
 
@@ -38,11 +38,11 @@ export async function drink(prefix: string): Promise<boolean> {
     return true;
 }
 
-export async function eat(): Promise<boolean> {
+export async function eat(confirm = true): Promise<boolean> {
     const before = Inventory.countById(FOOD);
     const item = Inventory.items().find(i => i.id === FOOD);
     if (!item || !(await item.interact('Eat'))) return false;
-    return Execution.delayUntilTicks(() => Inventory.countById(FOOD) < before, 2);
+    return !confirm || Execution.delayUntilTicks(() => Inventory.countById(FOOD) < before, 2);
 }
 
 export async function boost(melee: boolean): Promise<boolean> {
@@ -69,6 +69,7 @@ async function open(log: (s: string) => void): Promise<boolean> {
 }
 
 class BankInterrupted extends Error {}
+class BankShortage extends Error {}
 
 async function bankReady(): Promise<void> {
     if (!(await Bank.waitReady(5000))) throw new BankInterrupted();
@@ -78,29 +79,31 @@ async function withdraw(id: number, count: number): Promise<void> {
     await bankReady();
     const need = count - Inventory.countById(id);
     if (need <= 0) return;
-    if (Bank.countById(id) < need) throw new Error(`KQ bank needs ${need} more of item ${id}`);
+    if (Bank.countById(id) < need) throw new BankShortage(`KQ bank needs ${need} more of item ${id}`);
     if (!(await Bank.withdrawXById(id, need))) {
         await bankReady();
         throw new Error(`KQ could not withdraw item ${id}`);
     }
 }
 
-export async function provision(slot: number, log: (s: string) => void): Promise<boolean> {
+export async function provision(slot: number, log: (s: string) => void, waitForGear = false): Promise<boolean> {
     try {
-        return await prepare(slot, log);
+        return await prepare(slot, log, waitForGear);
     } catch (error) {
+        if (waitForGear && error instanceof BankShortage) return false;
         if (!(error instanceof BankInterrupted)) throw error;
         log('bank: interrupted, retrying KQ supplies');
         return false;
     }
 }
 
-async function prepare(slot: number, log: (s: string) => void): Promise<boolean> {
+async function prepare(slot: number, log: (s: string) => void, waitForGear: boolean): Promise<boolean> {
     const pack = tripPack(slot);
     const food = pack.find(([id]) => id === FOOD)![1];
     await Prayer.clear();
     if (!(await open(log))) return false;
     await Bank.depositAllMatching(() => true);
+    if (waitForGear && [...GEAR, BOW].some(id => !worn(id) && Bank.countById(id) === 0)) return false;
     await Bank.close();
     for (const item of Equipment.items()) {
         if (!GEAR.includes(item.id)) {
@@ -136,7 +139,7 @@ async function prepare(slot: number, log: (s: string) => void): Promise<boolean>
             else await withdraw(995, 100);
         } else if (id === DUELING_RINGS[0]) {
             const ring = [...DUELING_RINGS].reverse().find(id => Bank.countById(id) > 0);
-            if (!ring) throw new Error('KQ bank needs a charged Ring of dueling');
+            if (!ring) throw new BankShortage('KQ bank needs a charged Ring of dueling');
             await withdraw(ring, 1);
         } else await withdraw(id, id === FOOD ? food - 1 : count);
     }
