@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { CLIENT_VERSION } from '../src/client/io/ClientProt.js';
+import Skill from '../src/client/shell/Skill.js';
 import { CHECKLIST, CHECKS, KqEvidence, chamber } from './lib/kqEvidence.js';
 import { kqOptions } from './lib/kqOptions.js';
 import type { Page } from 'playwright-core';
@@ -13,7 +14,7 @@ import type { Prayer } from '../src/bot/api/prayer/Prayer.js';
 import type { reader } from '../src/bot/adapter/ClientAdapter.js';
 import type JiveKQ from '../src/bot/scripts/JiveKQ/JiveKQ.js';
 import { deployIsolatedClient, launchBrowser, logout, requireSim, setSettings, stopScript } from './lib/harness.js';
-import { bootAndLogin, cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, seedItemsToBank, startScript, teleTo, type BankSeedItem } from './tutorial/harness.js';
+import { bootAndLogin, cheatQuiet, clearChatDialogs, mainlandAccount, seedItemsToBank, startScript, teleTo, type BankSeedItem } from './tutorial/harness.js';
 
 interface WindowApi {
     __rs2b0t: { Game: typeof Game; Inventory: typeof Inventory; Equipment: typeof Equipment; Npcs: typeof Npcs; Skills: typeof Skills; Prayer: typeof Prayer; reader: typeof reader };
@@ -37,6 +38,8 @@ const browser = await launchBrowser();
 const context = await browser.newContext();
 const pages = await Promise.all(names.map(() => context.newPage()));
 const errors: string[] = [];
+const skills = Skill.names.filter((_, i) => Skill.used[i]);
+const startingStats: Record<string, { name: string; base: number; effective: number; xp: number }[]> = {};
 const seed: BankSeedItem[] = [
     ['dragon_mace', 'Dragon mace', 1], ['magic_shortbow', 'Magic shortbow', 1], ['rune_full_helm', 'Rune full helm', 1],
     ['black_dragonhide_body', 'Dragonhide body', 1], ['black_dragonhide_chaps', 'Dragonhide chaps', 1], ['black_dragon_vambraces', 'Dragon vambraces', 1],
@@ -106,8 +109,8 @@ process.on('SIGINT', () => { interrupted = true; });
 process.on('SIGUSR1', () => { interrupted = true; });
 console.log(CHECKS.map(check => `[ ] ${CHECKLIST[check]}`).join('\n'));
 console.log(`KQ revision ${CLIENT_VERSION}: ${args.base}; evidence: ${output}`);
-console.log(`Soak target: ${args.trips} completed trips and at least ${args.trips} kills; timeout: ${args.minutes} minutes after setup`);
-await Bun.write('out/jivekq-proof.json', JSON.stringify({ result: 'RUNNING', names, evidenceDirectory: output, targetTrips: args.trips, timeoutMinutes: args.minutes }, null, 2));
+console.log(`Soak target: ${args.trips} completed trips and at least ${args.trips} kills; level: ${args.level}; timeout: ${args.minutes} minutes after setup`);
+await Bun.write('out/jivekq-proof.json', JSON.stringify({ result: 'RUNNING', names, evidenceDirectory: output, level: args.level, targetTrips: args.trips, timeoutMinutes: args.minutes }, null, 2));
 try {
     await Promise.all(pages.map(async (page, i) => {
         page.on('pageerror', error => errors.push(`${names[i]}: ${error.message}`));
@@ -115,12 +118,24 @@ try {
             await bootAndLogin(page, args.base, names[i], client.page);
         } else {
             await mainlandAccount(page, args.base, names[i], client.page);
-            await maxmeAndClearDialogs(page);
             await cheatQuiet(page, 'setvar heroquest 15');
             await clearChatDialogs(page);
             await seedItemsToBank(page, seed, { x: 3269, z: 3167, level: 0 });
         }
         await stopScript(page);
+        for (const skill of skills) {
+            if (!(await cheatQuiet(page, `setstat ${skill} ${args.level}`))) throw new Error(`Could not set ${names[i]} ${skill}`);
+        }
+        await clearChatDialogs(page);
+        await page.waitForFunction(({ skills, level }) => {
+            const { Skills } = (globalThis as typeof globalThis & WindowApi).__rs2b0t;
+            return skills.every(skill => Skills.level(skill) === level && Skills.effective(skill) === level);
+        }, { skills, level: args.level }, { timeout: 10_000 });
+        startingStats[names[i]] = await page.evaluate(skills => {
+            const { Skills } = (globalThis as typeof globalThis & WindowApi).__rs2b0t;
+            return skills.map(name => ({ name, base: Skills.level(name), effective: Skills.effective(name), xp: Skills.xp(name) }));
+        }, skills);
+        console.log(`FIXTURE ${names[i]}: all ${skills.length} enabled skills verified at ${args.level}`);
         if (i % 2 === 0) await seedItemsToBank(page, [{ debugName: 'shantay_pass', displayName: 'Shantay pass', qty: 3 }], { x: 3269, z: 3167, level: 0 });
         if (!(await teleTo(page, { x: 3308, z: 3120, level: 0 }, 3))) throw new Error('Could not reach Shantay bank');
         await setSettings(page, 'JiveKQ', { team: names.join(',') });
@@ -135,6 +150,7 @@ try {
             document.body.append(box);
         });
     }));
+    await Bun.write(`${output}/starting-stats.json`, JSON.stringify(startingStats, null, 2));
     await Promise.all(pages.slice(0, 3).map(page => startScript(page, 'JiveKQ')));
     console.log(`Started three members of ${names.join(',')}; fourth joins after the readiness check`);
     let fourthStarted = false;
@@ -194,7 +210,7 @@ try {
             lastPrint = Date.now();
             await Bun.write(`${output}/current.json`, JSON.stringify(samples, null, 2));
             await observations.flush();
-            await Bun.write(`${output}/progress.json`, JSON.stringify({ result: 'RUNNING', elapsedMs: Date.now() - started, targetTrips: args.trips, completedTrips: soakTrips().length, pauseTrip, trips: evidence.trips, kills: evidence.kills.length, restarts: evidence.restarts, milestones, minimumHp, sampleCount }, null, 2));
+            await Bun.write(`${output}/progress.json`, JSON.stringify({ result: 'RUNNING', level: args.level, elapsedMs: Date.now() - started, targetTrips: args.trips, completedTrips: soakTrips().length, pauseTrip, trips: evidence.trips, kills: evidence.kills.length, restarts: evidence.restarts, milestones, minimumHp, sampleCount }, null, 2));
         }
         if (Date.now() < deadline && CHECKS.every(check => milestones[check])) { await drawChecklist(samples); capture('pauseRetreat'); result = 'PASS'; break; }
         await pages[0].waitForTimeout(200);
@@ -221,7 +237,7 @@ try {
 } finally {
     await observations.end();
     const summary = {
-        result, failure, names, base: args.base, revision: CLIENT_VERSION, fixture: reuse ? 'reused accounts' : 'fresh max-stat accounts',
+        result, failure, names, base: args.base, revision: CLIENT_VERSION, fixture: `${reuse ? 'reused' : 'fresh'} level-${args.level} accounts`, level: args.level, startingStats,
         elapsedMs: Date.now() - started, milestones, errors, bundleSha256, crossings: evidence.crossings, ropeCounts: evidence.ropeCounts,
         targetTrips: args.trips, timeoutMinutes: args.minutes, sampleCount, completedTrips: soakTrips().length, pauseTrip, trips: evidence.trips,
         xpGains: evidence.xpGains, kills: evidence.kills, restarts: evidence.restarts, loot: evidence.loot, minimumHp
@@ -231,6 +247,7 @@ try {
     await Bun.write(`${output}/progress.json`, JSON.stringify(summary, null, 2));
     const report = [
         '# JiveKQ local validation', '', `Result: **${result}**`, '', `Server: ${args.base}, revision ${CLIENT_VERSION}. Fixture: ${summary.fixture}.`,
+        '', `Starting stats: ${Object.keys(startingStats).length}/4 accounts verified with all ${skills.length} enabled skills at level ${args.level}. [Recorded levels and XP](starting-stats.json).`,
         '', `Bundle SHA-256: ${bundleSha256}`, '', failure, '', '| Check | Result |', '|---|---|',
         ...CHECKS.map(check => `| ${CHECKLIST[check]} | ${milestones[check] ? 'PASS' : 'MISSING'} |`), '',
         `Strength XP gained: ${evidence.xpGains.melee.join(', ')}. Ranged XP gained: ${evidence.xpGains.ranged.join(', ')}.`, '',

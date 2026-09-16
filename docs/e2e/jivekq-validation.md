@@ -45,9 +45,11 @@ bun tools/nav/build-collision.ts --engine "$HOME/code/rs2b2t-engine"
 HEADED=1 SLOWMO=0 bun run verify:kq --base http://localhost:8890 --trips 10 --minutes 60
 # Or run without a visible browser.
 bun run verify:kq --base http://localhost:8890 --trips 10 --minutes 60
+# Run the same soak with every enabled skill starting at level 70.
+HEADED=1 SLOWMO=0 bun run verify:kq --base http://localhost:8890 --trips 10 --minutes 60 --level 70
 ```
 
-`--trips` defaults to 10 completed trips and `--minutes` defaults to 60. The timeout bounds the scenario after account setup. Allow extra time for the first cache download, tutorial bootstrap and bank seeding. The harness builds and serves an isolated client, reads the engine's login key, creates four fresh accounts, grants max stats and Heroes' Quest completion, and seeds their banks. Two accounts receive banked passes and two must buy them. All travel, purchases, banking and combat after setup run through JiveKQ. The harness leaves server tick speed and queen health, damage and drops unchanged.
+`--trips` defaults to 10 completed trips and `--minutes` defaults to 60. `--level` defaults to 99 and accepts integers from 70 to 99. The timeout bounds the scenario after account setup. Allow extra time for the first cache download, tutorial bootstrap and bank seeding. The harness builds and serves an isolated client, reads the engine's login key, creates four fresh accounts, grants Heroes' Quest completion, and seeds their banks. It sets every enabled skill to the requested level and verifies base and effective levels before starting the scripts. `starting-stats.json` records each account's initial levels and XP. Two accounts receive banked passes and two must buy them. All travel, purchases, banking and combat after setup run through JiveKQ. The harness leaves server tick speed and queen health, damage and drops unchanged.
 
 For a faster rerun, use the four names printed by a completed run:
 
@@ -55,7 +57,7 @@ For a faster rerun, use the four names printed by a completed run:
 KQ_ACCOUNTS=a,b,c,d HEADED=1 SLOWMO=0 bun run verify:kq --base http://localhost:8890 --trips 10 --minutes 60
 ```
 
-These must be disposable test accounts previously seeded by this harness; reused accounts retain their existing supplies, with three passes added to the first and third accounts. Refill depleted banks before reusing them. Fresh accounts are the default reproducibility check. On a different local port, set both `ENGINE_DIR` and `--base` to the matching engine.
+These must be disposable test accounts previously seeded by this harness; reused accounts retain their existing supplies, with three passes added to the first and third accounts. Their skills are reset to `--level`, including XP and current HP/prayer. Refill depleted banks before reusing them. Fresh accounts are the default reproducibility check. On a different local port, set both `ENGINE_DIR` and `--base` to the matching engine.
 
 ## What must pass
 
@@ -107,4 +109,12 @@ Across 17 respawns, observed damage began after 1.45–5.00 seconds, with a 2.91
 
 Artifacts are in `out/e2e/jivekq/kq3k23u6/`, including `report.md`, `proof.json`, the full observations, Team chat screenshots and `electron-channel.json`. The served bundle SHA-256 was `f768f5b10014cd3a86bd01c51444c26958a7c09a9e3b7a33255c526ac4607b7b`.
 
-The fixture used four max-stat accounts, engine `2135d3a2`, content `8e96792ea` and the running server's approximately 200 ms ticks. Minimum supported combat levels have not been validated live. The full offline suite passed 9,849 tests with one skip and no failures; typecheck, lint and both prose gates passed.
+The fixture used four max-stat accounts, engine `2135d3a2`, content `8e96792ea` and the running server's approximately 200 ms ticks. The full offline suite passed 9,849 tests with one skip and no failures; typecheck, lint and both prose gates passed.
+
+### Level 70
+
+Run `kq434fb0` used `--level 70 --trips 10 --minutes 60` and failed after 3m 03s including setup. All four accounts started with all 19 enabled skills at base/effective level 70 and 737,627 XP per skill, verified in `starting-stats.json`. Gear and the existing checklist were unchanged.
+
+The run passed nine checks, including both synchronized entrances and super potion boosts, but stopped on the first chamber visit after the leader died. It completed zero trips and zero kills; every account gained zero Strength and Ranged XP. The east player fell from 60 to 29 HP while the group approached the queen and triggered a group retreat. The leader ate from 39 to 59 HP, then fell to 28, 2 and 0 HP before escaping, with 15 sharks still carried. The north and south players reached the Duel Arena. All four had Protect from Magic active during the approach.
+
+This run does not validate level-70 safety or sustained DPS. The approach and escape behavior need further work before the lower-level soak can pass. Artifacts are in `out/e2e/jivekq/kq434fb0/`; the served bundle SHA-256 was `467380dae6241fa860c6f0a25eb7c14da91a0b6d2d6426ae1fc9b5091a8ad0b9`. The fixture change passed 86 focused tests, typecheck and lint.
