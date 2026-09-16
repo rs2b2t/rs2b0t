@@ -2,9 +2,21 @@
 
 [Harness setup and checklist](jivekq-validation.md).
 
-## Final concurrent level-70 soaks
+## Normal-speed prayer failure and bank benchmark
 
-Both four-player teams passed all 25 runtime checks and the full-stream replay against the corrected harness assertions. Each completed ten counted trips plus one excluded pause-test trip, with zero deaths, zero browser errors and no cleanup rescue teleports. All eight clients were observed logged out safely. Durations include setup and cleanup.
+The first three-team run at 600 ms per tick exposed an attack-prayer confirmation failure. Teams `kq4nlnzu`, `kq4nlxvw` and `kq4nmicz` aborted their first fights after 13–17 seconds with food remaining. Strength and Reflexes activated after the two-second API timeout, but the script had already broadcast a group retreat. These runs were interrupted after returning; all twelve clients logged out and no players died. C required two cleanup rescue teleports. All three results remain failures.
+
+Combat prayer updates now run without blocking food actions. A pending toggle is not sent again, and a timed-out toggle gets ten ticks from its request for the actual state to arrive. Attack-prayer failures cannot cause retreat. Missing magic protection gets a retry; repeated failure sends only the affected player to restock after the second grace period. Regression tests cover late first and second confirmations, continued eating and delayed prayer removal between kills.
+
+Exact-ID bank withdrawals now use the existing Withdraw-1/5/10 actions when the requested available quantity matches. Other quantities keep Withdraw-X, and every path still confirms inventory arrival. Three local 600 ms rounds per build withdrew and verified the same thirteen-request leader inventory. Median time fell from 23.387 to 17.375 seconds, saving 6.012 seconds (25.7%). This measures withdrawals only, excluding deposits, opening the bank, equipping and healing. Both benchmark clients were observed logged out.
+
+Artifacts are in `out/e2e/jivekq/three-teams-normal-speed/`: `bank-benchmark.json`, `baseline-timing.md` and `run.json`. The baseline timing report separates the deliberate fourth-player wait from each bot's own preparation. Normal travel took 35–38 seconds from bank release to the surface entrance and 59–64 seconds through the upper cavern. The failed prayer check then caused a 127–150 second escape and restock cycle.
+
+The bank and prayer changes passed 10,032 offline tests with one existing skip and zero failures. Typecheck, lint and both changed documentation files' prose checks passed.
+
+## Previous concurrent level-70 soaks
+
+Both four-player teams passed all 25 runtime checks and the full-stream replay against the corrected harness assertions at approximately 200 ms per server tick. Each completed ten counted trips plus one excluded pause-test trip, with zero deaths, zero browser errors and no cleanup rescue teleports. All eight clients were observed logged out safely. Durations include setup and cleanup. These runs predate the bank and prayer changes above.
 
 | Team | Counted trips | Kills on counted trips | Duration | Minimum HP, west/east/north/south |
 |---|---|---|---|---|

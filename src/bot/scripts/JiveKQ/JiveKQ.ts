@@ -65,6 +65,8 @@ export default class JiveKQ extends LoopingBot {
     private lastAttack = -10;
     private nextEatTick = 0;
     private pendingFood: { tick: number; count: number } | null = null;
+    private prayerRequests = new Map<string, { on: boolean; pending: boolean; retryTick: number }>();
+    private protectionFailures = 0;
     private queenDead = false;
     private blocked = false;
     private lure: Point | null = null;
@@ -212,17 +214,48 @@ export default class JiveKQ extends LoopingBot {
         }
     }
 
+    private requestPrayer(name: string, on: boolean): boolean {
+        const previous = this.prayerRequests.get(name);
+        if (previous?.pending) return previous.on === on && Prayer.active(name) === on;
+        if (Prayer.active(name) === on) {
+            if (name === PROTECT_FROM_MAGIC) this.protectionFailures = 0;
+            return true;
+        }
+        if (previous && Game.tick() < previous.retryTick) return false;
+        const request = { on, pending: true, retryTick: Game.tick() + 10 };
+        this.prayerRequests.set(name, request);
+        const completed = (ok: boolean) => {
+            request.pending = false;
+            request.retryTick = Math.max(request.retryTick, Game.tick() + 1);
+            if (name === PROTECT_FROM_MAGIC && on) this.protectionFailures = ok ? 0 : this.protectionFailures + 1;
+        };
+        void Prayer.set(name, on).then(completed, () => completed(false));
+        return false;
+    }
+
+    private protect(): boolean {
+        const request = this.prayerRequests.get(PROTECT_FROM_MAGIC);
+        if (!Prayer.active(PROTECT_FROM_MAGIC) && this.protectionFailures >= 2 && request && !request.pending && Game.tick() >= request.retryTick) {
+            this.retreat('could not restore magic protection after retrying', true);
+            return false;
+        }
+        return this.requestPrayer(PROTECT_FROM_MAGIC, true);
+    }
+
+    private clearPrayers(): boolean {
+        return [PROTECT_FROM_MAGIC, 'Ultimate strength', 'Incredible reflexes'].map(name => this.requestPrayer(name, false)).every(Boolean);
+    }
+
     private async upkeep(walking = false): Promise<boolean> {
         if (!Game.sceneReady() || this.stage === 'bank') return false;
         this.observeFood();
         const hp = Skills.effective('hitpoints');
         const queen = this.stage === 'fight' && !this.queenDead ? Npcs.query().where(n => queenPhase(n.id) !== null).nearest() : null;
         if (queen && hp > 31 && Prayer.points() > 0 && !Prayer.active(PROTECT_FROM_MAGIC)) {
-            await Prayer.set(PROTECT_FROM_MAGIC, true);
-            return true;
+            this.protect();
         }
         const waiting = this.stage === 'fight' && this.queenTracker.killedAt > 0 && !queen && !this.searching;
-        if (waiting) await Prayer.clear();
+        if (waiting) await this.clearPrayers();
         const food = Inventory.countById(FOOD);
         const tick = Game.tick();
         const canConsume = tick >= this.nextEatTick && (!this.pendingFood || tick - this.pendingFood.tick >= 4);
@@ -420,20 +453,22 @@ export default class JiveKQ extends LoopingBot {
         }
         this.lureAt = 0;
         if (!queen || this.queenDead) {
-            await Prayer.set('Ultimate strength', false);
-            await Prayer.set('Incredible reflexes', false);
             if (this.queenTracker.killedAt && Game.tick() - this.lastKillTick <= 120 && !sighting) {
-                await Prayer.clear();
+                if (!(await this.clearPrayers())) return;
                 if (Game.tick() < this.lootUntilTick && await this.loot()) { this.status = 'collecting queen loot'; return; }
                 this.status = near(Game.tile(), WAIT_CORNER, 0) ? 'stacked near spawn; prayers off' : 'regrouping in the northwest corner';
                 if (!near(Game.tile(), WAIT_CORNER, 0)) { step(WAIT_CORNER); return; }
                 if (!worn(MACE)) { await equip(MACE); return; }
                 if (Game.combatMode() !== 1) Game.setCombatMode(1);
-            } else if (!queen) await this.searchQueen(sighting);
+            } else {
+                this.requestPrayer('Ultimate strength', false);
+                this.requestPrayer('Incredible reflexes', false);
+                if (!queen) await this.searchQueen(sighting);
+            }
             return;
         }
         if (Prayer.points() === 0 && doses('Prayer potion') > 0) { this.status = 'restoring prayer before attacking'; return; }
-        if (!(await Prayer.set(PROTECT_FROM_MAGIC, true))) { this.retreat('protection prayer failed'); return; }
+        if (!this.protect()) { if (this.stage !== 'retreat') this.status = 'restoring magic protection'; return; }
         if (this.checkSafety()) return;
         const phase = queenPhase(queen.id)!;
         const formation = this.formation(queen);
@@ -455,13 +490,13 @@ export default class JiveKQ extends LoopingBot {
         if (mode === null) { this.retreat('required crush or rapid combat style unavailable'); return; }
         if (Game.combatMode() !== mode) Game.setCombatMode(mode);
         if (this.checkSafety()) return;
-        const prayers = Promise.all([Prayer.set('Ultimate strength', phase === 'melee'), Prayer.set('Incredible reflexes', phase === 'melee')]);
+        this.requestPrayer('Ultimate strength', phase === 'melee');
+        this.requestPrayer('Incredible reflexes', phase === 'melee');
         const special = Special.ready(phase === 'melee' ? 'Dragon mace' : 'Magic shortbow') ? Special.arm() : Promise.resolve(false);
         if (Game.tick() - this.lastAttack >= 4 || reader.selfFaceEntity() !== queen.index) {
             if (await queen.interact('Attack')) this.lastAttack = Game.tick();
         }
-        const [enabled] = await Promise.all([prayers, special]);
-        if (enabled.some(on => !on)) this.retreat('offensive prayers failed');
+        await special;
     }
 
     private formation(queen: Npc) {
@@ -489,7 +524,7 @@ export default class JiveKQ extends LoopingBot {
         this.searching = true;
         this.blocked = false;
         this.lure = null;
-        if (Prayer.points() > 0) await Prayer.set(PROTECT_FROM_MAGIC, true);
+        if (Prayer.points() > 0 && !this.protect()) return;
         if (this.checkSafety()) return;
         const target = this.search.next(here, sighting, Date.now(), p => this.usable(p));
         this.status = sighting ? 'searching the last reported queen position' : 'searching the queen chamber';
@@ -511,7 +546,7 @@ export default class JiveKQ extends LoopingBot {
             return;
         }
         if (!queen || !sighting) { await this.searchQueen(sighting); return; }
-        if (Prayer.points() > 0) await Prayer.set(PROTECT_FROM_MAGIC, true);
+        if (Prayer.points() > 0 && !this.protect()) return;
         if (this.checkSafety()) return;
         const now = Date.now();
         const centre = queen.networkTile();
@@ -570,7 +605,7 @@ export default class JiveKQ extends LoopingBot {
         if (collector?.name !== this.party.self) return false;
         const recovery = this.recoveries.get(`${casualty.name}:${casualty.session}:${casualty.death.at}`)!;
         this.status = `recovering ${casualty.name}'s dropped items`;
-        if (Prayer.points() === 0 || !(await Prayer.set(PROTECT_FROM_MAGIC, true))) return true;
+        if (Prayer.points() === 0 || !this.protect()) return true;
         if (this.checkSafety()) return true;
         if (!near(Game.tile(), casualty.death.tile, 1)) { step(casualty.death.tile); return true; }
         const items = recoveryDrops(casualty.death, reader.groundItems()).filter(i => i.id !== 229);

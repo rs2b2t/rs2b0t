@@ -88,6 +88,7 @@ function recoveryBot() {
     spyOn(Inventory, 'free').mockReturnValue(4);
     spyOn(Equipment, 'items').mockReturnValue([]);
     spyOn(Prayer, 'points').mockReturnValue(70);
+    spyOn(Prayer, 'active').mockImplementation(name => name === PROTECT_FROM_MAGIC);
     spyOn(Prayer, 'set').mockResolvedValue(true);
     spyOn(reader, 'groundItems').mockReturnValue([]);
     const party = new Party(['one', 'two', 'three', 'four'], 'one', 'one');
@@ -134,12 +135,17 @@ test('a queued hit after teleport records the Camelot pile instead of the old ch
 
 test('survivors protect and confirm a teammate gear pickup before banking it', async () => {
     const { bot, state, party } = recoveryBot();
+    let protectedFromMagic = false;
+    spyOn(Prayer, 'active').mockImplementation(() => protectedFromMagic);
+    spyOn(Prayer, 'set').mockImplementation(async () => { protectedFromMagic = true; return true; });
     party.receive({ name: 'two', session: 'two', trip: 1, stage: 'retreat', ready: false, restocking: true, tile, death }, 1000);
     spyOn(reader, 'groundItems').mockReturnValue([{ id: 861, count: 1, tile, name: 'Magic shortbow', distance: 0, ops: ['Take'] }]);
     const take = spyOn(Input, 'takeObj').mockImplementation(() => { state.bows++; return true; });
     spyOn(Execution, 'delayUntilTicks').mockImplementation(async condition => condition());
     expect(await bot['recoverLoot']()).toBe(true);
     expect(Prayer.set).toHaveBeenCalledWith(PROTECT_FROM_MAGIC, true);
+    expect(take).not.toHaveBeenCalled();
+    expect(await bot['recoverLoot']()).toBe(true);
     expect(take).toHaveBeenCalledTimes(1);
     expect(bot['lootCounts'].get('Recovered for two: Magic shortbow')).toBe(1);
     spyOn(reader, 'groundItems').mockReturnValue([]);

@@ -14,6 +14,8 @@ A pause, unexpected failure or missing heartbeat for six seconds aborts the trip
 
 Having food does not prevent every retreat. One shark is reserved for escape; depleted prayer without a restore dose, missing teleport supplies, exhausted arrows, owned random-event visitors and group failures can also end a visit. Escape preserves the last combat eat cooldown and retries needed healing until a shark is consumed. It does not cast while food remains and HP is still at the eating threshold. If no food remains, it attempts the teleport immediately.
 
+Prayer updates run without blocking eating. Each toggle gets ten game ticks for its state to arrive before another request can be sent. Failed attack prayers never trigger retreat. A player with missing magic protection keeps eating while retrying; two failed requests followed by that grace period send only that player back to restock. The other three continue fighting.
+
 If the queen is out of view, each bot approaches the latest team sighting, then searches six locations around the chamber. Reaching an empty location or making no progress for eight seconds advances the search. A blocked cross triggers a coordinated pull: bots first approach and attack until the queen targets a team member, then follow the route chosen by the first active roster member. The route checks room for the queen's five-by-five body and ends beyond her attack range. A stalled pull tries another direction and reacquires her position. Searching or a stalled pull never causes a retreat by itself; the normal supply and team safety checks still apply.
 
 A dying client broadcasts its server tile, carried items and the items already on that tile. For deaths in the queen chamber, survivors attempt to recover new matching drops at that exact tile. The first available survivor collects while the others continue fighting; a full collector returns to bank and the next takes over. Gear takes priority. Collectors keep eating and protecting from magic, may discard empty vials, and keep their food and escape supplies. Recovery ends after the pile clears, inventory fills or sixty game ticks pass. Recovered items are deposited at Shantay and listed by owner in the Loot paint and Team chat. The dead character returns to Shantay and waits if its bank lacks replacement gear. Items stay in the collector's bank for manual redistribution. The client has no ground-item owner field, so an identical item dropped onto the same tile at the same time cannot be distinguished.
@@ -42,7 +44,7 @@ The [team guide](https://lostcity.rs/t/solo-kq-infodump-a-companion-thread/18495
 
 ## Run against the local 289 server
 
-Use a running members server with local account creation and debug cheats enabled, Bun dependencies installed, and Google Chrome available. The default engine is `~/code/rs2b2t-engine`, served at `http://localhost:8890`. Set `ENGINE_DIR` when using another checkout. For a single-team baseline, keep other fighters out of the chamber. To test two teams, start a second harness after the first prints its isolated client path. Each creates a separate four-account roster and result directory; both share the queen and any existing ropes. Their cardinal positions can overlap. Shared queen deaths must be deduplicated when comparing the reports.
+Use a running members server with local account creation and debug cheats enabled, Bun dependencies installed, and Google Chrome available. The default engine is `~/code/rs2b2t-engine`, served at `http://localhost:8890`. Set `ENGINE_DIR` when using another checkout. For a single-team baseline, keep other fighters out of the chamber. To test multiple teams, start each additional harness after the preceding one prints its isolated client path. Three harnesses create twelve independent bots across three rosters and result directories. They share the queen and any existing ropes, and their cardinal positions can overlap. Shared queen deaths must be deduplicated when comparing the reports.
 
 From the rs2b0t checkout:
 
@@ -63,6 +65,8 @@ HEADED=1 SLOWMO=0 bun run verify:kq --base http://localhost:8890 --recovery-prob
 ```
 
 `--trips` defaults to 10 completed trips and `--minutes` defaults to 60. `--level` defaults to 99 and accepts integers from 70 to 99. The timeout bounds the scenario after account setup. Allow extra time for the first cache download, tutorial bootstrap and bank seeding. The harness builds and serves an isolated client, reads the engine's login key, creates four fresh accounts, grants Heroes' Quest completion, and seeds their banks. It sets every enabled skill to the requested level and verifies base and effective levels before starting the scripts. `starting-stats.json` records each account's initial levels and XP. Two accounts receive banked passes and two must buy them. All travel, purchases, banking and combat after setup run through JiveKQ. The harness leaves server tick speed and queen health, damage and drops unchanged.
+
+Normal server speed is 600 ms per tick. On a local debug server previously accelerated with `::speed`, restore it with `::speed 600` before starting. `SLOWMO=0` disables browser automation delays; it does not set game speed. A normal-speed soak may reach the sixty-minute deadline before completing ten trips.
 
 For a faster rerun, use the four names printed by a completed run:
 

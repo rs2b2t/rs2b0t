@@ -3,7 +3,7 @@ import { reader } from '../../src/bot/adapter/ClientAdapter.js';
 import { Game } from '../../src/bot/api/game/Game.js';
 import { Inventory, InvItem } from '../../src/bot/api/inventory/Inventory.js';
 import { Execution } from '../../src/bot/api/execution/Execution.js';
-import { Prayer } from '../../src/bot/api/prayer/Prayer.js';
+import { Prayer, PROTECT_FROM_MAGIC } from '../../src/bot/api/prayer/Prayer.js';
 import { Skills } from '../../src/bot/api/skills/Skills.js';
 import { Special } from '../../src/bot/api/combat/Special.js';
 import { Input } from '../../src/bot/input/Input.js';
@@ -26,6 +26,7 @@ function combat() {
     bot['party'] = party;
     for (const name of party.roster) party.receive({ name, session: name, trip: 1, ready: true, stage: 'fight', tile }, Date.now());
     spyOn(Game, 'sceneReady').mockReturnValue(true);
+    spyOn(Game, 'ingame').mockReturnValue(true);
     spyOn(Game, 'tile').mockReturnValue(tile);
     spyOn(Game, 'tick').mockImplementation(() => state.tick);
     spyOn(Game, 'combatMode').mockReturnValue(1);
@@ -70,6 +71,119 @@ test('critical HP eats and continues the fight without a personal or group retre
     expect(bot.stage).toBe('fight');
     expect(bot.retreats).toBe(0);
     expect(events).toEqual([{ action: 'eat', tick: 100 }, { action: 'attack', tick: 100 }]);
+});
+
+test('pending offensive prayers do not block eating or attacks, and failures do not retreat', async () => {
+    const { bot, state, events } = combat();
+    spyOn(Prayer, 'active').mockImplementation(name => name === PROTECT_FROM_MAGIC);
+    const responses: ((ok: boolean) => void)[] = [];
+    const prayer = spyOn(Prayer, 'set').mockImplementation(name => name === PROTECT_FROM_MAGIC ? Promise.resolve(true) : new Promise(resolve => responses.push(resolve)));
+    let finished = false;
+    const first = bot.loop().then(() => { finished = true; });
+    await Bun.sleep(10);
+    const completedWhilePending = finished;
+    if (finished) {
+        state.tick = 101; state.food--; bot['observeFood'](); state.tick = 103;
+        await bot.loop();
+    }
+    responses.forEach(resolve => resolve(false));
+    await first;
+    expect(completedWhilePending).toBe(true);
+    expect(prayer.mock.calls.filter(([name]) => name !== PROTECT_FROM_MAGIC)).toHaveLength(2);
+    expect(events).toEqual([{ action: 'eat', tick: 100 }, { action: 'attack', tick: 100 }, { action: 'eat', tick: 103 }, { action: 'attack', tick: 103 }]);
+    expect(bot.stage).toBe('fight');
+    expect(bot.retreats).toBe(0);
+});
+
+test('pending protection keeps eating available without attacking unprotected', async () => {
+    const { bot, state, events } = combat();
+    spyOn(Prayer, 'active').mockReturnValue(false);
+    let respond!: (ok: boolean) => void;
+    const prayer = spyOn(Prayer, 'set').mockImplementation(() => new Promise(resolve => { respond = resolve; }));
+    let finished = false;
+    const first = bot.loop().then(() => { finished = true; });
+    await Bun.sleep(10);
+    const completedWhilePending = finished;
+    if (finished) {
+        state.tick = 101; state.food--; bot['observeFood'](); state.tick = 103;
+        await bot.loop();
+    }
+    respond(false);
+    await first;
+    expect(completedWhilePending).toBe(true);
+    expect(prayer).toHaveBeenCalledTimes(1);
+    expect(events).toEqual([{ action: 'eat', tick: 100 }, { action: 'eat', tick: 103 }]);
+    expect(bot.stage).toBe('fight');
+});
+
+test('repeated protection failures restock only the affected player', async () => {
+    const { bot, state } = combat();
+    state.hp = 70;
+    spyOn(Prayer, 'active').mockReturnValue(false);
+    spyOn(Prayer, 'set').mockResolvedValue(false);
+    spyOn(route, 'step').mockReturnValue(true);
+    await bot.loop();
+    expect(bot.stage).toBe('fight');
+    state.tick += 10;
+    await bot.loop();
+    expect(bot.stage).toBe('fight');
+    state.tick += 10;
+    await bot.loop();
+    expect(bot.stage).toBe('retreat');
+    expect(bot.restocking).toBe(true);
+    expect(bot['party']!.unsafe(1, Date.now())).toBe(false);
+});
+
+test('late protection confirmation is observed before another toggle is sent', async () => {
+    const { bot, state, events } = combat();
+    state.hp = 70;
+    let protectedFromMagic = false;
+    spyOn(Prayer, 'active').mockImplementation(name => name === PROTECT_FROM_MAGIC ? protectedFromMagic : true);
+    const prayer = spyOn(Prayer, 'set').mockResolvedValue(false);
+    await bot.loop();
+    for (state.tick = 101; state.tick < 108; state.tick++) await bot.loop();
+    expect(prayer).toHaveBeenCalledTimes(1);
+    protectedFromMagic = true;
+    state.tick = 108;
+    await bot.loop();
+    expect(prayer).toHaveBeenCalledTimes(1);
+    expect(events).toEqual([{ action: 'attack', tick: 108 }]);
+    expect(bot.stage).toBe('fight');
+    expect(bot.retreats).toBe(0);
+});
+
+test('a delayed second protection acknowledgement does not trigger a premature personal retreat', async () => {
+    const { bot, state } = combat();
+    state.hp = 70;
+    let protectedFromMagic = false;
+    spyOn(Prayer, 'active').mockImplementation(name => name === PROTECT_FROM_MAGIC ? protectedFromMagic : true);
+    const prayer = spyOn(Prayer, 'set').mockResolvedValue(false);
+    await bot.loop();
+    state.tick = 110; await bot.loop();
+    for (state.tick = 111; state.tick < 118; state.tick++) await bot.loop();
+    expect(bot.stage).toBe('fight');
+    protectedFromMagic = true;
+    state.tick = 118; await bot.loop();
+    expect(prayer).toHaveBeenCalledTimes(2);
+    expect(bot.stage).toBe('fight');
+    expect(bot.retreats).toBe(0);
+});
+
+test('clearing prayers keeps food available and does not repeat a delayed off toggle', async () => {
+    const { bot, state, events } = combat();
+    bot['queenTracker'].killedAt = 1;
+    spyOn(reader, 'npcs').mockReturnValue([]);
+    let protectedFromMagic = true;
+    spyOn(Prayer, 'active').mockImplementation(name => name === PROTECT_FROM_MAGIC && protectedFromMagic);
+    const prayer = spyOn(Prayer, 'set').mockResolvedValue(false);
+    await bot['upkeep']();
+    state.tick = 101; state.food--; bot['observeFood']();
+    state.tick = 103; await bot['upkeep']();
+    expect(events).toEqual([{ action: 'eat', tick: 100 }, { action: 'eat', tick: 103 }]);
+    expect(prayer.mock.calls).toEqual([[PROTECT_FROM_MAGIC, false]]);
+    state.tick = 108; protectedFromMagic = false;
+    expect(bot['clearPrayers']()).toBe(true);
+    expect(prayer).toHaveBeenCalledTimes(1);
 });
 
 test('a food-reserve retreat preserves the last combat eat cooldown before healing and teleporting', async () => {

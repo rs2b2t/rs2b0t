@@ -24,6 +24,7 @@ function scene(npcs: NpcSnapshot[] = []) {
     spyOn(Inventory, 'countById').mockReturnValue(10);
     spyOn(reader, 'npcs').mockReturnValue(npcs);
     spyOn(Prayer, 'points').mockReturnValue(99);
+    spyOn(Prayer, 'active').mockImplementation(name => name === PROTECT_FROM_MAGIC);
     spyOn(Prayer, 'set').mockResolvedValue(true);
     spyOn(supply, 'eat').mockImplementation(async () => { events.push('eat'); return true; });
     spyOn(Prayer, 'clear').mockImplementation(async () => { events.push('clear'); });
@@ -97,14 +98,16 @@ test('a visible respawn restores magic protection before food or potion upkeep',
         protectedFromMagic = true; events.push('protect'); return true;
     });
     await bot['upkeep']();
-    expect(events).toEqual(['protect']);
-    await bot['upkeep']();
     expect(events).toEqual(['protect', 'eat']);
 });
 
 test('confirmed kill clears prayers before waiting upkeep', async () => {
     const { bot, events } = scene();
     bot['queenTracker'].killedAt = 1;
+    spyOn(Prayer, 'set').mockImplementation(async (name, on) => {
+        expect(name).toBe(PROTECT_FROM_MAGIC); expect(on).toBe(false);
+        events.push('clear'); return true;
+    });
     await bot['upkeep']();
     expect(events).toEqual(['clear', 'eat']);
 });
@@ -337,7 +340,7 @@ test('approaching a visible queen spreads into formation before optional attack 
     spyOn(Game, 'combatStyles').mockReturnValue([{ mode: 1, label: 'Aggressive' }]);
     spyOn(route, 'step').mockImplementation(() => { events.push('move'); return true; });
     await bot['fight']();
-    expect(events).toEqual([PROTECT_FROM_MAGIC, 'move']);
+    expect(events).toEqual(['move']);
 });
 
 
