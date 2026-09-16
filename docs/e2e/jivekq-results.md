@@ -14,6 +14,16 @@ Artifacts are in `out/e2e/jivekq/three-teams-normal-speed/`: `bank-benchmark.jso
 
 The bank and prayer changes passed 10,032 offline tests with one existing skip and zero failures. Typecheck, lint and both changed documentation files' prose checks passed.
 
+## Normal-speed weapon confirmation failure
+
+Teams `kq4oao32`, `kq4oaxrz` and `kq4obg0e` each completed a five-kill first trip and passed all 24 gameplay checks, including the excluded pause trip. On the third visit, all three leaders triggered `phase weapon unavailable`. Each still carried its bow; the bow became equipped 1.777–1.850 seconds after the retreat. The 2.5-second equip confirmation timeout had been treated as missing gear and escalated to a group retreat. B also missed an eating opportunity while that awaited confirmation blocked the loop.
+
+B failed the contribution assertion because the premature retreat ended a member's fight before it gained XP on that visit. A and C were interrupted before another fight. These runs lasted 26–29 minutes and are failures, not completed soaks. All twelve survived and were observed logged out without cleanup rescue teleports. The first trips lasted 624–661 seconds from chamber entry until all four returned to Shantay; their early returners waited for the remaining members.
+
+Weapon switches now track the pending request without blocking eating. Actual equipment state confirms success, and a failed request gets ten ticks before retrying. A missing weapon causes personal restocking. Regression tests cover delayed confirmation, rejected input, continued eating, and a phase change while an earlier equip is still pending. The failed runs and equip traces remain under `out/e2e/jivekq/three-teams-normal-speed/` and the individual run directories.
+
+The weapon fix passed 10,036 offline tests with one existing skip and zero failures, plus typecheck, focused lint and prose checks.
+
 ## Previous concurrent level-70 soaks
 
 Both four-player teams passed all 25 runtime checks and the full-stream replay against the corrected harness assertions at approximately 200 ms per server tick. Each completed ten counted trips plus one excluded pause-test trip, with zero deaths, zero browser errors and no cleanup rescue teleports. All eight clients were observed logged out safely. Durations include setup and cleanup. These runs predate the bank and prayer changes above.

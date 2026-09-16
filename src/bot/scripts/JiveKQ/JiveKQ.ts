@@ -67,6 +67,7 @@ export default class JiveKQ extends LoopingBot {
     private pendingFood: { tick: number; count: number } | null = null;
     private prayerRequests = new Map<string, { on: boolean; pending: boolean; retryTick: number }>();
     private protectionFailures = 0;
+    private weaponRequest: { id: number; pending: boolean; retryTick: number } | null = null;
     private queenDead = false;
     private blocked = false;
     private lure: Point | null = null;
@@ -244,6 +245,23 @@ export default class JiveKQ extends LoopingBot {
 
     private clearPrayers(): boolean {
         return [PROTECT_FROM_MAGIC, 'Ultimate strength', 'Incredible reflexes'].map(name => this.requestPrayer(name, false)).every(Boolean);
+    }
+
+    private equipWeapon(id: number): boolean {
+        const previous = this.weaponRequest;
+        const waiting = previous && !worn(previous.id) && (previous.pending || Game.tick() < previous.retryTick);
+        if (!waiting && worn(id)) { this.weaponRequest = null; return true; }
+        this.status = id === MACE ? 'equipping dragon mace' : 'equipping magic shortbow';
+        if (waiting) return false;
+        if (Inventory.countById(id) === 0) { this.retreat('phase weapon missing', true); return false; }
+        const request = { id, pending: true, retryTick: Game.tick() + 10 };
+        this.weaponRequest = request;
+        const completed = () => {
+            request.pending = false;
+            request.retryTick = Math.max(request.retryTick, Game.tick() + 1);
+        };
+        void equip(id).then(completed, completed);
+        return false;
     }
 
     private async upkeep(walking = false): Promise<boolean> {
@@ -458,7 +476,7 @@ export default class JiveKQ extends LoopingBot {
                 if (Game.tick() < this.lootUntilTick && await this.loot()) { this.status = 'collecting queen loot'; return; }
                 this.status = near(Game.tile(), WAIT_CORNER, 0) ? 'stacked near spawn; prayers off' : 'regrouping in the northwest corner';
                 if (!near(Game.tile(), WAIT_CORNER, 0)) { step(WAIT_CORNER); return; }
-                if (!worn(MACE)) { await equip(MACE); return; }
+                if (!this.equipWeapon(MACE)) return;
                 if (Game.combatMode() !== 1) Game.setCombatMode(1);
             } else {
                 this.requestPrayer('Ultimate strength', false);
@@ -482,10 +500,7 @@ export default class JiveKQ extends LoopingBot {
         this.status = `${phase}: ${SIDES[this.slot]}`;
         if (!near(Game.tile(), tile, 0)) { step(tile); return; }
         const weapon = phase === 'melee' ? MACE : BOW;
-        if (!worn(weapon)) {
-            if (!(await equip(weapon))) { this.retreat('phase weapon unavailable'); return; }
-            return;
-        }
+        if (!this.equipWeapon(weapon)) return;
         const mode = combatMode(phase, Game.combatStyles());
         if (mode === null) { this.retreat('required crush or rapid combat style unavailable'); return; }
         if (Game.combatMode() !== mode) Game.setCombatMode(mode);
@@ -565,7 +580,7 @@ export default class JiveKQ extends LoopingBot {
             const target = approachQueen(centre, here, p => this.usable(p) && Reachability.lineOfSight(p, origin, 5));
             if (!target) { await this.searchQueen(null); return; }
             if (!near(here, target, 0)) { step(target); return; }
-            if (!worn(BOW)) { await equip(BOW); return; }
+            if (!this.equipWeapon(BOW)) return;
             if (Game.combatMode() !== 1) Game.setCombatMode(1);
             if (Game.tick() - this.lastAttack >= 4 && await queen.interact('Attack')) this.lastAttack = Game.tick();
             return;

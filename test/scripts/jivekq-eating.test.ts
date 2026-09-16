@@ -73,6 +73,81 @@ test('critical HP eats and continues the fight without a personal or group retre
     expect(events).toEqual([{ action: 'eat', tick: 100 }, { action: 'attack', tick: 100 }]);
 });
 
+test('a late phase weapon equip keeps eating available without retreating or sending another equip', async () => {
+    const { bot, state, events } = combat();
+    let equipped = false;
+    spyOn(supply, 'worn').mockImplementation(id => id !== supply.MACE || equipped);
+    spyOn(Inventory, 'countById').mockImplementation(id => id === supply.FOOD ? state.food : id === supply.MACE ? 1 : 0);
+    let respond!: (ok: boolean) => void;
+    const equip = spyOn(supply, 'equip').mockImplementation(() => new Promise(resolve => { respond = resolve; }));
+    let finished = false;
+    const first = bot.loop().then(() => { finished = true; });
+    await Bun.sleep(10);
+    const completedWhilePending = finished;
+    if (finished) {
+        state.tick = 101; state.food--; bot['observeFood'](); state.tick = 103;
+        await bot.loop();
+    }
+    respond(false);
+    await first;
+    state.tick = 104; state.hp = 70;
+    await bot.loop();
+    equipped = true; state.tick = 108;
+    await bot.loop();
+    expect(completedWhilePending).toBe(true);
+    expect(equip).toHaveBeenCalledTimes(1);
+    expect(events).toEqual([{ action: 'eat', tick: 100 }, { action: 'eat', tick: 103 }, { action: 'attack', tick: 108 }]);
+    expect(bot.stage).toBe('fight');
+    expect(bot.retreats).toBe(0);
+});
+
+test('a missing phase weapon restocks only its owner', async () => {
+    const { bot, state } = combat();
+    state.hp = 70;
+    spyOn(supply, 'worn').mockImplementation(id => id !== supply.MACE);
+    spyOn(supply, 'equip').mockResolvedValue(false);
+    await bot.loop();
+    expect(bot.stage).toBe('retreat');
+    expect(bot.restocking).toBe(true);
+    expect(bot['party']!.unsafe(1, Date.now())).toBe(false);
+});
+
+test('a rejected equip retries after its grace period while the weapon remains available', async () => {
+    const { bot, state } = combat();
+    state.hp = 70;
+    spyOn(supply, 'worn').mockImplementation(id => id !== supply.MACE);
+    spyOn(Inventory, 'countById').mockImplementation(id => id === supply.FOOD ? state.food : id === supply.MACE ? 1 : 0);
+    const equip = spyOn(supply, 'equip').mockRejectedValue(new Error('input rejected'));
+    await bot.loop();
+    state.tick = 109; await bot.loop();
+    expect(equip).toHaveBeenCalledTimes(1);
+    state.tick = 110; await bot.loop();
+    expect(equip).toHaveBeenCalledTimes(2);
+    expect(bot.stage).toBe('fight');
+    expect(bot.status).toBe('equipping dragon mace');
+    expect(bot.retreats).toBe(0);
+});
+
+test('a phase change waits for an earlier equip before switching back', async () => {
+    const { bot, state } = combat();
+    let weapon = supply.MACE;
+    spyOn(supply, 'worn').mockImplementation(id => id === weapon);
+    spyOn(Inventory, 'countById').mockImplementation(id => id === weapon ? 0 : 1);
+    const equip = spyOn(supply, 'equip').mockResolvedValue(false);
+    expect(bot['equipWeapon'](supply.BOW)).toBe(false);
+    await Promise.resolve();
+    state.tick = 104;
+    expect(bot['equipWeapon'](supply.MACE)).toBe(false);
+    expect(equip).toHaveBeenCalledTimes(1);
+    weapon = supply.BOW; state.tick = 108;
+    expect(bot['equipWeapon'](supply.MACE)).toBe(false);
+    expect(equip.mock.calls).toEqual([[supply.BOW], [supply.MACE]]);
+    await Promise.resolve();
+    weapon = supply.MACE; state.tick = 109;
+    expect(bot['equipWeapon'](supply.MACE)).toBe(true);
+    expect(bot.retreats).toBe(0);
+});
+
 test('pending offensive prayers do not block eating or attacks, and failures do not retreat', async () => {
     const { bot, state, events } = combat();
     spyOn(Prayer, 'active').mockImplementation(name => name === PROTECT_FROM_MAGIC);
