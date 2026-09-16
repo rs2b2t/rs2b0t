@@ -1,0 +1,427 @@
+import { reader } from '../../adapter/ClientAdapter.js';
+import { LoopingBot } from '../../api/bot/Bot.js';
+import { Execution } from '../../api/execution/Execution.js';
+import { EventSignal } from '../../api/execution/EventSignal.js';
+import { Special } from '../../api/combat/Special.js';
+import { Game } from '../../api/game/Game.js';
+import { GroundItems } from '../../api/grounditems/GroundItems.js';
+import { Inventory } from '../../api/inventory/Inventory.js';
+import { Npcs, type Npc } from '../../api/npcs/Npcs.js';
+import { Players } from '../../api/players/Players.js';
+import { Prayer, PROTECT_FROM_MAGIC } from '../../api/prayer/Prayer.js';
+import { Skills } from '../../api/skills/Skills.js';
+import { Sustain } from '../../api/sustain/Sustain.js';
+import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
+import { DROP_DB } from '../../data/dropdb.js';
+import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
+import { COMBAT_SKILLS, XpTracker } from '../../paint/jive.js';
+import { CombatStats } from './stats.js';
+import { paintKq } from './paint.js';
+import { ScriptRunner } from '../../runtime/ScriptRunner.js';
+import type { SettingsSchema } from '../../runtime/Settings.js';
+import { Party, normalizeName, parseRoster, type Gate, type Member, type Release, type Stage } from './party.js';
+import { combatFormation, combatMode, inLair, inNest, lureTile, near, QueenTracker, queenPhase, retreatReason, SIDES, WAIT_CORNER, type Point } from './policy.js';
+import { descend, duelArena, gateTile, pass, placeRope, ropeReady, step, walk } from './route.js';
+import { BOW, FOOD, MACE, RECOIL, boost, boostsReady, doses, drink, eat, equip, provision, supplies, worn } from './supply.js';
+
+export const SETTINGS: SettingsSchema = {
+    team: { type: 'string', default: '', label: 'Four account names', help: 'The same comma-separated roster on all four clients in one browser profile and origin. First account places ropes; accounts stand west, east, north and south.' }
+};
+
+const DROPS = new Set(DROP_DB['Kalphite Queen'] ?? DROP_DB['Kalphite queen'] ?? []);
+
+export default class JiveKQ extends LoopingBot {
+    status = 'starting';
+    stage: Stage = 'bank';
+    trip = 0;
+    kills = 0;
+    looted = 0;
+    entries = 0;
+    retreats = 0;
+    tripKills = 0;
+    stats = new CombatStats();
+    private xp = new XpTracker(COMBAT_SKILLS, Skills);
+    private startedAt = 0;
+    private lastKillMs = 0;
+    private lootUntilTick = 0;
+    private lootCounts = new Map<string, number>();
+    private party: Party | null = null;
+    private channel: BroadcastChannel | null = null;
+    private prepared = false;
+    private paused = false;
+    private release: Release | null = null;
+    private entryAt = 0;
+    private gateAt = 0;
+    private descent: Gate | null = null;
+    private lastDose = 0;
+    private poisoned = false;
+    private queenTracker = new QueenTracker();
+    private slot = 0;
+    private lastAttack = -10;
+    private queenDead = false;
+    private blocked = false;
+    private lure: Point | null = null;
+    private lureAt = 0;
+
+    override async onStart(): Promise<void> {
+        await Execution.delayUntil(() => Game.sceneReady(), 0);
+        const roster = parseRoster(this.settings.str('team', ''));
+        const self = normalizeName(Game.myName() ?? '');
+        this.slot = roster.indexOf(self);
+        if (this.slot < 0) throw new Error('This account is not in the KQ team roster');
+        const requirements: [string, number][] = [['attack', 60], ['defence', 40], ['ranged', 70], ['hitpoints', 70], ['prayer', 37]];
+        for (const [skill, level] of requirements) {
+            if (Skills.level(skill) < level) throw new Error(`KQ requires ${level} ${skill}`);
+        }
+        this.startedAt = Date.now();
+        this.xp.begin();
+        this.party = new Party(roster, self, crypto.randomUUID(), message => this.log(`team: ${message}`));
+        this.channel = new BroadcastChannel(`rs2b0t:kq:v1:${roster.join(',')}`);
+        this.channel.onmessage = event => {
+            const message: unknown = event.data;
+            if (!message || typeof message !== 'object') return;
+            if ('member' in message) this.party?.receive(message.member, Date.now());
+            if ('release' in message && 'sender' in message && message.sender === roster[0]) this.party?.accept(message.release, Date.now());
+        };
+        this.on('tick', () => { this.observeDescent(); this.observeQueen(); this.observeStats(); this.checkSafety(); this.heartbeat(); });
+        this.on('chat.message', line => { if (/you have been poisoned/i.test(line.text)) this.poisoned = true; });
+        Game.setAutoRetaliate(false);
+        Sustain.set(async () => { this.checkSafety(); if (this.stage !== 'retreat') await this.upkeep(); });
+        EventSignal.setInterrupt(() => this.stage === 'retreat');
+        if (inNest(Game.tile())) this.stage = 'retreat';
+        this.heartbeat();
+    }
+
+    private heartbeat(): void {
+        if (!this.party) return;
+        const member: Member = {
+            blocked: this.blocked, lure: this.lure ?? undefined, name: this.party.self, session: this.party.session, trip: this.trip, stage: this.stage,
+            tile: Game.ingame() ? Game.tile() : null,
+            ready: this.prepared && !this.paused && Game.ingame() && Skills.effective('hitpoints') > 0 && this.stage !== 'retreat',
+            reason: this.paused ? 'paused' : this.stage === 'retreat' ? this.status : undefined,
+            stats: { hp: Math.max(0, Skills.effective('hitpoints')), prayer: Prayer.points(), food: Inventory.countById(FOOD), damage: this.stats.damage, dps: this.stats.dps, kills: this.kills }
+        };
+        this.party.receive(member, Date.now());
+        this.channel?.postMessage({ member });
+        if (this.release && Date.now() - this.release.at < 12_000) this.channel?.postMessage({ release: this.release, sender: this.party.self });
+    }
+
+    private retreat(reason: string): void {
+        if (this.stage === 'retreat') return;
+        this.log(`group retreat: ${reason}`);
+        this.stage = 'retreat';
+        this.descent = null;
+        this.status = reason;
+        this.retreats++;
+        this.heartbeat();
+    }
+
+    private checkSafety(): boolean {
+        if (this.stage === 'retreat') return true;
+        if (!this.prepared || this.stage === 'bank' || !this.party || !Game.sceneReady()) return false;
+        if (this.stage === 'fight' && !inLair(Game.tile())) { this.retreat('left the queen chamber unexpectedly'); return true; }
+        if (!inNest(Game.tile())) return false;
+        const reason = retreatReason(supplies());
+        if (!reason && !this.party.unsafe(this.trip, Date.now())) return false;
+        const peers = this.party.members(Date.now());
+        const missing = this.party.roster.filter(name => !peers.some(m => m.name === name));
+        const unready = peers.filter(m => !m.ready || m.trip !== this.trip || m.stage === 'retreat' || m.stage === 'bank');
+        this.retreat(reason ?? (missing.length ? `missing heartbeat: ${missing.join(', ')}` : `team not ready: ${unready.map(m => `${m.name} (${m.reason ?? m.stage})`).join(', ')}`));
+        return true;
+    }
+
+    private observeQueen(): void {
+        if (this.stage !== 'fight' || !inLair(Game.tile()) || !Game.sceneReady()) return;
+        const queen = Npcs.query().where(n => queenPhase(n.id) !== null).nearest();
+        const { dead, killed } = this.queenTracker.observe(queen?.snap ?? null);
+        this.queenDead = dead;
+        if (dead || killed || queen && this.formation(queen)) {
+            this.blocked = false;
+            this.lure = null;
+        } else if (queen) {
+            this.lure ??= lureTile(queen.networkTile());
+            this.blocked = true;
+        }
+        if (killed) {
+            this.kills++;
+            this.tripKills++;
+            this.lastKillMs = this.queenTracker.lastKillMs;
+            this.lootUntilTick = Game.tick() + 12;
+            this.log(`Kalphite Queen killed (${this.kills})`);
+        }
+    }
+
+    private observeStats(): void {
+        this.stats.observe(Date.now(), Skills.xp('strength') + Skills.xp('ranged'), !this.paused && this.stage === 'fight' && this.queenTracker.startedAt > 0 && !this.queenTracker.killedAt);
+    }
+
+    private leaveRendezvous(): void {
+        if (this.stage === 'surface' || this.stage === 'upper') {
+            this.stage = 'travel';
+            this.heartbeat();
+        }
+    }
+
+    private async upkeep(): Promise<boolean> {
+        if (!Game.sceneReady() || this.stage === 'bank') return false;
+        const queen = this.stage === 'fight' && !this.queenDead ? Npcs.query().where(n => queenPhase(n.id) !== null).nearest() : null;
+        if (queen && Prayer.points() > 0 && !Prayer.active(PROTECT_FROM_MAGIC)) {
+            await Prayer.set(PROTECT_FROM_MAGIC, true);
+            return true;
+        }
+        const waiting = this.stage === 'fight' && this.queenTracker.killedAt > 0 && !queen;
+        if (waiting) await Prayer.clear();
+        const hp = Skills.effective('hitpoints');
+        if (hp < Skills.level('hitpoints') - 20 && Inventory.countById(FOOD) > 0) { this.leaveRendezvous(); return eat(); }
+        if (inNest(Game.tile())) {
+            if (Prayer.points() <= Math.min(35, Prayer.max() - 15) && doses('Prayer potion') > 0) { this.leaveRendezvous(); return drink('Prayer potion'); }
+            if ((this.poisoned || Date.now() - this.lastDose > 240_000) && doses('Superantipoison') > 0) {
+                this.leaveRendezvous();
+                if (await drink('Superantipoison')) { this.lastDose = Date.now(); this.poisoned = false; return true; }
+            }
+            if (!worn(RECOIL) && Inventory.countById(RECOIL) > 0) { this.leaveRendezvous(); return equip(RECOIL); }
+            if (this.stage === 'upper' || this.stage === 'fight') {
+                const melee = this.stage === 'upper' || waiting || Npcs.query().where(n => n.id === 1158).nearest() !== null;
+                if (this.stage === 'upper' && !boostsReady()) this.leaveRendezvous();
+                if (await boost(melee)) return true;
+            }
+        }
+        return false;
+    }
+
+    override async loop(): Promise<void> {
+        if (!Game.sceneReady() || !this.party) return;
+        try {
+            this.observeDescent();
+            if (Skills.effective('hitpoints') <= 0) { this.retreat('a party member died'); return; }
+            if (this.stage === 'retreat') { await this.escape(); return; }
+            if (this.checkSafety()) { await this.escape(); return; }
+            if (await this.upkeep()) return;
+            if (ChatDialog.canContinue()) { await ChatDialog.continue(); return; }
+            if (this.stage === 'bank') {
+                this.status = 'banking the shared KQ loadout';
+                if (!this.prepared) {
+                    if (!(await provision(this.slot, s => this.log(s)))) return;
+                    this.prepared = true;
+                }
+                this.status = 'waiting for four supplied players at Shantay bank';
+                this.heartbeat();
+                const release = this.party.release('bank', Math.max(this.trip, ...this.party.members(Date.now()).map(m => m.trip)) + 1, Date.now());
+                if (release) { this.release = release; this.party.accept(release, Date.now()); this.heartbeat(); }
+                const trip = this.party.departure(this.trip, Date.now());
+                if (trip === null) return;
+                this.trip = trip;
+                this.stage = 'travel';
+                this.queenTracker = new QueenTracker();
+                this.queenDead = false;
+                this.blocked = false;
+                this.lure = null;
+                this.lureAt = 0;
+                this.tripKills = 0;
+                this.lootUntilTick = 0;
+                this.gateAt = 0;
+                this.descent = null;
+                this.log(`trip ${this.trip}: shared loadout ready`);
+                this.heartbeat();
+                return;
+            }
+            if (inLair(Game.tile())) { await this.fight(); return; }
+            if (inNest(Game.tile())) { await this.gate('upper'); return; }
+            if (!(await pass(s => this.log(s)))) return;
+            await this.gate('surface');
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            this.retreat(reason);
+            if (inNest(Game.tile())) await this.escape();
+            else ScriptRunner.stop(reason);
+        }
+    }
+
+    private async gate(gate: Gate): Promise<void> {
+        if (!this.party) return;
+        const target = gateTile(gate);
+        if (!near(Game.tile(), target, 0)) {
+            this.stage = 'travel';
+            this.status = `walking to ${gate} entrance`;
+            await walk(target, 0, s => this.log(s));
+            return;
+        }
+        if (!this.gateAt) this.gateAt = Date.now();
+        if (Date.now() - this.gateAt > 180_000) { this.retreat('party rendezvous timed out'); return; }
+        if (gate === 'upper' && !boostsReady()) {
+            this.stage = 'travel';
+            this.status = 'drinking super potions before entering';
+            await boost(true);
+            return;
+        }
+        if (gate === 'upper' && !Prayer.active(PROTECT_FROM_MAGIC)) {
+            this.stage = 'travel';
+            this.status = 'enabling protection before entering';
+            await Prayer.set(PROTECT_FROM_MAGIC, true);
+            return;
+        }
+        if (Date.now() - this.lastDose > 240_000) {
+            this.stage = 'travel';
+            this.status = 'drinking antipoison before entering';
+            if (!(await drink('Superantipoison'))) { this.retreat('antipoison unavailable'); return; }
+            this.lastDose = Date.now();
+            return;
+        }
+        this.stage = gate;
+        this.status = `waiting for four at ${gate} entrance`;
+        this.heartbeat();
+        if (this.slot === 0 && !(await placeRope(gate, s => this.log(s)))) return;
+        const visible = new Set([this.party.self, ...Players.query().within(8).results().map(p => normalizeName(p.name ?? ''))]);
+        const release = this.party.release(gate, this.trip, Date.now());
+        if (release && this.party.roster.every(name => visible.has(name))) {
+            this.release = release;
+            this.party.accept(release, Date.now());
+            this.heartbeat();
+        }
+        if (!this.party.released(gate, this.trip, Date.now()) || !ropeReady(gate)) return;
+        this.status = `descending ${gate} entrance with team`;
+        this.descent = gate;
+        await descend(gate);
+        this.observeDescent();
+    }
+
+    private observeDescent(): void {
+        if (!Game.sceneReady()) return;
+        const gate = this.descent;
+        if (!(gate === 'surface' && inNest(Game.tile()) && Game.tile()?.level === 2 || gate === 'upper' && inLair(Game.tile()))) return;
+        this.descent = null;
+        if (this.checkSafety()) return;
+        this.log(`trip ${this.trip}: descended ${gate}`);
+        this.stage = gate === 'surface' ? 'travel' : 'fight';
+        this.gateAt = 0;
+        this.entryAt = Date.now();
+        if (gate === 'upper') this.entries++;
+        this.heartbeat();
+    }
+
+    private async fight(): Promise<void> {
+        if (!this.party) return;
+        const peers = this.party.members(Date.now());
+        if (peers.some(m => m.stage !== 'fight' || !inLair(m.tile))) {
+            this.status = 'waiting for the team to finish descending';
+            if (Date.now() - this.entryAt > 12_000) this.retreat('the team did not arrive together');
+            return;
+        }
+        if (this.blocked || peers.some(m => m.blocked)) {
+            this.lureAt ||= Date.now();
+            if (Date.now() - this.lureAt > 15_000) { this.retreat('queen did not follow into open space'); return; }
+            this.status = 'luring the queen into open space';
+            step(peers.find(m => m.blocked && m.lure)?.lure ?? this.lure ?? { x: 3508, z: 9493, level: 0 });
+            return;
+        }
+        this.lureAt = 0;
+        const queen = Npcs.query().where(n => queenPhase(n.id) !== null).nearest();
+        if (!queen || this.queenDead) {
+            await Prayer.set('Ultimate strength', false);
+            await Prayer.set('Incredible reflexes', false);
+            if (this.queenTracker.killedAt) {
+                await Prayer.clear();
+                if (Game.tick() < this.lootUntilTick && await this.loot()) { this.status = 'collecting queen loot'; return; }
+                this.status = near(Game.tile(), WAIT_CORNER, 0) ? 'stacked near spawn; prayers off' : 'regrouping in the northwest corner';
+                if (!near(Game.tile(), WAIT_CORNER, 0)) { step(WAIT_CORNER); return; }
+                if (!worn(MACE)) { await equip(MACE); return; }
+                if (Game.combatMode() !== 1) Game.setCombatMode(1);
+            } else if (!queen) {
+                this.status = 'looking for the queen';
+                step({ x: 3488, z: 9496, level: 0 });
+            }
+            return;
+        }
+        if (!(await Prayer.set(PROTECT_FROM_MAGIC, true))) { this.retreat('protection prayer failed'); return; }
+        const phase = queenPhase(queen.id)!;
+        if (!(await Prayer.set('Ultimate strength', phase === 'melee')) || !(await Prayer.set('Incredible reflexes', phase === 'melee'))) { this.retreat('offensive prayers failed'); return; }
+        const weapon = phase === 'melee' ? MACE : BOW;
+        if (!worn(weapon)) {
+            if (!(await equip(weapon))) this.retreat('phase weapon unavailable');
+            return;
+        }
+        const mode = combatMode(phase, Game.combatStyles());
+        if (mode === null) { this.retreat('required crush or rapid combat style unavailable'); return; }
+        if (Game.combatMode() !== mode) { Game.setCombatMode(mode); return; }
+        const formation = this.formation(queen);
+        if (!formation) {
+            this.blocked = true;
+            this.lure = lureTile(queen.networkTile());
+            this.heartbeat();
+            this.status = 'luring the queen into open space';
+            step(this.lure);
+            return;
+        }
+        const tile = formation[this.slot];
+        this.status = `${phase}: ${SIDES[this.slot]}`;
+        if (!near(Game.tile(), tile, 0)) { step(tile); return; }
+        if (Special.ready(phase === 'melee' ? 'Dragon mace' : 'Magic shortbow')) await Special.arm();
+        if (Game.tick() - this.lastAttack >= 4 || reader.selfFaceEntity() !== queen.index) {
+            if (await queen.interact('Attack')) this.lastAttack = Game.tick();
+        }
+    }
+
+    private formation(queen: Npc) {
+        const centre = queen.networkTile();
+        const origin = { ...centre, x: centre.x - Math.floor(queen.size / 2), z: centre.z - Math.floor(queen.size / 2) };
+        return combatFormation(centre, queen.size, queenPhase(queen.id)!, p => Reachability.walkable(p) && Reachability.lineOfSight(p, origin, queen.size));
+    }
+
+    private async loot(): Promise<boolean> {
+        const drop = GroundItems.query().within(14).where(g => DROPS.has(g.name ?? '')).nearest();
+        if (!drop) return false;
+        if (Inventory.isFull()) {
+            const vial = Inventory.first('Vial');
+            if (vial) { await vial.interact('Drop'); return true; }
+            if (Skills.hpFraction() < 1) return eat();
+            return false;
+        }
+        const before = Inventory.countById(drop.id);
+        if (await drop.interact('Take') && await Execution.delayUntilTicks(() => Inventory.countById(drop.id) > before, 4)) {
+            this.looted++;
+            const name = drop.name ?? String(drop.id);
+            this.lootCounts.set(name, (this.lootCounts.get(name) ?? 0) + Inventory.countById(drop.id) - before);
+            this.log(`looted ${drop.name}`);
+            return true;
+        }
+        return false;
+    }
+
+    private async escape(): Promise<void> {
+        this.heartbeat();
+        if (inNest(Game.tile()) || (Game.tile()?.z ?? 9999) < 3117) {
+            this.status = 'teleporting to Duel Arena';
+            await this.upkeep();
+            await duelArena();
+            if (inNest(Game.tile()) || (Game.tile()?.z ?? 9999) < 3117) return;
+        }
+        await Prayer.clear();
+        this.prepared = false;
+        this.stage = 'bank';
+        this.release = null;
+        this.heartbeat();
+    }
+
+    override onPause(): void { this.paused = true; this.observeStats(); this.heartbeat(); }
+    override onResume(): void { this.paused = false; if (inNest(Game.tile())) this.retreat('resumed after party pause'); }
+    override onStop(): void {
+        this.stage = 'retreat';
+        this.heartbeat();
+        this.channel?.close();
+        this.channel = null;
+        Sustain.set(null);
+        EventSignal.setInterrupt(null);
+    }
+
+    override recoveryAnchor() { return null; }
+
+    override onPaint(ctx: CanvasRenderingContext2D): void {
+        const queen = Npcs.query().where(n => queenPhase(n.id) !== null).nearest();
+        paintKq(ctx, {
+            status: this.status, startedAt: this.startedAt, kills: this.kills, trip: this.trip, tripKills: this.tripKills,
+            retreats: this.retreats, lastKillMs: this.lastKillMs, slot: this.slot, stats: this.stats, xp: this.xp,
+            phase: queen ? queenPhase(queen.id) : null, queenHp: queen?.snap.totalHealth ? queen.health : null,
+            messages: this.party?.messages ?? [], roster: this.party?.roster ?? [], members: this.party?.members(Date.now()) ?? [], loot: this.lootCounts
+        });
+    }
+}

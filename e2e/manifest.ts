@@ -566,6 +566,15 @@ export const CASES: readonly Case[] = [
         provenAt: '9ff4ff8b'
     },
     {
+        id: 'jivekq-live',
+        harness: 'jivekq-live.ts',
+        covers: { scripts: ['JiveKQ'] },
+        status: 'documented',
+        documentedIn: 'docs/e2e/jivekq-validation.md',
+        budgetMin: 75,
+        note: 'Four fresh max-stat accounts on local 289: role-specific food and ropes, super potions, dueling-ring escape, banked and bought passes, both rope gates, cardinal formation, per-player combat XP, a respawn fought before banking, boss loot banked, ten completed trips and kills within 60 minutes, and pause recovery. Isolated client; no server speed or boss changes.'
+    },
+    {
         id: 'jivekbd-live',
         harness: 'jivekbd-live.ts',
         covers: { scripts: ['JiveKBD'] },
