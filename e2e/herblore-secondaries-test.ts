@@ -2,7 +2,8 @@
 // Seeds each secondary's site and asserts the bot loots, buys or grinds at least one unit.
 
 //   bun e2e/herblore-secondaries-test.ts [http://localhost:8888] [secondary-name]
-import { boot, bringUpOffIsland, cheatQuiet, fail, launchBrowser, login, positionalArgs, setSettings } from './lib/harness.js';
+//   unicorn needs the members sim: bun e2e/herblore-secondaries-test.ts http://localhost:8890 unicorn
+import { boot, bringUpOffIsland, cheatQuiet, deployIsolatedClient, fail, launchBrowser, login, positionalArgs, setSettings } from './lib/harness.js';
 
 const args = positionalArgs(process.argv.slice(2), 'http://localhost:8888');
 const base = args[0];
@@ -17,6 +18,8 @@ type Case = {
     /** inventory name that must increase */
     product: string;
     timeoutMs: number;
+    /** routes that empty a bank: the stop reason to wait for, the count that must be ground, the source that must be gone */
+    drain?: { reason: string; ground: number; source: string };
 };
 
 // Absolute tele: tele level,mx,mz,lx,lz
@@ -72,6 +75,16 @@ const CASES: Case[] = [
         seed: [],
         product: "Toad's legs",
         timeoutMs: 240_000
+    },
+    {
+        key: 'unicorn',
+        setting: 'Unicorn horn dust',
+        // Draynor bank, the nearest bank from here; pestle and horns are withdrawn, never given
+        tele: '0,48,50,29,43',
+        seed: ['~bankitem unicorn_horn 40', '~bankitem pestle_and_mortar 1'],
+        product: 'Unicorn horn dust',
+        timeoutMs: 240_000,
+        drain: { reason: 'out of Unicorn horn in the bank', ground: 40, source: 'Unicorn horn' }
     }
 ];
 
@@ -87,12 +100,13 @@ interface Api {
     };
 }
 
+const client = deployIsolatedClient(`hs${Date.now().toString(36).slice(-6)}`);
 const browser = await launchBrowser({ swiftshader: true });
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const user = `hs${Date.now().toString(36).slice(-5)}`;
 
 try {
-    await page.goto(`${base}/bot.html`);
+    await page.goto(`${base}${client.page}`);
     await boot(page);
     if (!(await login(page, user))) fail('login failed');
     await bringUpOffIsland(page, { user });
@@ -198,13 +212,42 @@ try {
         console.log(`  tile ${JSON.stringify(tile)} ${c.product}: ${before} → ${after}`);
         for (const l of log) console.log(`  ${l}`);
 
-        await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.stop('harness stop'));
-        if (!ok) fail(`${c.setting}: never obtained ${c.product}`);
+        await page.screenshot({ path: `docs/e2e/herblore-secondaries-${c.key}.png` });
+        if (!ok) {
+            await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.stop('harness stop'));
+            fail(`${c.setting}: never obtained ${c.product}`);
+        }
         console.log(`PASS — ${c.setting} (+${after - before})`);
+
+        if (c.drain) {
+            const drained = await page
+                .waitForFunction(
+                    needle => ((globalThis as never as Api).rs2b0t.runner.ctx?.log ?? []).some(l => l.msg.includes(String(needle))),
+                    c.drain.reason,
+                    { timeout: 360_000 }
+                )
+                .then(() => true)
+                .catch(() => false);
+            const msgs = await page.evaluate(() => ((globalThis as never as Api).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg));
+            const ground = msgs.reduce((n, m) => n + (Number(/^ground (\d+)×/.exec(m)?.[1]) || 0), 0);
+            const trips = msgs.filter(m => m.startsWith('restocked @')).length;
+            const held = await page.evaluate(name => (globalThis as never as Api).__rs2b0t.Inventory.count(name), c.product);
+            const left = await page.evaluate(name => (globalThis as never as Api).__rs2b0t.Inventory.count(name), c.drain.source);
+            for (const m of msgs.slice(-6)) console.log(`  ${m}`);
+            if (!drained) fail(`${c.setting}: never stopped with '${c.drain.reason}'`);
+            if (held !== 0) fail(`${c.setting}: ${held} ${c.product} still in the pack after the last trip banked`);
+            if (left !== 0) fail(`${c.setting}: ${left} ${c.drain.source} still in the pack`);
+            if (ground !== c.drain.ground) fail(`${c.setting}: ground ${ground}, seeded ${c.drain.ground}`);
+            console.log(`PASS — ${c.setting} drained the bank (${ground} ground over ${trips} trips)`);
+        }
+        await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.stop('harness stop'));
     }
 
-    await page.screenshot({ path: 'docs/e2e/issue-430-herblore-secondaries.png' });
-    console.log('\nPASS all secondaries — screenshot docs/e2e/issue-430-herblore-secondaries.png');
+    if (!only) {
+        await page.screenshot({ path: 'docs/e2e/issue-430-herblore-secondaries.png' });
+        console.log('\nPASS all secondaries — screenshot docs/e2e/issue-430-herblore-secondaries.png');
+    }
 } finally {
     await browser.close();
+    client.cleanup();
 }

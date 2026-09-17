@@ -170,3 +170,94 @@ function meetsRequirement(bank: BankLocation): boolean {
 export function nearestBank(from: WorldTile): BankLocation | null {
     return nearestUsableBank(from, meetsRequirement);
 }
+
+// Why: inside a dungeon the z-offset (~6400) dwarfs every straight-line bank difference, so air ranking collapses to "closest by x only" and can pick a bank far from the mine exit. Buying the cost of every candidate to its real tile is what flips Edgeville to Falador East.
+
+/** Walk cost in run-tiles from `from` to a bank, or null when the bank is unreachable. */
+export type BankPathCost = (from: WorldTile, to: Tile) => number | null;
+
+export function nearestWalkableBank(from: WorldTile, pathCost: BankPathCost): BankLocation | null {
+    let best: BankLocation | null = null;
+    let bestCost = Infinity;
+    for (const bank of nearestBanks(from)) {
+        const cost = pathCost(from, bank.tile);
+        if (cost !== null && cost < bestCost) {
+            bestCost = cost;
+            best = bank;
+        }
+    }
+    return best;
+}
+
+/** Async walk cost: the nav pack lives in the worker, so a live caller pays per {@link Navigator.findPath} instead of a local {@link PathFinder}. */
+export type BankPathCostAsync = (from: WorldTile, to: Tile) => Promise<number | null>;
+
+export async function nearestWalkableBankAsync(from: WorldTile, pathCost: BankPathCostAsync): Promise<BankLocation | null> {
+    // Why: Promise.all keeps a full shortlist batch at one worker round-trip, since the async cost is a worker postMessage.
+    const banks = nearestBanks(from);
+    const costs = await Promise.all(banks.map(bank => pathCost(from, bank.tile).catch(() => null)));
+    let best: BankLocation | null = null;
+    let bestCost = Infinity;
+    for (const [i, bank] of banks.entries()) {
+        const cost = costs[i];
+        if (cost !== null && cost < bestCost) {
+            bestCost = cost;
+            best = bank;
+        }
+    }
+    return best;
+}
+
+export interface BankPathStamp {
+    x: number;
+    z: number;
+    level: number;
+}
+
+/** The bits of the {@link Navigator} {@link findPath} that the walk-cost wrapper needs. */
+export type NavigatorLike = {
+    findPath(from: BankPathStamp, to: BankPathStamp, opts?: unknown): Promise<{
+        ok: boolean;
+        cost?: number;
+        reason?: string;
+    }>;
+};
+
+/** Wrap a {@link PathFinder} so {@link nearestWalkableBank} can reuse it. */
+export function bankCostForFinder(
+    finder: {
+        findPath(from: BankPathStamp, to: BankPathStamp, opts?: unknown): {
+            ok: boolean;
+            cost?: number;
+            reason?: string;
+        };
+    },
+    findPathOpts?: object,
+): BankPathCost {
+    return (from, to) => {
+        const out = finder.findPath(from, to, { useTeleportCatalog: false, ...findPathOpts });
+        return out.ok && out.cost !== undefined ? out.cost : null;
+    };
+}
+
+/**
+ * Wrap the {@link Navigator} worker so {@link nearestWalkableBankAsync} can reuse it live.
+ * Why: the pack lives in the worker, so this never desyncs from what a web-walk can do.
+ */
+export function bankCostForNavigator(navigator: NavigatorLike, findPathOpts?: object): BankPathCostAsync {
+    return async (from, to) => {
+        const out = await navigator.findPath(from, to, { useTeleportCatalog: false, ...findPathOpts });
+        return out.ok && out.cost !== undefined ? out.cost : null;
+    };
+}
+
+/**
+ * Live pick of the cheapest reachable bank through the Navigator worker.
+ * Why: nearestBank is air-ranked and a dungeon level offset floats every overworld bank near the same distance, so the winner collapses to "closest by x" (Edgeville from the Dwarven Mine); real per-candidate route cost fixes that, with the air-nearest bank as the no-route fallback.
+ */
+export async function nearestBankReachable(here: WorldTile, navigator: NavigatorLike): Promise<BankLocation | null> {
+    // Why: a 5s/500k budget per candidate both caps a worker batch and matches the offline pack budget the fail-closed scenarios were measured with.
+    const cost = bankCostForNavigator(navigator, { maxExpansions: 500_000, timeoutMs: 5_000 });
+    const picked = await nearestWalkableBankAsync(here, cost).catch(() => null);
+    return picked ?? nearestBank(here);
+}

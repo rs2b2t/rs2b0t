@@ -6,8 +6,8 @@ import { Locs } from '../locs/Locs.js';
 import { Npcs, talkOp } from '../npcs/Npcs.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import { Traversal } from './Traversal.js';
-import { WalkExecutor, isOpenableBarrier } from '../../event/webwalk/WalkExecutor.js';
-import { openOp, towardDest } from '../../event/webwalk/walkOpening.js';
+import { WalkExecutor, isOpenBarrierLeaf, isOpenableBarrier } from '../../event/webwalk/WalkExecutor.js';
+import { closeOp, openOp, towardDest } from '../../event/webwalk/walkOpening.js';
 import { chebyshev } from '../../event/webwalk/geometry/followMath.js';
 import { CANT_REACH, GameMessages } from '../chatbox/gameMessages.js';
 import type { Interactable } from '../model/Interactable.js';
@@ -83,6 +83,8 @@ async function sceneSettled(find: () => unknown, near: WorldTile, within: number
 
 const REACH_DOOR_ATTEMPTS = 8;
 
+const LEAF_CLOSE_RADIUS = 3;
+
 // Why: a shut wall-door blocks the step onto its own tile, so an adjacentOk probe rejects the one door that needs opening (#293).
 // Why: wall locs operate from either side of their edge, so reaching any tile on or beside the door is enough to click it.
 function doorApproachable(doorTile: WorldTile): boolean {
@@ -122,6 +124,35 @@ async function openBlockingDoor(toward: WorldTile, log: (m: string) => void): Pr
     }, 5000);
 }
 
+const reachable = (t: WorldTile): boolean => Reachability.canReach(t, { maxSteps: REACH_BFS_STEPS, adjacentOk: true });
+
+async function closeSwungLeaf(toward: WorldTile, log: (m: string) => void): Promise<boolean> {
+    const here = reader.worldTile();
+    if (!here || here.level !== toward.level || reachable(toward)) {
+        return false;
+    }
+    const leaf = Locs.query()
+        .where(l => isOpenBarrierLeaf(l.name, l.actions()))
+        .where(l => l.distance() <= LEAF_CLOSE_RADIUS
+            && chebyshev(l.tile(), toward) <= 1
+            && !Reachability.canStep(l.tile(), toward))
+        .nearest();
+    const op = leaf ? closeOp(leaf.actions()) : null;
+    if (!leaf || !op) {
+        return false;
+    }
+    const t = leaf.tile();
+    log(`reach: closing '${leaf.name}' at (${t.x},${t.z}) to reach (${toward.x},${toward.z})`);
+    if (!(await leaf.interact(op))) {
+        return false;
+    }
+    return Execution.delayUntil(() => reachable(toward), 5000);
+}
+
+async function clearBlockingDoor(toward: WorldTile, log: (m: string) => void): Promise<boolean> {
+    return (await closeSwungLeaf(toward, log)) || openBlockingDoor(toward, log);
+}
+
 async function reachThroughDoors(
     attempt: () => Promise<boolean>,
     expect: () => boolean,
@@ -141,7 +172,7 @@ async function reachThroughDoors(
             const here = reader.worldTile();
             if (blocked && here && blocked.level === here.level && chebyshev(here, blocked) <= PROBE_RADIUS
                 && !Reachability.canReach(blocked, { maxSteps: REACH_BFS_STEPS, adjacentOk: true })
-                && (await openBlockingDoor(blocked, log))) {
+                && (await clearBlockingDoor(blocked, log))) {
                 continue;
             }
         }
@@ -161,8 +192,8 @@ async function reachThroughDoors(
             }
             if (GameMessages.sawSince(mark, CANT_REACH)) {
                 const toward = targetTile();
-                if (!toward || !(await openBlockingDoor(toward, log))) {
-                    log(`reach: '${what}' — server can't reach it and no openable door in front (unreachable)`);
+                if (!toward || !(await clearBlockingDoor(toward, log))) {
+                    log(`reach: '${what}' at (${toward?.x},${toward?.z}): server can't reach it and no door in front to open or close (unreachable)`);
                     return 'unreachable';
                 }
                 continue;

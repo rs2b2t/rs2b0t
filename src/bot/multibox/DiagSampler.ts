@@ -15,7 +15,6 @@ const WALL_FIELDS = ['botCount', 'stallMs', 'inputMaxMs', 'inputCount', 'freezeC
 
 /** Fields that accumulate over a window; the rest carry their worst or latest value. */
 const SUMMED = new Set<string>(['logicMs', 'drawMs', 'logicCount', 'drawCount', 'stallMs', 'inputCount']);
-const MAXED = new Set<string>(['logicMaxMs', 'drawMaxMs', 'inputMaxMs', 'freezeCount', 'botCount', 'ingame']);
 
 class Tier {
     readonly hot: DiagRing;
@@ -40,7 +39,7 @@ class Tier {
             const field = this.fields[i];
             if (SUMMED.has(field)) {
                 this.accumulator[i] += values[i];
-            } else if (MAXED.has(field) || values[i] > this.accumulator[i]) {
+            } else {
                 this.accumulator[i] = Math.max(this.accumulator[i], values[i]);
             }
         }
@@ -48,7 +47,7 @@ class Tier {
 
         if (this.accumulated * HOT_INTERVAL_MS >= COLD_INTERVAL_MS) {
             this.cold.push(at, this.accumulator);
-            this.accumulator = new Array(this.fields.length).fill(0);
+            this.accumulator.fill(0);
             this.accumulated = 0;
         }
     }

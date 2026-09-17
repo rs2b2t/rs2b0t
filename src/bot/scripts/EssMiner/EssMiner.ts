@@ -117,7 +117,7 @@ export default class EssMiner extends TaskBot {
         }
 
         this.on('chat.message', e => {
-            if (/need to have completed the rune mysteries/i.test(e.text)) {
+            if (e.type === 0 && !e.username && /need to have completed the rune mysteries/i.test(e.text)) {
                 this.questRefused = true;
             }
         });
@@ -426,6 +426,7 @@ class TeleportIn implements Task {
         if (!aubury) { await Execution.delayTicks(3); return; }
         this.bot.setStatus('teleporting to the essence mine');
         this.bot.log('teleporting to the essence mine');
+        this.bot.questRefused = false;
         if (!(await aubury.interact(TELEPORT_OP))) { await Execution.delayTicks(2); return; }
         const arrived = await Execution.delayUntil(() => inMine(), 15_000);
         if (arrived) {

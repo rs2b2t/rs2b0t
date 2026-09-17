@@ -1,0 +1,734 @@
+{
+  "issue": 310,
+  "testedCommit": "2624b0c7561ed0e91a5500184e72bf89ff3b23c3",
+  "command": "ENGINE_DIR=/Users/elliottriplett/code/rs2b2t-engine bun e2e/flour-collector-310-live.ts --base http://localhost:8890 --minutes 8",
+  "result": "PASS",
+  "observations": {
+    "BEFORE": {
+      "state": "paused",
+      "tile": {
+        "x": 2722,
+        "z": 3493,
+        "level": 0
+      },
+      "inventory": [],
+      "pots": 0,
+      "flour": 0,
+      "bankPots": 30,
+      "bankFlour": 0,
+      "bankOpen": true,
+      "bankReady": true,
+      "logs": [
+        {
+          "time": 1789227189979,
+          "level": "info",
+          "msg": "previous run of 'HarnessVerifyBank_1789227188887' ended (stopped) \u2014 harness stop"
+        },
+        {
+          "time": 1789227189979,
+          "level": "info",
+          "msg": "FlourCollector started"
+        },
+        {
+          "time": 1789227190018,
+          "level": "info",
+          "msg": "bank: booth within 14 \u2014 opening here (skip long walk)"
+        },
+        {
+          "time": 1789227190375,
+          "level": "info",
+          "msg": "paused"
+        }
+      ]
+    },
+    "FILLED": {
+      "state": "running",
+      "tile": {
+        "x": 2735,
+        "z": 3581,
+        "level": 0
+      },
+      "inventory": [
+        {
+          "slot": 0,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 1,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 2,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 3,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 4,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 5,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 6,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 7,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 8,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 9,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 10,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 11,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 12,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 13,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 14,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 15,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 16,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 17,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 18,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 19,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 20,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 21,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 22,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 23,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 24,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 25,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 26,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 27,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        }
+      ],
+      "pots": 0,
+      "flour": 28,
+      "bankPots": 0,
+      "bankFlour": 0,
+      "bankOpen": false,
+      "bankReady": false,
+      "logs": [
+        {
+          "time": 1789227189979,
+          "level": "info",
+          "msg": "previous run of 'HarnessVerifyBank_1789227188887' ended (stopped) \u2014 harness stop"
+        },
+        {
+          "time": 1789227189979,
+          "level": "info",
+          "msg": "FlourCollector started"
+        },
+        {
+          "time": 1789227190018,
+          "level": "info",
+          "msg": "bank: booth within 14 \u2014 opening here (skip long walk)"
+        },
+        {
+          "time": 1789227190375,
+          "level": "info",
+          "msg": "paused"
+        },
+        {
+          "time": 1789227190508,
+          "level": "info",
+          "msg": "resumed"
+        },
+        {
+          "time": 1789227192555,
+          "level": "info",
+          "msg": "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+        },
+        {
+          "time": 1789227192668,
+          "level": "info",
+          "msg": "path: cost 119, 80 waypoints, expanded 18712, worker 14.0ms, hops=3"
+        },
+        {
+          "time": 1789227192668,
+          "level": "info",
+          "msg": "hops:\n1. [door] Open Gate loc=1558 \u2192 2742,3556,L0 (cost 4)\n2. [door] Open Large door loc=1516 \u2192 2740,3573,L0 (cost 4)\n3. [door] Open Door loc=1533 \u2192 2735,3581,L0 (cost 4)"
+        },
+        {
+          "time": 1789227206046,
+          "level": "info",
+          "msg": "crossed 'Gate' at (2742,3555)"
+        },
+        {
+          "time": 1789227210119,
+          "level": "info",
+          "msg": "crossed 'Large door' at (2740,3572)"
+        },
+        {
+          "time": 1789227213267,
+          "level": "info",
+          "msg": "crossed 'Door' at (2735,3581)"
+        },
+        {
+          "time": 1789227213270,
+          "level": "info",
+          "msg": "arrived (7 clicks)"
+        }
+      ]
+    },
+    "BANKED": {
+      "state": "running",
+      "tile": {
+        "x": 2723,
+        "z": 3492,
+        "level": 0
+      },
+      "inventory": [],
+      "pots": 0,
+      "flour": 0,
+      "bankPots": 2,
+      "bankFlour": 28,
+      "bankOpen": true,
+      "bankReady": true,
+      "logs": [
+        {
+          "time": 1789227190508,
+          "level": "info",
+          "msg": "resumed"
+        },
+        {
+          "time": 1789227192555,
+          "level": "info",
+          "msg": "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+        },
+        {
+          "time": 1789227192668,
+          "level": "info",
+          "msg": "path: cost 119, 80 waypoints, expanded 18712, worker 14.0ms, hops=3"
+        },
+        {
+          "time": 1789227192668,
+          "level": "info",
+          "msg": "hops:\n1. [door] Open Gate loc=1558 \u2192 2742,3556,L0 (cost 4)\n2. [door] Open Large door loc=1516 \u2192 2740,3573,L0 (cost 4)\n3. [door] Open Door loc=1533 \u2192 2735,3581,L0 (cost 4)"
+        },
+        {
+          "time": 1789227206046,
+          "level": "info",
+          "msg": "crossed 'Gate' at (2742,3555)"
+        },
+        {
+          "time": 1789227210119,
+          "level": "info",
+          "msg": "crossed 'Large door' at (2740,3572)"
+        },
+        {
+          "time": 1789227213267,
+          "level": "info",
+          "msg": "crossed 'Door' at (2735,3581)"
+        },
+        {
+          "time": 1789227213270,
+          "level": "info",
+          "msg": "arrived (7 clicks)"
+        },
+        {
+          "time": 1789227224549,
+          "level": "info",
+          "msg": "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+        },
+        {
+          "time": 1789227224592,
+          "level": "info",
+          "msg": "path: cost 116, 75 waypoints, expanded 4164, worker 3.9ms, hops=3"
+        },
+        {
+          "time": 1789227224592,
+          "level": "info",
+          "msg": "hops:\n1. [door] Open Door loc=1533 \u2192 2736,3581,L0 (cost 4)\n2. [door] Open Large door loc=1516 \u2192 2740,3572,L0 (cost 4)\n3. [door] Open Gate loc=1558 \u2192 2742,3555,L0 (cost 4)"
+        },
+        {
+          "time": 1789227224978,
+          "level": "info",
+          "msg": "crossed 'Door' at (2735,3581)"
+        },
+        {
+          "time": 1789227226542,
+          "level": "info",
+          "msg": "Large door at (2740,3572) already open \u2014 continuing"
+        },
+        {
+          "time": 1789227229347,
+          "level": "info",
+          "msg": "Gate at (2742,3555) already open \u2014 continuing"
+        },
+        {
+          "time": 1789227241347,
+          "level": "info",
+          "msg": "arrived (8 clicks)"
+        }
+      ]
+    },
+    "PASS": {
+      "state": "running",
+      "tile": {
+        "x": 2735,
+        "z": 3581,
+        "level": 0
+      },
+      "inventory": [
+        {
+          "slot": 0,
+          "id": 1933,
+          "name": "Pot of flour",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 1,
+          "id": 1931,
+          "name": "Pot",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        }
+      ],
+      "pots": 1,
+      "flour": 1,
+      "bankPots": 0,
+      "bankFlour": 0,
+      "bankOpen": false,
+      "bankReady": false,
+      "logs": [
+        {
+          "time": 1789227224978,
+          "level": "info",
+          "msg": "crossed 'Door' at (2735,3581)"
+        },
+        {
+          "time": 1789227226542,
+          "level": "info",
+          "msg": "Large door at (2740,3572) already open \u2014 continuing"
+        },
+        {
+          "time": 1789227229347,
+          "level": "info",
+          "msg": "Gate at (2742,3555) already open \u2014 continuing"
+        },
+        {
+          "time": 1789227241347,
+          "level": "info",
+          "msg": "arrived (8 clicks)"
+        },
+        {
+          "time": 1789227244361,
+          "level": "info",
+          "msg": "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+        },
+        {
+          "time": 1789227244403,
+          "level": "info",
+          "msg": "path: cost 118, 77 waypoints, expanded 18701, worker 11.1ms, hops=3"
+        },
+        {
+          "time": 1789227244403,
+          "level": "info",
+          "msg": "hops:\n1. [door] Open Gate loc=1557 \u2192 2741,3556,L0 (cost 4)\n2. [door] Open Large door loc=1516 \u2192 2740,3573,L0 (cost 4)\n3. [door] Open Door loc=1533 \u2192 2735,3581,L0 (cost 4)"
+        },
+        {
+          "time": 1789227261545,
+          "level": "info",
+          "msg": "Gate at (2741,3555) already open \u2014 continuing"
+        },
+        {
+          "time": 1789227267158,
+          "level": "info",
+          "msg": "Large door at (2740,3572) already open \u2014 continuing"
+        },
+        {
+          "time": 1789227270760,
+          "level": "info",
+          "msg": "arrived (9 clicks)"
+        },
+        {
+          "time": 1789227270951,
+          "level": "info",
+          "msg": "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+        },
+        {
+          "time": 1789227270993,
+          "level": "info",
+          "msg": "path: cost 6, 4 waypoints, expanded 23, worker 0.0ms, hops=1"
+        },
+        {
+          "time": 1789227270993,
+          "level": "info",
+          "msg": "hops:\n1. [door] Open Door loc=1533 \u2192 2735,3581,L0 (cost 4)"
+        },
+        {
+          "time": 1789227274536,
+          "level": "info",
+          "msg": "crossed 'Door' at (2735,3581)"
+        },
+        {
+          "time": 1789227274540,
+          "level": "info",
+          "msg": "arrived (0 clicks)"
+        }
+      ]
+    }
+  },
+  "screenshots": [
+    "issue-310-before.png",
+    "issue-310-filled.png",
+    "issue-310-bank.png",
+    "issue-310.png"
+  ]
+}

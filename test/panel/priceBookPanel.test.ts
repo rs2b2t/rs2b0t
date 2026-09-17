@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { PriceBooks } from '#/bot/api/market/bookStore.js';
 import { resetLiveCatalog } from '#/bot/api/market/catalog.js';
 import { PriceBookPanel } from '#/bot/panel/PriceBookPanel.js';
+import { parseOrderbookFile } from '#/bot/api/market/orderbook-format.js';
 import { resetObjCatalog } from '#/bot/adapter/ClientAdapter.js';
 import ObjType from '#/client/config/ObjType.js';
 
@@ -35,32 +36,38 @@ function stubCatalog(): void {
 }
 
 function openPanel(): PriceBookPanel {
-    PriceBooks.save([{
-        name: 'seers',
-        margin: 20,
-        maxTradeValue: 500_000,
-        rows: Object.keys(ITEMS).map(id => ({ id: Number(id), mid: 100, cap: 0, buying: true, selling: true }))
-    }]);
+    PriceBooks.save([
+        {
+            name: 'seers',
+            margin: 20,
+            maxTradeValue: 500_000,
+            rows: Object.keys(ITEMS).map(id => ({ id: Number(id), mid: 100, cap: 0, buying: true, selling: true }))
+        }
+    ]);
     const panel = new PriceBookPanel();
     document.body.appendChild(panel.root);
     panel.open('seers');
     return panel;
 }
 
-const names = (panel: PriceBookPanel): string[] =>
-    Array.from(panel.root.querySelectorAll('.rs2b0t-pricebook-table .rs2b0t-pricebook-name')).map(n => n.textContent ?? '');
+const names = (panel: PriceBookPanel): string[] => Array.from(panel.root.querySelectorAll('.rs2b0t-pricebook-table .rs2b0t-pricebook-name')).map(n => n.textContent ?? '');
 
-const filterBox = (panel: PriceBookPanel): HTMLInputElement =>
-    panel.root.querySelector('[data-role=book-filter]') as HTMLInputElement;
+const filterBox = (panel: PriceBookPanel): HTMLInputElement => panel.root.querySelector('[data-role=book-filter]') as HTMLInputElement;
 
-const table = (panel: PriceBookPanel): HTMLElement =>
-    panel.root.querySelector('.rs2b0t-pricebook-table') as HTMLElement;
+const table = (panel: PriceBookPanel): HTMLElement => panel.root.querySelector('.rs2b0t-pricebook-table') as HTMLElement;
 
 function type(box: HTMLInputElement, text: string): void {
     box.focus();
     box.value = text;
     box.setSelectionRange(text.length, text.length);
     box.dispatchEvent(new Event('input'));
+}
+
+async function chooseImport(panel: PriceBookPanel, name: string, contents: string): Promise<void> {
+    const input = panel.root.querySelector('[data-role=orderbook-import]') as HTMLInputElement;
+    Object.defineProperty(input, 'files', { configurable: true, value: [new File([contents], name)] });
+    input.dispatchEvent(new Event('change'));
+    await new Promise(resolve => setTimeout(resolve, 0));
 }
 
 beforeEach(() => {
@@ -176,5 +183,183 @@ describe('editing a row', () => {
 
         expect(table(panel).scrollTop).toBe(90);
         expect(PriceBooks.byName('seers')?.rows.find(r => r.id === 453)?.selling).toBe(false);
+    });
+});
+
+describe('transferring books', () => {
+    test('exports either the selected book or every book', async () => {
+        const panel = openPanel();
+        PriceBooks.save([...PriceBooks.all(), { name: 'varrock', margin: 10, maxTradeValue: 1000, rows: [] }]);
+        panel.open('seers');
+        const blobs: Blob[] = [];
+        const realCreate = URL.createObjectURL;
+        const realRevoke = URL.revokeObjectURL;
+        URL.createObjectURL = blob => {
+            blobs.push(blob as Blob);
+            return 'blob:test';
+        };
+        URL.revokeObjectURL = () => {};
+        try {
+            (panel.root.querySelector('[data-action=export-selected]') as HTMLButtonElement).click();
+            (panel.root.querySelector('[data-action=export-all]') as HTMLButtonElement).click();
+            expect(parseOrderbookFile(await blobs[0]!.text()).map(book => book.name)).toEqual(['seers']);
+            expect(parseOrderbookFile(await blobs[1]!.text()).map(book => book.name)).toEqual(['seers', 'varrock']);
+        } finally {
+            URL.createObjectURL = realCreate;
+            URL.revokeObjectURL = realRevoke;
+        }
+    });
+
+    test('keeps the download URL alive after clicking a connected anchor', async () => {
+        const panel = openPanel();
+        const realClick = HTMLAnchorElement.prototype.click;
+        const realCreate = URL.createObjectURL;
+        const realRevoke = URL.revokeObjectURL;
+        let connectedAtClick = false;
+        let revoked = false;
+        HTMLAnchorElement.prototype.click = function () {
+            connectedAtClick = this.isConnected;
+        };
+        URL.createObjectURL = () => 'blob:test';
+        URL.revokeObjectURL = () => {
+            revoked = true;
+        };
+        try {
+            (panel.root.querySelector('[data-action=export-selected]') as HTMLButtonElement).click();
+            expect(connectedAtClick).toBe(true);
+            expect(revoked).toBe(false);
+            await new Promise(resolve => setTimeout(resolve, 1050));
+            expect(revoked).toBe(true);
+        } finally {
+            HTMLAnchorElement.prototype.click = realClick;
+            URL.createObjectURL = realCreate;
+            URL.revokeObjectURL = realRevoke;
+        }
+    });
+
+    test('shows export limit errors without changing storage or a staged import', async () => {
+        const panel = openPanel();
+        const before = Array.from({ length: 51 }, (_, i) => ({ name: `saved${i}`, margin: 5, maxTradeValue: 1000, rows: [] }));
+        PriceBooks.save(before);
+        panel.open('saved0');
+        await chooseImport(panel, 'books.json', JSON.stringify([before[0]]));
+        const realCreate = URL.createObjectURL;
+        const realClick = HTMLAnchorElement.prototype.click;
+        let created = false;
+        let downloaded = false;
+        URL.createObjectURL = () => {
+            created = true;
+            return 'blob:test';
+        };
+        HTMLAnchorElement.prototype.click = () => {
+            downloaded = true;
+        };
+        try {
+            (panel.root.querySelector('[data-action=export-all]') as HTMLButtonElement).click();
+            expect(panel.root.querySelector('[data-role=import-error]')?.textContent).toContain('Could not export');
+            expect(panel.root.querySelector('[data-role=import-error]')?.textContent).toContain('50 books');
+            expect(panel.root.querySelector('[data-role=import-preview]')?.textContent).toContain('books.json');
+            expect(PriceBooks.all()).toEqual(before);
+            expect(created).toBe(false);
+            expect(downloaded).toBe(false);
+        } finally {
+            URL.createObjectURL = realCreate;
+            HTMLAnchorElement.prototype.click = realClick;
+        }
+    });
+
+    test('stages filename, row counts and conflicts before Apply saves once', async () => {
+        const panel = openPanel();
+        const before = PriceBooks.all();
+        const incoming = [
+            { name: 'SEERS', margin: 5, maxTradeValue: 700, rows: [] },
+            { name: 'ardougne', margin: 10, maxTradeValue: 900, rows: [{ id: 9999, mid: 8, cap: 4, buying: false, selling: true }] }
+        ];
+        await chooseImport(panel, 'books.json', JSON.stringify(incoming));
+
+        expect(PriceBooks.all()).toEqual(before);
+        expect(panel.root.querySelector('[data-role=import-preview]')?.textContent).toContain('books.json');
+        expect(panel.root.querySelector('[data-role=import-preview]')?.textContent).toContain('SEERS: 0 rows');
+        expect(panel.root.querySelector('[data-role=import-preview]')?.textContent).toContain('ardougne: 1 row');
+        expect(panel.root.querySelector('[data-role=import-conflicts]')?.textContent).toContain('SEERS');
+
+        (panel.root.querySelector('[data-action=apply-import]') as HTMLButtonElement).click();
+        expect(PriceBooks.all()).toEqual(incoming);
+        expect(panel.root.querySelector('[data-role=import-preview]')).toBeNull();
+    });
+
+    test('Cancel discards a staged import without changing storage', async () => {
+        const panel = openPanel();
+        const before = PriceBooks.all();
+        await chooseImport(panel, 'books.json', JSON.stringify([{ ...before[0], name: 'other' }]));
+        (panel.root.querySelector('[data-action=cancel-import]') as HTMLButtonElement).click();
+        expect(PriceBooks.all()).toEqual(before);
+        expect(panel.root.querySelector('[data-role=import-preview]')).toBeNull();
+    });
+
+    test('locks book edits until a staged import is cancelled', async () => {
+        const panel = openPanel();
+        const before = PriceBooks.all();
+        await chooseImport(panel, 'books.json', JSON.stringify([{ ...before[0], name: 'other' }]));
+
+        for (const action of ['new', 'rename', 'duplicate', 'delete']) {
+            const button = panel.root.querySelector(`[data-action=${action}]`) as HTMLButtonElement;
+            expect(button.disabled).toBe(true);
+            button.click();
+        }
+        const toggle = panel.root.querySelector('[data-item="440"] [data-role=buying]') as HTMLButtonElement;
+        expect(toggle.disabled).toBe(true);
+        toggle.click();
+        expect((panel.root.querySelector('[data-role=margin]') as HTMLInputElement).disabled).toBe(true);
+        expect(PriceBooks.all()).toEqual(before);
+
+        (panel.root.querySelector('[data-action=cancel-import]') as HTMLButtonElement).click();
+        const enabledToggle = panel.root.querySelector('[data-item="440"] [data-role=buying]') as HTMLButtonElement;
+        expect(enabledToggle.disabled).toBe(false);
+        enabledToggle.click();
+        expect(PriceBooks.byName('seers')?.rows.find(row => row.id === 440)?.buying).toBe(false);
+    });
+
+    test('requires another review when a new replacement appears before Apply', async () => {
+        const panel = openPanel();
+        const incoming = [{ name: 'other', margin: 5, maxTradeValue: 700, rows: [] }];
+        await chooseImport(panel, 'books.json', JSON.stringify(incoming));
+        const current = [...PriceBooks.all(), { ...incoming[0]!, maxTradeValue: 900 }];
+        PriceBooks.save(current);
+
+        (panel.root.querySelector('[data-action=apply-import]') as HTMLButtonElement).click();
+        expect(PriceBooks.all()).toEqual(current);
+        expect(panel.root.querySelector('[data-role=import-preview]')).not.toBeNull();
+        expect(panel.root.querySelector('[data-role=import-conflicts]')?.textContent).toContain('other');
+
+        (panel.root.querySelector('[data-action=apply-import]') as HTMLButtonElement).click();
+        expect(PriceBooks.byName('other')?.maxTradeValue).toBe(700);
+    });
+
+    test('keeps the preview and storage when the merged collection exceeds its limit', async () => {
+        const panel = openPanel();
+        const books = (prefix: string) => Array.from({ length: 30 }, (_, i) => ({ name: `${prefix}${i}`, margin: 5, maxTradeValue: 1000, rows: [] }));
+        const before = books('saved');
+        PriceBooks.save(before);
+        panel.open('saved0');
+        await chooseImport(panel, 'books.json', JSON.stringify(books('imported')));
+
+        expect(() => (panel.root.querySelector('[data-action=apply-import]') as HTMLButtonElement).click()).not.toThrow();
+        expect(PriceBooks.all()).toEqual(before);
+        expect(panel.root.querySelector('[data-role=import-preview]')?.textContent).toContain('books.json');
+        expect(panel.root.querySelector('[data-role=import-error]')?.textContent).toContain('50 books');
+
+        (panel.root.querySelector('[data-action=cancel-import]') as HTMLButtonElement).click();
+        expect(panel.root.querySelector('[data-role=import-preview]')).toBeNull();
+        expect(PriceBooks.all()).toEqual(before);
+    });
+
+    test('an invalid import shows an actionable error and leaves storage untouched', async () => {
+        const panel = openPanel();
+        const before = PriceBooks.all();
+        await chooseImport(panel, 'broken.json', '[{"name":"bad"}]');
+        expect(panel.root.querySelector('[data-role=import-error]')?.textContent).toContain('broken.json');
+        expect(panel.root.querySelector('[data-role=import-error]')?.textContent).toContain('rows');
+        expect(PriceBooks.all()).toEqual(before);
     });
 });

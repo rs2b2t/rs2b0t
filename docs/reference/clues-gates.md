@@ -26,36 +26,45 @@ edges across it.
 
 ## Clues the pack cannot reach
 
-Twenty-two clue destinations sit in components the baked nav graph cannot route to.
-These are gaps in the **nav data**, not the clue database: the solver abandons
-cleanly, and fixing one is a `transports.json`/`doors.json` change that makes the
-clue start working with no solver edit. Each is listed with its diagnosis in
-`KNOWN_UNREACHABLE` in [`audit-clues.ts`](../../tools/clues/audit-clues.ts), so the
-audit stays at zero findings while the list stays honest about what is missing.
+The offline audit currently carries seven exceptions in
+[`PACK_UNREACHABLE`](../../src/bot/api/ai/clues/data/unreachable.ts).
+An entry describes a limitation of ordinary pack routing; it does not always
+mean the clue solver cannot get there.
 
-The recurring causes are worth knowing, because they affect more than clues:
+- **Kharazi Jungle, 3532, 3534 and 3536.** `kharaziTravel.ts` cuts through the
+  jungle band on entry and exit. It needs a machete, an axe, and Radimus notes
+  unless Legends Quest is complete. Ordinary A* cannot perform the cutting.
+- **Tirannwn, 3560, 3562 and 3564.** After Regicide is complete,
+  `tirannwnTravel.ts` routes across `REGICIDE_SEAMS`, including the return to
+  the mainland. Those seams are separate from the ordinary nav graph.
+- **Duel Arena, 3554.** The dig at `(3374,3250,0)` is inside the obstacle arena
+  bounded by `(3364,3244)` and `(3388,3258)`. Entry requires an accepted duel
+  with another player and obstacles enabled. The nearby Forfeit actions only
+  leave the arena. The solver does not arrange duels, so this clue remains
+  unsupported. A Shantay pass does not open it.
 
-- **Underground is entered one-way.** Several cellars had a climb-*out* edge and no
-  climb-*in*, so the area was unreachable. Fixed for the Lumbridge cellar and
-  the Varrock manhole; other cellars likely have the same gap.
-- **Double doors and gates are not derived.** `derive-doors` emits single
-  `WALL_STRAIGHT` doors, so paired gates, the Varrock sewer gates, the West
-  Ardougne wall, leave regions islanded.
-- **Item-gated crossings.** Entering the Kharidian desert southbound consumes a
-  Shantay pass (edge is baked; `SolveClue.bankFirst` keeps/withdraws one, #371,
-  and a leg that still comes up short buys one, see [Crossing tolls](clues-mechanics.md#crossing-tolls)).
-  Offline pack audit still treats desert as closed without virtual WorldState.
+The Duel Arena bounds come from `duelarena.dbrow`; `duel_arena_start.rs2`
+places the accepted duel participants in a selected arena. These are in
+Content's `scripts/minigames/game_duelarena/` directory.
+
+Southern desert clues such as 3552 do use Shantay Pass. The crossing consumes
+a pass; the solver keeps or withdraws one and can buy a missing pass from
+Shantay. See [Crossing tolls](clues-mechanics.md#crossing-tolls).
+
+West Ardougne clue 3522 uses the main city gate once Biohazard is complete.
+Both directions work without a Gas mask. Before Biohazard, the sewer pipe
+requires Plague City started and a worn Gas mask. The pipe still requires
+the mask after Plague City is complete; the city gate has no mask check.
+Starting Biohazard fills in the garden mud patch. The navigator stops using
+that entrance at the same point, even when carrying a spade and wearing a mask.
 
 ## Proving a gate
 
-`e2e/clues/tirannwn-clue-gate-live.ts` runs 3560, 3562 and 3564 through ClueSolver on one
-account, first with Regicide unfinished and then with `regicide_quest` seeded to 15 and a relog.
-The shut phase wants the abandon; the open phase wants ClueExecutor's `leg N` solve line, which
-it logs on the statement after `blockReason` returns null. Absence of a gate line is not the
-oracle, because a leg that died in the bank stop looks the same.
-
-The open phase then reports where the walk stopped and does not fail on it. Pass
-`--expect-solve` once the solver can cross `REGICIDE_SEAMS`.
+`e2e/clues/tirannwn-clue-gate-live.ts` runs 3560, 3562 and 3564 through
+ClueSolver with Regicide complete. It requires solved trails and checks the
+return from Tirannwn. Use `--check-gate` to also test the unfinished-quest
+abandon, `--gate-only` to stop at the gate verdict, or `--no-exit` to omit
+the return leg.
 
 ## See also
 
