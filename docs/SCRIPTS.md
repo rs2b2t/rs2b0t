@@ -5,14 +5,14 @@
 
 # Bundled scripts
 
-- Scripts: 70. Categories: 20.
+- Scripts: 71. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
 ## Contents
 
 - [Agility](#agility) — 4
-- [Combat](#combat) — 15
+- [Combat](#combat) — 16
 - [Cooking](#cooking) — 2
 - [Crafting](#crafting) — 8
 - [Firemaking](#firemaking) — 1
@@ -449,6 +449,16 @@ King Black Dragon with magic from the alcove beside the lair exit lever, wearing
 | `bankTile` | tile | `{"x":3094,"z":3493,"level":0}` | Bank stand tile |
 | `teleStock` | number (0–10) | `2` | Spare escape casts |
 | `logDetail` | string | `"Normal"` | Log detail — one of: Normal, Verbose |
+
+### JiveKQ
+
+Four-player Kalphite Queen trips with a shared dragon mace and magic shortbow loadout, synchronized ropes, a four-point cross, repeated kills and group retreats.
+
+- Tags: `combat`, `boss`, `kalphite`, `group`, `banking`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `team` | string | `""` | Four account names |
 
 ### MossGiant
 

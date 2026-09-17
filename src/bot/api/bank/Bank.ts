@@ -250,8 +250,7 @@ export const Bank = {
             .filter(item => item.id === landsAsId)
             .reduce((sum, item) => sum + item.count, 0);
         const item = reader.bankItems().find(i => i.id === id);
-        const xOp = item?.ops.find((o): o is string => o !== null && /withdraw[\s-]*x/i.test(o));
-        if (!item || !xOp) {
+        if (!item) {
             return false;
         }
         const before = invCount();
@@ -259,15 +258,20 @@ export const Bank = {
         if (available === 0) {
             return false;
         }
-        const target = before + Math.min(count, available);
-        if (!(await clickInvButtonById(reader.bankItems(), id, xOp))) {
+        const take = Math.min(count, available);
+        const target = before + take;
+        const fixedOp = take === 1 || take === 5 || take === 10 ? withdrawOp(item.ops, `${take}`) : null;
+        const op = fixedOp ?? withdrawOp(item.ops, 'x');
+        if (!op || !(await clickInvButtonById(reader.bankItems(), id, op))) {
             return false;
         }
-        if (!(await Execution.delayUntil(() => reader.countDialogOpen(), 3000))) {
-            return false;
-        }
-        if (!actions.answerCountDialog(count)) {
-            return false;
+        if (!fixedOp) {
+            if (!(await Execution.delayUntil(() => reader.countDialogOpen(), 3000))) {
+                return false;
+            }
+            if (!actions.answerCountDialog(count)) {
+                return false;
+            }
         }
         return Execution.delayUntil(
             () => invCount() >= target || (invCount() > before && backpackFull()),
