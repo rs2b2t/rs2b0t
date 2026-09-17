@@ -3,6 +3,7 @@ import { DROP_DB } from '../../src/bot/data/dropdb.js';
 export interface KqItem { id: number; count: number; name?: string | null; bankId?: number }
 export interface KqTile { x: number; z: number; level: number }
 export interface KqAction { kind: 'eat' | 'attack'; tick: number; at: number; food: number; hp: number; xp: number }
+export interface KqFoodDrop { at: number; tick: number }
 export interface KqRopeClick { id: number; at: number; tile: KqTile }
 interface KqVisitor { id: number; name: string | null; tile: KqTile; targetsMe: boolean }
 interface KqEmergency { player: number; emergencyAt: number; hp: number; food: number; visitor?: KqVisitor; departedAt?: number }
@@ -10,6 +11,7 @@ type RopeGate = 'surface' | 'chamber';
 interface RopeAttempt { departedAt: number; consumed: Record<RopeGate, number>; shared: RopeGate[]; crossings: Record<RopeGate, number[]> }
 export interface KqSample {
     actions?: KqAction[];
+    foodDrops?: KqFoodDrop[];
     ropeClicks?: KqRopeClick[];
     at: number; tile: KqTile | null; serverTile?: KqTile | null; hp: number; sceneReady: boolean;
     pack: KqItem[]; gear: KqItem[]; bank: KqItem[]; bankOpen: boolean; restocking: boolean;
@@ -64,6 +66,7 @@ export class KqEvidence {
     private ropeAttempt: { proof: RopeAttempt; count: number; gate: RopeGate } | null = null;
     eatAttacks: { player: number; input: KqAction; attackAt: number; consumedAt: number; combatAt: number }[] = [];
     private eating = new Map<number, { input: KqAction; attackAt?: number; consumedAt?: number; consumedXp?: number }[]>();
+    private foodDroppedAt = [-Infinity, -Infinity, -Infinity, -Infinity];
     searches: { player: number; startedAt: number; foundAt: number; combatAt: number; from: KqTile; queen: KqTile; xpGained: number }[] = [];
     private searching = new Map<number, { at: number; tile: KqTile; xp: number; foundAt?: number; queen?: KqTile; moved: boolean }>();
     kits = new Set<number>();
@@ -133,6 +136,7 @@ export class KqEvidence {
                 }
             }
             const candidates = this.eating.get(i) ?? [];
+            this.foodDroppedAt[i] = Math.max(this.foodDroppedAt[i], ...(s.foodDrops ?? []).filter(d => d.at <= s.at).map(d => d.at));
             for (const action of s.actions ?? []) {
                 if (action.kind === 'eat' && chamber(s)) candidates.push({ input: action });
                 const pending = candidates.at(-1);
@@ -140,6 +144,7 @@ export class KqEvidence {
             }
             this.eating.set(i, candidates.filter(eating => {
                 if (s.at - eating.input.at > 10_000 || !chamber(s)) return false;
+                if (eating.consumedAt === undefined && this.foodDroppedAt[i] >= eating.input.at - 10_000) return false;
                 if (eating.consumedAt === undefined && count(s.pack, 385) < eating.input.food) {
                     eating.consumedAt = s.at;
                     eating.consumedXp = s.xp.melee + s.xp.ranged;

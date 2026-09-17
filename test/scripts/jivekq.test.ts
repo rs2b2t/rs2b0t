@@ -263,3 +263,49 @@ test('lure anchors start beyond either forms attack range', () => {
         expect(Math.max(Math.abs(target.x - queen.x), Math.abs(target.z - queen.z)) - 2).toBeGreaterThan(15);
     }
 });
+
+describe('KQ loot coordination', () => {
+    const tile = { x: 3477, z: 9493, level: 0 };
+    const loot = { id: 1113, name: 'Rune chainbody', tile, collecting: false };
+    const visible = (name: string, extra: Partial<Member> = {}): Member => member(name, { stage: 'fight', tile, loot, ...extra });
+
+    test('the first eligible viewer wins simultaneous candidates, while an active collector keeps its target', () => {
+        const party = new Party(names, 'one', 'one');
+        names.forEach(name => party.receive(visible(name), 100));
+        expect(party.lootCollector(1, 100)?.name).toBe('one');
+        party.receive(visible('three', { loot: { ...loot, collecting: true } }), 101);
+        expect(party.lootCollector(1, 101)?.name).toBe('three');
+        expect(party.messages.some(message => message.includes('three collecting Rune chainbody'))).toBe(true);
+    });
+
+    test('stale and restocking collectors release the election to a fresh candidate', () => {
+        const party = new Party(names, 'two', 'two');
+        party.receive(visible('one', { loot: { ...loot, collecting: true } }), 100);
+        party.receive(visible('two'), 6200);
+        expect(party.lootCollector(1, 6200)?.name).toBe('two');
+        party.receive(visible('one', { loot: { ...loot, collecting: true } }), 6201);
+        expect(party.lootCollector(1, 6201)?.name).toBe('one');
+        party.receive(visible('one', { stage: 'retreat', ready: false, restocking: true }), 6202);
+        expect(party.lootCollector(1, 6202)?.name).toBe('two');
+        expect(party.lootCollector(2, 6202)).toBeNull();
+    });
+
+    test('a private visible candidate does not assign an unseen drop to the leader', () => {
+        const party = new Party(names, 'three', 'three');
+        names.forEach(name => party.receive(visible(name, { loot: name === 'three' ? loot : undefined }), 100));
+        expect(party.lootCollector(1, 100)?.name).toBe('three');
+        party.receive(visible('three', { loot: undefined }), 101);
+        expect(party.lootCollector(1, 101)).toBeNull();
+        expect(party.messages.at(-1)).toContain('released loot claim');
+    });
+
+    test('malformed, arrow and outside-room claims cannot take the election', () => {
+        const party = new Party(names, 'one', 'one');
+        for (const change of [{ id: -1 }, { name: 'Rune arrow' }, { tile: { x: 3308, z: 3120, level: 0 } }, { collecting: 'yes' }]) {
+            party.receive({ ...visible('one'), loot: { ...loot, ...change } }, 100);
+            expect(party.lootCollector(1, 100)).toBeNull();
+        }
+        party.receive({ ...visible('visitor'), loot }, 100);
+        expect(party.lootCollector(1, 100)).toBeNull();
+    });
+});

@@ -16,6 +16,17 @@ test('the recovery probe is an explicit mode independent of soak flags', () => {
     }
 });
 
+test('the public loot probe defaults to level 70 and fifteen minutes and keeps explicit bounds', () => {
+    expect(kqOptions(['--loot-probe'])).toMatchObject({ lootProbe: true, recoveryProbe: false, level: 70, minutes: 15 });
+    expect(kqOptions(['--level', '75', '--minutes', '20', '--loot-probe'])).toMatchObject({ lootProbe: true, level: 75, minutes: 20 });
+    expect(kqOptions([])).toMatchObject({ lootProbe: false, level: 99, minutes: 60 });
+});
+
+test('loot fixtures cannot be combined with death or gate fixtures', () => {
+    expect(() => kqOptions(['--loot-probe', '--recovery-probe'])).toThrow('loot');
+    expect(() => kqOptions(['--gate-delay-probe', '--loot-probe'])).toThrow('loot');
+});
+
 test('the gate delay is an explicit optional fixture compatible with recovery mode', () => {
     expect(kqOptions([])).toMatchObject({ gateDelayProbe: false });
     expect(kqOptions(['--gate-delay-probe', '--recovery-probe', '--level', '70', '--minutes', '15'])).toMatchObject({ gateDelayProbe: true, recoveryProbe: true, level: 70, minutes: 15 });

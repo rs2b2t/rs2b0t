@@ -66,6 +66,7 @@ test('walking between the ropes sips melee boosts without advertising gate readi
     const { bot } = scene();
     bot.stage = 'travel';
     bot['lastDose'] = Date.now();
+    bot['walkTile'] = { x: 3484, z: 9510, level: 2 };
     spyOn(Game, 'tile').mockReturnValue({ x: 3486, z: 9510, level: 2 });
     spyOn(Skills, 'effective').mockReturnValue(99);
     spyOn(supply, 'worn').mockReturnValue(true);
@@ -73,6 +74,66 @@ test('walking between the ropes sips melee boosts without advertising gate readi
     await bot['upkeep'](true);
     expect(boost).toHaveBeenCalledWith(true);
     expect(bot.stage).toBe('travel');
+});
+
+test('initial cavern potions wait for movement instead of delaying the first walk click', async () => {
+    const { bot } = scene();
+    bot.stage = 'travel';
+    bot['party'] = new Party(['one', 'two', 'three', 'four'], 'one', 'one');
+    let tile = { x: 3483, z: 9510, level: 2 };
+    let rendered = tile;
+    spyOn(Game, 'tile').mockImplementation(() => rendered);
+    spyOn(reader, 'serverTile').mockImplementation(() => tile);
+    spyOn(Skills, 'effective').mockReturnValue(99);
+    spyOn(supply, 'worn').mockReturnValue(true);
+    spyOn(supply, 'doses').mockReturnValue(4);
+    const drink = spyOn(supply, 'drink').mockResolvedValue(true);
+    const boost = spyOn(supply, 'boost').mockResolvedValue(true);
+    spyOn(route, 'walk').mockImplementation(async () => {
+        await bot['upkeep'](true);
+        await bot['upkeep'](true);
+        expect(drink).not.toHaveBeenCalled();
+        expect(boost).not.toHaveBeenCalled();
+        rendered = { ...tile, x: tile.x + 2 };
+        await bot['upkeep'](true);
+        expect(drink).not.toHaveBeenCalled();
+        tile = { ...tile, x: tile.x + 2 };
+        rendered = tile;
+        await bot['upkeep'](true);
+        expect(drink).toHaveBeenCalledWith('Superantipoison');
+        expect(boost).not.toHaveBeenCalled();
+        await bot['upkeep'](true);
+        expect(boost).not.toHaveBeenCalled();
+        tile = { ...tile, x: tile.x + 2 };
+        rendered = tile;
+        await bot['upkeep'](true);
+        expect(boost).toHaveBeenCalledWith(true);
+        return true;
+    });
+    await bot['upkeep']();
+    await bot['gate']('upper');
+});
+
+test('observed poison is treated even before the cavern walk starts', async () => {
+    const { bot } = scene();
+    bot.stage = 'travel'; bot['poisoned'] = true;
+    spyOn(Game, 'tile').mockReturnValue({ x: 3483, z: 9510, level: 2 });
+    spyOn(Skills, 'effective').mockReturnValue(99);
+    spyOn(supply, 'doses').mockReturnValue(4);
+    const drink = spyOn(supply, 'drink').mockResolvedValue(true);
+    await bot['upkeep']();
+    expect(drink).toHaveBeenCalledWith('Superantipoison');
+});
+
+test('the surface rendezvous leaves initial antipoison for the cavern walk', async () => {
+    const { bot } = scene();
+    bot.stage = 'travel'; bot.trip = 1;
+    bot['party'] = new Party(['one', 'two', 'three', 'four'], 'one', 'one');
+    spyOn(Game, 'tile').mockReturnValue({ x: 3226, z: 3108, level: 0 });
+    const drink = spyOn(supply, 'drink').mockResolvedValue(true);
+    await bot['gate']('surface');
+    expect(drink).not.toHaveBeenCalled();
+    expect<string>(bot.stage).toBe('surface');
 });
 
 test('the surface walk saves combat boosts until after the first rope', async () => {
@@ -554,14 +615,15 @@ test('a member still approaching the rope cannot release the team', async () => 
     expect(walk).toHaveBeenCalledWith({ x: 3226, z: 3108, level: 0 }, 0, expect.any(Function));
 });
 
-test('antipoison preparation withdraws gate readiness until the sip finishes', async () => {
+test('a fallback antipoison sip at the upper gate withdraws readiness until it finishes', async () => {
     const { bot } = scene();
-    bot.stage = 'surface';
+    bot.stage = 'upper';
     bot['party'] = new Party(['one', 'two', 'three', 'four'], 'one', 'one');
-    spyOn(Game, 'tile').mockReturnValue({ x: 3226, z: 3108, level: 0 });
+    spyOn(Game, 'tile').mockReturnValue({ x: 3508, z: 9497, level: 2 });
+    spyOn(supply, 'boostsReady').mockReturnValue(true);
     const stages: string[] = [];
     spyOn(supply, 'drink').mockImplementation(async () => { stages.push(bot.stage); return true; });
-    await bot['gate']('surface');
+    await bot['gate']('upper');
     expect(stages).toEqual(['travel']);
 });
 
@@ -600,7 +662,7 @@ test('a teammate delayed beyond the rope lifetime does not consume the leader ro
     const party = new Party(['one', 'two', 'three', 'four'], 'one', 'one');
     bot['party'] = party;
     let arrived = false;
-    spyOn(reader, 'players').mockImplementation(() => party.roster.slice(1, arrived ? 4 : 3).map((name, index) => ({ name, index, tile, distance: 0, inCombat: false, faceEntity: -1 })));
+    spyOn(reader, 'players').mockImplementation(() => party.roster.slice(1, arrived ? 4 : 3).map((name, index) => ({ name, index, tile, distance: 0, inCombat: false, faceEntity: -1, combatLevel: 70 })));
     const rope = spyOn(route, 'placeRope').mockResolvedValue(true);
     spyOn(route, 'ropeReady').mockReturnValue(true);
     const descend = spyOn(route, 'descend').mockResolvedValue(false);
@@ -627,7 +689,7 @@ test('a peer starting upkeep during rope placement prevents the entrance release
     const party = new Party(['one', 'two', 'three', 'four'], 'one', 'one');
     bot['party'] = party;
     for (const name of party.roster) party.receive({ name, session: name, trip: 1, ready: true, stage: 'surface', tile }, Date.now());
-    spyOn(reader, 'players').mockReturnValue(party.roster.slice(1).map((name, index) => ({ name, index, tile, distance: 0, inCombat: false, faceEntity: -1 })));
+    spyOn(reader, 'players').mockReturnValue(party.roster.slice(1).map((name, index) => ({ name, index, tile, distance: 0, inCombat: false, faceEntity: -1, combatLevel: 70 })));
     spyOn(route, 'placeRope').mockImplementation(async () => {
         party.receive({ name: 'two', session: 'two', trip: 1, ready: true, stage: 'travel', tile }, Date.now());
         return true;

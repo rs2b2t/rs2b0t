@@ -950,6 +950,21 @@ test('XP before food consumption is not subsequent combat evidence', () => {
     expect(e.eatAttacks).toHaveLength(1);
 });
 
+test('a food Drop overlapping an Eat cannot satisfy consumed-food combat evidence', () => {
+    for (const beforeEat of [false, true]) {
+        const e = new KqEvidence(); const s = team(); e.observe(s); fight(e, s, 1158, 255); e.observe(s);
+        const p = s[0];
+        if (beforeEat) { Object.assign(p, { foodDrops: [{ at: p.at, tick: 99 }] }); e.observe(s); p.at += 200; Object.assign(p, { foodDrops: [] }); }
+        const action = { tick: 100, at: p.at, food: count(p.pack, 385), hp: 40, xp: p.xp.melee + p.xp.ranged };
+        p.actions = [{ ...action, kind: 'eat' }, { ...action, kind: 'attack' }]; e.observe(s);
+        p.actions = []; p.at += 200;
+        if (!beforeEat) Object.assign(p, { foodDrops: [{ at: p.at, tick: 101 }] });
+        p.pack.find(i => i.id === 385)!.count--; e.observe(s);
+        p.at += 200; p.xp.melee += 40; e.observe(s);
+        expect(e.eatAttacks).toHaveLength(0);
+    }
+});
+
 test('a new food input cannot replace an earlier pair awaiting combat evidence', () => {
     const e = new KqEvidence(); const s = team(); e.observe(s);
     fight(e, s, 1158, 255); e.observe(s);

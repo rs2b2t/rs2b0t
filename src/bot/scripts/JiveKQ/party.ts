@@ -1,11 +1,12 @@
 import { BANK, inLair, near, SURFACE, UPPER, type Point } from './policy.js';
+import { eligibleLoot, lootPriority, type LootClaim } from './loot.js';
 import type { QueenSighting } from './search.js';
 import { deathReport, type Casualty, type DeathReport } from './recovery.js';
 
 export type Gate = 'surface' | 'upper';
 export type Stage = 'bank' | 'travel' | Gate | 'fight' | 'retreat';
 export interface MemberStats { hp: number; prayer: number; food: number; damage: number; dps: number; kills: number }
-export interface Member { name: string; session: string; trip: number; stage: Stage; tile: Point | null; ready: boolean; playerSlot?: number; restocking?: boolean; blocked?: boolean; lure?: Point; queen?: QueenSighting; death?: DeathReport; recoverySpace?: number; reason?: string; stats?: MemberStats }
+export interface Member { name: string; session: string; trip: number; stage: Stage; tile: Point | null; ready: boolean; playerSlot?: number; restocking?: boolean; blocked?: boolean; lure?: Point; queen?: QueenSighting; death?: DeathReport; recoverySpace?: number; loot?: LootClaim; reason?: string; stats?: MemberStats }
 type Barrier = Gate | 'bank';
 export interface Release { stage: Barrier; trip: number; sessions: string[]; at: number }
 const FRESH_MS = 6000;
@@ -62,6 +63,11 @@ export class Party {
             if (!this.casualties.has(key)) this.report(`${member.name} died at ${death.tile.x},${death.tile.z}; recovering dropped items`);
             this.casualties.set(key, { name: member.name, session: member.session, trip: member.trip, death });
         }
+        const loot = value.loot;
+        if (record(loot) && Number.isInteger(loot.id) && Number(loot.id) > 0 && Number(loot.id) < 65536
+            && typeof loot.name === 'string' && eligibleLoot(loot.name) && point(loot.tile) && inLair(loot.tile) && typeof loot.collecting === 'boolean') {
+            member.loot = { id: Number(loot.id), name: loot.name, tile: { ...loot.tile }, collecting: loot.collecting };
+        }
         member.blocked = value.blocked === true;
         if (point(value.lure)) member.lure = value.lure;
         const queen = value.queen;
@@ -76,6 +82,9 @@ export class Party {
         }
         if (member.reason === 'paused' || !member.restocking && (member.stage === 'retreat' || (!member.ready && member.stage !== 'bank'))) this.aborted.add(member.trip);
         const previous = this.peers.get(member.name)?.member;
+        if (member.loot && (previous?.loot?.id !== member.loot.id || !near(previous.loot.tile, member.loot.tile, 0) || previous.loot.collecting !== member.loot.collecting)) {
+            this.report(`${member.name} ${member.loot.collecting ? 'collecting' : 'spotted'} ${member.loot.name} at ${member.loot.tile.x},${member.loot.tile.z}`);
+        } else if (!member.loot && previous?.loot) this.report(`${member.name} released loot claim for ${previous.loot.name}`);
         if (member.queen && (!previous?.queen || previous.queen.id !== member.queen.id)) this.report(`${member.name} spotted the ${member.queen.id === 1160 ? 'flying' : 'ground'} queen at ${member.queen.tile.x},${member.queen.tile.z}`);
         if (!previous || previous.session !== member.session || previous.trip !== member.trip || previous.stage !== member.stage || previous.ready !== member.ready || previous.reason !== member.reason || previous.blocked !== member.blocked || previous.restocking !== member.restocking) {
             this.report(`${member.name}: ${member.stage}, ${member.ready ? 'ready' : 'not ready'} (trip ${member.trip})${member.restocking ? ': restocking for next trip' : ''}${member.reason ? `: ${member.reason}` : ''}${member.blocked ? ': cross blocked' : ''}`);
@@ -88,6 +97,11 @@ export class Party {
             const peer = this.peers.get(name);
             return peer && now - peer.seen <= FRESH_MS ? [peer.member] : [];
         });
+    }
+
+    lootCollector(trip: number, now: number): Member | null {
+        return this.members(now).filter(m => m.trip === trip && m.stage === 'fight' && m.ready && !m.restocking && !m.death && inLair(m.tile) && m.loot)
+            .sort((a, b) => Number(b.loot!.collecting) - Number(a.loot!.collecting) || lootPriority(a.loot!.name) - lootPriority(b.loot!.name))[0] ?? null;
     }
 
     deaths(trip: number): Casualty[] { return [...this.casualties.values()].filter(c => c.trip === trip); }

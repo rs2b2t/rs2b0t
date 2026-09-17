@@ -2,12 +2,14 @@ import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { CLIENT_VERSION } from '../src/client/io/ClientProt.js';
 import Skill from '../src/client/shell/Skill.js';
-import { CHECKLIST, KqEvidence, chamber, type KqAction, type KqRopeClick } from './lib/kqEvidence.js';
+import { CHECKLIST, KqEvidence, chamber, type KqAction, type KqFoodDrop, type KqRopeClick } from './lib/kqEvidence.js';
 import type { Input } from '../src/bot/input/Input.js';
 import { kqOptions } from './lib/kqOptions.js';
 import { KqCleanup, type CleanupAction, type CleanupSample } from './lib/kqCleanup.js';
 import { KqRecoveryEvidence, RECOVERY_CHECKLIST } from './lib/kqRecoveryEvidence.js';
 import { KqGateDelay } from './lib/kqGateDelay.js';
+import { KqLootEvidence, LOOT_CHECKLIST, type KqLootTake } from './lib/kqLootEvidence.js';
+import { KqLootDonor } from './lib/kqLootDonor.js';
 import type { Page } from 'playwright-core';
 import type { Game } from '../src/bot/api/game/Game.js';
 import type { Inventory } from '../src/bot/api/inventory/Inventory.js';
@@ -23,14 +25,17 @@ import { bootAndLogin, cheatQuiet, clearChatDialogs, mainlandAccount, seedItemsT
 interface WindowApi {
     kqActions: KqAction[];
     kqRopeClicks: KqRopeClick[];
+    kqLootTakes: KqLootTake[];
+    kqFoodDrops: KqFoodDrop[];
     kqGateDelay?: { released: boolean; held: boolean };
     __rs2b0t: { Game: typeof Game; Inventory: typeof Inventory; Equipment: typeof Equipment; Npcs: typeof Npcs; Skills: typeof Skills; Prayer: typeof Prayer; reader: typeof reader };
     rs2b0t: { input: typeof Input; runner: { state: string; bot: JiveKQ | null; ctx: { log: { time: number; level: string; msg: string }[] } | null; pause(): void; resume(): void } };
 }
 
 const args = kqOptions(process.argv.slice(2));
-const mode = args.recoveryProbe ? 'recovery-probe' : 'soak';
-const checklist: Record<string, string> = { ...(args.recoveryProbe ? RECOVERY_CHECKLIST : CHECKLIST), ...(args.gateDelayProbe ? { gateDelay: 'Hold South at the bank for 225 gate-wait ticks without using ropes, then descend together' } : {}) };
+const mode = args.lootProbe ? 'loot-probe' : args.recoveryProbe ? 'recovery-probe' : 'soak';
+const probe = args.recoveryProbe || args.lootProbe;
+const checklist: Record<string, string> = { ...(args.lootProbe ? LOOT_CHECKLIST : args.recoveryProbe ? RECOVERY_CHECKLIST : CHECKLIST), ...(args.gateDelayProbe ? { gateDelay: 'Hold South at the bank for 225 gate-wait ticks without using ropes, then descend together' } : {}) };
 const checks = Object.keys(checklist);
 if (!['localhost', '127.0.0.1'].includes(new URL(args.base).hostname)) throw new Error('KQ harness requires a local server');
 await requireSim(args.base);
@@ -66,6 +71,8 @@ function sample(page: Page) {
         const bot = g.rs2b0t.runner.bot;
         return {
             actions: g.kqActions?.splice(0) ?? [],
+            lootTakes: g.kqLootTakes?.splice(0) ?? [],
+            foodDrops: g.kqFoodDrops?.splice(0) ?? [],
             ropeClicks: g.kqRopeClicks ?? [],
             gateDelayHeld: g.kqGateDelay?.held ?? false,
             at: Date.now(), ingame: a.Game.ingame(), inCombat: a.Game.inCombat(), sceneReady: a.Game.sceneReady(), tick: a.Game.tick(), tile: a.Game.tile(), hp: a.Skills.effective('hitpoints'), prayer: a.Skills.effective('prayer'),
@@ -98,12 +105,16 @@ const observations = Bun.file(`${output}/observations.jsonl`).writer();
 const minimumHp = names.map(() => Infinity);
 let sampleCount = 0;
 let pauseTrip: number | null = null;
-let pauseNotice = args.recoveryProbe ? 'RECOVERY PROBE: one controlled teammate death; this is not a zero-death soak.' : 'Pause probe: waiting for all four to fight on a later visit.';
+let pauseNotice = args.lootProbe ? 'PUBLIC LOOT FIXTURE: separate donor, real 100-tick reveal; seeded items are not natural-drop or soak proof.' : args.recoveryProbe ? 'RECOVERY PROBE: one controlled teammate death; this is not a zero-death soak.' : 'Pause probe: waiting for all four to fight on a later visit.';
 const soakTrips = () => evidence.trips.filter(t => t.number !== pauseTrip);
 let result = 'FAIL';
 let failure = '';
 const evidence = new KqEvidence();
 const recovery = new KqRecoveryEvidence(names);
+const lootProbe = args.lootProbe ? new KqLootEvidence() : null;
+let donor: KqLootDonor | undefined;
+let donorTask: Promise<void> | undefined;
+let donorFailure = '';
 const gateDelay = args.gateDelayProbe ? new KqGateDelay() : null;
 const milestones = evidence.milestones;
 const scenarioDeaths = () => args.recoveryProbe ? recovery.deaths.map(d => ({ ...d, phase: 'scenario' })) : (history.at(-1) ?? []).flatMap((s, player) => s.hp <= 0 || s.chat.some(line => /oh dear,? you are dead/i.test(line)) ? [{ player, at: s.at, expected: false, hp: s.hp, chat: s.chat, phase: 'scenario' }] : []);
@@ -111,7 +122,7 @@ const captured = new Set<string>();
 const screenshots: Promise<unknown>[] = [];
 async function drawChecklist(samples: Sample[]): Promise<void> {
     const lines = checks.map(check => `${milestones[check] ? '[x]' : '[ ]'} ${checklist[check]}`).join('\n');
-    const progress = args.recoveryProbe ? `Expected deaths ${recovery.deaths.filter(d => d.expected).length}/1 | Unexpected ${recovery.deaths.filter(d => !d.expected).length}\nRecovered bows banked ${recovery.pickups.filter(p => p.bankedAt).length}` : `Trips ${soakTrips().length}/${args.trips} | Kills ${evidence.kills.length}/${args.trips}`;
+    const progress = lootProbe ? `Fixture valuables picked up ${lootProbe.pickups.length}/3 | Banked ${lootProbe.pickups.filter(p => p.bankedAt).length}/3\nConfirmed meals ${lootProbe.eating.length} | Meals during pending pickup ${lootProbe.eating.filter(e => e.duringPickup).length}` : args.recoveryProbe ? `Expected deaths ${recovery.deaths.filter(d => d.expected).length}/1 | Unexpected ${recovery.deaths.filter(d => !d.expected).length}\nRecovered bows banked ${recovery.pickups.filter(p => p.bankedAt).length}` : `Trips ${soakTrips().length}/${args.trips} | Kills ${evidence.kills.length}/${args.trips}`;
     await Promise.all(pages.map((page, i) => page.evaluate(({ text, title }) => {
         const box = document.getElementById('kq-checklist');
         if (box) { box.querySelector('summary')!.textContent = title; box.querySelector('pre')!.textContent = text; }
@@ -121,7 +132,7 @@ function capture(check: string): void {
     if (captured.has(check)) return;
     captured.add(check);
     console.log(`CHECK ${check}: PASS ${checklist[check] ?? check}`);
-    if (['sharedKit', 'entered', 'formation', 'ranged', 'corner', 'looted', 'repeatFight', 'independentRestock', 'escape', 'restocked', 'reentered', 'pauseRetreat', 'recoveryDeath', 'recoveryRespawn', 'recoveryGround', 'recoveryPickup', 'recoveryBanked', 'recoveryWaiting'].includes(check)) {
+    if (['sharedKit', 'entered', 'formation', 'ranged', 'corner', 'looted', 'repeatFight', 'independentRestock', 'escape', 'restocked', 'reentered', 'pauseRetreat', 'recoveryDeath', 'recoveryRespawn', 'recoveryGround', 'recoveryPickup', 'recoveryBanked', 'recoveryWaiting', 'lootPublic', 'lootPicked', 'lootArrows', 'lootSustain', 'lootBanked'].includes(check)) {
         screenshots.push(Promise.allSettled(pages.map((page, i) => page.screenshot({ path: `${output}/${check}-${i + 1}.png` }))));
     }
 }
@@ -219,9 +230,9 @@ process.on('SIGINT', () => { interrupted = true; });
 process.on('SIGUSR1', () => { interrupted = true; });
 console.log(checks.map(check => `[ ] ${checklist[check]}`).join('\n'));
 console.log(`KQ revision ${CLIENT_VERSION}: ${args.base}; evidence: ${output}`);
-console.log(args.recoveryProbe ? `Recovery probe: exactly one intended death, survivor pickup and banking, victim returns Shantay waiting for gear; level ${args.level}; timeout ${args.minutes} minutes.` : `Soak target: ${args.trips} completed trips and at least ${args.trips} kills; level: ${args.level}; timeout: ${args.minutes} minutes after setup`);
+console.log(args.lootProbe ? `Public loot probe: separate donor drops Dragon chainbody, Rune chainbody, Amulet of power and 137 Rune arrows; real 100-tick reveal, ordinary production collection and banking; level ${args.level}; timeout ${args.minutes} minutes.` : args.recoveryProbe ? `Recovery probe: exactly one intended death, survivor pickup and banking, victim returns Shantay waiting for gear; level ${args.level}; timeout ${args.minutes} minutes.` : `Soak target: ${args.trips} completed trips and at least ${args.trips} kills; level: ${args.level}; timeout: ${args.minutes} minutes after setup`);
 if (gateDelay) console.log('GATE DELAY FIXTURE: South will wait at Shantay with a running heartbeat for 225 game ticks after the first three reach the surface rope. No runner pause is used.');
-await Bun.write('out/jivekq-proof.json', JSON.stringify({ result: 'RUNNING', mode, gateDelay: gateDelay?.proof, expectedDeaths: args.recoveryProbe ? 1 : 0, names, evidenceDirectory: output, level: args.level, targetTrips: args.recoveryProbe ? null : args.trips, timeoutMinutes: args.minutes }, null, 2));
+await Bun.write('out/jivekq-proof.json', JSON.stringify({ result: 'RUNNING', mode, soakEligible: !probe, gateDelay: gateDelay?.proof, expectedDeaths: args.recoveryProbe ? 1 : 0, names, evidenceDirectory: output, level: args.level, targetTrips: probe ? null : args.trips, timeoutMinutes: args.minutes }, null, 2));
 try {
     await Promise.all(pages.map(async (page, i) => {
         page.on('pageerror', error => errors.push(`${names[i]}: ${error.message}`));
@@ -255,6 +266,8 @@ try {
             const g = globalThis as typeof globalThis & WindowApi;
             g.kqActions = [];
             g.kqRopeClicks = [];
+            g.kqLootTakes = [];
+            g.kqFoodDrops = [];
             const { Game, Inventory, Skills, Npcs } = g.__rs2b0t;
             const input = g.rs2b0t.input;
             const interactLoc = input.interactLoc.bind(input);
@@ -265,11 +278,20 @@ try {
                 if (sent && loc && tile) g.kqRopeClicks = [...g.kqRopeClicks.slice(-7), { id: loc.id, at: Date.now(), tile }];
                 return sent;
             };
+            const takeObj = input.takeObj.bind(input);
+            input.takeObj = (...args) => {
+                const tile = g.__rs2b0t.reader.toWorld(args[0], args[1]);
+                const owned = Inventory.countById(args[2]) + g.__rs2b0t.Equipment.items().filter(i => i.id === args[2]).reduce((n, i) => n + i.count, 0);
+                const sent = takeObj(...args);
+                if (sent && tile) g.kqLootTakes.push({ id: args[2], tile, at: Date.now(), tick: Game.tick(), owned, food: Inventory.countById(385), hp: Skills.effective('hitpoints') });
+                return sent;
+            };
             const record = (kind: KqAction['kind']) => g.kqActions.push({ kind, tick: Game.tick(), at: Date.now(), food: Inventory.countById(385), hp: Skills.effective('hitpoints'), xp: Skills.xp('strength') + Skills.xp('ranged') });
             const heldOp = input.heldOp.bind(input);
             input.heldOp = (...args) => {
                 const sent = heldOp(...args);
                 if (sent && args[0] === 385 && args[3] === 1) record('eat');
+                if (sent && args[0] === 385 && args[3] === 5) g.kqFoodDrops.push({ at: Date.now(), tick: Game.tick() });
                 return sent;
             };
             const interactNpc = input.interactNpc.bind(input);
@@ -287,6 +309,13 @@ try {
             document.body.append(box);
         });
     }));
+    if (lootProbe) {
+        const page = await context.newPage();
+        page.on('pageerror', error => errors.push(`donor: ${error.message}`));
+        donor = new KqLootDonor(page, `${tag}d`);
+        await donor.prepare(args.base, client.page);
+        console.log(`LOOT FIXTURE: donor ${donor.proof.account} prepared separately with 99 HP/Defence/Prayer; all four production accounts remain level ${args.level}.`);
+    }
     await Bun.write(`${output}/starting-stats.json`, JSON.stringify(startingStats, null, 2));
     await Promise.all(pages.slice(0, 3).map(page => startScript(page, 'JiveKQ')));
     console.log(`Started three members of ${names.join(',')}; fourth joins after the readiness check`);
@@ -306,7 +335,10 @@ try {
         history.push(samples);
         if (history.length > 600) history.shift();
         if (args.recoveryProbe) recovery.observe(samples);
-        if (!args.recoveryProbe || !recovery.fixture) evidence.observe(samples);
+        if (donorFailure) throw new Error(donorFailure);
+        if (lootProbe) lootProbe.observe(samples);
+        if ((!args.recoveryProbe || !recovery.fixture) && !lootProbe?.fixture) evidence.observe(samples);
+        if (lootProbe) Object.assign(milestones, lootProbe.milestones);
         if (gateDelay) {
             const startedAt = gateDelay.proof.startedAt;
             if (gateDelay.observe(samples, evidence.ropeAttempts)) {
@@ -321,7 +353,7 @@ try {
             for (const trip of evidence.trips.slice(reportedTrips)) console.log(`TRIP ${trip.number}: ${trip.kills} kills, ${Math.round((trip.returnedAt - trip.enteredAt) / 1000)}s, minimum HP ${trip.minimumHp.join('/')}, food ${trip.foodRemaining.join('/')}`);
             reportedTrips = evidence.trips.length;
         }
-        if (!args.recoveryProbe && soakTrips().length >= args.trips && evidence.kills.length >= args.trips) milestones.soak ??= Date.now();
+        if (!probe && soakTrips().length >= args.trips && evidence.kills.length >= args.trips) milestones.soak ??= Date.now();
         if (Date.now() - lastOverlay > 1000) {
             await drawChecklist(samples);
             lastOverlay = Date.now();
@@ -353,6 +385,20 @@ try {
             }
         }
         for (const check of checks) if (milestones[check]) capture(check);
+        const fixtureDeathAt = evidence.kills[0]?.at ?? 0;
+        if (lootProbe && donor && !lootProbe.fixture && milestones.entered && lootProbe.ready(samples, fixtureDeathAt)) {
+            const tile = samples[0].serverTile ?? samples[0].tile!;
+            lootProbe.arm(samples, tile, Date.now(), fixtureDeathAt);
+            pauseNotice = `PUBLIC LOOT FIXTURE: first flying death independently confirmed. ${donor.proof.account} drops three valuables and 137 Rune arrows at ${tile.x},${tile.z}; 100-tick public reveal aligns with the next respawn. These items never count as natural-drop soak proof.`;
+            console.log(pauseNotice);
+            await drawChecklist(samples);
+            donorTask = donor.drop(tile).then(() => {
+                if (donor!.proof.failures.length) throw new Error(donor!.proof.failures.join('; '));
+                milestones.lootDonor = donor!.proof.loggedOutAt!;
+                console.log('LOOT FIXTURE: all four donor drops confirmed; donor safely logged out. Waiting for normal public reveal.');
+            }).catch(error => { donorFailure = String(error); });
+            continue;
+        }
         if (args.recoveryProbe && !recovery.fixture && milestones.formation && recovery.ready(samples)) {
             pauseNotice = `CONTROLLED RECOVERY PROBE: dispatching ~hit 999 to ${names[recovery.player]}. Exactly one real death is expected; this run cannot count as a zero-death soak.`;
             console.log(pauseNotice);
@@ -362,7 +408,7 @@ try {
             if (!(await cheatQuiet(pages[recovery.player], recovery.fixture!.command, 0))) throw new Error('Could not dispatch the controlled recovery death');
             continue;
         }
-        if (!args.recoveryProbe && milestones.reentered && milestones.bankedLoot && milestones.repeatFight && evidence.readyForPause(samples) && !milestones.paused) {
+        if (!probe && milestones.reentered && milestones.bankedLoot && milestones.repeatFight && evidence.readyForPause(samples) && !milestones.paused) {
             pauseTrip = Math.min(...evidence.crossings.chamber.map(t => t.length));
             pauseNotice = `DELIBERATE PAUSE PROBE: pausing ${names[3]} during combat on trip ${pauseTrip}. Group retreat is expected; this trip is excluded from the soak target.`;
             console.log(pauseNotice);
@@ -392,12 +438,12 @@ try {
             lastPrint = Date.now();
             await Bun.write(`${output}/current.json`, JSON.stringify(samples, null, 2));
             await observations.flush();
-            await Bun.write(`${output}/progress.json`, JSON.stringify({ result: 'RUNNING', mode, gateDelay: gateDelay?.proof, ropeAttempts: evidence.ropeAttempts, recovery: args.recoveryProbe ? { fixture: recovery.fixture, deaths: recovery.deaths, pickups: recovery.pickups } : undefined, level: args.level, elapsedMs: Date.now() - started, targetTrips: args.recoveryProbe ? null : args.trips, completedTrips: args.recoveryProbe ? null : soakTrips().length, pauseTrip, trips: evidence.trips, kills: evidence.kills.length, restarts: evidence.restarts, eatAttacks: evidence.eatAttacks, searches: evidence.searches, independentRestocks: evidence.independentRestocks, escapes: evidence.escapes, milestones, minimumHp, sampleCount }, null, 2));
+            await Bun.write(`${output}/progress.json`, JSON.stringify({ result: 'RUNNING', mode, soakEligible: !probe, seededLoot: lootProbe ? { fixture: lootProbe.fixture, publicDrops: lootProbe.publicDrops, pickups: lootProbe.pickups, eating: lootProbe.eating, donor: donor?.proof } : undefined, gateDelay: gateDelay?.proof, ropeAttempts: evidence.ropeAttempts, recovery: args.recoveryProbe ? { fixture: recovery.fixture, deaths: recovery.deaths, pickups: recovery.pickups } : undefined, level: args.level, elapsedMs: Date.now() - started, targetTrips: probe ? null : args.trips, completedTrips: probe ? null : soakTrips().length, pauseTrip, trips: evidence.trips, kills: evidence.kills.length, restarts: evidence.restarts, eatAttacks: evidence.eatAttacks, searches: evidence.searches, independentRestocks: evidence.independentRestocks, escapes: evidence.escapes, milestones, minimumHp, sampleCount }, null, 2));
         }
         if (Date.now() < deadline && checks.every(check => milestones[check])) { await drawChecklist(samples); result = 'PASS'; break; }
         await pages[0].waitForTimeout(200);
     }
-    if (result !== 'PASS' && args.recoveryProbe) throw new Error(`Recovery probe timed out. Missing checks: ${checks.filter(check => !milestones[check]).join(', ')}`);
+    if (result !== 'PASS' && probe) throw new Error(`${mode} timed out. Missing checks: ${checks.filter(check => !milestones[check]).join(', ')}`);
     if (result !== 'PASS') throw new Error(`Timed out with ${soakTrips().length}/${args.trips} trips and ${evidence.kills.length}/${args.trips} kills. Missing checks: ${checks.filter(check => !milestones[check]).join(', ')}`);
     if (errors.length) throw new Error(errors.join('\n'));
 } catch (error) {
@@ -405,7 +451,15 @@ try {
     failure = String(error);
     console.error(failure);
 } finally {
+    const donorExit = donor?.close().catch(error => { donorFailure = String(error); });
     const cleanup = await cleanupClients();
+    await donorExit;
+    await donorTask;
+    if (donorFailure || donor?.proof.failures.length) cleanup.failures.push(donorFailure || donor!.proof.failures.join('; '));
+    if (donor && !donor.proof.loggedOutAt) {
+        donor.proof.forcedDisconnect = { at: Date.now(), lastObservation: donor.proof.observations.at(-1) ?? null };
+        cleanup.failures.push('Donor logout unverified; browser will be forcibly disconnected after bounded cleanup');
+    }
     if (cleanup.failures.length) {
         result = 'FAIL';
         failure = [failure, ...cleanup.failures].filter(Boolean).join('\n');
@@ -413,17 +467,32 @@ try {
     await observations.end();
     const deaths = [...scenarioDeaths(), ...cleanup.deaths.map(d => ({ ...d, expected: false, phase: 'cleanup' }))];
     const summary = {
-        result, failure, mode, soakEligible: !args.recoveryProbe, expectedDeaths: args.recoveryProbe ? 1 : 0, deaths, unexpectedDeaths: deaths.filter(d => !d.expected).length,
+        result, failure, mode, soakEligible: !probe, expectedDeaths: args.recoveryProbe ? 1 : 0, deaths, unexpectedDeaths: deaths.filter(d => !d.expected).length,
+        seededLoot: lootProbe ? { fixture: lootProbe.fixture, publicDrops: lootProbe.publicDrops, pickups: lootProbe.pickups, takes: lootProbe.takes, eating: lootProbe.eating, milestones: lootProbe.milestones, donor: donor?.proof } : undefined,
         recovery: args.recoveryProbe ? { fixture: recovery.fixture, deaths: recovery.deaths, ground: recovery.ground, pickups: recovery.pickups, milestones: recovery.milestones } : undefined,
         cleanup, names, base: args.base, revision: CLIENT_VERSION, fixture: `${reuse ? 'reused' : 'fresh'} level-${args.level} accounts`, level: args.level, startingStats,
         elapsedMs: Date.now() - started, milestones, errors, bundleSha256, crossings: evidence.crossings, ropeCounts: evidence.ropeCounts, sharedRopes: evidence.sharedRopes, ropeAttempts: evidence.ropeAttempts, gateDelay: gateDelay?.proof,
-        targetTrips: args.recoveryProbe ? null : args.trips, timeoutMinutes: args.minutes, sampleCount, completedTrips: args.recoveryProbe ? null : soakTrips().length, pauseTrip, trips: evidence.trips,
-        xpGains: evidence.xpGains, kills: evidence.kills, restarts: evidence.restarts, eatAttacks: evidence.eatAttacks, searches: evidence.searches, independentRestocks: evidence.independentRestocks, escapes: evidence.escapes, loot: evidence.loot, minimumHp
+        targetTrips: probe ? null : args.trips, timeoutMinutes: args.minutes, sampleCount, completedTrips: probe ? null : soakTrips().length, pauseTrip, trips: evidence.trips,
+        xpGains: evidence.xpGains, kills: evidence.kills, restarts: evidence.restarts, eatAttacks: evidence.eatAttacks, searches: evidence.searches, independentRestocks: evidence.independentRestocks, escapes: evidence.escapes, loot: lootProbe ? undefined : evidence.loot, minimumHp
     };
     await Bun.write(`${output}/proof.json`, JSON.stringify({ ...summary, history }, null, 2));
     await Bun.write('out/jivekq-proof.json', JSON.stringify({ ...summary, evidenceDirectory: output }, null, 2));
     await Bun.write(`${output}/progress.json`, JSON.stringify(summary, null, 2));
-    const report = (args.recoveryProbe ? [
+    const report = (lootProbe ? [
+        '# JiveKQ public leftover loot probe', '', `Result: **${result}**`, '',
+        'Fixture items were granted to a separate donor, dropped through ordinary inventory actions and revealed publicly after 100 game ticks. This run is ineligible for natural-drop or soak validation.', '',
+        `Server: ${args.base}, revision ${CLIENT_VERSION}. Roster fixture: ${summary.fixture}. Donor: ${donor?.proof.account ?? 'not prepared'} (99 HP/Defence/Prayer).`, '',
+        `Bundle SHA-256: ${bundleSha256}`, '', failure, '', '| Check | Result |', '|---|---|',
+        ...checks.map(check => `| ${checklist[check]} | ${milestones[check] ? 'PASS' : 'MISSING'} |`), '',
+        '| Collector | Item ID | Extra ownership | Inventory to bank |', '|---|---|---|---|',
+        ...lootProbe.pickups.map(p => `| ${names[p.player]} | ${p.id} | ${p.ownedBefore} → ${p.ownedAfter} | ${p.bankedAt ? `Bank ${p.bankBefore} → ${p.bankAfter}, retained ownership ${p.ownedAfterBank}` : 'Missing'} |`), '',
+        `Accepted Rune-arrow Take inputs: ${lootProbe.takes.filter(t => t.id === 892).length}. Confirmed meals: ${lootProbe.eating.length}; during pending pickup: ${lootProbe.eating.filter(e => e.duringPickup).length} (diagnostic, not required).`, '',
+        'Bank proof requires physical Shantay position, inventory ownership decreasing, bank count increasing, and total bank plus carried ownership retaining the extra fixture item.', '',
+        `Observed roster deaths: ${deaths.length}. Donor failures: ${donor?.proof.failures.join('; ') || 'none'}. Donor verified logged out: ${!!donor?.proof.loggedOutAt}.`, '',
+        `Roster cleanup: ${cleanup.loggedOut}/4 verified logged out; ${cleanup.deaths.length} additional deaths; ${cleanup.fixtureTeleports.length} fixture rescue teleports.`, '',
+        '[Starting levels and XP](starting-stats.json) · [Full fixture proof](proof.json) · [Scenario observations](observations.jsonl) · [Cleanup observations](cleanup-observations.jsonl)', '',
+        ...[...captured].filter(check => ['lootPublic', 'lootPicked', 'lootArrows', 'lootSustain', 'lootBanked'].includes(check)).flatMap(check => [`## ${check}`, '', ...names.map((name, i) => `![${name}](${check}-${i + 1}.png)`), ''])
+    ] : args.recoveryProbe ? [
         '# JiveKQ controlled death recovery probe', '', `Result: **${result}**`, '',
         'This probe deliberately causes one real player death. It is ineligible for zero-death soak validation.', '',
         `Server: ${args.base}, revision ${CLIENT_VERSION}. Fixture: ${summary.fixture}.`, '',

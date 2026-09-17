@@ -2,6 +2,22 @@
 
 [Harness setup and checklist](jivekq-validation.md).
 
+## Moving potions and public loot
+
+Level-70 probe `kq4rv34b` passed all ten checks at normal 600 ms ticks in 11m 54s including setup and cleanup. A separate donor dropped a dragon chainbody, rune chainbody, amulet of power and 137 rune arrows after a verified kill, then logged out. After 59.462 seconds of private visibility, all four fighters saw the items during the next fight with the queen at 252/255 HP. West collected all three valuables, resumed combat, then banked each extra copy at Shantay. The previously banked fixture copies were excluded by the baseline. No Rune-arrow Take inputs occurred, and the arrows remained after collection.
+
+West ate from 39 to 59 HP while the dragon-chain pickup was pending. All four fighters and the donor survived and were observed logged out, with no cleanup rescues. Minimum fighter HP was 26/25/26/29. The seeded drops are separate from natural-loot and soak evidence. Artifacts are in `out/e2e/jivekq/kq4rv34b/`; bundle SHA-256 is `943d05fe2e3f1454edb14c2c13cb26e404a2e4504c317512a52d144633c61709`.
+
+All sixteen initial potion doses were consumed after observed upper-floor movement and before the upper gate. Own kit preparation took 32–35 seconds; the first three then waited roughly 40 seconds for the deliberately delayed fourth member. Upper travel took 71–83 seconds over 163 observed tiles, with no stationary span of 1.8 seconds or longer. The faster member waited 11 seconds at the second rope. These measurements exclude existing-account setup and do not identify run energy as the cause of speed differences.
+
+The earlier probe `kq4rajgh` collected and banked every valuable but revealed the drops between kills. It remains a failed active-fight test. The donor timing was corrected without changing production code or weakening that assertion.
+
+Final offline verification passed 10,091 tests with one existing skip and no failures, plus typecheck against the current-main merge snapshot, lint and prose gates. Fresh three-team normal-speed soaks are running; their final results are pending.
+
+## Twelve-client Electron channel isolation
+
+Twelve same-origin Electron MultiBox frames using three distinct four-name rosters each received three teammate messages and no foreign-roster messages. This checks channel isolation without logging accounts in; it does not establish twelve-client combat performance. The artifact and reproducer are `out/e2e/jivekq/three-teams-normal-speed/electron-twelve-channel.{json,ts}`.
+
 ## Normal-speed prayer failure and bank benchmark
 
 The first three-team run at 600 ms per tick exposed an attack-prayer confirmation failure. Teams `kq4nlnzu`, `kq4nlxvw` and `kq4nmicz` aborted their first fights after 13–17 seconds with food remaining. Strength and Reflexes activated after the two-second API timeout, but the script had already broadcast a group retreat. These runs were interrupted after returning; all twelve clients logged out and no players died. C required two cleanup rescue teleports. All three results remain failures.
@@ -23,6 +39,10 @@ B failed the contribution assertion because the premature retreat ended a member
 Weapon switches now track the pending request without blocking eating. Actual equipment state confirms success, and a failed request gets ten ticks before retrying. A missing weapon causes personal restocking. Regression tests cover delayed confirmation, rejected input, continued eating, and a phase change while an earlier equip is still pending. The failed runs and equip traces remain under `out/e2e/jivekq/three-teams-normal-speed/` and the individual run directories.
 
 The weapon fix passed 10,036 offline tests with one existing skip and zero failures, plus typecheck, focused lint and prose checks.
+
+## Normal-speed weapon-fix checkpoint
+
+The next weapon-fixed runs, `kq4pfsci`, `kq4pg1du` and `kq4pgck8`, each completed one four-kill trip at normal speed. All twelve survived and logged out without rescue. They were deliberately interrupted at Shantay to apply the requested moving-potion and leftover-loot changes, so their results remain incomplete soaks. Across 90 observed equip waits, confirmations arrived in 619–842 ms; these runs did not exercise a late equip confirmation. The delayed-confirmation eating regression remains covered by the offline tests.
 
 ## Previous concurrent level-70 soaks
 

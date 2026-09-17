@@ -13,7 +13,6 @@ import { Prayer, PROTECT_FROM_MAGIC } from '../../api/prayer/Prayer.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Sustain } from '../../api/sustain/Sustain.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
-import { DROP_DB } from '../../data/dropdb.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import { COMBAT_SKILLS, XpTracker } from '../../paint/jive.js';
 import { CombatStats } from './stats.js';
@@ -23,6 +22,7 @@ import type { SettingsSchema } from '../../runtime/Settings.js';
 import { Party, normalizeName, parseRoster, type Gate, type Member, type Release, type Stage } from './party.js';
 import { combatFormation, combatMode, inLair, inNest, near, QueenTracker, queenPhase, retreatReason, SIDES, WAIT_CORNER, type Point } from './policy.js';
 import { approachQueen, pullQueen, QueenSearch, type QueenSighting } from './search.js';
+import { LootCollector } from './loot.js';
 import { recoveryDrops, type DeathReport } from './recovery.js';
 import { camelot, descend, duelArena, gateTile, pass, placeRope, ropeReady, step, walk } from './route.js';
 import { BOW, FOOD, MACE, RECOIL, boost, boostsReady, doses, drink, eat, equip, provision, supplies, worn } from './supply.js';
@@ -30,8 +30,6 @@ import { BOW, FOOD, MACE, RECOIL, boost, boostsReady, doses, drink, eat, equip, 
 export const SETTINGS: SettingsSchema = {
     team: { type: 'string', default: '', label: 'Four account names', help: 'The same comma-separated roster on all four clients in one browser profile and origin. First account places ropes; accounts stand west, east, north and south.' }
 };
-
-const DROPS = new Set(DROP_DB['Kalphite Queen'] ?? DROP_DB['Kalphite queen'] ?? []);
 
 export default class JiveKQ extends LoopingBot {
     status = 'starting';
@@ -48,7 +46,7 @@ export default class JiveKQ extends LoopingBot {
     private xp = new XpTracker(COMBAT_SKILLS, Skills);
     private startedAt = 0;
     private lastKillMs = 0;
-    private lootUntilTick = 0;
+    private collector = new LootCollector();
     private lootCounts = new Map<string, number>();
     private party: Party | null = null;
     private channel: BroadcastChannel | null = null;
@@ -58,6 +56,7 @@ export default class JiveKQ extends LoopingBot {
     private entryAt = 0;
     private gateAt = 0;
     private descent: Gate | null = null;
+    private walkTile: Point | null = null;
     private lastDose = 0;
     private poisoned = false;
     private queenTracker = new QueenTracker();
@@ -119,6 +118,7 @@ export default class JiveKQ extends LoopingBot {
             tile: Game.ingame() ? Game.tile() : null,
             playerSlot: reader.selfSlot(),
             death: this.death ?? undefined,
+            loot: this.collector.claim ?? undefined,
             recoverySpace: Inventory.free() + Inventory.items().filter(i => i.name === 'Vial').length,
             ready: this.prepared && !this.paused && Game.ingame() && Skills.effective('hitpoints') > 0 && this.stage !== 'retreat',
             restocking: this.restocking && !this.paused && (Game.ingame() && Skills.effective('hitpoints') > 0 || !!this.death),
@@ -134,6 +134,7 @@ export default class JiveKQ extends LoopingBot {
         if (this.stage === 'retreat') return;
         this.log(`${restocking ? 'restocking' : 'group retreat'}: ${reason}`);
         this.restocking = restocking;
+        this.collector.clear();
         this.stage = 'retreat';
         this.descent = null;
         this.status = reason;
@@ -199,7 +200,6 @@ export default class JiveKQ extends LoopingBot {
             this.lastKillMs = this.queenTracker.lastKillMs;
             this.lastKillTick = Game.tick();
             this.search = new QueenSearch();
-            this.lootUntilTick = Game.tick() + 12;
             this.log(`Kalphite Queen killed (${this.kills})`);
         }
     }
@@ -266,6 +266,9 @@ export default class JiveKQ extends LoopingBot {
 
     private async upkeep(walking = false): Promise<boolean> {
         if (!Game.sceneReady() || this.stage === 'bank') return false;
+        const tile = reader.serverTile() ?? Game.tile();
+        const moving = walking && tile?.level === 2 && this.walkTile !== null && !near(tile, this.walkTile, 0);
+        if (walking) this.walkTile = tile;
         this.observeFood();
         const hp = Skills.effective('hitpoints');
         const queen = this.stage === 'fight' && !this.queenDead ? Npcs.query().where(n => queenPhase(n.id) !== null).nearest() : null;
@@ -284,29 +287,41 @@ export default class JiveKQ extends LoopingBot {
             this.leaveRendezvous();
             if (!canConsume) return false;
             if (this.stage !== 'fight') return eat();
-            if (await eat(false)) {
-                this.pendingFood = { tick, count: food };
-                this.nextEatTick = tick + 3;
-                this.lastAttack = -10;
-            }
+            await this.queueCombatFood();
             return false;
         }
         if (this.stage === 'fight' && !canConsume) return false;
         if (inNest(Game.tile())) {
             if (Prayer.points() <= Math.min(35, Prayer.max() - 15) && doses('Prayer potion') > 0) { this.leaveRendezvous(); return drink('Prayer potion'); }
-            if ((this.poisoned || Date.now() - this.lastDose > 240_000) && doses('Superantipoison') > 0) {
+            if ((this.poisoned || Date.now() - this.lastDose > 240_000 && (this.stage === 'fight' || this.stage === 'upper' || moving)) && doses('Superantipoison') > 0) {
                 this.leaveRendezvous();
                 if (await drink('Superantipoison')) { this.lastDose = Date.now(); this.poisoned = false; return true; }
             }
             if (!worn(RECOIL) && Inventory.countById(RECOIL) > 0) { this.leaveRendezvous(); return equip(RECOIL); }
             const upper = Game.tile()?.level === 2;
-            if (this.stage === 'upper' || this.stage === 'fight' || walking && upper) {
+            if (this.stage === 'upper' || this.stage === 'fight' || moving) {
                 const melee = upper || waiting || Npcs.query().where(n => n.id === 1158).nearest() !== null;
                 if (this.stage === 'upper' && !boostsReady()) this.leaveRendezvous();
                 if (await boost(melee)) return true;
             }
         }
         return false;
+    }
+
+    private async queueCombatFood(): Promise<boolean> {
+        const tick = Game.tick(), count = Inventory.countById(FOOD);
+        if (!count || tick < this.nextEatTick || this.pendingFood && tick - this.pendingFood.tick < 4) return false;
+        const previous = this.pendingFood, next = this.nextEatTick, pending = { tick, count };
+        this.pendingFood = pending;
+        this.nextEatTick = tick + 3;
+        let sent = false;
+        try {
+            sent = await eat(false);
+            if (sent) this.lastAttack = -10;
+            return sent;
+        } finally {
+            if (!sent && this.pendingFood === pending) { this.pendingFood = previous; this.nextEatTick = next; }
+        }
     }
 
     private observeFood(): void {
@@ -360,7 +375,7 @@ export default class JiveKQ extends LoopingBot {
                 this.recoveries.clear();
                 this.recoveryMessage = '';
                 this.tripKills = 0;
-                this.lootUntilTick = 0;
+                this.collector.clear();
                 this.gateAt = 0;
                 this.descent = null;
                 this.log(`trip ${this.trip}: shared loadout ready`);
@@ -386,7 +401,9 @@ export default class JiveKQ extends LoopingBot {
         if (!near(Game.tile(), target, 0)) {
             this.stage = 'travel';
             this.status = `walking to ${gate} entrance`;
+            this.walkTile = reader.serverTile() ?? Game.tile();
             await walk(target, 0, s => this.log(s));
+            this.walkTile = null;
             return;
         }
         if (!this.gateAt) this.gateAt = Date.now();
@@ -403,7 +420,7 @@ export default class JiveKQ extends LoopingBot {
             await Prayer.set(PROTECT_FROM_MAGIC, true);
             return;
         }
-        if (Date.now() - this.lastDose > 240_000) {
+        if (gate === 'upper' && Date.now() - this.lastDose > 240_000) {
             this.stage = 'travel';
             this.status = 'drinking antipoison before entering';
             if (!(await drink('Superantipoison'))) { this.retreat('antipoison unavailable'); return; }
@@ -463,6 +480,7 @@ export default class JiveKQ extends LoopingBot {
             if (Date.now() - this.entryAt > 12_000) this.retreat('the team did not arrive together');
             return;
         }
+        if (this.loot()) return;
         const queen = Npcs.query().where(n => queenPhase(n.id) !== null).nearest();
         const sighting = this.latestSighting();
         if (!this.queenDead && (this.blocked || peers.some(m => m.blocked)) && (!queen || !this.formation(queen))) {
@@ -473,7 +491,6 @@ export default class JiveKQ extends LoopingBot {
         if (!queen || this.queenDead) {
             if (this.queenTracker.killedAt && Game.tick() - this.lastKillTick <= 120 && !sighting) {
                 if (!(await this.clearPrayers())) return;
-                if (Game.tick() < this.lootUntilTick && await this.loot()) { this.status = 'collecting queen loot'; return; }
                 this.status = near(Game.tile(), WAIT_CORNER, 0) ? 'stacked near spawn; prayers off' : 'regrouping in the northwest corner';
                 if (!near(Game.tile(), WAIT_CORNER, 0)) { step(WAIT_CORNER); return; }
                 if (!this.equipWeapon(MACE)) return;
@@ -618,6 +635,7 @@ export default class JiveKQ extends LoopingBot {
         }
         const collector = this.party.members(Date.now()).find(m => m.trip === this.trip && m.stage === 'fight' && m.ready && !m.death && (m.recoverySpace ?? 0) > 0 && inLair(m.tile));
         if (collector?.name !== this.party.self) return false;
+        if (this.collector.claim) { this.collector.clear(); this.heartbeat(); }
         const recovery = this.recoveries.get(`${casualty.name}:${casualty.session}:${casualty.death.at}`)!;
         this.status = `recovering ${casualty.name}'s dropped items`;
         if (Prayer.points() === 0 || !this.protect()) return true;
@@ -652,24 +670,24 @@ export default class JiveKQ extends LoopingBot {
         return true;
     }
 
-    private async loot(): Promise<boolean> {
-        const drop = GroundItems.query().within(14).where(g => DROPS.has(g.name ?? '')).nearest();
-        if (!drop) return false;
-        if (Inventory.isFull()) {
-            const vial = Inventory.first('Vial');
-            if (vial) { await vial.interact('Drop'); return true; }
-            if (Skills.hpFraction() < 1) return eat();
-            return false;
-        }
-        const before = Inventory.countById(drop.id);
-        if (await drop.interact('Take') && await Execution.delayUntilTicks(() => Inventory.countById(drop.id) > before, 4)) {
+    private loot(): boolean {
+        if (!this.party) return false;
+        const previous = this.collector.claim;
+        const result = this.collector.step(this.party, this.trip, this.party.deaths(this.trip).map(c => c.death.tile), () => {
+            const waiting = this.queenTracker.killedAt > 0 && !this.latestSighting()
+                && !Npcs.query().where(n => queenPhase(n.id) !== null && (n.health > 0 || n.snap.totalHealth === 0)).nearest();
+            return waiting ? this.clearPrayers() : Prayer.points() > 0 && this.protect();
+        }, () => this.queueCombatFood());
+        if (this.stage === 'retreat') return true;
+        if (result.collected) {
             this.looted++;
-            const name = drop.name ?? String(drop.id);
-            this.lootCounts.set(name, (this.lootCounts.get(name) ?? 0) + Inventory.countById(drop.id) - before);
-            this.log(`looted ${drop.name}`);
-            return true;
+            const { name, count } = result.collected;
+            this.lootCounts.set(name, (this.lootCounts.get(name) ?? 0) + count);
+            this.log(`looted ${count} ${name}`);
         }
-        return false;
+        if (previous !== this.collector.claim) this.heartbeat();
+        if (result.busy) { this.lastAttack = -10; this.status = `collecting ${this.collector.claim?.name ?? 'queen loot'}`; }
+        return result.busy;
     }
 
     private async escape(): Promise<void> {
@@ -701,9 +719,10 @@ export default class JiveKQ extends LoopingBot {
         this.heartbeat();
     }
 
-    override onPause(): void { this.paused = true; this.observeStats(); this.heartbeat(); }
+    override onPause(): void { this.collector.clear(); this.paused = true; this.observeStats(); this.heartbeat(); }
     override onResume(): void { this.paused = false; if (inNest(Game.tile())) this.retreat('resumed after party pause'); }
     override onStop(): void {
+        this.collector.clear();
         this.restocking = !!this.death;
         this.stage = 'retreat';
         this.heartbeat();
