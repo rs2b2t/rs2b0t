@@ -226,6 +226,142 @@ test('arrow-only ground leaves normal attacks unchanged', async () => {
     expect(actions.map(a => a.kind)).toEqual(['attack', 'attack']);
 });
 
+test('spent Rune arrows are swept across multiple piles before stacking after a kill', async () => {
+    const { bot, state, actions, next } = scene();
+    bot['queenTracker'].killedAt = Date.now(); bot['lastKillTick'] = state.tick;
+    spyOn(reader, 'npcs').mockReturnValue([]);
+    state.drops = [drop(892, 'Rune arrow', 3478), drop(892, 'Rune arrow', 3483), drop(884, 'Iron arrow', 3477)];
+    await bot.loop(); await next();
+    expect(actions.filter(a => a.kind === 'take').map(a => a.id)).toEqual([892]);
+    state.pack.push({ ...item(892, 'Rune arrow', 10), count: 3 }); state.drops.shift();
+    await next(); await next(); await next();
+    expect(actions.filter(a => a.kind === 'take').map(a => a.id)).toEqual([892, 892]);
+    expect(actions.some(a => a.kind === 'walk')).toBe(false);
+    state.pack[10].count = 7; state.drops.shift();
+    await next(); await next();
+    expect(bot['lootCounts'].get('Rune arrow')).toBe(7);
+    expect(actions.at(-1)?.kind).toBe('walk');
+    expect([...state.active]).toEqual([]);
+});
+
+test('Rune arrows that become public while waiting are swept before returning to the stack', async () => {
+    const { bot, state, actions, next } = scene();
+    bot['queenTracker'].killedAt = Date.now(); bot['lastKillTick'] = state.tick;
+    spyOn(reader, 'npcs').mockReturnValue([]);
+    state.drops = [];
+    await bot.loop();
+    actions.length = 0;
+    state.drops = [drop(892, 'Rune arrow')];
+    await next(60); await next();
+    expect(actions.filter(a => a.kind === 'take').map(a => a.id)).toEqual([892]);
+    expect(actions.some(a => a.kind === 'walk')).toBe(false);
+});
+
+test('valuable consumables outrank closer Rune arrows between kills', async () => {
+    const { bot, state, actions, next } = scene();
+    bot['queenTracker'].killedAt = Date.now(); bot['lastKillTick'] = state.tick;
+    spyOn(reader, 'npcs').mockReturnValue([]);
+    state.drops = [drop(892, 'Rune arrow', 3477), drop(565, 'Blood rune', 3500)];
+    await bot.loop(); await next();
+    expect(actions.filter(a => a.kind === 'take').map(a => a.id)).toEqual([565]);
+});
+
+test('newly visible valuable loot interrupts an existing arrow sweep', async () => {
+    const { bot, state, actions, next } = scene();
+    bot['queenTracker'].killedAt = Date.now(); bot['lastKillTick'] = state.tick;
+    spyOn(reader, 'npcs').mockReturnValue([]);
+    state.drops = [drop(892, 'Rune arrow')];
+    await bot.loop(); await next();
+    state.drops.push(drop(1731, 'Amulet of power'));
+    actions.length = 0;
+    await next(); await next(); await next();
+    expect(actions.filter(a => a.kind === 'take').map(a => a.id)).toEqual([1731]);
+});
+
+test('a private valuable claim stops a different member from continuing an arrow sweep', async () => {
+    const { bot, party, state, actions, next } = scene();
+    bot['queenTracker'].killedAt = Date.now(); bot['lastKillTick'] = state.tick;
+    spyOn(reader, 'npcs').mockReturnValue([]);
+    state.drops = [drop(892, 'Rune arrow')];
+    await bot.loop(); await next();
+    party.receive({ name: 'two', session: 'two', trip: 1, stage: 'fight', ready: true, tile: state.tile,
+        loot: { id: 1731, name: 'Amulet of power', tile: state.tile, collecting: false } }, Date.now());
+    actions.length = 0;
+    await next();
+    expect(party.lootCollector(1, Date.now())?.name).toBe('two');
+    expect(actions.map(a => a.kind)).toEqual(['walk']);
+    expect(bot['collector'].claim).toBeNull();
+});
+
+test.each([{ health: 255, totalHealth: 255 }, { health: 0, totalHealth: 0 }])('a respawn with health %p cancels an in-flight arrow pickup before potion upkeep', async health => {
+    const { bot, state, actions, next } = scene();
+    const queen = reader.npcs().map(n => ({ ...n, ...health }));
+    const npcs = spyOn(reader, 'npcs').mockReturnValue([]);
+    bot['queenTracker'].killedAt = Date.now(); bot['lastKillTick'] = state.tick;
+    state.drops = [drop(892, 'Rune arrow')];
+    await bot.loop(); await next();
+    expect(actions.filter(a => a.kind === 'take').map(a => a.id)).toEqual([892]);
+    npcs.mockReturnValue(queen);
+    spyOn(supply, 'boost').mockResolvedValue(true);
+    actions.length = 0;
+    await next();
+    expect(bot['collector'].claim).toBeNull();
+    expect(actions.map(a => a.kind)).toEqual(['walk']);
+    expect(state.active.has(PROTECT_FROM_MAGIC)).toBe(true);
+});
+
+test('a teammate sighting stops arrow recovery even when the local Queen is out of view', async () => {
+    const { bot, party, state, actions, next } = scene();
+    bot['queenTracker'].killedAt = Date.now(); bot['lastKillTick'] = state.tick;
+    spyOn(reader, 'npcs').mockReturnValue([]);
+    state.drops = [drop(892, 'Rune arrow')];
+    await bot.loop(); await next();
+    expect(actions.filter(a => a.kind === 'take').map(a => a.id)).toEqual([892]);
+    party.receive({ name: 'two', session: 'two', trip: 1, stage: 'fight', ready: true, tile: state.tile,
+        queen: { id: 1158, tile: state.tile, at: Date.now(), engaged: true } }, Date.now());
+    spyOn(supply, 'boost').mockResolvedValue(true);
+    actions.length = 0;
+    await next();
+    expect(bot['collector'].claim).toBeNull();
+    expect(actions.map(a => a.kind)).toEqual(['walk']);
+});
+
+test('missing Queen visibility without a confirmed kill never starts an arrow sweep', () => {
+    const { bot, state, actions } = scene();
+    spyOn(reader, 'npcs').mockReturnValue([]);
+    state.drops = [drop(892, 'Rune arrow')];
+    bot['loot'](); state.tick++; bot['loot']();
+    expect(bot['collector'].claim).toBeNull();
+    expect(actions.some(a => a.kind === 'take')).toBe(false);
+});
+
+test('an expired respawn wait stops the pending arrow approach and rejects another sweep', async () => {
+    const { bot, state, actions, next } = scene();
+    bot['queenTracker'].killedAt = Date.now(); bot['lastKillTick'] = state.tick;
+    spyOn(reader, 'npcs').mockReturnValue([]);
+    state.drops = [drop(892, 'Rune arrow')];
+    await bot.loop(); await next();
+    actions.length = 0;
+    state.tick += 120;
+    await bot['upkeep']();
+    bot['loot']();
+    expect(bot['collector'].claim).toBeNull();
+    expect(actions.map(a => a.kind)).toEqual(['walk']);
+});
+
+test('damage during an arrow sweep still queues food with prayers off', async () => {
+    const { bot, state, actions, next } = scene();
+    bot['queenTracker'].killedAt = Date.now(); bot['lastKillTick'] = state.tick;
+    spyOn(reader, 'npcs').mockReturnValue([]);
+    state.drops = [drop(892, 'Rune arrow')];
+    await bot.loop(); await next();
+    state.hp = 30;
+    await next();
+    expect(actions.filter(a => a.kind === 'eat').map(a => a.tick)).toEqual([102]);
+    expect([...state.active]).toEqual([]);
+    expect(bot['collector'].claim?.id).toBe(892);
+});
+
 test('a private drop can elect the later roster member who can actually see it', async () => {
     const { bot, state, actions, next } = scene();
     const party = new Party(names, 'three', 'three');

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { KqCleanup, type CleanupSample } from '../../e2e/lib/kqCleanup.js';
+import { KqCleanup, cleanupDeadline, type CleanupSample } from '../../e2e/lib/kqCleanup.js';
 
 function player(at = 1000): CleanupSample {
     const tile = { x: 3476, z: 9498, level: 0 };
@@ -185,4 +185,41 @@ test('a safe rendered tile without a server position cannot authorize pause or c
     expect(c.observe([s])).toEqual([]);
     s.runner = 'paused'; s.at += 200; c.observe([s]);
     expect(c.captureReady).toBe(false);
+});
+
+test('lost pages do not authorize rescue or erase an observed logout', () => {
+    const c = new KqCleanup(2, 1000);
+    const offline = { ...player(), ingame: false };
+    const missing = { ...player(), ingame: null, sceneReady: false, tile: null, serverTile: null, hp: -1, runner: 'unknown' };
+    expect(c.observe([offline, missing])).toEqual([]);
+    expect(c.loggedOut).toBe(1);
+    expect(c.observe([{ ...missing, at: 2000 }, { ...missing, at: 2000 }])).toEqual([]);
+    expect(c.loggedOut).toBe(1);
+    expect(c.finished).toBe(false);
+    expect(c.fixtureTeleports).toEqual([]);
+});
+
+test('cleanup terminates at its deadline and reports unresolved players honestly', () => {
+    const c = new KqCleanup(2, 1000);
+    c.observe([{ ...player(), ingame: false }, player()]);
+    const missing = { ...player(121000), ingame: null, sceneReady: false, tile: null, serverTile: null, hp: -1, runner: 'unknown' };
+    expect(c.observe([missing, missing])).toEqual([]);
+    expect(c.finished).toBe(true);
+    expect(c.loggedOut).toBe(1);
+    expect(c.failures).toContain('Player 2 logout was not verified within 120 seconds');
+    expect(c.fixtureTeleports).toEqual([]);
+});
+
+test('a real relog invalidates previously observed logout', () => {
+    const c = new KqCleanup(2, 1000);
+    c.observe([{ ...player(), ingame: false }, player()]);
+    c.observe([player(1200), player(1200)]);
+    expect(c.loggedOut).toBe(0);
+    expect(c.finished).toBe(false);
+});
+
+test('cleanup deadlines bound a stalled browser operation', async () => {
+    await expect(cleanupDeadline(new Promise<never>(() => {}), 5, 'Observation')).rejects.toThrow('Observation exceeded 5 ms');
+    await expect(cleanupDeadline(Promise.resolve(4), 1000, 'Action')).resolves.toBe(4);
+    await expect(cleanupDeadline(Promise.reject(new Error('Page closed')), 1000, 'Action')).rejects.toThrow('Page closed');
 });

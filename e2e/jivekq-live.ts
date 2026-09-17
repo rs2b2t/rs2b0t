@@ -5,7 +5,7 @@ import Skill from '../src/client/shell/Skill.js';
 import { CHECKLIST, KqEvidence, chamber, type KqAction, type KqFoodDrop, type KqRopeClick } from './lib/kqEvidence.js';
 import type { Input } from '../src/bot/input/Input.js';
 import { kqOptions } from './lib/kqOptions.js';
-import { KqCleanup, type CleanupAction, type CleanupSample } from './lib/kqCleanup.js';
+import { KqCleanup, cleanupDeadline, type CleanupAction, type CleanupSample } from './lib/kqCleanup.js';
 import { KqRecoveryEvidence, RECOVERY_CHECKLIST } from './lib/kqRecoveryEvidence.js';
 import { KqGateDelay } from './lib/kqGateDelay.js';
 import { KqLootEvidence, LOOT_CHECKLIST, type KqLootTake } from './lib/kqLootEvidence.js';
@@ -19,7 +19,7 @@ import type { Skills } from '../src/bot/api/skills/Skills.js';
 import type { Prayer } from '../src/bot/api/prayer/Prayer.js';
 import type { reader } from '../src/bot/adapter/ClientAdapter.js';
 import type JiveKQ from '../src/bot/scripts/JiveKQ/JiveKQ.js';
-import { deployIsolatedClient, launchBrowser, logout, requireSim, setSettings, stopScript } from './lib/harness.js';
+import { deployIsolatedClient, launchBrowser, requireSim, setSettings, stopScript } from './lib/harness.js';
 import { bootAndLogin, cheatQuiet, clearChatDialogs, mainlandAccount, seedItemsToBank, startScript, teleTo, type BankSeedItem } from './tutorial/harness.js';
 
 interface WindowApi {
@@ -29,7 +29,7 @@ interface WindowApi {
     kqFoodDrops: KqFoodDrop[];
     kqGateDelay?: { released: boolean; held: boolean };
     __rs2b0t: { Game: typeof Game; Inventory: typeof Inventory; Equipment: typeof Equipment; Npcs: typeof Npcs; Skills: typeof Skills; Prayer: typeof Prayer; reader: typeof reader };
-    rs2b0t: { input: typeof Input; runner: { state: string; bot: JiveKQ | null; ctx: { log: { time: number; level: string; msg: string }[] } | null; pause(): void; resume(): void } };
+    rs2b0t: { input: typeof Input; runner: { state: string; bot: JiveKQ | null; ctx: { log: { time: number; level: string; msg: string }[] } | null; pause(): void; resume(): void; stop(reason: string): void }; actions: { ifButton(com: number): boolean } };
 }
 
 const args = kqOptions(process.argv.slice(2));
@@ -50,6 +50,9 @@ const bundleSha256 = createHash('sha256').update(new Uint8Array(await bundle.arr
 const output = `out/e2e/jivekq/${tag}`;
 mkdirSync(output, { recursive: true });
 const browser = await launchBrowser();
+const browserSession = await browser.newBrowserCDPSession();
+const browserPid = (await browserSession.send('SystemInfo.getProcessInfo')).processInfo.find(p => p.type === 'browser')?.id;
+await browserSession.detach();
 const context = await browser.newContext();
 const pages = await Promise.all(names.map(() => context.newPage()));
 const errors: string[] = [];
@@ -105,7 +108,7 @@ const observations = Bun.file(`${output}/observations.jsonl`).writer();
 const minimumHp = names.map(() => Infinity);
 let sampleCount = 0;
 let pauseTrip: number | null = null;
-let pauseNotice = args.lootProbe ? 'PUBLIC LOOT FIXTURE: separate donor, real 100-tick reveal; seeded items are not natural-drop or soak proof.' : args.recoveryProbe ? 'RECOVERY PROBE: one controlled teammate death; this is not a zero-death soak.' : 'Pause probe: waiting for all four to fight on a later visit.';
+let pauseNotice = args.lootProbe ? 'PUBLIC LOOT FIXTURE: real 100-tick donor reveal, active-combat valuables, separate between-kill arrow recovery; ineligible for natural-drop or soak proof.' : args.recoveryProbe ? 'RECOVERY PROBE: one controlled teammate death; this is not a zero-death soak.' : 'Pause probe: waiting for all four to fight on a later visit.';
 const soakTrips = () => evidence.trips.filter(t => t.number !== pauseTrip);
 let result = 'FAIL';
 let failure = '';
@@ -122,7 +125,8 @@ const captured = new Set<string>();
 const screenshots: Promise<unknown>[] = [];
 async function drawChecklist(samples: Sample[]): Promise<void> {
     const lines = checks.map(check => `${milestones[check] ? '[x]' : '[ ]'} ${checklist[check]}`).join('\n');
-    const progress = lootProbe ? `Fixture valuables picked up ${lootProbe.pickups.length}/3 | Banked ${lootProbe.pickups.filter(p => p.bankedAt).length}/3\nConfirmed meals ${lootProbe.eating.length} | Meals during pending pickup ${lootProbe.eating.filter(e => e.duringPickup).length}` : args.recoveryProbe ? `Expected deaths ${recovery.deaths.filter(d => d.expected).length}/1 | Unexpected ${recovery.deaths.filter(d => !d.expected).length}\nRecovered bows banked ${recovery.pickups.filter(p => p.bankedAt).length}` : `Trips ${soakTrips().length}/${args.trips} | Kills ${evidence.kills.length}/${args.trips}`;
+    const progress = lootProbe ? `Fixture valuables picked up ${lootProbe.pickups.length}/3 | Banked ${lootProbe.pickups.filter(p => p.bankedAt).length}/3\nArrow recoveries ${lootProbe.arrowRecoveries.length} | Confirmed meals ${lootProbe.eating.length}
+Meals during pending pickup ${lootProbe.eating.filter(e => e.duringPickup).length}` : args.recoveryProbe ? `Expected deaths ${recovery.deaths.filter(d => d.expected).length}/1 | Unexpected ${recovery.deaths.filter(d => !d.expected).length}\nRecovered bows banked ${recovery.pickups.filter(p => p.bankedAt).length}` : `Trips ${soakTrips().length}/${args.trips} | Kills ${evidence.kills.length}/${args.trips}`;
     await Promise.all(pages.map((page, i) => page.evaluate(({ text, title }) => {
         const box = document.getElementById('kq-checklist');
         if (box) { box.querySelector('summary')!.textContent = title; box.querySelector('pre')!.textContent = text; }
@@ -132,7 +136,7 @@ function capture(check: string): void {
     if (captured.has(check)) return;
     captured.add(check);
     console.log(`CHECK ${check}: PASS ${checklist[check] ?? check}`);
-    if (['sharedKit', 'entered', 'formation', 'ranged', 'corner', 'looted', 'repeatFight', 'independentRestock', 'escape', 'restocked', 'reentered', 'pauseRetreat', 'recoveryDeath', 'recoveryRespawn', 'recoveryGround', 'recoveryPickup', 'recoveryBanked', 'recoveryWaiting', 'lootPublic', 'lootPicked', 'lootArrows', 'lootSustain', 'lootBanked'].includes(check)) {
+    if (['sharedKit', 'entered', 'formation', 'ranged', 'corner', 'looted', 'repeatFight', 'independentRestock', 'escape', 'restocked', 'reentered', 'pauseRetreat', 'recoveryDeath', 'recoveryRespawn', 'recoveryGround', 'recoveryPickup', 'recoveryBanked', 'recoveryWaiting', 'lootPublic', 'lootPicked', 'lootArrows', 'lootArrowsRecovered', 'lootSustain', 'lootBanked'].includes(check)) {
         screenshots.push(Promise.allSettled(pages.map((page, i) => page.screenshot({ path: `${output}/${check}-${i + 1}.png` }))));
     }
 }
@@ -158,7 +162,6 @@ async function finalPaint(): Promise<void> {
 }
 
 async function cleanupClients() {
-    if (gateDelay) await pages[3].evaluate(() => { const g = globalThis as typeof globalThis & WindowApi; if (g.kqGateDelay) g.kqGateDelay.released = true; }).catch(() => {});
     const startedAt = Date.now();
     const knownDeaths = scenarioDeaths().map(d => ({ player: d.player, chatCount: history.at(-1)?.[d.player]?.deathChatCount ?? 0, zeroHp: (history.at(-1)?.[d.player]?.hp ?? 1) <= 0 }));
     const cleanup = new KqCleanup(pages.length, startedAt, true, knownDeaths);
@@ -166,11 +169,12 @@ async function cleanupClients() {
     const cleanupHistory: (Sample | CleanupSample)[][] = [];
     const failures = new Set<string>();
     const errorCount = errors.length;
+    if (gateDelay) await cleanupDeadline(pages[3].evaluate(() => { const g = globalThis as typeof globalThis & WindowApi; if (g.kqGateDelay) g.kqGateDelay.released = true; }), 5000, 'Cleanup gate release').catch(error => { failures.add(String(error)); });
     const pending = new Set<Promise<void>>();
     let sampleCount = 0;
     let lastPrint = 0;
     let capture: Promise<void> | undefined;
-    console.log('CLEANUP: requesting retreat with runners active; observing until all four are safely logged out.');
+    console.log('CLEANUP: requesting retreat with runners active; observing logout for up to 120 seconds.');
     const perform = async (action: CleanupAction): Promise<boolean> => {
         const page = pages[action.player];
         if (action.kind === 'retreat') return page.evaluate(() => {
@@ -184,20 +188,24 @@ async function cleanupClients() {
             console.error(`FIXTURE CLEANUP: rescuing ${names[action.player]} to Shantay; this invalidates scenario success.`);
             return teleTo(page, { x: 3308, z: 3120, level: 0 }, 3, 2000);
         }
-        if (action.kind === 'pause') return page.evaluate(() => {
-            const runner = (globalThis as typeof globalThis & WindowApi).rs2b0t.runner;
-            runner.pause();
-            return runner.state === 'paused';
-        });
-        if (action.kind === 'stop') { await stopScript(page); return true; }
-        return logout(page, 1500);
+        return page.evaluate(kind => {
+            const g = globalThis as typeof globalThis & WindowApi;
+            const api = g.__rs2b0t;
+            const tile = api.reader.serverTile();
+            if (!api.Game.ingame() || !api.Game.sceneReady() || api.Game.inCombat() || tile?.level !== 0
+                || ![[3308, 3120, 10], [2757, 3478, 12], [3315, 3235, 12], [3221, 3218, 25]].some(([x, z, radius]) => Math.max(Math.abs(tile.x - x), Math.abs(tile.z - z)) <= radius)) return false;
+            const runner = g.rs2b0t.runner;
+            if (kind === 'pause') { runner.pause(); return runner.state === 'paused'; }
+            if (kind === 'stop') { runner.stop('local harness cleanup'); return true; }
+            return g.rs2b0t.actions.ifButton(2458);
+        }, action.kind);
     };
     while (!cleanup.finished) {
         const samples = await Promise.all(pages.map(async (page, i): Promise<Sample | CleanupSample> => {
-            try { return await sample(page); }
+            try { return await cleanupDeadline(sample(page), 5000, `${names[i]} cleanup observation`); }
             catch (error) {
                 failures.add(`${names[i]} cleanup observation: ${error}`);
-                const ingame = await page.evaluate(() => (globalThis as typeof globalThis & { rs2b0t?: { client?: { ingame: boolean } } }).rs2b0t?.client?.ingame ?? null).catch(() => null);
+                const ingame = await cleanupDeadline(page.evaluate(() => (globalThis as typeof globalThis & { rs2b0t?: { client?: { ingame: boolean } } }).rs2b0t?.client?.ingame ?? null), 1000, `${names[i]} cleanup login state`).catch(() => null);
                 return { at: Date.now(), ingame, sceneReady: false, tile: null, serverTile: null, hp: -1, inCombat: true, runner: 'unknown', chat: [] };
             }
         }));
@@ -207,11 +215,11 @@ async function cleanupClients() {
         if (cleanupHistory.length > 600) cleanupHistory.shift();
         samples.forEach((s, i) => { if (s.ingame && s.hp >= 0) minimumHp[i] = Math.min(minimumHp[i], s.hp); });
         for (const action of cleanup.observe(samples)) {
-            const operation = perform(action).then(ok => cleanup.complete(action, ok), error => cleanup.complete(action, false, String(error))).finally(() => pending.delete(operation));
+            const operation = cleanupDeadline(perform(action), 10_000, `${names[action.player]} cleanup ${action.kind}`).then(ok => cleanup.complete(action, ok), error => cleanup.complete(action, false, String(error))).finally(() => pending.delete(operation));
             pending.add(operation);
         }
         if (cleanup.captureReady && !capture) {
-            capture = finalPaint().catch(error => { failures.add(String(error)); }).finally(() => cleanup.releaseCapture());
+            capture = cleanupDeadline(finalPaint(), 15_000, 'Cleanup screenshots').catch(error => { failures.add(String(error)); }).finally(() => cleanup.releaseCapture());
         }
         if (Date.now() - lastPrint > 10_000) {
             console.log(`CLEANUP ${Math.round((Date.now() - startedAt) / 1000)}s: ${samples.map((s, i) => `${names[i]} ${s.ingame === false ? 'logged out' : `${s.runner} HP ${s.hp} at ${s.tile?.x},${s.tile?.z}`}`).join('; ')}`);
@@ -222,7 +230,7 @@ async function cleanupClients() {
     }
     await Promise.allSettled([...pending, ...(capture ? [capture] : [])]);
     await observations.end();
-    return { startedAt, endedAt: Date.now(), sampleCount, loggedOut: pages.length, deaths: cleanup.deaths, fixtureTeleports: cleanup.fixtureTeleports, failures: [...cleanup.failures, ...failures, ...errors.slice(errorCount)], actions: cleanup.actions, history: cleanupHistory };
+    return { startedAt, endedAt: Date.now(), sampleCount, loggedOut: cleanup.loggedOut, deaths: cleanup.deaths, fixtureTeleports: cleanup.fixtureTeleports, failures: [...cleanup.failures, ...failures, ...errors.slice(errorCount)], actions: cleanup.actions, history: cleanupHistory };
 }
 const started = Date.now();
 let interrupted = false;
@@ -230,7 +238,7 @@ process.on('SIGINT', () => { interrupted = true; });
 process.on('SIGUSR1', () => { interrupted = true; });
 console.log(checks.map(check => `[ ] ${checklist[check]}`).join('\n'));
 console.log(`KQ revision ${CLIENT_VERSION}: ${args.base}; evidence: ${output}`);
-console.log(args.lootProbe ? `Public loot probe: separate donor drops Dragon chainbody, Rune chainbody, Amulet of power and 137 Rune arrows; real 100-tick reveal, ordinary production collection and banking; level ${args.level}; timeout ${args.minutes} minutes.` : args.recoveryProbe ? `Recovery probe: exactly one intended death, survivor pickup and banking, victim returns Shantay waiting for gear; level ${args.level}; timeout ${args.minutes} minutes.` : `Soak target: ${args.trips} completed trips and at least ${args.trips} kills; level: ${args.level}; timeout: ${args.minutes} minutes after setup`);
+console.log(args.lootProbe ? `Public loot probe: separate donor drops Dragon chainbody, Rune chainbody, Amulet of power and 137 Rune arrows; real 100-tick reveal, active-combat valuable collection and banking, separate observed between-kill arrow recovery; level ${args.level}; timeout ${args.minutes} minutes.` : args.recoveryProbe ? `Recovery probe: exactly one intended death, survivor pickup and banking, victim returns Shantay waiting for gear; level ${args.level}; timeout ${args.minutes} minutes.` : `Soak target: ${args.trips} completed trips and at least ${args.trips} kills; level: ${args.level}; timeout: ${args.minutes} minutes after setup`);
 if (gateDelay) console.log('GATE DELAY FIXTURE: South will wait at Shantay with a running heartbeat for 225 game ticks after the first three reach the surface rope. No runner pause is used.');
 await Bun.write('out/jivekq-proof.json', JSON.stringify({ result: 'RUNNING', mode, soakEligible: !probe, gateDelay: gateDelay?.proof, expectedDeaths: args.recoveryProbe ? 1 : 0, names, evidenceDirectory: output, level: args.level, targetTrips: probe ? null : args.trips, timeoutMinutes: args.minutes }, null, 2));
 try {
@@ -438,7 +446,7 @@ try {
             lastPrint = Date.now();
             await Bun.write(`${output}/current.json`, JSON.stringify(samples, null, 2));
             await observations.flush();
-            await Bun.write(`${output}/progress.json`, JSON.stringify({ result: 'RUNNING', mode, soakEligible: !probe, seededLoot: lootProbe ? { fixture: lootProbe.fixture, publicDrops: lootProbe.publicDrops, pickups: lootProbe.pickups, eating: lootProbe.eating, donor: donor?.proof } : undefined, gateDelay: gateDelay?.proof, ropeAttempts: evidence.ropeAttempts, recovery: args.recoveryProbe ? { fixture: recovery.fixture, deaths: recovery.deaths, pickups: recovery.pickups } : undefined, level: args.level, elapsedMs: Date.now() - started, targetTrips: probe ? null : args.trips, completedTrips: probe ? null : soakTrips().length, pauseTrip, trips: evidence.trips, kills: evidence.kills.length, restarts: evidence.restarts, eatAttacks: evidence.eatAttacks, searches: evidence.searches, independentRestocks: evidence.independentRestocks, escapes: evidence.escapes, milestones, minimumHp, sampleCount }, null, 2));
+            await Bun.write(`${output}/progress.json`, JSON.stringify({ result: 'RUNNING', mode, soakEligible: !probe, seededLoot: lootProbe ? { fixture: lootProbe.fixture, publicDrops: lootProbe.publicDrops, pickups: lootProbe.pickups, waits: lootProbe.waits, arrowRecoveries: lootProbe.arrowRecoveries, eating: lootProbe.eating, donor: donor?.proof } : undefined, gateDelay: gateDelay?.proof, ropeAttempts: evidence.ropeAttempts, recovery: args.recoveryProbe ? { fixture: recovery.fixture, deaths: recovery.deaths, pickups: recovery.pickups } : undefined, level: args.level, elapsedMs: Date.now() - started, targetTrips: probe ? null : args.trips, completedTrips: probe ? null : soakTrips().length, pauseTrip, trips: evidence.trips, kills: evidence.kills.length, restarts: evidence.restarts, eatAttacks: evidence.eatAttacks, searches: evidence.searches, independentRestocks: evidence.independentRestocks, escapes: evidence.escapes, milestones, minimumHp, sampleCount }, null, 2));
         }
         if (Date.now() < deadline && checks.every(check => milestones[check])) { await drawChecklist(samples); result = 'PASS'; break; }
         await pages[0].waitForTimeout(200);
@@ -451,14 +459,25 @@ try {
     failure = String(error);
     console.error(failure);
 } finally {
-    const donorExit = donor?.close().catch(error => { donorFailure = String(error); });
+    const donorExit = donor && cleanupDeadline(donor.close(), 120_000, 'Donor cleanup').catch(error => { donorFailure = String(error); });
     const cleanup = await cleanupClients();
     await donorExit;
-    await donorTask;
+    if (donorTask) await cleanupDeadline(donorTask, 5000, 'Donor pending drop').catch(error => { cleanup.failures.push(String(error)); });
     if (donorFailure || donor?.proof.failures.length) cleanup.failures.push(donorFailure || donor!.proof.failures.join('; '));
     if (donor && !donor.proof.loggedOutAt) {
         donor.proof.forcedDisconnect = { at: Date.now(), lastObservation: donor.proof.observations.at(-1) ?? null };
         cleanup.failures.push('Donor logout unverified; browser will be forcibly disconnected after bounded cleanup');
+    }
+    try {
+        await cleanupDeadline(browser.close(), 10_000, 'Browser close');
+    } catch (error) {
+        cleanup.failures.push(String(error));
+        if (browserPid) {
+            try { process.kill(browserPid, 'SIGKILL'); }
+            catch (killError) { cleanup.failures.push(`Browser termination: ${killError}`); }
+        }
+    } finally {
+        client.cleanup();
     }
     if (cleanup.failures.length) {
         result = 'FAIL';
@@ -468,7 +487,7 @@ try {
     const deaths = [...scenarioDeaths(), ...cleanup.deaths.map(d => ({ ...d, expected: false, phase: 'cleanup' }))];
     const summary = {
         result, failure, mode, soakEligible: !probe, expectedDeaths: args.recoveryProbe ? 1 : 0, deaths, unexpectedDeaths: deaths.filter(d => !d.expected).length,
-        seededLoot: lootProbe ? { fixture: lootProbe.fixture, publicDrops: lootProbe.publicDrops, pickups: lootProbe.pickups, takes: lootProbe.takes, eating: lootProbe.eating, milestones: lootProbe.milestones, donor: donor?.proof } : undefined,
+        seededLoot: lootProbe ? { fixture: lootProbe.fixture, publicDrops: lootProbe.publicDrops, pickups: lootProbe.pickups, takes: lootProbe.takes, waits: lootProbe.waits, arrowRecoveries: lootProbe.arrowRecoveries, eating: lootProbe.eating, milestones: lootProbe.milestones, donor: donor?.proof } : undefined,
         recovery: args.recoveryProbe ? { fixture: recovery.fixture, deaths: recovery.deaths, ground: recovery.ground, pickups: recovery.pickups, milestones: recovery.milestones } : undefined,
         cleanup, names, base: args.base, revision: CLIENT_VERSION, fixture: `${reuse ? 'reused' : 'fresh'} level-${args.level} accounts`, level: args.level, startingStats,
         elapsedMs: Date.now() - started, milestones, errors, bundleSha256, crossings: evidence.crossings, ropeCounts: evidence.ropeCounts, sharedRopes: evidence.sharedRopes, ropeAttempts: evidence.ropeAttempts, gateDelay: gateDelay?.proof,
@@ -480,18 +499,20 @@ try {
     await Bun.write(`${output}/progress.json`, JSON.stringify(summary, null, 2));
     const report = (lootProbe ? [
         '# JiveKQ public leftover loot probe', '', `Result: **${result}**`, '',
-        'Fixture items were granted to a separate donor, dropped through ordinary inventory actions and revealed publicly after 100 game ticks. This run is ineligible for natural-drop or soak validation.', '',
+        'Fixture items were granted to a separate donor, dropped through ordinary inventory actions and revealed publicly after 100 game ticks. Ordinary player drops last 300 ticks total. Valuable pickups require active queen combat; arrow recovery is a separate observed respawn-wait check and can use other ground piles. This run is ineligible for natural-drop or soak validation.', '',
         `Server: ${args.base}, revision ${CLIENT_VERSION}. Roster fixture: ${summary.fixture}. Donor: ${donor?.proof.account ?? 'not prepared'} (99 HP/Defence/Prayer).`, '',
         `Bundle SHA-256: ${bundleSha256}`, '', failure, '', '| Check | Result |', '|---|---|',
         ...checks.map(check => `| ${checklist[check]} | ${milestones[check] ? 'PASS' : 'MISSING'} |`), '',
         '| Collector | Item ID | Extra ownership | Inventory to bank |', '|---|---|---|---|',
         ...lootProbe.pickups.map(p => `| ${names[p.player]} | ${p.id} | ${p.ownedBefore} → ${p.ownedAfter} | ${p.bankedAt ? `Bank ${p.bankBefore} → ${p.bankAfter}, retained ownership ${p.ownedAfterBank}` : 'Missing'} |`), '',
-        `Accepted Rune-arrow Take inputs: ${lootProbe.takes.filter(t => t.id === 892).length}. Confirmed meals: ${lootProbe.eating.length}; during pending pickup: ${lootProbe.eating.filter(e => e.duringPickup).length} (diagnostic, not required).`, '',
+        '| Arrow collector | Source | Ground count | Ownership | Wait confirmed | Take | Inventory gain |', '|---|---|---|---|---|---|---|',
+        ...lootProbe.arrowRecoveries.map(p => `| ${names[p.player]} | ${p.source} (${p.tile.x}, ${p.tile.z}) | ${p.groundCount} | ${p.ownedBefore} → ${p.ownedAfter} | ${p.waitAt} | ${p.takeAt} | ${p.pickedAt} |`), '',
+        `Accepted Rune-arrow Take inputs: ${lootProbe.takes.filter(t => t.id === 892).length}; confirmed recoveries: ${lootProbe.arrowRecoveries.length}. Active-combat arrow Takes fail the probe. Arrow banking is not asserted. Confirmed meals: ${lootProbe.eating.length}; during pending pickup: ${lootProbe.eating.filter(e => e.duringPickup).length} (diagnostic, not required).`, '',
         'Bank proof requires physical Shantay position, inventory ownership decreasing, bank count increasing, and total bank plus carried ownership retaining the extra fixture item.', '',
         `Observed roster deaths: ${deaths.length}. Donor failures: ${donor?.proof.failures.join('; ') || 'none'}. Donor verified logged out: ${!!donor?.proof.loggedOutAt}.`, '',
         `Roster cleanup: ${cleanup.loggedOut}/4 verified logged out; ${cleanup.deaths.length} additional deaths; ${cleanup.fixtureTeleports.length} fixture rescue teleports.`, '',
         '[Starting levels and XP](starting-stats.json) · [Full fixture proof](proof.json) · [Scenario observations](observations.jsonl) · [Cleanup observations](cleanup-observations.jsonl)', '',
-        ...[...captured].filter(check => ['lootPublic', 'lootPicked', 'lootArrows', 'lootSustain', 'lootBanked'].includes(check)).flatMap(check => [`## ${check}`, '', ...names.map((name, i) => `![${name}](${check}-${i + 1}.png)`), ''])
+        ...[...captured].filter(check => ['lootPublic', 'lootPicked', 'lootArrows', 'lootArrowsRecovered', 'lootSustain', 'lootBanked'].includes(check)).flatMap(check => [`## ${check}`, '', ...names.map((name, i) => `![${name}](${check}-${i + 1}.png)`), ''])
     ] : args.recoveryProbe ? [
         '# JiveKQ controlled death recovery probe', '', `Result: **${result}**`, '',
         'This probe deliberately causes one real player death. It is ineligible for zero-death soak validation.', '',
@@ -532,8 +553,6 @@ try {
     ]).join('\n');
     const gateReport = gateDelay ? `\n\n## Controlled gate delay\n\nSouth was held at Shantay with its runner active. Target: ${gateDelay.proof.holdTicks} game ticks after the first three physically reached the surface gate. Observed hold: ${gateDelay.proof.releaseTick !== undefined ? gateDelay.proof.releaseTick - gateDelay.proof.startTick! : 'incomplete'} ticks. Both leader ropes were required throughout the hold. Synchronized surface and chamber descents after release: ${gateDelay.proof.completedAt ? 'PASS' : 'MISSING'}.\n` : '';
     await Bun.write(`${output}/report.md`, report + gateReport);
-    await browser.close();
-    client.cleanup();
 }
 console.log(`${result}: ${output}/report.md`);
 if (result !== 'PASS') process.exitCode = 1;

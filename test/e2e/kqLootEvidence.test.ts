@@ -29,6 +29,17 @@ function bank(e: KqLootEvidence, s: LootSample[]) {
     advance(s, 10_000); s[0].tile = { x: 3308, z: 3120, level: 0 }; s[0].bankOpen = true;
     s[0].pack = [{ id: 385, count: 14 }]; s[0].bank = LOOT_FIXTURE.filter(i => i.id !== 892).map(i => ({ id: i.id, count: 1 })); e.observe(s);
 }
+function arrows(e: KqLootEvidence, s: LootSample[]) {
+    const pile = { ...tile, x: tile.x + 2 };
+    advance(s); s[0].ground.push({ id: 892, count: 7, tile: pile }); s[0].gear.push({ id: 892, count: 200 }); e.observe(s);
+    advance(s); s[0].lootTakes = [{ id: 892, tile: pile, at: s[0].at, tick: s[0].tick, owned: 200, food: 10, hp: 70 }]; e.observe(s);
+    advance(s); s[0].pack.push({ id: 892, count: 7 }); s[0].ground = s[0].ground.filter(g => g.id !== 892); e.observe(s);
+}
+function death(e: KqLootEvidence, s: LootSample[]) {
+    advance(s); s.forEach(p => { p.queens = [{ id: 1160, hp: 30, total: 255, tile }]; }); e.observe(s);
+    advance(s); s.forEach(p => { p.queens[0].hp = 0; }); e.observe(s);
+    advance(s); s.forEach(p => { p.queens = []; }); e.observe(s);
+}
 
 test('the donor arms immediately after a verified death, with four participating fighters still in the chamber', () => {
     const e = new KqLootEvidence(); const s = team(); e.observe(s); advance(s);
@@ -52,10 +63,100 @@ test('live fights, stale deaths and departed members cannot trigger the donor ti
 });
 
 test('public leftovers require non-owner visibility, actual own pickups and extra bank ownership', () => {
-    const { e, s } = armed(); publicLoot(e, s);
+    const { e, s } = armed(); arrows(e, s); publicLoot(e, s);
     for (const id of [3140, 1113, 1731]) pickup(e, s, id);
     feed(e, s); bank(e, s);
     expect(e.complete).toBe(true); expect(e.pickups).toHaveLength(3); expect(e.pickups.every(p => p.bankedAt)).toBe(true);
+});
+
+test('spent arrows are recovered during the verified first wait without relying on the donor stack lifetime', () => {
+    const { e, s } = armed(); arrows(e, s);
+    expect(e.arrowRecoveries).toMatchObject([{ player: 0, count: 7, ownedBefore: 200, ownedAfter: 207, source: 'other-ground' }]);
+    expect(e.milestones.lootArrowsRecovered).toBeGreaterThan(0);
+    expect(e.milestones.lootPublic).toBeUndefined();
+});
+
+test('a later wait needs observed living flying form, zero HP and disappearance', () => {
+    const { e, s } = armed(); publicLoot(e, s); death(e, s); arrows(e, s);
+    expect(e.arrowRecoveries).toHaveLength(1);
+    expect(e.arrowRecoveries[0].deathAt).toBeGreaterThan(e.fixture!.afterDeathAt);
+});
+
+test('a death witness is retained when another client still shows the last positive HP sample', () => {
+    const { e, s } = armed(); publicLoot(e, s); advance(s);
+    s.forEach(p => { p.queens = [{ id: 1160, hp: 30, total: 255, tile }]; }); e.observe(s);
+    advance(s); s[0].queens[0].hp = 0; e.observe(s);
+    advance(s); s.forEach(p => { p.queens = []; }); e.observe(s);
+    arrows(e, s); expect(e.arrowRecoveries).toHaveLength(1);
+});
+
+test('public arrows left alone during combat do not replace recovery evidence', () => {
+    const { e, s } = armed(); publicLoot(e, s);
+    for (const id of [3140, 1113, 1731]) pickup(e, s, id);
+    feed(e, s); bank(e, s);
+    expect(e.milestones.lootArrows).toBeGreaterThan(0);
+    expect(e.milestones.lootArrowsRecovered).toBeUndefined(); expect(e.complete).toBe(false);
+});
+
+test('a wait expires before an unseen respawn can authorize arrow recovery', () => {
+    const { e, s } = armed(); advance(s, 60_001);
+    s[0].lootTakes = [{ id: 892, tile, at: s[0].at, tick: s[0].tick, owned: 200, food: 10, hp: 70 }];
+    expect(() => e.observe(s)).toThrow('Rune arrow');
+});
+
+test('absence, lost witnesses and a respawn cannot authorize Rune-arrow recovery', () => {
+    for (const variant of ['unseen', 'departed', 'unknown scene', 'respawn', 'unknown HP respawn', 'corpse appeared']) {
+        const { e, s } = armed(); publicLoot(e, s);
+        if (variant !== 'unseen') death(e, s);
+        advance(s); s.forEach(p => { p.queens = []; });
+        if (variant === 'departed') s.forEach(p => { p.serverTile = { x: 2757, z: 3478, level: 0 }; });
+        if (variant === 'unknown scene') s.forEach(p => { p.sceneReady = false; });
+        if (variant.includes('respawn')) s[1].queens = [{ id: 1158, hp: variant === 'respawn' ? 255 : 0, total: variant === 'respawn' ? 255 : 0, tile }];
+        if (variant === 'corpse appeared') s[1].queens = [{ id: 1158, hp: 0, total: 255, tile }];
+        e.observe(s); advance(s); s.forEach(p => { p.sceneReady = true; p.serverTile = { ...tile }; });
+        s[0].lootTakes = [{ id: 892, tile, at: s[0].at, tick: s[0].tick, owned: 200, food: 10, hp: 70 }];
+        expect(() => e.observe(s)).toThrow('Rune arrow');
+        expect(e.arrowRecoveries).toHaveLength(0);
+    }
+});
+
+test('a flying sighting cannot survive all witnesses leaving and authorize a later corpse wait', () => {
+    const { e, s } = armed(); publicLoot(e, s); advance(s);
+    s.forEach(p => { p.queens = [{ id: 1160, hp: 30, total: 255, tile }]; }); e.observe(s);
+    advance(s); s.forEach(p => { p.serverTile = { x: 2757, z: 3478, level: 0 }; }); e.observe(s);
+    advance(s); s.forEach(p => { p.serverTile = { ...tile }; p.queens[0].hp = 0; }); e.observe(s);
+    advance(s); s.forEach(p => { p.queens = []; }); e.observe(s);
+    advance(s); s[0].lootTakes = [{ id: 892, tile, at: s[0].at, tick: s[0].tick, owned: 0, food: 10, hp: 70 }];
+    expect(() => e.observe(s)).toThrow('Rune arrow');
+});
+
+test('a missing arrow stack cannot turn unrelated inventory growth into recovery', () => {
+    const { e, s } = armed(); advance(s);
+    s[0].lootTakes = [{ id: 892, tile, at: s[0].at, tick: s[0].tick, owned: 0, food: 10, hp: 70 }]; e.observe(s);
+    advance(s); s[0].pack.push({ id: 892, count: 7 }); e.observe(s);
+    expect(e.arrowRecoveries).toHaveLength(0);
+});
+
+test('an unacknowledged arrow Take cannot prove recovery and respawn cancels its pending proof', () => {
+    const { e, s } = armed(); advance(s); s[0].ground = [{ id: 892, count: 7, tile }]; e.observe(s);
+    advance(s); s[0].lootTakes = [{ id: 892, tile, at: s[0].at, tick: s[0].tick, owned: 0, food: 10, hp: 70 }]; e.observe(s);
+    expect(e.arrowRecoveries).toHaveLength(0);
+    advance(s); s[1].queens = [{ id: 1158, hp: 255, total: 255, tile }]; s[0].pack.push({ id: 892, count: 7 }); e.observe(s);
+    expect(e.arrowRecoveries).toHaveLength(0);
+});
+
+test('a valuable pickup completed after the queen dies does not prove active-fight collection', () => {
+    const { e, s } = armed(); publicLoot(e, s); advance(s);
+    s[0].lootTakes = [{ id: 3140, tile, at: s[0].at, tick: s[0].tick, owned: 0, food: 10, hp: 70 }]; e.observe(s);
+    advance(s); s.forEach(p => { p.queens = []; }); s[0].pack.push({ id: 3140, count: 1 }); e.observe(s);
+    expect(e.pickups).toHaveLength(0);
+});
+
+test('active Rune-arrow Takes fail even before the donor fixture is armed', () => {
+    const e = new KqLootEvidence(); const s = team(); e.observe(s); advance(s);
+    s[0].tile = tile; s[0].queens = [{ id: 1158, hp: 200, total: 255, tile }];
+    s[0].lootTakes = [{ id: 892, tile, at: s[0].at, tick: s[0].tick, owned: 250, food: 10, hp: 70 }];
+    expect(() => e.observe(s)).toThrow('Rune arrow');
 });
 
 test('private visibility or an absent queen cannot establish active-fight public loot', () => {

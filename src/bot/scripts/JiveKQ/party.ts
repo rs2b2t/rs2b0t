@@ -65,7 +65,7 @@ export class Party {
         }
         const loot = value.loot;
         if (record(loot) && Number.isInteger(loot.id) && Number(loot.id) > 0 && Number(loot.id) < 65536
-            && typeof loot.name === 'string' && eligibleLoot(loot.name) && point(loot.tile) && inLair(loot.tile) && typeof loot.collecting === 'boolean') {
+            && typeof loot.name === 'string' && eligibleLoot(loot.name, true) && point(loot.tile) && inLair(loot.tile) && typeof loot.collecting === 'boolean') {
             member.loot = { id: Number(loot.id), name: loot.name, tile: { ...loot.tile }, collecting: loot.collecting };
         }
         member.blocked = value.blocked === true;
@@ -101,7 +101,8 @@ export class Party {
 
     lootCollector(trip: number, now: number): Member | null {
         return this.members(now).filter(m => m.trip === trip && m.stage === 'fight' && m.ready && !m.restocking && !m.death && inLair(m.tile) && m.loot)
-            .sort((a, b) => Number(b.loot!.collecting) - Number(a.loot!.collecting) || lootPriority(a.loot!.name) - lootPriority(b.loot!.name))[0] ?? null;
+            .sort((a, b) => Number(a.loot!.name === 'Rune arrow') - Number(b.loot!.name === 'Rune arrow')
+                || Number(b.loot!.collecting) - Number(a.loot!.collecting) || lootPriority(a.loot!.name) - lootPriority(b.loot!.name))[0] ?? null;
     }
 
     deaths(trip: number): Casualty[] { return [...this.casualties.values()].filter(c => c.trip === trip); }

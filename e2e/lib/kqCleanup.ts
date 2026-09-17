@@ -15,6 +15,7 @@ export class KqCleanup {
     readonly failures: string[] = [];
     readonly actions: (CleanupAction & { succeeded?: boolean; error?: string })[] = [];
     private latest: CleanupSample[] = [];
+    private expired = false;
     private readonly players: { requested: boolean; failedRetreat: boolean; pending?: CleanupAction; lastKind?: CleanupAction['kind']; lastAt: number; loggedOut: boolean; deathChats: number; zeroHp: boolean }[];
 
     constructor(count: number, private readonly startedAt: number, private capture = false, knownDeaths: { player: number; chatCount: number; zeroHp: boolean }[] = []) {
@@ -22,7 +23,8 @@ export class KqCleanup {
             deathChats: knownDeaths.find(d => d.player === i)?.chatCount ?? 0, zeroHp: knownDeaths.find(d => d.player === i)?.zeroHp ?? false }));
     }
 
-    get finished(): boolean { return this.players.every(p => p.loggedOut); }
+    get loggedOut(): number { return this.players.filter(p => p.loggedOut).length; }
+    get finished(): boolean { return this.expired || this.loggedOut === this.players.length; }
     get captureReady(): boolean {
         return this.capture && this.latest.length === this.players.length && this.latest.every(s => s.ingame === false || safe(s) && !['running', 'stopping'].includes(s.runner));
     }
@@ -32,6 +34,15 @@ export class KqCleanup {
         if (samples.length !== this.players.length) throw new Error('Missing cleanup observations');
         this.latest = samples;
         const actions: CleanupAction[] = [];
+        samples.forEach((s, i) => {
+            if (s.ingame !== null) this.players[i].loggedOut = s.ingame === false;
+        });
+        if (Math.max(...samples.map(s => s.at)) - this.startedAt >= 120_000) {
+            this.expired = true;
+            this.players.forEach((p, i) => {
+                if (!p.loggedOut) this.fail(`Player ${i + 1} logout was not verified within 120 seconds`);
+            });
+        }
         samples.forEach((s, player) => {
             const state = this.players[player];
             if (s.ingame && s.runner === 'crashed') this.fail(`Player ${player + 1} runner crashed during cleanup`);
@@ -44,8 +55,7 @@ export class KqCleanup {
             if (s.sceneReady || s.deathChatCount !== undefined) state.deathChats = chatCount;
             if (s.ingame === true && s.sceneReady && s.hp >= 0) state.zeroHp = s.hp === 0;
             else if (s.ingame === false) state.zeroHp = false;
-            state.loggedOut = s.ingame === false;
-            if (state.loggedOut || state.pending) return;
+            if (this.expired || state.loggedOut || state.pending || s.ingame !== true) return;
             const active = ['running', 'paused', 'stopping'].includes(s.runner);
             let action: CleanupAction | undefined;
             let rescueReason = '';
@@ -86,5 +96,16 @@ export class KqCleanup {
 
     private fail(message: string): void {
         if (!this.failures.includes(message)) this.failures.push(message);
+    }
+}
+
+export async function cleanupDeadline<T>(operation: Promise<T>, ms: number, label: string): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+        return await Promise.race([operation, new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error(`${label} exceeded ${ms} ms`)), ms);
+        })]);
+    } finally {
+        clearTimeout(timer);
     }
 }

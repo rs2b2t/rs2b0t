@@ -3,16 +3,17 @@ import { Game } from '../../api/game/Game.js';
 import { GroundItems } from '../../api/grounditems/GroundItems.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { DROP_DB } from '../../data/dropdb.js';
-import { FOOD } from './loadout.js';
+import { ARROWS, FOOD } from './loadout.js';
 import type { Party } from './party.js';
 import { inLair, near, type Point } from './policy.js';
+import { step } from './route.js';
 
 export interface LootClaim { id: number; name: string; tile: Point; collecting: boolean }
 export interface LootResult { busy: boolean; collected?: { id: number; name: string; count: number } }
 const DROPS = new Set(DROP_DB['Kalphite Queen']);
 const EQUIPMENT = new Set(['Dragon chainbody', 'Dragon spear', 'Shield left half', 'Rune chainbody', 'Lava battlestaff', 'Rune warhammer', 'Rune spear', 'Rune axe', 'Amulet of power', 'Adamant spear']);
-export const lootPriority = (name: string): number => EQUIPMENT.has(name) ? 0 : 1;
-export const eligibleLoot = (name: string): boolean => DROPS.has(name) && !/arrow/i.test(name);
+export const lootPriority = (name: string): number => EQUIPMENT.has(name) ? 0 : name === 'Rune arrow' ? 2 : 1;
+export const eligibleLoot = (name: string, recoverArrows = false): boolean => recoverArrows && name === 'Rune arrow' || DROPS.has(name) && !/arrow/i.test(name);
 const key = (drop: { id: number; tile: Point }): string => `${drop.id}:${drop.tile.x}:${drop.tile.z}:${drop.tile.level}`;
 const stacks = (id: number): boolean => Inventory.countById(id) > 0 && reader.objCatalog().some(item => item.id === id && item.stackable);
 const room = (id: number, name: string): boolean => !Inventory.isFull() || stacks(id) || !!Inventory.first('Vial') || lootPriority(name) === 0 && Inventory.countById(FOOD) > 2;
@@ -30,32 +31,38 @@ export class LootCollector {
         return { busy: false };
     }
 
-    step(party: Party, trip: number, excluded: Point[], ready: () => boolean, eatForSpace?: () => Promise<boolean>): LootResult {
+    step(party: Party, trip: number, excluded: Point[], ready: () => boolean, eatForSpace?: () => Promise<boolean>, recoverArrows = false): LootResult {
         const tick = Game.tick();
-        try { return this.advance(party, trip, excluded, ready, tick, eatForSpace); }
+        try { return this.advance(party, trip, excluded, ready, tick, eatForSpace, recoverArrows); }
         catch { return this.release(tick); }
     }
 
-    private advance(party: Party, trip: number, excluded: Point[], ready: () => boolean, tick: number, eatForSpace?: () => Promise<boolean>): LootResult {
+    private advance(party: Party, trip: number, excluded: Point[], ready: () => boolean, tick: number, eatForSpace?: () => Promise<boolean>, recoverArrows = false): LootResult {
         const here = reader.serverTile() ?? Game.tile();
         if (!here || !inLair(here)) { this.clear(); return { busy: false }; }
         for (const [id, until] of this.backoff) if (tick >= until) this.backoff.delete(id);
-        const drops = GroundItems.query().where(g => eligibleLoot(g.name ?? '') && inLair(g.tile()) && !excluded.some(p => near(g.tile(), p, 0))).results();
+        const drops = GroundItems.query().where(g => eligibleLoot(g.name ?? '', recoverArrows) && inLair(g.tile()) && !excluded.some(p => near(g.tile(), p, 0))).results();
         const target = this.target;
         if (target?.before !== null && target?.before !== undefined) {
             const count = Inventory.countById(target.claim.id) - target.before;
             if (count > 0) {
                 const collected = { id: target.claim.id, name: target.claim.name, count };
                 this.release(tick);
-                return { busy: false, collected };
+                return { busy: recoverArrows, collected };
             }
+        }
+        if (target && !eligibleLoot(target.claim.name, recoverArrows)) return this.release(tick);
+        if (target?.claim.id === ARROWS && drops.some(g => g.id !== ARROWS && !this.backoff.has(key({ id: g.id, tile: g.tile() })) && room(g.id, g.name!))) {
+            if (target.claim.collecting) step(here);
+            this.release(tick);
+            return { busy: true };
         }
         if (!target) {
             const drop = drops.filter(g => !this.backoff.has(key({ id: g.id, tile: g.tile() })) && room(g.id, g.name!))
                 .sort((a, b) => lootPriority(a.name!) - lootPriority(b.name!) || a.distance() - b.distance())[0];
             if (!drop) return { busy: false };
             this.target = { claim: { id: drop.id, name: drop.name!, tile: { ...drop.snap.tile }, collecting: false }, offered: tick, started: tick, progress: tick, position: { ...here }, before: null, attempt: -1, attempts: 0, missing: null, usedFood: false, room: null };
-            return { busy: false };
+            return { busy: recoverArrows };
         }
         const drop = drops.find(g => g.id === target.claim.id && near(g.tile(), target!.claim.tile, 0));
         if (!drop) {
@@ -63,11 +70,16 @@ export class LootCollector {
             return tick - target.missing >= 3 ? this.release(tick) : { busy: target.claim.collecting };
         }
         target.missing = null;
-        if (tick === target.offered) return { busy: false };
+        if (tick === target.offered) return { busy: recoverArrows };
         if (party.lootCollector(trip, Date.now())?.name !== party.self) {
+            if (target.claim.id === ARROWS && target.claim.collecting) {
+                step(here);
+                this.release(tick);
+                return { busy: true };
+            }
             if (target.claim.collecting) target.claim = { ...target.claim, collecting: false };
             target.started = tick; target.progress = tick;
-            return { busy: false };
+            return { busy: recoverArrows };
         }
         if (!room(drop.id, drop.name!)) return this.release(tick);
         if (!target.claim.collecting) target.claim = { ...target.claim, collecting: true };

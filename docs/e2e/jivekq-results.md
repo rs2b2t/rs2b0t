@@ -2,6 +2,14 @@
 
 [Harness setup and checklist](jivekq-validation.md).
 
+## Waiting-arrow recovery
+
+Updated level-70 probe `kq4v71mw` passed all eleven checks at normal 600 ms ticks in 9m 31s, including setup and cleanup. West collected all three valuables during combat and later banked each extra copy at Shantay. Its required checks cover a continuously witnessed death-to-respawn wait, an accepted ground-arrow Take followed by increased ownership, no active-fight arrow Takes, and all three extra valuable deposits at Shantay. The four recovery acknowledgements gained 95 arrows in total; multiple piles at the same tile prevent attribution to a particular owner's arrows.
+
+Minimum HP was 21/26/26/26. All four fighters and the donor were observed logged out, with no deaths, rescues or cleanup failures. All sixteen initial doses followed observed upper-cavern movement. Artifacts are in `out/e2e/jivekq/kq4v71mw/`; bundle SHA-256 is `9d4693e5a729e096e825eeb910ee6251402570ac20a63e31c03c00bfe3835f70`. The hour-long three-team results below predate these arrow changes.
+
+The full offline suite passed 10,129 tests with one existing skip and no failures. The final focused suite passed 387 tests; typecheck, lint and prose gates passed. EssMiner's added tests cover player-chat rejection, genuine game refusals and stale refusal reset before Aubury teleport attempts.
+
 ## Moving potions and public loot
 
 Level-70 probe `kq4rv34b` passed all ten checks at normal 600 ms ticks in 11m 54s including setup and cleanup. A separate donor dropped a dragon chainbody, rune chainbody, amulet of power and 137 rune arrows after a verified kill, then logged out. After 59.462 seconds of private visibility, all four fighters saw the items during the next fight with the queen at 252/255 HP. West collected all three valuables, resumed combat, then banked each extra copy at Shantay. The previously banked fixture copies were excluded by the baseline. No Rune-arrow Take inputs occurred, and the arrows remained after collection.
@@ -12,7 +20,19 @@ All sixteen initial potion doses were consumed after observed upper-floor moveme
 
 The earlier probe `kq4rajgh` collected and banked every valuable but revealed the drops between kills. It remains a failed active-fight test. The donor timing was corrected without changing production code or weakening that assertion.
 
-Final offline verification passed 10,091 tests with one existing skip and no failures, plus typecheck against the current-main merge snapshot, lint and prose gates. Fresh three-team normal-speed soaks are running; their final results are pending.
+Final offline verification passed 10,091 tests with one existing skip and no failures, plus typecheck against the current-main merge snapshot, lint and prose gates. The three-team results below apply to commit `88bac766`, before the subsequent waiting-arrow changes.
+
+## Three teams at normal speed
+
+Level-70 teams `kq4saabm`, `kq4sakf7` and `kq4sb35o` each completed three counted trips before their 60-minute scenario deadline. All 24 gameplay checks passed, but the ten-trip target failed. Their 20/19/20 verified queen-death observations represent 21 distinct world deaths, eighteen witnessed by all three teams. No scenario deaths or foreign-roster messages were observed. The full raw-stream replay uses the frozen `88bac766` evidence code.
+
+A public stack of 75 Nature runes was visible to A and C during combat; A West collected it and deposited it at Shantay. The loot audit correlates 39 inventory-gain acknowledgements with fifteen bank transfers. Twenty-two acknowledgements involved repeated Oyster pearls at the same tile; they are not counted as distinct queen drops, and none received bank credit. One pair of Take inputs overlapped for 146 ms within B, below one server tick; the audit retains that ambiguity.
+
+A and B verified all eight logouts without rescue. C lost access to all four pages during cleanup after two observed logouts, then retried ineffective fixture rescues indefinitely. Its process was stopped and its result remains an aborted cleanup, without a completed proof. Separate login/logout checks subsequently verified all four existing C accounts offline. Their saved positions were safely outside the chamber. The harness now bounds cleanup and browser operations, preserves observed logouts across unknown samples, and cannot authorize rescues from missing-page observations.
+
+Minimum HP was A 19/24/21/23, B 23/20/12/21 and C 22/24/23/23. B North reached 12 HP with sixteen sharks while an Eat was pending, then healed and survived. Consumption arrived 5.6 seconds after the first Eat dispatch and 3.184 seconds after its retry. The cause remains unproved because server packet acceptance was not recorded. These zero-death results do not establish that every such delay is survivable.
+
+Artifacts are under `out/e2e/jivekq/three-teams-normal-speed/`: `final-concurrency-audit.{json,md}`, `loot-final-capture-20260917T012854Z/`, and `north-low-hp-audit.{json,md}`. C's `aborted-run.json` and `cleanup-page-loss/` preserve the failure and separate logout verification.
 
 ## Twelve-client Electron channel isolation
 

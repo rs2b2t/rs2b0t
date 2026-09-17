@@ -290,6 +290,17 @@ describe('KQ loot coordination', () => {
         expect(party.lootCollector(2, 6202)).toBeNull();
     });
 
+    test('valuable candidates preempt active arrow collectors while Rune arrows still elect one viewer', () => {
+        const party = new Party(names, 'one', 'one');
+        const arrows = { id: 892, name: 'Rune arrow', tile, collecting: false };
+        names.forEach(name => party.receive(visible(name, { loot: arrows }), 100));
+        expect(party.lootCollector(1, 100)?.name).toBe('one');
+        party.receive(visible('three', { loot: { ...arrows, collecting: true } }), 101);
+        expect(party.lootCollector(1, 101)?.name).toBe('three');
+        party.receive(visible('two', { loot: { id: 565, name: 'Blood rune', tile, collecting: false } }), 102);
+        expect(party.lootCollector(1, 102)?.name).toBe('two');
+    });
+
     test('a private visible candidate does not assign an unseen drop to the leader', () => {
         const party = new Party(names, 'three', 'three');
         names.forEach(name => party.receive(visible(name, { loot: name === 'three' ? loot : undefined }), 100));
@@ -299,9 +310,9 @@ describe('KQ loot coordination', () => {
         expect(party.messages.at(-1)).toContain('released loot claim');
     });
 
-    test('malformed, arrow and outside-room claims cannot take the election', () => {
+    test('malformed, other-arrow and outside-room claims cannot take the election', () => {
         const party = new Party(names, 'one', 'one');
-        for (const change of [{ id: -1 }, { name: 'Rune arrow' }, { tile: { x: 3308, z: 3120, level: 0 } }, { collecting: 'yes' }]) {
+        for (const change of [{ id: -1 }, { name: 'Iron arrow' }, { tile: { x: 3308, z: 3120, level: 0 } }, { collecting: 'yes' }]) {
             party.receive({ ...visible('one'), loot: { ...loot, ...change } }, 100);
             expect(party.lootCollector(1, 100)).toBeNull();
         }

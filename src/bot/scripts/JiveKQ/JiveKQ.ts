@@ -23,6 +23,7 @@ import { Party, normalizeName, parseRoster, type Gate, type Member, type Release
 import { combatFormation, combatMode, inLair, inNest, near, QueenTracker, queenPhase, retreatReason, SIDES, WAIT_CORNER, type Point } from './policy.js';
 import { approachQueen, pullQueen, QueenSearch, type QueenSighting } from './search.js';
 import { LootCollector } from './loot.js';
+import { ARROWS } from './loadout.js';
 import { recoveryDrops, type DeathReport } from './recovery.js';
 import { camelot, descend, duelArena, gateTile, pass, placeRope, ropeReady, step, walk } from './route.js';
 import { BOW, FOOD, MACE, RECOIL, boost, boostsReady, doses, drink, eat, equip, provision, supplies, worn } from './supply.js';
@@ -222,7 +223,7 @@ export default class JiveKQ extends LoopingBot {
             if (name === PROTECT_FROM_MAGIC) this.protectionFailures = 0;
             return true;
         }
-        if (previous && Game.tick() < previous.retryTick) return false;
+        if (previous?.on === on && Game.tick() < previous.retryTick) return false;
         const request = { on, pending: true, retryTick: Game.tick() + 10 };
         this.prayerRequests.set(name, request);
         const completed = (ok: boolean) => {
@@ -267,6 +268,11 @@ export default class JiveKQ extends LoopingBot {
     private async upkeep(walking = false): Promise<boolean> {
         if (!Game.sceneReady() || this.stage === 'bank') return false;
         const tile = reader.serverTile() ?? Game.tile();
+        if (this.collector.claim?.id === ARROWS && !this.waitingForRespawn()) {
+            if (this.collector.claim.collecting && tile) step(tile);
+            this.collector.clear();
+            this.heartbeat();
+        }
         const moving = walking && tile?.level === 2 && this.walkTile !== null && !near(tile, this.walkTile, 0);
         if (walking) this.walkTile = tile;
         this.observeFood();
@@ -670,14 +676,18 @@ export default class JiveKQ extends LoopingBot {
         return true;
     }
 
+    private waitingForRespawn(): boolean {
+        return this.queenTracker.killedAt > 0 && Game.tick() - this.lastKillTick <= 120 && !this.latestSighting()
+            && !Npcs.query().where(n => queenPhase(n.id) !== null && (n.health > 0 || n.snap.totalHealth === 0)).nearest();
+    }
+
     private loot(): boolean {
         if (!this.party) return false;
         const previous = this.collector.claim;
+        const waiting = this.waitingForRespawn();
         const result = this.collector.step(this.party, this.trip, this.party.deaths(this.trip).map(c => c.death.tile), () => {
-            const waiting = this.queenTracker.killedAt > 0 && !this.latestSighting()
-                && !Npcs.query().where(n => queenPhase(n.id) !== null && (n.health > 0 || n.snap.totalHealth === 0)).nearest();
             return waiting ? this.clearPrayers() : Prayer.points() > 0 && this.protect();
-        }, () => this.queueCombatFood());
+        }, () => this.queueCombatFood(), waiting);
         if (this.stage === 'retreat') return true;
         if (result.collected) {
             this.looted++;
