@@ -11,6 +11,16 @@ export const CASES: readonly Case[] = [
         budgetMin: 3,
         note: 'Fresh local account holds unfinished potions with no secondary banked; verifies the stop, closed bank and preserved batch.'
     },
+    {
+        id: 'firemaker-empty-bank-live',
+        harness: 'firemaker-empty-bank-live.ts',
+        covers: { scripts: ['Firemaker'] },
+        status: 'vetted',
+        provenAt: '8cc200c08aa8a732b6742b38e832782c39faff86',
+        manual: true,
+        budgetMin: 3,
+        note: 'Fresh local account with a tinderbox and no banked logs; verifies the ready empty-bank stop and saves a screenshot.'
+    },
     ...(['missing-dds', 'missing-superanti', 'sharks14', 'guardian', 'reward'] as const).map(scenario => ({
         id: `jive-private-${scenario}`,
         harness: 'jive-private-live.ts',
