@@ -6,7 +6,8 @@ export const CASES: readonly Case[] = [
         id: 'potionmaker-empty-secondary-live',
         harness: 'potionmaker-empty-secondary-live.ts',
         covers: { scripts: ['PotionMaker'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: '7217e27b',
         manual: true,
         budgetMin: 3,
         note: 'Fresh local account holds unfinished potions with no secondary banked; verifies the stop, closed bank and preserved batch.'

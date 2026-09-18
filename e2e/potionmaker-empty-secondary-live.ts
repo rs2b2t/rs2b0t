@@ -21,6 +21,7 @@ try {
     await setSettings(page, 'PotionMaker', { herb: 'Guam leaf', secondary: 'Eye of newt' });
     await startScript(page, 'PotionMaker');
     await page.waitForFunction(() => (globalThis as never as Api).rs2b0t.runner.ctx?.log.some(row => row.msg.includes('no Eye of newt in the bank')), undefined, { timeout: 45_000 });
+    await page.waitForFunction(() => (globalThis as never as Api).rs2b0t.runner.state === 'stopped', undefined, { timeout: 10_000 });
     const result = await page.evaluate(() => {
         const g = globalThis as never as Api;
         return { state: g.rs2b0t.runner.state, logs: g.rs2b0t.runner.ctx?.log.map(row => row.msg), unfinished: g.__rs2b0t.Inventory.countById(91), bankOpen: g.__rs2b0t.Bank.isOpen() };
