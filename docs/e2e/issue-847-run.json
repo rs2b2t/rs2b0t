@@ -1,0 +1,10 @@
+{
+  "sourceCommit": "50642e21fb6f0736cd85fa01188cef71fb65035b",
+  "harnessSha256": "fa974c57dd938a20a1de12191a1e68c8fcac1eff877173f3cb1bd8e94a54e94a",
+  "startedAt": "2026-09-18T01:34:26.093416+00:00",
+  "command": "ENGINE_DIR=/Users/elliottriplett/code/rs2b2t-engine bun e2e/witchs-house-patrol-847-live.ts --base http://localhost:8890",
+  "finishedAt": "2026-09-18T01:40:08.401313+00:00",
+  "exitCode": 0,
+  "elapsedSeconds": 342.31,
+  "questSeconds": 309.64
+}

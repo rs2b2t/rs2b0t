@@ -98,13 +98,13 @@
   },
   "after": {
     "tile": {
-      "x": 2931,
-      "z": 3458,
+      "x": 2928,
+      "z": 3456,
       "level": 0
     },
     "sprite": {
-      "x": 2930,
-      "z": 3457,
+      "x": 2928,
+      "z": 3456,
       "level": 0
     },
     "quest": "complete",
@@ -190,10 +190,6 @@
       {
         "id": 2411,
         "count": 1
-      },
-      {
-        "id": 2407,
-        "count": 1
       }
     ],
     "state": "running",
@@ -203,25 +199,25 @@
       "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
       "  path: cost 5, 3 waypoints, expanded 9, worker 0.1ms, hops=1",
       "  hops:\n1. [door] Open Door loc=2862 → 2901,3466,L0 (cost 4)",
-      "  crossed 'Door' at (2901,3465) (Open sent tick 1382, open unseen, stepped +21, crossed +21)",
+      "  crossed 'Door' at (2901,3465) (Open sent tick 1356, open unseen, stepped +14, crossed +14)",
       "  arrived (2 clicks)",
-      "  → ok in 52.6s · no inventory change",
+      "  → ok in 48.0s · no inventory change",
       "[t9] Witch's House: talk to Boy · stage 6 · (2902,3466) · 7 free",
       "  stage=6 at=2902,3466,L0 key=1 magnet=0 cheese=1 diary=1 shedkey=1 ball=1 gloves=1 step=talk",
       "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
-      "  path: cost 58, 35 waypoints, expanded 3024, worker 3.3ms, hops=2",
+      "  path: cost 58, 35 waypoints, expanded 3024, worker 3.2ms, hops=2",
       "  hops:\n1. [door] Open Door loc=1530 → 2902,3468,L0 (cost 4)\n2. [door] Open Door loc=2861 → 2900,3473,L0 (cost 4)",
-      "  crossed 'Door' at (2902,3468) (Open sent tick 1414, open +1, stepped +2, crossed +4)",
-      "  crossed 'Door' at (2901,3473) (Open sent tick 1431, open unseen, stepped +21, crossed +21)",
-      "  arrived (8 clicks)"
+      "  crossed 'Door' at (2902,3468) (Open sent tick 1380, open +1, stepped +2, crossed +4)",
+      "  crossed 'Door' at (2901,3473) (Open sent tick 1393, open unseen, stepped +15, crossed +15)",
+      "  arrived (7 clicks)"
     ]
   },
   "key": true,
   "shed": true,
   "ball": true,
   "waited": true,
+  "returned": true,
   "seenWitchX": [
-    2920,
     2921,
     2922,
     2923,
@@ -232,21 +228,22 @@
     2928,
     2929,
     2930,
-    2919,
-    2918,
-    2917,
-    2916,
-    2915,
-    2914,
-    2913,
-    2912,
-    2911,
-    2910,
-    2909,
-    2908,
-    2907,
-    2906,
+    2920,
     2905,
+    2906,
+    2907,
+    2908,
+    2909,
+    2910,
+    2911,
+    2912,
+    2913,
+    2914,
+    2915,
+    2916,
+    2917,
+    2918,
+    2919,
     2904
   ],
   "gardenTiles": [
