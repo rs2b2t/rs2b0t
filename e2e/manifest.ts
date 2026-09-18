@@ -2,6 +2,15 @@ import type { Case } from './manifestTypes.js';
 
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
+    {
+        id: 'cookbot-zanaris-live',
+        harness: 'cookbot-zanaris-live.ts',
+        covers: { scripts: ['CookBot'] },
+        status: 'unvetted',
+        manual: true,
+        budgetMin: 4,
+        note: 'Fresh local account completes Lost City, opts into Zanaris banking, withdraws a banked shrimp and cooks it at the nearby range.'
+    },
     ...(['missing-dds', 'missing-superanti', 'sharks14', 'guardian', 'reward'] as const).map(scenario => ({
         id: `jive-private-${scenario}`,
         harness: 'jive-private-live.ts',

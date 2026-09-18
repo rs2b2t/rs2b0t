@@ -24,14 +24,9 @@ export interface BankObjectAccess {
     };
 }
 
-/**
- * A bank opened through a conversation.
- * Why: Gundai in the Mage Arena is the only one; `[opnpc1,magearena_banker]` chats, offers 2 choices, and only then runs `@openbank`.
- */
 export interface BankNpcAccess {
     name: string;
     op: string;
-    // Why: most NPC bankers open a menu that must be clicked, but a few (Zanaris fairies) bank on the op directly with no dialogue, so this is optional.
     /** The dialogue option that opens the bank, when the banker surfaces one. */
     choose?: string;
 }
@@ -55,6 +50,7 @@ export interface BankLocation {
 
 /** Global setting key gating the Mage Arena bank. @see BankRequirement.setting */
 export const USE_MAGE_BANK = 'useMageBank';
+export const USE_ZANARIS_BANK = 'useZanarisBank';
 
 /**
  * Every known bank. Some stands are sealed collision islands, so reaching one is a data problem.
@@ -80,8 +76,9 @@ export const BANK_LOCATIONS: BankLocation[] = [
         name: 'Shilo Village',
         tile: new Tile(2852, 2954, 0),
         requires: { quest: 'Shilo Village' },
-        npcAccess: { name: 'Banker', op: 'Bank', choose: "I'd like to access my bank account" }
+        npcAccess: { name: 'Banker', op: 'Bank' }
     },
+    { name: 'Zanaris', tile: new Tile(3153, 9576, 0), requires: { quest: 'Lost City', setting: USE_ZANARIS_BANK }, npcAccess: { name: 'Banker', op: 'Bank' } },
     { name: 'Fishing Guild', tile: new Tile(2586, 3420, 0), requires: { skill: { name: 'fishing', level: 68 } } },
     // Why: the live object is "Shantay chest" (id 2693) with Open; "Bank chest" with Use doesn't exist here, and neither does a Bank booth.
     {
