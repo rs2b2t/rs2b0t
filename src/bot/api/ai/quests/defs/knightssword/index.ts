@@ -30,13 +30,13 @@ function swordStep(snap: QuestSnapshot): QuestStep | null {
     return null;
 }
 
-function materials(snap: QuestSnapshot, miningLevel: number): QuestStep {
+function materials(snap: QuestSnapshot, miningLevel: number, smithingLevel: number): QuestStep {
     const sword = swordStep(snap);
     if (sword) {
         return sword;
     }
     if (heldId(snap, KS_ID.IRON_BAR) < 2) {
-        return ironBarsAt(snap, miningLevel);
+        return ironBarsAt(snap, miningLevel, smithingLevel);
     }
     if (heldId(snap, KS_ID.BLURITE_ORE) === 0) {
         // Stock up above ground; kit() refuses to send the bot back out of the cave.
@@ -45,7 +45,7 @@ function materials(snap: QuestSnapshot, miningLevel: number): QuestStep {
     return talk(THURGO);
 }
 
-export function decideAt(snap: QuestSnapshot, miningLevel: number): QuestStep {
+export function decideAt(snap: QuestSnapshot, miningLevel: number, smithingLevel: number): QuestStep {
     if (snap.journal === 'unknown') {
         return { kind: 'wait', reason: 'quest journal not loaded' };
     }
@@ -81,13 +81,13 @@ export function decideAt(snap: QuestSnapshot, miningLevel: number): QuestStep {
                 ? talk(THURGO)
                 : { kind: 'custom', name: 'take the portrait', run: fetchPortrait };
         case KS_STAGE.LOOKING_BLURITE:
-            return materials(snap, miningLevel);
+            return materials(snap, miningLevel, smithingLevel);
         default:
             return { kind: 'done' };
     }
 }
 
-export const decide = (snap: QuestSnapshot): QuestStep => decideAt(snap, Skills.level('mining'));
+export const decide = (snap: QuestSnapshot): QuestStep => decideAt(snap, Skills.level('mining'), Skills.level('smithing'));
 
 export const knightssword: QuestModule = {
     record: QUESTS.find(r => r.id === 'squire')!,

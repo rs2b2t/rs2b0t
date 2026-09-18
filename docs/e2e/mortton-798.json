@@ -1,0 +1,49 @@
+{
+  "town-razmire": {
+    "walkOk": true,
+    "tile": {
+      "x": 3488,
+      "z": 3295,
+      "level": 0
+    },
+    "logs": [
+      "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+      "path: cost 15, 12 waypoints, expanded 482, worker 1.7ms, hops=1",
+      "hops:\n1. [door] Open Door loc=1530 → 3488,3295,L0 (cost 4)",
+      "crossed 'Door' at (3488,3294) (Open sent tick 52, open +1, stepped +2, crossed +5)",
+      "arrived (3 clicks)"
+    ]
+  },
+  "razmire-ulsquire": {
+    "walkOk": true,
+    "tile": {
+      "x": 3495,
+      "z": 3289,
+      "level": 0
+    },
+    "logs": [
+      "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+      "path: cost 22, 13 waypoints, expanded 530, worker 0.5ms, hops=2",
+      "hops:\n1. [door] Open Door loc=1530 → 3488,3294,L0 (cost 4)\n2. [door] Open Door loc=1530 → 3495,3289,L0 (cost 4)",
+      "Door at (3488,3294) already open — continuing",
+      "crossed 'Door' at (3488,3294)",
+      "crossed 'Door' at (3494,3289) (Open sent tick 78, open +1, stepped +2, crossed +4)",
+      "arrived (1 clicks)"
+    ]
+  },
+  "temple-razmire": {
+    "walkOk": true,
+    "tile": {
+      "x": 3488,
+      "z": 3295,
+      "level": 0
+    },
+    "logs": [
+      "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+      "path: cost 38, 17 waypoints, expanded 1376, worker 1.3ms, hops=1",
+      "hops:\n1. [door] Open Door loc=1530 → 3488,3295,L0 (cost 4)",
+      "Door at (3488,3294) already open — continuing",
+      "arrived (5 clicks)"
+    ]
+  }
+}
