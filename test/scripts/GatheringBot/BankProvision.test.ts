@@ -25,6 +25,7 @@ function fixture() {
     spyOn(Inventory, 'isFull').mockImplementation(() => state.full);
     spyOn(Bank, 'isOpen').mockImplementation(() => state.open);
     spyOn(Bank, 'loaded').mockImplementation(() => state.ready);
+    spyOn(Bank, 'snapshotReady').mockImplementation(() => state.ready);
     const open = spyOn(Banking, 'open').mockImplementation(async () => { state.open = true; return true; });
     const scriptOpen = spyOn(bot, 'openScriptBank').mockImplementation(async () => { state.open = true; return true; });
     spyOn(bot, 'waitBankReady').mockImplementation(async () => state.ready);
@@ -159,4 +160,27 @@ test('trip coins top up only the missing amount and stay out of deposits', async
     expect(withdraw).toHaveBeenCalledWith('Coins', 60);
     expect(pack.get('Coins')).toBe(100);
     expect(bot.restockDepositMatcher()('Coins')).toBe(false);
+});
+
+test('trip provisioning waits for an unsynchronized bank without spending withdrawal attempts', async () => {
+    const { bot, state, withdraw } = fixture();
+    state.open = true;
+    state.ready = false;
+    bot['withdrawCoinsTarget'] = 100;
+    const coins = spyOn(bot, 'withdrawCoinsFor').mockResolvedValue(false);
+    await bot.withdrawTripProvisionsAtBank();
+    expect(coins).not.toHaveBeenCalled();
+    expect(withdraw).not.toHaveBeenCalled();
+});
+
+test('trip provisioning handles a synchronized empty bank as missing stock', async () => {
+    const { bot, state, withdraw } = fixture();
+    state.open = true;
+    state.stock = false;
+    bot['withdrawCoinsTarget'] = 100;
+    spyOn(Bank, 'loaded').mockReturnValue(false);
+    const coins = spyOn(bot, 'withdrawCoinsFor').mockResolvedValue(false);
+    await bot.withdrawTripProvisionsAtBank();
+    expect(coins).toHaveBeenCalledTimes(1);
+    expect(withdraw).toHaveBeenCalledTimes(3);
 });

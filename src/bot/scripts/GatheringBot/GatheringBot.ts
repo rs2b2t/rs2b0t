@@ -3094,7 +3094,7 @@ export default class GatheringBot extends TaskBot {
         if (!Bank.isOpen()) {
             return;
         }
-        if (!(await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5)) || !Bank.isOpen() || !Bank.loaded()) {
+        if (!(await Bank.waitReady(4000, log))) {
             return;
         }
 
