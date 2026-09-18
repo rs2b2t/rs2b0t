@@ -1,7 +1,9 @@
+import { reader } from '../../adapter/ClientAdapter.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
+import { GroundItems, type GroundItem } from '../../api/grounditems/GroundItems.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Locs } from '../../api/locs/Locs.js';
 import { Skills } from '../../api/skills/Skills.js';
@@ -13,7 +15,7 @@ import { fmtDuration } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import { escapeRunesFor } from '../../api/combat/hunting/supply.js';
-import { CHEST, CHEST_STAND, JUNK, KEY, KEYS_PER_TRIP, PACK, decide, junkHeld, keysToWithdraw, type PackState, type Step } from './logic.js';
+import { CHEST, CHEST_STAND, JUNK, KEY, KEYS_PER_TRIP, PACK, decide, junkHeld, keysToWithdraw, lootPriority, type PackState, type Step } from './logic.js';
 
 /** The Falador West booths, the nearest bank to both the chest and the teleport. */
 const BANK_STAND = new Tile(2946, 3369, 0);
@@ -33,7 +35,7 @@ export const SETTINGS: SettingsSchema = {
         type: 'boolean',
         default: true,
         label: 'Teleport back to Falador',
-        help: 'casts the Falador teleport when the keys are spent, and walks when the runes or the Magic level are short. The walk is the long way back through the Taverley gate'
+        help: 'keeps and restocks Falador teleport runes for banking when the keys are spent or the pack is full. Walks through the Taverley gate when runes or Magic are short'
     }
 };
 
@@ -49,6 +51,8 @@ export default class JiveChests extends TaskBot {
     private lootByName = new Map<string, number>();
 
     teleportHome = true;
+    banking = false;
+    pendingLoot = false;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -57,7 +61,7 @@ export default class JiveChests extends TaskBot {
         this.xp.begin();
         const esc = escapeRunesFor(TELEPORT_ID);
         this.log(`[chests] ${KEYS_PER_TRIP} ${KEY}s a trip from Falador West, opening the chest at ${CHEST_STAND.x},${CHEST_STAND.z}, dropping ${JUNK.join(', ')}, home by ${this.teleportHome ? esc.label : 'the walk back'}`);
-        this.add(new ContinueDialog(), new DropJunk(this), new OpenChest(this), new Travel(this), new BankTrip(this));
+        this.add(new ContinueDialog(), new DropJunk(this), new CollectLoot(this), new OpenChest(this), new Travel(this), new BankTrip(this));
     }
 
     override recoveryAnchor(): Tile | null {
@@ -76,12 +80,14 @@ export default class JiveChests extends TaskBot {
         return junkHeld(n => Inventory.count(n));
     }
 
-    /** Everything but the keys and the junk, which is what a trip is carrying home. */
-    lootInPack(): number {
-        return Inventory.items().filter(i => {
-            const name = i.name ?? '';
-            return name !== KEY && !JUNK.some(j => j.toLowerCase() === name.toLowerCase());
-        }).length;
+    groundLoot(): GroundItem[] {
+        return GroundItems.query().withinOf(CHEST_STAND, 0)
+            .where(item => item.tile().level === CHEST_STAND.level && Number.isFinite(lootPriority(item.name)))
+            .results().sort((a, b) => lootPriority(a.name) - lootPriority(b.name));
+    }
+
+    canLoot(item: GroundItem): boolean {
+        return Inventory.free() > 0 || (Inventory.countById(item.id) > 0 && reader.objCatalog().some(obj => obj.id === item.id && obj.stackable));
     }
 
     atChest(): boolean {
@@ -90,7 +96,16 @@ export default class JiveChests extends TaskBot {
     }
 
     pack(): PackState {
-        return { keys: this.keysHeld(), junk: this.junkInPack(), loot: this.lootInPack(), free: Inventory.free(), atChest: this.atChest() };
+        const atChest = this.atChest();
+        const drops = atChest && !this.banking ? this.groundLoot() : [];
+        if (atChest && !this.banking) {
+            this.pendingLoot = drops.length > 0;
+        }
+        return {
+            keys: this.keysHeld(), junk: this.junkInPack(), free: Inventory.free(), atChest,
+            groundLoot: drops.length > 0, canLoot: drops.some(item => this.canLoot(item)),
+            pendingLoot: this.pendingLoot, banking: this.banking
+        };
     }
 
     step(): Step {
@@ -99,6 +114,10 @@ export default class JiveChests extends TaskBot {
 
     noteOpen(gained: Map<string, number>): void {
         this.opened++;
+        this.noteLoot(gained);
+    }
+
+    noteLoot(gained: Map<string, number>): void {
         for (const [name, n] of gained) {
             this.lootByName.set(name, (this.lootByName.get(name) ?? 0) + n);
         }
@@ -145,6 +164,31 @@ export default class JiveChests extends TaskBot {
         p.gap();
         ScriptRunner.paintControls(p);
         p.end();
+    }
+}
+
+class CollectLoot implements Task {
+    constructor(private bot: JiveChests) {}
+
+    validate(): boolean {
+        return this.bot.step().kind === 'loot';
+    }
+
+    async execute(): Promise<void> {
+        const bot = this.bot;
+        const item = bot.groundLoot().find(drop => bot.canLoot(drop));
+        if (!item) {
+            return;
+        }
+        const before = Inventory.countById(item.id);
+        bot.setStatus(`picking up ${item.name}`);
+        if (!(await item.interact('Take')) || !(await Execution.delayUntil(() => Inventory.countById(item.id) > before, REWARD_MS))) {
+            bot.log(`[chests] could not pick up ${item.name}, retrying`);
+            return;
+        }
+        const gained = Inventory.countById(item.id) - before;
+        bot.noteLoot(new Map([[item.name!, gained]]));
+        bot.log(`[chests] picked up ${gained} ${item.name}`);
     }
 }
 
@@ -243,7 +287,7 @@ class Travel implements Task {
 
     async execute(): Promise<void> {
         const bot = this.bot;
-        bot.setStatus('walking to the chest');
+        bot.setStatus(bot.pendingLoot ? 'returning for chest loot' : 'walking to the chest');
         if (!(await Traversal.walkResilient(CHEST_STAND, { radius: 0, attempts: 4, timeoutMs: WALK_MS, log: m => bot.log(`  ${m}`) }))) {
             bot.log('[chests] the walk to the chest failed, will retry');
         }
@@ -260,6 +304,7 @@ class BankTrip implements Task {
 
     async execute(): Promise<void> {
         const bot = this.bot;
+        bot.banking = true;
         const here = Game.tile();
         const far = here === null || BANK_STAND.distanceTo(here) > 20;
         if (far && bot.teleportHome && (await this.castHome())) {
@@ -275,14 +320,23 @@ class BankTrip implements Task {
             return;
         }
         bot.setStatus('banking the haul');
-        await Bank.depositAllMatching(name => name.toLowerCase() !== KEY.toLowerCase());
+        const esc = escapeRunesFor(TELEPORT_ID);
+        const keep = new Set([KEY, ...(bot.teleportHome ? esc.runes.map(r => r.rune) : [])].map(name => name.toLowerCase()));
+        await Bank.depositAllMatching(name => !keep.has(name.toLowerCase()));
+        if (Inventory.items().some(item => !keep.has((item.name ?? '').toLowerCase()))) {
+            bot.log('[chests] the haul is still in the pack, retrying');
+            return;
+        }
         if (!(await Execution.delayUntil(() => Bank.isOpen() && Bank.loaded(), 5000))) {
             bot.log(Bank.isOpen() ? '[chests] the bank list has not filled in, retrying' : '[chests] the bank window closed, retrying');
             return;
         }
-        const want = keysToWithdraw(bot.keysHeld(), Bank.count(KEY));
-        if (want < 1 && bot.keysHeld() < 1) {
-            await Bank.close();
+        const want = bot.pendingLoot ? 0 : keysToWithdraw(bot.keysHeld(), Bank.count(KEY));
+        if (!bot.pendingLoot && want < 1 && bot.keysHeld() < 1) {
+            if (!(await Bank.close())) {
+                return;
+            }
+            bot.banking = false;
             bot.setStatus('stopped');
             ScriptRunner.stop(`[chests] no ${KEY}s left in the bank; ${bot.opened} chest(s) opened over ${bot.trips} trip(s)`);
             return;
@@ -294,10 +348,20 @@ class BankTrip implements Task {
                 return;
             }
         }
+        if (bot.teleportHome && Skills.level('magic') >= esc.level) {
+            for (const rune of esc.runes) {
+                const missing = rune.count - Inventory.count(rune.rune);
+                if (missing > 0 && Bank.count(rune.rune) >= missing && !(await Bank.withdrawX(rune.rune, missing))) {
+                    bot.log(`[chests] could not withdraw ${rune.rune}, retrying`);
+                    return;
+                }
+            }
+        }
         if (!(await Bank.close())) {
             bot.log('[chests] the bank would not close, retrying');
             return;
         }
+        bot.banking = false;
         bot.noteTrip();
         bot.log(`[chests] banked the haul and took ${bot.keysHeld()} ${KEY}s`);
     }

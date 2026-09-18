@@ -1,7 +1,29 @@
-import { describe, expect, test } from 'bun:test';
+import fs from 'node:fs';
+import path from 'node:path';
 
-import { BANK_LOCATIONS, approachOf, bankDistance, nearestBank, nearestBanks, nearestUsableBank } from '#/bot/api/bank/BankLocations.js';
-import type { BankLocation } from '#/bot/api/bank/BankLocations.js';
+import { afterEach, describe, expect, test } from 'bun:test';
+import { gunzipSync } from 'fflate';
+
+import { BANK_LOCATIONS, USE_MAGE_BANK, approachOf, bankCostForFinder, bankCostForNavigator, bankDistance, nearestBank, nearestBanks, nearestBankReachable, nearestUsableBank, nearestWalkableBank, nearestWalkableBankAsync } from '#/bot/api/bank/BankLocations.js';
+import type { BankLocation, BankPathCost, NavigatorLike } from '#/bot/api/bank/BankLocations.js';
+import Tile from '#/bot/geometry/Tile.js';
+import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
+import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
+import { richTransportQuestMap } from '#/bot/event/webwalk/transportQuestReqs.js';
+import { emptyWorldStateData, type WorldStateData } from '#/bot/event/webwalk/worldStateData.js';
+
+const MAGE_KEY = `rs2b0t:set:Global:${USE_MAGE_BANK}`;
+
+function setSetting(on: boolean | null): void {
+    if (on === null) {
+        localStorage.removeItem(MAGE_KEY);
+        sessionStorage.removeItem(MAGE_KEY);
+        return;
+    }
+    localStorage.setItem(MAGE_KEY, String(on));
+}
+
+afterEach(() => setSetting(null));
 
 test('bank names are unique', () => {
     const names = BANK_LOCATIONS.map(b => b.name);
@@ -195,4 +217,121 @@ describe('nearestBanks', () => {
         expect(upstairs).toContain('Ardougne West');
         expect(upstairs.length).toBeGreaterThan(1);
     });
+});
+
+// --- nav-cost edit to nearest bank (dungeon offset) ---
+
+const NAV_SKILLS = Object.fromEntries(
+    [
+        'agility', 'prayer', 'mining', 'smithing', 'crafting', 'woodcutting', 'firemaking',
+        'ranged', 'attack', 'strength', 'defence', 'hitpoints', 'magic', 'thieving', 'fishing',
+        'cooking', 'runecraft', 'herblore', 'fletching', 'slayer', 'farming'
+    ].map(s => [s, 99])
+);
+
+function navState(): WorldStateData {
+    return {
+        ...emptyWorldStateData(),
+        members: true,
+        skills: NAV_SKILLS,
+        quests: richTransportQuestMap(),
+        items: { Coins: 200_000, 'Shantay pass': 5, Rope: 5, Spade: 1, Machete: 1, 'Climbing boots': 1 },
+        worn: { 'Climbing boots': 1 },
+        freeSlots: 14,
+        canSlashWeb: true
+    };
+}
+
+function loadFinder(): PathFinder | null {
+    const packPath = path.join(process.cwd(), 'out/collision.lcnav.gz');
+    if (!fs.existsSync(packPath)) {
+        return null;
+    }
+    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
+    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+        bytes = new Uint8Array(gunzipSync(bytes));
+    }
+    const finder = new PathFinder(bytes as Uint8Array);
+    loadDefaultNavEdges(finder);
+    return finder;
+}
+
+test('bankCostForNavigator maps navigator outcomes to a cost, off by catalog', async () => {
+    const navigator = {
+        async findPath(_from: unknown, _to: unknown, opts?: unknown) {
+            return (opts as { useTeleportCatalog?: boolean }).useTeleportCatalog === false
+                ? { ok: true, cost: 42 }
+                : { ok: false, reason: 'catalog on' };
+        }
+    };
+    const cost = bankCostForNavigator(navigator);
+    await expect(cost({ x: 0, z: 0, level: 0 }, new Tile(1, 1, 0))).resolves.toBe(42);
+    await expect(
+        bankCostForNavigator({ findPath: async () => ({ ok: false, reason: 'blocked' }) })({ x: 0, z: 0, level: 0 }, new Tile(1, 1, 0))
+    ).resolves.toBeNull();
+});
+
+describe('nearestWalkableBank picks the walkable-nearest bank, not the air-nearest one', () => {
+    // Why: these run the real nav pack (~13MB cold), so they're skipped unless the pack is present.
+
+    const finder = loadFinder();
+    const state = navState();
+    if (!finder) {
+        return;
+    }
+
+    const costWalk = bankCostForFinder(finder, { state, maxExpansions: 500_000 });
+    const blockedCost = bankCostForFinder(finder, { state, maxExpansions: 500_000, avoidDoors: new Set(['3091|3957']) });
+    const walkTo = (from: { x: number; z: number; level: number }, name: string, cost: BankPathCost = costWalk): number | null => {
+        const bank = BANK_LOCATIONS.find(b => b.name === name)!;
+        return cost(from, bank.tile);
+    };
+
+    test('inside the Dwarven Mine the walk to Falador East beats the straight-nearest Edgeville', () => {
+        // Why: surface z sits ~6400 tiles below the overworld, so straight-line ranking collapses onto the x-axis (Edgeville wins on x) while the real exits land at the Falador end; miningLocations.ts already banks this seed at faladorEast and the walk-cost ranker agrees.
+        const from = { x: 3021, z: 9800, level: 0 };
+        expect(nearestBank(from)?.name).toBe('Edgeville');
+        const picked = nearestWalkableBank(from, costWalk);
+        expect(picked?.name).toBe('Falador East');
+        expect(walkTo(from, 'Falador East')).not.toBeNull();
+        expect(walkTo(from, 'Edgeville')).not.toBeNull();
+        expect(walkTo(from, 'Falador East')!).toBeLessThan(walkTo(from, 'Edgeville')!);
+    }, 120_000);
+
+    test('async twin walks the same shortlist and agrees with the sync pick', async () => {
+        // Why: live callers pay costs through the Navigator worker, so the select loop batches one Promise.all over the same candidate order.
+        const from = { x: 3021, z: 9800, level: 0 };
+        const picked = await nearestWalkableBankAsync(from, async (f, t) => costWalk(f, t));
+        expect(picked?.name).toBe('Falador East');
+    }, 120_000);
+
+    test('at the Mage Arena webs, the walk to Edgeville beats the air-close Gundai cellar', () => {
+        setSetting(true);
+        const from = { x: 3094, z: 3785, level: 0 };
+        // Why: off the ladder mouth the air line to Gundai's cellar is a few tiles, but the full route is a run to the webs plus the ladder, and Edgeville's plain road is cheaper.
+        expect(nearestBank(from)?.name).toBe('Mage Arena');
+        expect(walkTo(from, 'Edgeville')!).toBeLessThan(walkTo(from, 'Mage Arena')!);
+        expect(nearestWalkableBank(from, costWalk)?.name).toBe('Edgeville');
+    }, 120_000);
+
+    test('ladder edge blocked, the Mage Arena is rejected outright', () => {
+        setSetting(true);
+        const from = { x: 3091, z: 3958, level: 0 };
+        // Why: the ladder loc at 3091|3957 is the only route to the cellar; blocking it makes the bank unreachable so the selector skips it and returns the nearest surface bank instead.
+        expect(walkTo(from, 'Mage Arena', blockedCost)).toBeNull();
+        expect(nearestWalkableBank(from, blockedCost)?.name).not.toBe('Mage Arena');
+    }, 120_000);
+
+    test('nearestBankReachable wires the live pick, and falls back to the air pick without a route', async () => {
+        const from = { x: 3021, z: 9800, level: 0 };
+        const navigator: NavigatorLike = {
+            async findPath(f, t) {
+                const c = costWalk(f, new Tile(t.x, t.z, t.level));
+                return c === null ? { ok: false, reason: 'unreachable' } : { ok: true, cost: c };
+            }
+        };
+        expect((await nearestBankReachable(from, navigator))?.name).toBe('Falador East');
+        // Why: a dead navigator must not take the bank down with it, so the air-nearest pick stays the fallback.
+        await expect(nearestBankReachable(from, { findPath: async () => ({ ok: false, reason: 'offline' }) })).resolves.toEqual(nearestBank(from));
+    }, 120_000);
 });

@@ -1,3 +1,6 @@
+import { Bank } from '#/bot/api/bank/Bank.js';
+import { Banking } from '#/bot/api/bank/Banking.js';
+import { executeStep } from '#/bot/api/ai/quests/exec/steps.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
 import { combatGear, resetCombatGear } from '#/bot/api/ai/quests/defs/shilo/gear.js';
 import { stubProps } from '../../../../lib/stubSingletons.js';
@@ -876,4 +879,49 @@ test('Shilo withdraws only the gear that fits before equipping it', () => {
     }));
     expect(step?.kind).toBe('withdraw');
     if (step?.kind === 'withdraw') expect(step.items).toEqual([{ name: 'Steel scimitar', qty: 1 }]);
+});
+
+for (const weapon of ['steel scimitar', 'rune 2h sword']) {
+    test(`Shilo continues reading with ${weapon} equipped before any bank scan`, () => {
+        const s = snapshot({
+            progress: progress(SV_STAGE.ENTERED_AH_ZA_RHOON),
+            invIds: new Map([[SV_ITEM.TATTERED_SCROLL.id, 1], [SV_ITEM.ROPE.id, 1]]),
+            worn: new Set([weapon, 'steel chainbody', 'steel platelegs', 'steel full helm',
+                ...(weapon === 'steel scimitar' ? ['steel kiteshield'] : [])]),
+            bankKnown: false,
+            tile: at(2898, 9401)
+        });
+        expect(name(decide(s))).toBe('read the tattered scroll');
+    });
+}
+
+test('Shilo scans an unknown bank when combat slots still need gear', () => {
+    expect(combatGear(snapshot({ bankKnown: false }))?.kind).toBe('scanBank');
+});
+
+test('Shilo deposits a rejected warhammer while preserving the quest hammer', async () => {
+    const deposited: string[] = [];
+    const s = snapshot({
+        inv: new Map([['rune warhammer', 1], ['hammer', 1], ['tattered scroll', 1], ['lobster', 25]]),
+        bank: new Map([['steel scimitar', 1]]), freeSlots: 0
+    });
+    const restores = [
+        stubProps(Equipment, { contains: () => false, equip: async () => false }),
+        stubProps(Banking, { open: async () => true }),
+        stubProps(Bank, { depositAllMatching: async predicate => {
+            for (const item of s.inv.keys()) if (predicate(item, 0)) deposited.push(item);
+        } })
+    ];
+    try {
+        const wear = combatGear(s);
+        expect(wear?.kind).toBe('custom');
+        if (wear?.kind === 'custom') await wear.run(() => {});
+        const deposit = combatGear(s);
+        expect(deposit?.kind).toBe('deposit');
+        if (deposit?.kind !== 'deposit') throw new Error('expected gear deposit');
+        expect(await executeStep({ ...deposit, leaveOpen: true }, [], () => {})).toBe(true);
+        expect(deposited).toEqual(['rune warhammer']);
+    } finally {
+        for (const restore of restores.reverse()) restore();
+    }
 });

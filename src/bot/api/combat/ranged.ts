@@ -23,7 +23,7 @@ export function rangeLoadoutOf(weapon: string, ammo: string): RangeLoadout {
     return {
         weapon: dart ?? weapon,
         projectile: dart ?? ammo,
-        thrown: dart !== undefined
+        thrown: dart !== undefined || (wanted.length > 0 && wanted === ammo.trim().toLowerCase())
     };
 }
 

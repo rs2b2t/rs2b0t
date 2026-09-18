@@ -197,6 +197,7 @@ export class Player implements Locatable {
     /** Slot in the client's player list. */
     readonly index: number;
     readonly inCombat: boolean;
+    readonly combatLevel: number;
     tile(): Tile;
     distance(): number;
     actions(): string[];
@@ -339,6 +340,27 @@ export const Equipment: {
     equip(name: string): Promise<boolean>;
     /** Remove from a worn slot into the backpack. */
     unequip(name: string): Promise<boolean>;
+};
+
+/**
+ * Weapon special-attack state and controls.
+ * Energy is expressed on the client scale 0–1000 (100 = 10%).
+ */
+export const Special: {
+    /** Current special-attack energy, 0–1000. */
+    energy(): number;
+    /** Whether a special is armed for the next attack. */
+    armed(): boolean;
+    /** Currently wielded weapon name, or '' with no weapon equipped. */
+    wielded(): string;
+    /** Special energy cost for a supported weapon, or null when unsupported. */
+    cost(weaponName: string): number | null;
+    /** Whether current energy is sufficient for this weapon's special. */
+    ready(weaponName: string): boolean;
+    /** Current weapon's special-bar component, or -1 when unavailable. */
+    barComponent(): number;
+    /** Arm the current weapon's special attack for the next attack. */
+    arm(): Promise<boolean>;
 };
 
 /**

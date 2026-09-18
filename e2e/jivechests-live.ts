@@ -48,7 +48,7 @@ const BANK_STAND: Point = { x: 2946, z: 3369, level: 0 };
 const CHEST_STAND: Point = { x: 2914, z: 3451, level: 0 };
 /** Always in the reward, so it counts the opens the log claims. */
 const ALWAYS = 'Uncut dragonstone';
-const JUNK = ['Raw swordfish', 'Body rune', 'Spinach roll'];
+const JUNK = ['Raw swordfish', 'Body rune', 'Spinach roll', 'Adamant sq shield'];
 const KEYS_PER_TRIP = 7;
 const POLL_MS = 2000;
 const SCREENSHOT = 'docs/e2e/jivechests-live.png';
@@ -154,7 +154,7 @@ try {
             const banked = BANKED.exec(line.msg);
             if (banked) {
                 trips++;
-                tookOnTrip = Number(banked[1]);
+                tookOnTrip = Math.max(tookOnTrip, Number(banked[1]));
             }
         }
         if (fresh.length > 0) {

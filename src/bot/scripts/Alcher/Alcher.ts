@@ -9,7 +9,8 @@ import { Paint } from '../../paint/Paint.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { nearestBank } from '../../api/bank/BankLocations.js';
+import { nearestBankReachable } from '../../api/bank/BankLocations.js';
+import { Navigator } from '../../event/webwalk/Navigator.js';
 import { liveCatalog } from '../../api/market/catalog.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import { etaHours, levelProgress } from '../../paint/levelProgress.js';
@@ -171,7 +172,8 @@ export default class Alcher extends TaskBot {
         if (!here) {
             return false;
         }
-        const bank = nearestBank(here);
+        // Why: inside a dungeon the air-nearest bank can be the x-closest one far from the exit, so buy the real route to every candidate before walking.
+        const bank = await nearestBankReachable(here, Navigator);
         if (!bank) {
             this.log('no reachable bank — stopping');
             ScriptRunner.stop('no reachable bank');

@@ -51,7 +51,7 @@ All entities are `Locatable` (`tile(): Tile`, `distance(): number`); most are
 class Npc  { name; id; level; index; size; inCombat; health; networkTile(); valid(); targetsMe(); targetsAnotherPlayer(); /* + Locatable + Interactable */ }
 class Loc  { name; id; /* + Locatable + Interactable */ }
 class GroundItem { name; id; count; /* + Locatable + Interactable */ }
-class Player { name; index; inCombat; targetsMe(); /* + Locatable, actions() */ }
+class Player { name; index; combatLevel; inCombat; targetsMe(); /* + Locatable, actions() */ }
 ```
 
 For NPCs, `tile()` remains the centre of the rendered position. `networkTile()`

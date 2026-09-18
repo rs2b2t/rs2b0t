@@ -40,6 +40,7 @@ import JiveDragons, { SETTINGS as JIVEDRAGONS_SETTINGS } from './JiveDragons/Jiv
 import JiveDemons, { SETTINGS as JIVEDEMONS_SETTINGS } from './JiveDemons/JiveDemons.js';
 import JiveEnchanter, { SETTINGS as JIVEENCHANTER_SETTINGS } from './JiveEnchanter/JiveEnchanter.js';
 import JiveKBD, { SETTINGS as JIVEKBD_SETTINGS } from './JiveKBD/JiveKBD.js';
+import JiveKQ, { SETTINGS as JIVEKQ_SETTINGS } from './JiveKQ/JiveKQ.js';
 import JiveCrafting, { SETTINGS as JIVECRAFTING_SETTINGS } from './JiveCrafting/JiveCrafting.js';
 import JiveChests, { SETTINGS as JIVECHESTS_SETTINGS } from './JiveChests/JiveChests.js';
 import JiveMarketDumper, { SETTINGS as JIVEMARKETDUMPER_SETTINGS } from './JiveMarketDumper/JiveMarketDumper.js';
@@ -144,7 +145,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'CowKiller',
-    description: 'Walks to the Lumbridge, north-west Lumbridge, south-Falador, or East Ardougne cow fields, loots hides + bones, and supports field-aware banking',
+    description: 'Walks to the Lumbridge, north-west Lumbridge, south-Falador, or East Ardougne cow fields, loots cowhide, and banks each field at its pinned bank',
     category: 'Combat',
     tags: ['lumbridge', 'falador', 'ardougne', 'cowhide', 'bones', 'banking', 'afk'],
     settingsSchema: COWKILLER_SETTINGS,
@@ -242,6 +243,15 @@ ScriptRegistry.register({
 });
 
 ScriptRegistry.register({
+    name: 'JiveKQ',
+    description: 'Four-player Kalphite Queen trips with a shared dragon mace and magic shortbow loadout, synchronized ropes, a four-point cross, repeated kills and group retreats.',
+    category: 'Combat',
+    tags: ['combat', 'boss', 'kalphite', 'group', 'banking'],
+    settingsSchema: JIVEKQ_SETTINGS,
+    create: () => new JiveKQ()
+});
+
+ScriptRegistry.register({
     name: 'JiveCrafting',
     description: 'Makes one gold jewel picked from the dropdown at the Al Kharid furnace: banks for the mould, the gold bars and the gems, uses a bar on the furnace, clicks the biggest Make button that fits the load and walks back with it. Stops honestly when the bank runs out of any of the three.',
     category: 'Crafting',
@@ -270,7 +280,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'JiveChests',
-    description: 'Opens the Taverley crystal chest on a bank of crystal keys: withdraws seven at Falador West, walks to the chest, uses a key on it per open, drops the raw swordfish, body runes and spinach rolls the roll gives, then teleports back and banks the rest. Stops when the bank runs out of keys.',
+    description: 'Opens the Taverley crystal chest with seven keys per trip from Falador West. Drops raw swordfish, body runes, spinach rolls and adamant square shields. Collects overflow in priority order: dragonstones, key halves, runite bars, diamonds, rubies, rune legs or skirts, then other rewards. Banks when full and returns for remaining loot before opening again. Keeps and restocks Falador teleport runes. Stops after the keys are exhausted and remaining loot is collected and banked.',
     category: 'Money making',
     tags: ['chest', 'taverley', 'banking', 'looting', 'afk'],
     settingsSchema: JIVECHESTS_SETTINGS,

@@ -19,7 +19,7 @@ export function resetCombatGear(): void {
     rejected.clear();
 }
 
-function wanted(snap: QuestSnapshot): string[] {
+function candidates(snap: QuestSnapshot): string[][] {
     const worn = ITEM_DB.filter(item => snap.worn.has(item.name.toLowerCase()));
     const wornSlots = new Set(worn.map(item => item.slot));
     const declared = QuestLoadout.current?.worn ?? {};
@@ -29,14 +29,18 @@ function wanted(snap: QuestSnapshot): string[] {
         if (wornSlots.has(slot) || (slot === 'lefthand' && twoHanded)) return [];
         const names = declared[slot] ? [declared[slot]] : TIERS.flatMap(tier => kinds.map(kind => `${tier} ${kind}`));
         const usable = names.filter(name => !rejected.has(name.toLowerCase()));
-        const pick = usable.find(name => (snap.inv.get(name.toLowerCase()) ?? 0) > 0)
-            ?? usable.find(name => (snap.bank?.get(name.toLowerCase()) ?? 0) > 0);
-        return pick ? [pick] : [];
+        return usable.length > 0 ? [usable] : [];
     });
 }
 
 export function combatGear(snap: QuestSnapshot): QuestStep | null {
-    const names = wanted(snap);
+    const missing = candidates(snap);
+    if (missing.length === 0) return null;
+    const names = missing.flatMap(usable => {
+        const pick = usable.find(name => (snap.inv.get(name.toLowerCase()) ?? 0) > 0)
+            ?? usable.find(name => (snap.bank?.get(name.toLowerCase()) ?? 0) > 0);
+        return pick ? [pick] : [];
+    });
     const carried = names.filter(name => (snap.inv.get(name.toLowerCase()) ?? 0) > 0);
     if (carried.length > 0) {
         return {
@@ -63,7 +67,7 @@ export function combatGear(snap: QuestSnapshot): QuestStep | null {
         const food = new Set(foodNames().map(name => name.toLowerCase()));
         const stored = [...snap.inv.keys()].find(name => rejected.has(name) || food.has(name) || !protectedNames.has(name));
         return stored
-            ? { kind: 'deposit', keep: [...snap.inv.keys()].filter(name => name !== stored), bank: SV_TILE.ARDOUGNE_BANK }
+            ? { kind: 'deposit', exactKeep: true, keep: [...snap.inv.keys()].filter(name => name !== stored), bank: SV_TILE.ARDOUGNE_BANK }
             : { kind: 'wait', reason: 'need a free inventory slot for combat gear' };
     }
     return withdrawFrom(names.slice(0, snap.freeSlots ?? names.length).map(name => ({ name, qty: 1 })));
