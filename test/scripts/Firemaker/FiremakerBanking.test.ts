@@ -19,6 +19,7 @@ function fixture() {
         ...Array.from({ length: state.packLogs }, (_, i) => ({ id: 1511, name: 'Logs', count: 1, slot: i + 1, comId: 3214, ops: [] }))
     ]);
     spyOn(Bank, 'openNearest').mockResolvedValue(true);
+    spyOn(Bank, 'close').mockResolvedValue(true);
     spyOn(Bank, 'ready').mockImplementation(() => state.ready);
     spyOn(Bank, 'loaded').mockImplementation(() => state.logs > 0);
     spyOn(Bank, 'count').mockImplementation(name => name === 'Logs' ? state.logs : 0);
@@ -95,6 +96,42 @@ test('a timed-out deposit keeps stock checks blocked across empty-pack retries',
     refreshed = true;
     await bot.loop();
     expect(deposit).toHaveBeenCalledTimes(1);
+    expect(state.withdrawals).toBe(1);
+    expect(state.stops).toEqual([]);
+});
+
+test('a deposit that sends nothing reopens and retries held logs after a failed close', async () => {
+    const { bot, state } = fixture();
+    state.logs = 0;
+    state.packLogs = 1;
+    let open = true;
+    spyOn(Bank, 'openNearest').mockImplementation(async () => {
+        if (!open) state.generation++;
+        open = true;
+        return true;
+    });
+    let closes = 0;
+    spyOn(Bank, 'close').mockImplementation(async () => {
+        if (++closes === 1) return false;
+        open = false;
+        return true;
+    });
+    const deposit = spyOn(Bank, 'depositAllMatching').mockImplementation(async () => {
+        if (deposit.mock.calls.length === 1) return;
+        state.logs = state.packLogs;
+        state.packLogs = 0;
+        state.generation++;
+    });
+    spyOn(Bank, 'waitSnapshotAfter').mockImplementation(async generation => state.generation > generation);
+    await bot.loop();
+    await bot.loop();
+    expect(closes).toBe(2);
+    expect(deposit).toHaveBeenCalledTimes(1);
+    expect(state.withdrawals).toBe(0);
+    expect(state.stops).toEqual([]);
+    await bot.loop();
+    expect(deposit).toHaveBeenCalledTimes(2);
+    expect(state.packLogs).toBe(0);
     expect(state.withdrawals).toBe(1);
     expect(state.stops).toEqual([]);
 });
