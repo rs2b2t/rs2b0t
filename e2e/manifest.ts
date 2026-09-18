@@ -3,6 +3,16 @@ import type { Case } from './manifestTypes.js';
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
     {
+        id: 'snape-bank-distance-653-live',
+        harness: 'snape-bank-distance-653-live.ts',
+        covers: { scripts: ['HerbloreSecondaries'] },
+        status: 'vetted',
+        provenAt: '0a2d971942e2fb815dc8bacad2e77407178d112d',
+        manual: true,
+        budgetMin: 5,
+        note: 'Fresh local account banks 28 Snape grass at Falador East and returns to gather with teleports disabled. Checks travelled distance and saves logs and a screenshot.'
+    },
+    {
         id: 'duel-clue-373-live',
         harness: 'duel-clue-373-live.ts',
         covers: { scripts: ['ClueSolver', 'DuelArena'], subsystems: ['clues', 'multibox'] },
