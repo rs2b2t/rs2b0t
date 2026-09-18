@@ -16,7 +16,7 @@ export interface ArenaFight {
 }
 
 // Why: running out mid-fight hands the tick back to the engine, which reads the journal, and that opens a main modal on top of a boss.
-// Why: the budgets are generous for that reason; a fight that has stalled is the watchdog's problem, not this loop's.
+// Why: the budgets are generous for that reason; a stalled fight is the watchdog's problem.
 export const FA_FIGHT: Record<'ogre' | 'scorpion' | 'bouncer', ArenaFight> = {
     ogre: { what: 'Khazard Ogre', npcId: FA_NPC.OGRE, guard: 600 },
     scorpion: { what: 'Khazard Scorpion', npcId: FA_NPC.SCORPION, guard: 600 },
@@ -28,22 +28,22 @@ export const PROTECT_LEVEL = 43;
 /** A lobster's worth of damage is enough to eat on; waiting spends the margin. */
 const EAT_AT_MISSING = 15;
 const SEARCH_RADIUS = 20;
-/** Ticks with nothing to hit before the fight counts as won. Nothing here respawns inside 100. */
+/** Empty-target ticks before the fight counts as won; targets do not respawn within this window. */
 const MISSING_TO_WIN = 3;
 
-// Why: an empty scene before the first swing means the server has not released the beast yet, which is a different problem from having killed it.
+// Why: an empty scene before the first swing means the server hasn't released the beast yet.
 
-/** True once the target has been gone long enough to be dead rather than unreleased. */
+/** True once the target has been gone long enough to be dead. */
 export function fightWon(swings: number, missingTicks: number): boolean {
     return swings > 0 && missingTicks >= MISSING_TO_WIN;
 }
 
-// Why: a caged beast is in the scene and offers Attack, so presence proves nothing. The server drops every op against it and the swing counter climbs to the guard while hitpoints never move.
+// Why: a caged beast is in the scene and offers Attack but the server drops every op against it, so the swing counter climbs to the guard while hitpoints never move.
 
 /** Swings taken with no combat before the target counts as unreachable. */
 export const ENGAGE_PROOF = 12;
 
-/** True when the target answers Attack but never joins combat, which is what a cage looks like. */
+/** Whether the target exposes Attack but cannot enter combat through the cage. */
 export function unengaged(swings: number, everEngaged: boolean): boolean {
     return !everEngaged && swings >= ENGAGE_PROOF;
 }
@@ -64,8 +64,7 @@ function target(npcId: number): Npc | null {
         .nearest();
 }
 
-// Why: the win opens the dialogue that releases the next beast, the scorpion's summons Bouncer, and Bouncer's frees the Servils and moves the stage.
-// Why: leaving it undrained loses the release and parks the quest one step later.
+// Why: Victory dialogue releases the next target or advances the stage, so drain it before returning.
 
 /** Drain whatever the win opened, without answering an option. */
 async function drainWinDialogue(): Promise<void> {
@@ -88,7 +87,7 @@ async function dropPrayer(): Promise<void> {
     }
 }
 
-// Why: the server decodes one player op per tick and drops the rest, so a pass that eats, prays and swings loses two of the three, and the one it loses is the food.
+// Why: the server decodes 1 player op per tick and drops the rest, so a pass that eats, prays and swings loses 2 of the 3, and the one it loses is the food.
 
 /** Run one arena fight to its win. */
 export async function runFight(fight: ArenaFight, log: (m: string) => void): Promise<FightResult> {

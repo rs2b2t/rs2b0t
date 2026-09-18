@@ -1,4 +1,4 @@
-// Why: an unknown config opcode desyncs every entry after it; decode the whole cache under STRICT_CONFIG=1.
+// Why: an unknown config opcode desyncs every entry after it, so decode every entry under STRICT_CONFIG=1.
 
 import { readFileSync } from 'node:fs';
 

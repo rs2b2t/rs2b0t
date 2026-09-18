@@ -442,6 +442,7 @@ export class Client extends GameShell {
     private statXP: Int32Array = new Int32Array(Skill.count);
     /** Login attempt that supplied each stat slot; prevents stale relog data from becoming ready. */
     private statSessionGeneration: number = 0;
+    private modalCloseGeneration: number = 0;
     private statSeenGeneration: Int32Array = new Int32Array(Skill.count);
     /** Distinguishes a complete empty inventory from stale, partial, or stopped transmission. */
     private invUpdateState: Map<number, { generation: number; fullGeneration: number; transmitting: boolean }> = new Map();
@@ -6161,6 +6162,7 @@ export class Client extends GameShell {
             }
 
             if (this.ptype === ServerProt.IF_CLOSE) {
+                this.modalCloseGeneration++;
                 if (this.sideModalId !== -1) {
                     this.sideModalId = -1;
                     this.redrawSide = true;
@@ -6341,7 +6343,9 @@ export class Client extends GameShell {
 
                 if (this.localPlayer) {
                     IfType.list[comId].model1Type = 3;
-                    IfType.list[comId].model1Id = (this.localPlayer.appearance[8] << 6) + (this.localPlayer.appearance[0] << 12) + (this.localPlayer.colour[0] << 24) + (this.localPlayer.colour[4] << 18) + this.localPlayer.appearance[11];
+                    IfType.list[comId].model1Id = this.localPlayer.transmog
+                        ? this.localPlayer.transmog.id + 0x12345678
+                        : (this.localPlayer.appearance[8] << 6) + (this.localPlayer.appearance[0] << 12) + (this.localPlayer.colour[0] << 24) + (this.localPlayer.colour[4] << 18) + this.localPlayer.appearance[11];
                 }
 
                 this.ptype = -1;
@@ -11942,7 +11946,7 @@ export class Client extends GameShell {
             this.ny = e.screenY | 0;
 
             if (this.dragging) {
-                // Dragging owns the pointer — no keyboard or pan handling while it does.
+                // Dragging owns the pointer, so skip keyboard and pan handling.
             } else if (MobileKeyboard.isWithinCanvasKeyboard(x, y) && this.exceedsGrabThreshold(20)) {
                 MobileKeyboard.notifyTouchMove(x, y);
             } else if (this.startedInGame && !this.isGameObscured() && this.exceedsGrabThreshold(20)) {

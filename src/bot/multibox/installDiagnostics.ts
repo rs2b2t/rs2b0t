@@ -19,10 +19,7 @@ export interface Diagnostics {
     download(): void;
 }
 
-/**
- * A frame that has not booted yet has no `diag` to read; a frame that has booted
- * but whose drain throws is a fault and must not be swallowed.
- */
+/** Missing diagnostics are valid before boot; drain failures still propagate. */
 function collectFrames(frames: () => Iterable<DiagFrame>): () => FrameSample[] {
     return () => {
         const out: FrameSample[] = [];

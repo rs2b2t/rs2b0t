@@ -5,14 +5,14 @@ export interface Stand {
     level: number;
 }
 
-// Why: a crossing spends the seam FROM THE SIDE it was crossed from, not outright. The slave cage that puts a character into a cell is the only thing that takes them out of it again, so a seam struck off the list on the far side seals the pocket behind them. One run stood in the fourteen-tile cell at (2385,9661) for an hour with its own door filtered out of every search. Which side the character is on is a question the loaded scene answers: a stand tile it can still walk to is a stand tile on this side.
+// Why: Mark the departure stand as spent only after it becomes unreachable; the same cage seam is also the cell's only exit.
 
 /** The stand tiles each seam has already been used from, by seam key. */
 export type SpentSides = Map<string, Stand[]>;
 
 /**
  * Whether this seam has been used, and from where.
- * Why: a seam already used FROM THIS SIDE is finished, while one used from the far side is the way back out of a cul-de-sac, worth having, and worth having last. Offered as an equal candidate it turns a maze into a pendulum, and a run crossed the same three stone bridges back and forth for nine minutes.
+ * Why: a seam used from this side is finished, while one used from the far side is the way back out of a cul-de-sac, worth having last. As an equal candidate it turns the maze into a pendulum.
  */
 export function spentStateHere(sides: SpentSides, key: string, reachable: (tile: Stand) => boolean): 'fresh' | 'here' | 'elsewhere' {
     const used = sides.get(key);
@@ -40,7 +40,7 @@ export interface Journey {
     visited: Set<string>;
 }
 
-/** Ground is remembered in eight-tile cells, which is coarse enough that a wander lands back inside one. */
+/** Ground is remembered in 8-tile cells, coarse enough that a wander lands back inside one. */
 export function cellOf(tile: Stand): string {
     return `${tile.x >> 3},${tile.z >> 3},${tile.level}`;
 }

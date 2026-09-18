@@ -5,7 +5,7 @@ export function held(snap: QuestSnapshot, id: number): number {
     return snap.invIds?.get(id) ?? 0;
 }
 
-// Why: an unread bank is not an empty bank, and a bare count sends the bot to a booth for something it never saw.
+// Why: Preserve unknown bank state instead of treating an unread bank as empty.
 export function banked(snap: QuestSnapshot, id: number): number {
     return snap.bankKnown ? (snap.bankIds?.get(id) ?? 0) : 0;
 }
@@ -22,7 +22,7 @@ export function heldThread(snap: QuestSnapshot): number | null {
 }
 
 // Why: the print hunt walks the suspects in one fixed order and stops at the match, so every keepsake taken belongs to a suspect at or before the murderer, and the last one held is the murderer.
-// Why: this survives a restart, which a counter of who has been cleared does not.
+// Why: this survives a restart; a counter of who has been cleared doesn't.
 
 /** Who the matched print convicts, or null while the keepsakes cannot say. */
 export function accused(snap: QuestSnapshot, thread: number): Suspect | null {

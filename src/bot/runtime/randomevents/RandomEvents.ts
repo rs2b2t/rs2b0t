@@ -2,10 +2,12 @@ import { reader } from '../../adapter/ClientAdapter.js';
 import { BotHost } from '../BotHost.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { fleeCandidates } from './eventEvade.js';
+import { fleeCandidates, stepOffCandidates } from './eventEvade.js';
 import { Game } from '../../api/game/Game.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
+import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import { Traversal } from '../../api/walking/Traversal.js';
+import { ENT_LIFE_TICKS, ENT_NPC_IDS } from '../../data/woodcuttingLocations.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
@@ -20,9 +22,20 @@ import { SettingsStore } from '../Settings.js';
 
 const DIALOG_EVENT_NPCS = ['genie', 'drunken dwarf', 'mysterious old man', 'sandwich lady', 'frog'];
 const PICK_EVENT_NPCS = ['strange plant'];
+
+// Why: the plant spawns within one tile of whoever it is for and never moves, and clicking someone else's answers "It's not here for you", so anything further out is a walk the run cannot cash in. At Seers bank the old eight-tile reach kept finding the ones that spawn on the woodcutters.
+/** How far a strange plant may be and still be ours: its spawn tile plus a step or two of drift. */
+export const PLANT_REACH = 3;
+
+/** Whether this npc is a pickable event close enough to belong to us. */
+export function pickEventNear(npc: { name: string | null; distance: number }): boolean {
+    const name = npc.name?.toLowerCase();
+    return name !== undefined && PICK_EVENT_NPCS.includes(name) && npc.distance <= PLANT_REACH;
+}
 const idRange = (lo: number, hi: number): number[] => Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
 const HOSTILE_EVENT_NPC_IDS = new Set<number>([
     ...idRange(391, 396), // River troll  (macro_rivertrollguardian_1..6)
+    408,
     411,                  // Swarm        (macro_swarm)
     ...idRange(413, 418), // Rock Golem   (macro_golemguardian_1..6)
     ...idRange(419, 424), // Zombie       (macro_zombie1..6)
@@ -43,46 +56,55 @@ const FISHING_GEAR = [
     'oily fishing rod',
     'fly fishing rod',
     'harpoon',
-    'lobster pot',
-    'fishing bait',
-    'feather'
+    'lobster pot'
 ];
 const GEAR_LOSS_WINDOW_MS = 90_000;
-/** Hostile fishing/mining randoms (river troll, rock golem, …) often open from a few tiles out.
- *  Why: detecting by id within this range when they face or attack us, rather than only when adjacent, stops fishers dying before distance<=1 fires. */
+const GEAR_RECOVERY_RANGE = 10;
+/** Detection range for hostile gathering randoms that attack from several tiles away. */
 const HOSTILE_ENGAGE_DISTANCE = 8;
 
 export function isHostileEventNpc(
     npc: {
         id: number;
-        inCombat: boolean;
         distance: number;
-        faceEntity: number;
     },
-    _selfSlot: number,
-    _playerInCombat: boolean
+    playerDamaged: boolean
 ): boolean {
-    if (!HOSTILE_EVENT_NPC_IDS.has(npc.id)) {
+    return playerDamaged
+        && HOSTILE_EVENT_NPC_IDS.has(npc.id)
+        && npc.distance <= HOSTILE_ENGAGE_DISTANCE;
+}
+
+/**
+ * The active Ent chop: facing the NPC, adjacent, and animating.
+ * Why: matching every Ent would pause unrelated chopping until it despawns.
+ */
+export function isEntHijack(
+    npc: { id: number; index: number; distance: number },
+    selfFaceEntity: number,
+    animating: boolean
+): boolean {
+    if (!ENT_NPC_IDS.has(npc.id) || npc.distance > 1 || !animating) {
         return false;
     }
-    if (npc.distance > HOSTILE_ENGAGE_DISTANCE) {
-        return false;
-    }
-    // Why: these antimacro ids only exist as your own random event. They are not world mobs you walk past.
-    // Why: soft flags (combatCycle / faceEntity) often lag or never set for 0-damage Swarm (#422), which left walks repathing until timeout while Supervisor never intercepted, so presence within engage range is enough.
-    return true;
+    return selfFaceEntity === npc.index;
 }
 
 export class GearLossTracker {
     private held = new Set<string>();
     private lost = new Map<string, number>();
     private wasSuppressed = false;
+    private lastFishingTick = -Infinity;
+    private canRecover = false;
 
     constructor(private readonly windowMs = GEAR_LOSS_WINDOW_MS) {}
 
-    update(heldNow: readonly string[], suppressedNow: boolean, nowMs: number): void {
-        const now = new Set(heldNow.map(s => s.toLowerCase()));
-        if (!suppressedNow && !this.wasSuppressed) {
+    update(heldNow: readonly string[], suppressedNow: boolean, nowMs: number, fishingNearby: boolean, tick: number): void {
+        if (fishingNearby) this.lastFishingTick = tick;
+        this.canRecover = tick >= this.lastFishingTick && tick - this.lastFishingTick <= 1 && !suppressedNow && !this.wasSuppressed;
+        const now = new Set(heldNow.map(s => s.toLowerCase()).filter(s => FISHING_GEAR.includes(s)));
+        for (const gear of now) this.lost.delete(gear);
+        if (this.canRecover) {
             for (const gear of this.held) {
                 if (!now.has(gear)) {
                     this.lost.set(gear, nowMs);
@@ -95,27 +117,38 @@ export class GearLossTracker {
 
     recentlyLost(gear: string, nowMs: number): boolean {
         const at = this.lost.get(gear.toLowerCase());
-        return at !== undefined && nowMs - at <= this.windowMs;
+        return this.canRecover && at !== undefined && nowMs - at <= this.windowMs;
     }
 }
 
-type EventKind = 'dialog' | 'pick' | 'evade' | 'lost-tool' | 'box' | 'lamp' | 'hazard' | 'lost-gear' | 'mime' | 'maze';
+type EventKind =
+    | 'dialog'
+    | 'pick'
+    | 'evade'
+    | 'lost-tool'
+    | 'box'
+    | 'lamp'
+    | 'hazard'
+    | 'hijack'
+    | 'lost-gear'
+    | 'mime'
+    | 'maze';
 
 interface DetectedEvent {
     kind: EventKind;
     name: string;
 }
 
-const MAX_ATTEMPTS = 4; // give up on an event we can't clear after this many tries
-const GIVE_UP_COOLDOWN_MS = 45000; // then ignore that event for this long so the bot resumes
+const MAX_ATTEMPTS = 4; // bounded retries before the script resumes
+const GIVE_UP_COOLDOWN_MS = 45000; // ignore the failed event for this long
 const PICK_WAIT_MS = 80_000;
 
-/** Why: maze/mime trap the player; box/lamp occupy a pack slot with no Drop, so keep solving. */
+/** Maze and mime trap the player; box and lamp rewards cannot be dropped. */
 const TRAPPED_KINDS: ReadonlySet<EventKind> = new Set(['maze', 'mime', 'box', 'lamp']);
 
-export function plantStrategy(ops: string[]): 'pick' | 'evade' {
-    const canPick = ops.some(a => /pick|take/i.test(a));
-    const canAttack = ops.some(a => /attack/i.test(a));
+export function plantStrategy(ops: readonly (string | null)[]): 'pick' | 'evade' {
+    const canPick = ops.some(a => a !== null && /pick|take/i.test(a));
+    const canAttack = ops.some(a => a !== null && /attack/i.test(a));
     return !canPick && canAttack ? 'evade' : 'pick';
 }
 
@@ -167,10 +200,7 @@ class RandomEventsImpl {
     private lastCheckTick = -1;
     private lastPending = false;
 
-    /**
-     * True when a random is active and not currently being solved.
-     * Why: quiet while {@link handling} so the handler's own walks do not self-interrupt, while Supervisor / EventSignal still gate scripts between loops via detect + handling.
-     */
+    /** True when a random is active but not inside its handler. */
     pending(): boolean {
         if (this.handling) {
             return false;
@@ -272,6 +302,13 @@ class RandomEventsImpl {
     private detectSceneEvents(): DetectedEvent | null {
         // Scene may be empty mid-teleport; npcs() can still walk combatCycle stamps.
         const npcs = reader.npcs();
+        this.gearLoss.update(
+            Inventory.items().flatMap(item => item.name ? [item.name] : []),
+            Bank.isOpen() || Shop.isOpen(),
+            Date.now(),
+            npcs.some(npc => npc.distance <= GEAR_RECOVERY_RANGE && (npc.name?.toLowerCase() === 'fishing spot' || WHIRLPOOL_NPC_IDS.includes(npc.id))),
+            BotHost.tickCount
+        );
 
         for (const npc of npcs) {
             const name = npc.name?.toLowerCase();
@@ -281,21 +318,28 @@ class RandomEventsImpl {
             if (DIALOG_EVENT_NPCS.includes(name) && npc.distance <= 6) {
                 return { kind: 'dialog', name };
             }
-            if (PICK_EVENT_NPCS.includes(name) && npc.distance <= 8) {
+            if (pickEventNear(npc) && plantStrategy(npc.ops) === 'pick') {
                 return { kind: 'pick', name };
             }
         }
 
-        const selfSlot = reader.selfSlot();
-        let playerInCombat = false;
-        try {
-            playerInCombat = Game.inCombat();
-        } catch {
-            playerInCombat = false;
-        }
+        const playerDamaged = reader.takingDamage();
         for (const npc of npcs) {
-            if (isHostileEventNpc(npc, selfSlot, playerInCombat)) {
+            if (isHostileEventNpc(npc, playerDamaged)) {
                 return { kind: 'evade', name: npc.name?.toLowerCase() ?? 'event monster' };
+            }
+        }
+
+        let animating = false;
+        try {
+            animating = Game.animating();
+        } catch {
+            animating = false;
+        }
+        const selfFace = reader.selfFaceEntity();
+        for (const npc of npcs) {
+            if (isEntHijack(npc, selfFace, animating)) {
+                return { kind: 'hijack', name: 'ent' };
             }
         }
 
@@ -313,18 +357,13 @@ class RandomEventsImpl {
             }
         }
 
-        this.gearLoss.update(
-            FISHING_GEAR.filter(g => Inventory.contains(g)),
-            Bank.isOpen() || Shop.isOpen(),
-            Date.now()
-        );
         for (const gear of FISHING_GEAR) {
             if (!this.gearLoss.recentlyLost(gear, Date.now()) || Inventory.contains(gear)) {
                 continue;
             }
             const onGround = GroundItems.query()
                 .where(g => (g.name?.toLowerCase() ?? '') === gear)
-                .within(10)
+                .within(GEAR_RECOVERY_RANGE)
                 .nearest();
             if (onGround) {
                 return { kind: 'lost-gear', name: gear };
@@ -341,8 +380,7 @@ class RandomEventsImpl {
         }
         this.handling = true;
         try {
-            // detect/handle must never throw into ScriptRunner, a thrown error
-            // marks the script crashed even when the maze/dialog later succeeds.
+            // detect/handle must never throw into ScriptRunner; a thrown error marks the script crashed even when the maze or dialog later succeeds.
             return await this.handleInner(log);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -388,6 +426,9 @@ class RandomEventsImpl {
                 break;
             case 'hazard':
                 acted = await this.handleHazard(event.name, log);
+                break;
+            case 'hijack':
+                acted = await this.handleHijack(log);
                 break;
             case 'mime':
                 acted = await performMimeStage(log);
@@ -480,9 +521,13 @@ class RandomEventsImpl {
                 return true;
             }
             if (plantStrategy(plant.actions()) === 'evade') {
-                log(`random event: ${name} turned hostile — fleeing (it poisons)`);
-                return await this.handleEvade(name, log);
+                return isHostileEventNpc(plant.snap, reader.takingDamage())
+                    ? await this.handleEvade(name, log)
+                    : true;
             }
+            const plantChanged = (): boolean => !reader.npcs().some(n =>
+                n.index === plant.index && plantStrategy(n.ops) === 'pick'
+            );
             if (!announced) {
                 log(`random event: ${name} — picking the fruit as soon as it ripens`);
                 announced = true;
@@ -494,7 +539,7 @@ class RandomEventsImpl {
                 await plant.interact(op);
                 await Execution.delayUntil(
                     () => Inventory.count('Strange fruit') > before
-                        || !reader.npcs().some(n => (n.name?.toLowerCase() ?? '') === name)
+                        || plantChanged()
                         || this.plantNotOurs(sinceText),
                     6000
                 );
@@ -507,8 +552,11 @@ class RandomEventsImpl {
                     log(`random event: ${name} — fruit picked`);
                     return true;
                 }
+                if (plantChanged()) {
+                    continue;
+                }
             }
-            await Execution.delayTicks(4);
+            await Execution.delayUntil(plantChanged, 2400);
         }
         log(`random event: ${name} — fruit never ripened in this pass; will retry`);
         return true;
@@ -550,6 +598,29 @@ class RandomEventsImpl {
             await Traversal.walkTo(flee, { radius: 1, timeoutMs: 15_000, log });
         }
         await Execution.delayTicks(60);
+        return true;
+    }
+
+    private async handleHijack(log: (msg: string) => void): Promise<boolean> {
+        const me = Game.tile();
+        if (!me) {
+            return false;
+        }
+        const ent = Npcs.query()
+            .where(n => ENT_NPC_IDS.has(n.id) && n.distance() <= 1)
+            .nearest();
+        if (!ent) {
+            return false;
+        }
+        log('random event: ent — cancelling chop');
+        const candidates = stepOffCandidates(me, ent.tile());
+        const step = candidates.find(t => Reachability.canReach(t, { maxSteps: 400 })) ?? candidates[0];
+        if (step) {
+            DirectNavigator.walk(step);
+            await Execution.delayTicks(1);
+        }
+        // Why: the Ent stays for 60 ticks; pending() must not keep the grove paused after we cancel.
+        this.cooldownUntil.set('hijack:ent', performance.now() + ENT_LIFE_TICKS * 600 + 4000);
         return true;
     }
 
@@ -627,7 +698,7 @@ class RandomEventsImpl {
     private async handleLostGear(name: string, log: (msg: string) => void): Promise<boolean> {
         const drop = GroundItems.query()
             .where(g => (g.name?.toLowerCase() ?? '') === name)
-            .within(10)
+            .within(GEAR_RECOVERY_RANGE)
             .nearest();
         if (!drop) {
             return false;
@@ -644,7 +715,7 @@ class RandomEventsImpl {
 
 /**
  * Detects and resolves random events.
- * Why: events are matched by NPC id rather than name, because names collide with ordinary monsters.
+ * Why: events are matched by npc id because names collide with ordinary monsters.
  * @see docs/reference/api-events.md
  */
 export const RandomEvents = new RandomEventsImpl();

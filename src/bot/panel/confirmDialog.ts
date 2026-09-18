@@ -1,7 +1,4 @@
-/**
- * In-app confirm dialog (replaces window.confirm for bot UI).
- * Optional "don't ask again" checkbox above Yes / No.
- */
+/** In-app confirm dialog in place of window.confirm, with an optional "don't ask again" checkbox above Yes / No. */
 import { el } from './dom.js';
 
 type ConfirmDialogOptions = {
@@ -19,10 +16,7 @@ type ConfirmDialogResult = {
     dontAskAgain: boolean;
 };
 
-/**
- * Show a modal confirm. Resolves when the user chooses Yes or No
- * (or Escape / backdrop click → No).
- */
+/** Show a modal confirm; resolves on Yes or No, with Escape and a backdrop click counting as No. */
 export function showConfirmDialog(opts: ConfirmDialogOptions): Promise<ConfirmDialogResult> {
     const confirmLabel = opts.confirmLabel ?? 'Yes';
     const cancelLabel = opts.cancelLabel ?? 'No';

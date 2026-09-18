@@ -7,6 +7,7 @@ import {
 } from '../../api/tasks/Anchor.js';
 import { reader } from '../../adapter/ClientAdapter.js';
 import { TaskBot } from '../../api/bot/Bot.js';
+import { ShiloSupplyTrip } from './ShiloSupplyTrip.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Game } from '../../api/game/Game.js';
@@ -16,7 +17,8 @@ import { Bank, withdrawOp, type BackpackItem } from '../../api/bank/Bank.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
-import { Paint } from '../../paint/Paint.js';
+import { paintLevels, scriptFrame } from '../../paint/jive.js';
+import type { SkillGain } from '../../paint/levelProgress.js';
 import { Skills } from '../../api/skills/Skills.js';
 import {
     foodCount as countFood,
@@ -32,13 +34,14 @@ import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import { cookSurfaceForFishCamp, resolveFishCampCookSurface } from '../../data/cookingRanges.js';
 import { resolveFishingLocation, type FishingLocation } from '../../data/fishingLocations.js';
-import { effectiveGatherLeash, isAutoLocation, NAMED_CAMP_LEASH_FLOOR } from './GatherCamp.js';
+import type { BaitVendor, GatheringLocation } from '../../data/gatheringLocations.js';
 import {
     DEFAULT_CHASE_RADIUS,
+    NONE_LEGACY,
     resolveCampRadius,
-    resolveChaseRadius,
-    type GatheringLocation
+    resolveChaseRadius
 } from '../../data/gatheringLocations.js';
+import { effectiveGatherLeash, isAutoLocation, isCustomLocation, spotAvoided, sweepStopFor, NAMED_CAMP_LEASH_FLOOR } from './GatherCamp.js';
 import { Players } from '../../api/players/Players.js';
 import {
     DEFAULT_TRADE_RANGE,
@@ -135,16 +138,20 @@ import {
     isDisposableGatherJunk,
     purgePackAtBank,
     waitBankReady,
-    withdrawCoins
+    withdrawCoins,
+    type BankDestination
 } from '../../api/bank/Banking.js';
 import {
+    BANK_LOCATIONS,
+    bankUnlocked,
+    nearestBank,
+    type BankLocation
+} from '../../api/bank/BankLocations.js';
+import {
     fmtDuration,
-    fmtXpGained as fmtXpGainedPaint,
     fmtXpHr as fmtXpHrPaint,
     gatherPaintAccent,
-    paintClip,
-    paintSkillShort,
-    paintSkillTitle
+    paintClip
 } from '../../paint/paintLogic.js';
 import { driveDialog } from '../../api/ai/quests/exec/primitives.js';
 import {
@@ -173,6 +180,7 @@ import {
     type ToolAcquireHost
 } from './ToolAcquireExec.js';
 import {
+    baitTripDue,
     gatheringCombatPolicy,
     hostileAttackerNearby,
     incomingPlayerAttacker,
@@ -210,6 +218,8 @@ import {
     MuleRequestOrWait,
     MinerEatFood,
     RepairBrokenGatherTool,
+    BuyGuildFeathers,
+    BuyShiloSupplies,
     RestockFishingGear,
     RestockGatherTool,
     StartupProvision,
@@ -233,6 +243,12 @@ import {
 
 /** Default half-size of the Auto (start) burn box around the script start tile. */
 const LOCAL_BURN_HALF = 8;
+
+/** The family this script's paint signs itself with, the way the Jive scripts carry theirs. */
+const GATHER_BYLINE = 'Gathering scripts';
+/** The gap and the button row that follow every section. */
+const CONTROL_ROWS = 2;
+const PAINT_DIM = '#8a919a';
 
 // Re-export pure policy from api/ so existing `#/bot/scripts/GatheringBot` imports keep working.
 export {
@@ -259,10 +275,21 @@ export {
 
 // Pure policy (also in GatheringBotLogic), re-export for existing test/import paths.
 export {
+    FEATHER_RESTOCK_MINUTES,
+    FEATHER_BUYOUT_GP,
+    FEATHER_STOCK,
+    buyoutCost,
+    BAIT_RETRY_MINUTES,
+    baitTripDue,
+    featherBuyoutDue,
+    featherCoinsToDraw,
+    shopBuyPrice,
     fishingSessionBroken,
     gatheringCombatPolicy,
     hostileAttackerNearby,
     incomingPlayerAttacker,
+    locGatherShouldYield,
+    entAbortAction,
     shouldFleeCombat,
     shouldYieldGathering,
     wildernessMinerAt,
@@ -304,7 +331,7 @@ export const GATHERING_SETTINGS: SettingsSchema = {
     target: { type: 'string', default: 'Rocks', label: 'Target name', help: 'in-game name, e.g. Rocks / Tree / Fishing spot' },
     action: { type: 'string', default: 'Mine', label: 'Action', help: 'right-click op, e.g. Mine / Chop down / Net' },
     dropMatch: { type: 'string', default: 'ore', label: 'Drop items containing', help: 'when full, drop items whose name contains this (the gathered product)' },
-    // Named camps / None floor membership to NAMED_CAMP_LEASH_FLOOR. Auto alone keeps the setting.
+    // Named camps floor membership to NAMED_CAMP_LEASH_FLOOR. Freeform (Use Closest / Use Start / Use Custom Position) keeps the setting.
     // Named-camp fishing hops use a separate player-relative chase disk (see DEFAULT_CHASE_RADIUS).
     leashRadius: {
         type: 'number',
@@ -313,7 +340,31 @@ export const GATHERING_SETTINGS: SettingsSchema = {
         max: 64,
         label: 'Leash radius (tiles)',
         help:
-            'Camp/start membership radius (ReturnToAnchor). Only Location Auto uses this as-is (freeform and unverified chunk snaps). Named camps and None floor to 64. Fishing spots at named camps chase from the player inside the camp, not from this pin disk alone.'
+            'Camp/start membership radius (ReturnToAnchor). Only Location Use Closest / Use Start Position / Use Custom Position use this as-is (freeform and unverified chunk snaps). Named camps floor to 64. Fishing spots at named camps chase from the player inside the camp, not from this pin disk alone.'
+    },
+    customLocation: {
+        type: 'tile',
+        default: new Tile(3200, 3200, 0),
+        label: 'Custom position (x,z)',
+        help: 'when Location is Use Custom Position, gather around this tile instead of your start tile — like AutoFighter Use Custom Position',
+        showIf: { key: 'location', anyOf: ['Use Custom Position'] }
+    },
+    bank: {
+        type: 'boolean',
+        default: true,
+        label: 'Bank haul',
+        group: 'Banking',
+        help: 'true = bank when full (uses the bank behind Bank location below). false = power mode: drop haul when full, only bank for missing tools. Legacy None location also power-mines.'
+    },
+    bankLocation: {
+        type: 'string',
+        default: 'Auto',
+        options: ['Auto', 'Nearest', ...BANK_LOCATIONS.map(b => b.name)],
+        label: 'Bank location',
+        group: 'Banking',
+        showIf: { key: 'bank', anyOf: ['true'] },
+        help:
+            'Shown only when Bank haul is on. Auto = the camp\'s own bank stand for Use Closest / named camps; the nearest bank for Use Start Position / Use Custom Position. Nearest = always the nearest usable bank. A named choice forces that exact bank (quest/skill locked choices fall back to the nearest).'
     },
     muleMode: {
         type: 'string',
@@ -322,7 +373,7 @@ export const GATHERING_SETTINGS: SettingsSchema = {
         label: 'Mule mode',
         group: 'Mule',
         help:
-            'Off = bank/drop. Gatherer = trade full haul at camp meet. Mule = accept→bank (demo for ore/logs). Cooker = accept raw fish→cook→bank cooked (Fisher + cook mode). Supplier = withdraw raw from bank→trade at meet (pairs with Cooker). Needs Partner. Disabled under location None.'
+            'Off = bank/drop. Gatherer = trade full haul at camp meet. Mule = accept→bank (demo for ore/logs). Cooker = accept raw fish→cook→bank cooked (Fisher + cook mode). Supplier = withdraw raw from bank→trade at meet (pairs with Cooker). Needs Partner. Disabled when Bank=false (power mode).'
     },
     mulePartner: {
         type: 'string',
@@ -338,7 +389,7 @@ export const GATHERING_SETTINGS: SettingsSchema = {
         label: 'Bank junk on start',
         group: 'Banking',
         help:
-            'Deposit non-tool stacks at the camp bank before gathering so you can start with a junk pack. Skipped under location None, Cooker (raw pack), and Supplier.'
+            'Deposit non-tool stacks at the camp bank before gathering so you can start with a junk pack. Skipped when Bank=false (power mode), Cooker (raw pack), and Supplier.'
     },
     packJunk: {
         type: 'string',
@@ -347,7 +398,7 @@ export const GATHERING_SETTINGS: SettingsSchema = {
         label: 'Event junk while gathering',
         group: 'Banking',
         help:
-            'When random-event loot (caskets, fruit, gems, …) steals pack slots under chop-then-burn or power mode: Bank at the camp (default), Drop, or Off. Location None has no camp bank — Bank falls back to Drop. (Future: shared API helper for other scripts.)'
+            'When random-event loot (caskets, fruit, gems, …) steals pack slots under chop-then-burn or power mode: Bank at the camp (default), Drop, or Off. Bank=false has no camp bank — Bank falls back to Drop. (Future: shared API helper for other scripts.)'
     },
     withdrawCoins: {
         type: 'number',
@@ -382,6 +433,7 @@ export const GATHERING_SETTINGS: SettingsSchema = {
 
 
 export default class GatheringBot extends TaskBot {
+    readonly shiloSupplyTrip = new ShiloSupplyTrip();
     override loopDelay = 600;
 
     private anchor: Tile | null = null;
@@ -401,8 +453,13 @@ export default class GatheringBot extends TaskBot {
     private pairOp = '';
     private dropMatch = 'ore';
     private leash = 10;
-    /** Raw location setting, Auto skips mob flee (expert / may-die). */
-    private locationSetting = 'None';
+    /** Raw location setting, Use Start/Custom Position skips mob flee (expert / may-die). */
+    private locationSetting = 'Auto';
+
+    /** Bank location dropdown value; default 'Auto'. */
+    private bankLocation = 'Auto';
+    /** Named bank chosen in Bank location (null when Auto/Nearest/unknown). */
+    private forcedBank: BankLocation | null = null;
 
     private rockIds = new Set<number>();
     private productKeywords: string[] = [];
@@ -491,6 +548,9 @@ export default class GatheringBot extends TaskBot {
     private forgetfulBank = false;
     /** Buy/withdraw target for bait & feathers when the method needs them. */
     private baitQty = 1000;
+    private guildFeatherMinutes = 0;
+    private lastGuildFeatherAt: number | null = null;
+    private sweepIndex = 0;
 
     /** Off / gatherer (handoff) / mule (bank-side). See muleMode settings. */
     private muleMode: MuleMode = 'off';
@@ -514,7 +574,7 @@ export default class GatheringBot extends TaskBot {
         this.target = this.settings.str('target', 'Rocks');
         this.action = this.settings.str('action', 'Mine');
         this.dropMatch = this.settings.str('dropMatch', 'ore').toLowerCase();
-        // Final leash applied after location is resolved (named/None floor; Auto keeps setting).
+        // Final leash applied after location is resolved (named camps + Bank=false floor; Use Closest keeps setting).
         this.leash = this.settings.num('leashRadius', 10);
 
         if ('rocks' in this.settings.raw()) {
@@ -551,6 +611,7 @@ export default class GatheringBot extends TaskBot {
             this.action = method.op;
             this.pairOp = method.pair;
             this.baitQty = Math.max(1, Math.floor(this.settings.num('baitQty', 1000)));
+            this.guildFeatherMinutes = Math.max(0, Math.floor(this.settings.num('guildFeatherMinutes', 0)));
             // Apply bait/feather target only to pieces that need them; tools stay min=1.
             this.fishMethod = { ...method, gear: withBaitTarget(method, this.baitQty).gear };
             this.fishing = true;
@@ -591,7 +652,7 @@ export default class GatheringBot extends TaskBot {
         }
 
         const here = Game.tile()!;
-        const locSetting = this.settings.str('location', 'None');
+        const locSetting = this.settings.str('location', 'Auto');
         this.locationSetting = locSetting;
         // Skill-branched location tables, Miner/WC must not resolve fishing piers.
         if (this.fishing) {
@@ -604,12 +665,18 @@ export default class GatheringBot extends TaskBot {
             this.location = null;
         }
 
-        // Why: a resolved camp, named or Auto-snap, takes camp geography (campRadius or the floor of 64), never the Auto UI leash, which clips the camp scan to as little as 18.
-        // Why: freeform Auto and power None take the start-tile leash from the UI, plus the None floor.
+        // Why: a resolved camp, named or Use Start Position-snap, takes camp geography (campRadius or the floor of 64), never the freeform UI leash, which clips the camp scan to as little as 18.
+        // Why: freeform Use Start Position / Use Custom Position and power None take the start/custom-tile leash from the UI, plus the None floor.
         // Why: fishing discovery for named camps is any matching spot inside membership, while freeform uses the player-relative hunt in Gather.findFishSpot.
         if (this.location?.spot) {
             this.anchor = resolveRunAnchor(new Tile(here.x, here.z, here.level), this.location.spot);
             this.leash = resolveCampRadius(this.location.campRadius, NAMED_CAMP_LEASH_FLOOR);
+        } else if (isCustomLocation(locSetting)) {
+            const fallback = Tile.from(here) ?? new Tile(here.x, here.z, here.level);
+            const custom = this.settings.tile('customLocation', fallback);
+            this.anchor = new Tile(custom.x, custom.z, custom.level);
+            this.leash = effectiveGatherLeash(this.leash, locSetting);
+            this.log(`location: Use Custom Position ${this.anchor.x},${this.anchor.z} r${this.leash}; bank nearest to custom`);
         } else {
             this.anchor = new Tile(here.x, here.z, here.level);
             this.leash = effectiveGatherLeash(this.leash, locSetting);
@@ -639,7 +706,18 @@ export default class GatheringBot extends TaskBot {
             await Execution.delayUntilTicks(() => Locs.query().results().length > 0, 9);
         }
 
-        this.powerMode = locSetting.toLowerCase() === 'none';
+        this.powerMode = !this.settings.bool('bank', true);
+        if (locSetting.trim().toLowerCase() === NONE_LEGACY.toLowerCase()) {
+            this.log(`location: legacy '${locSetting}' — power mode (drop); set Bank=false from now on`);
+            this.powerMode = true;
+        }
+
+        this.bankLocation = this.settings.str('bankLocation', 'Auto').trim() || 'Auto';
+        const forced = BANK_LOCATIONS.find(b => b.name.toLowerCase() === this.bankLocation.toLowerCase());
+        this.forcedBank = forced && !this.powerMode && bankUnlocked(forced) ? forced : null;
+        if (forced && !this.forcedBank) {
+            this.log(`bank: ${forced.name} ${this.powerMode ? 'disabled in power mode' : 'locked (quest/skill) — using auto/nearest'}`);
+        }
 
         // Mule / partner trade (NatureCrafter-style). Power mode forces Off.
         {
@@ -653,7 +731,7 @@ export default class GatheringBot extends TaskBot {
                 return;
             }
             if (this.muleMode !== 'off' && this.powerMode) {
-                this.log(`mule: '${this.muleMode}' disabled under location None (drop-only)`);
+                this.log(`mule: '${this.muleMode}' disabled when Bank=false (drop-only)`);
                 this.muleMode = 'off';
             } else if (this.muleMode !== 'off' && this.mulePartners.length === 0) {
                 this.log('mule: no partner names — falling back to Off (bank/drop)');
@@ -698,7 +776,7 @@ export default class GatheringBot extends TaskBot {
                     : 'Off';
             this.tickManip = skill ? profileForSetting(skill, rawLabel) : profileForSetting('mine', 'Off');
             if (this.tickManip.method !== 'off' && this.powerMode) {
-                this.log(`tick manip: '${this.tickManip.label}' disabled under location None`);
+                this.log(`tick manip: '${this.tickManip.label}' disabled under Bank=false (power)`);
                 this.tickManip = profileForSetting(skill ?? 'mine', 'Off');
             } else if (this.tickManip.method !== 'off') {
                 this.log(
@@ -714,7 +792,7 @@ export default class GatheringBot extends TaskBot {
         }
 
         if (this.cookMode !== 'off' && this.powerMode) {
-            this.log('cook: disabled under location None (drop-only)');
+            this.log('cook: disabled under Bank=false (power mode — drop only)');
             this.cookMode = 'off';
         }
         if (this.cookMode !== 'off' && this.fishing) {
@@ -738,7 +816,7 @@ export default class GatheringBot extends TaskBot {
             this.burnMode = parseBurnMode(this.settings.str('burnMode', 'Off'));
             this.burnLogs = logsForTree(this.target);
             if (this.burnMode !== 'off' && this.powerMode) {
-                this.log('burn: disabled under location None (drop-only)');
+                this.log('burn: disabled under Bank=false (power mode — drop only)');
                 this.burnMode = 'off';
             }
             if (this.burnMode !== 'off') {
@@ -870,17 +948,20 @@ export default class GatheringBot extends TaskBot {
             if (this.packJunkPolicy !== 'off' && (this.burnEnabled() || this.powerMode)) {
                 this.log(
                     `pack junk: ${this.packJunkPolicy}` +
-                        (this.powerMode && this.packJunkPolicy === 'bank' ? ' (None → drop if no bank)' : '')
+                        (this.powerMode && this.packJunkPolicy === 'bank' ? ' (Bank=false → drop if no bank)' : '')
                 );
             }
         }
 
         // #170, bank junk so gather can start with a full pack of trash.
-        // Skip power drop-only, Cooker (raw pack to cook), Supplier (empty/feeder).
+        // Skip power drop-only (Bank=false), Cooker (raw pack to cook), Supplier (empty/feeder).
+        this.startupProvisionPending =
+            !this.powerMode && this.muleMode === 'off' && !this.strictDesertCampBanking() && this.bankProvisionNeeded();
         const purgePackOnStart = this.settings.bool('purgePackOnStart', true);
         const deferDesertPurge = purgePackOnStart && this.desertCampRoute !== null;
         if (
             purgePackOnStart
+            && !this.startupProvisionPending
             && !this.powerMode
             && !this.isMuleCooker()
             && !this.isMuleSupplier()
@@ -893,9 +974,12 @@ export default class GatheringBot extends TaskBot {
             for (const g of this.fishMethod?.gear ?? []) {
                 keep.add(g.name);
             }
+            const bp = this.scriptBankTarget();
             await purgePackAtBank({
                 keep: [...keep],
-                stand: this.location?.bankStand ?? null,
+                stand: bp.stand,
+                destination: bp.destination ?? undefined,
+                preferNearby: !this.forcedBank,
                 boothName: this.location?.boothName,
                 boothOp: this.location?.boothOp,
                 obstacles: this.location?.obstacles ?? ['door', 'gate'],
@@ -903,17 +987,9 @@ export default class GatheringBot extends TaskBot {
             });
         }
 
-        // Why: the provision trip must run before the first camp walk, or a coin-gated
-        // transport edge (boat/cart) reports "unreachable without Nx Coins" and strands the run.
-        this.startupProvisionPending =
-            !this.powerMode && this.muleMode === 'off' && !this.strictDesertCampBanking() && this.bankProvisionNeeded();
-        if (this.startupProvisionPending) {
-            this.log('bank: startup provisioning trip queued (coins/runes before first camp walk)');
-        }
-
         // Why: tick-manip retaliate methods run Auto Retaliate ON with no FleeCombat, and may die.
         // Why: Wilderness Miner holds ground against NPCs so an aggressive camp stays mineable, but a detectable player attack still yields to FleeCombat.
-        // Why: Location Auto is expert and may-die, so combat is left alone with no flee babysitting.
+        // Why: Location Use Start Position / Use Custom Position is expert and may-die, so combat is left alone with no flee babysitting.
         // Why: named and None AFK run Auto Retaliate off with FleeCombat walking hits off.
         if (this.tickManip.allowCombat) {
             if (Game.setAutoRetaliate(true)) {
@@ -938,11 +1014,11 @@ export default class GatheringBot extends TaskBot {
                 this.log('combat: could not toggle Auto Retaliate (controls missing?)');
             }
         } else {
-            this.log('combat: Location Auto — mob flee off (may die)');
+            this.log(`combat: Location ${this.locationSetting} — mob flee off (may die)`);
         }
 
         if (this.location) {
-            const auto = locSetting.toLowerCase() === 'auto' ? ' (auto)' : '';
+            const auto = isAutoLocation(locSetting) ? ` (${locSetting})` : '';
             this.log(`location: ${this.location.name}${auto}; bank ${this.location.bankStand}`);
             if (!this.location.verified) {
                 this.log(`location: ${this.location.name} coords unverified — watch first bank run`);
@@ -950,11 +1026,16 @@ export default class GatheringBot extends TaskBot {
         } else if (!this.powerMode) {
             this.log('location: no preset — nearest bank');
         }
+        if (this.forcedBank) {
+            this.log(`bank: Bank location = ${this.forcedBank.name}`);
+        } else if (this.bankLocation.toLowerCase() === 'nearest') {
+            this.log('bank: Bank location = Nearest');
+        }
         if (this.powerMode) {
             this.log(
                 this.minerFood
-                    ? 'location: power mode — eat food for ore slots; nearest-bank restock when empty'
-                    : 'location: power mode — drop haul; bank only to fetch missing tools (nearest bank)'
+                    ? 'location: Bank=false (power) — eat food for ore slots; nearest-bank restock when empty'
+                    : 'location: Bank=false (power) — drop haul; bank only to fetch missing tools (nearest bank)'
             );
         }
         const pairNote = this.pairOp ? ` + pair '${this.pairOp}'` : '';
@@ -1018,8 +1099,6 @@ export default class GatheringBot extends TaskBot {
         const minerFoodLoop = this.minerFoodEnabled();
         this.add(
             new ContinueDialog(),
-            // Why: cold-start coins/runes must arrive before the first camp walk (see StartupProvision).
-            new StartupProvision(this),
             ...(minerFoodLoop ? [new MinerEatFood(this)] : []),
             // Why: a sticky combatCycle with no face target waits rather than thrash-walking.
             // Why: named and None only break multi-combat pulls, such as wildy spiders, by walking off.
@@ -1028,12 +1107,13 @@ export default class GatheringBot extends TaskBot {
             // Entry/relogin can restore Auto Retaliate. Re-assert the Wilderness
             // Miner stance after dialog/eating/player flee, before any gather work.
             new MaintainWildernessMinerStance(this),
+            new StartupProvision(this),
             ...(this.desertCampRoute ? [new DesertMiningCampTravel(this)] : []),
             ...(!muleSide && this.tickManip.shortbowRapid ? [new EnsureShortbowRapid(this)] : []),
             ...(!muleSide && this.tickManip.cookEatInterleave ? [new TannerfishSustain(this)] : []),
             ...(!muleSide && this.tickManip.useKnifeDelay ? [new TrimKnifeDelayLogs(this)] : []),
             ...(!muleSide && (this.mining() || this.woodcutting()) ? [new RepairBrokenGatherTool(this)] : []),
-            ...(!muleSide && this.fishing ? [new RestockFishingGear(this)] : []),
+            ...(!muleSide && this.fishing ? [new BuyGuildFeathers(this), new RestockFishingGear(this)] : []),
             ...(gatherTools
                 ? [new EnsureGatherToolEquipped(this), new RestockGatherTool(this), new UpgradeGatherTool(this)]
                 : []),
@@ -1045,6 +1125,7 @@ export default class GatheringBot extends TaskBot {
             ...(!muleSide && burnOn ? createChopBurnTasks(this) : []),
             // Mule trade owns the loop while the modal is open (movement cancels trade).
             ...(this.muleMode !== 'off' ? [new HandleGatherMuleTrade(this)] : []),
+            ...(!muleSide && this.fishing ? [new BuyShiloSupplies(this)] : []),
             ...(bankMule ? [new MuleBankHaul(this), new MuleGoMeet(this), new MuleRequestOrWait(this)] : []),
             ...(cooker ? [new MuleGoMeet(this), new MuleRequestOrWait(this)] : []),
             ...(supplier
@@ -1167,11 +1248,6 @@ export default class GatheringBot extends TaskBot {
         return BANK_TELEPORTS[this.bankTeleport]?.runes ?? [];
     }
 
-    /** Every distinct rune kept for the configured teleport. */
-    teleportRuneNames(): string[] {
-        return [...new Set(this.teleportRunes().map(r => r.rune))];
-    }
-
     bankTeleportEnabled(): boolean {
         return this.bankTeleport !== 'Off';
     }
@@ -1198,33 +1274,25 @@ export default class GatheringBot extends TaskBot {
     }
 
     startupProvisionNeeded(): boolean {
-        return this.startupProvisionPending && this.bankProvisionNeeded();
+        return this.startupProvisionPending;
     }
 
-    clearStartupProvision(): void {
-        this.startupProvisionPending = false;
-    }
-
-    /** One-shot startup bank trip for the configured coins/teleport runes. */
     async runStartupProvision(log: (m: string) => void = m => this.log(`  ${m}`)): Promise<void> {
-        if (!(await this.openScriptBank(log))) {
-            log('bank: could not open bank for startup coins/runes - will retry');
+        if (!(await Banking.open({ log })) || !(await this.waitBankReady(log))) {
+            log('bank: could not load startup bank - will retry');
             return;
         }
-        await this.waitBankReady(log);
-        // Why: the bank stays open across retries, so a withdraw that failed to stick or a slow
-        // tab reload retries cheaply instead of closing the bank and reopening it every pass.
-        let tried = 0;
-        for (tried = 0; tried < STARTUP_PROVISION_RETRIES && this.bankProvisionNeeded(); tried++) {
+        await Bank.depositAllMatching(this.restockDepositMatcher(), log);
+        for (let tried = 0; tried < STARTUP_PROVISION_RETRIES && this.bankProvisionNeeded(); tried++) {
             await this.withdrawTripProvisionsAtBank(log);
-            if (tried + 1 < STARTUP_PROVISION_RETRIES && this.bankProvisionNeeded()) {
-                log(`bank: provision retry ${tried + 1}/${STARTUP_PROVISION_RETRIES}`);
-            }
         }
         if (Bank.isOpen() && !(await this.closeScriptBank(log, { allowForgetful: false }))) {
             log('bank: startup provision left the bank open - will retry');
+            return;
         }
-        if (!this.bankProvisionNeeded()) {
+        if (this.bankProvisionNeeded()) {
+            await this.giveUpStartupProvision(log);
+        } else {
             this.startupProvisionPending = false;
         }
     }
@@ -1232,6 +1300,10 @@ export default class GatheringBot extends TaskBot {
     /** Final give-up once the open-once retries and the task-level open budget are exhausted. */
     async giveUpStartupProvision(log: (m: string) => void = m => this.log(`  ${m}`)): Promise<void> {
         this.startupProvisionPending = false;
+        if (Bank.isOpen()) {
+            this.stopStrictBankFailure('startup provisioning could not close the bank');
+            return;
+        }
         if (this.coinsProvisionNeeded()) {
             const need = this.withdrawCoinsTarget - Inventory.count(COINS);
             this.stopMissingGear(
@@ -1514,7 +1586,8 @@ export default class GatheringBot extends TaskBot {
             return true;
         }
         log(`bank: forgot something — stepping out then back (1/${FORGETFUL_BANK_ODDS})`);
-        const stand = this.location?.bankStand ?? here;
+        const t = this.scriptBankTarget();
+        const stand = t.stand ?? t.destination?.tile ?? here;
         // A few tiles off the booth, not a full trip home.
         const away = new Tile(here.x + (Math.random() < 0.5 ? -3 : 3), here.z + (Math.random() < 0.5 ? -2 : 2), here.level);
         await Traversal.walkResilient(away, { radius: 1, timeoutMs: 12_000, log });
@@ -1588,10 +1661,29 @@ export default class GatheringBot extends TaskBot {
         });
     }
 
+    /** The stand / destination the Bank location setting points at: camp stand, nearest bank, or the forced named bank. */
+    private scriptBankTarget(): { stand: Tile | null; destination: BankDestination | null } {
+        if (this.forcedBank) {
+            const b = this.forcedBank;
+            return {
+                stand: b.tile,
+                destination: { name: b.name, tile: b.tile, access: b.access, npcAccess: b.npcAccess }
+            };
+        }
+        const nearestOnly = this.bankLocation.toLowerCase() === 'nearest';
+        if (nearestOnly || !this.location?.bankStand) {
+            return { stand: null, destination: null };
+        }
+        return { stand: this.location.bankStand, destination: null };
+    }
+
     async openScriptBank(log: (m: string) => void = m => this.log(`  ${m}`)): Promise<boolean> {
         const loc = this.location;
+        const t = this.scriptBankTarget();
         return Banking.open({
-            stand: loc?.bankStand ?? null,
+            stand: t.stand,
+            destination: t.destination ?? undefined,
+            preferNearby: !this.forcedBank,
             boothName: loc?.boothName,
             boothOp: loc?.boothOp,
             obstacles: this.cookEnabled() ? this.cookObstacles : (loc?.obstacles ?? []),
@@ -1722,7 +1814,7 @@ export default class GatheringBot extends TaskBot {
 
     private paintModeLabel(): string {
         if (this.powerMode) {
-            return 'drop';
+            return 'Bank=false (drop)';
         }
         if (this.tickManip.cookEatInterleave) {
             return 'tanner drop';
@@ -1743,15 +1835,7 @@ export default class GatheringBot extends TaskBot {
         if (this.location) {
             return this.location.name;
         }
-        return this.powerMode ? 'power' : 'nearest bank';
-    }
-
-    private paintSkillShort(skill: string): string {
-        return paintSkillShort(skill);
-    }
-
-    private paintSkillTitle(skill: string): string {
-        return paintSkillTitle(skill);
+        return this.powerMode ? 'Bank=false (power)' : 'nearest bank';
     }
 
     private trackedSkills(): string[] {
@@ -1796,10 +1880,6 @@ export default class GatheringBot extends TaskBot {
         return fmtXpHrPaint(this.xpGained(skill), mins);
     }
 
-    private fmtXpGained(skill: string): string {
-        return fmtXpGainedPaint(this.xpGained(skill));
-    }
-
     private fullInventoryNote(): string {
         if (this.burnMode === 'chop-then-burn') {
             return `burning ${this.burnLogs} when full`;
@@ -1811,7 +1891,7 @@ export default class GatheringBot extends TaskBot {
             return `eating ${this.minerFood.name} for ore slots, then banking to restock`;
         }
         if (this.powerMode) {
-            return `dropping ${this.productLabel()} when full`;
+            return `Bank=false: dropping ${this.productLabel()} when full`;
         }
         if (this.tickManip.cookEatInterleave) {
             return 'tannerfishing: cook/eat on pier; drop haul when full (may die)';
@@ -1839,7 +1919,7 @@ export default class GatheringBot extends TaskBot {
             return `Full: eat ${this.minerFood.name} → bank`;
         }
         if (this.powerMode) {
-            return `Full: drop ${this.productLabel()}`;
+            return `Full: Bank=false drop ${this.productLabel()}`;
         }
         if (this.tickManip.cookEatInterleave) {
             return 'Full: tanner cook/eat · drop';
@@ -1870,9 +1950,38 @@ export default class GatheringBot extends TaskBot {
         return 'fishing';
     }
 
+    // Why: the sections are built per run rather than fixed, because a fisher that is not cooking and a chopper that is not burning have nothing to put on those rails.
+    private paintSections(): string[] {
+        const sections = ['Overview', 'Levels'];
+        if (this.fishing && this.cookMode !== 'off') {
+            sections.push('Cook');
+        }
+        if (this.chopping && this.burnMode !== 'off') {
+            sections.push('Burn');
+        }
+        return sections;
+    }
+
+    /** Every tracked skill as a level bar's worth of progress, off the same baseline the XP rows read. */
+    private skillGains(): SkillGain[] {
+        return this.trackedSkills().map(skill => ({
+            skill,
+            level: Skills.level(skill),
+            xp: Skills.xp(skill),
+            gained: this.xpGained(skill)
+        }));
+    }
+
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const p = Paint.begin(ctx, { dock: 'chatbox', accent: this.paintAccent() });
-        p.title(`${this.paintKind()} — ${this.paintTitleStatus()}`);
+        const { frame: p, page, section } = scriptFrame(ctx, {
+            script: this.paintKind(),
+            status: this.paintTitleStatus(),
+            pages: ['Statistics', 'Options'],
+            sections: this.paintSections(),
+            accent: this.paintAccent(),
+            byline: GATHER_BYLINE,
+            key: 'gb'
+        });
 
         const mins = (Date.now() - this.startedAt) / 60_000;
         const rate = mins > 0.5 ? `${Math.round((this.gathered / mins) * 60)}/hr` : '—/hr';
@@ -1880,118 +1989,59 @@ export default class GatheringBot extends TaskBot {
         const cookOn = this.fishing && this.cookMode !== 'off';
         const burnOn = this.chopping && this.burnMode !== 'off';
 
-        const tabNames = ['Overview', 'Skills'];
-        if (cookOn) {
-            tabNames.push('Cook');
-        }
-        if (burnOn) {
-            tabNames.push('Burn');
-        }
-        tabNames.push('Setup');
-
-        const tab = p.tabs('gb', tabNames);
-
-        if (tab === 'Overview') {
-            p.row(`Runtime: ${fmtDuration(mins)}`, `${product}: ${this.gathered}`, rate);
-            const third =
-                this.mining() && this.gems > 0
-                    ? `Gems: ${this.gems}`
-                    : this.minerFood
-                        ? `Food: ${this.minerFoodCount()}/${this.minerFood.target} · ate ${this.minerFoodEaten}`
-                        : cookOn
-                            ? `Ok ${this.cooked} · Burnt ${this.burnt}`
-                            : burnOn
-                                ? `Burned: ${this.firesLit}`
-                                : `Inv: ${Inventory.used()}/28`;
-            p.row(`Banked: ${this.banked}`, `Trips: ${this.trips}`, third);
+        if (page === 'Options') {
+            const loc = this.anchor
+                ? `${this.paintLocLabel()} (${this.anchor.x},${this.anchor.z})`
+                : this.paintLocLabel();
+            // Why: the camp name runs past a half-width cell, so it takes a row of its own.
+            p.statGrid([[{ text: `Loc: ${this.paintClip(loc, 40)}` }]], 1);
+            p.statGrid([
+                [{ text: `Mode: ${this.paintModeLabel()}` }, { text: `Leash: ${this.leash}` }],
+                [{ text: `Action: ${this.action}` }, { text: `Target: ${this.paintClip(this.target, 18)}` }],
+                [{ text: `Gear: ${this.paintClip(this.gearLabel(), 18)}` }, { text: `Tick: ${this.tickManip.method === 'off' ? 'off' : this.paintClip(this.tickManip.label, 18)}` }]
+            ]);
+            p.text(this.paintFullNote(), PAINT_DIM);
+        } else if (section === 'Overview') {
+            const third = this.mining() && this.gems > 0
+                ? `Gems: ${this.gems}`
+                : this.minerFood
+                    ? `Food: ${this.minerFoodCount()}/${this.minerFood.target}`
+                    : cookOn
+                        ? `Ok ${this.cooked} · Burnt ${this.burnt}`
+                        : burnOn
+                            ? `Burned: ${this.firesLit}`
+                            : `Trips: ${this.trips}`;
+            p.statGrid([
+                [{ text: `Runtime: ${fmtDuration(mins)}` }, { text: `${product}: ${this.gathered}` }],
+                [{ text: `Rate: ${rate}` }, { text: `Banked: ${this.banked}` }],
+                [{ text: `Trips: ${this.trips}` }, { text: third }]
+            ]);
             p.bar('Pack', Inventory.used() / 28);
-
-            const skills = this.trackedSkills();
-            if (skills.length === 1) {
-                const sk = skills[0];
-                p.row(
-                    `${this.paintSkillShort(sk)}: ${Skills.level(sk)}`,
-                    `XP/hr: ${this.fmtXpHr(sk, mins)}`,
-                    this.fmtXpGained(sk)
-                );
-            } else if (skills.length >= 2) {
-                p.row(
-                    ...skills.slice(0, 3).map(sk => `${this.paintSkillShort(sk)} ${this.fmtXpHr(sk, mins)}/hr`)
-                );
-            }
-
-            if (this.tickManip.method !== 'off') {
-                const flags = [
-                    this.tickManip.mayDie ? 'may-die' : null,
-                    this.tickManip.useKnifeDelay ? 'knife' : null,
-                    this.tickManip.timedReclick || this.tickManip.method === 'iron-cadence' ? 'reclick' : null,
-                    this.tickManip.shortbowRapid ? 'rapid' : null,
-                    this.tickManip.farmerWillowCycle ? 'farmer' : null,
-                    this.tickManip.cookEatInterleave ? 'cook/eat' : null
-                ]
-                    .filter(Boolean)
-                    .join(' · ');
-                p.row(
-                    `Tick: ${this.paintClip(this.tickManip.label, 22)}`,
-                    flags || 'on',
-                    this.tickManip.allowCombat ? 'combat OK' : 'flee'
-                );
-            }
-
-            p.text(this.paintClip(`${this.action} · ${this.target} · ${this.paintLocLabel()}`), '#8a919a');
-        } else if (tab === 'Skills') {
-            const skills = this.trackedSkills();
-            if (skills.length === 0) {
-                p.text('no tracked skills', '#8a919a');
-            } else {
-                for (const sk of skills) {
-                    p.row(
-                        `${this.paintSkillTitle(sk)} ${Skills.level(sk)}`,
-                        `XP/hr: ${this.fmtXpHr(sk, mins)}`,
-                        this.fmtXpGained(sk)
-                    );
-                }
-            }
-            p.text(this.paintClip(`session ${fmtDuration(mins)} · ${product} ${this.gathered} (${rate})`), '#8a919a');
-        } else if (tab === 'Cook') {
-            p.row(`Mode: ${this.paintCookMode()}`, `Cooked: ${this.cooked}`, `Burnt: ${this.burnt}`);
-            if (this.cookMode === 'bank-raw-then-cook') {
-                p.row(
-                    `Raw bank: ${this.bankRawInBank}/${this.bankRawTarget}`,
-                    `Phase: ${this.cookPhaseLabel()}`,
-                    `After: ${this.afterCook}`
-                );
-                p.row(`Filter: ${this.cookFishFilter || 'all raw'}`, `Policy: ${this.burntPolicy}`);
-            } else {
-                p.row(`Phase: ${this.cookPhaseLabel()}`, `Policy: ${this.burntPolicy}`, `Filter: ${this.cookFishFilter || 'all raw'}`);
-            }
-            p.row(`Cook XP/hr: ${this.fmtXpHr('cooking', mins)}`, this.fmtXpGained('cooking'));
+            p.text(this.paintClip(`${this.action} · ${this.target} · ${this.paintLocLabel()}`), PAINT_DIM);
+        } else if (section === 'Levels') {
+            paintLevels(p, this.skillGains(), mins, CONTROL_ROWS, 'no tracked skills');
+        } else if (section === 'Cook') {
+            p.statGrid([
+                [{ text: `Mode: ${this.paintCookMode()}` }, { text: `Phase: ${this.cookPhaseLabel()}` }],
+                [{ text: `Cooked: ${this.cooked}` }, { text: `Burnt: ${this.burnt}` }],
+                [{ text: `Filter: ${this.cookFishFilter || 'all raw'}` }, { text: `Policy: ${this.burntPolicy}` }],
+                ...(this.cookMode === 'bank-raw-then-cook'
+                    ? [[{ text: `Raw bank: ${this.bankRawInBank}/${this.bankRawTarget}` }, { text: `After: ${this.afterCook}` }]]
+                    : [])
+            ]);
             p.text(
                 this.rangeStand
                     ? this.paintClip(`Range: ${this.rangeName} @ (${this.rangeStand.x}, ${this.rangeStand.z})`)
                     : 'Range: not resolved',
-                '#8a919a'
+                PAINT_DIM
             );
-        } else if (tab === 'Burn') {
-            p.row(`Mode: ${this.burnMode}`, `Burned: ${this.firesLit}`, `Logs: ${this.burnLogs}`);
-            p.row(`Spot: ${this.burnSpotName || '—'}`, `FM XP/hr: ${this.fmtXpHr('firemaking', mins)}`);
-            p.row(this.fmtXpGained('firemaking'), this.hasTinderbox() ? 'Tinderbox: yes' : 'Tinderbox: missing');
-            p.text(this.paintFullNote(), '#8a919a');
         } else {
-            // Setup, keep ≤4 content lines so the note clears paintControls in the chatbox dock.
-            const loc = this.anchor
-                ? `${this.paintLocLabel()} (${this.anchor.x},${this.anchor.z})`
-                : this.paintLocLabel();
-            p.row(`Loc: ${this.paintClip(loc, 28)}`, `Mode: ${this.paintModeLabel()}`);
-            p.row(`Action: ${this.action}`, `Target: ${this.paintClip(this.target, 22)}`);
-            p.row(`Leash: ${this.leash}`, `Gear: ${this.paintClip(this.gearLabel(), 24)}`);
-            if (this.tickManip.method !== 'off') {
-                p.row(
-                    `Tick: ${this.paintClip(this.tickManip.label, 24)}`,
-                    this.tickManip.mayDie ? 'may die' : 'safe'
-                );
-            }
-            p.text(this.paintFullNote(), '#8a919a');
+            p.statGrid([
+                [{ text: `Mode: ${this.burnMode}` }, { text: `Spot: ${this.burnSpotName || '—'}` }],
+                [{ text: `Burned: ${this.firesLit}` }, { text: `Logs: ${this.burnLogs}` }],
+                [{ text: `FM/hr: ${this.fmtXpHr('firemaking', mins)}` }, { text: this.hasTinderbox() ? 'Tinderbox: yes' : 'Tinderbox: missing' }]
+            ]);
+            p.text(this.paintFullNote(), PAINT_DIM);
         }
 
         p.gap();
@@ -2441,15 +2491,14 @@ export default class GatheringBot extends TaskBot {
         });
     }
 
-    async eatMinerFood(): Promise<boolean> {
-        const config = this.minerFood;
-        if (!config || Bank.isOpen()) {
+    async eatMinerFood(foodName = this.minerFood?.name): Promise<boolean> {
+        if (!foodName || Bank.isOpen()) {
             return false;
         }
         if (this.desertCampRoute && Inventory.isFull() && this.hasDepositable()) {
             this.desertCampBankTrip = true;
         }
-        const food = Inventory.items().find(i => isFoodItem(i.name, config.name));
+        const food = Inventory.items().find(i => isFoodItem(i.name, foodName));
         if (!food) {
             return false;
         }
@@ -2486,6 +2535,66 @@ export default class GatheringBot extends TaskBot {
             this.log(`food: ${food.name} did not change the pack or HP — will retry`);
         }
         return consumed;
+    }
+
+    async healMinerAtBank(log: (message: string) => void): Promise<boolean> {
+        if (!this.mining()) return true;
+        const name = this.settings.str('food', 'Lobster').trim();
+        if (!name) return true;
+        const heal = foodHealAmount(name);
+        const missingHp = () => Skills.level('hitpoints') - Skills.effective('hitpoints');
+        const bites = Math.floor(missingHp() / heal);
+        if (bites <= 0 || Skills.effective('hitpoints') <= 0) return true;
+        const fail = (reason: string): false => {
+            this.setStatus(`${reason} - stopped`);
+            log(reason);
+            ScriptRunner.stop(reason);
+            return false;
+        };
+        const reopen = async (): Promise<boolean> => {
+            if (Bank.isOpen()) return this.waitBankReady(log);
+            await Execution.delayUntilTicks(() => Bank.normalBackpackSnapshot() !== null, 6);
+            const expected = Bank.normalBackpackSnapshot();
+            if (!expected || !(await this.openScriptBank(log))) return false;
+            return await this.waitBankReady(log) && await Bank.backpackReady(expected, log);
+        };
+        for (let eaten = 0; eaten < bites && missingHp() >= heal; eaten++) {
+            if (!Inventory.items().some(item => isFoodItem(item.name, name))) {
+                if (!(await reopen())) return fail('food: bank did not open for healing');
+                const form = foodForms(name).find(form => Bank.count(form) > 0);
+                if (!form) return fail(`food: no ${name} available for bank healing`);
+                if (Inventory.free() === 0 || !(await Bank.withdrawX(form, 1))) {
+                    return fail(`food: could not withdraw ${name} for bank healing`);
+                }
+                if (!(await Execution.delayUntilTicks(() => Inventory.items().some(item => isFoodItem(item.name, name)), 7))) {
+                    return fail(`food: ${name} withdrawal did not reach the backpack`);
+                }
+            }
+            const expectedFood = Inventory.items().filter(item => isFoodItem(item.name, name));
+            if (!(await this.closeScriptBank(log, { allowForgetful: false }))) {
+                return fail('food: bank did not close for healing');
+            }
+            if (!(await Execution.delayUntilTicks(() => Bank.normalBackpackSnapshot() !== null
+                && expectedFood.every(food => Inventory.items().some(item => item.slot === food.slot && item.id === food.id)), 6))) {
+                return fail('food: normal backpack did not update after closing the bank');
+            }
+            if (missingHp() < heal) break;
+            const hp = Skills.effective('hitpoints');
+            const food = Inventory.items().find(item => isFoodItem(item.name, name))!;
+            const held = countFood(Inventory.items(), name);
+            if (!(await this.eatMinerFood(name)) || !(await Execution.delayUntilTicks(() => Skills.effective('hitpoints') > hp
+                && (countFood(Inventory.items(), name) < held
+                    || !Inventory.items().some(item => item.slot === food.slot && item.id === food.id && item.name === food.name)), 6))) {
+                return fail(`food: ${name} did not restore HP at the bank`);
+            }
+            await Execution.delayTicks(3);
+        }
+        if (!(await reopen())) return fail('food: bank did not reopen after healing');
+        await Bank.depositAllMatching(item => this.shouldDeposit(item), log);
+        if (!(await Execution.delayUntilTicks(() => !Inventory.items().some(item => this.shouldDeposit(item.name ?? '')), 6))) {
+            return fail('food: bank did not accept healing leftovers');
+        }
+        return true;
     }
 
     /** Top up the configured Miner food while BankCatch already has the bank open. */
@@ -2597,6 +2706,35 @@ export default class GatheringBot extends TaskBot {
     // Why: the skip uses the soft arrive disk ({@link HOME_ARRIVE_RADIUS}), not the full gather leash.
     // Why: bank stands at named camps often sit inside the leash but far from resources, the Catherby bank is ~36 from the pier.
 
+    baitVendor(): BaitVendor | null {
+        return this.location?.baitVendor ?? null;
+    }
+
+    avoidsSpot(tile: Tile): boolean {
+        return spotAvoided(tile, this.location?.avoidSpots ?? []);
+    }
+
+    nextSweepStop(): Tile | null {
+        const next = sweepStopFor(this.location?.sweep ?? [], this.sweepIndex, Game.tile());
+        this.sweepIndex = next.index;
+        return next.stop === null ? null : Tile.from(next.stop);
+    }
+
+    guildFeatherTripDue(): boolean {
+        const vendor = this.baitVendor();
+        return this.isFishing() && baitTripDue({
+            hasVendor: vendor !== null,
+            outOfBait: vendor !== null && this.fishMethod?.gear.some(gear => gear.name === vendor.item) === true && Inventory.count(vendor.item) === 0,
+            lastAtMs: this.lastGuildFeatherAt,
+            intervalMinutes: this.guildFeatherMinutes,
+            nowMs: Date.now()
+        });
+    }
+
+    noteGuildFeatherTrip(): void {
+        this.lastGuildFeatherAt = Date.now();
+    }
+
     /** Soft return toward the gather anchor after bank, shop or repair. */
     async walkHomeIfNeeded(
         log: (m: string) => void = m => this.log(`  ${m}`),
@@ -2695,8 +2833,9 @@ export default class GatheringBot extends TaskBot {
         if (Bank.isOpen()) {
             return true;
         }
-        const stand = this.location?.bankStand;
+        const t = this.scriptBankTarget();
         const here = Game.tile();
+        const stand = t.stand ?? t.destination?.tile ?? (here ? nearestBank(here)?.tile : null);
         if (!stand || !here) {
             return false;
         }
@@ -2955,8 +3094,7 @@ export default class GatheringBot extends TaskBot {
         if (!Bank.isOpen()) {
             return;
         }
-        await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
-        if (!Bank.isOpen()) {
+        if (!(await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5)) || !Bank.isOpen() || !Bank.loaded()) {
             return;
         }
 
@@ -2991,7 +3129,7 @@ export default class GatheringBot extends TaskBot {
     /** Guarded withdraw to a target count, mirroring the FireGiant withdrawTo helper. */
     private async withdrawTo(name: string, target: number): Promise<number> {
         const start = Inventory.count(name);
-        for (let guard = 0; guard < 40 && Inventory.count(name) < target && !Inventory.isFull() && Bank.isOpen(); guard++) {
+        for (let guard = 0; guard < 40 && Inventory.count(name) < target && (!Inventory.isFull() || Inventory.count(name) > 0) && Bank.isOpen(); guard++) {
             const before = Inventory.count(name);
             const need = target - before;
             if (need > 10 && (await Bank.withdrawX(name, need))) {

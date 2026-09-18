@@ -2,8 +2,8 @@ import { BotHost } from '../../runtime/BotHost.js';
 import { Scheduler } from '../../runtime/Scheduler.js';
 
 /**
- * The only legal way to sleep. Waits are settled from the client's frame
- * callback, so they follow game time and unwind cleanly on Stop.
+ * The only legal way to sleep. The client's frame callback settles every wait,
+ * so they follow game time and unwind on Stop.
  * @see docs/reference/api-bots.md#execution
  * @see docs/decisions/architecture.md#frame-gap-insurance
  */
@@ -18,6 +18,11 @@ export const Execution = {
 
     delayUntil(cond: () => boolean, timeoutMs: number = 6000): Promise<boolean> {
         return Scheduler.enqueue({ kind: 'cond', cond, timeoutAt: timeoutMs > 0 ? performance.now() + timeoutMs : null });
+    },
+
+    /** Report progress invisible to tile and XP checks. Calling without real work disables stall detection. */
+    noteProgress(): void {
+        Scheduler.active?.noteProgress();
     },
 
     /**

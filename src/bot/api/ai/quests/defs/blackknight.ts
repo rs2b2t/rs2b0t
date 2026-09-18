@@ -88,7 +88,6 @@ async function pickCabbage(log: (m: string) => void): Promise<boolean> {
 export const blackknight: QuestModule = {
     record: QUESTS.find(r => r.id === 'blackknight')!,
     bank: new Tile(2946, 3369, 0),
-    food: 4,
     grind: ['black knight', 'aggressive black knight'],
     gather: {
         'cabbage': () => ({ kind: 'custom', name: 'pick cabbage', run: pickCabbage })

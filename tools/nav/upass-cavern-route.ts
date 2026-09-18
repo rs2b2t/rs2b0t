@@ -1,6 +1,4 @@
-/**
- * Which seam joins which pocket of the caverns, and what a route between two of them would be.  Why: the level-1 platforms were solved offline because a runtime search over twenty identical bridges  wandered. Both caverns have the same shape and the same failure. The first cavern's two links are baked  in `CAVERN_LINKS` and end that wander; the second cavern's chain from the well down to the boulder is  five to seven hops through the slave cages, the spade mud, the ledge and the unicorn tunnel, and is not  baked yet. This is the report it would be built from.  bun tools/nav/upass-cavern-route.ts
- */
+/** Derive the second cavern route from the well to the boulder through cages, mud, ledge and unicorn tunnel. Run: bun tools/nav/upass-cavern-route.ts */
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -41,7 +39,7 @@ for (const name of fs.readdirSync(MAPS)) {
     const mx = Number(m[1]);
     const mz = Number(m[2]);
     let section = '';
-    // Why: `GameMap` reads a loc's level as `level - 1` wherever the LEVEL-1 land flag carries LINK_BELOW (0x2), so every ledge and stone bridge in the second cavern is written at level 1 and stands at level 0. Filtering on the file's own level dropped all of them, and the report read as a cavern with no ledges and no bridges in it.
+    // Why: LINK_BELOW (0x2) moves the second cavern ledges and bridges from level 1 to effective level 0.
     const linkBelow = new Set<number>();
     const lines = fs.readFileSync(path.join(MAPS, name), 'utf8').split('\n');
     for (const line of lines) {

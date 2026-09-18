@@ -50,7 +50,6 @@ describe('DiagRing', () => {
 
         expect(ring.at(2500)).toEqual({ a: 2, b: 4 });
         expect(ring.at(2000)).toEqual({ a: 2, b: 4 });
-        // before the first retained sample there is nothing to report
         expect(ring.at(-1)).toBeNull();
     });
 

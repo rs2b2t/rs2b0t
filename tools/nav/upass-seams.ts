@@ -1,6 +1,4 @@
-/**
- * Offline seam check for the Underground Pass: does every waypoint have a crossing to the next one?  Why: the pass is sealed pockets joined by scripted obstacles, and a leg that lands in a pocket with no  seam it can name costs a three-minute live boot to discover. This floods each waypoint's pocket in the  collision pack, then reports which known seam locs touch that pocket's edge, so a missing crossing is a  minute of reading rather than a run.  bun tools/nav/upass-seams.ts [--maps ~/code/rs2b2t-content/maps] [--pack out/collision.lcnav.gz]
- */
+/** Report crossing locs bordering each Underground Pass waypoint pocket. Run: bun tools/nav/upass-seams.ts [--maps ~/code/rs2b2t-content/maps] [--pack out/collision.lcnav.gz] */
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -132,7 +130,7 @@ function readLocs(keep: (id: number) => boolean): Placed[] {
         }
         const mx = Number(m[1]);
         const mz = Number(m[2]);
-        // Why: the pass only occupies these map squares, and reading every square of the world costs a minute.
+        // Only read map squares containing the pass.
         if (mx < 33 || mx > 40 || (mz < 149 || mz > 156) && (mz < 70 || mz > 75)) {
             continue;
         }
@@ -179,7 +177,7 @@ function pocket(seed: NavPoint): Set<number> {
         if (seen.has(key)) {
             continue;
         }
-        // Why: `findPath` accepts a goal up to five tiles short, so "reachable" from it is not "standable on", a flood built on it claimed the collapsed bridges bordered the main cavern landing, and they do not. The last waypoint has to be the tile itself.
+        // Why: findPath can stop five tiles short; require the waypoint itself to confirm it is standable.
         const probe = finder.findPath(seed, t, { policy: { useTeleports: false }, maxExpansions: 20_000 } as never);
         const last = probe.ok ? probe.waypoints[probe.waypoints.length - 1] : undefined;
         if (!probe.ok || !last || last.x !== t.x || last.z !== t.z) {
@@ -198,7 +196,7 @@ const pockets = ROUTE.map(([name, seed]) => {
     return { name, seed, tiles };
 });
 
-// Why: two waypoints in one pocket need no crossing at all, and that is the fact a route plan turns on.
+// Waypoints in the same pocket need no crossing.
 const groups = new Map<string, string[]>();
 for (const p of pockets) {
     const key = [...p.tiles].sort((a, b) => a - b).slice(0, 4).join(',');
@@ -215,15 +213,13 @@ console.log('');
 for (let i = 0; i < pockets.length; i++) {
     const here = pockets[i]!;
     const next = pockets[i + 1];
-    // Why: a seam is usable from a pocket when one of its cardinal neighbours is in it, the seam's own tile
-    // is blocked, which is what makes it a seam.
+    // Why: a usable seam has a cardinal neighbour in the pocket; the seam tile itself is blocked.
     const onEdge = locs.filter(loc => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(
         ([dx, dz]) => here.tiles.has(((loc.x + dx!) << 16) | (loc.z + dz!))
     ));
     const named = [...new Set(onEdge.map(loc => `${SEAMS[loc.id]}(${loc.id})`))].join(', ') || 'NONE';
     console.log(`${here.name.padEnd(24)} ${String(here.tiles.size).padStart(5)} tiles — seams: ${named}`);
-    // Why: the vocabulary is the likelier gap, so the unnamed ops on a pocket's edge are what a stuck leg
-    // needs to see, one of them is the crossing nobody wrote down.
+    // Report unnamed actions on the boundary to help find missing crossings.
     const unnamed = [...new Set(opLocs
         .filter(loc => SEAMS[loc.id] === undefined)
         .filter(loc => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(

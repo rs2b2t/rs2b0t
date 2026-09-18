@@ -2,8 +2,7 @@ import { actions, reader } from '../../../adapter/ClientAdapter.js';
 import { Execution } from '../../execution/Execution.js';
 
 /**
- * Coarse quest-list colour only, not mid-stage.
- * `unknown` means the tab is not loaded yet; it is not `notStarted`.
+ * Coarse quest-list colour. `unknown` means the tab hasn't loaded yet.
  * @see docs/reference/quest-engine.md#quest-state
  */
 export type QuestStatus = 'notStarted' | 'inProgress' | 'complete' | 'unknown';
@@ -13,7 +12,7 @@ const COLOUR_IN_PROGRESS = 0xf8f800;
 const COLOUR_COMPLETE = 0x00f800;
 
 // Why: mid-progress stages are not on the wire as varps for almost every quest (`scope=perm` without `transmit`).
-// Why: the client therefore has list colour (3-way), total QP, inventory, and journal text only after this API opens the log modal.
+// Why: so the client sees list colour (3-way), total QP, inventory, and journal text only once this API opens the log modal.
 
 /**
  * Quest tab + journal.
@@ -25,17 +24,14 @@ export const Quests = {
     all(): { name: string; status: QuestStatus }[] {
         return reader.questStatuses().map(q => ({ name: q.name, status: toStatus(q.colour) }));
     },
-    /**
-     * Coarse status from the quest-list name colour (red / yellow / green).
-     * Yellow is any in-progress state, not a stage index.
-     */
+    /** Coarse status from the quest-list name colour (red / yellow / green); yellow covers every in-progress stage. */
     status(name: string): QuestStatus {
         const hit = reader.questStatuses().find(q => q.name.toLowerCase() === name.toLowerCase());
         return hit ? toStatus(hit.colour) : 'unknown';
     },
     /**
      * Open the quest's journal scroll and return its text lines.
-     * Why: this flashes the main modal, the only durable client view of mid-stage narrative, so prefer item or message oracles when they uniquely prove progress.
+     * Why: it flashes the main modal, the only client view of mid-stage text, so prefer an item or message oracle when one proves progress.
      */
     async journal(name: string): Promise<string[]> {
         const entry = reader.questStatuses().find(q => q.name.toLowerCase() === name.toLowerCase());

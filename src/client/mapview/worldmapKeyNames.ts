@@ -2,7 +2,7 @@
  * Classic 2004scape worldmap Key legend names (index = mapfunction sprite id).
  * Shared by MapView and the map-picker basemap bake / settings.
  *
- * @see https://2004.lostcity.rs/worldmap — Key button, two pages.
+ * @see https://2004.lostcity.rs/worldmap under the two-page Key legend.
  */
 export const WORLDMAP_KEY_NAMES: readonly string[] = [
     'General Store',

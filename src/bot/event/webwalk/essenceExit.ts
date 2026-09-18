@@ -1,5 +1,4 @@
-// Why: the essence mine exit is a session multiloc transport, in `essence_mine.rs2` entry wizards set `%exit_essence_mine_coord`, and every `blankrunestone_exit_portal` placement telejumps to that varp rather than a per-placement fixed dest.
-// Why: the client varp pack id is 64.
+// The entry wizard stores the mine's return coordinate in server-only varp 64.
 
 import type { TransportEdgeData } from './PathFinder.js';
 import { packNavPoint, parseLcCoord } from './geometry/lcCoord.js';
@@ -70,7 +69,7 @@ export function essenceReturnIdFromPacked(packed: number): EssenceReturnId | nul
             return row.id;
         }
     }
-    // map_findsquare can land 0–2 tiles off the constant, match by proximity
+    // map_findsquare can land up to two tiles from the constant.
     const live = {
         level: (packed >> 28) & 0x3,
         x: (packed >> 14) & 0x3fff,
@@ -81,7 +80,7 @@ export function essenceReturnIdFromPacked(packed: number): EssenceReturnId | nul
 
 export function essenceReturnIdFromTile(tile: NavPoint): EssenceReturnId | null {
     let best: EssenceReturnId | null = null;
-    let bestD = 4; // exclusive: must be within 3
+    let bestD = 4; // exclusive upper bound: distance must be under 4
     for (const [id, t] of Object.entries(ESSENCE_EXIT_RETURNS) as [EssenceReturnId, NavPoint][]) {
         if (t.level !== tile.level) {
             continue;
@@ -95,12 +94,9 @@ export function essenceReturnIdFromTile(tile: NavPoint): EssenceReturnId | null 
     return best;
 }
 
-// Why: in `blankrunestone_exit_portal` the destination is `%exit_essence_mine_coord`, set by the entry wizard, then `map_findsquare(..., 0, 2, lineofwalk)`, determined by session return, not by which of the four portal tiles is clicked.
-// Why: that session is modelled via `requires.essenceExitReturn` plus PathFinder path-state (#377).
-// Why: these rows are not blacklisted, since the landing is fixed given the entry wizard (wizard tile ±2).
-// Why: entry into the mine stays blacklisted (#388), random over 22 pads.
+// Why: exit landings are fixed by the entry wizard within radius 2; mine entry remains random across 22 pads.
 
-/** Plan-time edges: each portal placement × each known return. */
+/** Plan-time edges: each portal placement x each known return. */
 export function essenceExitEdges(): TransportEdgeData[] {
     const out: TransportEdgeData[] = [];
     for (const portal of ESSENCE_EXIT_PORTALS) {

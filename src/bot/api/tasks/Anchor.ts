@@ -14,14 +14,10 @@ export interface AnchorHost {
     log?(msg: string): void;
 }
 
-/**
- * Soft home arrive radius after bank/shop/repair.
- * Humans re-enter the camp disk. They do not pin the exact location.spot tile.
- */
+/** Arrival radius after banking, shopping, or repair; avoids pinning the exact camp spot. */
 export const HOME_ARRIVE_RADIUS = 8;
 
-// Why: "already home" is the soft {@link HOME_ARRIVE_RADIUS} disk rather than camp membership.
-// Why: bank stands often sit inside the membership disk but far from resources (Catherby bank→pier ≈ 36), and treating full membership as home left Fisher idling on "no spots" at the bank (#154).
+// Why: Camp membership can include a distant bank, so use a tighter arrival radius around the resource (#154).
 
 /** Whether post-bank or no-target gather should walk toward the camp anchor. */
 export function shouldWalkHomeToGatherAnchor(
@@ -35,9 +31,7 @@ export function shouldWalkHomeToGatherAnchor(
     return distToAnchor > r;
 }
 
-// Why: BankCatch and restock use the tight {@link HOME_ARRIVE_RADIUS} disk via {@link shouldWalkHomeToGatherAnchor}, but gather must not, since freeform pier-hops and brief spot despawns sit outside the 8-tile disk and thrash hunt↔home.
-// Why: home is only pulled when clearly off the resource pad, a bank square or a long wander.
-// Why: the threshold is soft (~20–28) rather than full camp membership, because a bank at ~36 must still soft-home even when membership is 64.
+// Why: Gathering needs room for spot hops, so return only after a clear wander while keeping a bank about 36 tiles away outside the threshold.
 
 /** Backup soft-home from a gather miss (no spot or rock in scene). */
 export function shouldSoftHomeFromGatherMiss(
@@ -48,7 +42,7 @@ export function shouldSoftHomeFromGatherMiss(
         return false;
     }
     const L = Math.max(2, Math.floor(Number.isFinite(leash) ? leash : DEFAULT_CAMP_RADIUS));
-    // ≥20 tiles off anchor, or past half a tight freeform leash, not the soft arrive disk.
+    // 20 tiles off anchor, or the leash capped at 28 when that's larger.
     const threshold = Math.max(HOME_ARRIVE_RADIUS + 12, Math.min(L, 28));
     return distToAnchor > threshold;
 }
@@ -59,10 +53,7 @@ export interface ReturnToAnchorOptions {
     timeoutMs?: number;
     /** When set and non-empty, final approach opens matching doors/gates via walkOpening. */
     obstacles?: string[];
-    /**
-     * If distance to anchor exceeds this, walkResilient first (web path), then local approach.
-     * Omit or set <= 0 to skip the long-range leg (GatheringBot default path).
-     */
+    /** Past this distance walkResilient (web path) runs before the local approach; omit or <= 0 skips the long-range leg. */
     longRangeTiles?: number;
     suppress?: () => boolean;
     status?: string;
@@ -92,7 +83,7 @@ export function resolveRunAnchor(here: WorldTile, locationSpot: Tile | null | un
 }
 
 export function createReturnToAnchorTask(host: AnchorHost, opts: ReturnToAnchorOptions = {}): Task {
-    // Soft defaults: humans re-enter the camp disk, they don't pin the exact spot tile.
+    // Soft defaults: you re-enter the camp disk without pinning the exact spot tile.
     const slack = opts.slack ?? 6;
     const arriveRadius = opts.arriveRadius ?? 8;
     const timeoutMs = opts.timeoutMs ?? 90_000;

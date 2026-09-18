@@ -5,7 +5,7 @@ import type Tile from '../../geometry/Tile.js';
 
 // Why: `server-tick` (the default) waits for N observed `Game.tick()` / PLAYER_INFO advances.
 // Why: `frame` is eligible on the next client frame (~20 ms), for hot TaskBots that already guard against double-dispatch.
-// Why: `time` is deliberate wall-clock pacing, for dashboards and humanisation.
+// Why: `time` is wall-clock pacing, for dashboards and humanisation.
 // Why: numeric `loopDelay` is still accepted for compatibility, via {@link resolveLoopCadence}.
 
 /** How the runner schedules the next `loop()` after one finishes. */
@@ -16,7 +16,7 @@ export type LoopCadence =
 
 /**
  * Map legacy `loopDelay` ms to an explicit cadence.
- * Why: `0` means the next client frame, `600` (the historical "one tick" default and most overrides) means the next server tick, and any other value is wall-clock ms.
+ * Why: `0` is the next client frame, `600` (the old "one tick" default) is the next server tick, anything else is wall-clock ms.
  */
 export function resolveLoopCadence(loopDelayMs: number, override?: LoopCadence | null): LoopCadence {
     if (override) {
@@ -25,8 +25,7 @@ export function resolveLoopCadence(loopDelayMs: number, override?: LoopCadence |
     if (loopDelayMs <= 0) {
         return { kind: 'frame' };
     }
-    // The long-standing default and the value ~30 scripts hardcode: meant "about one
-    // game tick", not a free-running wall-clock timer that drifts vs PLAYER_INFO.
+    // About 30 scripts hardcode 600 to mean "one game tick", so keep it on the server tick; a wall-clock timer drifts from PLAYER_INFO.
     if (loopDelayMs === 600) {
         return { kind: 'server-tick', ticks: 1 };
     }
@@ -38,8 +37,8 @@ export function resolveLoopCadence(loopDelayMs: number, override?: LoopCadence |
  * @see docs/reference/api-bots.md
  */
 export abstract class AbstractBot {
-    // Why: prefer {@link loopCadence}, `600` here is read as one server tick (see {@link resolveLoopCadence}).
-    // Why: pass an explicit `loopCadence: { kind: 'time', ms }` when wall-clock 600 ms is what is wanted.
+    // Prefer `loopCadence`; legacy `600` maps to one server tick through `resolveLoopCadence`.
+    // Why: pass `loopCadence: { kind: 'time', ms }` when you want wall-clock 600 ms.
 
     /** Legacy wall-clock-ish pacing between `loop()` calls. */
     loopDelay = 600;
@@ -65,10 +64,7 @@ export abstract class AbstractBot {
         return [];
     }
 
-    /**
-     * Random-event names this bot will not pause for. Re-read each detect so
-     * a script can ignore Swarm only while it is on a 5x5 arena platform (#597).
-     */
+    /** Random-event names this bot won't pause for. Re-read on each detect so a script can ignore Swarm only while on a 5x5 arena platform (#597). */
     ignoredRandoms(): string[] {
         return [];
     }
@@ -117,8 +113,7 @@ export interface Task {
 }
 
 /**
- * Runs the first task whose `validate()` passes, once per loop. Order is
- * priority.
+ * Runs the first task whose `validate()` passes, once per loop; order is priority.
  * @see docs/reference/api-bots.md#taskbot
  */
 export abstract class TaskBot extends LoopingBot {
@@ -130,8 +125,7 @@ export abstract class TaskBot extends LoopingBot {
     }
 
     async loop(): Promise<number | void> {
-        // Mid-zone rebuilds leave ingame=true while sceneState is 0/1, tasks that
-        // still validate would thrash soft-failed injects (#445).
+        // Mid-zone rebuilds leave ingame=true while sceneState is 0/1, and tasks that still validate thrash soft-failed injects (#445).
         if (!Game.sceneReady()) {
             const now = performance.now();
             if (now - this.lastSceneWaitLogAt > 2000) {

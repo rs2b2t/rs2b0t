@@ -8,7 +8,7 @@ export interface TgItem {
 }
 
 // Why: `orb_of_protection` and `orbs_of_protection` both display "Orb of protection", and only the plural finishes the quest.
-// Why: three objs display "Logs", and `commander_montai` deletes obj 1511 alone.
+// Why: 3 objs display "Logs", and `commander_montai` deletes obj 1511 alone.
 export const TG_ITEM = {
     COINS: { id: 995, name: 'Coins' },
     LOGS: { id: 1511, name: 'Logs' },
@@ -58,7 +58,7 @@ export const LOGS_WANTED = 6;
 
 type Rows = Readonly<Record<number, readonly [number, number]>>;
 
-// Why: the crumbled wall drops into the east hall and the ladder sits in the west room, and the two share x and z ranges, so a box over both would answer for the wrong side.
+// Why: The east hall and west ladder room overlap in x/z bounds, so classify them separately.
 const HALL_ROWS: Rows = {
     3254: [2508, 2511],
     3255: [2507, 2512],

@@ -13,7 +13,7 @@ import { EXPERIMENT_IDS, WH_LOC, WH_OBJ, WH_TILE, inGarden, inShed } from './are
 import { held } from './house.js';
 
 const WALK_MS = 180_000;
-/** Four forms and 144 hitpoints between them, at the tick rate a live server runs. */
+/** 4 forms and 144 hitpoints between them, at the tick rate a live server runs. */
 const FIGHT_MS = 300_000;
 /** Ticks a transition may take before the chain counts as broken. */
 const SPAWN_TICKS = 25;
@@ -51,7 +51,7 @@ export async function fountainKey(log: (m: string) => void): Promise<boolean> {
     return took && held(WH_OBJ.SHED_KEY) > 0;
 }
 
-// Why: `oploc1,witchsheddoor` answers "The shed door is locked" below stage 6, so the way in is the key on the leaf, and that same `oplocu` is what spawns the shapeshifter.
+// Why: Before stage 6, plain Open is locked; using the leaf key also spawns the shapeshifter.
 
 /** Cross the shed door with the key, which is also what spawns the first form. */
 async function enterShed(log: (m: string) => void): Promise<boolean> {
@@ -76,8 +76,7 @@ function ballDrop(): GroundItem | null {
     return GroundItems.query().where(g => g.id === WH_OBJ.BALL).within(10).nearest();
 }
 
-// Why: `opobj3,ball` re-adds a `shapeshifterglob` whenever the quest is short of stage 6 and none is in
-// range, so touching the ball is how a fight that was interrupted is started again.
+// Why: `opobj3,ball` re-adds a `shapeshifterglob` whenever the quest is short of stage 6 and none is in range, so touching the ball restarts an interrupted fight.
 
 /** Touch the ball to bring a shapeshifter back. */
 async function summonExperiment(log: (m: string) => void): Promise<boolean> {
@@ -100,7 +99,7 @@ async function summonExperiment(log: (m: string) => void): Promise<boolean> {
 // Why: `Sustain` is call-driven, so this loop is what keeps food and Protect from Melee going.
 // Why: the hook drops the prayer between forms, where nothing is hitting and every point burnt is one the wolf does not get.
 
-/** Fight the shapeshifter through all four of its forms. */
+/** Fight the shapeshifter through all 4 of its forms. */
 export async function fightExperiment(log: (m: string) => void): Promise<boolean> {
     const mark = GameMessages.mark();
     const won = (): boolean => GameMessages.sawSince(mark, KILLED);

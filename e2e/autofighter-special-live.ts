@@ -1,6 +1,5 @@
-/** Live proof, AutoFighter arms the dragon dagger's special and the toggle turns it off.
- *  Why: the spec bar component is looked up from whatever combat interface the wielded weapon shows, and
- *  %sa_energy only moves when the armed flag survives to the hit, so both varps are read off the wire. */
+/** Live check for arming and disabling the dragon dagger special. */
+// Why: read both varps because `%sa_energy` moves only when the armed flag reaches the hit.
 
 //   bun e2e/autofighter-special-live.ts [http://localhost:8890]
 import type { Page } from 'playwright-core';
@@ -12,7 +11,7 @@ const args = positionalArgs(process.argv.slice(2), 'http://localhost:8890');
 const base = args[0];
 const stamp = Date.now().toString(36).slice(-5);
 
-/** Quiet enough that the only Attack targets in leash are the spawned ones. */
+/** Only spawned targets are within attack range. */
 const ARENA = { x: 3288, z: 3370, level: 0 };
 const WEAPON = 'Dragon dagger';
 /** specwep.rs2 varps: %sa_energy and %sa_attack. */
@@ -25,7 +24,7 @@ const LEASH = 6;
 const SPAWNS = ['chicken', 'chicken', 'chicken', 'chicken'];
 const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints'] as const;
 const ARM_LINE = /special armed with Dragon dagger/i;
-/** Long enough for four chickens to die with a full bar untouched. */
+/** Covers four chicken kills without spending the full bar. */
 const OFF_WINDOW_MS = 90_000;
 const ON_WINDOW_MS = 240_000;
 

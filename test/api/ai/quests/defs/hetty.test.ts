@@ -10,7 +10,8 @@ const snap = (journal: string, items: [string, number][] = [], bankCoins = 0): Q
     bankCoins
 });
 
-const ALL_FOUR: [string, number][] = [['rats tail', 1], ['onion', 1], ['eye of newt', 1], ['burnt meat', 1]];
+const TAIL = "rat's tail";
+const ALL_FOUR: [string, number][] = [[TAIL, 1], ['onion', 1], ['eye of newt', 1], ['burnt meat', 1]];
 
 describe('hetty decide — quest states', () => {
     test('complete -> done, unknown -> wait', () => {
@@ -37,18 +38,35 @@ describe('hetty decide — gather routing (record-item order, self-heal any gap)
         expect(s.kind === 'custom' && s.name).toMatch(/rat/i);
     });
     test('tail held -> onion next', () => {
-        const s = decide(snap('inProgress', [['rats tail', 1]]));
+        const s = decide(snap('inProgress', [[TAIL, 1]]));
         expect(s.kind === 'pickLoc' && s.item).toBe('Onion');
     });
     test('tail+onion held, funded -> buy the eye of newt from Betty', () => {
-        const s = decide(snap('inProgress', [['rats tail', 1], ['onion', 1]], 50));
+        const s = decide(snap('inProgress', [[TAIL, 1], ['onion', 1]], 50));
         expect(s.kind === 'buy' && s.shop.npc).toBe('Betty');
         expect(s.kind === 'buy' && s.item).toBe('Eye of newt');
     });
     test('tail+onion+eye held, funded -> burnt meat buys raw beef from Wydin', () => {
-        const s = decide(snap('inProgress', [['rats tail', 1], ['onion', 1], ['eye of newt', 1]], 50));
+        const s = decide(snap('inProgress', [[TAIL, 1], ['onion', 1], ['eye of newt', 1]], 50));
         expect(s.kind === 'buy' && s.shop.npc).toBe('Wydin');
         expect(s.kind === 'buy' && s.item).toBe('Raw beef');
+    });
+});
+
+describe('hetty decide — rev 289 display name', () => {
+    test("holding Rat's tail is enough to leave the kill and to hand in", () => {
+        expect(decide(snap('inProgress', [[TAIL, 1]])).kind).toBe('pickLoc');
+        const s = decide(snap('inProgress', ALL_FOUR));
+        expect(s.kind === 'custom' && s.name).toMatch(/drink/i);
+    });
+
+    test("the pre-289 'rats tail' spelling is not the packed item", () => {
+        const s = decide(snap('inProgress', [['rats tail', 1]]));
+        expect(s.kind === 'custom' && s.name).toMatch(/rat/i);
+        const fakeFour = decide(snap('inProgress', [
+            ['rats tail', 1], ['onion', 1], ['eye of newt', 1], ['burnt meat', 1]
+        ]));
+        expect(fakeFour.kind === 'custom' && fakeFour.name).toMatch(/rat/i);
     });
 });
 
@@ -81,7 +99,8 @@ describe('hetty module wiring', () => {
     test('binds the existing record, banks at Draynor, grinds the Rat, gathers all four', () => {
         expect(hetty.record.id).toBe('hetty');
         expect(hetty.record.name).toBe("Witch's Potion");
+        expect(hetty.record.items.some(i => i.name === "Rat's tail")).toBe(true);
         expect(hetty.grind).toContain('Rat');
-        expect(Object.keys(hetty.gather ?? {}).sort()).toEqual(['burnt meat', 'eye of newt', 'onion', 'rats tail']);
+        expect(Object.keys(hetty.gather ?? {}).sort()).toEqual(['burnt meat', 'eye of newt', 'onion', TAIL]);
     });
 });

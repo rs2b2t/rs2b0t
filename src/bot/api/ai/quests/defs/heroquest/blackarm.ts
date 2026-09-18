@@ -32,8 +32,7 @@ import { HeroHandoffState, shouldFetchKey } from './partner.js';
 import { kitOwned, kitStep, type Purchasable } from './shops.js';
 import { heldId } from './state.js';
 
-// Why: Garv checks all three worn and refuses silently otherwise, and Louie leads because Valaine
-// restocks every 20 000 ticks to his 1 200.
+// Why: Garv checks all 3 worn and refuses silently otherwise, and Louie leads because Valaine restocks every 20 000 ticks to his 1 200.
 
 /** Hartigen's disguise. */
 const DISGUISE: readonly Purchasable[] = [
@@ -57,7 +56,7 @@ const DISGUISE: readonly Purchasable[] = [
     }
 ];
 
-/** How long one pass keeps re-luring before the engine gets its turn back. */
+/** How long a pass keeps re-luring before the engine gets its turn back. */
 const LURE_MS = 150_000;
 /** How long a single lure holds Grip on the row before he walks home. */
 const LURE_HOLD_MS = 12_000;
@@ -65,12 +64,12 @@ const LURE_HOLD_MS = 12_000;
 const DIALOG_MS = 6_000;
 const GROUND_RANGE = 12;
 
-/** The disguise, in whatever state it is in: bought, withdrawn, then worn. */
+/** The disguise: bought, withdrawn, then worn. */
 export function disguiseStep(snap: QuestSnapshot): QuestStep | null {
     return kitStep(snap, DISGUISE);
 }
 
-/** True once all three pieces are somewhere the bot can reach them. */
+/** True once all 3 pieces are somewhere the bot can reach them. */
 export function disguiseOwned(snap: QuestSnapshot): boolean {
     return kitOwned(snap, DISGUISE);
 }
@@ -82,10 +81,9 @@ export async function talkToTrobert(log: (m: string) => void): Promise<boolean> 
     return talkUntil(TROBERT, TROBERT.prefer, () => Inventory.countById(HERO_ID.ID_PAPERS) > 0, log, 60_000);
 }
 
-// Why: the first talk takes the papers and only then opens the option tree, so one leg covers both
-// the introduction and the key, and Grip re-issues the spare whenever `~obj_gettotal` reads zero.
+// Why: the first talk takes the papers and only then opens the option tree, so one leg covers the introduction and the key, and Grip re-issues the spare whenever `~obj_gettotal` reads 0.
 
-/** Report for duty, then ask for a job, which is what hands over the spare key. */
+/** Report for duty, then ask for the job that provides the spare key. */
 export async function askGripForKey(log: (m: string) => void): Promise<boolean> {
     if (Inventory.countById(HERO_ID.MISC_KEY) > 0) {
         return true;
@@ -100,8 +98,7 @@ function keyringOnFloor(): GroundItem | null {
     return GroundItems.query().where(g => g.id === HERO_ID.GRIP_KEYS).within(GROUND_RANGE).nearest();
 }
 
-// Why: the rival's shot needs Grip on the arrow slit's own row and nothing else, so this is the same
-// test the snipe uses, anywhere else on the way there is not a lure that helps.
+// Why: the rival's shot needs Grip on the arrow slit's own row, so this is the same test the snipe uses; anywhere else on the way is no help.
 function gripOnTheRow(): boolean {
     const grip = Npcs.query().where(n => n.id === HERO_NPC.GRIP).nearest();
     const tile = grip?.tile();
@@ -126,11 +123,9 @@ async function takeKeyring(log: (m: string) => void): Promise<boolean> {
     return took;
 }
 
-// Why: `snipable_wall` (blockrange=no) seals the side room, so the rival shoots Grip through the arrow
-// slit, and reaches him only while the drinks cabinet has walked him onto that row.
+// Why: `snipable_wall` (blockrange=no) seals the side room, so the rival shoots Grip through the arrow slit and reaches him only while the drinks cabinet has walked him onto that row.
 
-// Why: `summon_grip` walks him six tiles and `npc_setmode(null)` turns him round six ticks later, so
-// the loop re-runs the cabinet's Search rather than luring once and waiting.
+// Why: `summon_grip` walks him 6 tiles and `npc_setmode(null)` turns him round 6 ticks later, so the loop re-runs the cabinet's Search every pass.
 
 /** Walk Grip to the arrow slit over and over until the rival drops him, then take the keyring. */
 export async function lureGripAndTakeKeyring(log: (m: string) => void): Promise<boolean> {
@@ -154,14 +149,12 @@ export async function lureGripAndTakeKeyring(log: (m: string) => void): Promise<
             log('lure: yielding to a random event');
             return false;
         }
-        // Why: a Grip already standing on the row needs no second summon, and re-clicking there spends
-        // every tick on a dialogue rather than leaving the rival's shot the tick it needs.
+        // Why: a Grip already on the row needs no second summon, and re-clicking spends every tick on a dialogue the rival's shot needs.
         if (gripOnTheRow()) {
             await Execution.delayUntil(() => keyringOnFloor() !== null || !gripOnTheRow(), LURE_HOLD_MS);
             continue;
         }
-        // Why: the cabinet is two locs, `gripcbshut` becomes `gripcbopen` for 500 ticks, and both run
-        // `summon_grip`, one under Open and one under Search.
+        // Why: the cabinet is 2 locs, `gripcbshut` becomes `gripcbopen` for 500 ticks, and both run `summon_grip`, one under Open and one under Search.
         const cupboard = Locs.query()
             .where(l => l.id === HERO_LOC.CABINET_OPEN || l.id === HERO_LOC.CABINET_SHUT)
             .within(8)
@@ -172,8 +165,7 @@ export async function lureGripAndTakeKeyring(log: (m: string) => void): Promise<
         }
         const op = cupboard.id === HERO_LOC.CABINET_OPEN ? 'Search' : 'Open';
         const clicked = await cupboard.interact(op);
-        // Why: `summon_grip` does nothing at all unless a pirate guard is within four tiles of the
-        // player, with no dialogue, no walk and no refusal, so the guard is worth naming when nothing happens.
+        // Why: `summon_grip` does nothing unless a pirate guard is within 4 tiles, with no dialogue, walk or refusal, so the guard is worth naming when nothing happens.
         const guard = Npcs.query().where(n => n.id === HERO_NPC.PIRATE_GUARD).within(4).nearest();
         const asked = await Execution.delayUntil(
             () => ChatDialog.isOpen() || ChatDialog.canContinue() || gripOnTheRow(),
@@ -198,14 +190,13 @@ export async function lureGripAndTakeKeyring(log: (m: string) => void): Promise<
         HeroHandoffState.lureFailures = 0;
         return true;
     }
-    // Why: a rival that never turned up may have died holding the spare key, and Grip will only issue
-    // another once this bot is empty-handed, so a run of fruitless lures re-opens the fetch.
+    // Why: a rival that never turned up may have died holding the spare key, and Grip only issues another once this bot is empty-handed, so a run of fruitless lures re-opens the fetch.
     HeroHandoffState.lureFailures++;
     log(`no keyring after ${lures} lures — the rival may not be at the arrow slit yet`);
     return false;
 }
 
-/** Grip's keyring opens the treasure room, and the chest inside hands over two candlesticks. */
+/** Grip's keyring opens the treasure room, and the chest inside hands over 2 candlesticks. */
 export async function lootCandlesticks(log: (m: string) => void): Promise<boolean> {
     if (Inventory.countById(HERO_ID.CANDLESTICK) >= 2) {
         return crossTreasureDoorOut(log);
@@ -263,8 +254,7 @@ export function blackarmArmbandStep(snap: QuestSnapshot, stage: number): QuestSt
             };
 
         case HERO_STAGE.BLACKARM_SPOKEN: {
-            // Why: the disguise is bought in Varrock, where Katrine already stands, buying it after
-            // the crossing costs a return ferry and a walk across two kingdoms.
+            // Why: the disguise is bought in Varrock, where Katrine already stands; after the crossing it costs a return ferry and a walk across 2 kingdoms.
             const piece = disguiseOwned(snap) ? null : disguiseStep(snap);
             if (piece) {
                 return piece;
@@ -293,8 +283,7 @@ export function blackarmArmbandStep(snap: QuestSnapshot, stage: number): QuestSt
             if (heldId(snap, HERO_ID.GRIP_KEYS) > 0) {
                 return { kind: 'custom', name: 'open the treasure room and the chest', run: lootCandlesticks };
             }
-            // Why: Grip re-issues the spare whenever the bot holds none, so a bot that fetches after
-            // every trade swaps keys with its rival forever instead of luring him onto the slit.
+            // Why: Grip re-issues the spare whenever the bot holds none, so a bot that fetches after every trade swaps keys with its rival forever and never lures him onto the slit.
             if (heldId(snap, HERO_ID.MISC_KEY) === 0 && shouldFetchKey()) {
                 return { kind: 'custom', name: 'ask Grip for a job, which hands over his spare key', run: askGripForKey };
             }

@@ -69,7 +69,7 @@ describe('searchCatalog', () => {
 });
 
 describe('resolveByName', () => {
-    // Why: every bow shares its display name with its unstrung twin, and only the strung one can be worn.
+// Why: bows share names with unstrung variants; only the strung item is wearable.
     test('a bare bow name is the strung one', () => {
         expect(resolveByName(CAT, 'maple longbow').map(r => r.id)).toEqual([851]);
     });
@@ -102,7 +102,7 @@ describe('resolveByName', () => {
         expect(resolveByName(CAT, 'iron ore').map(r => r.id)).toEqual([440]);
     });
 
-    // Why: the suffix narrows a pair, so where there is no pair there is nothing to narrow and a typo still finds the item.
+    // Why: ignore a narrowing suffix when no colliding pair exists.
     test('a trailing u on an item with no unstrung twin still finds it', () => {
         expect(resolveByName(CAT, 'iron ore u').map(r => r.id)).toEqual([440]);
     });
@@ -226,7 +226,7 @@ describe('resolveByName with aliases', () => {
         expect(ids('strung sapphire amulet')).toEqual([1694]);
     });
 
-    // Why: guam is an alias word inside the "Herb" group, and a plain name has to beat it or the leaf disappears.
+    // Why: an exact display name must beat an alias within the `Herb` group.
     test('a plain name wins over an alias word inside it', () => {
         expect(ids('guam leaf')).toEqual([249]);
         expect(ids('guam herb')).toEqual([199]);
@@ -243,8 +243,7 @@ describe('resolveByName with aliases', () => {
     });
 });
 
-// Why: Trade.offer and every other click-by-name path filters the client's own pack on its own name, so
-// Why: handing it the shop's label finds no slot at all and the bot silently owes goods it cannot put up.
+// Why: trade actions need the pack's display name, not the shop label.
 describe('clientName', () => {
     test('is what the client calls the obj, whatever the shop calls it', () => {
         expect(clientName(ALIAS_CAT, 1751)).toBe('Dragonhide');

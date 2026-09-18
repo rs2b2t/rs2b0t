@@ -27,6 +27,7 @@ import {
     negotiationExpired,
     observeFightSignal,
     shouldCenterDuelLobby,
+    sortChallengeTargets,
     targetMeleeStyle
 } from '#/bot/scripts/DuelArena/DuelArenaLogic.js';
 
@@ -88,12 +89,26 @@ describe('Duel Arena geography', () => {
 });
 
 describe('target-driven melee style', () => {
-    test('chooses the stat with the larger remaining gap', () => {
+    test('trains the lower of Attack and Strength while either is below target', () => {
         expect(targetMeleeStyle(20, 40, 1, 99, 99, 1)).toBe('attack');
         expect(targetMeleeStyle(40, 20, 1, 99, 99, 1)).toBe('strength');
-        expect(targetMeleeStyle(60, 60, 1, 70, 99, 1)).toBe('strength');
+        expect(targetMeleeStyle(60, 60, 1, 70, 99, 1)).toBe('attack');
         expect(targetMeleeStyle(60, 60, 1, 99, 70, 1)).toBe('attack');
-        expect(targetMeleeStyle(60, 60, 1, 70, 70, 50)).toBe('defence');
+    });
+
+    test('levels the pair from 1/1 to 30/30 before finishing 99', () => {
+        expect(targetMeleeStyle(1, 1, 1, 30, 99, 1)).toBe('attack');
+        expect(targetMeleeStyle(29, 29, 1, 30, 99, 1)).toBe('attack');
+        expect(targetMeleeStyle(30, 29, 1, 30, 99, 1)).toBe('strength');
+        expect(targetMeleeStyle(30, 98, 1, 30, 99, 1)).toBe('strength');
+        expect(targetMeleeStyle(30, 99, 1, 30, 99, 1)).toBe('attack');
+    });
+
+    test('withholds Defence until Attack and Strength both reach their targets', () => {
+        expect(targetMeleeStyle(60, 60, 1, 70, 70, 50)).toBe('attack');
+        expect(targetMeleeStyle(69, 69, 1, 70, 70, 50)).toBe('attack');
+        expect(targetMeleeStyle(70, 70, 1, 70, 70, 50)).toBe('defence');
+        expect(targetMeleeStyle(99, 99, 1, 99, 99, 2)).toBe('defence');
     });
 
     test('defaults Defence to complete and preserves Attack, Strength, Defence tie priority', () => {
@@ -293,5 +308,20 @@ describe('challenge cadence and rotation', () => {
         expect(challengeCandidate(bots, 3)).toEqual({ candidate: 'a', nextCursor: 1 });
         expect(challengeCandidate(bots, -1)).toEqual({ candidate: 'c', nextCursor: 3 });
         expect(challengeCandidate([], 0)).toBeNull();
+    });
+
+    test('prefers candidates closest to the bot combat level, then index order', () => {
+        const peers = [
+            { index: 0, combatLevel: 20 },
+            { index: 1, combatLevel: 100 },
+            { index: 2, combatLevel: 55 },
+            { index: 3, combatLevel: 59 }
+        ];
+        expect(sortChallengeTargets(peers, 60)).toEqual([
+            { index: 3, combatLevel: 59 },
+            { index: 2, combatLevel: 55 },
+            { index: 0, combatLevel: 20 },
+            { index: 1, combatLevel: 100 }
+        ]);
     });
 });

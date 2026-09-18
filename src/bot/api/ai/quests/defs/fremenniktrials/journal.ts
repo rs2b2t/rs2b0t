@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -11,7 +12,7 @@ export const TRIALS = ['navigator', 'merchant', 'hunter', 'seer', 'warrior', 're
 
 export type Trial = (typeof TRIALS)[number];
 
-/** The journal names each councillor by role, so these are the words to match, not the NPC names. */
+/** The journal names each councillor by role, so these are the words to match. */
 const ROLE: Record<Trial, string> = {
     navigator: 'navigator',
     merchant: 'merchant',
@@ -22,7 +23,7 @@ const ROLE: Record<Trial, string> = {
     bard: 'bard'
 };
 
-/** Where the flower trade has got to, newest step first, only one of these renders at a time. */
+/** Where the flower trade has got to, newest step first; only one of these renders at a time. */
 const MERCHANT_STEPS: readonly [string, string][] = [
     ['all askeladden wants is some money', 'thora'],
     ['the reveller is looking for a legendary cocktail', 'manni'],
@@ -47,15 +48,6 @@ const VOTES: readonly [string, number][] = [
     ['i have one vote so far', 1],
     ["i don't have any votes yet", 0]
 ];
-
-/** Colour tags become a space, so no needle may span a tag boundary. */
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 export function parseFremennikJournal(lines: readonly string[] | string): QuestProgress | undefined {
     const text = normalize(lines);
@@ -84,7 +76,7 @@ export function parseFremennikJournal(lines: readonly string[] | string): QuestP
     return { stage: votes ? votes[1] : 0, flags };
 }
 
-/** A failed read is not evidence the quest went backwards. */
+/** Last good read, so a failed read can't look like the quest went backwards. */
 let lastGood: QuestProgress | undefined;
 
 export function resetFremennikJournalCache(): void {

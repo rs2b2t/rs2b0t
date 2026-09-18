@@ -10,14 +10,14 @@ import { SM_ID, SM_LOC, SM_LOC_ID, SM_NAME, SM_STAGE, SM_TILE, VARROCK_GENERAL }
 
 export const COIN_TARGET = 30_000;
 export const COIN_LOW = 5_000;
-// Why: six is what the temple loadout can spare, the shopping trip fills fifteen slots and Morytania has no bank to trim against.
+// Why: 6 is what the temple loadout can spare; the shopping trip fills 15 slots and Morytania has no bank to trim against.
 export const FOOD_TARGET = 6;
-// Why: the only bank inside Morytania is Canifis, two hundred tiles north of the temple, so a restock only happens when the last piece of food has gone.
+// Why: the only bank inside Morytania is Canifis, 200 tiles north of the temple, so a restock only happens when the last food has gone.
 export const FOOD_LOW = 1;
-/** A brewed vial of serum 207 carries three doses. */
+/** A brewed vial of serum 207 carries 3 doses. */
 export const DOSES_PER_VIAL = 3;
 const TINDERBOX_GP = 100;
-// Why: a fire burns 100–200 ticks before it drops its ashes and the spawn respawns on its own timer, so two burns is minutes rather than a handful of cycles.
+// Why: a fire burns 100-200 ticks before it drops its ashes and the spawn has its own timer, so 2 burns is minutes.
 const BURN_BUDGET_MS = 420_000;
 
 /** Kept through any deposit this quest issues. */
@@ -95,22 +95,22 @@ export function dosesNeeded(stage: number): number {
     return doses;
 }
 
-// Why: a half-brewed vial is not a vial, counting it as one stops the chain on the unfinished potion and leaves the last conversation unpayable.
+// Why: counting a half-brewed vial as a vial stops the chain on the unfinished potion and leaves the last conversation unpayable.
 
-/** Serums still to brew for the rest of the quest, at three doses a vial. */
+/** Serums still to brew for the rest of the quest, at 3 doses a vial. */
 export function serumsShort(snap: QuestSnapshot, stage: number): number {
     const have = serumDoses(snap) + permSerumDoses(snap);
     return Math.max(0, Math.ceil((dosesNeeded(stage) - have) / DOSES_PER_VIAL));
 }
 
-// Why: nothing inside Morytania sells or spawns logs and no axe is carried, so the two spawns beside the Varrock east bank are the source for both the ashes and the pyre.
+// Why: nothing inside Morytania sells or spawns logs and no axe is carried, so the 2 spawns beside the Varrock east bank feed both the ashes and the pyre.
 
 /** Ashes still to burn: one per serum this quest has yet to brew. */
 export function ashesShort(snap: QuestSnapshot, stage: number): number {
     return Math.max(0, serumsShort(snap, stage) - heldId(snap, SM_ID.ASHES));
 }
 
-// Why: past `logs_on_pyre` the log is already stacked on the pyre, and a predicate that still wants one sends the bot back across the swamp for a log the quest has finished with.
+// Why: After `logs_on_pyre`, the log has been consumed and should not trigger another swamp trip.
 
 /** Logs the pack still needs: one per outstanding burn, plus the one the pyre consumes. */
 export function logsShort(snap: QuestSnapshot, stage: number): number {
@@ -175,7 +175,7 @@ async function burnOne(log: (m: string) => void): Promise<boolean> {
     if (!(await tinder.useOn(logs))) {
         return false;
     }
-    // Why: the fire burns 100–200 ticks before `obj_addall` drops its ashes, so the wait is minutes rather than seconds.
+    // Why: the fire burns 100-200 ticks before `obj_addall` drops its ashes, so the wait is minutes.
     const ashesNear = (): boolean =>
         GroundItems.query().where(g => g.id === SM_ID.ASHES).within(3).nearest() !== null;
     if (!(await Execution.delayUntil(ashesNear, 180_000))) {
@@ -189,7 +189,7 @@ async function burnOne(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => Inventory.countById(SM_ID.ASHES) > before, 8000);
 }
 
-// Why: the spawn is two logs at a time on its own respawn timer, so the loop burns whatever is spare rather than waiting to hold every log the order asks for.
+// Why: the spawn is 2 logs at a time on its own timer, so the loop burns whatever is spare as it goes.
 
 /** Take logs from the Varrock spawns, burning them until the pack holds the ashes and the pyre log. */
 export function makeAshes(want: { ashes: number; logs: number }): (log: (m: string) => void) => Promise<boolean> {

@@ -7,18 +7,15 @@ import { BIO_ITEM, BIO_LOC, BIO_NPC, BIO_TILE, VIALS, inGuidorQuarter, type BioI
 import { heldId, wear } from './gear.js';
 import { locById, talkAt, walkTo } from './travel.js';
 
-// Why: the first option hands the chemist the plague sample and he confiscates it, and the
-// touch-paper-for-the-sample line does the same, only the Guidor errand keeps it.
+// Why: the first option hands the chemist the plague sample and he confiscates it, as does the touch-paper-for-the-sample line; only the Guidor errand keeps it.
 const CHEMIST_PREFER = ["It's ok, I'm Elena's friend.", 'for a guy called Guidor'];
-// Why: the third page comes after the stage has already moved, so a run that abandons it still
-// finishes the quest, and reports the leg failed, which is a lie the next leg has to walk back.
+// Why: the third page comes after the stage has already moved, so a run that abandons it still finishes the quest but reports the leg failed, and the next leg has to walk that back.
 const GUIDOR_PREFER = [
     "I've come to ask your assistance in stopping a plague.",
     "I've been sent by your old pupil Elena.",
     'So what does that mean exactly?'
 ];
-// Why: the boys who lost a vial open a two-way choice whose branches are both harmless, and
-// `talkStrict` abandons the dialogue rather than guessing.
+// Why: the boys who lost a vial open a two-way choice whose branches are both harmless, and an unlisted choice makes `talkStrict` abandon the dialogue.
 const COLLECT_PREFER = ['No! Nothing could be further from the truth!', "I'm getting a bad feeling about this."];
 
 interface Errand {
@@ -28,8 +25,7 @@ interface Errand {
     stand: Tile;
 }
 
-// Why: Hops drinks anything but the broline, Chancy sells anything but the honey, and DeVinci
-// paints with anything but the ethenea, a wrong pairing destroys that vial.
+// Why: Hops drinks anything but the broline, Chancy sells anything but the honey, and DeVinci paints with anything but the ethenea; a wrong pairing destroys that vial.
 export const ERRANDS: readonly Errand[] = [
     { npc: BIO_NPC.HOPS, vial: BIO_ITEM.SULPHURIC_BROLINE, give: 'vial of sulphuric broline', stand: BIO_TILE.HOPS },
     { npc: BIO_NPC.DEVINCI, vial: BIO_ITEM.ETHENEA, give: 'vial of ethenea', stand: BIO_TILE.DEVINCI },
@@ -38,13 +34,13 @@ export const ERRANDS: readonly Errand[] = [
 
 const PRIEST_SUIT: readonly BioItem[] = [BIO_ITEM.PRIEST_GOWN, BIO_ITEM.PRIEST_ROBE];
 
-/** Coins in the pack below which the priest-suit float is redrawn; the halves cost ten. */
+/** Coins in the pack below which the priest-suit float is redrawn; the halves cost 10. */
 export const PRIEST_SUIT_GP = 200;
 
 export const getTouchPaper = (log: (m: string) => void): Promise<boolean> =>
     talkAt(BIO_NPC.CHEMIST, BIO_TILE.CHEMIST, CHEMIST_PREFER, log);
 
-/** Hand every vial still in the pack to the boy who will not ruin it. */
+/** Hand every vial still in the pack to the boy who won't ruin it. */
 export async function handToErrandBoys(log: (m: string) => void): Promise<boolean> {
     let given = 0;
     for (const errand of ERRANDS) {
@@ -63,7 +59,7 @@ export async function handToErrandBoys(log: (m: string) => void): Promise<boolea
     return given > 0;
 }
 
-/** Collect from all three at the Dancing Donkey. A boy who ruined his vial gives nothing back. */
+/** Collect from all 3 at the Dancing Donkey. A boy who ruined his vial gives nothing back. */
 export async function collectFromErrandBoys(log: (m: string) => void): Promise<boolean> {
     let got = 0;
     for (const errand of ERRANDS) {
@@ -127,7 +123,7 @@ export async function visitGuidor(log: (m: string) => void): Promise<boolean> {
     return driveUntil(() => heldId(BIO_ITEM.PLAGUE_SAMPLE.id) === 0, [], log, 15_000);
 }
 
-// Why: between given_distillator and found_secret the guard stops everyone within two tiles of the gate for a two-page search, and the walker's own door crossing has no answer for either page, so this leg drives the gate itself rather than leaving it to a route.
+// Why: The guard opens a two-page search near the gate, which the generic door crossing cannot continue.
 
 /** Open the Varrock east gate and sit out the guard's search, in whichever direction. */
 async function passVarrockGate(log: (m: string) => void): Promise<boolean> {
@@ -146,8 +142,7 @@ async function passVarrockGate(log: (m: string) => void): Promise<boolean> {
     if (!(await gate.interact('Open'))) {
         return false;
     }
-    // Why: the search ends by teleporting onto the gate's own tile in either direction, so the
-    // landing is a step clear of the gateway rather than the far side of the wall.
+    // Why: the search ends by teleporting you onto the gate's own tile in either direction, so the landing is a step clear of the gateway.
     await driveUntil(() => {
         const here = Game.tile();
         return here !== null && here.x !== stand.x;

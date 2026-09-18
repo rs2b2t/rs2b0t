@@ -28,9 +28,9 @@ interface Wanted {
     mould: boolean;
 }
 
-// Why: the professor only ever accepts the item his current stage names, so the hand-overs cannot be batched, but the errands can, and each one is opened as soon as its stage is in reach rather than when it is due.
-// Why: the order below is the map rather than the quest, sand by the reception, the pickaxe and the seam south-east, the planks and the seaweed north, then one furnace visit that smelts both bars on the way home.
-// Why: ordering it by the quest instead walks the length of the map three times, as the planks and the seaweed are two hundred tiles apart and everything else is south of both.
+// Why: the professor only accepts the item his current stage names, so hand-overs can't be batched but the errands can, and each opens as soon as its stage is in reach.
+// Why: the order below follows the map: sand by the reception, the pickaxe and seam south-east, the planks and seaweed north, then one furnace visit for both bars on the way home.
+// Why: ordering by quest walks the map 3 times, since the planks and the seaweed are 200 tiles apart and everything else is south of both.
 
 /** The next errand this loop owes, or null when the pack is ready for the professor. */
 function supply(snap: QuestSnapshot, want: Wanted): QuestStep | null {
@@ -92,7 +92,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
     if (stage === OBS_STAGE.GIVEN_MOULD) {
         if (heldId(snap, OBS_ID.LENS) > 0) { return talkProfessor; }
-        // Why: `professor_glass` deletes the glass at the previous hand-over and `professor_mould` hands it straight back, so a stage-5 pack without one has lost it rather than never had it.
+        // Why: `professor_glass` removes the glass and `professor_mould` immediately returns it, so it should be present at stage 5.
         const rebuild = supply(snap, { planks: false, bar: false, glass: true, mould: true });
         if (rebuild) { return rebuild; }
         return {

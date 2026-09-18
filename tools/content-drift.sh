@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Diff tranche quest content between the dev engine content and rs2b2t-content.
+# Compare quest content between the dev engine and rs2b2t-content.
 # Usage: tools/content-drift.sh [dev-content-root] [prod-content-root]
 set -u
 DEV="${1:-$HOME/code/lostcity-dev/content}"

@@ -1,7 +1,4 @@
-/**
- * PlannedEdge: the frontier hop the walker cannot yet cross (door, ladder, tele).
- * Used by recovery resolvers (Phase 3).
- */
+/** The frontier hop the walker can't yet cross (door, ladder, tele), for recovery resolvers. */
 
 import type { NavPoint } from './types.js';
 

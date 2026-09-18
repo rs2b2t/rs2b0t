@@ -45,7 +45,7 @@ const REGIONS: [string, NavPoint][] = [
     ['cityGuard', { x: 2541, z: 3029, level: 0 }],
     ['enclave', { x: 2588, z: 9410, level: 0 }],
     ['cave6Approach', { x: 2526, z: 3011, level: 0 }],
-    // Each skavid cave is its own sealed room. There is no walking between them.
+    // Each skavid cave is its own sealed room; nothing walks between them.
     ...WT_CAVES.map(cave => [`cave${cave.index}`, cave.landing as NavPoint] as [string, NavPoint])
 ];
 const comps = REGIONS.map(([name, seed]) => ({ name, seed, set: flood(seed) }));
@@ -70,7 +70,7 @@ for (const [key, shop] of Object.entries(SHOPS)) {
     stands.push([`shop.${key}(${shop.npc})`, shop.anchor as NavPoint]);
 }
 
-// Why: the walker snaps to a neighbour, so an unwalkable loc tile is a fine target only where some region can path to it, Toban's cave mouth could not, its one cardinal neighbour sitting in a cut-off component.
+// Why: loc targets need a reachable neighbour; Toban's cave mouth has only one, in a separate component.
 let bad = 0;
 for (const [label, tile] of stands) {
     const walkable = finder.walkable(tile.x, tile.z, tile.level);

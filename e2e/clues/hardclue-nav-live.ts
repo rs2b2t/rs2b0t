@@ -1,8 +1,6 @@
-/** Web-walk to every hard clue destination on an account with the transport quests complete.
- *  This is a navigation sweep, not a solve: each leg teleports to a fixed start, walks to the
- *  clue's coord (or its talk anchor) and reports what the walker did on the way.
- *  A leg fails on a refused crossing, on a repath storm, or on not arriving.
- *  PACK_UNREACHABLE ids are skipped by default; they are pack gaps with a written diagnosis. */
+/** Navigation sweep across every hard-clue destination with transport quests complete. */
+// Each leg starts from a fixed teleport and fails on refusal, repath storms, or no arrival.
+// `PACK_UNREACHABLE` IDs are diagnosed pack gaps and skipped by default.
 
 //   ~/redeploy.sh
 //   bun e2e/clues/hardclue-nav-live.ts                    # first 8 destinations

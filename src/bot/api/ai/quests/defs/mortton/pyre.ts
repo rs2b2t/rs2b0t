@@ -8,7 +8,7 @@ import { SM_ID, SM_LOC, SM_LOC_ID, SM_TILE } from './areas.js';
 import { sacredOilDoses } from './temple.js';
 
 const PYRE_RADIUS = 10;
-/** Normal logs need two doses of sacred oil. */
+/** Normal logs need 2 doses of sacred oil. */
 export const DOSES_PER_PYRE_LOG = 2;
 
 const pyreOfType = (id: number): Loc | null =>

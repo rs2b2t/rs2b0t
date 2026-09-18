@@ -1,6 +1,6 @@
 // docs/NAV.md
-// Why: one raw loc type can exist at many tiles, so identity here is the placement (level + tile) rather than the name alone.
-// Why: the optional closed and open ids describe the raw and effective forms at that placement (trapdoor → open trapdoor).
+// Why: one raw loc type can exist at many tiles, so identity here is the placement (level + tile).
+// Why: the optional closed and open ids describe the raw and effective forms at that placement (trapdoor to open trapdoor).
 // Why: `valid()` answers whether the live scene still has this placement in an interactable form, or already open for Open-actions.
 
 import type { TransportInfo } from './PathFinder.js';
@@ -12,15 +12,12 @@ interface LocPlacement {
     z: number;
 }
 
-/**
- * Stable reference to a nav-relevant loc placement.
- * Built from TransportInfo / door edges; used for match + validity.
- */
+/** Stable reference to a nav loc placement, built from TransportInfo / door edges for match and validity checks. */
 export interface LocRef {
     placement: LocPlacement;
     /** Closed / map-placement id when known. */
     locId?: number;
-    /** Action-bearing open-state id (closed trapdoor → open). */
+    /** Action-bearing open-state id (closed trapdoor to open). */
     openLocId?: number;
     name?: string;
     action?: string;
@@ -34,8 +31,7 @@ export function locPlacementKey(p: LocPlacement): string {
 
 /** Build a LocRef from a compiled transport hop. */
 export function locRefFromTransport(transport: TransportInfo, level = 0): LocRef {
-    // Slashable webs sit one tile apart (e.g. Yanille 2569/2570,3118) with the same
-    // locId. Slack 3 would match the neighbour and double-slash; exact placement only.
+    // Slashable webs sit one tile apart with the same locId (Yanille 2569/2570,3118), so slack 3 would double-slash the neighbour.
     const webSlash =
         /^slash$/i.test(transport.action ?? '') && /web/i.test(transport.locName ?? '');
     return {
@@ -60,10 +56,7 @@ export function locRefFromDoor(
     };
 }
 
-/**
- * Whether a live loc instance matches this placement ref (id + near tile).
- * Pure, no scene query.
- */
+/** Whether a live loc instance matches this placement ref (id + near tile); pure. */
 export function matchesLocRef(
     ref: LocRef,
     loc: { readonly id: number; tile(): { x: number; z: number } }
@@ -111,9 +104,7 @@ export interface LocSceneSnap {
     z: number;
 }
 
-/**
- * Classify scene snaps against a placement ref (pure; pass Locs.query results).
- */
+/** Classify scene snaps against a placement ref; pure, pass Locs.query results. */
 export function probeLocRef(ref: LocRef, scene: readonly LocSceneSnap[]): LocRefProbe {
     const slack = ref.slack ?? 3;
     const near = (s: LocSceneSnap) =>
@@ -135,7 +126,7 @@ export function probeLocRef(ref: LocRef, scene: readonly LocSceneSnap[]): LocRef
         return { status: 'matching' };
     }
 
-    // Slashable web already cut: content loc_change → bigweb_slashed ("Slashed web").
+    // Slashable web already cut: content loc_change to bigweb_slashed ("Slashed web").
     if (ref.action && /^slash$/i.test(ref.action) && ref.name && /web/i.test(ref.name)) {
         const slashed = scene.some(
             s =>

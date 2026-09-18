@@ -2,7 +2,7 @@
 // Regenerate: bun tools/clues/gen-cluedb.ts   (drift gate: --check)
 // docs/reference/clues-mechanics.md#puzzle-boxes
 
-// piece obj id → the board slot it belongs in when the puzzle is solved.
+// piece obj id to the board slot it belongs in when the puzzle is solved.
 export const PUZZLE_PIECE_SLOT: Record<number, number> = {
     2749: 0,
     2750: 1,

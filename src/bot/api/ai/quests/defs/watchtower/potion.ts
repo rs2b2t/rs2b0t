@@ -34,10 +34,7 @@ export async function grindBatBones(log: (m: string) => void): Promise<boolean> 
     return combine(WT_ITEM.PESTLE.id, WT_ITEM.BAT_BONES.id, WT_ITEM.GROUND_BAT_BONES.id, log);
 }
 
-/**
- * Guam, then jangerberries, then ground bat bones. Any other pairing calls
- * potion_explosion: both items are destroyed and it costs 5 damage.
- */
+/** Guam, then jangerberries, then ground bat bones. Any other pairing calls potion_explosion: both items are destroyed and it costs 5 damage. */
 export async function brewOgrePotion(log: (m: string) => void): Promise<boolean> {
     if (heldId(WT_ITEM.OGRE_POTION.id) > 0) {
         return true;

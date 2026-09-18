@@ -8,18 +8,17 @@ import { buildIdentityDefines, resolveBuildIdentity } from './tools/lib/buildIde
 
 const define = {
     'process.env.SECURE_ORIGIN': JSON.stringify(process.env.SECURE_ORIGIN ?? 'false'),
-    // config/target.ts reads this unconditionally too; unset here left it in out/client.js verbatim (ReferenceError in a browser)
+    // Why: config/target.ts reads this unconditionally; leaving it undefined puts a ReferenceError in the browser bundle.
     'process.env.RS2B0T_TARGET': JSON.stringify(process.env.RS2B0T_TARGET ?? 'local'),
     // original key, used 2003-2010
     'process.env.LOGIN_RSAE': JSON.stringify(process.env.LOGIN_RSAE ?? '58778699976184461502525193738213253649000149147835990136706041084440742975821'),
     'process.env.LOGIN_RSAN': JSON.stringify(process.env.LOGIN_RSAN ?? '7162900525229798032761816791230527296329313291232324290237849263501208207972894053929065636522363163621000728841182238772712427862772219676577293600221789'),
-    // shipped default is OFF: Client.ts/LocType.ts/NpcType.ts/ObjType.ts/SeqType.ts gate on === '1'
+    // Config decoders enable strict mode only for '1'.
     'process.env.STRICT_PACKETS': JSON.stringify(process.env.STRICT_PACKETS ?? ''),
     'process.env.STRICT_CONFIG': JSON.stringify(process.env.STRICT_CONFIG ?? ''),
     ...buildIdentityDefines(resolveBuildIdentity())
 };
 
-// ----
 
 type BunOutput = {
     source: string;
@@ -47,7 +46,7 @@ async function bunBuild(entry: string, external: string[] = [], minify = true, d
     };
 }
 
-async function applyTerser(script: BunOutput): Promise<boolean> {
+async function applyTerser(script: BunOutput): Promise<void> {
     const mini = await minify(script.source, {
         sourceMap: {
             content: script.sourcemap
@@ -140,10 +139,8 @@ async function applyTerser(script: BunOutput): Promise<boolean> {
 
     script.source = mini.code ?? '';
     script.sourcemap = mini.map?.toString() ?? '';
-    return true;
 }
 
-// ----
 
 if (!fs.existsSync('out')) {
     fs.mkdirSync('out');
@@ -164,12 +161,10 @@ for (const file of entrypoints) {
     const output = path.basename(file).replace('.ts', '.js').toLowerCase();
 
     const script = await bunBuild(file, [], prod, prod ? ['console'] : []);
-    if (script) {
-        if (prod) {
-            await applyTerser(script);
-        }
-
-        fs.writeFileSync(`out/${output}`, script.source);
-        fs.writeFileSync(`out/${output}.map`, script.sourcemap);
+    if (prod) {
+        await applyTerser(script);
     }
+
+    fs.writeFileSync(`out/${output}`, script.source);
+    fs.writeFileSync(`out/${output}.map`, script.sourcemap);
 }

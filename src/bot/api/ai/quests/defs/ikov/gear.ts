@@ -2,8 +2,7 @@
 import { Equipment } from '../../../../equipment/Equipment.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 
-// Why: nine level-61 ice spiders sit on the chest circuit and the hobgoblin camp is three level-42 attackers at once, both of them `crush_style`, and this quest sources no armour of its own, so the bank is the only wardrobe there is.
-// Why: the feet carry the boots of lightness and the right hand carries the bow the Fire Warrior demands, so neither slot is the armour's to fill.
+// Why: 9 level-61 ice spiders on the chest circuit and 3 level-42 hobgoblins at once, both `crush_style`, and the bank is the only wardrobe; feet hold the boots of lightness and the right hand the bow, so neither slot is filled here.
 
 /** Ranged armour the bank might already hold, best first within each slot. */
 const RANGED_SLOTS: readonly (readonly string[])[] = [
@@ -45,7 +44,7 @@ function bestInBank(snap: QuestSnapshot, slot: readonly string[]): string | null
     return slot.find(name => !refused.has(name.toLowerCase()) && stocked(snap, name) > 0) ?? null;
 }
 
-// Why: a slot already carrying something is left alone rather than upgraded, because a mid-run swap costs a bank trip to save a point of defence.
+// Why: a slot already carrying something is left alone, because a mid-run swap costs a bank trip to save a point of defence.
 
 /** The best ranged piece the bank can dress each bare slot with. */
 function rangedGearWanted(snap: QuestSnapshot): string[] {
@@ -94,7 +93,7 @@ export function rangedArmourStep(snap: QuestSnapshot): QuestStep | null {
     };
 }
 
-// Why: the crossing kit leaves the bot bare-handed and the roots farm is a crowd of level-42s, so the weapon is picked the same way the armour is, the best the bank already holds, with the axe the yew was cut with as the floor.
+// Why: the crossing kit leaves the bot bare-handed for the roots farm, so the weapon is picked like the armour, best in the bank, with the yew axe as the floor.
 
 /** The best melee weapon the bank holds, or null when it holds none the server has not refused. */
 function bestMeleeWeapon(snap: QuestSnapshot): string | null {

@@ -1,0 +1,463 @@
+{
+  "issue": 483,
+  "testedCommit": "a029256ea6f047f095f908475c8c64b52355fb3e",
+  "command": "bun e2e/ranged-ammo-483-live.ts --base http://localhost:8890 --minutes 3",
+  "environment": "Local engine, isolated client, two fresh accounts; setup uses local cheats for skills, inventory, quest access and starting tile. FireGiant equips, attacks and merges refills through normal game actions.",
+  "result": "passed",
+  "cases": [
+    {
+      "phase": "before",
+      "loadout": "crossbow",
+      "action": "equip",
+      "state": {
+        "state": "idle",
+        "tile": {
+          "x": 2568,
+          "z": 9892,
+          "level": 0
+        },
+        "xp": 13034431,
+        "held": 200,
+        "worn": 0,
+        "equipment": [],
+        "target": null,
+        "logs": []
+      }
+    },
+    {
+      "phase": "pass",
+      "loadout": "crossbow",
+      "action": "equip",
+      "rangedXpGained": 16,
+      "state": {
+        "state": "running",
+        "tile": {
+          "x": 2568,
+          "z": 9892,
+          "level": 0
+        },
+        "xp": 13034447,
+        "held": 0,
+        "worn": 197,
+        "equipment": [
+          {
+            "slot": 3,
+            "id": 837,
+            "name": "Crossbow",
+            "count": 1,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          },
+          {
+            "slot": 13,
+            "id": 877,
+            "name": "Bolts",
+            "count": 197,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          }
+        ],
+        "target": "Fire giant",
+        "logs": [
+          {
+            "time": 1789226511976,
+            "level": "info",
+            "msg": "FireGiant started"
+          },
+          {
+            "time": 1789226511983,
+            "level": "info",
+            "msg": "FireGiant \u2014 style range w/ Crossbow, food 'Lobster' (smart-eat, panic<25%), spot (2568, 9892, 0), escape Camelot tele, bank (2616, 3332, 0)"
+          },
+          {
+            "time": 1789226512220,
+            "level": "info",
+            "msg": "wielded Crossbow"
+          },
+          {
+            "time": 1789226512626,
+            "level": "info",
+            "msg": "equipped Bolts"
+          },
+          {
+            "time": 1789226512957,
+            "level": "info",
+            "msg": "engaging fire giant 2599 at 2568,9889 (d=3)"
+          }
+        ]
+      }
+    },
+    {
+      "phase": "before",
+      "loadout": "crossbow",
+      "action": "merge",
+      "state": {
+        "state": "stopped",
+        "tile": {
+          "x": 2568,
+          "z": 9892,
+          "level": 0
+        },
+        "xp": 13034495,
+        "held": 300,
+        "worn": 196,
+        "equipment": [
+          {
+            "slot": 3,
+            "id": 837,
+            "name": "Crossbow",
+            "count": 1,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          },
+          {
+            "slot": 13,
+            "id": 877,
+            "name": "Bolts",
+            "count": 196,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          }
+        ],
+        "target": "Fire giant",
+        "logs": [
+          {
+            "time": 1789226511976,
+            "level": "info",
+            "msg": "FireGiant started"
+          },
+          {
+            "time": 1789226511983,
+            "level": "info",
+            "msg": "FireGiant \u2014 style range w/ Crossbow, food 'Lobster' (smart-eat, panic<25%), spot (2568, 9892, 0), escape Camelot tele, bank (2616, 3332, 0)"
+          },
+          {
+            "time": 1789226512220,
+            "level": "info",
+            "msg": "wielded Crossbow"
+          },
+          {
+            "time": 1789226512626,
+            "level": "info",
+            "msg": "equipped Bolts"
+          },
+          {
+            "time": 1789226512957,
+            "level": "info",
+            "msg": "engaging fire giant 2599 at 2568,9889 (d=3)"
+          },
+          {
+            "time": 1789226515396,
+            "level": "info",
+            "msg": "stopping \u2014 harness stopScript()"
+          },
+          {
+            "time": 1789226515396,
+            "level": "info",
+            "msg": "stopped \u2014 harness stopScript()"
+          }
+        ]
+      }
+    },
+    {
+      "phase": "pass",
+      "loadout": "crossbow",
+      "action": "merge",
+      "rangedXpGained": 40,
+      "state": {
+        "state": "running",
+        "tile": {
+          "x": 2568,
+          "z": 9892,
+          "level": 0
+        },
+        "xp": 13034535,
+        "held": 0,
+        "worn": 495,
+        "equipment": [
+          {
+            "slot": 3,
+            "id": 837,
+            "name": "Crossbow",
+            "count": 1,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          },
+          {
+            "slot": 13,
+            "id": 877,
+            "name": "Bolts",
+            "count": 495,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          }
+        ],
+        "target": "Fire giant",
+        "logs": [
+          {
+            "time": 1789226516503,
+            "level": "info",
+            "msg": "previous run of 'FireGiant' ended (stopped) \u2014 harness stopScript()"
+          },
+          {
+            "time": 1789226516503,
+            "level": "info",
+            "msg": "FireGiant started"
+          },
+          {
+            "time": 1789226516504,
+            "level": "info",
+            "msg": "FireGiant \u2014 style range w/ Crossbow, food 'Lobster' (smart-eat, panic<25%), spot (2568, 9892, 0), escape Camelot tele, bank (2616, 3332, 0)"
+          },
+          {
+            "time": 1789226516824,
+            "level": "info",
+            "msg": "equipped Bolts"
+          },
+          {
+            "time": 1789226516960,
+            "level": "info",
+            "msg": "engaging fire giant 2599 at 2569,9890 (d=2)"
+          }
+        ]
+      }
+    },
+    {
+      "phase": "before",
+      "loadout": "knife",
+      "action": "equip",
+      "state": {
+        "state": "idle",
+        "tile": {
+          "x": 2568,
+          "z": 9892,
+          "level": 0
+        },
+        "xp": 13034431,
+        "held": 200,
+        "worn": 0,
+        "equipment": [],
+        "target": null,
+        "logs": []
+      }
+    },
+    {
+      "phase": "pass",
+      "loadout": "knife",
+      "action": "equip",
+      "rangedXpGained": 60,
+      "state": {
+        "state": "running",
+        "tile": {
+          "x": 2568,
+          "z": 9892,
+          "level": 0
+        },
+        "xp": 13034491,
+        "held": 0,
+        "worn": 199,
+        "equipment": [
+          {
+            "slot": 3,
+            "id": 868,
+            "name": "Rune knife",
+            "count": 199,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          }
+        ],
+        "target": "Fire giant",
+        "logs": [
+          {
+            "time": 1789226562100,
+            "level": "info",
+            "msg": "FireGiant started"
+          },
+          {
+            "time": 1789226562107,
+            "level": "info",
+            "msg": "FireGiant \u2014 style range w/ Rune knife, food 'Lobster' (smart-eat, panic<25%), spot (2568, 9892, 0), escape Camelot tele, bank (2616, 3332, 0)"
+          },
+          {
+            "time": 1789226562419,
+            "level": "info",
+            "msg": "equipped Rune knife"
+          },
+          {
+            "time": 1789226562752,
+            "level": "info",
+            "msg": "engaging fire giant 2599 at 2570,9889 (d=3)"
+          }
+        ]
+      }
+    },
+    {
+      "phase": "before",
+      "loadout": "knife",
+      "action": "merge",
+      "state": {
+        "state": "stopped",
+        "tile": {
+          "x": 2568,
+          "z": 9892,
+          "level": 0
+        },
+        "xp": 13034527,
+        "held": 300,
+        "worn": 196,
+        "equipment": [
+          {
+            "slot": 3,
+            "id": 868,
+            "name": "Rune knife",
+            "count": 196,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          }
+        ],
+        "target": "Fire giant",
+        "logs": [
+          {
+            "time": 1789226562100,
+            "level": "info",
+            "msg": "FireGiant started"
+          },
+          {
+            "time": 1789226562107,
+            "level": "info",
+            "msg": "FireGiant \u2014 style range w/ Rune knife, food 'Lobster' (smart-eat, panic<25%), spot (2568, 9892, 0), escape Camelot tele, bank (2616, 3332, 0)"
+          },
+          {
+            "time": 1789226562419,
+            "level": "info",
+            "msg": "equipped Rune knife"
+          },
+          {
+            "time": 1789226562752,
+            "level": "info",
+            "msg": "engaging fire giant 2599 at 2570,9889 (d=3)"
+          },
+          {
+            "time": 1789226563173,
+            "level": "info",
+            "msg": "stopping \u2014 harness stopScript()"
+          },
+          {
+            "time": 1789226563173,
+            "level": "info",
+            "msg": "stopped \u2014 harness stopScript()"
+          }
+        ]
+      }
+    },
+    {
+      "phase": "pass",
+      "loadout": "knife",
+      "action": "merge",
+      "rangedXpGained": 12,
+      "state": {
+        "state": "running",
+        "tile": {
+          "x": 2568,
+          "z": 9892,
+          "level": 0
+        },
+        "xp": 13034539,
+        "held": 0,
+        "worn": 495,
+        "equipment": [
+          {
+            "slot": 3,
+            "id": 868,
+            "name": "Rune knife",
+            "count": 495,
+            "ops": [
+              "Remove",
+              null,
+              null,
+              null,
+              null
+            ],
+            "comId": 1688
+          }
+        ],
+        "target": "Fire giant",
+        "logs": [
+          {
+            "time": 1789226564283,
+            "level": "info",
+            "msg": "previous run of 'FireGiant' ended (stopped) \u2014 harness stopScript()"
+          },
+          {
+            "time": 1789226564283,
+            "level": "info",
+            "msg": "FireGiant started"
+          },
+          {
+            "time": 1789226564292,
+            "level": "info",
+            "msg": "FireGiant \u2014 style range w/ Rune knife, food 'Lobster' (smart-eat, panic<25%), spot (2568, 9892, 0), escape Camelot tele, bank (2616, 3332, 0)"
+          },
+          {
+            "time": 1789226564609,
+            "level": "info",
+            "msg": "equipped Rune knife"
+          },
+          {
+            "time": 1789226564747,
+            "level": "info",
+            "msg": "engaging fire giant 2599 at 2569,9889 (d=3)"
+          }
+        ]
+      }
+    }
+  ]
+}

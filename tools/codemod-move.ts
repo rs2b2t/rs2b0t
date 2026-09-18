@@ -124,8 +124,7 @@ if (import.meta.main) {
         if (after !== before) {
             changed++;
         }
-        // Write only files whose text changed or whose path changed; leaving the
-        // rest untouched keeps the run fast and `git status` honest.
+        // Only write files whose content or path changed.
         if (after !== before || moves.has(file)) {
             pending.push([move(file), after]);
         }
@@ -144,8 +143,7 @@ if (import.meta.main) {
         writeFileSync(path, text);
     }
 
-    // Specifiers get rewritten across all three trees, so a commit staged by a
-    // narrower path list ships a tree that does not resolve. Name what to stage.
+    // Why: imports change across all three trees, so staging only the moved files leaves broken imports.
     const touched = [...new Set(pending.map(([p]) => relative(ROOT, p).split('/')[0]))].sort();
     console.log(`done — stage all of: git add ${touched.join(' ')}`);
 }

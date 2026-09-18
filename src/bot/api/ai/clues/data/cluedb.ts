@@ -193,7 +193,7 @@ export const CLUE_DB: Record<number, ClueRow> = {
     3618: {"obj":"trail_clue_medium_anagram020","id":3618,"type":"talk","npc":"Fycie"}
 };
 
-// casket obj id → casket obj name; lets the solver recognise a held casket.
+// casket obj id to casket obj name; lets the solver recognise a held casket.
 export const CASKET_IDS: Record<number, string> = {
     2714: "trail_clue_easy_map001_casket",
     2717: "trail_clue_easy_map002_casket",

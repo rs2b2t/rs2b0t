@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -6,18 +7,10 @@ import { MURDER_NAME } from './areas.js';
 
 export const MURDER_STAGE = { NOT_STARTED: 0, STARTED: 1, COMPLETE: 2 } as const;
 
-/** The three evidence lines the page adds one at a time. */
+/** The 3 evidence lines the page adds one at a time. */
 export const POISON_PROVED = 'poison-proved';
 export const THREAD_FOUND = 'thread';
 export const WEAPON_TAKEN = 'weapon';
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 const STAGES: readonly [string, number][] = [
     ['quest complete!', MURDER_STAGE.COMPLETE],
@@ -46,7 +39,7 @@ export function parseMurderJournal(lines: readonly string[] | string): QuestProg
     return { stage: hit[1], flags };
 }
 
-// Why: the page drops every in-progress line once the poison is proved, so a stale read is not evidence the quest went backwards.
+// Why: the page drops every in-progress line once the poison is proved, so a stale read doesn't mean the quest went backwards.
 let lastGood: QuestProgress | undefined;
 
 export async function readMurderProgress(): Promise<QuestProgress | undefined> {

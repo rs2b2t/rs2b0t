@@ -1,6 +1,6 @@
-/** Live full-queue soak: --minutes N --stats N --quests csv --food name --coins N --tick N --content dir --no-deploy, base :8890.
- *  Why: the bank is seeded with the seven `mustHave` items and nothing else the engine can reach, the other 87 declared items are `acquirable`, and leaving them out is what makes a broken gather fn, shop buy or mining leg fail here instead of passing silently.
- *  Why: 70 clears every skill gate in the records (Magic 59 is the highest), so one number covers the queue without hand-tuning per quest. */
+/** Live full-queue soak with only the seven `mustHave` items banked. */
+// Why: omitted `acquirable` items expose broken gather, shop, and mining legs.
+// Skill level 70 clears every record gate; Magic 59 is the highest.
 
 //   HEADED=1 bun e2e/aio-full-queue-live.ts --minutes 480
 //   HEADED=1 bun e2e/aio-full-queue-live.ts --quests cooksassistant,sheepshearer --minutes 30

@@ -40,7 +40,7 @@ function key(name: string): string {
 }
 
 /** Chat intents, cooldowns, and the one open window. */
-// Why: there is no queue and no quote. The engine allows one window per player, so the server is the mutex and the window is the transaction.
+// Why: the server permits one trade window per player, so the window is the transaction lock.
 export class Desk {
     private intents = new Map<string, Intent>();
     private cooldowns = new Map<string, number>();
@@ -48,7 +48,7 @@ export class Desk {
 
     constructor(private readonly intentCap: number) {}
 
-    // ---- intents ----
+    // Intents.
 
     remember(intent: Intent): void {
         const k = key(intent.customer);
@@ -76,10 +76,10 @@ export class Desk {
     }
 
     /** Restart an intent's clock, for the moment the customer is told the goods are ready. */
-    // Why: the wait for a bank trip and a free window is dead time the customer cannot control, and charging it against the intent loses the request they already paid attention to.
+    // Why: do not charge bank and window wait time against the customer's intent.
     renew(customer: string, nowMs: number): void {
         const i = this.intents.get(key(customer));
-        // Why: renewing every time the shop re-announces lets a request that never settles block the customer's every later trade, so the clock restarts once and then runs out.
+        // Restart once; repeated shop announcements must not keep an intent alive forever.
         if (i && i.renewed !== true) {
             i.askedAtMs = nowMs;
             i.renewed = true;
@@ -95,7 +95,7 @@ export class Desk {
     }
 
     /** Cut an order down to what the shop managed to get, so it stops trying to top it up. */
-    // Why: an unfillable order keeps Restock at the bank for ever, which is what stops the shop banking at all.
+    // Why: cap the order to available stock so Restock can leave the bank.
     limitTo(customer: string, qty: number): void {
         const i = this.intents.get(key(customer));
         if (i && qty > 0 && qty < i.maxQty) {
@@ -104,7 +104,7 @@ export class Desk {
     }
 
     /** Count a bank trip that fetched none of it, and say whether to give up on the order. */
-    // Why: the next fetch is always the oldest live intent, so an order that cannot be filled blocks every customer behind it until it is dropped.
+    // Why: drop an unfillable oldest intent so later customers can advance.
     missedStock(customer: string, limit: number): boolean {
         const i = this.intents.get(key(customer));
         if (!i) {
@@ -129,14 +129,14 @@ export class Desk {
     }
 
     /** Drop everything the desk is holding: what was asked for, who is waiting out a cooldown, and the window. */
-    // Why: a desk that has got itself into a state nobody can trade through needs one way back to empty.
+    // Reset every desk state to recover from an unusable trade flow.
     clear(): void {
         this.intents.clear();
         this.cooldowns.clear();
         this.window = null;
     }
 
-    // ---- the window ----
+    // Trade window.
 
     open(customer: string, nowMs: number): Window {
         this.window = { customer, openedAtMs: nowMs, stillBeats: 0, reOffers: 0, lastSig: '', sawOpen: false, accepted: null, waited: 0 };
@@ -156,7 +156,7 @@ export class Desk {
         return this.window !== null && nowMs - this.window.openedAtMs > windowMs;
     }
 
-    // ---- cooldowns ----
+    // Cooldowns.
 
     cool(customer: string, untilMs: number): void {
         this.cooldowns.set(key(customer), untilMs);
@@ -183,21 +183,22 @@ export type Beat =
     | { do: 'give-up'; reason: string };
 
 /** One beat of an open window, as a pure decision. */
-// Why: the bot only acts on a side that has stopped moving. Any change resets both accepts, so a bot that answers every twitch never lets the trade settle.
+// Why: wait for a stable customer side because any change resets both accepts.
 export function decideBeat(input: {
     theirSig: string;
     window: Window;
     oweMatched: boolean;
     wantMatched: boolean;
     oweAnything: boolean;
+    /** The owed side comes from what they asked for rather than from their side of the window. */
+    oweFixed: boolean;
     stillBeatsNeeded: number;
     reOfferCap: number;
     /** Beats of waiting on them before the window is given back. */
     waitCap: number;
 }): Beat {
     const beat = beatFor(input);
-    // Why: the shop serves one window at a time, so a customer sitting on an open one costs every customer
-    // Why: behind them. Waiting is capped, and the deadline stays as the backstop for a trade still moving.
+    // Why: cap idle customer time because one open window blocks every customer behind it.
     if (beat.do === 'wait' && input.window.waited >= input.waitCap) {
         return { do: 'give-up', reason: 'you left your side up too long' };
     }
@@ -210,9 +211,16 @@ function beatFor(input: {
     oweMatched: boolean;
     wantMatched: boolean;
     oweAnything: boolean;
+    oweFixed: boolean;
     stillBeatsNeeded: number;
     reOfferCap: number;
 }): Beat {
+    // Why: a sale owes what the customer asked for, which nothing on their side changes, so the goods go up the beat the window opens rather than after their coins have settled; the money is still what the accept is judged on.
+    if (input.oweFixed && input.oweAnything && !input.oweMatched) {
+        return input.window.reOffers >= input.reOfferCap
+            ? { do: 'give-up', reason: 'too many changes in one trade' }
+            : { do: 'offer', reason: 'the goods asked for do not depend on their side' };
+    }
     if (input.theirSig !== input.window.lastSig) {
         return { do: 'wait', reason: 'their side moved' };
     }
@@ -249,8 +257,41 @@ export function tradeIsStalled(tradeActive: boolean, hasWindow: boolean, windowE
     return tradeActive && (!hasWindow || windowExpired);
 }
 
-export function shouldSettle(freeSlots: number, packCoins: number, coinFloor: number): boolean {
-    return freeSlots <= FREE_SLOT_FLOOR || packCoins > coinFloor;
+export function shouldSettle(freeSlots: number, packCoins: number, coinFloor: number, saleReady = false): boolean {
+    return (!saleReady && freeSlots <= FREE_SLOT_FLOOR) || packCoins > coinFloor;
+}
+
+// Why: a reset is what an operator reaches for when the shop is wedged, so it owes a trip whatever the pack looks like and Settle's deposit takes everything.
+/** Whether a bank trip is owed: no room, takings over the float, or a reset asked for one. */
+export function settleDue(freeSlots: number, packCoins: number, coinFloor: number, forced: boolean, saleReady = false): boolean {
+    return forced || shouldSettle(freeSlots, packCoins, coinFloor, saleReady);
+}
+
+// Why: OpenWindow holds every window while a trip is due, so an order that held Settle back waited on a window that could not open: the customer who bought the cap and asked again had the goods fetched and no window, with the takings still in the pack. A live order now delays only a float top-up.
+/** Whether Settle takes the tick: a due trip always, a float top-up only while no order is live. */
+export function settleRuns(input: { due: boolean; floatShort: boolean; orderLive: boolean }): boolean {
+    return input.due || (input.floatShort && !input.orderLive);
+}
+
+// Why: a sale in progress has its goods fetched for one customer, and a window opened with anyone else meanwhile takes their stock into the same pack; the sale's customer is the only request answered until it settles or lapses.
+/** The requests a window may open with: the sale's customer alone while a sale is live, every request otherwise. */
+export function windowCandidates(requests: readonly string[], saleCustomer: string | null): string[] {
+    if (saleCustomer === null) {
+        return [...requests];
+    }
+    return requests.filter(name => key(name) === key(saleCustomer));
+}
+
+// Why: goods bought sit in the pack until a trip, and the operator wants them in the bank before the next customer, whatever room is left; a buy is the side where the shop's coins went out.
+/** Whether a completed trade owes a bank trip: the shop bought something. */
+export function buyOwesSettle(give: ReadonlyMap<number, number>, coinId: number): boolean {
+    return give.has(coinId);
+}
+
+// Why: OpenWindow runs above Settle, so a queue of customers dumping goods kept it opening windows on a pack with no room to take any and the shop never reached the bank; it yields the tick once a trip is due, though a bank it cannot reach must not shut the shop, so a backed-off bank leaves it serving.
+/** Whether the next window should wait for a bank trip. */
+export function bankBeforeServing(freeSlots: number, packCoins: number, coinFloor: number, bankReady: boolean, forced = false, saleReady = false): boolean {
+    return bankReady && settleDue(freeSlots, packCoins, coinFloor, forced, saleReady);
 }
 
 /** Coins worth going to the bank for: the gap up to the float, capped at what the bank holds. */

@@ -30,9 +30,9 @@ describe('questCategories', () => {
 
 describe('reportLine', () => {
     test('it names each finding and its quest on one line', () => {
-        const line = reportLine([finding('Stake', true), finding('Rats tail', false)]);
+        const line = reportLine([finding('Stake', true), finding("Rat's tail", false)]);
         expect(line).toContain('Stake');
-        expect(line).toContain('Rats tail');
+        expect(line).toContain("Rat's tail");
         expect(line.split('\n')).toHaveLength(1);
     });
 

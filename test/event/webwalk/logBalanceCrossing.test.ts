@@ -24,7 +24,8 @@ describe('meetsSkill', () => {
 });
 
 describe('log balance transport edges', () => {
-    const edges = transports.filter(t => t.locName === 'Log balance');
+    // Why: the Brimhaven Dungeon log at z 9506 is a second pair with the same name, so the coal trucks pair is picked out by its river.
+    const edges = transports.filter(t => t.locName === 'Log balance' && t.from.z === WEST.z);
 
     test('exactly one edge each way', () => {
         expect(edges).toHaveLength(2);

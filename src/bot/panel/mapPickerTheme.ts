@@ -1,7 +1,4 @@
-/**
- * Map picker display theme, SettingsStore namespace `MapPicker` (in-picker Settings modal).
- * Not part of Global settings.
- */
+/** Map picker display theme, SettingsStore namespace `MapPicker`, separate from Global settings. */
 import { parseHtmlColor, rgba } from '../event/webwalk/pathPaintTheme.js';
 import { WORLDMAP_KEY_NAMES } from '../../client/mapview/worldmapKeyNames.js';
 import {
@@ -26,10 +23,7 @@ const MAP_PICKER_FREE_KEY = 'showFreeTint';
 type MapPickerDotTheme = {
     /** Classic worldmap terrain mode (vs collision-dot mode). */
     showBasemap: boolean;
-    /**
-     * Walkable collision dots, only drawn when basemap is **off** (classic mode).
-     * Always true in classic mode; always false in basemap mode.
-     */
+    /** Walkable collision dots, drawn only in classic mode (basemap off). */
     showWalkable: boolean;
     /** Selected Key legend type names (empty = none). */
     keyIconTypes: string[];
@@ -62,9 +56,7 @@ function getMapPickerKeyIconTypes(): string[] {
     return list.filter(n => allowed.has(n.toLowerCase()));
 }
 
-/**
- * Map Key legend name → mapfunction type id (index in WORLDMAP_KEY_NAMES).
- */
+/** Map Key legend name to mapfunction type id (index in WORLDMAP_KEY_NAMES). */
 export function keyNameToTypeId(name: string): number | null {
     const wanted = name.trim().toLowerCase();
     const i = WORLDMAP_KEY_NAMES.findIndex(n => n.toLowerCase() === wanted);

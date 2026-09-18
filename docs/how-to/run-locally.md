@@ -13,7 +13,6 @@ Production target is [rs2b2t](https://rs2b2t.com) only.
 |---|---|
 | [Bun](https://bun.sh) | builds and tests this repo |
 | Node 24+ | the engine runs on it, as do the Electron and Playwright harnesses |
-| `git submodule update --init` | `src/client/3rdparty/` holds the MIDI and bzip2 helpers |
 
 ## Get an engine
 
@@ -120,8 +119,7 @@ bun run smoke http://localhost:8888 user pass     # another engine, named accoun
 `bunfig.toml` preloads `test/setup-dom.ts`, which registers happy-dom globally. That is
 what lets DOM-touching modules be imported in unit tests.
 
-`bun run lint` reports pre-existing problems in the vendored client. The bar is not
-adding new ones, not reaching zero.
+`bun run lint` must pass before opening a pull request.
 
 `format` deliberately takes explicit paths. The repo is not globally prettier-formatted,
 so `prettier --write .` produces an enormous unrelated diff.

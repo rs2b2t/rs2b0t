@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -22,14 +23,6 @@ export const TROLL_FLAG = {
     FREED_EADGAR: 'freed-eadgar'
 } as const;
 
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
-
 function readFlags(text: string): Set<string> {
     const flags = new Set<string>();
     if (text.includes('climbing boots from tenzing')) {
@@ -41,8 +34,7 @@ function readFlags(text: string): Set<string> {
     if (text.includes('i have the prison key')) {
         flags.add(TROLL_FLAG.HAS_PRISON_KEY);
     }
-    // Stage 30 prints "I've rescued Mad Eadgar."; stage 40 folds him into
-    // "I've rescued Godric and Mad Eadgar.", match both, not the first.
+    // Stage 30 prints "I've rescued Mad Eadgar."; stage 40 folds him into "I've rescued Godric and Mad Eadgar.", so match both.
     if (text.includes('rescued mad eadgar') || text.includes('and mad eadgar')) {
         flags.add(TROLL_FLAG.FREED_EADGAR);
     }

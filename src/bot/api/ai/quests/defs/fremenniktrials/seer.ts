@@ -14,7 +14,7 @@ import { promptLoc, settleScene, useOnLoc } from '../../exec/prompts.js';
 import { FT_ID, FT_LOC, FT_TILE, PEER, inPuzzleRoom, inSeerEast, inSeerWest } from './areas.js';
 import { combine, walkTo } from './supplies.js';
 
-/** `combolockdoor` from pack/interface.pack: root 10051, then the four dials with their buttons, then Enter. */
+/** `combolockdoor` from pack/interface.pack: root 10051, then the 4 dials with their buttons, then Enter. */
 const COMBO = {
     ROOT: 10051,
     LETTER: [10095, 10096, 10097, 10098],
@@ -25,7 +25,7 @@ const COMBO = {
 
 const ALPHABET = 26;
 
-/** One of six riddles is rolled when the trial starts; these phrases name the answer. */
+/** Answer phrases for the six possible starting riddles. */
 const RIDDLES: readonly [RegExp, string][] = [
     [/my first is in mage, but not in wizard|powerful\s*\|?\s*tool you will possess/i, 'MIND'],
     [/my first is in tar, but not in a swamp|wears more rings the older/i, 'TREE'],
@@ -45,15 +45,12 @@ const carried = (snap: QuestSnapshot, id: number): number => snap.invIds?.get(id
 const BUCKETS = [FT_ID.BUCKET_EMPTY, FT_ID.BUCKET_1, FT_ID.BUCKET_2, FT_ID.BUCKET_3, FT_ID.BUCKET_4, FT_ID.BUCKET_5];
 const JUGS = [FT_ID.JUG_EMPTY, FT_ID.JUG_1, FT_ID.JUG_2, FT_ID.JUG_3];
 
-/** How full the carried vessel is, or -1 when it is not carried. */
+/** How full the carried vessel is, or -1 when it isn't carried. */
 function level(ids: readonly number[], snap: QuestSnapshot): number {
     return ids.findIndex(id => carried(snap, id) > 0);
 }
 
-/**
- * Peer's trial: enter his house with nothing, answer the riddle on the lock,
- * then work the puzzle floor out through the far door.
- */
+/** Peer's trial: enter empty-handed, solve the lock riddle, then cross the puzzle floor. */
 export function seerStep(snap: QuestSnapshot): QuestStep | null {
     if (hasFlag(snap.progress, 'seer-done')) {
         return null;
@@ -130,9 +127,9 @@ function collectDisks(snap: QuestSnapshot): QuestStep {
         () => holding(FT_ID.RED_GOOP), 'cook the red herring for its dye');
 }
 
-// Why: the chest's balance opens on four fifths, and the only vessels in the room hold three and five.
+// Why: the chest's balance opens on 4 fifths, and the only vessels in the room hold 3 and 5.
 
-/** Fill the five-bucket to four using the three-jug, then trade it for the vase. */
+/** Fill the 5-bucket to 4 using the 3-jug, then trade it for the vase. */
 function measureWater(snap: QuestSnapshot): QuestStep {
     const jug = level(JUGS, snap);
     const bucket = level(BUCKETS, snap);
@@ -198,7 +195,7 @@ function openCupboard(): QuestStep {
     };
 }
 
-// Why: a loc that transforms keeps its old id for a tick, so the Search that follows has to wait for the open id rather than a fixed delay.
+// Why: a loc that transforms keeps its old id for a tick, so the Search that follows waits for the open id.
 async function openContainer(shutId: number, openId: number, near: Tile, log: (m: string) => void): Promise<void> {
     const opened = (): boolean => Locs.query().where(l => l.id === openId).within(5).nearest() !== null;
     if (opened()) {
@@ -224,7 +221,7 @@ function eastRoom(snap: QuestSnapshot): QuestStep {
     if (carried(snap, FT_ID.RED_DISK) > 0) {
         return { kind: 'custom', name: 'press a red disk into the mural', run: pressDisk };
     }
-    // Why: the mural hands the lid back to anyone whose two disks are already in it, so this must be gated on still needing one.
+    // Why: the mural hands the lid back to anyone whose 2 disks are already in it, so gate this on still needing one.
     if (carried(snap, FT_ID.VASE) > 0 && carried(snap, FT_ID.VASE_LID) === 0) {
         return locStep('Abstract mural', 'Study', FT_LOC.MURAL, FT_TILE.MURAL_STAND,
             () => holding(FT_ID.VASE_LID), 'take the vase lid out of the mural');
@@ -245,7 +242,7 @@ async function pressDisk(log: (m: string) => void): Promise<boolean> {
 
 // Step builders
 
-// Why: both mounted heads answer with `~mesbox`, which suspends the script until the box is continued. The disk lands after the click, not on it.
+// Why: Both mounted heads open `~mesbox`, and the disk appears only after it is continued.
 function locStep(name: string, op: string, id: number, near: Tile, expect: () => boolean, label: string): QuestStep {
     return {
         kind: 'custom',
@@ -277,7 +274,7 @@ async function climb(near: Tile, id: number, log: (m: string) => void): Promise<
 const climbWest = (log: (m: string) => void): Promise<boolean> => climb(FT_TILE.SEER_UP_LADDER, FT_LOC.SEER_UP_LADDER, log);
 const climbEast = (log: (m: string) => void): Promise<boolean> => climb(FT_TILE.SEER_DOWN_LADDER, FT_LOC.SEER_DOWN_LADDER, log);
 
-// Why: the east trapdoor starts shut and `loc_change` gives it the same id as the western one, so the search radius, not the id, is what keeps them apart.
+// Why: the east trapdoor starts shut and `loc_change` gives it the same id as the western one, so the search radius keeps them apart.
 async function goDownEast(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(FT_TILE.PUZZLE_EAST_TRAPDOOR, 0, log))) {
         return false;
@@ -394,7 +391,7 @@ async function solveRiddleAndEnter(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => inSeerWest(Game.tile()), 8000);
 }
 
-// Why: `driveChoice` would continue past the two plaque boxes before anything read them, and the plaque is the only place the answer is written.
+// Why: Read both plaque boxes before continuing; they contain the only copy of the answer.
 async function readRiddle(log: (m: string) => void): Promise<string | null> {
     let spoken = '';
     const deadline = performance.now() + 40_000;

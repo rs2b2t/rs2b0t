@@ -10,7 +10,7 @@ export const ArravConfig: { gang: ArravGangSetting; partner: string; certTarget:
     certTarget: 2
 };
 
-// Why: the gang must come out the same on every run of one character, and nothing about the choice is durable between runs.
+// Why: the gang has to come out the same on every run of one character, and nothing durable stores the choice.
 export function hashName(name: string): number {
     let hash = 0x811c9dc5;
     const norm = name.replace(/[^a-z0-9]/gi, '').toLowerCase();
@@ -25,7 +25,7 @@ export function resolveGang(setting: ArravGangSetting, playerName: string | null
     if (setting !== 'random') {
         return setting;
     }
-    // Why: the name lands a few ticks after login, and guessing blackarm there commits to a path needing a key no partner has been asked for.
+    // Why: the name lands a few ticks after login, and guessing blackarm before then commits to a key no partner has been asked for.
     if (!playerName) {
         return 'phoenix';
     }

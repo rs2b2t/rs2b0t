@@ -20,7 +20,7 @@ export const ITEM = {
 
 /** Bonzo's entrance fee. */
 export const ENTRY_FEE = 5;
-// Why: three casts win the contest, and the spare two cover a cast the server refused and a death on the way in.
+// Why: 3 casts win the contest, and the spare 2 cover a cast the server refused and a death on the way in.
 
 /** Worms carried into the contest. */
 export const WORM_TARGET = 5;
@@ -78,7 +78,7 @@ export function sourceFee(snap: QuestSnapshot): QuestStep | null {
         ?? { kind: 'wait', reason: `no coins for the ${ENTRY_FEE}gp contest entry fee` };
 }
 
-// Why: `need` is 1 once the contest is under way, topping a half-spent pack back to five would walk out of Hemenster mid-round and lose the entry at the gate.
+// Why: `need` is 1 once the contest is under way; topping a half-spent pack back to 5 would walk out of Hemenster mid-round and lose the entry at the gate.
 
 /** Top the pack back to {@link WORM_TARGET} whenever it holds fewer than `need`. */
 export function sourceWorms(snap: QuestSnapshot, need: number): QuestStep | null {
@@ -95,7 +95,7 @@ export function sourceWorms(snap: QuestSnapshot, need: number): QuestStep | null
 }
 
 // Why: the wood is a sealed pocket whose one entrance, the loose railing, is already a baked transport, so the walk needs no leg of its own.
-// Why: the patch is twenty-odd vines and the server can path to only some of them from any given tile, the nearest one answered "I can't reach that!" from a tile one step away while its neighbour dug fine, so the leg walks the ring rather than re-clicking the nearest.
+// Why: the server can only path to some of the 20-odd vines from a given tile (the nearest answered "I can't reach that!" from 1 step away while its neighbour dug fine), so walk the ring.
 
 /** Dig the red-worm patch in McGrubor's Wood up to `target` worms. */
 async function digWorms(target: number, log: (m: string) => void): Promise<boolean> {

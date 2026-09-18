@@ -1,18 +1,18 @@
-/** One obj inside a group of objs the content gave the same display name. */
+/** One object in a group sharing a display name. */
 export interface CollisionMember {
     obj: string;
     id: number;
-    /** Debugname tokens no sibling shares, so the words that separate this one. Empty where nothing survived. */
+/** Unique debugname tokens that distinguish this object; empty when none exist. */
     words: readonly string[];
 }
 
-/** Objs the content gives the same display name, so a customer naming one names them all. */
+/** Objects sharing the same display name. */
 export interface NameCollision {
     name: string;
     objs: readonly CollisionMember[];
 }
 
-/** What a customer may call one obj, and what the shop calls it back. */
+/** Customer alias and the shop's display label. */
 export interface ItemAlias {
     words: readonly string[];
     label: string;

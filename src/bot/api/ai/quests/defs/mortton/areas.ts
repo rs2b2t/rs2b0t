@@ -26,9 +26,9 @@ export const SM_STAGE = {
     COMPLETE: 85
 } as const;
 
-// Why: `%morttonquest` is not transmitted, but the three flamtaer meters are, so the temple leg reads its own progress off varps rather than flashing the journal every tick.
+// Why: `%morttonquest` isn't transmitted but the 3 flamtaer meters are, so the temple leg reads its progress off varps without flashing the journal every tick.
 
-/** Transmitted flamtaer meters, 0–100. */
+/** Transmitted flamtaer meters, 0-100. */
 export const SM_VARP = {
     TEMPLE_REPAIRED: 343,
     TEMPLE_RESOURCES: 344,
@@ -110,10 +110,10 @@ export const SM_LOC_ID = {
     SHELF: 4062,
     TABLE: 4064,
     SINK: 4063,
-    /** `templewall_base` … `templewall_10`. */
+    /** `templewall_base` ... `templewall_10`. */
     WALL_BASE: 4068,
     WALL_DONE: 4078,
-    /** `templewallcorner_base` … `templewallcorner_10`. */
+    /** `templewallcorner_base` ... `templewallcorner_10`. */
     CORNER_BASE: 4079,
     CORNER_DONE: 4089,
     ALTAR_LIT: 4090,
@@ -154,7 +154,7 @@ export const SM_TILE = {
 
 export const VARROCK_GENERAL = { npc: 'Shop keeper', anchor: new Tile(3218, 3414, 0) };
 
-// Why: both villagers answer to their afflicted name until a dose of serum 207 lands on them, and revert 200 ticks later, so every query has to accept either name.
+// Why: Serum changes each villager's name for 200 ticks, so queries accept both forms.
 export const SM_NPC = {
     RAZMIRE: 'Razmire Keelgan',
     RAZMIRE_AFFLICTED: 'Afflicted(Razmire)',
@@ -199,7 +199,7 @@ export function inMortton(t: Pos | null | undefined): boolean {
     return !!t && t.level === 0 && t.x >= 3456 && t.x <= 3519 && t.z >= 3264 && t.z <= 3327;
 }
 
-// Why: Razmire's ai_timer only recomputes the three flamtaer meters for players standing in this zone, so a reading taken outside it is whatever it was when the bot last left.
+// Why: Razmire's ai_timer only recomputes the 3 flamtaer meters for players in this zone, so a reading outside it is stale.
 
 /** The `mortton_temple_zones` coord pair the overlay update tests. */
 export function inTempleZone(t: Pos | null | undefined): boolean {

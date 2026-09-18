@@ -1,10 +1,13 @@
 import Tile from '../../geometry/Tile.js';
 import { matchesAny } from '../../api/inventory/packRules.js';
+import { BANK_LOCATIONS } from '../../api/bank/BankLocations.js';
 
 export const START_POSITION = 'Start position';
 export const CUSTOM_COORDINATES = 'Custom coordinates';
 export const SPOT_OPTIONS = [START_POSITION, CUSTOM_COORDINATES];
 export const BANKING_OPTIONS = ['Auto', 'None'];
+/** Bank location dropdown: nearest unlocked bank, or a forced named bank. */
+export const BANK_LOCATION_OPTIONS = ['Nearest', ...BANK_LOCATIONS.map(b => b.name)];
 export const DEFAULT_CUSTOM_SPOT = new Tile(3273, 3427, 0);
 export const BURIAL_BONE_NAME = 'Bones';
 

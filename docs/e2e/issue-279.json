@@ -1,0 +1,842 @@
+{
+  "issue": 279,
+  "testedCommit": "5b423ccaa000b99bbb0b9a900e337755c6684d4e",
+  "command": "ENGINE_DIR=/Users/elliottriplett/code/rs2b2t-engine bun e2e/leather-thread-279-live.ts --base http://localhost:8890 --minutes 6",
+  "result": "PASS",
+  "observations": {
+    "BEFORE": {
+      "state": "stopped",
+      "tile": {
+        "x": 3185,
+        "z": 3440,
+        "level": 0
+      },
+      "inventory": [],
+      "thread": 0,
+      "leather": 0,
+      "coins": 0,
+      "bankCoins": 500,
+      "bankThread": 0,
+      "bankLeather": 40,
+      "bankOpen": true,
+      "bankReady": true,
+      "shopOpen": false,
+      "stock": [],
+      "xp": 2107,
+      "logs": [
+        {
+          "time": 1789226660491,
+          "level": "info",
+          "msg": "previous run of 'HarnessVerifyBank_1789226656482' ended (stopped) \u2014 harness stop"
+        },
+        {
+          "time": 1789226660491,
+          "level": "info",
+          "msg": "HarnessVerifyBank_1789226660489 started"
+        },
+        {
+          "time": 1789226660776,
+          "level": "info",
+          "msg": "stopping \u2014 harness stop"
+        },
+        {
+          "time": 1789226660776,
+          "level": "info",
+          "msg": "stopped \u2014 harness stop"
+        }
+      ]
+    },
+    "PURCHASE": {
+      "state": "running",
+      "tile": {
+        "x": 3281,
+        "z": 3397,
+        "level": 0
+      },
+      "inventory": [
+        {
+          "slot": 0,
+          "id": 1733,
+          "name": "Needle",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 1,
+          "id": 995,
+          "name": "Coins",
+          "count": 40,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 2,
+          "id": 1734,
+          "name": "Thread",
+          "count": 20,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        }
+      ],
+      "thread": 20,
+      "leather": 0,
+      "coins": 40,
+      "bankCoins": 0,
+      "bankThread": 0,
+      "bankLeather": 0,
+      "bankOpen": false,
+      "bankReady": false,
+      "shopOpen": true,
+      "stock": [
+        {
+          "name": "Chef's hat",
+          "count": 0,
+          "slot": 0
+        },
+        {
+          "name": "Wizards hat",
+          "count": 3,
+          "slot": 1
+        },
+        {
+          "name": "Cape",
+          "count": 1,
+          "slot": 2
+        },
+        {
+          "name": "Grey wolf fur",
+          "count": 3,
+          "slot": 3
+        },
+        {
+          "name": "Fur",
+          "count": 3,
+          "slot": 4
+        },
+        {
+          "name": "Needle",
+          "count": 3,
+          "slot": 5
+        },
+        {
+          "name": "Thread",
+          "count": 80,
+          "slot": 6
+        },
+        {
+          "name": "Leather gloves",
+          "count": 10,
+          "slot": 7
+        },
+        {
+          "name": "Leather boots",
+          "count": 10,
+          "slot": 8
+        },
+        {
+          "name": "Priest gown",
+          "count": 3,
+          "slot": 9
+        },
+        {
+          "name": "Priest gown",
+          "count": 3,
+          "slot": 10
+        },
+        {
+          "name": "Brown apron",
+          "count": 1,
+          "slot": 11
+        },
+        {
+          "name": "Pink skirt",
+          "count": 5,
+          "slot": 12
+        },
+        {
+          "name": "Black skirt",
+          "count": 3,
+          "slot": 13
+        },
+        {
+          "name": "Blue skirt",
+          "count": 2,
+          "slot": 14
+        },
+        {
+          "name": "Cape",
+          "count": 4,
+          "slot": 15
+        },
+        {
+          "name": "Eye patch",
+          "count": 3,
+          "slot": 16
+        }
+      ],
+      "xp": 2107,
+      "logs": [
+        {
+          "time": 1789226662109,
+          "level": "info",
+          "msg": "previous run of 'HarnessVerifyBank_1789226660489' ended (stopped) \u2014 harness stop"
+        },
+        {
+          "time": 1789226662109,
+          "level": "info",
+          "msg": "LeatherCrafter started"
+        },
+        {
+          "time": 1789226662124,
+          "level": "info",
+          "msg": "LeatherCrafter \u2014 Leather -> Leather body (level 14, 1 per item)"
+        },
+        {
+          "time": 1789226663140,
+          "level": "info",
+          "msg": "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+        },
+        {
+          "time": 1789226663260,
+          "level": "info",
+          "msg": "path: cost 114, 65 waypoints, expanded 17498, worker 17.2ms, hops=1"
+        },
+        {
+          "time": 1789226663260,
+          "level": "info",
+          "msg": "hops:\n1. [door] Open Gate loc=2050 \u2192 3264,3405,L0 (cost 4)"
+        },
+        {
+          "time": 1789226677979,
+          "level": "info",
+          "msg": "crossed 'Gate' at (3264,3405)"
+        },
+        {
+          "time": 1789226680748,
+          "level": "info",
+          "msg": "arrived (8 clicks)"
+        }
+      ]
+    },
+    "RETURNED": {
+      "state": "running",
+      "tile": {
+        "x": 3184,
+        "z": 3437,
+        "level": 0
+      },
+      "inventory": [
+        {
+          "slot": 0,
+          "id": 1733,
+          "name": "Needle",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 2,
+          "id": 1734,
+          "name": "Thread",
+          "count": 20,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        }
+      ],
+      "thread": 20,
+      "leather": 0,
+      "coins": 0,
+      "bankCoins": 480,
+      "bankThread": 0,
+      "bankLeather": 40,
+      "bankOpen": true,
+      "bankReady": true,
+      "shopOpen": false,
+      "stock": [],
+      "xp": 2107,
+      "logs": [
+        {
+          "time": 1789226662109,
+          "level": "info",
+          "msg": "previous run of 'HarnessVerifyBank_1789226660489' ended (stopped) \u2014 harness stop"
+        },
+        {
+          "time": 1789226662109,
+          "level": "info",
+          "msg": "LeatherCrafter started"
+        },
+        {
+          "time": 1789226662124,
+          "level": "info",
+          "msg": "LeatherCrafter \u2014 Leather -> Leather body (level 14, 1 per item)"
+        },
+        {
+          "time": 1789226663140,
+          "level": "info",
+          "msg": "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+        },
+        {
+          "time": 1789226663260,
+          "level": "info",
+          "msg": "path: cost 114, 65 waypoints, expanded 17498, worker 17.2ms, hops=1"
+        },
+        {
+          "time": 1789226663260,
+          "level": "info",
+          "msg": "hops:\n1. [door] Open Gate loc=2050 \u2192 3264,3405,L0 (cost 4)"
+        },
+        {
+          "time": 1789226677979,
+          "level": "info",
+          "msg": "crossed 'Gate' at (3264,3405)"
+        },
+        {
+          "time": 1789226680748,
+          "level": "info",
+          "msg": "arrived (8 clicks)"
+        },
+        {
+          "time": 1789226681739,
+          "level": "info",
+          "msg": "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+        },
+        {
+          "time": 1789226681781,
+          "level": "info",
+          "msg": "  path: cost 113, 64 waypoints, expanded 12318, worker 6.1ms, hops=1"
+        },
+        {
+          "time": 1789226681781,
+          "level": "info",
+          "msg": "  hops:\n1. [door] Open Gate loc=2051 \u2192 3263,3406,L0 (cost 4)"
+        },
+        {
+          "time": 1789226685714,
+          "level": "info",
+          "msg": "  crossed 'Gate' at (3264,3406)"
+        },
+        {
+          "time": 1789226699553,
+          "level": "info",
+          "msg": "  arrived (6 clicks)"
+        }
+      ]
+    },
+    "PASS": {
+      "state": "running",
+      "tile": {
+        "x": 3185,
+        "z": 3436,
+        "level": 0
+      },
+      "inventory": [
+        {
+          "slot": 0,
+          "id": 1733,
+          "name": "Needle",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 1,
+          "id": 1129,
+          "name": "Leather body",
+          "count": 1,
+          "ops": [
+            null,
+            "Wear",
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 2,
+          "id": 1734,
+          "name": "Thread",
+          "count": 20,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 3,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 4,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 5,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 6,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 7,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 8,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 9,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 10,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 11,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 12,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 13,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 14,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 15,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 16,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 17,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 18,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 19,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 20,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 21,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 22,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 23,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 24,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 25,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 26,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 27,
+          "id": 1741,
+          "name": "Leather",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        }
+      ],
+      "thread": 20,
+      "leather": 25,
+      "coins": 0,
+      "bankCoins": 0,
+      "bankThread": 0,
+      "bankLeather": 0,
+      "bankOpen": false,
+      "bankReady": false,
+      "shopOpen": false,
+      "stock": [],
+      "xp": 2132,
+      "logs": [
+        {
+          "time": 1789226662109,
+          "level": "info",
+          "msg": "previous run of 'HarnessVerifyBank_1789226660489' ended (stopped) \u2014 harness stop"
+        },
+        {
+          "time": 1789226662109,
+          "level": "info",
+          "msg": "LeatherCrafter started"
+        },
+        {
+          "time": 1789226662124,
+          "level": "info",
+          "msg": "LeatherCrafter \u2014 Leather -> Leather body (level 14, 1 per item)"
+        },
+        {
+          "time": 1789226663140,
+          "level": "info",
+          "msg": "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+        },
+        {
+          "time": 1789226663260,
+          "level": "info",
+          "msg": "path: cost 114, 65 waypoints, expanded 17498, worker 17.2ms, hops=1"
+        },
+        {
+          "time": 1789226663260,
+          "level": "info",
+          "msg": "hops:\n1. [door] Open Gate loc=2050 \u2192 3264,3405,L0 (cost 4)"
+        },
+        {
+          "time": 1789226677979,
+          "level": "info",
+          "msg": "crossed 'Gate' at (3264,3405)"
+        },
+        {
+          "time": 1789226680748,
+          "level": "info",
+          "msg": "arrived (8 clicks)"
+        },
+        {
+          "time": 1789226681739,
+          "level": "info",
+          "msg": "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+        },
+        {
+          "time": 1789226681781,
+          "level": "info",
+          "msg": "  path: cost 113, 64 waypoints, expanded 12318, worker 6.1ms, hops=1"
+        },
+        {
+          "time": 1789226681781,
+          "level": "info",
+          "msg": "  hops:\n1. [door] Open Gate loc=2051 \u2192 3263,3406,L0 (cost 4)"
+        },
+        {
+          "time": 1789226685714,
+          "level": "info",
+          "msg": "  crossed 'Gate' at (3264,3406)"
+        },
+        {
+          "time": 1789226699553,
+          "level": "info",
+          "msg": "  arrived (6 clicks)"
+        }
+      ]
+    }
+  },
+  "screenshots": [
+    "issue-279-before.png",
+    "issue-279-shop.png",
+    "issue-279.png"
+  ]
+}

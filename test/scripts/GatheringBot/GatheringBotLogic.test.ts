@@ -1,6 +1,39 @@
 import { describe, expect, test } from 'bun:test';
+
+describe('Shilo supply cadence', () => {
+    test('starts immediately and honors the configured interval, including disabled', () => {
+        expect(featherBuyoutDue(null, 15, 0)).toBe(true);
+        expect(featherBuyoutDue(0, 15, 14 * 60000)).toBe(false);
+        expect(featherBuyoutDue(0, 15, 15 * 60000)).toBe(true);
+        expect(featherBuyoutDue(null, 0, 999 * 60000)).toBe(false);
+        expect(featherBuyoutDue(0, 5, 5 * 60000)).toBe(true);
+    });
+    const due = (over: Partial<Parameters<typeof baitTripDue>[0]> = {}) => baitTripDue({
+        hasVendor: true, outOfBait: false, lastAtMs: null, intervalMinutes: 0, nowMs: 0, ...over
+    });
+    test('never sends camps without a vendor', () => {
+        expect(due({ hasVendor: false, outOfBait: true, intervalMinutes: 15 })).toBe(false);
+    });
+    test('retries missing bait after a minute even with the scheduled trip disabled', () => {
+        expect(due({ outOfBait: true })).toBe(true);
+        expect(due({ outOfBait: true, lastAtMs: 0, nowMs: 30000 })).toBe(false);
+        expect(due({ outOfBait: true, lastAtMs: 0, nowMs: BAIT_RETRY_MINUTES * 60000 })).toBe(true);
+        expect(due()).toBe(false);
+    });
+    test('sends scheduled trips even with bait already held', () => {
+        expect(due({ intervalMinutes: 15 })).toBe(true);
+        expect(due({ intervalMinutes: 15, lastAtMs: 0, nowMs: 14 * 60000 })).toBe(false);
+        expect(due({ intervalMinutes: 15, lastAtMs: 0, nowMs: 15 * 60000 })).toBe(true);
+    });
+});
 import {
     DEFAULT_CHASE_RADIUS,
+    FEATHER_BUYOUT_GP,
+    FEATHER_RESTOCK_MINUTES,
+    BAIT_RETRY_MINUTES,
+    baitTripDue,
+    featherBuyoutDue,
+    featherCoinsToDraw,
     HOME_ARRIVE_RADIUS,
     LOCAL_MINE_PREFER_RADIUS,
     NAMED_CAMP_LEASH_FLOOR,
@@ -10,6 +43,8 @@ import {
     gatherHuntRadius,
     gatherSpotRangeOrigin,
     hostileAttackerNearby,
+    locGatherShouldYield,
+    entAbortAction,
     shouldFleeCombat,
     isAutoLocation,
     pickNearestPreferLocal,
@@ -327,10 +362,13 @@ describe('gatheringCombatPolicy (Desert Mining Camp)', () => {
 });
 
 describe('effectiveGatherLeash', () => {
-    test('Auto keeps the UI setting (freeform / unverified snaps)', () => {
+    test('freeform keeps the UI setting (Use Closest / Use Start / Use Custom / Auto)', () => {
+        expect(effectiveGatherLeash(12, 'Use Closest')).toBe(12);
+        expect(effectiveGatherLeash(12, 'Use Start Position')).toBe(12);
+        expect(effectiveGatherLeash(12, 'Use Custom Position')).toBe(12);
         expect(effectiveGatherLeash(12, 'Auto')).toBe(12);
         expect(effectiveGatherLeash(18, 'auto')).toBe(18);
-        expect(effectiveGatherLeash(40, 'Auto')).toBe(40);
+        expect(effectiveGatherLeash(40, 'Use Closest')).toBe(40);
         expect(effectiveGatherLeash(64, 'Auto')).toBe(64);
     });
 
@@ -343,18 +381,21 @@ describe('effectiveGatherLeash', () => {
         expect(effectiveGatherLeash(64, 'Draynor Village')).toBe(64);
     });
 
-    test('None (power) also floors — start-tile clusters need width', () => {
-        expect(effectiveGatherLeash(10, 'None')).toBe(NAMED_CAMP_LEASH_FLOOR);
-        expect(effectiveGatherLeash(8, 'none')).toBe(NAMED_CAMP_LEASH_FLOOR);
+    test('unknown names also floor — start-tile clusters need width', () => {
+        expect(effectiveGatherLeash(10, 'Atlantis')).toBe(NAMED_CAMP_LEASH_FLOOR);
+        expect(effectiveGatherLeash(8, 'Some Unknown Camp')).toBe(NAMED_CAMP_LEASH_FLOOR);
     });
 });
 
 describe('isAutoLocation', () => {
-    test('only Auto is expert freeform (no mob flee)', () => {
+    test('Use Closest / Use Start Position / Use Custom Position / Auto are expert freeform (no mob flee)', () => {
+        expect(isAutoLocation('Use Closest')).toBe(true);
+        expect(isAutoLocation('Use Start Position')).toBe(true);
+        expect(isAutoLocation('Use Custom Position')).toBe(true);
         expect(isAutoLocation('Auto')).toBe(true);
         expect(isAutoLocation(' auto ')).toBe(true);
         expect(isAutoLocation('Fishing Guild')).toBe(false);
-        expect(isAutoLocation('None')).toBe(false);
+        expect(isAutoLocation('Atlantis')).toBe(false);
     });
 });
 
@@ -442,6 +483,37 @@ describe('shouldYieldGathering', () => {
     });
 });
 
+describe('locGatherShouldYield (Ent / smoking rock on the clicked tile)', () => {
+    const calm = {
+        eventPending: false,
+        inventoryFull: false,
+        dialogPending: false,
+        inCombat: false,
+        allowCombatGather: false,
+        shouldEatMinerFood: false,
+        clickedTileHazard: false,
+        noResourceInCamp: false
+    };
+
+    test('an Ent on the clicked tile yields even when other trees remain', () => {
+        expect(locGatherShouldYield({ ...calm, clickedTileHazard: true })).toBe(true);
+        expect(locGatherShouldYield(calm)).toBe(false);
+    });
+
+    test('other trees in camp are not treated as an empty grove', () => {
+        expect(locGatherShouldYield({ ...calm, noResourceInCamp: false, clickedTileHazard: false })).toBe(false);
+        expect(locGatherShouldYield({ ...calm, noResourceInCamp: true })).toBe(true);
+    });
+});
+
+describe('entAbortAction', () => {
+    test('chops a neighbour in reach, else walks, else steps off', () => {
+        expect(entAbortAction({ neighbourInReach: true, neighbourExists: true })).toBe('chop-neighbour');
+        expect(entAbortAction({ neighbourInReach: false, neighbourExists: true })).toBe('walk-to-neighbour');
+        expect(entAbortAction({ neighbourInReach: false, neighbourExists: false })).toBe('step-off');
+    });
+});
+
 describe('AXE_BAR_FOR (smith restock keep)', () => {
     test('maps every smithable axe to a bar name restock must retain', () => {
         expect(AXE_BAR_FOR['Rune axe']).toBe('Runite bar');
@@ -492,5 +564,88 @@ describe('fishingSessionBroken', () => {
         expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: true, spotGone: true })).toBe(true);
         expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: true, eventPending: true })).toBe(true);
         expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: true, inventoryFull: true })).toBe(true);
+    });
+});
+
+// Why: Roachey's feathers come back one a tick toward a baseline of 1500, so a full buyout is fifteen minutes of restock and anything sooner takes a partial stack.
+describe('the guild feather buyout', () => {
+    const MIN = 60_000;
+
+    test('the default interval is the shop\'s own full-recovery time', () => {
+        expect(FEATHER_RESTOCK_MINUTES).toBe(15);
+    });
+
+    test('the first trip is owed as soon as the run starts', () => {
+        expect(featherBuyoutDue(null, 15, 0)).toBe(true);
+    });
+
+    test('waits the interval out between trips', () => {
+        expect(featherBuyoutDue(0, 15, 14 * MIN)).toBe(false);
+        expect(featherBuyoutDue(0, 15, 15 * MIN)).toBe(true);
+        expect(featherBuyoutDue(0, 15, 40 * MIN)).toBe(true);
+    });
+
+    test('zero minutes turns it off, first trip included', () => {
+        expect(featherBuyoutDue(null, 0, 999 * MIN)).toBe(false);
+        expect(featherBuyoutDue(0, 0, 999 * MIN)).toBe(false);
+    });
+
+    describe('the bait trip', () => {
+        const due = (over: Partial<Parameters<typeof baitTripDue>[0]> = {}): boolean =>
+            baitTripDue({ hasVendor: true, outOfBait: false, lastAtMs: 0, intervalMinutes: 0, nowMs: 999 * MIN, ...over });
+
+        test('a camp with no shop never goes, however short it is', () => {
+            expect(due({ hasVendor: false, outOfBait: true, lastAtMs: null })).toBe(false);
+            expect(due({ hasVendor: false, intervalMinutes: 15, lastAtMs: null })).toBe(false);
+        });
+
+        // Why: the bank run at a shop-only camp finds no bait to withdraw and spins on 'bank has no Feather', so running out has to send the trip by itself.
+        test('runs out of bait and goes, even with the clock switched off', () => {
+            expect(due({ outOfBait: true })).toBe(true);
+            expect(due({ outOfBait: false })).toBe(false);
+        });
+
+        test('a needed trip still waits out the retry, so an empty shelf is not hit every loop', () => {
+            expect(due({ outOfBait: true, lastAtMs: 0, nowMs: 30_000 })).toBe(false);
+            expect(due({ outOfBait: true, lastAtMs: 0, nowMs: BAIT_RETRY_MINUTES * MIN })).toBe(true);
+        });
+
+        test('the clock still sends a trip that holds plenty of bait', () => {
+            expect(due({ outOfBait: false, intervalMinutes: 15, lastAtMs: 0, nowMs: 15 * MIN })).toBe(true);
+            expect(due({ outOfBait: false, intervalMinutes: 15, lastAtMs: 0, nowMs: 14 * MIN })).toBe(false);
+        });
+
+        test('the first trip is owed at once on the clock, and at once when out of bait', () => {
+            expect(due({ intervalMinutes: 15, lastAtMs: null })).toBe(true);
+            expect(due({ outOfBait: true, lastAtMs: null })).toBe(true);
+        });
+    });
+
+    test('a shorter interval is honoured, since a partial stack still buys', () => {
+        expect(featherBuyoutDue(0, 5, 5 * MIN)).toBe(true);
+        expect(featherBuyoutDue(0, 5, 4 * MIN)).toBe(false);
+    });
+});
+
+describe('drawing coins for the buyout', () => {
+    test('takes a shelf out of a bank that holds more', () => {
+        expect(featherCoinsToDraw(0, 5_000_000, 2)).toBe(FEATHER_BUYOUT_GP);
+    });
+
+    test('takes the whole of a bank that holds less', () => {
+        expect(featherCoinsToDraw(0, 900, 2)).toBe(900);
+    });
+
+    test('counts what is already held against the budget', () => {
+        expect(featherCoinsToDraw(250, 5_000_000, 2)).toBe(FEATHER_BUYOUT_GP - 250);
+    });
+
+    test('draws nothing when the pack already covers a shelf', () => {
+        expect(featherCoinsToDraw(FEATHER_BUYOUT_GP, 5_000_000, 2)).toBe(0);
+        expect(featherCoinsToDraw(FEATHER_BUYOUT_GP + 1, 5_000_000, 2)).toBe(0);
+    });
+
+    test('an empty bank asks for nothing', () => {
+        expect(featherCoinsToDraw(0, 0, 2)).toBe(0);
     });
 });

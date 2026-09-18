@@ -18,8 +18,7 @@ import { SELF_TEST, type RawClient } from './RawClient.js';
 
 const SCENE_SIZE = 104;
 
-// Why: locs() sweeps 104x104 tiles x 4 typecodes at a measured 1.4-1.7ms and 586-2289
-// objects per call, and frame-rate script waiters would rebuild the unchanged scene ~24x/sec per bot.
+// Why: locs() scans 104x104 tiles across four typecodes, so reuse it within a client tick.
 let locCache: LocSnapshot[] | null = null;
 let locCacheKey = '';
 
@@ -28,9 +27,10 @@ export function invalidateLocSnapshots(): void {
     locCache = null;
 }
 
-/** Releases the attached client; later reads degrade to empty rather than dereferencing a half-dead client. */
+/** Releases the client; later reads return empty state. */
 export function detach(): void {
     raw = null;
+    modalCloseSession = null;
     bankInventorySession = null;
     previousBankGeneration.clear();
     invalidateLocSnapshots();
@@ -38,6 +38,12 @@ export function detach(): void {
 const SCRATCH_SLOT = 499;
 
 let raw: RawClient | null = null;
+export type ModalCloseObservation = { readonly session: symbol; readonly generation: number };
+let modalCloseSession: {
+    readonly stream: object;
+    readonly loginGeneration: number;
+    readonly token: symbol;
+} | null = null;
 let packetListener: ((ptype: number) => void) | null = null;
 let adapterLoginGeneration = -1;
 let bankInventorySession: {
@@ -231,7 +237,11 @@ export interface NpcSnapshot {
     anim: number;
     name: string | null;
     level: number;
+    /** Tiles along each side of the footprint. */
+    size: number;
     tile: WorldTile;
+    /** Latest received route-head centre, not the interpolated render position. */
+    readonly networkTile?: WorldTile;
     distance: number;
     ops: (string | null)[];
     inCombat: boolean;
@@ -246,6 +256,7 @@ export interface PlayerSnapshot {
     tile: WorldTile;
     distance: number;
     inCombat: boolean;
+    combatLevel: number;
     faceEntity: number;
 }
 
@@ -285,17 +296,18 @@ export interface ModalButton {
     comId: number;
     /** The button's own caption, as drawn. */
     label: string;
-    /** The word the right-click menu offers, which is what the client sends the option as. */
+/** The right-click menu action sent by the client. */
     menu: string;
-    /** True while the button or any layer above it is hidden, and a click on it cannot be seen. */
+/** Whether this button or an ancestor is hidden. */
     hidden: boolean;
-    /** True for a `buttontype=pause` button, which resumes a suspended script instead of firing an `if_button` trigger. */
+/** A `buttontype=pause` button resumes a suspended script instead of firing `if_button`. */
     pause: boolean;
 }
 
 export function attach(client: unknown): string[] {
     const missing = SELF_TEST.filter(name => !(name in (client as Record<string, unknown>)));
     raw = client as RawClient;
+    modalCloseSession = null;
     bankInventorySession = null;
     adapterLoginGeneration = raw.statSessionGeneration;
     previousBankGeneration.clear();
@@ -327,7 +339,7 @@ export function setPacketListener(cb: ((ptype: number) => void) | null): void {
 
 /** The client's own chat input cap. */
 const PUBLIC_CHAT_LIMIT = 80;
-/** Chat type 2 is a plain player line, and 150 client ticks is how long the client holds its own bubble up. */
+/** Chat type 2 is player speech; its overhead bubble lasts 150 client ticks. */
 const PUBLIC_CHAT_TYPE = 2;
 const CHAT_BUBBLE_TICKS = 150;
 
@@ -362,6 +374,20 @@ export function resetObjCatalog(): void {
 }
 
 export const reader = {
+    modalCloseObservation(): ModalCloseObservation | null {
+        if (!raw?.ingame || !raw.stream || typeof raw.stream !== 'object'
+            || !Number.isSafeInteger(raw.statSessionGeneration) || raw.statSessionGeneration < 0
+            || !Number.isSafeInteger(raw.modalCloseGeneration) || raw.modalCloseGeneration < 0) {
+            modalCloseSession = null;
+            return null;
+        }
+        if (!modalCloseSession || modalCloseSession.stream !== raw.stream
+            || modalCloseSession.loginGeneration !== raw.statSessionGeneration) {
+            modalCloseSession = { stream: raw.stream, loginGeneration: raw.statSessionGeneration, token: Symbol() };
+        }
+        return { session: modalCloseSession.token, generation: raw.modalCloseGeneration };
+    },
+
     attached(): boolean {
         return raw !== null;
     },
@@ -386,6 +412,20 @@ export const reader = {
         };
     },
 
+    // Why: `worldTile` reads the sprite, which walks 4px a frame and so reaches a tile a tick after the server put the player there (two on a 300ms sim); the route head is the tile the server holds.
+    /** The tile the server holds the player on. */
+    serverTile(): WorldTile | null {
+        if (!raw || !raw.localPlayer) {
+            return null;
+        }
+
+        return {
+            x: raw.mapBuildBaseX + raw.localPlayer.routeX[0]!,
+            z: raw.mapBuildBaseZ + raw.localPlayer.routeZ[0]!,
+            level: raw.minusedlevel
+        };
+    },
+
     /**
      * Hint-arrow tile (type 2–6), or null when no tile hint is active.
      * Used by Brimhaven Agility Arena for the active ticket pillar.
@@ -400,7 +440,7 @@ export const reader = {
             hintTileZ?: number;
         };
         const t = c.hintType ?? 0;
-        // Client normalises types 2–6 to type 2 after reading the tile coords.
+        // The client normalizes tile hint types 2-6 to type 2.
         if (t !== 2) {
             return null;
         }
@@ -420,10 +460,7 @@ export const reader = {
         return { x: raw.mapBuildBaseX, z: raw.mapBuildBaseZ };
     },
 
-    /**
-     * Project a point on a world tile onto the bot overlay canvas (pixels).
-     * `u`/`v` are fractional offsets within the tile (0 = west/south edge, 1 = east/north), clamped to the tile interior.
-     */
+    /** Project a world-tile point onto the overlay; `u` and `v` are clamped tile fractions. */
     overlayPosWorld(x: number, z: number, height = 0, u = 0.5, v = 0.5): { x: number; y: number } | null {
         if (!raw) {
             return null;
@@ -435,10 +472,7 @@ export const reader = {
         return raw.overlayPos(scene.sceneX, scene.sceneZ, height);
     },
 
-    /**
-     * Project a world tile corner into **areaGame** pixels (512×334, no canvas +4).
-     * Call only while the client has bound Pix2D to areaGame (onAfterWorldRender).
-     */
+    /** Project a world-tile corner into areaGame pixels while Pix2D is bound there. */
     projectAreaGameWorld(x: number, z: number, height = 0, u = 0.5, v = 0.5): { x: number; y: number } | null {
         if (!raw) {
             return null;
@@ -467,16 +501,13 @@ export const reader = {
         return raw?.runenergy ?? 0;
     },
 
-    /**
-     * Orbit camera yaw 0–2047 (client-only; TS-private on Client, plain property at runtime).
-     * Used by optional nav path-facing, no server/LC dependency.
-     */
+    /** Client-only orbit yaw (0-2047) used by nav path-facing. */
     cameraYaw(): number {
         const c = raw as (RawClient & { orbitCameraYaw?: number }) | null;
         return (c?.orbitCameraYaw ?? 0) & 0x7ff;
     },
 
-    /** Orbit camera pitch 128–383. */
+    /** Orbit camera pitch (128-383). */
     cameraPitch(): number {
         const c = raw as (RawClient & { orbitCameraPitch?: number }) | null;
         return c?.orbitCameraPitch ?? 128;
@@ -843,7 +874,9 @@ export const reader = {
                 anim: npc.primaryAnim,
                 name: npc.type?.name ?? null,
                 level: npc.type?.vislevel ?? -1,
+                size: npc.type?.size ?? 1,
                 tile: { x, z, level: raw.minusedlevel },
+                networkTile: { x: raw.mapBuildBaseX + npc.routeX[0] + Math.floor((npc.type?.size ?? 1) / 2), z: raw.mapBuildBaseZ + npc.routeZ[0] + Math.floor((npc.type?.size ?? 1) / 2), level: raw.minusedlevel },
                 distance: Math.max(Math.abs(x - px), Math.abs(z - pz)),
                 ops: npc.type?.op ?? [],
                 inCombat: combatShowing(npc.combatCycle),
@@ -887,6 +920,7 @@ export const reader = {
                 tile: { x, z, level: raw.minusedlevel },
                 distance: Math.max(Math.abs(x - px), Math.abs(z - pz)),
                 inCombat: combatShowing(player.combatCycle),
+                combatLevel: player.combatLevel,
                 faceEntity: player.faceEntity
             });
         }
@@ -896,6 +930,17 @@ export const reader = {
 
     inCombat(): boolean {
         return raw?.localPlayer ? combatShowing(raw.localPlayer.combatCycle) : false;
+    },
+
+    takingDamage(): boolean {
+        const player = raw?.localPlayer;
+        if (!raw?.ingame || !player) {
+            return false;
+        }
+        const cycle = loopCycleNow();
+        return player.damageValues.some((damage, i) =>
+            damage > 0 && player.damageTypes[i] === 1 && player.damageCycles[i] > cycle
+        );
     },
 
     locs(): LocSnapshot[] {
@@ -1099,7 +1144,8 @@ export const reader = {
             && reader.bankComId() === session.mainComId
             && state !== null
             && state.transmitting
-            && state.fullGeneration > session.mainOpenedAt;
+            && state.fullGeneration > 0
+            && state.fullGeneration >= session.mainOpenedAt;
     },
 
     bankSideSnapshotReady(): boolean {
@@ -1114,7 +1160,8 @@ export const reader = {
         const state = invState(session.sideComId);
         return sideComId === session.sideComId
             && state.transmitting
-            && state.fullGeneration > session.sideOpenedAt;
+            && state.fullGeneration > 0
+            && state.fullGeneration >= session.sideOpenedAt;
     },
 
     bankSnapshotGeneration(): number {

@@ -5,19 +5,19 @@ import { decide } from '#/bot/api/ai/quests/defs/upass/index.js';
 import { UP_FLAG, UP_STAGE } from '#/bot/api/ai/quests/defs/upass/journal.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
-// Why: decide() reads only a snapshot, so every branch of the routing table is testable without a client.
+// `decide()` is pure over a snapshot, so these tests need no client.
 type Stack = number | [number, number];
 const counts = (stacks: Stack[]): Map<number, number> =>
     new Map(stacks.map(s => (Array.isArray(s) ? s : [s, 1])));
 
-/** itemdb ids the bow-family tests lean on. */
+/** Item IDs used by the bow-family cases. */
 const ITEM_ID = { OAK_SHORTBOW: 843, CROSSBOW: 837 } as const;
 
 const ARDOUGNE = { x: 2655, z: 3283, level: 0 };
 const WEST_ARDOUGNE = { x: 2500, z: 3300, level: 0 };
 const AREA1 = { x: 2450, z: 9716, level: 0 };
 
-/** The kit the module refuses to go underground without. */
+/** Minimum kit for entering the pass. */
 const KIT: Stack[] = [
     [UP_ITEM.ROPE.id, 3],
     UP_ITEM.SHORTBOW.id,
@@ -28,7 +28,7 @@ const KIT: Stack[] = [
     [UP_ITEM.LOBSTER.id, 14]
 ];
 
-// Why: the melee kit is matched by name, not id, any scimitar or platebody will do, so a snapshot needs the name maps as well. It is worn by default, because a pack holding one unworn is a step of its own and a pack holding none parks at the cave mouth.
+// Why: melee gear matches by name and defaults to worn in these snapshots.
 const WEAPON = 'rune scimitar';
 
 function snapshot(over: Partial<QuestSnapshot> & {
@@ -75,16 +75,14 @@ describe('Underground Pass decide()', () => {
         expect(kindOf(decide(snapshot({ journal: 'complete' })))).toBe('done');
     });
 
-    // Why: the paladins are level 62 and there is no bank past the cave mouth, so a pack with the kit and
-    // no weapon has to stop and say so rather than walk a one-way dungeon into a fight it cannot win.
+    // Why: there is no bank past the cave mouth before the level 62 paladins.
     test('without a melee weapon the cave mouth is a stop, not a descent', () => {
         const step = decide(snapshot({ carried: KIT, wornNames: [], flags: [UP_FLAG.STARTED] }));
         expect(kindOf(step)).toBe('wait');
         expect(reasonOf(step)).toContain('melee weapon');
     });
 
-    // Why: the journal prints the same two sentences at stage three and stage four and differs only in which is struck through, so the module reads three while the server is at four, and levered a boulder that was already spent, forever. The two stages are one leg, and the horn is what ends it.
-    // Why: and the crests, the well and the doors are one step after that, because the well eats the crests and the journal never says it did, a run killed three respawned paladins after feeding the first.
+    // Why: the journal cannot distinguish these stages; the horn marks the leg complete.
     test('the unicorn leg is keyed on the horn, not on the stage', () => {
         const inArea2 = { x: 2396, z: 9600, level: 0 };
         for (const stage of [UP_STAGE.ENTERED_SECOND_AREA, UP_STAGE.KILLED_UNICORN]) {
@@ -95,8 +93,7 @@ describe('Underground Pass decide()', () => {
         }
     });
 
-    // Why: the fire arrow puts the bow in the right hand and the scimitar in the pack, and nothing after
-    // the bridge took it back out. The paladins were being fought bare-handed.
+    // Why: firing the arrow swaps the bow in and leaves the scimitar packed.
     test('the weapon goes back on before the paladins', () => {
         const step = decide(snapshot({
             stage: UP_STAGE.KILLED_UNICORN,
@@ -117,14 +114,13 @@ describe('Underground Pass decide()', () => {
         expect(nameOf(step)).toContain('King Lathas');
     });
 
-    // Why: the started bit is not a stage, reading it as one sent the bot back to Lathas forever.
+    // Why: treating the started bit as a stage loops back to Lathas.
     test('started is a flag on stage zero and routes to Koftik, not back to Lathas', () => {
         const step = decide(snapshot({ carried: KIT, flags: [UP_FLAG.STARTED] }));
         expect(nameOf(step)).not.toContain('King Lathas');
     });
 
-    // Why: `no path to (2436,3315): unreachable`. The navigator has no edge into West Ardougne, so the
-    // wall has to be crossed explicitly before anything inside it is reachable.
+    // Why: West Ardougne needs an explicit wall crossing before Koftik is reachable.
     test('Koftik is behind the wall, so the crossing comes first', () => {
         const step = decide(snapshot({ carried: KIT, flags: [UP_FLAG.STARTED] }));
         expect(nameOf(step)).toContain('West Ardougne');
@@ -135,8 +131,7 @@ describe('Underground Pass decide()', () => {
         expect(nameOf(step)).toContain('Koftik');
     });
 
-    // Why: the pass is one-way with no bank in it, so a short pack stops at the mouth and says what is
-    // missing rather than walking in and parking at an obstacle it cannot pass.
+    // Why: the one-way pass has no bank after the entrance.
     test('a pack short of the kit refuses to descend and names what is missing', () => {
         const step = decide(snapshot({
             stage: UP_STAGE.SPOKEN_KOFTIK,
@@ -148,8 +143,7 @@ describe('Underground Pass decide()', () => {
         expect(reasonOf(step)).toContain('a bow');
     });
 
-    // Why: upass_bridge.rs2 checks oc_category = weapon_bow, which is thirteen items, so a pack holding an
-    // oak shortbow was being told to go and find id 841.
+    // Why: `upass_bridge.rs2` accepts the full `weapon_bow` category.
     test('any bow satisfies the bridge shot, not only the plain shortbow', () => {
         const noPlainBow = KIT.filter(s => s !== UP_ITEM.SHORTBOW.id);
         const step = decide(snapshot({
@@ -160,7 +154,7 @@ describe('Underground Pass decide()', () => {
         expect(kindOf(step)).not.toBe('wait');
     });
 
-    // Why: a crossbow is weapon_crossbow and fires bolts, so it must not read as the bow the rope shot needs.
+    // Why: crossbows use `weapon_crossbow`, not the required `weapon_bow` category.
     test('a crossbow is not a bow', () => {
         const noPlainBow = KIT.filter(s => s !== UP_ITEM.SHORTBOW.id);
         const step = decide(snapshot({
@@ -173,8 +167,7 @@ describe('Underground Pass decide()', () => {
         expect(reasonOf(step)).toContain('bow');
     });
 
-    // Why: bestInBank built '<tier> <kind>' names from a tier list with no dragon in it, and matched on
-    // endsWith(kind) with no dagger in it, so a Dragon dagger(p) read as no weapon at all.
+    // Why: tier-name matching previously missed dragon and poisoned daggers.
     test('a dragon dagger counts as a melee weapon, poisoned or not', () => {
         for (const weapon of ['dragon dagger', 'dragon dagger(p)', 'poisoned dagger(p)']) {
             const step = decide(snapshot({ carried: KIT, wornNames: [weapon], flags: [UP_FLAG.STARTED] }));
@@ -182,8 +175,7 @@ describe('Underground Pass decide()', () => {
         }
     });
 
-    // Why: the bank running dry is not the end of the road, Aemad sells rope forty tiles from the booth
-    // this quest already banks at.
+    // Why: Aemad sells rope near the bank this quest already uses.
     test('rope the bank does not have is bought at Aemad', () => {
         const noRope = KIT.filter(s => !Array.isArray(s) || s[0] !== UP_ITEM.ROPE.id);
         const step = decide(snapshot({ carried: [...noRope, [UP_ITEM.COINS.id, 5000]] }));
@@ -192,7 +184,7 @@ describe('Underground Pass decide()', () => {
         expect((step as { shop: { npc: string } }).shop.npc).toBe('Aemad');
     });
 
-    // Why: no bow in the bank either, and Lowe is the only bow counter this repo already has a stand for.
+    // Why: Lowe is the supported fallback when the bank has no bow.
     test('a bow the bank does not have is bought at Lowe', () => {
         const noBow = KIT.filter(s => s !== UP_ITEM.SHORTBOW.id);
         const step = decide(snapshot({ carried: [...noBow, [UP_ITEM.COINS.id, 5000]] }));
@@ -200,8 +192,7 @@ describe('Underground Pass decide()', () => {
         expect((step as { shop: { npc: string } }).shop.npc).toBe('Lowe');
     });
 
-    // Why: the buy step tops its own purse up from the bank, so a broke account must not be handed one.
-    // Walking to Aemad with no coins fails at the counter and the engine retries that walk forever.
+    // Why: sending a broke account to Aemad would retry the failed purchase forever.
     test('with no coins anywhere it never walks to a counter it cannot pay', () => {
         const noRope = KIT.filter(s => !Array.isArray(s) || s[0] !== UP_ITEM.ROPE.id);
         expect(kindOf(decide(snapshot({ carried: noRope, banked: [] })))).not.toBe('buy');
@@ -215,7 +206,7 @@ describe('Underground Pass decide()', () => {
         expect(reasonOf(atTheMouth)).toContain('Rope');
     });
 
-    // Why: with no coins either, it still has to stop and say so rather than walk to a counter it cannot pay.
+    // Why: without coins, report the shortfall before walking to a shop.
     test('short of kit and coins alike, it stops and names the shortfall', () => {
         const step = decide(snapshot({
             stage: UP_STAGE.SPOKEN_KOFTIK,

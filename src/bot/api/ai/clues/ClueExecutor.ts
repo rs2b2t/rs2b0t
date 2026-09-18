@@ -23,9 +23,14 @@ import { clueGate } from '#/bot/api/ai/clues/data/clueGates.js';
 import { KILL_ANCHORS } from '#/bot/api/ai/clues/data/killAnchors.js';
 import { ensureSpade, ensureCoordTools, ensureExtraItems, ensureGateItems } from '#/bot/api/ai/clues/AcquireTools.js';
 import { SPADE_NAME } from '#/bot/api/ai/clues/data/toolAcquire.js';
-import { fightGuardian, sustainUntil } from '#/bot/api/ai/clues/Guardian.js';
+import { GuardianEncounter, sustainUntil, GUARDIAN_DEATH, type GuardianStop } from '#/bot/api/ai/clues/Guardian.js';
+import { GuardianProtection } from './guardianKit.js';
+import { hardClueKit, SHARK_ID } from './hardClueKit.js';
+import { hardKitSnapshot } from './hardCluePreparation.js';
+import { Equipment } from '#/bot/api/equipment/Equipment.js';
+import { FOOD_OPTIONS, isFoodItem } from '#/bot/api/combat/food.js';
+import { namesHaveEntranaRestrictedGear } from '#/bot/event/webwalk/exec/specialCrossing.js';
 import { PuzzleBox } from '#/bot/api/ai/clues/PuzzleBox.js';
-import { casketRewardSlots } from '#/bot/api/ai/clues/packPlan.js';
 import type { ClueRow, ClueStep } from '#/bot/api/ai/clues/types.js';
 import type { NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 import { talkThrough } from '#/bot/api/ai/quests/exec/primitives.js';
@@ -41,8 +46,7 @@ const SEARCH_OPS = ['Search', 'Open'];
 const ARRIVE_RADIUS = 1;
 const WALK_ATTEMPTS = 4;
 const WALK_TIMEOUT_MS = 45_000;
-// Why: trails cross the map, Varrock to Feldip and Varrock to level-50 Wilderness, so they route through the teleport catalog when the kit is held.
-// Why: a tele is admitted only once the route is longer than this, so short hops stay on foot.
+// Why: Long clue legs may use affordable catalog teleports; short legs stay on foot.
 const TELEPORT_MIN_SPAN = 40;
 const STEP_ATTEMPTS = 4;
 const PROGRESS_MS = 6000;
@@ -50,16 +54,16 @@ const MAX_STEPS = 20;
 const OUTER_GUARD = 1000;
 const REWARD_WAIT_MS = 2000;
 const REWARD_CLOSE_TRIES = 5;
+const TRAIL_COMPLETE = /completed the treasure trail/i;
 const CHALLENGE_REPLY_MS = 3000;
 
 const KEY_WALK_RADIUS = 5;
 const KEY_HUNT_MS = 120_000;
 const KEY_ENGAGE_MS = 3000;
-// black_heather respawns in 100 ticks; the rest of the riddle keepers are quicker.
+// Black Heather respawns in 100 ticks; other riddle targets respawn sooner.
 const KEY_RESPAWN_MS = 70_000;
 const LOOT_WAIT_MS = 3000;
-// Why: player_combat.rs2 refuses op2 outright in single-way combat, while we are still flagged from another fight, while another player has hit the target inside the last 8 ticks, or when the target is someone else's random event.
-// Why: each refusal is a chat line and a dropped op, so the attack has to be re-sent rather than waited out.
+// Why: `player_combat.rs2` drops the attack op for several single-way ownership conflicts, so retry after its refusal message.
 const ATTACK_REFUSED = /already under attack|someone else is fighting|not after you/i;
 
 import { TALK_ANCHORS } from '#/bot/api/ai/clues/data/talkAnchors.js';
@@ -103,9 +107,9 @@ let teleportsEnabled = true;
 
 /**
  * Options for a cross-map clue leg, so the teleport policy lives in one place.
- * Why: close-in walks (stepping onto an NPC or a dropped key) do not use this, the span gate would refuse a tele at two tiles anyway.
+ * Why: close-in walks (onto an NPC or a dropped key) don't use this; the span gate would refuse a tele at 2 tiles anyway.
  */
-function walkOpts(log: (m: string) => void, radius = ARRIVE_RADIUS): Parameters<typeof Traversal.walkResilient>[1] {
+export function trailWalkOpts(log: (m: string) => void, radius = ARRIVE_RADIUS): Parameters<typeof Traversal.walkResilient>[1] {
     return {
         radius,
         attempts: WALK_ATTEMPTS,
@@ -117,12 +121,12 @@ function walkOpts(log: (m: string) => void, radius = ARRIVE_RADIUS): Parameters<
     };
 }
 
-/** Tolls already bought this trail, so a stuck leg cannot shop in a loop. */
+/** Tolls bought during this trail, preventing repeated shop trips. */
 const gateItemsTried = new Set<string>();
 
 /**
- * Walk a clue leg, treating an unpayable toll as a shopping trip rather than a dead end.
- * Why: the navigator names what the route was short of, the Kharidian desert has one entrance and it eats a Shantay pass, so a leg failing for want of a 5gp ticket buys one and walks again.
+ * Walk a clue leg, treating an unpayable toll as a shopping trip.
+ * Why: the navigator names what the route was short of, and the desert's one entrance eats a Shantay pass, so a leg short a 5gp ticket buys one and walks again.
  */
 async function walkLeg(dest: NavPoint, log: (m: string) => void, radius = ARRIVE_RADIUS): Promise<boolean> {
     if (crossesTirannwn(dest)) {
@@ -131,7 +135,7 @@ async function walkLeg(dest: NavPoint, log: (m: string) => void, radius = ARRIVE
     if (crossesKharazi(dest)) {
         return walkAcrossKharazi(dest, radius, log);
     }
-    if (await Traversal.walkResilient(dest, walkOpts(log, radius))) {
+    if (await Traversal.walkResilient(dest, trailWalkOpts(log, radius))) {
         return true;
     }
     const short = WalkExecutor.lastMissingGateItems.filter(m => !gateItemsTried.has(m.name));
@@ -144,7 +148,7 @@ async function walkLeg(dest: NavPoint, log: (m: string) => void, radius = ARRIVE
     if (!(await ensureGateItems(short, log))) {
         return false;
     }
-    return Traversal.walkResilient(dest, walkOpts(log, radius));
+    return Traversal.walkResilient(dest, trailWalkOpts(log, radius));
 }
 
 const trace = new ClueTrace({
@@ -157,6 +161,10 @@ const trace = new ClueTrace({
 let sessionActive = false;
 let sessionLegs = 0;
 let acquireTries = 0;
+let postKillClue: number | null = null;
+let guardianHalt: 'dead' | 'guardian-lost' | null = null;
+let guardianEncounter: { readonly clueId: number; readonly encounter: GuardianEncounter } | null = null;
+export type ClueOutcome = 'done' | 'abandon' | 'yield' | GuardianStop;
 
 function heldIds(): number[] {
     return Inventory.items().map(i => i.id);
@@ -170,7 +178,7 @@ function heldCounts(): Map<number, number> {
     return counts;
 }
 
-// Why: only gains count, comparing the pack as a made every bite of food read as progress, so a leg that did nothing still reported `step done` and burned a leg off the trail budget.
+// Why: only gains count; comparing pack contents made every bite of food read as progress, so an idle leg reported `step done` and burned trail budget.
 // Why: a step also counts as progressed when it picks up something it needed, such as a riddle key or a tool.
 
 /** Did anything enter the pack since `before`? */
@@ -227,7 +235,7 @@ async function drainChat(): Promise<void> {
     }
 }
 
-/** Free one slot the only way a trail pack safely can. */
+/** Free one slot by eating; other trail items are retained. */
 async function eatOneForRoom(): Promise<boolean> {
     const edible = Inventory.items().find(i => i.actions().some(a => a.toLowerCase() === 'eat'));
     if (!edible) {
@@ -236,58 +244,6 @@ async function eatOneForRoom(): Promise<boolean> {
     const before = Inventory.used();
     await edible.interact('Eat');
     return Execution.delayUntil(() => Inventory.used() < before, 3000);
-}
-
-/**
- * Eat food to clear casket reward space; nothing else in a trail pack is safe to shed.
- * Why: a casket rolls its reward into a side inv and moves it one slot at a time, so anything that does not fit lands on the floor.
- */
-async function makeRoomForReward(casketObj: string, log: (m: string) => void): Promise<void> {
-    const want = casketRewardSlots(casketObj);
-    if (Inventory.free() >= want) {
-        return;
-    }
-    log(`casket needs ${want} free slots, pack has ${Inventory.free()} — eating to make room`);
-    for (let guard = 0; guard < 28 && Inventory.free() < want; guard++) {
-        if (!(await eatOneForRoom())) {
-            break;
-        }
-    }
-    if (Inventory.free() < want) {
-        log(`only ${Inventory.free()}/${want} slots free and nothing left to eat — will retrieve anything that spills`);
-    }
-}
-
-/**
- * Take back whatever the reward could not fit and left under us, eating for room as we go.
- * Why: restricted to our own tile so this never hoovers up unrelated drops.
- */
-async function collectSpilledReward(log: (m: string) => void): Promise<void> {
-    const here = reader.worldTile();
-    if (!here) {
-        return;
-    }
-    for (let guard = 0; guard < 28; guard++) {
-        const spill = GroundItems.query()
-            .where(g => {
-                const t = g.tile();
-                return t.x === here.x && t.z === here.z && t.level === here.level;
-            })
-            .nearest();
-        if (!spill) {
-            return;
-        }
-        if (Inventory.isFull() && !(await eatOneForRoom())) {
-            log(`WARNING: '${spill.name}' spilled from the casket and the pack is full with nothing to eat — leaving it on the ground`);
-            return;
-        }
-        const before = Inventory.used();
-        await spill.interact('Take');
-        if (!(await Execution.delayUntil(() => Inventory.used() > before, LOOT_WAIT_MS))) {
-            return;
-        }
-        log(`picked spilled reward '${spill.name}' back up`);
-    }
 }
 
 async function answerChallengeIfOpen(step: ClueStep, log: (m: string) => void): Promise<boolean> {
@@ -311,7 +267,7 @@ async function answerChallengeIfOpen(step: ClueStep, log: (m: string) => void): 
 
 // Why: `Attack` is refused outright whenever the server thinks the fight belongs to somebody else, so the op is re-sent on the tick until it takes.
 // Why: riddle001's keeper stands in the Bandit Camp, where aggressive bandits keep us combat-flagged for most of the approach.
-// Why: shaped like fightGuardian rather than one fire-and-forget op, with upkeep pumped throughout.
+// Why: shaped like fightGuardian, with upkeep pumped throughout.
 
 /** Kill the keeper of a riddle key and pick the key up. */
 async function acquireRiddleKey(kf: NonNullable<ClueRow['keyFrom']>, huntTile: NavPoint, log: (m: string) => void): Promise<boolean> {
@@ -407,10 +363,7 @@ async function acquireRiddleKey(kf: NonNullable<ClueRow['keyFrom']>, huntTile: N
     return haveKey();
 }
 
-// Why: only walkLeg routes through the pocket graph, and the talk case reaches its NPC through
-// Why: Reach.npcDialog, which walks itself. That asked the baked pack for a path into the elf camp,
-// Why: which it does not have. Cross into the destination's pocket first, then let each step's own
-// Why: reach logic finish the approach inside it.
+// Why: Only `walkLeg` uses the pocket graph, so enter the elf camp before the local NPC approach.
 async function reachTirannwn(step: ClueStep, log: (m: string) => void): Promise<void> {
     const target = stepTarget(step);
     if (target === null || !crossesTirannwn(target)) {
@@ -419,7 +372,7 @@ async function reachTirannwn(step: ClueStep, log: (m: string) => void): Promise<
     await walkAcrossTirannwn(target, ARRIVE_RADIUS, log);
 }
 
-async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void> {
+async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void | GuardianStop | 'yield'> {
     await reachTirannwn(step, log);
     switch (step.type) {
         case 'search': {
@@ -449,28 +402,50 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void>
                 return;
             }
             const coord = step.coord;
+            const deathMark = GameMessages.mark();
+            const died = (): boolean => guardianHalt === 'dead' || GameMessages.sawSince(deathMark, GUARDIAN_DEATH);
             const standOnIt = (): Promise<boolean> =>
                 walkLeg(coord, log);
             const dig = async (): Promise<void> => {
+                if (died()) return;
                 const spade = Inventory.first(SPADE_NAME);
                 if (spade) {
                     await spade.interact('Dig');
                 }
             };
 
-            if (!(await standOnIt())) {
+            if (guardianEncounter?.clueId !== step.id && !(await standOnIt())) {
+                if (died()) return 'dead';
                 return;
             }
-            await dig();
+            if (died()) return 'dead';
+            if (postKillClue === step.id) {
+                await dig();
+                return;
+            }
+            const guardian = step.guardian;
+            if (guardianEncounter?.clueId !== step.id) {
+                const protection = new GuardianProtection();
+                const prepared = !guardian || await protection.prepare();
+                if (died()) return 'dead';
+                if (!prepared) return 'supplies-needed';
+                if (guardian) guardianEncounter = { clueId: step.id, encounter: new GuardianEncounter(guardian, protection) };
+                await dig();
+            }
 
             // Why: a guarded coord yields the wizard on the first dig and the casket only on a dig after it dies, so both happen in one attempt.
             // Why: the fight chases, so walk back before the second dig.
-            const guardian = (step as ClueRow).guardian;
-            if (guardian) {
-                const outcome = await fightGuardian(guardian, log);
-                if (outcome.killed && (await standOnIt())) {
+            if (guardian && guardianEncounter?.clueId === step.id) {
+                if (GameMessages.sawSince(deathMark, GUARDIAN_DEATH)) return 'dead';
+                const outcome = await guardianEncounter.encounter.fight(log);
+                if (outcome !== 'killed') return outcome;
+                guardianEncounter = null;
+                postKillClue = step.id;
+                if (await standOnIt()) {
+                    if (died()) return 'dead';
                     await dig();
                 }
+                if (died()) return 'dead';
             }
             return;
         }
@@ -496,12 +471,14 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void>
         }
         case 'open-casket': {
             const casket = Inventory.items().find(i => i.id === step.casketId);
-            if (casket) {
-                await makeRoomForReward(step.casketObj, log);
-                await casket.interact('Open');
-                await Execution.delayUntil(() => Inventory.items().every(i => i.id !== step.casketId), REWARD_WAIT_MS);
-                await collectSpilledReward(log);
-            }
+            if (!casket) return;
+            const mark = GameMessages.mark();
+            await casket.interact('Open');
+            if (!(await Execution.delayUntil(() => Inventory.items().every(i => i.id !== step.casketId), REWARD_WAIT_MS))) return;
+            // Why: a hard trail is four to six caskets and the server keeps the count, so the only sign the trail ended is that no scroll came back.
+            if (heldIds().some(id => CLUE_DB[id] !== undefined)) return;
+            if (GameMessages.sawSince(mark, TRAIL_COMPLETE)) log('the trail is complete');
+            await collectReward(log, step.casketObj.includes('_hard_'));
             return;
         }
     }
@@ -530,8 +507,7 @@ function blockReason(step: ClueStep): string | null {
     if (extras.length > 0) {
         return `needs ${extras.join('+')} (not held)`;
     }
-    // Why: `start_chop_jungle` answers a missing machete, axe or map with a message box rather than a refusal
-    // Why: the walker can see, so the leg would swing at the band until its budget ran out and report no progress.
+    // Why: `start_chop_jungle` answers a missing machete, axe or map with a message box the walker can't see, so the leg would swing at the band until its budget ran out.
     if (step.type !== 'open-casket' && KHARAZI_CLUES.has(step.id)) {
         const short = jungleKitMissing();
         if (short.length > 0) {
@@ -545,8 +521,7 @@ async function tryAcquire(step: ClueStep, log: (m: string) => void): Promise<boo
     if (step.type === 'open-casket') {
         return false;
     }
-    // Row extras (Baxtorian's Rope) come first: the bank prep only withdraws
-    // them when the bank already has one, and without it the trail abandons.
+    // Row extras (Baxtorian's Rope) come first: bank prep only withdraws them when the bank has one, and without it the trail abandons.
     const extras = ((step as ClueRow).items ?? []).filter(n => !Inventory.first(n));
     if (extras.length > 0 && (await ensureExtraItems(extras, log))) {
         return true;
@@ -563,12 +538,13 @@ async function tryAcquire(step: ClueStep, log: (m: string) => void): Promise<boo
     return false;
 }
 
-async function solveStep(step: ClueStep, log: (m: string) => void, onAttempt: (n: number) => void): Promise<boolean> {
+async function solveStep(step: ClueStep, log: (m: string) => void, onAttempt: (n: number) => void): Promise<boolean | GuardianStop | 'yield'> {
     const tracked = trackedId(step);
     const before = heldCounts();
-    const progressed = (): boolean => !heldIds().includes(tracked) || gainedSince(before);
+    const progressed = (): boolean => !heldIds().includes(tracked) || (!(step.type === 'dig' && step.guardian) && gainedSince(before));
 
     for (let attempt = 0; attempt < STEP_ATTEMPTS; attempt++) {
+        if (guardianHalt !== null) return guardianHalt;
         if (progressed()) {
             return true;
         }
@@ -579,7 +555,8 @@ async function solveStep(step: ClueStep, log: (m: string) => void, onAttempt: (n
         onAttempt(attempt + 1);
         await drainChat();
         if (!(await answerChallengeIfOpen(step, log))) {
-            await dispatch(step, log);
+            const stopped = await dispatch(step, log);
+            if (stopped) return stopped;
         }
         if (await Execution.delayUntil(progressed, PROGRESS_MS)) {
             return true;
@@ -596,6 +573,36 @@ async function dismissRewardModal(): Promise<void> {
     }
 }
 
+async function collectReward(log: (m: string) => void, hard: boolean): Promise<void> {
+    await dismissRewardModal();
+    const here = reader.worldTile();
+    if (!here) return;
+    const discarded = new Set([SHARK_ID]);
+    const onTile = (g: GroundItem): boolean => {
+        const t = g.tile();
+        return t.x === here.x && t.z === here.z && t.level === here.level && !discarded.has(g.id);
+    };
+    for (let guard = 0; guard < 28; guard++) {
+        const drop = GroundItems.query().where(onTile).nearest();
+        if (!drop) return;
+        const name = drop.name ?? '';
+        if (Inventory.isFull()) {
+            const food = Inventory.items().find(i => hard ? i.id === SHARK_ID : FOOD_OPTIONS.some(name => isFoodItem(i.name, name)));
+            if (!food) {
+                log(`WARNING: '${name}' is left on the ground, the pack is full with no ${hard ? 'Shark' : 'food'} to drop`);
+                return;
+            }
+            const used = Inventory.used();
+            discarded.add(food.id);
+            if (!(await food.interact('Drop')) || !(await Execution.delayUntil(() => Inventory.used() < used, LOOT_WAIT_MS))) return;
+        }
+        const used = Inventory.used();
+        const count = Inventory.count(name);
+        if (!(await drop.interact('Take')) || !(await Execution.delayUntil(() => Inventory.used() > used || Inventory.count(name) > count, LOOT_WAIT_MS))) return;
+        log(`took '${name}' from the casket`);
+    }
+}
+
 export const ClueExecutor = {
     current: null as ClueProgress | null,
 
@@ -604,7 +611,20 @@ export const ClueExecutor = {
         teleportsEnabled = on;
     },
 
-    async solveHeldClue(log: (m: string) => void): Promise<'done' | 'abandon' | 'yield'> {
+    retryGuardian(): void {
+        guardianHalt = null;
+        guardianEncounter = null;
+        postKillClue = null;
+    },
+
+    noteDeath(): void {
+        guardianHalt = 'dead';
+        guardianEncounter = null;
+        postKillClue = null;
+    },
+
+    async solveHeldClue(log: (m: string) => void): Promise<ClueOutcome> {
+        if (guardianHalt !== null) return guardianHalt;
         const tlog = (m: string): void => {
             trace.note(m);
             log(m);
@@ -617,6 +637,7 @@ export const ClueExecutor = {
             sessionLegs = 0;
             acquireTries = 0;
             gateItemsTried.clear();
+            postKillClue = null;
             ClueExecutor.current = null;
             return outcome;
         };
@@ -628,6 +649,7 @@ export const ClueExecutor = {
             }
             await Sustain.run();
             await drainChat();
+            if (EventSignal.pending()) return 'yield';
 
             const step = identifyStep(heldIds(), CLUE_DB, CASKET_IDS);
             if (step === null) {
@@ -655,8 +677,7 @@ export const ClueExecutor = {
                 attempt: 0,
                 startedAt: ClueExecutor.current?.startedAt ?? Date.now(),
                 target,
-                // Keep the leg's original distance across retries so the bar
-                // does not reset every attempt.
+                // Keep the leg's original distance across retries so the bar doesn't reset every attempt.
                 startDist: sameLeg ? (ClueExecutor.current?.startDist ?? 0) : (tilesTo(target) ?? 0)
             };
 
@@ -666,6 +687,14 @@ export const ClueExecutor = {
                 return end('abandon', reason);
             }
 
+            if (step.type === 'dig' && step.guardian && guardianEncounter?.clueId !== step.id && postKillClue !== step.id && hardClueKit(hardKitSnapshot()) !== 'ready') {
+                return 'supplies-needed';
+            }
+            if (step.type !== 'open-casket' && step.coord?.level === 0
+                && step.coord.x >= 2802 && step.coord.x <= 2878 && step.coord.z >= 3329 && step.coord.z <= 3393
+                && namesHaveEntranaRestrictedGear([...Inventory.items(), ...Equipment.items()].map(i => i.name ?? ''))) {
+                return 'supplies-needed';
+            }
             const blocked = blockReason(step);
             if (blocked) {
                 if (acquireTries < 2 && (await tryAcquire(step, tlog))) {
@@ -685,7 +714,16 @@ export const ClueExecutor = {
                     trace.note(`attempt ${n}/${STEP_ATTEMPTS}`);
                 }
             };
-            if (!(await solveStep(step, tlog, onAttempt))) {
+            const result = await solveStep(step, tlog, onAttempt);
+            if (typeof result === 'string') {
+                if (result === 'dead' || result === 'guardian-lost') {
+                    guardianHalt = result;
+                    guardianEncounter = null;
+                    postKillClue = null;
+                }
+                return result;
+            }
+            if (!result) {
                 if (EventSignal.pending()) {
                     trace.note('yield — event fired mid-step');
                     return 'yield';

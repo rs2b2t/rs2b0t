@@ -1,5 +1,5 @@
-/** Offline path probe with optional --explain hops (nav-v2 Phase 4).
- *  --from 3222,3218,0 --to 2965,3378,0 [--explain] [--tele --magic 99 --runes] */
+/** Offline path probe with optional --explain hops.
+ *  --from 3222,3218,0 --to 2965,3378,0 [--pack out/collision.lcnav.gz] [--explain] [--tele --magic 99 --runes --distanceBeforeTeleport 0] */
 
 //   bun tools/nav/route-probe.ts --from 3222,3218,0 --to 2965,3378,0 --explain
 //   bun tools/nav/route-probe.ts --from 3019,9849,0 --to 2965,3378,0 --explain

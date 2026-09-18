@@ -1,5 +1,7 @@
 // RuneScape experience curve, for "how far to the next level" readouts.
 
+import { fmtDuration, fmtXpHr, paintSkillShort } from './paintLogic.js';
+
 // Why: the curve is the classic sum of `floor(l + 300 * 2^(l/7)) / 4`, so the table is built once rather than transcribed and left to drift.
 const MAX_LEVEL = 99;
 
@@ -44,4 +46,35 @@ export function etaHours(remaining: number, xpPerHour: number): number | null {
         return null;
     }
     return remaining / xpPerHour;
+}
+
+export interface SkillGain {
+    skill: string;
+    level: number;
+    xp: number;
+    /** Experience gained since the script began. */
+    gained: number;
+}
+
+export interface LevelRow {
+    label: string;
+    fraction: number;
+    /** The rate, the gap and the eta, for the row under the bar. */
+    cells: [string, string, string];
+}
+
+/** The bar and the line under it for one skill, from what it gained over `mins`. */
+export function levelRow(g: SkillGain, mins: number): LevelRow {
+    const prog = levelProgress(g.level, g.xp);
+    const rate = mins > 0.5 ? (g.gained / mins) * 60 : 0;
+    const eta = etaHours(prog.remaining, rate);
+    const perHour = mins > 0.5 ? `${fmtXpHr(g.gained, mins)}/hr` : 'xp/hr n/a';
+    if (prog.level >= MAX_LEVEL) {
+        return { label: `${paintSkillShort(g.skill)} ${prog.level}`, fraction: 1, cells: [perHour, 'maxed', ''] };
+    }
+    return {
+        label: `${paintSkillShort(g.skill)} ${prog.level}`,
+        fraction: prog.fraction,
+        cells: [perHour, `${prog.remaining.toLocaleString()} to go`, eta === null ? 'eta n/a' : `eta ${fmtDuration(eta * 60)}`]
+    };
 }

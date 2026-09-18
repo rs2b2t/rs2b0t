@@ -3,16 +3,13 @@ export interface ToolTier {
     name: string;
     /** Skill level required to *use* the tool (mining / woodcutting). */
     level: number;
-    // Why: mining gates on the metal tier, bronze/iron 1, steel 6, mithril 21, adamant 31, rune 41.
-    // Why: tools may still be used from the backpack without meeting this.
+    // Mining level for using the tool from inventory; wielding has a separate Attack requirement.
 
     /** Attack level required to wield the tool. */
     attackLevel?: number;
 }
 
-// Why: `tiered` picks the best usable tool from a level-ordered list (axes, pickaxes).
-// Why: `exact` names one item (tinderbox, hammer, …).
-// Why: fishing gear is handled separately in FishingMethods, since it is not equippable on this era pack.
+// `tiered` selects from axes or pickaxes; `exact` names one item. Fishing gear is defined with fishing methods.
 
 /** Tool requirement for gathering scripts. */
 export type ToolReq =
@@ -21,7 +18,7 @@ export type ToolReq =
           skill: string;
           tiers: readonly ToolTier[];
           label: string;
-          /** When true, restock/ensure will Wield the best held tier. */
+/** Wield the best held tier during restock. */
           equip?: boolean;
       }
     | {
@@ -41,7 +38,7 @@ export const PICKAXES: readonly ToolTier[] = [
     { name: 'Bronze pickaxe', level: 1, attackLevel: 1 }
 ];
 
-// Why: this era puts no woodcutting requirement on axes, Attack alone gates wielding them.
+// Why: This revision gates axe wielding on Attack, with no Woodcutting requirement.
 export const AXES: readonly ToolTier[] = [
     { name: 'Rune axe', level: 1, attackLevel: 40 },
     { name: 'Adamant axe', level: 1, attackLevel: 30 },
@@ -51,7 +48,7 @@ export const AXES: readonly ToolTier[] = [
     { name: 'Bronze axe', level: 1, attackLevel: 1 }
 ];
 
-/** Attack required to wield a named axe/pick (1 when unknown / non-tiered). */
+/** Attack level required to wield an axe or pickaxe; defaults to 1 for unknown tools. */
 export function toolAttackLevel(name: string): number {
     const want = name.toLowerCase();
     for (const t of PICKAXES) {
@@ -104,7 +101,7 @@ export const exactTool = (name: string, opts: { min?: number; restock?: number; 
 
 export const tinderboxReq = (): ToolReq => exactTool(TINDERBOX);
 
-/** Best tier the player can use that is also available (inv/bank/worn). Tiers are best-first. */
+/** Best available tier the player can use. Input tiers are best-first. */
 export function bestFromTiers(
     level: number,
     tiers: readonly ToolTier[],
@@ -209,7 +206,7 @@ export function toolRestockPlan(
     for (const r of reqs) {
         if (r.kind === 'tiered') {
             const level = skillLevel(r.skill);
-            // Prefer the best usable tier across pack + bank (bronze held + steel banked → withdraw steel).
+            // Best usable tier across pack + bank (bronze held + steel banked withdraws steel).
             const bestOwned = bestFromTiers(
                 level,
                 r.tiers,
@@ -264,7 +261,7 @@ export function bankHasBetterGatherTool(
     });
 }
 
-// Why: tiers the player cannot wield yet (Attack too low) are skipped.
+// Why: tiers the player can't wield yet (Attack too low) are skipped.
 // Why: classic RS still lets you mine or chop with the tool in the backpack, so Wield must not thrash forever.
 
 /** Names of tools that should be worn now (held, equip flag set, not yet worn); empty when nothing needs wielding. */
@@ -321,7 +318,7 @@ export function bestHeldToolNames(
 
 /**
  * Tiered tools held on the player that are worse than the best usable tier we already have.
- * e.g. bronze axe while holding/wearing steel → bronze is surplus.
+ * e.g. a bronze axe while holding/wearing steel is surplus.
  */
 export function surplusHeldToolNames(
     reqs: readonly ToolReq[],

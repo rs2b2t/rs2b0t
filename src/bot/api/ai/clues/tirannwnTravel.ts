@@ -1,6 +1,4 @@
-// Why: three callers walk a clue somewhere, and only one of them was the trail itself. The talk
-// Why: step reaches its NPC through Reach, and the bank stop picks its own booth, so each needs the
-// Why: seam graph or it asks the baked pack for a path across Isafdar and is told unreachable.
+// Why: 3 callers walk a clue somewhere and only one is the trail itself; the talk step reaches its NPC through Reach and the bank stop picks its own booth, so each needs the seam graph or the baked pack calls Isafdar unreachable.
 // @see docs/reference/clues-gates.md#proving-a-gate
 
 import { Game } from '#/bot/api/game/Game.js';

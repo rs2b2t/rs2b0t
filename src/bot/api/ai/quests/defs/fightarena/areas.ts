@@ -1,6 +1,6 @@
 import Tile from '../../../../../geometry/Tile.js';
 
-/** Five npcs render "Khazard Guard" and two render "Jeremy Servil", so everything here is by id. */
+/** 5 npcs render "Khazard Guard" and 2 render "Jeremy Servil", so everything here is by id. */
 export const FA_NPC = {
     GUARD1: 253,
     DRUNK_GUARD: 254,
@@ -44,7 +44,7 @@ export const FA_TILE = {
 
 export interface FaRect { minX: number; maxX: number; minZ: number; maxZ: number }
 
-// Why: these are the bounding boxes of four floods over the baked collision pack with the scripted doors removed, and neither cell rect holds a building tile.
+// Why: these are the bounding boxes of 4 floods over the baked collision pack with the scripted doors removed, and neither cell rect holds a building tile.
 export const FA_AREA: Record<'JEREMY_CELL' | 'PRISON_CELL' | 'ARENA' | 'BUILDING', FaRect> = {
     JEREMY_CELL: { minX: 2614, maxX: 2616, minZ: 3166, maxZ: 3170 },
     PRISON_CELL: { minX: 2597, maxX: 2601, minZ: 3142, maxZ: 3144 },

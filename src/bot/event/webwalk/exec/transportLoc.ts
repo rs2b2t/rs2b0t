@@ -1,6 +1,4 @@
-/**
- * Transport location matching + trapdoor open (extracted from WalkExecutor).
- */
+/** Transport location matching and trapdoor open. */
 
 import type { TransportInfo } from '../PathFinder.js';
 import type { WorldTile } from '../../../adapter/ClientAdapter.js';
@@ -49,8 +47,7 @@ export function matchesTransportLanding(
         if (before === null || current.level !== before.level) {
             return true;
         }
-        // Tolerance must not exceed the crossing's own span, or the near side
-        // and every frame of the animation read as crossed.
+        // Tolerance can't exceed the crossing's own span, or the near side and every animation frame read as crossed.
         const span = chebyshev(before, transport.toTile);
         return span <= LANDING_TOLERANCE
             ? chebyshev(current, transport.toTile) === 0
@@ -107,8 +104,7 @@ export function findTransportLoc(transport: TransportInfo): Loc | null {
     if (transport.locId !== undefined && DESERT_MINING_CAMP_SCRIPTED_DOOR_IDS.has(transport.locId)) {
         return null;
     }
-    // Fallback: name+action near the recorded placement (scene lag / id drift after
-    // ship hops, gangplanks on Brimhaven deck after Barnaby).
+    // Fallback: name+action near the recorded placement (id drift after ship hops, e.g. gangplanks on the Brimhaven deck).
     const nearName = Locs.query()
         .name(...names)
         .action(transport.action)
@@ -120,8 +116,7 @@ export function findTransportLoc(transport: TransportInfo): Loc | null {
     if (nearName) {
         return nearName;
     }
-    // Last resort for stairs: any Climb-* loc at the placement tile, regardless of
-    // Stairs vs Staircase (content packs differ; edge data may lag).
+    // Last resort for stairs: any Climb-* loc at the placement tile, Stairs or Staircase (packs differ).
     if (/climb/i.test(transport.action) && /stair/i.test(transport.locName)) {
         const byTile = Locs.query()
             .action(transport.action)
@@ -137,8 +132,7 @@ export function findTransportLoc(transport: TransportInfo): Loc | null {
             return byTile;
         }
     }
-    // Closed→open transform: doors keep the same name but swap Open↔Close and id.
-    // Nearby open leaf ⇒ treat as not-shut so the walker steps through.
+    // Closed-to-open transform keeps the name but swaps Open/Close and id, so a nearby open leaf means not shut and the walker steps through.
     if (/^open$/i.test(transport.action)) {
         const openLeaf = Locs.query()
             .name(transport.locName)
@@ -149,11 +143,10 @@ export function findTransportLoc(transport: TransportInfo): Loc | null {
             })
             .nearest();
         if (openLeaf) {
-            return null; // open, caller should walk through, not re-Open
+            return null; // open, the caller walks through
         }
     }
-    // Web already slashed: content loc_change → bigweb_slashed ("Slashed web", no Slash).
-    // Exact placement only, dual webs share locId one tile apart.
+    // Web already slashed: content loc_change to bigweb_slashed ("Slashed web", no Slash); exact placement only, since dual webs share locId one tile apart.
     if (/^slash$/i.test(transport.action) && /web/i.test(transport.locName)) {
         const slashed = Locs.query()
             .name('Slashed web')
@@ -169,7 +162,7 @@ export function findTransportLoc(transport: TransportInfo): Loc | null {
     return null;
 }
 
-// Why: a ship or teleport landing rebuilds the client scene, so the disembark loc is unqueryable for a few ticks and the first lookup misses, failing there repaths off a deck the walker is standing on.
+// Why: a ship or teleport landing rebuilds the scene, so the disembark loc is unqueryable for a few ticks; failing on the first miss repaths off the deck you're standing on.
 
 /** Look for a transport loc, waiting out a scene rebuild before reporting it absent. */
 export async function awaitTransportLoc(

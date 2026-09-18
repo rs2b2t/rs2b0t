@@ -1,5 +1,7 @@
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 import Tile from '../geometry/Tile.js';
+
+export const SHILO_WATER_VENDOR = { keeper: 'Obli', stand: new Tile(2825, 2959, 0), item: 'Vial of water' } as const;
 import { cookSurfaceForFishCamp } from './cookingRanges.js';
 import {
     locationOptions,
@@ -7,10 +9,7 @@ import {
     type GatheringLocation
 } from './gatheringLocations.js';
 
-/**
- * Fishing camps for GatheringBot / Fisher, catalogued from rs2b2tgathering.csv plus legacy presets and polished via live verify and visual stand checks.
- * Cook surfaces ({@link rangeStand}) come from {@link CookingRanges} when a Range/Fire is within a useful walk of the pier (Catherby, Seers fly, Barb fires, …).
- */
+/** Fishing camps from rs2b2tgathering.csv and live checks. `rangeStand` is set when a useful cook surface is near the pier. */
 export interface FishingLocation extends GatheringLocation {
     rangeStand?: Tile;
     rangeName?: string;
@@ -20,8 +19,7 @@ function withCampCook(loc: FishingLocation): FishingLocation {
     if (loc.rangeStand) {
         return loc;
     }
-    // Default pin is pier surface (cook-then-bank). bank-raw-then-cook re-resolves
-    // at runtime via resolveCookScene + CookSurfaceRole 'bank'.
+    // Default pin is the pier surface (cook-then-bank); bank-raw-then-cook re-resolves at runtime via resolveCookScene + CookSurfaceRole 'bank'.
     const cook = cookSurfaceForFishCamp(loc.name, 'pier');
     if (!cook) {
         return loc;
@@ -44,7 +42,8 @@ const BANK = {
     edgeville: new Tile(3094, 3493, 0),
     seers: new Tile(2725, 3491, 0),
     faladorWest: new Tile(2946, 3369, 0),
-    grandTree: new Tile(2449, 3482, 1)
+    grandTree: new Tile(2449, 3482, 1),
+    shilo: new Tile(2852, 2954, 0)
 } as const;
 
 export const FISHING_LOCATIONS: FishingLocation[] = (
@@ -68,6 +67,7 @@ export const FISHING_LOCATIONS: FishingLocation[] = (
             // Long shore hops: spots reach past ~72, beyond the old pin-disk radius.
             campRadius: 80,
             chaseRadius: 28,
+            sweep: [new Tile(2845, 3431, 0), new Tile(2855, 3428, 0)],
             verified: true,
             resources: ['mackerel', 'cod', 'bass', 'tuna', 'lobster', 'swordfish', 'shark'],
             // rangeStand filled by withCampCook (Catherby bank-house Range)
@@ -84,6 +84,7 @@ export const FISHING_LOCATIONS: FishingLocation[] = (
             chaseRadius: 28,
             verified: true,
             resources: ['mackerel', 'cod', 'bass', 'tuna', 'lobster', 'swordfish', 'shark'],
+            baitVendor: { keeper: 'Roachey', stand: new Tile(2596, 3399, 0), price: 2, item: 'Feather' },
             notes: 'Bank requires Fishing 68'
         },
         {
@@ -148,6 +149,30 @@ export const FISHING_LOCATIONS: FishingLocation[] = (
             verified: false,
             resources: ['trout', 'salmon'],
             notes: 'Tick manip: Tannerfishing (fly + cook/eat). Unverified seed; bank Grand Tree 1F'
+        },
+        {
+            name: 'Shilo Village',
+            spot: new Tile(2841, 2970, 0),
+            bankStand: BANK.shilo,
+            campRadius: 48,
+            chaseRadius: 28,
+            verified: false,
+            resources: ['trout', 'salmon'],
+            sweep: [
+                new Tile(2862, 2971, 0),
+                new Tile(2856, 2972, 0),
+                new Tile(2841, 2970, 0),
+                new Tile(2836, 2970, 0),
+                new Tile(2822, 2968, 0),
+                new Tile(2832, 2973, 0),
+                new Tile(2834, 2975, 0),
+                new Tile(2850, 2977, 0),
+                new Tile(2855, 2978, 0),
+                new Tile(2860, 2977, 0),
+                new Tile(2869, 2978, 0)
+            ],
+            baitVendor: { keeper: 'Fernahei', stand: new Tile(2870, 2971, 0), price: 2, item: 'Feather' },
+            notes: 'Requires Shilo Village quest; fly only, the teller banks and Fernahei sells the feathers.'
         }
     ] as FishingLocation[]
 ).map(withCampCook);

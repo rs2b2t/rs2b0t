@@ -7,7 +7,7 @@ import { REGICIDE_POCKETS, REGICIDE_SEAMS } from '#/bot/api/ai/quests/defs/regic
 import { RG_STAGE } from '#/bot/api/ai/quests/defs/regicide/journal.js';
 import { onShelf } from '#/bot/api/ai/quests/defs/regicide/pass.js';
 
-// Why: the seam table is generated from the collision pack by `tools/nav/regicide-pockets.ts`, so these are the assertions that catch a regeneration that silently lost a crossing, a lost seam is not a compile error, it is a leg that walks into a wall thirty minutes into a run.
+// Why: generated seam omissions compile cleanly but strand a live route.
 
 const at = (t: { x: number; z: number }) => ({ x: t.x, z: t.z, level: 0 });
 
@@ -24,7 +24,7 @@ describe('the Tirannwn seam table', () => {
         expect(degenerate).toEqual([]);
     });
 
-    // Why: the pitfalls and the log balances are one-way per loc. A pit's side loc stages the player one tile off itself away from the pit, so taking the far loc from the near bank stages them inside it and the trap timer drops them in before the jump runs.
+    // Why: pitfalls and log balances are directional; using the far loc can stage the player inside the trap.
     test('every pitfall and log balance is marked one-way', () => {
         const loose = REGICIDE_SEAMS.filter(seam => (seam.kind === 'pit' || seam.kind === 'log') && !seam.directed);
         expect(loose).toEqual([]);

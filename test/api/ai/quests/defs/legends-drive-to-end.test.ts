@@ -19,7 +19,7 @@ const restore = [
 afterAll(() => restore.forEach(fn => fn()));
 beforeEach(() => { boxes = []; });
 
-// Why: a `~mesbox` opens no chat widget, so the quiet counter read a chain suspended on one as a chain that had ended, and reported success with the box still up. `ungadulu_where` finishes on one, and the page left standing is the modal that stopped the next shaman from opening his mouth.
+// Why: `~mesbox` can suspend a chain without opening chat, so silence does not mean completion.
 test('a chain suspended on a message box is driven, not counted as silence', async () => {
     boxes = ['the shaman throws himself down on the floor and starts convulsing.'];
     const chat = stubProps(ChatDialog, {

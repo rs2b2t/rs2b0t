@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -16,14 +17,6 @@ export const DRAGON_STAGE = {
 } as const;
 
 const DRAGON_QUEST = 'Dragon Slayer';
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 const FLAG_LINES: readonly [string, string][] = [
     ['i should return to oziach for more detailed instructions', 'needs-briefing'],
@@ -70,11 +63,10 @@ export function parseDragonJournal(lines: readonly string[] | string): QuestProg
     return stage === undefined ? undefined : { stage, flags: readFlags(text) };
 }
 
-// Why: the journal modal does not always open, a leftover dialogue, a level change, a tick where the tab has not refreshed.
-// Why: a failed read is no evidence the quest went backwards, so the last good one stands in until the next success.
+// Why: the journal modal doesn't always open (leftover dialogue, level change, unrefreshed tab), so the last good read stands in until the next success.
 let lastGood: QuestProgress | undefined;
 
-// Why: `decide()` branches entirely on this, so a flag that flaps between loops means the read is failing rather than the quest moving backwards.
+// Why: `decide()` branches on this, so a flag that flaps between loops means the read is failing.
 
 /** What the last journal read saw. */
 export interface JournalRead {

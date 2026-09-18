@@ -1,6 +1,4 @@
-/**
- * Multi-tile door / gate crossing + stall nearby-door open (extracted from WalkExecutor).
- */
+/** Multi-tile door / gate crossing and the stall nearby-door open. */
 
 import type { WorldTile } from '../../../adapter/ClientAdapter.js';
 import { reader } from '../../../adapter/ClientAdapter.js';
@@ -10,7 +8,9 @@ import { Locs, type Loc } from '../../../api/locs/Locs.js';
 import { Reachability } from '../geometry/Reachability.js';
 import { CANT_REACH, GameMessages } from '../../../api/chatbox/gameMessages.js';
 import { Input } from '../../../input/Input.js';
+import { BotHost } from '../../../runtime/BotHost.js';
 import { DirectNavigator } from '../DirectNavigator.js';
+import { DEFAULT_DOOR_STEP_TICKS } from '../pathFollowPolicy.js';
 import {
     chooseCrossClick,
     isOnFarSide,
@@ -38,6 +38,7 @@ const WEB_SLASH_CHAT_MS = 3500;
 const WEB_PASSAGE_MS = 4000;
 const APPROACH_WALK_MS = 3000;
 const SCENE_STEP_MS = 8000;
+const STEP_WAIT_MS = 4000;
 
 /** True when content has swapped this placement to bigweb_slashed (walkable). */
 function slashedWebAtPlacement(locX: number, locZ: number): boolean {
@@ -52,10 +53,7 @@ function slashedWebAtPlacement(locX: number, locZ: number): boolean {
     );
 }
 
-/**
- * Web is passable: slashed leaf visible, or no Slash-target and can step the edge.
- * Prefer slashed-leaf, collision lags a tick after loc_change (blockwalk=no).
- */
+/** Web passable: slashed leaf visible, or no Slash target and the edge steps; the leaf is checked first since collision lags a tick after loc_change. */
 function webPassageReady(
     transport: TransportInfo,
     approach: PathStepTile,
@@ -111,7 +109,7 @@ async function walkThroughWeb(
 
 type WebSlashAttempt = 'success' | 'fail' | 'no_blade' | 'cant_reach' | 'timeout';
 
-// Why: web.rs2 reports the outcome by chat, success is "You slash the web apart.", fail is "You fail to cut through it." (retry the same web), and no blade is "Only a sharp blade…".
+// Why: web.rs2 reports the outcome by chat, success is "You slash the web apart.", fail is "You fail to cut through it." (retry the same web), and no blade is "Only a sharp blade...".
 
 /** One Slash / use-on attempt on a bigweb. */
 async function attemptSlashWeb(
@@ -120,8 +118,7 @@ async function attemptSlashWeb(
     mark: number,
     log: (msg: string) => void
 ): Promise<WebSlashAttempt> {
-    // Prefer plain Knife use-on; else slash-capable inv weapon; else menu Slash
-    // (needs worn blade via slash_checker). Metal throwing knives ≠ content knife.
+    // Knife use-on first, then a slash-capable inv weapon, then menu Slash (needs a worn blade via slash_checker); throwing knives don't count.
     let slashItem = Inventory.first('Knife');
     if (slashItem === null) {
         slashItem = Inventory.items().find(i => isSlashWeaponName(i.name)) ?? null;
@@ -201,12 +198,12 @@ export function isOpenBarrierLeaf(name: string | null, ops: readonly (string | n
 /** Failed crossings at one placement before A* is told to avoid it this walk. */
 export const DOOR_AVOID_STRIKES = 2;
 
-// Why: `resetAvoids` throws the per-walk avoid list away on the next `walkTo`, so a door that cannot be crossed, a quest-locked gate or a leaf the server refuses, is replanned by the next `walkResilient` ladder pass and the walk loops forever.
-// Why: strikes therefore count across walks, and a placement that has refused this many crossings is treated as shut for the session.
+// Why: `resetAvoids` drops the per-walk avoid list on the next `walkTo`, so a door that can't be crossed gets replanned by the next `walkResilient` pass and the walk loops.
+// Why: strikes count across walks, and a placement that refused this many is treated as shut for the session.
 export const DOOR_SESSION_STRIKES = 3;
 
 // Why: a gangplank or ladder that "refuses" is usually a scene that has not caught up, and banning it can strand the walker somewhere with one exit.
-// Why: live, three missed `Gangplank` frames on the Karamja ship left a bot marooned on the deck.
+// Why: live, 3 missed `Gangplank` frames on the Karamja ship left a bot marooned on the deck.
 
 /** True when the barrier is openable, the only kind that may be banned for the run. */
 export function barrierBannable(kind: string | undefined, locName: string | undefined): boolean {
@@ -232,24 +229,18 @@ export function noteFailedDoor(
     return strikes;
 }
 
-/**
- * Path-scoped stall recovery: only open doors that belong on the published route.
- * Street-front house doors sit *next* to the path corridor, proximity must not win.
- */
+/** Path-scoped stall recovery: only doors on the published route qualify, since street-front house doors sit beside the corridor. */
 interface PathDoorHint {
     tiles: readonly { x: number; z: number; level: number }[];
     pathIdx: number;
     // Why: defaults to 0, so the door placement must be a path tile.
-    // Why: pathfinder door edges put the closed loc on an edge endpoint, while lateral house doors sit at d≥1.
+    // Why: pathfinder door edges put the closed loc on an edge endpoint, while lateral house doors sit at d >= 1.
 
     /** Max Chebyshev distance from a path tile for a door to count as on-route. */
     corridor?: number;
     /** How far ahead of pathIdx to consider (default 12). */
     window?: number;
-    /**
-     * Planned door/gate hop placements (transport.locX/Z) ahead on the path.
-     * Highest priority, exact map placement we intend to cross.
-     */
+    /** Planned door/gate hop placements (transport.locX/Z) ahead on the path; these win outright. */
     hopDoors?: readonly { x: number; z: number }[];
 }
 
@@ -267,8 +258,7 @@ export function pickNearbyDoorTile(
         return null;
     }
     const hasPath = !!(path && path.tiles.length > 0);
-    // Default 0: must be *on* a path tile. corridor=1 treats every street-front
-    // door as on-route and re-opens the "tour the house" failure mode.
+    // Default 0: the door must be on a path tile; corridor=1 treats every street-front door as on-route and tours houses again.
     const corridor = path?.corridor ?? 0;
     const window = path?.window ?? 12;
     const hopDoors = path?.hopDoors ?? [];
@@ -360,7 +350,7 @@ export async function tryNearbyDoor(
                 return t.x === pick.x && t.z === pick.z;
             }) ?? null);
     if (!door) {
-        // Path-scoped stall with only off-path doors nearby, repath, don't tour houses.
+        // Path-scoped stall with only off-path doors nearby: leave it to repath.
         if (path && path.tiles.length > 0) {
             log('stalled with no path-corridor door to open — leaving door-hunt to repath');
         }
@@ -389,7 +379,7 @@ export async function tryNearbyDoor(
         return cur === null || Reachability.canReach(t, { maxSteps: 200, adjacentOk: true });
     }, 5000);
 
-    // Quest-lock mesbox with no passage → caller may blacklist via return flag.
+    // Quest-lock mesbox with no passage; the caller may blacklist via the return flag.
     if (!opened && chatShowsQuestLock()) {
         await dismissQuestLockDialogue();
         return false;
@@ -397,9 +387,7 @@ export async function tryNearbyDoor(
     return opened;
 }
 
-/**
- * After a failed nearby-door open, if chat shows quest lock, return the door tile to blacklist.
- */
+/** After a failed nearby-door open, the door tile to blacklist when chat shows a quest lock. */
 export function questLockDoorTileNearPlayer(): { x: number; z: number } | null {
     if (!chatShowsQuestLock()) {
         return null;
@@ -415,12 +403,37 @@ export function questLockDoorTileNearPlayer(): { x: number; z: number } | null {
     return { x: t.x, z: t.z };
 }
 
-/**
- * True when the barrier is not a shut Open-target (open leaf with Close, or
- * no matching loc). Caller still verifies passage with Reachability.
- */
+/** True when no shut Open-target is found (open leaf with Close, or no loc); the caller still checks passage with Reachability. */
 export function barrierLooksOpen(transport: TransportInfo): boolean {
     return findTransportLoc(transport) === null;
+}
+
+/** Ticks from the Open click to the open leaf, the step click and the crossing, for the crossed log line. */
+export function crossingTiming(openClick: number | null, opened: number | null, stepped: number | null, now: number): string {
+    if (openClick === null) {
+        return '';
+    }
+    const rel = (tick: number | null): string => (tick === null ? 'unseen' : `+${tick - openClick}`);
+    return ` (Open sent tick ${openClick}, open ${rel(opened)}, stepped ${rel(stepped)}, crossed +${now - openClick})`;
+}
+
+// Why: the sprite the reader's `worldTile` follows reaches the far tile a tick or two after the server moved the player, so a same-frame stepper judges the crossing on the server's tile; the default keeps the sprite so every other walker's timing stays as its live proofs recorded it.
+function positionFor(stepTicks: number): () => WorldTile | null {
+    return stepTicks === 0 ? () => reader.serverTile() : () => reader.worldTile();
+}
+
+// Why: on the frame the leaf swings the client has already applied the collision change, so the poll here only covers a scene that has not caught up, and it stops at the next PLAYER_INFO because a leaf landing on the step tile never frees the edge and the caller's scene-step owns that case.
+async function stepThroughOpened(approach: PathStepTile, step: PathStepTile, stepTicks: number, position: () => WorldTile | null): Promise<number> {
+    if (stepTicks > 0) {
+        await Execution.delayTicks(stepTicks);
+    } else if (!Reachability.canStep(approach, step)) {
+        const seen = BotHost.tickCount;
+        await Execution.delayUntil(() => Reachability.canStep(approach, step) || BotHost.tickCount > seen, STEP_WAIT_MS);
+    }
+    const stepped = BotHost.tickCount;
+    DirectNavigator.walk(step);
+    await Execution.delayUntil(() => isOnFarSide(position(), approach, step), STEP_WAIT_MS);
+    return stepped;
 }
 
 export async function crossMultiTileDoor(
@@ -428,13 +441,18 @@ export async function crossMultiTileDoor(
     step: PathStepTile,
     transport: TransportInfo,
     log: (msg: string) => void,
-    onQuestLock?: (x: number, z: number) => void
+    onQuestLock?: (x: number, z: number) => void,
+    stepTicks: number = DEFAULT_DOOR_STEP_TICKS
 ): Promise<boolean> {
     const dir = { x: Math.sign(step.x - approach.x), z: Math.sign(step.z - approach.z) };
     const landing = { x: step.x + dir.x, z: step.z + dir.z, level: step.level };
+    let openClick: number | null = null;
+    let opened: number | null = null;
+    let stepped: number | null = null;
+    const position = positionFor(stepTicks);
 
     // Why: a web already slashed (multiloc or a prior cut) is walked through as soon as "Slashed web" or passage shows, without a long canStep-only poll.
-    // Why: only an identical placement matches, so a neighbouring web is never slashed instead.
+    // Why: only an identical placement matches, so a neighbouring web is never slashed.
     if (isSlashWebTransport(transport.locName, transport.action)) {
         const here0 = reader.worldTile();
         if (isOnFarSide(here0, approach, step)) {
@@ -454,9 +472,9 @@ export async function crossMultiTileDoor(
         }
     }
 
-    // Fast path: already open (or gone). Skip approach-Open-wait loops that feel
-    // like a multi-second pause at every previously-opened door on the route.
-    if (barrierLooksOpen(transport)) {
+    // Fast path: already open or gone, so no approach-Open-wait pause at a door opened earlier on the route.
+    // Why: `findTransportLoc` falls back to any same-named Open loc within five tiles, so an open door with a shut neighbour (Doric's hut) reads as shut; a steppable edge is open whatever the lookup says.
+    if (barrierLooksOpen(transport) || Reachability.canStep(approach, step)) {
         const here0 = reader.worldTile();
         if (isOnFarSide(here0, approach, step)) {
             log(`crossed '${transport.locName}' at (${transport.locX},${transport.locZ}) (already past)`);
@@ -467,8 +485,7 @@ export async function crossMultiTileDoor(
             || Reachability.canReach(step, { maxSteps: 64, adjacentOk: true });
         if (passage) {
             log(`${transport.locName} at (${transport.locX},${transport.locZ}) already open — continuing`);
-            // Only nudge through if we are already on the approach tile; otherwise
-            // clear the hop and let the path follower walk the open corridor.
+            // Nudge through only from the approach tile; otherwise clear the hop and let the follower walk the open corridor.
             if (
                 here0
                 && here0.level === approach.level
@@ -490,12 +507,12 @@ export async function crossMultiTileDoor(
 
     const deadline = performance.now() + MULTI_DOOR_CROSS_MS;
     while (performance.now() < deadline) {
-        const here = reader.worldTile();
+        const here = position();
         if (isOnFarSide(here, approach, step)) {
-            log(`crossed '${transport.locName}' at (${transport.locX},${transport.locZ})`);
+            log(`crossed '${transport.locName}' at (${transport.locX},${transport.locZ})${crossingTiming(openClick, opened, stepped, BotHost.tickCount)}`);
             return true;
         }
-        // Mid-loop: web became slashed (us or someone else) → walk, do not re-Slash.
+        // Mid-loop: the web got slashed (by us or someone else), so walk through; no second Slash.
         if (
             isSlashWebTransport(transport.locName, transport.action)
             && webPassageReady(transport, approach, step)
@@ -521,8 +538,7 @@ export async function crossMultiTileDoor(
         }
         if (shut) {
             const mark = GameMessages.mark();
-            // Stand on the approach tile before Open. CANT_REACH is common when
-            // the walker clicks a door from one tile too far (manor vestibule, guild).
+            // Stand on the approach tile before Open; CANT_REACH is common one tile too far out (manor vestibule, guild).
             const p0 = reader.worldTile();
             if (
                 p0
@@ -536,7 +552,7 @@ export async function crossMultiTileDoor(
                 }, APPROACH_WALK_MS);
             }
             // Why: content web.rs2 decides a slash by chat, random(2) fail sends "You fail to cut through it.", which retries the same web now.
-            // Why: on success the code waits for Slashed web or passage, walks through once and returns rather than continue-looping onto the neighbour web.
+            // Why: on success we wait for Slashed web or passage, walk through once and return, or the loop would move on to the neighbour web.
             if (isSlashWebTransport(transport.locName, transport.action)) {
                 const outcome = await attemptSlashWeb(shut, transport, mark, log);
                 if (outcome === 'no_blade' || outcome === 'cant_reach') {
@@ -558,7 +574,10 @@ export async function crossMultiTileDoor(
                 log(`'${transport.action}' not offered by ${transport.locName} (ops: ${shut.actions().join(', ')})`);
                 return false;
             }
-            await Execution.delayUntil(
+            openClick = BotHost.tickCount;
+            opened = null;
+            stepped = null;
+            const swung = await Execution.delayUntil(
                 () =>
                     findTransportLoc(transport) === null
                     || Reachability.canStep(approach, step)
@@ -566,6 +585,9 @@ export async function crossMultiTileDoor(
                     || chatShowsQuestLock(),
                 OPEN_WAIT_MS
             );
+            if (swung && !GameMessages.sawSince(mark, CANT_REACH) && !chatShowsQuestLock()) {
+                opened = BotHost.tickCount;
+            }
             if (GameMessages.sawSince(mark, CANT_REACH)) {
                 log(`server says can't reach ${transport.locName} — repathing`);
                 return false;
@@ -576,10 +598,7 @@ export async function crossMultiTileDoor(
                 onQuestLock?.(transport.locX, transport.locZ);
                 return false;
             }
-            // Collision often lags a tick after Open, step through immediately.
-            await Execution.delayTicks(1);
-            DirectNavigator.walk(step);
-            await Execution.delayUntil(() => isOnFarSide(reader.worldTile(), approach, step), 4000);
+            stepped = await stepThroughOpened(approach, step, stepTicks, position);
             continue;
         }
         const canStepEdge = Reachability.canStep(approach, step);

@@ -2,6 +2,158 @@ import type { Case } from './manifestTypes.js';
 
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
+    ...(['missing-dds', 'missing-superanti', 'sharks14', 'guardian', 'reward'] as const).map(scenario => ({
+        id: `jive-private-${scenario}`,
+        harness: 'jive-private-live.ts',
+        covers: { scripts: ['JiveDragons'] as const, subsystems: ['clues'] as const },
+        status: 'unvetted' as const,
+        manual: true as const,
+        env: { JIVE_SCENARIO: scenario },
+        budgetMin: 12,
+        note: 'Offline-authored, not run. PRIVATE 8891 and RUNTIME_AUTHORIZED only; explicit bundle, fresh jive-private-observer stream and reward fixture hash required. Setup/cleanup: e2e/jive-private-setup.md.'
+    })),
+    {
+        id: 'jivedragons-clue-bank-live',
+        harness: 'jivedragons-clue-bank-live.ts',
+        covers: { scripts: ['JiveDragons'] },
+        status: 'unvetted',
+        manual: true,
+        budgetMin: 10,
+        note: 'PRIVATE 8891 only, explicit RUNTIME_AUTHORIZED=1 after producer handoff. Fresh attested candidate; blue dungeon clue2693/trail_status0, Falador egress before bank, actual hide deposit with clue held, then solver path progress. No combat-refill requirement.'
+    },
+    {
+        id: 'jivedragons-black-range-live',
+        harness: 'jivedragons-black-range-live.ts',
+        covers: { scripts: ['JiveDragons'] },
+        status: 'unvetted',
+        manual: true,
+        args: ['--site', 'black', '--style', 'range', '--stand', '1', '--tick', '200', '--minutes', '4', '--no-starve'],
+        budgetMin: 10,
+        note: 'PRIVATE 8891 only; ENGINE_DIR ends /shilo-private/engine, HEADED=1 SLOWMO=0, BLACK_SERVER_TRACE and candidate E2E_CLIENT_PAGE/BLACK_BUNDLE required. Full Sharks after equip; real Drop/Bury/Take, XP and NPC54 lifetimes. Closer-position safety remains a separate unvetted claim.'
+    },
+    {
+        id: 'jivedragons-blue-readiness-live',
+        harness: 'jivedragons-black-range-live.ts',
+        covers: { scripts: ['JiveDragons'] },
+        status: 'unvetted',
+        manual: true,
+        args: ['--site', 'blue', '--style', 'range', '--stand', '1', '--tick', '200', '--minutes', '3', '--no-starve'],
+        budgetMin: 8,
+        note: 'PRIVATE candidate only: same explicit environment as Black case. Blue NPC55 moving readiness at safe range6, full-food bones/bury/hide/other/return and authoritative deaths; foreign claims covered separately by unit tests.'
+    },
+    {
+        id: 'shilo-north-bank-live',
+        harness: 'shilo-north-bank-live.ts',
+        covers: { scripts: ['GatheringBot'] },
+        status: 'unvetted',
+        manual: true,
+        budgetMin: 18,
+        note: 'PRIVATE world only: BASE localhost:8891, HEADED=1, E2E_CLIENT_PAGE=/bot-north-green.html and NORTH_SERVER_TRACE required. Three stationary north-only NPC317 spawns; actual Fisher full catch, teller deposit, bridge return and next catch. Never run on shared 8890.'
+    },
+    {
+        id: 'leather-thread-279-live',
+        harness: 'leather-thread-279-live.ts',
+        covers: { scripts: ['LeatherCrafter'] },
+        status: 'vetted',
+        provenAt: '5b423ccaa000b99bbb0b9a900e337755c6684d4e',
+        manual: true,
+        budgetMin: 10,
+        note: 'Fresh local account; no thread, banked leather and coins at Varrock West. Actual nearest-shop purchase, original-bank return and Crafting XP; screenshots docs/e2e/issue-279*.png.'
+    },
+    {
+        id: 'nature-runner-coins-739-live',
+        harness: 'nature-runner-coins-739-live.ts',
+        covers: { scripts: ['NatureCrafter'] },
+        status: 'vetted',
+        provenAt: '39e3095468c329823aabd554db5455c2cef02401',
+        budgetMin: 3,
+        note: 'drops 450 Coins outside the altar and proves the runner takes that ground stack into inventory'
+    },
+    {
+        id: 'deathplateau-scout-470-live',
+        harness: 'deathplateau-scout-470-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'vetted',
+        provenAt: 'baf798efe70b4d892fd232b2926e635b266e07db',
+        budgetMin: 8,
+        note: 'starts three tiles south of the scout zone with the secret map and proves AIOQuester enters the zone and advances death_map from 7 to 8'
+    },
+    {
+        id: 'clue-rune-budget-593-live',
+        harness: 'clue-rune-budget-593-live.ts',
+        covers: { scripts: ['ClueSolver'], subsystems: ['clues'] },
+        status: 'vetted',
+        provenAt: '2773b993e38a40c737beb2c34901238f28632dbb',
+        budgetMin: 6,
+        note: 'prepares a Hans clue from a real bank and proves 20 Law, 100 Air, 20 Earth, 20 Fire and 20 Water runes plus the ten-food cap'
+    },
+    {
+        id: 'catherby-sweep-687-live',
+        harness: 'catherby-sweep-687-live.ts',
+        covers: { scripts: ['GatheringBot'] },
+        status: 'vetted',
+        provenAt: 'adeab3c5186429fcd01479bb1180b488a552dbf5',
+        budgetMin: 7,
+        note: 'starts within 28 tiles of camp with no visible fishing NPC and proves a shoreline sweep produces a real catch and Fishing XP'
+    },
+    {
+        id: 'fishing-gear-749-live',
+        harness: 'fishing-gear-749-live.ts',
+        covers: { subsystems: ['random-events'] },
+        status: 'vetted',
+        provenAt: '08632baa06d5649e3aaa50004a21bd38252be086',
+        budgetMin: 5,
+        note: 'leaves dropped bait and feathers down near and away from water, leaves a tool down away from water, and recovers a dropped tool beside a real whirlpool NPC'
+    },
+    {
+        id: 'flour-collector-310-live',
+        harness: 'flour-collector-310-live.ts',
+        covers: { scripts: ['FlourCollector'] },
+        status: 'vetted',
+        provenAt: '2624b0c7561ed0e91a5500184e72bf89ff3b23c3',
+        manual: true,
+        budgetMin: 12,
+        note: 'Fresh local account with Murder Mystery started and 30 banked pots. Withdraws unnoted pots, fills 28, banks flour at Seers and fills the next load; screenshots docs/e2e/issue-310*.png.'
+    },
+    {
+        id: 'donovan-door-771-live',
+        harness: 'donovan-door-771-live.ts',
+        covers: { scripts: ['ClueSolver'], subsystems: ['nav', 'clues'] },
+        status: 'vetted',
+        provenAt: '2707b229c279f1b99018ce520f6428e9c184090e',
+        manual: true,
+        budgetMin: 10,
+        note: 'Exclusive local door run. Waits for Donovan to enter his natural pocket, opens the real bedroom door, proves collision blocks him, then Reach closes the leaf and reaches real dialogue; screenshots docs/e2e/issue-771*.png.'
+    },
+    {
+        id: 'ranged-ammo-483-live',
+        harness: 'ranged-ammo-483-live.ts',
+        covers: { scripts: ['FireGiant'] },
+        status: 'vetted',
+        provenAt: 'a029256ea6f047f095f908475c8c64b52355fb3e',
+        manual: true,
+        budgetMin: 18,
+        note: 'Fresh local accounts; custom Crossbow/Bolts and Rune knife must equip, merge carried refills and gain ranged XP against Fire giants. Isolated deployment; --no-deploy requires CLIENT_PAGE.'
+    },
+    {
+        id: 'fisher-shilo-shopping-live',
+        harness: 'fisher-shilo-shopping-live.ts',
+        covers: { scripts: ['GatheringBot'] },
+        status: 'unvetted',
+        args: ['--scenario', 'all', '--minutes', '8'],
+        budgetMin: 24,
+        note: 'actual registry Fisher (GatheringBot): fresh full-pack and empty-pack Shilo fixtures; bank fish/junk before either shop, fund Obli vials plus Fernahei feathers, deposit vials before resumed Fishing XP. Evidence under out/e2e; no speed changes; --tick200 asserts an already configured engine'
+    },
+    {
+        id: 'fisher-shilo-shopping-limited',
+        harness: 'fisher-shilo-shopping-live.ts',
+        covers: { scripts: ['GatheringBot'] },
+        status: 'unvetted',
+        manual: true,
+        args: ['--scenario', 'limited', '--minutes', '8'],
+        budgetMin: 12,
+        note: 'requires Obli runtime vial stock 0..24 and Fernahei feather stock >0; records actual stock at Shop.open, buys limited stock or skips a zero shelf once, then resumes fishing; does not fabricate or mutate shared shop stock'
+    },
     {
         id: 'aio-quest-test',
         harness: 'aio-quest-test.ts',
@@ -45,6 +197,22 @@ export const CASES: readonly Case[] = [
         note: 'noted rune chainbodies, natures and a fire staff banked at Varrock West; passes when the note stack shrinks, coins appear and magic XP moves. `--item "Iron platebody"` runs the same drain through the Custom chip on any item the database knows'
     },
     {
+        id: 'alcher-low-744-live',
+        harness: 'alcher-low-744-live.ts',
+        covers: { scripts: ['Alcher'] },
+        status: 'unvetted',
+        budgetMin: 10,
+        note: 'Magic 25 at Varrock West with spell=Low; before (main) stops because High needs 55 Magic; after casts Low Level Alchemy (31xp) and the note stack turns into coins'
+    },
+    {
+        id: 'alcher-fire-battlestaff-live',
+        harness: 'alcher-fire-battlestaff-live.ts',
+        covers: { scripts: ['Alcher'] },
+        status: 'unvetted',
+        budgetMin: 8,
+        note: 'Varrock West with rune chainbodies, natures and a Fire battlestaff banked (no Staff of fire); passes on wore Fire battlestaff plus notes turning into coins'
+    },
+    {
         id: 'alcher-swarm-drain-live',
         harness: 'alcher-swarm-drain-live.ts',
         covers: { scripts: ['Alcher'] },
@@ -62,6 +230,14 @@ export const CASES: readonly Case[] = [
         note: 'seeds a scrambled bank at Varrock West, sorts it cold, then tops it up and re-sorts; passes when both orders are contiguous by category and ranked by tier inside each one, the incremental pass takes one insert batch, and varp 304 comes back to where it started'
     },
     {
+        id: 'banksorter-quest-junk-live',
+        harness: 'banksorter-quest-junk-live.ts',
+        covers: { scripts: ['BankSorter'] },
+        status: 'unvetted',
+        budgetMin: 8,
+        note: "seeds a Silverlight key, Rat's tail and Stake after Demon Slayer / Witch's Potion / Vampire Slayer complete; passes when BankSorter logs all three as complete leftovers"
+    },
+    {
         id: 'ardyfighter-restock-loop-live',
         harness: 'ardyfighter-restock-loop-live.ts',
         covers: { scripts: ['ArdyFighter'] },
@@ -76,6 +252,15 @@ export const CASES: readonly Case[] = [
         status: 'unvetted',
         budgetMin: 10,
         note: 'pauses and resumes in the middle of a walk and proves one loop body comes back, not two (#580 regression)'
+    },
+    {
+        id: 'autofighter-eat-resume-659-live',
+        harness: 'autofighter-eat-resume-659-live.ts',
+        covers: { scripts: ['AutoFighter'] },
+        status: 'vetted',
+        provenAt: 'a49c73c641bb0f731ac9a269a8dda83577900b4b',
+        budgetMin: 5,
+        note: 'eats during combat and gains attack XP against the same guard without another damaging hit'
     },
     {
         id: 'autofighter-bank-resume-live',
@@ -264,6 +449,34 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'dragon-slayer-669-live',
+        harness: 'dragon-slayer-669-live.ts',
+        covers: { scripts: ['AIOQuester'] },
+        status: 'unvetted',
+        args: ['--minutes', '20'],
+        budgetMin: 25
+    },
+    {
+        id: 'dragon-slayer-resume-live',
+        harness: 'dragon-slayer-resume-live.ts',
+        covers: { scripts: ['AIOQuester'] },
+        status: 'vetted',
+        provenAt: '9fb7d961',
+        args: ['--stage', '8', '--until', '9', '--minutes', '15'],
+        budgetMin: 18,
+        note: "resumes Dragon Slayer with the map already in Ned's hands and an empty pack; fails on any shopping line and passes once the ship has sailed"
+    },
+    {
+        id: 'dragon-slayer-resume-hull-live',
+        harness: 'dragon-slayer-resume-live.ts',
+        covers: { scripts: ['AIOQuester'] },
+        status: 'vetted',
+        provenAt: '18a7c16b',
+        args: ['--stage', '3', '--until', '7', '--minutes', '45'],
+        budgetMin: 40,
+        note: 'resumes Dragon Slayer with the ship bought and nothing but the map, the shield and coins in the pack; passes once the hull is patched, which is the hammer, twelve smithed nails and three wilderness planks fetched in one trip'
+    },
+    {
         id: 'dragonslayer-solo-test',
         harness: 'dragonslayer-solo-test.ts',
         covers: { scripts: ['AIOQuester'] },
@@ -337,6 +550,86 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'jivedragons-live',
+        harness: 'jivedragons-live.ts',
+        covers: { scripts: ['JiveDragons'] },
+        status: 'vetted',
+        budgetMin: 25,
+        provenAt: 'b66cb7f3',
+        note: '`--site blue|black|heroes|gutanoth|iron|steel` picks the lair. The black run seeds Sharks and a Superantipoison and passes on the corridor stand, both spawns in view, with no health lost on a safespot. The heroes run sets heroquest itself and asserts no key leg: it casts through the pen fence and walks the drops out through the gate. The gutanoth run sets itwatchtower itself, talks past the Enclave guard, banks at Yanille on the Watchtower spell, and claims it held the stand rather than that nothing hit it, since the cave reaches the tile at range; `--stand n` picks one of its six, one per dragon, and the run also requires a greater demon killed off the same stand while a dragon was respawning. The iron and steel runs need the 289 sim: they set elenaquest for the Ardougne teleport, seed coins, a Rune axe, Antifire potions and the shield, and require Saniboch paid, the walk through the vines, stones, log and pipe, a dose drunk, a kill and a bank trip through Ardougne; the stands are open camps that each see most of one dragon\'s wander, since the breath is 0 through the shield with a dose up, and `--stand 2` is the south-west. `--style melee` there chases the dragon from the camp under Protect from Melee with the Dragon longsword on its stab style, and requires the overhead to go up'
+    },
+    {
+        id: 'jivedragons-clue-guardian-live',
+        harness: 'jivedragons-live.ts',
+        covers: { scripts: ['JiveDragons'], subsystems: ['clues'] },
+        status: 'unvetted',
+        args: ['--clue', 'guardian', '--minutes', '30', '--no-starve'],
+        budgetMin: 35,
+        note: 'The trail alone, on a hard coordinate clue guarded by a Saradomin Wizard on dry land at Feldip (2581,3030). Seeds the hard kit, Lost City with a relog, a Dragon dagger(p), Superantipoison and Sharks, and requires a dose drunk before the wizard shows, the casket dug up after it, and that casket opened where it stands with the trail moving on. The wizard melees under Protect from Magic and nineteen hits in twenty poison, so this is the antidote proof.'
+    },
+    {
+        id: 'jivedemons-live',
+        harness: 'jivedemons-live.ts',
+        covers: { scripts: ['JiveDemons'] },
+        status: 'vetted',
+        budgetMin: 25,
+        provenAt: '9ff4ff8b'
+    },
+    {
+        id: 'jivekq-live',
+        harness: 'jivekq-live.ts',
+        covers: { scripts: ['JiveKQ'] },
+        status: 'documented',
+        documentedIn: 'docs/e2e/jivekq-validation.md',
+        budgetMin: 75,
+        note: 'Four fresh max-stat accounts on local 289: role-specific food and ropes, super potions, dueling-ring escape, banked and bought passes, both rope gates, cardinal formation, per-player combat XP, a respawn fought before banking, boss loot banked, ten completed trips and kills within 60 minutes, and pause recovery. Isolated client; no server speed or boss changes.'
+    },
+    {
+        id: 'jivekbd-live',
+        harness: 'jivekbd-live.ts',
+        covers: { scripts: ['JiveKBD'] },
+        status: 'vetted',
+        budgetMin: 45,
+        provenAt: 'ec523361',
+        note: 'a kill from full health is three food trips at about 9% per cast, so --kill-min 35 is the budget the proof ran with'
+    },
+    {
+        id: 'jivecrafting-live',
+        harness: 'jivecrafting-live.ts',
+        covers: { scripts: ['JiveCrafting'] },
+        status: 'vetted',
+        provenAt: '6bba87ec',
+        budgetMin: 10,
+        note: 'seeds a mould, 30 gold bars and 30 gems in the Al Kharid bank with Crafting 99; passes once a full load has come back to the bank as jewels, a second trip has left, and the furnace has taken bars again'
+    },
+    {
+        id: 'jiveenchanter-live',
+        harness: 'jiveenchanter-live.ts',
+        covers: { scripts: ['JiveEnchanter'] },
+        status: 'vetted',
+        provenAt: '8d156980',
+        budgetMin: 8,
+        note: 'seeds 60 jewels, the runes for 80 casts and a matching staff at Varrock West with Magic 70; passes once the staff is wielded, a full load has come back to the bank as products, a second trip has left and the casting has resumed'
+    },
+    {
+        id: 'jivemarketdumper-live',
+        harness: 'jivemarketdumper-live.ts',
+        covers: { scripts: ['JiveMarketDumper', 'MarketMaker'] },
+        status: 'vetted',
+        provenAt: 'ed09b5e7',
+        budgetMin: 8,
+        note: 'a MarketMaker on a two-row book at Seers with a 200k float, a customer holding three junk slots whose bank holds 500 yews, 1000 iron and two chainbodies the book does not price; passes when the pack it started with is banked first, one pile takes the maker ceiling of 100k, the chainbodies ride along unpriced and the bank ends bare'
+    },
+    {
+        id: 'jivechests-live',
+        harness: 'jivechests-live.ts',
+        covers: { scripts: ['JiveChests'] },
+        status: 'vetted',
+        provenAt: '5c9e5d69',
+        budgetMin: 10,
+        note: 'seeds 14 crystal keys and a teleport kit at Falador West; passes once a seven-key trip is open at the Taverley chest, the haul is banked, the next seven are drawn and no swordfish, body runes or spinach rolls come home'
+    },
+    {
         id: 'fishing-contest-244-live',
         harness: 'fishing-contest-244-live.ts',
         covers: { scripts: ['AIOQuester'] },
@@ -376,10 +669,10 @@ export const CASES: readonly Case[] = [
         harness: 'marketmaker-pair-live.ts',
         covers: { scripts: ['MarketMaker'] },
         status: 'vetted',
-        provenAt: '02ca7734',
+        provenAt: '96aeecbd',
         budgetMin: 17,
         env: { BUDGET_S: '900' },
-        note: 'two accounts at Seers bank: a sale paid by coins in the window, a mixed pile bought with no chat, a live re-price mid-trade, a pile over the trade cap bid at the cap, coins ignored and named, and a cooldown after walking out'
+        note: 'two accounts at Seers bank: a sale whose goods go up before a coin is offered against them, a mixed pile bought with no chat, a live re-price mid-trade, a pile over the trade cap bid at the cap, coins ignored and named, a cooldown after walking out, a second order placed the moment a sale completes, served with the takings banked first, and a reset that sorts the bank, with the startup sort asserted before the legs'
     },
     {
         id: 'marketmaker-aliases-live',
@@ -639,7 +932,11 @@ export const CASES: readonly Case[] = [
         id: 'maze-probe-live',
         harness: 'maze-probe-live.ts',
         covers: { subsystems: ['nav'] },
-        status: 'unvetted'
+        status: 'vetted',
+        args: ['--spawn', 'se', '--minutes', '4'],
+        budgetMin: 6,
+        provenAt: 'f3e20a70',
+        note: 'teleports to one of the four maze corners and passes when the guardian solves the route out. `--spawn se` is the 28-step leg to the door at (2936,4560) that used to read as walled off; nw, ne and sw all pass too'
     },
     {
         id: 'merlin-mordred-353-live',
@@ -676,6 +973,15 @@ export const CASES: readonly Case[] = [
         note: 'starts at Varrock West with the kit banked there; coming within 20 tiles of the Al Kharid booth fails the run'
     },
     {
+        id: 'miner-bank-food-live',
+        harness: 'miner-bank-food-live.ts',
+        covers: { scripts: ['GatheringBot'] },
+        status: 'documented',
+        documentedIn: 'docs/e2e/miner-bank-food-proof.json',
+        budgetMin: 5,
+        note: 'banks 27 coal at 50/80 HP, eats two lobsters with no trip food, then returns to the Wilderness Skeleton Mine and gains mining XP'
+    },
+    {
         id: 'miner-fight-arena-bank-live',
         harness: 'miner-fight-arena-bank-live.ts',
         covers: { scripts: ['GatheringBot'] },
@@ -683,6 +989,15 @@ export const CASES: readonly Case[] = [
         provenAt: '4f99b5cf',
         budgetMin: 8,
         note: 'a full ore pack at the Fight Arena Mine has to reach the Yanille booth, and the run fails if the walk drifts to East Ardougne'
+    },
+    {
+        id: 'miner-skeleton-mine-live',
+        harness: 'miner-skeleton-mine-live.ts',
+        covers: { scripts: ['GatheringBot'] },
+        status: 'vetted',
+        provenAt: '2c03f6e859f03a3da50e3db6c229451fb6f163d6',
+        budgetMin: 12,
+        note: 'coal depletion retarget latency under Skeleton attacks, Auto Retaliate off, and native random rock choices'
     },
     {
         id: 'mossgiant-dart-test',
@@ -820,6 +1135,15 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'karamja-fare-755-live',
+        harness: 'karamja-fare-755-live.ts',
+        covers: { scripts: ['WalkToBot'], subsystems: ['nav'] },
+        status: 'vetted',
+        provenAt: '26a714e489b30919f98293af8a41380bd8d0a8f1',
+        budgetMin: 10,
+        note: 'starts in Brimhaven without coins, earns the Luthas fare and reaches Draynor'
+    },
+    {
         id: 'piratestreasure-231-live',
         harness: 'piratestreasure-231-live.ts',
         covers: { scripts: ['AIOQuester'] },
@@ -853,6 +1177,15 @@ export const CASES: readonly Case[] = [
         note: 'seeds Underground Pass complete varp and bits; --stage is the %regicide_quest value, 0 to 15'
     },
     {
+        id: 'west-ardougne-373-live',
+        harness: 'west-ardougne-373-live.ts',
+        covers: { subsystems: ['nav'] },
+        status: 'vetted',
+        provenAt: '83ff1932',
+        budgetMin: 15,
+        note: 'live sewer quest and worn-mask gates, mud-pile return, and both city-gate directions after Biohazard; screenshots and state proof under docs/e2e'
+    },
+    {
         id: 'plague-pipe-366-live',
         harness: 'plague-pipe-366-live.ts',
         covers: { subsystems: ['world'] },
@@ -865,10 +1198,42 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'quest-armour-live',
+        harness: 'quest-armour-live.ts',
+        covers: { scripts: ['AIOQuester'] },
+        status: 'unvetted',
+        args: ['--armour', 'metal'],
+        budgetMin: 25
+    },
+    {
+        id: 'quest-failed-step-live',
+        harness: 'quest-failed-step-live.ts',
+        covers: { scripts: ['AIOQuester'] },
+        status: 'unvetted',
+        budgetMin: 5
+    },
+    {
+        id: 'hostile-random-damage-live',
+        harness: 'hostile-random-damage-live.ts',
+        covers: { subsystems: ['random-events'] },
+        status: 'vetted',
+        provenAt: '417c30b6',
+        budgetMin: 8,
+        note: 'eight hostile families ignore spawns and zero hits, then escape and return after positive damage with no target information; includes a natural Swarm attack'
+    },
+    {
         id: 'random-events-live',
         harness: 'random-events-live.ts',
         covers: { subsystems: ['random-events'] },
         status: 'unvetted'
+    },
+    {
+        id: 'rangingguild-live',
+        harness: 'rangingguild-live.ts',
+        covers: { scripts: ['RangingGuild'] },
+        status: 'vetted',
+        budgetMin: 15,
+        provenAt: 'aeeb61ba'
     },
     {
         id: 'relogin-test',
@@ -959,6 +1324,15 @@ export const CASES: readonly Case[] = [
         documentedIn: 'docs/reference/quest-harness-recipes-2.md'
     },
     {
+        id: 'shopbuyout-fernahei-live',
+        harness: 'shopbuyout-fernahei-live.ts',
+        covers: { scripts: ['ShopBuyout'] },
+        status: 'vetted',
+        provenAt: '683f264f',
+        budgetMin: 8,
+        note: 'Shilo Village marked complete and 1000gp banked; passes when the teller hands over the coins, the bot stands at Fernahei\'s counter and feathers land in the pack'
+    },
+    {
         id: 'smelter-swarm-422-live',
         harness: 'smelter-swarm-422-live.ts',
         covers: { scripts: ['SmelterBot'] },
@@ -972,6 +1346,15 @@ export const CASES: readonly Case[] = [
         provenAt: '57498434',
         budgetMin: 10,
         note: 'Varrock West bank → anvil → bank on a 54-bar Platebody load; the remainder the bot cannot smith has to send it back'
+    },
+    {
+        id: 'smithingbot-doors-live',
+        harness: 'smithingbot-doors-live.ts',
+        covers: { scripts: ['SmithingBot'], subsystems: ['nav'] },
+        status: 'vetted',
+        provenAt: 'ca329ff5',
+        budgetMin: 12,
+        note: "Falador east bank into Doric's hut, the harness shuts the door, then back out; passes when both steps through the opened door leave on the tick the leaf swings"
     },
     {
         id: 'superheater-smelt-live',
@@ -989,6 +1372,14 @@ export const CASES: readonly Case[] = [
         status: 'unvetted',
         budgetMin: 10,
         note: 'Varrock West with iron, coal, natures and a Fire battlestaff banked (no Staff of fire); passes on wore Fire battlestaff plus steel bars'
+    },
+    {
+        id: 'strangebox-bank-open-live',
+        harness: 'strangebox-bank-open-live.ts',
+        covers: { subsystems: ['random-events'] },
+        status: 'unvetted',
+        budgetMin: 5,
+        note: 'Varrock West booth left open, then ::give macro_cube; passes when the solver closes the bank, Open is present, and the box is consumed (#756)'
     },
     {
         id: 'strangebox-repro-live',
@@ -1097,6 +1488,30 @@ export const CASES: readonly Case[] = [
         harness: 'waterfall-exit-test.ts',
         covers: { subsystems: ['nav', 'quests'] },
         status: 'unvetted'
+    },
+    {
+        id: 'cooksassistant-758-live',
+        harness: 'cooksassistant-758-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'unvetted',
+        budgetMin: 10,
+        note: "seeds 990 coins on a started Cook's Assistant at the Lumbridge farm; before withdraws Coins, after Takes the egg and never withdraws Coins (#758)"
+    },
+    {
+        id: 'witchs-potion-rats-tail-live',
+        harness: 'witchs-potion-rats-tail-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'unvetted',
+        budgetMin: 8,
+        note: "seeds Rat's tail on a started Witch's Potion; passes when AIOQuester picks an onion and never attacks a Rimmington rat (#796)"
+    },
+    {
+        id: 'runemysteries-759-live',
+        harness: 'runemysteries-759-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'unvetted',
+        budgetMin: 8,
+        note: 'seeds leftover air talismans plus the research package at stage 3; passes when AIOQuester talks to Aubury and never Sedridor (#759)'
     },
     {
         id: 'witchs-house-226-live',

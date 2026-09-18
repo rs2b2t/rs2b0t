@@ -7,10 +7,7 @@ export const DS_NPC = {
     DUKE: new Tile(3212, 3220, 1),
     ORACLE: new Tile(3015, 3504, 0),
     WORMBRAIN: new Tile(3014, 3186, 0),
-    /**
-     * Outside his cell. The bars are `blockrange=no`, so the talk lands from
-     * here on line of sight alone; no tile beside him is reachable.
-     */
+    /** Outside his cell. The bars are `blockrange=no`, so the talk lands from here on line of sight; no tile beside him is reachable. */
     WORMBRAIN_STAND: new Tile(3012, 3186, 0),
     KLARENSE: new Tile(3047, 3204, 0),
     NED: new Tile(3100, 3258, 0),
@@ -43,24 +40,17 @@ export const DS_LOC = {
     SHIP_LADDER: new Tile(3049, 3208, 1),
     SHIP_HOLE: new Tile(3047, 9639, 1),
     CRANDOR_ROCK: new Tile(2833, 3255, 0),
-    // Why: the secret wall is one loc, spawned at angle 3 (south) on this tile in m44_150.jm2.
-    // Why: both sides click this tile, as a wall has no second loc on its far side.
-    // Why: the angle is what makes this row the one `check_axis_locactive` counts as "entering".
+    // Why: the secret wall is one loc at angle 3 (south) in m44_150.jm2, so both sides click this tile and `check_axis_locactive` counts this row as "entering".
     CRANDOR_SECRET_DOOR: new Tile(2836, 9600, 0),
-    // Why: this is a stand and not a loc. The wall is still the tile above.
-    // Why: opening from here works only once it has been opened from the Crandor side, which is what sets %dragon_wall.
+    // Why: a stand, the wall is the tile above; opening from here only works once the Crandor side has set %dragon_wall.
     SECRET_WALL_KARAMJA_STAND: new Tile(2836, 9599, 0),
     ELVARG_GATE: new Tile(2847, 9636, 0),
     ELVARG_GATE_STAND: new Tile(2846, 9637, 0),
-    // Why: both leaves of this gate spawn at angle 0 (west) on x=2847, so `check_axis_locactive` counts the lair's own column as "entering".
-    // Why: the lock therefore only ever guards the way in, and standing here is what lets a finished run back out.
+    // Why: both leaves spawn at angle 0 (west) on x=2847, so `check_axis_locactive` counts the lair's own column as "entering" and the lock only guards the way in.
     ELVARG_GATE_INSIDE: new Tile(2847, 9637, 0)
 } as const;
 
-/**
- * All six maze keys render as "Key" and all three map parts as "Map part", so
- * anything that has to tell them apart must go through the object id.
- */
+/** All 6 maze keys render as "Key" and all 3 map parts as "Map part", so tell them apart by id. */
 export const DS_ID = {
     MAP_MELZAR: 1535,
     MAP_WORMBRAIN: 1536,

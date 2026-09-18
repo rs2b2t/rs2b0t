@@ -3,10 +3,7 @@ interface TeleportDefinition {
     fallbackComId: number;
 }
 
-/**
- * Component IDs from the 2004 magic interface. They are deliberately fallbacks:
- * the live component tree is searched by button text before one of these is used.
- */
+/** Component ids from the 2004 magic interface, used only when a button-text search of the live component tree finds nothing. */
 const TELEPORTS: Record<string, TeleportDefinition> = {
     varrock: { name: 'Varrock', fallbackComId: 1164 },
     lumbridge: { name: 'Lumbridge', fallbackComId: 1167 },

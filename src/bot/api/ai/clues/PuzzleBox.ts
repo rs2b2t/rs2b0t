@@ -7,13 +7,12 @@ import { PUZZLE_SIZE, applyPuzzleMove, isPuzzleSolved, readPuzzleBoard, solvePuz
 import { PUZZLE_PIECE_SLOT } from '#/bot/api/ai/clues/data/puzzlePieces.js';
 
 const MOVE_OP = 'Move';
-// Why: every trail_slidingpuzzle* obj declares iop5=Move, and the server validates the op against the obj rather than against what the client renders, so a board whose labels did not reach us is still driveable.
+// Why: Every puzzle piece defines `iop5=Move`, so the board remains usable before labels load.
 const MOVE_OP_INDEX = 5;
 const OPEN_OP = 'Open';
 const OPEN_WAIT_MS = 5000;
 const CLOSE_WAIT_MS = 3000;
-// Why: the engine silently drops an OPHELD whose slot no longer holds that obj, so the board is re-read and re-planned after every move.
-// Why: a batch of clicks is faster but wedges the moment one is dropped, while replanning costs a few milliseconds and cannot desynchronise.
+// Why: The engine drops stale-slot OPHELD packets, so re-read and re-plan after each move.
 const MOVE_SETTLE_MS = 2000;
 const MAX_MOVES = 600;
 const STALL_LIMIT = 8;
@@ -43,7 +42,7 @@ export const PuzzleBox = {
 
     /**
      * Open the held box and slide it into the solved arrangement.
-     * Why: false is returned without a claim when the box could not be opened or the board never converged; the caller re-talks to the NPC either way.
+     * Why: false is returned without a claim when the box couldn't be opened or the board never converged; the caller re-talks to the NPC either way.
      */
     async solveHeld(puzzleId: number, log: (m: string) => void): Promise<boolean> {
         const box = Inventory.items().find(i => i.id === puzzleId);
@@ -75,7 +74,7 @@ export const PuzzleBox = {
                     return false;
                 }
                 if (isPuzzleSolved(board)) {
-                    // Re-entered to hand a finished box back, not a fresh solve.
+                    // Re-entered to hand a finished box back.
                     log(moved === 0 ? 'puzzle already solved' : `puzzle solved in ${moved} moves`);
                     return true;
                 }
@@ -110,8 +109,7 @@ export const PuzzleBox = {
                 }
             }
         } finally {
-            // Any path out must leave the modal shut, or the hand-back talk and
-            // every walk after it is blocked by an open main interface.
+            // Every path out must leave the modal shut, or an open main interface blocks the hand-back talk and every walk after it.
             await this.close();
         }
 

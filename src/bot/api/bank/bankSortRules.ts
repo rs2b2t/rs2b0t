@@ -75,6 +75,8 @@ const RULES: readonly CategoryRule[] = [
         'bread', 'cake', 'stew', 'meat', 'chicken', 'kebab', 'wine', 'beer'
     ) },
     { category: 'food', match: word('cod', 'pie') },
+    // Why: the strange plant's reward is an edible, so it belongs with the food rather than falling through to junk.
+    { category: 'food', match: any('strange fruit') },
     { category: 'herbs', match: any(
         'grimy', 'clean ', 'guam', 'marrentill', 'tarromin', 'harralander', 'ranarr',
         'irit', 'avantoe', 'kwuarm', 'cadantine', 'dwarf weed', 'torstol',
@@ -96,7 +98,7 @@ const RULES: readonly CategoryRule[] = [
         'feather', 'leather', 'hide', 'thread', 'bowstring', 'bow string', 'seed',
         'bait', 'shaft', 'wool', 'flax', 'molten glass', 'soda ash'
     ) },
-    // Why: an explicit junk entry is filed junk rather than counted as a rule the table is missing.
+    // Why: an explicit junk entry is filed as junk instead of counting as a rule the table is missing.
     { category: 'junk', ids: [526, 532] }
 ];
 

@@ -133,7 +133,7 @@ describe('bank snapshot packet generations', () => {
         expect(reader.bankSideSnapshotReady()).toBe(true);
     });
 
-    test('requires newer full snapshots after close and reopen', async () => {
+    test('a still-transmitting full stays ready after close and reopen', async () => {
         installBankInterfaces();
         const client = fakeClient();
         attach(client as never);
@@ -142,6 +142,25 @@ describe('bank snapshot packet generations', () => {
         await packet(client, ServerProt.IF_OPENMAIN_SIDE);
         expect(reader.bankSnapshotReady()).toBe(true);
 
+        await packet(client, ServerProt.IF_CLOSE);
+        await packet(client, ServerProt.IF_OPENMAIN_SIDE);
+        expect(reader.bankSnapshotReady()).toBe(true);
+        expect(reader.bankSideSnapshotReady()).toBe(true);
+    });
+
+    test('stopped transmission still requires a new full after reopen', async () => {
+        installBankInterfaces();
+        const client = fakeClient();
+        attach(client as never);
+        full(client, 101);
+        full(client, 201);
+        await packet(client, ServerProt.IF_OPENMAIN_SIDE);
+        expect(reader.bankSnapshotReady()).toBe(true);
+
+        const main = client.invUpdateState.get(101)!;
+        const side = client.invUpdateState.get(201)!;
+        client.invUpdateState.set(101, { generation: main.generation + 1, fullGeneration: 0, transmitting: false });
+        client.invUpdateState.set(201, { generation: side.generation + 1, fullGeneration: 0, transmitting: false });
         await packet(client, ServerProt.IF_CLOSE);
         await packet(client, ServerProt.IF_OPENMAIN_SIDE);
         expect(reader.bankSnapshotReady()).toBe(false);

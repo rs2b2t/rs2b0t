@@ -6,8 +6,8 @@ import { Locs } from '../locs/Locs.js';
 import { Npcs, talkOp } from '../npcs/Npcs.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import { Traversal } from './Traversal.js';
-import { WalkExecutor, isOpenableBarrier } from '../../event/webwalk/WalkExecutor.js';
-import { openOp, towardDest } from '../../event/webwalk/walkOpening.js';
+import { WalkExecutor, isOpenBarrierLeaf, isOpenableBarrier } from '../../event/webwalk/WalkExecutor.js';
+import { closeOp, openOp, towardDest } from '../../event/webwalk/walkOpening.js';
 import { chebyshev } from '../../event/webwalk/geometry/followMath.js';
 import { CANT_REACH, GameMessages } from '../chatbox/gameMessages.js';
 import type { Interactable } from '../model/Interactable.js';
@@ -19,15 +19,15 @@ interface ReachLocOpts {
     op: string;
     near: WorldTile;
     within?: number;
-    // Why: display names collide, four ordinary crates answer "Search" within six tiles of Wydin's grocery crate, and the nearest is rarely the one the quest means.
+    // Why: Display names collide; four searchable crates surround Wydin's quest crate.
 
     /** Exact loc id, when the display name is shared with something else in range. */
     id?: number;
     expect: () => boolean;
     expectMs?: number;
-    // Why: only "I can't reach that!" is watched by default, so every other refusal is invisible to `expect` and the op is re-sent to the cap, each send waiting out `expectMs` in full.
+    // Why: Provide other refusal patterns explicitly or each attempt waits the full `expectMs`.
 
-    /** Game-message pattern the loc's script answers with when the op cannot work yet. */
+    /** Game-message pattern emitted when the loc op cannot run yet. */
     refused?: RegExp;
     log?: (m: string) => void;
 }
@@ -55,10 +55,7 @@ interface ReachEntityOpts<T extends ReachEntity> {
 }
 
 const REACH_BFS_STEPS = 400;
-/**
- * How far the scene probe's verdict is worth trusting.
- * Why: `REACH_BFS_STEPS` expansions run out at ~11 tiles of open ground, so beyond this a plain "too far" is indistinguishable from "walled off" and a patrolling target would have us opening doors for nothing.
- */
+/** Maximum distance where a failed scene probe reliably means blocked rather than out of search range. */
 const PROBE_RADIUS = 10;
 
 async function closeIn(near: WorldTile, radius: number, log: (m: string) => void): Promise<ReachStatus> {
@@ -73,7 +70,7 @@ async function closeIn(near: WorldTile, radius: number, log: (m: string) => void
 /** How long a blank scene at the stand is worth re-asking, matching the transport layer's ceiling. */
 const LOC_SCENE_MS = 3000;
 
-// Why: a teleport or level change empties every scene query for a few ticks, so blank while standing where the loc lives means not-yet-rebuilt, not absent (docs/decisions/level-change-lag.md). Walking the hint instead skips the op entirely and hands the caller a 'retry' it reads as a failure.
+// Why: a teleport or level change empties every scene query for a few ticks, so a blank scene at the loc's tile means the rebuild is still in flight (docs/decisions/level-change-lag.md); walking the hint instead skips the op and hands the caller a 'retry' it reads as a failure.
 
 /** Re-ask for a loc the player is already standing among, so a rebuild in flight does not read as absent. */
 async function sceneSettled(find: () => unknown, near: WorldTile, within: number): Promise<boolean> {
@@ -85,6 +82,8 @@ async function sceneSettled(find: () => unknown, near: WorldTile, within: number
 }
 
 const REACH_DOOR_ATTEMPTS = 8;
+
+const LEAF_CLOSE_RADIUS = 3;
 
 // Why: a shut wall-door blocks the step onto its own tile, so an adjacentOk probe rejects the one door that needs opening (#293).
 // Why: wall locs operate from either side of their edge, so reaching any tile on or beside the door is enough to click it.
@@ -125,6 +124,35 @@ async function openBlockingDoor(toward: WorldTile, log: (m: string) => void): Pr
     }, 5000);
 }
 
+const reachable = (t: WorldTile): boolean => Reachability.canReach(t, { maxSteps: REACH_BFS_STEPS, adjacentOk: true });
+
+async function closeSwungLeaf(toward: WorldTile, log: (m: string) => void): Promise<boolean> {
+    const here = reader.worldTile();
+    if (!here || here.level !== toward.level || reachable(toward)) {
+        return false;
+    }
+    const leaf = Locs.query()
+        .where(l => isOpenBarrierLeaf(l.name, l.actions()))
+        .where(l => l.distance() <= LEAF_CLOSE_RADIUS
+            && chebyshev(l.tile(), toward) <= 1
+            && !Reachability.canStep(l.tile(), toward))
+        .nearest();
+    const op = leaf ? closeOp(leaf.actions()) : null;
+    if (!leaf || !op) {
+        return false;
+    }
+    const t = leaf.tile();
+    log(`reach: closing '${leaf.name}' at (${t.x},${t.z}) to reach (${toward.x},${toward.z})`);
+    if (!(await leaf.interact(op))) {
+        return false;
+    }
+    return Execution.delayUntil(() => reachable(toward), 5000);
+}
+
+async function clearBlockingDoor(toward: WorldTile, log: (m: string) => void): Promise<boolean> {
+    return (await closeSwungLeaf(toward, log)) || openBlockingDoor(toward, log);
+}
+
 async function reachThroughDoors(
     attempt: () => Promise<boolean>,
     expect: () => boolean,
@@ -144,7 +172,7 @@ async function reachThroughDoors(
             const here = reader.worldTile();
             if (blocked && here && blocked.level === here.level && chebyshev(here, blocked) <= PROBE_RADIUS
                 && !Reachability.canReach(blocked, { maxSteps: REACH_BFS_STEPS, adjacentOk: true })
-                && (await openBlockingDoor(blocked, log))) {
+                && (await clearBlockingDoor(blocked, log))) {
                 continue;
             }
         }
@@ -157,15 +185,15 @@ async function reachThroughDoors(
                 expectMs
             );
             if (expect()) { return 'done'; }
-            // Why: the script has answered, and the answer was no, re-sending the identical click cannot change a gate it is keyed on, so the caller decides rather than the cap.
+            // Why: the script said no, and re-sending the same click can't change the gate it's keyed on, so the caller decides.
             if (refused !== undefined && GameMessages.sawSince(mark, refused)) {
                 log(`reach: '${what}' refused the op — not retrying`);
                 return 'retry';
             }
             if (GameMessages.sawSince(mark, CANT_REACH)) {
                 const toward = targetTile();
-                if (!toward || !(await openBlockingDoor(toward, log))) {
-                    log(`reach: '${what}' — server can't reach it and no openable door in front (unreachable)`);
+                if (!toward || !(await clearBlockingDoor(toward, log))) {
+                    log(`reach: '${what}' at (${toward?.x},${toward?.z}): server can't reach it and no door in front to open or close (unreachable)`);
                     return 'unreachable';
                 }
                 continue;
@@ -183,8 +211,7 @@ async function reachThroughDoors(
 }
 
 /**
- * The shared last-mile primitive: walk to a stand, act, and open the blocking door when the server says it cannot reach.
- * Why: use this rather than hand-rolling another approach loop.
+ * Walk to a stand, interact, and open a blocking door after a reach failure.
  * @see docs/reference/nav-walker.md#the-reach-primitive
  */
 export const Reach = {

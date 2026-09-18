@@ -17,8 +17,7 @@ describe('offersMatch', () => {
 });
 
 describe('offerCovers', () => {
-    // Why: the shop's own side has to be exact, but theirs only has to carry the deal. Holding out for an exact
-    // Why: side means a customer who rounds up, or leaves something else in the window, waits out the deadline.
+// Why: require the shop's exact offer while allowing customer extras and rounded payment.
     test('the exact deal is covered', () => {
         expect(offerCovers(side([[COINS, 2200]]), side([[COINS, 2200]]))).toBe(true);
     });

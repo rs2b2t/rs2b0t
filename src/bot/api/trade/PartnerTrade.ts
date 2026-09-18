@@ -1,5 +1,5 @@
 // Shared partner and trade-screen policy for mule/runner scripts (NatureCrafter, FlaxRunner, GatheringBot mule modes).
-// Why: HUD actions stay on Trade, so this module is name matching and offer-screen decisions only, and scripts do not re-copy partner filters.
+// Why: HUD actions stay on Trade; this module is name matching and offer-screen decisions, shared so scripts don't re-copy partner filters.
 
 export const DEFAULT_TRADE_RANGE = 2;
 
@@ -35,7 +35,7 @@ export function countOfferByName(
         .reduce((s, o) => s + Math.max(1, o.count), 0);
 }
 
-/** True if any offer slot matches a product predicate (name contains keyword, etc.). */
+/** Sum counts for offer slots matching a product predicate (name contains keyword, etc.). */
 export function countOfferMatching(
     items: readonly { name: string | null; count: number }[],
     match: (name: string) => boolean
@@ -123,17 +123,17 @@ export function muleGathererHandoffActive(mode: MuleMode, partners: readonly str
     return mode === 'gatherer' && partners.length > 0 && !powerMode;
 }
 
-/** Bank-side accept → bank (ore/logs demo mule). */
+/** Bank-side: accept, then bank (ore/logs demo mule). */
 export function muleReceiverActive(mode: MuleMode, partners: readonly string[]): boolean {
     return mode === 'mule' && partners.length > 0;
 }
 
-/** Fish cooker: accept raw → cook → bank cooked. */
+/** Fish cooker: accept raw, cook, bank cooked. */
 export function muleCookerActive(mode: MuleMode, partners: readonly string[]): boolean {
     return mode === 'cooker' && partners.length > 0;
 }
 
-/** Bank feeder: withdraw raw → meet → trade (pairs with Cooker). */
+/** Bank feeder: withdraw raw, meet, trade (pairs with Cooker). */
 export function muleSupplierActive(mode: MuleMode, partners: readonly string[], powerMode: boolean): boolean {
     return mode === 'supplier' && partners.length > 0 && !powerMode;
 }

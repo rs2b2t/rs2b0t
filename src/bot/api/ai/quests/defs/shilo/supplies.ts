@@ -9,11 +9,10 @@ import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { QuestFood } from '../../food.js';
 import { BONE_SPAWNS, SV_ITEM, SV_NPC, SV_TILE, type ShiloItem } from './areas.js';
 
-// Why: Jiminua stocks rope, spade, chisel, candle, tinderbox, hammer and a bronze bar, thirty-five tiles from Trufitus.
-// Why: Karamja has no bank until this quest opens Shilo's, so everything except coins, bones and food is bought here rather than carried.
+// Why: Jiminua stocks rope, spade, chisel, candle, tinderbox, hammer and a bronze bar 35 tiles from Trufitus, and Karamja has no bank until this quest opens Shilo's, so everything but coins, bones and food is bought here.
 const JIMINUA_SHOP = { npc: SV_NPC.JIMINUA, anchor: SV_TILE.JIMINUA };
 
-/** Two ship fares, the Jiminua kit, and headroom for a second shop trip. */
+/** 2 ship fares, the Jiminua kit, and headroom for a second shop trip. */
 export const KARAMJA_PURSE = 2000;
 
 /** Drawn in this order when the food the script was given is not in the bank. */
@@ -47,7 +46,7 @@ export function withdrawFrom(items: { name: string; id?: number; qty: number }[]
     return { kind: 'withdraw', items, bank: SV_TILE.ARDOUGNE_BANK };
 }
 
-// Why: Jiminua is 35 tiles from Trufitus but the mound is 200 the other way, so buying one item per trip costs six crossings of the island.
+// Why: Jiminua is 35 tiles from Trufitus but the mound is 200 the other way, so buying one item per trip costs 6 crossings of the island.
 
 /** Buy every tool the rest of the quest still needs in one visit. */
 function stockUp(wanted: readonly { item: ShiloItem; qty: number }[]): QuestStep {
@@ -83,10 +82,7 @@ function carriedId(id: number): number {
     return Inventory.items().filter(entry => entry.id === id).reduce((sum, entry) => sum + entry.count, 0);
 }
 
-/**
- * The engine's `buy` step falls back to a bank trip when short of coin, and there
- * is no bank on Karamja, so the purse is filled at Ardougne before crossing.
- */
+/** The engine's `buy` step falls back to a bank trip when short of coin and Karamja has none, so the purse is filled at Ardougne before crossing. */
 export function sourceCoins(snap: QuestSnapshot, want: number): QuestStep | null {
     if (held(snap, SV_ITEM.COINS.id) >= want) {
         return null;
@@ -101,10 +97,7 @@ export function sourceCoins(snap: QuestSnapshot, want: number): QuestStep | null
     return withdrawFrom([{ name: SV_ITEM.COINS.name, id: SV_ITEM.COINS.id, qty: Math.min(want, available) }]);
 }
 
-/**
- * The outstanding toolkit, judged by what the remaining quest still needs.
- * One `stockUp` step buys all of it in a single visit.
- */
+/** The outstanding toolkit; one `stockUp` step buys all of it in a single visit. */
 function kitShortfall(snap: QuestSnapshot, need: readonly ShiloItem[]): { item: ShiloItem; qty: number }[] {
     return need.filter(item => held(snap, item.id) === 0).map(item => ({ item, qty: 1 }));
 }
@@ -125,8 +118,7 @@ export function foodHeld(snap: QuestSnapshot): number {
     return foodNames().reduce((total, name) => total + (snap.inv.get(name.toLowerCase()) ?? 0), 0);
 }
 
-// Why: `ownsInventory` opts the module out of the engine's food withdrawal, so the float is drawn here.
-// Why: nothing on Karamja sells food worth taking to Nazastarool and the island has no bank, so the pack is filled at Ardougne before the crossing.
+// Why: `ownsInventory` opts out of the engine's food withdrawal, and nothing on Karamja sells food worth taking to Nazastarool, so the pack is filled at Ardougne.
 
 /** Draw `want` food from Ardougne, or null once the pack carries it. */
 export function sourceFood(snap: QuestSnapshot, want: number): QuestStep | null {
@@ -144,10 +136,7 @@ export function sourceFood(snap: QuestSnapshot, want: number): QuestStep | null 
     return withdrawFrom([{ name: stocked, qty: Math.min(want - carried, bankedByName(snap, stocked)) }]);
 }
 
-/**
- * Only a lit candle, lit black candle or lit torch satisfies the fissure, and the
- * shop sells the candle unlit, so the tinderbox rides along and lights it.
- */
+/** Only a lit candle, lit black candle or lit torch satisfies the fissure, and the shop sells the candle unlit, so the tinderbox rides along. */
 export function sourceLitCandle(snap: QuestSnapshot, need: readonly ShiloItem[] = []): QuestStep | null {
     if (held(snap, SV_ITEM.LIT_CANDLE.id) > 0) {
         return null;
@@ -175,10 +164,7 @@ export async function lightCandle(log: (m: string) => void): Promise<boolean> {
     );
 }
 
-/**
- * Nothing sells bronze wire. Smithing 4 turns a Jiminua bar into one at the Tai Bwo
- * Wannai anvil, which is why the quest asks for the level at all.
- */
+/** Nothing sells bronze wire; Smithing 4 turns a Jiminua bar into one at the Tai Bwo Wannai anvil. */
 export function sourceBronzeWire(snap: QuestSnapshot, need: readonly ShiloItem[] = []): QuestStep | null {
     if (held(snap, SV_ITEM.BRONZE_WIRE.id) > 0) {
         return null;
@@ -220,10 +206,7 @@ async function smithBronzeWire(log: (m: string) => void): Promise<boolean> {
     );
 }
 
-/**
- * No shop sells bones and every NPC this quest kills has `death_drop=null`, so the
- * three for the tomb door come from the bank or from the Khazard battlefield spawns.
- */
+/** No shop sells bones and every NPC this quest kills has `death_drop=null`, so the 3 for the tomb door come from the bank or the Khazard battlefield spawns. */
 export function sourceBones(snap: QuestSnapshot, want: number): QuestStep | null {
     const carried = held(snap, SV_ITEM.BONES.id);
     if (carried >= want) {
@@ -248,8 +231,7 @@ export async function gatherBones(want: number, log: (m: string) => void): Promi
         if (!(await Traversal.walkResilient(spawn, { radius: 3, attempts: 2, timeoutMs: 120_000, log }))) {
             continue;
         }
-        // Each battlefield tile respawns one pile, so take every pile in range
-        // before walking to the next.
+        // Each battlefield tile respawns one pile, so take every pile in range before walking to the next.
         while (carried() < want) {
             const before = carried();
             const pile = GroundItems.query().name(SV_ITEM.BONES.name).within(6).nearest();

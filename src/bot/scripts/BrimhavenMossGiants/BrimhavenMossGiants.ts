@@ -1,3 +1,4 @@
+import { rangedItem } from '../../api/combat/rangedSettings.js';
 import { TaskBot } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
@@ -38,15 +39,15 @@ export default class BrimhavenMossGiants extends TaskBot {
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
-        Game.setAutoRetaliate(true); // Why: this script drives the fight, so ensure auto-retaliate is on at start
+        Game.setAutoRetaliate(true); // Why: this script drives combat through auto-retaliate.
 
         cfg.style = (this.settings.str('combatStyle', 'melee') as CombatStyle);
         cfg.meleeStyle = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
         cfg.rangeMode = parseRangeStyle(this.settings.str('rangeStyle', 'rapid'));
         cfg.spell = this.settings.str('spell', 'Wind Strike');
-        cfg.ammo = this.settings.str('ammo', 'Iron arrow');
+        cfg.ammo = cfg.style === 'range' ? rangedItem(this.settings, 'ammo', 'Iron arrow') : '';
         cfg.weapon = cfg.style === 'mage' ? this.settings.str('staff', 'Staff of air')
-            : cfg.style === 'range' ? this.settings.str('bow', 'Maple shortbow') : '';
+            : cfg.style === 'range' ? rangedItem(this.settings, 'bow', 'Maple shortbow') : '';
         cfg.foodName = this.settings.str('food', 'Lobster');
 
         cfg.panicHp = this.settings.num('panicHp', 25) / 100;
@@ -112,7 +113,7 @@ export default class BrimhavenMossGiants extends TaskBot {
         return [TARGET.toLowerCase()];
     }
 
-    // ── Status / counters (consumed by tasks + paint) ───────────────────────
+    // Shared task and paint state.
 
     setStatus(s: string): void {
         this.status = s;

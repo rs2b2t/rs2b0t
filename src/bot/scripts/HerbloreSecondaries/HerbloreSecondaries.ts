@@ -5,6 +5,7 @@ import Tile from '../../geometry/Tile.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import { Bank } from '../../api/bank/Bank.js';
+import { nearestBank, type BankNpcAccess, type BankObjectAccess } from '../../api/bank/BankLocations.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Paint } from '../../paint/Paint.js';
@@ -23,12 +24,14 @@ import {
     SHIELD_NAME,
     SHOP_COIN_CAP,
     foodHealAmount,
+    grinds,
     keepOnDeposit,
     needsRestock,
     secondaryByName,
     shouldEat,
     shopCoinsToWithdraw,
-    type SecondaryDef
+    type SecondaryDef,
+    type TileRef
 } from './HerbloreSecondariesLogic.js';
 import { scriptFood } from '../../api/loadout/loadoutPlan.js';
 import { LOADOUT_SETTING } from '../../api/loadout/loadoutSetting.js';
@@ -52,10 +55,19 @@ export const HERBLORE_SECONDARIES_SETTINGS: SettingsSchema = {
     }
 };
 
+interface Site {
+    anchor: TileRef;
+    bank: TileRef;
+    bankName: string;
+    access?: BankObjectAccess;
+    npcAccess?: BankNpcAccess;
+}
+
 export default class HerbloreSecondaries extends TaskBot {
     override loopDelay = 400;
 
     private def: SecondaryDef = SECONDARIES[0];
+    private _site: Site | null = null;
     private foodName = FOOD_DEFAULT;
     private foodWant = FOOD_DEFAULT_COUNT;
 
@@ -74,12 +86,17 @@ export default class HerbloreSecondaries extends TaskBot {
             return;
         }
         this.def = def;
+        const site = this.resolveSite(def);
+        if (!site) {
+            return;
+        }
+        this._site = site;
         this.foodName = scriptFood(this.settings, FOOD_DEFAULT);
         this.foodWant = this.settings.num('foodWithdraw', FOOD_DEFAULT_COUNT);
         this.startedAt = Date.now();
 
         this.log(
-            `HerbloreSecondaries — ${def.name} (${def.mode}) bank ${def.bankName}, food '${this.foodName}' x${this.foodWant}${def.needShield ? `, shield '${SHIELD_NAME}'` : ''}`
+            `HerbloreSecondaries — ${def.name} (${def.mode}) bank ${site.bankName}, food '${this.foodName}' x${this.foodWant}${def.needShield ? `, shield '${SHIELD_NAME}'` : ''}`
         );
 
         // Why: ProcessSource sits before BankTrip so swamp toads become legs before the deposit.
@@ -98,6 +115,42 @@ export default class HerbloreSecondaries extends TaskBot {
         );
     }
 
+    private resolveSite(def: SecondaryDef): Site | null {
+        if (def.mode !== 'bank_grind') {
+            if (!def.anchor || !def.bank || !def.bankName) {
+                ScriptRunner.stop(`${def.name} has no site`);
+                return null;
+            }
+            return { anchor: def.anchor, bank: def.bank, bankName: def.bankName };
+        }
+        const here = Game.tile();
+        const bank = here ? nearestBank(here) : null;
+        if (!bank) {
+            ScriptRunner.stop('no reachable bank');
+            return null;
+        }
+        return { anchor: bank.tile, bank: bank.tile, bankName: bank.name, access: bank.access, npcAccess: bank.npcAccess };
+    }
+
+    site(): Site {
+        if (!this._site) {
+            throw new Error('site read before onStart');
+        }
+        return this._site;
+    }
+
+    async openBank(): Promise<boolean> {
+        const { access, npcAccess } = this.site();
+        const log = (m: string) => this.log(`  ${m}`);
+        if (access) {
+            return Bank.openNearestAccess(access, log);
+        }
+        if (npcAccess) {
+            return Bank.openNpcAccess(npcAccess, log);
+        }
+        return (await Bank.openNearest('Bank booth', 'Use-quickly', log)) || Bank.openNearest('Bank booth', 'Bank', log);
+    }
+
     setStatus(s: string): void {
         this.status = s;
     }
@@ -112,6 +165,9 @@ export default class HerbloreSecondaries extends TaskBot {
     }
     sourceCount(): number {
         return this.def.sourceName ? Inventory.count(this.def.sourceName) : 0;
+    }
+    grindLeft(): number {
+        return this.def.grindFrom ? Inventory.count(this.def.grindFrom) : 0;
     }
     coinCount(): number {
         return Inventory.count('Coins');
@@ -173,7 +229,7 @@ class Eat implements Task {
             // same gate as Loot, or a bot at the bank would burn its stack.
             collecting:
                 (def.mode === 'loot' || def.mode === 'loot_process')
-                && this.bot.near(def.anchor, def.searchRadius + 4)
+                && this.bot.near(this.bot.site().anchor, def.searchRadius + 4)
         });
     }
     async execute(): Promise<void> {
@@ -212,21 +268,20 @@ class BankTrip implements Task {
             coins: this.bot.coinCount(),
             hasShield: this.bot.hasShield(),
             hasTool: this.bot.hasTool(),
-            packFull: Inventory.isFull() && this.bot.productCount() + this.bot.sourceCount() > 0
+            packFull: Inventory.isFull() && this.bot.productCount() + this.bot.sourceCount() > 0,
+            grindLeft: this.bot.grindLeft()
         });
     }
     async execute(): Promise<void> {
         const { def, food, foodWant } = this.bot.cfg();
-        this.bot.setStatus(`banking at ${def.bankName}`);
-        if (!(await this.bot.walkTo(def.bank, `${def.bankName} bank`))) {
+        const { bank, bankName } = this.bot.site();
+        this.bot.setStatus(`banking at ${bankName}`);
+        if (!(await this.bot.walkTo(bank, `${bankName} bank`))) {
             return;
         }
-        if (!(await Bank.openNearest('Bank booth', 'Use-quickly', m => this.bot.log(`  ${m}`)))) {
-            // Grand Tree / chests
-            if (!(await Bank.openNearest('Bank booth', 'Bank', m => this.bot.log(`  ${m}`)))) {
-                this.bot.log('could not open bank');
-                return;
-            }
+        if (!(await this.bot.openBank())) {
+            this.bot.log('could not open bank');
+            return;
         }
 
         const keep = new Set(keepOnDeposit(def, food).map(n => n.toLowerCase()));
@@ -270,15 +325,29 @@ class BankTrip implements Task {
             }
         }
 
-        if (def.mode === 'buy_grind' && def.toolName && !Inventory.contains(def.toolName)) {
+        if (grinds(def) && def.toolName && !Inventory.contains(def.toolName)) {
             if (Bank.count(def.toolName) > 0) {
                 await Bank.withdrawX(def.toolName, 1);
+            } else if (def.mode === 'bank_grind') {
+                await Bank.close();
+                ScriptRunner.stop(`no ${def.toolName} in the bank`);
+                return;
             }
+        }
+
+        if (def.mode === 'bank_grind' && def.grindFrom) {
+            if (Bank.count(def.grindFrom) < 1) {
+                await Bank.close();
+                ScriptRunner.stop(`out of ${def.grindFrom} in the bank`);
+                return;
+            }
+            await Bank.withdrawLoad(def.grindFrom);
         }
 
         await Bank.close();
         this.bot.countTrip();
-        this.bot.log(`restocked @ ${def.bankName}: food ${this.bot.foodInPack()}, coins ${this.bot.coinCount()}`);
+        const stock = def.grindFrom ? `, ${def.grindFrom} ${this.bot.grindLeft()}` : '';
+        this.bot.log(`restocked @ ${bankName}: food ${this.bot.foodInPack()}, coins ${this.bot.coinCount()}${stock}`);
     }
 }
 
@@ -357,7 +426,7 @@ class Grind implements Task {
     validate(): boolean {
         const { def } = this.bot.cfg();
         return (
-            def.mode === 'buy_grind' &&
+            grinds(def) &&
             !!def.grindFrom &&
             !!def.toolName &&
             Inventory.contains(def.grindFrom) &&
@@ -427,7 +496,7 @@ class Loot implements Task {
         if (Inventory.isFull()) {
             return false;
         }
-        if (!this.bot.near(def.anchor, def.searchRadius + 4)) {
+        if (!this.bot.near(this.bot.site().anchor, def.searchRadius + 4)) {
             return false;
         }
         return this.find() !== null;
@@ -457,12 +526,12 @@ class Travel implements Task {
         if (Inventory.isFull() && (this.bot.productCount() > 0 || this.bot.sourceCount() > 0)) {
             return false;
         }
-        const dest = def.shopStand ?? def.anchor;
+        const dest = def.shopStand ?? this.bot.site().anchor;
         return !this.bot.near(dest, def.searchRadius);
     }
     async execute(): Promise<void> {
         const { def } = this.bot.cfg();
-        const dest = def.shopStand ?? def.anchor;
+        const dest = def.shopStand ?? this.bot.site().anchor;
         await this.bot.walkTo(dest, def.name);
     }
 }
