@@ -210,7 +210,7 @@ try {
     console.log(`stats: ${args.stats} across the board`);
 
     // Why: a Black Arm account needs a weapon-store key it has no way to obtain alone, only Straven issues one, and joining Phoenix makes Katrine refuse you.
-    // Why: it goes through seedItemsToBank rather than a bare `givebank`, because this engine answers only `~bankitem` and a bare cheat fails silently.
+    // Why: seedItemsToBank verifies the deposited quantities before quest provisioning starts.
     const seed = args.gang === 'blackarm'
         ? [...BANK_SEED, { debugName: 'phoenixkey2', displayName: 'Key', qty: 1 }]
         : BANK_SEED;
