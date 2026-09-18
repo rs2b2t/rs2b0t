@@ -3,6 +3,7 @@
 // Potion cases: a pack of flasks in empty wilderness stays sealed, and the dose only lands once a dragon is engaged.
 
 //   bun e2e/greendragon-test.ts [http://localhost:8888]
+import { seedItemsToBank } from './tutorial/harness.js';
 import { boot, bringUpOffIsland, cheatQuiet, deployIsolatedClient, fail, launchBrowser, login, positionalArgs, setSettings } from './lib/harness.js';
 import type { Page } from 'playwright-core';
 
@@ -677,8 +678,10 @@ async function casePotionRestock(page: Page, user: string): Promise<void> {
     // Attack is already held and strength is not, so one trip has to prove both halves: keep what is carried, draw what is missing.
     await give(page, '3dose2attack', SUPER_ATTACK_3, 1);
     await cheatQuiet(page, '~bank_f2p', 2500);
-    await cheatQuiet(page, '~bankitem 3dose2attack 5', 1500);
-    await cheatQuiet(page, '~bankitem 3dose2strength 5', 1500);
+    await seedItemsToBank(page, [
+        { debugName: '3dose2attack', displayName: 'Super attack(3)', qty: 5 },
+        { debugName: '3dose2strength', displayName: 'Super strength(3)', qty: 5 }
+    ], { x: 3094, z: 3493, level: 0 });
     // No food in the pack is what makes the bank run validate on the first pass.
     await give(page, 'dragon_bones', DRAGON_BONES, 20);
 

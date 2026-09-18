@@ -1,6 +1,4 @@
 /** Live GatheringBot scenarios for Miner, Fisher, and Woodcutter. */
-// Why: acquisition cases purge bank tools so leftovers cannot produce a false pass.
-// Inventory uses `give`, bank stock uses `givebank`, and the bot client is deployed manually.
 
 // Usage:
 //   bun e2e/gatheringbot-test.ts
@@ -229,7 +227,7 @@ async function setSettings(page: Page, script: string, map: Record<string, strin
 }
 
 /** Seed held items via the engine cheat `give` (ClientCheatHandler).
- *  Why: Local Server engines carry no `~item`/`~bankitem`, and `~item` no-ops silently while `~clearinv` still works, which reads as an endless inventory wipe. */
+ *  Why: inventory seeds use the stock engine command `give`, and verify that the requested items arrived. */
 async function seedItem(page: Page, debugName: string, displayName: string, qty = 1): Promise<void> {
     const cmd = `give ${debugName} ${qty}`;
     for (let i = 0; i < 8; i++) {
@@ -893,7 +891,7 @@ type Scenario = {
     /** Held items to seed via `give` (debug name → display name, qty). */
     seed?: { debug: string; name: string; qty?: number }[];
     /**
-     * Direct bank seed via engine `givebank` ({@link seedItemsToBank}).
+     * Bank seed via noted items and verified deposits ({@link seedItemsToBank}).
      * Prefer this over give→deposit, bulk unstackables fill the pack and stall.
      */
     bankSeed?: { items: BankSeedItem[]; stand: Tile };
@@ -905,7 +903,7 @@ type Scenario = {
     /** Before seed: open this bank and withdraw matching tools, then clearinv. */
     purgeBank?: { stand: Tile; match: RegExp; label: string };
     /**
-     * @deprecated Prefer {@link bankSeed} (`givebank`). Kept only for rare cases
+     * @deprecated Prefer {@link bankSeed} (noted deposits). Kept only for rare cases
      * where give→deposit is intentional; bulk fixtures must use bankSeed.
      */
     depositSeedToBank?: { stand: Tile; names: string[]; label: string };
@@ -1036,6 +1034,43 @@ const TOOL_RE = {
 } as const;
 
 const SCENARIOS: Scenario[] = [
+    {
+        id: 'mine-startup-provision',
+        tags: ['mining', 'bank', 'provision'],
+        script: 'Miner',
+        start: SPOT.varrockWestBank,
+        camp: SPOT.swVarrockMine,
+        settings: {
+            rocks: 'Tin',
+            location: 'Southwest Varrock Mine',
+            withdrawCoins: 100,
+            bankTeleport: 'Varrock',
+            teleCasts: 2,
+            toolAcquire: 'Off',
+            forgetfulBank: false
+        },
+        bankSeed: {
+            stand: SPOT.varrockWestBank,
+            items: [
+                { debugName: 'coins', displayName: 'Coins', qty: 1000 },
+                { debugName: 'airrune', displayName: 'Air rune', qty: 10 },
+                { debugName: 'firerune', displayName: 'Fire rune', qty: 10 },
+                { debugName: 'lawrune', displayName: 'Law rune', qty: 10 }
+            ]
+        },
+        seed: [
+            { debug: 'rune_pickaxe', name: 'Rune pickaxe', qty: 1 },
+            { debug: 'tin_ore', name: 'Tin ore', qty: 27 }
+        ],
+        scene: 'bank',
+        check: ({ start, cur }) => {
+            const funded = invCount(cur, 'Coins') >= 100 && invCount(cur, 'Air rune') >= 6
+                && invCount(cur, 'Fire rune') >= 2 && invCount(cur, 'Law rune') >= 2;
+            if (cur.runner === 'crashed') return 'fail';
+            if (cur.xp.mining > start.xp.mining) return funded ? 'pass' : 'fail';
+            return 'wait';
+        }
+    },
     // ── early-game gather (short path into camp) ─────────────────────────────
     {
         id: 'mine-bank',
@@ -1752,7 +1787,7 @@ const SCENARIOS: Scenario[] = [
             `mule=${logHas(cur, /mule:\s*cooker/i)} distBank=${minDistToBank}`
     },
     {
-        // Bank raw then cook: givebank 973 raw + inv pot + 26 raw → catch the last → bank hits N → withdraw and cook the batch.
+        // Bank raw then cook: deposit 973 noted raw + inv pot + 26 raw → catch the last → bank hits N → withdraw and cook the batch.
         // 973 banked + 27 deposited = 1000 (explicit bankRawBeforeCook; the product default is 56).
         id: 'fish-bank-raw-cook',
         tags: ['fishing', 'fish', 'cook', 'bank', 'early'],
@@ -2589,7 +2624,7 @@ const SCENARIOS: Scenario[] = [
             leashRadius: 12
         },
         purgeBank: { stand: SPOT.varrockWestBank, match: TOOL_RE.axe, label: 'axes@varrock-w' },
-        // Bank mats via givebank so restock must withdraw (not materials-held short-circuit).
+        // Bank noted materials so restock must withdraw (not materials-held short-circuit).
         bankSeed: {
             stand: SPOT.varrockWestBank,
             items: [
@@ -2699,7 +2734,7 @@ try {
                 await purgeBankTools(page, sc.purgeBank.stand, sc.purgeBank.match, sc.purgeBank.label);
             }
 
-            // Bank fixtures first (givebank) so pack never holds bulk stackables.
+            // Bank fixtures first so their noted stacks are deposited before inventory gear is seeded.
             if (sc.bankSeed) {
                 console.log(
                     `  bankSeed @ (${sc.bankSeed.stand.x},${sc.bankSeed.stand.z}): ` +

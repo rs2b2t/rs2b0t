@@ -7,10 +7,30 @@ export const CASES: readonly Case[] = [
         harness: 'duel-clue-373-live.ts',
         covers: { scripts: ['ClueSolver', 'DuelArena'], subsystems: ['clues', 'multibox'] },
         status: 'vetted',
-        provenAt: 'ec3ba080',
+        provenAt: '1b66e152',
         manual: true,
         budgetMin: 7,
         note: 'Two fresh local accounts negotiate a no-stake obstacle duel, dig clue3554, forfeit, open the casket outside and bank the reward. Both players retain their starting HP. Saves logs and screenshots.'
+    },
+    {
+        id: 'potionmaker-empty-secondary-live',
+        harness: 'potionmaker-empty-secondary-live.ts',
+        covers: { scripts: ['PotionMaker'] },
+        status: 'vetted',
+        provenAt: '7217e27b',
+        manual: true,
+        budgetMin: 3,
+        note: 'Fresh local account holds unfinished potions with no secondary banked; verifies the stop, closed bank and preserved batch.'
+    },
+    {
+        id: 'firemaker-empty-bank-live',
+        harness: 'firemaker-empty-bank-live.ts',
+        covers: { scripts: ['Firemaker'] },
+        status: 'vetted',
+        provenAt: '8cc200c08aa8a732b6742b38e832782c39faff86',
+        manual: true,
+        budgetMin: 3,
+        note: 'Fresh local account with a tinderbox and no banked logs; verifies the ready empty-bank stop and saves a screenshot.'
     },
     {
         id: 'mortton-shop-798-live',
@@ -21,6 +41,16 @@ export const CASES: readonly Case[] = [
         manual: true,
         budgetMin: 5,
         note: 'Fresh local account walks town and temple into Razmire, then from Razmire through both doors to Ulsquire. Saves route logs and screenshots.'
+    },
+    {
+        id: 'cookbot-zanaris-live',
+        harness: 'cookbot-zanaris-live.ts',
+        covers: { scripts: ['CookBot'] },
+        status: 'vetted',
+        provenAt: '3fe15f03',
+        manual: true,
+        budgetMin: 4,
+        note: 'Fresh local account completes Lost City, opts into Zanaris banking, withdraws a banked shrimp and cooks it at the nearby range.'
     },
     ...(['missing-dds', 'missing-superanti', 'sharks14', 'guardian', 'reward'] as const).map(scenario => ({
         id: `jive-private-${scenario}`,
@@ -134,6 +164,16 @@ export const CASES: readonly Case[] = [
         manual: true,
         budgetMin: 12,
         note: 'Fresh local account with Murder Mystery started and 30 banked pots. Withdraws unnoted pots, fills 28, banks flour at Seers and fills the next load; screenshots docs/e2e/issue-310*.png.'
+    },
+    {
+        id: 'shilo-gear-703-live',
+        harness: 'shilo-gear-703-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'vetted',
+        provenAt: '458d230867335cd6a7dcbe0241b43547a1e01703',
+        manual: true,
+        budgetMin: 12,
+        note: 'Fresh local accounts; actual Shilo inventory equip and full-pack bank provisioning preserve Rope and Tattered scroll. Isolated deployment; --no-deploy requires CLIENT_PAGE.'
     },
     {
         id: 'donovan-door-771-live',

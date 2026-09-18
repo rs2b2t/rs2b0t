@@ -1,5 +1,5 @@
 /** Live Pirate's Treasure harness (#231): --stage/--employed/--crate-rum/--crate-bananas, base :8890.
- *  Why: the smuggle state lives in three varps the client cannot read, so a stage number alone reaches only a third of the quest; every seed relogs because update_questlist recolours the journal at login only; the bank holds coins and food alone so the rum, apron and spade are sourced in the world; the :8888 sim answers neither `givebank` nor `~bankitem`. */
+ *  Why: the smuggle state lives in three varps the client cannot read, so a stage number alone reaches only a third of the quest; every seed relogs because update_questlist recolours the journal at login only; the bank holds coins and food alone so the rum, apron and spade are sourced in the world. */
 
 //   HEADED=1 bun e2e/piratestreasure-231-live.ts --stage 0 --until 4 --minutes 120
 //   HEADED=1 bun e2e/piratestreasure-231-live.ts --stage 1 --employed 2 --crate-rum 2 --until 2

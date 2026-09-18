@@ -6,11 +6,11 @@ What every quest harness does, independent of which quest it drives.
 
 ## Building one
 
-1. Prefer `bank:obj:qty` / `givebank` / `~bankitem` over give→deposit loops for unstackable food.
+1. Use `bank:obj:qty` seeds; the shared helper deposits noted items for bulk stock.
 2. Ideal smoke → realistic bank-seed → **lower non-required stats until red**;
    keep proven floor + failed floor + next probe in the module; `warnReadiness`.
 3. Leave the pack empty after bank seed so provisioning runs.
-4. Drain dialogs before `~bankitem`; prefer `givebank` mid-setup.
+4. Drain dialogs before opening the bank to deposit fixture items.
 5. Assert journal complete + clean stop.
 6. Later: power-level tactics (safespot vs melee) from the same skill snapshot.
 

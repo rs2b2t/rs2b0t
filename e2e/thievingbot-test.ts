@@ -1,5 +1,5 @@
 /** Live verification for Thiever efficiency (#139): [base], with BASE / BUDGET_S / HEADED / SLOWMO from the environment. Boots a mainland account, seeds a short pack of cooked lobsters, starts Thiever on Ardougne Guards with loot off, and asserts thieving XP/hr >= 25k after a warm-up.
- *  Why: item seeds go through the engine cheat `give <obj> <qty>` rather than `~item`/`~bankitem`, and the bot client is redeployed by hand, tools/deploy-local.sh from this tree is not for live e2e. */
+ *  Why: item seeds go through the engine cheat `give <obj> <qty>`, and the bot client is redeployed by hand, tools/deploy-local.sh from this tree is not for live e2e. */
 
 // Usage:
 //   bun e2e/thievingbot-test.ts

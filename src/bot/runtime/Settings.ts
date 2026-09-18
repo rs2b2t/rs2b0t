@@ -166,6 +166,12 @@ export const GLOBAL_SETTINGS_CORE: SettingsSchema = {
         label: 'Clue duel partner',
         help: 'Named account running Duel Arena in Clue helper mode for the obstacle-arena coordinate clue.'
     },
+    useZanarisBank: {
+        type: 'boolean',
+        default: false,
+        label: 'Allow the Zanaris bank',
+        help: 'Enable while working inside Zanaris. Requires Lost City and starting inside the city.'
+    },
     useMageBank: {
         type: 'boolean',
         default: false,

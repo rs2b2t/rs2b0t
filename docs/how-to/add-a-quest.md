@@ -13,7 +13,7 @@
    **lower combat (etc.) until red**, store proven floor + failed floor + next
    probe in the module; wire `warnReadiness`; update [Testing](../TESTING.md) when
    a headed run moves the floor. Later add power-level tactics (safespots, …).
-6. Prefer bank-first realistic harnesses (`givebank` / `bank:` seeds) before
+6. Prefer bank-first realistic harnesses (`bank:` seeds) before
    claiming the quest is done, inv+max only proves the mid-quest loop.
 
 Start from [`defs/cooksassistant.ts`](../../src/bot/api/ai/quests/defs/cooksassistant.ts) for
