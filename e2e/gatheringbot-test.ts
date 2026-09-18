@@ -1034,6 +1034,43 @@ const TOOL_RE = {
 } as const;
 
 const SCENARIOS: Scenario[] = [
+    {
+        id: 'mine-startup-provision',
+        tags: ['mining', 'bank', 'provision'],
+        script: 'Miner',
+        start: SPOT.varrockWestBank,
+        camp: SPOT.swVarrockMine,
+        settings: {
+            rocks: 'Tin',
+            location: 'Southwest Varrock Mine',
+            withdrawCoins: 100,
+            bankTeleport: 'Varrock',
+            teleCasts: 2,
+            toolAcquire: 'Off',
+            forgetfulBank: false
+        },
+        bankSeed: {
+            stand: SPOT.varrockWestBank,
+            items: [
+                { debugName: 'coins', displayName: 'Coins', qty: 1000 },
+                { debugName: 'airrune', displayName: 'Air rune', qty: 10 },
+                { debugName: 'firerune', displayName: 'Fire rune', qty: 10 },
+                { debugName: 'lawrune', displayName: 'Law rune', qty: 10 }
+            ]
+        },
+        seed: [
+            { debug: 'rune_pickaxe', name: 'Rune pickaxe', qty: 1 },
+            { debug: 'tin_ore', name: 'Tin ore', qty: 27 }
+        ],
+        scene: 'bank',
+        check: ({ start, cur }) => {
+            const funded = invCount(cur, 'Coins') >= 100 && invCount(cur, 'Air rune') >= 6
+                && invCount(cur, 'Fire rune') >= 2 && invCount(cur, 'Law rune') >= 2;
+            if (cur.runner === 'crashed') return 'fail';
+            if (cur.xp.mining > start.xp.mining) return funded ? 'pass' : 'fail';
+            return 'wait';
+        }
+    },
     // ── early-game gather (short path into camp) ─────────────────────────────
     {
         id: 'mine-bank',
