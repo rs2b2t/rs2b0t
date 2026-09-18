@@ -12,6 +12,16 @@ export const CASES: readonly Case[] = [
         budgetMin: 5,
         note: 'Fresh local account walks town and temple into Razmire, then from Razmire through both doors to Ulsquire. Saves route logs and screenshots.'
     },
+    {
+        id: 'cookbot-zanaris-live',
+        harness: 'cookbot-zanaris-live.ts',
+        covers: { scripts: ['CookBot'] },
+        status: 'vetted',
+        provenAt: '3fe15f03',
+        manual: true,
+        budgetMin: 4,
+        note: 'Fresh local account completes Lost City, opts into Zanaris banking, withdraws a banked shrimp and cooks it at the nearby range.'
+    },
     ...(['missing-dds', 'missing-superanti', 'sharks14', 'guardian', 'reward'] as const).map(scenario => ({
         id: `jive-private-${scenario}`,
         harness: 'jive-private-live.ts',
@@ -124,6 +134,16 @@ export const CASES: readonly Case[] = [
         manual: true,
         budgetMin: 12,
         note: 'Fresh local account with Murder Mystery started and 30 banked pots. Withdraws unnoted pots, fills 28, banks flour at Seers and fills the next load; screenshots docs/e2e/issue-310*.png.'
+    },
+    {
+        id: 'shilo-gear-703-live',
+        harness: 'shilo-gear-703-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'vetted',
+        provenAt: '458d230867335cd6a7dcbe0241b43547a1e01703',
+        manual: true,
+        budgetMin: 12,
+        note: 'Fresh local accounts; actual Shilo inventory equip and full-pack bank provisioning preserve Rope and Tattered scroll. Isolated deployment; --no-deploy requires CLIENT_PAGE.'
     },
     {
         id: 'donovan-door-771-live',
