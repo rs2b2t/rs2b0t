@@ -721,8 +721,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
             return custom('buy Harold an Asgarnian ale', giveAleToHarold);
         }
         if (stage === DP_STAGE.GIVEN_ALE) {
-            return sourceCoins(snap, GAMBLE_STAKE_FLOAT)
-                ?? sourceCocktail(snap)
+            const cocktail = sourceCocktail(snap);
+            return sourceCoins(snap, GAMBLE_STAKE_FLOAT + (cocktail?.kind === 'buy' ? cocktail.estGp ?? 0 : 0))
+                ?? cocktail
                 ?? custom('give Harold a Blurberry special and gamble for the IOU', gambleWithHarold);
         }
         if (stage === DP_STAGE.GIVEN_IOU) {

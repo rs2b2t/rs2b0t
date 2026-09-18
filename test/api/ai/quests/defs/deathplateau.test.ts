@@ -524,3 +524,25 @@ test('startup deposit keeps a carried Blurberry special', () => {
     expect(step.kind).toBe('deposit');
     if (step.kind === 'deposit') expect(step.keep).toContain('blurberry special');
 });
+
+for (const coins of [131, 400]) {
+    test(`buying the cocktail with ${coins} coins leaves enough for gambling`, () => {
+        const before = { ...snap({ progress: progress(DP_STAGE.GIVEN_ALE) }), bank: new Map(), bankCoins: 0, inv: new Map([['coins', coins]]) };
+        expect(decide(before).kind).toBe('buy');
+        const after = { ...before, inv: new Map([['coins', coins - 30], ['blurberry special', 1]]), invIds: new Map([[2028, 1]]) };
+        expect(customName(decide(after))).toContain('gamble');
+    });
+}
+
+for (const id of [2028, 2064]) {
+    test(`banked or held cocktail ${id} only needs the 101gp stake`, () => {
+        const base = { ...snap({ progress: progress(DP_STAGE.GIVEN_ALE) }), bank: new Map(), bankCoins: 0, inv: new Map([['coins', 101]]) };
+        expect(decide({ ...base, bankIds: new Map([[id, 1]]) }).kind).toBe('withdraw');
+        expect(customName(decide({ ...base, invIds: new Map([[id, 1]]) }))).toContain('gamble');
+    });
+}
+
+test('reserves the cocktail price when the shop is still needed', () => {
+    const step = decide({ ...snap({ progress: progress(DP_STAGE.GIVEN_ALE) }), bank: new Map(), bankCoins: 0, inv: new Map([['coins', 130]]) });
+    expect(step.kind).toBe('wait');
+});

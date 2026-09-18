@@ -161,6 +161,5 @@ export const HAROLD_PURSE_START = 100;
 export const MAX_BET = 1000;
 
 export const COIN_FLOAT = 2000;
-/** Enough to cover the first stake and the ones a losing streak forces up after it. */
-export const GAMBLE_STAKE_FLOAT = 400;
+export const GAMBLE_STAKE_FLOAT = HAROLD_PURSE_START + 1;
 export const ALE_PRICE = 5;
