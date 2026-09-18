@@ -42,6 +42,10 @@ try {
     await cheatQuiet(page, 'setstat prayer 43');
     // Spoken to Shamus, spirit not yet defeated.
     await cheatQuiet(page, 'setvar zanaris 2');
+    await cheatQuiet(page, 'setstat magic 13');
+    await cheatQuiet(page, 'give mindrune 500');
+    await cheatQuiet(page, 'give airrune 1000');
+    await cheatQuiet(page, 'give firerune 1500');
     await cheatQuiet(page, 'give iron_axe 1');
     await cheatQuiet(page, 'give lobster 20');
     // Dramen tree in Entrana dungeon

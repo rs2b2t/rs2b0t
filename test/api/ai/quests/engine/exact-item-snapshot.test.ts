@@ -2,6 +2,7 @@
    assembly are exercised without constructing a live bot host. */
 import { afterEach, expect, test } from 'bun:test';
 
+import { Skills } from '#/bot/api/skills/Skills.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
@@ -11,6 +12,7 @@ import { QuestEngine } from '#/bot/api/ai/quests/engine/QuestEngine.js';
 import type { QuestModule, QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 const originals = {
+    effective: Skills.effective,
     bankIsOpen: Bank.isOpen,
     bankLoaded: Bank.loaded,
     bankItems: Bank.items,
@@ -22,6 +24,7 @@ const originals = {
 };
 
 afterEach(() => {
+    Skills.effective = originals.effective;
     (Bank as any).isOpen = originals.bankIsOpen;
     (Bank as any).loaded = originals.bankLoaded;
     (Bank as any).items = originals.bankItems;
@@ -33,6 +36,7 @@ afterEach(() => {
 });
 
 test('quest snapshots retain exact IDs alongside legacy name totals', () => {
+    Skills.effective = skill => skill === 'magic' ? 13 : 1;
     let bankOpen = true;
     (Bank as any).isOpen = () => bankOpen;
     (Bank as any).loaded = () => true;
@@ -69,4 +73,5 @@ test('quest snapshots retain exact IDs alongside legacy name totals', () => {
     expect(snap.bank?.get('a key')).toBe(3);
     expect(snap.bankIds).toEqual(new Map([[293, 2], [298, 1]]));
     expect(snap.stage).toBe(6);
+    expect(snap.magic).toBe(13);
 });

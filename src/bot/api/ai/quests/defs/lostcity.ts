@@ -6,7 +6,6 @@ import { Equipment } from '../../../equipment/Equipment.js';
 import { Inventory } from '../../../inventory/Inventory.js';
 import { Quests } from '../../../ui/questlog/Quests.js';
 import { Skills } from '../../../skills/Skills.js';
-import { Prayer } from '../../../prayer/Prayer.js';
 import { GroundItems } from '../../../grounditems/GroundItems.js';
 import { Locs } from '../../../locs/Locs.js';
 import { Npcs } from '../../../npcs/Npcs.js';
@@ -16,6 +15,8 @@ import { QUESTS } from '../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { talkThrough, type NpcStop } from '../exec/primitives.js';
 import { FOOD_FLOAT, QuestFood } from '../food.js';
+import { SPELL_DB } from '../../../../data/spelldb.js';
+import { defeatTreeSpirit, highestLostCityStrike } from './lostcityCombat.js';
 
 export const LOST_CITY_STAGE = {
     NOT_STARTED: 0,
@@ -65,13 +66,14 @@ const BRANCH = 'Dramen branch';
 const STAFF = 'Dramen staff';
 export const LOST_CITY_FOOD_TARGET = FOOD_FLOAT;
 export const LOST_CITY_STAFF_TARGET = 5;
+export const LOST_CITY_CAST_TARGET = 200;
+const STRIKE_RUNES = ['air rune', 'mind rune', 'water rune', 'earth rune', 'fire rune'];
 const AXES = ['Rune axe', 'Adamant axe', 'Mithril axe', 'Black axe', 'Steel axe', 'Iron axe', 'Bronze axe'];
 const DUNGEON_AXES = ['Iron axe', 'Bronze axe'];
 
 const SHAMUS_TREE_ID = 2409;
 const DRAMEN_TREE_ID = 1292;
 const MAGIC_DOOR_ID = 2407;
-const TREE_SPIRIT_ID = 655;
 const SHAMUS_ID = 654;
 const ENTRANA_ZOMBIE_ID = 76;
 
@@ -155,7 +157,7 @@ function scanBank(): QuestStep {
 
 function mainlandKeep(): string[] {
     const food = selectedFood()?.toLowerCase();
-    return ['knife', ...AXES.map(name => name.toLowerCase()), 'dramen branch', 'dramen staff', 'coins', ...(food ? [food] : [])];
+    return [...STRIKE_RUNES, 'knife', ...AXES.map(name => name.toLowerCase()), 'dramen branch', 'dramen staff', 'coins', ...(food ? [food] : [])];
 }
 
 function makeAcquisitionSpace(snap: QuestSnapshot, slots: number): QuestStep | null {
@@ -212,7 +214,7 @@ function sourceMainlandAxe(snap: QuestSnapshot): QuestStep | null {
 
 function entranaKeep(): string[] {
     const food = selectedFood()?.toLowerCase();
-    return ['knife', 'coins', ...(food ? [food] : [])];
+    return [...STRIKE_RUNES, 'knife', 'coins', ...(food ? [food] : [])];
 }
 
 function hasEntranaSpillover(snap: QuestSnapshot): boolean {
@@ -266,37 +268,10 @@ async function restoreWithSelectedFood(target: number): Promise<void> {
     }
 }
 
-/** Drink a prayer potion dose when points are low (optional; user-supplied pots). */
-async function sipPrayerIfNeeded(): Promise<void> {
-    if (Prayer.max() < 43 || Prayer.points() > Math.max(5, Prayer.max() * 0.25)) {
-        return;
-    }
-    const pot = Inventory.items().find(i => {
-        const n = (i.name ?? '').toLowerCase();
-        return n.includes('prayer potion') && i.actions().some(a => a.toLowerCase() === 'drink');
-    });
-    if (!pot) {
-        return;
-    }
-    const before = Prayer.points();
-    await pot.interact('Drink');
-    await Execution.delayUntil(() => Prayer.points() > before, 3000);
-}
-
-async function waitOutCombat(timeoutMs: number, opts?: { protectMelee?: boolean }): Promise<boolean> {
-    if (opts?.protectMelee && Prayer.available('Protect from Melee') && !Prayer.active('Protect from Melee')) {
-        await Prayer.set('Protect from Melee', true);
-    }
+async function waitOutCombat(timeoutMs: number): Promise<boolean> {
     const deadline = performance.now() + timeoutMs;
     while (Game.inCombat() && performance.now() < deadline) {
-        // Sustain respects AIO eatBelowHp (Lost City policy is 50%).
         await Sustain.run();
-        if (opts?.protectMelee) {
-            await sipPrayerIfNeeded();
-            if (Prayer.available('Protect from Melee') && !Prayer.active('Protect from Melee')) {
-                await Prayer.set('Protect from Melee', true);
-            }
-        }
         await Execution.delayTicks(1);
     }
     return !Game.inCombat();
@@ -411,63 +386,20 @@ async function acquireDungeonAxe(log: (m: string) => void): Promise<boolean> {
     return takeDungeonAxe();
 }
 
-async function defeatTreeSpirit(log: (m: string) => void): Promise<boolean> {
-    let spirit = Npcs.query()
-        .where(n => n.id === TREE_SPIRIT_ID && !n.targetsAnotherPlayer())
-        .within(18)
-        .nearest();
-    if (!spirit) {
-        if (!(await Traversal.walkResilient(DRAMEN_TREE, { radius: 3, attempts: 3, timeoutMs: 120_000, log }))) {
-            return false;
-        }
-        const tree = Locs.query().where(l => l.id === DRAMEN_TREE_ID).action('Chop down').within(8).nearest();
-        if (!tree) {
-            log('no Dramen tree to Chop down');
-            return false;
-        }
-        if (!(await tree.interact('Chop down'))) {
-            return false;
-        }
-        await Execution.delayUntil(
-            () => Npcs.query()
-                .where(n => n.id === TREE_SPIRIT_ID && !n.targetsAnotherPlayer())
-                .within(18)
-                .nearest() !== null,
-            10_000
-        );
-        spirit = Npcs.query()
-            .where(n => n.id === TREE_SPIRIT_ID && !n.targetsAnotherPlayer())
-            .within(18)
-            .nearest();
-    }
-    if (!spirit) {
-        return false;
-    }
-    // Heal to 70% into the fight (#393).
-    await restoreWithSelectedFood(0.7);
-    if (!Game.inCombat() && !(await spirit.interact('Attack'))) {
-        return false;
-    }
-    if (!(await Execution.delayUntil(() => Game.inCombat() || !spirit!.valid(), 5000))) {
-        return false;
-    }
-    // Melee crush spirit: Protect from Melee plus optional prayer pots at prayer 43+.
-    await waitOutCombat(180_000, { protectMelee: true });
-    // The next journal read confirms this player got the credit.
-    return true;
-}
-
 async function chopBranch(log: (m: string) => void): Promise<boolean> {
     if (Inventory.isFull()) {
         const keep = mainlandKeep();
         const junk = Inventory.items().find(item => item.name !== null
             && !keep.includes(item.name.toLowerCase())
             && item.actions().some(op => op.toLowerCase() === 'drop'));
-        if (!junk || !(await junk.interact('Drop'))) {
-            log('inventory is full and has no disposable item for the Dramen branch');
+        const food = selectedFood()?.toLowerCase();
+        const item = junk ?? (food ? Inventory.items().find(item => item.name?.toLowerCase() === food
+            && item.actions().some(op => op.toLowerCase() === 'eat')) : undefined);
+        if (!item || !(await item.interact(junk ? 'Drop' : 'Eat'))) {
+            log('inventory is full and has no disposable item or food for the Dramen branch');
             return false;
         }
-        await Execution.delayUntil(() => !Inventory.isFull(), 3000);
+        if (!(await Execution.delayUntil(() => !Inventory.isFull(), 3000))) return false;
     }
     if (!(await Traversal.walkResilient(DRAMEN_TREE, { radius: 3, attempts: 3, timeoutMs: 120_000, log }))) {
         return false;
@@ -539,6 +471,29 @@ function mainlandTools(snap: QuestSnapshot): QuestStep | null {
     return sourceKnife(snap) ?? sourceMainlandAxe(snap);
 }
 
+function sourceStrikeRunes(snap: QuestSnapshot): QuestStep | null {
+    const magic = snap.magic ?? 1;
+    const best = highestLostCityStrike(magic, () => Infinity);
+    if (!best) return { kind: 'wait', reason: 'need Magic 1 for Lost City Strike spells' };
+    const carried = (rune: string): number => heldCount(snap, rune) / LOST_CITY_CAST_TARGET;
+    if (highestLostCityStrike(magic, carried) === best) return null;
+    if (!snap.bankKnown) return scanBank();
+    const available = (rune: string): number => heldCount(snap, rune) + banked(snap, rune);
+    const spell = highestLostCityStrike(magic, rune => available(rune) / LOST_CITY_CAST_TARGET);
+    if (!spell) {
+        const missing = SPELL_DB['Wind Strike'].runes
+            .map(({ rune, count }) => ({ rune, count: count * LOST_CITY_CAST_TARGET - available(rune) }))
+            .filter(item => item.count > 0)
+            .map(item => `${item.count} ${item.rune}`).join(', ');
+        return { kind: 'wait', reason: `need runes for ${LOST_CITY_CAST_TARGET} Strike casts: ${missing}` };
+    }
+    const items = SPELL_DB[spell].runes
+        .map(({ rune, count }) => ({ name: rune, qty: count * LOST_CITY_CAST_TARGET - heldCount(snap, rune) }))
+        .filter(item => item.qty > 0);
+    if (items.length === 0) return null;
+    return makeAcquisitionSpace(snap, items.filter(item => !held(snap, item.name)).length) ?? withdraw(items);
+}
+
 function travelToDungeon(snap: QuestSnapshot): QuestStep {
     const area = lostCityArea(snap.tile);
     if (area === 'entranaShip') {
@@ -562,6 +517,10 @@ function travelToDungeon(snap: QuestSnapshot): QuestStep {
         if (food) {
             return food;
         }
+        if (snap.stage === LOST_CITY_STAGE.SPOKEN_TO_SHAMUS) {
+            const runes = sourceStrikeRunes(snap);
+            if (runes) return runes;
+        }
         return { kind: 'custom', name: 'sail from Port Sarim to Entrana', run: sailToEntrana };
     }
     return { kind: 'wait', reason: 'locating the Entrana route' };
@@ -575,7 +534,10 @@ function dungeonWork(snap: QuestSnapshot, stage: number): QuestStep {
         return { kind: 'equip', item: heldAxe(snap)! };
     }
     if (stage === LOST_CITY_STAGE.SPOKEN_TO_SHAMUS) {
-        return { kind: 'custom', name: 'defeat the Tree Spirit', run: defeatTreeSpirit };
+        return {
+            kind: 'custom', name: 'defeat the Tree Spirit',
+            run: log => defeatTreeSpirit(log, async () => (await readLostCityStage() ?? 0) >= LOST_CITY_STAGE.SPIRIT_DEFEATED)
+        };
     }
     return { kind: 'custom', name: 'cut a Dramen branch', run: chopBranch };
 }
