@@ -149,3 +149,19 @@ export async function talkAt(stop: NpcStop, log: (m: string) => void): Promise<b
     }
     return talkThrough(stop.npc, stop.prefer, log);
 }
+
+export const THROWER_APPROACH = [{ minX: 2848, maxX: 2880, minZ: 3590, maxZ: 3608, level: 0 }];
+
+export function onSecretPath(tile: { x: number; z: number; level: number } | null): boolean {
+    return tile !== null && tile.level === 0 && tile.x >= 2810 && tile.x <= 2871
+        && tile.z >= 3563 && (tile.x < 2848 || tile.z >= 3609);
+}
+
+export async function walkSecretPath(dest: Tile, log: (m: string) => void): Promise<boolean> {
+    if (!(await Traversal.walkTo(dest, {
+        radius: 0, timeoutMs: 180_000, useTeleportCatalog: false,
+        avoidZones: THROWER_APPROACH, log
+    }))) return false;
+    const here = Game.tile();
+    return here !== null && here.level === dest.level && dest.distanceTo(here) === 0;
+}
