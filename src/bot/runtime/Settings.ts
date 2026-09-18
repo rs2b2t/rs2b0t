@@ -188,7 +188,9 @@ export const GLOBAL_SETTINGS_CORE: SettingsSchema = {
         type: 'boolean',
         default: true,
         label: 'Auto re-enable run',
-        help: 'flip the run orb back on once energy regenerates (the engine forces it off at 0)'
+        help:
+            'flip the run orb back on once energy regenerates (the engine forces it off at 0). '
+            + 'Scripts may RunManager.override({ runAuto, energyMin }); cleared when the script stops.'
     },
     runEnergyMin: {
         type: 'number',
@@ -196,7 +198,9 @@ export const GLOBAL_SETTINGS_CORE: SettingsSchema = {
         min: 0,
         max: 100,
         label: 'Re-enable run at energy %',
-        help: 'higher = longer walk-regen phases with faster bursts; 0 = re-enable immediately'
+        help:
+            'higher = longer walk-regen phases with faster bursts; 0 = re-enable immediately. '
+            + 'Scripts may RunManager.override({ energyMin }) to raise the floor for one run.'
     }
 };
 

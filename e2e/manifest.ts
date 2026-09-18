@@ -351,6 +351,15 @@ export const CASES: readonly Case[] = [
         note: 'pauses and resumes in the middle of a walk and proves one loop body comes back, not two (#580 regression)'
     },
     {
+        id: 'run-override-live',
+        harness: 'run-override-live.ts',
+        covers: { scripts: ['DoorOpener'], subsystems: ['infra'] },
+        status: 'unvetted',
+        manual: true,
+        budgetMin: 2,
+        note: 'headed: Global auto-run re-enables, RunManager.override({ runAuto: false }) holds the orb off, and script start/stop clear the overlay'
+    },
+    {
         id: 'autofighter-eat-resume-659-live',
         harness: 'autofighter-eat-resume-659-live.ts',
         covers: { scripts: ['AutoFighter'] },
