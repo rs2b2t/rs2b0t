@@ -1,0 +1,297 @@
+{
+  "issue": 847,
+  "result": "PASS",
+  "before": {
+    "tile": {
+      "x": 2946,
+      "z": 3369,
+      "level": 0
+    },
+    "sprite": {
+      "x": 2946,
+      "z": 3369,
+      "level": 0
+    },
+    "quest": "inProgress",
+    "run": false,
+    "energy": 100,
+    "inventory": [
+      {
+        "id": 1059,
+        "count": 1
+      },
+      {
+        "id": 1985,
+        "count": 1
+      },
+      {
+        "id": 2409,
+        "count": 1
+      },
+      {
+        "id": 2408,
+        "count": 1
+      },
+      {
+        "id": 995,
+        "count": 1000
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 2434,
+        "count": 1
+      },
+      {
+        "id": 2434,
+        "count": 1
+      }
+    ],
+    "state": "idle",
+    "logs": []
+  },
+  "after": {
+    "tile": {
+      "x": 2931,
+      "z": 3458,
+      "level": 0
+    },
+    "sprite": {
+      "x": 2930,
+      "z": 3457,
+      "level": 0
+    },
+    "quest": "complete",
+    "run": false,
+    "energy": 100,
+    "inventory": [
+      {
+        "id": 1059,
+        "count": 1
+      },
+      {
+        "id": 1985,
+        "count": 1
+      },
+      {
+        "id": 2409,
+        "count": 1
+      },
+      {
+        "id": 2408,
+        "count": 1
+      },
+      {
+        "id": 995,
+        "count": 1000
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 379,
+        "count": 1
+      },
+      {
+        "id": 2434,
+        "count": 1
+      },
+      {
+        "id": 2434,
+        "count": 1
+      },
+      {
+        "id": 2411,
+        "count": 1
+      },
+      {
+        "id": 2407,
+        "count": 1
+      }
+    ],
+    "state": "running",
+    "logs": [
+      "  waiting behind the hedge at 2907,3460",
+      "  waiting behind the hedge at 2903,3460",
+      "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+      "  path: cost 5, 3 waypoints, expanded 9, worker 0.1ms, hops=1",
+      "  hops:\n1. [door] Open Door loc=2862 → 2901,3466,L0 (cost 4)",
+      "  crossed 'Door' at (2901,3465) (Open sent tick 1382, open unseen, stepped +21, crossed +21)",
+      "  arrived (2 clicks)",
+      "  → ok in 52.6s · no inventory change",
+      "[t9] Witch's House: talk to Boy · stage 6 · (2902,3466) · 7 free",
+      "  stage=6 at=2902,3466,L0 key=1 magnet=0 cheese=1 diary=1 shedkey=1 ball=1 gloves=1 step=talk",
+      "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+      "  path: cost 58, 35 waypoints, expanded 3024, worker 3.3ms, hops=2",
+      "  hops:\n1. [door] Open Door loc=1530 → 2902,3468,L0 (cost 4)\n2. [door] Open Door loc=2861 → 2900,3473,L0 (cost 4)",
+      "  crossed 'Door' at (2902,3468) (Open sent tick 1414, open +1, stepped +2, crossed +4)",
+      "  crossed 'Door' at (2901,3473) (Open sent tick 1431, open unseen, stepped +21, crossed +21)",
+      "  arrived (8 clicks)"
+    ]
+  },
+  "key": true,
+  "shed": true,
+  "ball": true,
+  "waited": true,
+  "seenWitchX": [
+    2920,
+    2921,
+    2922,
+    2923,
+    2924,
+    2925,
+    2926,
+    2927,
+    2928,
+    2929,
+    2930,
+    2919,
+    2918,
+    2917,
+    2916,
+    2915,
+    2914,
+    2913,
+    2912,
+    2911,
+    2910,
+    2909,
+    2908,
+    2907,
+    2906,
+    2905,
+    2904
+  ],
+  "gardenTiles": [
+    "2901,3465",
+    "2901,3464",
+    "2901,3463",
+    "2901,3462",
+    "2901,3461",
+    "2901,3460",
+    "2902,3460",
+    "2903,3460",
+    "2904,3460",
+    "2905,3460",
+    "2906,3460",
+    "2907,3460",
+    "2908,3460",
+    "2909,3460",
+    "2910,3460",
+    "2911,3460",
+    "2912,3460",
+    "2913,3460",
+    "2914,3460",
+    "2915,3460",
+    "2916,3460",
+    "2917,3460",
+    "2918,3460",
+    "2919,3460",
+    "2920,3460",
+    "2921,3460",
+    "2922,3460",
+    "2923,3460",
+    "2924,3460",
+    "2925,3460",
+    "2926,3460",
+    "2927,3460",
+    "2928,3460",
+    "2929,3460",
+    "2930,3460",
+    "2931,3460",
+    "2932,3460",
+    "2933,3460",
+    "2933,3461",
+    "2933,3462",
+    "2933,3463",
+    "2933,3464",
+    "2933,3465"
+  ]
+}

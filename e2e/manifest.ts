@@ -120,6 +120,15 @@ export const CASES: readonly Case[] = [
         note: 'drops 450 Coins outside the altar and proves the runner takes that ground stack into inventory'
     },
     {
+        id: 'witchs-house-patrol-847-live',
+        harness: 'witchs-house-patrol-847-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'vetted',
+        provenAt: '565c35fa46905d983ed1f54d4b8b182a86054458',
+        budgetMin: 12,
+        note: 'Fresh account after the diary stage; running disabled. Obtains the fountain key, crosses to the shed, defeats every form and returns the ball without a catch. Trace and screenshot: docs/e2e/issue-847.*'
+    },
+    {
         id: 'deathplateau-secret-path-843-live',
         harness: 'deathplateau-secret-path-843-live.ts',
         covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
