@@ -1,7 +1,4 @@
-/**
- * Manual basemap rebuild for the map picker, reached only from the Rebuild button path: never on picker open, never on a timer, never when settings change.
- * Why: the tab freezes briefly while worldmap.jag decodes and paints.
- */
+/** Manual basemap rebuild; decoding worldmap.jag blocks the tab for several seconds. */
 // eslint-disable-next-line no-restricted-imports -- TODO: route through ClientAdapter
 import { sleep } from '#/client/util/JsUtil.js';
 // eslint-disable-next-line no-restricted-imports -- TODO: route through ClientAdapter
@@ -36,10 +33,7 @@ type RegeneratedBasemap = {
 };
 
 let pendingJag: Uint8Array | null = null;
-/**
- * Serialize regenerates so only one MapView bake runs at a time.
- * Callers after the first wait, then run with **their own** prefs (not the first's).
- */
+/** Run one MapView bake at a time, preserving each caller's settings. */
 let regenTail: Promise<unknown> = Promise.resolve();
 
 /** Defaults for live Rebuild: nothing stamped (terrain-like). Prefer pre-baked overlays. */
@@ -154,13 +148,10 @@ function pix2dToImageData(pixels: Int32Array, width: number, height: number): Im
     return new ImageData(rgba, width, height);
 }
 
-/**
- * Re-render the full world basemap with MapView layer flags (same idea as the classic /worldmap applet), saving and restoring the game canvas; still costly.
- * Concurrent calls queue: each waits for the previous bake, then runs with its own prefs rather than reusing the first caller's result.
- */
+/** Re-render the full world basemap with MapView layer flags (like the classic /worldmap applet), saving and restoring the game canvas. Concurrent calls queue and each bakes with its own prefs. */
 export function regenerateBasemap(prefs: BasemapBakePrefs = resolveBasemapBakePrefs()): Promise<RegeneratedBasemap> {
     const run = (): Promise<RegeneratedBasemap> => regenerateBasemapOnce(prefs);
-    // Chain so a second Rebuild waits, then bakes with **its** prefs.
+    // Chain so a second Rebuild waits, then bakes with its own prefs.
     const next = regenTail.then(run, run);
     regenTail = next.then(
         () => undefined,
@@ -208,8 +199,7 @@ async function regenerateBasemapOnce(prefs: BasemapBakePrefs): Promise<Regenerat
     MapView.shouldDrawMultimap = prefs.multimap;
     MapView.shouldDrawFreemap = prefs.freemap;
 
-    // Resolve when maininit finishes. MapView's constructor calls run(); we override
-    // run() so it only runs maininit once, never enters GameShell's frame while-loop.
+    // Resolve when maininit finishes; MapView's constructor calls run(), overridden here to run maininit once and skip GameShell's frame loop.
     let resolveReady!: () => void;
     let rejectReady!: (e: unknown) => void;
     const ready = new Promise<void>((resolve, reject) => {
@@ -235,7 +225,7 @@ async function regenerateBasemapOnce(prefs: BasemapBakePrefs): Promise<Regenerat
             } catch (e) {
                 rejectReady(e);
             }
-            // Intentionally no game loop (do not call super.run()).
+            // No game loop; super.run() is skipped on purpose.
         }
         override async drawProgress(): Promise<void> {
             checkAbort();
@@ -261,7 +251,7 @@ async function regenerateBasemapOnce(prefs: BasemapBakePrefs): Promise<Regenerat
     try {
         await sleep(0); // let status UI paint before the heavy work
         checkAbort();
-        // Construct starts run() → maininit; do not race without an abort path.
+        // Construction starts run() and maininit; never race it without an abort path.
         const view = new LiveBakeMapView();
         const timeout = new Promise<never>((_, reject) => {
             timeoutId = setTimeout(() => {
@@ -324,8 +314,7 @@ async function regenerateBasemapOnce(prefs: BasemapBakePrefs): Promise<Regenerat
             manifest.sizeTiles = { ...DEFAULT_MAP_SIZE };
         }
 
-        // Do not call GameShell.shutdown(). It would tear down the live client's canvas handlers.
-        // LiveBakeMapView.run() never installs those listeners (only maininit).
+        // Never call GameShell.shutdown(): it would tear down the live client's canvas handlers, and LiveBakeMapView.run() never installed any.
         return { manifest, image };
     } finally {
         aborted = true; // stop any straggler maininit that still yields

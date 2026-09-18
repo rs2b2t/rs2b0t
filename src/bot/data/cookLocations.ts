@@ -10,13 +10,13 @@ import { cookSurfaceForFishCamp, rangeStandFromLoc } from './cookingRanges.js';
  * @see api/cooking/CookLocations.ts for the table bound to the live bank list.
  */
 
-/** Location setting that hands control back to the raw bankStand / rangeStand tiles. */
+/** Location setting that uses the raw `bankStand` and `rangeStand` tiles. */
 export const CUSTOM_LOCATION = 'Custom';
 
 /** How far from a bank a surface may sit and still count as that bank's. */
 export const MAX_SURFACE_CHEB = 20;
 
-// Why: a derived stand is one tile south of the loc, which is right for a 1x2 range and a guess for anything else, so the walk arrives near and lets useOn close the gap.
+// Why: Derived stands are approximate; `useOn` handles the final approach.
 const DERIVED_ARRIVE_RADIUS = 2;
 
 const DEFAULT_OBSTACLES: readonly string[] = ['door', 'gate'];
@@ -42,7 +42,7 @@ export interface CookLocation {
     /** Null when nothing cookable sits within {@link MAX_SURFACE_CHEB}: fire mode only. */
     surface: CookSurfacePlan | null;
     obstacles: readonly string[];
-    /** True only for hand-checked stands; a derived stand has never been walked. */
+/** True only for stands checked in game. */
     verified: boolean;
 }
 

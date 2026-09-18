@@ -106,7 +106,7 @@ let FOOD_WITHDRAW = 20;
 let MIN_FOOD = 1;
 let OBSTACLE_TIMEOUT_TICKS = 24;
 
-/** Ensure Auto Retaliate is off so skeletons near rocks don't pull us into combat. */
+/** Disable Auto Retaliate so nearby skeletons cannot pull the bot off course. */
 async function ensureRetaliateOff(log: (m: string) => void): Promise<void> {
     const controls = reader.retaliateControls();
     if (!controls) {
@@ -593,7 +593,7 @@ class PitEscape implements Task {
         const lt = ladder.tile();
         if (here && !nearTile(here, lt, 2)) {
             this.bot.setStatus('in the pit — heading to the ladder');
-            // Short enclosed walk, walkTo is enough; walkResilient is overkill.
+            // This short enclosed walk does not need resilient retries.
             await Traversal.walkTo(lt, { radius: 1 });
             if (this.bot.died) {
                 return;

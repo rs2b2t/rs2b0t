@@ -1,13 +1,13 @@
 // Why: a runtime array makes the union checkable against the registry; a bare type union cannot be.
 export const SCRIPT_NAMES = [
     'AgilityBot', 'AIOQuester', 'AIOTeleport', 'ArdyCakes', 'ArdyFighter',
-    'ArdyThiever', 'ArravSupplier', 'AutoFighter', 'BankFletcher', 'Barcrawl', 'BoneBurier',
-    'BrimhavenAgility', 'BrimhavenMossGiants', 'ChaosDruidKiller', 'ChickenKiller', 'ClueSolver',
+    'ArdyThiever', 'ArravSupplier', 'AutoFighter', 'BankFletcher', 'BankSorter', 'Barcrawl', 'BoneBurier',
+    'BrimhavenAgility', 'BrimhavenMossGiants', 'ChaosDruidKiller', 'ChickenKiller', 'ClimbingBoots', 'ClueSolver',
     'CoalTrucks', 'CookBot', 'DartFletcher', 'DoorOpener', 'DuelArena', 'EdgevilleMonkeyBars',
     'EssMiner', 'FireGiant', 'Firemaker', 'FlaxAIO', 'FlaxPicker', 'FlaxRunner',
-    'FlaxSpinner', 'GatheringBot', 'GemCutter', 'GnomeMagicChopper', 'GreenDragon', 'HerbCleaner',
-    'HerbloreSecondaries', 'HillGiant', 'LeatherCrafter', 'MarketMaker', 'MossGiant',
-    'MuleCrafter', 'NatureCrafter', 'PotionMaker', 'RockCrab', 'RoguesPurse',
+    'FlaxSpinner', 'FlourCollector', 'GatheringBot', 'GemCutter', 'GnomeMagicChopper', 'GreenDragon', 'HerbCleaner',
+    'HerbloreSecondaries', 'HillGiant', 'JiveChests', 'JiveCrafting', 'JiveDemons', 'JiveDragons', 'JiveEnchanter', 'JiveKBD', 'JiveKQ', 'JiveMarketDumper', 'LeatherCrafter', 'MarketMaker', 'MossGiant',
+    'MuleCrafter', 'NatureCrafter', 'PotionMaker', 'RangingGuild', 'RockCrab', 'RoguesPurse',
     'RuneCrafter', 'ShopBuyout', 'ShopRunner', 'SmelterBot', 'SmithingBot', 'Superheater',
     'TannerBot', 'ThievingBot', 'VialFiller', 'WalkToBot', 'WildyAgility', 'Alcher'
 ] as const;

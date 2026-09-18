@@ -2,10 +2,12 @@ import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import {
     bankDistance,
     nearestBank,
+    nearestBankReachable,
     type BankLocation,
     type BankNpcAccess,
     type BankObjectAccess
 } from './BankLocations.js';
+import { Navigator } from '../../event/webwalk/Navigator.js';
 import { Execution } from '../execution/Execution.js';
 import { Game } from '../game/Game.js';
 import Tile from '../../geometry/Tile.js';
@@ -40,7 +42,7 @@ export interface BankDestination {
     name: string;
     tile: WorldTile;
     access?: BankObjectAccess;
-    /** Set when the bank is a person (Gundai) rather than a booth. */
+    /** Set when the banker is an npc (Gundai). */
     npcAccess?: BankNpcAccess;
 }
 
@@ -57,8 +59,8 @@ function openAccess(
 }
 
 /**
- * Start-of-script pack cleanup (#170): deposit anything not on the keep list so the bot can start anywhere without a full junk pack.
- * Why: true when nothing needed banking or the purge finished; false only when junk remains and the bank could not be opened or deposited.
+ * Start-of-script pack cleanup (#170): deposit anything off the keep list so the bot can start with a junk pack.
+ * Why: true when nothing needed banking or the purge finished; false when junk remains and the bank couldn't be opened or deposited.
  */
 export async function purgePackAtBank(opts: {
     /** Exact display names to keep (case-insensitive), e.g. pickaxe / rod. */
@@ -247,10 +249,14 @@ export const Banking = {
             return Bank.openBooth(stand, boothName, boothOp, log);
         }
 
-        // nearest-fallback (no stand): scene booth anywhere, else web-walk nearestBank
+        // nearest-fallback (no stand): scene booth anywhere, else web-walk the cheapest reachable bank
         let destination: BankDestination | null = null;
         if (!realBooth(boothName)) {
-            destination = opts.destination ?? (nearest ? { name: nearest.name, tile: nearest.tile, access: nearest.access, npcAccess: nearest.npcAccess } : null);
+            // Why: nearestBank is air-ranked and in a dungeon every bank floats ~the same distance, so rank real routes instead; the air-nearest bank remains the no-route fallback.
+            const chosen = opts.destination ?? (here ? await nearestBankReachable(here, Navigator) : nearest);
+            destination = chosen
+                ? { name: chosen.name, tile: chosen.tile, access: chosen.access, npcAccess: chosen.npcAccess }
+                : null;
             if (destination) {
                 log(`no booth in scene — web-walking to the ${destination.name} bank at ${destination.tile}`);
                 await Traversal.walkResilient(asTile(destination.tile), { radius: 4, timeoutMs: 120_000, log });
@@ -293,8 +299,8 @@ export const Banking = {
 };
 
 /**
- * Human-ish pause between bank UI actions (open→scan, withdraw, deposit).
- * Why: tick-based at 1–2 ticks so bank load is not raced by open→scan→close on the same tick after the GatheringBot split.
+ * Human-ish pause between bank UI actions (open, scan, withdraw, deposit).
+ * Why: 1 to 2 ticks so open, scan and close can't land on the same tick and race the bank load.
  */
 export function bankPaceTicks(rand: () => number = Math.random): number {
     return rand() < 0.35 ? 2 : 1;
@@ -307,17 +313,14 @@ export async function bankPace(log?: (m: string) => void): Promise<void> {
     await Execution.delayTicks(ticks);
 }
 
-/**
- * Wait for bank item list after open. Counts stay 0 until loaded, without a
- * human pause this looks like an instant open→scan→close.
- */
+/** Wait for the bank item list after open. Counts stay 0 until it arrives, and without a pause this looks like an instant open, scan, close. */
 export async function waitBankReady(log?: (m: string) => void): Promise<boolean> {
     if (!Bank.isOpen()) {
         return false;
     }
     await bankPace(log);
     // ~7 ticks for bank table load
-    await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 7);
+    await Execution.delayUntilTicks(() => Bank.ready() || !Bank.isOpen(), 7);
     if (!Bank.isOpen()) {
         return false;
     }

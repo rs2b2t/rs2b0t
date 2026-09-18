@@ -35,7 +35,7 @@ function gateLoc(): Loc | null {
     return Locs.query().where(loc => GATE_LOC.includes(loc.id)).action('Open').within(4).nearest();
 }
 
-// Why: the gate is a `p_teleport`, not a walk. The character lands on the far side and the loc reverts three ticks later, so where it is standing is the only oracle.
+// Why: the gate is a `p_teleport`: you land on the far side and the loc reverts 3 ticks later, so where you're standing is the only oracle.
 async function crossGate(stand: Tile, want: () => boolean, log: (m: string) => void): Promise<boolean> {
     if (want()) {
         return true;
@@ -119,7 +119,7 @@ async function takeBones(n: SheepIndex, log: (m: string) => void): Promise<boole
     return false;
 }
 
-// Why: the sheep in the enclosure is a 150-tick `npc_add`, so the kill runs in the same leg as the herd, a decide() round trip in between loses the sheep and buys another forty pushes.
+// Why: the sheep in the enclosure is a 150-tick `npc_add`, so the kill runs in the same leg as the herd; a decide() round trip loses the sheep and costs another 40 pushes.
 async function poison(n: SheepIndex, log: (m: string) => void): Promise<boolean> {
     if (heldId(BONES_OBJ[n]) > 0) {
         return true;
@@ -172,7 +172,7 @@ export async function penAndKill(n: SheepIndex, log: (m: string) => void): Promi
     return poison(n, log);
 }
 
-// Why: `incinerate_bones` deletes the remains, waits three ticks and only then sets the quest bits, so a leg that stops when the pack empties hands `decide()` a journal that still reads "now I must kill it", and the queue herds the same sheep again.
+// Why: `incinerate_bones` deletes the remains, waits 3 ticks and then sets the bits, so a leg that stops when the pack empties hands `decide()` a journal still reading "now I must kill it".
 
 /** The chat line `incinerate_bones` prints once the bits are set. */
 const BURNT = /remains burn to dust/i;

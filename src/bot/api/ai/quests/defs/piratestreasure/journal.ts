@@ -1,17 +1,9 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { PT_QUEST, PT_STAGE } from './areas.js';
-
-/** Colour tags become a space, so no needle may span a tag boundary. */
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 function readStage(text: string): number | undefined {
     if (text.includes('quest complete!')) return PT_STAGE.COMPLETE;
@@ -22,7 +14,7 @@ function readStage(text: string): number | undefined {
     return undefined;
 }
 
-// Why: the page keeps every earlier line struck through, so an early needle still matches in a late state and this order is the only thing that separates them.
+// Why: the page keeps every earlier line struck through, so an early needle still matches late and only this order separates them.
 // Why: `rum-lost` leads because the lost-rum page is reachable with every shipping line already behind it.
 const SMUGGLE: readonly [string, string][] = [
     ['but i seem to have lost it', 'rum-lost'],
@@ -53,7 +45,7 @@ export function parsePiratesTreasureJournal(lines: readonly string[] | string): 
     return { stage, flags };
 }
 
-/** A failed read is not evidence the quest went backwards. */
+/** A failed read doesn't mean the quest went backwards. */
 let lastGood: QuestProgress | undefined;
 
 export async function readPiratesTreasureProgress(): Promise<QuestProgress | undefined> {

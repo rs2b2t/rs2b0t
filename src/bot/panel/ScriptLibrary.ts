@@ -21,8 +21,7 @@ export default class ScriptLibrary {
         });
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape' && this.isOpen()) {
-                // Match the other modal controls: the selector owns this Escape
-                // so outer UI hosts do not also close or handle it.
+                // The selector owns this Escape so outer UI hosts don't also handle it.
                 e.stopPropagation();
                 this.close();
             }

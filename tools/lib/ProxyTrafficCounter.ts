@@ -12,7 +12,7 @@ export function payloadByteLength(payload: Payload): number {
     return payload.byteLength;
 }
 
-/** Cumulative application-payload accounting owned by the production proxy. */
+/** Application payload bytes counted by the proxy. */
 export class ProxyTrafficCounter {
     private receivedBytes = 0;
     private sentBytes = 0;

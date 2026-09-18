@@ -34,7 +34,7 @@ function templeWalk(dest: Tile, radius: number, log: (m: string) => void): Promi
     });
 }
 
-// Why: her teleport lands five ticks after the conversation closes, so a leg that acts the moment it returns is still standing on the ledge, where the shiny key is a McGrubor round trip away rather than seventy tiles.
+// Why: her teleport lands 5 ticks after the conversation closes, so a leg that acts at once is still on the ledge, where the shiny key is a McGrubor round trip away.
 
 /** Wait out Winelda's ferry, and ask her again if it never came. */
 async function ensureAcrossTheLava(log: (m: string) => void): Promise<boolean> {
@@ -81,7 +81,7 @@ async function takeShinyKey(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => heldId(IKOV_OBJ.SHINY_KEY) > 0, 8000);
 }
 
-// Why: the wall is a "Wall" with a `Push`, not a door, so `derive-doors` never baked it and no route crosses it on its own.
+// Why: the wall is a "Wall" with a `Push`, so `derive-doors` never baked it and no route crosses it on its own.
 async function pushSecretWall(intoTemple: boolean, log: (m: string) => void): Promise<boolean> {
     const arrived = (): boolean => {
         const t = Game.tile();
@@ -105,7 +105,7 @@ async function pushSecretWall(intoTemple: boolean, log: (m: string) => void): Pr
         if (!(await wall.interact('Push'))) {
             return false;
         }
-        // Why: `open_and_close_door2` teleports the player through rather than opening a leaf to walk past.
+        // Why: `open_and_close_door2` teleports you through.
         if (await Execution.delayUntil(arrived, 8000)) {
             await settleScene();
             return true;

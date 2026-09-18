@@ -9,7 +9,7 @@ export const SHEEP: readonly SheepIndex[] = [1, 2, 3, 4];
 /** Journal ordinals, in `sheepherder_journal.rs2` order. */
 export const ORDINAL: Record<SheepIndex, string> = { 1: 'first', 2: 'second', 3: 'third', 4: 'fourth' };
 
-// Why: all four sets of remains render "Bones", as does the ordinary drop, so every lookup is by id.
+// Why: all 4 sets of remains render "Bones", as does the ordinary drop, so every lookup is by id.
 export const BONES_OBJ: Record<SheepIndex, number> = { 1: 280, 2: 281, 3: 282, 4: 283 };
 
 export const PROD_OBJ = 278;
@@ -41,7 +41,7 @@ export const ORBON: NpcStop = {
     prefer: ["Ok, I'll take it."]
 };
 
-// Why: an npc only enters the client's list within about fifteen tiles, so a sheep two fields away is not "missing". The leg has to walk to its map spawn before it can look.
+// Why: an npc only enters the client's list within about 15 tiles, so a sheep 2 fields away isn't missing; the leg walks to its map spawn before looking.
 export const SHEEP_SPAWN: Record<SheepIndex, Tile> = {
     1: new Tile(2610, 3344, 0),
     2: new Tile(2622, 3367, 0),

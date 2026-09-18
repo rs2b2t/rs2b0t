@@ -4,7 +4,7 @@ import type { LadderHop, NpcStop } from '../../exec/primitives.js';
 
 export const HERO_NAME = "Hero's Quest";
 
-/** Object ids. Key, Herb, Chest and Door each name more than one object, so nothing here is matched by name. */
+/** Object ids. Key, Herb, Chest and Door each name more than one object, so nothing here matches by name. */
 export const HERO_ID = {
     COINS: 995,
     /** Grip's spare, tradeable, the only way a Phoenix bot crosses the side door. */
@@ -120,7 +120,7 @@ export const HERO_LOC = {
 /** Every tile is walkable in the collision pack unless the comment says which loc blocks it. */
 export const HERO_TILE = {
     ACHIETTIES: new Tile(2903, 3511, 0),
-    // Why: `grubordoor` is a west wall, so its two sides are east and west of one tile, not north and south.
+    // Why: `grubordoor` is a west wall, so its 2 sides are east and west of one tile.
     /** The alley outside the Black Arm Brimhaven hideout. */
     GRUBOR_DOOR: new Tile(2810, 3170, 0),
     /** Past the door, in the hideout. */
@@ -139,11 +139,11 @@ export const HERO_TILE = {
     GARDEN: new Tile(2784, 3194, 0),
     /** The dead-end yard the garden door opens into, south of the side door. */
     YARD: new Tile(2781, 3196, 0),
-    /** The five-tile side room, north of the side door. */
+    /** The 5-tile side room, north of the side door. */
     SIDE_ROOM: new Tile(2781, 3197, 0),
     /** Beside the arrow slit; `snipable_wall` carries blockrange=no, so Grip is shootable through it. */
     ARROW_SLIT: new Tile(2780, 3198, 0),
-    /** Where `summon_grip` walks Grip, three tiles west of the slit on one row. */
+    /** Where `summon_grip` walks Grip, 3 tiles west of the slit on one row. */
     GRIP_LURE: new Tile(2777, 3198, 0),
     GARV_DOOR: new Tile(2774, 3187, 0),
     GARV_DOOR_INNER: new Tile(2774, 3188, 0),
@@ -158,7 +158,7 @@ export const HERO_TILE = {
     TREASURE_DOOR_INNER: new Tile(2764, 3197, 0),
     /** South of the candlestick chest: `forceapproach=north` at angle 2 rotates to south. */
     CHEST_STAND: new Tile(2766, 3198, 0),
-    /** Open street south of the Shrimp and Parrot, where the two bots meet to trade. */
+    /** Open street south of the Shrimp and Parrot, where the 2 bots meet to trade. */
     RENDEZVOUS: new Tile(2793, 3180, 0),
 
     GERRANT: new Tile(3013, 3226, 0),
@@ -182,14 +182,13 @@ export const HERO_TILE = {
     /** Inside the cell, where the door lands you. */
     JAIL_DOOR_INNER: new Tile(2931, 9689, 0),
     VELRAK: new Tile(2931, 9686, 0),
-    // Why: `deepdungeondoor` is a west wall, so its sides are east and west of one tile.
+    // Why: `deepdungeondoor` is a west wall too, so its sides are east and west of one tile.
     /** East of the deep dungeon gate, where the dusty key is used on it. */
     DEEP_GATE: new Tile(2924, 9803, 0),
     /** Past the gate, where the lava eels are. */
     DEEP_GATE_INNER: new Tile(2923, 9803, 0),
     LAVA_FISH: new Tile(2892, 9767, 0),
-    // Why: Taverley's own range (2844,3367) sits in a pocket the baked graph has no door into, so the
-    // nearest cooking surface a walker can reach from the dungeon ladder is Catherby's.
+    // Why: Taverley's own range (2844,3367) sits in a pocket the baked graph has no door into, so Catherby's is the nearest cooking surface a walker can reach from the dungeon ladder.
     CATHERBY_RANGE: new Tile(2817, 3443, 0),
 
     WWM_LADDER: new Tile(2845, 3526, 0),
@@ -204,8 +203,7 @@ export const HERO_TILE = {
     DRAYNOR_BANK: new Tile(3092, 3245, 0)
 } as const;
 
-// Why: `pickPreferred` matches a lower-cased substring, so every fragment here is apostrophe-free,
-// the content mixes straight and curly quotes and one wrong glyph silently picks no option at all.
+// Why: `pickPreferred` matches a lower-cased substring and the content mixes straight and curly quotes, so every fragment here is apostrophe-free; one wrong glyph picks no option at all.
 
 export const ACHIETTIES: NpcStop = {
     npc: 'Achietties',
@@ -277,7 +275,7 @@ export const GERRANT: NpcStop = {
     prefer: ['how to catch a lava eel']
 };
 
-/** Grubor's password, and the cabinet answer that walks Grip to the arrow slit. */
+/** Grubor's password and the cabinet choice that moves Grip to the arrow slit. */
 export const HERO_SAY = {
     BLACK_ARM_PASSWORD: 'four leaved clover',
     GRIP_DUTIES: 'what do my duties involve',
@@ -340,8 +338,7 @@ function within(t: WorldTile | null | undefined, x0: number, x1: number, z0: num
     return !!t && t.level === level && t.x >= x0 && t.x <= x1 && t.z >= z0 && t.z <= z1;
 }
 
-// Why: every box below is a flood of the collision pack, not a guess. The mansion is six sealed
-// pockets and a distance test calls two tiles either side of one wall the same place.
+// Why: every box below is a flood of the collision pack. The mansion is 6 sealed pockets and a distance test calls 2 tiles either side of one wall the same place.
 
 /** The Shrimp and Parrot's kitchen, which only `herokitchendoor` opens. */
 export function inKitchen(t: WorldTile | null | undefined): boolean {
@@ -353,22 +350,22 @@ export function inGarden(t: WorldTile | null | undefined): boolean {
     return within(t, 2783, 2788, 3188, 3199, 0) && !inKitchen(t);
 }
 
-/** The nine-tile yard between the garden door and the side door. */
+/** The 9-tile yard between the garden door and the side door. */
 export function inYard(t: WorldTile | null | undefined): boolean {
     return within(t, 2780, 2782, 3193, 3196, 0);
 }
 
-/** The five-tile side room, sealed from the mansion by the snipable wall. */
+/** The 5-tile side room, sealed from the mansion by the snipable wall. */
 export function inSideRoom(t: WorldTile | null | undefined): boolean {
     return within(t, 2780, 2782, 3197, 3198, 0);
 }
 
-/** Past `pete_treasuredoor`, where the candlestick chest is. Seventeen tiles. */
+/** Past `pete_treasuredoor`, where the candlestick chest is. 17 tiles. */
 export function inTreasureRoom(t: WorldTile | null | undefined): boolean {
     return within(t, 2764, 2769, 3196, 3199, 0);
 }
 
-/** The eight-tile store the treasure room's ordinary door opens onto; nothing in the quest needs it. */
+/** The 8-tile store the treasure room's ordinary door opens onto; nothing in the quest needs it. */
 export function inStoreCorridor(t: WorldTile | null | undefined): boolean {
     return within(t, 2770, 2772, 3196, 3198, 0);
 }
@@ -386,10 +383,9 @@ export function inMansion(t: WorldTile | null | undefined): boolean {
     return within(t, 2767, 2779, 3188, 3199, 0) || inWestWing(t);
 }
 
-// Why: the hideout and the alley interleave along z 3167-3170, so one rectangle over the pair puts
-// Grubor's own doorstep inside the hideout and every crossing then reads as already done.
+// Why: Hideout and alley bounds overlap, so use separate narrow regions around their interleaved tiles.
 
-/** The Brimhaven Black Arm hideout, past Grubor's door. Sixty-nine tiles. */
+/** The Brimhaven Black Arm hideout, past Grubor's door. 69 tiles. */
 export function inBrimhavenHq(t: WorldTile | null | undefined): boolean {
     return within(t, 2811, 2815, 3167, 3178, 0) || within(t, 2805, 2810, 3171, 3178, 0);
 }
@@ -398,13 +394,12 @@ export function inTaverleyDungeon(t: WorldTile | null | undefined): boolean {
     return within(t, 2820, 2950, 9600, 9900, 0);
 }
 
-/** Velrak's cell, past `dungeonjail`. Thirty-three tiles. */
+/** Velrak's cell, past `dungeonjail`. 33 tiles. */
 export function inVelrakCell(t: WorldTile | null | undefined): boolean {
     return within(t, 2928, 2934, 9683, 9689, 0);
 }
 
-// Why: the deep dungeon and the rest of Taverley's interleave across x 2881-2923, so these four boxes
-// cover the flood instead: all 2473 pocket tiles inside one, no tile of the main component.
+// Why: the deep dungeon and the rest of Taverley's interleave across x 2881-2923, so these 4 boxes cover the flood: all 2473 pocket tiles inside one, no tile of the main component.
 
 /** Past the dusty-key gate, where the lava eels are fished. */
 export function inDeepDungeon(t: WorldTile | null | undefined): boolean {

@@ -1,4 +1,4 @@
-<!-- Assembling a quest's pack: what to withdraw, when the pack is emptied, and the coin and food floats. -->
+<!-- Quest supplies: withdrawals, inventory clearing, coins and food. -->
 
 # Quest provisioning
 
@@ -12,7 +12,7 @@ quest needs **before** it starts, bank-first:
 | `depositPlan(inv, keep)` | what to drop before starting |
 | `gpShort(snap, estGp)` | how much coin is missing for a purchase |
 | `floatWithdraw(...)`, `coinFloatWithdraw(...)` | withdrawing with headroom |
-| `foodFloatPlan(...)` | how much food to draw, and whether the float is closed |
+| `floatDrawPlan(...)`, `coinFloatPlan(...)` | how much of a float to draw, and whether it is closed |
 
 ## An empty pack per quest
 
@@ -46,12 +46,24 @@ Eating during the quest does not reopen it, the provisioning block re-runs every
 quest is still gathering, and topping the float up sent the bot back to the bank after every
 meal. A death reopens it, because the pack is gone.
 
+## The coin float
+
+`COIN_FLOAT` (1000) is walking-around money unless a module names another figure. The engine
+draws it once, then latches it the same way as food: a 10gp gate while a gather is still
+outstanding must not emit `withdraw Coins`. Death, complete, and skip clear the latch.
+
+Cook's Assistant and Sheep Shearer set `coinFloat: 0`. Neither spends anything, so a default
+float would still send the first provision trip to the bank for money the quest never uses.
+
 Two rules that are easy to get wrong:
 
 - **A quest that buys anything must keep `coins` in its `tools`.** Omit it and the
   provisioner does not carry coin, so every purchase step parks with "need gp".
 - Quest-internal consumables are not `record.items`. The record lists what the quest
-  *requires*; things consumed along the way are the module's own business.
+  *requires*; things consumed along the way are the module's own business. The engine walks
+  the list again on every session start and after every death, so a listed consumable is
+  re-fetched by any run resumed past the leg that spent it. Dragon Slayer's Oracle charms
+  were, with the map already in Ned's hands.
 
 ## Prayer
 

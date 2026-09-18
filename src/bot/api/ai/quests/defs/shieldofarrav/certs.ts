@@ -8,13 +8,13 @@ import { otherHalf, ownHalf } from './state.js';
 
 // Why: both conversations run through `~mesbox` / `~objbox`, which build a main modal no chat driver can see.
 
-/** Hand both halves over for two certificates. */
+/** Hand both halves over for 2 certificates. */
 export async function mintCertificates(log: (m: string) => void): Promise<boolean> {
     const before = Inventory.countById(SOA_ID.CERTIFICATE);
     return talkUntil(CURATOR, [], () => Inventory.countById(SOA_ID.CERTIFICATE) > before, log);
 }
 
-/** Redeem one certificate with the king, which is what completes the quest. */
+/** Redeem one certificate with the king; that completes the quest. */
 export async function redeemCertificate(log: (m: string) => void): Promise<boolean> {
     const before = Inventory.countById(SOA_ID.CERTIFICATE);
     return talkUntil(ROALD, [], () => Inventory.countById(SOA_ID.CERTIFICATE) < before, log);
@@ -40,10 +40,10 @@ export function certsBanked(snap: QuestSnapshot): number {
     return bankedId(snap, SOA_ID.CERTIFICATE);
 }
 
-/** Both halves in one pack, the only thing the curator answers to; runs before any handoff. */
+/** Join both halves with the curator before any partner handoff. */
 export function curatorStep(snap: QuestSnapshot, gang: ArravGang): QuestStep | null {
     const pair = [ownHalf(gang), otherHalf(gang)];
-    // Why: the test is the total across pack and bank, never the split. A predicate that flips as the halves move makes a withdraw and a deposit undo each other every tick.
+    // Why: test the total across pack and bank; a predicate that flips as the halves move makes a withdraw and a deposit undo each other every tick.
     if (pair.some(id => heldId(snap, id) + bankedId(snap, id) === 0)) {
         return null;
     }
@@ -51,7 +51,7 @@ export function curatorStep(snap: QuestSnapshot, gang: ArravGang): QuestStep | n
     if (short.length > 0) {
         return { kind: 'withdraw', items: short.map(id => ({ name: 'Broken shield', qty: 1, id })) };
     }
-    // Why: he mints two per pair and stops the moment either varp goes complete, so this is the only window.
+    // Why: he mints 2 per pair and stops once either varp goes complete, so this is the only window.
     return { kind: 'custom', name: 'mint two certificates at the curator', run: mintCertificates };
 }
 
@@ -62,11 +62,11 @@ export function certStep(snap: QuestSnapshot, gang: ArravGang): QuestStep | null
     const held = certsHeld(snap);
     const banked = certsBanked(snap);
     const target = Math.max(1, ArravConfig.certTarget);
-    // Why: only the phoenix bot mints, it is the one that reaches Straven and the curator unaided, so only it is held to the stockpile target.
-    // Why: the stockpile is what pays a partner, and a solo account has nobody to pay, so holding out for a second certificate it cannot mint alone is a wedge.
+    // Why: only the phoenix bot reaches Straven and the curator unaided, so only it mints and only it is held to the stockpile target.
+    // Why: Solo accounts cannot produce a second certificate, so do not wait for partner stock.
     const minting = gang === 'phoenix' && ArravConfig.partner.trim().length > 0;
-    // Why: the test is the total, never the split between pack and bank, a predicate that flips when the certificates move makes the deposit and the withdraw undo each other every tick.
-    // Why: handing the partner its certificate ends the minting whatever the total then reads, since giving one away drops it back below target.
+    // Why: test the total across pack and bank; a predicate that flips as certificates move makes the deposit and the withdraw undo each other every tick.
+    // Why: handing the partner its certificate ends minting whatever the total reads, since giving one away drops it below target again.
     const doneMinting = !minting || ArravHandoffState.gaveCert || held + banked >= target;
 
     if (doneMinting) {
@@ -74,7 +74,7 @@ export function certStep(snap: QuestSnapshot, gang: ArravGang): QuestStep | null
             return { kind: 'custom', name: 'claim the reward from King Roald', run: redeemCertificate };
         }
         if (banked > 0) {
-            // Why: two when a partner is still owed one, the bot redeems one and hands the other over, and a trade can only offer from the pack.
+            // Why: withdraw 2 while a partner is owed one: redeem one, trade the other, and a trade can only offer from the pack.
             const owed = ArravConfig.partner.trim().length > 0 && !ArravHandoffState.gaveCert && gang === 'phoenix';
             const qty = owed ? Math.min(2, banked) : 1;
             return {
@@ -85,7 +85,7 @@ export function certStep(snap: QuestSnapshot, gang: ArravGang): QuestStep | null
         return null;
     }
 
-    // Why: a spare half cannot be banked, the chest and cupboard re-check the bank, so only the certificate stockpiles.
+    // Why: a spare half can't be banked (the chest and cupboard re-check the bank), so only the certificate stockpiles.
     if (held >= 2) {
         return {
             kind: 'deposit',

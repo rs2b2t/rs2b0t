@@ -13,9 +13,9 @@ import { RG_ITEM, RG_LOC, RG_NPC, RG_TILE } from './areas.js';
 import { RG_STAGE } from './journal.js';
 import { walkTo } from './isafdar.js';
 
-// Why: `[zone,0_40_51_24_32]`, Arianwyn steps out of the trees at (2584,3296) on the road to Ardougne castle, and only while the message is in the pack. The walk to King Lathas passes through it either way, but the stop is explicit so a run that took another line into the castle is not left short a stage.
+// Why: Arianwyn appears at (2584,3296) only while the message is held, so stop there explicitly before entering the castle.
 const ARIANWYN_ZONE = new Tile(2586, 3299, 0);
-// Why: `[zone,0_40_51_24_32]` is the eight-by-eight square from (2584,3296), so this is a tile off its west edge, near enough that stepping out and back is two short walks, far enough that the walk back is an entry.
+// Why: `[zone,0_40_51_24_32]` is the 8x8 square from (2584,3296), so this is a tile off its west edge: near enough that stepping out and back is 2 short walks, far enough that the walk back counts as an entry.
 const ARIANWYN_OUTSIDE = new Tile(2580, 3299, 0);
 const ARIANWYN_TRIES = 3;
 
@@ -29,7 +29,7 @@ export async function feedLazyGuard(log: (m: string) => void): Promise<boolean> 
         return false;
     }
     await settleScene();
-    // Why: five different NPCs render as "Tyras guard", and only this one takes the rabbit.
+    // Why: 5 NPCs render as "Tyras guard", and only this one takes the rabbit.
     const guard = Npcs.query().where(npc => npc.id === RG_NPC.LAZY_GUARD).within(10).nearest();
     const rabbit = Inventory.items().find(item => item.id === RG_ITEM.COOKED_RABBIT.id);
     if (!guard || !rabbit) {
@@ -42,7 +42,7 @@ export async function feedLazyGuard(log: (m: string) => void): Promise<boolean> 
     return driveUntil(() => heldId(RG_ITEM.COOKED_RABBIT.id) === 0, [], log, 30_000);
 }
 
-// Why: the firing is a two-minute cutscene. The player is walked round the catapult, teleported into an instanced copy of the camp to watch the tent burn, and put back at (2183,3185), so the oracle is the bomb leaving the pack, not the tile or the dialogue.
+// Why: the firing is a 2-minute cutscene that walks you round the catapult, teleports you into an instanced copy of the camp to watch the tent burn and puts you back at (2183,3185), so the oracle is the bomb leaving the pack.
 
 /** The barrel bomb loaded and fired over the trees into King Tyras's tent. */
 export async function fireCatapult(log: (m: string) => void): Promise<boolean> {
@@ -63,7 +63,7 @@ export async function fireCatapult(log: (m: string) => void): Promise<boolean> {
         log('the catapult would not take the bomb');
         return false;
     }
-    // Why: the cutscene teleports twice and ends with a three-tick animation lock, so the next leg waits for the player to be back on the forest floor rather than starting mid-flight.
+    // Why: the cutscene teleports twice and ends with a 3-tick animation lock, so the next leg waits for the forest floor before it starts.
     return Execution.delayUntil(() => (Game.tile()?.z ?? 9999) < 4000, 60_000);
 }
 
@@ -81,7 +81,7 @@ export async function reportToIorwerth(log: (m: string) => void): Promise<boolea
 
 /** Arianwyn's ambush on the Ardougne road, which breaks the seal on the letter. */
 export async function meetArianwyn(log: (m: string) => void): Promise<boolean> {
-    // Why: `[zone,0_40_51_24_32]` queues Arianwyn only while `inv_total(inv, regicide_iorwerth_message) > 0`, so a pack without the letter stands in the zone forever and the step has nothing to report. Say it once rather than time out in silence eleven times.
+    // Why: `[zone,0_40_51_24_32]` queues Arianwyn only while `inv_total(inv, regicide_iorwerth_message) > 0`, so a pack without the letter stands in the zone forever. Say it once, with a reason.
     if (heldId(RG_ITEM.MESSAGE.id) === 0) {
         log(`no ${RG_ITEM.MESSAGE.name} in the pack — the Ardougne road zone only calls Arianwyn out while the letter is held`);
         return false;
@@ -89,7 +89,7 @@ export async function meetArianwyn(log: (m: string) => void): Promise<boolean> {
     const elfNear = (): boolean =>
         Npcs.query().where(npc => npc.id === RG_NPC.ARIANWYN).within(8).nearest() !== null;
     const showing = (): boolean => ChatDialog.isOpen() || ChatDialog.canContinue() || elfNear();
-    // Why: `[zone,…]` fires on ENTRY, and a leg that is already standing in it has nothing to trigger, `walkResilient` at radius 1 returns without moving, the sixty-second wait runs out, and the step reports a timeout for a zone it is standing in. So each attempt steps out to the mustering tile first and walks back in.
+    // Why: `[zone,...]` fires on entry, so a leg already standing in it has nothing to trigger: `walkResilient` at radius 1 returns without moving and the step reports a timeout for a zone it's standing in. Each attempt steps out to the mustering tile first and walks back in.
     for (let attempt = 0; attempt < ARIANWYN_TRIES && !showing(); attempt++) {
         if (inArianwynZone(Game.tile()) && !(await Traversal.walkResilient(ARIANWYN_OUTSIDE, { radius: 1, attempts: 2, timeoutMs: 90_000, log }))) {
             log(`could not step out of the zone at ${formatTile(Game.tile())} to re-enter it`);
@@ -105,7 +105,7 @@ export async function meetArianwyn(log: (m: string) => void): Promise<boolean> {
         log(`Arianwyn did not step out after ${ARIANWYN_TRIES} entries into the zone at ${formatTile(Game.tile())}`);
         return false;
     }
-    // Why: `[queue,arianwyn_dialogue]` re-queues itself sixteen times with a `p_walk(coord)` between beats, and one of them is an objbox rather than a chat line, so the goal is the elf leaving, not the dialogue closing.
+    // Why: `[queue,arianwyn_dialogue]` re-queues itself 16 times with a `p_walk(coord)` between beats, and one beat is an objbox, so the goal is the elf leaving.
     return driveUntil(() => !elfNear() && !ChatDialog.isOpen(), [], log, 120_000);
 }
 

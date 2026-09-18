@@ -62,7 +62,7 @@ export function buildIdentityLabel(identity: BuildIdentity): string {
     return identity.dirty ? `${identity.short}-dirty` : identity.short;
 }
 
-/** Sidecar for `curl …/rs2b0t/version.json` without parsing the JS bundle. */
+/** Sidecar for `curl .../rs2b0t/version.json` without parsing the JS bundle. */
 export function writeVersionJson(path: string, identity: BuildIdentity): void {
     writeFileSync(
         path,

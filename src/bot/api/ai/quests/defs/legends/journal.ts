@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -7,16 +8,7 @@ import { LEGENDS_QUEST, LQ_STAGE } from './areas.js';
 // Why: the journal is cumulative, every entry keeps the earlier history, so the newest line present names the stage.
 // Why: stages 35 and 40 render identically, as the "I replaced the evil totem" line is gated on 45 and nothing else separates them; `decide()` splits that pair by what is carried.
 
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
-
-// Needles avoid anything a colour tag sits next to: stripping "@dbl@" leaves a
-// space, so "Ungadulu@dbl@." normalises to "ungadulu .".
+// Needles avoid anything a colour tag sits next to: stripping "@dbl@" leaves a space, so "Ungadulu@dbl@." normalises to "ungadulu .".
 const STAGE_LINES: readonly [string, number][] = [
     ['quest complete!', LQ_STAGE.COMPLETE],
     ['radimus has given me four training sessions as reward', LQ_STAGE.TRAINING_4],
@@ -67,8 +59,7 @@ const FLAG_LINES: readonly [string, string][] = [
     ['i told ungadulu about the spirit', 'told-ungadulu']
 ];
 
-// Why: this is the one sub-progress the stage number cannot carry, the three
-// crystal sections all live in `%legends_bits`, which never reaches the client.
+// Why: the one sub-progress the stage number can't carry: the 3 crystal sections live in `%legends_bits`, which never reaches the client.
 function crystalsPlaced(text: string): number {
     if (text.includes("i've place some crystal chunks in a lava furnace")) {
         return 2;

@@ -6,8 +6,7 @@ export interface PrinceItem {
     name: string;
 }
 
-// Names are the engine's. Wig, Beer, Pot of flour, Logs and Coins each collide with
-// another object, so every lookup in this quest goes through the id.
+// Names are the engine's; Wig, Beer, Pot of flour, Logs and Coins each collide with another object, so every lookup goes through the id.
 export const PA_ITEM = {
     COINS: { id: 995, name: 'Coins' },
     PRINCE_KEY: { id: 2418, name: 'Bronze key' },
@@ -124,7 +123,7 @@ export const NED_WIG: NpcStop = {
     ]
 };
 
-// "Okay, please sell me some rope." must outrank Ned's offer to spin four balls of wool.
+// "Okay, please sell me some rope." must outrank Ned's offer to spin 4 balls of wool.
 export const NED_ROPE: NpcStop = {
     npc: 'Ned',
     anchor: PA_TILE.NED,

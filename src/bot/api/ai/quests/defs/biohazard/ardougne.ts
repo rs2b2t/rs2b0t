@@ -23,8 +23,7 @@ export const handOverDistillator = (log: (m: string) => void): Promise<boolean> 
 export const reportToElena = (log: (m: string) => void): Promise<boolean> =>
     talkAt(BIO_NPC.ELENA, BIO_TILE.ELENA, [], log);
 
-// Why: Elena reissues every vial and the sample she still owes, gated on the pack rather than the
-// bank, so this is the only recovery for a vial an errand boy drank, sold or painted with.
+// Why: Elena reissues every vial and the sample she still owes, gated on the pack, so this is the only recovery for a vial an errand boy drank, sold or painted with.
 export const askElenaForReplacements = (log: (m: string) => void): Promise<boolean> =>
     talkAt(BIO_NPC.ELENA, BIO_TILE.ELENA, REISSUE_PREFER, log);
 
@@ -53,8 +52,7 @@ export async function takeBirdfeed(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => locById(BIO_LOC.JERICO_CUPBOARD_OPEN, 'Search', 6) !== null, 6000);
 }
 
-// Why: `pigeoncage` renders "Pigeon cage" too, so a spent cage dropped here would answer a
-// name query and the Take would put an empty one back in the pack.
+// Why: The spent `pigeoncage` shares the display name, so match the filled cage by id.
 export async function takePigeons(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(BIO_TILE.PIGEON_SPAWN, 1, log))) {
         return false;
@@ -90,14 +88,12 @@ export async function feedTheTower(log: (m: string) => void): Promise<boolean> {
     if (!(await driveUntil(() => heldId(BIO_ITEM.BIRDFEED.id) === 0, [], log, 15_000))) {
         return false;
     }
-    // Why: the script deletes the seed, waits two ticks and only then moves the stage, so returning
-    // on the empty slot hands the next decide a journal that still says "fetch bird feed".
+    // Why: the script deletes the seed, waits 2 ticks and only then moves the stage, so returning on the empty slot hands the next decide a journal that still says "fetch bird feed".
     await Execution.delayTicks(4);
     return true;
 }
 
-// Why: `opheld1,pigeons` only fires inside 2559..2565 x 3299..3307, outside it the cage answers
-// "The pigeons don't want to leave" and the stage never moves.
+// Why: `opheld1,pigeons` only fires inside 2559..2565 x 3299..3307; outside it the cage answers "The pigeons don't want to leave" and the stage never moves.
 export async function releasePigeons(log: (m: string) => void): Promise<boolean> {
     if (!inPigeonZone(Game.tile()) && !(await walkTo(BIO_TILE.WATCHTOWER, 1, log))) {
         return false;

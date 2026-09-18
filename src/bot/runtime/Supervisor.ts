@@ -31,7 +31,17 @@ class SupervisorImpl {
         this.lastRecoveryAt = 0;
     }
 
-    private sampleProgress(): void {
+    /** Work the wedge check cannot see, reported by the script doing it. */
+    // Why: the only progress read here is an xp drop or a change of tile, so a script that stands on one tile and trades makes neither and a quiet hour reads as a wedge.
+    noteProgress(): void {
+        this.lastProgressAt = performance.now();
+    }
+
+    private sampleProgress(ctx: ScriptContext): void {
+        if (ctx.lastReportedProgressAt > this.lastProgressAt) {
+            this.lastProgressAt = ctx.lastReportedProgressAt;
+        }
+
         const t = reader.worldTile();
         if (t && (!this.lastTile || t.x !== this.lastTile.x || t.z !== this.lastTile.z || t.level !== this.lastTile.level)) {
             this.lastTile = t;
@@ -79,7 +89,7 @@ class SupervisorImpl {
             ctx.addLog('info', 'random event cleared — resuming script');
         }
 
-        this.sampleProgress();
+        this.sampleProgress(ctx);
         const now = performance.now();
         if (now - this.lastProgressAt > WEDGE_MS && now - this.lastRecoveryAt > RETRY_MS) {
             this.lastRecoveryAt = now;

@@ -601,6 +601,7 @@
     {"x":3105,"z":9944,"level":0,"locId":1557,"locName":"Gate","dir":"N"},
     {"x":3106,"z":3368,"level":0,"locId":1530,"locName":"Door","dir":"N"},
     {"x":3106,"z":9944,"level":0,"locId":1558,"locName":"Gate","dir":"N"},
+    {"x":3107,"z":3162,"level":0,"locId":1536,"locName":"Door","dir":"E"},
     {"x":3107,"z":3273,"level":0,"locId":1551,"locName":"Gate","dir":"W"},
     {"x":3107,"z":3274,"level":0,"locId":1553,"locName":"Gate","dir":"W"},
     {"x":3108,"z":9570,"level":0,"locId":1530,"locName":"Door","dir":"W"},

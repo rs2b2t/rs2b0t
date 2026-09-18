@@ -16,6 +16,7 @@ import {
     seedMid,
     setMaxTradeValue,
     toggleSide,
+    matchesFilter,
     viewRows,
     type DisplayRow
 } from '#/bot/panel/priceBookPanelLogic.js';
@@ -188,6 +189,55 @@ describe('viewRows', () => {
 
     test('a shelf with nothing on it is empty, not everything', () => {
         expect(viewRows(VIEW, 'Potions', 'name', 'asc')).toEqual([]);
+    });
+});
+
+describe('matchesFilter', () => {
+    test('no query keeps everything', () => {
+        expect(matchesFilter('Rune platebody', '')).toBe(true);
+        expect(matchesFilter('Rune platebody', '   ')).toBe(true);
+    });
+
+    test('a plain substring, in any case', () => {
+        expect(matchesFilter('Iron ore', 'iron')).toBe(true);
+        expect(matchesFilter('Iron ore', 'IRON')).toBe(true);
+        expect(matchesFilter('Iron ore', 'dragon')).toBe(false);
+    });
+
+    test('every word has to land, in whatever order they are typed', () => {
+        expect(matchesFilter('Rune platebody', 'body rune')).toBe(true);
+        expect(matchesFilter('Rune platebody', 'rune legs')).toBe(false);
+    });
+
+    test('the letters in order are enough', () => {
+        expect(matchesFilter('Rune platebody', 'rnplt')).toBe(true);
+        expect(matchesFilter('Rune platelegs', 'rnplt')).toBe(true);
+        expect(matchesFilter('Adamantite ore', 'adore')).toBe(true);
+    });
+
+    // Why: measured over the price snapshot, three letters in order took 'ore' to 22 names and 'aro' to 16, so anything shorter than four is a substring match only.
+    test('a short query does not spray on its letters', () => {
+        expect(matchesFilter('Rune platebody', 'rb')).toBe(false);
+        expect(matchesFilter('Yew longbow', 'ylb')).toBe(false);
+        expect(matchesFilter("Zamorak monk's robe", 'ore')).toBe(false);
+        expect(matchesFilter('Iron ore', 'ore')).toBe(true);
+        expect(matchesFilter('Rune platebody', 'ru')).toBe(true);
+    });
+
+    test('punctuation in the name is not something you have to type', () => {
+        expect(matchesFilter("Zamorak monk's robe", 'monks robe')).toBe(true);
+    });
+});
+
+describe('viewRows filtering', () => {
+    test('narrows to what matches, and keeps the shelf', () => {
+        expect(viewRows(VIEW, 'All', 'name', 'asc', 'iron').map(r => r.name)).toEqual(['Iron ore']);
+        expect(viewRows(VIEW, 'All', 'name', 'asc', 'ore').map(r => r.name)).toEqual(['Iron ore']);
+        expect(viewRows(VIEW, 'Ores', 'name', 'asc', 'yew')).toEqual([]);
+    });
+
+    test('no query is the same list as before', () => {
+        expect(viewRows(VIEW, 'All', 'name', 'asc', '')).toEqual(viewRows(VIEW, 'All', 'name', 'asc'));
     });
 });
 

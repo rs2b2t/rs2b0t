@@ -24,11 +24,13 @@ query()
   .name(...names: string[])   // case-insensitive exact match against any name
   .action(action: string)     // offers this action (case-insensitive)
   .within(dist: number)       // within dist tiles of the local player
+  .withinOf(origin: WorldTile, dist: number)   // within dist tiles of another tile
   .inside({ minX, maxX, minZ, maxZ })
   .where(pred: (e) => boolean)
   // terminals:
   .results(): E[]
   .nearest(): E | null
+  .nearestPreferLocal(preferRadius: number): E | null   // the cluster within preferRadius first, when one exists
   .first(): E | null
   .exists(): boolean
   .count(): number
@@ -46,11 +48,16 @@ All entities are `Locatable` (`tile(): Tile`, `distance(): number`); most are
 `Interactable` (`actions(): string[]`, `interact(action): boolean | Promise<boolean>`).
 
 ```ts
-class Npc  { name; level; index; inCombat; health; valid(); /* + Locatable + Interactable */ }
+class Npc  { name; id; level; index; size; inCombat; health; networkTile(); valid(); targetsMe(); targetsAnotherPlayer(); /* + Locatable + Interactable */ }
 class Loc  { name; id; /* + Locatable + Interactable */ }
 class GroundItem { name; id; count; /* + Locatable + Interactable */ }
-class Player { name; inCombat; /* + Locatable, actions() */ }
+class Player { name; index; combatLevel; inCombat; targetsMe(); /* + Locatable, actions() */ }
 ```
+
+For NPCs, `tile()` remains the centre of the rendered position. `networkTile()`
+returns the latest route-head centre carried by the optional `NpcSnapshot.networkTile`
+field. Snapshots without that field fall back to `tile()`, so adding the network
+position does not replace or alter the rendered tile.
 
 > **Note:** `interact()` sends the action in place. It does **not** walk the
 > player to a distant target. Walk first (see [Movement](api-movement.md)); the client

@@ -1,5 +1,6 @@
-// Live proof: a hard-clue dig guardian is fought while eating. Proof: out/clue-guardian-eat-proof.json
-// Why: one SolveClue call spans a full trail, so a host's own Eat task never gets a turn between legs; prayer stays at 1 so Protect from Magic cannot blunt the wizard.
+// Live check that a hard-clue dig guardian is fought while eating. Proof: out/clue-guardian-eat-proof.json
+// Why: one SolveClue call spans the trail, so its host Eat task cannot run between legs.
+// Prayer stays at 1 to expose the wizard's full damage.
 
 //   HEADED=1 bun e2e/clue-guardian-eat-live.ts
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';

@@ -16,10 +16,10 @@ import { driveBoxes, driveToEnd, driveUntil, heldId, here, locNear, modalText, o
 
 const CRAWL_ATTEMPTS = 6;
 
-/** The three mossy rocks that hide the shaman cave, by exact id. */
+/** The 3 mossy rocks that hide the shaman cave, by id. */
 const ROCK_IDS: readonly number[] = [LQ_LOC_ID.MOSSY_ROCK_1, LQ_LOC_ID.MOSSY_ROCK_2, LQ_LOC_ID.MOSSY_ROCK_3];
 
-// Why: the crawl rolls against agility twice, a hard gate at 50 and then `stat_random(agility, 125, 250)`, and a failed roll costs 5 hitpoints and leaves the player where they were.
+// Why: The crawl has a level-50 gate, then an Agility roll; failure costs 5 HP without moving the player.
 
 /** Squeeze through the rocks in the north-west jungle into Ungadulu's cave. */
 export async function enterShamanCave(log: (m: string) => void): Promise<boolean> {
@@ -38,7 +38,7 @@ export async function enterShamanCave(log: (m: string) => void): Promise<boolean
             await settleScene();
             return true;
         }
-        // Why: "Rocks" and "Mossy rock" are shared with every ore vein in the jungle, so the three cave-mouth ids are the filter.
+        // Why: Jungle ore veins share these names, so match the three cave-mouth ids.
         const rock = Locs.query().where(l => ROCK_IDS.includes(l.id)).action('Search').within(8).nearest();
         if (!rock) {
             log('no mossy rock offering Search near the cave mouth');
@@ -53,13 +53,12 @@ export async function enterShamanCave(log: (m: string) => void): Promise<boolean
     return false;
 }
 
-// Why: "Who are you?" sets both the where-bit and the who-bit, and the who-bit is what unlocks Gujuo's pure-water branch; "Where do I get pure water from?" then ends the conversation on its own.
-// Why: taking them in the other order re-offers "Who are you?" every pass, which is the loop `driveDialog` only escapes by timing out.
+// Why: "Who are you?" unlocks Gujuo's pure-water branch and must be asked before the water question.
 const UNGADULU_PREFER = ['Who are you?', 'Where do I get pure water from?'];
 
 /** Talk to Ungadulu through the flames until he has named the sacred water. */
 export async function speakToUngadulu(log: (m: string) => void): Promise<boolean> {
-    // Why: from inside the ring, Investigate raises "Leap out of the flaming octagram." and "Attract the shaman's attention." instead of his conversation, neither is a thing `UNGADULU_PREFER` can answer, so the drive abandons, the step fails and the engine sends the run straight back to Gujuo, over and over.
+    // Why: From inside the ring, Investigate opens a different menu outside this driver's preference list.
     if (inOctagram(Game.tile()) && !(await leaveOctagram(log))) {
         log('cannot get out of the octagram to talk to Ungadulu through the flames');
         return false;
@@ -79,17 +78,16 @@ export async function speakToUngadulu(log: (m: string) => void): Promise<boolean
     if (!(await wall.interact('Investigate'))) {
         return false;
     }
-    // The white-robed figure appears in a message box first, and the option list a beat later.
+    // The message box appears before the option list.
     if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 8000))) {
         log('the fire wall raised nothing — is Ungadulu still in the octagram?');
         return false;
     }
-    // Why: "Who are you?" is what sets `asked_ungadulu_who`, and that bit is the reason for coming here, Gujuo's pure-water topic is gated on it.
-    // Why: named as required because a chain of boxes with no options at all ends quietly and reads as a conversation that ran its course. `npc_find(coord, ungadulu_good, 10, 0)` failing gives that: two message boxes, no menu, and a `driveToEnd` that reports success having asked nothing.
+    // Why: Require "Who are you?" because a missing Ungadulu produces two boxes and no menu, which otherwise looks successful.
     return driveToEnd(UNGADULU_PREFER, log, 60_000, 'Who are you?');
 }
 
-// Why: the last two are the menu he offers once the sketch is handed over, and abandoning there logs a miss on a chain that has already done its job.
+// Why: The last two choices finish the dialogue after Gujuo gives the sketch.
 const GUJUO_WATER_PREFER = [
     'I need some pure water to douse some magic flames.',
     'Where is the pool of sacred water?',
@@ -99,7 +97,7 @@ const GUJUO_WATER_PREFER = [
     'Ok thanks for your help.'
 ];
 
-// Why: the sketch is handed over by the same branch that sets the stage, so a sketch in the pack proves the stage moved without opening the journal.
+// Why: Receiving the sketch also advances the stage, so the item proves success without reading the journal.
 
 const gujuoWaterTalk = talkGujuoStatus(
     GUJUO_WATER_PREFER,
@@ -107,12 +105,9 @@ const gujuoWaterTalk = talkGujuoStatus(
     120_000
 );
 
-// Why: Gujuo only offers the pure-water topic once Ungadulu has been asked who he is, and that bit is `%legends_bits`, invisible from here.
-// Why: without it his menu is four topics that all dead-end, so a stage-7 resume that skipped a question would ask him for ever; the recovery is to go back and ask.
+// Why: A menu without the water topic means the invisible Ungadulu bit still needs setting; no dialogue is retried locally.
 
-// Why: the caves are the answer to a menu without the topic on it, and to nothing else. A shaman who never opened his mouth says nothing about the bit, and walking to Ungadulu on that reading set a bit that was already set, came back, failed to talk again, and went again, the loop a live run spent six minutes in, four attempts deep, reporting a cause it had not checked.
-
-/** What a failed water talk calls for: the topic is there, he needs asking again, or the bit wants setting. */
+/** Next action after trying Gujuo's water dialogue. */
 export function waterTalkAnswer(talk: GujuoTalk): 'done' | 'retry' | 'caves' {
     if (talk === 'goal') {
         return 'done';
@@ -134,7 +129,6 @@ export async function askGujuoForWater(log: (m: string) => void): Promise<boolea
     if (!(await speakToUngadulu(log))) {
         return false;
     }
-    // Why: the trip back is the half that fails, and returning its verdict bare left the one interesting failure of this step with nothing said about it at all.
     const after = await gujuoWaterTalk(log);
     if (after !== 'goal') {
         log(`back from Ungadulu and the sketch still did not come — ${after === 'nodialog' ? 'no conversation happened' : 'no topic on his menu'}`);
@@ -142,7 +136,7 @@ export async function askGujuoForWater(log: (m: string) => void): Promise<boolea
     return after === 'goal';
 }
 
-// Why: `gujuo_start` only opens with the bless offer when it notices the bowl, and every other list it can raise leads there through the vessel questions. The goodbyes are left out on purpose, as they end the conversation with the bowl still plain.
+// Why: These paths reach the blessing offer; goodbye options leave the bowl unchanged.
 const BLESS_PREFER = [
     "Yes, I'd like you to bless my gold bowl.",
     "Yes, I'd like to bless my gold bowl.",
@@ -151,7 +145,7 @@ const BLESS_PREFER = [
     'I need some pure water to douse some magic flames.'
 ];
 
-// Why: `opnpcu,gujuo` offers the blessing straight off the bowl, which is one menu rather than the four the talk route walks through to reach the same question.
+// Why: Using the bowl on Gujuo opens the blessing menu directly.
 
 /** Gujuo blesses the bowl; the trance rolls against prayer and re-offers on a miss. */
 export async function blessBowl(log: (m: string) => void): Promise<boolean> {
@@ -163,7 +157,7 @@ export async function blessBowl(log: (m: string) => void): Promise<boolean> {
     if (!(await summonGujuo(log))) {
         return false;
     }
-    // Why: the use-on lands and the greeting sometimes never arrives, and one long wait on a chat that is not coming spends the budget learning nothing, so the offer is made again rather than waited on.
+    // Why: The use-on sometimes produces no dialogue, so retry the offer after a short wait.
     for (let i = 0; i < BLESS_ATTEMPTS; i++) {
         const gujuo = Npcs.query().name(LQ_NPC.GUJUO).within(12).nearest();
         if (!gujuo) {
@@ -182,7 +176,6 @@ export async function blessBowl(log: (m: string) => void): Promise<boolean> {
         if (needsDose(outcome, Skills.effective('prayer'))) {
             await drinkPrayer(log);
         }
-        // Why: a silent wait is the one failure that tells you nothing, and this one cost two live runs before it said a word.
         log(`bowl on Gujuo ${offered ? 'sent' : 'refused'} at ${gujuo.tile().x},${gujuo.tile().z}, prayer ${Skills.effective('prayer')}/${Skills.level('prayer')}, trance ${outcome}`);
         await settleScene();
     }
@@ -190,27 +183,27 @@ export async function blessBowl(log: (m: string) => void): Promise<boolean> {
     return blessed();
 }
 
-// Why: a devout account starts at the wrong end of the roll and only five points a miss walks it down, from ninety-nine it is eleven misses to the forty-two where the odds are best, and twelve throws still leave one run in fifteen unblessed. Twenty covers the walk with room over, and a throw is now seconds rather than the better part of a minute.
+// Why: Starting at 99 Prayer can take 11 misses to reach the optimal 42; 20 attempts leave margin beyond that worst case.
 const BLESS_ATTEMPTS = 20;
 
-// Why: a miss ends the conversation outright. Gujuo offers a retry, but the five points it took put the answer under his own forty-two gate, so "too inexperienced" closes the chain, and a wait watching for a blessing that is no longer coming polled a chat that had already gone for all forty seconds, four times over.
+// Why: A miss drains 5 Prayer and closes the dialogue when that drops below Gujuo's level-42 gate.
 const BLESS_MS = 40_000;
 
-// Why: the trance closes its own dialogue and then chants, `if_close`, two `mes`, then six `p_delay(2)` carrying `npc_say`/`say`, which are overhead chat and open no widget. That is twelve ticks in which nothing is up and the throw has not resolved, so a shorter patience gives up mid-meditation, reports the trance quiet, and re-offers the bowl to a shaman still humming.
+// Why: The trance has 12 ticks of overhead dialogue with no widget, so shorter waits would retry before it resolves.
 
-/** How many idle ticks end the wait, longer than the trance's own twelve of silence. */
+/** Idle ticks that end the wait, longer than the trance's own 12 of silence. */
 const BLESS_IDLE_TICKS = 20;
 
-/** What Gujuo's own words said about a throw, read while the chain is still up. */
+/** Result inferred from Gujuo's dialogue. */
 export type Trance = 'blessed' | 'refused' | 'missed' | 'quiet';
 
-/** He took the five points and the trance failed. */
+/** The trance failed after consuming 5 Prayer. */
 const BLESS_MISSED = /deep enough trance/;
 
-/** He would not begin, the server's prayer is under his gate, whatever the stat block says. */
+/** The server rejected the attempt for being below the Prayer gate. */
 const BLESS_REFUSED = /too inexperienced/;
 
-/** Drive Gujuo's trance, ending the moment it blesses the bowl or the conversation closes without it. */
+/** Drive Gujuo's trance, ending once it blesses the bowl or the conversation closes without it. */
 async function driveBlessing(blessed: () => boolean): Promise<Trance> {
     let opened = false;
     let idle = 0;
@@ -231,7 +224,7 @@ async function driveBlessing(blessed: () => boolean): Promise<Trance> {
         idle++;
         return opened && idle >= BLESS_IDLE_TICKS;
     };
-    // Why: `driveUntil` hands the chain to `driveChoice`, which clicks to the end without re-testing, so the box naming the miss was dismissed before anything read it, and every throw came back `quiet`. `driveBoxes` tests between clicks, which is the point of reading his words.
+    // Why: `driveBoxes` checks between clicks, preserving the failure text that `driveChoice` would dismiss.
     await driveBoxes(ended, BLESS_MS, BLESS_PREFER);
     if (blessed()) {
         return 'blessed';
@@ -242,13 +235,12 @@ async function driveBlessing(blessed: () => boolean): Promise<Trance> {
     return missed ? 'missed' : 'quiet';
 }
 
-// Why: the stat block lags the server by a tick or two, so a throw made straight after a miss reads a prayer bar that has not fallen yet. Gujuo refuses on his own gate and the throw is spent learning what the miss had already said. At forty-two that doubled every miss: eighteen throws to land nine rolls, against a budget of twenty.
-// Why: a miss takes five, so they are counted rather than waited for, and his refusal is believed over the stat block outright.
+// Why: The stat block can lag by two ticks, so account for the 5-point miss and trust a server refusal immediately.
 
 /** The points `gujuo_bless_bowl` takes on a miss. */
 const BLESS_MISS_COST = 5;
 
-/** True when the next throw would meet Gujuo's gate short, whatever the stat block has caught up to. */
+/** Whether another attempt needs a Prayer dose. */
 export function needsDose(outcome: Trance, points: number): boolean {
     if (outcome === 'refused') {
         return true;
@@ -256,28 +248,26 @@ export function needsDose(outcome: Trance, points: number): boolean {
     return outcome === 'missed' && points - BLESS_MISS_COST < BLESS_FLOOR;
 }
 
-/** The points Gujuo's own gate demands, below which he will not begin. */
+/** Minimum Prayer accepted by Gujuo. */
 const BLESS_FLOOR = 42;
 
-// Why: `value = ⌊80·(99−n)/98⌋ + ⌊250·(n−1)/98⌋ + 1` against `rand(0..256)`, and true is the miss, so the roll rises about 1.73 for every point of prayer and the trance is likelier to fail the more devout you are. It misses three times in five at forty-two and ninety-eight times in a hundred at ninety-nine.
-// Why: that makes every dose above the gate a cost. Prayer is held as low as Gujuo will accept rather than as high as the bar goes, and the five points a miss takes walk the odds towards the player rather than away.
+// Why: The miss roll rises about 1.73 per Prayer point, from 3 in 5 at level 42 to 98 in 100 at level 99, so hold at the minimum.
 
-/** The points to hold before a throw. The gate itself, the roll only worsens above it. */
+/** Prayer target for each attempt. */
 export function blessPrayerFloor(): number {
     return BLESS_FLOOR;
 }
 
-/** Put the prayer back above the trance's floor, so a run of misses cannot end the leg. */
+/** Restore Prayer to Gujuo's minimum. */
 async function topUpPrayer(log: (m: string) => void): Promise<boolean> {
     return Skills.effective('prayer') >= blessPrayerFloor() ? true : drinkPrayer(log);
 }
 
 const BOWL_ATTEMPTS = 6;
 
-// Why: the anvil carries no ops at all, the golden bowl is a gold bar *used on* it, which no op-based step can express.
-// Why: a failed forge costs one bar and sometimes two, so the leg retries while bars remain.
+// Why: The anvil has no ops, and failed forging can consume one or both bars, so retry while two remain.
 
-/** Hammer two gold bars into a golden bowl at the Tai Bwo Wannai anvil. */
+/** Hammer 2 gold bars into a golden bowl at the Tai Bwo Wannai anvil. */
 export async function makeGoldenBowl(log: (m: string) => void): Promise<boolean> {
     if (heldId(LQ_ID.GOLD_BOWL) > 0) {
         return true;
@@ -322,7 +312,7 @@ export async function cutReed(log: (m: string) => void): Promise<boolean> {
     );
 }
 
-// Why: the reed is the only thing that reaches the water through the rocks, and it is consumed by the syphon.
+// Why: Only the reed reaches the water through the rocks, and siphoning consumes it.
 
 /** Syphon the jungle pool into the blessed bowl. */
 export async function fillBowlFromPool(log: (m: string) => void): Promise<boolean> {
@@ -341,7 +331,7 @@ export async function fillBowlFromPool(log: (m: string) => void): Promise<boolea
     );
 }
 
-// Why: the pool answers the reed with "this pool has dried up" once the seeds are germinated, which is the step that moves the quest to `water_pool_dried_up`.
+// Why: Using the reed after germination advances the quest to `water_pool_dried_up`.
 
 /** Touch the dried pool, which is what starts the hunt for the source. */
 export async function findPoolDried(log: (m: string) => void): Promise<boolean> {
@@ -358,15 +348,14 @@ export async function findPoolDried(log: (m: string) => void): Promise<boolean> 
     ) || dry();
 }
 
-// Why: the west wall is crossed by standing on its own tile, `~check_axis` compares the player's x with the wall's, so (2788,9325) is outside and the splash teleports us to (2789,9325).
-// Why: the stand is taken at radius 0 first, as a diagonal section of the octagram two tiles away crosses on a different axis.
+// Why: Use the west wall from its own tile; a nearby diagonal section crosses on the wrong axis.
 
 /** Douse the flames with pure water and step into the octagram. */
 export async function enterOctagram(log: (m: string) => void): Promise<boolean> {
     if (inOctagram(Game.tile())) {
         return true;
     }
-    // Why: the trials pockets are all `shamanCaves` to the area reader, so a leg that comes back up holding the book reads as "already there" and walks at a wall it cannot reach.
+    // Why: Trials pockets also report `shamanCaves`, so leave them before approaching the fire wall.
     if (!(await climbOutOfTrials(log))) {
         return false;
     }
@@ -390,12 +379,11 @@ export async function enterOctagram(log: (m: string) => void): Promise<boolean> 
             return true;
         }
     }
-    // Why: every chop through the dense band boils the bowl dry, blessed or not, and the octagram is reached through that band, so a bowl filled before the last crossing arrives empty and the splash above never runs.
+    // Why: Chopping through the dense jungle empties the bowl, so fill it after the last crossing.
     if (heldId(LQ_ID.GOLD_BOWL_BLESSED_PURE) === 0) {
         log('no pure water in the bowl at the flames — the fill has to be the last thing before the cave, as crossing the band boils it off');
     }
-    // Why: once the demon is dead Ungadulu's spell walks anyone through the flames on a plain Touch, which is the only way in for a leg that no longer carries water.
-    // Why: bounded, because before the demon is dead Touch cannot work at all, and `Reach` would otherwise spend eight attempts of its own budget proving it, which is a leg standing at the wall rather than going back for water.
+    // Why: After the demon dies, Touch crosses the flames without water; keep the attempt bounded because it cannot work earlier.
     const touched = await promptLoc(
         {
             name: LQ_LOC.FIRE_WALL,
@@ -439,9 +427,9 @@ const SEEDS_PREFER = [
     'Ok, thanks...'
 ];
 
-// Why: the seeds come from inside the octagram, which the released shaman now lets anyone walk into.
+// Why: After the demon dies, Ungadulu lets the player enter without water.
 
-/** Ask the freed Ungadulu for the three Yommi tree seeds. */
+/** Ask the freed Ungadulu for the 3 Yommi tree seeds. */
 export async function askForSeeds(log: (m: string) => void): Promise<boolean> {
     if (heldId(LQ_ID.YOMMI_SEEDS) > 0 || heldId(LQ_ID.YOMMI_SEEDS_GERM) > 0) {
         return true;
@@ -459,7 +447,7 @@ export async function askForSeeds(log: (m: string) => void): Promise<boolean> {
 
 const GERMINATE_ATTEMPTS = 4;
 
-/** Close whatever page is still up, so the next use-on is not thrown away unread. */
+/** Close the previous dialogue before sending another use-on. */
 async function closeChat(log: (m: string) => void): Promise<void> {
     if (!ChatDialog.isOpen() && !ChatDialog.canContinue()) {
         return;
@@ -474,7 +462,7 @@ export async function germinateSeeds(log: (m: string) => void): Promise<boolean>
         return true;
     }
     for (let i = 0; i < GERMINATE_ATTEMPTS; i++) {
-        // Why: the seeds arrive on the last page of Ungadulu's chat, and an `opheldu` sent while that page is still up is dropped without a word.
+        // Why: The server drops `opheldu` while Ungadulu's final dialogue page is open.
         await closeChat(log);
         await settleScene();
         const bowl = Inventory.items().find(item => item.id === LQ_ID.GOLD_BOWL_BLESSED_PURE);
@@ -483,19 +471,18 @@ export async function germinateSeeds(log: (m: string) => void): Promise<boolean>
             log(`pack holds ${bowl ? 'the pure bowl' : `bowls [${bowlsHeld()}]`} and ${seeds ? 'the seeds' : 'no seeds'}`);
             return false;
         }
-        // Why: `opheldu` runs the handler on the item clicked second and the bowl is the one that carries it, so the seeds go on the bowl, the script's own comment says the reverse is "nothing interesting happens", and that is what eleven attempts got.
+        // Why: `opheldu` runs the second item's handler, which is defined on the bowl.
         const sent = await seeds.useOn(bowl);
-        // Why: `~doubleobjbox` suspends the script until the box is answered, and the germinated seeds are added after it, so waiting for them without clearing the box waits for something the server is not going to do.
+        // Why: The germinated seeds are added only after `~doubleobjbox` is dismissed.
         if (sent && await driveUntil(done, [], log, 20_000)) {
             return true;
         }
-        // Why: a use-on that lands and answers nothing is the one failure that tells you nothing, and this one has cost two runs already.
         log(`seeds on bowl ${sent ? 'sent' : 'refused'}, chat "${modalText().slice(0, 60)}"`);
     }
     return done();
 }
 
-/** Which bowls are in the pack, for when the pure one is not. */
+/** Which bowls are in the pack, for when the pure one isn't. */
 function bowlsHeld(): string {
     const names: Record<number, string> = {
         [LQ_ID.GOLD_BOWL]: 'plain',

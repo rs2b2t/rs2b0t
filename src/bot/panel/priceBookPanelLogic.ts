@@ -1,5 +1,5 @@
 import { isPopular, shelfOf, type Category } from '../api/market/categories.js';
-import { searchCatalog, type Catalog } from '../api/market/catalog.js';
+import { displayName, searchCatalog, type Catalog } from '../api/market/catalog.js';
 import { rowOf, type PriceBook, type PriceRow } from '../api/market/priceBook.js';
 import { MARKET_PRICES } from '../data/marketprices.js';
 import { resolvePrices, rowValid } from '../api/market/prices.js';
@@ -8,7 +8,7 @@ export interface DisplayRow {
     id: number;
     name: string;
     category: Category;
-    /** Popular overlaps the other shelves, so it is carried alongside the category rather than in it. */
+    /** Popular overlaps the other shelves, so it's carried alongside the category. */
     popular: boolean;
     mid: number;
     buy: number;
@@ -21,15 +21,14 @@ export interface DisplayRow {
     valid: boolean;
 }
 
-// Why: an override shows verbatim, even when it is invalid. resolvePrices clamps sell to buy+1 for the
-// Why: trading path, and echoing that clamp back would silently replace the number the operator typed.
+// Why: an override shows verbatim even when invalid; resolvePrices clamps sell to buy+1 for the trading path, and echoing that clamp back would replace the number the operator typed.
 export function displayRows(book: PriceBook, cat: Catalog): DisplayRow[] {
     return book.rows.map(row => {
         const { buy, sell } = resolvePrices(book, row);
         const item = cat.byId.get(row.id);
         return {
             id: row.id,
-            name: item?.name ?? `item ${row.id}`,
+            name: item ? displayName(cat, row.id) : `item ${row.id}`,
             category: item ? shelfOf(item) : 'Other',
             popular: item ? isPopular(item) : false,
             mid: row.mid,
@@ -115,7 +114,7 @@ export function pickerRows(
 ): { id: number; name: string; cost: number; added: boolean }[] {
     return searchCatalog(cat, query, 60).map(r => ({
         id: r.id,
-        name: r.name,
+        name: displayName(cat, r.id),
         cost: r.cost,
         added: rowOf(book, r.id) !== null
     }));
@@ -124,12 +123,46 @@ export function pickerRows(
 export type SortKey = 'name' | 'category' | 'buy' | 'sell' | 'cap';
 export type SortDir = 'asc' | 'desc';
 
+/** Letters and digits, everything else a gap, so you never have to type an apostrophe. */
+function loose(text: string): string {
+    return text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/** Shortest query that may match on its letters alone. */
+// Why: over the 132-item price snapshot 3 letters in order still spray ('ore' matched 22 names, 'aro' 16); 4 cuts those to 4 and 0 and still lands 'rnplt' on the Rune plates.
+const SUBSEQUENCE_FLOOR = 4;
+
+function subsequence(haystack: string, needle: string): boolean {
+    let at = 0;
+    for (const ch of needle) {
+        at = haystack.indexOf(ch, at) + 1;
+        if (at === 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/** Every word typed has to land, as a substring or as letters in order. */
+export function matchesFilter(name: string, query: string): boolean {
+    const q = loose(query);
+    if (q.length === 0) {
+        return true;
+    }
+    const spaced = loose(name);
+    const packed = spaced.replace(/ /g, '');
+    return q.split(' ').every(term =>
+        spaced.includes(term) || (term.length >= SUBSEQUENCE_FLOOR && subsequence(packed, term))
+    );
+}
+
 /** The book as the table shows it: one shelf or all of them, in the operator's chosen order. */
 // Why: sorting a copy leaves the book's own order alone, so what is saved never depends on how it was last looked at.
-export function viewRows(rows: readonly DisplayRow[], shelf: Category | 'All', key: SortKey, dir: SortDir): DisplayRow[] {
-    const kept = shelf === 'All'
+export function viewRows(rows: readonly DisplayRow[], shelf: Category | 'All', key: SortKey, dir: SortDir, query = ''): DisplayRow[] {
+    const onShelf = shelf === 'All'
         ? [...rows]
         : rows.filter(r => (shelf === 'Popular' ? r.popular : r.category === shelf));
+    const kept = onShelf.filter(r => matchesFilter(r.name, query));
     const sign = dir === 'asc' ? 1 : -1;
     return kept.sort((a, b) => {
         if (key === 'name') {
@@ -173,7 +206,7 @@ export function formatPrice(n: number): string {
     const sign = value < 0 ? '-' : '';
     const size = Math.abs(value);
     if (size >= MILLION) {
-        // Why: two places is what separates 1.25M from 1.3M, and trailing zeros only add width.
+        // Why: 2 places separate 1.25M from 1.3M, and trailing zeros only add width.
         return `${sign}${(size / MILLION).toFixed(2).replace(/\.?0+$/, '')}M`;
     }
     if (size >= SHORTEN_FROM) {

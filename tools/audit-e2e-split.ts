@@ -4,7 +4,7 @@ import { join, posix, relative } from 'node:path';
 
 export const SPEC = /(?:from\s+|import\s*\(\s*|require\s*\(\s*|import\s+)['"]([^'"]+)['"]/g;
 
-/** Repo-root path a relative specifier names; null when it is bare, aliased or names a non-TypeScript file. */
+/** Resolve a relative TypeScript import to a repo path; null for other specifiers. */
 export function resolveSpec(fromFile: string, spec: string): string | null {
     if (!spec.startsWith('.')) {
         return null;
@@ -16,7 +16,7 @@ export function resolveSpec(fromFile: string, spec: string): string | null {
     if (target.endsWith('.ts')) {
         return target;
     }
-    // Why: moduleResolution "bundler" makes the extensionless spelling idiomatic, and it typechecks.
+    // Match moduleResolution: bundler, which allows extensionless imports.
     return posix.basename(target).includes('.') ? null : `${target}.ts`;
 }
 
@@ -28,7 +28,7 @@ function depGraph(sources: Map<string, string>): Map<string, Set<string>> {
         let m: RegExpExecArray | null;
         while ((m = SPEC.exec(src))) {
             const target = resolveSpec(file, m[1]);
-            // Why: membership never leaves the supplied map, so product source under src/ is not swept in.
+            // Why: stay inside the supplied map to avoid including product source under src/.
             if (target !== null && sources.has(target)) {
                 out.add(target);
             }
@@ -54,14 +54,7 @@ function outboundInto(consumers: Map<string, string>, sources: Map<string, strin
     return out;
 }
 
-/** The bidirectional import closure around `entry`: consumers, their ABI, minus ABI shared with offline code.
- *  `offlineTests` names consumers outside the scanned tree, a unit test proves its target runs without a browser. */
-export function liveClosure(
-    entry: string,
-    sources: Map<string, string>,
-    offlineTests: Map<string, string> = new Map()
-): { move: string[]; heldBack: string[] } {
-    const dep = depGraph(sources);
+function graphConsumers(entry: string, dep: Map<string, Set<string>>): string[] {
     const reaches = (file: string, seen: Set<string>): boolean => {
         if (seen.has(file)) {
             return false;
@@ -74,14 +67,21 @@ export function liveClosure(
         }
         return false;
     };
+    return [...dep.keys()].filter(f => reaches(f, new Set())).sort();
+}
+
+/** The bidirectional import closure around `entry`: consumers, their ABI, minus ABI shared with offline code.
+ *  `offlineTests` names consumers outside the scanned tree, a unit test proves its target runs without a browser. */
+export function liveClosure(
+    entry: string,
+    sources: Map<string, string>,
+    offlineTests: Map<string, string> = new Map()
+): { move: string[]; heldBack: string[] } {
+    const dep = depGraph(sources);
     // Why: the entry joins the closure only when it is inside the scanned tree, so pointing the audit
     // at the post-move entry over tools/ reports an empty closure rather than the entry itself.
     const core = new Set<string>(sources.has(entry) ? [entry] : []);
-    for (const file of sources.keys()) {
-        if (reaches(file, new Set())) {
-            core.add(file);
-        }
-    }
+    for (const file of graphConsumers(entry, dep)) core.add(file);
     const abi = new Set<string>();
     const frontier = [...core];
     while (frontier.length) {
@@ -93,7 +93,7 @@ export function liveClosure(
         }
     }
     const offline = [...sources.keys()].filter(f => !core.has(f) && !abi.has(f));
-    // Why: only ABI modules are eligible, so a unit test covering a harness never drags the harness back.
+    // Why: only ABI modules can be excluded; testing a harness doesn't make it offline code.
     const testedOffline = outboundInto(offlineTests, sources);
     const heldBack = [...abi]
         .filter(a => testedOffline.has(a) || offline.some(o => dep.get(o)?.has(a)))
@@ -103,8 +103,7 @@ export function liveClosure(
     return { move, heldBack };
 }
 
-/** Files under `fromPrefix` whose specifiers resolve into `toPrefix`, as `file\tspecifier`.
- *  Why: the closure drops edges leaving its source map, so it cannot see a tools/ file reaching into e2e/. */
+/** Imports from fromPrefix into toPrefix, as `file\tspecifier`; includes edges outside the source map. */
 export function importsInto(fromPrefix: string, toPrefix: string, sources: Map<string, string>): string[] {
     const found: string[] = [];
     for (const [file, src] of sources) {
@@ -123,8 +122,7 @@ export function importsInto(fromPrefix: string, toPrefix: string, sources: Map<s
     return found.sort();
 }
 
-/** Files under `fromPrefix` holding a string literal that names a path inside `toPrefix`, as `file\tliteral`.
- *  Why: a specifier assembled by concatenation never appears as one literal, so specifier analysis misses it. */
+/** Path literals from fromPrefix into toPrefix, as `file\tliteral`; catches paths in concatenated specifiers. */
 export function mentionsAcross(
     fromPrefix: string,
     toPrefix: string,
@@ -139,8 +137,7 @@ export function mentionsAcross(
         }
         for (const lit of src.match(/'[^'\n]*'|"[^"\n]*"/g) ?? []) {
             const body = lit.slice(1, -1);
-            // Why: only a relative fragment can be concatenated into a working specifier, so prose
-            // naming an e2e command is not a violation.
+            // Why: only a relative fragment can be concatenated into a working specifier, so prose naming an e2e command isn't a violation.
             if (body.includes(needle) && /^\.{1,2}\//.test(body)) {
                 found.push(`${file}\t${body}`);
             }
@@ -149,8 +146,7 @@ export function mentionsAcross(
     return found.sort();
 }
 
-/** Files under `prefix` that drive a browser, which belong on the e2e side whatever they import.
- *  Why: it matches an import of playwright rather than the word, so naming a symbol after it is not a hit. */
+/** Files under prefix that import Playwright belong in e2e/. */
 export function playwrightUnder(prefix: string, sources: Map<string, string>): string[] {
     const DRIVES = /(?:from\s+|import\s*\(\s*|require\s*\(\s*|import\s+)['"]playwright|chromium\.launch\s*\(/;
     return [...sources]
@@ -159,22 +155,9 @@ export function playwrightUnder(prefix: string, sources: Map<string, string>): s
         .sort();
 }
 
-/** Files transitively importing `entry`. This is the violation set; ABI modules `entry` imports are not. */
+/** Files transitively importing `entry`, i.e. the violation set. */
 export function consumersOf(entry: string, sources: Map<string, string>): string[] {
-    const dep = depGraph(sources);
-    const reaches = (file: string, seen: Set<string>): boolean => {
-        if (seen.has(file)) {
-            return false;
-        }
-        seen.add(file);
-        for (const d of dep.get(file) ?? []) {
-            if (d === entry || reaches(d, seen)) {
-                return true;
-            }
-        }
-        return false;
-    };
-    return [...sources.keys()].filter(f => reaches(f, new Set())).sort();
+    return graphConsumers(entry, depGraph(sources));
 }
 
 export function misnamedUnder(prefix: string, files: string[]): string[] {
@@ -202,7 +185,7 @@ export function readTree(dir: string): Map<string, string> {
 }
 
 if (import.meta.main) {
-    const entry = process.argv.includes('--after') ? 'e2e/lib/harness.ts' : 'e2e/lib/harness.ts';
+    const entry = 'e2e/lib/harness.ts';
     const sources = readTree('tools');
     const { move, heldBack } = liveClosure(entry, sources, readTree('test'));
     if (process.argv.includes('--plan')) {

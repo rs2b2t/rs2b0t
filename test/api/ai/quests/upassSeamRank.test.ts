@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { orderSeams, seamBucket } from '#/bot/api/ai/quests/defs/upass/rank.js';
 
-// Why: live at (2375,9644), the pocket the mud dig lands in. Its only exit is the ledge at x 2374, which the collision pack agrees leads to a pocket of 153 tiles that walking cannot reach, and by straight line it is thirty-six tiles from the target where standing still is thirty-eight, so it gains nothing. Seven stone bridges at (2392,9627) and up read as twenty tiles of gain and have both sides blocked. Ordering gain first gave every one of those a turn, and ten cages in another cell after them, before the seam the character was standing beside.
+// Why: reachable seams must beat closer-looking seams across sealed pocket walls.
 
 const seam = (gains: boolean, open: boolean, dist: number) => ({ gains, open, dist });
 const order = (...seams: { gains: boolean; open: boolean; dist: number }[]): number[] =>
@@ -23,7 +23,7 @@ describe('which seam the search tries first', () => {
     });
 
     test('puts the ledge under the character ahead of every walled bridge', () => {
-        // ledge d36, no gain, reachable, against seven stone bridges d21-d38 that gain and are walled
+    // The reachable ledge has less apparent gain than seven walled bridges.
         expect(order(seam(true, false, 21), seam(false, true, 36), seam(true, false, 25)))
             .toEqual([36, 21, 25]);
     });

@@ -45,8 +45,7 @@ interface RuneType {
     bank: Tile;
 }
 
-// Adding a rune = one row (talisman/rune/level from runecraft.dbrow) + its
-// Mysterious-ruins tile (exit_coord) + nearest bank.
+// Each rune adds its runecraft row, ruins tile, and nearest bank.
 const RUNES: Record<string, RuneType> = {
     'Air runes': { talisman: 'Air talisman', rune: 'Air rune', level: 1, ruins: new Tile(2988, 3294, 0), bank: new Tile(3013, 3355, 0) },
     'Earth runes': { talisman: 'Earth talisman', rune: 'Earth rune', level: 9, ruins: new Tile(3303, 3477, 0), bank: new Tile(3253, 3420, 0) }
@@ -64,17 +63,16 @@ function inTemple(): boolean {
     const t = Game.tile();
     return t !== null && t.z > TEMPLE_Z;
 }
-// unnoted only: a noted stack can't be crafted or traded onward, counting it wedges every loop
+// Count only unnoted essence; notes cannot be crafted or handed onward.
 function essCount(): number {
     return Inventory.items().filter(i => i.id === ESSENCE_ID).reduce((s, i) => s + i.count, 0);
 }
-// everything the pack is allowed to hold; anything else eats a slot essence needs.
-// Nameless items count as junk, a cache miss must not smuggle an item past the deposit.
+// Everything else, including nameless cache misses, consumes an essence slot and is junk.
 function packJunk(keep: string[]): InvItem[] {
     const kept = new Set(keep.map(s => s.toLowerCase()));
     return Inventory.items().filter(i => !kept.has((i.name ?? '').toLowerCase()));
 }
-// chat usernames can carry nbsp/underscores where the entity list has spaces
+// Chat names may use nonbreaking spaces or underscores where entities use spaces.
 function sameName(a: string, b: string): boolean {
     const clean = (s: string) => s.toLowerCase().replace(/[\u00A0_]/g, ' ').trim();
     return clean(a) === clean(b);
@@ -546,7 +544,7 @@ class MuleAnswerRequest implements Task {
 /** Drops recipient-side junk that would block a full delivery. */
 class MuleDropJunk implements Task {
     constructor(private bot: RuneCrafter) {}
-    // essence is the payload, never junk. A delivery can land between two loops
+    // Essence is payload, and a delivery can land between two loops.
     private junk(): InvItem[] { return packJunk([...this.bot.muleKeep(), ESSENCE]); }
     validate(): boolean { return inTemple() && !Trade.active() && this.junk().length > 0; }
     async execute(): Promise<void> {
@@ -561,13 +559,13 @@ class MuleDropJunk implements Task {
         }
         const left = this.junk();
         if (left.length > 0) {
-            // undroppable junk would loop here forever while runners pile up outside
+        // Undroppable junk would loop here while runners pile up outside.
             ScriptRunner.stop(`RuneCrafter: could not drop ${left.map(i => `${i.name ?? 'unnamed'}#${i.id}`).join(', ')} — it keeps blocking essence deliveries`);
         }
     }
 }
 
-// anything besides the talisman/runes blocks a full 26-essence trade, bank it off
+// Bank anything besides the talisman and runes before a 26-essence trade.
 class MulePrepare implements Task {
     constructor(private bot: RuneCrafter) {}
     validate(): boolean {
@@ -584,7 +582,7 @@ class MulePrepare implements Task {
     }
 }
 
-// the recipient never walks off the altar: runners come to it
+// The recipient stays at the altar; runners come to it.
 class MuleWait implements Task {
     constructor(private bot: RuneCrafter) {}
     validate(): boolean { return inTemple() && essCount() === 0; }

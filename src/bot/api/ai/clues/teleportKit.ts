@@ -14,14 +14,14 @@ export interface TeleportKit {
     jewelleryPrefixes: string[];
     /**
      * Spell teleportIds the account can cast, for an honest log line.
-     * Why: jewellery is left out because the kit cannot know whether the account carries a charged glory, so listing one would claim a hop that may not exist.
+     * Why: jewellery is left out because the kit can't know whether the account carries a charged glory.
      */
     usable: string[];
 }
 
 /**
- * Whether the account could use this destination if it held the runes, magic level, members, quest unlocks.
- * Why: the runes and the pack space to hold them are excluded because stocking is what fills that gap, and checking it here would keep every kit permanently empty.
+ * Whether the account could use this destination if it held the runes: magic level, members, quest unlocks.
+ * Why: runes and pack space are excluded because stocking fills that gap, and checking it here would keep every kit empty.
  */
 function castable(dest: TeleportDestination, state: WorldState): boolean {
     if (dest.family === 'lever') {
@@ -30,8 +30,8 @@ function castable(dest: TeleportDestination, state: WorldState): boolean {
     return meetsRequires({ ...dest.requires, items: undefined, freeSlots: undefined }, state).ok;
 }
 
-// Why: derived from the catalog so a new destination cannot leave its runes being banked.
-// Why: gated on what the account can cast so a low-magic trail does not carry four spellbooks' worth of dead runes.
+// Why: derived from the catalog so a new destination can't leave its runes being banked.
+// Why: gated on what the account can cast so a low-magic trail doesn't carry 4 spellbooks' worth of dead runes.
 
 /** The teleport kit for one account. */
 export function teleportKitFor(state: WorldState): TeleportKit {

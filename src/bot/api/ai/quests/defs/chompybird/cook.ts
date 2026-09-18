@@ -15,8 +15,8 @@ const held = (id: number): number => Inventory.countById(id);
 /** The kids' choices live in a varbit the client never sees, so asking them is tracked here. */
 export const CookState = { kidsAsked: false };
 
-// Why: Rantz rolls his own flavour when the carcass is shown and the kids roll theirs when asked, and none of the three is on the wire, so all six candidates are carried.
-// Why: the order is the round trip east of Rantz and then west of him, since taking them in pairs alternates across three hundred tiles of Feldip.
+// Why: Rantz rolls his own flavour when the carcass is shown and the kids roll theirs when asked, and none of the 3 is on the wire, so all 6 candidates are carried.
+// Why: the order is the round trip east of Rantz and then west of him, since taking them in pairs alternates across 300 tiles of Feldip.
 const SEASONINGS: readonly { id: number; name: string; loc?: number; tile: Tile }[] = [
     { id: CB_ID.POTATO, name: CB_NAME.POTATO, loc: 312, tile: CB_TILE.POTATO },
     { id: CB_ID.CABBAGE, name: CB_NAME.CABBAGE, loc: 1161, tile: CB_TILE.CABBAGE },
@@ -26,7 +26,7 @@ const SEASONINGS: readonly { id: number; name: string; loc?: number; tile: Tile 
     { id: CB_ID.DOOGLE, name: CB_NAME.DOOGLE, tile: CB_TILE.DOOGLE }
 ];
 
-// Why: the cabbage loc carries no `name=` at all, so the client menu reads "null" and a name query finds nothing, every patch is matched by loc id instead.
+// Why: the cabbage loc carries no `name=`, so the client menu reads "null" and a name query finds nothing; every patch matches by loc id.
 
 /** Pick one vegetable off its patch. */
 function pickPatch(locId: number, name: string, itemId: number, tile: Tile): (log: (m: string) => void) => Promise<boolean> {
@@ -48,7 +48,7 @@ function pickPatch(locId: number, name: string, itemId: number, tile: Tile): (lo
     };
 }
 
-/** The next seasoning to fetch, or null once all six are carried. */
+/** The next seasoning to fetch, or null once all 6 are carried. */
 export function seasoningStep(snap: QuestSnapshot): QuestStep | null {
     const missing = SEASONINGS.find(s => heldId(snap, s.id) === 0);
     if (!missing) {
@@ -64,7 +64,7 @@ export function seasoningStep(snap: QuestSnapshot): QuestStep | null {
     return { kind: 'grabGround', item: missing.name, anchor: missing.tile, waitIfMissing: true };
 }
 
-/** Ask both children what they want on the chompy, which is what sets their varbits. */
+/** Ask both children what they want on the chompy; that sets their varbits. */
 export async function askKids(log: (m: string) => void): Promise<boolean> {
     for (const npc of [CB_NPC.BUGS, CB_NPC.FYCIE]) {
         if (!(await walkTo(npc === CB_NPC.BUGS ? CB_TILE.BUGS : CB_TILE.FYCIE, 4, log))) {
@@ -83,9 +83,9 @@ export async function askKids(log: (m: string) => void): Promise<boolean> {
 const NEEDS_KIDS = /what (bugs|fycie) wants/i;
 const NEEDS_INGREDIENTS = /don't have all the ingredients/i;
 
-// Why: the spit is six locs sharing one display name and only the empty one carries the `oplocu` a raw chompy needs.
+// Why: the spit is 6 locs sharing one display name and only the empty one carries the `oplocu` a raw chompy needs.
 
-/** Roast the chompy with all three seasonings on the ogre spit. */
+/** Roast the chompy with all 3 seasonings on the ogre spit. */
 export async function cookChompy(log: (m: string) => void): Promise<boolean> {
     if (held(CB_ID.SEASONED_CHOMPY) > 0) {
         return true;

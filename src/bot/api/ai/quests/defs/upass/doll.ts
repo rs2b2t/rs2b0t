@@ -53,8 +53,7 @@ export async function fillBrew(log: (m: string) => void): Promise<boolean> {
     return driveUntil(() => heldId(UP_ITEM.DWARF_BREW.id) > 0, [], log, 12_000);
 }
 
-// Why: the tomb only takes the brew once the doll is in hand, and only burns after it is soaked,
-// so the pour and the light are two separate uses of the same loc, in that order.
+// Why: the tomb only takes the brew with the doll in hand and only burns once soaked, so the pour and the light are 2 uses of the same loc, in that order.
 
 /** Pour the brew over Iban's tomb, then light it, and take the ashes. */
 export async function burnTomb(log: (m: string) => void): Promise<boolean> {
@@ -92,8 +91,7 @@ export async function burnTomb(log: (m: string) => void): Promise<boolean> {
     return driveUntil(() => heldId(UP_ITEM.ASHES.id) > 0, [], log, 20_000);
 }
 
-// Why: an NPC that dies leaves the scene, so "the target is gone" is the only completion signal that does
-// not depend on a drop landing or on a journal line the engine has not re-read yet.
+// Why: a dead NPC leaves the scene, so "the target is gone" is the one completion signal that doesn't depend on a drop or a stale journal line.
 async function killNpc(npcId: number, near: Tile, name: string, log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(near, 5, log))) {
         return false;
@@ -112,8 +110,7 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
     if (!(await driveUntil(() => find() === null, [], log, 180_000))) {
         return false;
     }
-    // Why: these all wander, so one absent poll is "walked out of the query", not "dead", and a false kill
-    // sends the leg on to look for a drop that was never made. It has to still be gone a moment later.
+    // Why: these all wander, so one absent poll can be "walked out of the query", and a false kill sends the leg looking for a drop that was never made. It has to still be gone a moment later.
     await Execution.delayTicks(3);
     if (find() !== null) {
         log(`${name} only wandered out of range`);
@@ -161,7 +158,7 @@ export async function killDemon(log: (m: string) => void): Promise<boolean> {
     return driveUntil(() => heldId(owed.amulet.id) > 0, [], log, 10_000);
 }
 
-/** The three amulets unseal the chest that holds Iban's shadow. */
+/** The 3 amulets unseal the chest that holds Iban's shadow. */
 export async function openSealedChest(log: (m: string) => void): Promise<boolean> {
     if (heldId(UP_ITEM.SHADOW.id) > 0) {
         return true;
@@ -179,9 +176,9 @@ export async function openSealedChest(log: (m: string) => void): Promise<boolean
     return driveUntil(() => heldId(UP_ITEM.SHADOW.id) > 0, [], log, 20_000);
 }
 
-// Why: the cage is an `aploc`, and its script force-walks and then returns in silence if the character is further than two tiles from the loc's own coordinate. A radius of three satisfies the walk and fails the script, so the approach is tight and the failure says what the game said.
+// Why: the cage is an `aploc` whose script force-walks and returns in silence if you're more than 2 tiles from the loc's coordinate, so a radius of 3 satisfies the walk and fails the script. The approach is tight and the failure quotes the chat.
 
-/** Search the soulless cages for Iban's dove; the gauntlets are what stop the bite. */
+/** Search the soulless cages for Iban's dove; the gauntlets stop the bite. */
 export async function searchCages(log: (m: string) => void): Promise<boolean> {
     if (heldId(UP_ITEM.DOVE.id) > 0) {
         return true;
@@ -211,9 +208,9 @@ export async function searchCages(log: (m: string) => void): Promise<boolean> {
     return false;
 }
 
-// Why: the doors only open for a follower of Zamorak wearing the robes and nothing else. The script counts worn slots and wants two of them, so the armour comes off here and goes back on after the throw. The robes come off an Iban disciple: level thirteen, twenty hitpoints, and a dozen of them line the approach.
+// Why: the doors only open for the robes of Zamorak and nothing else on. The script counts worn slots and wants 2, so the armour comes off here and goes back on after the throw. The robes drop from Iban disciples: level 13, 20 hitpoints, a dozen on the approach.
 
-// Why: thirteen disciples line the approach and `nearest()` picked one through the temple wall, the attack sent, nothing happened, and the step sat out all three minutes of its wait in silence, twice. Proximity is not reach. Take them in order of distance but only where a cardinal neighbour can be stood on, give each one a short wait rather than one long one, and say what happened when none of them dies.
+// Why: 13 disciples line the approach and `nearest()` can pick one through the temple wall, where the attack sends and nothing happens. Take them by distance but only where a cardinal neighbour is standable, give each a short wait, and say what happened when none dies.
 
 /** Kill a disciple for both halves of the robe of Zamorak. */
 async function robeFromDisciple(log: (m: string) => void): Promise<boolean> {
@@ -246,8 +243,7 @@ async function robeFromDisciple(log: (m: string) => void): Promise<boolean> {
         }
         const where = target.tile();
         const mark = GameMessages.mark();
-        // Why: disciples wander, so "no disciple on that tile any more" is satisfied by one walking away and
-        // reported four kills that never happened. The server index is the identity that dies.
+        // Why: disciples wander, so "no disciple on that tile" is satisfied by one walking away. The server index is the identity that dies.
         const slot = target.index;
         const gone = (): boolean => Npcs.query().where(npc => npc.index === slot).nearest() === null;
         if (await target.interact('Attack') && await driveUntil(gone, [], log, 45_000)) {
@@ -270,7 +266,7 @@ async function robeFromDisciple(log: (m: string) => void): Promise<boolean> {
     return false;
 }
 
-// Why: everything the pass asked to be carried has been used by now, the rope, the spade, the bucket, the bow and its arrows, and the book that came out of Kardia's chest with the doll. The pack arrives at the temple with four or five slots and the strip needs six, so the spent kit goes on the floor to make room.
+// Why: the rope, spade, bucket, bow, arrows and the book from Kardia's chest are all used up by now. The pack reaches the temple with 4 or 5 free slots and the strip needs 6, so the spent kit goes on the floor.
 const SPENT: readonly UpassItem[] = [
     UP_ITEM.ROPE, UP_ITEM.SPADE, UP_ITEM.BUCKET, UP_ITEM.SHORTBOW, UP_ITEM.BRONZE_ARROW, UP_ITEM.HISTORY
 ];
@@ -315,8 +311,7 @@ async function wearOnlyRobes(log: (m: string) => void): Promise<boolean> {
     return Equipment.items().length === 2;
 }
 
-// Why: opening a door does not move anyone through it, the loc swaps to its open variant and the player
-// stays put, so the walk inside is a second step, and standing on the temple floor is the only proof.
+// Why: opening a door swaps the loc to its open variant and you stay put, so the walk inside is a second step and standing on the temple floor is the only proof.
 
 /** Iban's temple doors, and the walk through them. */
 export async function openIbanDoor(log: (m: string) => void): Promise<boolean> {
@@ -339,7 +334,7 @@ export async function openIbanDoor(log: (m: string) => void): Promise<boolean> {
                 log("the doors on Iban's temple would not open");
                 return false;
             }
-            // Why: the script force-moves the player a tile west as it opens, so the door is the entry. There is no walk to make afterwards, and nothing to make it on. A flood of the pack over the temple finds no walkable floor at all, the altar and Iban's own tile included.
+            // Why: the script force-moves you a tile west as it opens, so the door is the entry. There's no walk after: the pack has no walkable floor in the temple at all, altar and Iban's tile included.
             await driveUntil(() => insideIbanTemple(Game.tile()), [], log, 12_000);
         }
     }
@@ -359,7 +354,7 @@ export async function throwDoll(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     await settleScene();
-    // Why: no walk first. The temple floor is not in the collision pack, so any radius-based approach reports unreachable from a tile the character is already standing on. A use-on-loc leaves the pathing to the server, which is the only thing here that can see the floor.
+    // Why: no walk first. The temple floor isn't in the collision pack, so any radius approach reports unreachable from where you stand; a use-on-loc leaves the pathing to the server, which can see the floor.
     const altar = locById(UP_LOC.IBAN_ALTAR, null, 16);
     const doll = Inventory.items().find(item => item.id === UP_ITEM.DOLL.id);
     if (!altar || !doll) {

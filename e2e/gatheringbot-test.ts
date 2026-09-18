@@ -1,5 +1,6 @@
-/** Live verification for GatheringBot (Miner / Fisher / Woodcutter): scenario ids as argv, BASE / HEADED / SLOWMO / BUDGET_S from the environment.
- *  Why: inventory seeds go through the engine cheat `give` and bank seeds through `givebank`; acquire scenarios purge bank tools first so a leftover withdrawal cannot false-PASS, and the bot client is redeployed by hand, tools/deploy-local.sh from this tree is not for live e2e. */
+/** Live GatheringBot scenarios for Miner, Fisher, and Woodcutter. */
+// Why: acquisition cases purge bank tools so leftovers cannot produce a false pass.
+// Inventory uses `give`, bank stock uses `givebank`, and the bot client is deployed manually.
 
 // Usage:
 //   bun e2e/gatheringbot-test.ts
@@ -11,10 +12,11 @@
 //   HEADED=1 SLOWMO=200 bun e2e/gatheringbot-test.ts mine-bank
 //   BUDGET_S=180 bun e2e/gatheringbot-test.ts   # per-scenario seconds (default 150)
 import type { Page } from 'playwright-core';
-import { launchBrowser, parseArgs } from './lib/harness.js';
+import { deployIsolatedClient, launchBrowser, parseArgs } from './lib/harness.js';
 import {
     cheatQuiet,
     mainlandAccount,
+    relog,
     seedItemsToBank,
     startScript,
     type BankSeedItem
@@ -897,6 +899,9 @@ type Scenario = {
     bankSeed?: { items: BankSeedItem[]; stand: Tile };
     /** Skill levels to advance before start. End-game uses ~90 for success rolls. */
     stats?: { skill: string; level: number }[];
+    // Why: a camp behind a quest is unreachable without it, Shilo's every tile sits past Vigroy's cart, and no cheat here completes one on its own.
+    /** Quest varps to set before the seed, `[name, value]`; Shilo Village is `zombiequeen` at 15. */
+    questVars?: { name: string; value: number }[];
     /** Before seed: open this bank and withdraw matching tools, then clearinv. */
     purgeBank?: { stand: Tile; match: RegExp; label: string };
     /**
@@ -979,6 +984,10 @@ const SPOT = {
     lavaRunite: { x: 3058, z: 3884, level: 0 },
     /** Fishing Guild dock walkway. */
     fishingGuild: { x: 2604, z: 3420, level: 0 },
+    /** Shilo river, mid-sweep, the camp pin. */
+    shiloRiver: { x: 2841, z: 2970, level: 0 },
+    /** The Shilo teller, which is an npc and not a booth. */
+    shiloBank: { x: 2852, z: 2954, level: 0 },
     /** Ardougne West / north bank, path start for guild sharks. */
     ardougneWestBank: { x: 2616, z: 3332, level: 0 },
     /** Near Bob (Lumbridge axes). */
@@ -1214,15 +1223,14 @@ const SCENARIOS: Scenario[] = [
             `peak=${productPeak} distCamp ${minDistToCamp}..${maxDistToCamp} ` +
             `tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
     },
-    /** Single-account mule gatherer smoke: a full pack with muleMode Gatherer must hold at the meet and wait for a partner rather than bank.
-     *  A full Gatherer↔Mule trade needs two harnesses. */
+    /** A solo Gatherer waits at the meetup with a full pack instead of banking. */
     {
         id: 'mine-mule-gatherer-meet',
         tags: ['mining', 'mine', 'mule', 'early'],
         script: 'Miner',
         start: offsetTile(SPOT.seVarrockIron, -2, -1),
         camp: SPOT.seVarrockIron,
-        bank: { x: 3253, z: 3420, level: 0 }, // Varrock East, must NOT visit for handoff
+        bank: { x: 3253, z: 3420, level: 0 }, // The handoff must not visit Varrock East.
         settings: {
             rocks: 'Iron',
             location: 'Southeast Varrock Mine',
@@ -1242,15 +1250,15 @@ const SCENARIOS: Scenario[] = [
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            // Startup log always includes mode line; waiting/trade lines are status-only.
+            // The startup mode line is durable; wait and trade lines are transient status.
             const muleOn = logHas(cur, /mule:\s*gatherer with/i);
             const nearMeet = minDistToCamp <= 4;
             const stillHolding = invMatch(cur, /ore/i) >= 20 || productPeak >= 20;
-            // Must not complete a bank deposit of the haul.
+            // A bank deposit would invalidate the handoff case.
             if (logHas(cur, /bank:\s*deposited/i) && elapsedMs >= 12_000) {
                 return 'fail';
             }
-            // Use current bank distance, minDistToBank is poisoned by start-purge bank trips.
+            // Startup purge trips make `minDistToBank` unusable here.
             if (muleOn && nearMeet && stillHolding && distToBank > 12 && elapsedMs >= 8_000) {
                 return 'pass';
             }
@@ -1262,10 +1270,7 @@ const SCENARIOS: Scenario[] = [
             `muleOn=${logHas(cur, /mule:\s*gatherer with/i)} bankedLog=${logHas(cur, /bank:\s*deposited/i)} ` +
             `tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
     },
-    /**
-     * Second mine bank loop + long soft-home: Rimmington iron → Falador East (~100+ tiles).
-     * Catches bank preference / post-deposit return regressions not covered by SW Varrock.
-     */
+    /** Rimmington to Falador East covers a 100+ tile bank and return loop. */
     {
         id: 'mine-bank-rimmington',
         tags: ['mining', 'mine', 'bank', 'camp', 'early'],
@@ -1517,8 +1522,8 @@ const SCENARIOS: Scenario[] = [
             `tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
     },
     {
-        // Cook then bank: seed cooked so one catch fills the pack with 1 raw + 26 cooked → cook the raw → bank the cooked pile at Catherby.
-        // Why: #154. The bot must also leave the bank toward the pier after depositing; Catherby bank is ~36 from the spot, inside the 64 leash, so deposit-only false-PASSed.
+        // Seed 26 cooked fish so one catch fills the pack and forces cook, bank, then return.
+        // Why: Catherby bank is inside the old 64-tile leash, so deposit alone could false-pass #154.
         id: 'fish-cook-bank',
         tags: ['fishing', 'fish', 'cook', 'bank', 'early'],
         script: 'Fisher',
@@ -1537,14 +1542,14 @@ const SCENARIOS: Scenario[] = [
             purgePackOnStart: false,
             leashRadius: 18
         },
-        // Pot + 26 cooked = 27 slots; one free → fish last raw → cook → bank → home.
+        // Pot plus 26 cooked fish leaves one slot for the final catch.
         seed: [
             { debug: 'lobster_pot', name: 'Lobster pot', qty: 1 },
             { debug: 'lobster', name: 'Lobster', qty: 26 }
         ],
         // Cooking/fishing already 99 from BASE_STATS.
         scene: 'skip',
-        // No Make-X: one last catch + one-at-a-time cook + bank/home (Catherby range≈bank).
+        // No Make-X: one catch, one cook, then bank and return.
         budgetMs: 300_000,
         check: ({
             start,
@@ -1561,8 +1566,7 @@ const SCENARIOS: Scenario[] = [
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            // Full cook→bank→home: catch → cook → deposit near bank → walk to pier.
-            // After home the bot may re-fish; do not require empty pack at pass time.
+            // The bot may fish again after returning, so the pack need not stay empty.
             if (
                 fishXp > 0
                 && cookXp > 0
@@ -1697,10 +1701,7 @@ const SCENARIOS: Scenario[] = [
             `peak=${productPeak} banked=${bankedHint} nearBank=${sawNearBank} distBank=${minDistToBank} ` +
             `tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
     },
-    /**
-     * Cooker mule solo: full raw pack + muleMode Cooker + cook-then-bank → cook at camp
-     * range and bank cooked (no partner needed once raw is held; trade tasks idle).
-     */
+    /** A solo Cooker with raw fish cooks and banks while trade tasks stay idle. */
     {
         id: 'fish-cooker-solo',
         tags: ['fishing', 'fish', 'cook', 'mule', 'early'],
@@ -2067,6 +2068,78 @@ const SCENARIOS: Scenario[] = [
         },
         failMsg: ({ start, cur, minDistToCamp }) =>
             `shark path xp ${start.xp.fishing}→${cur.xp.fishing}, distGuild=${minDistToCamp}, tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}, raw=${invMatch(cur, /^raw /i)}`
+    },
+
+    {
+        id: 'fish-shilo-feathers',
+        tags: ['fishing', 'fish', 'shilo', 'shop', 'feathers', 'bank'],
+        script: 'Fisher',
+        // Flow: stand at the Shilo teller with no feathers anywhere, walk the river, run out, buy Fernahei's shelf and cast again.
+        start: SPOT.shiloBank,
+        camp: SPOT.shiloRiver,
+        bank: SPOT.shiloBank,
+        questVars: [{ name: 'zombiequeen', value: 15 }],
+        settings: {
+            fishMethod: 'Fly fishing — trout/salmon',
+            location: 'Shilo Village',
+            cookMode: 'Off',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            leashRadius: 30
+        },
+        seed: [
+            { debug: 'fly_fishing_rod', name: 'Fly fishing rod', qty: 1 },
+            { debug: 'coins', name: 'Coins', qty: 4000 }
+        ],
+        // Why: the scene probe waits on a booth or a chest, and Shilo's bank is a teller with neither, so there is nothing here for it to wait on.
+        scene: 'skip',
+        budgetMs: 480_000,
+        // Why: the shop half passes inside a minute and the teller opens for its own coin draw, so the budget is there for a full pack going in; a run that only bought feathers proves half the camp.
+        check: ({ cur, start, productPeak, bankedHint, sawNearBank }) => {
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            const bought = logHas(cur, /feathers: bought \d+ from Fernahei/i);
+            const teller = logHas(cur, /bank: Shilo Village uses npc access/i);
+            const banked = productPeak >= 20 && bankedHint && sawNearBank && invMatch(cur, /^raw /i) <= 2;
+            return bought && teller && banked && cur.xp.fishing > start.xp.fishing ? 'pass' : 'wait';
+        },
+        failMsg: ({ start, cur, minDistToCamp }) =>
+            `shilo xp ${start.xp.fishing}→${cur.xp.fishing}, feathers=${invMatch(cur, /^feather$/i)}, raw=${invMatch(cur, /^raw /i)}, distCamp=${minDistToCamp}, tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
+    },
+
+    {
+        id: 'fish-guild-feathers',
+        tags: ['fishing', 'fish', 'guild', 'shop', 'feathers'],
+        script: 'Fisher',
+        // Flow: stand on the guild docks, walk to Roachey on the clock, buy his feathers, go back.
+        start: SPOT.fishingGuild,
+        camp: SPOT.fishingGuild,
+        settings: {
+            fishMethod: 'Harpoon — sharks',
+            location: 'Fishing Guild',
+            cookMode: 'Off',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            guildFeatherMinutes: 1,
+            leashRadius: 30
+        },
+        seed: [
+            { debug: 'harpoon', name: 'Harpoon', qty: 1 },
+            { debug: 'coins', name: 'Coins', qty: 4000 }
+        ],
+        scene: 'bank',
+        budgetMs: 240_000,
+        check: ({ cur }) => {
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            return logHas(cur, /feathers: bought \d+ from Roachey/i) && invMatch(cur, /^feather$/i) > 0
+                ? 'pass'
+                : 'wait';
+        },
+        failMsg: ({ cur }) =>
+            `feathers=${invMatch(cur, /^feather$/i)} coins=${invCount(cur, 'Coins')} bought=${logHas(cur, /feathers: bought/i)} tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
     },
 
     // ── tool acquire (bank-isolated; assert shop/smith not leftover withdraw) ─
@@ -2563,6 +2636,10 @@ if (selected.length === 0) {
 console.log(`gatheringbot-test base=${base} user=${USER} scenarios=${selected.map(s => s.id).join(',')}`);
 console.log(`per-scenario budget ≈ ${Math.round(PER_SCENARIO_MS / 1000)}s (override with BUDGET_S=)`);
 
+// Why: public/bot is shared, so a run on /bot.html silently exercises whichever branch another session deployed last, and deploying by hand clobbers theirs in turn. An isolated copy takes this harness out of that race.
+const client = deployIsolatedClient(`gb${Date.now().toString(36).slice(-6)}`);
+console.log(`client: ${client.page}`);
+
 const browser = await launchBrowser({ swiftshader: true });
 const results: { id: string; ok: boolean; detail: string; ms: number }[] = [];
 
@@ -2578,7 +2655,7 @@ try {
         }
     });
 
-    await mainlandAccount(page, base, USER);
+    await mainlandAccount(page, base, USER, client.page);
     console.log(`${stamp()} mainland-ready as '${USER}'`);
 
     // Why: early zones (Draynor jail guard) kill a low-HP bot stuck behind "Congratulations, you advanced…", so max once and drain the chat before any tele/seed/start.
@@ -2603,6 +2680,16 @@ try {
             // Drain any leftover level-up / NPC chat before tele into danger zones.
             await clearChatDialogs(page);
             await clearInv(page);
+
+            // Why: setvar moves the server varp, and the bank's own quest gate reads Quests.status off the client's journal, which only picks the new value up on a fresh login. Without the relog the Shilo teller is filtered out of nearestBank and the run stands on the tile dropping its catch.
+            if ((sc.questVars ?? []).length > 0) {
+                for (const q of sc.questVars ?? []) {
+                    await cheatQuiet(page, `setvar ${q.name} ${q.value}`);
+                    console.log(`  ${q.name}=${q.value}`);
+                }
+                await relog(page, USER);
+                await clearChatDialogs(page);
+            }
 
             // Isolate bank tools so acquire cannot withdraw leftovers from prior runs.
             if (sc.purgeBank) {
@@ -2982,6 +3069,7 @@ try {
     }
 } finally {
     await browser.close();
+    client.cleanup();
 }
 
 console.log('\n── summary ──');

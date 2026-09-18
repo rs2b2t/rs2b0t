@@ -1,10 +1,13 @@
 import Tile from '../../geometry/Tile.js';
 import { matchesAny } from '../../api/inventory/packRules.js';
+import { BANK_LOCATIONS } from '../../api/bank/BankLocations.js';
 
 export const START_POSITION = 'Start position';
 export const CUSTOM_COORDINATES = 'Custom coordinates';
 export const SPOT_OPTIONS = [START_POSITION, CUSTOM_COORDINATES];
 export const BANKING_OPTIONS = ['Auto', 'None'];
+/** Bank location dropdown: nearest unlocked bank, or a forced named bank. */
+export const BANK_LOCATION_OPTIONS = ['Nearest', ...BANK_LOCATIONS.map(b => b.name)];
 export const DEFAULT_CUSTOM_SPOT = new Tile(3273, 3427, 0);
 export const BURIAL_BONE_NAME = 'Bones';
 
@@ -54,6 +57,16 @@ export function assertAutoRetaliateOn(on: boolean): void {
     if (!on) {
         throw new Error('[AutoFighter] could not enable Auto Retaliate');
     }
+}
+
+/** A weapon with a special is in hand and specials are turned on. Spells never spec. */
+export function specialAvailable(enabled: boolean, style: string, cost: number | null): boolean {
+    return enabled && style !== 'mage' && cost !== null;
+}
+
+/** Arm when the wielded weapon's special is affordable and the last one has already been spent. */
+export function shouldArmSpecial(enabled: boolean, style: string, cost: number | null, energy: number, armed: boolean): boolean {
+    return specialAvailable(enabled, style, cost) && !armed && energy >= (cost ?? 0);
 }
 
 export function shouldBuryRegularBones(state: BoneBurialState): boolean {

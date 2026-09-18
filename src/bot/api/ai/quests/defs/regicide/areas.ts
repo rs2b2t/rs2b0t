@@ -6,8 +6,7 @@ export interface RegicideItem {
     name: string;
 }
 
-// Why: "Barrel bomb" is the display name of both the sealed barrel and the fused one, and "Naphtha mix" of
-// both half-mixes, every lookup here goes through the id, never the name.
+// Why: "Barrel bomb" is the display name of both the sealed barrel and the fused one, and "Naphtha mix" of both half-mixes, so every lookup here goes through the id.
 export const RG_ITEM = {
     COINS: { id: 995, name: 'Coins' },
     SHARK: { id: 385, name: 'Shark' },
@@ -43,7 +42,7 @@ export const RG_ITEM = {
     BOOK: { id: 3230, name: 'Big book of bangs' }
 } as const satisfies Record<string, RegicideItem>;
 
-/** Either half-mix. The two are the same step from opposite sides. */
+/** Either half-mix; the 2 are the same step from opposite sides. */
 export const RG_MIXES: readonly RegicideItem[] = [RG_ITEM.MIX_QUICKLIME, RG_ITEM.MIX_SULPHUR];
 
 export const RG_NPC = {
@@ -72,7 +71,7 @@ export const RG_LOC = {
     SULPHUR3: 3964,
     STILL: 4026,
     CATAPULT: 3976,
-    /** The ordinary furnace pair, `regicide_heat_quicklime` hangs off the generic `use_furnace` switch. */
+    /** The ordinary furnace pair; `regicide_heat_quicklime` hangs off the generic `use_furnace` switch. */
     FURNACE_MAIN: 2781,
     FURNACE_SIDE: 2785,
     LIMESTONE1: 4029,
@@ -85,13 +84,12 @@ export const RG_LOC = {
 export const RG_SULPHUR_LOCS: readonly number[] = [RG_LOC.SULPHUR1, RG_LOC.SULPHUR2, RG_LOC.SULPHUR3];
 export const RG_LIMESTONE_LOCS: readonly number[] = [RG_LOC.LIMESTONE1, RG_LOC.LIMESTONE2, RG_LOC.LIMESTONE3];
 
-// Why: every tile here is a STAND, never a multi-tile loc's own origin, walking to an origin inside a
-// footprint fails outright and reads as a missing loc.
+// Why: Use every footprint tile as a stand because pathing to a multi-tile loc origin can fail.
 export const RG_TILE = {
     ARDOUGNE_BANK: new Tile(2655, 3283, 0),
     /** The range beside the Ardougne bank, where the rabbit for the catapult guard is cooked. */
     ARDOUGNE_RANGE: new Tile(2648, 3298, 0),
-    /** East Ardougne's furnace, which is where the limestone is burned on the way to the still. */
+    /** East Ardougne's furnace, where the limestone is burned on the way to the still. */
     ARDOUGNE_FURNACE: new Tile(2601, 3309, 0),
     LATHAS: new Tile(2578, 3293, 1),
 
@@ -130,11 +128,10 @@ export const RG_TILE = {
     CHEMIST: new Tile(2934, 3210, 0)
 } as const;
 
-/** Where the player is, at the coarse grain the module's legs branch on. */
+/** Where you are, at the coarse grain the module's legs branch on. */
 export type RegicideArea = 'mainland' | 'pass' | 'voyage' | 'tirannwn' | 'pit' | 'unknown';
 
-// Why: the pitfalls drop the player into mapsquare 36_150 alongside the voyage temple, so the two are told
-// apart by z. The temple sits at 9620-9635 and every spike pit below it at 9640-9660.
+// Why: the pitfalls drop you into mapsquare 36_150 alongside the voyage temple, so z tells them apart: the temple sits at 9620-9635 and every spike pit below it at 9640-9660.
 const VOYAGE_MAX_Z = 9635;
 
 export function regicideArea(tile: QuestSnapshot['tile']): RegicideArea {
@@ -148,8 +145,7 @@ export function regicideArea(tile: QuestSnapshot['tile']): RegicideArea {
     if (z >= 4500) {
         return 'pass';
     }
-    // Why: Tirannwn is everything west and south of the Arandar palisade, which is the only join to the
-    // rest of the map. The box is the two mapsquare columns the forest occupies plus the Arandar pass.
+    // Why: Tirannwn is everything west and south of the Arandar palisade, the only join to the rest of the map, so the box is the 2 mapsquare columns the forest occupies plus the Arandar pass.
     if (level === 0 && x >= 2160 && x <= 2390 && z >= 3110 && z <= 3334) {
         return 'tirannwn';
     }
@@ -176,7 +172,7 @@ export function owned(snap: QuestSnapshot, item: RegicideItem): number {
     return held(snap, item) + banked(snap, item);
 }
 
-/** How many of a set the pack holds, the two half-mixes share a display name. */
+/** How many of a set the pack holds; the 2 half-mixes share a display name. */
 export function countHeld(snap: QuestSnapshot, items: readonly RegicideItem[]): number {
     return items.filter(item => held(snap, item) > 0).length;
 }

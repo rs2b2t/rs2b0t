@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { decide, gatherBalls } from '#/bot/api/ai/quests/defs/sheepshearer.js';
+import { decide, gatherBalls, sheepshearer } from '#/bot/api/ai/quests/defs/sheepshearer.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 const snap = (journal: string, items: [string, number][] = []): QuestSnapshot => ({
@@ -34,5 +34,11 @@ describe('sheepshearer decide', () => {
     });
     test('inProgress with no balls -> re-gather (partial hand-in / lost wool recovery)', () => {
         expect(decide(snap('inProgress')).kind).not.toBe('talk');
+    });
+});
+
+describe('sheepshearer module', () => {
+    test('spends nothing, so it carries no engine coin float', () => {
+        expect(sheepshearer.coinFloat).toBe(0);
     });
 });

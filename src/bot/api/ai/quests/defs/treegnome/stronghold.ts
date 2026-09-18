@@ -17,7 +17,7 @@ function locById(id: number, within = 6): Loc | null {
     return Locs.query().where(l => l.id === id).within(within).nearest();
 }
 
-// Why: `tracker_gnome.rs2` records nothing the trackers say, so the ballista's own check is the only gate and these three answers are the leg.
+// Why: Tracker dialogue is not recorded, so these three responses and the ballista check define the leg.
 const COORDINATE: readonly [string, string][] = [
     ['height-coordinate', '0004'],
     ['x-coordinate', '0003'],

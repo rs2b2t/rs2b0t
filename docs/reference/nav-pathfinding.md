@@ -78,9 +78,10 @@ connectivity rule to the target.
 The Shilo log balance is the crossing that found it. `zq_logbalance` is two 1x1 blocking
 locs at (2907,3049) and (2909,3049) with one open tile between them, and the script
 crosses in two `p_teleport` hops of two tiles, so the player stands on (2908,3049) for a
-tick. `matchesTransportLanding` accepts that midpoint whenever the loc was clicked from
-two or more tiles out, the walker re-paths from it, and before this rule every hard clue
-past the log read as unreachable.
+tick. The generic landing check could accept that midpoint when the loc was clicked
+from a distance, leaving the walker to re-path from an isolated tile. The Shilo crossing
+now approaches the exact starting stand and waits for the exact far-bank tile before
+continuing. Origin snapping still handles plans requested from isolated tiles.
 
 ## Following a path
 

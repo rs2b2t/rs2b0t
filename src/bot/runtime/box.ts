@@ -1,8 +1,6 @@
 // docs/decisions/architecture.md#per-instance-storage
-// Why: every bot instance keeps its credentials and settings under a "box" id so nothing bleeds between instances.
-// Why: a standalone bot.html tab is box '', isolated by its own sessionStorage.
-// Why: a MultiBox iframe is box '<account>', isolated within the tab's shared sessionStorage, because same-origin iframes share one sessionStorage.
-// Why: the MultiBox passes ?box=<account> when it spawns each iframe.
+// Why: same-origin multibox frames share sessionStorage, so `?box=<account>` namespaces each bot.
+// Standalone tabs use the empty box id and their own sessionStorage.
 export function boxId(): string {
     if (typeof location === 'undefined') {
         return '';

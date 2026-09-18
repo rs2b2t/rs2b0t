@@ -64,7 +64,7 @@ function parseRow(raw: unknown): PriceRow | null {
     return row;
 }
 
-// Why: storage is player-editable JSON, so a malformed book must degrade to an empty list rather than throw inside a panel render.
+// Why: storage is player-editable JSON, so a malformed book degrades to an empty list instead of throwing inside a panel render.
 export function parseBooks(json: string): PriceBook[] {
     let raw: unknown;
     try {

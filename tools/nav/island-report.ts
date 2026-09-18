@@ -1,7 +1,7 @@
-/** Map-wide connectivity census: every region the walker cannot reach from the mainland, and the loc most likely to be the missing edge. Default islands >= 40 tiles; --min 200 --top 30 --json out/islands.json.
- *  Why: flooding uses the pack's exit masks plus the baked door / transport / stair edges, i.e. what A* can traverse. Plain walkability over-connects and lies. */
+/** Find regions disconnected from the mainland and likely missing crossings. Default minimum: 40 tiles; flags: --min, --top, --json.
+ * Why: use exit masks and baked edges to match A*; walkability alone connects regions the walker cannot cross. */
 
-// Why: a clue, quest step or bot that "can't get there" is usually not a walker bug. It is a region the baked graph never joined up.
+
 
 //   bun tools/nav/island-report.ts                    # islands >= 40 tiles
 //   bun tools/nav/island-report.ts --min 200 --top 30
@@ -32,7 +32,7 @@ const TOP = Number(arg('top', '40'));
 const JSON_OUT = args.includes('--json') ? arg('json', 'out/islands.json') : null;
 const PACK = arg('pack', 'out/collision.lcnav.gz');
 const ENGINE = arg('engine', join(homedir(), 'code', 'lostcity-dev', 'engine'));
-// Why: ops that move a player between regions outrank ops that merely clear scenery (cutting jungle, slashing a web), either can be the crossing, but a door is a likelier answer than the nearest tree.
+// Why: prefer movement actions over clearing actions when ranking possible crossings.
 const MOVEMENT_OP = /^(open|climb|enter|exit|pass|pay|cross|go|push|pull|squeeze|walk|jump|swing|board|travel|ride|balance|use)/i;
 const CLEARING_OP = /^(slash|chop|cut|mine)/i;
 const CROSSING_OP = new RegExp(`${MOVEMENT_OP.source}|${CLEARING_OP.source}`, 'i');

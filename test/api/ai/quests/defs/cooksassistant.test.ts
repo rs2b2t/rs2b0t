@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { decide, gatherFlour, gatherMilk } from '#/bot/api/ai/quests/defs/cooksassistant.js';
+import { cooksassistant, decide, gatherFlour, gatherMilk } from '#/bot/api/ai/quests/defs/cooksassistant.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 const snap = (journal: string, items: [string, number][] = []): QuestSnapshot => ({
@@ -33,5 +33,15 @@ describe('cooksassistant decide', () => {
     test('inProgress missing an ingredient self-heals through the gathers', () => {
         const s = decide(snap('inProgress', [['egg', 1], ['bucket of milk', 1]]));
         expect(s.kind).not.toBe('talk');
+    });
+    test('the egg waits at the pen instead of treating arrival as a take', () => {
+        const s = decide(snap('inProgress'));
+        expect(s).toMatchObject({ kind: 'grabGround', item: 'Egg', waitIfMissing: true });
+    });
+});
+
+describe('cooksassistant module', () => {
+    test('spends nothing, so it carries no engine coin float', () => {
+        expect(cooksassistant.coinFloat).toBe(0);
     });
 });

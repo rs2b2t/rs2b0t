@@ -57,8 +57,7 @@ async function enterCave(index: number, log: (m: string) => void): Promise<boole
     const cave = WT_CAVES.find(entry => entry.index === index)!;
     const start = Game.tile();
     if (start && watchtowerArea(start) === 'skavidCaves') {
-        // The six caves are separate sealed rooms. Being in one of them is only
-        // useful if it is this one; otherwise walk out before trying the mouth.
+        // The 6 caves are separate sealed rooms, so being in one only helps if it's this one; otherwise walk out first.
         if (cave.landing.distanceTo(start) <= 5) {
             return true;
         }
@@ -78,7 +77,7 @@ async function enterCave(index: number, log: (m: string) => void): Promise<boole
         return false;
     }
     await settleScene();
-    // Why: p_teleport lands on the landing tile, so anything further out means the player was dumped in the dark cave.
+    // Why: p_teleport lands on the landing tile, so anything further out means you were dumped in the dark cave.
     // Why: cave 4's landing is only 9 tiles from it, so the tolerance has to be tight.
     const here = Game.tile();
     if (here && cave.landing.distanceTo(here) > 5) {
@@ -167,15 +166,14 @@ export async function takeNightshade(log: (m: string) => void): Promise<boolean>
 }
 
 export async function answerMadSkavid(log: (m: string) => void): Promise<boolean> {
-    // Cave 6 sits on the far side of the gold-bar gate, and the trip is one
-    // leg so the crossing state never has to survive a decide() round trip.
+    // Cave 6 sits on the far side of the gold-bar gate, and the trip is one leg so the crossing state never has to survive a decide() round trip.
     if (watchtowerArea(Game.tile()) !== 'skavidCaves' && !(await crossEastGate(log))) {
         return false;
     }
     if (!(await reachSkavid(6, log))) {
         return false;
     }
-    // He says one of four phrases at random, so a wrong guess costs only a retry.
+    // He says one of 4 phrases at random, so a wrong guess costs only a retry.
     for (let attempt = 0; attempt < 5; attempt++) {
         await talkChoosingBy(WT_NPC.MAD_SKAVID, MAD_SKAVID_RULES, ["But I've lost it!"], log);
         if (heldId(WT_ITEM.CRYSTAL2.id) > 0) {
@@ -183,7 +181,7 @@ export async function answerMadSkavid(log: (m: string) => void): Promise<boolean
         }
         await Execution.delayTicks(2);
     }
-    // Why: the region beyond the east gate overlaps the battlement side, so decide() cannot tell them apart and would send the escape at a battlement it has no path to, hence leaving under our own steam even on failure.
+    // Why: the region beyond the east gate overlaps the battlement side, so decide() can't tell them apart and would aim the escape at a battlement it has no path to; leave under our own steam even on failure.
     log('the mad skavid did not hand over a crystal in five attempts');
     await leaveCave(log);
     await leaveEastGate(log);

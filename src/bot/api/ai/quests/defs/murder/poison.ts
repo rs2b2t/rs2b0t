@@ -10,13 +10,13 @@ import { POISON_PROVED, readMurderProgress } from './journal.js';
 
 const BOX_MS = 6000;
 
-// Why: the walk to the anchor is a hint, not a gate, everyone here drifts five tiles off spawn, and `Reach` finds and chases whoever is in the scene when the anchor walk falls short.
+// Why: the anchor walk is a hint; everyone here drifts 5 tiles off spawn, and `Reach` finds and chases whoever is in the scene when the walk falls short.
 async function ask(stop: NpcStop, log: (m: string) => void): Promise<boolean> {
     await gotoNpc(stop, [], log);
     return talkThrough(stop.npc, stop.prefer, log);
 }
 
-// Why: the loc answers a plain game message until the suspect has been asked about the poison and a mesbox after, so the box is driven rather than waited on for an item that never arrives.
+// Why: The loc emits a game message before the poison interview and a mesbox afterward; no item confirms progress.
 async function investigate(loc: LocStop, log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(loc.near, { radius: 1, attempts: 3, timeoutMs: 90_000, log }))) {
         return false;

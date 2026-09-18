@@ -3,20 +3,20 @@ import { CANT_REACH, GameMessages, WRONG_SIDE } from '../../../../chatbox/gameMe
 /** What an obstacle's script said it did. */
 export type Verdict = 'refused' | 'failed' | 'crossing';
 
-// Why: every obstacle in the pass announces its outcome in the chatbox in the same tick the op resolves, and the step was waiting on a tile instead, so a refusal cost the full crossing timeout, then the settle, then the reachability poll, for an answer it had already been given. Twelve of those in a row is a leg. The op's own words are the fastest honest oracle there is.
+// Why: every obstacle in the pass announces its outcome in the chatbox in the tick the op resolves, so waiting on a tile instead costs a refusal the full crossing timeout, the settle and the reachability poll. The op's own words are the fastest oracle.
 
-/** The op will not work from here, however many times it is sent. */
+/** The op won't work from here, however many times it's sent. */
 const REFUSED: readonly RegExp[] = [
     CANT_REACH,
     WRONG_SIDE,
-    // Why: `%upass_rockswing_used`, `%upass_swampswing_used`, `%upass_area1_pipe_used` and `%upass_area2_pipe_used` are map_clock cooldowns of 3 to 15 ticks. Retrying inside one cannot pass, and the rock and the swamp swing answer with a `~mesbox` that holds a main modal open while the retry waits.
+    // Why: Crossing cooldowns last 3 to 15 ticks, and failed swings may leave a blocking `~mesbox`, so wait before retrying.
     /is being used/i,
     /blocked by a grill/i,
     /cannot open the grill from this side/i,
     /need a thieving level/i
 ];
 
-/** The roll failed and the character is where they were, another try is worth sending. */
+/** The roll failed and you're where you were; another try is worth sending. */
 const FAILED: readonly RegExp[] = [
     /but you slip back down/i,
     /you fail to pick the lock/i,
@@ -27,7 +27,7 @@ const FAILED: readonly RegExp[] = [
     /and fail, activating the trap/i
 ];
 
-/** The script is carrying the character across. This is the one outcome worth waiting out. */
+/** The script is carrying you across, the one outcome worth waiting out. */
 const CROSSING: readonly RegExp[] = [
     /and step down the other side/i,
     /you manage to pick the lock/i,
@@ -48,7 +48,7 @@ const CLASSES: readonly (readonly [Verdict, readonly RegExp[]])[] = [
 
 /**
  * What the obstacle said since `mark`, or null while it has said nothing.
- * Why: the LAST verdict, not the first. One attempt loop keeps one mark across four rolls, so a seam that slipped and then landed has both a failure and a crossing in the ring, and the one that describes where the character is now is the one at the end.
+ * Why: the last verdict. One attempt loop keeps one mark across 4 rolls, so a seam that slipped then landed has both a failure and a crossing in the ring, and the last one says where you are now.
  */
 export function verdictSince(mark: number): Verdict | null {
     const said = GameMessages.since(mark);

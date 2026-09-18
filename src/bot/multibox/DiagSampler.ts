@@ -1,6 +1,5 @@
 // docs/decisions/multibox-telemetry-honesty.md
-// Why: degradation is only visible against its own past, so a fine tier covers the minutes
-// around an incident and a coarse tier answers "what did it look like an hour ago".
+// Why: keep fine samples around an incident and coarse samples for hour-scale comparisons.
 
 import { DiagRing } from '../runtime/diag/DiagRing.js';
 import type { FrameSample } from '../runtime/diag/BotDiag.js';
@@ -16,7 +15,6 @@ const WALL_FIELDS = ['botCount', 'stallMs', 'inputMaxMs', 'inputCount', 'freezeC
 
 /** Fields that accumulate over a window; the rest carry their worst or latest value. */
 const SUMMED = new Set<string>(['logicMs', 'drawMs', 'logicCount', 'drawCount', 'stallMs', 'inputCount']);
-const MAXED = new Set<string>(['logicMaxMs', 'drawMaxMs', 'inputMaxMs', 'freezeCount', 'botCount', 'ingame']);
 
 class Tier {
     readonly hot: DiagRing;
@@ -34,17 +32,14 @@ class Tier {
         return this.hot.bytes + this.cold.bytes;
     }
 
-    /**
-     * The coarse tier aggregates rather than decimates: dropping 29 of every 30
-     * samples would hide the spikes worth keeping.
-     */
+    /** Aggregates the coarse tier so spikes survive downsampling. */
     push(at: number, values: number[]): void {
         this.hot.push(at, values);
         for (let i = 0; i < values.length; i++) {
             const field = this.fields[i];
             if (SUMMED.has(field)) {
                 this.accumulator[i] += values[i];
-            } else if (MAXED.has(field) || values[i] > this.accumulator[i]) {
+            } else {
                 this.accumulator[i] = Math.max(this.accumulator[i], values[i]);
             }
         }
@@ -52,7 +47,7 @@ class Tier {
 
         if (this.accumulated * HOT_INTERVAL_MS >= COLD_INTERVAL_MS) {
             this.cold.push(at, this.accumulator);
-            this.accumulator = new Array(this.fields.length).fill(0);
+            this.accumulator.fill(0);
             this.accumulated = 0;
         }
     }
@@ -144,10 +139,7 @@ export class DiagSampler {
         }
     }
 
-    /**
-     * Per-bot state as of `wallClockMs`, reading the coarse tier so it can reach
-     * back hours. Returns only bots that existed then.
-     */
+    /** Per-bot coarse state at `wallClockMs`; omits bots that did not exist yet. */
     at(wallClockMs: number): Record<string, Record<string, number>> {
         const out: Record<string, Record<string, number>> = {};
         for (const [box, tier] of this.bots) {
@@ -159,10 +151,7 @@ export class DiagSampler {
         return out;
     }
 
-    /**
-     * "It was fine an hour ago" made mechanical: the same fields then and now,
-     * with the delta, sorted by the bot whose logic cost grew most.
-     */
+    /** Current and historical fields with deltas, sorted by logic-cost growth. */
     compare(agoMs: number): { agoMs: number; then: number; now: number; bots: { box: string; field: string; then: number; now: number; delta: number }[] } {
         const now = this.wallClock();
         const then = now - agoMs;
@@ -187,10 +176,7 @@ export class DiagSampler {
         return { agoMs, then, now, bots: rows };
     }
 
-    /**
-     * Which bots were mid-phase during a stall.
-     * Why: a stall is only detected once it ends, so the suspect is whoever's span overlapped the window, not whoever is running when the record is written.
-     */
+    /** Phases that overlapped a stall window, which is only known after the stall ends. */
     blame(at: number, stallMs: number): { box: string; phase: string; overlapMs: number }[] {
         const from = at - stallMs;
         const hits: { box: string; phase: string; overlapMs: number }[] = [];

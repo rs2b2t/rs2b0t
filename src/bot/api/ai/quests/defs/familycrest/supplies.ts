@@ -18,9 +18,8 @@ export const FC_OFFICIAL_SKILLS = {
     magic: 59
 } as const;
 
-// Why: combat is no server gate here, but two fights are unavoidable, the hellhounds (lvl 122) guarding the perfect-gold rocks aggro at any combat level a 2004 account can reach.
-// Why: Chronozon (lvl 170, att 173 / str 172) is in the wilderness, where the not-too-strong check does not apply.
-// Why: only max stats have been through a headed run so far, so lower this once a realistic profile clears (docs/QUESTS.md polish goal).
+// Why: the hellhounds (lvl 122) at the perfect-gold rocks aggro at any reachable combat level, and Chronozon (lvl 170, att 173 / str 172) is in the wilderness where the not-too-strong check doesn't apply.
+// Why: only max stats have cleared a headed run; lower this once a realistic profile does (docs/QUESTS.md polish goal).
 const FC_PROVEN_COMBAT_FLOOR = {
     attack: 99,
     strength: 99,
@@ -28,11 +27,11 @@ const FC_PROVEN_COMBAT_FLOOR = {
     hitpoints: 99
 } as const;
 
-/** Foods deliberately disjoint from Caleb's five fish, so Sustain cannot eat the quest. */
+/** Disjoint from Caleb's 5 fish, so Sustain can't eat the quest. */
 export const FC_FOODS = ['Shark', 'Lobster', 'Trout', 'Herring'] as const;
 export const FOOD_WITHDRAW = 10;
 
-/** One cast of each blast, times a generous allowance for splashes on def 173. */
+/** One cast of each blast, with allowance for splashes on def 173. */
 const RUNE_BUY = {
     air: 600,
     water: 200,
@@ -41,7 +40,7 @@ const RUNE_BUY = {
     death: 60
 } as const;
 
-// Why: a `buy` step withdraws this much when the pack is under it, so each estimate has to stay well below the leg's coin float or every purchase walks back to a bank.
+// Why: a `buy` step withdraws this much when the pack is under it, so each estimate stays under the leg's coin float or every purchase walks back to a bank.
 
 // Per-purchase coin estimates.
 export const RUNE_GP = 25_000;
@@ -65,7 +64,7 @@ export const BLAST_RUNES: readonly { item: FcItem; qty: number }[] = [
     { item: { id: FC_ID.DEATH_RUNE, name: FC_ITEM.DEATH_RUNE }, qty: RUNE_BUY.death }
 ];
 
-// Why: this is reference and test material rather than a provisioning threshold, as the teleport kit alone clears it and left the fight with six Fire Blasts and no way to finish.
+// Why: reference and test material only; as a provisioning threshold the teleport kit alone clears it and the fight runs dry after 6 Fire Blasts.
 
 // One cast of every blast.
 export const BLAST_MINIMUM: readonly { item: FcItem; qty: number }[] = [
@@ -125,8 +124,7 @@ export function bestBankWeapon(snap: QuestSnapshot): FcItem | null {
     return bestBanked(snap);
 }
 
-// Why: `hasWeapon` is happy with a scimitar in the pack, so the withdraw satisfies it and the equip step never fires, hence a separate check against `worn`.
-// Why: null comes back both when a weapon is already wielded and when none exists anywhere, as Chronozon dies to the blasts, so an unarmed fight is slow rather than impossible and stalling the quest over it would be worse.
+// Why: `hasWeapon` is satisfied by a scimitar in the pack, hence the separate `worn` check; null covers both wielded and none anywhere, since Chronozon dies to the blasts and an unarmed fight is only slow.
 
 /** Equip a melee weapon when one is held or banked, or null. */
 export function wieldWeapon(snap: QuestSnapshot, bank?: Tile): QuestStep | null {
@@ -144,8 +142,7 @@ export function wieldWeapon(snap: QuestSnapshot, bank?: Tile): QuestStep | null 
     return fromTheBank ? fromBank(snap, fromTheBank, 1, bank) : null;
 }
 
-// Why: air covers Camelot (5) and the strike component of the others, and law is the limiting rune at one or two a hop.
-// Why: the quest takes roughly ten hops, so these quantities are generous rather than exact, nothing else consumes them and unused runes come home.
+// Why: air covers Camelot (5) and the strike half of the others, law is the limit at 1 or 2 a hop, and the quest takes about 10 hops; unused runes come home.
 
 // Runes the standard-spellbook hops need, and how many to carry.
 export const TELEPORT_KIT: readonly { item: FcItem; qty: number }[] = [
@@ -165,9 +162,8 @@ function heldDuelRing(snap: QuestSnapshot): number {
     return DUEL_RING_IDS.reduce((sum, id) => sum + held(snap, id), 0);
 }
 
-// Why: A* only injects a teleport the live inventory can afford, and nothing else in this quest ever puts a law rune in the pack. This is the gap between the navigator being able to plan a Camelot hop and it doing so.
-// Why: it costs one bank trip at the start and saves several minutes of walking, as Camelot lands 71 tiles from Caleb against a 379-cost walk and the duel ring lands 73 from the Al Kharid furnace against roughly 600 from Witchaven.
-// Why: it never blocks, no runes banked means the quest walks, as before.
+// Why: A* only injects a teleport the live inventory can afford and nothing else here carries law, so this is what lets it plan a hop at all.
+// Why: one bank trip: Camelot lands 71 tiles from Caleb against a 379-cost walk, and the duel ring 73 from the Al Kharid furnace against about 600 from Witchaven; no runes banked means walking.
 
 /** Carry the teleport kit when nav teleports are on and the bank can pay for it. */
 export function teleportKitTopUp(snap: QuestSnapshot, bank?: Tile): QuestStep | null {
@@ -176,7 +172,7 @@ export function teleportKitTopUp(snap: QuestSnapshot, bank?: Tile): QuestStep | 
 
 /** {@link teleportKitTopUp} without the settings read, so it is testable. */
 export function teleportKitPlan(snap: QuestSnapshot, bank?: Tile): QuestStep | null {
-    // Why: both halves are tested up front, as keying the "already carrying it" check on one item at a time went wrong twice, on law alone it stopped before fetching the air every spell needs, and on the runes alone it stopped before the ring.
+    // Why: both halves are tested up front; keyed on law alone it stopped before the air, on runes alone before the ring.
     const runesShort = TELEPORT_KIT.some(want => held(snap, want.item.id) < Math.ceil(want.qty / 3));
     const ringShort = heldDuelRing(snap) === 0;
     if (!runesShort && !ringShort) {
@@ -186,23 +182,21 @@ export function teleportKitPlan(snap: QuestSnapshot, bank?: Tile): QuestStep | n
         return scanBank(bank);
     }
 
-    // Why: law runes are Magic Guild and Mage Arena stock only, so a bank without them is the normal case rather than a fault, and the spell hops stay off.
+    // Why: law is Magic Guild and Mage Arena stock only, so a bank without it is normal and the spell hops stay off.
     if (runesShort && banked(snap, TELEPORT_KIT[0]!.item.id) > 0) {
         for (const want of TELEPORT_KIT) {
             const step = fromBank(snap, want.item, want.qty, bank);
             if (step) {
                 return step;
             }
-            // Why: Aubury stocks air, fire and water and stands twenty tiles from the Varrock East booth this trip already visits, so only the law runes have to come from the bank.
-            // Why: he does not sell law.
+            // Why: Aubury stocks air, fire and water 20 tiles from the Varrock East booth, so only law has to come from the bank.
             if (held(snap, want.item.id) < Math.ceil(want.qty / 3) && AUBURY_STOCKS.has(want.item.id)) {
                 return { kind: 'buy', item: want.item.name, qty: want.qty, shop: FC_SHOP.AUBURY, estGp: RUNE_GP };
             }
         }
     }
 
-    // Independent of the runes: the ring reaches Al Kharid, which no spell on
-    // this book can (Ardougne teleport needs Plague City).
+    // Independent of the runes: the ring reaches Al Kharid, which no spell on this book can (Ardougne teleport needs Plague City).
     if (ringShort) {
         const ring = DUEL_RING_IDS.find(id => banked(snap, id) > 0);
         if (ring !== undefined) {
@@ -294,7 +288,7 @@ export function foodTopUp(snap: QuestSnapshot, want = FOOD_WITHDRAW, bank?: Tile
     return take > 0 ? withdraw([{ name: food, qty: take }], bank) : null;
 }
 
-/** Bank stand nearest each leg, this quest is spread over four kingdoms. */
+/** Bank stand nearest each leg, this quest is spread over 4 kingdoms. */
 export const LEG_BANK = {
     start: FC_BANK.VARROCK_EAST,
     caleb: FC_BANK.CATHERBY,
@@ -304,8 +298,7 @@ export const LEG_BANK = {
     /** Nearest bank to the Witchaven ladder, for the kit the mine itself needs. */
     mine: FC_BANK.ARDOUGNE_EAST,
     boot: FC_BANK.FALADOR_EAST,
-    // Why: Aubury's rune shop is 19 tiles from the Varrock East booth and 160 from Edgeville's, and the Jolly Boar Inn is closer to Varrock East too.
-    // Why: the dungeon walk starts from wherever the last withdraw left us either way.
+    // Why: Aubury is 19 tiles from the Varrock East booth and 160 from Edgeville's, and the Jolly Boar Inn is closer to Varrock East too.
     chronozon: FC_BANK.VARROCK_EAST
 } as const;
 

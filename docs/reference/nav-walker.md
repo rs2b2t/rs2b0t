@@ -24,7 +24,7 @@ a tree are all solid.
 ```ts
 if (dist === 0) return true;                       // on it
 if (probe.canReach(dest)) return true;             // adjacent and reachable
-if (probe.walkable(dest)) return false;            // walkable but not reached — keep going
+if (probe.walkable(dest)) return false;            // walkable but not reached; keep going
 return !probe.probeable(dest) || probe.canReachAdjacent(dest);
 ```
 

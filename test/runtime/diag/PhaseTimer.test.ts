@@ -5,7 +5,7 @@ import { PhaseTimer } from '#/bot/runtime/diag/PhaseTimer.js';
 const spin = (ms: number): void => {
     const until = performance.now() + ms;
     while (performance.now() < until) {
-        /* burn main thread */
+        /* no-op */
     }
 };
 
@@ -56,7 +56,6 @@ describe('PhaseTimer', () => {
 
         const totals = t.drain();
         expect(totals.ms.logic).toBeGreaterThanOrEqual(8);
-        // the 60ms of yielded time must not appear anywhere in the bucket
         expect(totals.ms.logic).toBeLessThan(40);
     });
 

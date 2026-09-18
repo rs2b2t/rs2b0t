@@ -4,7 +4,7 @@ import type { NpcStop } from '../../exec/primitives.js';
 
 export const DIG_NAME = 'Digsite Quest';
 
-// Why: Student, Digsite workman, Panning tray, Mixed chemicals and Rock sample all name more than one thing, so nothing in this module is matched by display name alone.
+// Why: Student, Digsite workman, Panning tray, Mixed chemicals and Rock sample each name more than one thing, so this module never matches by display name alone.
 
 export const DIG_ID = {
     COINS: 995,
@@ -48,7 +48,7 @@ export const DIG_ID = {
     CUP_OF_TEA: 1978
 } as const;
 
-/** Display names, for the steps that buy or withdraw rather than click. */
+/** Display names for the steps that buy or withdraw. */
 export const DIG_ITEM = {
     COINS: 'Coins',
     TROWEL: 'Trowel',
@@ -101,10 +101,10 @@ export const DIG_LOC = {
     PANNING_POINT: 2363
 } as const;
 
-/** The three ground-decoration soil locs the dig zones are made of. */
+/** The 3 ground-decoration soil locs the dig zones are made of. */
 export const DIG_SOIL_IDS: readonly number[] = [2376, 2377, 2378];
 
-// Why: `area_digsite.rs2` picks the exam level from `inzone(...)` on the soil's own coordinate, so these boxes are copied from it rather than paced out.
+// Why: `area_digsite.rs2` picks the exam level from `inzone(...)` on the soil's own coordinate, so these boxes are copied from it.
 
 /** The level 3 site west of the student camp, and the training site south of it. */
 export const DIG_ZONE = {
@@ -138,7 +138,7 @@ export const DIG_TILE = {
 
     /** North of the sacks at (3359,3398). */
     SACKS_STAND: new Tile(3359, 3399, 0),
-    /** The middle of the student camp, where all three colours spawn. */
+    /** The middle of the student camp, where all 3 colours spawn. */
     STUDENTS: new Tile(3358, 3410, 0),
     WORKMEN: new Tile(3357, 3407, 0),
 
@@ -195,14 +195,14 @@ function within(t: WorldTile | null | undefined, x0: number, x1: number, z0: num
     return !!t && t.level === 0 && t.x >= x0 && t.x <= x1 && t.z >= z0 && t.z <= z1;
 }
 
-// Why: a flood over the collision pack puts the four shaft pockets at 189, 52, 426 and 52 tiles with nothing walking between them, so these boxes are exact rather than generous.
+// Why: a flood over the collision pack puts the 4 shaft pockets at 189, 52, 426 and 52 tiles with nothing walking between them, so these boxes are tight.
 
-/** The eastern shaft, before the blast: the blast bricks are here and nothing else is. */
+/** The eastern shaft before the blast: only the blast bricks are here. */
 export function inShaftEast(t: WorldTile | null | undefined): boolean {
     return within(t, 3360, 3392, 9820, 9856);
 }
 
-/** The western shaft: the cave workman with the chest key, and two arcenia roots. */
+/** The western shaft: the cave workman with the chest key, and 2 arcenia roots. */
 export function inShaftWest(t: WorldTile | null | undefined): boolean {
     return within(t, 3344, 3360, 9810, 9828);
 }

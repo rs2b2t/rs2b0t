@@ -12,7 +12,7 @@ import { QUESTS } from '../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { talkThrough, type NpcStop } from '../exec/primitives.js';
 import { GARLIC, MORGAN_STAIRS_TOP, takeGarlic } from '../exec/garlic.js';
-import { FOOD_FLOAT, QuestFood } from '../food.js';
+import { QuestFood } from '../food.js';
 import { prayerUpkeep } from '../prayer.js';
 
 export const VAMPIRE_SLAYER_STAGE = {
@@ -65,7 +65,6 @@ const ITEM = {
 const COUNT_DRAYNOR_ID = 757;
 const COFFIN_CLOSED_ID = 2614;
 
-const FOOD_TARGET = FOOD_FLOAT;
 const COIN_FLOAT = 5000;
 const COIN_RESERVE = 2000;
 
@@ -73,7 +72,6 @@ const DRAYNOR_BANK = new Tile(3093, 3243, 0);
 const JOLLY_BOAR = new Tile(3277, 3490, 0);
 const VARROCK_GENERAL = { npc: 'Shop keeper', anchor: new Tile(3218, 3415, 0) };
 const VARROCK_SWORDS = { npc: 'Shop keeper', anchor: new Tile(3203, 3397, 0) };
-const KEBAB_SELLER = new Tile(3272, 3182, 0);
 const MANOR_STAIRS_DOWN = new Tile(3115, 3357, 0);
 const CRYPT_ARRIVAL = new Tile(3077, 9771, 0);
 const CRYPT_STAIRS_UP = new Tile(3077, 9768, 0);
@@ -138,10 +136,6 @@ function foodNames(): string[] {
     return [...new Map(names.map(name => [name.toLowerCase(), name])).values()];
 }
 
-function foodHeld(snap: QuestSnapshot): number {
-    return foodNames().reduce((total, name) => total + heldCount(snap, name), 0);
-}
-
 function exactKeep(): string[] {
     return [
         'coins',
@@ -168,8 +162,7 @@ function makeSpace(snap: QuestSnapshot, slots: number): QuestStep | null {
     if ([...snap.inv.keys()].some(name => !keep.includes(name))) {
         return { kind: 'deposit', keep, bank: DRAYNOR_BANK, exactKeep: true };
     }
-    // Why: a restart can hold nothing but an oversized pile of otherwise-valid quest supplies or food, and the generic deposit step cannot retain quantities.
-    // Why: the load is banked, keeping only coins, and the state machine withdraws one clean loadout.
+    // Why: a restart can hold nothing but an oversized pile of valid supplies or food and the generic deposit can't keep quantities, so bank everything but coins and withdraw 1 clean loadout.
     return { kind: 'deposit', keep: ['coins'], bank: DRAYNOR_BANK, exactKeep: true };
 }
 
@@ -182,8 +175,7 @@ function normalizePack(snap: QuestSnapshot): QuestStep | null {
 
 function sourceCoins(snap: QuestSnapshot): QuestStep | null {
     const inPack = heldCount(snap, 'Coins');
-    // One 5k withdrawal comfortably covers the beer, hammer, sword, and kebabs. Do not walk
-    // across the map after every tiny purchase to refill one or two coins.
+    // One 5k withdrawal covers the beer, hammer, sword and kebabs; don't cross the map to refill a couple of coins.
     if (inPack >= COIN_RESERVE) return null;
     const inBank = banked(snap, 'Coins');
     if (inBank <= 0) return { kind: 'wait', reason: 'need coins for Vampire Slayer supplies' };
@@ -218,8 +210,7 @@ function bankWeapon(snap: QuestSnapshot): string | null {
 
 async function leaveMorganUpper(log: (message: string) => void): Promise<boolean> {
     if (Game.tile()?.level !== 1) return true;
-    // Why: the upper staircase's map tile is blocked by its own collision shape.
-    // Why: on a restart the staircase is already in the loaded scene, so it is interacted with before navigation is asked to route onto an impossible destination.
+    // Why: the upper staircase's map tile is blocked by its own collision shape, so on a restart the loaded staircase is clicked before navigation is asked for an impossible route.
     const visible = Locs.query().name('Staircase').action('Climb-down').within(8).nearest();
     if (visible) {
         if (!(await visible.interact('Climb-down'))) return false;
@@ -244,37 +235,6 @@ async function buyBeer(log: (message: string) => void): Promise<boolean> {
     const before = Inventory.count(ITEM.BEER);
     if (!(await talkThrough('Bartender', ["I'll have a beer please."], log))) return false;
     return Execution.delayUntil(() => Inventory.count(ITEM.BEER) > before, 6000);
-}
-
-async function buyKebabs(target: number, log: (message: string) => void): Promise<boolean> {
-    if (!(await Traversal.walkResilient(KEBAB_SELLER, { radius: 2, attempts: 3, timeoutMs: 180_000, log }))) {
-        return false;
-    }
-    while (Inventory.count(ITEM.KEBAB) < target) {
-        if (Inventory.count('Coins') < 1 || Inventory.isFull()) return false;
-        const before = Inventory.count(ITEM.KEBAB);
-        if (!(await talkThrough('Kebab seller', ['Yes please.'], log))) return false;
-        if (!(await Execution.delayUntil(() => Inventory.count(ITEM.KEBAB) > before, 5000))) return false;
-    }
-    return true;
-}
-
-function sourceFood(snap: QuestSnapshot): QuestStep | null {
-    const have = foodHeld(snap);
-    if (have >= FOOD_TARGET) return null;
-    for (const name of foodNames()) {
-        const available = banked(snap, name);
-        if (available <= 0) continue;
-        const qty = Math.min(FOOD_TARGET - have, available);
-        return makeSpace(snap, qty) ?? withdraw([{ name, qty }]);
-    }
-    const coins = sourceCoins(snap);
-    if (coins) return coins;
-    const missing = FOOD_TARGET - have;
-    const space = makeSpace(snap, missing);
-    if (space) return space;
-    const target = heldCount(snap, ITEM.KEBAB) + missing;
-    return { kind: 'custom', name: `buy ${missing} combat Kebabs`, run: log => buyKebabs(target, log) };
 }
 
 async function eatFood(): Promise<boolean> {
@@ -377,12 +337,12 @@ async function fightCount(log: (message: string) => void): Promise<boolean> {
     return false;
 }
 
+// Why: a free quest is fought at low level against low-level things, so food is not what makes the loadout complete; the run still eats whatever it happens to carry.
 function completeCombatLoadout(snap: QuestSnapshot): boolean {
     return held(snap, ITEM.STAKE)
         && held(snap, ITEM.GARLIC)
         && held(snap, ITEM.HAMMER)
-        && wornWeapon(snap)
-        && foodHeld(snap) >= FOOD_TARGET;
+        && wornWeapon(snap);
 }
 
 function stageTwo(snap: QuestSnapshot, area: VampireSlayerArea): QuestStep {
@@ -432,8 +392,6 @@ function stageTwo(snap: QuestSnapshot, area: VampireSlayerArea): QuestStep {
         return { kind: 'buy', item: ITEM.SWORD, qty: 1, shop: VARROCK_SWORDS, estGp: 1000 };
     }
 
-    const food = sourceFood(snap);
-    if (food) return food;
     return { kind: 'custom', name: 'enter the crypt and defeat Count Draynor', run: fightCount };
 }
 

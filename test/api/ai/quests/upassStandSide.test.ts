@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { bySideThatLands, crossingLanding } from '#/bot/api/ai/quests/defs/upass/stand.js';
 import Tile from '#/bot/geometry/Tile.js';
 
-// Why: a seam moves the player a fixed step across itself, not the distance they walked up to it. Ranking a stand by its MIRROR about the loc scales with how far out the stand is, so a tile four out mirrors eight past the seam and outranks the cardinal neighbour that lands on the same square, and the op-click then spends three tiles walking in, which the crossing test reads as the crossing. Live: the rockslide at (2467,9723) was taken from (2471,9723), the approach walked to (2468,9723), and the leg called a successful climb "did not cross".
+// Why: rank by the fixed seam landing, not by mirroring a distant approach tile.
 
 const ROCKSLIDE = new Tile(2467, 9723, 0);
 const KOFTIK = new Tile(2449, 9716, 0);

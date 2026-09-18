@@ -103,8 +103,7 @@ const BOOT: NpcStop = {
     prefer: ["Hello. I'm in search of very high quality gold."]
 };
 
-// Why: both brothers re-issue their fragment when asked, but only while neither the pack nor the bank holds it, which is why nothing in this module ever banks one.
-// Why: Avan's line calls it a "fragment" and Caleb's a "piece".
+// Why: both brothers re-issue their fragment only while neither pack nor bank holds it, so nothing here banks one; Avan calls it a "fragment", Caleb a "piece".
 const CALEB_LOST: NpcStop = {
     npc: 'Caleb',
     anchor: FC_NPC.CALEB,
@@ -119,10 +118,7 @@ const JOHNATHON: NpcStop = {
     prefer: []
 };
 
-/**
- * Avan's NPC is called "Man" and Al Kharid is full of them, so he is addressed
- * by id. Everything else about the stop is an ordinary walk-and-talk.
- */
+/** Avan's NPC is called "Man" and Al Kharid is full of them, so he's addressed by id. */
 async function talkToAvan(prefer: string[], log: (m: string) => void): Promise<boolean> {
     const find = () => Npcs.query().where(n => n.id === FC_NPC.AVAN_NPC_ID).nearest();
     if (!find() && !(await Traversal.walkResilient(FC_NPC.AVAN, { radius: 3, attempts: 4, timeoutMs: 180_000, log }))) {
@@ -149,7 +145,7 @@ async function talkToAvan(prefer: string[], log: (m: string) => void): Promise<b
     return driveChoice(prefer, log);
 }
 
-/** Any dose cures Johnathon; `opnpcu` accepts all four. */
+/** Any dose cures Johnathon; `opnpcu` accepts all 4. */
 async function cureJohnathon(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(FC_NPC.JOHNATHON, { radius: 2, attempts: 4, timeoutMs: 180_000, log }))) {
         return false;
@@ -165,7 +161,7 @@ async function cureJohnathon(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 6000);
-    // Why: curing him promotes the stage and then opens a three-way about Chronozon with no "goodbye" until a branch is taken, so the list has to walk it out rather than stop at the first menu.
+    // Why: Curing him opens a required three-choice Chronozon dialogue with no initial exit.
     return driveChoice(['Where can I find Chronozon?', 'I will be on my way now.'], log);
 }
 
@@ -178,10 +174,7 @@ function missingFish(snap: QuestSnapshot): FcItem[] {
     return CALEB_FISH.filter(fish => held(snap, fish.id) === 0);
 }
 
-/**
- * Bank, then a shop, then park with the exact shortfall. Returns null when the
- * need is already met.
- */
+/** Source from bank, then shop, or return a wait step with the exact shortfall. */
 function source(
     snap: QuestSnapshot,
     item: FcItem,
@@ -204,9 +197,7 @@ function source(
     return { kind: 'wait', reason: `need ${short}x ${item.name} — none in the bank and nothing sells it` };
 }
 
-// Why: runes are stackable, so one withdraw covers the fight.
-// Why: the top-up is measured against a third of the buy quantity rather than against `BLAST_MINIMUM`, which is one cast of each.
-// Why: the teleport kit carries 30 fire runes, which satisfied that minimum, so the fight went in with six Fire Blasts and spent the kill phase casting nothing.
+// Why: the top-up is a third of the buy quantity; against `BLAST_MINIMUM` (one cast each) the teleport kit's 30 fire runes pass and the kill phase runs dry after 6 Fire Blasts.
 
 /** Withdraw the blast runes when the pack is short, or null. */
 function sourceRunes(snap: QuestSnapshot): QuestStep | null {
@@ -226,8 +217,7 @@ function sourceRunes(snap: QuestSnapshot): QuestStep | null {
 /** One to cure Johnathon, one for the spiders on the gate tiles. */
 const ANTIPOISON_CARRY = 2;
 
-// Why: this covers the fight and the walk out, sized to the pack rather than to appetite.
-// Why: five rune stacks, law, coins, the ring, two doses and the crest fragments leave about nineteen slots after the pre-wilderness deposit, so asking for more means a withdraw that cannot complete.
+// Why: 5 rune stacks, law, coins, the ring, 2 doses and the fragments leave about 19 slots after the pre-wilderness deposit, so more is a withdraw that can't complete.
 const ENDGAME_FOOD = 16;
 
 function sourceAntipoison(snap: QuestSnapshot, want: number): QuestStep | null {
@@ -244,23 +234,20 @@ function sourceAntipoison(snap: QuestSnapshot, want: number): QuestStep | null {
             return step;
         }
     }
-    // Jiminua is a Karamja round trip, worth it for the dose the quest cannot
-    // proceed without, not for a spare.
+    // Jiminua is a Karamja round trip, only worth it for the dose the quest can't proceed without.
     if (heldAntipoison(snap) === 0) {
         return { kind: 'buy', item: 'Antipoison(3)', qty: ANTIPOISON_CARRY, shop: SHOP.JIMINUA, estGp: ANTIPOISON_GP };
     }
     return null;
 }
 
-// Why: this is fetched at stage 8, before the walk to the Jolly Boar Inn, as Varrock East and Aubury both sit on that walk.
-// Why: sourcing each piece where it is first needed meant three separate trips back to Varrock, one for the dose that cures him, one for the blast runes, one for the spare dose.
+// Why: fetched at stage 8 since Varrock East and Aubury sit on the walk to the Jolly Boar Inn; sourcing each piece where first needed was 3 trips back to Varrock.
 
 /** Everything the Johnathon-to-Chronozon run needs, in one visit. */
 function endgameLoadout(snap: QuestSnapshot): QuestStep | null {
     const runes = sourceRunes(snap);
     if (runes) {
-        // Coins only while there is still something to buy, or this and the
-        // pre-wilderness deposit take turns undoing each other.
+        // Coins only while there's still something to buy, or this and the pre-wilderness deposit undo each other.
         return coinTopUp(snap, 150_000, LEG_BANK.chronozon) ?? runes;
     }
     const potions = sourceAntipoison(snap, ANTIPOISON_CARRY);
@@ -277,9 +264,7 @@ function endgameLoadout(snap: QuestSnapshot): QuestStep | null {
 /** Keep-lists for the deposits this quest makes; fragments are kept by id. */
 const ALWAYS_KEEP = ['coins', ...FC_FOODS.map(f => f.toLowerCase())];
 
-// Why: coins and the ring of dueling are absent on purpose, as that is what this deposit is for.
-// Why: law runes are kept, since the lair sits at wilderness level 3, far under the level-20 spell cutoff, so keeping them turns the walk home into a Varrock teleport the moment the last fragment is in hand.
-// Why: that walk crosses the black demons and giant skeletons on the way out, and it has killed a run.
+// Why: coins and the ring of dueling are what this deposit banks; law stays since the lair is wilderness level 3, under the level-20 spell cutoff, so the walk home past the black demons and giant skeletons becomes a Varrock teleport.
 const WILDERNESS_KEEP = [
     ...FC_FOODS.map(f => f.toLowerCase()),
     ...BLAST_RUNES.map(r => r.item.name.toLowerCase()),
@@ -292,8 +277,7 @@ function tidyFor(snap: QuestSnapshot, need: number, keep: string[], bank: Tile):
     return (snap.freeSlots ?? 28) >= need ? null : deposit([...ALWAYS_KEEP, ...keep], bank);
 }
 
-// Why: no quest varp is read, as none of `%crestquest` is transmitted.
-// Why: the flow runs Dimintheis → Caleb (five cooked fish) → an Al Kharid trader → Avan → Boot → perfect gold (lever puzzle, furnace, jewellery) → Avan → Johnathon (antipoison) → Chronozon (four blasts) → combine → Dimintheis.
+// Why: `%crestquest` isn't transmitted, so the journal is the only state read.
 
 /** Pure decide over journal stage plus held items. */
 export function decide(snap: QuestSnapshot): QuestStep {
@@ -311,8 +295,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
 
-    // The endgame outranks the stage: Chronozon's drop is the only evidence that
-    // stage 10 finished, and the restored crest is the only evidence of the combine.
+    // The endgame outranks the stage: Chronozon's drop is the only evidence stage 10 finished, and the restored crest the only evidence of the combine.
     if (held(snap, FC_ID.FAMILY_CREST) > 0) {
         return { kind: 'talk', stop: DIMINTHEIS_FINISH };
     }
@@ -320,13 +303,11 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return custom('combine the three crest parts', combineCrest);
     }
 
-    // Why: a fragment that should be held and is not was lost to a death, or to a run that banked it before this module existed.
-    // Why: both brothers hand theirs over again and the last one drops from Chronozon again, so this is a detour rather than a dead quest.
+    // Why: a missing fragment was lost to a death or banked; both brothers hand theirs over again and Chronozon drops his again.
     if (stage >= FC_STAGE.CALEB_WHERE && held(snap, FC_ID.CREST_FROM_CALEB) === 0) {
         return { kind: 'talk', stop: CALEB_LOST };
     }
-    // Why: at stage 8 `switch_int(%crestquest)` sends `crest_avan_piece` to `avan_where`, which is pure chat about Johnathon with no "I have lost the fragment" branch.
-    // Why: that branch lives in `avan_pieces`, the `default` case, from stage 9 on, so talking to Johnathon first advances into it.
+    // Why: at stage 8 `switch_int(%crestquest)` sends `crest_avan_piece` to `avan_where`, which has no "I have lost the fragment" branch; that lives in `avan_pieces` from stage 9 on.
     if (stage >= FC_STAGE.SPOKEN_JOHNATHON && held(snap, FC_ID.CREST_FROM_AVAN) === 0) {
         return custom('ask Avan to replace the fragment', log =>
             talkToAvan(['I have lost the fragment you gave me.'], log));
@@ -336,9 +317,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'talk', stop: DIMINTHEIS_START };
     }
 
-    // Why: one bank trip, before the first long leg, and only when the operator has nav teleports on, A* will not plan a hop the live inventory cannot pay for, and nothing else in this quest ever carries a law rune.
-    // Why: it is skipped while Chronozon is still standing, as the wilderness deposit banks the kit on purpose and re-fetching it here walked thirty law runes and a ring of dueling straight back into the fight they were banked to avoid.
-    // Why: the walk home afterwards is the price, and it is one leg.
+    // Why: one bank trip before the first long leg when nav teleports are on, since A* won't plan a hop the live inventory can't pay for and nothing else here carries law.
+    // Why: skipped while Chronozon stands, since the wilderness deposit banks the kit on purpose and re-fetching walks 30 law and a ring of dueling back into the fight.
     const fightPending = stage === FC_STAGE.CURED_JOHNATHON
         && held(snap, FC_ID.CREST_FROM_CHRONOZON) === 0;
     if (!fightPending) {
@@ -348,7 +328,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         }
     }
 
-    // --- Caleb: the five cooked fish ---
+    // Caleb: the 5 cooked fish
     if (stage <= FC_STAGE.CALEB_PIECE) {
         if (stage === FC_STAGE.SPOKEN_DIMINTHEIS) {
             return { kind: 'talk', stop: CALEB_START };
@@ -378,7 +358,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'talk', stop: CALEB_FISH_STOP };
     }
 
-    // --- The desert: an Al Kharid trader, then Avan, then Boot ---
+    // The desert: an Al Kharid trader, then Avan, then Boot
     if (stage === FC_STAGE.CALEB_WHERE) {
         return { kind: 'talk', stop: GEM_TRADER };
     }
@@ -390,7 +370,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'talk', stop: BOOT };
     }
 
-    // --- Perfect gold: mine, smelt, craft, hand over ---
+    // Perfect gold: mine, smelt, craft, hand over
     if (stage === FC_STAGE.SPOKEN_BOOT) {
         const haveRing = held(snap, FC_ID.PERFECT_RUBY_RING) > 0;
         const haveNecklace = held(snap, FC_ID.PERFECT_RUBY_NECKLACE) > 0;
@@ -411,9 +391,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
         }
 
         if (supply < outstanding) {
-            // Why: nothing in the mine can be fetched from inside it and the walk back out costs the lever chain, so everything is sourced before entering.
-            // Why: the bank is pinned to Ardougne rather than left to "nearest" because the next stop is Witchaven, from Boot, Falador is the closer booth but the Falador-then-Witchaven walk is about 90 tiles longer.
-            // Why: an unread bank is no evidence of an empty one, as deciding "buy from Nurmof" before the first scan sends the bot across the map for a pickaxe that was in the bank all along.
+            // Why: the walk back out costs the lever chain, so everything is sourced before entering.
+            // Why: the bank is pinned to Ardougne because the next stop is Witchaven; from Boot, Falador is closer but the Falador-then-Witchaven walk is about 90 tiles longer.
+            // Why: scan before deciding "buy from Nurmof", or the bot crosses the map for a pickaxe that was in the bank.
             if (!snap.bankKnown && (!hasPickaxe(snap) || !hasWeapon(snap) || heldFood(snap) === 0)) {
                 return { kind: 'scanBank', bank: LEG_BANK.mine };
             }
@@ -436,9 +416,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
             return custom('climb down into the perfect-gold mine', enterGoldMine);
         }
 
-        // Why: everything left after the mine, meaning the moulds, the rubies, the furnace and Avan himself, is in Al Kharid, so the moulds and rubies are sourced before the smelt to keep it to one trip.
-        // Why: coins come first, as a `buy` step withdraws its own `estGp` threshold, so buying the ring mould leaves the pack a few coins under it and the next purchase walks back to the bank.
-        // Why: one float covers the leg.
+        // Why: moulds, rubies, furnace and Avan are all in Al Kharid, so moulds and rubies are sourced before the smelt to keep it one trip.
+        // Why: coins first, since a `buy` step withdraws its own `estGp` and buying the ring mould leaves the pack under it for the next purchase.
         const legCoins = coinTopUp(snap, 50_000, LEG_BANK.gold);
         if (legCoins) {
             return legCoins;
@@ -456,8 +435,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
                 return step;
             }
         }
-        // Why: rubies are the one thing this quest cannot reliably buy, the Ardougne gem merchant restocks a single cut ruby every 60k ticks and no other shop stocks one.
-        // Why: the shop is tried once and the shortfall reported plainly, rather than looping on a stall the watchdog would report as "no progress".
+        // Why: the Ardougne gem merchant restocks one cut ruby every 60k ticks and no other shop stocks one, so the shop is tried once and the shortfall reported.
         const rubyShort = outstanding - held(snap, FC_ID.RUBY);
         if (rubyShort > 0) {
             const banked = fromBank(snap, { id: FC_ID.RUBY, name: FC_ITEM.RUBY }, outstanding, LEG_BANK.gold);
@@ -478,7 +456,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return custom('craft the perfect gold jewellery', craftPerfectJewellery);
     }
 
-    // --- Johnathon ---
+    // Johnathon
     if (stage === FC_STAGE.AVAN_PIECE) {
         const load = endgameLoadout(snap);
         if (load) {
@@ -497,21 +475,18 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return custom('cure Johnathon with antipoison', cureJohnathon);
     }
 
-    // --- Chronozon ---
+    // Chronozon
     if (stage === FC_STAGE.CURED_JOHNATHON) {
-        // Why: everything below is preparation and preparation re-runs every tick, which inside the lair is a trap, eating three sharks or drinking a dose drops the pack under a threshold and the bot walks out mid-fight to top up.
-        // Why: once through the gates, the fight owns what it is carrying.
+        // Why: preparation re-runs every tick, and inside the lair eating 3 sharks or drinking a dose would drop the pack under a threshold and walk the bot out mid-fight.
         if (inChronozonLair(snap.tile)) {
             return custom('kill Chronozon with the four blasts', fightChronozon);
         }
-        // Normally all fetched at stage 8; this re-runs the same list so a death
-        // re-provisions rather than walking in empty.
+        // Normally all fetched at stage 8; re-running the list re-provisions after a death.
         const load = endgameLoadout(snap);
         if (load) {
             return load;
         }
-        // Everything is bought: bank the float before stepping into the
-        // wilderness, where dying drops it. Nothing past this point costs coin.
+        // Bank the float before the wilderness, where dying drops it. Nothing past here costs coin.
         if (heldName(snap, FC_ITEM.COINS) > 0) {
             return deposit(WILDERNESS_KEEP, LEG_BANK.chronozon);
         }

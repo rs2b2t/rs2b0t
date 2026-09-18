@@ -6,7 +6,7 @@ import { pickPreferred } from '#/bot/api/ai/quests/exec/primitives.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 const MAINLAND = { x: 3093, z: 3243, level: 0 };
-/** Mid-transit between Draynor and Ardougne: the leg with no bank on it. */
+/** Midway between Draynor and Ardougne, with no bank on the route. */
 const KARAMJA = { x: 2845, z: 3175, level: 0 };
 
 interface SnapOpts {
@@ -20,7 +20,7 @@ interface SnapOpts {
     tile?: { x: number; z: number; level: number };
 }
 
-/** Coins ride along unless a case sets them: a bot mid-quest is carrying the ship fare. */
+/** Default to the ship fare carried by a bot mid-quest. */
 const withCoins = (inv: [string, number][] | undefined): [string, number][] =>
     inv === undefined || inv.some(([name]) => name === 'coins') ? (inv ?? [['coins', 1000]]) : [...inv, ['coins', 1000]];
 
@@ -50,7 +50,7 @@ describe('impcatcher decide', () => {
         expect(step.kind).toBe('wait');
     });
 
-    // Why: the imp drop table is unconditional, and the strip is 625 of walking and two ship fares from Mizgog, so gathering first spends that once instead of twice.
+    // Why: farming first avoids walking the 625-tile round trip twice.
     test('notStarted with no beads -> farm first, so the tower is one trip', () => {
         expect(decide(snap('notStarted')).kind).toBe('custom');
     });
@@ -105,7 +105,7 @@ describe('impcatcher gatherBead', () => {
         expect(step.kind).toBe('custom');
     });
 
-    // Why: the ship charges 30 coins each way, and a float topped up on every tick sails the bot home for the fare it has spent, forever.
+    // Why: topping up after each fare would keep sailing the bot home forever.
     test('a coin top-up happens on the mainland, before the crossing', () => {
         const step = gatherBead(snap('inProgress', { inv: [['coins', 0]], tile: MAINLAND }));
         expect(step.kind).toBe('withdraw');
@@ -149,7 +149,7 @@ describe('impcatcher pickImp', () => {
         ({ index, tile: { x, z, level: 0 }, distance, contested });
     const anywhere = (): boolean => true;
 
-    // Why: twenty bots that all pick the nearest imp queue on the same one; a random pick spreads them over the strip.
+    // Why: random picks spread bots across the strip instead of queueing on one imp.
     test('every valid imp gets picked over many rolls, not only the nearest', () => {
         const field = [imp(1, 2625, 3203, 20), imp(2, 2633, 3222, 4), imp(3, 2639, 3230, 12)];
         const chosen = new Set<number>();
@@ -178,7 +178,7 @@ describe('impcatcher pickImp', () => {
         expect(pickImp([imp(1, 2633, 3222, 2, true)], anywhere)).toBeNull();
     });
 
-    // Why: an imp teleports up to 20 tiles, which lands some of them behind scenery where every walk answers "unreachable".
+    // Why: imps can teleport behind unreachable scenery.
     test('a nearer imp on an unreachable tile loses to a reachable one', () => {
         const walled = imp(1, 2629, 3233, 3);
         const open = imp(2, 2633, 3222, 18);
@@ -191,7 +191,7 @@ describe('impcatcher pickImp', () => {
     });
 });
 
-// Why: "no imp within 40 tiles" cannot tell an empty scene from a filter eating every candidate, and the two have different fixes.
+// Why: separate counts distinguish an empty scene from over-filtering.
 describe('impcatcher impCensus', () => {
     const imp = (x: number, z: number, contested = false): ImpCandidate =>
         ({ index: x, tile: { x, z, level: 0 }, distance: 5, contested });
@@ -208,7 +208,7 @@ describe('impcatcher impCensus', () => {
         expect(impCensus([], () => true)).toEqual({ scene: 0, inField: 0, free: 0, reachable: 0, nearestRefused: null });
     });
 
-    // Why: a refusal 45 tiles off is the scene probe running out of BFS budget; one at 5 tiles is an obstacle in the scene, and the two need different fixes.
+    // Why: distance separates a BFS limit from a nearby obstacle.
     test('the closest refused candidate reports its distance', () => {
         const far: ImpCandidate = { index: 1, tile: { x: 2625, z: 3203, level: 0 }, distance: 45, contested: false };
         const near: ImpCandidate = { index: 2, tile: { x: 2633, z: 3222, level: 0 }, distance: 6, contested: false };
@@ -221,7 +221,7 @@ describe('impcatcher impCensus', () => {
     });
 });
 
-// Why: zero imps in the scene reads the same whether the spawns are dead or the zone never streamed, and the neighbours tell those apart.
+// Why: nearby NPC names distinguish dead spawns from an unloaded zone.
 describe('impcatcher tallyNames', () => {
     test('names are counted and ordered by how many there are', () => {
         expect(tallyNames(['Scorpion', 'Monkey', 'Scorpion', 'Snake', 'Scorpion', 'Monkey'])).toBe('Scorpion x3, Monkey x2, Snake');
@@ -243,7 +243,7 @@ describe('impcatcher nearestReachable', () => {
         expect(nearestReachable([drop(1470, 2625, 9), drop(1472, 2633, 2)], () => true)?.id).toBe(1472);
     });
 
-    // Why: another player's kill can leave a bead behind scenery, and walking at it burns the step's budget.
+    // Why: another player's drop may land behind unreachable scenery.
     test('a nearer drop on an unreachable tile loses to a reachable one', () => {
         const reachable = (tile: { x: number }): boolean => tile.x !== 2650;
         expect(nearestReachable([drop(1470, 2650, 1), drop(1472, 2633, 20)], reachable)?.id).toBe(1472);
@@ -254,7 +254,7 @@ describe('impcatcher nearestReachable', () => {
     });
 });
 
-// Why: the idle wait reports its result as the step's success, so anything in it that is true without work being available loops the step at ~20ms and the watchdog parks the quest after eight identical snapshots.
+// Why: false progress spins at ~20ms until the watchdog parks the quest.
 describe('impcatcher idleProgress', () => {
     const target = { index: 1, tile: { x: 2633, z: 3222, level: 0 }, distance: 4, contested: false };
 
@@ -271,10 +271,10 @@ describe('impcatcher idleProgress', () => {
     });
 });
 
-// Why: imps roam far enough that standing still watches empty ground, so an idle bot sweeps the strip instead.
+// Why: idle bots must sweep because imps roam out of view.
 describe('impcatcher searchTarget', () => {
     const middle = { x: IMP_STAND.x, z: IMP_STAND.z, level: 0 };
-    /** Feeds `searchTarget` a fixed sequence so a case is deterministic. */
+    /** Gives `searchTarget` deterministic rolls. */
     const rolls = (...values: number[]): (() => number) => {
         let i = 0;
         return () => values[i++ % values.length];
@@ -310,7 +310,7 @@ describe('impcatcher searchTarget', () => {
         expect(`${north.x},${north.z}`).not.toBe(`${south.x},${south.z}`);
     });
 
-    // Why: the field is a rectangle with no terrain in it, so a heading can aim at a tile the walker cannot reach and burn its budget finding out.
+    // Why: reject headings that would waste the walk budget on an unreachable tile.
     test('an unreachable heading is re-rolled rather than walked at', () => {
         const target = searchTarget(middle, rolls(0.1, 0.5, 0.6, 0.5), tile => tile.z !== 3230);
         expect(target.z).not.toBe(3230);

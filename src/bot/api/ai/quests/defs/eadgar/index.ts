@@ -48,7 +48,7 @@ function scarecrowNeed(snap: QuestSnapshot, stage: number): { logs: number; chic
     };
 }
 
-// Why: the food float only has to shrink while the grain and the chickens are still filling the pack, holding it down for the rest of stage 70 sends the character up the thrower gauntlet on four lobsters, which is what killed three live runs.
+// Why: the food float only shrinks while the grain and chickens are still filling the pack; holding it down for the rest of stage 70 sends you up the thrower gauntlet on 4 lobsters, which killed 3 runs.
 
 /** Pack slots the scarecrow still has to fill. */
 function scarecrowSlots(snap: QuestSnapshot, stage: number): number {
@@ -67,8 +67,7 @@ function sourceScarecrow(snap: QuestSnapshot, stage: number): QuestStep | null {
         ?? (need.grain > 0 ? sourceGrain(snap, need.grain) : null);
 }
 
-// Why: Tegid only parts with a robe while the quest sits at stage 70 and neither the pack nor the
-// bank already holds one, so a banked robe has to come out rather than be asked for again.
+// Why: Tegid only parts with a robe at stage 70 when neither the pack nor the bank holds one, so a banked robe has to come out first.
 function sourceRobe(snap: QuestSnapshot): QuestStep | null {
     if (!hasFlag(snap.progress, EADGAR_FLAG.NEED_CLOTHES) || held(snap, ER_ITEM.DIRTY_ROBE) > 0) {
         return null;
@@ -93,12 +92,11 @@ function parrotInHand(snap: QuestSnapshot): QuestStep | null {
     if (banked(snap, ER_ITEM.DRUNK_PARROT) > 0) {
         return withdraw(snap, [{ name: ER_ITEM.DRUNK_PARROT.name, id: ER_ITEM.DRUNK_PARROT.id, qty: 1 }]);
     }
-    // Eadgar hands out a replacement once neither the pack nor the bank has one.
+    // Eadgar replaces the item when neither inventory nor bank has one.
     return { kind: 'talk', stop: EADGAR_TALK };
 }
 
-// Why: Burntmeat only takes the dummy out of the pack, and Eadgar keeps a spare, "You bumbling
-// imbecile!" hands over another one, so a lost fake man is a walk rather than a dead run.
+// Why: Burntmeat consumes only the carried dummy, and Eadgar supplies replacements.
 function fakeManInHand(snap: QuestSnapshot): QuestStep | null {
     if (held(snap, ER_ITEM.FAKE_MAN) > 0) {
         return null;
@@ -155,8 +153,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
         case EADGAR_STAGE.SPOKE_BURNTMEAT_FIRST:
         case EADGAR_STAGE.SPOKE_BURNTMEAT:
             return prep() ?? guardedTalk(EADGAR_TALK);
-        // Why: the knife, the pineapple, the vodka and the axe all sit in the Tree Gnome Stronghold, so the axe the scarecrow's logs need at stage 60 is bought on this trip rather than paying for a second one.
-        // Why: the axe goes first, as the parrot leg ends four hundred tiles away in Ardougne and coming back for one is the walk this ordering exists to avoid.
+        // Why: the knife, the pineapple, the vodka and the axe all sit in the Tree Gnome Stronghold, so the axe the scarecrow's logs need at stage 60 is bought on this trip.
+        // Why: the axe goes first, as the parrot leg ends 400 tiles away in Ardougne and this ordering avoids coming back for one.
         case EADGAR_STAGE.NEEDS_PARROT:
             return prep() ?? sourceAxe(snap) ?? sourceParrot(snap) ?? guardedTalk(EADGAR_TALK);
         case EADGAR_STAGE.EXPLAINED_PLAN:
@@ -230,8 +228,7 @@ export const eadgar: QuestModule = {
     ],
     ownsInventory: true,
     readProgress: readEadgarProgress,
-    // Why: the mountain is a ranged gauntlet with nothing to fight back at, so the margin is food
-    // and the only lever on it is eating sooner.
+    // Why: the mountain is a ranged gauntlet with nothing to fight back at, so the margin is food and the only lever is eating sooner.
     sustain: { foods: foodNames(), eatBelowHp: 0.7 },
     warnReadiness: warnEadgarReadiness,
     observe,

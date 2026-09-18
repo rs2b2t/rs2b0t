@@ -1,4 +1,4 @@
-// Why: the path-scoped bank planner pathfinds as if bank items were held, inspects only items required by transports on the chosen route, and withdraws only those, never speculative tele runes.
+// Why: virtualize bank stock, then withdraw only the items used by the chosen route.
 
 import type { Waypoint } from './PathFinder.js';
 import type { WorldStateData } from './worldStateData.js';
@@ -24,7 +24,7 @@ interface BankPlanInput {
     directHasTeleport: boolean;
     /** Cost from current tile to nearest bank stand. */
     toBankCost: number;
-    /** Cost bank → dest with virtual bank items. */
+    /** Cost bank to dest with virtual bank items. */
     bankToDestCost: number;
     /** Items missing from inventory that the virtual path needs. */
     missing: MissingItem[];
@@ -34,17 +34,14 @@ type BankPlan =
     | { action: 'skip'; reason: string }
     | { action: 'bank'; missing: MissingItem[]; estimatedCost: number };
 
-/**
- * Merge required item counts from a path into a name → count map.
- */
+/** Merge required item counts from a path into a name to count map. */
 export function itemsRequiredByWaypoints(waypoints: Waypoint[]): Record<string, number> {
     const need: Record<string, number> = {};
     const bump = (name: string, count: number): void => {
         if (count <= 0) {
             return;
         }
-        // Why: each ship/toll fare is spent on that hop, so Port Sarim→Karamja then Brimhaven→Ardougne is 60 coins, not max(30, 30) (#709).
-        // Why: keys and tools are still a peak-hold (one Brass key opens every door that wants it).
+        // Why: sum consumable fares across hops; reusable keys and tools use their peak count.
         if (name.toLowerCase() === 'coins') {
             need[name] = (need[name] ?? 0) + count;
             return;
@@ -67,13 +64,10 @@ export function itemsRequiredByWaypoints(waypoints: Waypoint[]): Record<string, 
                     bump(it.name, it.count);
                 }
             }
-            // Why: plan time requires the ring or glory in inventory, PathFinder scans state.items via inventoryNameMatchesJewellery.
-            // Why: jewellery is never withdrawn path-scoped here, only runes and tolls.
-            // Why: there is no bank cache of jewellery for routing unless a caller passes bankItemCounts and PathFinder is given a virtualized state.
+            // Jewellery routing only sees inventory or an explicitly virtualized bank snapshot.
             continue;
         }
-        // Why: door and special-crossing tolls are keyed at the approach stand, which is often not the loc tile, the Shantay pass stand is (3304,3118) while its loc is (3302,3116).
-        // Why: resolving the same way the executor does keeps the toll visible; otherwise the region behind it reads as unreachable rather than unpaid.
+        // Why: resolve gates from the approach stand, which may differ from the loc tile.
         const prev = waypoints[i - 1] ?? wp;
         const sc = specialCrossingForTransport(
             t,
@@ -83,8 +77,7 @@ export function itemsRequiredByWaypoints(waypoints: Waypoint[]): Record<string, 
         if (sc?.requires) {
             bump(sc.requires.item, sc.requires.count);
         }
-        // Slash webs: bank plan withdraws plain Knife when no slash tool held.
-        // (Wielded blades also work at execute, no withdraw needed if canSlashWeb.)
+        // Withdraw a plain Knife unless a held or worn blade can already slash webs.
         if (isSlashWebTransport(t.locName, t.action)) {
             bump(WEB_SLASH_KNIFE_NAME, 1);
         }
@@ -98,7 +91,7 @@ export function missingItemsForPath(waypoints: Waypoint[], state: WorldStateData
     const need = itemsRequiredByWaypoints(waypoints);
     const missing: MissingItem[] = [];
     for (const [name, count] of Object.entries(need)) {
-        // Already have a slash tool (knife or blade) → do not bank-withdraw Knife.
+    // A held slash tool means no Knife withdrawal.
         if (name === WEB_SLASH_KNIFE_NAME && state.canSlashWeb === true) {
             continue;
         }
@@ -110,10 +103,7 @@ export function missingItemsForPath(waypoints: Waypoint[], state: WorldStateData
     return missing;
 }
 
-/**
- * Decide whether a bank leg is cheaper than walking direct.
- * Pure, callers supply path costs from the pathfinder.
- */
+/** Whether a bank leg is cheaper than walking direct; pure, callers supply the pathfinder costs. */
 export function planBankLeg(input: BankPlanInput): BankPlan {
     if (input.directHasTeleport) {
         return { action: 'skip', reason: 'direct path already uses teleport' };

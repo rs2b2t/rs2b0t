@@ -28,14 +28,14 @@ const heldFilledBellows = (): number | null => BELLOWS_IDS.find(id => held(id) >
 /** Rantz misses every shot he takes, and the miss is what moves the quest on. */
 const RANTZ_MISSED = /rantz keeps missing|de'ese arrows are rubbish/i;
 
-// Why: the chest hands out one pair per account and refuses in a chat line while a pair sits in the bank, so the refusal is what sends the quest to a booth rather than a speculative bank trip first.
+// Why: The chest refuses replacements while bellows are banked, so that message triggers a bank trip.
 
 /** Set once the chest has said the account already owns a pair. */
 export const ChestState = { refused: false };
 
 const CHEST_EMPTY = /find nothing in the ogre chest/i;
 
-// Why: the chest's `Unlock` is a strength roll that drains a level when it fails, so one attempt is not evidence the rock is immovable.
+// Why: the chest's `Unlock` is a strength roll that drains a level when it fails, so one attempt proves nothing about the rock.
 
 /** Lift the rock and search the ogre chest for the bellows. */
 export async function openChest(log: (m: string) => void): Promise<boolean> {
@@ -86,7 +86,7 @@ export async function openChest(log: (m: string) => void): Promise<boolean> {
     return true;
 }
 
-// Why: the pool is a block of unwalkable floor, and `nearest()` picks a bubble in the middle of it that no tile is cardinally adjacent to. The op is then sent, accepted, and never lands.
+// Why: the pool is a block of unwalkable floor, and `nearest()` picks a bubble in the middle with no cardinally adjacent tile, so the op is sent, accepted and never lands.
 
 /** Suck a full charge of swamp gas into the bellows. */
 async function fillBellows(log: (m: string) => void): Promise<boolean> {
@@ -118,7 +118,7 @@ async function fillBellows(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => held(CB_ID.BELLOWS3) > 0, 10_000);
 }
 
-// Why: a toad standing in the pool cannot be reached at all, so a failed inflate tries the next one out rather than the same nearest one again.
+// Why: a toad standing in the pool can't be reached, so a failed inflate tries the next one out.
 
 async function inflateOne(pick: number, log: (m: string) => void): Promise<boolean> {
     if (heldFilledBellows() === null && !(await fillBellows(log))) {
@@ -147,10 +147,10 @@ async function inflateOne(pick: number, log: (m: string) => void): Promise<boole
     return Execution.delayUntil(() => held(CB_ID.TOAD) > before, 12_000);
 }
 
-// Why: a placed toad lasts about a hundred ticks and only one roll in six brings a chompy, so one toad per pool trip spends the run walking.
-// Why: three is the ceiling, inflating a fourth lets one of the others hop away.
+// Why: a placed toad lasts about 100 ticks and only 1 roll in 6 brings a chompy, so one toad per pool trip spends the run walking.
+// Why: 3 is the ceiling; inflating a fourth lets one of the others hop away.
 
-/** Fill the pack with bait, up to the three the quest lets you carry. */
+/** Fill the pack with bait, up to the 3 the quest lets you carry. */
 export async function catchToad(log: (m: string) => void): Promise<boolean> {
     for (let attempt = 0; attempt < 5 && held(CB_ID.TOAD) < 3; attempt++) {
         await inflateOne(attempt, log);
@@ -179,7 +179,7 @@ async function dropBait(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     const before = held(CB_ID.TOAD);
-    // Why: `iop1` on a bloated toad is the quest's placement, not the pack's ordinary drop.
+    // Why: `iop1` on a bloated toad is the quest's placement op, so Drop here puts it down in the clearing.
     if (!(await toad.interact('Drop'))) {
         return false;
     }
@@ -188,7 +188,7 @@ async function dropBait(log: (m: string) => void): Promise<boolean> {
     return placed;
 }
 
-// Why: Rantz fires only while the player is inside twenty tiles of him, and the pool is thirty-five tiles the other way, so the bait check is made from the clearing rather than wherever the last step ended.
+// Why: Rantz only fires while you're inside 20 tiles of him and the pool is 35 tiles the other way, so the bait check is made from the clearing.
 
 async function keepBaitDown(log: (m: string) => void): Promise<boolean> {
     if (!inBaitZone(Game.tile())) {
@@ -212,7 +212,7 @@ async function keepBaitDown(log: (m: string) => void): Promise<boolean> {
 const chompyAlive = (): boolean => Npcs.query().name(CB_NPC.CHOMPY).action('Attack').within(16).exists();
 const chompyDead = (): boolean => Npcs.query().name(CB_NPC.CHOMPY).action('Pluck').within(16).exists();
 
-// Why: Rantz only fires when the player is inside twenty tiles of him, so the wait happens beside the clearing rather than back at the pool.
+// Why: Rantz only fires while you're inside 20 tiles of him, so the wait happens beside the clearing.
 
 /** Bait the clearing and stand by until Rantz has fired and missed. */
 export async function watchRantzShoot(log: (m: string) => void): Promise<boolean> {
@@ -236,7 +236,7 @@ export async function watchRantzShoot(log: (m: string) => void): Promise<boolean
     return GameMessages.sawSince(mark, RANTZ_MISSED);
 }
 
-// Why: every shot drops its arrow at the bird's feet, so the six the quest is left with are re-usable and a quiver that runs dry is a walk rather than a wall.
+// Why: every shot drops its arrow at the bird's feet, so the 6 the quest leaves you are re-usable and a dry quiver is a short walk.
 
 /** Pick the spent arrows up off the floor. */
 async function recoverArrows(): Promise<boolean> {
@@ -300,7 +300,7 @@ async function pluckChompy(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => held(CB_ID.RAW_CHOMPY) > 0, 8000);
 }
 
-// Why: the chompy flees anything that stands within two tiles of it, and its own spawn only lasts a hundred ticks, so the shot is taken from range as soon as one lands.
+// Why: the chompy flees anything within 2 tiles of it, and its spawn only lasts 100 ticks, so the shot is taken from range as soon as one lands.
 
 /** Bait, shoot and pluck one chompy bird. */
 export async function huntChompy(log: (m: string) => void): Promise<boolean> {
@@ -333,8 +333,7 @@ export async function huntChompy(log: (m: string) => void): Promise<boolean> {
         if (bird && !(await bird.interact('Attack'))) {
             return false;
         }
-        // Why: every shot spends an arrow and the quiver holds what the fletching leg could make, so a dry
-        // quiver mid-fight is answered by picking the spent arrows back up rather than waiting out the window.
+        // Why: every shot spends an arrow and the quiver holds what the fletching leg could make, so a dry quiver mid-fight is answered by picking the spent arrows back up.
         const deadline = performance.now() + 60_000;
         while (performance.now() < deadline && !chompyDead()) {
             if (!Equipment.contains(CB_NAME.ARROW)) {

@@ -14,6 +14,10 @@ that quest steps are built from:
 | `talkOp(actions)` / `pickPreferred(options, prefer)` | choosing an op or an option |
 | `isUnderground(t)` / `needsHop(here, anchor)` | whether a level change is required |
 
+A `LadderHop` names `stand` for the loc find radius. Set `walk` when that stand is
+behind a door the baked graph cannot pin, so the long-walk dest is a reachable hall
+tile rather than the interior pin.
+
 [`exec/prompts.ts`](../../src/bot/api/ai/quests/exec/prompts.ts) covers the other half, the
 world, rather than a conversation:
 

@@ -8,6 +8,11 @@ export interface Rect {
     h: number;
 }
 
+export interface RailRow {
+    y: number;
+    h: number;
+}
+
 export interface Region extends Rect {
     id: string;
     kind: 'panel' | 'widget' | 'scroll';
@@ -37,10 +42,7 @@ export function toCanvasPoint(clientX: number, clientY: number, rect: { left: nu
 
 const inRect = (r: Rect, x: number, y: number): boolean => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
 
-/**
- * Wrap-around option cycle for paint steppers / selects.
- * `delta` of −1 is previous, +1 is next. Unknown `current` starts at index 0.
- */
+/** Wrap an option index; -1 moves back, +1 moves forward, and unknown values start at 0. */
 export function cycleOption(options: readonly string[], current: string, delta: number): string {
     if (options.length === 0) {
         return current;
@@ -102,10 +104,7 @@ export class PaintState {
         return this.clicks.delete(id);
     }
 
-    /**
-     * Route a wheel notch to whatever scrollable region is under the cursor.
-     * Why: true means it landed on one, so the canvas can swallow the event instead of letting the game zoom.
-     */
+    /** Queue a wheel notch for the region under the cursor; true means the canvas should consume it. */
     wheel(x: number, y: number, delta: number): boolean {
         const hit = hitRegion(this.regions, x, y);
         if (!hit || hit.kind !== 'scroll') {
@@ -152,10 +151,7 @@ export function paintCols(w: number, pad: number, charW: number): number {
     return Math.max(0, Math.floor((w - pad * 2) / charW));
 }
 
-/**
- * Word-wrap `text` to `cols` characters, indenting continuation lines by
- * `indent` spaces so a wrapped entry still reads as one entry.
- */
+/** Wrap text to `cols`, indenting continuation lines by `indent` spaces. */
 export function wrapText(text: string, cols: number, indent = 0): string[] {
     if (cols <= 0) {
         return [];
@@ -269,23 +265,34 @@ export function paintSkillShort(skill: string): string {
             return 'Cook';
         case 'mining':
             return 'Mine';
-        default:
-            return skill;
-    }
-}
-
-export function paintSkillTitle(skill: string): string {
-    switch (skill) {
-        case 'woodcutting':
-            return 'Woodcutting';
-        case 'firemaking':
-            return 'Firemaking';
-        case 'fishing':
-            return 'Fishing';
-        case 'cooking':
-            return 'Cooking';
-        case 'mining':
-            return 'Mining';
+        case 'attack':
+            return 'Att';
+        case 'strength':
+            return 'Str';
+        case 'defence':
+            return 'Def';
+        case 'hitpoints':
+            return 'HP';
+        case 'ranged':
+            return 'Range';
+        case 'magic':
+            return 'Mage';
+        case 'prayer':
+            return 'Pray';
+        case 'crafting':
+            return 'Craft';
+        case 'smithing':
+            return 'Smith';
+        case 'herblore':
+            return 'Herb';
+        case 'agility':
+            return 'Agil';
+        case 'thieving':
+            return 'Thief';
+        case 'fletching':
+            return 'Fletch';
+        case 'runecraft':
+            return 'RC';
         default:
             return skill;
     }
@@ -307,16 +314,6 @@ export function paintClip(text: string, max = 52): string {
     return clipText(text.trim(), max);
 }
 
-export function fmtXpGained(n: number): string {
-    if (n <= 0) {
-        return '+0';
-    }
-    if (n >= 1000) {
-        return `+${(n / 1000).toFixed(1)}k`;
-    }
-    return `+${n}`;
-}
-
 export function fmtXpHr(gained: number, mins: number): string {
     if (mins <= 0.5) {
         return '—';
@@ -336,4 +333,52 @@ export function gatherPaintAccent(kind: 'fish' | 'mine' | 'wc' | 'other'): strin
         default:
             return '#9be05b';
     }
+}
+
+export interface Slot {
+    x: number;
+    w: number;
+}
+
+export interface StripSegments {
+    tabs: Slot[];
+    status: Slot;
+    brand: Slot;
+}
+
+/** Title-row slots: tabs from the left, brand hard right, status filling the gap. */
+export function stripSegments(w: number, tabWidths: readonly number[], brandWidth: number, pad: number): StripSegments {
+    const tabs: Slot[] = [];
+    let x = pad;
+    for (const tw of tabWidths) {
+        tabs.push({ x, w: tw });
+        x += tw;
+    }
+    const brandX = Math.max(x, w - pad - brandWidth);
+    const statusX = x;
+    return {
+        tabs,
+        status: { x: statusX, w: Math.max(0, brandX - statusX) },
+        brand: { x: brandX, w: brandWidth }
+    };
+}
+
+/** Even vertical slices of the rail, never shorter than a pixel. */
+export function railRows(h: number, count: number): RailRow[] {
+    if (count <= 0) {
+        return [];
+    }
+    const each = Math.max(1, Math.floor(h / count));
+    return Array.from({ length: count }, (_, i) => ({ y: i * each, h: each }));
+}
+
+/** Equal columns filling the body to the right of the rail. */
+export function statColumns(panelW: number, railW: number, pad: number, columns: number): Slot[] {
+    const left = railW + pad;
+    const room = panelW - left - pad;
+    if (columns <= 0 || room <= 0) {
+        return [];
+    }
+    const each = room / columns;
+    return Array.from({ length: columns }, (_, i) => ({ x: left + i * each, w: each }));
 }

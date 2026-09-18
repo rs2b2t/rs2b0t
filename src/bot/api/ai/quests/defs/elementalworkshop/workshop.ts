@@ -47,7 +47,7 @@ async function walkNear(tile: Tile, radius: number, log: (m: string) => void): P
 }
 
 async function closeBookModal(): Promise<void> {
-    // Reading the battered book opens a book interface (main modal), not a chat box.
+    // Reading the battered book opens a book interface as the main modal.
     const deadline = performance.now() + BOOK_MODAL_MS;
     while (performance.now() < deadline) {
         if (reader.modals().main === -1) {
@@ -118,7 +118,7 @@ export async function slashBookForKey(log: (m: string) => void): Promise<boolean
     }
 
     let knife = findHeldSlashTool();
-    // useOn needs a pack item, if the only blade is worn, remove it first.
+    // useOn needs a pack item, so a worn-only blade comes off first.
     if (!knife) {
         const wornBlade = Equipment.items().find(i => isSlashToolName(i.name));
         if (wornBlade?.name) {
@@ -143,14 +143,13 @@ export async function enterWorkshop(log: (m: string) => void): Promise<boolean> 
     if (ewArea(Game.tile()) === 'workshop') {
         return true;
     }
-    // Stand outside the smithy, do not path onto the wall loc tile (unwalkable).
+    // Stand outside the smithy; the wall loc tile is unwalkable.
     if (!(await walkNear(SMITHY, 4, log))) {
         return false;
     }
     await settleScene();
 
-    // The "Odd looking wall" is not a normal door: oplocu with the Battered key opens it.
-    // Push only works after it is already unlocked for this player.
+    // The "Odd looking wall" opens by oplocu with the Battered key; Push only works once it's unlocked for this player.
     const wall = Locs.query().name('Odd looking wall').within(10).nearest();
     if (!wall) {
         log('no Odd looking wall near the Seers smithy');
@@ -268,7 +267,7 @@ async function turnValve(valve: Loc, label: string, log: (m: string) => void): P
         return 'fail';
     }
     await settleScene();
-    // Re-query, scene may have resettled after the walk.
+    // Re-query; the scene may have resettled after the walk.
     const live = Locs.query().name('Water Valve').action('Turn').within(6).nearest()
         ?? valve;
     if (!(await live.interact('Turn'))) {
@@ -291,7 +290,7 @@ async function turnValve(valve: Loc, label: string, log: (m: string) => void): P
 
 // Why: right (valve_1) may only toggle while left is off, and left (valve_2) always toggles.
 // Why: the lever needs both bits set, and the wrong order answers "flow gates resetting".
-// Why: a running wheel with the lever pulled stops it, so success is only reported on a verified start or on locked valves.
+// Why: pulling the lever on a running wheel stops it, so success means a verified start or locked valves.
 
 /** Try one valve order and report whether the flow started. */
 async function tryValveOrder(
@@ -361,7 +360,7 @@ export async function startWaterWheel(log: (m: string) => void): Promise<boolean
     log(`valves at (${hi.tile().x},${hi.tile().z}) and (${lo.tile().x},${lo.tile().z})`);
 
     // Guide says east then west. Server needs right-bit first (only toggles while left is off).
-    // If compass mapping is inverted, the reverse order is tried after a reset.
+    // If the compass mapping is inverted, retry in reverse order after a reset.
     let result = await tryValveOrder(hi, lo, 'higher-x then lower-x', log);
     if (result === 'reset') {
         log('flow gates reset — retrying reverse valve order (valves are off again)');
@@ -541,7 +540,7 @@ async function _waitOutCombat(ms: number): Promise<void> {
     await Execution.delayUntil(() => !Game.inCombat(), ms);
 }
 
-/** Prefer a live weapon, unarmed maxed accounts still stall forever on the rock elemental. */
+/** Prefer a wielded weapon; even maxed accounts stall forever unarmed on the rock elemental. */
 async function ensureMeleeWeapon(log: (m: string) => void): Promise<void> {
     if (Equipment.items().some(i => {
         const n = i.name?.toLowerCase() ?? '';
@@ -562,12 +561,12 @@ async function ensureMeleeWeapon(log: (m: string) => void): Promise<void> {
     await Equipment.equip(weapon.name);
 }
 
-/** Earth elementals in the water/air wings do not drop quest ore, only the rock spawn does. */
+/** Only the rock-spawn Earth elemental drops quest ore; the ones in the water/air wings don't. */
 function nearRockPocket(tile: { x: number; z: number } | null | undefined): boolean {
     if (!tile) {
         return false;
     }
-    // West mining wing (live runs drift to ~2690–2712, z ~9880–9905).
+    // West mining wing (live runs drift to x 2690-2712, z 9880-9905).
     return tile.x >= 2688 && tile.x <= 2714 && tile.z >= 9875 && tile.z <= 9910;
 }
 
@@ -579,7 +578,7 @@ function earthAtRock(): Npc | null {
         .nearest();
 }
 
-/** Prefer exact object id, name match alone can miss depending on scene load order. */
+/** Prefer the object id; a name match alone can miss depending on scene load order. */
 function findOreOnGround(): GroundItem | null {
     return GroundItems.query()
         .where(g => g.id === EW_ITEM.ELEMENTAL_ORE.id)
@@ -588,10 +587,7 @@ function findOreOnGround(): GroundItem | null {
         ?? GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(24).nearest();
 }
 
-/**
- * Loot Elemental ore after the rock-spawn death. Drop can land a few tiles off and
- * appears a tick or two after the NPC is gone, wait, walk, and retry Take.
- */
+/** Loot Elemental ore after the rock-spawn death. The drop can land a few tiles off and shows up a tick or two after the NPC is gone, so wait, walk and retry Take. */
 async function takeElementalOre(log: (m: string) => void): Promise<boolean> {
     if (heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0) {
         return true;
@@ -663,8 +659,8 @@ async function freeSlotForOre(log: (m: string) => void): Promise<void> {
     await Execution.delayUntil(() => !Inventory.isFull(), 3_000);
 }
 
-// Why: standing "Earth elemental" NPCs in the workshop drop no quest ore, only `earth_elemental_rock_version` after Mine does, and only for the hero.
-// Why: the step therefore always mines first and never attacks a pre-existing earth elemental.
+// Why: standing "Earth elemental" NPCs drop no quest ore; only `earth_elemental_rock_version` after Mine does, and only for the hero.
+// Why: mine first, never attack a pre-existing earth elemental.
 
 /** Mine the west-chamber rock, which spawns the rock Earth elemental, and take the ore. */
 export async function mineElementalOre(log: (m: string) => void): Promise<boolean> {
@@ -764,10 +760,7 @@ export async function mineElementalOre(log: (m: string) => void): Promise<boolea
     return false;
 }
 
-/**
- * Smelt ore + 4 coal. Air is not journal-visible and the air lever toggles,
- * try the furnace first; only pull air when the server says it needs more heat.
- */
+/** Smelt ore + 4 coal. Air isn't journal-visible and the air lever toggles, so try the furnace first and only pull air when the server asks for more heat. */
 export async function smeltElementalBar(log: (m: string) => void): Promise<boolean> {
     if (heldId(EW_ITEM.ELEMENTAL_METAL.id) > 0) {
         return true;

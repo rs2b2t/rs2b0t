@@ -19,22 +19,22 @@ export function inMainHall(): boolean {
     return here !== null && here.level === 0 && here.x >= 2722 && here.x <= 2733 && here.z >= 3374 && here.z <= 3390;
 }
 
-// Why: at stage 0 the gate answers Open by summoning a guard and starting his conversation instead of swinging, so the walker cannot cross it on its own.
-// Why: the guard's own "Yes, I'd like to talk to Grand Vizier Erkle" branch opens the gate and teleports the player through, which is the only way in before the quest starts.
+// Why: At stage 0, Open starts the guard dialogue instead of crossing the gate.
+// Why: the guard's "Yes, I'd like to talk to Grand Vizier Erkle" branch opens the gate and teleports you through, the only way in before the quest starts.
 
 const GUARD_PREFER = [
     "Yes, I'd like to talk to Grand Vizier Erkle",
     'Can I go on the quest?',
     'What is this place?',
-    // Why: last, so it is only taken when none of the ways in are on offer, and then it makes the guard read the missing quests into the log rather than leaving the refusal unexplained.
+    // Why: last, so it's only taken when none of the ways in are on offer, and then the guard reads the missing quests into the log.
     'Which quests do I need to complete?'
 ];
 
-// Why: `legends_guard_eligible` answers a short quest list with a `multi2` the entry options are not in, and a short quest-point total with a `chatnpc` and no menu at all. The conversation ends there. Either way the drive returns with the gate shut, the step fails, and the engine sends the run back to the same guard for as long as it is left running.
+// Why: Failed eligibility can end without an entry option, so detect the closed gate instead of retrying the guard indefinitely.
 const GUARD_REFUSED = /complete more quests|107 quest points|quest point/i;
 
-// Why: `legends_guard_start` only has a conversation before the quest starts. From stage one on he nods you past and says nothing at all, so `Reach.npcDialog` waits out its budget on a chat that is never coming, which is what parked a run carrying the gilded totem back to Radimus, five times over.
-// Why: from then on the gate is the way in. `open_legends_gate` looks for a guard within fourteen tiles, has him nod, and swings the doors for anyone past `legends_not_started`.
+// Why: `legends_guard_start` only has a conversation before the quest starts; from stage 1 on he nods you past and says nothing, so `Reach.npcDialog` would wait out its budget on a chat that never comes.
+// Why: from then on the gate is the way in: `open_legends_gate` looks for a guard within 14 tiles, has him nod, and swings the doors for anyone past `legends_not_started`.
 
 /** The gate line; north of it is the guild side. */
 const GUILD_GATE_Z = 3349;
@@ -80,14 +80,14 @@ export async function enterGuild(log: (m: string) => void): Promise<boolean> {
     if (Quests.status(LEGENDS_QUEST) !== 'notStarted') {
         return walkThroughGate(log);
     }
-    // Why: the guard patrols, so the leash-limited `gotoNpc` loses him, `Reach` searches the scene and lets the server chase.
+    // Why: the guard patrols, so the leash-limited `gotoNpc` loses him; `Reach` searches the scene and lets the server chase.
     const status = await Reach.npcDialog({ name: LQ_NPC.GUARD, near: LQ_TILE.GUARD, log });
     if (status !== 'done') {
         log('the Legends guard never opened a dialogue');
         return false;
     }
-    // Why: the gate opens inside the conversation and teleports us through, so the goal is the tile rather than the dialogue closing.
-    // Why: the refusal is caught while the chat is still up, since it is gone from `modalText` the moment the conversation closes.
+    // Why: the gate opens inside the conversation and teleports us through, so the goal is the tile.
+    // Why: the refusal is caught while the chat is still up, since it's gone from `modalText` once the conversation closes.
     let refused = '';
     const entered = await driveUntil(
         () => {
@@ -134,7 +134,7 @@ export async function startQuest(log: (m: string) => void): Promise<boolean> {
     return driveUntil(() => heldId(LQ_ID.MAP) > 0, START_PREFER, log, 60_000);
 }
 
-// Why: `radimus_erkle_midquest` only offers the lost-map topic when neither map is held, and it charges thirty coins for the copy.
+// Why: `radimus_erkle_midquest` only offers the lost-map topic when neither map is held, and it charges 30 coins for the copy.
 
 const LOST_MAP_PREFER = [
     'Terrible, I lost my map of the Kharazi Jungle.',
@@ -162,7 +162,7 @@ export async function replaceMap(log: (m: string) => void): Promise<boolean> {
 }
 
 // Why: the cupboard is a shut loc that becomes an open one, and only the open half carries Search.
-// Why: the Search branch returns silently unless Radimus is within five tiles, so it is only ever run from his study.
+// Why: the Search branch returns silently unless Radimus is within 5 tiles, so it's only ever run from his study.
 
 /** Take the free machete out of Radimus' cupboard. */
 export async function takeMachete(log: (m: string) => void): Promise<boolean> {
@@ -238,9 +238,9 @@ export async function enterMainHall(log: (m: string) => void): Promise<boolean> 
     return ok;
 }
 
-// Why: one conversation walks all four sessions, each choice re-offers the menu until the fourth, which queues the completion.
-// Why: the four menus are `p_choice4` pages of three skills and a link to the next, so reaching a skill off page one means taking the link until its page is up.
-// Why: every page carries one link and no more, so listing all four costs nothing and the chosen skill coming first is what makes the walk stop when it arrives.
+// Why: one conversation walks all 4 sessions, each choice re-offers the menu until the 4th, which queues the completion.
+// Why: the 4 menus are `p_choice4` pages of 3 skills and a link to the next, so reaching a skill off page 1 means taking the link until its page is up.
+// Why: every page carries one link, so listing all 4 costs nothing and the chosen skill coming first stops the walk when it arrives.
 
 /** Say yes, then page to the chosen skill and take it. */
 function trainingPrefer(): string[] {
@@ -254,7 +254,7 @@ function trainingPrefer(): string[] {
     ];
 }
 
-/** Take Radimus' four training sessions, which is what completes the quest. */
+/** Take Radimus' 4 training sessions, which completes the quest. */
 export async function takeTraining(log: (m: string) => void): Promise<boolean> {
     if (!(await enterMainHall(log))) {
         return false;

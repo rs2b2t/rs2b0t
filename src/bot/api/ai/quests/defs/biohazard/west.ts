@@ -12,8 +12,7 @@ import { BIO_ITEM, BIO_LOC, BIO_TILE, SICK_MOURNER_ID } from './areas.js';
 import { heldId, wear } from './gear.js';
 import { enterHq, locById, walkTo } from './travel.js';
 
-// Why: the third answer is the only one that does not accuse the bot of being a fake doctor
-// before the fight, and all three end in the same `~npc_retaliate(0)`.
+// Why: The third choice avoids the fake-doctor branch; all three still end at `~npc_retaliate(0)`.
 const MOURNER_PREFER = ["There's nothing I can do, it's fatal."];
 
 /** Ticks of fighting before the mourner counts as stuck. Level 13, 19 hitpoints. */
@@ -21,7 +20,7 @@ const FIGHT_GUARD = 300;
 /** A lobster's worth of damage is enough to eat on. */
 const EAT_AT_MISSING = 15;
 // Why: the key arrives from `queue,defeat_biohazard_mourner`, run after the death animation and `npc_del`, so the corpse is gone for several ticks before the pack changes.
-/** Ticks with nothing to hit before the kill counts as landed without a key. */
+/** Empty-target ticks before treating the kill as complete without a key. */
 const MISSING_TO_WIN = 10;
 
 export async function takeRottenApples(log: (m: string) => void): Promise<boolean> {
@@ -41,8 +40,7 @@ export async function takeRottenApples(log: (m: string) => void): Promise<boolea
     return Execution.delayUntil(() => heldId(BIO_ITEM.ROTTEN_APPLES.id) > 0, 8000);
 }
 
-// Why: the cauldron sits in the headquarters yard, and the only way in that is not the
-// gown-locked building is the Climb-over fence at 2541,3331, a curated transport.
+// Why: the cauldron sits in the headquarters yard, and the only way in that skips the gown-locked building is the Climb-over fence at 2541,3331, a curated transport.
 export async function poisonTheStew(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(BIO_TILE.CAULDRON, 1, log))) {
         return false;
@@ -60,8 +58,7 @@ export async function poisonTheStew(log: (m: string) => void): Promise<boolean> 
     if (!(await driveUntil(() => heldId(BIO_ITEM.ROTTEN_APPLES.id) === 0, [], log, 20_000))) {
         return false;
     }
-    // Why: the apple dissolves three ticks before the stage moves, so returning on the empty slot
-    // hands the next decide a journal that still says "fetch rotten apples".
+    // Why: the apple dissolves 3 ticks before the stage moves, so returning on the empty slot hands the next decide a journal that still says "fetch rotten apples".
     await Execution.delayTicks(5);
     return true;
 }
@@ -100,7 +97,7 @@ function hungry(): boolean {
     return max > 0 && Skills.effective('hitpoints') <= max - EAT_AT_MISSING;
 }
 
-// Why: the key only drops for the player the mourner is aggressive toward, and `%npc_aggressive_player` is set by `~npc_retaliate`, which is what the doctor dialogue calls, so Attack alone is not guaranteed to claim him.
+// Why: the key only drops for the player the mourner is aggressive toward, and `~npc_retaliate` from the doctor dialogue is what sets `%npc_aggressive_player`, so Attack alone may not claim him.
 // Why: he respawns 140 ticks after dying, so the talk, the fight and the search are one step.
 async function fightForKey(log: (m: string) => void): Promise<boolean> {
     let swings = 0;
@@ -177,8 +174,7 @@ export async function takeMournerKey(log: (m: string) => void): Promise<boolean>
     if (!(await npc.interact('Talk-to'))) {
         return false;
     }
-    // Why: `talkStrict` would re-find "Mourner" by display name and could open a different one;
-    // the click is already sent, so this only drives the prompt it raised.
+    // Why: `talkStrict` would re-find "Mourner" by display name and could open a different one; the click is already sent, so this only drives the prompt it raised.
     if (await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 8000)) {
         await driveChoice(MOURNER_PREFER, log);
     }

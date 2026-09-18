@@ -1,6 +1,4 @@
-/**
- * Build WorldStateData from live client APIs (main thread only, not for NavWorker).
- */
+/** Build WorldStateData from live client APIs (main thread only). */
 
 // eslint-disable-next-line no-restricted-imports -- TODO: route through ClientAdapter
 import { Client } from '#/client/shell/Client.js';
@@ -94,15 +92,13 @@ export function snapshotWorldStateData(): WorldStateData {
     const entranaRestrictedGear = namesHaveEntranaRestrictedGear([...invNames, ...wornNames]);
 
     const here = reader.worldTile();
-    // Omit wildernessLevel when tile is unknown so planners fall back to
-    // wildernessLevelAt(from) rather than treating missing as safe level 0.
+    // Omit wildernessLevel when the tile is unknown so planners fall back to wildernessLevelAt(from); missing must never read as level 0.
     const wildernessLevel = here ? wildernessLevelAt(here) : undefined;
     const essenceExitReturn = snapshotEssenceExitReturn();
     const canSlashWeb = recordsHaveSlashTool(items, worn);
 
     return {
-        // Client.memServer is set at boot from world config (members vs free world).
-        // Never hardcode true, free-world snapshots must fail members-gated edges.
+        // Client.memServer is set at boot from world config; a free-world snapshot must fail members-gated edges.
         members: Client.memServer === true,
         skills,
         quests,

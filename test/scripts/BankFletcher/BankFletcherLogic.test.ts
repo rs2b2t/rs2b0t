@@ -222,6 +222,9 @@ describe('keepNames — knife or bow string stays, attach keeps nothing', () => 
     test('arrow attach deposits the whole pack', () => {
         expect(keepNames('attach', 'Knife')).toEqual([]);
     });
+    test('cut+string keeps the bow string and the knife across both phases', () => {
+        expect(keepNames('cut+string', 'Knife')).toEqual([BOW_STRING, 'Knife']);
+    });
 });
 
 describe('needsRestock / hasFletchWork', () => {
@@ -247,6 +250,19 @@ describe('needsRestock / hasFletchWork', () => {
         expect(needsRestock({ kind: 'string', logCount: 0, knifeCount: 0, input0: 0, input1: 14 })).toBe(true);
         expect(needsRestock({ kind: 'string', logCount: 0, knifeCount: 0, input0: 80, input1: 0 })).toBe(true);
         expect(needsRestock({ kind: 'string', logCount: 0, knifeCount: 0, input0: 80, input1: 14 })).toBe(false);
+    });
+
+    test('cut+string banks only when neither phase can run', () => {
+        expect(needsRestock({ kind: 'cut+string', logCount: 12, knifeCount: 1, input0: 0, input1: 0 })).toBe(false);
+        expect(needsRestock({ kind: 'cut+string', logCount: 0, knifeCount: 0, input0: 14, input1: 14 })).toBe(false);
+        expect(needsRestock({ kind: 'cut+string', logCount: 12, knifeCount: 0, input0: 0, input1: 0 })).toBe(true);
+        expect(needsRestock({ kind: 'cut+string', logCount: 0, knifeCount: 1, input0: 14, input1: 0 })).toBe(true);
+    });
+
+    test('cut+string has work while either phase has its inputs', () => {
+        expect(hasFletchWork({ kind: 'cut+string', logCount: 12, knifeCount: 1, input0: 0, input1: 0 })).toBe(true);
+        expect(hasFletchWork({ kind: 'cut+string', logCount: 0, knifeCount: 0, input0: 14, input1: 14 })).toBe(true);
+        expect(hasFletchWork({ kind: 'cut+string', logCount: 0, knifeCount: 1, input0: 0, input1: 14 })).toBe(false);
     });
 });
 

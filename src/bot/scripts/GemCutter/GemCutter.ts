@@ -78,7 +78,7 @@ export default class GemCutter extends TaskBot {
             this.plannedLevel = level;
             this.refreshEligible();
         }
-        // Stop if all eligible gems are confirmed empty in bank
+        // Stop after the bank confirms every eligible gem is empty.
         const remaining = this.eligible.filter(g => !this.confirmedEmpty.has(g.key));
         if (remaining.length === 0) {
             this.log('All selected gems confirmed empty in bank — stopping');
@@ -168,7 +168,7 @@ class Cut implements Task {
         if (Bank.isOpen()) {
             return false;
         }
-        // Need both chisel and uncut gems
+        // Cutting needs both a chisel and an eligible gem.
         const chisel = Inventory.items().find(i => i.id === CHISEL_ID);
         return chisel !== null && this.bot.peekCuttable() !== null;
     }
@@ -179,14 +179,13 @@ class Cut implements Task {
             return;
         }
 
-        // Find the LAST uncut gem in inventory (highest slot index)
-        // Clicking the last slot lets the game process from the end of the stack
+        // Use the highest slot so the game processes backward through the stack.
         let targetItem: InvItem | null = null;
         let targetGem: GemDef | null = null;
         for (const gem of this.bot.targets()) {
             const items = Inventory.items().filter(i => i.id === gem.uncutId);
             if (items.length > 0) {
-                targetItem = items[items.length - 1]; // last slot
+                targetItem = items[items.length - 1]; // highest slot
                 targetGem = gem;
                 break;
             }
@@ -198,18 +197,17 @@ class Cut implements Task {
 
         this.bot.setStatus(`cutting ${targetGem.name}s`);
 
-        // Spam click the chisel on the LAST uncut gem repeatedly
-        // Clicking the last slot lets the game process from the end of the stack
+        // Queue chisel actions against the highest uncut slot.
         const startXp = Skills.xp('crafting');
-        const maxSpam = 60; // safety cap
+        const maxSpam = 60; // packet-burst cap
 
         for (let i = 0; i < maxSpam; i++) {
             if (Inventory.countById(targetGem.uncutId) === 0) break;
             if (Inventory.countById(CHISEL_ID) === 0) break; // chisel broke
-            chisel.useOn(targetItem); // fire and forget - true spam
+            chisel.useOn(targetItem); // queue without waiting
         }
 
-        // Settle: wait for xp to increase
+        // Wait for the server to award XP.
         await Execution.delayUntil(
             () => Skills.xp('crafting') > startXp,
             3000

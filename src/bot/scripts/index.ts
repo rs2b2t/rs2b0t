@@ -28,7 +28,7 @@ import ChickenKiller, { SETTINGS as CHICKEN_SETTINGS } from './ChickenKiller/Chi
 import CowKiller, { SETTINGS as COWKILLER_SETTINGS } from './ChickenKiller/CowKiller.js';
 import ClueSolver, { SETTINGS as CLUESOLVER_SETTINGS } from './ClueSolver/ClueSolver.js';
 import CookBot, { SETTINGS as COOKBOT_SETTINGS } from './CookBot/CookBot.js';
-import GatheringBot, { GATHERING_SETTINGS } from './GatheringBot/GatheringBot.js';
+import GatheringBot, { FEATHER_BUYOUT_GP, FEATHER_RESTOCK_MINUTES, GATHERING_SETTINGS } from './GatheringBot/GatheringBot.js';
 import Woodcutter, { WOODCUTTER_SETTINGS } from './GatheringBot/Woodcutter.js';
 import { FORGETFUL_BANK_SETTING, TOOL_ACQUIRE_SETTING } from '../api/acquisition/ToolAcquire.js';
 import AIOQuester, { AIO_SETTINGS } from './AIOQuester/AIOQuester.js';
@@ -36,7 +36,16 @@ import MossGiant, { SETTINGS as MOSSGIANT_SETTINGS } from './MossGiant/MossGiant
 import BrimhavenMossGiants, { SETTINGS as BRIMHAVEN_MOSS_GIANTS_SETTINGS } from './BrimhavenMossGiants/BrimhavenMossGiants.js';
 import GreenDragon, { SETTINGS as GREENDRAGON_SETTINGS } from './GreenDragon/GreenDragon.js';
 import FireGiant, { SETTINGS as FIREGIANT_SETTINGS } from './FireGiant/FireGiant.js';
+import JiveDragons, { SETTINGS as JIVEDRAGONS_SETTINGS } from './JiveDragons/JiveDragons.js';
+import JiveDemons, { SETTINGS as JIVEDEMONS_SETTINGS } from './JiveDemons/JiveDemons.js';
+import JiveEnchanter, { SETTINGS as JIVEENCHANTER_SETTINGS } from './JiveEnchanter/JiveEnchanter.js';
+import JiveKBD, { SETTINGS as JIVEKBD_SETTINGS } from './JiveKBD/JiveKBD.js';
+import JiveKQ, { SETTINGS as JIVEKQ_SETTINGS } from './JiveKQ/JiveKQ.js';
+import JiveCrafting, { SETTINGS as JIVECRAFTING_SETTINGS } from './JiveCrafting/JiveCrafting.js';
+import JiveChests, { SETTINGS as JIVECHESTS_SETTINGS } from './JiveChests/JiveChests.js';
+import JiveMarketDumper, { SETTINGS as JIVEMARKETDUMPER_SETTINGS } from './JiveMarketDumper/JiveMarketDumper.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab/RockCrab.js';
+import RangingGuild, { RANGING_GUILD_SETTINGS } from './RangingGuild/RangingGuild.js';
 import ThievingBot, { SETTINGS as THIEVING_SETTINGS } from './ThievingBot/ThievingBot.js';
 import WalkToBot, { WALKTO_SETTINGS } from './WalkToBot/WalkToBot.js';
 import DoorOpener, { SETTINGS as DOOROPENER_SETTINGS } from './DoorOpener/DoorOpener.js';
@@ -52,8 +61,10 @@ import LeatherCrafter, { CRAFTER_SETTINGS } from './LeatherCrafter/LeatherCrafte
 import Firemaker, { FIREMAKER_SETTINGS } from './Firemaker/Firemaker.js';
 import SmithingBot, { SETTINGS as SMITHING_SETTINGS } from './SmithingBot/SmithingBot.js';
 import BankFletcher, { SETTINGS as BANKFLETCHER_SETTINGS } from './BankFletcher/BankFletcher.js';
+import BankSorter, { BANKSORTER_SETTINGS } from './BankSorter/BankSorter.js';
 import DartFletcher, { DART_FLETCHER_SETTINGS } from './DartFletcher/DartFletcher.js';
 import BoneBurier, { BONE_BURIER_SETTINGS } from './BoneBurier/BoneBurier.js';
+import FlourCollector from './FlourCollector/FlourCollector.js';
 import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker/FlaxPicker.js';
 import FlaxSpinner, { SETTINGS as FLAXSPINNER_SETTINGS } from './FlaxSpinner/FlaxSpinner.js';
 import FlaxAIO, { SETTINGS as FLAXAIO_SETTINGS } from './FlaxAIO/flaxaio.js';
@@ -68,6 +79,7 @@ import HerbloreSecondaries, { HERBLORE_SECONDARIES_SETTINGS } from './HerbloreSe
 import HerbCleaner, { HERB_CLEANER_SETTINGS } from './HerbCleaner/HerbCleaner.js';
 import PotionMaker, { POTION_MAKER_SETTINGS } from './PotionMaker/PotionMaker.js';
 import MarketMaker, { MARKET_MAKER_SETTINGS } from './MarketMaker/MarketMaker.js';
+import ClimbingBoots, { CLIMBING_BOOTS_SETTINGS } from './ClimbingBoots/ClimbingBoots.js';
 import ShopBuyout, { SHOPBUYOUT_SETTINGS } from './ShopBuyout/ShopBuyout.js';
 import FlaxRunner, { SETTINGS as FLAXRUNNER_SETTINGS } from './FlaxRunner/FlaxRunner.js';
 import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner/ShopRunner.js';
@@ -133,7 +145,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'CowKiller',
-    description: 'Walks to the Lumbridge, north-west Lumbridge, south-Falador, or East Ardougne cow fields, loots hides + bones, and supports field-aware banking',
+    description: 'Walks to the Lumbridge, north-west Lumbridge, south-Falador, or East Ardougne cow fields, loots cowhide, and banks each field at its pinned bank',
     category: 'Combat',
     tags: ['lumbridge', 'falador', 'ardougne', 'cowhide', 'bones', 'banking', 'afk'],
     settingsSchema: COWKILLER_SETTINGS,
@@ -156,6 +168,15 @@ ScriptRegistry.register({
     tags: ['rellekka', 'keys', 'afk'],
     settingsSchema: ROCKCRAB_SETTINGS,
     create: () => new RockCrab()
+});
+
+ScriptRegistry.register({
+    name: 'RangingGuild',
+    description: 'Plays the Ranging Guild archery competition for tickets and trades every 2000 for 50 rune arrows. Pays the judge 200 coins a round, shoots the ten arrows from behind the haystacks, banks at Seers for coins and the best bow',
+    category: 'Money making',
+    tags: ['ranging guild', 'minigame', 'archery', 'tickets', 'rune arrows', 'seers', 'afk'],
+    settingsSchema: RANGING_GUILD_SETTINGS,
+    create: () => new RangingGuild()
 });
 
 ScriptRegistry.register({
@@ -192,6 +213,78 @@ ScriptRegistry.register({
     tags: ['waterfall', 'safespot', 'members', 'banking'],
     settingsSchema: FIREGIANT_SETTINGS,
     create: () => new FireGiant()
+});
+
+ScriptRegistry.register({
+    name: 'JiveDragons',
+    description: "Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought through its fence: mage or range from a derived safespot, or melee with the Dragonfire shield. Opens the dusty-key gate, fetching the key off Velrak when the bank has none.",
+    category: 'Combat',
+    tags: ['taverley', 'heroes guild', 'dragons', 'safespot', 'members', 'banking', 'clues'],
+    settingsSchema: JIVEDRAGONS_SETTINGS,
+    create: () => new JiveDragons()
+});
+
+ScriptRegistry.register({
+    name: 'JiveDemons',
+    description: 'Taverley Dungeon black demons: mage or range from a derived safespot in the pocket past the blue dragons. Opens the dusty-key gate, fetching the key off Velrak when the bank has none.',
+    category: 'Combat',
+    tags: ['taverley', 'demons', 'safespot', 'members', 'banking'],
+    settingsSchema: JIVEDEMONS_SETTINGS,
+    create: () => new JiveDemons()
+});
+
+ScriptRegistry.register({
+    name: 'JiveKBD',
+    description: 'King Black Dragon with magic from the alcove beside the lair exit lever, wearing the Dragonfire shield against the far fire. Walks the wilderness from Edgeville to the Lava Maze ladder, drinks a Superantipoison before the lever spiders, and teleports to Varrock to bank.',
+    category: 'Combat',
+    tags: ['kbd', 'dragon', 'safespot', 'wilderness', 'members', 'banking'],
+    settingsSchema: JIVEKBD_SETTINGS,
+    create: () => new JiveKBD()
+});
+
+ScriptRegistry.register({
+    name: 'JiveKQ',
+    description: 'Four-player Kalphite Queen trips with a shared dragon mace and magic shortbow loadout, synchronized ropes, a four-point cross, repeated kills and group retreats.',
+    category: 'Combat',
+    tags: ['combat', 'boss', 'kalphite', 'group', 'banking'],
+    settingsSchema: JIVEKQ_SETTINGS,
+    create: () => new JiveKQ()
+});
+
+ScriptRegistry.register({
+    name: 'JiveCrafting',
+    description: 'Makes one gold jewel picked from the dropdown at the Al Kharid furnace: banks for the mould, the gold bars and the gems, uses a bar on the furnace, clicks the biggest Make button that fits the load and walks back with it. Stops honestly when the bank runs out of any of the three.',
+    category: 'Crafting',
+    tags: ['crafting', 'jewellery', 'al kharid', 'banking', 'afk'],
+    settingsSchema: JIVECRAFTING_SETTINGS,
+    create: () => new JiveCrafting()
+});
+
+ScriptRegistry.register({
+    name: 'JiveEnchanter',
+    description: 'Stands at the nearest bank and enchants one jewel picked from the dropdown: wields a matching elemental staff when the bank has one, withdraws the jewels by id and the runes their casts need, casts one enchant every three ticks and banks the products. Stops honestly when the bank runs out of the jewel or a rune.',
+    category: 'Magic',
+    tags: ['magic', 'enchanting', 'jewellery', 'banking', 'afk'],
+    settingsSchema: JIVEENCHANTER_SETTINGS,
+    create: () => new JiveEnchanter()
+});
+
+ScriptRegistry.register({
+    name: 'JiveMarketDumper',
+    description: 'Dumps a bank to a running MarketMaker: withdraws every tradeable item as notes, puts the pile up in one window and takes whatever the maker bids, banking the coins between trips. It needs no price book, since anything the maker will not pay for rides along with what it does. Stops when the bank is empty or the maker turns down all that is left.',
+    category: 'Money making',
+    tags: ['trading', 'bank', 'market', 'afk'],
+    settingsSchema: JIVEMARKETDUMPER_SETTINGS,
+    create: () => new JiveMarketDumper()
+});
+
+ScriptRegistry.register({
+    name: 'JiveChests',
+    description: 'Opens the Taverley crystal chest with seven keys per trip from Falador West. Drops raw swordfish, body runes, spinach rolls and adamant square shields. Collects overflow in priority order: dragonstones, key halves, runite bars, diamonds, rubies, rune legs or skirts, then other rewards. Banks when full and returns for remaining loot before opening again. Keeps and restocks Falador teleport runes. Stops after the keys are exhausted and remaining loot is collected and banked.',
+    category: 'Money making',
+    tags: ['chest', 'taverley', 'banking', 'looting', 'afk'],
+    settingsSchema: JIVECHESTS_SETTINGS,
+    create: () => new JiveChests()
 });
 
 ScriptRegistry.register({
@@ -389,6 +482,15 @@ ScriptRegistry.register({
             group: 'Tick manip',
             help: TICK_MANIP_UNSHIPPED_HELP
         },
+        guildFeatherMinutes: {
+            type: 'number',
+            default: 0,
+            min: 0,
+            max: 120,
+            label: 'Feather supply trip every (minutes)',
+            showIf: { key: 'location', anyOf: ['Fishing Guild', 'Shilo Village'] },
+            help: `In the Fishing Guild, buys Roachey's feathers with up to ${FEATHER_BUYOUT_GP.toLocaleString('en-US')}gp; a full shelf restocks in ${FEATHER_RESTOCK_MINUTES} minutes. In Shilo, banks the catch, buys Fernahei's feathers first, then affordable water vials from Obli, banks the vials and returns to fishing. 0 disables scheduled trips; running out of feathers still triggers a paced supply trip.`
+        },
         location: {
             type: 'string',
             default: 'Auto',
@@ -484,6 +586,15 @@ ScriptRegistry.register({
 });
 
 ScriptRegistry.register({
+    name: 'BankSorter',
+    description: 'Walks to a bank and rewrites the slot order into categories, coins first and junk last, then stops. Optionally reports, and drops, quest items a finished quest no longer needs',
+    category: 'Utility',
+    tags: ['bank', 'sort', 'tidy', 'quest'],
+    settingsSchema: BANKSORTER_SETTINGS,
+    create: () => new BankSorter()
+});
+
+ScriptRegistry.register({
     name: 'DartFletcher',
     description: 'Spam-attaches feathers to stackable dart tips at the five-action-per-tick server ceiling; runs anywhere until either input stack is empty',
     category: 'Fletching',
@@ -503,7 +614,7 @@ ScriptRegistry.register({
 ScriptRegistry.register({
     name: 'HerbloreSecondaries',
     description:
-        "Collects one herblore secondary — red spiders' eggs, snape grass, eye of newt, chocolate dust (buy+grind), white berries (dragonfire shield), or toad's legs — with food on dangerous routes and a 5k coin cap for shops",
+        "Collects one herblore secondary — red spiders' eggs, snape grass, eye of newt, chocolate dust (buy+grind), white berries (dragonfire shield), toad's legs, or unicorn horn dust (grinds banked horns at the nearest bank) — with food on dangerous routes and a 5k coin cap for shops",
     category: 'Herblore',
     tags: ['herblore', 'secondaries', 'banking', 'shopping', 'loot'],
     settingsSchema: HERBLORE_SECONDARIES_SETTINGS,
@@ -540,6 +651,14 @@ ScriptRegistry.register({
 });
 
 ScriptRegistry.register({
+    name: 'FlourCollector',
+    description: 'Fills banked empty pots at Sinclair Mansion and banks the flour at Seers. Requires Murder Mystery started.',
+    category: 'Cooking',
+    tags: ['flour', 'supplies', 'banking', 'members'],
+    create: () => new FlourCollector()
+});
+
+ScriptRegistry.register({
     name: 'SmelterBot',
     description: 'Al Kharid smelter — withdraw ore, use it on the Furnace to smelt bars (all 8 bar types), bank, repeat',
     category: 'Smithing',
@@ -559,9 +678,9 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'Alcher',
-    description: 'High alchemy loop — withdraw the chosen item from the bank as notes, cast High Level Alchemy (fire staff + nature runes) on the stack to alch it in full, bank the coins, repeat',
+    description: 'Alchemy loop — tick the items to alch and the bot drains them richest first, withdrawing each as notes and casting High or Low Level Alchemy (fire staff + nature runes) until the bank is out, then moving to the next',
     category: 'Magic',
-    tags: ['magic', 'high alchemy', 'alchemy', 'banking', 'noted'],
+    tags: ['magic', 'high alchemy', 'low alchemy', 'alchemy', 'banking', 'noted'],
     settingsSchema: ALCHER_SETTINGS,
     create: () => new Alcher()
 });
@@ -668,6 +787,16 @@ ScriptRegistry.register({
 });
 
 ScriptRegistry.register({
+    name: 'ClimbingBoots',
+    description:
+        'Falador West to Tenzing climbing-boot buyer. Withdraws exact gp so the last pair replaces the coin stack. Optional Falador teleport runes for the walk back. Needs Death Plateau complete.',
+    category: 'Money making',
+    tags: ['tenzing', 'climbing boots', 'burthorpe', 'falador', 'bank', 'teleport'],
+    settingsSchema: CLIMBING_BOOTS_SETTINGS,
+    create: () => new ClimbingBoots()
+});
+
+ScriptRegistry.register({
     name: 'ShopBuyout',
     description: "Parks at ONE shop and buys it out repeatedly on a total gp budget — no routing. Defaults to Lundail's Mage Arena rune shop (banks via Gundai's dialog); get the bot to the shop yourself.",
     category: 'Money making',
@@ -741,7 +870,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'LeatherCrafter',
-    description: 'Needle-and-thread crafting loop — banks for leather and makes the best item your Crafting level allows for it',
+    description: 'Crafts the best leather item your Crafting level allows at the nearest bank. Buys missing thread from Dommik, Rommik, or the Fancy dress shop owner and returns to the same bank.',
     category: 'Crafting',
     tags: ['crafting', 'leather', 'dragonhide', 'banking', 'afk'],
     settingsSchema: CRAFTER_SETTINGS,

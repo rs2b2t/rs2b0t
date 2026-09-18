@@ -74,7 +74,7 @@ export const CB_NAME = {
     COINS: 'Coins'
 } as const;
 
-/** The bellows carry three charges and every charge is a different obj. */
+/** The bellows carry 3 charges and every charge is a different obj. */
 export const BELLOWS_IDS: readonly number[] = [CB_ID.BELLOWS3, CB_ID.BELLOWS2, CB_ID.BELLOWS1];
 export const ANY_BELLOWS: readonly number[] = [CB_ID.BELLOWS_EMPTY, ...BELLOWS_IDS];
 
@@ -94,7 +94,7 @@ export const CB_LOC_ID = {
     CHEST: 3377,
     /** `chompybird_chest_open`, the searchable half. */
     CHEST_OPEN: 3378,
-    // Why: six locs share the name "Ogre spit-roast" and only the empty one carries the `oplocu` a raw chompy needs.
+    // Why: 6 locs share the name "Ogre spit-roast" and only the empty one carries the `oplocu` a raw chompy needs.
     /** `chompybird_spitroast_empty`. */
     SPIT_EMPTY: 3375
 } as const;
@@ -118,7 +118,7 @@ export const CB_TILE = {
     CHEST: new Tile(2638, 9397, 0),
     ACHEY: new Tile(2626, 2974, 0),
     WOLVES: new Tile(2607, 2962, 0),
-    // Why: the pool is a block of unwalkable floor and five of its six bubble locs have no standable cardinal neighbour at all, so this is the one that can ever be used.
+    // Why: the pool is a block of unwalkable floor and 5 of its 6 bubble locs have no standable cardinal neighbour, so this is the only usable one.
     /** The only swamp bubbles the bellows can reach. */
     BUBBLE: new Tile(2598, 2963, 0),
     /** Standing south of that bubble, at the pool's south lip. */

@@ -1,7 +1,9 @@
 /** Two-account MarketMaker e2e at Seers bank, against the window-is-the-transaction model.
- *  Five legs: a sale driven by coins in the window, a mixed pile bought with no chat at all, a live
- *  re-price when the customer adds more mid-trade, coins ignored and named, and the cooldown that
- *  follows walking out. Quotes and appraisals travel over public chat, and the shop pays out in notes. */
+ *  Eight legs: a sale paid by coins in the window, a mixed pile bought with no chat, a live re-price
+ *  mid-trade, a pile over the trade cap bid at the cap, coins ignored and named, the cooldown
+ *  after walking out, a second order placed while the takings sit over the float, and a reset that
+ *  sorts the bank. Quotes and
+ *  appraisals travel over public chat, and the shop pays out in notes. */
 
 // Usage:
 //   HEADED=1 bun e2e/marketmaker-pair-live.ts
@@ -31,12 +33,15 @@ const IRON_NOTE = 441;
 const YEW = 1515;
 const YEW_NOTE = 1516;
 const COINS = 995;
+const CAP = 100_000;
+/** Worth 115,200gp at the buy price, so the pile clears the cap. */
+const CAP_YEWS = 400;
 
 /** 20% spread: iron 18/22, yew 288/352. */
 const BOOK = JSON.stringify([{
     name: 'e2e',
     margin: 20,
-    maxTradeValue: 100_000,
+    maxTradeValue: CAP,
     rows: [
         { id: IRON, mid: 20, cap: 4_000, buying: true, selling: true },
         { id: YEW, mid: 320, cap: 2_000, buying: true, selling: true }
@@ -191,6 +196,20 @@ async function yewCount(page: Page): Promise<number> {
     return (await countById(page, YEW)) + (await countById(page, YEW_NOTE));
 }
 
+// Why: the script log is a capped list, so a line is found by counting matches rather than by its index.
+/** The newest maker log line matching, once more than `seen` of them exist, polled until the deadline. */
+async function waitForMakerLog(page: Page, re: RegExp, timeoutMs: number, seen = 0): Promise<string | null> {
+    const until = Date.now() + timeoutMs;
+    while (Date.now() < until) {
+        const hits = (await makerLogs(page)).filter(l => re.test(l));
+        if (hits.length > seen) {
+            return hits[hits.length - 1]!;
+        }
+        await page.waitForTimeout(1500);
+    }
+    return null;
+}
+
 async function makerLogs(page: Page): Promise<string[]> {
     return page.evaluate(() => ((globalThis as never as Abi).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg));
 }
@@ -225,18 +244,34 @@ async function dump(makerPage: Page, custPage: Page, label: string): Promise<str
     ].join('\n');
 }
 
+/** Game messages (no sender) in the chat buffer that match. */
+async function countGameLines(page: Page, re: RegExp): Promise<number> {
+    return page.evaluate(source => {
+        const want = new RegExp(source, 'i');
+        return (globalThis as never as Abi).__rs2b0t.reader.chat(20).filter(l => l.type === 0 && want.test(l.text)).length;
+    }, re.source);
+}
+
 /** Request until the window opens; the engine refuses while the maker is at the bank. */
+// Why: a "Trade with" click clears the pending action, which closes a window that opened the same tick, so a request that went through is waited out and only a refused one is repeated.
 async function openTrade(page: Page, label: string): Promise<boolean> {
-    for (let attempt = 0; attempt < 14; attempt++) {
+    for (let attempt = 0; attempt < 8; attempt++) {
+        const busyBefore = await countGameLines(page, /busy at the moment/);
         await page.evaluate(m => (globalThis as never as Abi).__rs2b0t.Trade.request(m), MAKER);
-        for (let probe = 0; probe < 15; probe++) {
+        const deadline = Date.now() + 40_000;
+        while (Date.now() < deadline) {
             if (await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.Trade.onOfferScreen())) {
                 const partner = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.Trade.myOffer().length);
                 console.log(`${at()} ${label}: window open (request ${attempt + 1}, my slots ${partner})`);
                 return true;
             }
+            if ((await countGameLines(page, /busy at the moment/)) > busyBefore) {
+                console.log(`${at()} ${label}: the maker is busy, asking again shortly`);
+                break;
+            }
             await page.waitForTimeout(400);
         }
+        await page.waitForTimeout(3_000);
     }
     console.log(`${at()} ${label}: the window never opened`);
     return false;
@@ -336,7 +371,7 @@ try {
     await cheatQuiet(custPage, '~clearinv');
     await cheatQuiet(custPage, 'give coins 100000');
     await cheatQuiet(custPage, 'give cert_iron_ore 500');
-    await cheatQuiet(custPage, 'give cert_yew_logs 100');
+    await cheatQuiet(custPage, 'give cert_yew_logs 500');
     await teleArrive(custPage, SPOT);
 
     if (!(await makerPage.evaluate(() => Boolean((globalThis as never as Abi).rs2b0t.registry.get('MarketMaker'))))) {
@@ -346,6 +381,12 @@ try {
     await startScript(makerPage, 'MarketMaker');
     console.log(`${at()} MarketMaker started, waiting for the ledger and coin float`);
     await makerPage.waitForTimeout(25_000);
+    // Why: the shop sorts its bank on the first trip it takes, before it serves anyone, so the sort line is a startup assertion rather than a leg.
+    const sortedAtStart = await waitForMakerLog(makerPage, /^bank sort(ed|\s+stopped)/i, 90_000);
+    if (sortedAtStart === null) {
+        fail(`the shop never sorted its bank at startup: ${(await makerLogs(makerPage)).slice(-6).join(' | ')}`);
+    }
+    console.log(`${at()} startup: ${sortedAtStart}`);
 
     const state = await makerPage.evaluate(() => (globalThis as never as Abi).rs2b0t.runner.state);
     if (state !== 'running') {
@@ -365,11 +406,15 @@ try {
     if (!(await openTrade(custPage, 'sale'))) {
         fail(await dump(makerPage, custPage, 'sale leg: the window never opened'));
     }
-    await offerItem(custPage, { name: 'Coins', id: COINS, qty: 100 * IRON_SELL });
 
-    if (!(await waitBotSide(custPage, s => unitsOn(s, IRON, IRON_NOTE) === 100, 45_000, 'sale'))) {
-        fail(await dump(makerPage, custPage, 'sale leg: the maker never put up 100 iron ore'));
+    // Why: what a sale owes is the request, not anything on the customer's side, so the goods have to be up before a coin is offered; waiting for their side to settle first is delay and nothing else.
+    const upAt = Date.now();
+    if (!(await waitBotSide(custPage, s => unitsOn(s, IRON, IRON_NOTE) === 100, 20_000, 'sale'))) {
+        fail(await dump(makerPage, custPage, 'sale leg: the maker did not put up 100 iron ore against an empty customer side'));
     }
+    const upMs = Date.now() - upAt;
+    console.log(`${at()} the maker put its side up ${(upMs / 1000).toFixed(1)}s after the window opened, with nothing offered against it`);
+    await offerItem(custPage, { name: 'Coins', id: COINS, qty: 100 * IRON_SELL });
     if (!(await settle(custPage, 'sale'))) {
         fail(await dump(makerPage, custPage, 'sale leg: the trade never completed'));
     }
@@ -380,7 +425,7 @@ try {
     if (oreGained !== 100 || gpSpent !== 100 * IRON_SELL) {
         fail(await dump(makerPage, custPage, `sale leg: expected +100 ore and -${100 * IRON_SELL}gp, got +${oreGained} and -${gpSpent}`));
     }
-    results.push(`sold 100 iron ore for ${100 * IRON_SELL}gp, paid by coins in the window`);
+    results.push(`sold 100 iron ore for ${100 * IRON_SELL}gp, its side up ${(upMs / 1000).toFixed(1)}s before a coin was offered`);
     console.log(`${at()} PASS leg 1: ${results[0]}`);
 
     // ---- leg 2: a mixed pile, bought with no chat at all ------------------
@@ -448,11 +493,45 @@ try {
     results.push(`re-priced ${50 * IRON_BUY} to ${100 * IRON_BUY}gp when the customer added more, and still settled`);
     console.log(`${at()} PASS leg 3: ${results[2]}`);
 
-    // ---- leg 4: coins on their side are ignored, and named ----------------
+    // ---- leg 4: a pile over the trade cap is bid at the cap, and the shop says the max ----
+    if (Date.now() > deadline) {
+        fail('out of budget before the cap leg');
+    }
+    const yew3 = await yewCount(custPage);
+    const gp3 = await countById(custPage, COINS);
+    const mark4 = await chatMark(custPage);
+
+    if (!(await openTrade(custPage, 'over the cap'))) {
+        fail(await dump(makerPage, custPage, 'cap leg: the window never opened'));
+    }
+    await offerItem(custPage, { name: 'Yew logs', id: YEW_NOTE, qty: CAP_YEWS });
+
+    if (!(await waitBotSide(custPage, s => coinsOn(s) === CAP, 45_000, 'over the cap'))) {
+        fail(await dump(makerPage, custPage, `cap leg: the maker never put up the ${CAP}gp cap for a ${CAP_YEWS * YEW_BUY}gp pile`));
+    }
+    // Why: public chat is lowercased on the wire, so the match is case-blind.
+    const capLine = await waitForMakerLine(custPage, /max i can offer is 100,000gp per trade/i, 20_000, mark4);
+    if (capLine === null) {
+        fail(await dump(makerPage, custPage, 'cap leg: the maker never said what the max is'));
+    }
+    await custPage.screenshot({ path: 'docs/e2e/marketmaker-cap-bid.png' });
+    if (!(await settle(custPage, 'over the cap'))) {
+        fail(await dump(makerPage, custPage, 'cap leg: the trade never completed'));
+    }
+    await custPage.waitForTimeout(2500);
+    const capPaid = (await countById(custPage, COINS)) - gp3;
+    const yewGone = yew3 - (await yewCount(custPage));
+    if (capPaid !== CAP || yewGone !== CAP_YEWS) {
+        fail(await dump(makerPage, custPage, `cap leg: expected +${CAP}gp for ${CAP_YEWS} yew logs, got +${capPaid}gp for ${yewGone}`));
+    }
+    results.push(`bid the ${CAP}gp cap for a ${CAP_YEWS * YEW_BUY}gp pile of ${CAP_YEWS} yew logs, said '${capLine}', and settled`);
+    console.log(`${at()} PASS leg 4: ${results[3]}`);
+
+    // ---- leg 5: coins on their side are ignored, and named ----------------
     if (Date.now() > deadline) {
         fail('out of budget before the ignored-coins leg');
     }
-    const mark4 = await chatMark(custPage);
+    const mark5 = await chatMark(custPage);
     if (!(await openTrade(custPage, 'ignored coins'))) {
         fail(await dump(makerPage, custPage, 'coins leg: the window never opened'));
     }
@@ -462,26 +541,92 @@ try {
     if (!(await waitBotSide(custPage, s => coinsOn(s) === 10 * IRON_BUY, 45_000, 'ignored coins'))) {
         fail(await dump(makerPage, custPage, `coins leg: the maker did not offer ${10 * IRON_BUY}gp for the ore alone`));
     }
-    if ((await waitForMakerLine(custPage, /not counted/i, 20_000, mark4)) === null) {
+    if ((await waitForMakerLine(custPage, /not counted/i, 20_000, mark5)) === null) {
         fail(await dump(makerPage, custPage, 'coins leg: the maker never said the coins were not counted'));
     }
     await custPage.evaluate(() => (globalThis as never as Abi).__rs2b0t.Trade.decline());
     await custPage.waitForTimeout(4000);
     results.push('ignored coins in a purchase and said so before accepting');
-    console.log(`${at()} PASS leg 4: ${results[3]}`);
+    console.log(`${at()} PASS leg 5: ${results[4]}`);
 
-    // ---- leg 5: walking away costs the walker, not the shop ---------------
+    // ---- leg 6: walking away costs the walker, not the shop ---------------
     if (Date.now() > deadline) {
         fail('out of budget before the cooldown leg');
     }
     await custPage.waitForTimeout(8_000);
-    const mark5 = await chatMark(custPage);
+    const mark6 = await chatMark(custPage);
     await say(custPage, 'buy 100 iron ore');
-    if ((await waitForMakerLine(custPage, /trade me/i, 12_000, mark5)) !== null) {
+    if ((await waitForMakerLine(custPage, /trade me/i, 12_000, mark6)) !== null) {
         fail(await dump(makerPage, custPage, 'cooldown leg: the maker answered someone who just walked out of a trade'));
     }
     results.push(`ignored a customer for ${COOLDOWN_S}s after they walked out mid-trade`);
-    console.log(`${at()} PASS leg 5: ${results[4]}`);
+    console.log(`${at()} PASS leg 6: ${results[5]}`);
+
+    // ---- leg 7: a second order while the takings sit over the float -------
+    // Why: takings over the float owe a trip, the window waits on that trip, and a live order used to hold the trip back, so the customer who bought and asked again got their goods fetched and no window.
+    if (Date.now() > deadline) {
+        fail('out of budget before the second-order leg');
+    }
+    await custPage.waitForTimeout(COOLDOWN_S * 1000 + 3_000);
+    const ore7 = await oreCount(custPage);
+    const gp7 = await countById(custPage, COINS);
+    if ((await askUntilAnswered(custPage, 'buy 100 iron ore', /trade me/i)) === null) {
+        fail(await dump(makerPage, custPage, 'second-order leg: the maker never answered the first request'));
+    }
+    if (!(await openTrade(custPage, 'second order, first sale'))) {
+        fail(await dump(makerPage, custPage, 'second-order leg: the first window never opened'));
+    }
+    if (!(await waitBotSide(custPage, s => unitsOn(s, IRON, IRON_NOTE) === 100, 20_000, 'second order, first sale'))) {
+        fail(await dump(makerPage, custPage, 'second-order leg: the maker did not put up 100 iron ore'));
+    }
+    await offerItem(custPage, { name: 'Coins', id: COINS, qty: 100 * IRON_SELL });
+    if (!(await settle(custPage, 'second order, first sale'))) {
+        fail(await dump(makerPage, custPage, 'second-order leg: the first sale never completed'));
+    }
+    const mark7 = await chatMark(custPage);
+    await say(custPage, 'buy 100 iron ore');
+    if ((await waitForMakerLine(custPage, /trade me|got your/i, 120_000, mark7)) === null) {
+        fail(await dump(makerPage, custPage, 'second-order leg: the maker never came back with the second order'));
+    }
+    const makerGp = await countById(makerPage, COINS);
+    if (makerGp > 200_000) {
+        fail(await dump(makerPage, custPage, `second-order leg: the maker is serving with ${makerGp}gp in the pack, the takings were not banked first`));
+    }
+    if (!(await openTrade(custPage, 'second order, second sale'))) {
+        fail(await dump(makerPage, custPage, 'second-order leg: the second window never opened'));
+    }
+    if (!(await waitBotSide(custPage, s => unitsOn(s, IRON, IRON_NOTE) === 100, 20_000, 'second order, second sale'))) {
+        fail(await dump(makerPage, custPage, 'second-order leg: the maker did not put up 100 iron ore the second time'));
+    }
+    await offerItem(custPage, { name: 'Coins', id: COINS, qty: 100 * IRON_SELL });
+    if (!(await settle(custPage, 'second order, second sale'))) {
+        fail(await dump(makerPage, custPage, 'second-order leg: the second sale never completed'));
+    }
+    await custPage.waitForTimeout(2500);
+    const oreGained7 = (await oreCount(custPage)) - ore7;
+    const gpSpent7 = gp7 - (await countById(custPage, COINS));
+    if (oreGained7 !== 200 || gpSpent7 !== 200 * IRON_SELL) {
+        fail(await dump(makerPage, custPage, `second-order leg: expected +200 ore and -${200 * IRON_SELL}gp over the two sales, got +${oreGained7} and -${gpSpent7}`));
+    }
+    results.push(`served a second order placed while the takings sat over the float, with ${makerGp}gp in the pack at the window`);
+    console.log(`${at()} PASS leg 7: ${results[6]}`);
+
+    // ---- leg 8: a reset sorts the bank --------------------------------------
+    if (Date.now() > deadline) {
+        fail('out of budget before the reset leg');
+    }
+    const sortsBefore8 = (await makerLogs(makerPage)).filter(l => /^bank sort(ed|\s+stopped)/i.test(l)).length;
+    const mark8 = await chatMark(custPage);
+    await say(custPage, 'reset');
+    if ((await waitForMakerLine(custPage, /resetting/i, 15_000, mark8)) === null) {
+        fail(await dump(makerPage, custPage, 'reset leg: the maker never said it was resetting'));
+    }
+    const sortedOnReset = await waitForMakerLog(makerPage, /^bank sort(ed|\s+stopped)/i, 120_000, sortsBefore8);
+    if (sortedOnReset === null) {
+        fail(await dump(makerPage, custPage, 'reset leg: the maker never sorted its bank after the reset'));
+    }
+    results.push(`sorted the bank on a reset: ${sortedOnReset}`);
+    console.log(`${at()} PASS leg 8: ${results[7]}`);
 
     console.log(`PASS: ${results.join(', ')}`);
     process.exit(0);

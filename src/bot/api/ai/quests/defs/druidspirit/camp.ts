@@ -21,8 +21,7 @@ async function reachCamp(log: (m: string) => void): Promise<boolean> {
 
 const LEAVE = ['Ok, thanks.', 'Ok thanks.'];
 
-// Why: every topic in Filliman's tree ends by re-offering the same list, so a prefer list naming one picks it again on every pass and the conversation only ends when the driver gives up.
-// Why: the topic is therefore taken once and the goodbye taken from then on.
+// Why: every topic in Filliman's tree ends by re-offering the same list, so a prefer list picks it again every pass; take the topic once and then the goodbye.
 
 /** Drive an open dialogue, taking `topic` once and then leaving. */
 async function driveOnce(topic: string, log: (m: string) => void): Promise<boolean> {
@@ -56,8 +55,8 @@ async function driveOnce(topic: string, log: (m: string) => void): Promise<boole
     return !ChatDialog.isOpen();
 }
 
-// Why: the spirit is npc_add'ed by `Enter` on the grotto door and despawns after 100 ticks, so an empty camp is answered by knocking rather than by waiting.
-// Why: below the ritual stage the same op opens his dialogue, which is why the prefer list is driven straight off the door.
+// Why: `Enter` on the grotto door npc_adds the spirit and he despawns after 100 ticks, so an empty camp means knock.
+// Why: Before the ritual stage, the same door op opens Filliman's dialogue.
 
 /** Summon the spirit, take `topic` once if there is one, then leave. */
 export async function talkFilliman(topic: string | null, log: (m: string) => void): Promise<boolean> {
@@ -96,7 +95,7 @@ async function ensureSpirit(log: (m: string) => void): Promise<boolean> {
     return findSpirit() !== null;
 }
 
-// Why: taking the washing bowl is what uncovers the mirror underneath it, and the mirror is a second ground spawn rather than a drop.
+// Why: taking the washing bowl uncovers the mirror under it, which is a second ground spawn.
 
 /** Take the bowl, take the mirror it uncovers, then show the mirror to the spirit. */
 export async function mirrorLeg(log: (m: string) => void): Promise<boolean> {
@@ -128,7 +127,7 @@ export async function mirrorLeg(log: (m: string) => void): Promise<boolean> {
     if (!target || !mirror) {
         return false;
     }
-    // Why: the mirror is never deleted. The spirit hands it back, so the dialogue completing is the only oracle this leg has.
+    // Why: the spirit hands the mirror back, so the dialogue completing is the only oracle this leg has.
     if (!(await mirror.useOn(target))) {
         return false;
     }
@@ -184,9 +183,9 @@ export function pickable(within = 10): { name: string; op: string } | null {
     return null;
 }
 
-// Why: the bloom affects the eight tiles around the caster and not the caster's own, and every bloomable is blockwalk=no, so standing on one is the way to miss it.
+// Why: the bloom affects the 8 tiles around the caster, and every bloomable is blockwalk=no, so standing on one misses it.
 
-// Why: every bloomable is inside Mort Myre, and the blessing that precedes this leg happens in the mausoleum, a scene query from there sees no swamp at all.
+// Why: every bloomable is inside Mort Myre and the blessing before this leg is in the mausoleum, from where a scene query sees no swamp.
 
 /** Stand next to something bloomable, never on it. */
 export async function standBeside(log: (m: string) => void, names: readonly string[] = BLOOMABLE): Promise<boolean> {
@@ -240,7 +239,7 @@ async function pickHarvest(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => Inventory.used() > before, 8000);
 }
 
-// Why: a bloomed loc reverts 25 ticks after it grows, so casting and picking cannot be two decide ticks, a resume that finds neither a fungus nor a bloom has to do both in one step.
+// Why: a bloomed loc reverts 25 ticks after it grows, so casting and picking can't be 2 decide ticks; a resume with neither does both in one step.
 
 /** Cast the paper scroll beside a rotting log and take the fungus it grows. */
 export async function bloomWithScroll(log: (m: string) => void): Promise<boolean> {
@@ -265,7 +264,7 @@ export async function bloomWithScroll(log: (m: string) => void): Promise<boolean
     return heldId(NS_ID.FUNGI) > 0;
 }
 
-// Why: all three ritual stones render as "Stone" and sit on adjacent tiles, so each is addressed by its own tile rather than by a nearest-match.
+// Why: all 3 ritual stones render as "Stone" on adjacent tiles, so each is addressed by its own tile.
 
 /** Use a carried item on one named stone. */
 async function useOnStone(itemId: number, at: Tile, expect: () => boolean, log: (m: string) => void): Promise<boolean> {
@@ -288,7 +287,7 @@ async function useOnStone(itemId: number, at: Tile, expect: () => boolean, log: 
     return driveUntil(expect, ['Ok, thanks.', 'Ok thanks.'], log);
 }
 
-// Why: each stone consumes what it is given, so a fed stone must never be re-fed, the journal flags say which are done.
+// Why: each stone consumes what it's given, so never re-feed one; the journal flags say which are done.
 
 /** Feed the fungus to the nature stone and the spent scroll to the spirit stone. */
 export async function feedStones(flags: ReadonlySet<string>, log: (m: string) => void): Promise<boolean> {
@@ -307,9 +306,9 @@ export async function feedStones(flags: ReadonlySet<string>, log: (m: string) =>
     return useOnStone(scroll, NS_TILE.SPIRIT_STONE, () => heldId(scroll) === 0, log);
 }
 
-// Why: the ritual is judged on the player's own tile, `coord = 0_53_52_48_7`, so the faith stone is stood on rather than used.
+// Why: the ritual is judged on the player's own tile, `coord = 0_53_52_48_7`, so stand on the faith stone.
 
-// Why: the summon is `Enter` on the grotto door, two tiles off the faith stone, so the spirit is called up first and the stone taken second, the other order puts the puzzle option on screen from the wrong tile.
+// Why: the summon is `Enter` on the grotto door, 2 tiles off the faith stone, so call the spirit first and take the stone second or the puzzle option opens from the wrong tile.
 
 /** Stand on the faith stone and tell the spirit the puzzle is solved. */
 export async function solvePuzzle(log: (m: string) => void): Promise<boolean> {
@@ -333,7 +332,7 @@ export async function solvePuzzle(log: (m: string) => void): Promise<boolean> {
     if (!(await openDialogue(FILLIMAN.npc, log))) {
         return false;
     }
-    // Why: the option is judged against the tile the character is standing on when it is chosen, so a talk that walked us off the stone is abandoned rather than answered.
+    // Why: the option is judged on the tile you stand on when chosen, so a talk that walked us off the stone is abandoned.
     const at = Game.tile();
     if (!at || at.x !== NS_TILE.FAITH_STONE.x || at.z !== NS_TILE.FAITH_STONE.z) {
         log(`the talk moved the character to (${at?.x},${at?.z}) — off the faith stone`);

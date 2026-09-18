@@ -1,5 +1,5 @@
 // Why: the wired settings are path, transport, click and text, plus size and show-text.
-// Why: calculating, unreachable and collision are reserved slots, not yet in the Global UI.
+// Why: calculating, unreachable and collision are reserved slots the Global UI doesn't expose yet.
 
 import { SettingsStore, type SettingsBag } from '../../runtime/Settings.js';
 

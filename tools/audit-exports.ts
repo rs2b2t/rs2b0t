@@ -4,7 +4,7 @@ import { join, relative } from 'node:path';
 
 const DECL = /^export\s+(?:declare\s+)?(?:async\s+)?(?:const|let|var|function|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)/gm;
 
-/** Escape every regex metacharacter, not the ones identifiers happen to use. */
+/** Escapes every regex metacharacter, including the $ an identifier can carry. */
 function escapeRegExp(literal: string): string {
     return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

@@ -1,4 +1,4 @@
-/** Live proof for the list/CSV toggle on a `string[]` setting, driven through the real panel.
+/** Live proof for the list/CSV toggle on a `string[]` setting, driven through the shipped panel.
  *  Why: the toggle rewrites another row's control, so the only honest check is opening the modal,
  *  flipping the mode, typing into the textarea, and reading what the store kept. */
 

@@ -71,7 +71,7 @@ describe('parsePositiveInt / cook fish filter', () => {
         expect(rawMatchesCookFilter('Raw tuna', 'Tuna')).toBe(true);
         expect(rawMatchesCookFilter('Raw swordfish', 'Tuna')).toBe(false);
         expect(rawMatchesCookFilter('Raw lobster', '')).toBe(true);
-        expect(rawMatchesCookFilter('Lobster', 'Lobster')).toBe(false); // not raw
+        expect(rawMatchesCookFilter('Lobster', 'Lobster')).toBe(false);
         expect(rawMatchesCookFilter('Raw shark', 'raw shark')).toBe(true);
         expect(rawMatchesCookFilter(null, 'Tuna')).toBe(false);
     });
@@ -179,7 +179,7 @@ describe('cook flow predicates', () => {
         // fish-bank-raw-cook: cert_raw_lobster 973 → bank, inv 26 raw + catch 1.
         const N = 1000;
         const banked = 973;
-        const deposited = 27; // 26 seed + 1 catch
+        const deposited = 27;
         expect(shouldStartBankRawCookBatch('bank-raw-then-cook', banked, N)).toBe(false);
         expect(shouldStartBankRawCookBatch('bank-raw-then-cook', banked + deposited, N)).toBe(true);
         expect(countRawInBank([{ name: 'Raw lobster', count: banked + deposited }], 'Lobster')).toBe(1000);
@@ -187,11 +187,9 @@ describe('cook flow predicates', () => {
 
     test('sticky batch: N is entry only — keep draining after withdraw drops below N', () => {
         const N = 5000;
-        // Arm when bank hits N
         expect(shouldStartBankRawCookBatch('bank-raw-then-cook', 5000, N)).toBe(true);
-        // After withdrawing 28, bank has 4972, must NOT re-require ≥ N
+        // The threshold stays latched after the first withdrawal.
         expect(shouldStartBankRawCookBatch('bank-raw-then-cook', 4972, N)).toBe(false);
-        // Sticky flag keeps the drain going regardless of N
         expect(shouldKeepDrainingCookBatch(true, 4972)).toBe(true);
         expect(shouldKeepDrainingCookBatch(true, 1)).toBe(true);
         expect(shouldKeepDrainingCookBatch(true, 0)).toBe(false);
@@ -199,11 +197,9 @@ describe('cook flow predicates', () => {
     });
 
     test('cookBatchAfterLoad: drain-more until empty, then stop or fish-again', () => {
-        // Mid-batch after first 28 of 5000
         expect(cookBatchAfterLoad(4972, 'stop')).toBe('drain-more');
         expect(cookBatchAfterLoad(4972, 'continue')).toBe('drain-more');
         expect(cookBatchAfterLoad(1, 'stop')).toBe('drain-more');
-        // Fully drained
         expect(cookBatchAfterLoad(0, 'stop')).toBe('stop');
         expect(cookBatchAfterLoad(0, 'continue')).toBe('fish-again');
     });
@@ -211,8 +207,8 @@ describe('cook flow predicates', () => {
 
 describe('pace ticks', () => {
     test('cook is 1 tick; bank is 1–2 ticks', () => {
-        const low = () => 0.1; // < 0.35 → 2 ticks
-        const high = () => 0.9; // ≥ 0.35 → 1 tick
+        const low = () => 0.1;
+        const high = () => 0.9;
         expect(cookPaceTicks(low)).toBe(1);
         expect(cookPaceTicks(high)).toBe(1);
         expect(bankPaceTicks(low)).toBe(2);

@@ -54,7 +54,7 @@ const TO_WEST = custom("cross the wall on Omart's rope ladder", goWest);
 /** Slots kept free outside the mourner headquarters, where nothing can be banked. */
 const TIDY_FLOOR = 8;
 
-/** How many failed collection passes before the boys are treated as having ruined a vial. */
+/** Failed collection passes before the boys count as having ruined a vial. */
 const COLLECT_GIVE_UP = 2;
 
 const PRIEST_SUIT = [BIO_ITEM.PRIEST_GOWN, BIO_ITEM.PRIEST_ROBE] as const;
@@ -67,7 +67,7 @@ function inWest(area: BioArea, step: QuestStep): QuestStep {
     return area === 'west' || area === 'hq' || area === 'hqUpstairs' ? step : TO_WEST;
 }
 
-// Why: the meal and the priest suit's float come out here rather than at the wall, Jerico's house is nine tiles from the Ardougne booth, and the watchtower where the next stage ends is sixty.
+// Why: the meal and the priest suit's float come out here; Jerico's house is 9 tiles from the Ardougne booth and the watchtower where the next stage ends is 60.
 /** The distraction leg: seed from Jerico's cupboard, birds from behind his house, then the tower. */
 function distractionStep(snap: QuestSnapshot, area: BioArea): QuestStep {
     const kit = sourceFood(snap) ?? sourceCoins(snap, PRIEST_SUIT_GP, false);
@@ -96,8 +96,7 @@ function distillatorStep(snap: QuestSnapshot, area: BioArea): QuestStep {
     if (owned(snap, BIO_ITEM.DOCTOR_GOWN) === 0) {
         return inWest(area, custom("search the nurse's cupboard for a doctors' gown", takeDoctorGown));
     }
-    // Why: the cupboard hands nothing over while one is banked, so the banked copy is the only one
-    // this stage will ever have, and West Ardougne has no booth to draw it from.
+    // Why: the cupboard hands nothing over while one is banked, so the banked copy is the only one this stage gets, and West Ardougne has no booth to draw it from.
     if (held(snap, BIO_ITEM.DOCTOR_GOWN) === 0 && !worn(snap, BIO_ITEM.DOCTOR_GOWN)) {
         const gown = reclaim(snap, BIO_ITEM.DOCTOR_GOWN);
         return gown ? onMainland(area, gown) : { kind: 'wait', reason: "the doctors' gown is nowhere the bot can reach" };
@@ -109,8 +108,7 @@ function distillatorStep(snap: QuestSnapshot, area: BioArea): QuestStep {
     return inWest(area, custom("search the crate for Elena's distillator", searchTheCrate));
 }
 
-// Why: Elena hands back three vials and the sample one at a time, each gated on `inv_freespace > 1`,
-// so a pack with four slots free silently loses the last of them.
+// Why: Elena returns four items individually under `inv_freespace > 1`, requiring five free slots for all of them.
 function returnDistillatorStep(snap: QuestSnapshot, area: BioArea): QuestStep {
     if (held(snap, BIO_ITEM.DISTILLATOR) === 0) {
         const banked = reclaim(snap, BIO_ITEM.DISTILLATOR);
@@ -119,8 +117,7 @@ function returnDistillatorStep(snap: QuestSnapshot, area: BioArea): QuestStep {
     return onMainland(area, tidy(snap, HANDBACK_SLOTS) ?? custom('hand Elena her distillator', handOverDistillator));
 }
 
-// Why: an errand boy taking a vial and Elena's own vials being lost look identical from the pack,
-// so the reissue is never offered here, only the sample, which no errand boy is ever given.
+// Why: an errand boy taking a vial and Elena's own vials being lost look identical from the pack, so only the sample is reissued here; no errand boy is ever given it.
 
 /** Draw whatever Elena already handed over out of the bank, and replace a lost sample. */
 function reagentStep(snap: QuestSnapshot, area: BioArea): QuestStep | null {
@@ -157,8 +154,7 @@ function outside(name: string, errand: (log: (m: string) => void) => Promise<boo
     return custom(name, async log => (await leaveQuarter(log)) && errand(log));
 }
 
-// Why: nothing in the quarter touches a bank, the nearest booth is on the far side of the gate,
-// and a vial carried back through it is confiscated, which is a wedge rather than a recovery.
+// Why: The quarter has no bank, and the gate confiscates any vial carried back out.
 function inQuarterStep(snap: QuestSnapshot): QuestStep {
     if (owned(snap, BIO_ITEM.TOUCH_PAPER) === 0) {
         return outside('ask the chemist for touch paper', getTouchPaper);
@@ -167,7 +163,7 @@ function inQuarterStep(snap: QuestSnapshot): QuestStep {
         return outside('ask Elena to replace the sample she gave me', askElenaForReplacements);
     }
     if (VIALS.some(vial => held(snap, vial) === 0)) {
-        // Why: a boy who drank, sold or painted his vial gives nothing back and only Elena reissues one, the walk out loses whatever is still carried to the gate guard, which is what makes her hand over a full set rather than the remainder.
+    // Why: Elena alone replaces lost vials, while the gate confiscates any remaining vial on exit.
         return snap.noProgress >= COLLECT_GIVE_UP
             ? outside('ask Elena to replace the vials the errand boys ruined', askElenaForReplacements)
             : custom('collect the vials at the Dancing Donkey', collectFromErrandBoys);
@@ -197,8 +193,7 @@ function stageStep(snap: QuestSnapshot, area: BioArea, stage: number): QuestStep
             return onMainland(area, pigeonStep(snap) ?? custom('open the pigeon cage by the wall', releasePigeons));
         case BIO_STAGE.RELEASED_PIGEONS:
             return TO_WEST;
-        // Why: the apples are a free respawning spawn a few tiles from the cauldron, so this leg
-        // never consults the bank, which is what keeps a fresh start in West Ardougne moving.
+            // Why: Apples respawn near the cauldron, so this leg does not require bank state.
         case BIO_STAGE.CLIMBED_LADDER:
             if (held(snap, BIO_ITEM.ROTTEN_APPLES) === 0) {
                 return inWest(area, custom('take the rotten apples in West Ardougne', takeRottenApples));
@@ -237,7 +232,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (stage === undefined) {
         return { kind: 'wait', reason: 'Biohazard journal stage unavailable' };
     }
-    // Why: `ownsInventory` skips the engine's provisioning, so nothing else ever opens a booth and a gown, vial or key sitting in the bank stays invisible until this module reads one, but past the wall the navigator answers "unreachable" for every booth in the game, so the read waits for the mainland.
+    // Why: `ownsInventory` skips the engine's provisioning, so a banked gown, vial or key stays invisible until this module reads the bank; past the wall the navigator answers "unreachable" for every booth, so the read waits for the mainland.
     if (!snap.bankKnown) {
         if (area === 'mainland') {
             return scanBank();
@@ -248,8 +243,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     }
     const spillover = area === 'mainland' ? tidy(snap, TIDY_FLOOR) : null;
     const step = spillover ?? stageStep(snap, area, stage);
-    // Why: West Ardougne has no booth and the headquarters is sealed behind a door the navigator
-    // has no edge for, so a bank leg decided over there walks at a booth it can prove no route to.
+    // Why: West Ardougne has no booth and the headquarters is sealed behind a door the navigator has no edge for, so a bank leg decided over there walks at a booth it can prove no route to.
     return bankless(area) && banking(step) ? TO_MAINLAND : step;
 }
 
