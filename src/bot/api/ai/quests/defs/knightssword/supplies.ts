@@ -231,7 +231,7 @@ async function smeltIron(log: (m: string) => void): Promise<boolean> {
 }
 
 /** Nothing sells iron bars, Drogo's Mining Emporium stocks zero and the only ground spawn is deep in the Wilderness, so smelt them. */
-export function ironBarsAt(snap: QuestSnapshot, miningLevel: number): QuestStep {
+export function ironBarsAt(snap: QuestSnapshot, miningLevel: number, smithingLevel: number): QuestStep {
     const held = heldId(snap, KS_ID.IRON_BAR);
     if (held >= 2) {
         return { kind: 'wait', reason: 'two iron bars already held' };
@@ -243,10 +243,16 @@ export function ironBarsAt(snap: QuestSnapshot, miningLevel: number): QuestStep 
     if (banked > 0) {
         return withdraw([{ name: KS_NAME.IRON_BAR, qty: Math.min(2 - held, banked), id: KS_ID.IRON_BAR }]);
     }
+    if (smithingLevel < 15) {
+        return { kind: 'wait', reason: 'Smithing 15 is required to smelt iron bars; train Smithing or obtain and bank two Iron bars' };
+    }
     // Why: `mineRock` ignores its qty and mines one ore per invocation, so the batch is counted here.
     // Why: smelting on the first ore would walk the 130 tiles between Rimmington and the furnace 8 times.
     if (heldId(snap, KS_ID.IRON_ORE) >= ORE_PER_TRIP) {
         return { kind: 'custom', name: 'smelt iron bars', run: smeltIron };
+    }
+    if (miningLevel < 15) {
+        return { kind: 'wait', reason: 'Mining 15 is required to mine iron ore; train Mining or obtain and bank two Iron bars' };
     }
     return pickaxeAt(snap, miningLevel)
         ?? { kind: 'mineRock', rock: 'Iron', item: KS_NAME.IRON_ORE, qty: ORE_PER_TRIP, anchor: KS_TILE.IRON_ROCKS };
