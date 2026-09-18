@@ -89,7 +89,7 @@ export const AUTO_LEGACY = 'Auto';
 export const NONE_LEGACY = 'None';
 
 export function locationOptions(table: readonly GatheringLocation[]): string[] {
-    return [USE_CLOSEST, USE_START_POSITION, USE_CUSTOM_POSITION, NONE_LEGACY, ...table.map(l => l.name)];
+    return [AUTO_LEGACY, USE_CLOSEST, USE_START_POSITION, USE_CUSTOM_POSITION, NONE_LEGACY, ...table.map(l => l.name)];
 }
 
 export function boothFields(loc: GatheringLocation | null | undefined): {
@@ -115,15 +115,15 @@ export function resolveGatheringLocation<T extends GatheringLocation>(
     if (normalized === USE_START_POSITION.toLowerCase()) {
         return null;
     }
-    if (normalized === USE_CLOSEST.toLowerCase() || normalized === 'auto' || normalized === AUTO_LEGACY.toLowerCase()) {
-        if (table.length === 0) {
+    if (normalized === USE_CLOSEST.toLowerCase() || normalized === AUTO_LEGACY.toLowerCase()) {
+        const pool = normalized === AUTO_LEGACY.toLowerCase() ? table.filter(loc => sameMapSquare(startTile, loc.spot)) : table;
+        if (pool.length === 0) {
             return null;
         }
-        // Use Closest: pick nearest preset by distance to spot, no map-square restriction.
-        let best = table[0]!;
+        let best = pool[0]!;
         let bestD = bankDistance(startTile, best.spot);
-        for (let i = 1; i < table.length; i++) {
-            const loc = table[i]!;
+        for (let i = 1; i < pool.length; i++) {
+            const loc = pool[i]!;
             const d = bankDistance(startTile, loc.spot);
             if (d < bestD) {
                 best = loc;

@@ -53,6 +53,7 @@ export interface QuestSnapshot {
     /** Ranged level, which is the tier of bow the account can wield. */
     ranged?: number;
     freeSlots?: number;
+    combatXp?: number;
 }
 
 // Why: display names collide: "Broken shield", "Certificate", "Fishing spot" and "Gate" each name more than one thing, so a name lookup silently accepts the wrong object.

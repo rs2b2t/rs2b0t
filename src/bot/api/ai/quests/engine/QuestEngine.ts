@@ -42,6 +42,7 @@ export interface QuestHost {
 const PARK_GIVE_UP = 3;
 
 const WAIT_PARK = 15;
+const COMBAT_STALL_MS = 60_000;
 
 /** Walks back to a bank to try before leaving the character where it finished. */
 const RETREAT_GIVE_UP = 4;
@@ -97,7 +98,11 @@ export class QuestEngine implements Task {
     private readonly records: QuestRecord[] = QUEST_DEFS.map(d => d.record);
 
     private readonly watchdog = new ProgressWatchdog();
+    private readonly failedWatchdog = new ProgressWatchdog();
+    private pendingFailedSignature: string | null = null;
     private noProgressCount = 0;
+    private combatIdleSince: number | null = null;
+    private combatXp = 0;
 
     private readonly parked = new Set<string>();
     private readonly parkCounts = new Map<string, number>();
@@ -223,6 +228,21 @@ export class QuestEngine implements Task {
         const progress = await module.readProgress?.();
         const stage = progress ? progress.stage : await module.readStage?.();
         const snap = this.buildSnapshot(module, stage, progress);
+        const combatActive = this.combatAdvancing(snap);
+
+        if (this.pendingFailedSignature !== null) {
+            if (!combatActive && progressSignature(snap) === this.pendingFailedSignature) {
+                this.host.log(`no progress after ${this.noProgressCount} steps on ${module.record.name}`);
+                this.parkOrGiveUp(id, module.record.name);
+                this.resetWatchdog();
+                this.runningId = null;
+                return;
+            }
+            this.pendingFailedSignature = null;
+            this.failedWatchdog.reset();
+            this.noProgressCount = 0;
+            snap.noProgress = 0;
+        }
 
         // Why: a fight shaped as a step returns here every pass, so this is the only place its prayer can be held.
         // Why: the server runs one op per tick, so a pass that prays yields instead of also swinging.
@@ -337,7 +357,9 @@ export class QuestEngine implements Task {
                 }
             }
             const extras = [coinFloat, foodFloat, potionFloat].filter((w): w is { name: string; qty: number } => w !== null);
-            if (plan.blocked.length > 0 && plan.withdraw.length === 0) {
+            if (!this.bankKnown && plan.blocked.length > 0) {
+                step = { kind: 'scanBank', bank: bankFor(module) };
+            } else if (plan.blocked.length > 0 && plan.withdraw.length === 0) {
                 this.host.log(`${module.record.name} short on items: ${plan.blocked.join(', ')} — parking`);
                 this.parkedReasons.set(id, plan.blocked.map(b => `missing: ${b}`));
                 this.parkOrGiveUp(id, module.record.name);
@@ -451,9 +473,10 @@ export class QuestEngine implements Task {
         // Why: the no-progress watchdog only counts successful steps, so a step failing forever parks nothing.
         if (ok) {
             this.failStreak = 0;
+            this.failedWatchdog.reset();
         } else if (++this.failStreak % FAIL_WARN === 0) {
             this.host.log(`WARN: '${stepDesc}' has failed ${this.failStreak}x in a row `
-                + `over ${formatDuration(this.tracker.elapsed(Date.now()))} — failures do not feed the no-progress watchdog, so this will not park itself`);
+                + `over ${formatDuration(this.tracker.elapsed(Date.now()))}`);
         }
 
         if (Bank.isOpen()) {
@@ -462,11 +485,23 @@ export class QuestEngine implements Task {
             await Modals.close();
         }
 
-        if (ok && advancesWorld(step)) {
-            const count = this.watchdog.note(progressSignature(this.buildSnapshot(module, stage, progress)));
+        if (advancesWorld(step)) {
+            const after = this.buildSnapshot(module, stage, progress);
+            const signature = progressSignature(after);
+            const combatActive = this.combatAdvancing(after);
+            if (combatActive) {
+                this.watchdog.reset();
+                this.failedWatchdog.reset();
+            }
+            const count = combatActive ? 0 : ok
+                ? this.watchdog.note(signature)
+                : this.failedWatchdog.noteFailure(progressSignature(snap), signature);
             this.noProgressCount = count;
             if (count === NO_PROGRESS_WARN) {
                 this.host.log(`WARN: ${count} steps with no progress on ${module.record.name} — check the decide()/prefer lists`);
+            } else if (count >= NO_PROGRESS_PARK && !ok && (module.readProgress || module.readStage)) {
+                // Why: journal oracles can open/close modals; confirm on the next normal read, not with an extra post-step action.
+                this.pendingFailedSignature = signature;
             } else if (count >= NO_PROGRESS_PARK) {
                 this.host.log(`no progress after ${count} steps on ${module.record.name}`);
                 this.parkOrGiveUp(id, module.record.name);
@@ -576,9 +611,23 @@ export class QuestEngine implements Task {
 
     private resetWatchdog(): void {
         this.watchdog.reset();
+        this.failedWatchdog.reset();
+        this.pendingFailedSignature = null;
         this.noProgressCount = 0;
         this.tracker.reset();
         this.failStreak = 0;
+        this.combatIdleSince = null;
+    }
+
+    private combatAdvancing(snap: QuestSnapshot): boolean {
+        if (!Game.inCombat()) {
+            this.combatIdleSince = null;
+            return false;
+        }
+        const xp = snap.combatXp ?? 0;
+        if (this.combatIdleSince === null || xp !== this.combatXp) this.combatIdleSince = Date.now();
+        this.combatXp = xp;
+        return Date.now() - this.combatIdleSince < COMBAT_STALL_MS;
     }
 
     /**
@@ -678,7 +727,8 @@ export class QuestEngine implements Task {
             prayer: Skills.effective('prayer'),
             attack: Skills.level('attack'),
             ranged: Skills.level('ranged'),
-            freeSlots: Inventory.free()
+            freeSlots: Inventory.free(),
+            combatXp: Skills.xp('attack') + Skills.xp('strength') + Skills.xp('defence') + Skills.xp('ranged') + Skills.xp('magic') + Skills.xp('hitpoints')
         };
     }
 

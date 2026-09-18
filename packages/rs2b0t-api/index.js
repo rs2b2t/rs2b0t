@@ -35,6 +35,7 @@ export const {
     Inventory,
     InvItem,
     Equipment,
+    Special,
     Bank,
     withdrawOp,
     Banking,

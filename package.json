@@ -34,6 +34,7 @@
         "gen:cooksurfaces": "bun tools/cooking/gen-cooksurfaces.ts",
     "gen:scriptdocs": "bun tools/gen-scriptdocs.ts",
         "verify:gatheringbot": "bun e2e/gatheringbot-test.ts",
+        "verify:kq": "bun e2e/jivekq-live.ts",
         "verify:thievingbot": "bun e2e/thievingbot-test.ts",
         "verify:coaltrucks": "bun e2e/coaltrucks-test.ts",
         "gen:basemap": "bun tools/map/build-basemap.ts",

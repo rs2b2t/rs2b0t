@@ -29,6 +29,31 @@ it: McGrubor's Wood's front gate is locked from inside the wood and guarded by t
 Forester from outside, so the only way through the fence is the Loose Railing one
 `Squeeze-through` edge away, curated, because "Squeeze-through" is not an `Open`.
 
+## Stepping through
+
+The server runs a loc op only on a tick where the player took no step, swaps the door
+in that tick, and moves the player on the tick after it decodes the next click. So the
+earliest crossing is one tick after the open, and it happens only if the walk click
+leaves on the frame the leaf swings. `doorStepTicks` in `pathFollow` is the wait
+between the open leaf showing and that click: the default of 1 keeps every walker on
+the timing its live proofs were recorded at, and 0 steps on the open frame.
+`walkOpening` takes the same option and, for a door the graph does not know, reads the
+passage off the client's collision, the one face of the door tile that became
+steppable, and steps to the far side of it before the next segment replans.
+
+A same-frame crossing is judged on the tile the server holds the player on
+(`reader.serverTile()`, the route head). The sprite that `reader.worldTile()` follows
+walks four pixels a frame, so it reaches the far tile a tick after the server moved the
+player, and two on a 300ms sim; every other walker keeps the sprite so its timing stays
+as its live proofs recorded it.
+
+The crossed line in the walk log carries the tick ledger: `(Open sent tick 40, open +1,
+stepped +1, crossed +2)` is a same-frame step, and `crossed` one more than `stepped`
+is the floor the server allows. An edge the client can already step across is treated
+as open before any Open is sent: `findTransportLoc` falls back to any same-named Open
+loc within five tiles, so an open door with a shut neighbour, Doric's hut, would
+otherwise be re-opened by clicking the neighbour.
+
 ## Special crossings
 
 Some barriers need more than an `Open`: a toll, a fare, a dialogue, or a quest state.

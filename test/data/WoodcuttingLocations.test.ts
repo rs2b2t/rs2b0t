@@ -42,8 +42,9 @@ describe('resolveWoodcuttingLocation', () => {
 });
 
 describe('WOODCUTTING_LOCATIONS table', () => {
-    test('dropdown is Use Closest + Use Start Position + Use Custom Position + legacy None + camps', () => {
+    test('dropdown is Auto + Use Closest + Use Start Position + Use Custom Position + legacy None + camps', () => {
         expect(WOODCUTTING_LOCATION_OPTIONS).toEqual([
+            'Auto',
             'Use Closest',
             'Use Start Position',
             'Use Custom Position',

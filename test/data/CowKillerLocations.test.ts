@@ -2,10 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import { BANK_LOCATIONS } from '#/bot/api/bank/BankLocations.js';
 import Tile from '#/bot/geometry/Tile.js';
 import {
-    ARDOUGNE_EAST_BANK,
+    ARDOUGNE_WEST_BANK,
     COW_LOCATIONS,
     COW_LOCATION_OPTIONS,
     cowBankDestination,
+    DRAYNOR_BANK,
+    FALADOR_EAST_BANK,
     isCowFieldLootTile,
     needsTollCoins,
     resolveCowLocation,
@@ -27,7 +29,7 @@ describe('CowKiller locations', () => {
         expect(resolveCowLocation('Auto', new Tile(3269, 3167, 0))?.name).toBe('Lumbridge cow field');
         expect(resolveCowLocation('Auto', new Tile(3185, 3440, 0))?.name).toBe('North-west of Lumbridge');
         expect(resolveCowLocation('Auto', new Tile(3013, 3355, 0))?.name).toBe('South of Falador');
-        expect(resolveCowLocation('Auto', ARDOUGNE_EAST_BANK)?.name).toBe('East Ardougne cow field');
+        expect(resolveCowLocation('Auto', ARDOUGNE_WEST_BANK)?.name).toBe('East Ardougne cow field');
     });
 
     test('named locations are case-insensitive and Start tile stays custom', () => {
@@ -108,21 +110,37 @@ describe('Al Kharid toll float', () => {
         expect(shouldBootstrapTollCoins(lumbridge, new Tile(3210, 3424, 0), 0, true)).toBe(false);
     });
 
-    test('pins East Ardougne to its east bank without adding a toll or supply requirement', () => {
-        const knownBank = BANK_LOCATIONS.find(bank => bank.name === 'Ardougne East');
-        expect(knownBank?.tile).toEqual(ARDOUGNE_EAST_BANK);
+    test('pins every field to a bank without adding a toll or supply requirement', () => {
+        const draynor = BANK_LOCATIONS.find(bank => bank.name === 'Draynor');
+        expect(draynor?.tile).toEqual(DRAYNOR_BANK);
+        expect(cowBankDestination(northWest, true)).toEqual({
+            name: 'Draynor',
+            tile: DRAYNOR_BANK
+        });
+
+        const faladorEast = BANK_LOCATIONS.find(bank => bank.name === 'Falador East');
+        expect(faladorEast?.tile).toEqual(FALADOR_EAST_BANK);
+        expect(cowBankDestination(falador, true)).toEqual({
+            name: 'Falador East',
+            tile: FALADOR_EAST_BANK
+        });
+
+        const ardougneWest = BANK_LOCATIONS.find(bank => bank.name === 'Ardougne West');
+        expect(ardougneWest?.tile).toEqual(ARDOUGNE_WEST_BANK);
         expect(cowBankDestination(eastArdougne, true)).toEqual({
-            name: 'Ardougne East',
-            tile: ARDOUGNE_EAST_BANK
+            name: 'Ardougne West',
+            tile: ARDOUGNE_WEST_BANK
         });
         expect(cowBankDestination(eastArdougne, false)).toEqual({
-            name: 'Ardougne East',
-            tile: ARDOUGNE_EAST_BANK
+            name: 'Ardougne West',
+            tile: ARDOUGNE_WEST_BANK
         });
+
+        expect(cowBankDestination(null, true)).toBeNull();
+
         expect(cowBankDestination(COW_LOCATIONS[0], true)).toEqual({
             name: 'Al Kharid',
             tile: new Tile(3269, 3167, 0)
         });
-        expect(cowBankDestination(northWest, true)).toBeNull();
     });
 });

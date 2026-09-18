@@ -9,7 +9,9 @@ export interface CowLocation {
     bankDestination?: BankDestination;
 }
 
-export const ARDOUGNE_EAST_BANK = new Tile(2655, 3283, 0);
+export const DRAYNOR_BANK = new Tile(3093, 3243, 0);
+export const FALADOR_EAST_BANK = new Tile(3013, 3355, 0);
+export const ARDOUGNE_WEST_BANK = new Tile(2616, 3332, 0);
 
 export const COW_LOCATIONS: CowLocation[] = [
     {
@@ -18,22 +20,24 @@ export const COW_LOCATIONS: CowLocation[] = [
         usesAlKharidToll: true
     },
     {
-        // West of the river, so it banks at Draynor and never pays the toll gate
+        // Why: west of the river, so it banks at Draynor and never pays the toll gate.
         name: 'North-west of Lumbridge',
         anchor: new Tile(3168, 3329, 0),
-        usesAlKharidToll: false
+        usesAlKharidToll: false,
+        bankDestination: { name: 'Draynor', tile: DRAYNOR_BANK }
     },
     {
         name: 'South of Falador',
         anchor: new Tile(3033, 3306, 0),
-        usesAlKharidToll: false
+        usesAlKharidToll: false,
+        bankDestination: { name: 'Falador East', tile: FALADOR_EAST_BANK }
     },
     {
         name: 'East Ardougne cow field',
         anchor: new Tile(2664, 3347, 0),
         usesAlKharidToll: false,
-        // Ardougne West is nearer by straight line but farther through the street/pen route.
-        bankDestination: { name: 'Ardougne East', tile: ARDOUGNE_EAST_BANK }
+        // Why: Ardougne East is technically closer, but Ardougne West's booth avoids the crowded Ardougne area.
+        bankDestination: { name: 'Ardougne West', tile: ARDOUGNE_WEST_BANK }
     }
 ];
 

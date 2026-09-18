@@ -76,6 +76,14 @@ export function renderScriptDocs(metas: ScriptMeta[]): string {
 if (import.meta.main) {
     const { GlobalRegistrator } = await import('@happy-dom/global-registrator');
     GlobalRegistrator.register();
+    Object.assign(window, {
+        BroadcastChannel: undefined,
+        audioContext: {
+            currentTime: 0,
+            destination: {},
+            createGain: () => ({ gain: { setValueAtTime: () => {} }, connect: () => {} })
+        }
+    });
     const { ScriptRegistry } = await import('#/bot/runtime/ScriptRegistry.js');
     await import('#/bot/scripts/index.js');
 
@@ -99,4 +107,5 @@ if (import.meta.main) {
         writeFileSync(OUT, fresh);
         console.log(`wrote ${OUT}`);
     }
+    await GlobalRegistrator.unregister();
 }

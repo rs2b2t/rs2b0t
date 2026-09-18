@@ -193,6 +193,7 @@ import { Player } from '../api/model/Player.js';
 import { Bank, withdrawOp } from '../api/bank/Bank.js';
 import { ChatDialog } from '../api/ui/dialogue/ChatDialog.js';
 import { Equipment } from '../api/equipment/Equipment.js';
+import { Special } from '../api/combat/Special.js';
 import { InvItem, Inventory } from '../api/inventory/Inventory.js';
 import { Quests } from '../api/ui/questlog/Quests.js';
 import { Prayer } from '../api/prayer/Prayer.js';
@@ -263,6 +264,7 @@ export function installAbi(): void {
         Inventory,
         InvItem,
         Equipment,
+        Special,
         Bank,
         withdrawOp,
         Banking,

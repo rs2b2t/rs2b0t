@@ -22,6 +22,16 @@ import { SettingsStore } from '../Settings.js';
 
 const DIALOG_EVENT_NPCS = ['genie', 'drunken dwarf', 'mysterious old man', 'sandwich lady', 'frog'];
 const PICK_EVENT_NPCS = ['strange plant'];
+
+// Why: the plant spawns within one tile of whoever it is for and never moves, and clicking someone else's answers "It's not here for you", so anything further out is a walk the run cannot cash in. At Seers bank the old eight-tile reach kept finding the ones that spawn on the woodcutters.
+/** How far a strange plant may be and still be ours: its spawn tile plus a step or two of drift. */
+export const PLANT_REACH = 3;
+
+/** Whether this npc is a pickable event close enough to belong to us. */
+export function pickEventNear(npc: { name: string | null; distance: number }): boolean {
+    const name = npc.name?.toLowerCase();
+    return name !== undefined && PICK_EVENT_NPCS.includes(name) && npc.distance <= PLANT_REACH;
+}
 const idRange = (lo: number, hi: number): number[] => Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
 const HOSTILE_EVENT_NPC_IDS = new Set<number>([
     ...idRange(391, 396), // River troll  (macro_rivertrollguardian_1..6)
@@ -46,11 +56,10 @@ const FISHING_GEAR = [
     'oily fishing rod',
     'fly fishing rod',
     'harpoon',
-    'lobster pot',
-    'fishing bait',
-    'feather'
+    'lobster pot'
 ];
 const GEAR_LOSS_WINDOW_MS = 90_000;
+const GEAR_RECOVERY_RANGE = 10;
 /** Detection range for hostile gathering randoms that attack from several tiles away. */
 const HOSTILE_ENGAGE_DISTANCE = 8;
 
@@ -85,12 +94,17 @@ export class GearLossTracker {
     private held = new Set<string>();
     private lost = new Map<string, number>();
     private wasSuppressed = false;
+    private lastFishingTick = -Infinity;
+    private canRecover = false;
 
     constructor(private readonly windowMs = GEAR_LOSS_WINDOW_MS) {}
 
-    update(heldNow: readonly string[], suppressedNow: boolean, nowMs: number): void {
-        const now = new Set(heldNow.map(s => s.toLowerCase()));
-        if (!suppressedNow && !this.wasSuppressed) {
+    update(heldNow: readonly string[], suppressedNow: boolean, nowMs: number, fishingNearby: boolean, tick: number): void {
+        if (fishingNearby) this.lastFishingTick = tick;
+        this.canRecover = tick >= this.lastFishingTick && tick - this.lastFishingTick <= 1 && !suppressedNow && !this.wasSuppressed;
+        const now = new Set(heldNow.map(s => s.toLowerCase()).filter(s => FISHING_GEAR.includes(s)));
+        for (const gear of now) this.lost.delete(gear);
+        if (this.canRecover) {
             for (const gear of this.held) {
                 if (!now.has(gear)) {
                     this.lost.set(gear, nowMs);
@@ -103,7 +117,7 @@ export class GearLossTracker {
 
     recentlyLost(gear: string, nowMs: number): boolean {
         const at = this.lost.get(gear.toLowerCase());
-        return at !== undefined && nowMs - at <= this.windowMs;
+        return this.canRecover && at !== undefined && nowMs - at <= this.windowMs;
     }
 }
 
@@ -288,6 +302,13 @@ class RandomEventsImpl {
     private detectSceneEvents(): DetectedEvent | null {
         // Scene may be empty mid-teleport; npcs() can still walk combatCycle stamps.
         const npcs = reader.npcs();
+        this.gearLoss.update(
+            Inventory.items().flatMap(item => item.name ? [item.name] : []),
+            Bank.isOpen() || Shop.isOpen(),
+            Date.now(),
+            npcs.some(npc => npc.distance <= GEAR_RECOVERY_RANGE && (npc.name?.toLowerCase() === 'fishing spot' || WHIRLPOOL_NPC_IDS.includes(npc.id))),
+            BotHost.tickCount
+        );
 
         for (const npc of npcs) {
             const name = npc.name?.toLowerCase();
@@ -297,7 +318,7 @@ class RandomEventsImpl {
             if (DIALOG_EVENT_NPCS.includes(name) && npc.distance <= 6) {
                 return { kind: 'dialog', name };
             }
-            if (PICK_EVENT_NPCS.includes(name) && npc.distance <= 8 && plantStrategy(npc.ops) === 'pick') {
+            if (pickEventNear(npc) && plantStrategy(npc.ops) === 'pick') {
                 return { kind: 'pick', name };
             }
         }
@@ -336,18 +357,13 @@ class RandomEventsImpl {
             }
         }
 
-        this.gearLoss.update(
-            FISHING_GEAR.filter(g => Inventory.contains(g)),
-            Bank.isOpen() || Shop.isOpen(),
-            Date.now()
-        );
         for (const gear of FISHING_GEAR) {
             if (!this.gearLoss.recentlyLost(gear, Date.now()) || Inventory.contains(gear)) {
                 continue;
             }
             const onGround = GroundItems.query()
                 .where(g => (g.name?.toLowerCase() ?? '') === gear)
-                .within(10)
+                .within(GEAR_RECOVERY_RANGE)
                 .nearest();
             if (onGround) {
                 return { kind: 'lost-gear', name: gear };
@@ -682,7 +698,7 @@ class RandomEventsImpl {
     private async handleLostGear(name: string, log: (msg: string) => void): Promise<boolean> {
         const drop = GroundItems.query()
             .where(g => (g.name?.toLowerCase() ?? '') === name)
-            .within(10)
+            .within(GEAR_RECOVERY_RANGE)
             .nearest();
         if (!drop) {
             return false;

@@ -64,6 +64,11 @@ describe('resolveGatheringLocation', () => {
         expect(resolveGatheringLocation('FAR', new Tile(0, 0, 0), TABLE)?.name).toBe('Far');
     });
 
+    test('Auto keeps distant starts freeform and only snaps on the same plane', () => {
+        expect(resolveGatheringLocation('Auto', new Tile(3150, 3250, 0), TABLE)).toBeNull();
+        expect(resolveGatheringLocation('Auto', new Tile(3100, 3200, 1), TABLE)?.name).toBe('Upstairs');
+    });
+
     test('unknown name → null', () => {
         expect(resolveGatheringLocation('Atlantis', new Tile(3100, 3200, 0), TABLE)).toBeNull();
     });
@@ -108,6 +113,7 @@ describe('resolveGatheringLocation', () => {
 describe('locationOptions / boothFields', () => {
     test('options are Use Closest + Use Start Position + Use Custom Position + legacy None + names', () => {
         expect(locationOptions(TABLE)).toEqual([
+            'Auto',
             'Use Closest',
             'Use Start Position',
             'Use Custom Position',

@@ -172,9 +172,12 @@ export class Npc implements Interactable, Locatable {
     readonly id: number;
     readonly level: number;
     readonly index: number;
+    /** Tiles along each side of the footprint; `tile()` is the one under its centre. */
+    readonly size: number;
     readonly inCombat: boolean;
     readonly health: number;
     tile(): Tile;
+    networkTile(): Tile;
     distance(): number;
     actions(): string[];
     valid(): boolean;
@@ -194,6 +197,7 @@ export class Player implements Locatable {
     /** Slot in the client's player list. */
     readonly index: number;
     readonly inCombat: boolean;
+    readonly combatLevel: number;
     tile(): Tile;
     distance(): number;
     actions(): string[];
@@ -336,6 +340,27 @@ export const Equipment: {
     equip(name: string): Promise<boolean>;
     /** Remove from a worn slot into the backpack. */
     unequip(name: string): Promise<boolean>;
+};
+
+/**
+ * Weapon special-attack state and controls.
+ * Energy is expressed on the client scale 0–1000 (100 = 10%).
+ */
+export const Special: {
+    /** Current special-attack energy, 0–1000. */
+    energy(): number;
+    /** Whether a special is armed for the next attack. */
+    armed(): boolean;
+    /** Currently wielded weapon name, or '' with no weapon equipped. */
+    wielded(): string;
+    /** Special energy cost for a supported weapon, or null when unsupported. */
+    cost(weaponName: string): number | null;
+    /** Whether current energy is sufficient for this weapon's special. */
+    ready(weaponName: string): boolean;
+    /** Current weapon's special-bar component, or -1 when unavailable. */
+    barComponent(): number;
+    /** Arm the current weapon's special attack for the next attack. */
+    arm(): Promise<boolean>;
 };
 
 /**
@@ -574,6 +599,8 @@ export const Shop: {
     buyById(id: number, n: number): Promise<number>;
     /** Sell up to `n` of `name`; resolves the units sold. */
     sell(name: string, n: number): Promise<number>;
+    /** Sell every one of `name` the pack holds, ten to a click; resolves the units sold. */
+    sellAll(name: string): Promise<number>;
     close(): Promise<void>;
 };
 

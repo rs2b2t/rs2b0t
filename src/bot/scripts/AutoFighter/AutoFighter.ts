@@ -27,7 +27,8 @@ import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Sustain } from '../../api/sustain/Sustain.js';
-import { nearestBank } from '../../api/bank/BankLocations.js';
+import { nearestBank, BANK_LOCATIONS, bankUnlocked, type BankLocation } from '../../api/bank/BankLocations.js';
+import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { GroundItems } from '../../api/grounditems/GroundItems.js';
 import { Npcs, type Npc } from '../../api/npcs/Npcs.js';
 import { matchesEntityName } from '../../api/query/Query.js';
@@ -37,6 +38,7 @@ import { countMatching, matchesAny, shouldBank, shouldEat, shouldPanic } from '.
 import {
     autoBankEnabled,
     BANKING_OPTIONS,
+    BANK_LOCATION_OPTIONS,
     shouldBankAfterMinutes,
     BURIAL_BONE_NAME,
     CUSTOM_COORDINATES,
@@ -60,7 +62,7 @@ import { Reach } from '../../api/walking/Reach.js';
 import { RANDOM_EVENT_CASKET_ID } from '../../api/bank/Banking.js';
 import { scriptFood } from '../../api/loadout/loadoutPlan.js';
 import { LOADOUT_SETTING } from '../../api/loadout/loadoutSetting.js';
-import { HERBS, HERB_OPTIONS } from '../HerbCleaner/HerbCleanerLogic.js';
+import { HERBS, HERB_OPTIONS } from '../../data/herbs.js';
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const KIT = ['spade', 'sextant', 'watch', 'chart'];
@@ -110,6 +112,7 @@ export const SETTINGS: SettingsSchema = {
     buryBones: { type: 'boolean', default: false, label: 'Bury regular bones', group: 'Banking & loot', help: 'pick up and bury regular Bones for Prayer XP (always looted when on)' },
     solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues' },
     banking: { type: 'string', default: 'Auto', options: BANKING_OPTIONS, label: 'Banking', help: 'Auto = bank loot at the nearest bank and return; None = no loot-only bank trips' },
+    bankLocation: { type: 'string', default: 'Nearest', options: BANK_LOCATION_OPTIONS, label: 'Bank location', group: 'Banking & loot', help: 'Nearest = closest unlocked bank; a named bank forces that stand (locked banks fall back to nearest). Used for loot, food, supplies, and panic retreats.' },
     bankAtLootSlots: { type: 'number', default: 12, min: 1, max: 27, label: 'Bank at loot slots', showIf: { key: 'banking', anyOf: ['Auto'] } },
     bankEveryMinutes: {
         type: 'number',
@@ -141,6 +144,7 @@ let BANK_AT = 12;
 let BANK_EVERY_MINUTES = 0;
 let AUTO_BANK = true;
 let BANK_COMMON = true;
+let BANK_LOCATION = 'Nearest';
 let STYLE: 'melee' | 'mage' | 'range' = 'melee';
 let MELEE_STYLE: MeleeCombatStyle = 'strength';
 let USE_SPECIAL = true;
@@ -152,6 +156,34 @@ let AMMO_WITHDRAW = 500;
 let AMMO_RESTOCK_BELOW = 0.25;
 let TRACKED_GEAR: string[] = [];
 let AVOID_HERB_IDS = new Set<number>();
+
+/** The forced bank named by AutoFighter.bankLocation, or null for Nearest. */
+function forcedBank(): BankLocation | null {
+    return BANK_LOCATION === 'Nearest' ? null : (BANK_LOCATIONS.find(b => b.name === BANK_LOCATION) ?? null);
+}
+
+/** Bank this bank trip uses: the forced named bank when unlocked, else nearest. */
+function pickBank(here: WorldTile | null): BankLocation | null {
+    const forced = forcedBank();
+    if (here && forced && bankUnlocked(forced)) {
+        return forced;
+    }
+    return here ? nearestBank(here) : null;
+}
+
+/**
+ * Open whichever bank the bot just walked to: a teller behind a conversation
+ * (Mage Arena), a chest (Shantay / Duel Arena), or a plain Bank booth.
+ */
+async function openBank(bank: BankLocation, log: (m: string) => void): Promise<boolean> {
+    if (bank.npcAccess) {
+        return Bank.openNpcAccess(bank.npcAccess, log);
+    }
+    if (bank.access) {
+        return Bank.openNearestAccess(bank.access, log);
+    }
+    return Bank.openNearest(BOOTH.name, BOOTH.op, log);
+}
 
 function isAvoidedHerb(id: number): boolean {
     return AVOID_HERB_IDS.has(id);
@@ -250,6 +282,7 @@ export default class AutoFighter extends TaskBot {
     private lastBankAt = Date.now();
     private xpAtStart = 0;
     died = false;
+    resumeAttack = false;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -273,6 +306,17 @@ export default class AutoFighter extends TaskBot {
         BANK_EVERY_MINUTES = this.settings.num('bankEveryMinutes', 0);
         AUTO_BANK = autoBankEnabled(this.settings.str('banking', 'Auto'));
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
+        BANK_LOCATION = this.settings.str('bankLocation', 'Nearest');
+        const forced = forcedBank();
+        if (forced) {
+            if (bankUnlocked(forced)) {
+                this.log(`bank location: ${forced.name} (forced)`);
+            } else {
+                this.log(`bank location: ${forced.name} is locked — falling back to the nearest bank`);
+            }
+        } else {
+            this.log('bank location: nearest unlocked bank');
+        }
         // Why: pre-#195 saves stored attack/strength/controlled/defence in combatStyle.
         // Why: settings option validation coerces those to the default "melee" and leaves meleeStyle at strength, so Defence and the rest are ignored (#461).
         const rawCombatStyle = SettingsStore.displayString('AutoFighter', 'combatStyle', SETTINGS.combatStyle!);
@@ -323,6 +367,7 @@ export default class AutoFighter extends TaskBot {
                 if (food) {
                     const before = Skills.effective('hitpoints');
                     if (await food.interact('Eat')) {
+                        this.resumeAttack = true;
                         await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
                     }
                 }
@@ -332,7 +377,7 @@ export default class AutoFighter extends TaskBot {
         this.startedAt = Date.now();
         this.lastBankAt = this.startedAt;
         this.xpAtStart = COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
-        this.log(`AutoFighter starting — '${targetNames().join(', ')}' at ${spotMode} ${ANCHOR} r${LEASH}, style ${STYLE}${STYLE === 'mage' ? ` (${SPELL}, ${RUNES_WITHDRAW} casts)` : STYLE === 'range' ? ` (${RANGE_MODE === 0 ? 'accurate' : RANGE_MODE === 1 ? 'rapid' : 'longrange'}, ${AMMO}x${AMMO_WITHDRAW})` : ` (${MELEE_STYLE})`}, banking ${AUTO_BANK ? 'auto' : 'none'}${BANK_EVERY_MINUTES > 0 ? ` every ${BANK_EVERY_MINUTES}m` : ''}, food '${FOOD}'x${FOOD_WITHDRAW}, loot [${LOOT.join(', ')}]${BURY_BONES ? `, burying ${BURIAL_BONE_NAME}` : ''}`);
+        this.log(`AutoFighter starting — '${targetNames().join(', ')}' at ${spotMode} ${ANCHOR} r${LEASH}, style ${STYLE}${STYLE === 'mage' ? ` (${SPELL}, ${RUNES_WITHDRAW} casts)` : STYLE === 'range' ? ` (${RANGE_MODE === 0 ? 'accurate' : RANGE_MODE === 1 ? 'rapid' : 'longrange'}, ${AMMO}x${AMMO_WITHDRAW})` : ` (${MELEE_STYLE})`}, banking ${AUTO_BANK ? 'auto' : 'none'}${BANK_EVERY_MINUTES > 0 ? ` every ${BANK_EVERY_MINUTES}m` : ''} at ${BANK_LOCATION}, food '${FOOD}'x${FOOD_WITHDRAW}, loot [${LOOT.join(', ')}]${BURY_BONES ? `, burying ${BURIAL_BONE_NAME}` : ''}`);
 
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
@@ -500,6 +545,7 @@ class EatFood implements Task {
             if (!(await food.interact('Eat'))) {
                 return;
             }
+            this.bot.resumeAttack = true;
             await Execution.delayUntil(() => Skills.effective('hitpoints') > before || foodCount() === 0, 3000);
             if (Skills.effective('hitpoints') > before) {
                 this.bot.countEat();
@@ -515,14 +561,18 @@ class PanicRetreat implements Task {
     }
     async execute(): Promise<void> {
         const here = Game.tile();
-        const bank = here ? nearestBank(here) : null;
+        const bank = pickBank(here);
         if (!bank) {
             return;
         }
         this.bot.setStatus('panic: no food — retreating to the bank');
         this.bot.log(`panic retreat at ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp`);
+        const forced = forcedBank();
+        if (forced && bank !== forced) {
+            this.bot.log(`bank: ${forced.name} is locked — using ${bank.name} instead`);
+        }
         await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 4, timeoutMs: 180_000, log: m => this.bot.log(`  ${m}`) });
-        if (await Bank.openNearest(BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`))) {
+        if (await openBank(bank, m => this.bot.log(`  ${m}`))) {
             for (let i = 0; i < FOOD_WITHDRAW && !Inventory.isFull(); i++) {
                 const before = foodCount();
                 if (!(await Bank.withdraw(FOOD, 'Withdraw-1'))) {
@@ -596,7 +646,7 @@ class BankRun implements Task {
     }
     async execute(): Promise<void> {
         const here = Game.tile();
-        const bank = here ? nearestBank(here) : null;
+        const bank = pickBank(here);
         if (!bank) {
             this.bot.bankAfterSolve = false;
             return;
@@ -614,10 +664,14 @@ class BankRun implements Task {
         this.bot.log(`BankRun triggered: ${reason}`);
         this.bot.setStatus(this.bot.bankAfterSolve ? 'clue done — banking the loot' : 'banking');
         this.bot.log(`banking at the ${bank.name} bank (${bank.tile})`);
+        const forced = forcedBank();
+        if (forced && bank !== forced) {
+            this.bot.log(`bank: ${forced.name} is locked — using ${bank.name} instead`);
+        }
         if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 4, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) }))) {
             return;
         }
-        if (!(await Bank.openNearest(BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))) {
+        if (!(await openBank(bank, m => this.bot.log(`  ${m}`)))) {
             return;
         }
         await Bank.depositAllMatching((name, id) => !shouldKeepBankItem(name, id, FOOD, BANK_COMMON, STYLE === 'range' ? [AMMO] : [], TRACKED_GEAR, BURY_BONES), m => this.bot.log(`  ${m}`));
@@ -831,19 +885,21 @@ class Fight implements Task {
     private findTarget() {
         const q = Npcs.query()
             .action('Attack')
-            .where(n => !n.inCombat && n.tile().distanceTo(ANCHOR) <= LEASH);
+            .where(n => (n.targetsMe() || !n.inCombat) && !n.targetsAnotherPlayer() && n.tile().distanceTo(ANCHOR) <= LEASH);
         const names = targetNames();
         if (names.length > 0) {
             q.name(...names);
         }
-        return q.nearest();
+        const targets = q.results().sort((a, b) => a.distance() - b.distance());
+        return targets.find(n => n.targetsMe()) ?? targets[0] ?? null;
     }
     private track(engaged: Npc): Npc | null {
         const names = targetNames();
         return Npcs.all().find(n => n.index === engaged.index && names.some(name => matchesEntityName(n.name, name))) ?? null;
     }
     validate(): boolean {
-        return !Game.inCombat() && !needEat() && this.findTarget() !== null;
+        const target = this.findTarget();
+        return !needEat() && target !== null && (!Game.inCombat() || (this.bot.resumeAttack && target.targetsMe()));
     }
     async execute(): Promise<void> {
         const target = this.findTarget();
@@ -851,6 +907,10 @@ class Fight implements Task {
             return;
         }
         this.bot.setStatus(`attacking ${target.name} at ${target.tile()}`);
+        if (this.bot.resumeAttack && target.targetsMe()) {
+            if (!(await target.interact('Attack'))) return;
+            this.bot.resumeAttack = false;
+        }
         const status = await Reach.entityOp({
             find: () => this.track(target),
             op: 'Attack',
@@ -865,6 +925,7 @@ class Fight implements Task {
         if (status !== 'done' || ChatDialog.canContinue()) {
             return;
         }
+        this.bot.resumeAttack = false;
         this.bot.setStatus('fighting');
         const deadline = performance.now() + 90_000;
         while (performance.now() < deadline) {

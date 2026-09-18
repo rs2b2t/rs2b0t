@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 // docs/QUESTS.md
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
@@ -6,14 +7,6 @@ import type { QuestProgress } from '../../engine/types.js';
 import { SC_STAGE } from './areas.js';
 
 export const QUEST = 'Scorpion Catcher';
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 // Why: the journal only counts cages in the pack, so which scorpions are caught is read from the cage obj id, which works for a banked cage too.
 

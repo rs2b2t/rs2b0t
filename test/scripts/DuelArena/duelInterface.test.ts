@@ -33,6 +33,7 @@ function player(index: number): Player {
         tile: { x: 3368, z: 3274, level: 0 },
         distance: 1,
         inCombat: false,
+        combatLevel: 42,
         faceEntity: -1
     });
 }

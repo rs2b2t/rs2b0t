@@ -16,7 +16,7 @@ let walks: WorldTile[];
 
 function npc(id = 431, name = 'Watchman'): NpcSnapshot {
     return {
-        id, name, index: 7, anim: -1, level: 14, inCombat: false,
+        id, name, index: 7, anim: -1, level: 14, size: 1, inCombat: false,
         tile: { x: 3201, z: 3200, level: 0 }, distance: 1,
         ops: [null, 'Attack', null, null, null], health: 20, totalHealth: 20,
         faceEntity: 32771
