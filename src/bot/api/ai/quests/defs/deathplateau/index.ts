@@ -17,6 +17,7 @@ import {
     ALL_BALL_IDS,
     ALE_PRICE,
     BALL_PICKUP,
+    BLURBERRY_SHOP,
     COIN_FLOAT,
     DEATH_ITEM,
     DENULTH_FINISH,
@@ -40,7 +41,7 @@ import {
     reclaimIouFromHarold,
     talkInHaroldRoom
 } from './harold.js';
-import { talkAt, walkTo } from './nav.js';
+import { onSecretPath, talkAt, walkSecretPath, walkTo } from './nav.js';
 import { Modals } from '../../../../ui/widgets/Modals.js';
 import {
     DP_FLAG,
@@ -147,6 +148,7 @@ export function effectiveMap(snap: QuestSnapshot, progress: QuestProgress | unde
 const KEEP = [
     'coins',
     DEATH_ITEM.ASGARNIAN_ALE.name.toLowerCase(),
+    DEATH_ITEM.BLURBERRY_SPECIAL.name.toLowerCase(),
     DEATH_ITEM.IOU.name.toLowerCase(),
     DEATH_ITEM.COMBINATION.name.toLowerCase(),
     DEATH_ITEM.SECRET_MAP.name.toLowerCase(),
@@ -218,6 +220,16 @@ function sourceNamed(
     return makeSpace(snap, short) ?? withdraw([{ name, qty: Math.min(short, inBank), id }]);
 }
 
+function sourceCocktail(snap: QuestSnapshot): QuestStep | null {
+    const drinks = [DEATH_ITEM.BLURBERRY_SPECIAL, DEATH_ITEM.PREMADE_BLURBERRY_SPECIAL];
+    if (drinks.some(drink => heldId(snap, drink.id) > 0)) return null;
+    if (!snap.bankKnown) return scanBank();
+    const banked = drinks.find(drink => bankedId(snap, drink.id) > 0);
+    return makeSpace(snap, 1) ?? (banked
+        ? withdraw([{ ...banked, qty: 1 }])
+        : { kind: 'buy', item: DEATH_ITEM.BLURBERRY_SPECIAL.name, qty: 1, shop: BLURBERRY_SHOP, estGp: 30 });
+}
+
 function normalizePack(snap: QuestSnapshot): QuestStep | null {
     return [...snap.inv.keys()].some(n => !KEEP.includes(n)) ? depositKeep() : null;
 }
@@ -281,21 +293,6 @@ async function openTenzingDoor(log: (m: string) => void): Promise<boolean> {
     // After Saba: knock, "No milk today!", auto "I'm not the milkman", open.
     if (await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 3000)) {
         await driveDialog(["I'm not the milkman", 'I need your help'], log);
-    }
-    await Execution.delayTicks(2);
-    return true;
-}
-
-async function openTenzingBackDoor(log: (m: string) => void): Promise<boolean> {
-    if (!(await walkTo(TILE.TENZING_BACK, 2, log))) {
-        return false;
-    }
-    const door = Locs.query().name('Door').within(6).nearest();
-    if (!door) {
-        return true;
-    }
-    if (!(await door.interact('Open'))) {
-        return false;
     }
     await Execution.delayTicks(2);
     return true;
@@ -489,11 +486,10 @@ async function solveStoneMechanism(log: (m: string) => void): Promise<boolean> {
 }
 
 async function scoutSecretPath(log: (m: string) => void): Promise<boolean> {
-    if (!(await openTenzingBackDoor(log))) {
-        // Still try the walk, path may already be open.
-        log('tenzing back door open failed, walking scout path anyway');
+    if (!onSecretPath(Game.tile()) && !(await walkSecretPath(TILE.STILE_NORTH, log))) {
+        return false;
     }
-    if (!(await walkTo(TILE.SCOUT, 0, log))) {
+    if (!(await walkSecretPath(TILE.SCOUT, log))) {
         return false;
     }
     await settleScene();
@@ -505,9 +501,13 @@ async function scoutSecretPath(log: (m: string) => void): Promise<boolean> {
 }
 
 async function handInToDenulth(log: (m: string) => void): Promise<boolean> {
+    if (onSecretPath(Game.tile()) && !(await walkSecretPath(TILE.STILE_SOUTH, log))) {
+        return false;
+    }
     if (inSabaCave(Game.tile()) && !(await leaveSabaCave(log))) {
         return false;
     }
+    if (!(await walkSecretPath(TILE.DENULTH, log))) return false;
     return talkAt(DENULTH_FINISH, log);
 }
 
@@ -722,7 +722,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
         }
         if (stage === DP_STAGE.GIVEN_ALE) {
             return sourceCoins(snap, GAMBLE_STAKE_FLOAT)
-                ?? custom('gamble with Harold until the IOU', gambleWithHarold);
+                ?? sourceCocktail(snap)
+                ?? custom('give Harold a Blurberry special and gamble for the IOU', gambleWithHarold);
         }
         if (stage === DP_STAGE.GIVEN_IOU) {
             if (heldId(snap, DEATH_ITEM.IOU.id) === 0 && heldId(snap, DEATH_ITEM.COMBINATION.id) === 0) {

@@ -6,6 +6,8 @@ export const FALADOR_WEST_BANK = new Tile(2946, 3369, 0);
 
 export const DEATH_ITEM = {
     ASGARNIAN_ALE: { id: 1905, name: 'Asgarnian ale' },
+    BLURBERRY_SPECIAL: { id: 2064, name: 'Blurberry special' },
+    PREMADE_BLURBERRY_SPECIAL: { id: 2028, name: 'Blurberry special' },
     IOU: { id: 3103, name: 'Iou' },
     COMBINATION: { id: 3102, name: 'Combination' },
     SECRET_MAP: { id: 3104, name: 'Secret way map' },
@@ -55,6 +57,8 @@ export const TILE = {
     TENZING: new Tile(2820, 3556, 0),
     TENZING_DOOR: new Tile(2823, 3555, 0),
     TENZING_BACK: new Tile(2820, 3558, 0),
+    STILE_NORTH: new Tile(2817, 3564, 0),
+    STILE_SOUTH: new Tile(2817, 3561, 0),
     SABA_ENTRANCE: new Tile(2858, 3577, 0),
     SABA_INSIDE: new Tile(2270, 4759, 0),
     SABA_EXIT: new Tile(2269, 4752, 0),
@@ -69,6 +73,8 @@ export const TILE = {
     INN_STAIRS_BOTTOM: new Tile(2914, 3538, 0),
     INN_STAIRS_TOP: new Tile(2914, 3542, 1)
 } as const;
+
+export const BLURBERRY_SHOP = { npc: 'Barman', anchor: new Tile(2482, 3488, 1) };
 
 export const TOSTIG_SHOP = { npc: 'Tostig', anchor: TILE.TOSTIG };
 

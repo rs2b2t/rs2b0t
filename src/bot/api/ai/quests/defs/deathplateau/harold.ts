@@ -1,5 +1,6 @@
 import { actions, reader, type ModalButton } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
+import { Traversal } from '../../../../walking/Traversal.js';
 import { Game } from '../../../../game/Game.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
@@ -8,7 +9,7 @@ import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import Tile from '../../../../../geometry/Tile.js';
 import { driveBoxes, driveUntil, promptLoc } from '../../exec/prompts.js';
 import { driveDialog, openDialogue, type NpcStop } from '../../exec/primitives.js';
-import { DEATH_DICE_MAIN, DEATH_ITEM, HAROLD_DOOR, HAROLD_PURSE_START, MAX_BET } from './areas.js';
+import { DEATH_DICE_MAIN, DEATH_ITEM, HAROLD_DOOR, HAROLD_PURSE_START, MAX_BET, TILE } from './areas.js';
 import { talkAt, walkTo } from './nav.js';
 
 const held = (id: number): number =>
@@ -37,6 +38,11 @@ export function insideHaroldRoom(tile: { x: number; z: number; level: number } |
 export async function enterHaroldRoom(log: (m: string) => void): Promise<boolean> {
     if (insideHaroldRoom(Game.tile())) {
         return true;
+    }
+    const here = Game.tile();
+    if (here && TILE.HAROLD.distanceTo(here) > 64
+        && !(await Traversal.walkResilient(TILE.INN_STAIRS_BOTTOM, { radius: 2, attempts: 3, timeoutMs: 300_000, log }))) {
+        return false;
     }
     const stand = new Tile(HAROLD_DOOR.x, HAROLD_DOOR.z, HAROLD_DOOR.level);
     if (!(await walkTo(stand, 0, log)) && !insideHaroldRoom(Game.tile())) {
@@ -95,6 +101,21 @@ export async function giveAleToHarold(log: (m: string) => void): Promise<boolean
     }
     // Why: the branch signs off on the menu, and a menu left standing is a chat modal the next step's clicks get dropped behind.
     await driveDialog(['Can I buy you a drink?'], log);
+    return true;
+}
+
+export async function giveBlurberryToHarold(log: (m: string) => void): Promise<boolean> {
+    const drink = [DEATH_ITEM.BLURBERRY_SPECIAL, DEATH_ITEM.PREMADE_BLURBERRY_SPECIAL].find(item => held(item.id) > 0);
+    if (!drink) {
+        log('need a Blurberry special before gambling with Harold');
+        return false;
+    }
+    if (!(await enterHaroldRoom(log)) || !(await openDialogue('Harold', log))) return false;
+    const before = held(drink.id);
+    const ready = () => ChatDialog.texts().some(text => /I fink I've had enough/i.test(text)
+        || (held(drink.id) < before && /Now THAT hit the spot/i.test(text)));
+    if (!(await driveBoxes(ready, ALE_MS, ['Can I buy you a drink?'], log))) return false;
+    await driveDialog([], log);
     return true;
 }
 
@@ -262,7 +283,7 @@ export async function gambleWithHarold(log: (m: string) => void): Promise<boolea
     if (combinationFound()) {
         return true;
     }
-    if (!(await enterHaroldRoom(log))) {
+    if (!(await giveBlurberryToHarold(log))) {
         return false;
     }
     let purse = HAROLD_PURSE_START;
