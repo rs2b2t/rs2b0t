@@ -74,8 +74,8 @@ export const SECONDARIES: readonly SecondaryDef[] = [
         // peninsula west of Crafting Guild (map m45_51 spawns)
         anchor: { x: 2908, z: 3294, level: 0 },
         searchRadius: 16,
-        bank: { x: 2946, z: 3369, level: 0 },
-        bankName: 'Falador West',
+        bank: { x: 3013, z: 3355, level: 0 },
+        bankName: 'Falador East',
         takeFood: true,
         needShield: false
     },

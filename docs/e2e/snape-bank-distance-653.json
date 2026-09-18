@@ -1,0 +1,43 @@
+{
+  "result": "PASS",
+  "travelled": 330,
+  "deposited": {
+    "tile": {
+      "x": 3013,
+      "z": 3355,
+      "level": 0
+    },
+    "count": 0,
+    "open": true,
+    "state": "running",
+    "logs": [
+      "HerbloreSecondaries started",
+      "HerbloreSecondaries — Snape grass (loot) bank Falador East, food 'Lobster' x0",
+      "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+      "  path: cost 158, 76 waypoints, expanded 28926, worker 25.8ms, hops=0",
+      "  arrived (11 clicks)"
+    ]
+  },
+  "returned": {
+    "tile": {
+      "x": 2908,
+      "z": 3294,
+      "level": 0
+    },
+    "count": 1,
+    "open": false,
+    "state": "running",
+    "logs": [
+      "HerbloreSecondaries started",
+      "HerbloreSecondaries — Snape grass (loot) bank Falador East, food 'Lobster' x0",
+      "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+      "  path: cost 158, 76 waypoints, expanded 28926, worker 25.8ms, hops=0",
+      "  arrived (11 clicks)",
+      "restocked @ Falador East: food 0, coins 0",
+      "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+      "  path: cost 158, 89 waypoints, expanded 33579, worker 16.2ms, hops=0",
+      "  arrived (8 clicks)",
+      "looted Snape grass"
+    ]
+  }
+}
