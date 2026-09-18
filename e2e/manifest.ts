@@ -2,6 +2,15 @@ import type { Case } from './manifestTypes.js';
 
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
+    {
+        id: 'potionmaker-empty-secondary-live',
+        harness: 'potionmaker-empty-secondary-live.ts',
+        covers: { scripts: ['PotionMaker'] },
+        status: 'unvetted',
+        manual: true,
+        budgetMin: 3,
+        note: 'Fresh local account holds unfinished potions with no secondary banked; verifies the stop, closed bank and preserved batch.'
+    },
     ...(['missing-dds', 'missing-superanti', 'sharks14', 'guardian', 'reward'] as const).map(scenario => ({
         id: `jive-private-${scenario}`,
         harness: 'jive-private-live.ts',

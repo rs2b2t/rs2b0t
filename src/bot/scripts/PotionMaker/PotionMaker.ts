@@ -213,14 +213,16 @@ class RestockIngredients implements Task {
             return;
         }
         if (!(await Bank.withdrawXById(VIAL_OF_WATER_ID, BATCH))) {
-            if (++this.failedWithdraws >= 3) {
+            this.bot.log(`ingredient withdrawal failed (${++this.failedWithdraws}/3)`);
+            if (this.failedWithdraws >= 3) {
                 this.bot.log('withdrawing vials of water failed three times — stopping');
                 ScriptRunner.stop('could not withdraw vials of water');
             }
             return;
         }
         if (!(await Bank.withdrawXById(herb.id, BATCH))) {
-            if (++this.failedWithdraws >= 3) {
+            this.bot.log(`ingredient withdrawal failed (${++this.failedWithdraws}/3)`);
+            if (this.failedWithdraws >= 3) {
                 this.bot.log(`withdrawing ${herb.name} failed three times — stopping`);
                 ScriptRunner.stop(`could not withdraw ${herb.name}`);
             }
@@ -246,7 +248,7 @@ class MakeUnfinished implements Task {
 
     validate(): boolean {
         const herb = this.bot.herbDef();
-        if (Bank.isOpen() || !herb) {
+        if (!herb) {
             return false;
         }
         return Inventory.countById(herb.id) > 0 && Inventory.countById(VIAL_OF_WATER_ID) > 0;
@@ -255,6 +257,10 @@ class MakeUnfinished implements Task {
     async execute(): Promise<void> {
         const herb = this.bot.herbDef();
         if (!herb) {
+            return;
+        }
+        if (Bank.isOpen() && !(await Bank.close())) {
+            this.bot.log('bank would not close, retrying');
             return;
         }
         this.bot.setStatus(`making ${herb.name} unfinished potions`);
@@ -296,7 +302,7 @@ class FinishPotions implements Task {
     constructor(private bot: PotionMaker) {}
 
     validate(): boolean {
-        if (Bank.isOpen() || !this.bot.herbDef() || !this.bot.secondaryDef()) {
+        if (!this.bot.herbDef() || !this.bot.secondaryDef()) {
             return false;
         }
         const herb = this.bot.herbDef()!;
@@ -336,20 +342,21 @@ class FinishPotions implements Task {
             return;
         }
 
-        // Why: with an unfinished batch held, this task's own validate and the other two refuse while the booth stays open, so every early return here closes the bank first.
         if (!Bank.ready()) {
             await Bank.close();
             return;
         }
-        if (Bank.countById(secondary.id) === 0) {
+        const needed = Math.max(0, Math.min(BATCH, Inventory.countById(herb.unfId)) - Inventory.countById(secondary.id));
+        if (needed > 0 && Bank.countById(secondary.id) === 0) {
             this.bot.log(`no ${secondary.name} in the bank — stopping at the booth holding the batch`);
             await Bank.close();
             ScriptRunner.stop(`no ${secondary.name} in the bank`);
             return;
         }
-        if (!(await Bank.withdrawXById(secondary.id, BATCH))) {
+        if (needed > 0 && !(await Bank.withdrawXById(secondary.id, needed))) {
             await Bank.close();
-            if (++this.failedSecondaryWithdraws >= 3) {
+            this.bot.log(`could not withdraw ${secondary.name} (${++this.failedSecondaryWithdraws}/3)`);
+            if (this.failedSecondaryWithdraws >= 3) {
                 this.bot.log(`withdrawing ${secondary.name} failed three times — stopping`);
                 ScriptRunner.stop(`could not withdraw ${secondary.name}`);
             }
