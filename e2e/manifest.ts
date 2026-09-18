@@ -80,6 +80,24 @@ export const CASES: readonly Case[] = [
         note: 'drops 450 Coins outside the altar and proves the runner takes that ground stack into inventory'
     },
     {
+        id: 'deathplateau-secret-path-843-live',
+        harness: 'deathplateau-secret-path-843-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'vetted',
+        provenAt: '90eae720314783c6df7b8937cc772717d66a2d33',
+        budgetMin: 6,
+        note: 'Fresh account scouts from inside Tenzing’s hut, returns through the stile and completes the quest without entering the Thrower Troll approach or losing hitpoints.'
+    },
+    {
+        id: 'deathplateau-cocktail-844-live',
+        harness: 'deathplateau-cocktail-844-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'vetted',
+        provenAt: '90eae720314783c6df7b8937cc772717d66a2d33',
+        budgetMin: 6,
+        note: 'Fresh sober Harold drinks a premade Blurberry special and gives an IOU on the first 101gp stake; all 500 starting coins remain.'
+    },
+    {
         id: 'deathplateau-scout-470-live',
         harness: 'deathplateau-scout-470-live.ts',
         covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
