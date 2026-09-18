@@ -126,6 +126,16 @@ export const CASES: readonly Case[] = [
         note: 'Exclusive local door run. Waits for Donovan to enter his natural pocket, opens the real bedroom door, proves collision blocks him, then Reach closes the leaf and reaches real dialogue; screenshots docs/e2e/issue-771*.png.'
     },
     {
+        id: 'ranged-ammo-483-live',
+        harness: 'ranged-ammo-483-live.ts',
+        covers: { scripts: ['FireGiant'] },
+        status: 'vetted',
+        provenAt: 'a029256ea6f047f095f908475c8c64b52355fb3e',
+        manual: true,
+        budgetMin: 18,
+        note: 'Fresh local accounts; custom Crossbow/Bolts and Rune knife must equip, merge carried refills and gain ranged XP against Fire giants. Isolated deployment; --no-deploy requires CLIENT_PAGE.'
+    },
+    {
         id: 'fisher-shilo-shopping-live',
         harness: 'fisher-shilo-shopping-live.ts',
         covers: { scripts: ['GatheringBot'] },
@@ -564,6 +574,15 @@ export const CASES: readonly Case[] = [
         status: 'vetted',
         budgetMin: 25,
         provenAt: '9ff4ff8b'
+    },
+    {
+        id: 'jivekq-live',
+        harness: 'jivekq-live.ts',
+        covers: { scripts: ['JiveKQ'] },
+        status: 'documented',
+        documentedIn: 'docs/e2e/jivekq-validation.md',
+        budgetMin: 75,
+        note: 'Four fresh max-stat accounts on local 289: role-specific food and ropes, super potions, dueling-ring escape, banked and bought passes, both rope gates, cardinal formation, per-player combat XP, a respawn fought before banking, boss loot banked, ten completed trips and kills within 60 minutes, and pause recovery. Isolated client; no server speed or boss changes.'
     },
     {
         id: 'jivekbd-live',

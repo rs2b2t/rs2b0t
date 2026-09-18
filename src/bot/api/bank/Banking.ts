@@ -2,10 +2,12 @@ import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import {
     bankDistance,
     nearestBank,
+    nearestBankReachable,
     type BankLocation,
     type BankNpcAccess,
     type BankObjectAccess
 } from './BankLocations.js';
+import { Navigator } from '../../event/webwalk/Navigator.js';
 import { Execution } from '../execution/Execution.js';
 import { Game } from '../game/Game.js';
 import Tile from '../../geometry/Tile.js';
@@ -247,10 +249,14 @@ export const Banking = {
             return Bank.openBooth(stand, boothName, boothOp, log);
         }
 
-        // nearest-fallback (no stand): scene booth anywhere, else web-walk nearestBank
+        // nearest-fallback (no stand): scene booth anywhere, else web-walk the cheapest reachable bank
         let destination: BankDestination | null = null;
         if (!realBooth(boothName)) {
-            destination = opts.destination ?? (nearest ? { name: nearest.name, tile: nearest.tile, access: nearest.access, npcAccess: nearest.npcAccess } : null);
+            // Why: nearestBank is air-ranked and in a dungeon every bank floats ~the same distance, so rank real routes instead; the air-nearest bank remains the no-route fallback.
+            const chosen = opts.destination ?? (here ? await nearestBankReachable(here, Navigator) : nearest);
+            destination = chosen
+                ? { name: chosen.name, tile: chosen.tile, access: chosen.access, npcAccess: chosen.npcAccess }
+                : null;
             if (destination) {
                 log(`no booth in scene — web-walking to the ${destination.name} bank at ${destination.tile}`);
                 await Traversal.walkResilient(asTile(destination.tile), { radius: 4, timeoutMs: 120_000, log });

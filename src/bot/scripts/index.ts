@@ -40,6 +40,7 @@ import JiveDragons, { SETTINGS as JIVEDRAGONS_SETTINGS } from './JiveDragons/Jiv
 import JiveDemons, { SETTINGS as JIVEDEMONS_SETTINGS } from './JiveDemons/JiveDemons.js';
 import JiveEnchanter, { SETTINGS as JIVEENCHANTER_SETTINGS } from './JiveEnchanter/JiveEnchanter.js';
 import JiveKBD, { SETTINGS as JIVEKBD_SETTINGS } from './JiveKBD/JiveKBD.js';
+import JiveKQ, { SETTINGS as JIVEKQ_SETTINGS } from './JiveKQ/JiveKQ.js';
 import JiveCrafting, { SETTINGS as JIVECRAFTING_SETTINGS } from './JiveCrafting/JiveCrafting.js';
 import JiveChests, { SETTINGS as JIVECHESTS_SETTINGS } from './JiveChests/JiveChests.js';
 import JiveMarketDumper, { SETTINGS as JIVEMARKETDUMPER_SETTINGS } from './JiveMarketDumper/JiveMarketDumper.js';
@@ -239,6 +240,15 @@ ScriptRegistry.register({
     tags: ['kbd', 'dragon', 'safespot', 'wilderness', 'members', 'banking'],
     settingsSchema: JIVEKBD_SETTINGS,
     create: () => new JiveKBD()
+});
+
+ScriptRegistry.register({
+    name: 'JiveKQ',
+    description: 'Four-player Kalphite Queen trips with a shared dragon mace and magic shortbow loadout, synchronized ropes, a four-point cross, repeated kills and group retreats.',
+    category: 'Combat',
+    tags: ['combat', 'boss', 'kalphite', 'group', 'banking'],
+    settingsSchema: JIVEKQ_SETTINGS,
+    create: () => new JiveKQ()
 });
 
 ScriptRegistry.register({
