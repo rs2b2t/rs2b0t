@@ -470,7 +470,6 @@ export class QuestEngine implements Task {
             }
         }
 
-        // Why: the no-progress watchdog only counts successful steps, so a step failing forever parks nothing.
         if (ok) {
             this.failStreak = 0;
             this.failedWatchdog.reset();

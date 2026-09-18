@@ -118,6 +118,10 @@ async function crossHops(here: WorldTile, dest: { z: number }, hops: LadderHop[]
     if (hop.stand.distanceTo(here) > 2 && !(await Traversal.walkResilient(walkTo, { radius: 2, attempts: 3, log }))) {
         return null;
     }
+    here = Game.tile() ?? here;
+    if (hop.walk && hop.stand.distanceTo(here) > 2 && !(await Traversal.walkResilient(hop.stand, { radius: 1, attempts: 3, log }))) {
+        return null;
+    }
     if (!(await hopLadder(hop, log))) {
         return null;
     }
