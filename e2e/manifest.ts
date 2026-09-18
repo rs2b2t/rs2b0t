@@ -6,7 +6,8 @@ export const CASES: readonly Case[] = [
         id: 'lostcity-strike-safespot-live',
         harness: 'lostcity-strike-safespot-live.ts',
         covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: 'bef82841aaff06f447e0924836a4fa6a9de302b8',
         manual: true,
         budgetMin: 24,
         note: 'Fresh Magic 13 accounts fight the Tree Spirit with Fire Strike and no protection prayer. Checks safespot damage, rune exhaustion, retained food and five staves at quest completion.'

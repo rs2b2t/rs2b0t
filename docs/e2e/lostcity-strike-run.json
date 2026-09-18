@@ -1,0 +1,22 @@
+{
+  "startedAt": "2026-09-18T19:54:49.930365+00:00",
+  "baseCommit": "6a7685716660ca1fef2758476709872a6d262154",
+  "fileSha256": {
+    "e2e/lostcity-strike-safespot-live.ts": "cceb1d798caa6c7d81ce4d69e2e3d21789beb2a2241b782ea9a3889fca6a2ef0",
+    "src/bot/api/ai/quests/defs/lostcity.ts": "9e7834886aff92359757216841bfc826c84514a331e6457ca6406d6e5b38c223",
+    "src/bot/api/ai/quests/defs/lostcityCombat.ts": "655f249ac32089fa74270a1a44a31ad4472c4ee65466ffeedb20308f1b80336f"
+  },
+  "logPath": "/tmp/lostcity-strike-20260918T195449Z.log",
+  "finishedAt": "2026-09-18T20:01:09.223449+00:00",
+  "elapsedSeconds": 379.28,
+  "exitCode": 0,
+  "verifiedSourceCommit": "bef82841aaff06f447e0924836a4fa6a9de302b8",
+  "command": "ENGINE_DIR=/Users/elliottriplett/code/rs2b2t-engine bun e2e/lostcity-strike-safespot-live.ts --base http://localhost:8890",
+  "artifactSha256": {
+    "docs/e2e/lostcity-strike-complete.json": "46aa029710c437871966c3853bb3a804d6113d23c04ccba897722a972a3c5fa8",
+    "docs/e2e/lostcity-strike-complete.png": "fbd30618448f7729536e5bbf9856a6ecaf8a710866b75c6e66c0d65a2ee0133f",
+    "docs/e2e/lostcity-strike-exhaustion.json": "7a29402fecc91ea61a467188cf4d0a1b901ca2a56543d5cfe4c547175a7c81dc",
+    "docs/e2e/lostcity-strike-exhaustion.png": "4318c30bf65d2a32e8fa623525522cfa2e4c2cf34a5fbb0be4ecddb7f46dfea0",
+    "docs/e2e/lostcity-strike-safespot.json": "663ceb342c9a77ef0a9f22acc2863554b5f839019c5fbaf93d01700982f95e01"
+  }
+}

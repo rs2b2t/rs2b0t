@@ -1,0 +1,2033 @@
+{
+  "result": "PASS",
+  "mode": "exhaustion",
+  "user": "strikedntqke",
+  "stage": 2,
+  "before": {
+    "tick": 66,
+    "tile": {
+      "x": 2860,
+      "z": 9733,
+      "level": 0
+    },
+    "hp": 70,
+    "magic": 13,
+    "magicXp": 1833,
+    "meleeXp": [
+      0,
+      0,
+      0
+    ],
+    "prayer": 1,
+    "protected": false,
+    "run": false,
+    "autoRetaliate": true,
+    "inventory": [
+      {
+        "id": 946,
+        "count": 1,
+        "name": "Knife"
+      },
+      {
+        "id": 1349,
+        "count": 1,
+        "name": "Iron axe"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 558,
+        "count": 1,
+        "name": "Mind rune"
+      },
+      {
+        "id": 556,
+        "count": 2,
+        "name": "Air rune"
+      },
+      {
+        "id": 554,
+        "count": 3,
+        "name": "Fire rune"
+      }
+    ],
+    "equipment": [],
+    "spirit": [],
+    "quest": "inProgress",
+    "state": "idle",
+    "casts": [],
+    "melee": [],
+    "logs": []
+  },
+  "after": {
+    "tick": 134,
+    "tile": {
+      "x": 2859,
+      "z": 9731,
+      "level": 0
+    },
+    "hp": 70,
+    "magic": 13,
+    "magicXp": 1844,
+    "meleeXp": [
+      0,
+      0,
+      0
+    ],
+    "prayer": 1,
+    "protected": false,
+    "run": false,
+    "autoRetaliate": false,
+    "inventory": [
+      {
+        "id": 946,
+        "count": 1,
+        "name": "Knife"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      },
+      {
+        "id": 379,
+        "count": 1,
+        "name": "Lobster"
+      }
+    ],
+    "equipment": [
+      {
+        "id": 1349,
+        "count": 1,
+        "name": "Iron axe"
+      }
+    ],
+    "spirit": [
+      {
+        "index": 8154,
+        "tile": {
+          "x": 2859,
+          "z": 9733,
+          "level": 0
+        },
+        "health": 0,
+        "totalHealth": 0
+      }
+    ],
+    "quest": "inProgress",
+    "state": "running",
+    "casts": [
+      {
+        "tick": 84,
+        "tile": {
+          "x": 2859,
+          "z": 9731,
+          "level": 0
+        },
+        "spirit": {
+          "x": 2859,
+          "z": 9733,
+          "level": 0
+        },
+        "spiritHp": 0,
+        "spiritMaxHp": 0,
+        "spell": "Fire Strike",
+        "index": 8154,
+        "sent": true
+      }
+    ],
+    "melee": [],
+    "logs": [
+      "[t6] Lost City: defeat the Tree Spirit — attempt 5, 9.6s on this step · stage 2 · (2859,9731) · 7 free",
+      "  no castable Strike spell; holding the Tree Spirit safespot",
+      "  → FAILED in 0ms · no inventory change",
+      "WARN: 'defeat the Tree Spirit' has failed 5x in a row over 9.6s",
+      "[t7] Lost City: defeat the Tree Spirit — attempt 6, 10.8s on this step · stage 2 · (2859,9731) · 7 free",
+      "  no castable Strike spell; holding the Tree Spirit safespot",
+      "  → FAILED in 0ms · no inventory change",
+      "[t8] Lost City: defeat the Tree Spirit — attempt 7, 12.0s on this step · stage 2 · (2859,9731) · 7 free",
+      "  no castable Strike spell; holding the Tree Spirit safespot",
+      "  → FAILED in 0ms · no inventory change",
+      "[t9] Lost City: defeat the Tree Spirit — attempt 8, 13.2s on this step · stage 2 · (2859,9731) · 7 free",
+      "  no castable Strike spell; holding the Tree Spirit safespot",
+      "  → FAILED in 0ms · no inventory change",
+      "[t10] Lost City: defeat the Tree Spirit — attempt 9, 14.4s on this step · stage 2 · (2859,9731) · 7 free",
+      "  no castable Strike spell; holding the Tree Spirit safespot",
+      "  → FAILED in 1ms · no inventory change",
+      "no progress after 8 steps on Lost City",
+      "parking Lost City (park 1/3)",
+      "[t11] Lost City: defeat the Tree Spirit · stage 2 · (2859,9731) · 7 free",
+      "  no castable Strike spell; holding the Tree Spirit safespot",
+      "  → FAILED in 0ms · no inventory change",
+      "[t12] Lost City: defeat the Tree Spirit — attempt 2, 1.2s on this step · stage 2 · (2859,9731) · 7 free",
+      "  no castable Strike spell; holding the Tree Spirit safespot",
+      "  → FAILED in 1ms · no inventory change"
+    ]
+  },
+  "successfulCasts": 1,
+  "safeHp": 70,
+  "safeFood": 20,
+  "samples": [
+    {
+      "tick": 66,
+      "tile": {
+        "x": 2860,
+        "z": 9733,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": []
+    },
+    {
+      "tick": 67,
+      "tile": {
+        "x": 2860,
+        "z": 9733,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": []
+    },
+    {
+      "tick": 68,
+      "tile": {
+        "x": 2860,
+        "z": 9733,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": []
+    },
+    {
+      "tick": 69,
+      "tile": {
+        "x": 2860,
+        "z": 9733,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": []
+    },
+    {
+      "tick": 70,
+      "tile": {
+        "x": 2860,
+        "z": 9733,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": []
+    },
+    {
+      "tick": 71,
+      "tile": {
+        "x": 2860,
+        "z": 9733,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": []
+    },
+    {
+      "tick": 72,
+      "tile": {
+        "x": 2860,
+        "z": 9733,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": []
+    },
+    {
+      "tick": 73,
+      "tile": {
+        "x": 2860,
+        "z": 9733,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": []
+    },
+    {
+      "tick": 74,
+      "tile": {
+        "x": 2860,
+        "z": 9733,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": []
+    },
+    {
+      "tick": 75,
+      "tile": {
+        "x": 2860,
+        "z": 9733,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": []
+    },
+    {
+      "tick": 76,
+      "tile": {
+        "x": 2860,
+        "z": 9733,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": []
+    },
+    {
+      "tick": 77,
+      "tile": {
+        "x": 2860,
+        "z": 9733,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2860,
+            "z": 9737,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 78,
+      "tile": {
+        "x": 2860,
+        "z": 9732,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2860,
+            "z": 9736,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 79,
+      "tile": {
+        "x": 2860,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2860,
+            "z": 9736,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 80,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2860,
+            "z": 9736,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 81,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9736,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 82,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9735,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 83,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9734,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 84,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 1,
+      "air": 2,
+      "fire": 3,
+      "magicXp": 1833,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 85,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 86,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 87,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 88,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 89,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 90,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 91,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 92,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 93,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 94,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 95,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 96,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 97,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 98,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 99,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 100,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 101,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 102,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 103,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 104,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 105,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 106,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 107,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 108,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 109,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 110,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 111,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 112,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 113,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 114,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 115,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 116,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 117,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 118,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 119,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 120,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 121,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 122,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 123,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 124,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 125,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 126,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 127,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 128,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 129,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 130,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 131,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 132,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 133,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    },
+    {
+      "tick": 134,
+      "tile": {
+        "x": 2859,
+        "z": 9731,
+        "level": 0
+      },
+      "hp": 70,
+      "food": 20,
+      "mind": 0,
+      "air": 0,
+      "fire": 0,
+      "magicXp": 1844,
+      "spirit": [
+        {
+          "index": 8154,
+          "tile": {
+            "x": 2859,
+            "z": 9733,
+            "level": 0
+          },
+          "health": 0,
+          "totalHealth": 0
+        }
+      ]
+    }
+  ]
+}
