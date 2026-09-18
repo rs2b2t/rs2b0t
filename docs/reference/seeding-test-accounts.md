@@ -9,10 +9,10 @@ Server debug cheats are fair game.
 
 | Goal | How (local Server) |
 |---|---|
-| Item in **inventory** | engine `give bronze_pickaxe 1` (prefer) or content `~item bronze_pickaxe 1` (needs `p_finduid`, silent no-op after long walks) |
+| Item in **inventory** | engine `give bronze_pickaxe 1`, then verify the inventory count |
 | Jewellery in live OD | `nav-script-routes-live` seeds charged duel/glory/games at **start** (+ top-up each leg) so HARD paths may Rub; use `JEWELLERY_ONLY=1` for isolation legs |
-| Item seed after long walks | Prefer engine **`give`** over `~item` (`~item` needs `p_finduid` and silent-no-ops when busy) |
-| Item in **bank** | engine `givebank bronze_pickaxe 1` (or content `~bankitem bronze_pickaxe 1`) |
+| Item seed after long walks | Engine `give` adds to inventory; verify the item arrived before continuing |
+| Item in **bank** | `seedItemsToBank`: give notes such as `cert_bronze_pickaxe`, then deposit at a booth |
 | Wipe pack | `~clearinv` / `clearinv inv` |
 | Wipe bank | `~clearbank` |
 | Bulk max bank | `~bank_f2p` (no dialog), blunt fixture, not a realistic low-level kit |
@@ -21,12 +21,20 @@ Server debug cheats are fair game.
 
 **Bank seed path** (`seedItemsToBank` in [`e2e/tutorial/harness.ts`](../../e2e/tutorial/harness.ts)):
 
-1. `givebank <obj> <qty>` for each item (engine `ClientCheatHandler`, no busy-guard).
-2. If verify fails, retry with `~bankitem` (content debugproc; needs `p_finduid`).
-3. Tele next to a booth, open it once, assert `Bank.count(displayName)`.
+1. Clear level-up dialogs before calling the helper; it teleports to a booth.
+2. Give `cert_<obj> <qty>` for noteable items, or `<obj> <qty>` for ordinary stackables.
+3. Deposit the seeded quantity and verify the inventory change and unnoted bank
+   count by item ID. Existing held items are preserved with Deposit-X.
 
-Do **not** invent give→deposit loops for food/coal: backpack unstackables fill the
-pack and the seed stalls. Direct bank cheats skip that entirely.
+Notes fit bulk food/coal fixtures in one slot. Items without a noted form must fit
+in the available pack slots. An unavailable command or failed deposit stops setup.
+
+This path follows stock Lost City 289: the engine implements
+[`give`](https://github.com/LostCityRS/Engine-TS/blob/0c7cf6555d0cf92d2348999b2fd27c6ceff5ffbf/src/network/game/client/handler/ClientCheatHandler.ts#L340),
+and its [obj packer](https://github.com/LostCityRS/Engine-TS/blob/0c7cf6555d0cf92d2348999b2fd27c6ceff5ffbf/tools/pack/config/ObjConfig.ts#L212)
+generates `cert_` notes. The
+[289 obj names](https://github.com/LostCityRS/Content/blob/92649430fcbc83538d8c4367ecb96cee1a67a944/pack/obj.pack)
+include `cert_raw_lobster` and `cert_lobster`.
 
 [`e2e/aio-quest-test.ts`](../../e2e/aio-quest-test.ts) exposes bank seeds as a
 **`bank:`** prefix on `giveCsv`:

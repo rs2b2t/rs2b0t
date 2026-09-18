@@ -3,7 +3,7 @@
 
 import type { Page } from 'playwright-core';
 import { boot, bringUpOffIsland, fail, launchBrowser, login, positionalArgs, type } from './lib/harness.js';
-import { cheatQuiet, startScript } from './tutorial/harness.js';
+import { cheatQuiet, clearChatDialogs, startScript, seedItemsToBank } from './tutorial/harness.js';
 
 const args = positionalArgs(process.argv.slice(2), 'http://localhost:8890');
 const base = args[0];
@@ -127,12 +127,14 @@ try {
 
     for (let i = 0; i < NUM_RUNNERS; i++) {
         await bringUp(rPages[i], R_USERS[i]);
-        await teleTo(rPages[i], R_USERS[i], route.bankTele);
         await cheatQuiet(rPages[i], '~maxme');
-        await rPages[i].waitForTimeout(1000);
+        await clearChatDialogs(rPages[i], 'runner level-ups');
         await cheatQuiet(rPages[i], '~clearinv');
-        await cheatQuiet(rPages[i], `~bankitem blankrune ${route.essencePer}`);
-        if (route.coins > 0) { await cheatQuiet(rPages[i], `~bankitem coins ${route.coins}`); }
+        await seedItemsToBank(rPages[i], [
+            { debugName: 'blankrune', displayName: 'Rune essence', qty: route.essencePer },
+            ...(route.coins > 0 ? [{ debugName: 'coins', displayName: 'Coins', qty: route.coins }] : [])
+        ], { x: 3185, z: 3440, level: 0 });
+        await teleTo(rPages[i], R_USERS[i], route.bankTele);
         await rPages[i].evaluate(([m, rune]) => {
             sessionStorage.setItem('rs2b0t:set:NatureCrafter:rune', rune);
             sessionStorage.setItem('rs2b0t:set:NatureCrafter:mode', 'Runner');

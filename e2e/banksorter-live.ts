@@ -1,5 +1,4 @@
 /** Live BankSorter cold-sort and incremental re-sort check. */
-// Why: base :8890 provides `bankitem`; clear first because `~bankitem` adds to existing stacks.
 
 //   HEADED=1 bun e2e/banksorter-live.ts --tick 200
 import type { Page } from 'playwright-core';
@@ -11,6 +10,7 @@ import {
     seedItemsToBank,
     startScript,
     teleTo,
+    waitUntilBankClosed,
     type BankSeedItem
 } from './tutorial/harness.js';
 import { rankWithin } from '../src/bot/api/bank/bankSortRank.js';
@@ -236,6 +236,8 @@ async function runSorter(page: Page, label: string, maxMs = 180_000): Promise<st
 async function seed(page: Page, items: readonly BankSeedItem[], label: string): Promise<void> {
     console.log(`${label}: seeding ${items.length} item type(s)`);
     await seedItemsToBank(page, [...items], VARROCK_WEST_BANK);
+    await waitUntilBankClosed(page);
+    console.log(`${label}: bank closed before BankSorter`);
 }
 
 async function main(): Promise<void> {

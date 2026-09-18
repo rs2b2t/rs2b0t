@@ -5,7 +5,7 @@
 import type { Page } from 'playwright-core';
 
 import { cheatQuiet, deployIsolatedClient, fail, launchBrowser, parseArgs } from './lib/harness.js';
-import { mainlandAccount, relog, startScript, teleTo } from './tutorial/harness.js';
+import { mainlandAccount, relog, seedItemsToBank, startScript, teleTo } from './tutorial/harness.js';
 
 const { base, minutes } = parseArgs(process.argv.slice(2), { base: 'http://localhost:8888', minutes: 8 });
 const deploy = !process.argv.includes('--no-deploy');
@@ -76,8 +76,7 @@ try {
     page.on('pageerror', err => console.log(`pageerror: ${err}`));
     await mainlandAccount(page, base, user, client.page);
 
-    await seedPurse(page);
-    await cheatQuiet(page, 'givebank coins 5000', 900);
+    await seedItemsToBank(page, [{ debugName: 'coins', displayName: 'Coins', qty: 5000 }], { x: 3092, z: 3243, level: 0 });
     await cheatQuiet(page, 'setvar cookquest 1', 900);
     await relog(page, user);
     await seedPurse(page);

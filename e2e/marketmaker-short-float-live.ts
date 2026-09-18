@@ -8,7 +8,7 @@
 
 import type { Page } from 'playwright-core';
 import { deployIsolatedClient, fail, launchBrowser, logout } from './lib/harness.js';
-import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript } from './tutorial/harness.js';
+import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript, seedItemsToBank } from './tutorial/harness.js';
 
 const BASE = process.env.BASE ?? 'http://localhost:8890';
 const SHOP = process.env.SHOP ?? 'shortfloat';
@@ -68,8 +68,10 @@ try {
 
     console.log(`shortfloat: banking ${BANK_COINS}gp against a ${FLOAT}gp float`);
     await cheatQuiet(page, '~clearinv');
-    await cheatQuiet(page, `~bankitem coins ${BANK_COINS}`);
-    await cheatQuiet(page, '~bankitem iron_ore 2000');
+    await seedItemsToBank(page, [
+        { debugName: 'coins', displayName: 'Coins', qty: BANK_COINS },
+        { debugName: 'iron_ore', displayName: 'Iron ore', qty: 2000 },
+    ], { x: 3185, z: 3440, level: 0 });
 
     await page.evaluate(
         ({ json, settings }) => {

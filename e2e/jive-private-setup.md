@@ -24,7 +24,7 @@ JIVE_SCENARIO=guardian RUN_TAG=JIVE-guardian-UNIQUE bun e2e/jive-private-live.ts
 JIVE_SCENARIO=reward RUN_TAG=JIVE-reward-UNIQUE bun e2e/jive-private-live.ts
 ```
 
-Replace UNIQUE on every invocation. Each case creates a fresh account, empties only that account's inventories, seeds before observation and runs the actual registered JiveDragons script. Bank supply uses supported `~bankitem`, followed by a real bank open/read. There is no `givebank` dependency. A private observer with any other player present is rejected.
+Replace UNIQUE on every invocation. Each case creates a fresh account, empties only that account's inventories, seeds before observation and runs the actual registered JiveDragons script. Bank supply uses `seedItemsToBank` to give notes or stackables, deposit them, and verify the bank counts. A private observer with any other player present is rejected.
 
 All three guarded runners require the actual candidate worktree as cwd, `TARGET=local`, and an explicit safe `RUN_TAG`. They install context-wide HTTP/navigation and WebSocket restrictions before creating a page: only `http://localhost:8891` and `ws://localhost:8891` are allowed, redirects are aborted, and service workers are blocked. A live-baked WebSocket destination cannot connect. Before tutorial cheats, cadence changes, fixture seeding, and script start, a fresh complete observer frame must attest this engine/worktree and contain only the new account. Older observer streams without that attestation are rejected.
 

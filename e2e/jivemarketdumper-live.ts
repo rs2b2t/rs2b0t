@@ -4,7 +4,7 @@
 // Usage: HEADED=1 bun e2e/jivemarketdumper-live.ts [--base url] [--flood] [--minutes n] [--no-deploy]
 import type { Page } from 'playwright-core';
 import { deployIsolatedClient, fail, launchBrowser, requireSim, stopScript } from './lib/harness.js';
-import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript } from './tutorial/harness.js';
+import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript, seedItemsToBank } from './tutorial/harness.js';
 
 interface Args {
     base: string;
@@ -131,7 +131,7 @@ try {
     await maxmeAndClearDialogs(makerPage);
     await clearChatDialogs(makerPage);
     await cheatQuiet(makerPage, '~clearinv');
-    await cheatQuiet(makerPage, '~bankitem coins 500000');
+    await seedItemsToBank(makerPage, [{ debugName: 'coins', displayName: 'Coins', qty: 500000 }], SPOT);
     await teleArrive(makerPage, SPOT);
     await writeStorage(makerPage, {
         'rs2b0t:set:PriceBooks:books': BOOK,
@@ -152,16 +152,12 @@ try {
     for (const obj of PACK_SEED) {
         await cheatQuiet(custPage, `give ${obj} 1`, 500);
     }
-    await cheatQuiet(custPage, `~bankitem yew_logs ${SEED_YEWS}`);
-    await cheatQuiet(custPage, `~bankitem iron_ore ${SEED_IRON}`);
-    // Why: not in the book, so it has to stay in the bank while the run still ends with "nothing it buys".
-    await cheatQuiet(custPage, '~bankitem rune_chainbody 2');
-    // Why: twenty distinct kinds is twenty slots on the maker's side however small each stack is, which is the pack-flooding case that used to leave it opening windows it had no room to take goods into.
-    if (args.flood) {
-        for (const obj of FLOOD_KINDS) {
-            await cheatQuiet(custPage, `~bankitem ${obj} 1`, 500);
-        }
-    }
+    await seedItemsToBank(custPage, [
+        { debugName: 'yew_logs', displayName: 'Yew logs', qty: SEED_YEWS },
+        { debugName: 'iron_ore', displayName: 'Iron ore', qty: SEED_IRON },
+        { debugName: 'rune_chainbody', displayName: 'Rune chainbody', qty: 2 },
+        ...(args.flood ? FLOOD_KINDS.map(debugName => ({ debugName, displayName: debugName.replaceAll('_', ' '), qty: 1 })) : [])
+    ], SPOT);
     await teleArrive(custPage, SPOT);
     // Why: the dumper is given the maker's name and the bank it stands at, and nothing else; it never reads a price book.
     // Why: naming the bank rather than leaving it on Nearest is what proves the setting is honoured, since the maker's own bank is the one the takings have to reach.
