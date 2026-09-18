@@ -1,7 +1,7 @@
 import { QUESTS } from '../../data/quests.js';
 import { heldId, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { FALADOR_WEST_BANK, BOY, EXPERIMENT_NAMES, SHOP_GP, THESSALIA, WH_NAME, WH_OBJ, WYDIN, inGarden, inShed } from './areas.js';
-import { fountainKey, killExperiment, takeBall } from './garden.js';
+import { fountainKey, killExperiment, takeBall, leaveGarden } from './garden.js';
 import { diaryWanted, dropStaleMagnet, fetchDiary, fetchMagnet, readDiary, takeDoorKey, unlockBackDoor } from './house.js';
 import { WH_STAGE, readWitchsHouseProgress } from './journal.js';
 
@@ -34,6 +34,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'talk', stop: BOY };
     }
     if (stage >= WH_STAGE.DEFEATED && heldId(snap, WH_OBJ.BALL) > 0) {
+        if (inGarden(snap.tile) || inShed(snap.tile)) return custom('carry the ball safely out of the garden', leaveGarden);
         return { kind: 'talk', stop: BOY };
     }
     // Why: every remaining step is behind the front door, whose `oploc1` reads the key out of the pack.

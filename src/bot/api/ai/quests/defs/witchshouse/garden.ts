@@ -11,8 +11,8 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import { clearBoxes, crossTeleportDoor, promptLoc, settleScene } from '../../exec/prompts.js';
 import { EXPERIMENT_IDS, WH_LOC, WH_OBJ, WH_TILE, inGarden, inShed } from './areas.js';
 import { held } from './house.js';
+import { FOUNTAIN_STAND, GARDEN_ENTRY, GARDEN_SHED, walkGarden } from './patrol.js';
 
-const WALK_MS = 180_000;
 /** 4 forms and 144 hitpoints between them, at the tick rate a live server runs. */
 const FIGHT_MS = 300_000;
 /** Ticks a transition may take before the chain counts as broken. */
@@ -30,7 +30,7 @@ export async function fountainKey(log: (m: string) => void): Promise<boolean> {
     if (held(WH_OBJ.SHED_KEY) > 0) {
         return true;
     }
-    if (!(await Traversal.walkResilient(WH_TILE.FOUNTAIN, { radius: 1, attempts: 3, timeoutMs: WALK_MS, log }))) {
+    if (!(await walkGarden(FOUNTAIN_STAND, log))) {
         log(inGarden(Game.tile())
             ? 'stopped short of the fountain inside the garden'
             : 'never reached the garden. The witch throws a caught bot back to the boy');
@@ -62,6 +62,7 @@ async function enterShed(log: (m: string) => void): Promise<boolean> {
         log('no shed key in the pack. The witch deletes it when she catches you');
         return false;
     }
+    if (!(await walkGarden(GARDEN_SHED, log))) return false;
     return crossTeleportDoor({
         id: WH_LOC.SHED_DOOR,
         stand: WH_TILE.SHED_DOOR,
@@ -171,6 +172,7 @@ export async function takeBall(log: (m: string) => void): Promise<boolean> {
         return true;
     }
     if (!inShed(Game.tile())) {
+        if (!(await walkGarden(GARDEN_SHED, log))) return false;
         // Why: past stage 6 the shed door's own `oploc1` opens, so no second key is needed after a catch.
         if (!(await crossTeleportDoor({
             id: WH_LOC.SHED_DOOR,
@@ -195,4 +197,16 @@ export async function takeBall(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     return Execution.delayUntil(() => held(WH_OBJ.BALL) > 0, 8000);
+}
+
+export async function leaveGarden(log: (message: string) => void): Promise<boolean> {
+    if (inShed(Game.tile()) && !(await crossTeleportDoor({
+        id: WH_LOC.SHED_DOOR,
+        stand: WH_TILE.SHED_DOOR.translate(1, 0),
+        standRadius: 0,
+        isFar: () => inGarden(Game.tile()),
+        log
+    }))) return false;
+    if (!(await walkGarden(GARDEN_ENTRY, log))) return false;
+    return Traversal.walkResilient(WH_TILE.PORCH, { radius: 0, attempts: 2, timeoutMs: 30_000, log });
 }
