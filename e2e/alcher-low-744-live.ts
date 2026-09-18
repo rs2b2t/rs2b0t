@@ -106,7 +106,7 @@ try {
         fail(`could not reach the Varrock West bank stand (${VARROCK_WEST_BANK.x},${VARROCK_WEST_BANK.z})`);
     }
 
-    // Why: :8888 has no givebank, so the kit is given into the pack and deposited like Superheater.
+    // Why: the kit starts in the bank so the run exercises withdrawal and gearing.
     await cheatQuiet(page, '~clearinv', 800);
     await seedGive(page, `give ${ALCH_OBJ} ${BANKED_STOCK}`, async () => (await held(page, ALCH_ITEM)) >= BANKED_STOCK);
     await seedGive(page, 'give naturerune 200', async () => (await held(page, 'Nature rune')) >= 200);

@@ -2,6 +2,7 @@
 // Seeds each secondary's site and asserts the bot loots, buys or grinds at least one unit.
 
 //   bun e2e/herblore-secondaries-test.ts [http://localhost:8888] [secondary-name]
+import { seedItemsToBank } from './tutorial/harness.js';
 //   unicorn needs the members sim: bun e2e/herblore-secondaries-test.ts http://localhost:8890 unicorn
 import { boot, bringUpOffIsland, cheatQuiet, deployIsolatedClient, fail, launchBrowser, login, positionalArgs, setSettings } from './lib/harness.js';
 
@@ -15,6 +16,7 @@ type Case = {
     /** tele args after setstat food coins */
     tele: string;
     seed: string[];
+    bankSeed?: { debugName: string; displayName: string; qty: number }[];
     /** inventory name that must increase */
     product: string;
     timeoutMs: number;
@@ -28,7 +30,8 @@ const CASES: Case[] = [
         key: 'eggs',
         setting: "Red spiders' eggs",
         tele: '0,48,155,37,31', // near Edgeville dungeon eggs
-        seed: ['~bankitem lobster 50', 'give lobster 10'],
+        bankSeed: [{ debugName: 'lobster', displayName: 'Lobster', qty: 50 }],
+        seed: ['give lobster 10'],
         product: "Red spiders' eggs",
         timeoutMs: 240_000
     },
@@ -36,7 +39,8 @@ const CASES: Case[] = [
         key: 'snape',
         setting: 'Snape grass',
         tele: '0,45,51,28,32',
-        seed: ['~bankitem lobster 50', 'give lobster 10'],
+        bankSeed: [{ debugName: 'lobster', displayName: 'Lobster', qty: 50 }],
+        seed: ['give lobster 10'],
         product: 'Snape grass',
         timeoutMs: 180_000
     },
@@ -45,7 +49,8 @@ const CASES: Case[] = [
         setting: 'Eye of newt',
         // Betty @ 3012,3259 → m47_50 local 4,59
         tele: '0,47,50,4,59',
-        seed: ['~bankitem coins 10000', 'give coins 2000'],
+        bankSeed: [{ debugName: 'coins', displayName: 'Coins', qty: 10000 }],
+        seed: ['give coins 2000'],
         product: 'Eye of newt',
         timeoutMs: 180_000
     },
@@ -54,7 +59,8 @@ const CASES: Case[] = [
         setting: 'Chocolate dust',
         // Wydin @ 3014,3204 → m47_50 local 6,4, seed pestle so grind can run immediately
         tele: '0,47,50,6,4',
-        seed: ['~bankitem coins 10000', 'give coins 3000', 'give pestle_and_mortar 1'],
+        bankSeed: [{ debugName: 'coins', displayName: 'Coins', qty: 10000 }],
+        seed: ['give coins 3000', 'give pestle_and_mortar 1'],
         product: 'Chocolate dust',
         timeoutMs: 300_000
     },
@@ -63,7 +69,11 @@ const CASES: Case[] = [
         setting: 'White berries',
         // red dragon isle berries @ 3216,3812 → m50_59 local 16,36
         tele: '0,50,59,16,36',
-        seed: ['~bankitem lobster 50', 'give lobster 10', '~bankitem antidragonbreathshield 1', 'give antidragonbreathshield 1'],
+        bankSeed: [
+            { debugName: 'lobster', displayName: 'Lobster', qty: 50 },
+            { debugName: 'antidragonbreathshield', displayName: 'Dragonfire shield', qty: 1 }
+        ],
+        seed: ['give lobster 10', 'give antidragonbreathshield 1'],
         product: 'White berries',
         timeoutMs: 240_000
     },
@@ -81,7 +91,11 @@ const CASES: Case[] = [
         setting: 'Unicorn horn dust',
         // Draynor bank, the nearest bank from here; pestle and horns are withdrawn, never given
         tele: '0,48,50,29,43',
-        seed: ['~bankitem unicorn_horn 40', '~bankitem pestle_and_mortar 1'],
+        bankSeed: [
+            { debugName: 'unicorn_horn', displayName: 'Unicorn horn', qty: 40 },
+            { debugName: 'pestle_and_mortar', displayName: 'Pestle and mortar', qty: 1 }
+        ],
+        seed: [],
         product: 'Unicorn horn dust',
         timeoutMs: 240_000,
         drain: { reason: 'out of Unicorn horn in the bank', ground: 40, source: 'Unicorn horn' }
@@ -146,10 +160,7 @@ try {
             }
         });
         await page.waitForTimeout(1500);
-        for (const cmd of c.seed) {
-            await cheatQuiet(page, cmd, 1200);
-        }
-        // clear level-up / mesbox so ~bankitem can stick
+        // Clear level-up / mesbox dialogs before opening the bank.
         for (let i = 0; i < 6; i++) {
             await page.evaluate(() => {
                 const g = globalThis as unknown as {
@@ -159,6 +170,10 @@ try {
                 if (r?.modals?.().chat !== -1) g.rs2b0t?.actions?.continueDialog?.();
             });
             await page.waitForTimeout(200);
+        }
+        await seedItemsToBank(page, c.bankSeed ?? [], { x: 3092, z: 3243, level: 0 });
+        for (const cmd of c.seed) {
+            await cheatQuiet(page, cmd, 1200);
         }
         await cheatQuiet(page, `tele ${c.tele}`, 4000);
 

@@ -36,8 +36,8 @@ Three details govern this harness:
 - **The bank holds coins and food and nothing else.** The rum, the white apron and the
   spade all have sources in the world; seeding one hides whether the bot can find it.
 
-It runs on `:8890` even though the quest is free-to-play: bank seeding needs `givebank`
-or `~bankitem`, and the `:8888` sim answers neither.
+The harness defaults to `:8890` even though the quest is free-to-play. Bank fixtures
+use noted deposits and are verified before the quest starts.
 
 **`--no-deploy` is only safe when nothing else is deploying.** The engine serves one
 `public/bot/` bundle to every client, so a run that skips its own deploy loads whatever
@@ -88,9 +88,8 @@ fountain trip. Bank four buckets to time the fill and pour legs alone.
 
 Five details govern this harness:
 
-- **It is members-only (`map_members`), so it needs the :8890 world.** The :8888
-  sim also answers neither `givebank` nor `~bankitem`, so a run there starts with
-  an empty bank and parks on the coin float.
+- **It is members-only (`map_members`), so it needs the :8890 world.** The shared
+  bank helper verifies the coin float before the quest starts.
 - **Stages 20/21 and 24/25 render the same journal text.** The module reads the
   Book and the clerk's own answer to tell them apart, so a `--stage 21` seed that
   leaves a Book in the pack tests the wrong branch.
