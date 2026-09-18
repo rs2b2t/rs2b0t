@@ -59,7 +59,7 @@ export default class Firemaker extends LoopingBot {
     private xpStart = 0;
     private status = 'starting';
     private startedAt = Date.now();
-    private emptyLogReads = 0;
+    private failedLogWithdraws = 0;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -118,7 +118,18 @@ export default class Firemaker extends LoopingBot {
             return false;
         }
 
-        await Bank.depositAllMatching(depositAllExcept(toolKeepNames(TOOLS)));
+        if (!Bank.ready()) {
+            return false;
+        }
+        const deposit = depositAllExcept(toolKeepNames(TOOLS));
+        if (Inventory.items().some(item => deposit(item.name ?? ''))) {
+            const generation = Bank.snapshotGeneration();
+            await Bank.depositAllMatching(deposit);
+            if (!(await Bank.waitSnapshotAfter(generation))) {
+                this.log('bank stock did not reload after the deposit, retrying');
+                return false;
+            }
+        }
         const plan = toolRestockPlan(TOOLS, this.skillLevel, this.invCount, name => Bank.count(name));
         for (const step of plan) {
             await Bank.withdraw(step.name);
@@ -131,19 +142,21 @@ export default class Firemaker extends LoopingBot {
             ScriptRunner.stop('no tinderbox in the bank or pack');
             return false;
         }
-        // Why: Bank.loaded() is false for a beat after opening, when the item list reads [] and every count() is 0. Believe empty on the third consecutive read.
-        await Execution.delayUntil(() => Bank.loaded(), 3000);
+        if (!Bank.ready()) {
+            return false;
+        }
         if (Bank.count(this.logName) === 0) {
-            if (++this.emptyLogReads >= 3) {
-                ScriptRunner.stop(`no ${this.logName} left in the bank`);
-                return false;
+            ScriptRunner.stop(`no ${this.logName} left in the bank`);
+            return false;
+        }
+        if (!(await Bank.withdrawX(this.logName, reader.inventorySize() - Inventory.used()))) {
+            this.log(`could not withdraw ${this.logName} (${++this.failedLogWithdraws}/3)`);
+            if (this.failedLogWithdraws >= 3) {
+                ScriptRunner.stop(`could not withdraw ${this.logName}`);
             }
             return false;
         }
-        this.emptyLogReads = 0;
-        if (!(await Bank.withdrawX(this.logName, reader.inventorySize() - Inventory.used()))) {
-            return false;
-        }
+        this.failedLogWithdraws = 0;
 
         actions.closeModal();
         await Execution.delayUntilTicks(() => !Bank.isOpen(), 5);
