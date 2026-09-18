@@ -205,25 +205,25 @@ describe('iron bar chain', () => {
     const withPick = (extra: [number, number][] = []) => snap([[BRONZE_PICKAXE, 1], ...extra]);
 
     test('scans an unknown bank first', () => {
-        expect(ironBarsAt(snap([], { bankKnown: false }), MAX_MINING).kind).toBe('scanBank');
+        expect(ironBarsAt(snap([], { bankKnown: false }), MAX_MINING, 15).kind).toBe('scanBank');
     });
 
     test('withdraws banked bars rather than smelting', () => {
-        const step = ironBarsAt(snap([], { bankIds: [[KS_ID.IRON_BAR, 2]] }), MAX_MINING);
+        const step = ironBarsAt(snap([], { bankIds: [[KS_ID.IRON_BAR, 2]] }), MAX_MINING, 15);
         expect(withdrawn(step)).toContain(KS_ID.IRON_BAR);
     });
 
     test('withdraws only the shortfall', () => {
-        const step = ironBarsAt(snap([[KS_ID.IRON_BAR, 1]], { bankIds: [[KS_ID.IRON_BAR, 5]] }), MAX_MINING);
+        const step = ironBarsAt(snap([[KS_ID.IRON_BAR, 1]], { bankIds: [[KS_ID.IRON_BAR, 5]] }), MAX_MINING, 15);
         expect(step.kind === 'withdraw' && step.items[0].qty).toBe(1);
     });
 
     test('sources a pickaxe before heading for the rocks', () => {
-        expect(ironBarsAt(snap(), MAX_MINING)).toMatchObject({ kind: 'grabGround', item: 'Bronze pickaxe' });
+        expect(ironBarsAt(snap(), MAX_MINING, 15)).toMatchObject({ kind: 'grabGround', item: 'Bronze pickaxe' });
     });
 
     test('mines a batch of ore once a pickaxe is held', () => {
-        expect(ironBarsAt(withPick(), MAX_MINING)).toMatchObject({
+        expect(ironBarsAt(withPick(), MAX_MINING, 15)).toMatchObject({
             kind: 'mineRock',
             rock: 'Iron',
             qty: ORE_PER_TRIP
@@ -231,7 +231,7 @@ describe('iron bar chain', () => {
     });
 
     test('smelts once the whole batch is mined', () => {
-        const step = ironBarsAt(withPick([[KS_ID.IRON_ORE, ORE_PER_TRIP]]), MAX_MINING);
+        const step = ironBarsAt(withPick([[KS_ID.IRON_ORE, ORE_PER_TRIP]]), MAX_MINING, 15);
         expect(step).toMatchObject({ kind: 'custom', name: 'smelt iron bars' });
     });
 
@@ -239,22 +239,48 @@ describe('iron bar chain', () => {
         // mineRock ignores its qty and mines one ore per invocation, so
         // smelting on the first ore would walk Rimmington -> furnace eight times.
         for (const ore of [1, ORE_PER_TRIP - 1]) {
-            expect(ironBarsAt(withPick([[KS_ID.IRON_ORE, ore]]), MAX_MINING))
+            expect(ironBarsAt(withPick([[KS_ID.IRON_ORE, ore]]), MAX_MINING, 15))
                 .toMatchObject({ kind: 'mineRock', rock: 'Iron' });
         }
     });
 
     test('one bar and no ore goes back to the rocks', () => {
         // Iron fails to refine half the time, so the loop counts bars, never ore.
-        expect(ironBarsAt(withPick([[KS_ID.IRON_BAR, 1]]), MAX_MINING)).toMatchObject({ kind: 'mineRock' });
+        expect(ironBarsAt(withPick([[KS_ID.IRON_BAR, 1]]), MAX_MINING, 15)).toMatchObject({ kind: 'mineRock' });
     });
 
     test('two bars ends the chain', () => {
-        expect(ironBarsAt(withPick([[KS_ID.IRON_BAR, 2]]), MAX_MINING).kind).toBe('wait');
+        expect(ironBarsAt(withPick([[KS_ID.IRON_BAR, 2]]), MAX_MINING, 15).kind).toBe('wait');
     });
 
     test('the batch covers two bars with room to spare', () => {
         // P(fewer than 2 successes in 8 coin flips) = 9/256.
         expect(ORE_PER_TRIP).toBeGreaterThanOrEqual(8);
+    });
+});
+
+describe('iron bar skill requirements', () => {
+    test('does not try smelting an iron batch at Smithing 1', () => {
+        expect(ironBarsAt(snap([[KS_ID.IRON_ORE, ORE_PER_TRIP]]), 86, 1)).toMatchObject({
+            kind: 'wait', reason: 'Smithing 15 is required to smelt iron bars; train Smithing or obtain and bank two Iron bars'
+        });
+    });
+
+    test('withdraws banked bars at the quest Mining floor and Smithing 1', () => {
+        expect(ironBarsAt(snap([], { bankIds: [[KS_ID.IRON_BAR, 2]] }), 10, 1)).toMatchObject({
+            kind: 'withdraw', items: [{ name: 'Iron bar', id: KS_ID.IRON_BAR, qty: 2 }]
+        });
+    });
+
+    test('does not mine iron below Mining 15', () => {
+        expect(ironBarsAt(snap([[BRONZE_PICKAXE, 1]]), 10, 15)).toMatchObject({
+            kind: 'wait', reason: 'Mining 15 is required to mine iron ore; train Mining or obtain and bank two Iron bars'
+        });
+    });
+
+    test('smelts carried ore below Mining 15 when Smithing permits it', () => {
+        expect(ironBarsAt(snap([[KS_ID.IRON_ORE, ORE_PER_TRIP]]), 10, 15)).toMatchObject({
+            kind: 'custom', name: 'smelt iron bars'
+        });
     });
 });

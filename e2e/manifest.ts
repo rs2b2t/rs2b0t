@@ -13,6 +13,16 @@ export const CASES: readonly Case[] = [
         note: 'Fresh local account with a tinderbox and no banked logs; verifies the ready empty-bank stop and saves a screenshot.'
     },
     {
+        id: 'mortton-shop-798-live',
+        harness: 'mortton-shop-798-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['nav'] },
+        status: 'vetted',
+        provenAt: 'aec09f58',
+        manual: true,
+        budgetMin: 5,
+        note: 'Fresh local account walks town and temple into Razmire, then from Razmire through both doors to Ulsquire. Saves route logs and screenshots.'
+    },
+    {
         id: 'cookbot-zanaris-live',
         harness: 'cookbot-zanaris-live.ts',
         covers: { scripts: ['CookBot'] },
