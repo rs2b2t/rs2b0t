@@ -160,6 +160,12 @@ export const GLOBAL_SETTINGS_CORE: SettingsSchema = {
         default: true,
         label: 'Bank gems/fruit/beer/kebabs/caskets (default)'
     },
+    useZanarisBank: {
+        type: 'boolean',
+        default: false,
+        label: 'Allow the Zanaris bank',
+        help: 'Enable while working inside Zanaris. Requires Lost City and starting inside the city.'
+    },
     useMageBank: {
         type: 'boolean',
         default: false,

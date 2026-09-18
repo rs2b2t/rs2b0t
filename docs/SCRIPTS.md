@@ -145,7 +145,7 @@ Start-or-coordinate fighter — kills any named NPC in its leash, loots selected
 | `buryBones` | boolean | `false` | Bury regular bones |
 | `solveClues` | boolean | `true` | Solve clue drops |
 | `banking` | string | `"Auto"` | Banking — one of: Auto, None |
-| `bankLocation` | string | `"Nearest"` | Bank location — one of: Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Fishing Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
+| `bankLocation` | string | `"Nearest"` | Bank location — one of: Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
 | `bankAtLootSlots` | number (1–27) | `12` | Bank at loot slots |
 | `bankEveryMinutes` | number (0–120) | `0` | Bank every N minutes |
 | `bankCommonJunk` | boolean | `true` | Bank common junk too |
@@ -544,7 +544,7 @@ Bank cook loop — withdraw raw fish, cook it one at a time on the range nearest
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `fish` | string | `"Raw salmon"` | Raw fish to cook (contains) |
-| `location` | string | `"Catherby"` | Where to cook — one of: Auto, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Fishing Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena, Custom |
+| `location` | string | `"Catherby"` | Where to cook — one of: Auto, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena, Custom |
 | `surface` | string | `"Range"` | Cook on — one of: Range, Fire |
 | `logType` | string | `"Logs"` | Logs to burn (Fire only) — one of: Logs, Oak logs, Willow logs, Maple logs, Yew logs, Magic logs |
 | `firePlotRadius` | number (2–16) | `8` | Fire ground search radius (Fire only) |
@@ -696,7 +696,10 @@ Fishes a chosen method at the spot that offers it; banks the catch, optionally c
 | `leashRadius` | number (2–64) | `18` | Leash radius (tiles) |
 | `tickManip` | string | `"Off"` | Tick manip — one of: Off |
 | `guildFeatherMinutes` | number (0–120) | `0` | Feather supply trip every (minutes) |
-| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Draynor Village, Catherby, Fishing Guild, Barbarian Village, Seers (fly fishing), Karamja (Musa Point), Taverley Dungeon (lava eels), Gnome Stronghold (fishing), Shilo Village, None |
+| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Use Closest, Use Start Position, Use Custom Position, None, Draynor Village, Catherby, Fishing Guild, Barbarian Village, Seers (fly fishing), Karamja (Musa Point), Taverley Dungeon (lava eels), Gnome Stronghold (fishing), Shilo Village |
+| `customLocation` | tile | `{"x":3200,"z":3200,"level":0}` | Custom position (x,z) |
+| `bank` | boolean | `true` | Bank haul |
+| `bankLocation` | string | `"Auto"` | Bank location — one of: Auto, Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
 | `cookMode` | string | `"Off"` | Cook mode — one of: Off, Cook then bank, Bank raw then cook |
 | `cookFish` | string | `"All raw"` | Fish to cook — one of: All raw, Tuna, Swordfish, Lobster, Shark, Salmon, Trout, Shrimps, Anchovies, Custom |
 | `cookFishCustom` | string | `""` | Custom cook filter |
@@ -860,7 +863,10 @@ Mines the selected rock types, then banks the ore at the nearest bank or drops i
 |---|---|---|---|
 | `rocks` | string[] | `["Iron"]` | Rock types — one of: Clay, Copper, Tin, Iron, Silver, Coal, Gold, Mithril, Adamantite, Runite |
 | `leashRadius` | number (2–64) | `10` | Leash radius (tiles) |
-| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Al Kharid Mine (29 Combat recommended), Barbarian Village, Coal Trucks (55 Combat recommended), Crafting Guild, Desert Mining Camp (91 Combat recommended), Desert Mining Camp Surface (91 Combat recommended), Dwarven Mine (65 Combat recommended), Edgeville Dungeon Mine (85 Combat recommended), Fight Arena Mine, Grand Tree Mine, Heroes Guild, Lava Maze Runite Mine (69 Combat recommended), Legends Guild Iron (east), Legends Guild Iron (west), Mining Guild, North Brimhaven Mine, Rimmington Mine, Shilo Village, South-east Ardougne Mine, Southeast Varrock Mine, Southwest Varrock Mine, West Lumbridge Swamp Mine, Wilderness Hobgoblin Mine (57 Combat recommended), Wilderness Skeleton Mine (45 Combat recommended), None |
+| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Use Closest, Use Start Position, Use Custom Position, None, Al Kharid Mine (29 Combat recommended), Barbarian Village, Coal Trucks (55 Combat recommended), Crafting Guild, Desert Mining Camp (91 Combat recommended), Desert Mining Camp Surface (91 Combat recommended), Dwarven Mine (65 Combat recommended), Edgeville Dungeon Mine (85 Combat recommended), Fight Arena Mine, Grand Tree Mine, Heroes Guild, Lava Maze Runite Mine (69 Combat recommended), Legends Guild Iron (east), Legends Guild Iron (west), Mining Guild, North Brimhaven Mine, Rimmington Mine, Shilo Village, South-east Ardougne Mine, Southeast Varrock Mine, Southwest Varrock Mine, West Lumbridge Swamp Mine, Wilderness Hobgoblin Mine (57 Combat recommended), Wilderness Skeleton Mine (45 Combat recommended) |
+| `customLocation` | tile | `{"x":3200,"z":3200,"level":0}` | Custom position (x,z) |
+| `bank` | boolean | `true` | Bank haul |
+| `bankLocation` | string | `"Auto"` | Bank location — one of: Auto, Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
 | `food` | string | `"Lobster"` | Food — one of: Shark, Lobster, Swordfish, Tuna, Salmon, Trout, Pike, Bass, Herring, Sardine, Anchovies, Shrimps, Cooked meat, Cooked chicken, Bread, Stew, Cake, Chocolate cake, Plain pizza, Meat pizza, Anchovy pizza, Pineapple pizza, Redberry pie, Meat pie, Apple pie |
 | `foodWithdraw` | number (0–27) | `0` | Food to withdraw |
 | `tickManip` | string | `"Off"` | Tick manip — one of: Off |
@@ -903,7 +909,7 @@ Dumps a bank to a running MarketMaker: withdraws every tradeable item as notes, 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `maker` | string | `""` | Maker name |
-| `bank` | string | `"Nearest"` | Bank — one of: Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Fishing Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
+| `bank` | string | `"Nearest"` | Bank — one of: Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
 
 ### MarketMaker
 
@@ -1228,7 +1234,10 @@ Chops the chosen tree type, then banks logs, drops them, or burns a full load (c
 |---|---|---|---|
 | `treeName` | string | `"Tree"` | Tree name — one of: Tree, Oak, Willow, Maple tree, Yew, Magic tree |
 | `leashRadius` | number (2–64) | `10` | Leash radius (tiles) |
-| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Draynor (trees), Draynor Oaks, Draynor Willows, Seers (trees), Seers Oaks, Seers Willows, Seers Maples, Seers Yews (cemetery), Edgeville Yews, Sorcerer's Tower, Gnome Stronghold, S Falador Oaks, Lumbridge Farmer Willows, Lumbridge Castle Willows, None |
+| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Use Closest, Use Start Position, Use Custom Position, None, Draynor (trees), Draynor Oaks, Draynor Willows, Seers (trees), Seers Oaks, Seers Willows, Seers Maples, Seers Yews (cemetery), Edgeville Yews, Sorcerer's Tower, Gnome Stronghold, S Falador Oaks, Lumbridge Farmer Willows, Lumbridge Castle Willows |
+| `customLocation` | tile | `{"x":3200,"z":3200,"level":0}` | Custom position (x,z) |
+| `bank` | boolean | `true` | Bank haul |
+| `bankLocation` | string | `"Auto"` | Bank location — one of: Auto, Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
 | `tickManip` | string | `"Off"` | Tick manip — one of: Off |
 | `burnMode` | string | `"Off"` | Burn mode — one of: Off, Chop then burn |
 | `fireSpot` | string | `"Auto"` | Fire spot — one of: Auto, Varrock East, Varrock West, Draynor, Seers |

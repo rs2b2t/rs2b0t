@@ -3,8 +3,8 @@ import { bankDistance } from '../geometry/distance.js';
 import Tile from '../geometry/Tile.js';
 
 /**
- * Shared Fisher, Miner, and Woodcutter camp with home and bank stands.
- * `campRadius` bounds wandering; `chaseRadius` bounds fishing-spot hops; `verified` marks live-checked camps.
+ * Shared gather camp: home pin + bank stand for Fisher / Miner / Woodcutter. Membership (ReturnToAnchor / soft wander bound) uses {@link campRadius}, while fishing hop chase inside camp uses {@link chaseRadius} measured from the player.
+ * `verified` marks camps confirmed via live pathability and resource checks (`bun e2e/verify-gathering-locations.ts` plus visual stand polish).
  */
 export interface GatheringLocation {
     name: string;
@@ -15,9 +15,15 @@ export interface GatheringLocation {
     boothName?: string;
     boothOp?: string;
     obstacles?: string[];
-    /** Camp membership radius from {@link spot} (Chebyshev); outside it ReturnToAnchor fires. Defaults to 64. */
+    /**
+     * Camp membership radius from {@link spot} (Chebyshev).
+     * Player outside this disk → ReturnToAnchor. Defaults to 64 when omitted.
+     */
     campRadius?: number;
-    /** Player-relative fishing-spot hop disk while in camp, default {@link DEFAULT_CHASE_RADIUS}; loc gather (rocks/trees) still uses campRadius from home. */
+    /**
+     * Player-relative fishing-spot / hop disk while in camp.
+     * Defaults to 24 when omitted. Loc gather (rocks/trees) still uses campRadius from home.
+     */
     chaseRadius?: number;
     /** CSV-ish resource tags for docs / verify helper (not used by Gather target pick). */
     resources?: readonly string[];
@@ -40,7 +46,10 @@ export const DEFAULT_BOOTH_OP = 'Use-quickly';
 /** Default camp membership when a named location omits {@link GatheringLocation.campRadius}. */
 export const DEFAULT_CAMP_RADIUS = 64;
 
-/** Soft prefer-near-player radius for named camps; any matching spot inside camp membership stays valid and this only ranks nearby hops first. */
+/**
+ * Soft prefer-near-player radius for named camps, not a hard exclusion.
+ * Any matching spot inside camp membership stays valid; this only ranks nearby hops first when both exist.
+ */
 export const DEFAULT_CHASE_RADIUS = 40;
 
 export function resolveCampRadius(campRadius: number | null | undefined, fallback = DEFAULT_CAMP_RADIUS): number {
@@ -53,7 +62,10 @@ export function resolveChaseRadius(chaseRadius: number | null | undefined, fallb
     return Math.max(2, Math.floor(raw));
 }
 
-/** Engine map-square edge length. Auto snaps to a preset only when the start tile shares this 64x64 chunk with the camp spot; otherwise freeform (location null, nearest bank, start-tile leash). */
+/**
+ * Engine map-square edge length.
+ * Auto snaps to a preset only when the start tile shares this 64×64 chunk with the camp spot; otherwise freeform (location null, nearest bank, start-tile leash).
+ */
 export const MAP_SQUARE = 64;
 
 /** True when both tiles sit in the same level + map square (chunk). */
@@ -67,8 +79,17 @@ export function sameMapSquare(a: WorldTile, b: WorldTile): boolean {
     );
 }
 
+export const USE_CLOSEST = 'Use Closest';
+export const USE_START_POSITION = 'Use Start Position';
+export const USE_CUSTOM_POSITION = 'Use Custom Position';
+/** Legacy alias, kept for saves that stored 'Auto'. */
+export const AUTO_LEGACY = 'Auto';
+
+/** Legacy power-drop location, kept so saved 'None' does not silently re-parse to the default. */
+export const NONE_LEGACY = 'None';
+
 export function locationOptions(table: readonly GatheringLocation[]): string[] {
-    return ['Auto', ...table.map(l => l.name), 'None'];
+    return [AUTO_LEGACY, USE_CLOSEST, USE_START_POSITION, USE_CUSTOM_POSITION, NONE_LEGACY, ...table.map(l => l.name)];
 }
 
 export function boothFields(loc: GatheringLocation | null | undefined): {
@@ -81,40 +102,35 @@ export function boothFields(loc: GatheringLocation | null | undefined): {
     };
 }
 
-/** Resolve a location name, or select the nearest preset in the start tile's map square for Auto. None and freeform Auto return null. */
+/** Resolve location setting: Use Closest = nearest by distance, Start/Custom = freeform null, named = case-insensitive. */
 export function resolveGatheringLocation<T extends GatheringLocation>(
     setting: string,
     startTile: WorldTile,
     table: readonly T[]
 ): T | null {
     const normalized = setting.trim().toLowerCase();
-    if (normalized === 'none' || normalized === '') {
+    if (normalized === USE_CUSTOM_POSITION.toLowerCase()) {
         return null;
     }
-    if (normalized !== 'auto') {
-        return table.find(l => l.name.toLowerCase() === normalized) ?? null;
-    }
-    if (table.length === 0) {
+    if (normalized === USE_START_POSITION.toLowerCase()) {
         return null;
     }
-
-    // Auto freeform: only snap when standing in a preset's map square.
-    const inChunk = table.filter(l => sameMapSquare(startTile, l.spot));
-    if (inChunk.length === 0) {
-        return null;
-    }
-
-    const sameLevel = inChunk.filter(l => l.spot.level === startTile.level);
-    const pool = sameLevel.length > 0 ? sameLevel : inChunk;
-    let best = pool[0]!;
-    let bestD = bankDistance(startTile, best.spot);
-    for (let i = 1; i < pool.length; i++) {
-        const loc = pool[i]!;
-        const d = bankDistance(startTile, loc.spot);
-        if (d < bestD) {
-            best = loc;
-            bestD = d;
+    if (normalized === USE_CLOSEST.toLowerCase() || normalized === AUTO_LEGACY.toLowerCase()) {
+        const pool = normalized === AUTO_LEGACY.toLowerCase() ? table.filter(loc => sameMapSquare(startTile, loc.spot)) : table;
+        if (pool.length === 0) {
+            return null;
         }
+        let best = pool[0]!;
+        let bestD = bankDistance(startTile, best.spot);
+        for (let i = 1; i < pool.length; i++) {
+            const loc = pool[i]!;
+            const d = bankDistance(startTile, loc.spot);
+            if (d < bestD) {
+                best = loc;
+                bestD = d;
+            }
+        }
+        return best;
     }
-    return best;
+    return table.find(l => l.name.toLowerCase() === normalized) ?? null;
 }

@@ -1,6 +1,4 @@
 /** Live GatheringBot scenarios for Miner, Fisher, and Woodcutter. */
-// Why: acquisition cases purge bank tools so leftovers cannot produce a false pass.
-// Inventory uses `give`, bank stock uses `givebank`, and the bot client is deployed manually.
 
 // Usage:
 //   bun e2e/gatheringbot-test.ts
@@ -229,7 +227,7 @@ async function setSettings(page: Page, script: string, map: Record<string, strin
 }
 
 /** Seed held items via the engine cheat `give` (ClientCheatHandler).
- *  Why: Local Server engines carry no `~item`/`~bankitem`, and `~item` no-ops silently while `~clearinv` still works, which reads as an endless inventory wipe. */
+ *  Why: inventory seeds use the stock engine command `give`, and verify that the requested items arrived. */
 async function seedItem(page: Page, debugName: string, displayName: string, qty = 1): Promise<void> {
     const cmd = `give ${debugName} ${qty}`;
     for (let i = 0; i < 8; i++) {
@@ -893,7 +891,7 @@ type Scenario = {
     /** Held items to seed via `give` (debug name → display name, qty). */
     seed?: { debug: string; name: string; qty?: number }[];
     /**
-     * Direct bank seed via engine `givebank` ({@link seedItemsToBank}).
+     * Bank seed via noted items and verified deposits ({@link seedItemsToBank}).
      * Prefer this over give→deposit, bulk unstackables fill the pack and stall.
      */
     bankSeed?: { items: BankSeedItem[]; stand: Tile };
@@ -905,7 +903,7 @@ type Scenario = {
     /** Before seed: open this bank and withdraw matching tools, then clearinv. */
     purgeBank?: { stand: Tile; match: RegExp; label: string };
     /**
-     * @deprecated Prefer {@link bankSeed} (`givebank`). Kept only for rare cases
+     * @deprecated Prefer {@link bankSeed} (noted deposits). Kept only for rare cases
      * where give→deposit is intentional; bulk fixtures must use bankSeed.
      */
     depositSeedToBank?: { stand: Tile; names: string[]; label: string };
@@ -1111,7 +1109,8 @@ const SCENARIOS: Scenario[] = [
         camp: SPOT.swVarrockMine,
         settings: {
             rocks: 'Tin',
-            // location None = power-mine: drop ore when full (no bank loop).
+            // Legacy None (kept option) = power-mine: drop ore when full (no bank loop).
+            // Same loop as Bank=false; this guards the saved-settings compat path.
             // Leash is from the live start tile (not camp), product floors to 40.
             location: 'None',
             toolAcquire: 'Off',
@@ -1751,7 +1750,7 @@ const SCENARIOS: Scenario[] = [
             `mule=${logHas(cur, /mule:\s*cooker/i)} distBank=${minDistToBank}`
     },
     {
-        // Bank raw then cook: givebank 973 raw + inv pot + 26 raw → catch the last → bank hits N → withdraw and cook the batch.
+        // Bank raw then cook: deposit 973 noted raw + inv pot + 26 raw → catch the last → bank hits N → withdraw and cook the batch.
         // 973 banked + 27 deposited = 1000 (explicit bankRawBeforeCook; the product default is 56).
         id: 'fish-bank-raw-cook',
         tags: ['fishing', 'fish', 'cook', 'bank', 'early'],
@@ -2416,7 +2415,7 @@ const SCENARIOS: Scenario[] = [
             `distCamp=${minDistToCamp} tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'} ` +
             `inv=${cur.inv.map(i => i.name).join(',') || 'empty'}`
     },
-    // ── Auto freeform (start outside every preset 64×64 map square) ──────────
+    // ── Use Start Position freeform (start outside every preset 64×64 map square) ──
     {
         id: 'auto-freeform-wc-willows-cg',
         tags: ['freeform', 'auto', 'woodcutting', 'wc', 'early'],
@@ -2426,7 +2425,8 @@ const SCENARIOS: Scenario[] = [
         camp: SPOT.willowsNwCg,
         settings: {
             treeName: 'Willow',
-            location: 'Auto',
+            // Use Start Position (ex-Auto): freeform when the start shares no 64×64 map square with a known camp.
+            location: 'Use Start Position',
             burnMode: 'Off',
             toolAcquire: 'Off',
             forgetfulBank: false,
@@ -2462,12 +2462,12 @@ const SCENARIOS: Scenario[] = [
         id: 'mine-wilderness-skeleton',
         tags: ['known-camp', 'auto', 'mining', 'mine', 'wildy'],
         script: 'Miner',
-        // Auto now recognizes the Wilderness Skeleton Mine as a known coal camp.
+        // Use Closest recognizes the Wilderness Skeleton Mine as a known coal camp.
         start: SPOT.skelMine,
         camp: SPOT.skelMine,
         settings: {
             rocks: 'Coal',
-            location: 'Auto',
+            location: 'Use Closest',
             toolAcquire: 'Off',
             forgetfulBank: false,
             leashRadius: 40
@@ -2479,7 +2479,7 @@ const SCENARIOS: Scenario[] = [
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            const selected = logHas(cur, /location:\s*Wilderness Skeleton Mine\s*\(auto\)/i);
+            const selected = logHas(cur, /location:\s*Wilderness Skeleton Mine\s*\(Use Closest\)/i);
             const xpGain = cur.xp.mining - start.xp.mining;
             // Coal is not "* ore"; count coal + any ore product.
             const haul = invMatch(cur, /^(coal|.+ ore)$/i);
@@ -2489,7 +2489,7 @@ const SCENARIOS: Scenario[] = [
             return 'wait';
         },
         failMsg: ({ start, cur, minDistToCamp }) =>
-            `selected=${logHas(cur, /location:\s*Wilderness Skeleton Mine\s*\(auto\)/i)} ` +
+            `selected=${logHas(cur, /location:\s*Wilderness Skeleton Mine\s*\(Use Closest\)/i)} ` +
             `mineXpΔ=${cur.xp.mining - start.xp.mining} haul=${invMatch(cur, /^(coal|.+ ore)$/i)} ` +
             `distStart=${minDistToCamp} tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
     },
@@ -2530,12 +2530,13 @@ const SCENARIOS: Scenario[] = [
         id: 'auto-freeform-fish-ardy-river',
         tags: ['freeform', 'auto', 'fishing', 'fish'],
         script: 'Fisher',
-        // Ardougne river fly spots, outside every FISHING_LOCATIONS chunk.
+        // Ardougne river fly spots are outside every FISHING_LOCATIONS chunk (Use Start Position freeform).
         start: SPOT.ardyRiverFly,
         camp: SPOT.ardyRiverFly,
         settings: {
             fishMethod: 'Fly fishing — trout/salmon',
-            location: 'Auto',
+            // Use Start Position (ex-Auto): freeform outside every FISHING_LOCATIONS chunk.
+            location: 'Use Start Position',
             cookMode: 'Off',
             toolAcquire: 'Off',
             baitQty: 100,
@@ -2586,7 +2587,7 @@ const SCENARIOS: Scenario[] = [
             leashRadius: 12
         },
         purgeBank: { stand: SPOT.varrockWestBank, match: TOOL_RE.axe, label: 'axes@varrock-w' },
-        // Bank mats via givebank so restock must withdraw (not materials-held short-circuit).
+        // Bank noted materials so restock must withdraw (not materials-held short-circuit).
         bankSeed: {
             stand: SPOT.varrockWestBank,
             items: [
@@ -2696,7 +2697,7 @@ try {
                 await purgeBankTools(page, sc.purgeBank.stand, sc.purgeBank.match, sc.purgeBank.label);
             }
 
-            // Bank fixtures first (givebank) so pack never holds bulk stackables.
+            // Bank fixtures first so their noted stacks are deposited before inventory gear is seeded.
             if (sc.bankSeed) {
                 console.log(
                     `  bankSeed @ (${sc.bankSeed.stand.x},${sc.bankSeed.stand.z}): ` +

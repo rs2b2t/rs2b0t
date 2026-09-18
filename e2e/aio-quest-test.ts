@@ -1,5 +1,5 @@
 // Live AIOQuester harness: [base] [user] [questsCsv] [minutes] [giveCsv] [statsCsv] [food] [cheatsCsv] [tele].
-// Why: giveCsv takes engine debug names (bronze_pickaxe) through give/givebank, content `~item` no-ops silently behind the busy guard.
+// Why: giveCsv takes engine debug names (bronze_pickaxe) through give and verified bank deposits, content `~item` no-ops silently behind the busy guard.
 
 // Usage:
 //   HEADED=1 bun e2e/aio-quest-test.ts \

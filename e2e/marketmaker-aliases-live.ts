@@ -9,7 +9,7 @@
 // The harness builds and deploys its own isolated client; no manual redeploy needed.
 import type { Page } from 'playwright-core';
 import { deployIsolatedClient, launchBrowser, parseArgs } from './lib/harness.js';
-import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript } from './tutorial/harness.js';
+import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript, seedItemsToBank } from './tutorial/harness.js';
 
 const { base } = parseArgs(process.argv.slice(2), { base: process.env.BASE ?? 'http://localhost:8890' });
 const BUDGET_MS = (Number(process.env.BUDGET_S) || 900) * 1000;
@@ -308,10 +308,12 @@ try {
     await clearChatDialogs(makerPage);
     await cheatQuiet(makerPage, '~clearinv');
     // Why: two hides that read as one name in the client, so only the alias can tell the shop which is which.
-    await cheatQuiet(makerPage, '~bankitem dragonhide_blue 120');
-    await cheatQuiet(makerPage, '~bankitem dragonhide_green 120');
-    await cheatQuiet(makerPage, '~bankitem keyhalf2 20');
-    await cheatQuiet(makerPage, '~bankitem coins 500000');
+    await seedItemsToBank(makerPage, [
+        { debugName: 'dragonhide_blue', displayName: 'Dragonhide', qty: 120 },
+        { debugName: 'dragonhide_green', displayName: 'Dragonhide', qty: 120 },
+        { debugName: 'keyhalf2', displayName: 'Half of a key', qty: 20 },
+        { debugName: 'coins', displayName: 'Coins', qty: 500000 }
+    ], { x: 3185, z: 3440, level: 0 });
     await teleArrive(makerPage, SPOT);
 
     await writeStorage(makerPage, {

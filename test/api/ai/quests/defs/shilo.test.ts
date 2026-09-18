@@ -1,11 +1,28 @@
-import { describe, expect, test } from 'bun:test';
+import { Bank } from '#/bot/api/bank/Bank.js';
+import { Banking } from '#/bot/api/bank/Banking.js';
+import { executeStep } from '#/bot/api/ai/quests/exec/steps.js';
+import { Equipment } from '#/bot/api/equipment/Equipment.js';
+import { combatGear, resetCombatGear } from '#/bot/api/ai/quests/defs/shilo/gear.js';
+import { stubProps } from '../../../../lib/stubSingletons.js';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { SV_ITEM, inDolmenRoom, shiloArea } from '#/bot/api/ai/quests/defs/shilo/areas.js';
 import { SV_STAGE, parseShiloJournal } from '#/bot/api/ai/quests/defs/shilo/journal.js';
 import { decide, shilo } from '#/bot/api/ai/quests/defs/shilo/index.js';
 import { evaluate } from '#/bot/api/ai/quests/EligibilityEvaluator.js';
 import { flagValue, hasFlag } from '#/bot/api/ai/quests/engine/types.js';
 import { QuestFood } from '#/bot/api/ai/quests/food.js';
+import { QuestLoadout } from '#/bot/api/ai/quests/gear.js';
 import type { QuestProgress, QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+
+let restoreLoadout: () => void;
+beforeEach(() => {
+    restoreLoadout = stubProps(QuestLoadout, { current: null });
+    resetCombatGear();
+});
+afterEach(() => {
+    restoreLoadout();
+    resetCombatGear();
+});
 
 const at = (x: number, z: number, level = 0) => ({ x, z, level });
 
@@ -758,4 +775,153 @@ describe('shilo eligibility', () => {
         const ready = evaluate(shilo.record, { ...player, completedQuests: new Set(['junglepotion']) }, items, 'notStarted');
         expect(ready.status).toBe('READY');
     });
+});
+
+
+describe('Shilo combat provisioning', () => {
+    test('withdraws a banked weapon and armour before entering Ah Za Rhoon', () => {
+        const s = snapshot({
+            progress: progress(SV_STAGE.ROPED_MOUND),
+            invIds: carrying(),
+            bank: new Map([['steel scimitar', 1], ['steel chainbody', 1]])
+        });
+        expect(withdrawn(decide(s))).toEqual([
+            { name: 'Steel scimitar', qty: 1 },
+            { name: 'Steel chainbody', qty: 1 }
+        ]);
+    });
+
+    test('equips carried gear before reading scrolls in the cave', () => {
+        const s = snapshot({
+            progress: progress(SV_STAGE.ENTERED_AH_ZA_RHOON),
+            invIds: carrying([SV_ITEM.TATTERED_SCROLL.id, 1]),
+            inv: new Map([['steel scimitar', 1]]),
+            tile: at(2898, 9401)
+        });
+        expect(name(decide(s))).toContain('wear Steel scimitar');
+    });
+
+    test('leaves the cave before retrieving banked gear', () => {
+        const s = snapshot({
+            progress: progress(SV_STAGE.ENTERED_AH_ZA_RHOON),
+            invIds: carrying([SV_ITEM.TATTERED_SCROLL.id, 1]),
+            bank: new Map([['steel scimitar', 1]]),
+            tile: at(2898, 9401)
+        });
+        expect(name(decide(s))).toBe('climb out of Ah Za Rhoon');
+    });
+
+    test('keeps an equipped weapon and the Beads of the dead', () => {
+        const s = snapshot({
+            progress: progress(SV_STAGE.ENTERED_AH_ZA_RHOON),
+            invIds: carrying([SV_ITEM.TATTERED_SCROLL.id, 1]),
+            bank: new Map([['steel scimitar', 1]]),
+            worn: new Set(['rune scimitar', 'beads of the dead'])
+        });
+        expect(name(decide(s))).toBe('read the tattered scroll');
+    });
+});
+
+
+test('Shilo keeps a two-handed weapon equipped when a shield is banked', () => {
+    const s = snapshot({
+        progress: progress(SV_STAGE.ENTERED_AH_ZA_RHOON),
+        invIds: carrying([SV_ITEM.TATTERED_SCROLL.id, 1]),
+        bank: new Map([['steel kiteshield', 1]]),
+        worn: new Set(['rune 2h sword'])
+    });
+    expect(name(decide(s))).toBe('read the tattered scroll');
+});
+
+
+test('Shilo equips carried gear before withdrawing a higher banked tier into a full pack', () => {
+    const s = snapshot({
+        progress: progress(SV_STAGE.ENTERED_AH_ZA_RHOON),
+        inv: new Map([['steel scimitar', 1]]),
+        bank: new Map([['rune scimitar', 1]]),
+        freeSlots: 0
+    });
+    expect(name(decide(s))).toBe('wear Steel scimitar');
+});
+
+test('Shilo banks rejected gear to free room for a usable replacement', async () => {
+    resetCombatGear();
+    const restore = stubProps(Equipment, { contains: () => false, equip: async () => false });
+    const s = snapshot({
+        inv: new Map([['rune scimitar', 1], ['tattered scroll', 1]]),
+        bank: new Map([['steel scimitar', 1]]), freeSlots: 0
+    });
+    try {
+        const first = combatGear(s);
+        expect(first?.kind).toBe('custom');
+        if (first?.kind === 'custom') await first.run(() => {});
+        const next = combatGear(s);
+        expect(next?.kind).toBe('deposit');
+        if (next?.kind === 'deposit') expect(next.keep).toEqual(['tattered scroll']);
+    } finally {
+        restore();
+        resetCombatGear();
+    }
+});
+
+test('Shilo can bank food to make room without depositing quest tools', () => {
+    const step = combatGear(snapshot({
+        inv: new Map([['rope', 1], ['lobster', 27]]),
+        bank: new Map([['steel scimitar', 1]]), freeSlots: 0
+    }));
+    expect(step?.kind).toBe('deposit');
+    if (step?.kind === 'deposit') expect(step.keep).toEqual(['rope']);
+});
+
+test('Shilo withdraws only the gear that fits before equipping it', () => {
+    const step = combatGear(snapshot({
+        bank: new Map([['steel scimitar', 1], ['steel chainbody', 1]]), freeSlots: 1
+    }));
+    expect(step?.kind).toBe('withdraw');
+    if (step?.kind === 'withdraw') expect(step.items).toEqual([{ name: 'Steel scimitar', qty: 1 }]);
+});
+
+for (const weapon of ['steel scimitar', 'rune 2h sword']) {
+    test(`Shilo continues reading with ${weapon} equipped before any bank scan`, () => {
+        const s = snapshot({
+            progress: progress(SV_STAGE.ENTERED_AH_ZA_RHOON),
+            invIds: new Map([[SV_ITEM.TATTERED_SCROLL.id, 1], [SV_ITEM.ROPE.id, 1]]),
+            worn: new Set([weapon, 'steel chainbody', 'steel platelegs', 'steel full helm',
+                ...(weapon === 'steel scimitar' ? ['steel kiteshield'] : [])]),
+            bankKnown: false,
+            tile: at(2898, 9401)
+        });
+        expect(name(decide(s))).toBe('read the tattered scroll');
+    });
+}
+
+test('Shilo scans an unknown bank when combat slots still need gear', () => {
+    expect(combatGear(snapshot({ bankKnown: false }))?.kind).toBe('scanBank');
+});
+
+test('Shilo deposits a rejected warhammer while preserving the quest hammer', async () => {
+    const deposited: string[] = [];
+    const s = snapshot({
+        inv: new Map([['rune warhammer', 1], ['hammer', 1], ['tattered scroll', 1], ['lobster', 25]]),
+        bank: new Map([['steel scimitar', 1]]), freeSlots: 0
+    });
+    const restores = [
+        stubProps(Equipment, { contains: () => false, equip: async () => false }),
+        stubProps(Banking, { open: async () => true }),
+        stubProps(Bank, { depositAllMatching: async predicate => {
+            for (const item of s.inv.keys()) if (predicate(item, 0)) deposited.push(item);
+        } })
+    ];
+    try {
+        const wear = combatGear(s);
+        expect(wear?.kind).toBe('custom');
+        if (wear?.kind === 'custom') await wear.run(() => {});
+        const deposit = combatGear(s);
+        expect(deposit?.kind).toBe('deposit');
+        if (deposit?.kind !== 'deposit') throw new Error('expected gear deposit');
+        expect(await executeStep({ ...deposit, leaveOpen: true }, [], () => {})).toBe(true);
+        expect(deposited).toEqual(['rune warhammer']);
+    } finally {
+        for (const restore of restores.reverse()) restore();
+    }
 });

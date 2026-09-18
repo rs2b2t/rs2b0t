@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import type { Page } from 'playwright-core';
-import { cheatQuiet, clearChatDialogs, relog, teleTo } from './tutorial/harness.js';
+import { cheatQuiet, clearChatDialogs, relog, teleTo, seedItemsToBank } from './tutorial/harness.js';
 import { privateScenario, type PrivateScenario } from './jive-private-config.js';
 import type { PrivateRuntime } from './jive-private-types.js';
 import { confirmPrivateTrail, privateMutation } from './jive-private-session.js';
@@ -38,8 +38,11 @@ export async function seedPrivateClue(page: Page, scenario: PrivateScenario, acc
             console.log('private quest ready', { quest, status });
         }),
     });
-    const stock = f.casketOnly ? [['3dose2attack', 7]] as const : [['coins', 10000], ['airrune', 300], ['waterrune', 300], ['earthrune', 300], ['firerune', 300], ['lawrune', 100]] as const;
-    for (const [name, count] of stock) assert(await cheatQuiet(page, `~bankitem ${name} ${count}`));
+    const stock = f.casketOnly ? [{ debugName: '3dose2attack', displayName: 'Super attack(3)', qty: 7 }] : [
+        { debugName: 'coins', displayName: 'Coins', qty: 10000 },
+        ...['Air', 'Water', 'Earth', 'Fire', 'Law'].map(name => ({ debugName: `${name.toLowerCase()}rune`, displayName: `${name} rune`, qty: name === 'Law' ? 100 : 300 }))
+    ];
+    await seedItemsToBank(page, stock, f.bank);
     {
         for (const name of ['magic_shortbow', 'rune_arrow']) assert(await cheatQuiet(page, `give ${name} ${name === 'rune_arrow' ? 500 : 1}`));
         await page.evaluate(async () => {

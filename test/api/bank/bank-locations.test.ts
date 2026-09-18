@@ -38,7 +38,7 @@ test('every bank centre is a plausible world tile', () => {
         expect(b.tile.x, b.name).toBeLessThan(3600);
         expect(b.tile.z, b.name).toBeGreaterThan(2900);
         // Why: the Mage Arena chamber is its own region above the surface map (^mage_arena_finish_coord z=4716), so the band is asserted on the walked-to tile.
-        expect(b.tile.z, b.name).toBeLessThan(4800);
+        expect(b.tile.z, b.name).toBeLessThan(b.name === 'Zanaris' ? 9600 : 4800);
     }
 });
 
@@ -48,7 +48,7 @@ test('every bank is approached from somewhere on the surface map', () => {
         expect(a.x, b.name).toBeGreaterThan(2300);
         expect(a.x, b.name).toBeLessThan(3600);
         expect(a.z, b.name).toBeGreaterThan(2900);
-        expect(a.z, b.name).toBeLessThan(4000);
+        expect(a.z, b.name).toBeLessThan(b.name === 'Zanaris' ? 9600 : 4000);
     }
 });
 
@@ -154,7 +154,7 @@ describe('bank entry gates', () => {
 
     test('every other bank is ungated', () => {
         const gated = BANK_LOCATIONS.filter(b => b.requires !== undefined).map(b => b.name).sort();
-        expect(gated).toEqual(['Canifis', 'Fishing Guild', 'Mage Arena', 'Shilo Village']);
+        expect(gated).toEqual(['Canifis', 'Fishing Guild', 'Mage Arena', 'Shilo Village', 'Zanaris']);
     });
 });
 
