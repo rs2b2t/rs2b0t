@@ -2,6 +2,16 @@ import type { Case } from './manifestTypes.js';
 
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
+    {
+        id: 'mortton-shop-798-live',
+        harness: 'mortton-shop-798-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['nav'] },
+        status: 'vetted',
+        provenAt: 'aec09f58',
+        manual: true,
+        budgetMin: 5,
+        note: 'Fresh local account walks town and temple into Razmire, then from Razmire through both doors to Ulsquire. Saves route logs and screenshots.'
+    },
     ...(['missing-dds', 'missing-superanti', 'sharks14', 'guardian', 'reward'] as const).map(scenario => ({
         id: `jive-private-${scenario}`,
         harness: 'jive-private-live.ts',
