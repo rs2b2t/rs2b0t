@@ -59,6 +59,8 @@ export default class Firemaker extends LoopingBot {
     private xpStart = 0;
     private status = 'starting';
     private startedAt = Date.now();
+    private failedLogWithdraws = 0;
+    private pendingBankGeneration: number | null = null;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -106,6 +108,19 @@ export default class Firemaker extends LoopingBot {
         return Traversal.walkResilient(dest, { radius, attempts: 3, timeoutMs: 120_000, log: m => this.log(`  ${m}`) });
     }
 
+    private async waitForDeposit(): Promise<boolean> {
+        if (this.pendingBankGeneration === null) {
+            return true;
+        }
+        if (!(await Bank.waitSnapshotAfter(this.pendingBankGeneration))) {
+            this.log('bank stock did not reload after the deposit, reopening');
+            await Bank.close();
+            return false;
+        }
+        this.pendingBankGeneration = null;
+        return true;
+    }
+
     private async bankLeg(): Promise<boolean> {
         const here = Game.tile();
         if (here && Math.max(Math.abs(here.x - this.plot.bank.x), Math.abs(here.z - this.plot.bank.z)) > 4 && !(await this.walkTo(this.plot.bank, `the ${this.spotName} bank`, 2))) {
@@ -117,7 +132,20 @@ export default class Firemaker extends LoopingBot {
             return false;
         }
 
-        await Bank.depositAllMatching(depositAllExcept(toolKeepNames(TOOLS)));
+        if (!Bank.ready()) {
+            return false;
+        }
+        if (!(await this.waitForDeposit())) {
+            return false;
+        }
+        const deposit = depositAllExcept(toolKeepNames(TOOLS));
+        if (Inventory.items().some(item => deposit(item.name ?? ''))) {
+            this.pendingBankGeneration = Bank.snapshotGeneration();
+            await Bank.depositAllMatching(deposit);
+        }
+        if (!(await this.waitForDeposit())) {
+            return false;
+        }
         const plan = toolRestockPlan(TOOLS, this.skillLevel, this.invCount, name => Bank.count(name));
         for (const step of plan) {
             await Bank.withdraw(step.name);
@@ -130,10 +158,21 @@ export default class Firemaker extends LoopingBot {
             ScriptRunner.stop('no tinderbox in the bank or pack');
             return false;
         }
-        if (!(await Bank.withdrawX(this.logName, reader.inventorySize() - Inventory.used()))) {
+        if (!Bank.ready()) {
+            return false;
+        }
+        if (Bank.count(this.logName) === 0) {
             ScriptRunner.stop(`no ${this.logName} left in the bank`);
             return false;
         }
+        if (!(await Bank.withdrawX(this.logName, reader.inventorySize() - Inventory.used()))) {
+            this.log(`could not withdraw ${this.logName} (${++this.failedLogWithdraws}/3)`);
+            if (this.failedLogWithdraws >= 3) {
+                ScriptRunner.stop(`could not withdraw ${this.logName}`);
+            }
+            return false;
+        }
+        this.failedLogWithdraws = 0;
 
         actions.closeModal();
         await Execution.delayUntilTicks(() => !Bank.isOpen(), 5);

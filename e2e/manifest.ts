@@ -3,6 +3,36 @@ import type { Case } from './manifestTypes.js';
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
     {
+        id: 'potionmaker-empty-secondary-live',
+        harness: 'potionmaker-empty-secondary-live.ts',
+        covers: { scripts: ['PotionMaker'] },
+        status: 'vetted',
+        provenAt: '7217e27b',
+        manual: true,
+        budgetMin: 3,
+        note: 'Fresh local account holds unfinished potions with no secondary banked; verifies the stop, closed bank and preserved batch.'
+    },
+    {
+        id: 'firemaker-empty-bank-live',
+        harness: 'firemaker-empty-bank-live.ts',
+        covers: { scripts: ['Firemaker'] },
+        status: 'vetted',
+        provenAt: '8cc200c08aa8a732b6742b38e832782c39faff86',
+        manual: true,
+        budgetMin: 3,
+        note: 'Fresh local account with a tinderbox and no banked logs; verifies the ready empty-bank stop and saves a screenshot.'
+    },
+    {
+        id: 'mortton-shop-798-live',
+        harness: 'mortton-shop-798-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['nav'] },
+        status: 'vetted',
+        provenAt: 'aec09f58',
+        manual: true,
+        budgetMin: 5,
+        note: 'Fresh local account walks town and temple into Razmire, then from Razmire through both doors to Ulsquire. Saves route logs and screenshots.'
+    },
+    {
         id: 'cookbot-zanaris-live',
         harness: 'cookbot-zanaris-live.ts',
         covers: { scripts: ['CookBot'] },

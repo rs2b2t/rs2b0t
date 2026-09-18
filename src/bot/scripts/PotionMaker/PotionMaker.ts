@@ -71,6 +71,7 @@ export default class PotionMaker extends TaskBot {
     private status = 'starting';
     private startedAt = Date.now();
     private xpAtStart = 0;
+    private pendingBankGeneration: number | null = null;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(
@@ -114,6 +115,30 @@ export default class PotionMaker extends TaskBot {
         this.batches++;
     }
 
+    async waitForDeposit(): Promise<boolean> {
+        if (this.pendingBankGeneration === null) {
+            return true;
+        }
+        if (!(await Bank.waitSnapshotAfter(this.pendingBankGeneration))) {
+            await Bank.close();
+            return false;
+        }
+        this.pendingBankGeneration = null;
+        return true;
+    }
+
+    async depositInventory(): Promise<boolean> {
+        if (!(await this.waitForDeposit())) {
+            return false;
+        }
+        if (Inventory.used() > 0) {
+            this.pendingBankGeneration = Bank.snapshotGeneration();
+            await Bank.depositAllMatching(() => true);
+            await Execution.delayTicks(1);
+        }
+        return this.waitForDeposit();
+    }
+
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#6aa84f' });
         p.title(`PotionMaker — ${this.status}`);
@@ -141,6 +166,8 @@ export default class PotionMaker extends TaskBot {
 
 /** First leg: withdraws the water and herb halves of a batch into an empty pack, then closes the bank. */
 class RestockIngredients implements Task {
+    private failedWithdraws = 0;
+
     constructor(private bot: PotionMaker) {}
 
     validate(): boolean {
@@ -186,22 +213,40 @@ class RestockIngredients implements Task {
             }
         }
 
-        if (Inventory.used() > 0) {
-            this.bot.log('bank open, depositing inventory');
-            await Bank.depositAllMatching(() => true);
-            await Execution.delayTicks(1);
+        if (!(await this.bot.depositInventory())) {
+            this.bot.log('bank stock did not reload after the deposit, retrying');
+            return;
         }
 
+        // Why: Bank.open* already waits for ready(), so one count is the server's answer, an empty bank and a still-loading one included.
+        if (!Bank.ready()) {
+            return;
+        }
+        const vialCount = Bank.countById(VIAL_OF_WATER_ID);
+        const herbCount = Bank.countById(herb.id);
+        if (vialCount === 0 || herbCount === 0) {
+            const missing = vialCount === 0 ? 'vials of water' : herb.name;
+            this.bot.log(`no ${missing} in the bank — stopping`);
+            ScriptRunner.stop(`no ${missing} in the bank`);
+            return;
+        }
         if (!(await Bank.withdrawXById(VIAL_OF_WATER_ID, BATCH))) {
-            this.bot.log('no vials of water in the bank — stopping');
-            ScriptRunner.stop('no vials of water in the bank');
+            this.bot.log(`ingredient withdrawal failed (${++this.failedWithdraws}/3)`);
+            if (this.failedWithdraws >= 3) {
+                this.bot.log('withdrawing vials of water failed three times — stopping');
+                ScriptRunner.stop('could not withdraw vials of water');
+            }
             return;
         }
         if (!(await Bank.withdrawXById(herb.id, BATCH))) {
-            this.bot.log(`no ${herb.name} in the bank — stopping`);
-            ScriptRunner.stop(`no ${herb.name} in the bank`);
+            this.bot.log(`ingredient withdrawal failed (${++this.failedWithdraws}/3)`);
+            if (this.failedWithdraws >= 3) {
+                this.bot.log(`withdrawing ${herb.name} failed three times — stopping`);
+                ScriptRunner.stop(`could not withdraw ${herb.name}`);
+            }
             return;
         }
+        this.failedWithdraws = 0;
 
         if (!(await Bank.close())) {
             this.bot.log('bank would not close — retrying the trip');
@@ -221,7 +266,7 @@ class MakeUnfinished implements Task {
 
     validate(): boolean {
         const herb = this.bot.herbDef();
-        if (Bank.isOpen() || !herb) {
+        if (!herb) {
             return false;
         }
         return Inventory.countById(herb.id) > 0 && Inventory.countById(VIAL_OF_WATER_ID) > 0;
@@ -230,6 +275,10 @@ class MakeUnfinished implements Task {
     async execute(): Promise<void> {
         const herb = this.bot.herbDef();
         if (!herb) {
+            return;
+        }
+        if (Bank.isOpen() && !(await Bank.close())) {
+            this.bot.log('bank would not close, retrying');
             return;
         }
         this.bot.setStatus(`making ${herb.name} unfinished potions`);
@@ -266,10 +315,12 @@ class MakeUnfinished implements Task {
 
 /** Third leg: withdraws the secondary, spam-uses it on the unfinished potions, then deposits the finished batch. */
 class FinishPotions implements Task {
+    private failedSecondaryWithdraws = 0;
+
     constructor(private bot: PotionMaker) {}
 
     validate(): boolean {
-        if (Bank.isOpen() || !this.bot.herbDef() || !this.bot.secondaryDef()) {
+        if (!this.bot.herbDef() || !this.bot.secondaryDef()) {
             return false;
         }
         const herb = this.bot.herbDef()!;
@@ -309,11 +360,30 @@ class FinishPotions implements Task {
             return;
         }
 
-        if (!(await Bank.withdrawXById(secondary.id, BATCH))) {
-            this.bot.log(`no ${secondary.name} in the bank — stopping`);
+        if (!(await this.bot.waitForDeposit())) {
+            return;
+        }
+        if (!Bank.ready()) {
+            await Bank.close();
+            return;
+        }
+        const needed = Math.max(0, Math.min(BATCH, Inventory.countById(herb.unfId)) - Inventory.countById(secondary.id));
+        if (needed > 0 && Bank.countById(secondary.id) === 0) {
+            this.bot.log(`no ${secondary.name} in the bank — stopping at the booth holding the batch`);
+            await Bank.close();
             ScriptRunner.stop(`no ${secondary.name} in the bank`);
             return;
         }
+        if (needed > 0 && !(await Bank.withdrawXById(secondary.id, needed))) {
+            await Bank.close();
+            this.bot.log(`could not withdraw ${secondary.name} (${++this.failedSecondaryWithdraws}/3)`);
+            if (this.failedSecondaryWithdraws >= 3) {
+                this.bot.log(`withdrawing ${secondary.name} failed three times — stopping`);
+                ScriptRunner.stop(`could not withdraw ${secondary.name}`);
+            }
+            return;
+        }
+        this.failedSecondaryWithdraws = 0;
         if (!(await Bank.close())) {
             this.bot.log('bank would not close — retrying the trip');
             return;
@@ -345,9 +415,7 @@ class FinishPotions implements Task {
             this.bot.log('could not open the bank — retrying');
             return;
         }
-        if (Inventory.used() > 0) {
-            await Bank.depositAllMatching(() => true);
-        }
+        await this.bot.depositInventory();
     }
 
     private lastItem(id: number): InvItem | null {
