@@ -6,7 +6,8 @@ export const CASES: readonly Case[] = [
         id: 'cookbot-zanaris-live',
         harness: 'cookbot-zanaris-live.ts',
         covers: { scripts: ['CookBot'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: '3fe15f03',
         manual: true,
         budgetMin: 4,
         note: 'Fresh local account completes Lost City, opts into Zanaris banking, withdraws a banked shrimp and cooks it at the nearby range.'

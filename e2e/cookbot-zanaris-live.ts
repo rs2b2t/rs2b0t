@@ -18,7 +18,7 @@ try {
     assert(await cheatQuiet(page, 'setvar zanaris 6'));
     assert(await cheatQuiet(page, 'setstat cooking 99'));
     await clearChatDialogs(page, 'cooking level');
-    assert(await cheatQuiet(page, 'give raw_shrimps 1'));
+    assert(await cheatQuiet(page, 'give raw_shrimp 1'));
     assert(await teleTo(page, { x: 3253, z: 3420, level: 0 }, 2, 30_000));
     assert(await page.evaluate(async () => {
         const bank = (globalThis as never as Api).__rs2b0t.Bank;
