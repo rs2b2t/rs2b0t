@@ -48,7 +48,7 @@ function snap(options: {
 }
 
 const decide = (options: Parameters<typeof snap>[0] = {}): QuestStep =>
-    decideAt(snap(options), MAX_MINING);
+    decideAt(snap(options), MAX_MINING, 15);
 
 const talkTo = (step: QuestStep): string | undefined =>
     step.kind === 'talk' ? step.stop.npc : undefined;
@@ -66,7 +66,7 @@ describe("The Knight's Sword decide()", () => {
 
     test('waits when the stage is unreadable', () => {
         const blind = { ...snap({ journal: 'inProgress' }), stage: undefined, progress: undefined };
-        expect(decideAt(blind, MAX_MINING).kind).toBe('wait');
+        expect(decideAt(blind, MAX_MINING, 15).kind).toBe('wait');
     });
 
     test('starts with the Squire', () => {
@@ -177,7 +177,7 @@ describe('stage 6, the materials and the sword', () => {
     test('tops the coin float up before anything else', () => {
         const bare = snap({ stage: KS_STAGE.SPOKEN_RELDO });
         bare.invIds = new Map([[COINS, 1]]);
-        const step = decideAt(bare, MAX_MINING);
+        const step = decideAt(bare, MAX_MINING, 15);
         expect(step.kind === 'withdraw' && step.items.some(i => i.id === COINS)).toBe(true);
     });
 });
@@ -201,4 +201,12 @@ describe('the module', () => {
     test('pins no bank, because the quest crosses four towns', () => {
         expect(knightssword.bank).toBe('nearest');
     });
+});
+
+test('Smithing 1 does not block starting the quest or delivering acquired materials', () => {
+    expect(talkTo(decideAt(snap(), 10, 1))).toBe('Squire');
+    expect(talkTo(decideAt(snap({
+        stage: KS_STAGE.LOOKING_BLURITE,
+        invIds: [[KS_ID.IRON_BAR, 2], [KS_ID.BLURITE_ORE, 1]]
+    }), 10, 1))).toBe('Thurgo');
 });
