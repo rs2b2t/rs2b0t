@@ -44,7 +44,7 @@ export const SETTINGS: SettingsSchema = {
     ...chickenPreset({
         leashRadius: 18,
         targetName: 'Cow',
-        lootMatch: 'cow hide|bones',
+        lootMatch: 'Cowhide',
         buryBones: false
     })
 };

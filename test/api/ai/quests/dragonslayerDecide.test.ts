@@ -1,9 +1,14 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 
 import { DS_ID, DS_ITEM } from '#/bot/api/ai/quests/defs/dragonslayer/areas.js';
 import { decide } from '#/bot/api/ai/quests/defs/dragonslayer/index.js';
 import { DRAGON_STAGE } from '#/bot/api/ai/quests/defs/dragonslayer/journal.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+import { Skills } from '#/bot/api/skills/Skills.js';
+
+let levels = spyOn(Skills, 'effective');
+beforeEach(() => { levels = spyOn(Skills, 'effective').mockReturnValue(99); });
+afterEach(() => levels.mockRestore());
 
 // Why: decide() reads only a snapshot, so the routing table is testable without a client.
 type Stack = number | [number, number];
@@ -30,6 +35,68 @@ function snapshot(over: Partial<QuestSnapshot> & { flags?: string[]; carried?: S
 
 /** Enough nails that the boat's smithing leg is satisfied. */
 const NAILS: Stack = [DS_ID.NAILS, 12];
+
+describe('Dragon Slayer production prerequisites', () => {
+    const boat = { progress: { stage: DRAGON_STAGE.BOUGHT_SHIP, flags: new Set<string>() } };
+    const hull: Stack[] = [DS_ID.HAMMER, [DS_ID.PLANK, 3]];
+    const charms = [DS_ID.MAZE_KEY, DS_ID.MAP_MELZAR, DS_ID.LOBSTER_POT, DS_ID.MIND_BOMB, DS_ID.SILK];
+
+    test.each([
+        { label: 'Smithing 33 with steel', smithing: 33, mining: 99, items: [['steel bar', 6]], kind: 'wait' },
+        { label: 'Smithing 34 with steel and Mining 1', smithing: 34, mining: 1, items: [['steel bar', 6]], kind: 'custom' },
+        { label: 'one steel bar with Mining 1', smithing: 34, mining: 1, items: [['steel bar', 1]], kind: 'custom' },
+        { label: 'Smithing 29 with all ore', smithing: 29, mining: 99, items: [['iron ore', 6], ['coal', 12]], kind: 'wait' },
+        { label: 'Smithing 30 still cannot hammer nails', smithing: 30, mining: 99, items: [['iron ore', 6], ['coal', 12]], kind: 'wait' },
+        { label: 'all ore with Mining 1', smithing: 34, mining: 1, items: [['iron ore', 6], ['coal', 12]], kind: 'custom' },
+        { label: 'missing iron at Mining 14', smithing: 34, mining: 14, items: [['coal', 12]], kind: 'wait' },
+        { label: 'missing iron at Mining 15', smithing: 34, mining: 15, items: [['coal', 12]], kind: 'custom' },
+        { label: 'missing coal at Mining 29', smithing: 34, mining: 29, items: [['iron ore', 6]], kind: 'wait' },
+        { label: 'missing coal at Mining 30', smithing: 34, mining: 30, items: [['iron ore', 6]], kind: 'custom' },
+        { label: 'partial coal at Mining 29', smithing: 34, mining: 29, items: [['iron ore', 6], ['coal', 11]], kind: 'wait' }
+    ] satisfies { label: string; smithing: number; mining: number; items: [string, number][]; kind: 'wait' | 'custom' }[])(
+        'selects the feasible nail stage when $label', ({ smithing, mining, items, kind }) => {
+            levels.mockImplementation(skill => skill === 'smithing' ? smithing : mining);
+            const given = snapshot({ ...boat, carried: hull, inv: new Map(items) });
+
+            const step = decide(given);
+
+            expect(step.kind).toBe(kind);
+            if (step.kind === 'wait') expect(step.reason).toMatch(/bank|obtain/i);
+        }
+    );
+
+    test('withdraws partial banked nails before checking production skills', () => {
+        levels.mockReturnValue(1);
+        const given = snapshot({ ...boat, carried: [...hull, [DS_ID.NAILS, 4]], banked: [[DS_ID.NAILS, 3]] });
+
+        const step = decide(given);
+
+        expect(step).toMatchObject({ kind: 'withdraw', items: [{ id: DS_ID.NAILS, qty: 3 }] });
+    });
+
+    test('patches a partial hull with carried supplies despite low skills', () => {
+        levels.mockReturnValue(1);
+        const given = snapshot({ ...boat, carried: [DS_ID.HAMMER, [DS_ID.PLANK, 2], [DS_ID.NAILS, 8]] });
+
+        const step = decide(given);
+
+        expect(step).toMatchObject({ kind: 'custom', name: 'patch the Lady Lumbridge' });
+    });
+
+    test.each([
+        { label: 'unknown bank', bankKnown: false, banked: [], carried: charms, kind: 'scanBank' },
+        { label: 'banked bowl', bankKnown: true, banked: [DS_ID.UNFIRED_BOWL], carried: charms, kind: 'withdraw' },
+        { label: 'carried bowl', bankKnown: true, banked: [], carried: [...charms, DS_ID.UNFIRED_BOWL], kind: 'talk' },
+        { label: 'absent bowl', bankKnown: true, banked: [], carried: charms, kind: 'wait' }
+    ] as const)('uses $label before bowl production at Crafting 7', ({ label: _label, kind, ...held }) => {
+        levels.mockReturnValue(7);
+        const given = snapshot({ ...held, carried: [...held.carried], banked: [...held.banked] });
+
+        const step = decide(given);
+
+        expect(step.kind).toBe(kind);
+    });
+});
 
 describe('Dragon Slayer decide()', () => {
     test('a banked maze key is not a missing one', () => {
@@ -247,5 +314,89 @@ describe('Dragon Slayer decide()', () => {
 
     test('an unreadable journal waits rather than guessing', () => {
         expect(decide(snapshot({ progress: undefined }))).toMatchObject({ kind: 'wait' });
+    });
+});
+
+// Why: the record used to list the Oracle's charms and the hull's planks, and the engine re-walks the record on every session start and death, so a run resumed with the map in Ned's hands shopped for a map piece it already had.
+describe('Dragon Slayer sources its own shopping at the point of use', () => {
+    const CHARMS = [DS_ID.LOBSTER_POT, DS_ID.MIND_BOMB, DS_ID.UNFIRED_BOWL, DS_ID.SILK];
+    const afterMaze = [DS_ID.MAZE_KEY, DS_ID.MAP_MELZAR];
+    const boat = { progress: { stage: DRAGON_STAGE.BOUGHT_SHIP, flags: new Set<string>() } };
+
+    test("the Oracle's charms are bought only once her piece is next", () => {
+        const step = decide(snapshot({ carried: afterMaze }));
+        expect(step).toMatchObject({ kind: 'buy', item: DS_ITEM.LOBSTER_POT });
+    });
+
+    test('charms in the bank are withdrawn before any counter', () => {
+        const step = decide(snapshot({ carried: afterMaze, banked: CHARMS }));
+        expect(step.kind).toBe('withdraw');
+        const ids = (step as { items: { id?: number }[] }).items.map(i => i.id);
+        expect(ids).toEqual(CHARMS);
+    });
+
+    test('an unread bank is scanned before a charm is bought', () => {
+        expect(decide(snapshot({ carried: afterMaze, bankKnown: false }))).toMatchObject({ kind: 'scanBank' });
+    });
+
+    test('holding every charm asks the Oracle, then opens her door', () => {
+        const held = { carried: [...afterMaze, ...CHARMS] };
+        expect(decide(snapshot(held))).toMatchObject({ kind: 'talk', stop: { npc: 'Oracle' } });
+        const asked = decide(snapshot({ ...held, flags: ['asked-oracle'] }));
+        expect((asked as { name: string }).name).toContain('chest under Ice Mountain');
+    });
+
+    test('past the magic door the chest comes before any shopping', () => {
+        // Why: the door ate the charms on the way in, and the journal cannot say so.
+        const step = decide(snapshot({ carried: afterMaze, tile: { x: 3057, z: 9842, level: 0 } }));
+        expect((step as { name: string }).name).toContain('chest under Ice Mountain');
+    });
+
+    test.each([
+        { label: 'coins for Wormbrain', carried: [...afterMaze, DS_ID.MAP_ORACLE] },
+        { label: 'a banked maze key', carried: [DS_ID.MAP_MELZAR, DS_ID.MAP_ORACLE], banked: [DS_ID.MAZE_KEY] },
+        { label: 'an unread bank', carried: [DS_ID.MAP_ORACLE], bankKnown: false },
+        { label: 'the Oziach briefing', carried: [DS_ID.MAP_ORACLE], flags: ['needs-briefing'] },
+        { label: 'joining the map', carried: [...afterMaze, DS_ID.MAP_ORACLE, DS_ID.MAP_WORMBRAIN] }
+    ])('leaves the chest room before $label after looting', ({ label: _label, ...held }) => {
+        const step = decide(snapshot({ ...held, tile: { x: 3056, z: 9841, level: 0 } }));
+
+        expect(step).toMatchObject({ kind: 'custom', name: 'leave the oracle chest room' });
+    });
+
+    test('withdraws coins once the map piece is west of the magic door', () => {
+        const step = decide(snapshot({
+            carried: [...afterMaze, DS_ID.MAP_ORACLE],
+            tile: { x: 3050, z: 9840, level: 0 }
+        }));
+
+        expect(step).toMatchObject({ kind: 'withdraw', items: [{ name: 'Coins' }] });
+    });
+
+    test('the hammer is bought before the anvil is visited', () => {
+        expect(decide(snapshot({ carried: [DS_ID.MAP], ...boat }))).toMatchObject({ kind: 'buy', item: DS_ITEM.HAMMER });
+    });
+
+    test('planks are fetched after the nails and before the patch', () => {
+        const step = decide(snapshot({ carried: [DS_ID.MAP, DS_ID.HAMMER, NAILS], ...boat }));
+        expect((step as { name: string }).name).toContain('fetch 3 planks');
+    });
+
+    test('a plank trip is finished before the hull is patched', () => {
+        // Why: one plank in the pack reads as one hole's worth everywhere else, and read that way at the spawns it sent the bot back to Port Sarim three times.
+        const graveyard = { x: 3171, z: 3680, level: 0 };
+        const step = decide(snapshot({ carried: [DS_ID.MAP, DS_ID.HAMMER, NAILS, DS_ID.PLANK], tile: graveyard, ...boat }));
+        expect((step as { name: string }).name).toContain('fetch 2 planks');
+        const last = decide(snapshot({ carried: [DS_ID.MAP, DS_ID.HAMMER, NAILS, [DS_ID.PLANK, 2]], tile: graveyard, ...boat }));
+        expect((last as { name: string }).name).toBe('fetch 1 plank');
+    });
+
+    test('an unread bank is scanned before a hull supply is bought', () => {
+        expect(decide(snapshot({ carried: [DS_ID.MAP], bankKnown: false, ...boat }))).toMatchObject({ kind: 'scanBank' });
+    });
+
+    test('aboard with a hull supply still to fetch, the bot goes ashore first', () => {
+        const step = decide(snapshot({ carried: [DS_ID.MAP, NAILS], tile: { x: 3047, z: 3208, level: 1 }, ...boat }));
+        expect((step as { name: string }).name).toBe('go ashore');
     });
 });

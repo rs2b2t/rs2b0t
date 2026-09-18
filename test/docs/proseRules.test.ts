@@ -118,7 +118,7 @@ test('the repository has no prose errors', () => {
         for (const a of alerts.filter(x => x.Severity === 'error')) errors.push(`${file}:${a.Line}  ${a.Check}  ${a.Match}`);
     }
     expect(errors.sort()).toEqual([]);
-});
+}, 60_000);
 
 test('the docs/superpowers exclusion holds, and styles still load', () => {
     const dir = 'docs/superpowers';

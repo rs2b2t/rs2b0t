@@ -34,7 +34,7 @@ export function hasAxe(snap: QuestSnapshot): boolean {
 
 export const scanBank = (): QuestStep => ({ kind: 'scanBank', bank: TG_TILE.BANK });
 
-/** Bank first, Aemad second; an unread bank is not an empty one. */
+/** Bank first, Aemad second; an unread bank may hold one. */
 export function sourceAxe(snap: QuestSnapshot): QuestStep | null {
     if (hasAxe(snap)) {
         return null;

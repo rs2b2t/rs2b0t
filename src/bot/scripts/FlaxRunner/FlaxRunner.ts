@@ -485,7 +485,7 @@ export default class FlaxRunner extends TaskBot {
     countSpun(n: number): void { this.spun += n; }
 }
 
-// --- Runner tasks ---
+// Runner tasks.
 
 class EscapeFlaxTrap implements Task {
     constructor(private bot: FlaxRunner) {}
@@ -708,7 +708,7 @@ class GoToField implements Task {
     }
 }
 
-// --- Spinner tasks ---
+// Spinner tasks.
 
 class RequestTrade implements Task {
     constructor(private bot: FlaxRunner) {}

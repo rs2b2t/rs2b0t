@@ -46,7 +46,7 @@ const FLEE_HP = 0.45;
 const ROOT_RADIUS = 12;
 const REACH_STEPS = 20_000;
 
-// Why: a bow in the quiver hand is not a bow the quest has to fletch again, and the pack view cannot see it.
+// Why: a worn bow doesn't need fletching again, and the pack view can't see it.
 export function heldOrBanked(snap: QuestSnapshot, id: number): number {
     return (snap.invIds?.get(id) ?? 0) + (snap.bankIds?.get(id) ?? 0) + (snap.wornIds?.has(id) === true ? 1 : 0);
 }
@@ -163,7 +163,7 @@ function sceneReachable(tile: { x: number; z: number; level: number }): boolean 
     return Reachability.canReach(tile, { adjacentOk: true, maxSteps: REACH_STEPS });
 }
 
-/** Low enough that the next two hits could land the bot in Lumbridge, with no food to stop them. */
+/** Low enough that the next 2 hits could land the bot in Lumbridge, with no food to stop them. */
 function starving(): boolean {
     const max = Skills.level('hitpoints');
     return max > 0
@@ -220,7 +220,7 @@ async function killHobgoblin(target: Npc, log: (m: string) => void): Promise<boo
         if (!live()) {
             return true;
         }
-        // Why: the camp is a crowd and the bot fights it in nothing but boots, so an empty pack at low hitpoints is a death rather than a slow kill, handing the tick back sends the ladder to a booth, which is also the way out.
+        // Why: the camp is a crowd and the bot fights it in boots, so an empty pack at low hp is a death; handing the tick back sends the ladder to a booth, which is also the way out.
         if (starving()) {
             log(`ikov: ${Skills.effective('hitpoints')} hitpoints and nothing to eat — leaving the camp`);
             return false;
@@ -253,7 +253,7 @@ async function farmRoots(log: (m: string) => void): Promise<boolean> {
     return Traversal.walkResilient(IKOV_TILE.HOBGOBLINS, { radius: 4, attempts: 3, timeoutMs: 420_000, log });
 }
 
-// Why: the warrior fight ends with the yew shortbow worn over a quiver the fight emptied, and a bow with no arrows answers every Attack click with "There is no ammo left in your quiver" until the hobgoblins finish the job.
+// Why: the warrior fight leaves the yew shortbow worn over an empty quiver, and it answers every Attack click with "There is no ammo left in your quiver".
 function armedForMelee(): boolean {
     const worn = Equipment.items();
     const weapon = worn.find(item => item.slot === WEAPON_SLOT);
@@ -266,24 +266,24 @@ function armedForMelee(): boolean {
     return worn.some(item => item.slot === AMMO_SLOT && item.count >= FARM_ARROWS);
 }
 
-/** Drop the spent bow so the fists the farm falls back on are at least fists. */
+/** Take the spent bow off; fists beat a bow with no arrows. */
 async function stowEmptyBow(log: (m: string) => void): Promise<boolean> {
     log('ikov: stowing the empty yew shortbow — it cannot swing at a hobgoblin');
     return Equipment.unequip(IKOV_NAME.YEW_SHORTBOW);
 }
 
-// Why: the crossing kit leaves the bot bare-handed, and a hundred-odd level-42 hobgoblins is not a fight to take with fists, the axe the yew was cut with is already banked and is a weapon.
+// Why: the crossing kit leaves the bot bare-handed against level-42 hobgoblins, and the axe the yew was cut with is banked and is a weapon.
 function armForTheFarm(snap: QuestSnapshot): QuestStep | null {
-    // Why: a spent bow is not a weapon however full the pack is, so the bow comes off before anything is picked to replace it.
+    // Why: a spent bow still fills the weapon slot, so it comes off before anything is picked to replace it.
     if (!armedForMelee() && Equipment.contains(IKOV_NAME.YEW_SHORTBOW)) {
         return { kind: 'custom', name: 'stow the empty bow', run: stowEmptyBow };
     }
-    // Why: the bank is the armoury this quest never builds, so the best weapon in it beats the axe the yew was cut with.
+    // Why: the best weapon in the bank beats the axe the yew was cut with.
     const better = meleeWeaponStep(snap);
     if (better) {
         return better;
     }
-    // Why: the right-hand slot is what the loadout would have filled, so an armed bot keeps whatever it is already holding.
+    // Why: an armed bot keeps whatever it's already holding.
     if (armedForMelee()) {
         return null;
     }
@@ -300,7 +300,7 @@ function armForTheFarm(snap: QuestSnapshot): QuestStep | null {
     return null;
 }
 
-// Why: the engine's food float is a one-shot at provisioning time and both fights outlast it, a starved bot dies at the hobgoblin camp and stands in front of the Fire Warrior doing nothing.
+// Why: the engine's food float is a one-shot at provisioning and both fights outlast it.
 /** Walk to a booth for more lobsters once the pack is down to `floor`, or null when it is stocked. */
 export function restockStep(snap: QuestSnapshot, want: number, floor: number): QuestStep | null {
     const food = IKOV_NAME.LOBSTER.toLowerCase();
@@ -315,7 +315,7 @@ export function restockStep(snap: QuestSnapshot, want: number, floor: number): Q
     return { kind: 'withdraw', items: [{ name: IKOV_NAME.LOBSTER, qty }] };
 }
 
-// Why: hobgoblins are aggressive and the retreat has to clear their radius, not merely stop fighting, a bot that stands still in the camp with nothing to eat dies there while the watchdog is still deciding the quest is stuck.
+// Why: hobgoblins are aggressive, so the retreat has to clear their radius; standing still in the camp with no food dies before the watchdog fires.
 /** Walk out of the camp when there is no food left anywhere to farm it with. */
 async function leaveTheCamp(log: (m: string) => void): Promise<boolean> {
     log('ikov: no food in the pack or the bank — leaving the hobgoblin camp');
@@ -328,8 +328,8 @@ function foodless(snap: QuestSnapshot): boolean {
     return (snap.inv.get(food) ?? 0) === 0 && (snap.bank?.get(food) ?? 0) === 0;
 }
 
-// Why: 20 unstackable roots plus food fill the pack, so the farm banks in batches rather than holding the lot.
-// Why: the camp is three level-42 attackers at once and the bot fights it in whatever the ice cavern dressed it in, so the armour is checked here too. A resumed run never walked the leg that put it on.
+// Why: 20 unstackable roots plus food fill the pack, so the farm banks in batches.
+// Why: the camp is 3 level-42 attackers at once and a resumed run never walked the leg that put armour on, so it's checked here too.
 function rootStep(snap: QuestSnapshot): QuestStep {
     const arm = rangedArmourStep(snap) ?? armForTheFarm(snap) ?? restockStep(snap, FARM_FOOD, FARM_FOOD_FLOOR);
     if (arm) {
@@ -358,7 +358,7 @@ interface SupplyWants {
  */
 export function suppliesStep(snap: QuestSnapshot, wants: SupplyWants): QuestStep | null {
     const needBow = wants.bow && heldOrBanked(snap, IKOV_OBJ.YEW_SHORTBOW) === 0;
-    // Why: Aemad's is in East Ardougne and the rest of the kit is a Catherby-Seers loop, so the axe is bought on the way out rather than walked back for.
+    // Why: Aemad's is in East Ardougne and the rest of the kit is a Catherby-Seers loop, so the axe is bought on the way out.
     if (needBow && axeOutstanding(snap)) {
         return { kind: 'buy', item: IKOV_NAME.IRON_AXE, qty: 1, shop: { npc: 'Aemad', anchor: IKOV_TILE.AEMAD }, estGp: AXE_GP };
     }
@@ -382,7 +382,7 @@ export function suppliesStep(snap: QuestSnapshot, wants: SupplyWants): QuestStep
     return null;
 }
 
-// Why: a withdraw step reports failure when any line comes up short, so asking for something already in the pack fails the step the rest of it succeeded in.
+// Why: a withdraw step fails when any line comes up short, so don't ask for something already in the pack.
 
 /** Withdraw only the listed items the pack is short of and the bank can cover. */
 function withdrawMissing(snap: QuestSnapshot, wanted: { name: string; id: number }[]): QuestStep | null {
@@ -400,7 +400,7 @@ function axeOutstanding(snap: QuestSnapshot): boolean {
         && heldOrBanked(snap, IKOV_OBJ.IRON_AXE) === 0;
 }
 
-// Why: the order is a west-to-east sweep, the Armoury, then Catherby for the candle and the yews, then Seers for the knife, the flax and the wheel.
+// Why: the order is a west-to-east sweep: Aemad's, then Catherby for the candle and yews, then Seers for the knife, flax and wheel.
 function bowChainStep(snap: QuestSnapshot): QuestStep | null {
     const stave = heldOrBanked(snap, IKOV_OBJ.UNSTRUNG_YEW_SHORTBOW);
     const string = heldOrBanked(snap, IKOV_OBJ.BOW_STRING);

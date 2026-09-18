@@ -1,6 +1,5 @@
 /**
- * The withdraw op for an amount, read off the item's own op list, the label
- * uses a space ("Withdraw 1"), not a hyphen.
+ * The withdraw op for an amount, read off the item's own op list; the label uses a space ("Withdraw 1").
  * @see docs/reference/api-items.md#bank
  */
 export function withdrawOp(ops: readonly (string | null)[], amount: 'all' | '10' | '5' | '1' | 'x' | 'any'): string | null {

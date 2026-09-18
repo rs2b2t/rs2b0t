@@ -5,12 +5,20 @@ import {
     decideBeat,
     Desk,
     freshChatLines,
+    listedRows,
     dealLine,
     dealOf,
     dealTotals,
     RateLimiter,
     resolveQuote,
+    floatShortfall,
+    bankBeforeServing,
+    buyOwesSettle,
+    windowCandidates,
+    settleDue,
+    settleRuns,
     shouldSettle,
+    tradeIsStalled,
     sideSignature,
     type Intent,
     type Window
@@ -150,7 +158,7 @@ describe('cooldowns punish the staller', () => {
 });
 
 describe('decideBeat', () => {
-    const base = { stillBeatsNeeded: 3, reOfferCap: 12, waitCap: 25, oweMatched: false, wantMatched: true, oweAnything: true };
+    const base = { stillBeatsNeeded: 3, reOfferCap: 12, waitCap: 25, oweMatched: false, wantMatched: true, oweAnything: true, oweFixed: false };
 
     // Why: one customer sitting on an open window blocks every customer behind them, so waiting is capped.
     test('waiting is given up on once the customer has sat on it long enough', () => {
@@ -197,7 +205,7 @@ describe('decideBeat', () => {
         expect(beat).toEqual({ do: 'accept' });
     });
 
-    // Why: each re-offer costs clicks and resets both accepts, so a patient toggler could waste the whole window.
+    // Why: each re-offer costs clicks and resets both accepts, so a patient toggler could waste the window.
     test('past the re-offer cap it gives up rather than keep paying', () => {
         const beat = decideBeat({ ...base, theirSig: '440x100', window: windowAt({ reOffers: 12 }) });
         expect(beat.do).toBe('give-up');
@@ -297,6 +305,71 @@ describe('advertiseDue', () => {
     });
 });
 
+// Why: a reset is what an operator reaches for when the shop is wedged, so it owes a bank trip whatever the pack looks like, and the trip deposits everything.
+describe('settleDue', () => {
+    test('is owed on no room or takings over the float, as before', () => {
+        expect(settleDue(2, 0, 50_000, false)).toBe(true);
+        expect(settleDue(20, 60_000, 50_000, false)).toBe(true);
+        expect(settleDue(20, 1_000, 50_000, false)).toBe(false);
+    });
+
+    test('a reset owes one whatever the pack holds, empty included', () => {
+        expect(settleDue(28, 0, 50_000, true)).toBe(true);
+        expect(settleDue(20, 1_000, 50_000, true)).toBe(true);
+    });
+});
+
+// Why: a sale's goods are fetched for one customer, and a window opened with anyone else meanwhile takes their stock into the same pack.
+describe('windowCandidates', () => {
+    test('with a sale live only its customer may open, whatever the queue order', () => {
+        expect(windowCandidates(['Bob', 'alice', 'Carol'], 'Alice')).toEqual(['alice']);
+        expect(windowCandidates(['Bob', 'Carol'], 'Alice')).toEqual([]);
+    });
+
+    test('with no sale live the queue is served in order', () => {
+        expect(windowCandidates(['Bob', 'Alice'], null)).toEqual(['Bob', 'Alice']);
+    });
+});
+
+// Why: what the shop buys goes to the bank before the next customer, so the trade that put coins out is the one that owes the trip.
+describe('buyOwesSettle', () => {
+    const coins = 995;
+
+    test('a trade where the shop paid coins owes a bank trip', () => {
+        expect(buyOwesSettle(new Map([[coins, 500]]), coins)).toBe(true);
+    });
+
+    test('a sale, where only goods went out, owes none', () => {
+        expect(buyOwesSettle(new Map([[440, 100]]), coins)).toBe(false);
+        expect(buyOwesSettle(new Map(), coins)).toBe(false);
+    });
+});
+
+// Why: OpenWindow runs above Settle, so a queue of customers dumping goods kept it opening windows on a pack with no room and the shop never reached the bank.
+describe('bankBeforeServing', () => {
+    test('holds the next window while the pack has no room for what comes in', () => {
+        expect(bankBeforeServing(2, 0, 50_000, true)).toBe(true);
+    });
+
+    test('holds it while the takings are over the float, which is the other reason to bank', () => {
+        expect(bankBeforeServing(20, 60_000, 50_000, true)).toBe(true);
+    });
+
+    test('serves on as normal with room and coins in hand', () => {
+        expect(bankBeforeServing(20, 1_000, 50_000, true)).toBe(false);
+    });
+
+    // Why: the shop is worth more open than shut, so a bank it cannot reach must not stop it trading.
+    test('serves on while the bank is backed off, however full it is', () => {
+        expect(bankBeforeServing(0, 90_000, 50_000, false)).toBe(false);
+    });
+
+    test('a reset holds the next window too, so its bank trip is not starved by the queue', () => {
+        expect(bankBeforeServing(28, 0, 50_000, true, true)).toBe(true);
+        expect(bankBeforeServing(28, 0, 50_000, false, true)).toBe(false);
+    });
+});
+
 describe('shouldSettle', () => {
     test('true when free slots run low', () => {
         expect(shouldSettle(2, 0, 50_000)).toBe(true);
@@ -308,6 +381,48 @@ describe('shouldSettle', () => {
 
     test('false otherwise', () => {
         expect(shouldSettle(20, 1_000, 50_000)).toBe(false);
+    });
+});
+
+// Why: Settle used to ask for the raw float, and a bank that could not fill it left that true on every loop, so the shop stood at the booth banking and re-withdrawing one stack instead of trading.
+describe('floatShortfall', () => {
+    test('the gap to the float when the bank can cover it', () => {
+        expect(floatShortfall(0, 500_000, 200_000)).toBe(200_000);
+        expect(floatShortfall(50_000, 500_000, 200_000)).toBe(150_000);
+    });
+
+    test('nothing to fetch once the pack is at the float', () => {
+        expect(floatShortfall(200_000, 500_000, 200_000)).toBe(0);
+        expect(floatShortfall(260_000, 500_000, 200_000)).toBe(0);
+    });
+
+    test('a bank short of the float is asked only for what it has', () => {
+        expect(floatShortfall(0, 50_000, 200_000)).toBe(50_000);
+    });
+
+    test('nothing left to fetch, so the trip is not worth making again', () => {
+        expect(floatShortfall(50_000, 0, 200_000)).toBe(0);
+        expect(floatShortfall(0, 0, 200_000)).toBe(0);
+    });
+});
+
+// Why: the shop reports standing still as progress so the wedge check does not restart a healthy stall, and a trade window is part of that. ServeWindow outranks Listen and only Listen calls dropExpired, so the engagement timeout cannot fire while the window is open: without this a customer who opens the confirm screen and walks away holds the shop for ever and nothing rescues it.
+describe('tradeIsStalled', () => {
+    test('no trade is not a stalled one', () => {
+        expect(tradeIsStalled(false, false, false)).toBe(false);
+        expect(tradeIsStalled(false, true, true)).toBe(false);
+    });
+
+    test('a live window inside its deadline is the shop working', () => {
+        expect(tradeIsStalled(true, true, false)).toBe(false);
+    });
+
+    test('past the deadline, nobody is advancing it', () => {
+        expect(tradeIsStalled(true, true, true)).toBe(true);
+    });
+
+    test('a trade the desk has let go of is orphaned', () => {
+        expect(tradeIsStalled(true, false, false)).toBe(true);
     });
 });
 
@@ -464,7 +579,7 @@ describe('resolveQuote', () => {
 
     test('the bow pair splits on the u suffix with no count given', () => {
         expect(quote('maple longbow', true)).toEqual({ kind: 'hit', id: 851, name: 'Maple longbow' });
-        expect(quote('maple longbow u', true)).toEqual({ kind: 'hit', id: 62, name: 'Maple longbow' });
+        expect(quote('maple longbow u', true)).toEqual({ kind: 'hit', id: 62, name: 'Maple longbow (u)' });
     });
 
     test('a partial name matching several is ambiguous, and only reachable with a count', () => {
@@ -563,5 +678,106 @@ describe('dealLine', () => {
     test('money carries its sign either way', () => {
         expect(dealLine({ clock: '00:00:00', customer: 'a', kind: 'sold', count: 1, item: 'X', gp: 10, mixed: false })).toContain('+10');
         expect(dealLine({ clock: '00:00:00', customer: 'a', kind: 'bought', count: 1, item: 'X', gp: -10, mixed: false })).toContain('-10');
+    });
+});
+
+describe('listedRows', () => {
+    const BOOK: PriceBook = {
+        name: 'shelf',
+        margin: 20,
+        maxTradeValue: 500_000,
+        rows: [
+            { id: 440, mid: 20, cap: 5_000, buying: true, selling: true },
+            { id: 1515, mid: 320, cap: 2_000, buying: true, selling: false },
+            { id: 851, mid: 640, cap: 500, buying: false, selling: true }
+        ]
+    };
+    const rows = (side: 'both' | 'buy' | 'sell', stock: Record<number, number>) =>
+        listedRows({ book: BOOK, side, stocked: id => stock[id] ?? 0 });
+
+    test('a row the shop holds none of is not listed', () => {
+        expect(rows('both', { 440: 900 }).rows.map(r => r.id)).toEqual([440]);
+    });
+
+    // Why: the operator chose to gate the buy side too, so the shop stops advertising what it wants while empty.
+    test('the gate applies to the buy side as well as the sell side', () => {
+        expect(rows('buy', { 440: 900 }).rows.map(r => r.id)).toEqual([440]);
+        expect(rows('buy', { 1515: 12 }).rows.map(r => r.id)).toEqual([1515]);
+        expect(rows('buy', {}).rows).toEqual([]);
+    });
+
+    test('each side still filters on which way the row trades', () => {
+        const stock = { 440: 900, 1515: 12, 851: 3 };
+        expect(rows('buy', stock).rows.map(r => r.id)).toEqual([440, 1515]);
+        expect(rows('sell', stock).rows.map(r => r.id)).toEqual([440, 851]);
+        expect(rows('both', stock).rows.map(r => r.id)).toEqual([440, 1515, 851]);
+    });
+
+    // Why: a shop that has sold out reads as broken unless it says so, and the two causes need different answers.
+    test('an empty book and an empty shelf are told apart', () => {
+        expect(rows('both', {}).empty).toBe('no-stock');
+        expect(listedRows({ book: { ...BOOK, rows: [] }, side: 'both', stocked: () => 0 }).empty).toBe('no-book');
+        expect(rows('both', { 440: 1 }).empty).toBeNull();
+    });
+
+    test('bank stock counts, so a row the shop would fetch is still listed', () => {
+        expect(rows('sell', { 851: 40 }).rows.map(r => r.id)).toEqual([851]);
+    });
+});
+
+// Why: what a sale owes is the customer's own request, which nothing on their side of the window changes, so making them watch an empty side settle before the goods go up is delay and nothing else.
+describe('a sale puts its goods up straight away', () => {
+    const base = { stillBeatsNeeded: 3, reOfferCap: 12, waitCap: 25, wantMatched: false, oweAnything: true, oweFixed: true, oweMatched: false };
+
+    test('offers on the first beat, before their side has settled or paid', () => {
+        const beat = decideBeat({ ...base, theirSig: '995x1', window: windowAt({ stillBeats: 0, lastSig: '' }) });
+        expect(beat).toEqual({ do: 'offer', reason: 'the goods asked for do not depend on their side' });
+    });
+
+    test('offers while their side is still moving', () => {
+        const beat = decideBeat({ ...base, theirSig: '995x7', window: windowAt({ lastSig: '995x1', stillBeats: 0 }) });
+        expect(beat.do).toBe('offer');
+    });
+
+    test('once the goods are up it settles and waits on the money like any other trade', () => {
+        const beat = decideBeat({ ...base, theirSig: '995x1', window: windowAt({ stillBeats: 9, lastSig: '995x1' }), oweMatched: true });
+        expect(beat).toEqual({ do: 'wait', reason: 'their side is not the deal yet' });
+    });
+
+    test('and accepts once the money is the deal', () => {
+        const beat = decideBeat({ ...base, theirSig: '995x1', window: windowAt({ stillBeats: 9, lastSig: '995x1' }), oweMatched: true, wantMatched: true });
+        expect(beat).toEqual({ do: 'accept' });
+    });
+
+    test('a customer who keeps changing their side still runs out of re-offers', () => {
+        const beat = decideBeat({ ...base, theirSig: '995x1', window: windowAt({ reOffers: 12 }) });
+        expect(beat).toEqual({ do: 'give-up', reason: 'too many changes in one trade' });
+    });
+
+    // Why: a purchase owes what is on their side, so putting coins up against a side still moving is what the settle wait is for.
+    test('a purchase still waits for their side to settle', () => {
+        const beat = decideBeat({ ...base, oweFixed: false, theirSig: '440x10', window: windowAt({ lastSig: '440x9', stillBeats: 0 }) });
+        expect(beat).toEqual({ do: 'wait', reason: 'their side moved' });
+    });
+});
+
+// Why: the customer who bought the cap and asked again had the goods fetched and no window, with the takings over the float holding every window and the live order holding Settle.
+describe('settleRuns', () => {
+    test('a due trip runs whether or not an order is live', () => {
+        expect(settleRuns({ due: true, floatShort: false, orderLive: true })).toBe(true);
+        expect(settleRuns({ due: true, floatShort: false, orderLive: false })).toBe(true);
+    });
+
+    test('a float top-up alone waits for the live order', () => {
+        expect(settleRuns({ due: false, floatShort: true, orderLive: true })).toBe(false);
+        expect(settleRuns({ due: false, floatShort: true, orderLive: false })).toBe(true);
+    });
+
+    test('nothing owed, nothing runs', () => {
+        expect(settleRuns({ due: false, floatShort: false, orderLive: false })).toBe(false);
+    });
+
+    test('takings over the float after a cap-sized sale make the trip due with the next order live', () => {
+        expect(settleRuns({ due: settleDue(20, 5_000_000, 200_000, false), floatShort: false, orderLive: true })).toBe(true);
     });
 });

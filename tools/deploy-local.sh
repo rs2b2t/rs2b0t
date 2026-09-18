@@ -1,7 +1,6 @@
 #!/bin/sh
-# Build the stock client + bot client and deploy both into a local Engine's
-# public/ (see docs/how-to/run-locally.md#deploy-the-client). Players: /rs2.cgi
-# untouched; bot: /bot.html.
+# Build the stock client and the bot client and deploy both into a local engine's public/ (see docs/how-to/run-locally.md#deploy-the-client).
+# Players keep /rs2.cgi; the bot lands at /bot.html.
 set -e
 
 ENGINE="${ENGINE_DIR:-$HOME/code/rs2b2t-engine}"
@@ -19,7 +18,7 @@ if [ ! -f out/collision.lcnav.gz ]; then
     bun tools/nav/build-collision.ts --engine "$ENGINE"
 fi
 
-# classic worldmap basemap + Key overlays (schema ≥2: terrain + key/multi/free)
+# classic worldmap basemap + Key overlays (schema >= 2: terrain + key/multi/free)
 need_basemap=0
 if [ ! -f out/worldmap-basemap.manifest.json ]; then
     need_basemap=1
@@ -54,8 +53,7 @@ if [ -f out/worldmap.jag ]; then
 elif [ -f "$ENGINE/data/pack/mapview/worldmap.jag" ]; then
     cp "$ENGINE/data/pack/mapview/worldmap.jag" "$ENGINE/public/bot/"
 fi
-# Bust browser / Playwright cache of the ES module (otherwise tele path edges
-# never appear live while the pack probe offline is already green).
+# Change the module URL so browsers and Playwright load the new build.
 BUST=$(date +%s)
 sed "s|botclient.js?v=nav-v2|botclient.js?v=${BUST}|g; s|botclient.js\"|botclient.js?v=${BUST}\"|g" \
     public-bot/bot.html > "$ENGINE/public/bot.html"
@@ -65,8 +63,7 @@ if [ -f out/version.json ]; then
     cp out/version.json "$ENGINE/public/bot/version.json"
 fi
 
-# soundfont lives in the engine repo, not ours; the bot bundle resolves it
-# relative to itself
+# the soundfont lives in the engine repo; the bot bundle resolves it relative to itself
 if [ -f "$ENGINE/public/client/SCC1_Florestan.sf2" ]; then
     cp "$ENGINE/public/client/SCC1_Florestan.sf2" "$ENGINE/public/bot/"
 fi

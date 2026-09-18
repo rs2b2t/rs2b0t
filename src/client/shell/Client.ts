@@ -59,12 +59,13 @@ import PixFont from '#/client/graphics/PixFont.js';
 import PixMap from '#/client/graphics/PixMap.js';
 
 import ClientStream from '#/client/io/ClientStream.js';
-import { ClientProt } from '#/client/io/ClientProt.js';
+import { ClientProt, CLIENT_VERSION } from '#/client/io/ClientProt.js';
 import Database from '#/client/io/Database.js';
 import Isaac from '#/client/io/Isaac.js';
 import JagFile from '#/client/io/JagFile.js';
 import Packet from '#/client/io/Packet.js';
 import OnDemand from '#/client/io/OnDemand.js';
+import { assertPacketConsumed } from '#/client/io/packetGuard.js';
 import { ServerProt, ServerProtSizes } from '#/client/io/ServerProt.js';
 
 import { reverseDnsLookup } from '#/client/util/WebDns.js';
@@ -73,8 +74,6 @@ import WordFilter from '#/client/wordfilter/WordFilter.js';
 import WordPack from '#/client/wordfilter/WordPack.js';
 
 import JagFX from '#/client/sound/JagFX.js';
-
-const CLIENT_VERSION = 274;
 
 const MAX_PLAYER_COUNT = 2048;
 const LOCAL_PLAYER_INDEX = 2047;
@@ -102,6 +101,7 @@ export class Client extends GameShell {
     static nodeId: number = 10;
     static memServer: boolean = true;
     static lowMem: boolean = false;
+    static readonly STRICT_PACKETS: boolean = process.env.STRICT_PACKETS === '1';
 
     static cyclelogic1: number = 0;
     static cyclelogic2: number = 0;
@@ -442,6 +442,7 @@ export class Client extends GameShell {
     private statXP: Int32Array = new Int32Array(Skill.count);
     /** Login attempt that supplied each stat slot; prevents stale relog data from becoming ready. */
     private statSessionGeneration: number = 0;
+    private modalCloseGeneration: number = 0;
     private statSeenGeneration: Int32Array = new Int32Array(Skill.count);
     /** Distinguishes a complete empty inventory from stale, partial, or stopped transmission. */
     private invUpdateState: Map<number, { generation: number; fullGeneration: number; transmitting: boolean }> = new Map();
@@ -6044,7 +6045,26 @@ export class Client extends GameShell {
         return type !== 1;
     }
 
+    // Off by default so a benign trailing byte never takes down a live bot; on for every
+    // test and e2e run. See src/client/io/packetGuard.ts.
     private async tcpIn(): Promise<boolean> {
+        if (!Client.STRICT_PACKETS) {
+            return this.tcpInDispatch();
+        }
+
+        const handled = await this.tcpInDispatch();
+
+        // ptype is reset to -1 only when a handler ran to completion, so this is the one
+        // point where psize and in.pos both describe the packet just consumed. ptype0
+        // still holds the opcode, since the read loop stashes it before dispatching.
+        if (handled && this.ptype === -1) {
+            assertPacketConsumed(this.ptype0, this.psize, this.in.pos);
+        }
+
+        return handled;
+    }
+
+    private async tcpInDispatch(): Promise<boolean> {
         if (!this.stream) {
             return false;
         }
@@ -6142,6 +6162,7 @@ export class Client extends GameShell {
             }
 
             if (this.ptype === ServerProt.IF_CLOSE) {
+                this.modalCloseGeneration++;
                 if (this.sideModalId !== -1) {
                     this.sideModalId = -1;
                     this.redrawSide = true;
@@ -6322,7 +6343,9 @@ export class Client extends GameShell {
 
                 if (this.localPlayer) {
                     IfType.list[comId].model1Type = 3;
-                    IfType.list[comId].model1Id = (this.localPlayer.appearance[8] << 6) + (this.localPlayer.appearance[0] << 12) + (this.localPlayer.colour[0] << 24) + (this.localPlayer.colour[4] << 18) + this.localPlayer.appearance[11];
+                    IfType.list[comId].model1Id = this.localPlayer.transmog
+                        ? this.localPlayer.transmog.id + 0x12345678
+                        : (this.localPlayer.appearance[8] << 6) + (this.localPlayer.appearance[0] << 12) + (this.localPlayer.colour[0] << 24) + (this.localPlayer.colour[4] << 18) + this.localPlayer.appearance[11];
                 }
 
                 this.ptype = -1;
@@ -6446,7 +6469,7 @@ export class Client extends GameShell {
                     throw new Error();
                 }
 
-                const size: number = this.in.g1();
+                const size: number = this.in.g2();
                 for (let i: number = 0; i < size; i++) {
                     inv.linkObjType[i] = this.in.g2();
 
@@ -6481,7 +6504,7 @@ export class Client extends GameShell {
                 }
 
                 while (this.in.pos < this.psize) {
-                    const slot: number = this.in.g1();
+                    const slot: number = this.in.gsmart();
                     const id: number = this.in.g2();
 
                     let count: number = this.in.g1();
@@ -11923,7 +11946,7 @@ export class Client extends GameShell {
             this.ny = e.screenY | 0;
 
             if (this.dragging) {
-                // Dragging owns the pointer — no keyboard or pan handling while it does.
+                // Dragging owns the pointer, so skip keyboard and pan handling.
             } else if (MobileKeyboard.isWithinCanvasKeyboard(x, y) && this.exceedsGrabThreshold(20)) {
                 MobileKeyboard.notifyTouchMove(x, y);
             } else if (this.startedInGame && !this.isGameObscured() && this.exceedsGrabThreshold(20)) {

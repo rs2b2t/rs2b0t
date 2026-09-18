@@ -1,5 +1,5 @@
-/** Build ~10 transport-heavy OD pairs from curated 2004 travel plus known hubs, pack-probe them with full WorldState, and write a live-friendly JSON list: --write --n=12 --explain.
- *  Output: tools/nav/transport-heavy.routes.json, feed it to a harness or copy ids into the nav-script-routes-live LIMIT list. */
+/** Build and probe routes likely to use transports, with full player state. Flags: --write --n=12 --explain.
+ * Write tools/nav/transport-heavy.routes.json for live harnesses or the nav-script-routes-live LIMIT list. */
 
 //   bun tools/nav/transport-heavy-routes.ts
 //   bun tools/nav/transport-heavy-routes.ts --write --n=12 --explain
@@ -47,10 +47,10 @@ interface Seed {
     note: string;
     from: NavPoint;
     to: NavPoint;
-    /** Live round-trip: tele to the wizard → walk into the mine (sets EssenceSession) → walk out through the portal. No setvar or harness override.
-     *  Pack probe: entry from→mine plus exit mine→to with matching session state. */
+    /** Live: teleport to the wizard, enter the mine to set EssenceSession, then leave through the portal.
+ * Pack probe: check both legs with matching session state. */
     essenceRoundtrip?: EssenceReturnId;
-    /** Always keep in written list (essence enter/exit should not be ranked out). */
+    /** Always include in the output, regardless of hop ranking. */
     pin?: boolean;
 }
 
@@ -112,8 +112,7 @@ const SEEDS: Seed[] = [
         from: TRAVEL_STANDS.brimhavenCart,
         to: CART_SHILO
     },
-    // Multiloc product path: enter via wizard (sets session) → exit portal.
-    // Live harness must NOT setvar exit_essence_mine_coord, that only tests cheats.
+    // Why: entering via the wizard sets EssenceSession; setting exit_essence_mine_coord would bypass the behavior being tested.
     {
         id: 'TH-ess-round-aubury',
         family: 'essence_roundtrip',
@@ -185,7 +184,7 @@ const SEEDS: Seed[] = [
     }
 ];
 
-/** Rich state so requires-gated edges open (quests, members, runes, coins). */
+/** Player state with the required quests, membership, runes and coins. */
 const RICH_STATE: WorldStateData = {
     members: true,
     skills: {
@@ -324,8 +323,7 @@ for (const s of SEEDS) {
     }
 }
 
-// Pin essence enter/exit (and other pin:true) first so hop-rank cannot drop them;
-// fill remaining slots by transport-hop heaviness.
+// Keep pinned routes first, then fill by transport-hop count.
 const ok = rows.filter(r => r.ok);
 const pinned = ok.filter(r => r.pin === true);
 const rest = ok
@@ -399,7 +397,7 @@ if (write) {
                         essenceRoundtrip: round,
                         /** Mid waypoint for live: walk into mine after tele to wizard. */
                         minePad: ESSENCE_MINE_PAD,
-                        /** Exit leg must use portal, not spell tele. */
+                        /** Exit leg goes through the portal. */
                         useTeleports: false
                     }
                     : {})

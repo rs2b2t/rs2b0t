@@ -1,5 +1,5 @@
 /**
- * Shared basemap manifest + coordinate helpers for the walkable map picker. Deploy bake (schema ≥ 2) produces a terrain-only basemap (no Key icons, labels or zone tints) plus pre-baked transparent overlays (Key icons, multi, free) generated once.
+ * Basemap manifest and coordinate helpers for the walkable map picker. The deploy bake (schema 2+) produces a terrain-only basemap plus pre-baked transparent overlays for Key icons, multi and free.
  * Why: the picker composites overlays at paint time, so toggling Key / multi / free costs no MapView run; walkability still comes from collision.lcnav.gz.
  */
 
@@ -15,24 +15,16 @@ export type BasemapManifest = {
     fingerprint: string;
     /** Absolute world origin of basemap pixel (0,0) tile corner. */
     origin: { x: number; z: number };
-    /** Map extent in tiles (matches MapView mapWidth × mapHeight). */
+    /** Map extent in tiles (matches MapView mapWidth x mapHeight). */
     sizeTiles: { w: number; h: number };
     pixelsPerTile: number;
     /** Relative URL of the terrain raster (no Key icons / labels / tints). */
     basemapUrl: string;
-    /**
-     * Pre-baked composite of all Key icons (optional convenience). Prefer
-     * `keyTypeOverlayUrls` for per-type toggles.
-     */
+    /** Pre-baked composite of all Key icons; prefer `keyTypeOverlayUrls` for per-type toggles. */
     keyOverlayUrl?: string;
-    /**
-     * Per-type placement index (names + pixel centres). Used with per-type overlays.
-     */
+    /** Per-type placement index (names + pixel centres), used with per-type overlays. */
     keyIndexUrl?: string;
-    /**
-     * Mapfunction type id → transparent PNG of only that Key legend type
-     * (Bank, Altar, …). Generated once at deploy; picker composites selected types free.
-     */
+    /** Mapfunction type id to a transparent PNG of that Key legend type alone (Bank, Altar, etc.), generated once at deploy so the picker composites selected types for free. */
     keyTypeOverlayUrls?: Record<string, string>;
     /** Pre-baked place-name / town labels (transparent). */
     labelsOverlayUrl?: string;
@@ -40,10 +32,7 @@ export type BasemapManifest = {
     multiOverlayUrl?: string;
     /** Pre-baked free-to-play tint overlay (transparent). */
     freeOverlayUrl?: string;
-    /**
-     * Classic media `mapmarker` sprite (you-are-here pin) as a small PNG.
-     * Optional; picker falls back to a drawn yellow X if missing.
-     */
+    /** Classic media `mapmarker` sprite (the you-are-here pin) as a small PNG; the picker draws a yellow X when missing. */
     playerMarkerUrl?: string;
     /** Byte length of source worldmap.jag used for the bake (debug). */
     jagBytes?: number;
@@ -54,10 +43,7 @@ export type WorldmapKeyIndex = {
     schema: 1;
     /** Same order as MapView.KEY_NAMES / classic Key legend. */
     names: string[];
-    /**
-     * Mapfunction type id → basemap pixel centres `[px, py]` (sprite is drawn
-     * centred with a −7,−7 offset like MapView.plotSprite).
-     */
+    /** Mapfunction type id to basemap pixel centres `[px, py]`; the sprite is drawn with a -7,-7 offset like MapView.plotSprite. */
     placements: Record<string, [number, number][]>;
     /** Optional sprite strip for runtime per-type draw (width = cell * n). */
     spriteStripUrl?: string;
@@ -68,10 +54,7 @@ export type WorldmapKeyIndex = {
 export const DEFAULT_MAP_ORIGIN = { x: 32 << 6, z: 44 << 6 };
 export const DEFAULT_MAP_SIZE = { w: 25 << 6, h: 19 << 6 };
 
-/**
- * World tile → basemap pixel (image Y increases south, like MapView local Y).
- * Pixel is the top-left of the tile cell at 1 ppt.
- */
+/** World tile to basemap pixel (image Y grows southward like MapView local Y); the pixel is the tile cell's top-left at 1 ppt. */
 export function worldToBasemapPx(
     worldX: number,
     worldZ: number,
@@ -84,9 +67,7 @@ export function worldToBasemapPx(
     return { px: localX * pixelsPerTile, py: localY * pixelsPerTile };
 }
 
-/**
- * Basemap pixel → world tile (continuous).
- */
+/** Basemap pixel to world tile (continuous). */
 export function basemapPxToWorld(
     px: number,
     py: number,
@@ -102,10 +83,7 @@ export function basemapPxToWorld(
     };
 }
 
-/**
- * Source rect in basemap pixels for a world viewport centred on (centreX, centreZ)
- * with `tilesAcross` tiles spanning the canvas width and aspect-matched height.
- */
+/** Source rect in basemap pixels for a world viewport centred on (centreX, centreZ), with `tilesAcross` tiles spanning the canvas width and an aspect-matched height. */
 export function basemapSourceRect(
     centreX: number,
     centreZ: number,

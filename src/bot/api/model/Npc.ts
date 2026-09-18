@@ -9,7 +9,7 @@ import { opIndex, presentOps, type Interactable, type Locatable } from './Intera
  * @see docs/reference/api-entities.md#entity-shapes
  */
 export class Npc implements Interactable, Locatable {
-    constructor(readonly snap: NpcSnapshot) {}
+    constructor(/** @internal */ readonly snap: NpcSnapshot) {}
 
     get name(): string | null {
         return this.snap.name;
@@ -25,6 +25,11 @@ export class Npc implements Interactable, Locatable {
 
     get index(): number {
         return this.snap.index;
+    }
+
+    /** Tiles along each side of the footprint; `tile()` is the one under its centre. */
+    get size(): number {
+        return this.snap.size;
     }
 
     get inCombat(): boolean {
@@ -45,6 +50,10 @@ export class Npc implements Interactable, Locatable {
 
     tile(): Tile {
         return Tile.from(this.snap.tile);
+    }
+
+    networkTile(): Tile {
+        return Tile.from(this.snap.networkTile ?? this.snap.tile);
     }
 
     distance(): number {

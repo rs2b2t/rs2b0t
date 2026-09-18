@@ -543,7 +543,7 @@ function outOfTime(): boolean {
     return closing || (BUDGET_MS > 0 && Date.now() - t0 > BUDGET_MS);
 }
 
-/** Wipe a customer that has filled up, since a full pack cannot receive what it just paid for. */
+/** Wipe a customer that has filled up, since a full pack cannot receive what it paid for. */
 // Why: every turn hands the customer more stock to sell, so without this the pack fills and every later trade fails on inventory space rather than on anything the shop did.
 async function makeRoom(c: Customer): Promise<void> {
     const used = await c.page.evaluate(() => (globalThis as never as Abi).__rs2b0t.Inventory.used());

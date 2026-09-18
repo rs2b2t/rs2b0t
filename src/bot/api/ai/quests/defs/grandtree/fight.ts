@@ -23,10 +23,9 @@ function here(): Tile | null {
     return t ? new Tile(t.x, t.z, t.level) : null;
 }
 
-// Why: the trapdoor is ground decor, which blocks its own tile, so the stand is the tile north of it and the server paths the last step itself.
-// Why: `[oploc1,grandtree_trapdoorclosed]` opens at every stage from 130 up, which is what makes a death after the demon recoverable. The caves have no other way in until the quest is finished.
+// Why: the trapdoor is ground decor and blocks its own tile, so the stand is the tile north of it and the server paths the last step.
+// Why: `[oploc1,grandtree_trapdoorclosed]` opens at every stage from 130 up, so a death after the demon is recoverable; the caves have no other way in until the quest is done.
 
-/** Drop through Glough's trapdoor into the root caves. */
 export async function descendTrapdoor(log: Log): Promise<boolean> {
     if (inCaves(here())) {
         return true;
@@ -54,10 +53,10 @@ export async function descendTrapdoor(log: Log): Promise<boolean> {
     return true;
 }
 
-// Why: Glough's speech ends in `if_close`, a camera move and an `npc_add`, so the demon appearing is what ends the cutscene rather than the dialogue closing.
-// Why: `ai_timer` deletes the demon once the player is more than seventeen tiles away, and only stage 130 re-runs the cutscene, so a run that wandered off climbs back out and drops in again.
+// Why: Glough's speech ends in `if_close`, a camera move and an `npc_add`, so the demon appearing is what ends the cutscene.
+// Why: `ai_timer` deletes the demon once you're more than 17 tiles away and only stage 130 re-runs the cutscene, so after wandering off you climb out and drop in again.
 
-/** Take the trapdoor, sit through Glough's speech, and kill what he sets on you. */
+/** Take the trapdoor, sit through Glough's speech, kill the demon. */
 export async function fightBlackDemon(log: Log): Promise<boolean> {
     const dropping = !inCaves(here());
     if (!(await descendTrapdoor(log))) {
@@ -75,8 +74,7 @@ export async function fightBlackDemon(log: Log): Promise<boolean> {
         await leaveCaves(log);
         return false;
     }
-    // Why: Glough sets the demon on the player twelve tiles away, and the fight loop counts a
-    // swing per tick it is not yet in combat, twelve of them and it calls the target caged.
+    // Why: Glough sets the demon on you 12 tiles away, and the fight loop calls the target caged after 12 ticks out of combat.
     const at = target.tile();
     await Traversal.walkResilient(new Tile(at.x, at.z, at.level), { radius: 2, attempts: 2, timeoutMs: 20_000, log });
     const result = await runFight({ what: 'Black Demon', npcId: GT_NPC.BLACK_DEMON, guard: DEMON_GUARD }, log);

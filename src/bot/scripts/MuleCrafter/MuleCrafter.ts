@@ -107,7 +107,7 @@ export default class MuleCrafter extends TaskBot {
             return;
         }
 
-        // --- Crafter Mode ---
+        // Crafter mode.
         if (this.partners.length === 0) {
             this.bankFill = true; // Ensure crafter fills essence at bank when running solo
             this.log('MuleCrafter: No partners configured. Running in Solo Crafter mode.');

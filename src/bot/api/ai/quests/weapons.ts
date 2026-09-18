@@ -29,11 +29,11 @@ const TIERS: readonly { tier: string; attack: number }[] = [
     { tier: 'Bronze', attack: 1 }
 ];
 
-// Why: one-handed only, a two-hander takes the shield slot, and every quest that arms itself also wears one.
+// Why: one-handed only; a two-hander takes the shield slot, and every quest that arms itself also wears one.
 /** Melee types within a tier, best first. */
 const TYPES: readonly string[] = ['scimitar', 'longsword', 'battleaxe', 'sword', 'mace', 'dagger', 'warhammer'];
 
-// Why: `tier60.rs2` gates dragon melee on a quest as well as Attack 60, so a level check alone withdraws a weapon the wield is refused for and the quest fights bare-handed.
+// Why: `tier60.rs2` gates dragon melee on a quest as well as Attack 60, so a level check alone withdraws a weapon that can't be wielded.
 const QUEST_GATE: Readonly<Record<string, string>> = {
     'Dragon longsword': 'Lost City',
     'Dragon dagger': 'Lost City',
@@ -58,8 +58,7 @@ function build(): MeleeWeapon[] {
 /** Every one-handed melee weapon the item db knows, best tier first. */
 export const MELEE_WEAPONS: readonly MeleeWeapon[] = build();
 
-// Why: `tier40.rs2` gates a rune pickaxe on Attack 40, not on Mining, so a pickaxe rides the same
-// tiers as a scimitar, and it is kept out of `MELEE_WEAPONS` so nothing goes to a fight holding one.
+// Why: `tier40.rs2` gates a rune pickaxe on Attack 40, so a pickaxe rides the same tiers as a scimitar; it's kept out of `MELEE_WEAPONS` so nothing goes to a fight holding one.
 
 /** Every pickaxe the item db knows, best tier first. */
 export const PICKAXES: readonly MeleeWeapon[] = TIERS
@@ -127,7 +126,7 @@ export function bestBanked(snap: QuestSnapshot): MeleeWeapon | null {
 
 // Why: some fight loops resolve a weapon with no snapshot to hand, so the live pack, worn set and bank stand in for one.
 
-/** The best weapon this account may wield, read live rather than from a snapshot. */
+/** The best weapon this account may wield, read from the live pack and worn set. */
 export function liveBestWeapon(): MeleeWeapon | null {
     const attack = Skills.level('attack');
     const held = new Map(Inventory.items().map(i => [i.id, i.count]));

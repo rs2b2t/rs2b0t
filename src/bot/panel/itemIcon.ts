@@ -1,15 +1,9 @@
 import { reader } from '../adapter/ClientAdapter.js';
 
-/**
- * Encoded icons by id.
- * Why: `toDataURL` is a ~1ms PNG encode and the picker re-renders up to 200 rows a click; failures stay uncached because a sprite the client has not streamed yet must be retried.
- */
+/** Encoded icons by id; missing streamed sprites remain retryable. */
 const encoded = new Map<number, string>();
 
-/**
- * Item icon as a data URL. Null when the cache is not loaded or the id has no sprite, so callers fall back to the item's name.
- * Why: DOM is fenced to this directory, so the adapter hands over raw pixels, an `Int32Array` of 0xRRGGBB with 0 meaning transparent.
- */
+/** Item icon data URL, or null until its sprite is available. Raw pixels use 0xRRGGBB with 0 transparent. */
 export function itemIconDataUrl(id: number): string | null {
     const hit = encoded.get(id);
     if (hit !== undefined) {

@@ -1,3 +1,4 @@
+import { normalizeJournal as normalize } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -41,14 +42,6 @@ const MARKERS: { text: string; stage: number }[] = [
     { text: 'i need to talk to holgart', stage: SS_STAGE.STARTED },
     { text: 'i can start this quest by speaking to caroline', stage: SS_STAGE.NOT_STARTED }
 ];
-
-function normalize(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
 
 function progressFor(stage: number): QuestProgress {
     const flag = AMBIGUOUS[stage];

@@ -58,6 +58,82 @@ function namedItem(count: number): InvItemSnapshot {
 }
 
 describe('Bank exact-ID helpers', () => {
+    test('uses fixed quantities by ID without a count dialog, including noted items and colliding names', async () => {
+        for (const [quantity, operation] of [[1, 1], [5, 2], [10, 3]] as const) {
+            for (const landsAsId of [298, 299]) {
+                let inventory: InvItemSnapshot[] = [];
+                const clicks: number[][] = [];
+                (reader as any).bankComId = () => 5382;
+                (reader as any).bankItems = () => [item(293, 20, 0), { ...item(298, 20, 1), ops: ['Withdraw 1', 'Withdraw 5', 'Withdraw 10'] }];
+                (reader as any).bankSideItems = () => inventory;
+                (reader as any).inventory = () => inventory;
+                (reader as any).inventorySize = () => 28;
+                (reader as any).modals = () => ({ main: 5292, side: 5063, chat: -1 });
+                (Execution as any).delayTicks = async () => {};
+                (Execution as any).delayUntil = async (condition: () => boolean) => condition();
+                (reader as any).countDialogOpen = () => { throw new Error('fixed withdrawal must not open a count dialog'); };
+                (actions as any).answerCountDialog = () => { throw new Error('fixed withdrawal must not answer a count dialog'); };
+                (Input as any).invButton = (id: number, slot: number, com: number, op: number) => {
+                    clicks.push([id, slot, com, op]);
+                    inventory = [{ ...item(landsAsId, quantity, 0), comId: 3214 }];
+                    return true;
+                };
+
+                expect(await Bank.withdrawXById(298, quantity, landsAsId)).toBe(true);
+                expect(clicks).toEqual([[298, 1, 5382, operation]]);
+            }
+        }
+    });
+
+    test('fixed exact-ID withdrawal still requires the requested inventory item to arrive', async () => {
+        (reader as any).bankComId = () => 5382;
+        (reader as any).bankItems = () => [item(298, 20, 0)];
+        (reader as any).bankSideItems = () => [];
+        (reader as any).inventory = () => [];
+        (reader as any).inventorySize = () => 28;
+        (reader as any).modals = () => ({ main: 5292, side: 5063, chat: -1 });
+        (Execution as any).delayTicks = async () => {};
+        (Execution as any).delayUntil = async (condition: () => boolean) => condition();
+        const clicked: number[] = [];
+        (Input as any).invButton = (_id: number, _slot: number, _com: number, op: number) => { clicked.push(op); return true; };
+        (reader as any).countDialogOpen = () => false;
+
+        expect(await Bank.withdrawXById(298, 1)).toBe(false);
+        expect(clicked).toEqual([1]);
+    });
+
+    test('exact-ID withdrawals fall back to X and choose a preset after clamping to stock', async () => {
+        for (const [requested, available, preset, operation] of [[5, 20, false, 5], [20, 5, true, 2]] as const) {
+            let inventory: InvItemSnapshot[] = [];
+            const clicked: number[] = [];
+            const answered: number[] = [];
+            (reader as any).bankComId = () => 5382;
+            (reader as any).bankItems = () => [{ ...item(298, available, 0), ops: ['Withdraw-1', preset ? 'Withdraw-5' : null, null, null, 'Withdraw-X'] }];
+            (reader as any).bankSideItems = () => inventory;
+            (reader as any).inventory = () => inventory;
+            (reader as any).inventorySize = () => 28;
+            (reader as any).modals = () => ({ main: 5292, side: 5063, chat: -1 });
+            (reader as any).countDialogOpen = () => true;
+            (Execution as any).delayTicks = async () => {};
+            (Execution as any).delayUntil = async (condition: () => boolean) => condition();
+            (Input as any).invButton = (_id: number, _slot: number, _com: number, op: number) => {
+                clicked.push(op);
+                if (op === 2) inventory = [{ ...item(298, 5, 0), comId: 3214 }];
+                return true;
+            };
+            (actions as any).answerCountDialog = (quantity: number) => {
+                answered.push(quantity);
+                inventory = [{ ...item(298, quantity, 0), comId: 3214 }];
+                return true;
+            };
+
+            expect(await Bank.withdrawXById(298, requested)).toBe(true);
+            expect(clicked).toEqual([operation]);
+            expect(answered).toEqual(preset ? [] : [5]);
+            expect(inventory[0]?.count).toBe(5);
+        }
+    });
+
     test('counts and clicks only the requested ID when names collide', async () => {
         const bankItems = [item(293, 2, 0), item(298, 3, 1), item(293, 4, 2)];
         const clicked: number[] = [];
@@ -104,6 +180,54 @@ describe('Bank exact-ID helpers', () => {
         expect(inventory[0]?.id).toBe(298);
         expect(inventory[0]?.count).toBe(2);
         expect(Bank.countById(293)).toBe(1);
+    });
+
+    test('note mode lands a different id, which landsAsId waits on', async () => {
+        const NOTED = 299;
+        let bankItems = [item(298, 5, 0)];
+        let inventory: InvItemSnapshot[] = [];
+
+        (reader as any).bankComId = () => 5382;
+        (reader as any).bankItems = () => bankItems;
+        (reader as any).bankSideItems = () => inventory;
+        (reader as any).inventory = () => inventory;
+        (reader as any).inventorySize = () => 28;
+        (reader as any).modals = () => ({ main: 5292, side: 5063, chat: -1 });
+        (reader as any).countDialogOpen = () => true;
+        (Execution as any).delayTicks = async () => {};
+        (Execution as any).delayUntil = async (condition: () => boolean) => condition();
+        (Input as any).invButton = () => true;
+        (actions as any).answerCountDialog = (count: number) => {
+            inventory = [{ ...item(NOTED, count, 0), comId: 3214 }];
+            bankItems = [item(298, 5 - count, 0)];
+            return true;
+        };
+
+        expect(await Bank.withdrawXById(298, 2, NOTED)).toBe(true);
+        expect(inventory[0]?.id).toBe(NOTED);
+    });
+
+    test('without landsAsId the same note-mode withdraw reports failure', async () => {
+        let bankItems = [item(298, 5, 0)];
+        let inventory: InvItemSnapshot[] = [];
+
+        (reader as any).bankComId = () => 5382;
+        (reader as any).bankItems = () => bankItems;
+        (reader as any).bankSideItems = () => inventory;
+        (reader as any).inventory = () => inventory;
+        (reader as any).inventorySize = () => 28;
+        (reader as any).modals = () => ({ main: 5292, side: 5063, chat: -1 });
+        (reader as any).countDialogOpen = () => true;
+        (Execution as any).delayTicks = async () => {};
+        (Execution as any).delayUntil = async (condition: () => boolean) => condition();
+        (Input as any).invButton = () => true;
+        (actions as any).answerCountDialog = (count: number) => {
+            inventory = [{ ...item(299, count, 0), comId: 3214 }];
+            bankItems = [item(298, 5 - count, 0)];
+            return true;
+        };
+
+        expect(await Bank.withdrawXById(298, 2)).toBe(false);
     });
 });
 

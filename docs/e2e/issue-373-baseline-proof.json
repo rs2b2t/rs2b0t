@@ -1,0 +1,56 @@
+{
+  "generatedAt": "2026-09-12T15:05:23.777Z",
+  "mode": "baseline",
+  "result": "EXPECTED_UNREACHABLE",
+  "screenshot": "docs/e2e/issue-373-baseline-unreachable.png",
+  "issue": 373,
+  "build": {
+    "revision": "3d90b4b7e311a3f95af9318014c698d75abb33ca",
+    "dirty": true,
+    "sha256": "bb04b515bf718566212d50291da7ce30674dad4a2665e9fa32b1ba905c0c0431"
+  },
+  "results": [
+    {
+      "label": "gate-before",
+      "before": {
+        "tile": {
+          "x": 2616,
+          "z": 3332,
+          "level": 0
+        },
+        "plagueCity": "complete",
+        "biohazard": "complete",
+        "maskCarried": 0,
+        "maskWorn": false
+      },
+      "destination": {
+        "x": 2488,
+        "z": 3308,
+        "level": 0
+      },
+      "allowed": false,
+      "ok": false,
+      "tile": {
+        "x": 2616,
+        "z": 3332,
+        "level": 0
+      },
+      "logs": [
+        "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+        "no path to (2488,3308,0): unreachable"
+      ],
+      "after": {
+        "tile": {
+          "x": 2616,
+          "z": 3332,
+          "level": 0
+        },
+        "plagueCity": "complete",
+        "biohazard": "complete",
+        "maskCarried": 0,
+        "maskWorn": false
+      },
+      "screenshot": "docs/e2e/issue-373-gate-before.png"
+    }
+  ]
+}

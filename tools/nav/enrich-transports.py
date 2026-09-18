@@ -1,22 +1,9 @@
 #!/usr/bin/env python3
-"""Build an enriched rs2b0t-compatible transport list from LostCity data.
+"""Match curated transports and generated stairs to LostCity map placements.
 
-This combines rs2b0t's curated transports and generated stair edges, then
-matches each location-backed source edge to the 2004scape Content maps and
-location definitions.  Existing fields remain compatible; metadata fields are
-additive:
-
-  locId      Numeric cache location id.
-  locX/locZ  Actual clickable location tile (not the player's stand tile).
-  locName    In-game display name (already present in rs2b0t data).
-  debugName  LostCity internal/symbolic location name.
-  options    All non-empty interaction options on the source location.
-
-NPC-backed transports retain their original shape because they have no loc id.
-
-Run this as the final stage of tools/nav/derive-transports.sh.  Running an
-earlier generator afterward can replace enriched rows with bare source edges.
-"""
+Add locId, locX/locZ (the clickable tile), debugName and options, and resolve
+locName. NPC transports keep their original fields. Run last in
+derive-transports.sh so earlier generators do not overwrite the enrichment."""
 
 from __future__ import annotations
 
@@ -179,10 +166,7 @@ def resolve_source_loc(
     source = edge["from"]
     destination = edge["to"]
     span = max(abs(destination["x"] - source["x"]), abs(destination["z"] - source["z"]))
-    # Local barrier/stair edges generally put the clickable loc between their
-    # two stand tiles. Long dungeon/teleport edges instead put it by the source,
-    # so applying midpoint scoring to those would send the search thousands of
-    # tiles away from the actual interaction.
+    # Why: local crossings use the midpoint, but long transports need a loc near the source.
     use_midpoint = kind in {"door", "gate", "stair"} and span <= 8
     midpoint_x = (source["x"] + destination["x"]) / 2
     midpoint_z = (source["z"] + destination["z"]) / 2
@@ -192,10 +176,7 @@ def resolve_source_loc(
         if not placed_config:
             continue
         variants = [placed_config]
-        # Closed trapdoors are the static map placement, but the action edge is
-        # executed against the temporary open loc after the executor opens it.
-        # Resolve that exact action-bearing config when it follows LostCity's
-        # conventional *_open debug-name pairing.
+        # Why: the map places the closed trapdoor; resolve its open config for the climb action.
         if wanted_action not in {normalized(option) for option in option_values(placed_config)}:
             open_debug = placed_config.debug_name + "_open"
             variants.extend(config for config in configs.values() if config.debug_name == open_debug)
@@ -277,13 +258,10 @@ def closed_open_loc_ids(
     placement_loc_id: int,
     action_config: LocConfig,
 ) -> tuple:
-    """Map placement id + optional open-state id for trapdoor-style transforms.
+    """Find the closed placement ID and open interaction ID for trapdoors.
 
-    Prefer closed id as locId (runtime default is usually closed). openLocId is the
-    climb/use-bearing open variant. Handles both:
-    - map places closed, action resolved via *_open config
-    - map places open (some content dumps), still pair to closed base debug name
-    """
+    Use the closed variant as locId, even when the map places the open variant.
+    openLocId identifies the variant with the climb or use action."""
     placed = configs.get(placement_loc_id)
     open_id: int | None = None
     closed_id = placement_loc_id
@@ -294,7 +272,7 @@ def closed_open_loc_ids(
         closed_id = placement_loc_id
         return closed_id, open_id
 
-    # Placement and action config share an id — may already be the open form.
+    # Placement and action config share an id; it may already be the open form.
     debug = (placed.debug_name if placed else action_config.debug_name) or ""
     if debug.endswith("_open"):
         open_id = placement_loc_id
@@ -325,9 +303,7 @@ def main() -> None:
 
     configs = load_loc_configs(args.content)
     _, spatial = load_placements(args.content)
-    # A reverse edge derived from a generic ladder may land beside a special
-    # quest/area ladder top. Include every loc that actually has an oploc
-    # handler, while still excluding decorative ladder-like scenery.
+    # Include quest ladders with oploc handlers, but exclude decorative ladders.
     allowed_stair_debugs: set[str] = set()
     oploc_re = re.compile(r"^\[oploc\d+,([a-z0-9_]+)]", re.MULTILINE)
     for script in (args.content / "scripts").rglob("*.rs2"):
@@ -346,9 +322,7 @@ def main() -> None:
                 normalized(existing.display_name) == "ladder"
                 or "ladder" in existing.debug_name.lower()
             )
-            # derive-ladders.py resolves its clickable placement directly from
-            # the handler source. Preserve those exact rows; refresh all other
-            # metadata so a ranking fix can repair previously mis-bound data.
+            # Keep ladder placements derived from handlers; refresh metadata for all other edges.
             if source_backed_ladder and all(field in edge for field in ("locId", "locX", "locZ", "debugName", "options")):
                 enriched.append(edge)
                 continue

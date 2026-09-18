@@ -1,32 +1,32 @@
-import { unnotedId, type Catalog } from './catalog.js';
+import { displayName, unnotedId, type Catalog } from './catalog.js';
 import { rowOf, type PriceBook } from './priceBook.js';
 import { resolvePrices, rowValid } from './prices.js';
 import { formatGp, truncateChat } from './chatProtocol.js';
 import type { OfferItem, ValuedLine } from './quote.js';
 
-/** What the customer asked to buy. Only that direction needs one. */
+/** Item requested by the buyer; sell orders omit it. */
 export interface SellIntent {
     itemId: number;
     maxQty: number;
 }
 
-/** What the bot can hand over and pay with, right now. */
+/** Current inventory available for the trade. */
 export interface DeskState {
     available(id: number): number;
     held(id: number): number;
     purse: number;
 }
 
-/** The deal: quantity times unit price, on both sides. */
+/** Total value on each side: quantity times unit price. */
 export interface Appraisal {
     kind: 'buy' | 'sell' | 'nothing';
     /** What the bot puts up. */
     owe: Map<number, number>;
-    /** What the customer must have up for the deal to be on. */
+/** Minimum offer required from the customer. */
     want: Map<number, number>;
     total: number;
     lines: ValuedLine[];
-    /** Named so the customer can take them back before the bot accepts. */
+/** Items the customer must remove before acceptance. */
     ignored: { name: string; count: number }[];
     note: string | null;
 }
@@ -48,7 +48,7 @@ function fold(cat: Catalog, items: readonly OfferItem[], coinId: number) {
             continue;
         }
         const id = unnotedId(cat, item.id);
-        const name = cat.byId.get(id)?.name ?? item.name ?? `item ${id}`;
+        const name = cat.byId.has(id) ? displayName(cat, id) : (item.name ?? `item ${id}`);
         goods.set(id, { name, count: (goods.get(id)?.count ?? 0) + units });
     }
     return { goods, coins };
@@ -66,7 +66,7 @@ function priceOf(book: PriceBook, id: number, side: 'buying' | 'selling'): numbe
 
 /**
  * The deal, given what the customer has up and what they asked for.
- * Why: derived every beat rather than remembered, so nothing can go stale and running it twice changes nothing.
+ * Why: derived every beat, so nothing can go stale and running it twice changes nothing.
  */
 export function appraise(input: {
     book: PriceBook;
@@ -103,7 +103,7 @@ function sale(
     coins: number,
     ignored: Ignored
 ): Appraisal {
-    const name = cat.byId.get(intent.itemId)?.name ?? `item ${intent.itemId}`;
+    const name = displayName(cat, intent.itemId);
     const each = priceOf(book, intent.itemId, 'selling');
     if (each === null) {
         return nothing(ignored, `I don't sell ${name} any more`);
@@ -162,23 +162,12 @@ function purchase(
         }
     }
 
-    // Why: paying for part of a stack means picking which units and the window has no way to say so, so a thin purse drops entire lines, dearest first.
+    // Why: the window can't say which units of a stack it's paying for, so over the ceiling the shop bids the ceiling for the pile and the customer takes items back for full price.
     const ceiling = Math.min(desk.purse, book.maxTradeValue);
-    lines.sort((a, b) => b.value - a.value);
-    const afford: ValuedLine[] = [];
-    let total = 0;
-    let dropped = false;
-    for (const line of lines) {
-        if (total + line.value <= ceiling) {
-            afford.push(line);
-            total += line.value;
-        } else {
-            ignored.push({ name: line.name, count: line.count });
-            dropped = true;
-        }
-    }
-    if (dropped) {
-        note = `I can only cover ${formatGp(total)}gp of that`;
+    const value = lines.reduce((sum, l) => sum + l.value, 0);
+    const total = Math.min(value, ceiling);
+    if (value > ceiling) {
+        note = `max I can offer is ${formatGp(ceiling)}gp per trade`;
     }
 
     if (total <= 0) {
@@ -187,9 +176,9 @@ function purchase(
     return {
         kind: 'buy',
         owe: new Map([[coinId, total]]),
-        want: new Map(afford.map(l => [l.id, l.count])),
+        want: new Map(lines.map(l => [l.id, l.count])),
         total,
-        lines: afford,
+        lines,
         ignored,
         note
     };
@@ -197,15 +186,14 @@ function purchase(
 
 /** One line, so the customer sees the deal before the bot accepts anything. */
 export function describeAppraisal(a: Appraisal): string {
-    const parts = a.lines.map(l => `${l.name} x${formatGp(l.count)} = ${formatGp(l.value)}.`);
+    // Why: the line is cut at the chat limit and 2 priced lines already reach it, so the reason goes first or goes unread.
+    const parts = a.note === null ? [] : [`${a.note}.`];
+    parts.push(...a.lines.map(l => `${l.name} x${formatGp(l.count)} = ${formatGp(l.value)}.`));
     for (const i of a.ignored) {
         parts.push(`${formatGp(i.count)} ${i.name}: not counted, keep them.`);
     }
-    if (a.note) {
-        parts.push(`${a.note}.`);
-    }
     if (parts.length === 0) {
-        // Why: an empty window is when a customer is most likely to be lost, so it teaches rather than shrugs.
+        // Why: an empty window is where a customer is most likely lost, so the line says what to do.
         return 'Put items in and I price them as you go. To buy, say what you want first.';
     }
     if (a.kind === 'nothing') {

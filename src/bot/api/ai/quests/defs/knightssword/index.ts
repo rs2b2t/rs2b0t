@@ -1,30 +1,14 @@
 import { Skills } from '../../../../skills/Skills.js';
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
-import { FOOD_FLOAT, QuestFood } from '../../food.js';
 import { KS_ID, KS_NAME, KS_STAGE, RELDO, SQUIRE, THURGO } from './areas.js';
 import { mineBlurite } from './dungeon.js';
 import { readKnightsSwordProgress } from './journal.js';
 import { fetchPortrait } from './portrait.js';
 import { bankedId, heldId, ironBarsAt, kit, pie, pieDish } from './supplies.js';
 
-const FOOD_TARGET = FOOD_FLOAT;
-const FOOD_LOW = 5;
 
 const talk = (stop: typeof SQUIRE): QuestStep => ({ kind: 'talk', stop });
-
-function foodWant(snap: QuestSnapshot): { name: string; held: number; target: number; low: number } | null {
-    const name = QuestFood.name?.trim();
-    if (!name) {
-        return null;
-    }
-    return {
-        name,
-        held: snap.inv.get(name.toLowerCase()) ?? 0,
-        target: FOOD_TARGET,
-        low: FOOD_LOW
-    };
-}
 
 /**
  * `squire_status_report` at stage 6 has one branch per place the sword can be,
@@ -56,7 +40,7 @@ function materials(snap: QuestSnapshot, miningLevel: number): QuestStep {
     }
     if (heldId(snap, KS_ID.BLURITE_ORE) === 0) {
         // Stock up above ground; kit() refuses to send the bot back out of the cave.
-        return kit(snap, foodWant(snap)) ?? { kind: 'custom', name: 'mine blurite', run: mineBlurite };
+        return kit(snap) ?? { kind: 'custom', name: 'mine blurite', run: mineBlurite };
     }
     return talk(THURGO);
 }
@@ -80,8 +64,8 @@ export function decideAt(snap: QuestSnapshot, miningLevel: number): QuestStep {
         case KS_STAGE.NOT_STARTED:
             return talk(SQUIRE);
         case KS_STAGE.STARTED:
-            // Why: the dish's only non-members source is a ground spawn thirteen tiles from the librarian, so it rides this leg rather than its own trip.
-            // Why: it is routed through supplies so both callers agree where a dish comes from.
+            // Why: the dish's only non-members source is a ground spawn 13 tiles from the librarian, so it rides this leg.
+            // Why: it goes through supplies so both callers agree where a dish comes from.
             if (heldId(snap, KS_ID.PIE_DISH) === 0 && bankedId(snap, KS_ID.PIE_DISH) === 0) {
                 return pieDish(snap);
             }
@@ -107,19 +91,16 @@ export const decide = (snap: QuestSnapshot): QuestStep => decideAt(snap, Skills.
 
 export const knightssword: QuestModule = {
     record: QUESTS.find(r => r.id === 'squire')!,
-    // Four towns, and bank contents are global, pinning one booth buys nothing
-    // and costs a kingdom-crossing on every leg that touches it.
+    // Why: bank contents are global across the 4 towns, so pinning one booth costs a kingdom-crossing on every leg that touches it.
     bank: 'nearest',
-    // `coins` is not optional for a quest that buys anything: without it the
-    // spillover deposit banks the float and every purchase parks on "need gp".
+    // Why: Keep coins through spillover deposits so purchases do not stop on "need gp".
     tools: [
         'coins', 'pickaxe', 'pie dish', 'pot of flour', 'redberries', 'bucket',
         'pastry dough', 'pie shell', 'uncooked berry pie', 'redberry pie',
         'iron ore', 'iron bar', 'blurite ore', 'portrait', 'blurite sword'
     ],
     ownsInventory: true,
-    // Literals, not QuestFood.name: this object is built at import, when the
-    // setting still holds its default. The host merges the configured food in.
+    // Why: this object is built at import, when QuestFood.name still holds its default; the host merges the configured food in.
     sustain: { foods: ['Lobster', 'Swordfish', 'Tuna'], eatBelowHp: 0.6 },
     readProgress: readKnightsSwordProgress,
     decide

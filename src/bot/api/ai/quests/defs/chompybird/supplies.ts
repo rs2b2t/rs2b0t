@@ -2,7 +2,7 @@ import { QuestFood } from '../../food.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { BOB_AXES, CB_ID, CB_NAME, CB_TILE, GERRANT } from './areas.js';
 
-/** Six for Rantz and six to shoot with; a burnt chompy costs a second kill. */
+/** 6 for Rantz and 6 to shoot with; a burnt chompy costs a second kill. */
 export const ARROW_TARGET = 12;
 export const FOOD_TARGET = 6;
 export const COIN_TARGET = 2000;
@@ -80,7 +80,7 @@ export function loadoutStep(snap: QuestSnapshot, wantAxe = true): QuestStep | nu
         return space;
     }
     const wants: { name: string; qty: number; id?: number }[] = [];
-    // Why: the axe trip is to Lumbridge and the bank is Yanille, so anything else the booth can answer goes in the same withdrawal.
+    // Why: Withdraw all available kit before the separate Lumbridge axe trip.
     for (const tool of [{ name: CB_NAME.KNIFE, id: CB_ID.KNIFE }, { name: CB_NAME.CHISEL, id: CB_ID.CHISEL }]) {
         if (heldId(snap, tool.id) === 0 && bankedId(snap, tool.id) > 0) {
             wants.push({ name: tool.name, qty: 1, id: tool.id });
@@ -110,13 +110,13 @@ export function loadoutStep(snap: QuestSnapshot, wantAxe = true): QuestStep | nu
         return withdraw(wants);
     }
     if (wantAxe && heldAxe(snap) === null) {
-        // Why: nothing in the ogre area sells an axe, and the achey trees answer nothing without one.
+        // Why: No nearby shop sells an axe, and achey trees cannot be chopped without one.
         return { kind: 'buy', item: 'Bronze axe', qty: 1, shop: BOB_AXES, estGp: 100 };
     }
     return null;
 }
 
-// Why: Bugs only sells the pair while the quest sits at stage 5, so an established account's own knife and chisel are the source every later leg has.
+// Why: Bugs only sells the pair while the quest sits at stage 5, so every later leg relies on the account's own knife and chisel.
 
 /** A knife and a chisel from the bank. Null when both are held, or when the bank has neither. */
 export function toolStep(snap: QuestSnapshot): QuestStep | null {

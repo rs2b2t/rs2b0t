@@ -1,5 +1,7 @@
 // Pure data and decisions for Superheater, which smelts bars with Superheat Item. The pack holds 28 slots and the nature-rune stack always takes one, leaving 27 for ore.
 
+import { STAFF_RUNES } from '#/bot/data/spelldb.js';
+
 export interface Recipe {
     readonly bar: string;
     readonly level: number;
@@ -25,8 +27,26 @@ export const RECIPES: readonly Recipe[] = [
 /** Nature rune, one per cast, kept in the pack across the deposit-all-except. */
 export const NATURE_RUNE = 'Nature rune';
 
-/** Wielded once so casts cost only the nature runes. */
+/** Preferred fire-rune staff when several are in the bank. */
 export const FIRE_STAFF = 'Staff of fire';
+
+const FIRE_RUNE = 'fire rune';
+
+// Why: Staff of fire stays first so a bank that still has one withdraws it ahead of a battlestaff.
+export const FIRE_STAVES: readonly string[] = [
+    FIRE_STAFF,
+    ...Object.entries(STAFF_RUNES)
+        .filter(([staff, runes]) =>
+            staff.toLowerCase() !== FIRE_STAFF.toLowerCase()
+            && runes.some(r => r.toLowerCase() === FIRE_RUNE)
+        )
+        .map(([staff]) => staff)
+];
+
+/** First fire-rune staff the predicate reports as present. */
+export function pickFireStaff(has: (name: string) => boolean): string | undefined {
+    return FIRE_STAVES.find(name => has(name));
+}
 
 /** Superheat Item unlocks at 43 Magic. */
 export const MAGIC_REQUIRED = 43;
@@ -76,10 +96,6 @@ export function withdrawSet(recipe: Recipe): Record<string, number> {
 /** The ingredient names in order. The first is the cast target. */
 export function primaryOre(recipe: Recipe): string {
     return recipe.ingredients[0].ore;
-}
-
-export function recipeNames(recipe: Recipe): string[] {
-    return recipe.ingredients.map(i => i.ore);
 }
 
 /** Full bars smeltable from the current counts, e.g. Steel = min(iron, coal/2). */

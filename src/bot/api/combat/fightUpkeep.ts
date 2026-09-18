@@ -11,15 +11,14 @@ const clock = new AttackClock();
 
 /**
  * True on the tick our swing animation began.
- * Why: anything that costs a tick, such as eating, burying or drinking a dose, must skip that one tick and spend the cooldown instead, or it stalls an attack.
+ * Why: anything that costs a tick (eating, burying, a dose) must skip that tick and spend the cooldown instead, or it stalls an attack.
  */
 export function swingStartedThisTick(): boolean {
     clock.observe(reader.selfAnim(), BotHost.tickCount);
     return clock.attackedThisTick(BotHost.tickCount);
 }
 
-// Why: this belongs in the fight loop rather than a sibling task, because a combat bot's fight `execute()` owns the bot for 90–120s at a time and a BuryBones task above it is only reached in whatever gaps that loop leaves, which reads as burying at random moments.
-// Why: true is returned only when a bone left the pack.
+// Why: Long fight loops block sibling tasks, so bury bones during combat cooldowns and report only completed burials.
 
 /** Bury one bone from inside a fight loop. */
 export async function buryOneInFight(boneName: string): Promise<boolean> {

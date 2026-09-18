@@ -10,7 +10,7 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import { settleScene } from '../../exec/prompts.js';
 import { SM_ID, SM_NPC_ID, SM_TILE } from './areas.js';
 
-/** Razmire wants five sets of remains in one pack before he takes any. */
+/** Razmire wants 5 sets of remains in one pack before he takes any. */
 export const REMAINS_WANTED = 5;
 
 const SEARCH_RADIUS = 15;
@@ -19,7 +19,7 @@ const EAT_AT_MISSING = 12;
 /** Ticks a single shade is given before the loop gives the step back. */
 const FIGHT_GUARD = 220;
 
-// Why: a Loar Shadow becomes a Loar Shade the moment anything attacks it, keeping its index, so the pair is one target rather than two.
+// Why: a Loar Shadow becomes a Loar Shade once attacked, keeping its index, so the pair is one target.
 const SHADE_IDS: readonly number[] = [SM_NPC_ID.SHADOW, SM_NPC_ID.SHADE];
 
 function hungry(): boolean {

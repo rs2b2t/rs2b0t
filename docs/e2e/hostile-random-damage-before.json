@@ -1,0 +1,145 @@
+{
+  "result": "FAIL",
+  "error": "AssertionError [ERR_ASSERTION]: macro_watchman1 reacted before damage",
+  "build": {
+    "sha256": "d04a24c36f066ef51d611813c262a7217f845c282712abb7bd58274a08365ca0",
+    "revision": "0eb93c074c0daf7db7ec1d3cade4e4ecc4b33580",
+    "dirty": null
+  },
+  "results": [],
+  "current": {
+    "start": {
+      "at": 1789215930103,
+      "cycle": 1306,
+      "tile": {
+        "x": 3248,
+        "z": 3252,
+        "level": 0
+      },
+      "hp": 99,
+      "damage": false,
+      "hits": [],
+      "npcs": []
+    },
+    "movedBeforeDamage": true,
+    "maxDistance": 4,
+    "minHp": 99,
+    "logs": [
+      "[rs2b0t] random event: watchman attacking — evading (it despawns once we're away)"
+    ],
+    "firstEvade": {
+      "at": 1789215930345,
+      "cycle": 1319,
+      "tile": {
+        "x": 3248,
+        "z": 3252,
+        "level": 0
+      },
+      "hp": 99,
+      "damage": false,
+      "hits": [],
+      "npcs": [
+        {
+          "index": 8315,
+          "id": 431,
+          "anim": -1,
+          "name": "Watchman",
+          "level": 14,
+          "tile": {
+            "x": 3248,
+            "z": 3252,
+            "level": 0
+          },
+          "distance": 0,
+          "ops": [
+            null,
+            "Attack",
+            null,
+            null,
+            null
+          ],
+          "inCombat": false,
+          "health": 0,
+          "totalHealth": 0,
+          "faceEntity": -1
+        }
+      ]
+    },
+    "escape": {
+      "at": 1789215931304,
+      "cycle": 1367,
+      "tile": {
+        "x": 3248,
+        "z": 3256,
+        "level": 0
+      },
+      "hp": 99,
+      "damage": false,
+      "hits": [],
+      "npcs": [
+        {
+          "index": 8315,
+          "id": 431,
+          "anim": -1,
+          "name": "Watchman",
+          "level": 14,
+          "tile": {
+            "x": 3247,
+            "z": 3253,
+            "level": 0
+          },
+          "distance": 3,
+          "ops": [
+            null,
+            "Attack",
+            null,
+            null,
+            null
+          ],
+          "inCombat": false,
+          "health": 0,
+          "totalHealth": 0,
+          "faceEntity": -1
+        }
+      ]
+    },
+    "end": {
+      "at": 1789215931428,
+      "cycle": 1374,
+      "tile": {
+        "x": 3248,
+        "z": 3257,
+        "level": 0
+      },
+      "hp": 99,
+      "damage": false,
+      "hits": [],
+      "npcs": [
+        {
+          "index": 8315,
+          "id": 431,
+          "anim": -1,
+          "name": "Watchman",
+          "level": 14,
+          "tile": {
+            "x": 3247,
+            "z": 3253,
+            "level": 0
+          },
+          "distance": 4,
+          "ops": [
+            null,
+            "Attack",
+            null,
+            null,
+            null
+          ],
+          "inCombat": false,
+          "health": 0,
+          "totalHealth": 0,
+          "faceEntity": -1
+        }
+      ]
+    }
+  }
+}

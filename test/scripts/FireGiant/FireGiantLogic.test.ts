@@ -273,3 +273,12 @@ describe('registry', () => {
         expect(entry?.settingsSchema?.combatStyle?.options).toEqual(['melee', 'mage', 'range']);
     });
 });
+
+
+test('ranged attacks respect thrown weapon reach at the safespot', () => {
+    expect(attackRangeFor('range', 'Rune dart')).toBe(3);
+    expect(attackRangeFor('range', 'Rune knife')).toBe(3);
+    expect(attackRangeFor('range', 'Rune javelin')).toBe(5);
+    expect(attackRangeFor('range', 'Rune thrownaxe')).toBe(4);
+    expect(attackRangeFor('range', 'Crossbow')).toBe(10);
+});

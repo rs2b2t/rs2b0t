@@ -4,14 +4,14 @@ import { Execution } from '../../../api/execution/Execution.js';
 import { ChatDialog } from '../../../api/ui/dialogue/ChatDialog.js';
 import { Locs } from '../../../api/locs/Locs.js';
 import { MAZE_SHRINE, MAZE_SHRINE_DOOR } from './mazeGraph.js';
+import { walkTowards, type MazeWalkWorld } from './mazeWalk.js';
 import { selectRoute } from './selectRoute.js';
 
 /** Region 45,71, content mapzone `0_45_71` / enum macro_maze_teleports. */
 export const MAZE_SQUARE = { mx: 45, mz: 71 };
 
-// Why: content pack (loc.pack + all.loc + macro_event_maze.rs2) gives 3628–3632 macro_maze_walllow* op Open, category macro_maze_wall_door.
-// Why: the same pack gives 3634 macro_maze_complete, "Strange shrine", 3×3, op Touch, which calls end_macro_maze.
-// Why: the finish is not the south tile of the SW corner, which is walled, the last door is the west chamber door at MAZE_SHRINE_DOOR (2910,4576), then Touch from an open face.
+// Content ids 3628-3632 are maze doors; 3634 is the 3x3 Strange shrine.
+// Enter through its west door at (2910,4576); the south face is walled.
 const MAZE_DOOR_IDS = new Set([3628, 3629, 3630, 3631, 3632]);
 const MAZE_SHRINE_LOC = 3634; // macro_maze_complete
 /** Step-backs allowed before giving up on this pass and restarting the route. */
@@ -40,8 +40,7 @@ export async function solveMaze(log: (msg: string) => void): Promise<boolean> {
 
     const route = selectRoute(start);
     if (!route) {
-        // Loudly, and without a route: silently replaying someone else's is what
-        // pinned two bots on a walled-off first door for a quarter of an hour.
+        // Bail loudly; replaying another spawn's route pinned 2 bots on a walled-off first door for 15 minutes.
         log(`random event: maze — no route solvable from (${start.x},${start.z}); the layout does not reach the shrine from here`);
         return true;
     }
@@ -50,40 +49,21 @@ export async function solveMaze(log: (msg: string) => void): Promise<boolean> {
         `random event: maze — spawn (${start.x},${start.z}) -> ${route.doors.length} doors, first (${route.doors[0].x},${route.doors[0].z})`
     );
 
-    const walkTowards = async (d: { x: number; z: number }, onto: boolean): Promise<void> => {
-        const reached = (t: { x: number; z: number }): boolean =>
-            onto ? t.x === d.x && t.z === d.z : chebyshev(t, d) <= 1;
-        for (let w = 0; w < 12 && inMaze(); w++) {
-            const now = reader.worldTile();
-            if (now && reached(now)) {
-                return;
-            }
+    const world: MazeWalkWorld = {
+        tile: () => reader.worldTile(),
+        walkTo: d => {
             const local = reader.toLocal(d.x, d.z);
-            if (!local) {
-                await Execution.delayTicks(1);
-                continue;
-            }
-            const before = reader.worldTile();
-            actions.walkTo(local.lx, local.lz);
-            const moved = await Execution.delayUntil(() => {
-                const t = reader.worldTile();
-                return t !== null && before !== null && chebyshev(t, before) >= 1;
-            }, 1_500);
-            if (!moved && inMaze()) {
+            if (local) {
                 actions.walkTo(local.lx, local.lz);
             }
-            await Execution.delayUntil(() => {
-                const t = reader.worldTile();
-                return t !== null && (reached(t) || (before !== null && chebyshev(t, before) >= 2));
-            }, 4_000);
-        }
+        },
+        inMaze,
+        until: (cond, ms) => Execution.delayUntil(cond, ms),
+        ticks: n => Execution.delayTicks(n)
     };
+    const goTo = (d: { x: number; z: number }, onto: boolean): Promise<boolean> => walkTowards(world, d, onto);
     /** True when the walk got next to `d`; false means it is walled off. */
-    const walkAdjacent = async (d: { x: number; z: number }): Promise<boolean> => {
-        await walkTowards(d, false);
-        const t = reader.worldTile();
-        return t !== null && chebyshev(t, d) <= 1;
-    };
+    const walkAdjacent = (d: { x: number; z: number }): Promise<boolean> => goTo(d, false);
 
     const openDoorAt = async (d: { x: number; z: number }): Promise<void> => {
         await clearMesbox();
@@ -111,7 +91,7 @@ export async function solveMaze(log: (msg: string) => void): Promise<boolean> {
 
     // Why: the door list is a route through cells, each door is reachable only from the cell the previous one opens into, and opens only from that side.
     // Why: anything that leaves the player out of step with it (a relogin inside the maze, or a door step that bounced them back) walls the next door off.
-    // Why: stepping back through the previous door re-enters the right cell instead of clicking a door on the far side of a wall for a minute.
+    // Why: stepping back through the previous door re-enters the right cell; otherwise you click a door on the far side of a wall for a minute.
     for (let i = 0; i < route.doors.length && inMaze(); ) {
         const door = route.doors[i];
         if (await walkAdjacent(door)) {
@@ -139,7 +119,7 @@ export async function solveMaze(log: (msg: string) => void): Promise<boolean> {
         }
     }
 
-    // Belt-and-suspenders: if a regenerated route missed the chamber door, open it.
+    // If a regenerated route missed the chamber door, open it.
     const last = route.doors[route.doors.length - 1];
     if (
         inMaze() &&
@@ -164,14 +144,14 @@ export async function solveMaze(log: (msg: string) => void): Promise<boolean> {
     for (let pass = 0; pass < 6 && inMaze(); pass++) {
         await clearMesbox();
         const me0 = reader.worldTile();
-        // First pass: already at an open face after the chamber door, Touch now.
+        // The first pass may already be at an open face after the chamber door.
         const nearShrine =
             me0 !== null &&
             Math.abs(me0.x - MAZE_SHRINE.x) <= 2 &&
             Math.abs(me0.z - MAZE_SHRINE.z) <= 2;
         if (!nearShrine || pass > 0) {
             const stand = touchStands[pass % touchStands.length]!;
-            await walkTowards(stand, pass % 2 === 0);
+            await goTo(stand, pass % 2 === 0);
             await clearMesbox();
         }
 

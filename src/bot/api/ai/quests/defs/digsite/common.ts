@@ -23,7 +23,7 @@ export function heldId(snap: QuestSnapshot, id: number): number {
     return snap.invIds?.get(id) ?? 0;
 }
 
-/** An unread bank is not an empty bank, and a bare count sends the bot to a booth for something it never saw. */
+/** Return unknown until the bank has been read, instead of treating it as empty. */
 export function bankedId(snap: QuestSnapshot, id: number): number {
     return snap.bankKnown ? (snap.bankIds?.get(id) ?? 0) : 0;
 }
@@ -54,7 +54,7 @@ export function locByIdAction(ids: readonly number[], op: string, within = 12): 
     return Locs.query().where(l => set.has(l.id)).action(op).within(within).nearest();
 }
 
-// Why: every Digsite student is displayed as "Student" and both workmen as "Digsite workman", so `Reach.npcDialog` would open the wrong conversation whichever one it found first.
+// Why: every Digsite student displays as "Student" and both workmen as "Digsite workman", so `Reach.npcDialog` could open the wrong conversation.
 
 /** Walk to an anchor and drive one NPC's dialogue, matched by server id. */
 export async function talkToNpcId(
@@ -86,7 +86,7 @@ export async function talkToNpcId(
         log(`npc ${npcId} never opened a dialogue (${status})`);
         return false;
     }
-    // Why: the Examiner's exams offer a different wrong-answer set for every errand the bot has not run, and abandoning mid-exam leaves the conversation open forever.
+    // Why: the Examiner's exams offer a different wrong-answer set for every errand not yet run, and abandoning mid-exam leaves the conversation open forever.
     return guessWhenUnmatched ? driveDialog([...prefer], log) : driveChoice([...prefer], log);
 }
 
@@ -164,17 +164,14 @@ export async function useOnNpcId(
         log(`no npc ${npcId} or no item ${itemId} near (${anchor.x},${anchor.z})`);
         return false;
     }
-    // Why: `opnpcu` makes the server path to the npc, and a client-side chase of a wandering student spends the walk budget on a target that keeps moving.
+    // Why: `opnpcu` has the server path to the npc; a client-side chase of a wandering student burns the walk budget on a moving target.
     if (!(await item.useOn(target))) {
         return false;
     }
     return driveUntilHeld(expect, prefer, log);
 }
 
-/**
- * Everything this quest ever carries. Anything else in the pack is dig spoil,
- * and the loops that fill the pack drop it rather than walk to a booth.
- */
+/** Everything this quest ever carries. Anything else in the pack is dig spoil, and the loops that fill the pack drop it on the spot. */
 const KEEP_IDS: ReadonlySet<number> = new Set<number>([
     DIG_ID.COINS, DIG_ID.TROWEL, DIG_ID.SPECIMEN_JAR, DIG_ID.SPECIMEN_BRUSH,
     DIG_ID.TRAY_EMPTY, DIG_ID.TRAY_MUD, DIG_ID.CHISEL, DIG_ID.TINDERBOX, DIG_ID.PESTLE,
@@ -188,7 +185,7 @@ const KEEP_IDS: ReadonlySet<number> = new Set<number>([
     DIG_ID.ROCK_SAMPLE_GREEN, DIG_ID.ROCK_SAMPLE_ORANGE, DIG_ID.ROCK_SAMPLE_PURPLE
 ]);
 
-// Why: every volatile chemical answers Drop with an explosion for up to 65 damage, so this list denies by default and the chemicals are on it.
+// Why: every volatile chemical answers Drop with an explosion for up to 65 damage, so this list denies by default and includes the chemicals.
 
 /** Whether an inventory slot is spoil this quest can throw away. */
 export function isSpoil(item: InvItem): boolean {
@@ -199,7 +196,7 @@ export function isSpoil(item: InvItem): boolean {
     return !food || item.name?.toLowerCase() !== food;
 }
 
-// Why: pickpocketing for one rock sample turns up five specimen brushes and three ropes on the way, and each surplus copy squats a slot the level 3 dig needs free.
+// Why: pickpocketing for one rock sample turns up 5 specimen brushes and 3 ropes, and each surplus copy takes a slot the level 3 dig needs free.
 
 /** How many of a kept item are worth carrying; anything past this is spoil. */
 const KEEP_LIMIT: ReadonlyMap<number, number> = new Map<number, number>([
@@ -261,7 +258,7 @@ export async function climbOutOfCave(log: (m: string) => void): Promise<boolean>
     return false;
 }
 
-/** Where the character is, for the branches that must escape a shaft first. */
+/** For the branches that must escape a shaft first. */
 export function tileOf(snap: QuestSnapshot): WorldTile | null {
     return snap.tile ?? null;
 }

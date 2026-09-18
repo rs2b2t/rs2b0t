@@ -23,7 +23,7 @@ export class MapView extends GameShell {
     static shouldDrawMultimap: boolean = false;
     static shouldDrawFreemap: boolean = false;
 
-    /** @see WORLDMAP_KEY_NAMES — classic Key legend order. */
+    /** @see WORLDMAP_KEY_NAMES for the classic Key legend order. */
     static readonly KEY_NAMES: readonly string[] = WORLDMAP_KEY_NAMES;
 
     mapStartX: number = 50 << 6;
@@ -436,7 +436,7 @@ export class MapView extends GameShell {
                 MapView.shouldDrawLabels = !MapView.shouldDrawLabels;
                 this.redraw = true;
             } else if (key == 'u'.charCodeAt(0) || key == 'U'.charCodeAt(0)) {
-                // "Key" icons (mapfunctions) — classic worldmap always shows these; toggle for tools/bake.
+                // Classic worldmap always shows mapfunction icons; tools and bakes may hide them.
                 MapView.shouldDrawMapfunctions = !MapView.shouldDrawMapfunctions;
                 this.redraw = true;
             } else if (key == 'b'.charCodeAt(0) || key == 'B'.charCodeAt(0)) {

@@ -1,15 +1,11 @@
-// Why: scripts, and later Global settings, mark axis-aligned rects the walker must not enter, e.g. White Wolf Mountain for low-level accounts.
-// Why: idea credit @lolwut, configurable danger zones for the pathfinder.
+// Configurable pathfinding exclusions, such as White Wolf Mountain for low-level accounts. Idea: @lolwut.
 
 export interface DangerZoneRect {
     minX: number;
     maxX: number;
     minZ: number;
     maxZ: number;
-    /**
-     * If set, only this height level is forbidden.
-     * If omitted, the rect applies on every level (mountain caves + surface).
-     */
+    /** Only this level is forbidden; omit to apply on every level (caves + surface). */
     level?: number;
 }
 
@@ -21,7 +17,7 @@ interface KnownDangerZone {
     automatic?: boolean;
     /** Only avoid this zone while the player's combat level is at or below this value. */
     avoidAtOrBelowCombat?: number;
-    // Why: this makes the zone a transit exclusion, preserving intentional destinations and letting a player already inside leave.
+    // Why: endpoint exemptions allow intentional destinations and let players leave a zone.
 
     /** Skip the zone when either route endpoint is inside it. */
     allowWhenEndpointInside?: boolean;
@@ -44,10 +40,7 @@ interface DangerZoneResolveContext {
     destination?: DangerZoneEndpoint;
 }
 
-/**
- * Curated zones for 2004 geography. Bounds are inclusive and slightly generous
- * so the main pass is fully covered; refine with live traces if needed.
- */
+/** Curated zones for 2004 geography; bounds are inclusive and a little generous so the main pass is covered. */
 export const KNOWN_DANGER_ZONES: readonly KnownDangerZone[] = [
     {
         id: 'white-wolf-mountain',
@@ -67,8 +60,7 @@ export const KNOWN_DANGER_ZONES: readonly KnownDangerZone[] = [
         help:
             'Four level-26 jail guards aggressively hunt players around the jail compound. '
             + 'Avoid as transit for combat 50 and below, but permit quest destinations inside.',
-        // Why: guard spawns are expanded to their maximum interaction tether, maxrange 12 plus the engine's one-tile op allowance.
-        // Why: the rectangles overlap on purpose, since fencing restricts movement but does not block line of sight.
+        // Why: cover each guard's maxrange 12 tether plus the one-tile operation allowance; overlaps are intentional.
         rects: [
             { minX: 3096, maxX: 3122, minZ: 3224, maxZ: 3250, level: 0 },
             { minX: 3107, maxX: 3133, minZ: 3225, maxZ: 3251, level: 0 },
@@ -109,10 +101,7 @@ export function tileInDangerZones(
     return false;
 }
 
-/**
- * Resolve a mix of known zone ids and ad-hoc rects into a flat rect list.
- * Unknown ids are skipped (logged by caller if desired).
- */
+/** Resolve known zone ids and ad-hoc rects into a flat rect list; unknown ids are skipped. */
 export function resolveDangerZones(
     specs: readonly (string | DangerZoneRect)[] | undefined,
     context?: DangerZoneResolveContext

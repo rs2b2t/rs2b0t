@@ -38,7 +38,7 @@ function havePaste(snap: QuestSnapshot): boolean {
     return owned(snap, PA_ITEM.PASTE.id) > 0;
 }
 
-/** The prince consumes all three from the pack, so a banked piece does not count. */
+/** The prince consumes all 3 from the pack, so a banked piece doesn't count. */
 export function disguiseComplete(snap: QuestSnapshot): boolean {
     return held(snap, PA_ITEM.BLOND_WIG.id) > 0
         && held(snap, PA_ITEM.PINK_SKIRT.id) > 0
@@ -140,10 +140,7 @@ export function makePaste(snap: QuestSnapshot): QuestStep | null {
     return { kind: 'talk', stop: AGGIE_PASTE };
 }
 
-/**
- * Item-on-NPC is an opnpcu, so this walks and then uses. It must not open a
- * conversation first, which is all `Reach.npcDialog` does.
- */
+/** Item-on-NPC is an opnpcu, so this walks then uses; `Reach.npcDialog` would open a conversation first. */
 async function useHeldOnNpc(
     itemId: number,
     npcName: string,

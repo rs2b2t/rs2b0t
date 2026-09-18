@@ -57,6 +57,10 @@ export default class LocType {
     forcedecor: boolean = false;
     breakroutefinding: boolean = false;
     raiseobject: number = 0;
+    multivarbit: number = -1;
+    multiloc: number[] = [];
+
+    static readonly STRICT: boolean = process.env.STRICT_CONFIG === '1';
 
     static init(config: JagFile): void {
         this.dat = new Packet(config.read('loc.dat'));
@@ -134,6 +138,8 @@ export default class LocType {
         this.forcedecor = false;
         this.breakroutefinding = false;
         this.raiseobject = -1;
+        this.multivarbit = -1;
+        this.multiloc = [];
     }
 
     decode(dat: Packet): void {
@@ -242,6 +248,19 @@ export default class LocType {
                 this.breakroutefinding = true;
             } else if (code === 75) {
                 this.raiseobject = dat.g1();
+            } else if (code === 77) {
+                this.multivarbit = dat.g2();
+
+                const count = dat.g1();
+                this.multiloc = new Array(count + 1);
+                for (let i = 0; i <= count; i++) {
+                    this.multiloc[i] = dat.g2();
+                    if (this.multiloc[i] === 65535) {
+                        this.multiloc[i] = -1;
+                    }
+                }
+            } else if (LocType.STRICT) {
+                throw new Error(`LocType ${this.id}: unknown config opcode ${code}`);
             }
         }
 

@@ -19,8 +19,8 @@ import { runHandoff } from '../../api/ai/quests/defs/shieldofarrav/partner.js';
 import { driveChoice } from '../../api/ai/quests/exec/prompts.js';
 import { supplierPhase, type SupplierPhase, type SupplierState } from './ArravSupplierLogic.js';
 
-// Why: a supplier is not a quest. Redeeming would set %phoenixgang to complete, which seals the chest and stops the curator, so it must never reach King Roald, and a QuestModule that never turns its journal green would be re-picked by the engine forever.
-// Why: the dual-gang state exists because [opnpcu,straven] is missing the %blackarmgang guard that [opnpc1,straven] and the hideout door both carry.
+// Why: redeeming completes Phoenix Gang and permanently stops certificate supply, so this is not a QuestModule.
+// Using the report on Straven bypasses the Black Arm guard and creates the dual-gang state.
 
 const STRAVEN_NPC = 644;
 const BANK = SOA_TILE.RENDEZVOUS;

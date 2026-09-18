@@ -4,7 +4,7 @@ import type { LadderHop, NpcStop } from '../../exec/primitives.js';
 
 export const SOA_NAME = 'Shield of Arrav';
 
-/** Object ids. Broken shield, Key, Scroll and Certificate each name more than one object, so nothing here is matched by name. */
+/** Object ids. Broken shield, Key, Scroll and Certificate each name more than one object, so match by id. */
 export const SOA_ID = {
     BOOK: 757,
     STORE_KEY: 759,
@@ -34,7 +34,7 @@ export const SOA_LOC = {
     BLACKARM_STAIRS_TOP: 1723
 } as const;
 
-/** Every tile here is walkable in the collision pack; the six that were not are noted where the geometry forced the choice. */
+/** Every tile here is walkable in the collision pack; the 6 that weren't are noted where the geometry forced the choice. */
 export const SOA_TILE = {
     /** East of the bookcase: x 3211 and 3212 are a solid run of shelves from z 3491 to 3496. */
     BOOKCASE: new Tile(3213, 3493, 0),
@@ -42,7 +42,7 @@ export const SOA_TILE = {
     HQ_LADDER: new Tile(3244, 9784, 0),
     HQ_SURFACE: new Tile(3244, 3382, 0),
     PHOENIX_DOOR: new Tile(3247, 9780, 0),
-    /** South of the door. Why: the door is the only crossing between the hideout's two components, and opening it teleports rather than steps. */
+    /** South of the door. Why: the door is the only crossing between the hideout's two components, and opening it teleports you. */
     PHOENIX_DOOR_INNER: new Tile(3247, 9778, 0),
     /** North of the chest, the side `forceapproach=north` leaves legal at angle 0. */
     CHEST_STAND: new Tile(3235, 9762, 0),
@@ -135,7 +135,7 @@ export const ROALD: NpcStop = {
     prefer: []
 };
 
-// Why: `needsHop` compares z against 6400, so a LadderHop can only express a surface-to-underground move, the two upper floors are climbed inside their own legs.
+// Why: `needsHop` compares z against 6400, so a LadderHop only covers a surface-to-underground move; the two upper floors get climbed inside their own legs.
 export const HQ_HOP_DOWN: LadderHop = {
     stand: SOA_TILE.CELLAR_LADDER,
     locName: 'Ladder',
@@ -156,7 +156,7 @@ function within(t: WorldTile | null | undefined, x0: number, x1: number, z0: num
     return !!t && t.level === level && t.x >= x0 && t.x <= x1 && t.z >= z0 && t.z <= z1;
 }
 
-/** The hideout is an underground band nothing walks into, the cellar ladder is the only way in or out. */
+/** The hideout is an underground band nothing walks into; the cellar ladder is the only way in or out. */
 export function inPhoenixHq(t: WorldTile | null | undefined): boolean {
     return within(t, 3225, 3260, 9750, 9795, 0);
 }
@@ -172,7 +172,7 @@ export function inWeaponStore(t: WorldTile | null | undefined): boolean {
     return within(t, 3240, 3256, 3378, 3392, 1);
 }
 
-// Why: a flood over the pack puts this pocket at ten tiles, and `phoenixdoor2` is its only way in or out.
+// Why: a flood over the pack puts this pocket at 10 tiles, and `phoenixdoor2` is its only way in or out.
 /** The weapon store's ground floor, which the store door seals. */
 export function inStoreGround(t: WorldTile | null | undefined): boolean {
     return within(t, 3250, 3252, 3382, 3385, 0);

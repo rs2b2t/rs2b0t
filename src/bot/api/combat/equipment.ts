@@ -29,7 +29,7 @@ export const BOLTS: string[] = [
 
 /**
  * One-handed melee weapons, so the shield slot stays free.
- * Why: attack style comes from the labels the client offers for whatever is wielded ("aggressive" → strength), so a dagger's Stab/Lunge and a longsword's Chop/Slash resolve with no per-weapon mapping here.
+ * Why: attack style comes from the labels the client offers for whatever is wielded ("aggressive" is strength), so a dagger's Stab/Lunge and a longsword's Chop/Slash resolve with no per-weapon mapping here.
  */
 export const MELEE_WEAPONS: string[] = [
     'Bronze scimitar', 'Iron scimitar', 'Steel scimitar', 'Black scimitar', 'Mithril scimitar', 'Adamant scimitar', 'Rune scimitar',
@@ -37,7 +37,8 @@ export const MELEE_WEAPONS: string[] = [
     'Bronze longsword', 'Iron longsword', 'Steel longsword', 'Black longsword', 'Mithril longsword', 'Adamant longsword', 'Rune longsword',
     'Dragon longsword',
     'Bronze dagger', 'Iron dagger', 'Steel dagger', 'Black dagger', 'Mithril dagger', 'Adamant dagger', 'Rune dagger', 'Dragon dagger',
-    'Dragon dagger(p)'
+    'Dragon dagger(p)',
+    'Dragon battleaxe', 'Dragon mace'
 ];
 
 export const STAFFS: string[] = [

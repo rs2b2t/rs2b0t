@@ -1,5 +1,5 @@
-/*  Biohazard (#234) stand-tile probe: pathfinds to every tile the module names, from the regions the quest starts a leg in.
- *  Why: the headquarters first floor is reachable only over stairEdges.json behind a refused door, and a stand beside an unwalkable loc is not automatically pathable. */
+/** Check Biohazard stand tiles from each leg's starting region.
+ * Why: mourner HQ needs quest crossings and stair edges; nearby walkable tiles may still be unreachable. */
 import fs from 'node:fs';
 
 import { gunzipSync } from 'fflate';
@@ -17,8 +17,7 @@ if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
 const finder = new PathFinder(bytes);
 finder.addEdges(doorsJson as DoorEdgeData[], transportsJson as never, stairsJson);
 
-// Why: the mourner headquarters is a sealed pocket, its door is SCRIPT_REFUSED, so the
-// building and its first floor form their own region that only the quest's own crossing enters.
+// Why: the HQ door is SCRIPT_REFUSED; only the quest crossing enters this region.
 const SEEDS: [string, NavPoint][] = [
     ['ardougne', { x: 2616, z: 3332, level: 0 }],
     ['westArdougne', { x: 2529, z: 3304, level: 0 }],

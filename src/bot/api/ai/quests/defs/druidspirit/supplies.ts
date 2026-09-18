@@ -38,11 +38,11 @@ export function amulet(snap: QuestSnapshot): QuestStep | null {
     if (bankedId(snap, NS_ID.GHOSTSPEAK) > 0) {
         return withdraw(NS_NAME.GHOSTSPEAK, NS_ID.GHOSTSPEAK);
     }
-    // Why: Urhney hands out a replacement on "I've lost the amulet.", so a lost one is never a park.
+    // Why: Urhney replaces a lost amulet, so this does not require user intervention.
     return { kind: 'talk', stop: URHNEY };
 }
 
-/** Walk to the furnace and answer the make menu whatever opened it. */
+/** Walk to the furnace and complete the resulting make menu. */
 async function atFurnace(
     log: (m: string) => void,
     open: (furnace: Loc) => Promise<boolean>,
@@ -56,7 +56,7 @@ async function atFurnace(
         return false;
     }
     await settleScene();
-    // Why: the furnace is two locs and only one carries `op2=Smelt`, so the op-bearing half is preferred and the other is only a use-on target.
+    // Why: the furnace is 2 locs and only one carries `op2=Smelt`, so prefer that half; the other is only a use-on target.
     const furnace = Locs.query().name(NS_LOC.FURNACE).action('Smelt').within(8).nearest()
         ?? Locs.query().name(NS_LOC.FURNACE).within(8).nearest();
     if (!furnace) {
@@ -87,9 +87,9 @@ async function smeltSilver(log: (m: string) => void): Promise<boolean> {
     );
 }
 
-// Why: the furnace's `Smelt` op opens the ore-to-bar menu alone, silver craft is an `oplocu`, so the bar is used on the furnace and no op expresses it.
+// Why: the `Smelt` op only opens the ore-to-bar menu; silver craft is an `oplocu`, so the bar is used on the furnace.
 // Why: casting the sickle is a members-only option and this world is members everywhere (`Environment.node.members`), so the Al Kharid furnace serves.
-// Why: the option only appears while the mould is held, so a missing mould reads as "no Silver sickle in the menu" rather than as a refusal.
+// Why: The Silver sickle option appears only while the mould is held.
 
 async function castSickle(log: (m: string) => void): Promise<boolean> {
     return atFurnace(
@@ -104,7 +104,7 @@ async function castSickle(log: (m: string) => void): Promise<boolean> {
 }
 
 // Why: the shared helper's last resort is the bronze pickaxe ground spawn at Rimmington, 360 tiles the wrong side of Al Kharid.
-// Why: Bob stocks five of them 70 tiles from the mine, and this quest carries coin for the mould anyway.
+// Why: Bob stocks 5 of them 70 tiles from the mine, and this quest carries coin for the mould anyway.
 
 /** A pickaxe, bank first, then Bob's counter in Lumbridge. */
 function pickaxe(snap: QuestSnapshot, miningLevel: number): QuestStep | null {
@@ -148,7 +148,7 @@ export function sickleStep(snap: QuestSnapshot, miningLevel?: number): QuestStep
     if (bankedId(snap, NS_ID.SILVER_ORE) > 0) {
         return withdraw(NS_NAME.SILVER_ORE, NS_ID.SILVER_ORE);
     }
-    // Why: mining without a pickaxe raises no refusal at all. The rock does not answer, so the tool is sourced before the rocks are walked to.
+    // Why: Mining without a pickaxe fails silently, so source one first.
     return pickaxe(snap, miningLevel ?? Skills.level('mining'))
         ?? { kind: 'mineRock', rock: 'Silver', item: NS_NAME.SILVER_ORE, qty: 1, anchor: NS_TILE.SILVER_ROCKS };
 }

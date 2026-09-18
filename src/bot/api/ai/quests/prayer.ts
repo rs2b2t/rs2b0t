@@ -38,7 +38,7 @@ export interface PrayerUpkeepInput {
 
 /**
  * Why: the server runs one op per tick and drops the rest, so upkeep names a single action and the caller spends the tick on it.
- * Why: protection is dropped the instant a fight ends. Held through the walk out it empties the flask the next fight was carrying.
+ * Why: protection is dropped as soon as a fight ends; held through the walk out it empties the flask the next fight needed.
  */
 export function prayerUpkeepAction(input: PrayerUpkeepInput): PrayerAction {
     if (!input.inCombat) {
@@ -61,9 +61,7 @@ export function protectionLevel(pray: QuestPrayer): number {
     return PROTECT_LEVEL[pray.protect];
 }
 
-/**
- * Why: quest fights come in three shapes: a step that returns each pass, a loop that calls `Sustain`, and a loop that owns the bot for minutes. The running quest's declaration lives here so every shape calls the same upkeep.
- */
+/** Shared Prayer upkeep for one-shot steps, Sustain loops, and long-running fight loops. */
 export const QuestPrayerState = {
     current: null as QuestPrayer | null,
     warned: false,

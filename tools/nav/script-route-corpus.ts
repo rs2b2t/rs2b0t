@@ -1,5 +1,5 @@
-/** Pack stress corpus ripped from in-tree script / nav data: BANK_LOCATIONS, WALK_DESTINATIONS, NAV_TARGETS and tools/nav/mainland-routes.json. --write, --hardest=25, --no-tele, --endpoint-radius=0, --corridor-grid=32.
- *  Why: paths dedupe three times, exact from→to at build time, an optional near-endpoint collapse for generator twins, and a post-A* journey-signature collapse on end map-square plus hop sequence; hardest ranking uses teleports by default (full runes, magic 99) to match live stress, and the preload is required since BankLocations pulls a little client surface. */
+/** Build stress routes from bank, destination and script catalogs plus mainland-routes.json. Flags: --write, --hardest, --no-tele, --endpoint-radius, --corridor-grid.
+ * Why: BankLocations needs the DOM preload; ranking enables teleports to match live runs. */
 
 //   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --write
 //   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --hardest=25
@@ -28,7 +28,7 @@ export interface ScriptRoute {
     source: string;
 }
 
-/** Pack metrics for ranking "hard" routes (no tele catalog, pure graph walk). */
+/** Pack metrics for ranking hard routes. */
 export interface RankedScriptRoute extends ScriptRoute {
     cost: number;
     expanded: number;
@@ -42,7 +42,7 @@ export interface RankedScriptRoute extends ScriptRoute {
 }
 
 export function difficultyScore(m: { cost: number; expanded: number; hops: number; cheb: number }): number {
-    // Cost dominates (tile + door/transport weights). Expansions capture "search thrash".
+    // Rank by route cost first, then search expansions.
     return m.cost * 1000 + Math.min(m.expanded, 500_000) + m.hops * 10 + m.cheb;
 }
 
@@ -55,8 +55,7 @@ const cheb = (a: NavPoint, b: NavPoint): number =>
 
 const keyOf = (p: NavPoint): string => `${p.x},${p.z},${p.level}`;
 
-/** Prefer curated / hub sources when two generators emit nearly the same leg (BOT camp↔bank against COMMUTE to nearest bank). Higher = keep.
- *  Reverse directions are never collapsed into each other. */
+/** Prefer curated and hub routes when endpoints nearly match. Higher priority wins; reverse routes stay separate. */
 const SOURCE_PRIORITY: Record<string, number> = {
     'mainland-routes.json': 100,
     WALK_DESTINATIONS: 80,
@@ -78,10 +77,7 @@ export function sameDirectedPath(a: ScriptRoute, b: ScriptRoute, radius: number)
     return cheb(a.from, b.from) <= radius && cheb(a.to, b.to) <= radius;
 }
 
-/**
- * Drop near-duplicate **endpoints** across sources (generator twins).
- * Does not know the actual walk corridor, see `pathCorridorSignature`.
- */
+/** Remove routes with near-duplicate endpoints; pathCorridorSignature handles shared journeys. */
 export function dedupePaths(routes: ScriptRoute[], radius = 3): ScriptRoute[] {
     const sorted = [...routes].sort((a, b) => {
         const dp = sourcePriority(b.source) - sourcePriority(a.source);
@@ -110,8 +106,8 @@ export type PathHopLike = {
 
 export type WaypointLike = { x: number; z: number; level: number };
 
-/** Journey fingerprint for stress / HARD dedupe: end map-square plus hop sequence, never the start tile. Same pure-walk destination collapses to one representative (keep hardest); tele against walk, differing hop kinds and reverse legs all stay distinct.
- *  Why: keying on the start tile floods the HARD list with near-identical pure-walks into the same region (Varrock/Falador/… → Rellekka all cost≈295, hops=1). `sampleEvery` is reserved for walk-corridor sampling; default `grid` 64 = one map square. */
+/** Key journeys by destination map-square and hop sequence; keep the hardest route per key. grid defaults to 64; sampleEvery is reserved.
+ * Why: including the start tile fills the hardest list with similar walks into the same region. */
 export function pathCorridorSignature(
     waypoints: WaypointLike[],
     hops: PathHopLike[],
@@ -138,10 +134,7 @@ export function pathCorridorSignature(
     return [`e:${end.level}:${(end.x / grid) | 0}:${(end.z / grid) | 0}`, `h:${hopKey}`].join('|');
 }
 
-/**
- * Keep one ranked route per journey signature. Prefer higher difficulty (the
- * HARD representative), then source priority as a tie-break.
- */
+/** Keep one ranked route per journey signature: highest difficulty wins, then source priority. */
 export function dedupeByCorridor<T extends ScriptRoute & { corridor: string; difficulty: number }>(
     rows: T[]
 ): T[] {
@@ -167,10 +160,10 @@ export function dedupeByCorridor<T extends ScriptRoute & { corridor: string; dif
     return kept;
 }
 
-/** Build the route list, pure, unit-testable. */
+/** Build the route list without loading the collision pack. */
 export function buildScriptRoutes(opts?: { maxBankPairs?: number; pathDedupeRadius?: number }): ScriptRoute[] {
     const maxBankPairs = opts?.maxBankPairs ?? 24;
-    /** Endpoint near-dedupe only; 0 = exact from→to only. Corridor dedupe is pack-time. */
+    /** Endpoint near-dedupe only; 0 means exact from/to. Corridor dedupe happens at pack time. */
     const pathDedupeRadius = opts?.pathDedupeRadius ?? 3;
     const routes: ScriptRoute[] = [];
     const seen = new Set<string>();
@@ -187,7 +180,7 @@ export function buildScriptRoutes(opts?: { maxBankPairs?: number; pathDedupeRadi
         routes.push({ id, from: { ...from }, to: { ...to }, note, source });
     };
 
-    // 1) Curated mainland legs (already operator-vetted).
+    // Curated mainland routes.
     const mainlandPath = path.join(process.cwd(), 'tools/nav/mainland-routes.json');
     if (fs.existsSync(mainlandPath)) {
         const corpus = JSON.parse(fs.readFileSync(mainlandPath, 'utf8')) as {
@@ -198,7 +191,7 @@ export function buildScriptRoutes(opts?: { maxBankPairs?: number; pathDedupeRadi
         }
     }
 
-    // 2) WalkToBot hub mesh (small N, full directed pairs).
+    // All directed pairs between WalkToBot hubs.
     for (let i = 0; i < WALK_DESTINATIONS.length; i++) {
         for (let j = 0; j < WALK_DESTINATIONS.length; j++) {
             if (i === j) {
@@ -216,7 +209,7 @@ export function buildScriptRoutes(opts?: { maxBankPairs?: number; pathDedupeRadi
         }
     }
 
-    // 3) Bank hub mesh (undirected unique pairs, nearest-first budget).
+    // Bank pairs, nearest first and capped by the budget.
     const banks = BANK_LOCATIONS.map(b => ({
         name: b.name,
         tile: { x: b.tile.x, z: b.tile.z, level: b.tile.level } as NavPoint
@@ -241,8 +234,8 @@ export function buildScriptRoutes(opts?: { maxBankPairs?: number; pathDedupeRadi
         bankN++;
     }
 
-    // 4) Each NAV_TARGET → nearest bank (the commute every gatherer/fighter does).
-    //    Before full bot meshes so path-dedupe prefers COMMUTE over redundant BOT-*-bank legs.
+    // Connect each NAV_TARGET to its nearest bank.
+    // Why: add these before the bot routes so dedupe prefers COMMUTE over BOT-*-bank.
     for (let ti = 0; ti < NAV_TARGETS.length; ti++) {
         const t = NAV_TARGETS[ti]!;
         if (t.expected === 'island') {
@@ -274,7 +267,7 @@ export function buildScriptRoutes(opts?: { maxBankPairs?: number; pathDedupeRadi
         );
     }
 
-    // 5) Per-script NAV_TARGETS: chain stands for the same bot (as scripts hop camp→bank).
+    // Connect stands used by the same script.
     const byBot = new Map<string, { label: string; tile: NavPoint }[]>();
     for (const t of NAV_TARGETS) {
         if (t.expected === 'island') {
@@ -292,8 +285,7 @@ export function buildScriptRoutes(opts?: { maxBankPairs?: number; pathDedupeRadi
                 }
                 const a = stands[i]!;
                 const b = stands[j]!;
-                // Skip huge cross-map pairs within multi-bot labels, keep cheb ≤ 200
-                // or same bot short hops (camp↔bank).
+                // Skip cross-map pairs past cheb 220 unless one end is a bank stand.
                 const d = cheb(a.tile, b.tile);
                 if (d > 220 && !a.label.toLowerCase().includes('bank') && !b.label.toLowerCase().includes('bank')) {
                     continue;
@@ -309,11 +301,11 @@ export function buildScriptRoutes(opts?: { maxBankPairs?: number; pathDedupeRadi
         }
     }
 
-    // Collapse near-identical directed legs across generators (not reverse pairs).
+    // Collapse near-identical directed legs across generators. Reverse pairs stay.
     return pathDedupeRadius <= 0 ? routes : dedupePaths(routes, pathDedupeRadius);
 }
 
-// ── CLI (only when executed as a script, importable for unit tests) ─────
+
 const isMain =
     typeof import.meta !== 'undefined'
     && typeof Bun !== 'undefined'
@@ -386,8 +378,8 @@ if (isMain) {
     const ranked: RankedScriptRoute[] = [];
     const t0 = performance.now();
 
-    // Match live v2 / maxme stress: teles plus skill-gated guild doors open.
-    // Why: magic alone was wrong, Fishing Guild doors need fishing 68 (specialRequires), and missing skills default to 0, so A* fails closed and burns the expansion budget on script targets (BANK_* → Fishing Guild, ShopRunner feather stand).
+    // Match live stress state: teleports and skill-gated guild access.
+    // Why: missing skills default to zero; Fishing Guild routes need fishing 68 or A* exhausts its budget.
     const maxedSkills: Record<string, number> = {
         magic: 99,
         Magic: 99,
@@ -522,7 +514,7 @@ if (isMain) {
         );
     }
 
-    // JSON is always the corridor-unique set (what live HARD=1 and audits should use).
+    // Write the deduplicated journeys used by live HARD=1 runs and audits.
     if (write || hardestN > 0 || !limit) {
         const outPath = path.join(process.cwd(), 'tools/nav/script-routes.generated.json');
         const hardPath = path.join(process.cwd(), 'tools/nav/script-routes.hardest.json');

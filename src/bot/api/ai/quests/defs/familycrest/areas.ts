@@ -18,9 +18,7 @@ export const FC_STAGE = {
     COMPLETE: 11
 } as const;
 
-// Why: all three crest fragments render "Crest part", so every check goes through the id.
-// Why: the names are crossed over server-side. Caleb hands out `avan_crest` and Avan hands out `caleb_crest`.
-// Why: the constants below are named for the brother who gives them, which is what `decide()` reasons about.
+// Why: all 3 fragments render "Crest part", so checks go by id; the server names are crossed (Caleb hands out `avan_crest`, Avan `caleb_crest`), so these are named for the giver.
 export const FC_ID = {
     CREST_FROM_CALEB: 779,
     CREST_FROM_AVAN: 780,
@@ -81,9 +79,9 @@ export const FC_ITEM = {
     COINS: 'Coins'
 } as const;
 
-// Why: the navigator rubs jewellery from the inventory only and its bank planner never withdraws a ring, so the quest has to carry one for the Duel Arena hop to be planned at all.
+// Why: the navigator rubs jewellery from the inventory only and never withdraws a ring, so the quest carries one for the Duel Arena hop to be planned.
 
-// Ring of dueling, all eight charge stages.
+// Ring of dueling, all 8 charge stages.
 export const DUEL_RING_IDS = [2552, 2554, 2556, 2558, 2560, 2562, 2564, 2566] as const;
 
 /** Antipoison in every dose; any of them cures Johnathon. */
@@ -103,10 +101,7 @@ export const FC_NPC = {
     DIMINTHEIS: new Tile(3279, 3404, 0),
     CALEB: new Tile(2819, 3451, 0),
     GEM_TRADER: new Tile(3288, 3212, 0),
-    /**
-     * Avan's NPC renders as "Man" (`vislevel=hide`), and Al Kharid is full of
-     * them. He is only ever found by npc id 663.
-     */
+    /** Avan renders as "Man" (`vislevel=hide`) and Al Kharid is full of them; he's found by npc id 663. */
     AVAN: new Tile(3295, 3285, 0),
     AVAN_NPC_ID: 663,
     BOOT: new Tile(2965, 9811, 0),
@@ -149,7 +144,7 @@ export const FC_BANK = {
     EDGEVILLE: new Tile(3094, 3493, 0)
 } as const;
 
-// Why: `inzone` tests the player's tile rather than the rock's, so mining a boundary rock from outside the box yields ordinary gold ore and the quest silently stalls.
+// Why: `inzone` tests the player's tile, so a boundary rock mined from outside the box yields ordinary gold ore.
 
 // The perfect-gold zone from quest_crest.constant.
 const PERFECT_GOLD_ZONE = { minX: 2736, maxX: 2740, minZ: 9684, maxZ: 9693 } as const;

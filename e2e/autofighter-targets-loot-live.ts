@@ -1,6 +1,5 @@
-/** Live proof, AutoFighter fights every name in its target list and steps over the herbs it was told to skip.
- *  Why: one target string used to mean one NPC name, and grimy herbs all read as "Herb", so a loot list
- *  cannot tell guam from marrentill. Both are checked against what dies and what ends up in the pack. */
+/** Live check for multiple target names and exact herb loot filters. */
+// Why: grimy herbs share the display name "Herb", so verify kills and packed item IDs.
 
 //   bun e2e/autofighter-targets-loot-live.ts [http://localhost:8890]
 import type { Page } from 'playwright-core';
@@ -12,7 +11,7 @@ const args = positionalArgs(process.argv.slice(2), 'http://localhost:8890');
 const base = args[0];
 const stamp = Date.now().toString(36).slice(-5);
 
-/** Quiet enough that the only Attack targets in leash are the spawned ones, with a resident Giant rat as a name-filter distractor. */
+/** Only spawned targets and a name-filter decoy are within range. */
 const ARENA = { x: 3288, z: 3370, level: 0 };
 const ARDOUGNE_EAST_BANK = { x: 2655, z: 3283, level: 0 };
 const GUARD_SPOT = { x: 2661, z: 3306, level: 0 };

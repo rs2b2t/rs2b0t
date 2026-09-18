@@ -8,10 +8,8 @@ import { Reader, bridgedLevel, forEachLoc, loadLocTypes, loadMapsquares, parseLa
 const ENGINE = process.env.ENGINE_DIR ?? join(homedir(), 'code', 'lostcity-dev', 'engine');
 const OUT = 'src/bot/data/cookSurfaceLocs.ts';
 
-/**
- * Every loc type carrying `category=cooking_oven` or `cooking_fire` in content, minus `fire`.
- * Why: `fire` is the player-lit one, which never appears in the map pack and is found live by Locs.query.
- */
+/** Loc types carrying `category=cooking_oven` or `cooking_fire` in content, minus `fire`.
+ *  Why: `fire` is the player-lit one; it never appears in the map pack and Locs.query finds it live. */
 const COOK_SURFACE_KINDS: Readonly<Record<string, CookSurfaceKind>> = {
     range: 'oven',
     loc_2729: 'oven',
@@ -89,7 +87,7 @@ if (process.argv.includes('--check')) {
     try {
         current = readFileSync(OUT, 'utf8');
     } catch {
-        // No file yet: an absent catalog is "stale", which is what the check should report.
+        // Missing output is stale.
     }
     if (current !== fresh) {
         console.error(`STALE: ${OUT} does not match the map pack — run: bun run gen:cooksurfaces`);

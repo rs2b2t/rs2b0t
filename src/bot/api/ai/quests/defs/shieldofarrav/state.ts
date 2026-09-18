@@ -17,7 +17,7 @@ export function liveItem(id: number): InvItem | null {
     return Inventory.items().find(item => item.id === id) ?? null;
 }
 
-// Why: `~objbox` and `~mesbox` build a main modal, not a chat line, so their text never reaches `GameMessages`.
+// Why: `~objbox` and `~mesbox` build a main modal, so their text never reaches `GameMessages`.
 
 /** Whether the open main modal says something. */
 export function modalSaid(pattern: RegExp): boolean {

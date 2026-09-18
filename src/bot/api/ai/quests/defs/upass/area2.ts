@@ -24,7 +24,7 @@ export async function takeRailing(log: (m: string) => void): Promise<boolean> {
     return driveUntil(() => heldId(UP_ITEM.RAILING.id) > 0, [], log, 12_000);
 }
 
-// Why: the journal cannot tell this stage from the last one. Both print "Something is watching me" and "I must work my way deeper into these caverns", differing only in the strike-through colour that marks which is current, so a run levered a boulder that was already spent, forever. The horn is the honest signal, and taking it is part of the same step.
+// Why: the journal can't tell this stage from the last: both print "Something is watching me" and "I must work my way deeper into these caverns" and differ only in strike-through colour. The horn is the signal, so taking it is part of the same step.
 
 /** Lever the boulder onto the unicorn, then take the horn from what is left of the cage. */
 export async function crushUnicorn(log: (m: string) => void): Promise<boolean> {
@@ -42,7 +42,7 @@ export async function dropBoulder(log: (m: string) => void): Promise<boolean> {
     await settleScene();
     const boulder = Npcs.query().where(npc => npc.id === UP_NPC.BOULDER).within(10).nearest();
     const railing = Inventory.items().find(item => item.id === UP_ITEM.RAILING.id);
-    // Why: no boulder and a smashed cage is the job already done, the stage moved and the journal did not.
+    // Why: no boulder and a smashed cage means the job is done; the stage moved and the journal didn't.
     if (!boulder && locById(UP_LOC.UNICORN_CAGE, null, 16) !== null) {
         log('the boulder is already down and the cage is smashed');
         return true;
@@ -55,8 +55,7 @@ export async function dropBoulder(log: (m: string) => void): Promise<boolean> {
     if (!(await railing.useOn(boulder))) {
         return false;
     }
-    // Why: the script keeps the railing, so there is no inventory delta to read. The oracle is its
-    // `p_telejump(coord - 25x)`, and the threshold is set past anything the op-click's own walk could cover.
+    // Why: the script keeps the railing, so the oracle is its `p_telejump(coord - 25x)`, with the threshold past anything the op-click's walk could cover.
     return driveUntil(() => {
         const now = Game.tile();
         return now !== null && from !== null && Math.abs(now.x - from.x) >= 20;
@@ -91,20 +90,19 @@ export function badgesHeld(snap: QuestSnapshot): number {
     return countHeld(snap, UP_BADGES);
 }
 
-// Why: the three paladins only turn hostile once the main cavern has been entered, so before that they are killed one at a time from a standing start rather than left to aggro as a group.
-// Why: the well eats the crests and the journal never says it did, so a snapshot cannot tell "not killed yet" from "already fed", and a run killed three respawned paladins after feeding the first three. Every irreversible part of it is therefore one step, ending on the only thing the journal can see: the character standing on the level-1 platform past the temple doors.
+// Why: the 3 paladins only turn hostile once the main cavern has been entered, so before that they're killed one at a time from a standing start.
+// Why: the well eats the crests and the journal never says so, so a snapshot can't tell "not killed yet" from "already fed". Every irreversible part is one step, ending on the one thing the journal can see: standing on the level-1 platform past the temple doors.
 
 /** Kill paladins, feed the well and pass the doors, whatever of that is still outstanding. */
 export async function crossTheTemple(log: (m: string) => void): Promise<boolean> {
     const crests = (): number => UP_BADGES.filter(badge => heldId(badge.id) > 0).length;
-    // Why: a paladin respawns, and "whichever is alive" always picks the nearest, so the same one died eight times, its crest was fed to a bit already set, and the other two were never touched. Each is killed once per crossing, by id.
+    // Why: a paladin respawns and "whichever is alive" always picks the nearest, so the same one would die every time and its crest feed a bit already set. Each is killed once per crossing, by id.
     const killed = new Set<number>();
     for (let round = 0; round < 4; round++) {
         if ((Game.tile()?.level ?? 0) === 1) {
             return true;
         }
-        // Why: all three crests before one trip to the well. Feeding each as it drops costs a walk from the
-        // shelf to the well and back for every one of them, and that walk is fifty-odd tiles each way.
+        // Why: all 3 crests before one trip to the well; feeding each as it drops costs a 50-odd tile walk each way per crest.
         while (crests() < 3 && (await killPaladin(log, killed))) {
             log(`crests in hand: ${crests()}`);
         }
@@ -125,8 +123,7 @@ export async function killPaladin(log: (m: string) => void, killed = new Set<num
         return false;
     }
     await settleScene();
-    // Why: which crest is owed cannot be read once the well has eaten them, so the target is picked by who
-    // has not been killed yet rather than by which crest is missing.
+    // Why: which crest is owed can't be read once the well has eaten them, so the target is picked by who hasn't been killed yet.
     const target = Npcs.query()
         .where(npc => PALADINS.some(p => p.npc === npc.id) && !killed.has(npc.id))
         .action('Attack')
@@ -142,8 +139,7 @@ export async function killPaladin(log: (m: string) => void, killed = new Set<num
         log(`could not attack paladin ${owed.npc}`);
         return false;
     }
-    // Why: `ai_queue3` drops the crest on the paladin's own tile rather than handing it over, so waiting for
-    // it to appear in the pack waits forever, the kill and the pickup are two separate things.
+    // Why: `ai_queue3` drops the crest on the paladin's tile, so waiting for it in the pack waits forever; the kill and the pickup are separate.
     if (!(await driveUntil(() => Npcs.query().where(npc => npc.id === owed.npc).within(14).nearest() === null, [], log, 180_000))) {
         log(`paladin ${owed.npc} outlasted the fight`);
         return false;
@@ -159,7 +155,7 @@ export async function killPaladin(log: (m: string) => void, killed = new Set<num
     return driveUntil(() => heldId(owed.badge.id) > 0, [], log, 10_000);
 }
 
-/** The blood well opens the temple doors once it has all three crests and the horn. */
+/** The blood well opens the temple doors once it has all 3 crests and the horn. */
 export async function feedBloodWell(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(UP_TILE.BLOODWELL, 3, log))) {
         return false;

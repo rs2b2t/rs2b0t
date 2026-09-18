@@ -6,15 +6,20 @@
 a fighter that solves clues it drops. It must therefore not monopolise the loop:
 
 ```ts
-async solveHeldClue(log): Promise<'done' | 'abandon' | 'yield'>
+type ClueOutcome =
+  | 'done'
+  | 'abandon'
+  | 'yield'
+  | 'supplies-needed'
+  | 'dead'
+  | 'guardian-lost';
 ```
 
-The third outcome is the important one. Each pass checks whether the host needs
-control back and returns `'yield'` rather than continuing:
+Each pass checks whether the host needs control back and returns `'yield'`
+rather than continuing:
 
 ```ts
 if (EventSignal.pending()) {
-    trace.note('yield — random event pending');
     return 'yield';
 }
 ```
@@ -23,8 +28,22 @@ Without that, a random event fires mid-trail and the solver walks the bot away f
 it, ignoring an interaction the server is waiting on. Long-running loops elsewhere
 must poll `EventSignal` for the same reason.
 
+Yielding does not discard the trail. The next host task pass resumes the same
+executor session after the event clears. A guardian yield also retains its
+`GuardianEncounter`; the resumed fight revalidates the same NPC by index and id,
+ownership and range instead of digging again to spawn another guardian. Failed
+revalidation returns `'dead'` or `'guardian-lost'`, and an exhausted combat kit
+returns `'supplies-needed'`.
+
+`SolveClue.ownsEquipment()` keeps the host's normal weapon and combat-style tasks
+from replacing the guardian kit during that yield. A fresh solver clears the
+previous session's guardian halt; the failed solver stays blocked until retried.
+
 `Sustain.run()` is called every pass, so eating and other upkeep continue during a
 trail.
+
+These contracts are backed by source and automated tests. Private-server runtime
+acceptance is still pending, so they are not live acceptance evidence.
 
 ## Why the audit cannot catch everything
 

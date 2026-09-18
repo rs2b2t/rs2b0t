@@ -1,6 +1,4 @@
-/**
- * Execute originless teleport hops (spell cast or jewellery Rub).
- */
+/** Execute originless teleport hops (spell cast or jewellery Rub). */
 
 import { reader } from '../../adapter/ClientAdapter.js';
 import { Execution } from '../../api/execution/Execution.js';
@@ -50,9 +48,7 @@ function findJewelleryItem(dest: TeleportDestination) {
     return Inventory.items().find(i => i.name !== null && inventoryNameMatchesJewellery(i.name, dest)) ?? null;
 }
 
-/**
- * @returns true if the player landed near the hop destination.
- */
+/** @returns true if the player landed near the hop destination. */
 export async function executeTeleportHop(
     transport: TransportInfo,
     log: (msg: string) => void
@@ -61,7 +57,7 @@ export async function executeTeleportHop(
     const dest = teleportById(id);
     const before = reader.worldTile();
 
-    // ── Spells ──────────────────────────────────────────────────────────
+    // Spells
     const spellName = SPELL_CAST_NAMES[id];
     if (spellName) {
         log(`casting ${spellName} teleport…`);
@@ -79,7 +75,7 @@ export async function executeTeleportHop(
         return false;
     }
 
-    // ── Jewellery ───────────────────────────────────────────────────────
+    // Jewellery
     if (!dest || dest.family !== 'jewellery') {
         log(`teleport hop ${id || transport.locName}: unknown id — repath`);
         return false;

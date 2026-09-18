@@ -1,7 +1,4 @@
-/**
- * Quest-locked door dialogue detection.
- * After Open with no movement, mesbox/chat phrases → session blacklist + repath.
- */
+/** Quest-locked door dialogue detection: an Open with no movement and a lock phrase means session blacklist and repath. */
 
 import { ChatDialog } from '../../../api/ui/dialogue/ChatDialog.js';
 import { Execution } from '../../../api/execution/Execution.js';

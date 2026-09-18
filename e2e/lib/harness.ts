@@ -4,9 +4,34 @@ import { homedir } from 'node:os';
 import { chromium } from 'playwright-core';
 import type { Browser, Page } from 'playwright-core';
 
+import { engineLoginKey, type EngineLoginKey } from './engineLoginKey.js';
+
 export function fail(msg: string): never {
     console.error(`FAIL: ${msg}`);
     process.exit(1);
+}
+
+const SIM_PROBE_MS = 5000;
+
+// Why: a wrong port (`:889` for `:8890`) used to cost a deploy and answer with a Playwright stack trace from the first page load.
+/** Why nothing answers at `base`, or null when the sim serves its client page. */
+export async function simUnreachable(base: string, page = '/bot.html'): Promise<string | null> {
+    const url = `${base}${page}`;
+    try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(SIM_PROBE_MS) });
+        return res.ok ? null : `${url} answered ${res.status}, so this is not a sim serving the bot client`;
+    } catch (err) {
+        const why = err instanceof Error ? err.message : String(err);
+        return `nothing answered at ${url} (${why}); the local sims are :8890 (~/code/rs2b2t-engine) and :8888 (~/code/lostcity-dev/engine)`;
+    }
+}
+
+/** Stop before deploying when `base` is not a running sim. */
+export async function requireSim(base: string): Promise<void> {
+    const why = await simUnreachable(base);
+    if (why !== null) {
+        fail(why);
+    }
 }
 
 export interface IsolatedClient {
@@ -29,10 +54,22 @@ export function deployIsolatedClient(tag: string, engineDir = process.env.ENGINE
     if (!existsSync(shared)) {
         fail(`deploy: ${shared} not found — set ENGINE_DIR to the engine serving this run`);
     }
-    const build = Bun.spawnSync(['bun', 'run', 'build:bot'], { stdout: 'pipe', stderr: 'pipe' });
+    let key: EngineLoginKey;
+    try {
+        key = engineLoginKey(engineDir);
+    } catch (err) {
+        fail(err instanceof Error ? err.message : String(err));
+    }
+    // Why: a stock LostCity pem is 512-bit with a random exponent; build:bot defaults are 1024-bit / 65537, and login response 6 is the "RuneScape has been updated!" banner.
+    const build = Bun.spawnSync(['bun', 'run', 'build:bot'], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: { ...process.env, LOCAL_RSAE: key.rsae, LOCAL_RSAN: key.rsan }
+    });
     if (build.exitCode !== 0) {
         fail(`deploy: build:bot failed\n${build.stderr.toString()}`);
     }
+    console.log(`deploy: baked engine login key e=${key.rsae.slice(0, 8)}… n=${key.rsan.slice(0, 12)}…`);
     // Why: `build:bot` does not bake the collision pack, and without it every Navigator dies on boot and walking degrades in silence to the scene stepper.
     if (!existsSync('out/collision.lcnav.gz')) {
         fail('deploy: out/collision.lcnav.gz missing — run tools/nav/build-collision.ts first');
@@ -61,7 +98,7 @@ export function deployIsolatedClient(tag: string, engineDir = process.env.ENGINE
 }
 
 /** Flags that consume the argument after them. Their values are not positionals. */
-const VALUE_FLAGS = new Set(['--base', '--minutes', '--stage', '--engine']);
+const VALUE_FLAGS = new Set(['--base', '--minutes', '--stage', '--engine', '--item']);
 
 /** Positional argv for harnesses that index their arguments: `--base` first, then a positional URL, then `fallbackBase`.
  *  Why: the e2e runner appends global flags (`--no-deploy`) to every harness, so raw `process.argv[2]` indexing reads a flag as the engine base. */
@@ -88,11 +125,26 @@ export function parseArgs(argv: string[], defaults?: { base?: string; minutes?: 
     const rest: string[] = [];
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
-        if (a === '--base' && i + 1 < argv.length) { base = argv[++i]; continue; }
-        if (a === '--minutes' && i + 1 < argv.length) { const v = Number(argv[++i]); if (Number.isFinite(v)) { minutes = v; } continue; }
-        if (a.startsWith('http') || a.includes('://')) { base = a; continue; }
+        if (a === '--base' && i + 1 < argv.length) {
+            base = argv[++i];
+            continue;
+        }
+        if (a === '--minutes' && i + 1 < argv.length) {
+            const v = Number(argv[++i]);
+            if (Number.isFinite(v)) {
+                minutes = v;
+            }
+            continue;
+        }
+        if (a.startsWith('http') || a.includes('://')) {
+            base = a;
+            continue;
+        }
         const n = Number(a);
-        if (a.trim() !== '' && Number.isFinite(n)) { minutes = n; continue; }
+        if (a.trim() !== '' && Number.isFinite(n)) {
+            minutes = n;
+            continue;
+        }
         // rest is a scenario filter; the runner's global flags must never land in it
         if (a.startsWith('-')) continue;
         rest.push(a);
@@ -130,45 +182,55 @@ const BOOT_MS = Number(process.env.BOOT_MS) || 180_000;
 const LOGIN_MS = Number(process.env.LOGIN_MS) || 120_000;
 
 export function boot(page: Page): Promise<unknown> {
-    return page.waitForFunction(
-        () =>
-            ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client
-                .constructor.loopCycle ?? 0) > 10,
-        undefined,
-        { timeout: BOOT_MS }
-    );
+    return page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: BOOT_MS });
 }
 
 export async function login(page: Page, user: string, pass = 'test'): Promise<boolean> {
-    await page.evaluate(([u, p]) => {
-        const c = (globalThis as never as Rs2b0t).rs2b0t.client;
-        c.loginUser = u;
-        c.loginPass = p;
-        void c.login(u, p, false);
-    }, [user, pass]);
-    return page
-        .waitForFunction(
-            () =>
-                (globalThis as never as Rs2b0t).rs2b0t.client.ingame &&
-                (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2,
+    await page.evaluate(
+        ([u, p]) => {
+            const c = (globalThis as never as Rs2b0t).rs2b0t.client;
+            c.loginUser = u;
+            c.loginPass = p;
+            void c.login(u, p, false);
+        },
+        [user, pass]
+    );
+    try {
+        const handle = await page.waitForFunction(
+            () => {
+                const c = (globalThis as never as Rs2b0t).rs2b0t.client;
+                const mes = `${c.loginMes1 ?? ''} ${c.loginMes2 ?? ''}`;
+                if (/has been updated/i.test(mes)) {
+                    return mes.trim();
+                }
+                return c.ingame && c.sceneState === 2 ? 'ingame' : false;
+            },
             undefined,
             { timeout: LOGIN_MS }
-        )
-        .then(() => true)
-        .catch(() => false);
+        );
+        const value = await handle.jsonValue();
+        if (value !== 'ingame') {
+            fail(`login rejected (${value}). Bake ENGINE_DIR private.pem as LOCAL_RSAE/LOCAL_RSAN`);
+        }
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 /**
- * Send a client cheat packet (CLIENT_CHEAT / op 224) without keyboard focus.
+ * Send a client cheat packet (CLIENT_CHEAT, whose opcode the bundle publishes) without keyboard focus.
  * `command` is the text after `::`, e.g. `tele 0,50,50,20,20`.
  */
 export async function cheatQuiet(page: Page, command: string, waitMs = 700): Promise<boolean> {
     const sent = await page.evaluate(c => {
-        const client = (globalThis as never as Rs2b0t).rs2b0t?.client;
+        const g = (globalThis as never as Rs2b0t).rs2b0t;
+        const client = g?.client;
         if (!client?.ingame || !client.out) {
             return false;
         }
-        client.out.p1Enc(224); // ClientProt.CLIENT_CHEAT
+        // Why: CLIENT_CHEAT is 34 on 289 and was 224 on 274, and a bundle built before it was published falls back to the old number.
+        client.out.p1Enc(g.protocol?.clientCheat ?? 224);
         client.out.p1(c.length + 1);
         client.out.pjstr(c);
         return true;
@@ -212,24 +274,40 @@ export async function bringUpOffIsland(page: Page, opts: { user: string; typeWai
     await page.reload();
     await boot(page);
     let backIn = false;
-    for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(5000); backIn = await login(page, opts.user); }
-    if (!backIn) { fail('relogin failed'); }
+    for (let i = 0; i < 8 && !backIn; i++) {
+        await page.waitForTimeout(5000);
+        backIn = await login(page, opts.user);
+    }
+    if (!backIn) {
+        fail('relogin failed');
+    }
 }
 
 export async function stopScript(page: Page): Promise<void> {
     await page.evaluate(() => {
-        try { (globalThis as never as Rs2b0t).rs2b0t.runner.stop('harness stopScript()'); } catch { /* ignore */ }
+        try {
+            (globalThis as never as Rs2b0t).rs2b0t.runner.stop('harness stopScript()');
+        } catch {
+            /* ignore */
+        }
     });
     await page.waitForTimeout(400);
 }
 
 export async function setSettings(page: Page, script: string, map: Record<string, string | number | boolean>): Promise<void> {
-    await page.evaluate(([name, entries]) => {
-        for (const [k, v] of Object.entries(entries)) {
-            sessionStorage.setItem(`rs2b0t:set:${name}:${k}`, String(v));
-            try { localStorage.setItem(`rs2b0t:set:${name}:${k}`, String(v)); } catch { /* private mode */ }
-        }
-    }, [script, map] as const);
+    await page.evaluate(
+        ([name, entries]) => {
+            for (const [k, v] of Object.entries(entries)) {
+                sessionStorage.setItem(`rs2b0t:set:${name}:${k}`, String(v));
+                try {
+                    localStorage.setItem(`rs2b0t:set:${name}:${k}`, String(v));
+                } catch {
+                    /* private mode */
+                }
+            }
+        },
+        [script, map] as const
+    );
 }
 
 export async function startFromLibrary(page: Page, category: string, script: string): Promise<void> {
@@ -242,6 +320,7 @@ export async function startFromLibrary(page: Page, category: string, script: str
 
 export type Rs2b0t = {
     rs2b0t: {
+        protocol?: { version: number; clientCheat: number };
         client: {
             ingame: boolean;
             sceneState: number;
@@ -249,6 +328,8 @@ export type Rs2b0t = {
             loginPass: string;
             sideIcon: number[];
             loginMessage?: string;
+            loginMes1?: string;
+            loginMes2?: string;
             stream?: { close(): void } | null;
             out: { p1Enc(op: number): void; p1(v: number): void; pjstr(s: string): void } | null;
             login(u: string, p: string, r: boolean): Promise<void>;

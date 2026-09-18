@@ -1,6 +1,6 @@
-/** Live Legends Quest harness (#253): --stage N --until N --minutes N --kit. Members-only, so the :8890 world.
- *  Why: `--stage` sets `%legendsquest` and relogs, `update_questlist` only recolours the tab at login, and the module reads the tab rather than the varp.
- *  Why: Heroes' Quest and Underground Pass have no module yet, so their varps are cheated complete along with the other three the Legends guard checks. */
+/** Live Legends Quest harness (#253), using the members world at :8890. */
+// Why: stage jumps relog because the module reads the quest tab.
+// Prerequisite varps are seeded because Heroes' Quest and Underground Pass have no module yet.
 
 //   HEADED=1 bun e2e/legends-quest-253-live.ts --stage 0 --minutes 180          # full run
 //   HEADED=1 bun e2e/legends-quest-253-live.ts --stage 8 --until 12 --kit       # one leg, pre-kitted
@@ -32,7 +32,7 @@ interface Args {
     tickMs: number;
     /** Seed the gems, gold bars and papyrus the module would otherwise mine and buy. */
     kit: boolean;
-    // Why: `bitsFor` hands a stage jump the `%legends_bits` a continuous run would have set, which for stage 7 includes `asked_ungadulu_who`, the one bit that makes Gujuo offer the pure-water topic first time. A leg run with it set never exercises the recovery in `askGujuoForWater`.
+// Why: stage 7 omits `asked_ungadulu_who` when testing the missing-topic recovery.
 
     /** Prayer to seed, apart from the rest. Gujuo's trance is hardest on a devout account. */
     prayer: number;

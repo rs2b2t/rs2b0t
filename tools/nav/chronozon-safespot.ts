@@ -1,5 +1,5 @@
-/** Derive Chronozon's safespots (Family Crest, #210), the answer feeds `SAFESPOT` in defs/familycrest/chronozon.ts. BFS the placements a melee-only NPC of size N can slide between, take every tile they cover or border, and intersect the walkable remainder with the chamber's own connected component.
- *  Why: walkable is not reachable, the west passage at x=3082 looks like a perfect safespot and is a sealed island, and `exitMask` does not cross door edges, so seeding the flood outside the gates stops at them and only ever finds the north corridor, which is behind a gate that blocks the cast (three live casts from there never landed). */
+/** Find safe tiles for defs/familycrest/chronozon.ts by flooding size-3 NPC positions and excluding tiles the demon can touch.
+ * Why: the x=3082 passage is sealed; seed inside the chamber since exitMask cannot cross the gates. */
 
 //   bun tools/nav/chronozon-safespot.ts
 import fs from 'node:fs';
@@ -26,7 +26,7 @@ const fits = (ox: number, oz: number): boolean => {
     return true;
 };
 
-// BFS over legal origins the demon can slide between (4-way; diagonal needs both).
+// Flood legal NPC origins; diagonal moves need both cardinal moves.
 const spawnOrigin = { x: SPAWN.x - 1, z: SPAWN.z - 1 };
 const reach = new Set<string>();
 if (fits(spawnOrigin.x, spawnOrigin.z)) {
@@ -48,7 +48,7 @@ console.log(`demon can occupy ${reach.size} placements`);
 
 const origins = [...reach].map(k => { const [x, z] = k.split(',').map(Number); return { x: x!, z: z! }; });
 
-/** Every tile the demon's body can cover, and every tile touching that body. */
+/** Tiles covered by or adjacent to the demon's body. */
 const body = new Set<string>();
 const touched = new Set<string>();
 for (const o of origins) {
@@ -60,12 +60,10 @@ for (const o of origins) {
     }
 }
 
-// Reachability: a tile can be "walkable" and still be a sealed island with no
-// exits, which is no use as a safespot. Flood the entrance component first.
+// A walkable tile can still be a sealed island; flood the entrance component first.
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];
 const DZ = [1, 0, -1, 0, 1, -1, -1, 1];
-// Seed inside the chamber: exitMask does not cross door edges, so flooding from
-// the north corridor stops at the gates and never sees the demon's own room.
+// Why: exitMask cannot cross the gates, so seed inside the chamber.
 const ENTRY = { x: 3087, z: 9938 };
 const reachable = new Set<string>([`${ENTRY.x},${ENTRY.z}`]);
 {

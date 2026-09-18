@@ -1,8 +1,4 @@
-/**
- * Teleport catalog derived from rs2b2t-era content scripts (revision 274 pack).
- *
- * Spell + jewellery destinations injected into PathFinder A*.
- */
+/** Spell and jewellery teleport destinations (revision 274 content pack) injected into PathFinder A*. */
 
 import { ensureEdgeId } from './edgeId.js';
 import { teleportEdgeCost } from './geometry/edgeCosts.js';
@@ -30,17 +26,11 @@ export interface TeleportDestination {
     /** Fixed cost override; default {@link teleportEdgeCost}(family). */
     cost?: number;
     requires?: TransportRequires;
-    /** Where the player may cast/rub from (wildy thresholds, later spellbook, …). */
+    /** Where the player may cast/rub from (wildy thresholds). */
     origin?: TeleportOriginRequires;
-    /**
-     * Inventory item name substrings that satisfy the hop (any charge stage).
-     * Spells use requires.items (runes) instead.
-     */
+    /** Inventory item name substrings that satisfy the hop (any charge stage); spells use requires.items. */
     itemNameMatch?: string[];
-    /**
-     * Chat option substrings to pick after Rub (jewellery). Empty/omit for
-     * single-dest items that only offer that destination + Nowhere.
-     */
+    /** Chat option substrings to pick after Rub (jewellery); omit for single-dest items. */
     dialogueChoose?: string[];
     /** Debug / regenerate */
     source: string;
@@ -147,10 +137,7 @@ export const SPELL_TELEPORTS: readonly TeleportDestination[] = [
     }
 ];
 
-/**
- * Jewellery, Server-implemented destinations only.
- * Duel ring / games neck are single-dest on this content pack.
- */
+/** Jewellery, Server-implemented destinations only; duel ring and games neck are single-dest on this pack. */
 export const JEWELLERY_TELEPORTS: readonly TeleportDestination[] = [
     {
         teleportId: 'dueling_arena',
@@ -218,7 +205,7 @@ export const JEWELLERY_TELEPORTS: readonly TeleportDestination[] = [
     }
 ];
 
-/** Loc-backed levers (not originless). Documented for completeness; compile as loc edges later. */
+/** Loc-backed levers, listed for completeness; compile as loc edges later. */
 export const LEVER_TELEPORTS: readonly TeleportDestination[] = [
     {
         teleportId: 'lever_ardougne_to_wild',

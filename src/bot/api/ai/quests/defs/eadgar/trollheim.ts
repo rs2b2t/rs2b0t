@@ -16,7 +16,7 @@ import { AEMAD, scanBank, sourceLogs, sourcePestle, sourceTinderbox, withdraw } 
 /** `fire` from the firemaking script, Eadgar's cooking pot also displays as "Fire". */
 const FIRE_LOC = 2732;
 const VIAL_PRICE = 10;
-/** Middle of the five thistle hops; all of them are inside one loaded scene from here. */
+/** Middle of the 5 thistle hops; all of them are inside one loaded scene from here. */
 const THISTLE_STAND = THISTLE_SPOTS[2]!;
 
 const invById = (id: number): ReturnType<typeof Inventory.items>[number] | undefined =>
@@ -55,8 +55,7 @@ async function mixIds(fromId: number, ontoId: number, productId: number, log: (m
     return Execution.delayUntil(() => Inventory.countById(productId) > 0, 10_000);
 }
 
-// Why: every unfinished potion shares the display name "Unfinished potion", so this chain is
-// addressed by object id, a name-keyed withdraw pulls whichever unf the bank happened to sort first.
+// Why: every unfinished potion displays as "Unfinished potion", so this chain is addressed by object id; a name-keyed withdraw pulls the first unf the bank lists.
 
 /** A ranarr potion (unf): banked, or mixed from a banked ranarr weed and a vial. */
 function sourceRanarrVial(snap: QuestSnapshot): QuestStep | null {
@@ -85,7 +84,7 @@ function sourceRanarrVial(snap: QuestSnapshot): QuestStep | null {
     };
 }
 
-/** Pick the Thistle npc, which hops to another of its five tiles after every pick. */
+/** Pick the Thistle npc, which hops to another of its 5 tiles after every pick. */
 async function pickThistle(log: (m: string) => void): Promise<boolean> {
     if (Inventory.countById(ER_ITEM.THISTLE.id) > 0) {
         return true;
@@ -115,8 +114,7 @@ async function pickThistle(log: (m: string) => void): Promise<boolean> {
     return false;
 }
 
-// Why: the thistle dries on any `cooking_fire`, and the mountain has none, so the quest brings a
-// spare log and a tinderbox and lights one where it stands.
+// Why: the thistle dries on any `cooking_fire` and the mountain has none, so the quest brings a spare log and a tinderbox and lights one where it stands.
 
 /** Dry a picked thistle over a fire, lighting one first when there is none. */
 async function dryThistle(log: (m: string) => void): Promise<boolean> {
@@ -129,8 +127,7 @@ async function dryThistle(log: (m: string) => void): Promise<boolean> {
     }
     const nearbyFire = (): Loc | null => Locs.query().where(loc => loc.id === FIRE_LOC).within(4).nearest();
     let fire = nearbyFire();
-    // Why: `area_allow_loc_add` refuses a tile another loc already sits on and says so only in a
-    // game message, so a refusal is answered by standing somewhere else rather than by retrying.
+    // Why: `area_allow_loc_add` refuses a tile another loc sits on and only says so in a game message, so a refusal means stand somewhere else.
     for (let tile = 0; !fire && tile < 4; tile++) {
         const tinderbox = invById(ER_ITEM.TINDERBOX.id);
         const logs = invById(ER_ITEM.LOGS.id);
@@ -160,7 +157,7 @@ async function dryThistle(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => Inventory.countById(ER_ITEM.DRIED_THISTLE.id) > 0, 15_000);
 }
 
-/** Thistle → dried → ground → Troll potion. Null once the potion is in the pack. */
+/** Thistle to dried to ground to Troll potion. Null once the potion is in the pack. */
 export function sourceTrollPotion(snap: QuestSnapshot): QuestStep | null {
     if (held(snap, ER_ITEM.TROLL_POTION) > 0) {
         return null;
@@ -184,8 +181,7 @@ export function sourceTrollPotion(snap: QuestSnapshot): QuestStep | null {
             ?? sourceLogs(snap, 1)
             ?? { kind: 'custom', name: 'dry the thistle over a fire', run: dryThistle };
     }
-    // Why: the thistle only grows on Trollheim and everything that processes it is bought at the
-    // bottom of the mountain, so the kit is assembled before the climb rather than after it.
+    // Why: the thistle only grows on Trollheim and everything that processes it is bought at the bottom of the mountain, so the kit is assembled before the climb.
     return sourceTinderbox(snap)
         ?? sourceLogs(snap, 1)
         ?? sourcePestle(snap)
@@ -197,7 +193,7 @@ export function sourceTrollPotion(snap: QuestSnapshot): QuestStep | null {
 const EADGAR_CELL_STAND = new Tile(2833, 10082, 0);
 const EADGAR_CELL_DOOR = new Tile(2832, 10082, 0);
 
-// Why: Troll Stronghold finishes on Godric alone, so an account can arrive here with Mad Eadgar still in his cell and the Cave Entrance dropping it into an empty room.
+// Why: Troll Stronghold finishes on Godric alone, so you can arrive with Mad Eadgar still in his cell and the Cave Entrance dropping you into an empty room.
 // Why: Berry keeps handing out Cell key 2 for as long as the varbit is false, quest complete or not.
 
 /** Open Mad Eadgar's cell so he goes home to his cave. */

@@ -2,7 +2,7 @@ import type { ObjRecord } from '../../adapter/ClientAdapter.js';
 import { ITEM_DB } from '../../data/itemdb.js';
 import type { Catalog } from './catalog.js';
 
-/** The shelves an order book is browsed by. Order is the order they are offered in. */
+/** Order-book shelves in display order. */
 export const CATEGORIES = [
     'Popular',
     'Runes',
@@ -49,14 +49,14 @@ const TOOLS = [
 
 const has = (name: string, needles: readonly string[]): boolean => needles.some(n => name.includes(n));
 
-/** What the loadout data already knows about an item, where it knows anything. */
+/** Optional category data already known by the loadout catalog. */
 export interface Known {
     slot?: string;
     consumable?: string;
 }
 
-/** Which shelf an item belongs on. What the loadout data knows is passed in, so the rules stay decidable alone. */
-// Why: the client's obj data carries no category of any kind, so the shelf has to be read back out of the name.
+/** Choose an item's shelf using its name and optional loadout metadata. */
+// Why: Client object data has no category field, so classification uses the display name.
 export function categoryOf(rec: Pick<ObjRecord, 'name' | 'equippable'>, known: Known = {}): Category {
     const name = rec.name.toLowerCase();
     const { slot, consumable } = known;
@@ -80,7 +80,7 @@ export function categoryOf(rec: Pick<ObjRecord, 'name' | 'equippable'>, known: K
     if (name.includes('arrow') || name.includes('bolt') || name.includes('dart')) {
         return 'Arrows';
     }
-    // Why: a bow string is stock for fletching, not a bow, and "bowl" only shares the letters.
+    // Why: a bow string is fletching stock and "bowl" only shares the letters.
     if (name.includes('bow') && !name.includes('bow string') && !name.includes('bowl')) {
         return 'Bows';
     }
@@ -105,7 +105,7 @@ export function categoryOf(rec: Pick<ObjRecord, 'name' | 'equippable'>, known: K
     if (GEM.test(name)) {
         return 'Gems';
     }
-    // Why: most of what you eat is named for the thing rather than the eating, so the loadout data decides it.
+    // Prefer explicit loadout categories; most food names have no useful suffix.
     if (consumable === 'eat' || consumable === 'drink' || /^raw /.test(name) || name.includes('burnt')) {
         return 'Food';
     }
@@ -126,10 +126,10 @@ export function categoryOf(rec: Pick<ObjRecord, 'name' | 'equippable'>, known: K
 }
 
 /** Shelves that are popular stock wholesale. */
-// Why: the Arrows shelf also holds bolts, javelins, tips and shafts, which are not what people stock by the load.
+// Why: the Arrows shelf also holds bolts, javelins, tips and shafts, which nobody stocks by the load.
 const POPULAR_SHELVES: readonly Category[] = ['Runes', 'Ores', 'Bars', 'Herbs', 'Gems'];
 
-/** Named stock people ask for by the shelf-load, on top of the shelves above. */
+/** Popular named stock in addition to whole-shelf categories. */
 // Why: potions are the 3-dose, which is what gets traded; the other doses are still addable one at a time.
 const POPULAR_NAMES: readonly string[] = [
     'Bronze arrow', 'Iron arrow', 'Steel arrow', 'Mithril arrow', 'Adamant arrow', 'Rune arrow',
@@ -145,7 +145,7 @@ const POPULAR_NAMES: readonly string[] = [
 const POPULAR_SET = new Set(POPULAR_NAMES.map(n => n.toLowerCase()));
 
 /** Whether an item is on the Popular shelf, which overlaps the others: a nature rune is on Runes and Popular. */
-// Why: it answers what a shop would stock on day one, which cuts across the shelves rather than sitting beside them.
+// Popular is an initial-stock view that overlaps regular shelves.
 export function isPopular(rec: Pick<ObjRecord, 'name' | 'equippable'>, known: Known = {}): boolean {
     return POPULAR_SET.has(rec.name.trim().toLowerCase()) || POPULAR_SHELVES.includes(categoryOf(rec, known));
 }

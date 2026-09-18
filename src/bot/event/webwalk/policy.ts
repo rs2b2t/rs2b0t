@@ -12,7 +12,7 @@ export const DEFAULT_DISTANCE_BEFORE_TELEPORT = 0;
 
 // Why: teleports default on when policy is absent so catalog edges participate once added, and scripts wanting pure walk pass `{ useTeleports: false }`.
 
-/** Whether a transport kind is enabled by path policy, toggles only, not WorldState. */
+/** Whether a transport kind is enabled by path policy toggles; WorldState is checked elsewhere. */
 export function kindAllowedByPolicy(kind: TransportKind, policy: PathPolicy | undefined): boolean {
     if (!policy) {
         return true;
@@ -68,7 +68,7 @@ export function teleportAllowedByPolicy(
     return { ok: true };
 }
 
-/** Chebyshev start→goal helper for policy admission. Levels ignored (2004 tele landings are L0). */
+/** Chebyshev start to goal helper for policy admission. Levels ignored (2004 tele landings are L0). */
 export function routeSpanChebyshev(from: NavPoint, to: NavPoint): number {
     return chebyshev(from, to);
 }

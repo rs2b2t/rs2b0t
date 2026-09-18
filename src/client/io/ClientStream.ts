@@ -24,8 +24,8 @@ export default class ClientStream {
     }
 
     constructor(socket: WebSocket) {
-        socket.onclose = this.onclose;
-        socket.onerror = this.onerror;
+        socket.onclose = this.remoteClose;
+        socket.onerror = this.remoteClose;
         this.wsin = new WebSocketReader(socket, 30000);
         this.wsout = new WebSocketWriter(socket, 5000);
         this.socket = socket;
@@ -47,8 +47,7 @@ export default class ClientStream {
         return this.wsin.available;
     }
 
-    // how long the server has been silent. A live connection is one that is still
-    // sending, not one this client has managed to keep up with.
+    // Time since the server last sent data, independent of the client's read backlog.
     get msSinceData(): number {
         if (this.dummy || this.remoteClosed) {
             return Number.POSITIVE_INFINITY;
@@ -98,27 +97,15 @@ export default class ClientStream {
         this.wsout.close();
     }
 
-    private onclose = (_event: CloseEvent): void => {
+    private remoteClose = (): void => {
         if (this.dummy) {
             return;
         }
 
-        this.remoteClose();
-    };
-
-    private onerror = (_event: Event): void => {
-        if (this.dummy) {
-            return;
-        }
-
-        this.remoteClose();
-    };
-
-    private remoteClose(): void {
         this.remoteClosed = true;
         this.wsin.close();
         this.wsout.close();
-    }
+    };
 }
 
 class WebSocketWriter {
@@ -157,10 +144,6 @@ class WebSocketWriter {
 
     close(): void {
         this.closed = true;
-    }
-
-    fail(): void {
-        this.ioerror = true;
     }
 }
 
@@ -205,9 +188,7 @@ class WebSocketReader {
     private closed: boolean = false;
     private total: number = 0;
 
-    // when the server last put bytes on the wire, as opposed to when this client last
-    // managed to process them -- the two diverge badly on a wall, where one starved
-    // main thread is shared by every bot
+    // Timestamp at receipt, before a shared multibox thread can delay processing.
     lastDataAt: number = performance.now();
 
     constructor(socket: WebSocket, timeoutMs: number) {
@@ -281,14 +262,6 @@ class WebSocketReader {
         this.event = null;
         this.queue = [];
         this.queueRead = 0;
-    }
-
-    fail(): void {
-        this.closed = true;
-        this.callback = null;
-        this.clearTimeout();
-        this.rejectRead?.();
-        this.rejectRead = null;
     }
 
     private nextEvent(): WebSocketEvent | null {

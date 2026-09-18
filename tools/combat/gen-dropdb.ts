@@ -1,17 +1,14 @@
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { filesUnder } from '../lib/content.js';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 const CONTENT = process.env.CONTENT_DIR ?? join(homedir(), 'code', 'rs2b2t-content');
 const OUT = 'src/bot/data/dropdb.ts';
 const DROP_DIR = join(CONTENT, 'scripts', 'drop tables', 'scripts');
+// Why: the King Black Dragon's table is an ai_queue3 block inside its area script, not a file under drop tables.
+const AREA_DIR = join(CONTENT, 'scripts', 'areas');
 
-function filesUnder(root: string, ext: string): string[] {
-    return (readdirSync(root, { recursive: true }) as string[])
-        .filter(f => f.endsWith(ext))
-        .map(f => join(root, f))
-        .sort();
-}
 
 function loadConfigNames(ext: string, extra?: (cur: string, line: string) => void): Map<string, string> {
     const files = filesUnder(join(CONTENT, 'scripts'), ext);
@@ -43,7 +40,7 @@ interface Block {
 
 function loadBlocks(): Map<string, Block> {
     const blocks = new Map<string, Block>();
-    for (const f of filesUnder(DROP_DIR, '.rs2')) {
+    for (const f of [...filesUnder(DROP_DIR, '.rs2'), ...filesUnder(AREA_DIR, '.rs2')]) {
         let cur: Block | null = null;
         const lines: string[] = [];
         const flush = (): void => { if (cur) { cur.body = lines.join('\n'); blocks.set(`${cur.type}:${cur.name}`, cur); lines.length = 0; } };
@@ -63,9 +60,13 @@ function loadBlocks(): Map<string, Block> {
 
 const objNames = loadConfigNames('.obj');
 const deathDrops = new Map<string, string>();
+const categories = new Map<string, string[]>();
 const npcNames = loadConfigNames('.npc', (cur, line) => {
     if (line.startsWith('param=death_drop,')) {
         deathDrops.set(cur, line.slice('param=death_drop,'.length).split(',')[0].trim());
+    } else if (line.startsWith('category=')) {
+        const cat = line.slice('category='.length).trim();
+        categories.set(cat, [...(categories.get(cat) ?? []), cur]);
     }
 });
 const blocks = loadBlocks();
@@ -80,8 +81,7 @@ function itemsIn(key: string, deathDrop: string | undefined, seen: Set<string>):
     const tokens: string[] = [];
     for (const m of block.body.matchAll(/obj_add\s*\(\s*npc_coord\s*,\s*(~?[a-z0-9_]+)/g)) { tokens.push(m[1]); }
     for (const m of block.body.matchAll(/return\s*\(\s*(~?[a-z0-9_]+)/g)) { tokens.push(m[1]); }
-    // megararetable stages its drop in a local ($drop = rune_spear; ... return ($drop, 1)),
-    // so the literal never appears after `return (`. Non-obj tokens are filtered below.
+    // megararetable stages its drop in a local ($drop = rune_spear; ... return ($drop, 1)), so the literal never follows `return (`. Non-obj tokens are filtered below.
     for (const m of block.body.matchAll(/=\s*([a-z][a-z0-9_]*)\s*;/g)) { tokens.push(m[1]); }
     for (const tok of tokens) {
         if (tok.startsWith('~')) {
@@ -100,21 +100,30 @@ function itemsIn(key: string, deathDrop: string | undefined, seen: Set<string>):
 
 function generate(): string {
     const byDisplay = new Map<string, Set<string>>();
+    // Why: a block named _x is the table for every npc whose config says category=x, and the engine runs an npc's own block instead of it, so the category table only lands where no own block exists.
+    const npcsOf = (block: Block): string[] => {
+        if (!block.name.startsWith('_')) {
+            return npcNames.has(block.name) ? [block.name] : [];
+        }
+        return (categories.get(block.name.slice(1)) ?? []).filter(npc => npcNames.has(npc) && !blocks.has(`${block.type}:${npc}`));
+    };
     for (const block of blocks.values()) {
-        if (!/^ai_queue/.test(block.type) || !npcNames.has(block.name)) {
+        if (!/^ai_queue/.test(block.type)) {
             continue;
         }
-        const items = itemsIn(`${block.type}:${block.name}`, deathDrops.get(block.name), new Set());
-        if (items.size === 0) {
-            continue;
+        for (const npc of npcsOf(block)) {
+            const items = itemsIn(`${block.type}:${block.name}`, deathDrops.get(npc), new Set());
+            if (items.size === 0) {
+                continue;
+            }
+            const display = npcNames.get(npc)!;
+            const set = byDisplay.get(display) ?? new Set<string>();
+            for (const it of items) {
+                const name = objNames.get(it);
+                if (name) { set.add(name); }
+            }
+            byDisplay.set(display, set);
         }
-        const display = npcNames.get(block.name)!;
-        const set = byDisplay.get(display) ?? new Set<string>();
-        for (const it of items) {
-            const name = objNames.get(it);
-            if (name) { set.add(name); }
-        }
-        byDisplay.set(display, set);
     }
 
     const rows = [...byDisplay.entries()]
@@ -127,9 +136,7 @@ function generate(): string {
         '// GENERATED by tools/combat/gen-dropdb.ts, do not edit.',
         '// Regenerate: bun tools/combat/gen-dropdb.ts   (drift gate: --check)',
         '',
-        '/** Monster display name → the item display names its official drop table can',
-        ' *  yield (direct drops + always-drop + resolved herb/gem/jewel sub-tables).',
-        " *  Powers bots' loot multi-select. */",
+        '/** Monster display name to the item display names its drop table can yield (direct drops, always-drop, and resolved herb/gem/jewel sub-tables). Powers the loot multi-select. */',
         'export const DROP_DB: Record<string, string[]> = {',
         rows.join(',\n'),
         '};',

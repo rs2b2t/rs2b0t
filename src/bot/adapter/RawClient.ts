@@ -8,6 +8,8 @@ import type Packet from '#/client/io/Packet.js';
 
 export interface RawClient {
     ingame: boolean;
+    stream: object | null;
+    modalCloseGeneration: number;
     sceneState: number;
 
     mapBuildBaseX: number;
@@ -37,6 +39,7 @@ export interface RawClient {
     chatType: Int32Array;
     chatUsername: (string | null)[];
     chatText: (string | null)[];
+    addChat(type: number, text: string, sender: string): void;
 
     menuNumEntries: number;
     menuOption: string[];
@@ -61,7 +64,7 @@ export interface RawClient {
 
     doAction(optionId: number): void;
     tryMove(srcX: number, srcZ: number, dx: number, dz: number, tryNearest: boolean, locWidth: number, locLength: number, locAngle: number, locShape: number, forceapproach: number, type: number): boolean;
-    /** Set by Client after a successful tryMove, local scene tiles src→dest. */
+    /** Local scene path from the last successful `tryMove`, source through destination. */
     lastWalkPathLocal?: { x: number; z: number }[];
 
     out: Packet;
@@ -84,12 +87,14 @@ export interface RawClient {
     deltime: number;
 
     overlayPos(sceneX: number, sceneZ: number, height: number): { x: number; y: number } | null;
-    /** Scene → areaGame pixel (no +4 canvas offset). Optional on older builds. */
+    /** Scene to areaGame projection without the 4px canvas offset. Optional on older builds. */
     projectAreaGame?(sceneX: number, sceneZ: number, height: number): { x: number; y: number } | null;
 }
 
 export const SELF_TEST = [
     'ingame',
+    'stream',
+    'modalCloseGeneration',
     'sceneState',
     'mapBuildBaseX',
     'mapBuildBaseZ',
@@ -114,6 +119,7 @@ export const SELF_TEST = [
     'chatType',
     'chatUsername',
     'chatText',
+    'addChat',
     'menuNumEntries',
     'menuOption',
     'menuAction',

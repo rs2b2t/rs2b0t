@@ -19,8 +19,8 @@ const coins = (): number => Inventory.count('Coins');
 const combinationFound = (): boolean =>
     held(DEATH_ITEM.IOU.id) > 0 || held(DEATH_ITEM.COMBINATION.id) > 0;
 
-// Why: brickwall (2906,3543)'s neighbours make an L, x2905..2906 for z3536..3539 widening to x2907 for z3540..3542, and the room east of it opens onto the corridor with no door at all.
-// Why: a bounding box that swallowed that room called a walk which stopped two tiles east of Harold "arrived", and the talk that followed had a wall between it and him.
+// Why: the room is an L, x2905..2906 for z3536..3539 widening to x2907 for z3540..3542, and the room east of it opens onto the corridor with no door.
+// Why: a bounding box that swallowed the east room called a stop 2 tiles east of Harold "arrived", with a wall between him and the talk.
 
 /** Harold's bedroom, which the door at (2906,3543) is the only way into. */
 export function insideHaroldRoom(tile: { x: number; z: number; level: number } | null | undefined): boolean {
@@ -30,8 +30,8 @@ export function insideHaroldRoom(tile: { x: number; z: number; level: number } |
     return tile.z >= 3540 ? tile.x <= 2907 : tile.x <= 2906;
 }
 
-// Why: `death_harold_door` decides which half of its script to run with `~check_axis`, which for a south-facing wall compares the player's z with the door's and nothing else.
-// Why: clicked from z3544 it takes the leaving branch and teleports the character onto the door tile without knocking, so the stand is the door's own tile rather than anywhere beside it.
+// Why: `death_harold_door` picks which half of its script to run with `~check_axis`, which for a south-facing wall compares your z with the door's and nothing else.
+// Why: clicked from z3544 it takes the leaving branch and teleports you onto the door tile without knocking, so the stand is the door's own tile.
 
 /** Knock, wait for "Come in!", and be teleported into the bedroom. */
 export async function enterHaroldRoom(log: (m: string) => void): Promise<boolean> {
@@ -55,7 +55,7 @@ export async function enterHaroldRoom(log: (m: string) => void): Promise<boolean
         expect: () => insideHaroldRoom(Game.tile()),
         expectMs: 25_000
     }, log);
-    // Why: `Reach` reports 'retry' on a crossing that landed, because the teleport happens after its own wait, so the character's tile is the only oracle.
+    // Why: `Reach` reports 'retry' on a crossing that landed, because the teleport happens after its own wait, so your tile is the only oracle.
     if (insideHaroldRoom(Game.tile())) {
         return true;
     }
@@ -71,7 +71,7 @@ export async function talkInHaroldRoom(stop: NpcStop, log: (m: string) => void):
     return talkAt(stop, log);
 }
 
-// ─── the ale ─────────────────────────────────────────────────────────────────
+// the ale
 
 const ALE_MS = 45_000;
 
@@ -88,21 +88,21 @@ export async function giveAleToHarold(log: (m: string) => void): Promise<boolean
         return false;
     }
     const drunk = (): boolean => held(DEATH_ITEM.ASGARNIAN_ALE.id) === 0;
-    // Why: the branch ends on the three-way menu that offers the gamble, so the drive is stopped by the ale leaving the pack rather than by the conversation closing.
+    // Why: the branch ends on the 3-way menu that offers the gamble, so the drive stops when the ale leaves the pack.
     if (!(await driveUntil(drunk, ['Can I buy you a drink?'], log, ALE_MS))) {
         log('Harold never took the ale');
         return false;
     }
-    // Why: the branch signs off on the menu rather than closing, and a menu left standing is a chat modal the next step's clicks are dropped behind.
+    // Why: the branch signs off on the menu, and a menu left standing is a chat modal the next step's clicks get dropped behind.
     await driveDialog(['Can I buy you a drink?'], log);
     return true;
 }
 
-// ─── the dice ────────────────────────────────────────────────────────────────
+// the dice
 
 const diceOpen = (): boolean => reader.modals().main === DEATH_DICE_MAIN;
 
-// Why: the live harness surfaces a bounded number of log lines per poll, so a diagnostic printing one line per button arrives as the last one and nothing else.
+// Why: the live harness surfaces a bounded number of log lines per poll, so one line per button would only ever show the last.
 
 /** Every button the panel is showing, on one line. */
 const diceState = (): string =>
@@ -110,20 +110,20 @@ const diceState = (): string =>
         .map(b => `${b.comId}:${b.label || b.menu}${b.pause ? ' pause' : ''}${b.hidden ? ' hidden' : ''}`)
         .join(', ');
 
-// Why: `com_28` is `buttontype=normal` and `com_30` is `buttontype=pause`, and both pack ids are the server's own, so they are found by what they say and how they answer rather than by an id.
+// Why: `com_28` is `buttontype=normal` and `com_30` is `buttontype=pause`, and both pack ids are the server's own, so match on label and pause flag.
 const rollButton = (): ModalButton | null =>
     reader.modalButtons(DEATH_DICE_MAIN).find(b => !b.pause && b.label.toLowerCase().startsWith('roll dice')) ?? null;
 const continueButton = (): ModalButton | null =>
     reader.modalButtons(DEATH_DICE_MAIN).find(b => b.pause) ?? null;
 
-/** How long Harold's own two dice may take. `harold_roll` spends three `p_delay(2)` before it unhides anything. */
+/** How long Harold's own 2 dice may take. `harold_roll` spends 3 `p_delay(2)` before it unhides anything. */
 const ROLL_ARMED_MS = 20_000;
 const PRESS_MS = 3_000;
 const SETTLE_MS = 30_000;
 
 type RoundResult = 'win' | 'loss' | 'iou' | 'abort';
 
-// Why: `death_dice` is on the engine's do-not-auto-close list, so a round that bails with it up leaves a main modal nothing will ever shut, and the next round cannot talk to Harold past it.
+// Why: `death_dice` is on the engine's do-not-auto-close list, so a round that bails with it up leaves a main modal nothing shuts and the next round can't talk past it.
 
 /** Shut the dice interface if a round left it open. */
 export async function closeDiceIfOpen(log: (m: string) => void): Promise<void> {
@@ -137,8 +137,8 @@ export async function closeDiceIfOpen(log: (m: string) => void): Promise<void> {
     }
 }
 
-// Why: the client sends one RESUME_PAUSEBUTTON per interface open and refuses every later press until the next one, and `Player.runScript` drops an `if_button` that arrives while Harold is still delayed. Neither says so.
-// Why: so each press waits for the layer holding it to be unhidden, which is the same `if_sethide` the script arms the button with.
+// Why: the client sends one RESUME_PAUSEBUTTON per interface open and silently refuses later presses, and `Player.runScript` silently drops an `if_button` that arrives while Harold is still delayed.
+// Why: each press waits for its layer to be unhidden, the same `if_sethide` the script arms the button with.
 
 async function pressWhenArmed(
     find: () => ModalButton | null,
@@ -165,7 +165,7 @@ async function pressWhenArmed(
     return false;
 }
 
-// Why: the settle queue speaks in bursts, a line and then an objbox page, with a tick of nothing between them, so one quiet poll is not the end of it.
+// Why: the settle queue speaks in bursts, a line then an objbox page with a tick of nothing between, so one quiet poll proves nothing.
 
 /** Click away everything `haroldgamble_end` says after the interface closes. */
 async function drainRoundTail(log: (m: string) => void): Promise<void> {
@@ -173,7 +173,7 @@ async function drainRoundTail(log: (m: string) => void): Promise<void> {
     const deadline = performance.now() + SETTLE_MS;
     let quiet = 0;
     while (performance.now() < deadline && quiet < 4) {
-        // Why: a menu means the queue is done and Harold has started a fresh conversation, which is not this round's tail.
+        // Why: a menu means the queue is done and Harold has started a fresh conversation.
         if (ChatDialog.options().length > 0) {
             return;
         }
@@ -192,7 +192,7 @@ async function playRound(bet: number, log: (m: string) => void): Promise<RoundRe
     if (!(await openDialogue('Harold', log))) {
         return 'abort';
     }
-    // Why: `harold_gamble` runs `if_close` before `p_countdialog`, so the chat closing is a step in the chain rather than the end of it.
+    // Why: `harold_gamble` runs `if_close` before `p_countdialog`, so the chat closing is a step in the chain.
     if (!(await driveUntil(() => reader.countDialogOpen() || diceOpen(), ['Would you like to gamble?'], log, 30_000))) {
         log('Harold gamble: the gamble option never led to the bet prompt');
         return 'abort';
@@ -205,7 +205,7 @@ async function playRound(bet: number, log: (m: string) => void): Promise<RoundRe
         await Execution.delayUntil(() => !reader.countDialogOpen(), 3_000);
     }
     const mark = GameMessages.mark();
-    // Why: two `~chatnpc` pages stand between the bet and `if_openmain`, and a refused bet answers in one of them instead.
+    // Why: 2 `~chatnpc` pages stand between the bet and `if_openmain`, and a refused bet answers in one of them instead.
     if (!(await driveUntil(diceOpen, [], log, 20_000))) {
         const said = GameMessages.since(mark).map(line => line.text).join(' / ');
         log(`Harold gamble: a bet of ${bet} never opened the dice${said ? `; ${said}` : ''}`);
@@ -219,7 +219,7 @@ async function playRound(bet: number, log: (m: string) => void): Promise<RoundRe
         log(`Harold gamble: the roll landed but no verdict came; panel shows [${diceState()}]`);
         return 'abort';
     }
-    // Why: `player_roll` writes the verdict into the panel before it unhides the Continue layer, and the panel is gone the moment that button is pressed.
+    // Why: `player_roll` writes the verdict into the panel before it unhides the Continue layer, and pressing Continue removes the panel.
     const won = reader.mainModalTexts().some(text => /you win/i.test(text));
     if (!(await pressWhenArmed(continueButton, actions.pauseButton, () => !diceOpen(), 'Continue', log))) {
         return 'abort';
@@ -241,16 +241,16 @@ async function playRound(bet: number, log: (m: string) => void): Promise<RoundRe
 
 const MAX_ROUNDS = 25;
 
-// Why: `death_ig_commander.rs2` gives Harold 100gp when Denulth starts the quest, and `dice_winnings` only writes `harold_lostall`, which is the IOU, when `harold_gold - bet` goes below zero on a win.
-// Why: every loss hands him the stake, so a fixed bet stops being able to bankrupt him after the first one: 101 against a purse of 201 pays out and the run gambles forever.
-// Why: `%death_bits` is not transmitted, so the purse is tracked from the stake and the verdict rather than read.
+// Why: `death_ig_commander.rs2` gives Harold 100gp when Denulth starts the quest, and `dice_winnings` only writes `harold_lostall` (the IOU) when `harold_gold - bet` goes below zero on a win.
+// Why: every loss hands him the stake, so a fixed bet can't bankrupt him after the first: 101 against a purse of 201 pays out and the loop never ends.
+// Why: `%death_bits` is not transmitted, so the purse is tracked from the stake and the verdict.
 
 /** The stake that bankrupts a purse this size, as far as the pack and `harold_gamble`'s ceiling allow. */
 export function nextStake(purse: number, pack: number): number {
     return Math.min(MAX_BET, pack, purse + 1);
 }
 
-// Why: a win Harold could pay proves his purse was larger than the stake and says nothing about by how much, so the estimate goes up rather than down and reaches the ceiling in a few rounds.
+// Why: a win Harold could pay proves his purse was larger than the stake and nothing more, so the estimate goes up and hits the ceiling in a few rounds.
 
 /** The purse the round's verdict implies. */
 export function purseAfter(purse: number, stake: number, result: 'win' | 'loss'): number {

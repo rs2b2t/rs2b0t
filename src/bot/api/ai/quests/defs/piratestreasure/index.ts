@@ -18,7 +18,7 @@ function ship(): QuestStep {
     return { kind: 'custom', name: 'ship the crate from the plantation', run: shipCrate };
 }
 
-// Why: the apron is bought before the crossing so its Varrock trip rides the Varrock-Draynor-Port Sarim line rather than becoming a round trip after the rum is shipped.
+// Why: the apron is bought before the crossing so its Varrock trip rides the Varrock-Draynor-Port Sarim line and isn't a round trip after the rum ships.
 const APRON_STAGES = new Set(['need-rum', 'rum-lost', 'rum-shipped', 'store-job']);
 
 function smuggle(snap: QuestSnapshot, flag: string | undefined): QuestStep {
@@ -32,7 +32,7 @@ function smuggle(snap: QuestSnapshot, flag: string | undefined): QuestStep {
             return ship();
         case 'rum-shipped':
             return talk(WYDIN);
-        // Why: this page renders both for "the rum is waiting in Wydin's back room" and for "the rum is still in the plantation crate", and only where the character is standing tells them apart.
+        // Why: this page renders both for "the rum is waiting in Wydin's back room" and "the rum is still in the plantation crate", and only where you stand tells them apart.
         case 'store-job':
             if (onKaramja(snap.tile)) {
                 return ship();
@@ -40,7 +40,7 @@ function smuggle(snap: QuestSnapshot, flag: string | undefined): QuestStep {
             return wornId(snap, PT_ID.WHITE_APRON)
                 ? { kind: 'custom', name: 'search the back room for the rum', run: collectRum }
                 : { kind: 'equip', item: PT_NAME.WHITE_APRON };
-        // Why: this page also renders for a rum bought minutes earlier on Karamja, because `%hunt_store_employed = 2` sends the journal down the "retrieved it from the back room" branch whatever the bottle's history, and carrying it onto the boat is how the customs officer confiscates it.
+        // Why: `%hunt_store_employed = 2` renders this page for a rum bought minutes earlier on Karamja too, and carrying that onto the boat gets it confiscated.
         case 'rum-in-hand':
             return onKaramja(snap.tile) ? ship() : talk(FRANK);
         default:
@@ -95,7 +95,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const piratestreasure: QuestModule = {
     record: QUESTS.find(r => r.id === 'hunt')!,
-    // Why: four kingdoms and a bankless island, so no booth is worth pinning.
+    // Why: 4 kingdoms and a bankless island, so no booth is worth pinning.
     bank: 'nearest',
     // Why: the smuggle has to acquire at the stage that needs it, or the engine's provisioning block buys rum before Frank has asked for any.
     ownsInventory: true,
@@ -103,8 +103,7 @@ export const piratestreasure: QuestModule = {
         'karamjan rum', 'chest key', 'pirate message', 'white apron', 'spade',
         'banana', 'coins'
     ],
-    // Literals, not QuestFood.name: this object is built at import, when the
-    // setting still holds its default. The host merges the configured food in.
+    // Literals; this object is built at import, when QuestFood.name still holds its default. The host merges the configured food in.
     sustain: { foods: ['Lobster', 'Swordfish', 'Tuna'], eatBelowHp: 0.5 },
     readProgress: readPiratesTreasureProgress,
     decide

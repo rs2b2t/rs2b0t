@@ -1,20 +1,16 @@
-// Type declarations for the rs2b0t script ABI (apiVersion 1). Mirrors the
-// client's src/bot/api surface. interact()-style methods return
-// boolean | Promise<boolean> (the promise form is ABI headroom; the direct
-// driver resolves synchronously) — always await, and verify outcomes with
-// Execution.delayUntil on game state.
+// Type declarations for the rs2b0t script ABI (apiVersion 1), mirroring the client's src/bot/api surface.
+// interact()-style methods return boolean | Promise<boolean>: always await them, then verify the outcome with Execution.delayUntil on game state.
 
 /**
- * ABI version this shim is built for. The client refuses a bundle whose
- * version does not match the one it installs.
+ * The client rejects bundles with a different ABI version.
  * @see docs/decisions/architecture.md#the-abi-boundary
  */
 export const apiVersion: number;
 
-// ---- world primitives ----
+// world primitives
 
 /**
- * A world position. Anything positional accepts this shape.
+ * World coordinates accepted by position-based APIs.
  * @see docs/reference/api-game.md#world-primitives
  */
 export interface WorldTile {
@@ -24,7 +20,7 @@ export interface WorldTile {
 }
 
 /**
- * A concrete world tile with distance and translation helpers.
+ * A world tile with distance and translation helpers.
  * @see docs/reference/api-game.md#world-primitives
  */
 export class Tile implements WorldTile {
@@ -41,8 +37,7 @@ export class Tile implements WorldTile {
 }
 
 /**
- * A region of the map — rectangular or circular — for containment tests and
- * random-tile picks.
+ * A rectangular or circular map area with containment and random-tile helpers.
  * @see docs/reference/api-game.md#world-primitives
  */
 export abstract class Area {
@@ -52,12 +47,10 @@ export abstract class Area {
     abstract getRandomTile(): Tile;
 }
 
-// ---- execution (the only legal way to sleep) ----
+// execution
 
 /**
- * The only legal way to sleep. These waits are settled from the client's frame
- * callback, so bot time is game time and Stop can unwind them; a bare
- * `setTimeout` escapes the runtime and trips the watchdog.
+ * Use these waits in bots: the client settles them each frame and cancels them on Stop. Bare setTimeout calls bypass the runtime and trigger the watchdog.
  * @see docs/reference/api-bots.md#execution
  * @see docs/decisions/architecture.md#frame-gap-insurance
  */
@@ -66,34 +59,34 @@ export const Execution: {
     delay(ms: number): Promise<void>;
     /** Resolve after `n` more server ticks (~600ms each). */
     delayTicks(n: number): Promise<void>;
-    /**
-     * Resolve true when cond() holds (checked once per client frame), false
-     * after timeoutMs (default 6000). Awaiting anything other than
-     * Execution.* escapes the runtime: Stop can't unwind it and the watchdog
-     * warns.
-     */
+    /** Check cond() each frame; return true when it holds, false after timeoutMs (default 6000). Use Execution waits so Stop can cancel them. */
     delayUntil(cond: () => boolean, timeoutMs?: number): Promise<boolean>;
-    /**
-     * Poll cond each game tick for up to maxTicks. Prefer for tick-driven
-     * action loops over wall-clock delayUntil.
-     */
+    /** Check cond() each game tick, up to maxTicks. */
     delayUntilTicks(cond: () => boolean, maxTicks: number): Promise<boolean>;
+    /** Report observed progress that movement and XP cannot show, such as a completed trade. Calling this every loop disables stall detection. */
+    noteProgress(): void;
 };
 
-// ---- game state ----
+// game state
 
 export type MeleeCombatStyle = 'attack' | 'strength' | 'controlled' | 'defence';
+
+/** An available combat mode and its interface label. */
+export interface CombatModeLabel {
+    mode: number;
+    label: string;
+}
 
 export interface CombatStyleResolution {
     /** Style requested by the script. */
     requested: MeleeCombatStyle;
-    /** Actual interface-labelled style selected (may be defensive fallback). */
+    /** Selected style; may fall back to defence. */
     effective: MeleeCombatStyle;
     mode: number;
 }
 
 /**
- * Local player and world state — position, energy, combat, animation, ticks.
+ * Local player and world state: position, energy, combat, animation, ticks.
  * @see docs/reference/api-game.md
  */
 export const Game: {
@@ -101,14 +94,11 @@ export const Game: {
     /** Local player's world tile, or null before login/scene load. */
     tile(): WorldTile | null;
     energy(): number;
-    /** Orbit camera yaw 0–2047 (client-only). */
+    /** Orbit camera yaw 0-2047 (client-only). */
     cameraYaw(): number;
-    /** Orbit camera pitch 128–383 (client-only). */
+    /** Orbit camera pitch 128-383 (client-only). */
     cameraPitch(): number;
-    /**
-     * Snap orbit camera yaw (0–2047). Client-only.
-     * Prefer Global.navCameraFollow for path auto-facing during walks.
-     */
+    /** Set camera yaw (0-2047, client only). For walking, prefer Global.navCameraFollow. */
     setCameraYaw(yaw: number): boolean;
     /** The run toggle is on. */
     runEnabled(): boolean;
@@ -121,31 +111,42 @@ export const Game: {
     tick(): number;
     /** Current com_mode varp (combat style index). */
     combatMode(): number;
-    /** Resolve from current interface labels; unavailable styles fall back to its last defensive button. */
+    /** Resolve from interface labels; fall back to the last defensive button if unavailable. */
     combatStyleResolution(style: MeleeCombatStyle): CombatStyleResolution | null;
     combatStyleMode(style: MeleeCombatStyle): number | null;
     hasCombatStyle(style: MeleeCombatStyle): boolean;
     setCombatStyle(style: MeleeCombatStyle): boolean;
     /** @deprecated Use setCombatMode for an exact numeric mode. */
     setCombatStyle(mode: number): boolean;
-    /** Set an exact combat-tab varp mode, primarily for ranged styles. */
+    /** Set the combat-tab mode by number, usually for ranged styles. */
     setCombatMode(mode: number): boolean;
     /** Local player's display name, or null before login. */
     myName(): string | null;
     openSideTab(tab: number): Promise<boolean>;
     castOnNpc(spell: string, npc: Npc): Promise<boolean>;
-    /**
-     * Cast a standard spellbook teleport by destination name.
-     * Resolves the loaded magic button by name without activating its side tab,
-     * then falls back to its 2004 component ID. Success confirms dispatch, not arrival.
-     */
+    /** Cast a standard teleport by destination name, using the loaded button or its 2004 component ID. Does not switch tabs; success means dispatched, so check arrival. */
     teleport(name: string): Promise<boolean>;
+    /** Cast a targeted spell at a piece of scenery. */
+    castOnLoc(spell: string, loc: Loc): Promise<boolean>;
+    /** Cast on an inventory item, using the TGT_HELD action required by Superheat Item. */
+    castOnItem(spell: string, item: InvItem): Promise<boolean>;
+    /** The scene accepts input. Before this, menu and walk packets may be dropped or retried. */
+    sceneReady(): boolean;
+    /** Raw client scene build state: 0 idle/loading, 1 building, 2 ready. */
+    sceneState(): number;
+    /** Every combat mode the equipped weapon offers, with its interface label; null before the tab loads. */
+    combatStyles(): readonly CombatModeLabel[] | null;
+    autoRetaliateOn(): boolean;
+    /** Toggle auto-retaliate; true means the click was dispatched. */
+    setAutoRetaliate(on: boolean): boolean;
+    /** The local player's combat target is another player. */
+    attackedByPlayer(): boolean;
 };
 
-// ---- entities + queries ----
+// entities and queries
 
 /**
- * Something with right-click actions that can be operated by name.
+ * An entity with named right-click actions.
  * @see docs/reference/api-entities.md
  */
 export interface Interactable {
@@ -154,7 +155,7 @@ export interface Interactable {
 }
 
 /**
- * Something with a world position and a distance from the local player.
+ * An entity with a world position and distance from the local player.
  * @see docs/reference/api-entities.md
  */
 export interface Locatable {
@@ -168,14 +169,22 @@ export interface Locatable {
  */
 export class Npc implements Interactable, Locatable {
     readonly name: string | null;
+    readonly id: number;
     readonly level: number;
     readonly index: number;
+    /** Tiles along each side of the footprint; `tile()` is the one under its centre. */
+    readonly size: number;
     readonly inCombat: boolean;
     readonly health: number;
     tile(): Tile;
+    networkTile(): Tile;
     distance(): number;
     actions(): string[];
     valid(): boolean;
+    /** This NPC's combat target is the local player. */
+    targetsMe(): boolean;
+    /** This NPC's combat target is another player. */
+    targetsAnotherPlayer(): boolean;
     interact(action: string): boolean | Promise<boolean>;
 }
 
@@ -185,14 +194,19 @@ export class Npc implements Interactable, Locatable {
  */
 export class Player implements Locatable {
     readonly name: string | null;
+    /** Slot in the client's player list. */
+    readonly index: number;
     readonly inCombat: boolean;
+    readonly combatLevel: number;
     tile(): Tile;
     distance(): number;
     actions(): string[];
+    /** This player's combat target is the local player. */
+    targetsMe(): boolean;
 }
 
 /**
- * A scenery object — door, tree, rock, bank booth, altar.
+ * A scenery object: door, tree, rock, bank booth, altar.
  * @see docs/reference/api-entities.md#entity-shapes
  */
 export class Loc implements Interactable, Locatable {
@@ -219,7 +233,7 @@ export class GroundItem implements Interactable, Locatable {
 }
 
 /**
- * The shape `EntityQuery` filters over.
+ * Fields used by EntityQuery filters.
  * @see docs/reference/api-entities.md#entityquery
  */
 interface QueryableEntity extends Locatable {
@@ -228,8 +242,7 @@ interface QueryableEntity extends Locatable {
 }
 
 /**
- * Chainable filter over scene entities. Filters compose, then a terminal
- * (`nearest`, `results`, `exists`, ...) evaluates against the current scene.
+ * Chain filters, then evaluate them against the current scene with nearest(), results(), exists(), etc.
  * @see docs/reference/api-entities.md#entityquery
  */
 export class EntityQuery<E extends QueryableEntity> {
@@ -239,11 +252,15 @@ export class EntityQuery<E extends QueryableEntity> {
     action(action: string): this;
     /** Within `dist` tiles of the local player. */
     within(dist: number): this;
+    /** Within `dist` tiles of an arbitrary tile (a camp pin, booth stand or furnace). */
+    withinOf(origin: WorldTile, dist: number): this;
     /** Within a rectangle (inclusive). */
     inside(area: { minX: number; maxX: number; minZ: number; maxZ: number }): this;
     where(pred: (e: E) => boolean): this;
     results(): E[];
     nearest(): E | null;
+    /** Nearest to the player, considering only results within `preferRadius` when any exist. */
+    nearestPreferLocal(preferRadius: number): E | null;
     first(): E | null;
     exists(): boolean;
     count(): number;
@@ -264,8 +281,7 @@ export const Npcs: {
  */
 export const Players: { query(): EntityQuery<Player> };
 /**
- * Scenery queries. A loc query is empty for about a tick after a level change —
- * blank does not mean absent.
+ * Scenery queries. Results may be empty for about a tick after changing floors.
  * @see docs/reference/api-entities.md
  * @see docs/decisions/level-change-lag.md
  */
@@ -276,7 +292,7 @@ export const Locs: { query(): EntityQuery<Loc> };
  */
 export const GroundItems: { query(): EntityQuery<GroundItem> };
 
-// ---- hud ----
+// hud
 
 /**
  * One backpack slot.
@@ -290,11 +306,7 @@ export class InvItem {
     actions(): string[];
     /** Held op by name, e.g. item.interact('Bury'). */
     interact(action: string): boolean | Promise<boolean>;
-    /**
-     * Use this item on another item, a scenery loc, or an npc — the "use X
-     * with Y" behind every processing skill (knife→logs, bar→anvil, ess→altar).
-     * Returns false if a loc target is off-scene.
-     */
+    /** Use this item on another item, scenery or an NPC. Returns false for off-scene scenery. */
     useOn(target: InvItem | Loc | Npc): boolean | Promise<boolean>;
 }
 
@@ -311,6 +323,10 @@ export const Inventory: {
     /** Occupied slots. */
     used(): number;
     isFull(): boolean;
+    /** Total quantity by object id, for items that share a display name. */
+    countById(id: number): number;
+    /** Empty slots; 0 until the pack interface has loaded. */
+    free(): number;
 };
 
 /**
@@ -324,6 +340,27 @@ export const Equipment: {
     equip(name: string): Promise<boolean>;
     /** Remove from a worn slot into the backpack. */
     unequip(name: string): Promise<boolean>;
+};
+
+/**
+ * Weapon special-attack state and controls.
+ * Energy is expressed on the client scale 0–1000 (100 = 10%).
+ */
+export const Special: {
+    /** Current special-attack energy, 0–1000. */
+    energy(): number;
+    /** Whether a special is armed for the next attack. */
+    armed(): boolean;
+    /** Currently wielded weapon name, or '' with no weapon equipped. */
+    wielded(): string;
+    /** Special energy cost for a supported weapon, or null when unsupported. */
+    cost(weaponName: string): number | null;
+    /** Whether current energy is sufficient for this weapon's special. */
+    ready(weaponName: string): boolean;
+    /** Current weapon's special-bar component, or -1 when unavailable. */
+    barComponent(): number;
+    /** Arm the current weapon's special attack for the next attack. */
+    arm(): Promise<boolean>;
 };
 
 /**
@@ -355,7 +392,7 @@ export interface BankItemSnapshot {
     comId: number;
 }
 
-/** Bank booth / chest access descriptor (some banks need openFirst first). */
+/** Bank booth or chest access; some locations need openFirst. */
 export interface BankObjectAccess {
     name: string;
     op: string;
@@ -372,31 +409,41 @@ export function withdrawOp(
 ): string | null;
 
 /**
- * The bank interface. `isOpen()` only says the component exists — its item list
- * fills a beat later, and again after a deposit, so verify before trusting a
- * count of zero.
+ * Bank interface access. The item list arrives after the interface opens and updates after deposits; wait before trusting a zero count.
  * @see docs/reference/api-items.md#bank
  */
 export const Bank: {
     isOpen(): boolean;
-    /**
-     * True once the bank item list has populated. `isOpen` alone is not enough —
-     * the list fills a beat later (and again after deposit). Until then every
-     * `count()` reads 0, which is indistinguishable from an empty bank.
-     */
+    /** True after a nonempty item list arrives. False also describes an empty bank; use ready() to distinguish an empty snapshot from missing data. */
     loaded(): boolean;
+    /** True when loaded() or an open bank has a snapshot, including an empty one. */
+    ready(): boolean;
+    /** Wait for the bank item snapshot after opening. */
+    waitReady(timeoutMs?: number, log?: (msg: string) => void): Promise<boolean>;
+    /** A bank snapshot has arrived since opening. */
+    snapshotReady(): boolean;
+    /** Snapshot counter; pass it to waitSnapshotAfter. */
+    snapshotGeneration(): number;
+    /** Wait for a snapshot newer than generation. */
+    waitSnapshotAfter(generation: number, timeoutMs?: number): Promise<boolean>;
     /** Toggle note/item withdraw mode (resets to Item when the bank opens). */
     setNoteMode(on: boolean): Promise<void>;
     items(): BankItemSnapshot[];
     /** Exact name match (case-insensitive). */
     count(name: string): number;
+    /** Count by object id, for stock whose display name is shared. */
+    countById(id: number): number;
     /**
      * Withdraw by context-menu op label (default `'Withdraw-1'`).
-     * Prefer `withdrawOp(item.ops, 'all'|'10'|'5'|'1'|'x'|'any')` for the real label.
+     * Prefer `withdrawOp(item.ops, 'all'|'10'|'5'|'1'|'x'|'any')` for the label the bank shows.
      */
     withdraw(name: string, op?: string): boolean | Promise<boolean>;
+    /** `withdraw` by object id (default op `'Withdraw-1'`). */
+    withdrawById(id: number, op?: string): boolean | Promise<boolean>;
     /** Withdraw-X + count dialog for an exact quantity. */
     withdrawX(name: string, count: number): Promise<boolean>;
+    /** `withdrawX` by object id; in note mode `landsAsId` names the noted obj the pack receives. */
+    withdrawXById(id: number, count: number, landsAsId?: number): Promise<boolean>;
     /** Fill the pack: Withdraw-All when present, otherwise Withdraw-X for free slots. */
     withdrawLoad(name: string): Promise<boolean>;
     deposit(name: string, op?: string): boolean | Promise<boolean>;
@@ -431,9 +478,11 @@ export const Bank: {
         access: BankObjectAccess,
         log?: (msg: string) => void
     ): Promise<boolean>;
+    /** Close the bank modal so inventory ops (Wield, Use, Bury, ...) hit the backpack again. */
+    close(timeoutMs?: number): Promise<boolean>;
 };
 
-// ---- high-level banking (prefer this over raw Bank.open*) ----
+// high-level banking
 
 export type BankStrategy = 'off' | 'items' | 'time' | 'either';
 
@@ -465,7 +514,7 @@ export const PERIODIC_BANK_SETTINGS: SettingsSchema;
 /** Substrings matched as optional "common junk" when banking loot. */
 export const COMMON_BANK_LOOT: string[];
 
-/** Random-event casket obj id — always treated as common bank loot. */
+/** Random-event casket obj id, always treated as common bank loot. */
 export const RANDOM_EVENT_CASKET_ID: number;
 
 export function matchesCommonBankLoot(name: string, id?: number): boolean;
@@ -486,40 +535,27 @@ export function depositMatcher(
 export function depositAllExcept(keep: Iterable<string>): (name: string) => boolean;
 
 export interface OpenBankOpts {
-    /**
-     * Preset bank stand tile. Used when no bank is already nearby (see
-     * `preferNearby`). Distant stands are not forced when a booth is underfoot.
-     */
+    /** Bank stand to use when no bank is nearby; see preferNearby. */
     stand?: WorldTile | null;
     boothName?: string;
     boothOp?: string;
-    /**
-     * Openable obstacle names on the way to a preset stand (e.g. `['door','gate']`).
-     * Empty / omitted = plain `Traversal.walkResilient` to the stand.
-     */
+    /** Obstacles to open on the way, e.g. ['door', 'gate']. Without these, use Traversal.walkResilient. */
     obstacles?: string[];
     /** Forced destination when no booth is in scene and `stand` is unset. */
     destination?: BankDestination;
-    /**
-     * Prefer a bank already underfoot / in the local scene over a distant preset
-     * stand. Default true — starting next to Draynor must not web-walk to Edgeville
-     * just because the camp table says Edgeville.
-     */
+    /** Use a nearby bank before walking to the preset stand. Default true. */
     preferNearby?: boolean;
-    /** Distance for nearby snap. Default {@link NEARBY_BANK_RADIUS}. */
+    /** Nearby bank radius. Default {@link NEARBY_BANK_RADIUS}. */
     nearbyRadius?: number;
     log?: (msg: string) => void;
 }
 
-/** Snap radius for "I'm already at a bank" (booth underfoot / local stand). */
+/** Radius for treating a bank as already nearby. */
 export const NEARBY_BANK_RADIUS: number;
 
 export type BankOpenRoute = 'already-open' | 'scene-booth' | 'local-bank' | 'preset-stand' | 'nearest-fallback';
 
-/**
- * Pure routing for {@link Banking.open} — unit-testable without the client.
- * Nearby scene booth or local known bank beats a distant camp/vendor stand.
- */
+/** Choose a bank for Banking.open; prefer a nearby booth or known bank over a distant preset stand. */
 export function resolveBankOpenRoute(input: {
     bankOpen?: boolean;
     here: WorldTile | null;
@@ -530,22 +566,11 @@ export function resolveBankOpenRoute(input: {
     nearbyRadius?: number;
 }): BankOpenRoute;
 
-/**
- * High-level bank open + one-shot bank-and-deposit helpers.
- * Prefer `Banking.open` over hand-rolling walk + `Bank.openBooth` / `openNearest`.
- */
+/** Open and deposit helpers. Prefer Banking.open over manually walking to a booth. */
 export const Banking: {
-    /**
-     * Open a bank for script work (deposit / withdraw / restock).
-     * Default preferNearby: booth/local bank underfoot wins over a distant stand.
-     *
-     * Does **not** deposit or walk back — callers own the bank session.
-     */
+    /** Open a bank, preferring nearby banks by default. The caller handles deposits, withdrawals and the return trip. */
     open(opts?: OpenBankOpts): Promise<boolean>;
-    /**
-     * Open nearest (or forced) bank, deposit matching items, optional afterDeposit,
-     * optional walk to `returnTo`.
-     */
+    /** Open a bank, deposit matching items, run afterDeposit if supplied, then walk to returnTo if supplied. */
     bankNearest(opts: {
         deposit: (name: string) => boolean;
         commonJunk?: boolean;
@@ -564,14 +589,18 @@ export const Banking: {
  */
 export const Shop: {
     isOpen(): boolean;
-    /** Trade with `npcName` — walks nothing, the caller must already be near. */
+    /** Trade with npcName; the caller must walk to the keeper first. */
     open(npcName: string): Promise<boolean>;
     /** The shop-side stock rows of the open shop. */
     stock(): { name: string; count: number; slot: number }[];
-    /** Buy up to `n` of `name`; resolves the units actually bought. */
+    /** Buy up to `n` of `name`; resolves the units bought. */
     buy(name: string, n: number): Promise<number>;
-    /** Sell up to `n` of `name`; resolves the units actually sold. */
+    /** `buy` by exact object id, for stock whose display name is shared. */
+    buyById(id: number, n: number): Promise<number>;
+    /** Sell up to `n` of `name`; resolves the units sold. */
     sell(name: string, n: number): Promise<number>;
+    /** Sell every one of `name` the pack holds, ten to a click; resolves the units sold. */
+    sellAll(name: string): Promise<number>;
     close(): Promise<void>;
 };
 
@@ -582,7 +611,7 @@ export const Shop: {
 export type QuestStatus = 'notStarted' | 'inProgress' | 'complete' | 'unknown';
 
 /**
- * The quest tab. This is the authoritative source of quest progress — never
+ * The quest tab. It's the authoritative source of quest progress; don't
  * infer it from varps.
  * @see docs/reference/quest-engine.md#quest-state
  */
@@ -592,6 +621,8 @@ export const Quests: {
     status(name: string): QuestStatus;
     /** Quest points shown on the tab. */
     points(): number;
+    /** Open the journal and read its lines. Prefer an item or message check when it proves progress. */
+    journal(name: string): Promise<string[]>;
 };
 
 /**
@@ -623,6 +654,18 @@ export const ChatDialog: {
      * (or the first). Never opens the Make-X count dialog.
      */
     makeOne(match?: string): Promise<boolean>;
+    /** The lines currently rendered in the chat modal, including the NPC's. */
+    texts(): string[];
+    /** Click Make-X for the product whose name contains `match` and type `count`; waits for the count dialog to open and close. */
+    makeX(match: string, count: number): Promise<boolean>;
+    /** A main-modal make panel (the fletching/smithing kind) is open. */
+    isMainMakePanel(): boolean;
+    /** Product names on the open main-modal make panel. */
+    mainMakeProducts(): string[];
+    /** On the main-modal panel, click `op` (default its first op) for the product whose name contains `match`; resolves when the modal changes. */
+    makeFromPanel(match: string, op?: string): Promise<boolean>;
+    /** On the main-modal panel, pick the largest Make op for the product whose name contains `match`. */
+    makeFromPanelMax(match: string): Promise<boolean>;
 };
 
 export interface TradeItem {
@@ -652,18 +695,20 @@ export const Trade: {
         itemName: string,
         pick?: (i: { count: number; id: number; slot: number }) => boolean
     ): Promise<boolean>;
-    /** Offer exactly `n` via Offer-X + count dialog. */
+    /** Offer `n` via Offer-X + count dialog. */
     offer(
         itemName: string,
         n: number,
         pick?: (i: { count: number; id: number; slot: number }) => boolean
     ): Promise<boolean>;
+    /** Take everything back off your own side. */
+    removeAll(): Promise<boolean>;
     /** Accept the current offer or confirm screen. */
     accept(): Promise<boolean>;
     decline(): Promise<void>;
 };
 
-// ---- movement ----
+// movement
 
 /**
  * Options for a single web-walk.
@@ -676,7 +721,7 @@ export interface WalkOptions {
     log?: (msg: string) => void;
     /** A* expansion budget override. */
     maxExpansions?: number;
-    /** Path policy (tele toggles, distanceBeforeTeleport, deny lists, …). */
+    /** Path policy (tele toggles, distanceBeforeTeleport, deny lists, ...). */
     policy?: {
         useTeleports?: boolean;
         distanceBeforeTeleport?: number;
@@ -696,9 +741,7 @@ export interface WalkOptions {
      */
     bankItemCounts?: Record<string, number>;
     /**
-     * Danger / no-go zones the pathfinder must not enter.
-     * Known ids (e.g. `'white-wolf-mountain'`) and/or ad-hoc axis-aligned rects.
-     * Automatic catalog zones are also resolved from live player state.
+     * Areas to avoid, by known ID (e.g. 'white-wolf-mountain') or rectangle. Catalog zones also depend on live player state.
      * Idea credit: @lolwut.
      */
     avoidZones?: readonly (
@@ -708,46 +751,41 @@ export interface WalkOptions {
 }
 
 /**
- * Options for a walk behind the escalation ladder.
+ * Options for walking with retries and recovery.
  * @see docs/reference/nav-walker.md#when-it-gets-stuck
  */
 export interface WalkResilientOptions {
     /** Arrive when within this Chebyshev distance of dest. */
     radius: number;
-    /** Bound the escalation to this many baked-walk passes; default = retry forever. */
+    /** Maximum baked-walk attempts; retries forever by default. */
     attempts?: number;
     /** Per baked-walk budget (default 90s). */
     timeoutMs?: number;
     /** Client-scene-walk arrival radius when bridging a baked gap (default = radius+1). */
     sceneRadius?: number;
-    /** Big-budget baked retry's node budget (default 1.2M). */
+    /** Node budget for the larger baked-walk retry (default 1.2M). */
     maxBudget?: number;
     log?: (msg: string) => void;
     /** Forwarded to WalkExecutor on every baked repath. */
     useTeleportCatalog?: WalkOptions['useTeleportCatalog'];
     policy?: WalkOptions['policy'];
     bankItemCounts?: WalkOptions['bankItemCounts'];
-    /**
-     * Danger / no-go zones for every baked repath (same as WalkOptions.avoidZones).
-     * Known ids (e.g. `'white-wolf-mountain'`) and/or ad-hoc axis-aligned rects.
-     * Automatic catalog zones are resolved from live player state.
-     */
+    /** Areas to avoid on each repath, as in WalkOptions.avoidZones. Accepts known IDs or rectangles; catalog zones depend on live player state. */
     avoidZones?: WalkOptions['avoidZones'];
 }
 
 /**
- * World-scale movement: A* over the baked collision pack plus the door and
- * transport graph, opening doors and recovering from stuck.
+ * World navigation using the collision pack and door/transport graph, with door opening and stuck recovery.
  * @see docs/reference/api-movement.md
  * @see docs/NAV.md
  */
-/** Force nav tele inject off for one walk (overrides Global navTeleports). */
+/** Disable teleport planning for this walk, overriding Global navTeleports. */
 export const NAV_PURE_WALK: {
     useTeleportCatalog: false;
     policy: { useTeleports: false };
 };
 
-/** Force nav tele inject on for one walk (overrides Global navTeleports). */
+/** Enable teleport planning for this walk, overriding Global navTeleports. */
 export const NAV_WITH_TELES: {
     useTeleportCatalog: true;
     policy: { useTeleports: true };
@@ -758,23 +796,18 @@ export const Traversal: {
     pureWalk: typeof NAV_PURE_WALK;
     /** Same as NAV_WITH_TELES. */
     withTeles: typeof NAV_WITH_TELES;
-    /**
-     * Web-walk across the world (A* over the baked collision pack + door/
-     * transport graph; opens doors, recovers from stuck). Resolves false on
-     * timeout/no-path. Unwalkable destinations snap to the nearest reachable
-     * tile.
-     */
+    /** Walk using the collision pack and door/transport graph. Return false on timeout or no path; snap blocked destinations to a reachable tile. */
     walkTo(dest: WorldTile, opts?: WalkOptions): Promise<boolean>;
-    /**
-     * walkTo behind an escalation ladder (re-path, big-budget retry, scene-walk
-     * bridging) that by default never gives up — only a random event or Stop
-     * ends it early. Prefer this for unattended walks.
-     */
+    /** Retry walkTo with repathing, a larger search budget and scene walking. Retries forever by default; Stop or a random event can interrupt it. */
     walkResilient(dest: WorldTile, opts: WalkResilientOptions): Promise<boolean>;
     /** Warm the nav worker + collision pack before the first walk. */
     preload(): void;
     /** Path tiles left in the active walk (overlay/progress display). */
     remaining(): number;
+    /** Teleport planning is enabled by Global navTeleports; routes only use teleports the inventory can pay for. */
+    teleportsEnabled(): boolean;
+    /** Ask the active walk to re-plan on its next step instead of waiting for a stall. */
+    requestRepath(reason?: string): void;
 };
 
 /**
@@ -789,7 +822,7 @@ export const DirectNavigator: {
     walkTo(dest: WorldTile, radius?: number, timeoutMs?: number): Promise<boolean>;
 };
 
-// ---- events ----
+// events
 
 /**
  * One line of game chat.
@@ -824,10 +857,9 @@ export const events: {
     off<K extends keyof EventMap>(event: K, cb: (payload: EventMap[K]) => void): void;
 };
 
-// ---- bot base classes ----
+// bot base classes
 
-/** Typed accessor for the run's parameters (from the manifest settingsSchema,
- *  overlaid with panel edits and ?Script.key=… URL overrides). */
+/** Run settings: manifest defaults, panel edits, then ?Script.key=... overrides. */
 export interface SettingsBag {
     bool(key: string, fallback?: boolean): boolean;
     num(key: string, fallback?: number): number;
@@ -837,48 +869,44 @@ export interface SettingsBag {
     raw(): Record<string, unknown>;
 }
 
+/** How the runner schedules the next `loop()` after one finishes. */
+export type LoopCadence =
+    | { kind: 'frame' }
+    | { kind: 'server-tick'; ticks?: number }
+    | { kind: 'time'; ms: number };
+
 /**
  * Base class for every bot. Usually extended via `LoopingBot`, `TaskBot`, or
- * `TreeBot` rather than directly.
+ * `TreeBot`.
  * @see docs/reference/api-bots.md
  */
 export abstract class AbstractBot {
     /** Wall-clock ms between loop() iterations when loop() returns void. */
     loopDelay: number;
+    /** When set, overrides the cadence derived from `loopDelay`. */
+    loopCadence: LoopCadence | null;
     /** Resolved parameters for this run; read e.g. this.settings.bool('x'). */
     readonly settings: SettingsBag;
     onStart?(): void | Promise<void>;
-    /** Runs after stop AND crash — clean up here. */
+    /** Runs after stop and after a crash; clean up here. */
     onStop?(): void;
     onPause?(): void;
     onResume?(): void;
     /** Draw on the overlay canvas; called every client redraw while running. */
     onPaint?(ctx: CanvasRenderingContext2D): void;
-    /**
-     * Where recovery flows (watchdog, guarded restarts) should walk the bot
-     * back to. Scripts with a working anchor implement this.
-     */
+    /** Return the tile recovery should walk back to. Implement this when the script has a working location. */
     recoveryAnchor?(): Tile | null;
-    /**
-     * NPC names this bot legitimately fights — the runtime event guard never
-     * treats them as hostile random events. Override in combat scripts.
-     */
+    /** NPCs the bot fights intentionally; the random-event guard ignores them. */
     grindTargets(): string[];
-    /**
-     * Random-event names this bot will not pause for. Re-read each detect so
-     * a script can ignore Swarm only while it is on a 5x5 arena platform.
-     */
+    /** Random events the bot ignores, checked on each detection. Can depend on the current activity. */
     ignoredRandoms(): string[];
     log(msg: string): void;
-    /**
-     * Subscribe to a game event for this run (auto-removed on stop/crash).
-     * Callbacks fire mid-frame — set flags, log; do real work in loop().
-     */
-    protected on<K extends keyof EventMap>(event: K, cb: (payload: EventMap[K]) => void): void;
+    /** Subscribe until stop or crash. Callbacks run mid-frame: set flags or log, then do the work in loop(). Tasks can subscribe through the bot. */
+    on<K extends keyof EventMap>(event: K, cb: (payload: EventMap[K]) => void): void;
 }
 
 /**
- * The common shape: implement `loop()` and it is called repeatedly.
+ * Implement loop() to run work repeatedly.
  * @see docs/reference/api-bots.md#loopingbot
  */
 export abstract class LoopingBot extends AbstractBot {
@@ -887,7 +915,7 @@ export abstract class LoopingBot extends AbstractBot {
 }
 
 /**
- * A unit of work for `TaskBot`: a guard and the action it guards.
+ * A TaskBot task: validate() decides when execute() runs.
  * @see docs/reference/api-bots.md#taskbot
  */
 export interface Task {
@@ -895,7 +923,7 @@ export interface Task {
     execute(): void | Promise<void>;
 }
 
-// ---- item acquisition ----
+// item acquisition
 
 /**
  * Where an item can be obtained from.
@@ -919,10 +947,6 @@ export function hasAll(needs: ItemNeed[]): boolean;
 export class AcquireTask implements Task {
     constructor(bot: AbstractBot, needs: ItemNeed[]);
     validate(): boolean;
-    /** Dropdown choices when type is 'string' (or multi-select for 'string[]'). */
-    options?: string[];
-    /** Panel group heading for related settings. */
-    group?: string;
     execute(): Promise<void>;
 }
 
@@ -962,10 +986,10 @@ export abstract class TreeBot extends LoopingBot {
     loop(): Promise<number | void>;
 }
 
-// ---- manifest ----
+// manifest
 
 /**
- * The parameter types the panel can render.
+ * Parameter types supported by the panel.
  * @see docs/reference/api-events.md#settings
  */
 export type SettingType = 'boolean' | 'number' | 'string' | 'string[]' | 'tile';
@@ -992,16 +1016,14 @@ export interface SettingDef {
 export type SettingsSchema = Record<string, SettingDef>;
 
 /**
- * What a script declares about itself: name, description, category, tags, and
- * its parameter schema.
+ * Script name, description, category, tags and parameter schema.
  * @see docs/reference/api-bots.md#registering-a-bot
  */
 export interface BotManifestInput {
     name: string;
     description?: string;
     version?: string;
-    /** Skill/group the script belongs to (e.g. "Mining"). Becomes a filter
-     *  chip in the script library; grouped under "Other" when omitted. */
+    /** Library category, e.g. "Mining"; defaults to "Other". */
     category?: string;
     /** Free-form labels for search/filtering in the library (e.g. "f2p"). */
     tags?: string[];
@@ -1023,7 +1045,7 @@ export function defineBot(manifest: BotManifestInput): BotManifest;
 /** Imperative registration (the loader calls this for default exports). */
 export function registerScript(manifest: BotManifestInput, origin?: string): void;
 
-// ---- world catalogs (data tables + pure helpers) ----
+// world catalogs (data tables and pure helpers)
 // @see docs/reference/api-catalogs.md
 
 /** Bank requirement (skill or quest) for a known bank stand. */
@@ -1042,7 +1064,7 @@ export interface BankLocation {
 
 /** Every known bank stand. */
 export const BANK_LOCATIONS: BankLocation[];
-/** Euclidean same-plane distance (not Chebyshev). */
+/** Euclidean same-plane distance, unlike Tile.distanceTo's Chebyshev. */
 export function bankDistance(from: WorldTile, bank: WorldTile): number;
 export function nearestUsableBank(from: WorldTile, usable: (bank: BankLocation) => boolean): BankLocation | null;
 export function bankUnlocked(bank: BankLocation): boolean;
@@ -1238,6 +1260,13 @@ export type WoodcuttingLocation = GatheringLocation;
 export const WOODCUTTING_LOCATIONS: WoodcuttingLocation[];
 export const WOODCUTTING_LOCATION_OPTIONS: string[];
 export function resolveWoodcuttingLocation(setting: string, startTile: WorldTile): WoodcuttingLocation | null;
+export const ENT_NPC_IDS: Set<number>;
+export const ENT_LIFE_TICKS: number;
+export function isEntNpcId(id: number): boolean;
+export function entNpcOnTile(
+    npcs: readonly { id: number; tile: WorldTile }[],
+    tile: WorldTile
+): boolean;
 
 export interface FishingGearPiece { name: string; min: number; restock: number }
 export interface FishingMethod { name: string; op: string; pair: string; gear: FishingGearPiece[] }
@@ -1291,5 +1320,5 @@ export type RuneType = keyof typeof RUNES;
 export const RUNE_OPTIONS: string[];
 export const DEFAULT_RUNE: string;
 
-/** Low-level adapter reads — escape hatch; prefer the typed surface above. */
+/** Raw adapter access; prefer the typed APIs above. */
 export const reader: Record<string, (...args: never[]) => unknown>;

@@ -56,7 +56,7 @@ function needFurnaceWork(snap: QuestSnapshot): boolean {
 }
 
 function sourceKnife(snap: QuestSnapshot): QuestStep | null {
-    // useOn needs a pack item, worn-only does not count (slashBookForKey unequips if needed).
+    // useOn needs a pack item; worn doesn't count (slashBookForKey unequips if needed).
     if (held(snap, EW_ITEM.BATTERED_KEY.id) > 0 || hasHeldSlashTool(snap)) {
         return null;
     }
@@ -67,7 +67,7 @@ function sourceKnife(snap: QuestSnapshot): QuestStep | null {
         ?? { kind: 'grabGround', item: EW_ITEM.KNIFE.name, anchor: KNIFE_SPAWN, waitIfMissing: true };
 }
 
-// Why: the flow runs not started → bookcase → read book → knife → slash for key → surface loadout → enter workshop → water valves and lever → crate supplies → fix bellows → light furnace → mine ore → smelt (air lever and furnace) → smith shield.
+// Why: the flow runs not started, bookcase, read book, knife, slash for key, surface loadout, enter workshop, water valves and lever, crate supplies, fix bellows, light furnace, mine ore, smelt (air lever and furnace), smith shield.
 
 /** Pure decide over journal stage, flags and held items; never reads varps. */
 export function decide(snap: QuestSnapshot): QuestStep {
@@ -88,7 +88,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
     const area = ewArea(snap.tile);
 
-    // --- Start: book ---
+    // Start: book
     if (stage === EW_STAGE.NOT_STARTED) {
         if (held(snap, EW_ITEM.BATTERED_BOOK.id) === 0) {
             if (area === 'workshop') {
@@ -100,7 +100,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return custom('read the Battered book', readBatteredBook);
     }
 
-    // --- Key from book spine ---
+    // Key from book spine
     if (held(snap, EW_ITEM.BATTERED_KEY.id) === 0 && stage < EW_STAGE.ENTERED) {
         if (held(snap, EW_ITEM.BATTERED_BOOK.id) === 0) {
             return fromBank(snap, EW_ITEM.BATTERED_BOOK, 1)
@@ -165,7 +165,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return custom('enter the Elemental Workshop', enterWorkshop);
     }
 
-    // --- Inside workshop ---
+    // Inside workshop
 
     if (needWaterWork(snap)) {
         return custom('start the water wheel', startWaterWheel);

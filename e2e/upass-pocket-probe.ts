@@ -1,8 +1,5 @@
-/** Pocket probe (#265): what the CLIENT can reach and see from one tile of the pass.
- *  Why: the collision pack and the loaded scene disagree about this quest often enough that a route argued
- *  from the pack has been wrong three times, the ledge it called sealed is one the bot crosses. This asks
- *  the client instead: stand on a tile, and report which of the pass's anchors it can walk to, plus every
- *  seam loc in reach with its ops. One run per tile, and the answer is the one the module will act on. */
+/** Report reachable Underground Pass anchors and seam ops from one client tile. */
+// Why: loaded-scene reachability can disagree with the collision pack.
 
 //   bun e2e/upass-pocket-probe.ts --from 2423,9660
 //   bun e2e/upass-pocket-probe.ts --from 2375,9604 --stage 4

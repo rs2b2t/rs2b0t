@@ -1,3 +1,4 @@
+import { normalizeJournal } from '../../journalText.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
@@ -21,13 +22,7 @@ export const FA_STAGE = {
     COMPLETE: 14
 } as const;
 
-export function normalizeJournal(lines: readonly string[] | string): string {
-    return (typeof lines === 'string' ? lines : lines.join(' '))
-        .replace(/@[a-z0-9]{3}@/gi, ' ')
-        .replace(/[|\s]+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
+export { normalizeJournal };
 
 // Why: the journal keeps every earlier paragraph, so the newest line present is the stage and the order of this table is the parse.
 // Why: no needle may end on punctuation, as a colour tag beside a mark normalises to a space between them.

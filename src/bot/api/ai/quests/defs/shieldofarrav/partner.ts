@@ -21,21 +21,18 @@ export interface HandoffInput {
     certsHeld: number;
     certTarget: number;
     partnerConfigured: boolean;
-    /** Shield halves this session has handed over. Each one buys the pair two certificates. */
+    /** Shield halves this session has handed over. Each one buys the pair 2 certificates. */
     halvesGiven: number;
     /** Whether this session has already handed a certificate over. */
     gaveCert: boolean;
 }
 
-// Why: "I have not farmed my half yet" and "I gave my half away" are the same snapshot: no half, no certificate, joined. The cupboard re-arms once the half leaves the pack, so nothing durable tells them apart.
-// Why: a count rather than a flag, because a stockpile needs one half per two certificates and a flag stops the supplier after the first.
-// Why: session scope is enough, a restart farms another half, which is correct work rather than a wedge.
+// Why: before farming a half and after giving one away the snapshot is the same (joined, no half, no certificate); the cupboard re-arms once the half leaves the pack, so nothing durable tells them apart.
+// Why: a count, because a stockpile needs one half per 2 certificates and a flag would stop the supplier after the first.
+// Why: session scope is enough; a restart farms another half, which is correct work.
 export const ArravHandoffState = { halvesGiven: 0, gaveCert: false };
 
-/**
- * Who owes whom. The phoenix bot is the minter by convention: it is the one that
- * can reach Straven and the curator without being given anything first.
- */
+/** Who owes whom. The phoenix bot mints by convention, since it reaches Straven and the curator without being given anything first. */
 export function decideHandoff(input: HandoffInput): ArravHandoff | null {
     if (!input.partnerConfigured) {
         return null;
@@ -50,7 +47,7 @@ export function decideHandoff(input: HandoffInput): ArravHandoff | null {
         if (input.hasOwnHalf && input.hasOtherHalf) {
             return null;
         }
-        // Why: the count that matters is the pack, a stockpile sitting in the bank cannot be offered, and the withdraw that fixes that is the certificate step's job.
+        // Why: count the pack; a stockpile in the bank can't be offered, and the withdraw that fixes that is the certificate step's job.
         if (!input.gaveCert && input.certsHeld >= 2 && input.certs >= target) {
             return 'give-cert';
         }
@@ -66,7 +63,7 @@ export function decideHandoff(input: HandoffInput): ArravHandoff | null {
     if (input.hasOwnHalf) {
         return 'give-half';
     }
-    // Why: each half the pair mints from buys two certificates, so the supplier keeps farming until the target is covered, and asking before the cupboard leg has ever run waits for a certificate only its own half can buy.
+    // Why: each half buys 2 certificates, so the supplier keeps farming until the target is covered; asking before the cupboard leg has run waits on a certificate only its own half can buy.
     const covered = input.halvesGiven * 2 >= Math.max(1, input.certTarget);
     if (input.stage === SOA_STAGE.BLACKARM_JOINED && input.certs === 0 && covered) {
         return 'take-cert';

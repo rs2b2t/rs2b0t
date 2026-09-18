@@ -1,7 +1,4 @@
-/**
- * Session store for the active nav path.
- * Paint and recovery subscribe; walk never forges client path packets.
- */
+/** Session store for the active nav path; paint and recovery read it, nothing here sends packets. */
 
 export interface PublishedPathTile {
     x: number;
@@ -9,10 +6,7 @@ export interface PublishedPathTile {
     level: number;
     /** True when this step is a transport hop (door/ladder/tele). */
     transport?: boolean;
-    /**
-     * Display text for a hop (e.g. "Open Door", "Varrock teleport").
-     * Only set on transport tiles.
-     */
+    /** Hop caption ("Open Door", "Varrock teleport"), transport tiles only. */
     label?: string;
     /** Loc placement the executor will interact with (may differ from stand tile). */
     locX?: number;
@@ -21,9 +15,9 @@ export interface PublishedPathTile {
     locId?: number;
     /** Loc display name for scene lookup when id is missing. */
     locName?: string;
-    /** Interact action (Open, Climb-up, …) for live Loc query. */
+    /** Interact action (Open, Climb-up) for live Loc query. */
     action?: string;
-    /** Hop kind when known (door, ladder, teleport, …). */
+    /** Hop kind when known (door, ladder, teleport). */
     kind?: string;
     /** Spell/jewellery tele id, no scenery hull for these. */
     teleportId?: string;
@@ -34,10 +28,7 @@ interface PublishedPath {
     pathIdx: number;
     /** Optional next click target index for highlight. */
     clickIdx: number;
-    /**
-     * Explore: scene-BFS segment for the current walk click (cyan overlay).
-     * Set after a successful tryMove so operators can compare pack vs client route.
-     */
+    /** Scene-BFS segment for the current walk click (cyan overlay), set after a successful tryMove to compare pack and client routes. */
     clientSegment?: PublishedPathTile[];
 }
 

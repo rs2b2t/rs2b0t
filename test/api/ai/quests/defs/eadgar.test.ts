@@ -137,7 +137,7 @@ describe("Eadgar's Ruse decide — loadout", () => {
         expect(decide(snap({ bankKnown: false })).kind).toBe('scanBank');
     });
 
-    // Why: `nearest` ranks banks by straight line, and the cave sits at z ≈ 10 000 where every surface bank is six thousand tiles away. One run banked at Edgeville and walked to the Tree Gnome Stronghold through the wilderness.
+    // Why: surface-bank distance is meaningless from the cave's z offset near 10,000.
     test('pins Falador West from above the stile and stays on nearest below it', () => {
         const bankOf = (tile: WorldTile): string => {
             const step = decide(snap({ bankKnown: false, tile }));

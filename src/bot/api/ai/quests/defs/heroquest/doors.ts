@@ -15,8 +15,7 @@ import {
     inYard
 } from './areas.js';
 
-// Why: every door here is script-gated and absent from the baked graph, so the module owns both
-// directions of each one, a crossing removed from the navigator seals whatever it guards.
+// Why: every door here is script-gated and absent from the baked graph, so the module owns both directions of each one; a crossing the navigator lacks seals whatever it guards.
 
 function log2(log: (m: string) => void, mark: number, what: string): void {
     for (const line of GameMessages.since(mark)) {
@@ -32,8 +31,7 @@ export async function enterBrimhavenHq(log: (m: string) => void): Promise<boolea
     if (inBrimhavenHq(Game.tile())) {
         return true;
     }
-    // Why: every pocket in this quest is sealed in the baked graph, so a bot standing in one of the
-    // others has no route to this door at all. The walk reads `unreachable` and never starts.
+    // Why: every pocket in this quest is sealed in the baked graph, so from another one there's no route to this door and the walk reads `unreachable`.
     if (!(await returnToStreet(log))) {
         return false;
     }
@@ -69,7 +67,7 @@ export async function leaveBrimhavenHq(log: (m: string) => void): Promise<boolea
 
 /**
  * Garv's door: the first Open is his challenge, which only passes with the papers in the pack and
- * the black armour worn, and it unlocks rather than opening. The second Open crosses.
+ * the black armour worn, and it unlocks the door without swinging it. The second Open crosses.
  */
 export async function enterMansion(log: (m: string) => void): Promise<boolean> {
     if (inMansion(Game.tile())) {
@@ -78,8 +76,7 @@ export async function enterMansion(log: (m: string) => void): Promise<boolean> {
     if (inTreasureRoom(Game.tile())) {
         return crossTreasureDoorOut(log);
     }
-    // Why: Garv's door is out of the baked graph, so from the hideout or the kitchen there is no route
-    // to it. The pocket has to be left before the walk can even be planned.
+    // Why: Garv's door is out of the baked graph, so from the hideout or the kitchen there's no route to it and the pocket has to be left before the walk can be planned.
     if (!(await returnToStreet(log))) {
         return false;
     }
@@ -117,8 +114,7 @@ export async function enterKitchen(log: (m: string) => void): Promise<boolean> {
     if (inKitchen(Game.tile()) || inGarden(Game.tile()) || inYard(Game.tile()) || inSideRoom(Game.tile())) {
         return true;
     }
-    // Why: the kitchen door is out of the baked graph, so a bot inside the hideout or the mansion has
-    // no route to the restaurant floor it is clicked from.
+    // Why: the kitchen door is out of the baked graph, so from the hideout or the mansion there's no route to the restaurant floor it's clicked from.
     if (!(await returnToStreet(log))) {
         return false;
     }
@@ -160,8 +156,7 @@ export async function pushPanel(log: (m: string) => void): Promise<boolean> {
     });
 }
 
-// Why: the yard reaches the garden through an ordinary door the graph already carries, so both sides
-// of the panel push start from wherever behind it the character happens to be.
+// Why: the yard reaches the garden through an ordinary door the graph already carries, so the panel push works from either tile behind it.
 export async function pushPanelBack(log: (m: string) => void): Promise<boolean> {
     if (!inGarden(Game.tile()) && !inYard(Game.tile())) {
         return true;
@@ -177,8 +172,7 @@ export async function pushPanelBack(log: (m: string) => void): Promise<boolean> 
 }
 
 /**
- * Undo whichever sealed pocket the character is standing in, so a walk to a bank, a shop or a partner
- * has a route at all. Every door here is out of the baked graph.
+ * Undo the sealed pocket you're standing in, so a walk to a bank, a shop or a partner has a route. Every door here is out of the baked graph.
  */
 export async function returnToStreet(log: (m: string) => void): Promise<boolean> {
     if (inTreasureRoom(Game.tile()) && !(await crossTreasureDoorOut(log))) {
@@ -199,10 +193,9 @@ export async function returnToStreet(log: (m: string) => void): Promise<boolean>
     return leaveBrimhavenHq(log);
 }
 
-// Why: `[oploc1,pete_sidedoor]` only opens for someone already standing on the door's own row, which
-// is the side room, from the yard it answers "This door is locked" and yields only to the key.
+// Why: `[oploc1,pete_sidedoor]` only opens for someone on the door's own row, which is the side room; from the yard it answers "This door is locked" and yields only to the key.
 
-/** Into the five-tile side room, which needs Grip's spare key from a Black Arm partner. */
+/** Into the 5-tile side room, which needs Grip's spare key from a Black Arm partner. */
 export async function crossSideDoorIn(log: (m: string) => void): Promise<boolean> {
     if (inSideRoom(Game.tile())) {
         return true;

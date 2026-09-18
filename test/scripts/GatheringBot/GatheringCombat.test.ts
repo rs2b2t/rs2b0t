@@ -30,6 +30,7 @@ function snapshot(faceEntity: number, inCombat = true): PlayerSnapshot {
         tile: { x: 3019, z: 3590, level: 0 },
         distance: 1,
         inCombat,
+        combatLevel: 42,
         faceEntity
     };
 }

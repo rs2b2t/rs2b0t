@@ -21,10 +21,7 @@ export function cookLocation(name: string): CookLocation | null {
     return findCookLocation(COOK_LOCATIONS, name);
 }
 
-/**
- * Resolve the location setting: `Custom` and any unknown name yield null so the caller
- * falls back to its tile settings, `Auto` takes the nearest bank this account can open.
- */
+/** Resolve the location setting. `Custom` and unknown names yield null so the caller falls back to its tile settings; `Auto` takes the nearest bank this account can open. */
 export function resolveCookLocation(
     setting: string,
     from: WorldTile,

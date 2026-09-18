@@ -47,8 +47,7 @@ export const TALK_ANCHORS: Record<number, Tile> = {
     3564: new Tile(2205, 3252, 0), // Lord Iorwerth, elf camp, Isafdar (Regicide-gated)
     3566: new Tile(3360, 3343, 0), // Examiner, Digsite Exam Centre
     3568: new Tile(3375, 3285, 0), // Hamid, Duel Arena chapel
-    // Six gnomepilot spawns exist; riddle021 only counts the one within 8 tiles
-    // of ^sindarpos (2850,3497), White Wolf Mountain.
+    // 6 gnomepilot spawns exist; riddle021 only counts the one within 8 tiles of ^sindarpos (2850,3497), White Wolf Mountain.
     3570: new Tile(2847, 3499, 0), // Gnome pilot, White Wolf Mountain glider
     3575: new Tile(2493, 3488, 1), // Heckel Funch, Grand Tree, 1st floor
     3577: new Tile(2469, 3423, 0) // Gnome trainer, Gnome Stronghold agility course

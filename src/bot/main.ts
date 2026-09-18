@@ -1,3 +1,4 @@
+import { CLIENT_VERSION, ClientProt } from '../client/io/ClientProt.js';
 import { actions, reader } from './adapter/ClientAdapter.js';
 import BotClient from './runtime/BotClient.js';
 import { BotHost } from './runtime/BotHost.js';
@@ -29,8 +30,7 @@ import './scripts/index.js';
 export { BotClient, BotHost };
 
 if (typeof document !== 'undefined' && document.getElementById('canvas')) {
-    // Bots on a wall are same-origin iframes, so the top window is where the one
-    // shared collision pack lives; a standalone bot is its own top window.
+    // Bots on a wall are same-origin iframes, so the shared collision pack lives on the top window; a standalone bot is its own top.
     setNavPackHost(window.top ?? window);
 
     const params = new URLSearchParams(window.location.search);
@@ -72,7 +72,7 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
 
     WelcomeDismisser.enable();
 
-    // Always solve randoms when the scene is live, not only while a script loops.
+    // Solve randoms whenever the scene is live, even with no script looping.
     if (params.get('randomevents') !== '0') {
         RandomEventGuardian.enable();
     }
@@ -95,6 +95,8 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
         input: Input, scheduler: Scheduler,
         renderGate: RenderGate,
         build: BUILD_INFO,
+        // Why: the harnesses send cheats as raw packets, and CLIENT_CHEAT moved from 224 to 34 at revision 289, so the number comes off the bundle rather than being copied into every harness.
+        protocol: { version: CLIENT_VERSION, clientCheat: ClientProt.CLIENT_CHEAT },
         diag: () => BotDiag.drain(),
         setRenderMode: (mode: RenderMode) => RenderGate.setMode(mode),
         setCredentials: (u: string, p: string) => AutoRelogin.setCredentials(u, p),

@@ -18,7 +18,7 @@ const FOOD_FORMS: Record<string, string[]> = {
 
 /**
  * HP restored by one Eat/Drink of the named food (or a partial form of it).
- * Multi-bite foods list the per-bite heal, cake slice is 4, not 12.
+ * Multi-bite foods list the per-bite heal (a cake slice is 4).
  */
 const FOOD_HEAL: Record<string, number> = {
     shrimps: 3,
@@ -81,7 +81,7 @@ export function foodCount(items: readonly { name: string | null | undefined }[],
 
 /**
  * Heal amount for one consume of `foodName`, resolving partial cake/pizza/pie forms and common aliases.
- * Why: unknown names fall back to {@link DEFAULT_FOOD_HEAL} so smart-eat still has a usable room size rather than only the 5 HP floor.
+ * Why: unknown names fall back to {@link DEFAULT_FOOD_HEAL} so smart-eat still has a room size above the 5 HP floor.
  */
 export function foodHealAmount(foodName: string): number {
     const key = foodName.trim().toLowerCase();
@@ -107,7 +107,7 @@ export function foodHealAmount(foodName: string): number {
 
 /**
  * Absolute HP at or below which we eat for a full (or near-full) use of `heal`,
- * never above maxHp − heal, never below {@link MIN_EAT_HP}.
+ * never above maxHp - heal, never below {@link MIN_EAT_HP}.
  */
 export function eatAtHpThreshold(maxHp: number, heal: number, minHp: number = MIN_EAT_HP): number {
     if (maxHp <= 0) {
@@ -119,7 +119,7 @@ export function eatAtHpThreshold(maxHp: number, heal: number, minHp: number = MI
 
 /**
  * Eat when a full heal fits (no overheal waste), or HP is at/below the safety
- * floor so we do not die with food still in the pack (#465).
+ * floor so we don't die with food still in the pack (#465).
  */
 export function shouldEatToUseFood(opts: {
     hp: number;

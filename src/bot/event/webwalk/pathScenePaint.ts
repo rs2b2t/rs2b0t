@@ -1,5 +1,5 @@
-// Why: the scene's own projection (`projectAreaGame`) is reused so tiles line up with the ground under the current camera, fixing the HTML-overlay "few tiles off" drift.
-// Why: painting still lands after the model composite, a z-buffered draw would need a World inject.
+// Use the scene projection so tiles stay aligned with the ground under the current camera.
+// A z-buffered path would require a World injection before model compositing.
 
 // eslint-disable-next-line no-restricted-imports -- TODO: route through ClientAdapter
 import type { Client } from '#/client/shell/Client.js';
@@ -147,10 +147,7 @@ function drawLineTrans(x0: number, y0: number, x1: number, y1: number, rgb: numb
     }
 }
 
-/**
- * Paint path + loc markers into the bound game surface.
- * `client` is the live BotClient instance (for projectAreaGame).
- */
+/** Paint path and loc markers into the bound game surface; `client` is the live BotClient (projectAreaGame). */
 export function paintNavPathInGame(_client: Client): void {
     if (!isNavPathPaintEnabled()) {
         return;
@@ -169,10 +166,10 @@ export function paintNavPathInGame(_client: Client): void {
         parseHtmlColor(SettingsStore.globalBag().str('navPathColorTransport', NAV_PATH_PAINT_DEFAULTS.transport))
     );
     const clickRgb = rgbInt(parseHtmlColor(SettingsStore.globalBag().str('navPathColorClick', NAV_PATH_PAINT_DEFAULTS.click)));
-    // Explore: client walk trail colour (solid when walking; alternate when running).
+    // Experimental client walk-trail color.
     const g = SettingsStore.globalBag();
     const clientSegRgb = rgbInt(parseHtmlColor(g.str('navPathColorClient', '#00D4FF'), '#00D4FF'));
-    // Run-alt: yellow (user-facing); hex default #FFFF00.
+    // Running alternates with user-facing yellow (#FFFF00).
     const clientRunAltRgb = rgbInt(
         parseHtmlColor(g.str('navPathColorClientRunAlt', '#FFFF00'), '#FFFF00')
     );
@@ -186,7 +183,7 @@ export function paintNavPathInGame(_client: Client): void {
         q.done = q.idx < path.pathIdx;
     }
 
-    // Walk / hop tiles under camera (scene-aligned)
+    // Scene-aligned walk and hop tiles.
     for (const q of quads) {
         if (q.done) {
             fillQuadPix(q.corners, pathRgb, 0.12);
@@ -200,8 +197,7 @@ export function paintNavPathInGame(_client: Client): void {
         }
     }
 
-    // Experimental: client walk trail (exact tryMove tiles). No centre-line.
-    // Walk: solid primary. Run: checkerboard by world tile (stable as path trims).
+    // tryMove trail: solid while walking, checkerboard while running.
     const segRaw = path.clientSegment;
     if (segRaw && segRaw.length > 0) {
         const seg = remainingPathFromPlayer(segRaw, me);
@@ -219,10 +215,9 @@ export function paintNavPathInGame(_client: Client): void {
         }
     }
 
-    // Object highlighter hulls are drawn on the HTML overlay (crisp 2D strokes).
-    // Scene paint keeps path tile quads + click target.
+    // Loc hulls stay on the HTML overlay; scene paint owns tile quads and the click target.
 
-    // Next click target
+    // Next click target.
     if (path.clickIdx >= 0 && path.clickIdx < path.tiles.length) {
         const ct = path.tiles[path.clickIdx]!;
         if (ct.level === me.level) {
