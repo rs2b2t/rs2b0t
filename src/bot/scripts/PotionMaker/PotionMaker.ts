@@ -120,6 +120,7 @@ export default class PotionMaker extends TaskBot {
             return true;
         }
         if (!(await Bank.waitSnapshotAfter(this.pendingBankGeneration))) {
+            await Bank.close();
             return false;
         }
         this.pendingBankGeneration = null;

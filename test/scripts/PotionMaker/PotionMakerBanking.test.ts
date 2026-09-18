@@ -173,3 +173,35 @@ test('the final deposit barrier carries over into the next restock phase', async
     expect(state.withdrawals).toEqual([EYE, VIAL, GUAM]);
     expect(state.stops).toEqual([]);
 });
+
+test('a deposit that sends nothing reopens and retries held ingredients after a failed close', async () => {
+    const { bot, state, pack, stock } = await fixture();
+    pack.set(VIAL, 14);
+    stock.set(VIAL, 0);
+    state.open = true;
+    state.closeFails = 1;
+    let generation = 1;
+    spyOn(Bank, 'openNearestAccess').mockImplementation(async () => {
+        if (!state.open) generation++;
+        state.open = true;
+        return true;
+    });
+    spyOn(Bank, 'snapshotGeneration').mockImplementation(() => generation);
+    spyOn(Bank, 'waitSnapshotAfter').mockImplementation(async before => generation > before);
+    const deposit = spyOn(Bank, 'depositAllMatching').mockImplementation(async () => {
+        if (deposit.mock.calls.length === 1) return;
+        stock.set(VIAL, pack.get(VIAL) ?? 0);
+        pack.clear();
+        generation++;
+    });
+    await bot.loop();
+    await bot.loop();
+    expect(state.open).toBe(false);
+    expect(deposit).toHaveBeenCalledTimes(1);
+    expect(state.withdrawals).toEqual([]);
+    expect(state.stops).toEqual([]);
+    await bot.loop();
+    expect(deposit).toHaveBeenCalledTimes(2);
+    expect(state.withdrawals).toEqual([VIAL, GUAM]);
+    expect(state.stops).toEqual([]);
+});
