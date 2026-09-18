@@ -60,6 +60,7 @@ export default class Firemaker extends LoopingBot {
     private status = 'starting';
     private startedAt = Date.now();
     private failedLogWithdraws = 0;
+    private pendingBankGeneration: number | null = null;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -122,13 +123,16 @@ export default class Firemaker extends LoopingBot {
             return false;
         }
         const deposit = depositAllExcept(toolKeepNames(TOOLS));
-        if (Inventory.items().some(item => deposit(item.name ?? ''))) {
-            const generation = Bank.snapshotGeneration();
+        if (this.pendingBankGeneration === null && Inventory.items().some(item => deposit(item.name ?? ''))) {
+            this.pendingBankGeneration = Bank.snapshotGeneration();
             await Bank.depositAllMatching(deposit);
-            if (!(await Bank.waitSnapshotAfter(generation))) {
+        }
+        if (this.pendingBankGeneration !== null) {
+            if (!(await Bank.waitSnapshotAfter(this.pendingBankGeneration))) {
                 this.log('bank stock did not reload after the deposit, retrying');
                 return false;
             }
+            this.pendingBankGeneration = null;
         }
         const plan = toolRestockPlan(TOOLS, this.skillLevel, this.invCount, name => Bank.count(name));
         for (const step of plan) {

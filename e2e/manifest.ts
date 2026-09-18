@@ -22,6 +22,16 @@ export const CASES: readonly Case[] = [
         budgetMin: 3,
         note: 'Fresh local account with a tinderbox and no banked logs; verifies the ready empty-bank stop and saves a screenshot.'
     },
+    {
+        id: 'cookbot-zanaris-live',
+        harness: 'cookbot-zanaris-live.ts',
+        covers: { scripts: ['CookBot'] },
+        status: 'vetted',
+        provenAt: '3fe15f03',
+        manual: true,
+        budgetMin: 4,
+        note: 'Fresh local account completes Lost City, opts into Zanaris banking, withdraws a banked shrimp and cooks it at the nearby range.'
+    },
     ...(['missing-dds', 'missing-superanti', 'sharks14', 'guardian', 'reward'] as const).map(scenario => ({
         id: `jive-private-${scenario}`,
         harness: 'jive-private-live.ts',
