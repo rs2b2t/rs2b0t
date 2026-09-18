@@ -75,3 +75,26 @@ test('an unready bank does not consume a withdrawal retry', async () => {
     expect(state.withdrawals).toBe(0);
     expect(state.stops).toEqual([]);
 });
+
+test('a timed-out deposit keeps stock checks blocked across empty-pack retries', async () => {
+    const { bot, state } = fixture();
+    state.logs = 0;
+    state.packLogs = 1;
+    let refreshed = false;
+    const wait = spyOn(Bank, 'waitSnapshotAfter').mockImplementation(async generation => {
+        expect(generation).toBe(1);
+        if (refreshed) state.logs = 20;
+        return refreshed;
+    });
+    const deposit = spyOn(Bank, 'depositAllMatching').mockImplementation(async () => { state.packLogs = 0; });
+    await bot.loop();
+    await bot.loop();
+    expect(wait).toHaveBeenCalledTimes(2);
+    expect(state.withdrawals).toBe(0);
+    expect(state.stops).toEqual([]);
+    refreshed = true;
+    await bot.loop();
+    expect(deposit).toHaveBeenCalledTimes(1);
+    expect(state.withdrawals).toBe(1);
+    expect(state.stops).toEqual([]);
+});
