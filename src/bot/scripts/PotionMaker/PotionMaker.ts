@@ -71,6 +71,7 @@ export default class PotionMaker extends TaskBot {
     private status = 'starting';
     private startedAt = Date.now();
     private xpAtStart = 0;
+    private pendingBankGeneration: number | null = null;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(
@@ -112,6 +113,29 @@ export default class PotionMaker extends TaskBot {
     }
     countBatch(): void {
         this.batches++;
+    }
+
+    async waitForDeposit(): Promise<boolean> {
+        if (this.pendingBankGeneration === null) {
+            return true;
+        }
+        if (!(await Bank.waitSnapshotAfter(this.pendingBankGeneration))) {
+            return false;
+        }
+        this.pendingBankGeneration = null;
+        return true;
+    }
+
+    async depositInventory(): Promise<boolean> {
+        if (!(await this.waitForDeposit())) {
+            return false;
+        }
+        if (Inventory.used() > 0) {
+            this.pendingBankGeneration = Bank.snapshotGeneration();
+            await Bank.depositAllMatching(() => true);
+            await Execution.delayTicks(1);
+        }
+        return this.waitForDeposit();
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
@@ -188,16 +212,9 @@ class RestockIngredients implements Task {
             }
         }
 
-        if (Inventory.used() > 0) {
-            this.bot.log('bank open, depositing inventory');
-            const bankGenerationBeforeDeposit = Bank.snapshotGeneration();
-            await Bank.depositAllMatching(() => true);
-            await Execution.delayTicks(1);
-            // Why: the count below must see the post-deposit stock, not the stale list that was already loaded.
-            if (!(await Bank.waitSnapshotAfter(bankGenerationBeforeDeposit))) {
-                this.bot.log('bank stock did not reload after the deposit — retrying');
-                return;
-            }
+        if (!(await this.bot.depositInventory())) {
+            this.bot.log('bank stock did not reload after the deposit, retrying');
+            return;
         }
 
         // Why: Bank.open* already waits for ready(), so one count is the server's answer, an empty bank and a still-loading one included.
@@ -342,6 +359,9 @@ class FinishPotions implements Task {
             return;
         }
 
+        if (!(await this.bot.waitForDeposit())) {
+            return;
+        }
         if (!Bank.ready()) {
             await Bank.close();
             return;
@@ -394,13 +414,7 @@ class FinishPotions implements Task {
             this.bot.log('could not open the bank — retrying');
             return;
         }
-        if (Inventory.used() > 0) {
-            const bankGenerationBeforeDeposit = Bank.snapshotGeneration();
-            await Bank.depositAllMatching(() => true);
-            await Execution.delayTicks(1);
-            // Why: the next cycle's counts must see the post-deposit stock, so wait for the list that follows before leaving the booth open.
-            await Bank.waitSnapshotAfter(bankGenerationBeforeDeposit);
-        }
+        await this.bot.depositInventory();
     }
 
     private lastItem(id: number): InvItem | null {

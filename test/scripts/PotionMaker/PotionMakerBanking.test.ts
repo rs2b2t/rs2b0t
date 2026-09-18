@@ -127,3 +127,49 @@ test('an unready bank leaves the unfinished batch eligible to retry', async () =
     await bot.loop();
     expect(state.withdrawals).toEqual([EYE]);
 });
+
+test('restock retains a timed-out deposit barrier after the backpack empties', async () => {
+    const { bot, state, pack, stock } = await fixture();
+    pack.set(VIAL, 14);
+    stock.set(VIAL, 0);
+    let refreshed = false;
+    const wait = spyOn(Bank, 'waitSnapshotAfter').mockImplementation(async generation => {
+        expect(generation).toBe(1);
+        if (refreshed) stock.set(VIAL, 14);
+        return refreshed;
+    });
+    const deposit = spyOn(Bank, 'depositAllMatching').mockImplementation(async () => { pack.clear(); });
+    await bot.loop();
+    await bot.loop();
+    expect(wait).toHaveBeenCalledTimes(2);
+    expect(state.withdrawals).toEqual([]);
+    expect(state.stops).toEqual([]);
+    refreshed = true;
+    await bot.loop();
+    expect(deposit).toHaveBeenCalledTimes(1);
+    expect(state.withdrawals).toEqual([VIAL, GUAM]);
+    expect(state.stops).toEqual([]);
+});
+
+test('the final deposit barrier carries over into the next restock phase', async () => {
+    const { bot, state, pack, stock } = await fixture();
+    pack.set(UNFINISHED, 14);
+    stock.set(VIAL, 0);
+    let refreshed = false;
+    const wait = spyOn(Bank, 'waitSnapshotAfter').mockImplementation(async generation => {
+        expect(generation).toBe(1);
+        if (refreshed) stock.set(VIAL, 14);
+        return refreshed;
+    });
+    const deposit = spyOn(Bank, 'depositAllMatching').mockImplementation(async () => { pack.clear(); });
+    await bot.loop();
+    await bot.loop();
+    expect(wait).toHaveBeenCalledTimes(2);
+    expect(state.withdrawals).toEqual([EYE]);
+    expect(state.stops).toEqual([]);
+    refreshed = true;
+    await bot.loop();
+    expect(deposit).toHaveBeenCalledTimes(1);
+    expect(state.withdrawals).toEqual([EYE, VIAL, GUAM]);
+    expect(state.stops).toEqual([]);
+});
