@@ -1410,6 +1410,18 @@ export const reader = {
         return comId === -1 ? 0 : (IfType.list[comId].linkObjType?.length ?? 0);
     },
 
+    duelOffers(): { ready: boolean; mine: InvItemSnapshot[]; theirs: InvItemSnapshot[] } {
+        const main = raw?.mainModalId;
+        const ids = main === 6575 ? [6669, 6670] : main === 6412 ? [6507, 6508] : [];
+        const read = (id: number): InvItemSnapshot[] => readInvComponent(id, () => []);
+        const mine = ids.length ? read(ids[0]) : [];
+        const theirs = ids.length ? read(ids[1]) : [];
+        const ready = main === 6575
+            ? ids.every(id => invState(id).transmitting && invState(id).fullGeneration > 0)
+            : main === 6412 && [6516, 6517].every(id => reader.ifText(id)?.trim() === 'Absolutely nothing!');
+        return { ready, mine, theirs };
+    },
+
     // offer screen = main modal 3323 (pack in side 3321); confirm screen = main modal 3443
     tradeOfferOpen(): boolean {
         return raw?.mainModalId === 3323;

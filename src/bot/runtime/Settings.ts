@@ -160,6 +160,12 @@ export const GLOBAL_SETTINGS_CORE: SettingsSchema = {
         default: true,
         label: 'Bank gems/fruit/beer/kebabs/caskets (default)'
     },
+    clueDuelPartner: {
+        type: 'string',
+        default: '',
+        label: 'Clue duel partner',
+        help: 'Named account running Duel Arena in Clue helper mode for the obstacle-arena coordinate clue.'
+    },
     useMageBank: {
         type: 'boolean',
         default: false,

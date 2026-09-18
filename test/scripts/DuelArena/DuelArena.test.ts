@@ -184,3 +184,35 @@ describe('Duel Arena task integration', () => {
         }
     });
 });
+
+describe('Duel Arena clue helper', () => {
+    test('requires a named solver instead of training or accepting strangers', async () => {
+        const bot = new DuelArena();
+        bot.settings = new SettingsBag({ mode: 'Clue helper' });
+        bot.bindLog(() => {});
+        try {
+            await bot.onStart();
+            expect(stopReasons).toEqual(['set a clue solver partner']);
+            expect(selectedStyles).toEqual([]);
+        } finally {
+            bot.onStop();
+            bot.disposeSubscriptions();
+        }
+    });
+
+    test('helper mode ignores training targets and never selects a combat style', async () => {
+        levels = { attack: 99, strength: 99, defence: 99 };
+        const bot = new DuelArena();
+        bot.settings = new SettingsBag({ mode: 'Clue helper', partner: 'Solver' });
+        bot.bindLog(() => {});
+        try {
+            await bot.onStart();
+            await bot.loop();
+            expect(stopReasons).toEqual([]);
+            expect(selectedStyles).toEqual([]);
+        } finally {
+            bot.onStop();
+            bot.disposeSubscriptions();
+        }
+    });
+});

@@ -256,6 +256,8 @@ Walks to the Al Kharid Duel Arena, pairs with other players, accepts both no-sta
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
+| `mode` | string | `"Train"` | Mode — one of: Train, Clue helper |
+| `partner` | string | `""` | Clue solver partner |
 | `targetAttack` | number (1–99) | `99` | Target Attack level |
 | `targetStrength` | number (1–99) | `99` | Target Strength level |
 | `targetDefence` | number (1–99) | `1` | Target Defence level |

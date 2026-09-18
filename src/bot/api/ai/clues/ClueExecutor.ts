@@ -1,3 +1,6 @@
+import { crossesClueDuel, walkAcrossClueDuel, DUEL_CLUE_ID } from './duelTravel.js';
+import { leaveClueDuel } from '../../duel/ClueDuel.js';
+import { fightArenaAt } from '../../duel/Duel.js';
 // docs/decisions/clue-host-yielding.md
 import { actions, reader } from '#/bot/adapter/ClientAdapter.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
@@ -129,6 +132,7 @@ const gateItemsTried = new Set<string>();
  * Why: the navigator names what the route was short of, and the desert's one entrance eats a Shantay pass, so a leg short a 5gp ticket buys one and walks again.
  */
 async function walkLeg(dest: NavPoint, log: (m: string) => void, radius = ARRIVE_RADIUS): Promise<boolean> {
+    if (crossesClueDuel(dest)) return walkAcrossClueDuel(dest, radius, log);
     if (crossesTirannwn(dest)) {
         return walkAcrossTirannwn(dest, radius, log);
     }
@@ -651,6 +655,7 @@ export const ClueExecutor = {
             await drainChat();
             if (EventSignal.pending()) return 'yield';
 
+            if (fightArenaAt(Game.tile()) && Inventory.countById(DUEL_CLUE_ID) === 0 && !(await leaveClueDuel(tlog))) return 'yield';
             const step = identifyStep(heldIds(), CLUE_DB, CASKET_IDS);
             if (step === null) {
                 await dismissRewardModal();

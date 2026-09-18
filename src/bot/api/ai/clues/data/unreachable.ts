@@ -7,7 +7,7 @@
 
 /** Clue destinations the baked nav pack can't route to, each with its stated gap. */
 export const PACK_UNREACHABLE: Record<number, string> = {
-    3554: 'Duel Arena: obstacle arena requires an accepted duel with another player; no walking entrance',
+    3554: 'Duel Arena: accepted obstacle duel with a named helper; crossed by duelTravel.ts',
 
     // QUEST: assume complete, then bake
     3560: 'Isafdar: Sticks [Pass] @ (2200,3169) — requires Underground Pass/Regicide',

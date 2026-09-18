@@ -1,3 +1,4 @@
+import { ClueDuelHelper, clueDuelName } from '../../api/duel/ClueDuel.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Game } from '../../api/game/Game.js';
 import { Execution } from '../../api/execution/Execution.js';
@@ -47,6 +48,8 @@ import {
 } from './DuelArenaLogic.js';
 
 export const DUEL_ARENA_SETTINGS: SettingsSchema = {
+    mode: { type: 'string', default: 'Train', options: ['Train', 'Clue helper'], label: 'Mode' },
+    partner: { type: 'string', default: '', label: 'Clue solver partner', showIf: { key: 'mode', anyOf: ['Clue helper'] } },
     targetAttack: {
         type: 'number',
         default: 99,
@@ -109,6 +112,16 @@ export default class DuelArena extends TaskBot {
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.sceneReady(), 0);
+        if (this.settings.str('mode', 'Train') === 'Clue helper') {
+            const partner = this.settings.str('partner', '').trim();
+            if (!partner || clueDuelName(partner) === clueDuelName(reader.localPlayerName())) {
+                ScriptRunner.stop('set a clue solver partner');
+                return;
+            }
+            this.status = `helping ${partner} with clues`;
+            this.add(new ContinueDialog(), new ClueDuelHelper(partner, message => this.log(message)));
+            return;
+        }
         this.targetAttack = this.settings.num('targetAttack', 99);
         this.targetStrength = this.settings.num('targetStrength', 99);
         this.targetDefence = this.settings.num('targetDefence', 1);
@@ -145,6 +158,11 @@ export default class DuelArena extends TaskBot {
         const mins = (Date.now() - this.startedAt) / 60_000;
         const xpGained = Math.max(0, this.trainingXp() - this.xpAtStart);
         paint.title(`Duel Arena — ${this.status}`);
+        if (this.settings.str('mode', 'Train') === 'Clue helper') {
+            paint.row(`Partner ${this.settings.str('partner', '')}`, 'No stakes, no combat');
+            paint.end();
+            return;
+        }
         paint.row(`Attack ${Skills.level('attack')}/${this.targetAttack}`, `Strength ${Skills.level('strength')}/${this.targetStrength}`, `Defence ${Skills.level('defence')}/${this.targetDefence}`);
         paint.row(`Style ${this.desiredStyle()}`, `Opponent ${this.opponent ?? '—'}`, `Duels ${this.duels}`);
         paint.row(`Runtime ${Math.floor(mins)}m`, `XP/hr: ${fmtXpHr(xpGained, mins)}`);

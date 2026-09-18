@@ -1,3 +1,4 @@
+import { openClueBank } from './bankAccess.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
@@ -44,7 +45,7 @@ export async function stockHardWeapon(entrana: boolean, remember: (name: string)
     }
     if (!(await Equipment.equip(dagger.name)) || !ddsWorn()) return false;
     if (entrana && !(await Equipment.unequip(dagger.name))) return false;
-    if (!(await Bank.openNearest('Bank booth', 'Use-quickly')) || !(await Bank.waitReady())) return false;
+    if (!(await openClueBank()) || !(await Bank.waitReady())) return false;
     if (entrana) await Bank.depositAllMatching(name => ENTRANA_RESTRICTED_GEAR_RE.test(name));
     return true;
 }

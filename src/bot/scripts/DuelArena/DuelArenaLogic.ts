@@ -3,25 +3,9 @@ import type { CombatStyleResolution, MeleeCombatStyle } from '../../api/combat/C
 
 export type DuelTrainingStyle = Extract<MeleeCombatStyle, 'attack' | 'strength' | 'defence'>;
 
-export interface Rect {
-    minX: number;
-    maxX: number;
-    minZ: number;
-    maxZ: number;
-}
-
-// Why: the six 25x15 fight pens come from duel_arena_fight_zones and duel_arena_obstacle_fight_zones.
-// Why: other simultaneous duels share the scene, so a player in one pen must only target the other player in that pen.
-
-/** The duel-arena fight pens. */
-export const DUEL_FIGHT_ARENAS: readonly Rect[] = [
-    { minX: 3333, maxX: 3357, minZ: 3244, maxZ: 3258 },
-    { minX: 3364, maxX: 3388, minZ: 3225, maxZ: 3239 },
-    { minX: 3333, maxX: 3357, minZ: 3206, maxZ: 3220 },
-    { minX: 3364, maxX: 3388, minZ: 3244, maxZ: 3258 },
-    { minX: 3333, maxX: 3357, minZ: 3225, maxZ: 3239 },
-    { minX: 3364, maxX: 3388, minZ: 3206, maxZ: 3220 }
-];
+import { fightArenaAt } from '../../api/duel/Duel.js';
+import type { Rect } from '../../api/duel/Duel.js';
+export { DUEL_FIGHT_ARENAS, fightArenaAt, type Rect } from '../../api/duel/Duel.js';
 
 const DUEL_ZONE: Rect = { minX: 3328, maxX: 3393, minZ: 3203, maxZ: 3325 };
 export const DUEL_CHALLENGE_ANCHOR: WorldTile = { x: 3368, z: 3274, level: 0 };
@@ -34,10 +18,6 @@ export const BUSY_MESSAGE = /^other player is busy at the moment\.?$/i;
 
 function inside(tile: WorldTile, area: Rect): boolean {
     return tile.level === 0 && tile.x >= area.minX && tile.x <= area.maxX && tile.z >= area.minZ && tile.z <= area.maxZ;
-}
-
-export function fightArenaAt(tile: WorldTile | null): Rect | null {
-    return tile === null ? null : (DUEL_FIGHT_ARENAS.find(area => inside(tile, area)) ?? null);
 }
 
 export function fightArenaCenter(area: Rect): WorldTile {

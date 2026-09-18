@@ -3,6 +3,16 @@ import type { Case } from './manifestTypes.js';
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
     {
+        id: 'duel-clue-373-live',
+        harness: 'duel-clue-373-live.ts',
+        covers: { scripts: ['ClueSolver', 'DuelArena'], subsystems: ['clues', 'multibox'] },
+        status: 'vetted',
+        provenAt: 'ec3ba080',
+        manual: true,
+        budgetMin: 7,
+        note: 'Two fresh local accounts negotiate a no-stake obstacle duel, dig clue3554, forfeit, open the casket outside and bank the reward. Both players retain their starting HP. Saves logs and screenshots.'
+    },
+    {
         id: 'mortton-shop-798-live',
         harness: 'mortton-shop-798-live.ts',
         covers: { scripts: ['AIOQuester'], subsystems: ['nav'] },

@@ -1,3 +1,4 @@
+import { openClueBank } from '../../api/ai/clues/bankAccess.js';
 import { foodHealAmount, shouldEatToUseFood } from '../../api/combat/food.js';
 import { TaskBot } from '../../api/bot/Bot.js';
 import type { Task } from '../../api/bot/Bot.js';
@@ -122,7 +123,7 @@ export default class ClueSolver extends TaskBot {
 
     /** Bank the casket reward, keeping only what the next trail runs on. */
     private async depositTrailLoot(): Promise<void> {
-        if (!(await Bank.openNearestAccess({ name: 'Bank booth', op: 'Use-quickly' }, m => this.log(`  ${m}`)))) {
+        if (!(await openClueBank(m => this.log(`  ${m}`)))) {
             this.log('[clue] could not open the bank to store the reward');
             return;
         }

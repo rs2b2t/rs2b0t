@@ -1,3 +1,5 @@
+import { openClueBank } from './bankAccess.js';
+import { crossesClueDuel, walkAcrossClueDuel } from './duelTravel.js';
 import { EventSignal } from '#/bot/api/execution/EventSignal.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
 import { Game } from '#/bot/api/game/Game.js';
@@ -41,8 +43,6 @@ import { hardClueKit, DDS_IDS, SHARK_ID } from './hardClueKit.js';
 import { hardKitSnapshot, hardKitFingerprint, stockHardWeapon, stockHardSupplies } from './hardCluePreparation.js';
 import { sustainUntil } from './Guardian.js';
 
-const BANK_NAME = 'Bank booth';
-const BANK_OP = 'Use-quickly';
 const CLUE_COINS = 1_000;
 const ALTAR_OP = 'Pray-at';
 const ALTAR_RADIUS = 2;
@@ -94,6 +94,7 @@ export interface SolveClueHost {
 
 // Why: The nearest bank from the elf camp routes across unsupported Isafdar terrain, so leave Tirannwn first.
 export function walkToBank(tile: NavPoint, log: (m: string) => void): Promise<boolean> {
+    if (crossesClueDuel(tile)) return walkAcrossClueDuel(tile, 3, log);
     if (crossesTirannwn(tile)) {
         return walkAcrossTirannwn(tile, 3, log);
     }
@@ -405,7 +406,7 @@ export class SolveClue implements Task {
             this.host.log('[clue] walk to the bank failed — gear stays banked, will retry');
             return;
         }
-        if (!(await Bank.openNearest(BANK_NAME, BANK_OP, m => this.host.log(`  ${m}`)))) {
+        if (!(await openClueBank(m => this.host.log(`  ${m}`)))) {
             this.host.log('[clue] could not open the bank — gear stays banked, will retry');
             return;
         }
@@ -501,7 +502,7 @@ export class SolveClue implements Task {
             }
         }
 
-        if (!(await Bank.openNearest(BANK_NAME, BANK_OP, m => this.host.log(`  ${m}`)))) {
+        if (!(await openClueBank(m => this.host.log(`  ${m}`)))) {
             this.host.log('[clue] could not open the bank — will retry');
             return false;
         }

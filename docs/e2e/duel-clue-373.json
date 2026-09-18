@@ -1,0 +1,513 @@
+{
+  "before": {
+    "solver": {
+      "tile": {
+        "x": 3368,
+        "z": 3274,
+        "level": 0
+      },
+      "hp": 99,
+      "modal": {
+        "main": -1,
+        "side": -1,
+        "chat": -1
+      },
+      "options": 0,
+      "inventory": [
+        {
+          "slot": 0,
+          "id": 3554,
+          "name": "Clue scroll",
+          "count": 1,
+          "ops": [
+            "Read",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 1,
+          "id": 2574,
+          "name": "Sextant",
+          "count": 1,
+          "ops": [
+            "Look through",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 2,
+          "id": 2575,
+          "name": "Watch",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 3,
+          "id": 2576,
+          "name": "Chart",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 4,
+          "id": 952,
+          "name": "Spade",
+          "count": 1,
+          "ops": [
+            "Dig",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 5,
+          "id": 1231,
+          "name": "Dragon dagger(p)",
+          "count": 1,
+          "ops": [
+            null,
+            "Wield",
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 6,
+          "id": 2448,
+          "name": "Superantipoison(4)",
+          "count": 1,
+          "ops": [
+            "Drink",
+            null,
+            null,
+            "Empty",
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 7,
+          "id": 385,
+          "name": "Shark",
+          "count": 1,
+          "ops": [
+            "Eat",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 8,
+          "id": 385,
+          "name": "Shark",
+          "count": 1,
+          "ops": [
+            "Eat",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 9,
+          "id": 385,
+          "name": "Shark",
+          "count": 1,
+          "ops": [
+            "Eat",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 10,
+          "id": 385,
+          "name": "Shark",
+          "count": 1,
+          "ops": [
+            "Eat",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 11,
+          "id": 385,
+          "name": "Shark",
+          "count": 1,
+          "ops": [
+            "Eat",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 12,
+          "id": 385,
+          "name": "Shark",
+          "count": 1,
+          "ops": [
+            "Eat",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 13,
+          "id": 385,
+          "name": "Shark",
+          "count": 1,
+          "ops": [
+            "Eat",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 14,
+          "id": 385,
+          "name": "Shark",
+          "count": 1,
+          "ops": [
+            "Eat",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 15,
+          "id": 385,
+          "name": "Shark",
+          "count": 1,
+          "ops": [
+            "Eat",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 16,
+          "id": 385,
+          "name": "Shark",
+          "count": 1,
+          "ops": [
+            "Eat",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 17,
+          "id": 385,
+          "name": "Shark",
+          "count": 1,
+          "ops": [
+            "Eat",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 18,
+          "id": 385,
+          "name": "Shark",
+          "count": 1,
+          "ops": [
+            "Eat",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 19,
+          "id": 385,
+          "name": "Shark",
+          "count": 1,
+          "ops": [
+            "Eat",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 20,
+          "id": 385,
+          "name": "Shark",
+          "count": 1,
+          "ops": [
+            "Eat",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 21,
+          "id": 385,
+          "name": "Shark",
+          "count": 1,
+          "ops": [
+            "Eat",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 22,
+          "id": 995,
+          "name": "Coins",
+          "count": 1000,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        }
+      ],
+      "state": "running",
+      "logs": [
+        "ClueSolver started"
+      ]
+    },
+    "helper": {
+      "tile": {
+        "x": 3368,
+        "z": 3274,
+        "level": 0
+      },
+      "hp": 10,
+      "modal": {
+        "main": -1,
+        "side": -1,
+        "chat": -1
+      },
+      "options": 0,
+      "inventory": [],
+      "state": "running",
+      "logs": [
+        "Duel Arena Combat Trainer started"
+      ]
+    }
+  },
+  "after": {
+    "solver": {
+      "tile": {
+        "x": 3381,
+        "z": 3268,
+        "level": 0
+      },
+      "hp": 99,
+      "modal": {
+        "main": -1,
+        "side": -1,
+        "chat": -1
+      },
+      "options": 1024,
+      "inventory": [
+        {
+          "slot": 1,
+          "id": 2574,
+          "name": "Sextant",
+          "count": 1,
+          "ops": [
+            "Look through",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 2,
+          "id": 2575,
+          "name": "Watch",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 3,
+          "id": 2576,
+          "name": "Chart",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 4,
+          "id": 952,
+          "name": "Spade",
+          "count": 1,
+          "ops": [
+            "Dig",
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 22,
+          "id": 995,
+          "name": "Coins",
+          "count": 5517,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        }
+      ],
+      "state": "running",
+      "logs": [
+        "ClueSolver started",
+        "ClueSolver — watching the pack for easy clue scrolls/caskets, foodless",
+        "[clue] banking loot at the Duel Arena bank ((3382, 3269, 0)) before solving",
+        "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+        "  path: cost 25, 21 waypoints, expanded 420, worker 1.2ms, hops=0",
+        "  arrived (1 clicks)",
+        "  opening 'Closed chest' before banking",
+        "[clue] no Shantay pass in the bank — Kharidian desert digs will stay closed (#371)",
+        "[clue] trail pack: 0 , teleports off, 6 slots free",
+        "[clue] leg 1 — solving trail_clue_hard_sextant028 (dig) at (3374,3250,0) [3554]",
+        "[clue] nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+        "[clue] path: cost 25, 19 waypoints, expanded 395, worker 0.4ms, hops=0",
+        "[clue] arrived (1 clicks)",
+        "[clue] waiting for clue helper dh68xqlt",
+        "[clue] nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+        "[clue] path: cost 5, 6 waypoints, expanded 100, worker 0.1ms, hops=0",
+        "[clue] arrived (3 clicks)",
+        "[clue] step done",
+        "[clue] forfeiting the clue duel",
+        "[clue] leg 2 — solving trail_clue_hard_sextant028_casket (open-casket) [3555]",
+        "[clue] the trail is complete",
+        "[clue] step done",
+        "[clue] trail complete",
+        "[clue] trail complete",
+        "[clue] trail done — returning to the Duel Arena bank ((3382, 3269, 0))",
+        "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+        "  path: cost 34, 29 waypoints, expanded 635, worker 0.6ms, hops=0",
+        "  arrived (4 clicks)",
+        "[clue] banked the reward (26 → 5 slots used)"
+      ]
+    },
+    "helper": {
+      "tile": {
+        "x": 3365,
+        "z": 3275,
+        "level": 0
+      },
+      "hp": 10,
+      "modal": {
+        "main": -1,
+        "side": -1,
+        "chat": -1
+      },
+      "options": 0,
+      "inventory": [],
+      "state": "running",
+      "logs": [
+        "Duel Arena Combat Trainer started",
+        "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+        "path: cost 5, 4 waypoints, expanded 78, worker 1.0ms, hops=0",
+        "arrived (2 clicks)",
+        "nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}",
+        "path: cost 17, 13 waypoints, expanded 386, worker 0.7ms, hops=0",
+        "arrived (1 clicks)"
+      ]
+    }
+  },
+  "entered": true,
+  "casket": true,
+  "complete": true
+}
