@@ -108,6 +108,19 @@ export default class Firemaker extends LoopingBot {
         return Traversal.walkResilient(dest, { radius, attempts: 3, timeoutMs: 120_000, log: m => this.log(`  ${m}`) });
     }
 
+    private async waitForDeposit(): Promise<boolean> {
+        if (this.pendingBankGeneration === null) {
+            return true;
+        }
+        if (!(await Bank.waitSnapshotAfter(this.pendingBankGeneration))) {
+            this.log('bank stock did not reload after the deposit, reopening');
+            await Bank.close();
+            return false;
+        }
+        this.pendingBankGeneration = null;
+        return true;
+    }
+
     private async bankLeg(): Promise<boolean> {
         const here = Game.tile();
         if (here && Math.max(Math.abs(here.x - this.plot.bank.x), Math.abs(here.z - this.plot.bank.z)) > 4 && !(await this.walkTo(this.plot.bank, `the ${this.spotName} bank`, 2))) {
@@ -122,17 +135,16 @@ export default class Firemaker extends LoopingBot {
         if (!Bank.ready()) {
             return false;
         }
+        if (!(await this.waitForDeposit())) {
+            return false;
+        }
         const deposit = depositAllExcept(toolKeepNames(TOOLS));
-        if (this.pendingBankGeneration === null && Inventory.items().some(item => deposit(item.name ?? ''))) {
+        if (Inventory.items().some(item => deposit(item.name ?? ''))) {
             this.pendingBankGeneration = Bank.snapshotGeneration();
             await Bank.depositAllMatching(deposit);
         }
-        if (this.pendingBankGeneration !== null) {
-            if (!(await Bank.waitSnapshotAfter(this.pendingBankGeneration))) {
-                this.log('bank stock did not reload after the deposit, retrying');
-                return false;
-            }
-            this.pendingBankGeneration = null;
+        if (!(await this.waitForDeposit())) {
+            return false;
         }
         const plan = toolRestockPlan(TOOLS, this.skillLevel, this.invCount, name => Bank.count(name));
         for (const step of plan) {
