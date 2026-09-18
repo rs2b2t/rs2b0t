@@ -66,6 +66,9 @@ export async function purgePackAtBank(opts: {
     /** Exact display names to keep (case-insensitive), e.g. pickaxe / rod. */
     keep: Iterable<string>;
     stand?: WorldTile | null;
+    /** Forced bank destination (Bank location setting) when no stand is given. */
+    destination?: BankDestination;
+    preferNearby?: boolean;
     boothName?: string;
     boothOp?: string;
     obstacles?: string[];
@@ -84,6 +87,8 @@ export async function purgePackAtBank(opts: {
     if (
         !(await Banking.open({
             stand: opts.stand ?? null,
+            destination: opts.destination,
+            preferNearby: opts.preferNearby,
             boothName: opts.boothName,
             boothOp: opts.boothOp,
             obstacles: opts.obstacles,
