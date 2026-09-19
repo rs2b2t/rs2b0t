@@ -24,7 +24,7 @@
 - [Money making](#money-making) — 7
 - [Navigation](#navigation) — 2
 - [Prayer](#prayer) — 1
-- [Quest](#quest) — 3
+- [Quest](#quest) — 4
 - [Runecrafting](#runecrafting) — 3
 - [Smithing](#smithing) — 3
 - [Thieving](#thieving) — 3
@@ -1049,6 +1049,17 @@ Shield of Arrav certificate faucet — joins both gangs from one account, farms 
 Alfred Grimhand's Barcrawl — banks for the drinks, gets the card from the outpost guard, tours all ten bars nearest-first and hands it back in (opens the Barbarian Outpost gate)
 
 - Tags: `miniquest`, `barcrawl`, `barbarian outpost`, `gate`
+
+### DragonfireShield
+
+Farms free anti-dragonbreath shields from Duke Horacio in Lumbridge Castle (requires the %dragon_shield var, unlocked by Oziach in the Dark Slayer quest) — drop-mode: un-noted shields are dropped at the Duke, looted and banked; noted shields are carried to seed the pile and freely drop-safe to the floor
+
+- Tags: `dark slayer`, `dragonfire shield`, `antidragonbreath shield`, `duke horacio`, `certificates`, `faucet`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `tripSecs` | number (20–600) | `50` | Farm seconds per trip |
+| `carryNotes` | boolean | `true` | Carry noted shields |
 
 ## Runecrafting
 

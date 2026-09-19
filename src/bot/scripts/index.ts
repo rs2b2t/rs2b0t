@@ -88,6 +88,7 @@ import GnomeMagicChopper, { GNOME_MAGIC_CHOPPER_SETTINGS } from './GnomeMagicCho
 import ArravSupplier, { ARRAV_SUPPLIER_SETTINGS } from './ArravSupplier/ArravSupplier.js';
 import Barcrawl from './Barcrawl/Barcrawl.js';
 import DuelArena, { DUEL_ARENA_SETTINGS } from './DuelArena/DuelArena.js';
+import DragonfireShield, { SETTINGS as DRAGONFIRESHIELD_SETTINGS } from './DragonfireShield/DragonfireShield.js';
 
 // First register = panel default when no script is remembered (BotPanel → list()[0]).
 ScriptRegistry.register({
@@ -141,6 +142,15 @@ ScriptRegistry.register({
     tags: ['duel arena', 'pvp', 'attack', 'strength', 'defence', 'multibox'],
     settingsSchema: DUEL_ARENA_SETTINGS,
     create: () => new DuelArena()
+});
+
+ScriptRegistry.register({
+    name: 'DragonfireShield',
+    description: 'Farms free anti-dragonbreath shields from Duke Horacio in Lumbridge Castle (requires the %dragon_shield var, unlocked by Oziach in the Dark Slayer quest) — drop-mode: un-noted shields are dropped at the Duke, looted and banked; noted shields are carried to seed the pile and freely drop-safe to the floor',
+    category: 'Quest',
+    tags: ['dark slayer', 'dragonfire shield', 'antidragonbreath shield', 'duke horacio', 'certificates', 'faucet'],
+    settingsSchema: DRAGONFIRESHIELD_SETTINGS,
+    create: () => new DragonfireShield()
 });
 
 ScriptRegistry.register({
