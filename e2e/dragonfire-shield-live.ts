@@ -1,3 +1,5 @@
+// PRIVATE TEST — DO NOT PUSH, DO NOT OPEN A PR, DO NOT MERGE UPSTREAM.
+// Pairs with the private DragonfireShield script on branch feat/dragonfire-shield.
 /** Live proof for the DragonfireShield farm: once `%dragon_shield = 1` (what Oziach sets when he tells
  *  you where the shield is, so the quest is not required), Duke Horacio hands out a free un-noted
  *  Dragonfire shield every conversation. The script shuttles Al Kharid bank ↔ Lumbridge castle,
@@ -56,18 +58,19 @@ type Abi = {
 
 const proof = createHarnessProof({ slug: 'dragonfire-shield' });
 
-function shieldNoteId(): number | null {
-    // Mirrors the script's own resolution: the noted row certlinks back to the un-noted shield.
-    const catalog = (globalThis as never as Abi).rs2b0t.reader.objCatalog();
-    const note = catalog.find(o => o.certlink !== -1 && o.certtemplate !== -1 && o.certlink === 1540);
-    return note ? note.id : null;
-}
-
 async function bankSnapshot(page: Page): Promise<{ unNoted: number; notes: number; noteId: number }> {
     await page.evaluate(() => {
         const g = globalThis as never as Abi;
         const api = g.__rs2b0t;
-        const noteId = shieldNoteId();
+        const noteId = (() => {
+            try {
+                const catalog = g.rs2b0t.reader.objCatalog();
+                const note = catalog.find(o => o.certlink !== -1 && o.certtemplate !== -1 && o.certlink === 1540);
+                return note ? note.id : null;
+            } catch {
+                return null;
+            }
+        })();
         g.__dfsBank = { unNoted: 0, notes: 0, noteId: noteId ?? -1 };
         class Snap extends api.LoopingBot {
             private ran = false;

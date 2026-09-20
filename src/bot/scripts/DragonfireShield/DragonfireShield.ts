@@ -1,3 +1,6 @@
+// PRIVATE SCRIPT — DO NOT PUSH, DO NOT OPEN A PR, DO NOT MERGE UPSTREAM.
+// Kept on the local branch feat/dragonfire-shield only; it abuses a cheat var
+// (%dragon_shield) and must never be shared upstream.
 import { reader } from '../../adapter/ClientAdapter.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
@@ -159,11 +162,12 @@ export default class DragonfireShield extends TaskBot {
                 return;
             }
             const before = Inventory.countById(id);
-            if (!(await it.interact('Drop'))) {
+            const clicked = await it.interact('Drop');
+            const dropped = await Execution.delayUntil(() => Inventory.countById(id) < before, 3000);
+            this.log(`drop #${id}: ${before} -> ${Inventory.countById(id)} (clicked=${clicked} dropped=${dropped})`);
+            if (!clicked) {
                 await Execution.delayTicks(1);
-                continue;
             }
-            await Execution.delayUntil(() => Inventory.countById(id) < before, 3000);
         }
     }
 
@@ -178,17 +182,25 @@ export default class DragonfireShield extends TaskBot {
     async openDuke(): Promise<boolean> {
         const npc = Npcs.query().name(DUKE).where(n => talkOp(n.actions()) !== null).nearest();
         if (!npc) {
-            this.log('no Duke Horacio in the scene');
+            this.log('openDuke: no Duke Horacio in the scene');
             return false;
         }
-        await npc.interact(talkOp(npc.actions())!);
-        return Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), TALK_OPEN_MS);
+        const op = talkOp(npc.actions())!;
+        const t = npc.tile();
+        this.log(`openDuke: interact '${op}' @ ${t.x},${t.z},${t.level}`);
+        await npc.interact(op);
+        const opened = await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), TALK_OPEN_MS);
+        this.log(`openDuke: opened=${opened} canContinue=${ChatDialog.canContinue()} options=${ChatDialog.options().length}`);
+        return opened;
     }
 
     /** Drive one full Duke conversation, picking the "I seek a shield..." option, until the dialogue closes. */
     async dukeGivesShield(): Promise<boolean> {
+        let steps = 0;
+        let sawOptions: string[] = [];
         for (let i = 0; i < MAX_TALK_GUARD; i++) {
             if (ChatDialog.canContinue()) {
+                steps++;
                 await ChatDialog.continue();
                 await Execution.delayTicks(1);
                 continue;
@@ -196,9 +208,8 @@ export default class DragonfireShield extends TaskBot {
             const opts = ChatDialog.options();
             if (opts.length > 0) {
                 const pick = opts.find(o => /shield/i.test(o));
-                if (!pick) {
-                    this.log(`no shield option in [${opts.join(' | ')}]`);
-                }
+                sawOptions = opts;
+                this.log(`duke dialog: options=[${opts.join(' | ')}] pick='${pick ?? opts[0]}'`);
                 await ChatDialog.chooseOption(pick ?? opts[0]);
                 await Execution.delayTicks(2);
                 continue;
@@ -208,7 +219,9 @@ export default class DragonfireShield extends TaskBot {
             }
             await Execution.delayTicks(1);
         }
+        const modalsBefore = Modals.isOpen();
         await this.closeModalsOnce();
+        this.log(`duke dialog: done steps=${steps} optionsSeen=${sawOptions.length} modals ${modalsBefore}->${Modals.isOpen()}`);
         return !ChatDialog.isOpen();
     }
 
@@ -240,25 +253,42 @@ class FarmShields implements Task {
 
     validate(): boolean {
         const p = this.bot.pack();
-        return p.atStand && !p.full && (p.tripActive || p.free >= 1);
+        if (!p.atStand || p.full) {
+            return false;
+        }
+        if (p.tripActive) {
+            return true;
+        }
+        if (p.ground > 0) {
+            return false;
+        }
+        // Bank the product before farming again; notes-only cargo is fine to drop at the stand.
+        if (p.unNoted > 0 || p.junk > 0) {
+            return false;
+        }
+        return p.free >= 1;
     }
 
     async execute(): Promise<void> {
         const bot = this.bot;
+        const here = Game.tile();
+        bot.log(`FarmShields: start @ ${here ? `${here.x},${here.z},${here.level}` : '?'} free=${Inventory.free()} unNoted=${Inventory.countById(SHIELD_ID)} notes=${bot.notesHeld()} ground=${bot.groundShields().length}`);
         if (!bot.tripActive) {
             bot.setStatus('starting a farm trip');
             await bot.dropFarmCargo();
             bot.tripActive = true;
             bot.tripDeadline = Date.now() + bot.tripSecs * 1000;
-            bot.log('farm trip started');
+            bot.log(`FarmShields: trip window ${bot.tripSecs}s started, pack now free=${Inventory.free()}`);
         }
 
         let cycles = 0;
         while (bot.tripActive && Date.now() < bot.tripDeadline && !Inventory.isFull()) {
             if (EventSignal.pending() || !bot.atStand() || ChatDialog.isOpen()) {
+                bot.log(`FarmShields: breaking cycle (event=${EventSignal.pending()} atStand=${bot.atStand()} dialog=${ChatDialog.isOpen()})`);
                 break;
             }
             if (Equipment.contains(SHIELD)) {
+                bot.log('FarmShields: shield is equipped — unequipping');
                 await Equipment.unequip(SHIELD);
             }
             await bot.closeModalsOnce();
@@ -268,26 +298,27 @@ class FarmShields implements Task {
             const before = Inventory.countById(SHIELD_ID);
             const opened = bot.atStand() && (await bot.openDuke());
             if (!opened) {
+                bot.log(`FarmShields: duke did not open a dialog (before=${before}) — retry`);
                 await Execution.delayTicks(2);
                 continue;
             }
             if (!(await bot.dukeGivesShield())) {
-                bot.log('duke dialogue did not finish cleanly');
+                bot.log('FarmShields: duke dialogue did not finish cleanly');
             }
             const got = await Execution.delayUntil(() => Inventory.countById(SHIELD_ID) > before, RECEIVE_MS);
             if (!got) {
+                bot.log(`FarmShields: no shield received (inv still ${Inventory.countById(SHIELD_ID)}) — retry`);
                 await Execution.delayTicks(2);
                 continue;
             }
+            bot.log(`FarmShields: shield received (inv ${before} -> ${Inventory.countById(SHIELD_ID)})`);
             await bot.dropById(SHIELD_ID);
             bot.farmed++;
             cycles++;
             bot.setStatus(`farming (${bot.farmed} shields)`);
         }
         bot.tripActive = false;
-        if (cycles > 0) {
-            bot.log(`farm cycle ended after ${cycles} shield(s)`);
-        }
+        bot.log(`FarmShields: trip ended after ${cycles} cycle(s), ${bot.farmed} farmed, pack free=${Inventory.free()}`);
     }
 }
 
@@ -302,6 +333,7 @@ class LootShields implements Task {
     async execute(): Promise<void> {
         const bot = this.bot;
         bot.setStatus('looting the shield pile');
+        bot.log(`LootShields: ${bot.groundShields().length} ground stack(s), free=${Inventory.free()}`);
         let taken = 0;
         for (let guard = 0; guard < 40; guard++) {
             const pile = bot.groundShields();
@@ -310,22 +342,22 @@ class LootShields implements Task {
             }
             const drop = pile[0];
             if (!bot.canLoot(drop)) {
+                bot.log(`LootShields: cannot pick up #${drop.id} (pack free=${Inventory.free()}) — bank instead`);
                 break;
             }
             const before = Inventory.countById(drop.id);
-            if (!(await drop.interact('Take'))) {
-                await Execution.delayTicks(2);
-                continue;
-            }
-            await Execution.delayUntil(() => {
+            const clicked = await drop.interact('Take');
+            const got = await Execution.delayUntil(() => {
                 const now = Inventory.countById(drop.id);
-                return now > before || !bot.groundShields().some(g => g.id === drop.id && g.snap.tile === drop.snap.tile);
+                const stillThere = bot.groundShields().some(
+                    g => g.id === drop.id && g.snap.tile.x === drop.snap.tile.x && g.snap.tile.z === drop.snap.tile.z
+                );
+                return now > before || !stillThere;
             }, 4000);
+            bot.log(`LootShields: take #${drop.id} clicked=${clicked} got=${got} inv=${Inventory.countById(drop.id)}`);
             taken++;
         }
-        if (taken > 0) {
-            bot.log(`looted ${taken} ground shield stack(s)`);
-        }
+        bot.log(`LootShields: done, picked ${taken} stack(s), free=${Inventory.free()}`);
     }
 }
 
@@ -349,14 +381,17 @@ class BankTrip implements Task {
     async execute(): Promise<void> {
         const bot = this.bot;
         bot.setStatus('banking');
+        bot.log(`BankTrip: start atBank=${bot.atBank()} free=${Inventory.free()} unNoted=${Inventory.countById(SHIELD_ID)} notes=${bot.notesHeld()}`);
         if (Equipment.contains(SHIELD)) {
+            bot.log('BankTrip: shield is equipped — unequipping');
             await Equipment.unequip(SHIELD);
         }
         if (!bot.atBank()) {
-            if (!(await Traversal.walkResilient(BANK_STAND, {
+            const walked = await Traversal.walkResilient(BANK_STAND, {
                 radius: 2, attempts: 4, timeoutMs: WALK_MS, log: m => bot.log(`  ${m}`),
-            }))) {
-                bot.log('could not reach the Al Kharid bank — retry');
+            });
+            bot.log(`BankTrip: walk to Al Kharid bank = ${walked}`);
+            if (!walked) {
                 return;
             }
         }
@@ -367,20 +402,22 @@ class BankTrip implements Task {
             BOOTH_OP,
             m => bot.log(`  ${m}`),
         )) || (await Bank.openNearest(BOOTH, BOOTH_OP, m => bot.log(`  ${m}`)));
+        bot.log(`BankTrip: bank open = ${opened}`);
         if (!opened) {
-            bot.log('could not open the bank — retry');
             return;
         }
 
         await Bank.depositAllMatching(() => true, m => bot.log(`  ${m}`));
+        bot.log(`BankTrip: deposited, pack free=${Inventory.free()}`);
         if (bot.carryNotes && bot.noteId !== -1) {
             const free = Inventory.free();
             if (free > 0) {
-                await Bank.withdrawXById(SHIELD_ID, free, bot.noteId);
-                bot.log(`withdrew ${free} noted ${SHIELD}(s)`);
+                await Bank.setNoteMode(true);
+                const withdrew = await Bank.withdrawXById(SHIELD_ID, free, bot.noteId);
+                bot.log(`BankTrip: withdraw notes withdrew=${withdrew} notesHeld=${bot.notesHeld()}`);
             }
         } else if (bot.carryNotes && bot.noteId === -1) {
-            bot.log('no noted shield in the bank — farming without notes');
+            bot.log('BankTrip: no noted shield row found — farming without notes');
         }
         await Bank.close();
         await Execution.delayTicks(1);
@@ -409,8 +446,10 @@ class GoToDuke implements Task {
     async execute(): Promise<void> {
         const bot = this.bot;
         bot.setStatus('walking to Duke Horacio');
-        await Traversal.walkResilient(DUKE_STAND, {
+        const walked = await Traversal.walkResilient(DUKE_STAND, {
             radius: 1, attempts: 6, timeoutMs: WALK_MS, log: m => bot.log(`  ${m}`),
         });
+        const here = Game.tile();
+        bot.log(`GoToDuke: walk done=${walked} @ ${here ? `${here.x},${here.z},${here.level}` : '?'} atStand=${bot.atStand()}`);
     }
 }
