@@ -81,6 +81,27 @@ describe('itemsRequiredByWaypoints / missing', () => {
         expect(need['Coins']).toBe(10);
     });
 
+    test('Prince Ali Rescue complete waives the Al Kharid toll', () => {
+        const path: Waypoint[] = [
+            wp(3267, 3227),
+            wp(3268, 3227, {
+                locName: 'Gate',
+                action: 'Open',
+                locX: 3268,
+                locZ: 3227,
+                kind: 'door'
+            })
+        ];
+        const done = emptyWorldStateData();
+        done.quests = { 'Prince Ali Rescue': 'complete' };
+        expect(itemsRequiredByWaypoints(path, done)['Coins']).toBeUndefined();
+        expect(missingItemsForPath(path, done)).toEqual([]);
+
+        const stuck = emptyWorldStateData();
+        stuck.quests = { 'Prince Ali Rescue': 'not_started' };
+        expect(missingItemsForPath(path, stuck)).toEqual([{ name: 'Coins', count: 10 }]);
+    });
+
     test('two ship fares sum, they are not the same 30 coins twice', () => {
         const path: Waypoint[] = [
             { x: 3027, z: 3218, level: 1 },

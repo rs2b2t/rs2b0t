@@ -716,7 +716,9 @@ class WalkExecutorImpl {
             const itemCount = sc.requires
                 ? (state.items[sc.requires.item] ?? 0)
                 : 0;
-            const shortItem = sc.requires && !meetsRequirement(itemCount, sc.requires);
+            // Why: the waiver quest complete is equivalent to holding the crossing's items (Prince Ali Rescue lifts the toll).
+            const waived = sc.questWaivesItems !== undefined && state.quests[sc.questWaivesItems] === 'complete';
+            const shortItem = !!sc.requires && !waived && !meetsRequirement(itemCount, sc.requires);
             const skillLevel = sc.requiresSkill
                 ? (state.skills[sc.requiresSkill.name] ?? state.skills[sc.requiresSkill.name.toLowerCase()] ?? 0)
                 : 0;
@@ -745,7 +747,10 @@ class WalkExecutorImpl {
         const specialKeys = new Set(SPECIAL_CROSSINGS.map(sc => `${sc.x}|${sc.z}`));
         this.avoidDoors = this.avoidDoors.filter(d => !specialKeys.has(`${d.x}|${d.z}`));
         for (const sc of SPECIAL_CROSSINGS) {
-            const shortItem = sc.requires && !meetsRequirement(Inventory.count(sc.requires.item), sc.requires);
+            // Why: completing the waiver quest is equivalent to holding the crossing's items (Prince Ali
+            // Rescue lifts the Al Kharid toll), so the gate stays on the graph instead of a long detour.
+            const waived = sc.questWaivesItems !== undefined && Quests.status(sc.questWaivesItems) === 'complete';
+            const shortItem = !!sc.requires && !waived && !meetsRequirement(Inventory.count(sc.requires.item), sc.requires);
             const shortSkill = sc.requiresSkill && !meetsSkill(Skills.level(sc.requiresSkill.name), sc.requiresSkill);
             if (shortItem || shortSkill) {
                 this.avoidDoors.push({ x: sc.x, z: sc.z });

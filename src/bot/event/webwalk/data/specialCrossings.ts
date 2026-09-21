@@ -7,6 +7,11 @@ export interface SpecialCrossing {
     action: string;
     useItem?: { id: number; name: string };
     requires?: { item: string; count: number };
+    // Why: completing the quest removes the item/currency requirement (Prince Ali Rescue lifts the
+    // Al Kharid toll), so the toll is planned only while the quest is incomplete.
+
+    /** Quest (journal name) whose completion waives `requires` for this crossing. */
+    questWaivesItems?: string;
     requiresSkill?: { name: string; level: number };
     dialogue?: { choose: string[] };
     npc?: string;
@@ -46,8 +51,8 @@ export interface SpecialCrossing {
 }
 
 export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
-    { x: 3268, z: 3227, level: 0, locName: 'Gate', action: 'Open', requires: { item: 'Coins', count: 10 }, dialogue: { choose: ['Yes, ok.'] }, label: 'Al Kharid toll gate' },
-    { x: 3268, z: 3228, level: 0, locName: 'Gate', action: 'Open', requires: { item: 'Coins', count: 10 }, dialogue: { choose: ['Yes, ok.'] }, label: 'Al Kharid toll gate' },
+    { x: 3268, z: 3227, level: 0, locName: 'Gate', action: 'Open', requires: { item: 'Coins', count: 10 }, questWaivesItems: 'Prince Ali Rescue', dialogue: { choose: ['Yes, ok.'] }, label: 'Al Kharid toll gate' },
+    { x: 3268, z: 3228, level: 0, locName: 'Gate', action: 'Open', requires: { item: 'Coins', count: 10 }, questWaivesItems: 'Prince Ali Rescue', dialogue: { choose: ['Yes, ok.'] }, label: 'Al Kharid toll gate' },
 
     // Plague City (#366): East Ardougne garden mud to sewer to pipe to West Ardougne manhole.
     // Complete quest: dig soft mud (spade), climb mud pile out; pipe needs Gas mask worn.
