@@ -55,7 +55,7 @@ async function withWall(mode: 'local' | 'proxy', check: (wall: Wall) => Promise<
         await vault.upsert({ username: 'alice', password: 'a', world: 1 });
         await vault.upsert({ username: 'bob', password: 'b', world: 2 });
         document.body.innerHTML = '<div id="mbx-app"><div id="mbx-rail"><div id="mbx-tabs"></div><div id="mbx-add"></div></div></div>';
-        for (const id of ['build', 'world', 'start-all', 'stop-all', 'renderers-off', 'renderers-on', 'resource-bots', 'resource-cpu', 'resource-memory', 'resource-traffic', 'resource-cpu-row', 'resource-memory-row', 'settings', 'drawer']) {
+        for (const id of ['build', 'start-all', 'stop-all', 'renderers-off', 'renderers-on', 'resource-bots', 'resource-cpu', 'resource-memory', 'resource-traffic', 'resource-cpu-row', 'resource-memory-row', 'settings', 'drawer']) {
             const el = document.createElement('button');
             el.id = `mbx-${id}`;
             document.body.appendChild(el);
@@ -130,7 +130,6 @@ test('wall wiring preserves pending slots and retries persistence after a succes
             expect(new URL(replacement.src).searchParams.get('autologin')).toBe('0');
             expect(wall.slots()[0]).toMatchObject({ world: null, targetWorld: 2, switchingWorld: null });
             expect(vault.list()[0].world).toBe(1);
-            expect(document.getElementById('mbx-world')!.textContent).toContain('target changed, but could not save');
             expect(await wall.setWorld(alice.id, 2)).toBe(true);
             expect(document.querySelector('iframe')).toBe(replacement);
             expect(document.querySelectorAll('iframe')[1]).toBe(bobFrame);
@@ -159,7 +158,6 @@ test('local wall refuses assignment before preparation, unlock, or profile write
             expect(document.querySelector('iframe')).toBe(frame);
             expect(vault.list()[0].world).toBe(1);
             expect(unlock).not.toHaveBeenCalled();
-            expect(document.getElementById('mbx-world')!.textContent).toContain('Local engine');
         } finally {
             unlock.mockRestore();
             prepare.mockRestore();

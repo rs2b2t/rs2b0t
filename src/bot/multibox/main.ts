@@ -35,11 +35,6 @@ function boot(): void {
     const ops = new DomSlotOps(rail, addTile, worldRouting);
     const defaultWorld = worldRouting ? resolveWorldNumber(window.location.host, new URLSearchParams(window.location.search)) : 1;
     const controller = new MultiBoxController(ops, undefined, defaultWorld);
-    const worldStatus = document.getElementById('mbx-world');
-    if (worldStatus) {
-        worldStatus.textContent = worldRouting ? 'Choose a world per profile.' : 'Local engine. Saved world choices apply in live builds.';
-        worldStatus.setAttribute('role', 'status');
-    }
     const worldWrites = new Set<string>();
     const startAll = document.getElementById('mbx-start-all') as HTMLButtonElement;
     const stopAll = document.getElementById('mbx-stop-all') as HTMLButtonElement;
@@ -299,25 +294,15 @@ function boot(): void {
         const identity = normalizeUsername(profile.username);
         if (worldWrites.has(identity)) return false;
         worldWrites.add(identity);
-        let switched = false;
         try {
             const slot = controller.snapshot().find(candidate => normalizeUsername(candidate.username) === identity);
             if (slot && (slot.targetWorld !== world || slot.switchingWorld !== null)) {
                 if (!controller.switchWorld(slot.id, world)) {
-                    if (worldStatus) worldStatus.textContent = `${profile.username}: log out in-game, then click Retry.`;
                     return false;
                 }
-                switched = true;
             }
             await vault.setWorld(profile.username, world);
-            if (worldStatus) worldStatus.textContent = `${profile.username}: World ${world} saved. Resume login and scripts when ready.`;
             return true;
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            if (worldStatus) worldStatus.textContent = switched
-                ? `${profile.username}: target changed, but could not save World ${world}: ${message}`
-                : `${profile.username}: could not change world: ${message}`;
-            throw error;
         } finally {
             worldWrites.delete(identity);
             renderRail();
@@ -332,7 +317,6 @@ function boot(): void {
         try {
             if (profile) return await changeProfileWorld(profile, world);
             const changed = controller.switchWorld(id, world);
-            if (!changed && worldStatus) worldStatus.textContent = `${slot.username}: log out in-game, then click Retry.`;
             renderRail();
             return changed;
         } catch {
