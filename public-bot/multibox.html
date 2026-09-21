@@ -48,6 +48,13 @@
         .mbx-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .mbx-close { margin-left: auto; flex: 0 0 auto; background: none; border: 0; color: #666; cursor: pointer; font: inherit; padding: 0 2px; }
         .mbx-close:hover { color: #e05b5b; }
+        .mbx-world-controls { display: flex; align-items: center; gap: 4px; padding: 4px 7px; background: #121212; cursor: default; }
+        .mbx-world-controls select, .mbx-world-controls button, .mbx-profile-row select, .mbx-chooser-form select { background: #101d11; border: 1px solid #28522a; border-radius: 3px; color: #ddd; padding: 3px 4px; font: inherit; }
+        .mbx-world-controls button { cursor: pointer; }
+        .mbx-world-controls button:disabled { opacity: 0.5; cursor: default; }
+        .mbx-script-status { padding: 2px 7px 5px; color: #aaa; font-size: 10px; line-height: 1.4; cursor: default; }
+        .mbx-profile-row { gap: 8px; }
+        .mbx-profile-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
         /* TILE_W/TILE_H below must match TILE_W/TILE_H in DomSlotOps.ts (crop math depends on it) */
         .mbx-body { position: relative; width: 236px; height: 155px; background: #000; }
         .mbx-clip { position: absolute; inset: 0; overflow: hidden; background: #000; }
@@ -103,6 +110,9 @@
         .mbx-chooser-form { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid #2c2c2c; padding-top: 8px; }
         .mbx-chooser-form input { background: #000; border: 1px solid #333; color: #ddd; padding: 5px 7px; border-radius: 3px; font: inherit; }
         .mbx-chooser-form button { background: #07330a; border: 1px solid #04A800; color: #5be05b; padding: 5px 7px; border-radius: 3px; cursor: pointer; font: inherit; }
+        .rs2b0t-world-selector { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 0; font-size: 11px; color: #9bd49b; }
+        .rs2b0t-world-selector select, .rs2b0t-world-selector button { background: #101d11; border: 1px solid #28522a; color: #9bd49b; font: inherit; padding: 3px; cursor: pointer; }
+        .rs2b0t-world-status { flex-basis: 100%; color: #999; line-height: 1.4; }
     </style>
 </head>
 <body>

@@ -1,9 +1,11 @@
+import { resolveWorldNumber, type WorldNumber } from '../../client/config/worlds.js';
+import { supportsWorldRouting } from '../../client/config/target.js';
 import { BUILD_INFO, formatBuildInfo } from '../runtime/buildInfo.js';
 import { installWorkerClockHub } from '../runtime/WorkerClock.js';
 import { installDiagnostics } from './installDiagnostics.js';
 import { TrafficCollector } from '../adapter/TrafficAdapter.js';
 import { DomSlotOps, orderedSlotElements } from './DomSlotOps.js';
-import { MultiBoxController } from './MultiBoxController.js';
+import { MultiBoxController, normalizeUsername } from './MultiBoxController.js';
 import { ProfileChooser } from './ProfileChooser.js';
 import { vault, type Profile } from './ProfileVault.js';
 import { renderRailTile, slotIsRunning } from './RailTile.js';
@@ -29,8 +31,11 @@ function boot(): void {
     const rail = document.getElementById('mbx-rail')!;
     const addTile = document.getElementById('mbx-add')!;
 
-    const ops = new DomSlotOps(rail, addTile);
-    const controller = new MultiBoxController(ops);
+    const worldRouting = supportsWorldRouting();
+    const ops = new DomSlotOps(rail, addTile, worldRouting);
+    const defaultWorld = worldRouting ? resolveWorldNumber(window.location.host, new URLSearchParams(window.location.search)) : 1;
+    const controller = new MultiBoxController(ops, undefined, defaultWorld);
+    const worldWrites = new Set<string>();
     const startAll = document.getElementById('mbx-start-all') as HTMLButtonElement;
     const stopAll = document.getElementById('mbx-stop-all') as HTMLButtonElement;
     const renderersOff = document.getElementById('mbx-renderers-off') as HTMLButtonElement;
@@ -126,6 +131,18 @@ function boot(): void {
         const idx = railTiles().indexOf(tile as HTMLElement);
         const snap = controller.snapshot()[idx];
         if (!snap) return;
+        const target = ev.target as HTMLElement;
+        if (target.closest('.mbx-world-select')) return;
+        if (target.closest('.mbx-world-switch')) {
+            const selected = (tile.querySelector('.mbx-world-select') as HTMLSelectElement).value;
+            void changeSlotWorld(snap.id, Number(selected) as WorldNumber);
+            return;
+        }
+        if (target.closest('.mbx-world-cancel')) {
+            controller.cancelSlotWorldSwitch(snap.id);
+            renderRail();
+            return;
+        }
         if ((ev.target as HTMLElement).closest('.mbx-close')) {
             controller.remove(snap.id);
         } else {
@@ -164,7 +181,7 @@ function boot(): void {
             return;
         }
         const tile = target.closest('.mbx-slot');
-        if (!tile || target.closest('.mbx-close')) {
+        if (!tile || target.closest('button, select, input')) {
             ev.preventDefault();
             return;
         }
@@ -247,7 +264,7 @@ function boot(): void {
         renderRail();
         // a fresh profile joins the active tab; record that membership
         persistTabState();
-    });
+    }, { defaultWorld, worldRouting, onWorldChange: worldRouting ? changeProfileWorld : undefined });
     document.body.appendChild(chooser.el);
 
     const prompt = new VaultPrompt(vault);
@@ -272,6 +289,41 @@ function boot(): void {
         return ok;
     }
 
+    async function changeProfileWorld(profile: Profile, world: WorldNumber): Promise<boolean> {
+        if (!worldRouting) return false;
+        const identity = normalizeUsername(profile.username);
+        if (worldWrites.has(identity)) return false;
+        worldWrites.add(identity);
+        try {
+            const slot = controller.snapshot().find(candidate => normalizeUsername(candidate.username) === identity);
+            if (slot && (slot.targetWorld !== world || slot.switchingWorld !== null)) {
+                if (!controller.switchWorld(slot.id, world)) {
+                    return false;
+                }
+            }
+            await vault.setWorld(profile.username, world);
+            return true;
+        } finally {
+            worldWrites.delete(identity);
+            renderRail();
+        }
+    }
+
+    async function changeSlotWorld(id: number, world: WorldNumber): Promise<boolean> {
+        if (!worldRouting || (world !== 1 && world !== 2 && world !== 3)) return false;
+        const slot = controller.snapshot().find(candidate => candidate.id === id);
+        if (!slot || !(await ensureUnlocked())) return false;
+        const profile = vault.list().find(candidate => normalizeUsername(candidate.username) === normalizeUsername(slot.username));
+        try {
+            if (profile) return await changeProfileWorld(profile, world);
+            const changed = controller.switchWorld(id, world);
+            renderRail();
+            return changed;
+        } catch {
+            return false;
+        }
+    }
+
     function applyImportedTabs(data: ProfileSnapshot): void {
         const live = controller.snapshot();
         if (live.length === 0) {
@@ -289,7 +341,7 @@ function boot(): void {
         const live = new Set(controller.snapshot().map(slot => slot.username));
         for (const p of vault.list()) {
             if (!live.has(p.username)) {
-                controller.add({ username: p.username, password: p.password, tab: p.tab });
+                controller.add(p);
             }
         }
         persistTabState();
@@ -402,6 +454,11 @@ function boot(): void {
         },
         move: (id: number, toIndex: number) => moveSlot(id, toIndex),
         slots: () => controller.snapshot(),
+        setWorld: (id: number, world: WorldNumber) => changeSlotWorld(id, world),
+        cancelWorldSwitch: (id: number) => {
+            controller.cancelSlotWorldSwitch(id);
+            renderRail();
+        },
         tabs: () => controller.tabs(),
         activeTab: () => controller.activeTab(),
         addTab: (name: string) => mutateTabs(() => controller.addTab(name)),
@@ -418,7 +475,7 @@ function boot(): void {
             let n = 0;
             for (const p of Array.isArray(arr) ? arr : []) {
                 if (p && typeof p.username === 'string' && p.username.length > 0 && typeof p.password === 'string') {
-                    await vault.upsert({ username: p.username, password: p.password });
+                    await vault.upsert(p);
                     n++;
                 }
             }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { ProfileVault } from '#/bot/multibox/ProfileVault.js';
+import { ProfileVault, type Profile } from '#/bot/multibox/ProfileVault.js';
 
 const KEY = 'rs2b0t:multibox:profiles';
 const LEGACY_KEY = 'rs2b0t:multibox:accounts';
@@ -285,4 +285,150 @@ describe('ProfileVault tabs', () => {
             activeTab: 'Main'
         })).rejects.toThrow(/ghost/);
     });
+});
+
+describe('ProfileVault worlds', () => {
+    test('world assignments survive password saves, tab changes, reorder, and encryption', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        await v.upsert({ username: 'alice', password: 'a', world: 3 });
+        await v.upsert({ username: 'legacy', password: 'b' });
+        await v.upsert({ username: 'alice', password: 'new', world: 1 });
+        await v.saveTabState(['miners'], new Map([['alice', 'miners']]), 'miners');
+        await v.reorder(['legacy', 'alice']);
+
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.list()).toEqual([
+            { username: 'legacy', password: 'b', tab: 'Main' },
+            { username: 'alice', password: 'new', tab: 'miners', world: 3 }
+        ]);
+        expect(localStorage.getItem(KEY)).not.toContain('alice');
+    });
+
+    test('setWorld persists only the assignment and rejects unknown usernames', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        await v.upsert({ username: 'alice', password: 'a' });
+        await v.saveTabState(['miners'], new Map([['alice', 'miners']]), 'miners');
+        await v.setWorld('alice', 3);
+        await expect(v.setWorld('missing', 1)).rejects.toThrow(/missing/);
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.snapshot()).toEqual({
+            profiles: [{ username: 'alice', password: 'a', tab: 'miners', world: 3 }],
+            tabs: ['miners'], activeTab: 'miners'
+        });
+    });
+
+    test('a failed world write restores the previous assignment and permits retry', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        await v.upsert({ username: 'alice', password: 'a' });
+        const stored = localStorage.getItem(KEY);
+        const write = localStorage.setItem;
+        Object.defineProperty(localStorage, 'setItem', { configurable: true, value: () => { throw new Error('storage full'); } });
+        try {
+            await expect(v.setWorld('alice', 3)).rejects.toThrow('storage full');
+            expect(v.list()).toEqual([{ username: 'alice', password: 'a', tab: 'Main' }]);
+            expect(localStorage.getItem(KEY)).toBe(stored);
+        } finally {
+            Object.defineProperty(localStorage, 'setItem', { configurable: true, value: write });
+        }
+        await v.setWorld('alice', 3);
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.list()[0].world).toBe(3);
+    });
+
+    test('queued assignments retain call order', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        await v.upsert({ username: 'alice', password: 'a' });
+        await Promise.all([v.setWorld('alice', 3), v.setWorld('alice', 1)]);
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.list()[0].world).toBe(1);
+    });
+
+    test('a failed assignment cannot leak into a concurrent password save', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        await v.upsert({ username: 'alice', password: 'old', world: 1 });
+        const write = localStorage.setItem;
+        let writes = 0;
+        Object.defineProperty(localStorage, 'setItem', { configurable: true, value: (key: string, value: string) => {
+            if (++writes === 1) throw new Error('temporary write failure');
+            write(key, value);
+        } });
+        try {
+            const change = v.setWorld('alice', 3);
+            await Promise.resolve();
+            const save = v.upsert({ username: 'alice', password: 'new' });
+            await expect(change).rejects.toThrow('temporary write failure');
+            await save;
+        } finally {
+            Object.defineProperty(localStorage, 'setItem', { configurable: true, value: write });
+        }
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(v.list()).toEqual([{ username: 'alice', password: 'new', tab: 'Main', world: 1 }]);
+        expect(reopened.list()).toEqual(v.list());
+    });
+
+    test('a failed password save preserves a concurrent successful world assignment', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        await v.upsert({ username: 'alice', password: 'old', world: 1 });
+        const write = localStorage.setItem;
+        let writes = 0;
+        Object.defineProperty(localStorage, 'setItem', { configurable: true, value: (key: string, value: string) => {
+            if (++writes === 1) throw new Error('temporary write failure');
+            write(key, value);
+        } });
+        try {
+            const save = v.upsert({ username: 'alice', password: 'new' });
+            const change = v.setWorld('alice', 3);
+            await expect(save).rejects.toThrow('temporary write failure');
+            await change;
+        } finally {
+            Object.defineProperty(localStorage, 'setItem', { configurable: true, value: write });
+        }
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(v.list()).toEqual([{ username: 'alice', password: 'old', tab: 'Main', world: 3 }]);
+        expect(reopened.list()).toEqual(v.list());
+    });
+
+    test('imported assignments survive replacement and unlocking', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        await v.replaceAll({ profiles: [{ username: 'alice', password: 'a', world: 3 }], tabs: [], activeTab: 'Main' });
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.list()[0].world).toBe(3);
+    });
+
+    for (const world of [null, '3', 0, 4, true]) {
+        test(`rejects explicit invalid world ${JSON.stringify(world)} at every vault entry point`, async () => {
+            const p = { username: 'alice', password: 'a', world } as Profile;
+            const v = new ProfileVault();
+            await v.setup('pw');
+            await expect(v.upsert(p)).rejects.toThrow(/world/i);
+            await expect(v.replaceAll({ profiles: [p], tabs: [], activeTab: 'Main' })).rejects.toThrow(/world/i);
+            await expect(v.setWorld('alice', world as Profile['world'] & number)).rejects.toThrow(/world/i);
+            expect(v.list()).toEqual([]);
+
+            await writeBlob('pw', [p]);
+            const encrypted = new ProfileVault();
+            await expect(encrypted.unlock('pw')).rejects.toThrow(/world/i);
+            expect(encrypted.status()).toBe('locked');
+
+            const raw = JSON.stringify([p]);
+            localStorage.setItem(KEY, raw);
+            const legacy = new ProfileVault();
+            await expect(legacy.setup('pw')).rejects.toThrow(/world/i);
+            expect(localStorage.getItem(KEY)).toBe(raw);
+        });
+    }
 });

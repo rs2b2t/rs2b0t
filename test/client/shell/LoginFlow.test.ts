@@ -1,6 +1,8 @@
 import { expect, mock, test } from 'bun:test';
 
+import LinkList from '#/client/datastruct/LinkList.js';
 import type ClientStream from '#/client/io/ClientStream.js';
+import { resetLoginKey } from '#/client/config/loginKey.js';
 
 mock.module('#/client/3rdparty/audio.js', () => ({
     playWave: async (): Promise<void> => {},
@@ -42,6 +44,9 @@ interface LoginClientView {
     loginSleep(ms: number): Promise<void>;
     startLogin(username: string, password: string): boolean;
     cancelLoginAttempt(): void;
+    prepareWorldSwitch(): boolean;
+    cancelWorldSwitch(): void;
+    logout(): Promise<void>;
 }
 
 class FakeLoginStream {
@@ -79,7 +84,7 @@ class DeferredFirstReadStream {
 
     constructor(firstRead: Deferred<number>, response: number) {
         this.firstRead = firstRead;
-        this.reads = [...new Array<number>(7).fill(0), response];
+        this.reads = [...new Array<number>(7).fill(0), response, ...(response === 2 ? [0, 0] : [])];
     }
 
     write(_src: Uint8Array, _len: number): void {}
@@ -206,6 +211,95 @@ test('server retry stays inside one public login attempt', async () => {
     expect(client.loginMes2).toBe('Try again in 60 secs...');
 });
 
+test('a rotated login key retries and settles within the same public attempt', async () => {
+    const rejected = new FakeLoginStream(6);
+    const result = new FakeLoginStream(5);
+    const streams = [rejected, result];
+    let opens = 0;
+    let refreshes = 0;
+    const client = bareClient(async () => asClientStream(streams[opens++]));
+    const fetchBefore = globalThis.fetch;
+    resetLoginKey();
+    globalThis.fetch = Object.assign(async () => { refreshes++; return new Response('9'.repeat(309)); }, { preconnect: fetchBefore.preconnect });
+    try {
+        expect(client.startLogin('alice', 'secret')).toBe(true);
+        const done = client.loginAttempt!.done;
+        expect(await Promise.race([done.then(() => 'settled'), Bun.sleep(100).then(() => 'stuck')])).toBe('settled');
+        expect(opens).toBe(2);
+        expect(refreshes).toBe(1);
+        expect(rejected.closeCount).toBe(1);
+        expect(result.closeCount).toBe(1);
+        expect(client.statSessionGeneration).toBe(1);
+        expect(client.loginAttempt).toBeNull();
+        expect(client.loginMes1).toBe('Your account is already logged in.');
+    } finally {
+        client.cancelLoginAttempt();
+        globalThis.fetch = fetchBefore;
+        resetLoginKey();
+    }
+});
+
+test('world switching during key refresh settles without retrying admission', async () => {
+    const rejected = new FakeLoginStream(6);
+    const fetching = deferred<void>();
+    const response = deferred<Response>();
+    let opens = 0;
+    const client = bareClient(async () => { opens++; return asClientStream(rejected); });
+    const fetchBefore = globalThis.fetch;
+    resetLoginKey();
+    globalThis.fetch = Object.assign(async () => { fetching.resolve(); return response.promise; }, { preconnect: fetchBefore.preconnect });
+    try {
+        expect(client.startLogin('alice', 'secret')).toBe(true);
+        const done = client.loginAttempt!.done;
+        await fetching.promise;
+        expect(client.prepareWorldSwitch()).toBe(false);
+        response.resolve(new Response('9'.repeat(309)));
+        expect(await Promise.race([done.then(() => 'settled'), Bun.sleep(100).then(() => 'stuck')])).toBe('settled');
+        expect(opens).toBe(1);
+        expect(rejected.closeCount).toBe(1);
+        expect(client.prepareWorldSwitch()).toBe(true);
+        expect(client.startLogin('alice', 'secret')).toBe(false);
+    } finally {
+        client.cancelLoginAttempt();
+        globalThis.fetch = fetchBefore;
+        resetLoginKey();
+    }
+});
+
+test('a cancelled key refresh cannot join or retry the replacement login', async () => {
+    const rejected = new FakeLoginStream(6);
+    const fetching = deferred<void>();
+    const response = deferred<Response>();
+    const nextRead = deferred<number>();
+    const next = new DeferredFirstReadStream(nextRead, 5);
+    let opens = 0;
+    const client = bareClient(async () => asClientStream(opens++ === 0 ? rejected : next));
+    const fetchBefore = globalThis.fetch;
+    resetLoginKey();
+    globalThis.fetch = Object.assign(async () => { fetching.resolve(); return response.promise; }, { preconnect: fetchBefore.preconnect });
+    try {
+        expect(client.startLogin('alice', 'secret')).toBe(true);
+        const oldDone = client.loginAttempt!.done;
+        await fetching.promise;
+        client.cancelLoginAttempt();
+        expect(client.startLogin('bob', 'other')).toBe(true);
+        const nextAttempt = client.loginAttempt!;
+        response.resolve(new Response('9'.repeat(309)));
+        expect(await Promise.race([oldDone.then(() => 'settled'), Bun.sleep(100).then(() => 'stuck')])).toBe('settled');
+        expect(client.loginAttempt).toBe(nextAttempt);
+        expect(opens).toBe(2);
+        expect(client.loginUser).toBe('bob');
+        nextRead.resolve(0);
+        await nextAttempt.done;
+        expect(client.loginAttempt).toBeNull();
+    } finally {
+        nextRead.resolve(0);
+        client.cancelLoginAttempt();
+        globalThis.fetch = fetchBefore;
+        resetLoginKey();
+    }
+});
+
 test('cancelling a pending socket releases the gate and closes stale work', async () => {
     const pendingOpen = deferred<ClientStream>();
     const staleStream = new FakeLoginStream(5);
@@ -306,4 +400,67 @@ test('transport failures release the gate and show native connection feedback', 
     } finally {
         console.error = originalError;
     }
+});
+
+
+test('world switching blocks new login and waits for an in-flight attempt to finish', async () => {
+    const firstRead = deferred<number>();
+    const stream = new DeferredFirstReadStream(firstRead, 5);
+    const client = bareClient(async () => asClientStream(stream));
+    expect(client.startLogin('alice', 'secret')).toBe(true);
+    const done = client.loginAttempt!.done;
+    expect(client.prepareWorldSwitch()).toBe(false);
+    expect(client.startLogin('bob', 'secret')).toBe(false);
+    firstRead.resolve(0);
+    await done;
+    expect(client.prepareWorldSwitch()).toBe(true);
+    expect(client.startLogin('bob', 'secret')).toBe(false);
+    expect(stream.closeCount).toBe(1);
+});
+
+test('world switching refuses an active player without closing their game connection', () => {
+    const stream = new FakeLoginStream(5);
+    const client = bareClient(async () => asClientStream(stream));
+    client.ingame = true;
+    client.stream = asClientStream(stream);
+    expect(client.prepareWorldSwitch()).toBe(false);
+    expect(stream.closeCount).toBe(0);
+    client.ingame = false;
+    expect(client.prepareWorldSwitch()).toBe(true);
+});
+
+
+test('cancelling a world switch permits a fresh manual login', async () => {
+    const client = bareClient(async () => asClientStream(new FakeLoginStream(5)));
+    expect(client.prepareWorldSwitch()).toBe(true);
+    expect(client.startLogin('alice', 'secret')).toBe(false);
+    client.cancelWorldSwitch();
+    expect(client.startLogin('alice', 'secret')).toBe(true);
+    await client.loginAttempt!.done;
+});
+
+
+test('a successful admission arriving during a world switch still requires actual logout', async () => {
+    const firstRead = deferred<number>();
+    const stream = new DeferredFirstReadStream(firstRead, 2);
+    const client = bareClient(async () => asClientStream(stream));
+    Object.assign(client, {
+        in: { pos: 0 }, mouseTracking: [], chatText: [], players: [], npc: [], playerAppearanceBuffer: [],
+        projectiles: new LinkList(), spotanims: new LinkList(), collision: [],
+        groundObj: Array.from({ length: 4 }, () => Array.from({ length: 104 }, () => new Array(104).fill(null))),
+        idkDesignColour: [], playerOp: [], playerOpPriority: [],
+        validateIdkDesign: () => {}, prepareGame: () => {}
+    });
+    expect(client.startLogin('alice', 'secret')).toBe(true);
+    const done = client.loginAttempt!.done;
+    expect(client.prepareWorldSwitch()).toBe(false);
+    firstRead.resolve(0);
+    await done;
+    expect(client.ingame).toBe(true);
+    expect(client.prepareWorldSwitch()).toBe(false);
+    expect(stream.closeCount).toBe(0);
+    await client.logout();
+    expect(stream.closeCount).toBe(1);
+    expect(client.prepareWorldSwitch()).toBe(true);
+    expect(client.startLogin('alice', 'secret')).toBe(false);
 });

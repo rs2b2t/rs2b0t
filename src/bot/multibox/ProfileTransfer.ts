@@ -21,6 +21,7 @@ export interface ProfileFile extends ProfileSnapshot {
 const MAIN_TAB = 'Main';
 
 export function serializeProfileFile(data: ProfileSnapshot): string {
+    requireProfiles(data.profiles);
     const file: ProfileFile = {
         kind: PROFILE_FILE_KIND,
         v: PROFILE_FILE_VERSION,
@@ -166,6 +167,12 @@ function requireProfiles(v: unknown[]): Profile[] {
             throw new Error(`invalid profile entry ${JSON.stringify(raw)}`);
         }
         const entry: Profile = { username: p.username, password: p.password };
+        if (p.world !== undefined) {
+            if (p.world !== 1 && p.world !== 2 && p.world !== 3) {
+                throw new Error(`invalid profile world on '${p.username}': expected 1, 2 or 3`);
+            }
+            entry.world = p.world;
+        }
         if (typeof p.tab === 'string' && p.tab !== MAIN_TAB) {
             entry.tab = p.tab;
         } else if (p.tab !== undefined && p.tab !== MAIN_TAB) {

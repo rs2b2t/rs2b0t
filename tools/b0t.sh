@@ -18,10 +18,17 @@ case "$VIEWER" in
     *) echo "ERROR: unknown B0T_VIEWER '$VIEWER' (use electron, chrome, firefox, or none)." >&2; exit 1 ;;
 esac
 
+[ "$#" -eq 0 ] || { echo 'ERROR: choose a world per profile in the wall; b0t takes no command-line options.' >&2; exit 1; }
 PORT="${PORT:-8081}"
-WS="${RS2B2T_WS:-wss://w1.rs2b2t.com}"
-HTTP="$(printf '%s' "$WS" | sed -E 's,^ws,http,')"
-HOST="$(printf '%s' "$WS" | sed -E 's,^wss?://,,')"
+case "$PORT" in ''|*[!0-9]*) echo 'ERROR: PORT must be an integer from 1 to 65535.' >&2; exit 1 ;; esac
+[ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ] || { echo 'ERROR: PORT must be an integer from 1 to 65535.' >&2; exit 1; }
+case "${RS2B2T_WS:-wss://w1.rs2b2t.com}" in
+    wss://w1.rs2b2t.com|wss://w1.rs2b2t.com/|wss://w1.rs2b2t.com:443|wss://w1.rs2b2t.com:443/) DEFAULT_WORLD=1 ;;
+    wss://w2.rs2b2t.com|wss://w2.rs2b2t.com/|wss://w2.rs2b2t.com:443|wss://w2.rs2b2t.com:443/) DEFAULT_WORLD=2 ;;
+    wss://w3.rs2b2t.com|wss://w3.rs2b2t.com/|wss://w3.rs2b2t.com:443|wss://w3.rs2b2t.com:443/) DEFAULT_WORLD=3 ;;
+    *) echo 'ERROR: RS2B2T_WS must be the official secure W1, W2 or W3 endpoint. Custom worlds are unsupported by the live wall.' >&2; exit 1 ;;
+esac
+HOST="w$DEFAULT_WORLD.rs2b2t.com"
 
 LOCK_DIR="$ROOT/.b0t-launch.lock"
 LOCK_OWNER_FILE="$LOCK_DIR/owner.pid"
@@ -213,12 +220,20 @@ if [ "$VIEWER" = "electron" ]; then
     [ -d desktop/node_modules/electron ] || { echo "→ installing the Electron wall (first run downloads Electron)…"; ( cd desktop && bun install ); }
 fi
 
-# Fetch the current login modulus from the served client; it's the long digit string in the minified JS.
-echo "→ fetching rs2b2t login key + building live client…"
-MOD=$(curl -s --max-time 15 "$HTTP/client/client.js" | grep -oE '[0-9]+' | awk 'length($0) >= 250 { print; exit }')
-[ -n "$MOD" ] || { echo "ERROR: could not fetch the rs2b2t login modulus from $HTTP/client/client.js" >&2; exit 1; }
-TARGET=live LIVE_RSAN="$MOD" bun run build:bot >/dev/null
-echo "  built live client (login key fetched from $HOST)."
+echo "→ checking all world login keys + building the local proxy client…"
+MOD=''
+for WORLD in 1 2 3; do
+    HTTP="https://w$WORLD.rs2b2t.com"
+    KEY=$(curl -fsS --max-time 15 "$HTTP/client/client.js" | grep -oE '[0-9]+' | awk 'length($0) >= 250 { print; exit }')
+    [ -n "$KEY" ] || { echo "ERROR: could not fetch the World $WORLD login modulus from $HTTP/client/client.js" >&2; exit 1; }
+    if [ -n "$MOD" ] && [ "$KEY" != "$MOD" ]; then
+        echo 'ERROR: World 1, World 2 and World 3 login keys differ; refusing to build a mixed-world wall.' >&2
+        exit 1
+    fi
+    MOD=$KEY
+done
+TARGET=proxy LIVE_RSAN="$MOD" bun run build:bot >/dev/null
+echo '  built one client for World 1, World 2 and World 3.'
 
 # Why: build:bot does not create the collision pack; navigation needs it, so bake it from the engine cache.
 if [ ! -f out/collision.lcnav.gz ]; then
@@ -290,7 +305,7 @@ supervise_managed_viewer() {
     done
 }
 
-echo "→ starting local proxy on :$PORT → $HOST …"
+echo "→ starting one local proxy on :$PORT → World 1 + World 2 + World 3 …"
 PROXY_RESOURCE_PID=''
 if [ "$VIEWER" = "none" ]; then
     PROXY_RESOURCE_PID="${B0T_RESOURCE_PID:-}"
@@ -323,7 +338,7 @@ while [ "$i" -lt 40 ]; do
 done
 [ "$PROXY_READY" = "1" ] || { echo "ERROR: proxy did not come up on :$PORT" >&2; exit 1; }
 
-URL="http://localhost:$PORT/multibox.html"
+URL="http://localhost:$PORT/multibox.html?world=$DEFAULT_WORLD"
 echo "  Add bots with REGISTERED rs2b2t accounts; they play on the live server."
 
 case "$VIEWER" in

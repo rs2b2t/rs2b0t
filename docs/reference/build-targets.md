@@ -7,13 +7,19 @@ game WebSocket host and which RSA login modulus it uses:
 
 - **`local`** (default), **same-origin**: `wsHost = window.location.host`. Local dev key;
   Use `./tools/deploy-local-key.sh <engine>` to derive the RSA values automatically when deploying against a stock engine.
-- **`live`**, hardcodes `w1.rs2b2t.com` + `wss`. Used with the local reverse proxy
-  (`tools/live-proxy.ts`) for running a local client against production. Key via
-  `LIVE_RSAN`.
+- **`proxy`**, used by `bun run b0t`, routes each profile's selected world through
+  `tools/live-proxy.ts` on the serving origin. Game sockets, cache sockets,
+  CRC/JAG downloads and login-key refreshes all use the same world prefix.
+  Key via `LIVE_RSAN`; the launcher checks all three live worlds' keys before building.
+- **`live`**, retains the direct `w1.rs2b2t.com` + `wss` target for older harnesses
+  without an explicit world. An explicit `?world=1`, `?world=2` or `?world=3` uses the serving
+  origin's world proxy. Key via `LIVE_RSAN`.
 - **`prod`**, **same-origin** like `local`, but bakes the **production** modulus via
   `PROD_RSAN`. This is the client hosted *on* the game server (`w1.rs2b2t.com/rs2b0t`);
-  because it is served from the game origin, `/crc` + the cache/game WebSockets are all
-  same-origin and **no proxy is involved**. The build aborts if `PROD_RSAN` is unset.
+  ordinary clients use that game origin. Mixed-world profiles use its allowlisted
+  `/__rs2b0t/world/1`, `/__rs2b0t/world/2` and `/__rs2b0t/world/3` routes. Install those routes on all
+  game proxies before publishing a mixed-world hosted build. The build aborts if
+  `PROD_RSAN` is unset.
 
 ## See also
 
