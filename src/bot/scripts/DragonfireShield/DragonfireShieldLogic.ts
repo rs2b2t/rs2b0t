@@ -14,6 +14,13 @@ export const BOOTH = 'Bank booth';
 export const BOOTH_OP = 'Use-quickly';
 export const MAX_TALK_GUARD = 100;
 
+// Why: the Al Kharid gate guard tariffs 20 gp per crossing until Prince Ali Rescue is complete;
+// the walk planner pays the toll itself when the pack holds coins, so the script only needs to
+// top the pack up to GATE_FEE each bank trip while the quest is undone.
+export const COINS_ID = 995;
+export const PRINCE_ALI_QUEST = 'Prince Ali Rescue';
+export const GATE_FEE = 20;
+
 export type Step = 'farm' | 'loot' | 'bank' | 'duke' | 'wait';
 
 export interface PackState {

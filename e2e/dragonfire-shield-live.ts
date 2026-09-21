@@ -7,6 +7,8 @@
  *  shields each trip. Proof: out/dragonfire-shield-proof.json */
 //   ~/redeploy.sh && HEADED=1 bun e2e/dragonfire-shield-live.ts
 import type { Page } from 'playwright-core';
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import { launchBrowser, parseArgs } from './lib/harness.js';
 import { createHarnessProof } from './lib/harnessProof.js';
 import {
@@ -114,6 +116,10 @@ const browser = await launchBrowser({ swiftshader: true });
 const page = await browser.newPage();
 try {
     await proof.ensureDirs();
+    const watchDir = join(process.cwd(), 'screenshots', 'watch');
+    await mkdir(watchDir, { recursive: true });
+    const winWatch = `\\\\wsl.localhost\\${process.env.WSL_DISTRO_NAME ?? 'Ubuntu'}\\home\\shonc\\rs2bot\\rs2b0t\\screenshots\\watch`;
+    console.log(`watch frames -> ${winWatch} (open the folder in Windows Explorer)`);
     const user = `dfs${Date.now().toString(36).slice(-5)}`;
     console.log(`dragonfire-shield-live base=${base} user=${user}`);
     await mainlandAccount(page, base, user);
@@ -132,7 +138,10 @@ try {
 
     await seedItemsToBank(
         page,
-        [{ debugName: 'antidragonbreathshield', displayName: 'Dragonfire shield', qty: 20 }],
+        [
+            { debugName: 'antidragonbreathshield', displayName: 'Dragonfire shield', qty: 20 },
+            { debugName: 'Coins', displayName: 'Coins', qty: 100 }
+        ],
         AL_BANK
     );
 
@@ -144,6 +153,8 @@ try {
     let lastT = 0;
     let bestFarmed = 0;
     let tripsSeen = 0;
+    let frameN = 0;
+    let lastShot = 0;
     const deadline = Date.now() + WATCH_MS;
     while (Date.now() < deadline) {
         const snap = await page.evaluate(() => {
@@ -183,10 +194,11 @@ try {
     await page.waitForTimeout(1500);
 
     const bank = await bankSnapshot(page);
-    const ok = tripsSeen >= 1 && bestFarmed >= MIN_FARMED;
+    const feeOk = /gate fee \d+ — withdrew \d+ coins/.test(collected.join('\n'));
+    const ok = tripsSeen >= 1 && bestFarmed >= MIN_FARMED && feeOk;
     const detail = ok
-        ? `trips=${tripsSeen} farmed=${bestFarmed} bank(ds 1540)=${bank.unNoted} notes=${bank.notes}`
-        : `trips=${tripsSeen} farmed=${bestFarmed} sample=${collected.slice(-6).join(' | ') || '(no logs)'}`;
+        ? `trips=${tripsSeen} farmed=${bestFarmed} bank(ds 1540)=${bank.unNoted} notes=${bank.notes} fee=${feeOk}`
+        : `trips=${tripsSeen} farmed=${bestFarmed} fee=${feeOk} sample=${collected.slice(-6).join(' | ') || '(no logs)'}`;
     console.log(`result: ${ok ? 'PASS' : 'FAIL'} ${detail}`);
 
     await (ok ? proof.writeSuccess : proof.writeFailure).call(proof, page, {
@@ -194,7 +206,8 @@ try {
         trips: tripsSeen,
         farmed: bestFarmed,
         bankSnapshot: bank,
-        seed: { unNoted: 20 },
+        seed: { unNoted: 20, coins: 100 },
+        gateFee: feeOk,
         sample: collected.slice(-20)
     });
     if (!ok) {

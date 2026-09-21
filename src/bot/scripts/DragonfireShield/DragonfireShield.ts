@@ -15,6 +15,7 @@ import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Modals } from '../../api/ui/widgets/Modals.js';
 import { Traversal } from '../../api/walking/Traversal.js';
+import { Quests } from '../../api/ui/questlog/Quests.js';
 import Tile from '../../geometry/Tile.js';
 import { Paint } from '../../paint/Paint.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
@@ -25,9 +26,12 @@ import {
     BANK_STAND,
     BOOTH,
     BOOTH_OP,
+    COINS_ID,
     DUKE,
     DUKE_STAND,
+    GATE_FEE,
     MAX_TALK_GUARD,
+    PRINCE_ALI_QUEST,
     SHIELD,
     SHIELD_ID,
     STAND_REACH,
@@ -70,10 +74,13 @@ export default class DragonfireShield extends TaskBot {
     trips = 0;
     tripActive = false;
     tripDeadline = 0;
+    firstDropAt = 0;
+    redroppedAt = 0;
     noteId = -1;
 
     tripSecs = 50;
     carryNotes = true;
+    gateFee = 0;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -81,8 +88,13 @@ export default class DragonfireShield extends TaskBot {
         this.tripSecs = this.settings.num('tripSecs', 50);
         this.carryNotes = this.settings.bool('carryNotes', true);
         this.noteId = this.findNoteId();
-        this.log(`DragonfireShield: ${this.tripSecs}s trips, carrying notes: ${this.carryNotes}, note obj ${this.noteId === -1 ? '(none)' : `#${this.noteId}`}`);
-        this.add(new ContinueDialog(), new FarmShields(this), new LootShields(this), new BankTrip(this), new GoToDuke(this));
+        await Execution.delayUntil(() => Quests.status(PRINCE_ALI_QUEST) !== 'unknown', 5000);
+        this.gateFee = Quests.status(PRINCE_ALI_QUEST) === 'complete' ? 0 : GATE_FEE;
+        this.log(
+            `DragonfireShield: ${this.tripSecs}s trips, carrying notes: ${this.carryNotes}, note obj ${this.noteId === -1 ? '(none)' : `#${this.noteId}`}, ` +
+                `Prince Ali Rescue=${Quests.status(PRINCE_ALI_QUEST)} gate fee=${this.gateFee}`
+        );
+        this.add(new ContinueDialog(), new LootShields(this), new FarmShields(this), new BankTrip(this), new GoToDuke(this));
     }
 
     override recoveryAnchor(): Tile | null {
@@ -130,7 +142,11 @@ export default class DragonfireShield extends TaskBot {
     junkHeld(): number {
         const used = Inventory.used();
         const unNoted = Inventory.countById(SHIELD_ID);
-        return Math.max(0, used - unNoted - Math.min(used, this.notesHeld() > 0 ? 1 : 0));
+        const coins = Inventory.countById(COINS_ID);
+        return Math.max(
+            0,
+            used - unNoted - Math.min(used, this.notesHeld() > 0 ? 1 : 0) - Math.min(used, coins > 0 ? 1 : 0)
+        );
     }
 
     groundShields(): GroundItem[] {
@@ -156,7 +172,7 @@ export default class DragonfireShield extends TaskBot {
     }
 
     async dropById(id: number): Promise<void> {
-        for (let guard = 0; guard < 12; guard++) {
+        for (let guard = 0; guard < 40; guard++) {
             const it = Inventory.items().find(i => i.id === id);
             if (!it) {
                 return;
@@ -228,6 +244,7 @@ export default class DragonfireShield extends TaskBot {
     pack(): PackState {
         const unNoted = Inventory.countById(SHIELD_ID);
         const notes = this.notesHeld();
+        const coins = Inventory.countById(COINS_ID);
         const used = Inventory.used();
         return {
             atStand: this.atStand(),
@@ -236,7 +253,10 @@ export default class DragonfireShield extends TaskBot {
             free: Inventory.free(),
             unNoted,
             notes,
-            junk: Math.max(0, used - unNoted - Math.min(used, notes > 0 ? 1 : 0)),
+            // Why: the carried coin stack is the gate toll, not junk — counting it as junk would
+            // make the decision loop bank the toll back the moment it's withdrawn. The coins are
+            // spent crossing the Al Kharid gate (walk planner handles the payment).
+            junk: Math.max(0, used - unNoted - Math.min(used, notes > 0 ? 1 : 0) - Math.min(used, coins > 0 ? 1 : 0)),
             ground: this.atStand() && !this.tripActive ? this.groundShields().length : 0,
             tripActive: this.tripActive,
             wantNotes: this.carryNotes
@@ -259,10 +279,8 @@ class FarmShields implements Task {
         if (p.tripActive) {
             return true;
         }
-        if (p.ground > 0) {
-            return false;
-        }
-        // Bank the product before farming again; notes-only cargo is fine to drop at the stand.
+        // Why: the floor pile is the depot — farm keeps adding to it across windows. Only the pack
+        // has to be clear (un-noted blocks the Duke, junk is bankable); ground may be anything.
         if (p.unNoted > 0 || p.junk > 0) {
             return false;
         }
@@ -277,14 +295,23 @@ class FarmShields implements Task {
             bot.setStatus('starting a farm trip');
             await bot.dropFarmCargo();
             bot.tripActive = true;
+            bot.firstDropAt = 0;
             bot.tripDeadline = Date.now() + bot.tripSecs * 1000;
-            bot.log(`FarmShields: trip window ${bot.tripSecs}s started, pack now free=${Inventory.free()}`);
+            bot.log(`FarmShields: trip ${bot.tripSecs}s window (anchored to the first drop), pack now free=${Inventory.free()}`);
         }
 
         let cycles = 0;
         while (bot.tripActive && Date.now() < bot.tripDeadline && !Inventory.isFull()) {
             if (EventSignal.pending() || !bot.atStand() || ChatDialog.isOpen()) {
                 bot.log(`FarmShields: breaking cycle (event=${EventSignal.pending()} atStand=${bot.atStand()} dialog=${ChatDialog.isOpen()})`);
+                break;
+            }
+            // Why: once the ground pile can already fill the pack, farming more only wastes time —
+            // end the trip and let the loot phase bank it. groundShields() counts one stack per
+            // pick-up, so pile >= free slots means a pick-up run would fill the inventory.
+            if (bot.groundShields().length >= Inventory.free()) {
+                bot.log(`FarmShields: ground pile can fill the pack (${bot.groundShields().length} >= ${Inventory.free()} free) — ending trip early`);
+                bot.tripActive = false;
                 break;
             }
             if (Equipment.contains(SHIELD)) {
@@ -313,6 +340,11 @@ class FarmShields implements Task {
             }
             bot.log(`FarmShields: shield received (inv ${before} -> ${Inventory.countById(SHIELD_ID)})`);
             await bot.dropById(SHIELD_ID);
+            if (bot.firstDropAt === 0) {
+                bot.firstDropAt = Date.now();
+                bot.tripDeadline = bot.firstDropAt + bot.tripSecs * 1000;
+                bot.log(`FarmShields: first drop @ +0s, window ends in ${bot.tripSecs}s`);
+            }
             bot.farmed++;
             cycles++;
             bot.setStatus(`farming (${bot.farmed} shields)`);
@@ -327,7 +359,17 @@ class LootShields implements Task {
 
     validate(): boolean {
         const p = this.bot.pack();
-        return p.atStand && !p.tripActive && p.ground > 0;
+        if (!p.atStand || p.tripActive || p.ground === 0) {
+            return false;
+        }
+        // Why: once the pack is full there is no room to pick up anything — loot must let the
+        // bank take over instead of re-validating its own "full load" forever.
+        if (p.full) {
+            return false;
+        }
+        // Why: after redropping a partial load, let the farm start the next window instead of
+        // immediately re-picking the pile it just put down.
+        return Date.now() - this.bot.redroppedAt > 3000;
     }
 
     async execute(): Promise<void> {
@@ -335,7 +377,7 @@ class LootShields implements Task {
         bot.setStatus('looting the shield pile');
         bot.log(`LootShields: ${bot.groundShields().length} ground stack(s), free=${Inventory.free()}`);
         let taken = 0;
-        for (let guard = 0; guard < 40; guard++) {
+        for (let guard = 0; guard < 80; guard++) {
             const pile = bot.groundShields();
             if (pile.length === 0) {
                 break;
@@ -357,7 +399,20 @@ class LootShields implements Task {
             bot.log(`LootShields: take #${drop.id} clicked=${clicked} got=${got} inv=${Inventory.countById(drop.id)}`);
             taken++;
         }
-        bot.log(`LootShields: done, picked ${taken} stack(s), free=${Inventory.free()}`);
+        bot.log(`LootShields: picked ${taken} stack(s), free=${Inventory.free()}`);
+        // Why: the pack buys back only what fills it. A coin stack and any junk each cost a slot, so
+        // a load is "full" at 28 minus those. Below that the looted shields go straight back onto the
+        // pile and the farm runs another window instead of wasting a bank trip on a partial load.
+        const capacity = 28 - (Inventory.countById(COINS_ID) > 0 ? 1 : 0) - bot.junkHeld();
+        const used = Inventory.used();
+        if (used >= capacity || Inventory.isFull()) {
+            bot.log(`LootShields: pack ${used}/${capacity} — full load, taking it to the bank`);
+            return;
+        }
+        bot.log(`LootShields: pack ${used}/${capacity} — partial, redropping to pile for another window`);
+        await bot.dropFarmCargo();
+        bot.redroppedAt = Date.now();
+        bot.log(`LootShields: redropped, pack free=${Inventory.free()} ground=${bot.groundShields().length}`);
     }
 }
 
@@ -410,14 +465,39 @@ class BankTrip implements Task {
         await Bank.depositAllMatching(() => true, m => bot.log(`  ${m}`));
         bot.log(`BankTrip: deposited, pack free=${Inventory.free()}`);
         if (bot.carryNotes && bot.noteId !== -1) {
-            const free = Inventory.free();
-            if (free > 0) {
+            const banked = Bank.countById(SHIELD_ID) + Bank.countById(bot.noteId);
+            if (banked > 0) {
                 await Bank.setNoteMode(true);
-                const withdrew = await Bank.withdrawXById(SHIELD_ID, free, bot.noteId);
-                bot.log(`BankTrip: withdraw notes withdrew=${withdrew} notesHeld=${bot.notesHeld()}`);
+                let ok = true;
+                if (Bank.countById(SHIELD_ID) > 0) {
+                    ok = (await Bank.withdrawXById(SHIELD_ID, Bank.countById(SHIELD_ID), bot.noteId)) && ok;
+                }
+                if (Bank.countById(bot.noteId) > 0) {
+                    ok = (await Bank.withdrawXById(bot.noteId, Bank.countById(bot.noteId), bot.noteId)) && ok;
+                }
+                bot.log(`BankTrip: bring all banked shields as notes ok=${ok} notesHeld=${bot.notesHeld()} (bank had ${banked})`);
+            } else {
+                bot.log('BankTrip: no shields in the bank to bring (farming from scratch)');
             }
         } else if (bot.carryNotes && bot.noteId === -1) {
             bot.log('BankTrip: no noted shield row found — farming without notes');
+        }
+        if (bot.gateFee > 0) {
+            const heldCoins = Inventory.countById(COINS_ID);
+            const short = Math.max(0, bot.gateFee - heldCoins);
+            if (short > 0) {
+                await Bank.setNoteMode(false);
+                const bankCoins = Bank.countById(COINS_ID);
+                const took = Math.min(short, bankCoins);
+                if (took > 0) {
+                    const ok = await Bank.withdrawXById(COINS_ID, took);
+                    bot.log(`BankTrip: gate fee ${bot.gateFee} — withdrew ${took} coins (pack ${Inventory.countById(COINS_ID)}) ok=${ok}`);
+                } else {
+                    bot.log(`BankTrip: gate fee ${bot.gateFee} but NO coins in the bank`);
+                }
+            } else {
+                bot.log(`BankTrip: gate fee ${bot.gateFee} already held (${heldCoins} coins)`);
+            }
         }
         await Bank.close();
         await Execution.delayTicks(1);
