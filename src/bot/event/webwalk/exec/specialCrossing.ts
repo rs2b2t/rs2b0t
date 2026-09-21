@@ -112,7 +112,9 @@ export async function handleSpecialCrossing(
         throw new Error(`${sc.label}: path step is missing transport metadata`);
     }
 
-    if (sc.requires && !meetsRequirement(Inventory.count(sc.requires.item), sc.requires)) {
+    // Why: completing Prince Ali Rescue lifts the Al Kharid toll, so the item gate is skipped.
+    const tollWaived = sc.questWaivesItems !== undefined && Quests.status(sc.questWaivesItems) === 'complete';
+    if (sc.requires && !tollWaived && !meetsRequirement(Inventory.count(sc.requires.item), sc.requires)) {
         log(`${sc.label}: need ${sc.requires.count} ${sc.requires.item} — skipping`);
         return false;
     }

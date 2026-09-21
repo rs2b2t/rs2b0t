@@ -34,9 +34,15 @@ export function meetsRequires(requires: TransportRequires | undefined, state: Wo
         }
     }
 
+    // Why: completing Prince Ali Rescue removes the Al Kharid toll, so a full quest status waives
+    // both the currency and item gates instead of failing them (unknown/incomplete still require coins).
+    const questWaivesItems =
+        requires.questWaivesItems !== undefined
+        && state.questStatus(requires.questWaivesItems) === 'complete';
+
     if (requires.currency) {
         const have = state.itemCount(requires.currency.name);
-        if (have < requires.currency.amount) {
+        if (!questWaivesItems && have < requires.currency.amount) {
             return {
                 ok: false,
                 reason: `need ${requires.currency.amount}× ${requires.currency.name} (have ${have})`
@@ -47,7 +53,7 @@ export function meetsRequires(requires: TransportRequires | undefined, state: Wo
     if (requires.items) {
         for (const it of requires.items) {
             const have = state.itemCount(it.name);
-            if (have < it.count) {
+            if (!questWaivesItems && have < it.count) {
                 return { ok: false, reason: `need ${it.count}× ${it.name} (have ${have})` };
             }
         }
@@ -118,6 +124,7 @@ export function hasGatingRequires(requires: TransportRequires | undefined): bool
         || (requires.items !== undefined && requires.items.length > 0)
         || (requires.worn !== undefined && requires.worn.length > 0)
         || requires.currency !== undefined
+        || requires.questWaivesItems !== undefined
         || (requires.quests !== undefined && requires.quests.length > 0)
         || requires.forbidEntranaRestricted === true
         || requires.slashTool === true

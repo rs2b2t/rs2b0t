@@ -53,6 +53,12 @@ export interface TransportRequires {
     freeSlots?: number;
     /** Toll / charter cost; same as items[] but kept explicit for explain output. */
     currency?: { name: string; amount: number };
+    // Why: completing Prince Ali Rescue lifts the Al Kharid gate toll, so the item/currency gates
+    // below are only meaningful while the quest is unfinished. A live state with the quest complete
+    // waives them; a state without the information fails closed (toll still required).
+
+    /** Quest (journal name) whose completion waives the `items` + `currency` gates above. */
+    questWaivesItems?: string;
     /** Blocks the edge when WorldState reports Entrana-restricted gear (weapons/armour heuristic). */
     forbidEntranaRestricted?: boolean;
     // Why: content web.rs2 wants a plain Knife by use-on, or a slash-capable weapon worn for the menu Slash or used on the web.
