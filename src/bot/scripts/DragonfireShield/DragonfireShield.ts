@@ -82,6 +82,8 @@ export default class DragonfireShield extends TaskBot {
     carryNotes = true;
     gateFee = 0;
     initialSetupDone = false;
+    /** False until a bank trip actually found shields to bank; stops the "notes missing" re-bank when starting from an empty bank. */
+    hasBankedShields = false;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -260,7 +262,8 @@ export default class DragonfireShield extends TaskBot {
             junk: Math.max(0, used - unNoted - Math.min(used, notes > 0 ? 1 : 0) - Math.min(used, coins > 0 ? 1 : 0)),
             ground: this.atStand() && !this.tripActive ? this.groundShields().length : 0,
             tripActive: this.tripActive,
-            wantNotes: this.carryNotes
+            wantNotes: this.carryNotes,
+            hasBankedShields: this.hasBankedShields
         };
     }
 
@@ -434,7 +437,7 @@ class BankTrip implements Task {
         if (p.atStand && !p.tripActive && p.ground === 0 && (p.unNoted > 0 || p.notes > 0 || p.junk > 0)) {
             return true;
         }
-        if (p.atBank && (p.unNoted > 0 || p.junk > 0 || (p.wantNotes && p.notes === 0 && p.free > 0))) {
+        if (p.atBank && (p.unNoted > 0 || p.junk > 0 || (p.wantNotes && p.hasBankedShields && p.notes === 0 && p.free > 0))) {
             return true;
         }
         return false;
@@ -472,8 +475,9 @@ class BankTrip implements Task {
 
         await Bank.depositAllMatching(() => true, m => bot.log(`  ${m}`));
         bot.log(`BankTrip: deposited, pack free=${Inventory.free()}`);
+        const banked = Bank.countById(SHIELD_ID) + (bot.noteId === -1 ? 0 : Bank.countById(bot.noteId));
+        bot.hasBankedShields = banked > 0;
         if (bot.carryNotes && bot.noteId !== -1) {
-            const banked = Bank.countById(SHIELD_ID) + Bank.countById(bot.noteId);
             if (banked > 0) {
                 await Bank.setNoteMode(true);
                 let ok = true;
@@ -525,7 +529,7 @@ class GoToDuke implements Task {
         if (p.atStand) {
             return false;
         }
-        if (p.atBank && (p.unNoted > 0 || p.junk > 0 || (p.wantNotes && p.notes === 0 && p.free > 0))) {
+        if (p.atBank && (p.unNoted > 0 || p.junk > 0 || (p.wantNotes && p.hasBankedShields && p.notes === 0 && p.free > 0))) {
             return false;
         }
         return true;

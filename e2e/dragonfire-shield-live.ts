@@ -29,6 +29,10 @@ const { base } = parseArgs(process.argv.slice(2), {
 // toll is waived and the route must still take the toll gate with zero coins instead of a long detour.
 const PRINCE_ALI_DONE = process.env.PRINCE_ALI === 'done';
 
+// ZERO_BANK=1: start with the bank empty of shields to prove a from-scratch run leaves the bank,
+// farms the Duke, and banks the first load instead of looping "no shields to bring" at the booth.
+const ZERO_BANK = process.env.ZERO_BANK === '1';
+
 const AL_BANK = { x: 3269, z: 3167, level: 0 };
 const MIN_FARMED = 3;
 const WATCH_MS = 240_000;
@@ -149,17 +153,17 @@ try {
     await relog(page, user);
     await maxmeAndClearDialogs(page);
 
-    // A completed Prince Ali means no coins are ever held; seed only shields in that mode.
-    await seedItemsToBank(
-        page,
-        PRINCE_ALI_DONE
-            ? [{ debugName: 'antidragonbreathshield', displayName: 'Dragonfire shield', qty: 20 }]
+    // A completed Prince Ali means no coins are ever held; ZERO_BANK clears the shields to prove a
+// from-scratch start. Otherwise the bank is seeded with 20 shields + 100 coins.
+    const seedList = PRINCE_ALI_DONE
+        ? [{ debugName: 'antidragonbreathshield', displayName: 'Dragonfire shield', qty: 20 }]
+        : ZERO_BANK
+            ? [{ debugName: 'Coins', displayName: 'Coins', qty: 100 }]
             : [
                 { debugName: 'antidragonbreathshield', displayName: 'Dragonfire shield', qty: 20 },
                 { debugName: 'Coins', displayName: 'Coins', qty: 100 }
-            ],
-        AL_BANK
-    );
+            ];
+    await seedItemsToBank(page, seedList, AL_BANK);
 
     await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:DragonfireShield:tripSecs', '40'));
     await startScript(page, 'DragonfireShield');
@@ -230,7 +234,7 @@ try {
         trips: tripsSeen,
         farmed: bestFarmed,
         bankSnapshot: bank,
-        seed: { unNoted: 20, coins: PRINCE_ALI_DONE ? 0 : 100 },
+        seed: { unNoted: ZERO_BANK ? 0 : 20, coins: PRINCE_ALI_DONE ? 0 : 100 },
         gateFee: feeOk,
         tollCrosses: gateCrosses,
         sample: collected.slice(-20)

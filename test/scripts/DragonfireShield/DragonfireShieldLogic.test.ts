@@ -13,6 +13,7 @@ function mk(over: Partial<PackState> = {}): PackState {
         ground: 0,
         tripActive: false,
         wantNotes: true,
+        hasBankedShields: true,
         ...over
     };
 }
@@ -58,6 +59,10 @@ describe('DragonfireShield.decide', () => {
 
     test('withdraws the noted stack when none is carried', () => {
         expect(decide(mk({ atBank: true, notes: 0, wantNotes: true, free: 28 }))).toBe('bank');
+    });
+
+    test('leaves an empty bank instead of looping the notes-missing re-bank', () => {
+        expect(decide(mk({ atBank: true, notes: 0, wantNotes: true, hasBankedShields: false, free: 28, unNoted: 0, junk: 0 }))).toBe('duke');
     });
 
     test('does not re-bank while already carrying notes and pack is clean', () => {

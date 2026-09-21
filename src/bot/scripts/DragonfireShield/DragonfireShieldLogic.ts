@@ -38,6 +38,8 @@ export interface PackState {
     ground: number;
     tripActive: boolean;
     wantNotes: boolean;
+    /** A bank trip has actually found shields to withdraw; without it an empty bank would loop "notes missing" forever. */
+    hasBankedShields: boolean;
 }
 
 export function decide(p: PackState): Step {
@@ -53,7 +55,7 @@ export function decide(p: PackState): Step {
     if (p.atStand && !p.tripActive && p.ground === 0 && (p.unNoted > 0 || p.notes > 0 || p.junk > 0)) {
         return 'bank';
     }
-    if (p.atBank && (p.unNoted > 0 || p.junk > 0 || (p.wantNotes && p.notes === 0 && p.free > 0))) {
+    if (p.atBank && (p.unNoted > 0 || p.junk > 0 || (p.wantNotes && p.hasBankedShields && p.notes === 0 && p.free > 0))) {
         return 'bank';
     }
     if (!p.atStand) {
