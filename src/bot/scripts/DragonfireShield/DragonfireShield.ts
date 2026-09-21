@@ -81,6 +81,7 @@ export default class DragonfireShield extends TaskBot {
     tripSecs = 50;
     carryNotes = true;
     gateFee = 0;
+    initialSetupDone = false;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -424,6 +425,12 @@ class BankTrip implements Task {
         if (p.full) {
             return true;
         }
+        // Why: on a fresh start the boot sequence is bank-first — go to Al Kharid, deposit, pull the
+        // whole noted shield stack and 20 gate coins out, THEN farm. Without this, a start away from
+        // the bank tries to farm first and hits the toll gate with no coins on the first bank trip.
+        if (!this.bot.initialSetupDone) {
+            return true;
+        }
         if (p.atStand && !p.tripActive && p.ground === 0 && (p.unNoted > 0 || p.notes > 0 || p.junk > 0)) {
             return true;
         }
@@ -461,6 +468,7 @@ class BankTrip implements Task {
         if (!opened) {
             return;
         }
+        bot.initialSetupDone = true;
 
         await Bank.depositAllMatching(() => true, m => bot.log(`  ${m}`));
         bot.log(`BankTrip: deposited, pack free=${Inventory.free()}`);

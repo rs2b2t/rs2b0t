@@ -25,6 +25,10 @@ const { base } = parseArgs(process.argv.slice(2), {
     base: process.env.BASE ?? 'http://localhost:8888'
 });
 
+// PRINCE_ALI=done: run the farm on an account that completed Prince Ali Rescue, so the Al Kharid
+// toll is waived and the route must still take the toll gate with zero coins instead of a long detour.
+const PRINCE_ALI_DONE = process.env.PRINCE_ALI === 'done';
+
 const AL_BANK = { x: 3269, z: 3167, level: 0 };
 const MIN_FARMED = 3;
 const WATCH_MS = 240_000;
@@ -127,21 +131,33 @@ try {
 
     await cheatQuiet(page, 'setvar dragon_shield 1');
     await cheatQuiet(page, 'speed 200');
+    if (PRINCE_ALI_DONE) {
+        await cheatQuiet(page, 'setvar princequest 110');
+    }
     const varp = await getServerVarQuiet(page, 'dragon_shield');
     if (varp !== 1) {
         throw new Error(`dragon_shield expected 1, got ${varp}`);
     }
-    console.log(`dragon_shield=${varp}`);
-    // Reload the client so the server-pushed variables settle before the Duke is talked to.
+    if (PRINCE_ALI_DONE) {
+        const prince = await getServerVarQuiet(page, 'princequest');
+        if (prince !== 110) {
+            throw new Error(`princequest expected 110, got ${prince}`);
+        }
+    }
+    console.log(`dragon_shield=${varp}${PRINCE_ALI_DONE ? ' prince_ali=done' : ''}`);
+    // Reload the client so the server-pushed variables (incl. a recoloured quest list) settle before the Duke is talked to.
     await relog(page, user);
     await maxmeAndClearDialogs(page);
 
+    // A completed Prince Ali means no coins are ever held; seed only shields in that mode.
     await seedItemsToBank(
         page,
-        [
-            { debugName: 'antidragonbreathshield', displayName: 'Dragonfire shield', qty: 20 },
-            { debugName: 'Coins', displayName: 'Coins', qty: 100 }
-        ],
+        PRINCE_ALI_DONE
+            ? [{ debugName: 'antidragonbreathshield', displayName: 'Dragonfire shield', qty: 20 }]
+            : [
+                { debugName: 'antidragonbreathshield', displayName: 'Dragonfire shield', qty: 20 },
+                { debugName: 'Coins', displayName: 'Coins', qty: 100 }
+            ],
         AL_BANK
     );
 
@@ -194,20 +210,29 @@ try {
     await page.waitForTimeout(1500);
 
     const bank = await bankSnapshot(page);
-    const feeOk = /gate fee \d+ — withdrew \d+ coins/.test(collected.join('\n'));
-    const ok = tripsSeen >= 1 && bestFarmed >= MIN_FARMED && feeOk;
+    const logText = collected.join('\n');
+    const feeOk = /gate fee \d+ — withdrew \d+ coins/.test(logText);
+    const withheldCoins = /withdrew \d+ coins/.test(logText);
+    const gateCrosses = [...logText.matchAll(/Al Kharid toll gate: crossed at/g)].length;
+    // Quest-done runs: the toll is free, so the farm must cross the gate both ways with zero coins — a
+    // long detour around Al Kharid would still farm, so the gate-cross count is the route proxy.
+    const ok = PRINCE_ALI_DONE
+        ? tripsSeen >= 1 && bestFarmed >= MIN_FARMED && !withheldCoins && gateCrosses >= 2
+        : tripsSeen >= 1 && bestFarmed >= MIN_FARMED && feeOk;
     const detail = ok
-        ? `trips=${tripsSeen} farmed=${bestFarmed} bank(ds 1540)=${bank.unNoted} notes=${bank.notes} fee=${feeOk}`
-        : `trips=${tripsSeen} farmed=${bestFarmed} fee=${feeOk} sample=${collected.slice(-6).join(' | ') || '(no logs)'}`;
+        ? `trips=${tripsSeen} farmed=${bestFarmed} bank(ds 1540)=${bank.unNoted} notes=${bank.notes} tollCrosses=${gateCrosses}${PRINCE_ALI_DONE ? ' (no coins)' : ` fee=${feeOk}`}`
+        : `trips=${tripsSeen} farmed=${bestFarmed} fee=${feeOk} tollCrosses=${gateCrosses} sample=${collected.slice(-6).join(' | ') || '(no logs)'}`;
     console.log(`result: ${ok ? 'PASS' : 'FAIL'} ${detail}`);
 
     await (ok ? proof.writeSuccess : proof.writeFailure).call(proof, page, {
         dragonShieldVarp: varp,
+        princeAliDone: PRINCE_ALI_DONE,
         trips: tripsSeen,
         farmed: bestFarmed,
         bankSnapshot: bank,
-        seed: { unNoted: 20, coins: 100 },
+        seed: { unNoted: 20, coins: PRINCE_ALI_DONE ? 0 : 100 },
         gateFee: feeOk,
+        tollCrosses: gateCrosses,
         sample: collected.slice(-20)
     });
     if (!ok) {
