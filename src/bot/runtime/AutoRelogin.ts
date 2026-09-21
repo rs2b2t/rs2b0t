@@ -13,7 +13,8 @@ const RECONNECT_INTERVAL_MS = 9000;
 const BUSY_RETRY_MS = 250;
 const MAX_ATTEMPTS = 15;
 
-class AutoReloginImpl {
+export class AutoReloginImpl {
+    private shuttingDown = false;
     private enabled = false;
     private autoLogin = false;
     private autoLoginListeners = new Set<(on: boolean) => void>();
@@ -28,6 +29,7 @@ class AutoReloginImpl {
     private coordination: LoginCoordination | null = null;
 
     enable(autoLogin = false): void {
+        if (this.shuttingDown) return;
         // Notify UI even when already enabled, Multibox / URL may arm after the panel paints (#215).
         if (autoLogin && !this.autoLogin) {
             this.setAutoLogin(true);
@@ -39,7 +41,20 @@ class AutoReloginImpl {
         BotHost.addFrameListener(() => this.onFrame());
     }
 
+    cancelWorldSwitch(): void {
+        this.shuttingDown = false;
+        this.wasIngame = false;
+        this.clearReconnect();
+    }
+
+    shutdown(): void {
+        this.shuttingDown = true;
+        this.setAutoLogin(false);
+        this.clearReconnect();
+    }
+
     setAutoLogin(on: boolean): void {
+        if (on && this.shuttingDown) return;
         const was = this.autoLogin;
         this.autoLogin = on;
         // Title checkbox off stops title-only reconnects; a running or paused script still reconnects via scriptActive(), so don't clear that mid-flight (#215).
@@ -99,6 +114,7 @@ class AutoReloginImpl {
     }
 
     loginNow(): boolean {
+        if (this.shuttingDown) return false;
         const c = Credentials.get();
         if (!c || reader.ingame()) {
             return false;
@@ -132,6 +148,7 @@ class AutoReloginImpl {
     }
 
     private onFrame(): void {
+        if (this.shuttingDown) return;
         if (reader.ingame()) {
             this.cancelQueuedLogin();
             const live = actions.loginCredentials();

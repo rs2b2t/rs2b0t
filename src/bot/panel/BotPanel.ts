@@ -1,4 +1,6 @@
 import { BUILD_INFO } from '../runtime/buildInfo.js';
+import { TARGET, supportsWorldRouting } from '../../client/config/target.js';
+import { hostedWorld } from '../../client/config/worlds.js';
 import { reader } from '../adapter/ClientAdapter.js';
 import type { BotHostImpl } from '../runtime/BotHost.js';
 import { AutoRelogin } from '../runtime/AutoRelogin.js';
@@ -45,11 +47,14 @@ export default class BotPanel {
 
     private banner: HTMLElement;
     private stateCell: HTMLElement;
+    private worldCell: HTMLElement;
+    private readonly world = TARGET.world ?? hostedWorld(TARGET.wsHost)?.number ?? null;
     private playerCell: HTMLElement;
     private tileCell: HTMLElement;
     private modalsCell: HTMLElement;
 
     private lastRender = 0;
+    private worldSwitchPending = false;
 
     constructor(root: HTMLElement, host: BotHostImpl, renderer?: RendererControl) {
         this.host = host;
@@ -58,7 +63,9 @@ export default class BotPanel {
 
         const title = el('div', 'rs2b0t-title');
         title.textContent = 'rs2b0t';
-        const wallHref = wallLinkHref(boxId());
+        const location = new URL(window.location.href);
+        if (!supportsWorldRouting()) location.searchParams.delete('world');
+        const wallHref = wallLinkHref(boxId(), location);
         if (wallHref) {
             const wall = document.createElement('a');
             wall.className = 'rs2b0t-wall-link';
@@ -168,6 +175,8 @@ export default class BotPanel {
         const status = el('div', 'rs2b0t-section');
         status.appendChild(sectionTitle('status'));
         this.stateCell = row(status, 'state');
+        this.worldCell = row(status, 'world');
+        this.worldCell.dataset.status = 'world';
         this.playerCell = row(status, 'player');
         this.tileCell = row(status, 'tile');
         this.modalsCell = row(status, 'modals');
@@ -205,10 +214,15 @@ export default class BotPanel {
     }
 
     startSelectedScript(): void {
-        if (isActiveState(ScriptRunner.state)) {
+        if (this.worldSwitchPending || isActiveState(ScriptRunner.state)) {
             return;
         }
         this.handleStart();
+    }
+
+    setWorldSwitchPending(pending: boolean): void {
+        this.worldSwitchPending = pending;
+        this.renderScriptControls();
     }
 
     stopScript(): void {
@@ -378,6 +392,7 @@ export default class BotPanel {
     }
 
     private handlePause(): void {
+        if (this.worldSwitchPending) return;
         if (ScriptRunner.state === 'paused') {
             ScriptRunner.resume();
         } else {
@@ -389,8 +404,8 @@ export default class BotPanel {
         const state = ScriptRunner.state;
         const active = state === 'running' || state === 'paused' || state === 'stopping';
 
-        this.startBtn.disabled = active;
-        this.pauseBtn.disabled = !(state === 'running' || state === 'paused');
+        this.startBtn.disabled = this.worldSwitchPending || active;
+        this.pauseBtn.disabled = this.worldSwitchPending || !(state === 'running' || state === 'paused');
         this.pauseBtn.textContent = state === 'paused' ? 'Resume' : 'Pause';
         this.stopBtn.disabled = !active || state === 'stopping';
         this.browseBtn.disabled = active;
@@ -484,6 +499,8 @@ export default class BotPanel {
         }
 
         const ingame = reader.ingame();
+        this.worldCell.textContent = this.world === null ? ingame ? 'Local engine' : 'logged out (local engine)'
+            : ingame ? `World ${this.world}` : `logged out (target World ${this.world})`;
         const scene = reader.sceneState();
         // Ready means logged in with the scene fully built (2); showing a partial scene keeps "ingame" from reading as "safe to inject" (#445).
         this.stateCell.textContent = !ingame

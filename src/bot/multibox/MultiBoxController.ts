@@ -4,8 +4,15 @@ import type {
     LoginCoordinationRegistry
 } from '../runtime/LoginCoordination.js';
 import { LoginCoordinator } from './LoginCoordinator.js';
+import JString from '../../client/datastruct/JString.js';
+import type { WorldNumber } from '../../client/config/worlds.js';
 
 export const MAIN_TAB = 'Main';
+
+export function normalizeUsername(username: string): string {
+    const hash = JString.toUserhash(username);
+    return hash === 0n ? '' : JString.toRawUsername(hash);
+}
 
 interface Slot {
     id: number;
@@ -14,6 +21,7 @@ interface Slot {
     loginCoordination: LoginCoordination;
     mode: RenderMode;
     tab: string;
+    switchingWorld: WorldNumber | null;
 }
 
 type RailDirection = -1 | 1;
@@ -22,6 +30,7 @@ export class MultiBoxController {
     focusedId: number | null = null;
 
     private slots: Slot[] = [];
+    private switchingWorld = false;
     private nextId = 1;
     private customTabs: string[] = [];
     private active: string = MAIN_TAB;
@@ -30,7 +39,8 @@ export class MultiBoxController {
 
     constructor(
         private ops: SlotOps,
-        private loginCoordinator: LoginCoordinationRegistry = new LoginCoordinator()
+        private loginCoordinator: LoginCoordinationRegistry = new LoginCoordinator(),
+        private defaultWorld: WorldNumber = 1
     ) {}
 
     tabs(): string[] {
@@ -44,11 +54,13 @@ export class MultiBoxController {
     // New bots start empty; `account` is only for automation and vault restores.
     // Why: title-screen auto-login stays off unless the bot's Global checkbox (or ?autologin=1) arms it, though a running script still reconnects on its own (#215).
     add(account?: Account): SlotSnapshot | null {
-        const acct: Account = account ?? { username: `bot${this.nextId}`, password: '' };
-        if (acct.username.length === 0) {
+        if (this.switchingWorld) return null;
+        const acct: Account = { ...(account ?? { username: `bot${this.nextId}`, password: '' }), world: account?.world ?? this.defaultWorld };
+        const username = normalizeUsername(acct.username);
+        if (!username || (acct.world !== 1 && acct.world !== 2)) {
             return null;
         }
-        if (this.slots.some(s => s.account.username === acct.username)) {
+        if (this.slots.some(s => normalizeUsername(s.account.username) === username)) {
             return null;
         }
         const tab = account?.tab ?? this.active;
@@ -64,7 +76,8 @@ export class MultiBoxController {
             handle,
             loginCoordination,
             mode: 'background',
-            tab
+            tab,
+            switchingWorld: null
         };
         this.slots.push(slot);
         if (account) {
@@ -80,8 +93,9 @@ export class MultiBoxController {
     }
 
     remove(id: number): void {
+        if (this.switchingWorld) return;
         const slot = this.slots.find(s => s.id === id);
-        if (!slot) {
+        if (!slot || slot.switchingWorld !== null) {
             return;
         }
         // Release the parent-owned FIFO entry even if the iframe stopped responding.
@@ -256,9 +270,51 @@ export class MultiBoxController {
         return this.slots.map(s => this.snap(s));
     }
 
-    startAll(): void {
+    switchWorld(id: number, world: WorldNumber): boolean {
+        const slot = this.slots.find(s => s.id === id);
+        if (this.switchingWorld || !slot || (world !== 1 && world !== 2) || world === slot.account.world) return false;
+        slot.switchingWorld = world;
+        slot.loginCoordination.leaveQueue();
+        if (!slot.handle.prepareWorldSwitch()) return false;
+        slot.handle.setLoginCoordination(null);
+        slot.handle.reloadWorld(world);
+        slot.loginCoordination = this.loginCoordinator.register();
+        slot.handle.setLoginCoordination(slot.loginCoordination);
+        slot.handle.setAutoLogin(false);
+        slot.handle.setRenderMode(slot.mode);
+        slot.account = { ...slot.account, world };
+        slot.switchingWorld = null;
+        return true;
+    }
+
+    cancelSlotWorldSwitch(id: number): void {
+        const slot = this.slots.find(s => s.id === id);
+        if (this.switchingWorld || !slot || slot.switchingWorld === null) return;
+        slot.handle.cancelWorldSwitch();
+        slot.switchingWorld = null;
+    }
+
+    cancelWorldSwitch(): void {
+        this.switchingWorld = false;
         for (const slot of this.slots) {
-            slot.handle.startScript();
+            if (slot.switchingWorld === null) slot.handle.cancelWorldSwitch();
+        }
+    }
+
+    prepareWorldSwitch(): boolean {
+        this.switchingWorld = true;
+        let ready = true;
+        for (const slot of this.slots) {
+            slot.loginCoordination.leaveQueue();
+            if (!slot.handle.prepareWorldSwitch()) ready = false;
+        }
+        return ready;
+    }
+
+    startAll(): void {
+        if (this.switchingWorld) return;
+        for (const slot of this.slots) {
+            if (slot.switchingWorld === null) slot.handle.startScript();
         }
     }
 
@@ -303,6 +359,6 @@ export class MultiBoxController {
     }
 
     private snap(slot: Slot): SlotSnapshot {
-        return { id: slot.id, username: slot.account.username, focused: slot.id === this.focusedId, mode: slot.mode, tab: slot.tab, ...slot.handle.status() };
+        return { id: slot.id, username: slot.account.username, focused: slot.id === this.focusedId, mode: slot.mode, tab: slot.tab, targetWorld: slot.account.world ?? this.defaultWorld, switchingWorld: slot.switchingWorld, ...slot.handle.status() };
     }
 }

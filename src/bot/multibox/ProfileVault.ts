@@ -1,9 +1,12 @@
+import type { WorldNumber } from '../../client/config/worlds.js';
+
 // docs/reference/multibox.md#profiles-and-the-vault
 export interface Profile {
     username: string;
     password: string;
     // rail tab this account lives in; absent = the Main tab
     tab?: string;
+    world?: WorldNumber;
 }
 
 interface TabState {
@@ -75,6 +78,10 @@ function profilesFrom(v: unknown[]): Profile[] {
             continue;
         }
         const entry: Profile = { username: p.username, password: p.password };
+        if (p.world !== undefined) {
+            assertWorld(p.world);
+            entry.world = p.world;
+        }
         // Main is the absent-field canonical form, never stored explicitly
         if (typeof p.tab === 'string' && p.tab !== MAIN_TAB) {
             entry.tab = p.tab;
@@ -88,11 +95,18 @@ function parseLegacy(raw: string | null): Profile[] | null {
     if (!raw) {
         return null;
     }
+    let parsed: unknown;
     try {
-        const v = JSON.parse(raw) as unknown;
-        return Array.isArray(v) ? profilesFrom(v) : null;
+        parsed = JSON.parse(raw);
     } catch {
         return null;
+    }
+    return Array.isArray(parsed) ? profilesFrom(parsed) : null;
+}
+
+function assertWorld(world: unknown): asserts world is WorldNumber {
+    if (world !== 1 && world !== 2) {
+        throw new Error('profile world must be 1 or 2');
     }
 }
 
@@ -148,6 +162,7 @@ export class ProfileVault {
     private salt: Uint8Array<ArrayBuffer> | null = null;
     private persistTail = Promise.resolve();
     private persistGeneration = 0;
+    private worldTail = Promise.resolve();
 
     status(): VaultStatus {
         if (this.cache) {
@@ -248,19 +263,64 @@ export class ProfileVault {
     }
 
     async upsert(p: Profile): Promise<void> {
+        if (p.world !== undefined) {
+            assertWorld(p.world);
+        }
         if (p.username.length === 0) {
             return;
         }
         const all = this.assertUnlocked();
         const i = all.findIndex(x => x.username === p.username);
+        const previous = all[i];
+        const generation = this.persistGeneration;
         // tab membership changes flow only through saveTabState, a password
         // re-save (the in-game save prompt) must not move the account
+        const entry: Profile = i >= 0 ? { ...all[i], password: p.password } : { username: p.username, password: p.password, ...(p.world === undefined ? {} : { world: p.world }) };
         if (i >= 0) {
-            all[i] = { ...all[i], password: p.password };
+            all[i] = entry;
         } else {
-            all.push({ username: p.username, password: p.password });
+            all.push(entry);
         }
-        await this.persist();
+        try {
+            await this.persist();
+        } catch (error) {
+            const index = this.cache?.indexOf(entry) ?? -1;
+            if (generation === this.persistGeneration && this.cache && index >= 0) {
+                if (previous) entry.password = previous.password;
+                else this.cache.splice(index, 1);
+                await this.persist().catch(() => {});
+            }
+            throw error;
+        }
+    }
+
+    async setWorld(username: string, world: WorldNumber): Promise<void> {
+        assertWorld(world);
+        const generation = this.persistGeneration;
+        const change = this.worldTail.then(async () => {
+            if (generation !== this.persistGeneration) {
+                throw new Error('vault changed before the world assignment was saved');
+            }
+            const profile = this.assertUnlocked().find(p => p.username === username);
+            if (!profile) {
+                throw new Error(`unknown profile '${username}'`);
+            }
+            const previous = profile.world;
+            profile.world = world;
+            try {
+                await this.persist();
+            } catch (error) {
+                const current = this.cache?.find(p => p.username === username);
+                if (generation === this.persistGeneration && current?.world === world) {
+                    if (previous === undefined) delete current.world;
+                    else current.world = previous;
+                    await this.persist().catch(() => {});
+                }
+                throw error;
+            }
+        });
+        this.worldTail = change.catch(() => {});
+        return change;
     }
 
     async remove(username: string): Promise<void> {

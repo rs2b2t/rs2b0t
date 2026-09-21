@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { createHash } from 'node:crypto';
 
 import { buildIdentityDefines, buildIdentityLabel, resolveBuildIdentity, writeVersionJson } from './tools/lib/buildIdentity.js';
 
@@ -12,8 +13,11 @@ const TARGET_NAME = process.env.TARGET ?? 'local';
 const TARGET_RSA: Record<string, { rsae: string; rsan: string }> = {
     local: {
         rsae: process.env.LOCAL_RSAE ?? '65537',
-        rsan: process.env.LOCAL_RSAN ?? '135523076496100112838368820296627333081299340012903560093710594598681655098748405760144616526347126272127045237860467661349157596468705435014708178676542187051745346055229544524388140867808854007219907874939518784380039390430841371837588073879981616508242779530473286487605800927487856120184640386127488369021'
+        rsan:
+            process.env.LOCAL_RSAN ??
+            '135523076496100112838368820296627333081299340012903560093710594598681655098748405760144616526347126272127045237860467661349157596468705435014708178676542187051745346055229544524388140867808854007219907874939518784380039390430841371837588073879981616508242779530473286487605800927487856120184640386127488369021'
     },
+    proxy: { rsae: '65537', rsan: process.env.LIVE_RSAN ?? '' },
     live: {
         rsae: '65537',
         rsan: process.env.LIVE_RSAN ?? ''
@@ -31,8 +35,8 @@ if (!(TARGET_NAME in TARGET_RSA)) {
 }
 
 const rsa = TARGET_RSA[TARGET_NAME] ?? TARGET_RSA.local;
-if ((TARGET_NAME === 'live' || TARGET_NAME === 'prod') && rsa.rsan === '') {
-    const envVar = TARGET_NAME === 'live' ? 'LIVE_RSAN' : 'PROD_RSAN';
+if ((TARGET_NAME === 'live' || TARGET_NAME === 'proxy' || TARGET_NAME === 'prod') && rsa.rsan === '') {
+    const envVar = TARGET_NAME === 'prod' ? 'PROD_RSAN' : 'LIVE_RSAN';
     console.error(`TARGET=${TARGET_NAME} requires ${envVar} (rs2b2t rotated modulus). Aborting.`);
     process.exit(1);
 }
@@ -91,6 +95,5 @@ for (const [entry, output] of entrypoints) {
 }
 
 writeVersionJson('out/version.json', identity);
-console.log(
-    `bot bundle built (${prod ? 'prod' : 'dev'}): out/botclient.js  git=${buildIdentityLabel(identity)}`
-);
+fs.writeFileSync('out/target.json', JSON.stringify({ target: TARGET_NAME, worldRouting: 1, botclientSha256: createHash('sha256').update(fs.readFileSync('out/botclient.js')).digest('hex') }) + '\n');
+console.log(`bot bundle built (${prod ? 'prod' : 'dev'}): out/botclient.js  git=${buildIdentityLabel(identity)}`);

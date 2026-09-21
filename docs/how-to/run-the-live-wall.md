@@ -13,6 +13,24 @@ B0T_VIEWER=firefox bun run b0t      # dedicated Firefox profile
 B0T_VIEWER=none bun run b0t         # proxy only; CPU/RAM unavailable
 ```
 
+One wall can run accounts on both live worlds. Start it with `bun run b0t`, open
+**Add bot**, and choose **World 1** or **World 2** beside each saved profile or in
+the new-profile form. **load all profiles** uses those saved choices. Existing
+profiles keep the wall's default world until you assign one. Scripts, settings,
+tabs and profile order stay attached to the account.
+
+Each rail tile and the bot panel's status show the connected world. A logged-out
+bot shows its target instead. To move a loaded bot, choose its destination and
+click **Switch** on that tile. Its script and reconnects stop. Log out in-game,
+then click **Retry**. Only that bot reloads; the other bots keep running. Resume
+login and scripts when ready. **Cancel** keeps the original world and leaves
+scripts and auto-login stopped.
+
+The launcher builds one local client and starts one proxy for both worlds. No
+second Electron window or launcher is needed. Profile export/import preserves
+world choices. Importing over an already-loaded profile changes its saved choice;
+it does not interrupt that profile's current session.
+
 For Chrome DevTools MCP, launch the managed Chrome viewer and configure MCP with
 `--browser-url=http://127.0.0.1:9223`. Set `B0T_CDP_PORT` to choose another loopback
 port. A dedicated profile is intentional: an ordinary shared browser process includes

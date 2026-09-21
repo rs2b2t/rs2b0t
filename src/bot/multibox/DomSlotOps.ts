@@ -1,3 +1,5 @@
+import { botFrameUrl, type WorldNumber } from '../../client/config/worlds.js';
+import { supportsWorldRouting } from '../../client/config/target.js';
 import type { Account, RenderMode, SlotHandle, SlotOps, SlotStatus } from './types.js';
 import type { LoginCoordination } from '../runtime/LoginCoordination.js';
 import { paintThumbnail } from './ThumbnailPainter.js';
@@ -39,6 +41,9 @@ function railWidth(): number {
 }
 
 interface Lcb {
+    readonly world: WorldNumber | null;
+    prepareWorldSwitch(): boolean;
+    cancelWorldSwitch(): void;
     client: { constructor: { loopCycle: number } };
     reader: { ingame(): boolean; localPlayerName(): string | null };
     renderGate: { drawn: number; backgroundIntervalMs: number };
@@ -60,16 +65,18 @@ class DomSlotHandle implements SlotHandle {
     private iframe: HTMLIFrameElement;
     private mirror: HTMLCanvasElement;
     private mirrorTimer: number;
+    private pollTimer: number | null = null;
     private win: LcbWindow | null = null;
     private pending: Array<(l: Lcb) => void> = [];
     private destroyed = false;
     private mode: RenderMode = 'background';
     private onResize = (): void => this.applyLayout();
 
-    constructor(account: Account) {
+    constructor(private account: Account, private worldRouting: boolean) {
         this.el = document.createElement('div');
         this.el.className = 'mbx-slot';
         this.el.draggable = true;
+        if (!worldRouting) this.el.dataset.localEngine = 'true';
 
         const cap = document.createElement('div');
         cap.className = 'mbx-cap';
@@ -85,27 +92,43 @@ class DomSlotHandle implements SlotHandle {
         close.textContent = '✕';
         cap.append(dot, name, close);
 
+        const controls = document.createElement('div');
+        controls.className = 'mbx-world-controls';
+        const select = document.createElement('select');
+        select.className = 'mbx-world-select';
+        select.setAttribute('aria-label', `World for ${account.username}`);
+        for (const world of [1, 2]) {
+            const option = document.createElement('option');
+            option.value = String(world);
+            option.textContent = `World ${world}`;
+            select.appendChild(option);
+        }
+        select.value = String(account.world ?? 1);
+        const change = document.createElement('button');
+        change.className = 'mbx-world-switch';
+        change.type = 'button';
+        change.textContent = 'Switch';
+        select.addEventListener('change', () => {
+            if (select.disabled) return;
+            change.disabled = select.value === (select.dataset.worldState?.split(':')[0] ?? String(this.account.world ?? 1));
+        });
+        const cancel = document.createElement('button');
+        cancel.className = 'mbx-world-cancel';
+        cancel.type = 'button';
+        cancel.textContent = 'Cancel';
+        cancel.hidden = true;
+        controls.append(select, change, cancel);
+        const worldStatus = document.createElement('div');
+        worldStatus.className = 'mbx-world-status';
+        worldStatus.setAttribute('aria-live', 'polite');
+
         const body = document.createElement('div');
         body.className = 'mbx-body';
         const clip = document.createElement('div');
         clip.className = 'mbx-clip';
         this.scaler = document.createElement('div');
         this.scaler.className = 'mbx-scaler';
-        this.iframe = document.createElement('iframe');
-        this.iframe.className = 'mbx-frame';
-        this.iframe.title = account.username;
-        const q = new URLSearchParams(location.search);
-        const forwarded = new URLSearchParams();
-        for (const k of ['nodeid', 'members'] as const) {
-            if (q.has(k)) {
-                forwarded.set(k, q.get(k)!);
-            }
-        }
-        // per-account storage namespace, isolates each iframe's creds/settings
-        // even though same-origin iframes share one sessionStorage (see box.ts)
-        forwarded.set('box', account.username);
-        const qs = forwarded.toString();
-        this.iframe.src = new URL('bot.html' + (qs ? `?${qs}` : ''), document.baseURI).href;
+        this.iframe = this.createFrame(account.world);
         this.scaler.appendChild(this.iframe);
         clip.appendChild(this.scaler);
 
@@ -122,10 +145,50 @@ class DomSlotHandle implements SlotHandle {
         hit.className = 'mbx-hit';
 
         body.append(clip, this.mirror, hit);
-        this.el.append(cap, body);
+        this.el.append(cap);
+        if (worldRouting) this.el.append(controls);
+        this.el.append(worldStatus, body);
         this.mirrorTimer = window.setInterval(this.paintMirror, 1000);
         this.applyLayout();
         this.poll();
+    }
+
+    reloadWorld(world: WorldNumber): void {
+        if (this.destroyed || !this.worldRouting) return;
+        const frame = this.createFrame(world, true);
+        if (this.pollTimer !== null) window.clearTimeout(this.pollTimer);
+        this.win = null;
+        this.pending = [];
+        this.iframe.replaceWith(frame);
+        this.iframe = frame;
+        this.account = { ...this.account, world };
+        this.poll();
+    }
+
+    private createFrame(world?: WorldNumber, switching = false): HTMLIFrameElement {
+        const frame = document.createElement('iframe');
+        frame.className = 'mbx-frame';
+        frame.title = this.account.username;
+        const wall = new URL(location.href);
+        if (!this.worldRouting) wall.searchParams.delete('world');
+        const url = botFrameUrl(wall, this.account.username, this.worldRouting ? world : undefined);
+        if (switching) url.searchParams.set('autologin', '0');
+        frame.src = url.href;
+        return frame;
+    }
+
+    cancelWorldSwitch(): void {
+        if (!this.worldRouting) return;
+        this.whenReady(l => l.cancelWorldSwitch());
+    }
+
+    prepareWorldSwitch(): boolean {
+        if (!this.worldRouting) return false;
+        if (!this.win?.rs2b0t) {
+            this.whenReady(l => l.prepareWorldSwitch());
+            return false;
+        }
+        return this.win.rs2b0t.prepareWorldSwitch();
     }
 
     setRenderMode(mode: RenderMode): void {
@@ -164,14 +227,17 @@ class DomSlotHandle implements SlotHandle {
     status(): SlotStatus {
         const l = this.win?.rs2b0t;
         if (!l) {
-            return { ready: false, ingame: false, player: null, loopCycle: 0, drawn: 0, scriptState: 'idle' };
+            return { ready: false, ingame: false, world: null, player: null, loopCycle: 0, drawn: 0, scriptState: 'idle' };
         }
-        return { ready: true, ingame: l.reader.ingame(), player: l.reader.localPlayerName(), loopCycle: l.client.constructor.loopCycle, drawn: l.renderGate.drawn, scriptState: l.runner.state };
+        const ingame = l.reader.ingame();
+        const world = ingame && (l.world === 1 || l.world === 2) ? l.world : null;
+        return { ready: true, ingame, world, player: l.reader.localPlayerName(), loopCycle: l.client.constructor.loopCycle, drawn: l.renderGate.drawn, scriptState: l.runner.state };
     }
 
     destroy(): void {
         this.destroyed = true;
         window.clearInterval(this.mirrorTimer);
+        if (this.pollTimer !== null) window.clearTimeout(this.pollTimer);
         window.removeEventListener('resize', this.onResize);
         this.el.remove();
     }
@@ -198,7 +264,7 @@ class DomSlotHandle implements SlotHandle {
             for (const fn of flush) fn(w.rs2b0t);
             return;
         }
-        window.setTimeout(this.poll, 50);
+        this.pollTimer = window.setTimeout(this.poll, 50);
     };
 
     private whenReady(fn: (l: Lcb) => void): void {
@@ -244,10 +310,10 @@ export function orderedSlotElements(root: ParentNode): HTMLElement[] {
 }
 
 export class DomSlotOps implements SlotOps {
-    constructor(private railEl: HTMLElement, private beforeEl: HTMLElement) {}
+    constructor(private railEl: HTMLElement, private beforeEl: HTMLElement, private worldRouting = supportsWorldRouting()) {}
 
     spawn(account: Account): SlotHandle {
-        const handle = new DomSlotHandle(account);
+        const handle = new DomSlotHandle(account, this.worldRouting);
         this.railEl.insertBefore(handle.el, this.beforeEl);
         this.applyVisualOrder(orderedSlotElements(this.railEl));
         return handle;
