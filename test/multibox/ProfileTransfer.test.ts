@@ -33,16 +33,17 @@ describe('ProfileTransfer', () => {
         expect(parsed).toEqual(snap);
     });
 
-    test('round-trips both worlds and keeps a legacy profile unassigned', () => {
+    test('round-trips all worlds and keeps a legacy profile unassigned', () => {
         const snapshot = { ...snap, profiles: [
             { username: 'alice', password: 'a', world: 1 as const },
             { username: 'bob', password: 'b', world: 2 as const },
+            { username: 'charlie', password: 'c', world: 3 as const },
             { username: 'legacy', password: 'c' }
         ] };
         expect(parseProfileFile(serializeProfileFile(snapshot))).toEqual(snapshot);
     });
 
-    for (const world of [null, '2', 0, 3, true]) {
+    for (const world of [null, '3', 0, 4, true]) {
         test(`rejects explicit invalid world ${JSON.stringify(world)} on import and export`, () => {
             const snapshot = { ...snap, profiles: [{ username: 'alice', password: 'a', world } as Profile] };
             expect(() => serializeProfileFile(snapshot)).toThrow(/world/i);

@@ -44,11 +44,11 @@ class FakeOps implements SlotOps {
 describe('MultiBoxController', () => {
     test('restored slots carry their own world and older profiles inherit the default', () => {
         const ops = new FakeOps();
-        const c = new MultiBoxController(ops, undefined, 2);
+        const c = new MultiBoxController(ops, undefined, 3);
         const alice = c.add({ username: 'Alice One', password: 'a' })!;
         const bob = c.add({ username: 'bob', password: 'b', world: 1 })!;
-        expect([alice.targetWorld, bob.targetWorld]).toEqual([2, 1]);
-        expect(ops.accounts.map(account => account.world)).toEqual([2, 1]);
+        expect([alice.targetWorld, bob.targetWorld]).toEqual([3, 1]);
+        expect(ops.accounts.map(account => account.world)).toEqual([3, 1]);
         expect(alice.world).toBeNull();
         expect(alice.switchingWorld).toBeNull();
         expect(c.add({ username: ' alice_one ', password: 'other', world: 1 })).toBeNull();
@@ -68,9 +68,9 @@ describe('MultiBoxController', () => {
         first.calls = [];
         second.calls = [];
 
-        expect(c.switchWorld(alice.id, 2)).toBe(true);
+        expect(c.switchWorld(alice.id, 3)).toBe(true);
         expect(first.destroyed).toBe(false);
-        expect(first.calls).toContain('world:2');
+        expect(first.calls).toContain('world:3');
         expect(first.calls).toContain('autoLogin:false');
         expect(first.calls).not.toContain('creds:alice');
         expect(second.calls).toEqual([]);
@@ -78,7 +78,7 @@ describe('MultiBoxController', () => {
         expect(first.loginCoordination).not.toBe(oldCoordination);
         expect(first.loginCoordination!.requestPermit()).toBe(false);
         expect(c.snapshot().map(slot => [slot.id, slot.username, slot.tab, slot.targetWorld])).toEqual([
-            [alice.id, 'alice', 'Main', 2], [2, 'bob', 'alts', 2]
+            [alice.id, 'alice', 'Main', 3], [2, 'bob', 'alts', 2]
         ]);
         expect(c.focusedId).toBe(alice.id);
         expect(c.snapshot()[0].world).toBeNull();

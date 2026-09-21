@@ -134,6 +134,17 @@ test('wall wiring preserves pending slots and retries persistence after a succes
             expect(document.querySelector('iframe')).toBe(replacement);
             expect(document.querySelectorAll('iframe')[1]).toBe(bobFrame);
             expect(vault.list().map(profile => profile.world)).toEqual([2, 2]);
+
+            Reflect.set(replacement.contentWindow!, 'rs2b0t', runtime(2));
+            await new Promise(resolve => setTimeout(resolve, 75));
+            expect(await wall.setWorld(alice.id, 3)).toBe(true);
+            const world3Frame = document.querySelector('iframe')!;
+            expect(new URL(world3Frame.src).searchParams.get('world')).toBe('3');
+            expect(new URL(world3Frame.src).searchParams.get('nodeid')).toBe('12');
+            expect(wall.slots()[0]).toMatchObject({ world: null, targetWorld: 3, switchingWorld: null });
+            expect(document.querySelector<HTMLSelectElement>('.mbx-world-select')!.value).toBe('3');
+            expect(document.querySelectorAll('iframe')[1]).toBe(bobFrame);
+            expect(vault.list().map(profile => profile.world)).toEqual([3, 2]);
         } finally {
             save?.mockRestore();
         }

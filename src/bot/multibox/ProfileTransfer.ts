@@ -168,8 +168,8 @@ function requireProfiles(v: unknown[]): Profile[] {
         }
         const entry: Profile = { username: p.username, password: p.password };
         if (p.world !== undefined) {
-            if (p.world !== 1 && p.world !== 2) {
-                throw new Error(`invalid profile world on '${p.username}': expected 1 or 2`);
+            if (p.world !== 1 && p.world !== 2 && p.world !== 3) {
+                throw new Error(`invalid profile world on '${p.username}': expected 1, 2 or 3`);
             }
             entry.world = p.world;
         }

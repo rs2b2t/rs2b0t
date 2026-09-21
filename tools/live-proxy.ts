@@ -18,9 +18,9 @@ export interface LiveProxyOptions {
 export async function startLiveProxy(options: LiveProxyOptions = {}) {
     const PORT = options.port ?? Number(process.env.PORT ?? 8081);
     const liveHost = process.env.LIVE_HOST ?? 'w1.rs2b2t.com';
-    if (!['w1.rs2b2t.com', 'w2.rs2b2t.com'].includes(liveHost)) throw new Error('LIVE_HOST must be an official W1 or W2 host');
-    const defaultWorld = options.defaultWorld ?? (liveHost === 'w2.rs2b2t.com' ? 2 : 1);
-    const upstreams = options.upstreams ?? { 1: 'https://w1.rs2b2t.com', 2: 'https://w2.rs2b2t.com' };
+    if (!['w1.rs2b2t.com', 'w2.rs2b2t.com', 'w3.rs2b2t.com'].includes(liveHost)) throw new Error('LIVE_HOST must be an official W1, W2 or W3 host');
+    const defaultWorld = options.defaultWorld ?? (liveHost === 'w3.rs2b2t.com' ? 3 : liveHost === 'w2.rs2b2t.com' ? 2 : 1);
+    const upstreams = options.upstreams ?? { 1: 'https://w1.rs2b2t.com', 2: 'https://w2.rs2b2t.com', 3: 'https://w3.rs2b2t.com' };
     const REPO = options.root ?? join(import.meta.dir, '..');
     const OUT = join(REPO, 'out');
     const BOT_HTML = join(REPO, 'public-bot', 'bot.html');
@@ -132,7 +132,7 @@ export async function startLiveProxy(options: LiveProxyOptions = {}) {
         async fetch(req, srv) {
             const url = new URL(req.url);
 
-            const prefixed = /^\/__rs2b0t\/world\/([12])(?:(\/.*)|$)/.exec(url.pathname);
+            const prefixed = /^\/__rs2b0t\/world\/([123])(?:(\/.*)|$)/.exec(url.pathname);
             const world = prefixed ? (Number(prefixed[1]) as WorldNumber) : defaultWorld;
             const gamePath = prefixed ? prefixed[2] || '/' : url.pathname;
             const reserved = url.pathname.startsWith('/__rs2b0t/world');
@@ -247,6 +247,6 @@ export async function startLiveProxy(options: LiveProxyOptions = {}) {
 
 if (import.meta.main) {
     const server = await startLiveProxy();
-    console.log(`live-proxy: http://localhost:${server.port}/multibox.html -> worlds 1 and 2`);
+    console.log(`live-proxy: http://localhost:${server.port}/multibox.html -> worlds 1, 2 and 3`);
     console.log('Log in with a REGISTERED rs2b2t account.');
 }

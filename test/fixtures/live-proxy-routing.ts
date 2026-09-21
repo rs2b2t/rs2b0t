@@ -40,11 +40,11 @@ async function routeTraffic() {
         cleanups.push(() => server.stop(true));
         return `http://127.0.0.1:${server.port}`;
     }
-    const proxy = await startLiveProxy({ port: 0, root: fixtureRoot(), upstreams: { 1: upstream(1), 2: upstream(2) } });
+    const proxy = await startLiveProxy({ port: 0, root: fixtureRoot(), upstreams: { 1: upstream(1), 2: upstream(2), 3: upstream(3) } });
     cleanups.push(() => proxy.stop(true));
     const origin = `http://127.0.0.1:${proxy.port}`;
     assert.equal(await (await fetch(origin + '/multibox.html')).text(), 'one local wall');
-    for (const world of [1, 2]) {
+    for (const world of [1, 2, 3]) {
         for (const path of ['/crc', '/title-123', '/config456', '/versionlist0', '/loginkey', '/client/client.js']) {
             const response = await fetch(`${origin}/__rs2b0t/world/${world}${path}`);
             assert.equal(response.status, 200);
@@ -64,7 +64,7 @@ async function routeTraffic() {
         }
     }
     const forwarded = requests.length;
-    for (const path of ['/__rs2b0t/world/3/crc', '/__rs2b0t/world/02/crc', '/__rs2b0t/world/2/prometheus', '/__rs2b0t/world/2/setup', '/__rs2b0t/world/1/../2/admin', '/prometheus', '/setup', '/anything']) {
+    for (const path of ['/__rs2b0t/world/4/crc', '/__rs2b0t/world/02/crc', '/__rs2b0t/world/2/prometheus', '/__rs2b0t/world/2/setup', '/__rs2b0t/world/1/../2/admin', '/prometheus', '/setup', '/anything']) {
         assert.equal((await fetch(origin + path)).status, 404);
     }
     assert.equal((await fetch(origin + '/__rs2b0t/world/2/crc', { method: 'POST', body: 'no' })).status, 405);
@@ -125,7 +125,7 @@ try {
     await routeTraffic();
     await rejectStaleBundle();
     await discardClosedFrame();
-    console.log('two-world HTTP/game/cache routing and build metadata passed');
+    console.log('three-world HTTP/game/cache routing and build metadata passed');
 } finally {
     for (const cleanup of cleanups.reverse()) cleanup();
 }

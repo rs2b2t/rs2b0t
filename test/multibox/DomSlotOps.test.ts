@@ -83,11 +83,11 @@ describe('DomSlotOps', () => {
         handles.push(ops.spawn({ username: 'alice', password: '', world: 2 }));
         let ingame = true;
         Object.assign(document.querySelector('iframe')!.contentWindow!, { rs2b0t: {
-            world: 1, reader: { ingame: () => ingame, localPlayerName: () => 'Alice' },
+            world: 3, reader: { ingame: () => ingame, localPlayerName: () => 'Alice' },
             client: { constructor: { loopCycle: 0 } }, renderGate: { drawn: 0 }, runner: { state: 'idle' }
         } });
         await new Promise(resolve => setTimeout(resolve, 75));
-        expect(handles[0].status().world).toBe(1);
+        expect(handles[0].status().world).toBe(3);
         ingame = false;
         expect(handles[0].status().world).toBeNull();
     });

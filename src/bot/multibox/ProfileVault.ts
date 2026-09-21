@@ -105,8 +105,8 @@ function parseLegacy(raw: string | null): Profile[] | null {
 }
 
 function assertWorld(world: unknown): asserts world is WorldNumber {
-    if (world !== 1 && world !== 2) {
-        throw new Error('profile world must be 1 or 2');
+    if (world !== 1 && world !== 2 && world !== 3) {
+        throw new Error('profile world must be 1, 2 or 3');
     }
 }
 
