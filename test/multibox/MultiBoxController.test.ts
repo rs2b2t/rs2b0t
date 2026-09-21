@@ -26,7 +26,7 @@ class FakeHandle implements SlotHandle {
         this.loginCoordination = coordination;
         this.calls.push('loginCoordination');
     }
-    status(): SlotStatus { return { ready: true, ingame: this.ingame, world: this.world, player: null, loopCycle: 0, drawn: 0, scriptState: 'idle' }; }
+    status(): SlotStatus { return { ready: true, ingame: this.ingame, world: this.world, player: null, loopCycle: 0, drawn: 0, scriptState: 'idle', scriptName: null }; }
     destroy(): void { this.destroyed = true; this.calls.push('destroy'); }
 }
 class FakeOps implements SlotOps {

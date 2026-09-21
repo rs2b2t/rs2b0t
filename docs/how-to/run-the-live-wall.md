@@ -19,9 +19,10 @@ the new-profile form. **load all profiles** uses those saved choices. Existing
 profiles keep the wall's default world until you assign one. Scripts, settings,
 tabs and profile order stay attached to the account.
 
-Each rail tile and the bot panel's status show the connected world. A logged-out
-bot shows its target instead. To move a loaded bot, choose its destination and
-click **Switch** on that tile. Its script and reconnects stop. Log out in-game,
+Each rail tile shows its script name, with a state label when paused, stopped or
+crashed. The bot panel's status shows the connected world, or the target while
+logged out. To move a loaded bot, choose its destination and click **Switch** on
+that tile. Its script and reconnects stop. Log out in-game,
 then click **Retry**. Only that bot reloads; the other bots keep running. Resume
 login and scripts when ready. **Cancel** keeps the original world and leaves
 scripts and auto-login stopped.

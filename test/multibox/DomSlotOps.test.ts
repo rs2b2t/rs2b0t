@@ -18,6 +18,30 @@ afterEach(() => {
 });
 
 describe('DomSlotOps', () => {
+    test('script status follows runner metadata through switches and reloads', async () => {
+        const ops = new DomSlotOps(document.getElementById('rail')!, document.getElementById('add')!, true);
+        const handle = ops.spawn({ username: 'alice', password: '', world: 1 });
+        handles.push(handle);
+        expect(handle.status().scriptName).toBeNull();
+        const runner = { state: 'idle', meta: null as { name: string } | null };
+        Object.assign(document.querySelector('iframe')!.contentWindow!, { rs2b0t: {
+            world: 1, reader: { ingame: () => true, localPlayerName: () => 'Alice' },
+            client: { constructor: { loopCycle: 0 } }, renderGate: { drawn: 0 }, runner
+        } });
+        await new Promise(resolve => setTimeout(resolve, 75));
+        expect(handle.status()).toMatchObject({ scriptState: 'idle', scriptName: null });
+        runner.meta = { name: 'Fisher' };
+        runner.state = 'running';
+        expect(handle.status()).toMatchObject({ scriptState: 'running', scriptName: 'Fisher' });
+        runner.state = 'paused';
+        expect(handle.status()).toMatchObject({ scriptState: 'paused', scriptName: 'Fisher' });
+        runner.meta = { name: 'AutoFighter' };
+        runner.state = 'running';
+        expect(handle.status()).toMatchObject({ scriptState: 'running', scriptName: 'AutoFighter' });
+        handle.reloadWorld(3);
+        expect(handle.status()).toMatchObject({ ready: false, scriptName: null });
+    });
+
     test('mixed-world frames carry explicit targets and expose per-slot controls', () => {
         (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL('https://w1.rs2b2t.com/rs2b0t/wall');
         const ops = new DomSlotOps(document.getElementById('rail')!, document.getElementById('add')!, true);

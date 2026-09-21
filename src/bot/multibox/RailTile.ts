@@ -13,11 +13,10 @@ export function renderRailTile(tile: HTMLElement, slot: SlotSnapshot): void {
     dot.title = slot.ingame ? `${connected}; script ${slot.scriptState}` : 'logged out';
     tile.querySelector<HTMLElement>('.mbx-name')!.textContent = slot.player ?? slot.username;
     const pending = slot.switchingWorld;
-    const status = tile.querySelector<HTMLElement>('.mbx-world-status');
+    const status = tile.querySelector<HTMLElement>('.mbx-script-status');
     if (status) {
-        const current = slot.ingame ? slot.world === null ? 'Logged in; world unavailable' : `In World ${slot.world}` : slot.ready ? 'Logged out' : 'Loading';
-        status.textContent = local ? slot.ingame ? 'In local engine' : `${current}; local engine`
-            : pending !== null ? `${current}; waiting for World ${pending}` : slot.ingame ? current : `${current}; target World ${slot.targetWorld}`;
+        status.textContent = !slot.ready ? 'Loading' : !slot.scriptName ? 'No script running'
+            : slot.scriptState === 'running' ? slot.scriptName : `${slot.scriptName} (${slot.scriptState})`;
     }
     const select = tile.querySelector<HTMLSelectElement>('.mbx-world-select');
     if (select) {

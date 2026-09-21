@@ -22,6 +22,7 @@ export interface SlotStatus {
     loopCycle: number;
     drawn: number;
     scriptState: string;
+    scriptName: string | null;
 }
 
 export interface SlotSnapshot extends SlotStatus {

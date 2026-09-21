@@ -47,7 +47,7 @@ interface Lcb {
     client: { constructor: { loopCycle: number } };
     reader: { ingame(): boolean; localPlayerName(): string | null };
     renderGate: { drawn: number; backgroundIntervalMs: number };
-    runner: { state: string };
+    runner: { state: string; meta: { name: string } | null };
     setRenderMode(mode: RenderMode): void;
     startSelectedScript(): void;
     stopScript(): void;
@@ -118,9 +118,9 @@ class DomSlotHandle implements SlotHandle {
         cancel.textContent = 'Cancel';
         cancel.hidden = true;
         controls.append(select, change, cancel);
-        const worldStatus = document.createElement('div');
-        worldStatus.className = 'mbx-world-status';
-        worldStatus.setAttribute('aria-live', 'polite');
+        const scriptStatus = document.createElement('div');
+        scriptStatus.className = 'mbx-script-status';
+        scriptStatus.setAttribute('aria-live', 'polite');
 
         const body = document.createElement('div');
         body.className = 'mbx-body';
@@ -147,7 +147,7 @@ class DomSlotHandle implements SlotHandle {
         body.append(clip, this.mirror, hit);
         this.el.append(cap);
         if (worldRouting) this.el.append(controls);
-        this.el.append(worldStatus, body);
+        this.el.append(scriptStatus, body);
         this.mirrorTimer = window.setInterval(this.paintMirror, 1000);
         this.applyLayout();
         this.poll();
@@ -227,11 +227,11 @@ class DomSlotHandle implements SlotHandle {
     status(): SlotStatus {
         const l = this.win?.rs2b0t;
         if (!l) {
-            return { ready: false, ingame: false, world: null, player: null, loopCycle: 0, drawn: 0, scriptState: 'idle' };
+            return { ready: false, ingame: false, world: null, player: null, loopCycle: 0, drawn: 0, scriptState: 'idle', scriptName: null };
         }
         const ingame = l.reader.ingame();
         const world = ingame && (l.world === 1 || l.world === 2 || l.world === 3) ? l.world : null;
-        return { ready: true, ingame, world, player: l.reader.localPlayerName(), loopCycle: l.client.constructor.loopCycle, drawn: l.renderGate.drawn, scriptState: l.runner.state };
+        return { ready: true, ingame, world, player: l.reader.localPlayerName(), loopCycle: l.client.constructor.loopCycle, drawn: l.renderGate.drawn, scriptState: l.runner.state, scriptName: l.runner.meta?.name ?? null };
     }
 
     destroy(): void {
