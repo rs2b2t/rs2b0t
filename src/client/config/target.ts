@@ -3,7 +3,9 @@ export interface Target {
     tls: boolean;
 }
 
-const LIVE_HOST = 'w1.rs2b2t.com';
+const LIVE_HOST =
+    (process.env.RS2B2T_WS ?? '').replace(/^wss?:\/\//i, '').replace(/[/]+$/, '') ||
+    'w1.rs2b2t.com';
 
 export function resolveTarget(name: string, locationHost = '', isHttps = false): Target {
     if (name === 'live') {
