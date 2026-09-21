@@ -53,9 +53,8 @@ export interface TransportRequires {
     freeSlots?: number;
     /** Toll / charter cost; same as items[] but kept explicit for explain output. */
     currency?: { name: string; amount: number };
-    // Why: completing Prince Ali Rescue lifts the Al Kharid gate toll, so the item/currency gates
-    // below are only meaningful while the quest is unfinished. A live state with the quest complete
-    // waives them; a state without the information fails closed (toll still required).
+    // Why: completing Prince Ali Rescue lifts the Al Kharid gate toll, so a live state with it complete waives the gates below.
+    // A state without the information fails closed (toll still required).
 
     /** Quest (journal name) whose completion waives the `items` + `currency` gates above. */
     questWaivesItems?: string;
