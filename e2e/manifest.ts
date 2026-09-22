@@ -1092,7 +1092,8 @@ export const CASES: readonly Case[] = [
         id: 'jivepower-test',
         harness: 'jivepower-test.ts',
         covers: { scripts: ['GatheringBot'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: 'a6a0d79a1dcd72f60234e7b64daa0dacea375a61',
         budgetMin: 12,
         note: 'compares full-inventory dropping with Miner, completes a mining/drop cycle, and preserves supplies across iron, clay and coal camps'
     },

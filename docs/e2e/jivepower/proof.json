@@ -1,0 +1,164 @@
+{
+  "result": "PASS",
+  "command": "bun e2e/jivepower-test.ts",
+  "generatedAt": "2026-09-22T14:20:04.808Z",
+  "implementationCommit": "a6a0d79a1dcd72f60234e7b64daa0dacea375a61",
+  "build": {
+    "commit": "c58e90c292ef152d9ab8cdfa5a6fd29968df496d",
+    "short": "c58e90c",
+    "dirty": true,
+    "builtAt": "2026-09-22T14:16:03.494Z",
+    "label": "c58e90c-dirty"
+  },
+  "engineCommit": "2135d3a2a44646981ccbcafb684c65c6a507be89",
+  "environment": "Local engine, Chromium, fresh accounts with 99 Mining/Hitpoints/Defence; full inventories seeded before the first drop.",
+  "speedup": 5.024,
+  "serverUserActionsPerTick": 5,
+  "miningLocations": [
+    "Auto",
+    "Use Closest",
+    "Use Start Position",
+    "Use Custom Position",
+    "None",
+    "Al Kharid Mine",
+    "Barbarian Village",
+    "Coal Trucks",
+    "Crafting Guild",
+    "Desert Mining Camp",
+    "Desert Mining Camp Surface",
+    "Dwarven Mine",
+    "Edgeville Dungeon Mine",
+    "Fight Arena Mine",
+    "Grand Tree Mine",
+    "Heroes Guild",
+    "Lava Maze Runite Mine",
+    "Legends Guild Iron (east)",
+    "Legends Guild Iron (west)",
+    "Mining Guild",
+    "North Brimhaven Mine",
+    "Rimmington Mine",
+    "Shilo Village",
+    "South-east Ardougne Mine",
+    "Southeast Varrock Mine",
+    "Southwest Varrock Mine",
+    "West Lumbridge Swamp Mine",
+    "Wilderness Hobgoblin Mine",
+    "Wilderness Skeleton Mine"
+  ],
+  "checks": {
+    "unitTests": {
+      "passed": 10431,
+      "skipped": 1,
+      "failed": 0
+    },
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "prose": {
+      "errors": 0,
+      "warnings": 23
+    },
+    "proseExtras": "PASS",
+    "scriptBoundaries": "PASS",
+    "apiContract": "PASS",
+    "exportAudit": {
+      "baselineFindings": 309,
+      "currentFindings": 309,
+      "newFindings": 0
+    }
+  },
+  "cases": [
+    {
+      "name": "miner-baseline",
+      "script": "Miner",
+      "ore": "Iron",
+      "location": "Southeast Varrock Mine",
+      "drops": [
+        {
+          "oreCount": 27,
+          "dispatchMs": 15816.1,
+          "confirmedMs": 16418.1,
+          "serverTicks": 28,
+          "retained": {
+            "Rune pickaxe": 1
+          }
+        }
+      ],
+      "miningXpGained": 35,
+      "trace": "miner-baseline.json",
+      "screenshot": "miner-baseline.png"
+    },
+    {
+      "name": "iron-power",
+      "script": "JivePower",
+      "ore": "Iron",
+      "location": "Southeast Varrock Mine",
+      "drops": [
+        {
+          "oreCount": 27,
+          "dispatchMs": 0,
+          "confirmedMs": 3267.8,
+          "serverTicks": 6,
+          "retained": {
+            "Rune pickaxe": 1
+          }
+        },
+        {
+          "oreCount": 27,
+          "dispatchMs": 0.0,
+          "confirmedMs": 3621.4,
+          "serverTicks": 6,
+          "retained": {
+            "Rune pickaxe": 1
+          }
+        }
+      ],
+      "miningXpGained": 980,
+      "trace": "iron-power.json",
+      "screenshot": "iron-power.png"
+    },
+    {
+      "name": "clay-power",
+      "script": "JivePower",
+      "ore": "Clay",
+      "location": "Rimmington Mine",
+      "drops": [
+        {
+          "oreCount": 27,
+          "dispatchMs": 0.2,
+          "confirmedMs": 3254.7,
+          "serverTicks": 6,
+          "retained": {
+            "Rune pickaxe": 1
+          }
+        }
+      ],
+      "miningXpGained": 5,
+      "trace": "clay-power.json",
+      "screenshot": "clay-power.png"
+    },
+    {
+      "name": "coal-supplies",
+      "script": "JivePower",
+      "ore": "Coal",
+      "location": "Dwarven Mine",
+      "drops": [
+        {
+          "oreCount": 22,
+          "dispatchMs": 0.1,
+          "confirmedMs": 2834.2,
+          "serverTicks": 5,
+          "retained": {
+            "Rune pickaxe": 1,
+            "Lobster": 2,
+            "Coins": 100,
+            "Gold ore": 1,
+            "Uncut sapphire": 1
+          }
+        }
+      ],
+      "miningXpGained": 50,
+      "trace": "coal-supplies.json",
+      "screenshot": "coal-supplies.png"
+    }
+  ]
+}

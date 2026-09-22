@@ -1,0 +1,1290 @@
+{
+  "scenario": {
+    "name": "iron-power",
+    "script": "JivePower",
+    "ore": "Iron",
+    "item": "Iron ore",
+    "debug": "iron_ore",
+    "location": "Southeast Varrock Mine",
+    "tile": {
+      "x": 3285,
+      "z": 3366,
+      "level": 0
+    },
+    "naturalCycle": true,
+    "supplies": false
+  },
+  "drops": [
+    {
+      "before": [
+        {
+          "slot": 0,
+          "id": 1275,
+          "name": "Rune pickaxe",
+          "count": 1,
+          "ops": [
+            null,
+            "Wield",
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 1,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 2,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 3,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 4,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 5,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 6,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 7,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 8,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 9,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 10,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 11,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 12,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 13,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 14,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 15,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 16,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 17,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 18,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 19,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 20,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 21,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 22,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 23,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 24,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 25,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 26,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 27,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        }
+      ],
+      "startedAt": 15142.900000035763,
+      "startedTick": 17,
+      "requests": [
+        {
+          "at": 15143,
+          "slot": 1,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 2,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 3,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 4,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 5,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 6,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 7,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 8,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 9,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 10,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 11,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 12,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 13,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 14,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 15,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 16,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 17,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 18,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 19,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 20,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 21,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 22,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 23,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 24,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 25,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 26,
+          "id": 440
+        },
+        {
+          "at": 15143,
+          "slot": 27,
+          "id": 440
+        }
+      ],
+      "after": [
+        {
+          "slot": 0,
+          "id": 1275,
+          "name": "Rune pickaxe",
+          "count": 1,
+          "ops": [
+            null,
+            "Wield",
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        }
+      ],
+      "elapsedMs": 3267.7999999523163,
+      "elapsedTicks": 6,
+      "xpAfter": 13034431
+    },
+    {
+      "before": [
+        {
+          "slot": 0,
+          "id": 1275,
+          "name": "Rune pickaxe",
+          "count": 1,
+          "ops": [
+            null,
+            "Wield",
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 1,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 2,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 3,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 4,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 5,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 6,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 7,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 8,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 9,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 10,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 11,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 12,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 13,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 14,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 15,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 16,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 17,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 18,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 19,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 20,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 21,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 22,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 23,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 24,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 25,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 26,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        },
+        {
+          "slot": 27,
+          "id": 440,
+          "name": "Iron ore",
+          "count": 1,
+          "ops": [
+            null,
+            null,
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        }
+      ],
+      "startedAt": 125180.60000002384,
+      "startedTick": 201,
+      "requests": [
+        {
+          "at": 125180.69999998808,
+          "slot": 1,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 2,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 3,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 4,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 5,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 6,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 7,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 8,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 9,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 10,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 11,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 12,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 13,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 14,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 15,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 16,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 17,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 18,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 19,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 20,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 21,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 22,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 23,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 24,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 25,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 26,
+          "id": 440
+        },
+        {
+          "at": 125180.69999998808,
+          "slot": 27,
+          "id": 440
+        }
+      ],
+      "after": [
+        {
+          "slot": 0,
+          "id": 1275,
+          "name": "Rune pickaxe",
+          "count": 1,
+          "ops": [
+            null,
+            "Wield",
+            null,
+            null,
+            "Drop"
+          ],
+          "comId": 3214
+        }
+      ],
+      "elapsedMs": 3621.399999976158,
+      "elapsedTicks": 6,
+      "xpAfter": 13035376
+    }
+  ],
+  "xpBefore": 13034431,
+  "locations": [
+    "Auto",
+    "Use Closest",
+    "Use Start Position",
+    "Use Custom Position",
+    "None",
+    "Al Kharid Mine",
+    "Barbarian Village",
+    "Coal Trucks",
+    "Crafting Guild",
+    "Desert Mining Camp",
+    "Desert Mining Camp Surface",
+    "Dwarven Mine",
+    "Edgeville Dungeon Mine",
+    "Fight Arena Mine",
+    "Grand Tree Mine",
+    "Heroes Guild",
+    "Lava Maze Runite Mine",
+    "Legends Guild Iron (east)",
+    "Legends Guild Iron (west)",
+    "Mining Guild",
+    "North Brimhaven Mine",
+    "Rimmington Mine",
+    "Shilo Village",
+    "South-east Ardougne Mine",
+    "Southeast Varrock Mine",
+    "Southwest Varrock Mine",
+    "West Lumbridge Swamp Mine",
+    "Wilderness Hobgoblin Mine",
+    "Wilderness Skeleton Mine"
+  ],
+  "xpAfter": 13035411,
+  "inventory": [
+    {
+      "slot": 0,
+      "id": 1275,
+      "name": "Rune pickaxe",
+      "count": 1,
+      "ops": [
+        null,
+        "Wield",
+        null,
+        null,
+        "Drop"
+      ],
+      "comId": 3214
+    },
+    {
+      "slot": 1,
+      "id": 440,
+      "name": "Iron ore",
+      "count": 1,
+      "ops": [
+        null,
+        null,
+        null,
+        null,
+        "Drop"
+      ],
+      "comId": 3214
+    }
+  ],
+  "pickaxeKept": true,
+  "state": "running",
+  "logs": [
+    {
+      "time": 1790086616052,
+      "level": "info",
+      "msg": "JivePower started"
+    },
+    {
+      "time": 1790086616066,
+      "level": "info",
+      "msg": "rocks: Iron → 2 loc id(s)"
+    },
+    {
+      "time": 1790086616069,
+      "level": "info",
+      "msg": "combat: Auto Retaliate off (gather — flee, do not fight)"
+    },
+    {
+      "time": 1790086616069,
+      "level": "info",
+      "msg": "location: Southeast Varrock Mine; bank (3253, 3420, 0)"
+    },
+    {
+      "time": 1790086616069,
+      "level": "info",
+      "msg": "location: Bank=false (power) — drop haul; bank only to fetch missing tools (nearest bank)"
+    },
+    {
+      "time": 1790086616069,
+      "level": "info",
+      "msg": "gather: 'Rocks' (Mine) leash 64 @ (3285, 3366, 0); Bank=false: dropping iron when full"
+    },
+    {
+      "time": 1790086619356,
+      "level": "info",
+      "msg": "drop: haul cleared"
+    },
+    {
+      "time": 1790086650541,
+      "level": "info",
+      "msg": "gather: no 'Rocks' (Mine) rocks within leash 64 of (3285, 3366, 0)"
+    },
+    {
+      "time": 1790086666726,
+      "level": "info",
+      "msg": "gather: no 'Rocks' (Mine) rocks within leash 64 of (3285, 3366, 0)"
+    },
+    {
+      "time": 1790086682927,
+      "level": "info",
+      "msg": "gather: no 'Rocks' (Mine) rocks within leash 64 of (3285, 3366, 0)"
+    },
+    {
+      "time": 1790086699131,
+      "level": "info",
+      "msg": "gather: no 'Rocks' (Mine) rocks within leash 64 of (3285, 3366, 0)"
+    },
+    {
+      "time": 1790086705731,
+      "level": "info",
+      "msg": "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+    },
+    {
+      "time": 1790086705832,
+      "level": "info",
+      "msg": "  path: cost 2, 3 waypoints, expanded 13, worker 0.7ms, hops=0"
+    },
+    {
+      "time": 1790086706929,
+      "level": "info",
+      "msg": "  arrived (1 clicks)"
+    },
+    {
+      "time": 1790086718946,
+      "level": "info",
+      "msg": "gather: no 'Rocks' (Mine) rocks within leash 64 of (3285, 3366, 0)"
+    },
+    {
+      "time": 1790086721330,
+      "level": "info",
+      "msg": "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
+    },
+    {
+      "time": 1790086721367,
+      "level": "info",
+      "msg": "  path: cost 4, 5 waypoints, expanded 31, worker 0.1ms, hops=0"
+    },
+    {
+      "time": 1790086723742,
+      "level": "info",
+      "msg": "  arrived (2 clicks)"
+    },
+    {
+      "time": 1790086729745,
+      "level": "info",
+      "msg": "drop: haul cleared"
+    }
+  ],
+  "errors": []
+}
