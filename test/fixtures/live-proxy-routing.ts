@@ -64,7 +64,18 @@ async function routeTraffic() {
         }
     }
     const forwarded = requests.length;
-    for (const path of ['/__rs2b0t/world/3', '/__rs2b0t/world/3/crc', '/__rs2b0t/world/4/crc', '/__rs2b0t/world/02/crc', '/__rs2b0t/world/2/prometheus', '/__rs2b0t/world/2/setup', '/__rs2b0t/world/1/../2/admin', '/prometheus', '/setup', '/anything']) {
+    for (const path of [
+        '/__rs2b0t/world/3',
+        '/__rs2b0t/world/3/crc',
+        '/__rs2b0t/world/4/crc',
+        '/__rs2b0t/world/02/crc',
+        '/__rs2b0t/world/2/prometheus',
+        '/__rs2b0t/world/2/setup',
+        '/__rs2b0t/world/1/../2/admin',
+        '/prometheus',
+        '/setup',
+        '/anything'
+    ]) {
         assert.equal((await fetch(origin + path)).status, 404);
     }
     assert.equal((await fetch(origin + '/__rs2b0t/world/2/crc', { method: 'POST', body: 'no' })).status, 405);
@@ -121,7 +132,27 @@ async function rejectStaleBundle() {
     await assert.rejects(startLiveProxy({ port: 0, root }), /metadata/);
 }
 
+async function launchBesideExistingProxy() {
+    const firstRoot = fixtureRoot();
+    const secondRoot = fixtureRoot();
+    writeFileSync(join(secondRoot, 'public-bot/multibox.html'), 'second wall');
+    const first = await startLiveProxy({ port: 0, root: firstRoot });
+    cleanups.push(() => first.stop(true));
+    await assert.rejects(startLiveProxy({ port: first.port, root: secondRoot }), { code: 'EADDRINUSE' });
+    const [second, third] = await Promise.all([startLiveProxy({ port: first.port, autoPort: true, root: secondRoot }), startLiveProxy({ port: first.port, autoPort: true, root: fixtureRoot() })]);
+    cleanups.push(
+        () => second.stop(true),
+        () => third.stop(true)
+    );
+    assert.equal(new Set([first.port, second.port, third.port]).size, 3);
+    assert.ok(second.port! > first.port!);
+    assert.equal(await (await fetch(`http://127.0.0.1:${second.port}/multibox.html`)).text(), 'second wall');
+    second.stop(true);
+    assert.equal(await (await fetch(`http://127.0.0.1:${first.port}/multibox.html`)).text(), 'one local wall');
+}
+
 try {
+    await launchBesideExistingProxy();
     await routeTraffic();
     await rejectStaleBundle();
     await discardClosedFrame();

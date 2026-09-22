@@ -20,6 +20,11 @@ and state; the status panel shows its connected world. A tile's **Switch** stops
 that bot's script and reconnects; log out in-game, click **Retry**, then resume it
 on the destination world.
 
+Run `bun run b0t` again in another terminal to open another instance from the same
+checkout. Each launch gets a private build and a free port. All instances share
+saved accounts and settings, so you can test edits while existing bots keep running.
+See [Live wall](../docs/how-to/run-the-live-wall.md) for profile and port overrides.
+
 For a local development engine:
 
 1. Start the engine and deploy the client (`tools/deploy-local.sh`).
