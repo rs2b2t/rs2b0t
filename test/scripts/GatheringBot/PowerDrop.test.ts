@@ -6,22 +6,18 @@ import { Input } from '#/bot/input/Input.js';
 import { ScriptRegistry } from '#/bot/runtime/ScriptRegistry.js';
 import GatheringBot from '#/bot/scripts/GatheringBot/GatheringBot.js';
 import { BankCatch, DropProduct } from '#/bot/scripts/GatheringBot/GatheringBotTasks.js';
+import { wcTickManipProfile } from '#/bot/scripts/GatheringBot/TickManipLogic.js';
 import '#/bot/scripts/index.js';
 
 afterEach(() => mock.restore());
 
-test('JivePower exposes every Miner ore and location', () => {
-    const power = ScriptRegistry.get('JivePower');
-    expect(power).toBeDefined();
-    expect(power?.settingsSchema?.rocks.options).toEqual(ScriptRegistry.get('Miner')?.settingsSchema?.rocks.options);
-    expect(power?.settingsSchema?.location.options).toEqual(ScriptRegistry.get('Miner')?.settingsSchema?.location.options);
-});
-
 function fixture(names: string[]) {
-    const bot = ScriptRegistry.get('JivePower')?.create();
+    const bot = ScriptRegistry.get('Miner')?.create();
     expect(bot).toBeInstanceOf(GatheringBot);
-    if (!(bot instanceof GatheringBot)) throw new Error('JivePower missing');
+    if (!(bot instanceof GatheringBot)) throw new Error('Miner missing');
     bot['productKeywords'] = ['iron', 'coal'];
+    bot['rockIds'] = new Set([2092, 2096]);
+    bot['powerMode'] = true;
     const state = {
         items: names.map((name, slot): InvItemSnapshot => ({
             name, slot, id: name === 'Iron ore' ? 440 : 1000 + slot,
@@ -144,4 +140,50 @@ test('a full ore inventory does not start a desert camp bank trip', () => {
     bot['minerFood'] = { name: 'Lobster', target: 2 };
     expect(bot['desertCampDirection']()).toBe('enter');
     expect(bot.desertCampBankCatchNeeded()).toBe(false);
+});
+
+test('bank mode still sends a full ore inventory to the bank', () => {
+    const { bot } = fixture(['Rune pickaxe', ...Array<string>(27).fill('Iron ore')]);
+    bot['powerMode'] = false;
+    expect(new BankCatch(bot).validate()).toBe(true);
+});
+
+test('a power miner with no ore space enters supply handling instead of stalling', () => {
+    const { bot, task } = fixture(['Rune pickaxe', ...Array<string>(27).fill('Lobster')]);
+    bot['minerFood'] = { name: 'Lobster', target: 27 };
+    spyOn(Skills, 'effective').mockReturnValue(99);
+    spyOn(Skills, 'level').mockReturnValue(99);
+    expect(bot.shouldEatMinerFood()).toBe(false);
+    expect(task.validate()).toBe(false);
+    expect(new BankCatch(bot).validate()).toBe(true);
+});
+
+test('drops raw fish in one batch and keeps cooked food and fishing gear', async () => {
+    const { bot, state } = fixture(['Fly fishing rod', 'Feather', 'Raw trout', 'Raw salmon', 'Trout', 'Lobster']);
+    bot['rockIds'] = new Set();
+    bot['productKeywords'] = ['raw'];
+    await bot.dropProducts();
+    expect(state.items.map(item => item.name)).toEqual(['Fly fishing rod', 'Feather', 'Trout', 'Lobster']);
+    expect(state.batches).toEqual([[2, 3]]);
+});
+
+test('drops logs in one batch and keeps the axe', async () => {
+    const { bot, state } = fixture(['Rune axe', 'Logs', 'Oak logs', 'Willow logs']);
+    bot['rockIds'] = new Set();
+    bot['productKeywords'] = ['log'];
+    await bot.dropProducts();
+    expect(state.items.map(item => item.name)).toEqual(['Rune axe']);
+    expect(state.batches).toEqual([[1, 2, 3]]);
+});
+
+test('keeps one fletchable log during knife delay and confirms the rest together', async () => {
+    const { bot, state } = fixture(['Rune axe', 'Knife', 'Logs', 'Logs', 'Logs']);
+    bot['rockIds'] = new Set();
+    bot['productKeywords'] = ['log'];
+    bot['tickManip'] = wcTickManipProfile('knife-delay');
+    await bot.dropProducts();
+    expect(state.items.map(item => item.name)).toEqual(['Rune axe', 'Knife', 'Logs']);
+    expect(state.batches.map(batch => batch.length)).toEqual([2]);
+    await bot.dropProducts();
+    expect(state.batches.map(batch => batch.length)).toEqual([2]);
 });

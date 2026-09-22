@@ -13,7 +13,6 @@ import {
     tickManipUiOptions
 } from './GatheringBot/TickManipLogic.js';
 import { MINER_SETTINGS } from './GatheringBot/MinerSettings.js';
-import JivePower, { JIVEPOWER_SETTINGS } from './GatheringBot/JivePower.js';
 import EdgevilleMonkeyBars, { EDGEVILLE_MONKEYBARS_SETTINGS } from './EdgevilleMonkeyBars/EdgevilleMonkeyBars.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import AgilityBot from './AgilityBot/AgilityBot.js';
@@ -353,20 +352,11 @@ ScriptRegistry.register({
 ScriptRegistry.register({
     name: 'Miner',
     description:
-        'Mines the selected rock types, then banks the ore at the nearest bank or drops it (power-mining). Optional trip food is eaten when its full heal fits or to turn food slots into more ore slots. Needs a pickaxe (best available is restocked from the bank when Full inventory is Auto). Optional Buy/repair acquires picks from Nurmof (and repairs broken picks).',
+        'Mines the selected rock types, then banks the ore or drops the whole haul in a batch when Bank=false. Power mode keeps food for healing and restocks when it runs out. Needs a pickaxe (best available is restocked from the bank when Full inventory is Auto). Optional Buy/repair acquires picks from Nurmof (and repairs broken picks).',
     category: 'Mining',
     tags: ['gathering', 'banking', 'drop'],
     settingsSchema: MINER_SETTINGS,
     create: () => new GatheringBot()
-});
-
-ScriptRegistry.register({
-    name: 'JivePower',
-    description: 'Power-mines selected ores at any Miner location. Drops the whole haul in a burst, then resumes mining. Keeps pickaxes, food and supplies.',
-    category: 'Mining',
-    tags: ['gathering', 'drop', 'power-mining'],
-    settingsSchema: JIVEPOWER_SETTINGS,
-    create: () => new JivePower()
 });
 
 ScriptRegistry.register({

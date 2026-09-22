@@ -1099,13 +1099,12 @@ export const CASES: readonly Case[] = [
         note: 'starts at Varrock West with the kit banked there; coming within 20 tiles of the Al Kharid booth fails the run'
     },
     {
-        id: 'jivepower-test',
-        harness: 'jivepower-test.ts',
+        id: 'gathering-power-drop-test',
+        harness: 'gathering-power-drop-test.ts',
         covers: { scripts: ['GatheringBot'] },
-        status: 'vetted',
-        provenAt: 'a6a0d79a1dcd72f60234e7b64daa0dacea375a61',
+        status: 'unvetted',
         budgetMin: 12,
-        note: 'compares full-inventory dropping with Miner, completes a mining/drop cycle, and preserves supplies across iron, clay and coal camps'
+        note: 'checks Miner batch dropping with Bank=false, completes a mining/drop cycle, and preserves supplies across iron, clay and coal camps'
     },
     {
         id: 'miner-bank-food-live',

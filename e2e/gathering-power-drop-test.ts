@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { InvItemSnapshot } from '../src/bot/adapter/ClientAdapter.js';
 import type { ScriptMeta } from '../src/bot/runtime/ScriptRegistry.js';
 import type GatheringBot from '../src/bot/scripts/GatheringBot/GatheringBot.js';
@@ -40,18 +44,21 @@ interface PowerGlobal {
 
 const { base } = parseArgs(process.argv.slice(2));
 assert(['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname), 'Use a local test engine');
-const tag = `jpw${Date.now().toString(36).slice(-7)}`;
+const tag = `gpd${Date.now().toString(36).slice(-7)}`;
 const dir = `out/e2e/${tag}`;
 await mkdir(dir, { recursive: true });
-const client = deployIsolatedClient(tag);
-const build = await Bun.file('out/version.json').json();
+const sharedBundleHash = () => createHash('sha256').update(readFileSync('out/botclient.js')).digest('hex');
+const originalBundle = sharedBundleHash();
+const buildDir = mkdtempSync(join(tmpdir(), 'gathering-power-drop-'));
+const client = deployIsolatedClient(tag, undefined, buildDir);
+const build = await Bun.file(`${buildDir}/version.json`).json();
+assert.equal(sharedBundleHash(), originalBundle, 'test build overwrote the running client bundle');
 const browser = await launchBrowser({ swiftshader: true });
 const results: { name: string; drops: DropProof[]; xpGained: number }[] = [];
 const scenarios = [
-    { name: 'miner-baseline', script: 'Miner', ore: 'Iron', item: 'Iron ore', debug: 'iron_ore', location: 'Southeast Varrock Mine', tile: { x: 3285, z: 3366, level: 0 }, naturalCycle: false, supplies: false },
-    { name: 'iron-power', script: 'JivePower', ore: 'Iron', item: 'Iron ore', debug: 'iron_ore', location: 'Southeast Varrock Mine', tile: { x: 3285, z: 3366, level: 0 }, naturalCycle: true, supplies: false },
-    { name: 'clay-power', script: 'JivePower', ore: 'Clay', item: 'Clay', debug: 'clay', location: 'Rimmington Mine', tile: { x: 2978, z: 3247, level: 0 }, naturalCycle: false, supplies: false },
-    { name: 'coal-supplies', script: 'JivePower', ore: 'Coal', item: 'Coal', debug: 'coal', location: 'Dwarven Mine', tile: { x: 3021, z: 9800, level: 0 }, naturalCycle: false, supplies: true }
+    { name: 'iron-power', script: 'Miner', ore: 'Iron', item: 'Iron ore', debug: 'iron_ore', location: 'Southeast Varrock Mine', tile: { x: 3285, z: 3366, level: 0 }, naturalCycle: true, supplies: false },
+    { name: 'clay-power', script: 'Miner', ore: 'Clay', item: 'Clay', debug: 'clay', location: 'Rimmington Mine', tile: { x: 2978, z: 3247, level: 0 }, naturalCycle: false, supplies: false },
+    { name: 'coal-supplies', script: 'Miner', ore: 'Coal', item: 'Coal', debug: 'coal', location: 'Dwarven Mine', tile: { x: 3021, z: 9800, level: 0 }, naturalCycle: false, supplies: true }
 ];
 
 try {
@@ -79,7 +86,7 @@ try {
             assert(await teleTo(page, scenario.tile, 3, 25000), 'Mine teleport failed');
             await setSettings(page, scenario.script, {
                 rocks: scenario.ore, location: scenario.location, toolAcquire: 'Off',
-                ...(scenario.script === 'Miner' ? { bank: false } : {}),
+                bank: false,
                 purgePackOnStart: false, muleMode: 'Off', tickManip: 'Off', foodWithdraw: scenario.supplies ? 2 : 0,
                 forgetfulBank: false, packJunk: 'Off'
             });
@@ -88,11 +95,8 @@ try {
             await page.evaluate(script => {
                 const g = globalThis as never as PowerGlobal;
                 const meta = g.rs2b0t.registry.get(script);
-                const miner = g.rs2b0t.registry.get('Miner');
-                const power = g.rs2b0t.registry.get('JivePower');
-                if (!meta || !miner || !power) throw new Error('Mining script unavailable');
-                const locations = power.settingsSchema?.location.options ?? [];
-                if (JSON.stringify(locations) !== JSON.stringify(miner.settingsSchema?.location.options)) throw new Error('JivePower locations differ from Miner');
+                if (!meta) throw new Error('Mining script unavailable');
+                const locations = meta.settingsSchema?.location.options ?? [];
                 g.__powerProof = { drops: [], xpBefore: g.__rs2b0t.Skills.xp('mining'), locations };
                 g.rs2b0t.runner.start({
                     ...meta,
@@ -158,13 +162,11 @@ try {
                     const afterCount: number = drop.after.filter(kept => kept.id === item.id).reduce((sum, kept) => sum + kept.count, 0);
                     assert.equal(afterCount, beforeCount, `Lost ${item.name}`);
                 }
-                if (scenario.script === 'JivePower') {
-                    const ores = drop.before.filter(item => item.name === scenario.item);
-                    assert.equal(drop.requests.length, ores.length, 'Repeated or missing drop requests');
-                    assert(drop.requests.at(-1)!.at - drop.requests[0].at < 100, 'Drop dispatch was paced per item');
-                    assert(drop.elapsedMs! <= 4800, `Drop took ${drop.elapsedMs} ms`);
-                    assert(drop.elapsedTicks! <= Math.ceil(ores.length / 5) + 1, `Drop took ${drop.elapsedTicks} ticks`);
-                }
+                const ores = drop.before.filter(item => item.name === scenario.item);
+                assert.equal(drop.requests.length, ores.length, 'Repeated or missing drop requests');
+                assert(drop.requests.at(-1)!.at - drop.requests[0].at < 100, 'Drop dispatch was paced per item');
+                assert(drop.elapsedMs! <= 4800, `Drop took ${drop.elapsedMs} ms`);
+                assert(drop.elapsedTicks! <= Math.ceil(ores.length / 5) + 1, `Drop took ${drop.elapsedTicks} ticks`);
             }
             const lastDrop = proof.drops.at(-1)!;
             assert(proof.xpAfter > lastDrop.xpAfter!, 'Mining did not resume after the last drop');
@@ -180,15 +182,14 @@ try {
             await Bun.write(`${dir}/${scenario.name}-failure.json`, JSON.stringify({ error: String(error), state, errors }, null, 2));
             throw error;
         } finally {
-            await page.evaluate(() => (globalThis as never as PowerGlobal).rs2b0t?.runner.stop('JivePower e2e complete')).catch(() => {});
+            await page.evaluate(() => (globalThis as never as PowerGlobal).rs2b0t?.runner.stop('Gathering power drop e2e complete')).catch(() => {});
             await page.close();
         }
     }
-    const speedup = results[0].drops[0].elapsedMs! / results[1].drops[0].elapsedMs!;
-    assert(speedup >= 4, `Expected at least 4x faster dropping, got ${speedup.toFixed(1)}x`);
-    await Bun.write(`${dir}/summary.json`, JSON.stringify({ result: 'PASS', generatedAt: new Date().toISOString(), build, speedup, results }, null, 2) + '\n');
-    console.log(`PASS JivePower: ${speedup.toFixed(1)}x faster than Miner. Proof: ${dir}`);
+    await Bun.write(`${dir}/summary.json`, JSON.stringify({ result: 'PASS', generatedAt: new Date().toISOString(), build, results }, null, 2) + '\n');
+    console.log(`PASS Miner power dropping. Proof: ${dir}`);
 } finally {
     await browser.close();
     client.cleanup();
+    rmSync(buildDir, { recursive: true, force: true });
 }
