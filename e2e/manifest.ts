@@ -7,10 +7,10 @@ export const CASES: readonly Case[] = [
         harness: 'desktop-instances-test.ts',
         covers: { subsystems: ['multibox'] },
         status: 'vetted',
-        provenAt: '1fb37543609b7a1ab82f62b725c2f92a75d828f9',
+        provenAt: 'dc9ded2f381c756a06a21483ed733b85b9bf4b5b',
         manual: true,
         budgetMin: 3,
-        note: 'Two live launcher builds and real Electron windows share saved accounts/settings across separate ports. Checks migration, concurrent vault edits, iframe storage, persistence and independent shutdown. Requires desktop dependencies and a display; no game login.'
+        note: 'Two live launcher builds and real Electron windows share saved accounts/settings across separate ports. Checks migration, concurrent vault edits, iframe storage, zero synchronous settings reads during path drawing, write/revert races, persistence and independent shutdown. Requires desktop dependencies and a display; no game login.'
     },
     {
         id: 'lostcity-strike-safespot-live',

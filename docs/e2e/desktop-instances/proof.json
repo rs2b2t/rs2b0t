@@ -1,36 +1,53 @@
 {
   "passed": true,
   "build": {
-    "commit": "1fb37543609b7a1ab82f62b725c2f92a75d828f9",
-    "short": "1fb3754",
+    "commit": "dc9ded2f381c756a06a21483ed733b85b9bf4b5b",
+    "short": "dc9ded2",
     "dirty": false,
-    "builtAt": "2026-09-22T15:19:35.147Z",
-    "label": "1fb3754"
+    "builtAt": "2026-09-22T16:30:44.356Z",
+    "label": "dc9ded2"
   },
-  "verifiedAt": "2026-09-22T15:19:38.995Z",
+  "verifiedAt": "2026-09-22T16:30:49.660Z",
   "ports": [
-    8082,
-    8083
+    8083,
+    8084
   ],
   "builds": [
-    "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T//rs2b0t.o50saK",
-    "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T//rs2b0t.DSGKAw"
+    "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T//rs2b0t.pcvlFQ",
+    "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T//rs2b0t.ZPxpZj"
   ],
   "electronPids": [
-    83714,
-    83731
+    91946,
+    91979
   ],
-  "sharedSavedData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t-desktop-e2e-pXOkYG/shared/Shared Storage/storage.json",
+  "sharedSavedData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t-desktop-e2e-Q96BVZ/shared/Shared Storage/storage.json",
   "browserCaches": [
     {
-      "userData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t.o50saK/electron/rs2b0t-session-rGTfVt",
-      "sessionData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t.o50saK/electron/rs2b0t-session-rGTfVt"
+      "userData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t.pcvlFQ/electron/rs2b0t-session-18WE8z",
+      "sessionData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t.pcvlFQ/electron/rs2b0t-session-18WE8z"
     },
     {
-      "userData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t.DSGKAw/electron/rs2b0t-session-fJmK8k",
-      "sessionData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t.DSGKAw/electron/rs2b0t-session-fJmK8k"
+      "userData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t.ZPxpZj/electron/rs2b0t-session-wyJYnf",
+      "sessionData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t.ZPxpZj/electron/rs2b0t-session-wyJYnf"
     }
   ],
+  "settingsPerformance": {
+    "build": {
+      "commit": "dc9ded2f381c756a06a21483ed733b85b9bf4b5b",
+      "short": "dc9ded2",
+      "dirty": false,
+      "builtAt": "2026-09-22T16:30:44.356Z",
+      "label": "dc9ded2"
+    },
+    "verifiedAt": "2026-09-22T16:30:47.573Z",
+    "frames": 60,
+    "bagsPerFrame": 5,
+    "settingsPerBag": 22,
+    "medianWorkMs": 0.19999998807907104,
+    "p95WorkMs": 0.25,
+    "elapsedMs": 487.84500002861023,
+    "storageCalls": {}
+  },
   "checks": [
     "separate ports and build directories",
     "shared bundle unchanged",
@@ -38,6 +55,9 @@
     "one shared account/settings store",
     "concurrent account additions survive in both windows",
     "bot iframe reads shared settings without exposing Node",
+    "path overlay settings workload performs zero synchronous IPC reads",
+    "settings cache observes a reverted write even when file notifications coalesce",
+    "setting removal propagates between instances",
     "settings shared across ports",
     "saved settings persist after restart",
     "closing second instance leaves first serving its original bundle",

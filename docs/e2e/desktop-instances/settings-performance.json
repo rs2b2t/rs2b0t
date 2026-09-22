@@ -1,0 +1,17 @@
+{
+  "build": {
+    "commit": "dc9ded2f381c756a06a21483ed733b85b9bf4b5b",
+    "short": "dc9ded2",
+    "dirty": false,
+    "builtAt": "2026-09-22T16:30:44.356Z",
+    "label": "dc9ded2"
+  },
+  "verifiedAt": "2026-09-22T16:30:47.573Z",
+  "frames": 60,
+  "bagsPerFrame": 5,
+  "settingsPerBag": 22,
+  "medianWorkMs": 0.19999998807907104,
+  "p95WorkMs": 0.25,
+  "elapsedMs": 487.84500002861023,
+  "storageCalls": {}
+}
