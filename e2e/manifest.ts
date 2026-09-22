@@ -1102,7 +1102,8 @@ export const CASES: readonly Case[] = [
         id: 'gathering-power-drop-test',
         harness: 'gathering-power-drop-test.ts',
         covers: { scripts: ['GatheringBot'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: '8edeb1e4b098c586182585dfbed86bcdcb7c61c1',
         budgetMin: 12,
         note: 'checks Miner batch dropping with Bank=false, completes a mining/drop cycle, and preserves supplies across iron, clay and coal camps'
     },

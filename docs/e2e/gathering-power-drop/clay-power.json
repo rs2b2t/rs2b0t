@@ -1,18 +1,18 @@
 {
   "scenario": {
-    "name": "coal-supplies",
-    "script": "JivePower",
-    "ore": "Coal",
-    "item": "Coal",
-    "debug": "coal",
-    "location": "Dwarven Mine",
+    "name": "clay-power",
+    "script": "Miner",
+    "ore": "Clay",
+    "item": "Clay",
+    "debug": "clay",
+    "location": "Rimmington Mine",
     "tile": {
-      "x": 3021,
-      "z": 9800,
+      "x": 2978,
+      "z": 3247,
       "level": 0
     },
     "naturalCycle": false,
-    "supplies": true
+    "supplies": false
   },
   "drops": [
     {
@@ -33,11 +33,11 @@
         },
         {
           "slot": 1,
-          "id": 379,
-          "name": "Lobster",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
-            "Eat",
+            null,
             null,
             null,
             null,
@@ -47,11 +47,11 @@
         },
         {
           "slot": 2,
-          "id": 379,
-          "name": "Lobster",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
-            "Eat",
+            null,
             null,
             null,
             null,
@@ -61,9 +61,9 @@
         },
         {
           "slot": 3,
-          "id": 995,
-          "name": "Coins",
-          "count": 100,
+          "id": 434,
+          "name": "Clay",
+          "count": 1,
           "ops": [
             null,
             null,
@@ -75,8 +75,8 @@
         },
         {
           "slot": 4,
-          "id": 444,
-          "name": "Gold ore",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -89,8 +89,8 @@
         },
         {
           "slot": 5,
-          "id": 1623,
-          "name": "Uncut sapphire",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -103,8 +103,8 @@
         },
         {
           "slot": 6,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -117,8 +117,8 @@
         },
         {
           "slot": 7,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -131,8 +131,8 @@
         },
         {
           "slot": 8,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -145,8 +145,8 @@
         },
         {
           "slot": 9,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -159,8 +159,8 @@
         },
         {
           "slot": 10,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -173,8 +173,8 @@
         },
         {
           "slot": 11,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -187,8 +187,8 @@
         },
         {
           "slot": 12,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -201,8 +201,8 @@
         },
         {
           "slot": 13,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -215,8 +215,8 @@
         },
         {
           "slot": 14,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -229,8 +229,8 @@
         },
         {
           "slot": 15,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -243,8 +243,8 @@
         },
         {
           "slot": 16,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -257,8 +257,8 @@
         },
         {
           "slot": 17,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -271,8 +271,8 @@
         },
         {
           "slot": 18,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -285,8 +285,8 @@
         },
         {
           "slot": 19,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -299,8 +299,8 @@
         },
         {
           "slot": 20,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -313,8 +313,8 @@
         },
         {
           "slot": 21,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -327,8 +327,8 @@
         },
         {
           "slot": 22,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -341,8 +341,8 @@
         },
         {
           "slot": 23,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -355,8 +355,8 @@
         },
         {
           "slot": 24,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -369,8 +369,8 @@
         },
         {
           "slot": 25,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -383,8 +383,8 @@
         },
         {
           "slot": 26,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -397,8 +397,8 @@
         },
         {
           "slot": 27,
-          "id": 453,
-          "name": "Coal",
+          "id": 434,
+          "name": "Clay",
           "count": 1,
           "ops": [
             null,
@@ -410,118 +410,143 @@
           "comId": 3214
         }
       ],
-      "startedAt": 17984.399999976158,
-      "startedTick": 22,
+      "startedAt": 15134.100000023842,
+      "startedTick": 17,
       "requests": [
         {
-          "at": 17984.5,
+          "at": 15134.100000023842,
+          "slot": 1,
+          "id": 434
+        },
+        {
+          "at": 15134.199999988079,
+          "slot": 2,
+          "id": 434
+        },
+        {
+          "at": 15134.199999988079,
+          "slot": 3,
+          "id": 434
+        },
+        {
+          "at": 15134.199999988079,
+          "slot": 4,
+          "id": 434
+        },
+        {
+          "at": 15134.199999988079,
+          "slot": 5,
+          "id": 434
+        },
+        {
+          "at": 15134.199999988079,
           "slot": 6,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.5,
+          "at": 15134.300000011921,
           "slot": 7,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.5,
+          "at": 15134.300000011921,
           "slot": 8,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.5,
+          "at": 15134.300000011921,
           "slot": 9,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.5,
+          "at": 15134.300000011921,
           "slot": 10,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.600000023842,
+          "at": 15134.300000011921,
           "slot": 11,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.600000023842,
+          "at": 15134.300000011921,
           "slot": 12,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.600000023842,
+          "at": 15134.300000011921,
           "slot": 13,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.600000023842,
+          "at": 15134.300000011921,
           "slot": 14,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.600000023842,
+          "at": 15134.300000011921,
           "slot": 15,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.600000023842,
+          "at": 15134.300000011921,
           "slot": 16,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.600000023842,
+          "at": 15134.300000011921,
           "slot": 17,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.600000023842,
+          "at": 15134.300000011921,
           "slot": 18,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.600000023842,
+          "at": 15134.300000011921,
           "slot": 19,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.600000023842,
+          "at": 15134.300000011921,
           "slot": 20,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.600000023842,
+          "at": 15134.300000011921,
           "slot": 21,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.600000023842,
+          "at": 15134.300000011921,
           "slot": 22,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.600000023842,
+          "at": 15134.300000011921,
           "slot": 23,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.600000023842,
+          "at": 15134.300000011921,
           "slot": 24,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.600000023842,
+          "at": 15134.300000011921,
           "slot": 25,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.600000023842,
+          "at": 15134.300000011921,
           "slot": 26,
-          "id": 453
+          "id": 434
         },
         {
-          "at": 17984.600000023842,
+          "at": 15134.300000011921,
           "slot": 27,
-          "id": 453
+          "id": 434
         }
       ],
       "after": [
@@ -538,80 +563,10 @@
             "Drop"
           ],
           "comId": 3214
-        },
-        {
-          "slot": 1,
-          "id": 379,
-          "name": "Lobster",
-          "count": 1,
-          "ops": [
-            "Eat",
-            null,
-            null,
-            null,
-            "Drop"
-          ],
-          "comId": 3214
-        },
-        {
-          "slot": 2,
-          "id": 379,
-          "name": "Lobster",
-          "count": 1,
-          "ops": [
-            "Eat",
-            null,
-            null,
-            null,
-            "Drop"
-          ],
-          "comId": 3214
-        },
-        {
-          "slot": 3,
-          "id": 995,
-          "name": "Coins",
-          "count": 100,
-          "ops": [
-            null,
-            null,
-            null,
-            null,
-            "Drop"
-          ],
-          "comId": 3214
-        },
-        {
-          "slot": 4,
-          "id": 444,
-          "name": "Gold ore",
-          "count": 1,
-          "ops": [
-            null,
-            null,
-            null,
-            null,
-            "Drop"
-          ],
-          "comId": 3214
-        },
-        {
-          "slot": 5,
-          "id": 1623,
-          "name": "Uncut sapphire",
-          "count": 1,
-          "ops": [
-            null,
-            null,
-            null,
-            null,
-            "Drop"
-          ],
-          "comId": 3214
         }
       ],
-      "elapsedMs": 2834.2000000476837,
-      "elapsedTicks": 5,
+      "elapsedMs": 3293,
+      "elapsedTicks": 6,
       "xpAfter": 13034431
     }
   ],
@@ -647,7 +602,7 @@
     "Wilderness Hobgoblin Mine",
     "Wilderness Skeleton Mine"
   ],
-  "xpAfter": 13034481,
+  "xpAfter": 13034436,
   "inventory": [
     {
       "slot": 0,
@@ -665,78 +620,8 @@
     },
     {
       "slot": 1,
-      "id": 379,
-      "name": "Lobster",
-      "count": 1,
-      "ops": [
-        "Eat",
-        null,
-        null,
-        null,
-        "Drop"
-      ],
-      "comId": 3214
-    },
-    {
-      "slot": 2,
-      "id": 379,
-      "name": "Lobster",
-      "count": 1,
-      "ops": [
-        "Eat",
-        null,
-        null,
-        null,
-        "Drop"
-      ],
-      "comId": 3214
-    },
-    {
-      "slot": 3,
-      "id": 995,
-      "name": "Coins",
-      "count": 100,
-      "ops": [
-        null,
-        null,
-        null,
-        null,
-        "Drop"
-      ],
-      "comId": 3214
-    },
-    {
-      "slot": 4,
-      "id": 444,
-      "name": "Gold ore",
-      "count": 1,
-      "ops": [
-        null,
-        null,
-        null,
-        null,
-        "Drop"
-      ],
-      "comId": 3214
-    },
-    {
-      "slot": 5,
-      "id": 1623,
-      "name": "Uncut sapphire",
-      "count": 1,
-      "ops": [
-        null,
-        null,
-        null,
-        null,
-        "Drop"
-      ],
-      "comId": 3214
-    },
-    {
-      "slot": 6,
-      "id": 453,
-      "name": "Coal",
+      "id": 434,
+      "name": "Clay",
       "count": 1,
       "ops": [
         null,
@@ -752,59 +637,54 @@
   "state": "running",
   "logs": [
     {
-      "time": 1790086776057,
+      "time": 1790095995694,
       "level": "info",
-      "msg": "JivePower started"
+      "msg": "Miner started"
     },
     {
-      "time": 1790086776097,
+      "time": 1790095995706,
       "level": "info",
-      "msg": "food: Lobster x2; eat when its full heal fits or the pack needs an ore slot"
+      "msg": "rocks: Clay → 2 loc id(s)"
     },
     {
-      "time": 1790086776097,
-      "level": "info",
-      "msg": "rocks: Coal → 2 loc id(s)"
-    },
-    {
-      "time": 1790086776100,
+      "time": 1790095995709,
       "level": "info",
       "msg": "combat: Auto Retaliate off (gather — flee, do not fight)"
     },
     {
-      "time": 1790086776100,
+      "time": 1790095995709,
       "level": "info",
-      "msg": "location: Dwarven Mine; bank (3013, 3355, 0)"
+      "msg": "location: Rimmington Mine; bank (3013, 3355, 0)"
     },
     {
-      "time": 1790086776100,
+      "time": 1790095995709,
       "level": "info",
-      "msg": "location: Bank=false (power) — eat food for ore slots; nearest-bank restock when empty"
+      "msg": "location: Bank=false (power) — drop haul; bank only to fetch missing tools (nearest bank)"
     },
     {
-      "time": 1790086776100,
+      "time": 1790095995709,
       "level": "info",
-      "msg": "gather: 'Rocks' (Mine) leash 64 @ (3021, 9800, 0); eating Lobster for ore slots, then banking to restock"
+      "msg": "gather: 'Rocks' (Mine) leash 64 @ (2978, 3247, 0); Bank=false: batch dropping clay when full"
     },
     {
-      "time": 1790086778950,
+      "time": 1790095999013,
       "level": "info",
       "msg": "drop: haul cleared"
     },
     {
-      "time": 1790086779536,
+      "time": 1790095999607,
       "level": "info",
       "msg": "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
     },
     {
-      "time": 1790086779632,
+      "time": 1790095999704,
       "level": "info",
-      "msg": "  path: cost 69, 40 waypoints, expanded 1926, worker 3.2ms, hops=0"
+      "msg": "  path: cost 8, 3 waypoints, expanded 146, worker 1.0ms, hops=0"
     },
     {
-      "time": 1790086802330,
+      "time": 1790096003194,
       "level": "info",
-      "msg": "  arrived (5 clicks)"
+      "msg": "  arrived (2 clicks)"
     }
   ],
   "errors": []

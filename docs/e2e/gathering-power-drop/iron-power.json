@@ -1,7 +1,7 @@
 {
   "scenario": {
     "name": "iron-power",
-    "script": "JivePower",
+    "script": "Miner",
     "ore": "Iron",
     "item": "Iron ore",
     "debug": "iron_ore",
@@ -410,141 +410,141 @@
           "comId": 3214
         }
       ],
-      "startedAt": 15142.900000035763,
+      "startedAt": 16334.300000011921,
       "startedTick": 17,
       "requests": [
         {
-          "at": 15143,
+          "at": 16334.399999976158,
           "slot": 1,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 2,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 3,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 4,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 5,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 6,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 7,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 8,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 9,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 10,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 11,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 12,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 13,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 14,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 15,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 16,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 17,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 18,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 19,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 20,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 21,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 22,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 23,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 24,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 25,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 26,
           "id": 440
         },
         {
-          "at": 15143,
+          "at": 16334.5,
           "slot": 27,
           "id": 440
         }
@@ -565,7 +565,7 @@
           "comId": 3214
         }
       ],
-      "elapsedMs": 3267.7999999523163,
+      "elapsedMs": 3230,
       "elapsedTicks": 6,
       "xpAfter": 13034431
     },
@@ -964,141 +964,141 @@
           "comId": 3214
         }
       ],
-      "startedAt": 125180.60000002384,
-      "startedTick": 201,
+      "startedAt": 125214,
+      "startedTick": 199,
       "requests": [
         {
-          "at": 125180.69999998808,
+          "at": 125214,
           "slot": 1,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 2,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 3,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 4,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 5,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 6,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 7,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 8,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 9,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 10,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 11,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 12,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 13,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 14,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 15,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 16,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 17,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 18,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 19,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 20,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 21,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 22,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 23,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 24,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 25,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 26,
           "id": 440
         },
         {
-          "at": 125180.69999998808,
+          "at": 125214.09999996424,
           "slot": 27,
           "id": 440
         }
@@ -1119,7 +1119,7 @@
           "comId": 3214
         }
       ],
-      "elapsedMs": 3621.399999976158,
+      "elapsedMs": 3627.800000011921,
       "elapsedTicks": 6,
       "xpAfter": 13035376
     }
@@ -1191,97 +1191,67 @@
   "state": "running",
   "logs": [
     {
-      "time": 1790086616052,
+      "time": 1790095864217,
       "level": "info",
-      "msg": "JivePower started"
+      "msg": "Miner started"
     },
     {
-      "time": 1790086616066,
+      "time": 1790095864267,
       "level": "info",
       "msg": "rocks: Iron → 2 loc id(s)"
     },
     {
-      "time": 1790086616069,
+      "time": 1790095864269,
       "level": "info",
       "msg": "combat: Auto Retaliate off (gather — flee, do not fight)"
     },
     {
-      "time": 1790086616069,
+      "time": 1790095864269,
       "level": "info",
       "msg": "location: Southeast Varrock Mine; bank (3253, 3420, 0)"
     },
     {
-      "time": 1790086616069,
+      "time": 1790095864269,
       "level": "info",
       "msg": "location: Bank=false (power) — drop haul; bank only to fetch missing tools (nearest bank)"
     },
     {
-      "time": 1790086616069,
+      "time": 1790095864269,
       "level": "info",
-      "msg": "gather: 'Rocks' (Mine) leash 64 @ (3285, 3366, 0); Bank=false: dropping iron when full"
+      "msg": "gather: 'Rocks' (Mine) leash 64 @ (3285, 3366, 0); Bank=false: batch dropping iron when full"
     },
     {
-      "time": 1790086619356,
+      "time": 1790095867517,
       "level": "info",
       "msg": "drop: haul cleared"
     },
     {
-      "time": 1790086650541,
+      "time": 1790095898711,
       "level": "info",
       "msg": "gather: no 'Rocks' (Mine) rocks within leash 64 of (3285, 3366, 0)"
     },
     {
-      "time": 1790086666726,
+      "time": 1790095914936,
       "level": "info",
       "msg": "gather: no 'Rocks' (Mine) rocks within leash 64 of (3285, 3366, 0)"
     },
     {
-      "time": 1790086682927,
+      "time": 1790095931148,
       "level": "info",
       "msg": "gather: no 'Rocks' (Mine) rocks within leash 64 of (3285, 3366, 0)"
     },
     {
-      "time": 1790086699131,
+      "time": 1790095947345,
       "level": "info",
       "msg": "gather: no 'Rocks' (Mine) rocks within leash 64 of (3285, 3366, 0)"
     },
     {
-      "time": 1790086705731,
-      "level": "info",
-      "msg": "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
-    },
-    {
-      "time": 1790086705832,
-      "level": "info",
-      "msg": "  path: cost 2, 3 waypoints, expanded 13, worker 0.7ms, hops=0"
-    },
-    {
-      "time": 1790086706929,
-      "level": "info",
-      "msg": "  arrived (1 clicks)"
-    },
-    {
-      "time": 1790086718946,
+      "time": 1790095963571,
       "level": "info",
       "msg": "gather: no 'Rocks' (Mine) rocks within leash 64 of (3285, 3366, 0)"
     },
     {
-      "time": 1790086721330,
-      "level": "info",
-      "msg": "  nav tele=false policy={\"useTeleports\":false,\"distanceBeforeTeleport\":0}"
-    },
-    {
-      "time": 1790086721367,
-      "level": "info",
-      "msg": "  path: cost 4, 5 waypoints, expanded 31, worker 0.1ms, hops=0"
-    },
-    {
-      "time": 1790086723742,
-      "level": "info",
-      "msg": "  arrived (2 clicks)"
-    },
-    {
-      "time": 1790086729745,
+      "time": 1790095976795,
       "level": "info",
       "msg": "drop: haul cleared"
     }
