@@ -1,7 +1,6 @@
 import { AGILITY_SETTINGS } from './AgilityBot/AgilityBot.js';
 import { FISHING_LOCATION_OPTIONS } from '../data/fishingLocations.js';
 import { FISHING_METHOD_OPTIONS } from '../data/fishingMethods.js';
-import { MINING_LOCATION_OPTION_LABELS, MINING_LOCATION_OPTIONS } from '../data/miningLocations.js';
 import {
     AFTER_COOK_OPTIONS,
     BURNT_POLICY_OPTIONS,
@@ -10,12 +9,11 @@ import {
 } from './GatheringBot/FishCookLogic.js';
 import {
     FISH_TICK_MANIP_OPTIONS,
-    MINE_TICK_MANIP_OPTIONS,
     TICK_MANIP_UNSHIPPED_HELP,
     tickManipUiOptions
 } from './GatheringBot/TickManipLogic.js';
-import { ROCK_OPTIONS } from '../data/miningRocks.js';
-import { MINER_FOOD_SETTINGS } from './GatheringBot/MinerLogic.js';
+import { MINER_SETTINGS } from './GatheringBot/MinerSettings.js';
+import JivePower, { JIVEPOWER_SETTINGS } from './GatheringBot/JivePower.js';
 import EdgevilleMonkeyBars, { EDGEVILLE_MONKEYBARS_SETTINGS } from './EdgevilleMonkeyBars/EdgevilleMonkeyBars.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import AgilityBot from './AgilityBot/AgilityBot.js';
@@ -358,49 +356,17 @@ ScriptRegistry.register({
         'Mines the selected rock types, then banks the ore at the nearest bank or drops it (power-mining). Optional trip food is eaten when its full heal fits or to turn food slots into more ore slots. Needs a pickaxe (best available is restocked from the bank when Full inventory is Auto). Optional Buy/repair acquires picks from Nurmof (and repairs broken picks).',
     category: 'Mining',
     tags: ['gathering', 'banking', 'drop'],
-    settingsSchema: {
-        rocks: {
-            type: 'string[]',
-            default: ['Iron'],
-            options: ROCK_OPTIONS,
-            label: 'Rock types',
-            help:
-                'Which rocks to mine — every rock is named "Rocks" in-game, so pick the ore types here (multi-select). Empty = mine any rock.'
-        },
-        leashRadius: GATHERING_SETTINGS.leashRadius,
-        location: {
-            type: 'string',
-            default: 'Auto',
-            options: MINING_LOCATION_OPTIONS,
-            optionLabels: MINING_LOCATION_OPTION_LABELS,
-            label: 'Location / full inventory',
-            help:
-                'Mine camp + full-pack behaviour. Auto = snap to a camp in your map square, otherwise stay at your start tile. Use Closest = nearest camp by distance. Use Start Position = freeform around your start tile + nearest bank. Use Custom Position = freeform around the custom tile. Named camps pin spot + bank. Camps with aggressive NPCs show a recommended combat level (2× highest aggro + 1). Power-mine via Bank=false (drop ore; configured food still restocks from the nearest bank). Legacy None also power-mines.'
-        },
-        customLocation: GATHERING_SETTINGS.customLocation,
-        bank: GATHERING_SETTINGS.bank,
-        bankLocation: GATHERING_SETTINGS.bankLocation,
-        ...MINER_FOOD_SETTINGS,
-        tickManip: {
-            type: 'string',
-            default: 'Off',
-            options: tickManipUiOptions(MINE_TICK_MANIP_OPTIONS),
-            label: 'Tick manip',
-            group: 'Tick manip',
-            help: TICK_MANIP_UNSHIPPED_HELP
-        },
-        muleMode: GATHERING_SETTINGS.muleMode,
-        mulePartner: GATHERING_SETTINGS.mulePartner,
-        toolAcquire: TOOL_ACQUIRE_SETTING,
-        forgetfulBank: FORGETFUL_BANK_SETTING,
-        // Required for harness / live control of start purge (default true).
-        purgePackOnStart: GATHERING_SETTINGS.purgePackOnStart,
-        packJunk: GATHERING_SETTINGS.packJunk,
-        withdrawCoins: GATHERING_SETTINGS.withdrawCoins,
-        bankTeleport: GATHERING_SETTINGS.bankTeleport,
-        teleCasts: GATHERING_SETTINGS.teleCasts
-    },
+    settingsSchema: MINER_SETTINGS,
     create: () => new GatheringBot()
+});
+
+ScriptRegistry.register({
+    name: 'JivePower',
+    description: 'Power-mines selected ores at any Miner location. Drops the whole haul in a burst, then resumes mining. Keeps pickaxes, food and supplies.',
+    category: 'Mining',
+    tags: ['gathering', 'drop', 'power-mining'],
+    settingsSchema: JIVEPOWER_SETTINGS,
+    create: () => new JivePower()
 });
 
 ScriptRegistry.register({

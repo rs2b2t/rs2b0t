@@ -1759,7 +1759,7 @@ export default class GatheringBot extends TaskBot {
         return this.anchor;
     }
 
-    private paintKind(): string {
+    protected paintKind(): string {
         if (this.fishing) {
             return 'Fisher';
         }
@@ -2463,6 +2463,14 @@ export default class GatheringBot extends TaskBot {
         return this.minerFood !== null;
     }
 
+    protected keepMinerFood(): boolean {
+        return this.desertCampRoute !== null;
+    }
+
+    fullHaulNeedsBank(): boolean {
+        return Inventory.isFull() && this.hasDepositable();
+    }
+
     minerFoodCount(): number {
         return this.minerFood ? countFood(Inventory.items(), this.minerFood.name) : 0;
     }
@@ -2486,7 +2494,7 @@ export default class GatheringBot extends TaskBot {
             heal: foodHealAmount(config.name),
             foodCount: this.minerFoodCount(),
             inventoryFull: Inventory.isFull(),
-            retainForTravel: this.desertCampRoute !== null,
+            retainForTravel: this.keepMinerFood(),
             hazardMaxHit: this.desertCampRoute ? 9 : undefined
         });
     }
@@ -2495,7 +2503,7 @@ export default class GatheringBot extends TaskBot {
         if (!foodName || Bank.isOpen()) {
             return false;
         }
-        if (this.desertCampRoute && Inventory.isFull() && this.hasDepositable()) {
+        if (this.desertCampRoute && this.fullHaulNeedsBank()) {
             this.desertCampBankTrip = true;
         }
         const food = Inventory.items().find(i => isFoodItem(i.name, foodName));
@@ -2510,7 +2518,7 @@ export default class GatheringBot extends TaskBot {
             id: food.id,
             name: food.name
         };
-        const reason = Inventory.isFull() && !this.desertCampRoute ? 'ore room' : 'full heal';
+        const reason = Inventory.isFull() && !this.keepMinerFood() ? 'ore room' : 'full heal';
         this.setStatus(`food: eating ${food.name} (${reason})`);
         this.log(
             `food: eat ${food.name} (${reason}; hp ${before.hp}/${Skills.level('hitpoints')}, pack ${before.used}/28)`
@@ -2753,7 +2761,7 @@ export default class GatheringBot extends TaskBot {
     }
 
     private desertCampDirection(): DesertCampRouteDirection {
-        const needsBank = (Inventory.isFull() && this.hasDepositable())
+        const needsBank = this.fullHaulNeedsBank()
             || this.minerFoodRestockNeeded()
             || (this.desertCampRoute !== null && desertCampFoodReserveDepleted(this.minerFoodCount()))
             || this.desertCampStartupBankPending
@@ -2788,7 +2796,7 @@ export default class GatheringBot extends TaskBot {
     }
 
     desertCampBankCatchNeeded(): boolean {
-        return shouldRunDesertCampBankCatch(this.desertCampBankTrip, this.desertCampStartupBankPending, this.minerFoodRestockNeeded(), Inventory.isFull() && this.hasDepositable());
+        return shouldRunDesertCampBankCatch(this.desertCampBankTrip, this.desertCampStartupBankPending, this.minerFoodRestockNeeded(), this.fullHaulNeedsBank());
     }
 
     completeDesertCampBankTrip(): void {
@@ -3424,6 +3432,40 @@ export default class GatheringBot extends TaskBot {
     }
     productLabel(): string {
         return this.productKeywords.join('/');
+    }
+
+    async dropProducts(): Promise<void> {
+        this.setStatus('dropping');
+        // Tannerfishing keeps cooked catch as food, products() is raw-only for Fisher.
+        for (let guard = 0; guard < 30; guard++) {
+            const item = this.products()[0];
+            if (!item) {
+                break;
+            }
+            // Knife-delay: never drop the last fletchable delay log.
+            if (
+                this.tickManipProfile().useKnifeDelay &&
+                isFletchableLogName(item.name)
+            ) {
+                const logs = Inventory.items().filter(i => isFletchableLogName(i.name));
+                const total = logs.reduce((s, i) => s + Math.max(1, i.count), 0);
+                if (total <= 1) {
+                    // Only the delay log left among products, stop.
+                    const other = this.products().find(i => !isFletchableLogName(i.name));
+                    if (!other) {
+                        break;
+                    }
+                    const beforeOther = Inventory.used();
+                    await other.interact('Drop');
+                    await Execution.delayUntilTicks(() => Inventory.used() < beforeOther, 5);
+                    continue;
+                }
+            }
+            const before = Inventory.used();
+            await item.interact('Drop');
+            await Execution.delayUntilTicks(() => Inventory.used() < before, 5);
+        }
+        this.log('drop: haul cleared');
     }
 
     products() {

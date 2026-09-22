@@ -875,46 +875,12 @@ export class DropProduct implements Task {
         ) {
             await dropFletchByproducts(this.bot);
         }
-        await dropAll(this.bot);
+        await this.bot.dropProducts();
         // Tannerfishing: if still full of cooked food, trim to a small buffer.
         if (this.bot.tickManipProfile().cookEatInterleave && Inventory.isFull()) {
             await dropExcessCooked(this.bot, 3);
         }
     }
-}
-
-async function dropAll(bot: GatheringBot): Promise<void> {
-    bot.setStatus('dropping');
-    // Tannerfishing keeps cooked catch as food, products() is raw-only for Fisher.
-    for (let guard = 0; guard < 30; guard++) {
-        const item = bot.products()[0];
-        if (!item) {
-            break;
-        }
-        // Knife-delay: never drop the last fletchable delay log.
-        if (
-            bot.tickManipProfile().useKnifeDelay &&
-            isFletchableLogName(item.name)
-        ) {
-            const logs = Inventory.items().filter(i => isFletchableLogName(i.name));
-            const total = logs.reduce((s, i) => s + Math.max(1, i.count), 0);
-            if (total <= 1) {
-                // Only the delay log left among products, stop.
-                const other = bot.products().find(i => !isFletchableLogName(i.name));
-                if (!other) {
-                    break;
-                }
-                const beforeOther = Inventory.used();
-                await other.interact('Drop');
-                await Execution.delayUntilTicks(() => Inventory.used() < beforeOther, 5);
-                continue;
-            }
-        }
-        const before = Inventory.used();
-        await item.interact('Drop');
-        await Execution.delayUntilTicks(() => Inventory.used() < before, 5);
-    }
-    bot.log('drop: haul cleared');
 }
 
 /** Drop cooked fish above `keep` (Tannerfishing food buffer). */
@@ -987,7 +953,7 @@ export class BankCatch implements Task {
         if (this.bot.minerFoodRestockNeeded()) {
             return true;
         }
-        return Inventory.isFull() && this.bot.hasDepositable();
+        return this.bot.fullHaulNeedsBank();
     }
 
     async execute(): Promise<void> {
@@ -1033,7 +999,7 @@ export class BankCatch implements Task {
             if (!banked) {
                 this.bot.setStatus('bank: unreachable — dropping');
                 this.bot.log('bank: unreachable — dropping');
-                await dropAll(this.bot);
+                await this.bot.dropProducts();
                 return;
             }
         } else {

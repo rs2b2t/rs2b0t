@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 71. Categories: 20.
+- Scripts: 72. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -20,7 +20,7 @@
 - [Fletching](#fletching) — 2
 - [Herblore](#herblore) — 5
 - [Magic](#magic) — 3
-- [Mining](#mining) — 3
+- [Mining](#mining) — 4
 - [Money making](#money-making) — 7
 - [Navigation](#navigation) — 2
 - [Prayer](#prayer) — 1
@@ -857,6 +857,22 @@ Rune essence loop — Aubury teleport, one-click mine to a full pack, portal bac
 |---|---|---|---|
 | `pickaxe` | string | `"Best available"` | Pickaxe — one of: Best available, Rune, Adamant, Mithril, Steel, Iron, Bronze |
 | `purgePackOnStart` | boolean | `true` | Bank junk on start |
+
+### JivePower
+
+Power-mines selected ores at any Miner location. Drops the whole haul in a burst, then resumes mining. Keeps pickaxes, food and supplies.
+
+- Tags: `gathering`, `drop`, `power-mining`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `rocks` | string[] | `["Iron"]` | Rock types — one of: Clay, Copper, Tin, Iron, Silver, Coal, Gold, Mithril, Adamantite, Runite |
+| `location` | string | `"Auto"` | Mining location — one of: Auto, Use Closest, Use Start Position, Use Custom Position, None, Al Kharid Mine (29 Combat recommended), Barbarian Village, Coal Trucks (55 Combat recommended), Crafting Guild, Desert Mining Camp (91 Combat recommended), Desert Mining Camp Surface (91 Combat recommended), Dwarven Mine (65 Combat recommended), Edgeville Dungeon Mine (85 Combat recommended), Fight Arena Mine, Grand Tree Mine, Heroes Guild, Lava Maze Runite Mine (69 Combat recommended), Legends Guild Iron (east), Legends Guild Iron (west), Mining Guild, North Brimhaven Mine, Rimmington Mine, Shilo Village, South-east Ardougne Mine, Southeast Varrock Mine, Southwest Varrock Mine, West Lumbridge Swamp Mine, Wilderness Hobgoblin Mine (57 Combat recommended), Wilderness Skeleton Mine (45 Combat recommended) |
+| `customLocation` | tile | `{"x":3200,"z":3200,"level":0}` | Custom position (x,z) |
+| `leashRadius` | number (2–64) | `10` | Leash radius (tiles) |
+| `food` | string | `"Lobster"` | Food — one of: Shark, Lobster, Swordfish, Tuna, Salmon, Trout, Pike, Bass, Herring, Sardine, Anchovies, Shrimps, Cooked meat, Cooked chicken, Bread, Stew, Cake, Chocolate cake, Plain pizza, Meat pizza, Anchovy pizza, Pineapple pizza, Redberry pie, Meat pie, Apple pie |
+| `foodWithdraw` | number (0–27) | `0` | Food to withdraw |
+| `toolAcquire` | string | `"Off"` | Acquire tools — one of: Off, Buy / repair |
 
 ### Miner
 
