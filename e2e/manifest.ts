@@ -6,8 +6,8 @@ export const CASES: readonly Case[] = [
         id: 'desktop-instances',
         harness: 'desktop-instances-test.ts',
         covers: { subsystems: ['multibox'] },
-        status: 'documented',
-        documentedIn: 'docs/how-to/run-the-live-wall.md',
+        status: 'vetted',
+        provenAt: '1fb37543609b7a1ab82f62b725c2f92a75d828f9',
         manual: true,
         budgetMin: 3,
         note: 'Two live launcher builds and real Electron windows share saved accounts/settings across separate ports. Checks migration, concurrent vault edits, iframe storage, persistence and independent shutdown. Requires desktop dependencies and a display; no game login.'

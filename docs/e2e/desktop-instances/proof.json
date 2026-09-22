@@ -1,0 +1,47 @@
+{
+  "passed": true,
+  "build": {
+    "commit": "1fb37543609b7a1ab82f62b725c2f92a75d828f9",
+    "short": "1fb3754",
+    "dirty": false,
+    "builtAt": "2026-09-22T15:19:35.147Z",
+    "label": "1fb3754"
+  },
+  "verifiedAt": "2026-09-22T15:19:38.995Z",
+  "ports": [
+    8082,
+    8083
+  ],
+  "builds": [
+    "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T//rs2b0t.o50saK",
+    "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T//rs2b0t.DSGKAw"
+  ],
+  "electronPids": [
+    83714,
+    83731
+  ],
+  "sharedSavedData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t-desktop-e2e-pXOkYG/shared/Shared Storage/storage.json",
+  "browserCaches": [
+    {
+      "userData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t.o50saK/electron/rs2b0t-session-rGTfVt",
+      "sessionData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t.o50saK/electron/rs2b0t-session-rGTfVt"
+    },
+    {
+      "userData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t.DSGKAw/electron/rs2b0t-session-fJmK8k",
+      "sessionData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t.DSGKAw/electron/rs2b0t-session-fJmK8k"
+    }
+  ],
+  "checks": [
+    "separate ports and build directories",
+    "shared bundle unchanged",
+    "legacy accounts and settings migrate automatically",
+    "one shared account/settings store",
+    "concurrent account additions survive in both windows",
+    "bot iframe reads shared settings without exposing Node",
+    "settings shared across ports",
+    "saved settings persist after restart",
+    "closing second instance leaves first serving its original bundle",
+    "reload reads the shared saved settings",
+    "private builds and browser caches removed on shutdown"
+  ]
+}
