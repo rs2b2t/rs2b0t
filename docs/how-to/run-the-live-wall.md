@@ -99,6 +99,9 @@ To verify multiple instances with real Electron windows and temporary test data:
 bun e2e/desktop-instances-test.ts
 ```
 
+The [recorded proof](../e2e/desktop-instances/README.md) includes screenshots from
+both instances, launcher output, and the shared-account checks.
+
 ## See also
 
 - [Build targets](../reference/build-targets.md)
