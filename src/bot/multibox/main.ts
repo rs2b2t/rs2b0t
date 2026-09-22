@@ -310,7 +310,7 @@ function boot(): void {
     }
 
     async function changeSlotWorld(id: number, world: WorldNumber): Promise<boolean> {
-        if (!worldRouting || (world !== 1 && world !== 2 && world !== 3)) return false;
+        if (!worldRouting || (world !== 1 && world !== 2)) return false;
         const slot = controller.snapshot().find(candidate => candidate.id === id);
         if (!slot || !(await ensureUnlocked())) return false;
         const profile = vault.list().find(candidate => normalizeUsername(candidate.username) === normalizeUsername(slot.username));

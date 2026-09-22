@@ -78,7 +78,7 @@ path.unlink(missing_ok=True)
         return result, (self.root / 'events').read_text()
 
     def test_mismatched_world_keys_fail_before_build_and_release_the_checkout_lock(self):
-        for world in (2, 3):
+        for world in (2,):
             with self.subTest(world=world):
                 result, events = self.run_failure(f'keys{world}')
                 self.assertNotEqual(result.returncode, 0)
@@ -105,8 +105,14 @@ path.unlink(missing_ok=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn('build:bot', events)
 
+    def test_retired_world_rejected_before_build(self):
+        result, events = self.run_failure('keys2', {'RS2B2T_WS': 'wss://w3.rs2b2t.com'})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('RS2B2T_WS', result.stderr)
+        self.assertEqual(events, '')
+
     def test_one_proxy_build_and_viewer_are_owned_and_cleaned_up(self):
-        child = subprocess.Popen(['sh', 'tools/b0t.sh'], cwd=self.root, env=self.env | {'B0T_VIEWER': 'electron', 'RS2B2T_WS': 'wss://w3.rs2b2t.com:443/'}, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        child = subprocess.Popen(['sh', 'tools/b0t.sh'], cwd=self.root, env=self.env | {'B0T_VIEWER': 'electron', 'RS2B2T_WS': 'wss://w2.rs2b2t.com:443/'}, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         self.addCleanup(lambda: child.poll() is not None or child.kill())
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline and not (self.root / 'viewer.pid').exists():
@@ -120,7 +126,8 @@ path.unlink(missing_ok=True)
         self.assertEqual(events.count('bun proxy run build:bot'), 1)
         self.assertEqual(events.count('tools/live-proxy.ts'), 1)
         self.assertEqual(events.count('viewer started'), 1)
-        self.assertIn('--server=http://localhost:18081/multibox.html?world=3', events)
+        self.assertNotIn('w3.rs2b2t.com', events)
+        self.assertIn('--server=http://localhost:18081/multibox.html?world=2', events)
         self.assertFalse((self.root / 'proxy.pid').exists())
         self.assertFalse((self.root / 'viewer.pid').exists())
         self.assertFalse((self.root / '.b0t-launch.lock').exists())

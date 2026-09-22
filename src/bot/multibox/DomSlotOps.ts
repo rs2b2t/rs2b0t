@@ -97,7 +97,7 @@ class DomSlotHandle implements SlotHandle {
         const select = document.createElement('select');
         select.className = 'mbx-world-select';
         select.setAttribute('aria-label', `World for ${account.username}`);
-        for (const world of [1, 2, 3]) {
+        for (const world of [1, 2]) {
             const option = document.createElement('option');
             option.value = String(world);
             option.textContent = `World ${world}`;
@@ -230,7 +230,7 @@ class DomSlotHandle implements SlotHandle {
             return { ready: false, ingame: false, world: null, player: null, loopCycle: 0, drawn: 0, scriptState: 'idle', scriptName: null };
         }
         const ingame = l.reader.ingame();
-        const world = ingame && (l.world === 1 || l.world === 2 || l.world === 3) ? l.world : null;
+        const world = ingame && (l.world === 1 || l.world === 2) ? l.world : null;
         return { ready: true, ingame, world, player: l.reader.localPlayerName(), loopCycle: l.client.constructor.loopCycle, drawn: l.renderGate.drawn, scriptState: l.runner.state, scriptName: l.runner.meta?.name ?? null };
     }
 

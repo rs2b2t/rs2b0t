@@ -137,14 +137,14 @@ test('wall wiring preserves pending slots and retries persistence after a succes
 
             Reflect.set(replacement.contentWindow!, 'rs2b0t', runtime(2));
             await new Promise(resolve => setTimeout(resolve, 75));
-            expect(await wall.setWorld(alice.id, 3)).toBe(true);
-            const world3Frame = document.querySelector('iframe')!;
-            expect(new URL(world3Frame.src).searchParams.get('world')).toBe('3');
-            expect(new URL(world3Frame.src).searchParams.get('nodeid')).toBe('12');
-            expect(wall.slots()[0]).toMatchObject({ world: null, targetWorld: 3, switchingWorld: null });
-            expect(document.querySelector<HTMLSelectElement>('.mbx-world-select')!.value).toBe('3');
+            expect(await wall.setWorld(alice.id, 1)).toBe(true);
+            const world1Frame = document.querySelector('iframe')!;
+            expect(new URL(world1Frame.src).searchParams.get('world')).toBe('1');
+            expect(new URL(world1Frame.src).searchParams.get('nodeid')).toBe('10');
+            expect(wall.slots()[0]).toMatchObject({ world: null, targetWorld: 1, switchingWorld: null });
+            expect(document.querySelector<HTMLSelectElement>('.mbx-world-select')!.value).toBe('1');
             expect(document.querySelectorAll('iframe')[1]).toBe(bobFrame);
-            expect(vault.list().map(profile => profile.world)).toEqual([3, 2]);
+            expect(vault.list().map(profile => profile.world)).toEqual([1, 2]);
         } finally {
             save?.mockRestore();
         }

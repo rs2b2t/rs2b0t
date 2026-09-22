@@ -13,11 +13,14 @@ B0T_VIEWER=firefox bun run b0t      # dedicated Firefox profile
 B0T_VIEWER=none bun run b0t         # proxy only; CPU/RAM unavailable
 ```
 
-One wall can run accounts on all three live worlds. Start it with `bun run b0t`, open
-**Add bot**, and choose **World 1**, **World 2** or **World 3** beside each saved profile or in
+One wall can run accounts on both live worlds. Start it with `bun run b0t`, open
+**Add bot**, and choose **World 1** or **World 2** beside each saved profile or in
 the new-profile form. **load all profiles** uses those saved choices. Existing
 profiles keep the wall's default world until you assign one. Scripts, settings,
 tabs and profile order stay attached to the account.
+
+Saved World 3 profiles now use World 2 when you unlock the vault or import a
+profile file. Credentials, tabs and script settings are preserved.
 
 Each rail tile shows its script name, with a state label when paused, stopped or
 crashed. The bot panel's status shows the connected world, or the target while
@@ -27,7 +30,7 @@ then click **Retry**. Only that bot reloads; the other bots keep running. Resume
 login and scripts when ready. **Cancel** keeps the original world and leaves
 scripts and auto-login stopped.
 
-The launcher builds one local client and starts one proxy for all three worlds. No
+The launcher builds one local client and starts one proxy for both worlds. No
 second Electron window or launcher is needed. Profile export/import preserves
 world choices. Importing over an already-loaded profile changes its saved choice;
 it does not interrupt that profile's current session.

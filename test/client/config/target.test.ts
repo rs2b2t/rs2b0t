@@ -30,11 +30,11 @@ test('World 2 prod sockets use World 2 independently of the build machine', () =
 
 test('explicit live/proxy/prod frames route game and cache sockets through their world prefix', () => {
     for (const name of ['live', 'proxy', 'prod']) {
-        for (const world of [1, 2, 3] as const) {
+        for (const world of [1, 2] as const) {
             const target = resolveTarget(name, 'localhost:8081', false, new URLSearchParams(`world=${world}`));
             expect(target).toEqual({ wsHost: `localhost:8081/__rs2b0t/world/${world}`, tls: false, world, httpPrefix: `/__rs2b0t/world/${world}` });
         }
-        expect(() => resolveTarget(name, 'localhost:8081', false, new URLSearchParams('world=4'))).toThrow();
+        expect(() => resolveTarget(name, 'localhost:8081', false, new URLSearchParams('world=3'))).toThrow();
     }
 });
 

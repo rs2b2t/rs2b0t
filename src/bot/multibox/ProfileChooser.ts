@@ -23,7 +23,7 @@ export class ProfileChooser {
     constructor(private onLoad: (p: Profile) => void, private options: ProfileChooserOptions = {}) {
         this.worldRouting = options.worldRouting ?? supportsWorldRouting();
         this.defaultWorld = options.defaultWorld ?? (this.worldRouting ? resolveWorldNumber(location.host, new URLSearchParams(location.search)) : 1);
-        if (this.defaultWorld !== 1 && this.defaultWorld !== 2 && this.defaultWorld !== 3) throw new Error('profile world must be 1, 2 or 3');
+        if (this.defaultWorld !== 1 && this.defaultWorld !== 2) throw new Error('profile world must be 1 or 2');
         this.el = document.createElement('div');
         this.el.className = 'mbx-chooser-overlay';
         this.el.hidden = true;
@@ -95,7 +95,7 @@ export class ProfileChooser {
     private worldSelect(world: WorldNumber, label: string): HTMLSelectElement {
         const select = document.createElement('select');
         select.setAttribute('aria-label', label);
-        for (const number of [1, 2, 3]) {
+        for (const number of [1, 2]) {
             const option = document.createElement('option');
             option.value = String(number);
             option.textContent = `World ${number}`;
@@ -106,7 +106,7 @@ export class ProfileChooser {
     }
 
     private selectedWorld(select: HTMLSelectElement): WorldNumber {
-        if (select.value !== '1' && select.value !== '2' && select.value !== '3') throw new Error('profile world must be 1, 2 or 3');
+        if (select.value !== '1' && select.value !== '2') throw new Error('profile world must be 1 or 2');
         return Number(select.value) as WorldNumber;
     }
 

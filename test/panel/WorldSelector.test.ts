@@ -14,14 +14,15 @@ test('world switch waits for clean logout and keeps the whole wall in wall mode'
     });
     expect(root.textContent).toContain('World 1');
     const select = root.querySelector('select')!;
-    select.value = '3';
+    expect(Array.from(select.options).map(option => option.value)).toEqual(['1', '2']);
+    select.value = '2';
     root.querySelector('button')!.click();
     expect(navigations).toEqual([]);
     expect(preparations).toBe(1);
     expect(root.textContent).toContain('Log out');
     ready = true;
     root.querySelector('button')!.click();
-    expect(navigations).toEqual(['https://w3.rs2b2t.com/rs2b0t/wall?lowmem=0']);
+    expect(navigations).toEqual(['https://w2.rs2b2t.com/rs2b0t/wall?lowmem=0']);
 });
 
 test('a single client selector stays in single mode and never navigates to an unlisted world', () => {
