@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
     LOCAL_MINE_PREFER_RADIUS,
+    pickBucketNearest,
     pickNearestPreferLocal,
     shouldCooldownGatherTile
 } from '#/bot/scripts/GatheringBot/TargetPick.js';
@@ -25,6 +26,28 @@ describe('pickNearestPreferLocal', () => {
 
     test('empty candidates → null', () => {
         expect(pickNearestPreferLocal([], () => 0)).toBe(null);
+    });
+});
+
+describe('pickBucketNearest', () => {
+    const rock = (id: string, bucket: number, dist: number) => ({ id, bucket, dist });
+
+    test('the best bucket wins even when farther away', () => {
+        const coal = rock('coal', 6, 40);
+        const iron = rock('iron', 3, 2);
+        expect(pickBucketNearest([iron, coal], r => r.bucket, r => r.dist)?.id).toBe('coal');
+    });
+
+    test('within the best bucket, the nearest wins and the local radius still applies', () => {
+        const local = rock('local', 6, 3);
+        const far = rock('far', 6, 30);
+        const lower = rock('lower', 1, 1);
+        expect(pickBucketNearest([lower, far, local], r => r.bucket, r => r.dist)?.id).toBe('local');
+        expect(pickBucketNearest([lower, far], r => r.bucket, r => r.dist)?.id).toBe('far');
+    });
+
+    test('empty candidates → null', () => {
+        expect(pickBucketNearest([], () => 0, () => 0)).toBe(null);
     });
 });
 
