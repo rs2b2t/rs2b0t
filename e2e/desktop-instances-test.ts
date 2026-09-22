@@ -163,6 +163,55 @@ try {
     await secondDesktop.page.evaluate(() => localStorage.setItem('rs2b0t:shared:set:Miner:ore', 'Iron'));
     await firstDesktop.page.waitForFunction(() => document.querySelector<HTMLIFrameElement>('#storage-proof-frame')?.contentWindow?.localStorage.getItem('rs2b0t:shared:set:Miner:ore') === 'Iron');
     assert.equal(await firstDesktop.page.locator('#storage-proof-frame').evaluate(element => typeof ((element as HTMLIFrameElement).contentWindow as unknown as { require?: unknown }).require), 'undefined');
+    await firstDesktop.page.waitForFunction(() => !!(document.querySelector<HTMLIFrameElement>('#storage-proof-frame')?.contentWindow as Window & { __rs2b0t?: unknown }).__rs2b0t);
+    await firstDesktop.app.evaluate(({ ipcMain }) => {
+        const counts: Record<string, number> = {};
+        Object.assign(globalThis, { storageCalls: counts });
+        ipcMain.on('rs2b0t-storage', (_: unknown, method: string) => { counts[method] = (counts[method] ?? 0) + 1; });
+    });
+    const performanceProof = await firstDesktop.page.locator('#storage-proof-frame').evaluate(async element => {
+        const win = (element as HTMLIFrameElement).contentWindow as Window & { __rs2b0t: { SettingsStore: typeof import('../src/bot/runtime/Settings.js').SettingsStore } };
+        const durations: number[] = [];
+        const started = performance.now();
+        for (let frame = 0; frame < 60; frame++) {
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            const start = performance.now();
+            for (let read = 0; read < 5; read++) win.__rs2b0t.SettingsStore.globalBag();
+            durations.push(performance.now() - start);
+        }
+        durations.sort((a, b) => a - b);
+        return { frames: durations.length, bagsPerFrame: 5, settingsPerBag: Object.keys(win.__rs2b0t.SettingsStore.globalBag().raw()).length, medianWorkMs: durations[30], p95WorkMs: durations[57], elapsedMs: performance.now() - started };
+    });
+    const storageCalls = await firstDesktop.app.evaluate(() => (globalThis as unknown as { storageCalls: Record<string, number> }).storageCalls);
+    const performanceResult = { build, verifiedAt: new Date().toISOString(), ...performanceProof, storageCalls };
+    writeFileSync(join(proofDir, 'settings-performance.json'), JSON.stringify(performanceResult, null, 2) + '\n');
+    console.log(JSON.stringify(performanceResult, null, 2));
+    assert.equal(storageCalls.getItem ?? 0, 0, 'path overlay settings reads block the renderer on synchronous IPC');
+    await secondDesktop.page.evaluate(() => localStorage.setItem('rs2b0t:set:Global:navPathColorPath', '#000000'));
+    await firstDesktop.page.waitForFunction(() => document.querySelector<HTMLIFrameElement>('#storage-proof-frame')?.contentWindow?.localStorage.getItem('rs2b0t:set:Global:navPathColorPath') === '#000000');
+    await firstDesktop.app.evaluate(({ ipcMain }) => {
+        const holdFileNotifications = (_: unknown, method: string, key: string) => {
+            if (method !== 'setItem' || key !== 'rs2b0t:set:Global:navPathColorPath') return;
+            ipcMain.removeListener('rs2b0t-storage', holdFileNotifications);
+            Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+        };
+        ipcMain.on('rs2b0t-storage', holdFileNotifications);
+    });
+    const store = require('../desktop/shared-storage.cjs').sharedStorage(join(profiles, 'shared', 'Shared Storage'));
+    const writeStarted = Date.now();
+    const localWrite = firstDesktop.page.locator('#storage-proof-frame').evaluate(element => {
+        const win = (element as HTMLIFrameElement).contentWindow!;
+        win.localStorage.setItem('rs2b0t:set:Global:navPathColorPath', '#111111');
+        return win.localStorage.getItem('rs2b0t:set:Global:navPathColorPath');
+    });
+    while (store.getItem('rs2b0t:set:Global:navPathColorPath') !== '#111111' && Date.now() - writeStarted < 900) await new Promise(resolve => setTimeout(resolve, 5));
+    assert.equal(store.getItem('rs2b0t:set:Global:navPathColorPath'), '#111111');
+    store.setItem('rs2b0t:set:Global:navPathColorPath', '#000000');
+    assert.ok(Date.now() - writeStarted < 900, 'external write must finish before the main event loop resumes');
+    assert.equal(await localWrite, '#111111', 'synchronous setting writes must update the local cache');
+    await firstDesktop.page.waitForFunction(() => document.querySelector<HTMLIFrameElement>('#storage-proof-frame')?.contentWindow?.localStorage.getItem('rs2b0t:set:Global:navPathColorPath') === '#000000');
+    await secondDesktop.page.evaluate(() => localStorage.removeItem('rs2b0t:set:Global:navPathColorPath'));
+    await firstDesktop.page.waitForFunction(() => document.querySelector<HTMLIFrameElement>('#storage-proof-frame')?.contentWindow?.localStorage.getItem('rs2b0t:set:Global:navPathColorPath') === null);
     assert.equal(await secondDesktop.page.evaluate(() => localStorage.getItem('rs2b0t:instance-proof')), 'first', 'saved settings were not shared across ports');
     await secondDesktop.page.evaluate(() => localStorage.setItem('rs2b0t:instance-proof', 'second'));
     await secondDesktop.page.goto(`http://localhost:${second.port}/multibox.html`);
@@ -192,6 +241,7 @@ try {
         electronPids: [firstDesktop.pid, secondDesktop.pid],
         sharedSavedData: join(profiles, 'shared', 'Shared Storage', 'storage.json'),
         browserCaches: [firstDesktop.paths, secondDesktop.paths],
+        settingsPerformance: performanceResult,
         checks: [
             'separate ports and build directories',
             'shared bundle unchanged',
@@ -199,6 +249,9 @@ try {
             'one shared account/settings store',
             'concurrent account additions survive in both windows',
             'bot iframe reads shared settings without exposing Node',
+            'path overlay settings workload performs zero synchronous IPC reads',
+            'settings cache observes a reverted write even when file notifications coalesce',
+            'setting removal propagates between instances',
             'settings shared across ports',
             'saved settings persist after restart',
             'closing second instance leaves first serving its original bundle',

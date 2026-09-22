@@ -61,28 +61,32 @@ function prepareStorage(app) {
                 }
             }
             const origin = new URL(serverUrl).origin;
-            const methods = new Set(['getItem', 'keys', 'setItem', 'removeItem', 'compareAndSet']);
+            let snapshot = { version: 0, data: store.snapshot() };
+            function refresh() {
+                const next = store.snapshot();
+                if ([...new Set([...Object.keys(snapshot.data), ...Object.keys(next)])].some(key => snapshot.data[key] !== next[key])) {
+                    snapshot = { version: snapshot.version + 1, data: next };
+                    for (const contents of webContents.getAllWebContents()) {
+                        for (const frame of contents.mainFrame.framesInSubtree) {
+                            if (frame.url && new URL(frame.url).origin === origin) frame.send('rs2b0t-storage-changed', snapshot);
+                        }
+                    }
+                }
+                return snapshot;
+            }
+            const methods = new Set(['snapshot', 'getItem', 'keys', 'setItem', 'removeItem', 'compareAndSet']);
             ipcMain.on('rs2b0t-storage', (event, method, ...args) => {
                 try {
                     if (new URL(event.senderFrame.url).origin !== origin || !methods.has(method)) throw new Error('Invalid storage request');
-                    event.returnValue = { value: store[method](...args) };
+                    const value = method === 'snapshot' ? undefined : store[method](...args);
+                    event.returnValue = { value, snapshot: method === 'getItem' || method === 'keys' ? undefined : refresh() };
                 } catch (error) {
                     event.returnValue = { error: error.message };
                 }
             });
-            let snapshot = store.snapshot();
             watcher = fs.watch(storeDir, (_, file) => {
                 if (String(file) !== 'storage.json') return;
-                const next = store.snapshot();
-                for (const key of new Set([...Object.keys(snapshot), ...Object.keys(next)])) {
-                    if (snapshot[key] === next[key]) continue;
-                    for (const contents of webContents.getAllWebContents()) {
-                        for (const frame of contents.mainFrame.framesInSubtree) {
-                            if (frame.url && new URL(frame.url).origin === origin) frame.send('rs2b0t-storage-changed', key, snapshot[key] ?? null, next[key] ?? null);
-                        }
-                    }
-                }
-                snapshot = next;
+                refresh();
             });
         }
     };
