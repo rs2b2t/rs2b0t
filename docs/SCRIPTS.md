@@ -860,7 +860,7 @@ Rune essence loop — Aubury teleport, one-click mine to a full pack, portal bac
 
 ### Miner
 
-Mines the selected rock types, then banks the ore at the nearest bank or drops it (power-mining). Optional trip food is eaten when its full heal fits or to turn food slots into more ore slots. Needs a pickaxe (best available is restocked from the bank when Full inventory is Auto). Optional Buy/repair acquires picks from Nurmof (and repairs broken picks).
+Mines the selected rock types, then banks the ore or drops the whole haul in a batch when Bank=false. Power mode keeps food for healing and restocks when it runs out. Needs a pickaxe (best available is restocked from the bank when Full inventory is Auto). Optional Buy/repair acquires picks from Nurmof (and repairs broken picks).
 
 - Tags: `gathering`, `banking`, `drop`
 

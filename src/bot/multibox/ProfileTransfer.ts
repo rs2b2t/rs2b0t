@@ -57,7 +57,7 @@ export function parseProfileFile(text: string): ProfileSnapshot {
         throw new Error('profile file tabs must be strings');
     }
     return {
-        profiles: requireProfiles(obj.profiles),
+        profiles: requireProfiles(obj.profiles, true),
         tabs: obj.tabs as string[],
         activeTab: obj.activeTab,
         storage: parseStorage(obj.storage)
@@ -156,7 +156,7 @@ function parseStorage(raw: unknown): BoxStorageMap {
     return out;
 }
 
-function requireProfiles(v: unknown[]): Profile[] {
+function requireProfiles(v: unknown[], migrateRetired = false): Profile[] {
     const out: Profile[] = [];
     for (const raw of v) {
         if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -168,10 +168,11 @@ function requireProfiles(v: unknown[]): Profile[] {
         }
         const entry: Profile = { username: p.username, password: p.password };
         if (p.world !== undefined) {
-            if (p.world !== 1 && p.world !== 2 && p.world !== 3) {
-                throw new Error(`invalid profile world on '${p.username}': expected 1, 2 or 3`);
+            const world = migrateRetired && p.world === 3 ? 2 : p.world;
+            if (world !== 1 && world !== 2) {
+                throw new Error(`invalid profile world on '${p.username}': expected 1 or 2`);
             }
-            entry.world = p.world;
+            entry.world = world;
         }
         if (typeof p.tab === 'string' && p.tab !== MAIN_TAB) {
             entry.tab = p.tab;

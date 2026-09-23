@@ -1,3 +1,4 @@
+import './panel/desktopStorage.js';
 import { TARGET, supportsWorldRouting } from '../client/config/target.js';
 import { resolveNodeId, hostedWorld } from '../client/config/worlds.js';
 import { worldSelector } from './panel/WorldSelector.js';
@@ -121,7 +122,7 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
     (globalThis as Record<string, unknown>).rs2b0t = {
         prepareWorldSwitch, cancelWorldSwitch, world,
         client, host: BotHost, runner: ScriptRunner, registry: ScriptRegistry,
-        reader, actions, navigator: Navigator,
+        reader, actions, navigator: Navigator, runManager: RunManager,
         input: Input, scheduler: Scheduler,
         renderGate: RenderGate,
         build: BUILD_INFO,

@@ -7,7 +7,7 @@
 #   B0T_RESOURCE_PID=<pid>                monitor an already-dedicated external viewer
 #   B0T_CDP_PORT=9223                     Chrome DevTools/MCP attachment port
 #   B0T_PROFILE_DIR=<path>                managed browser profile override
-# General env: PORT (8081), RS2B2T_WS (wss://w1.rs2b2t.com).
+# General env: PORT (first free from 8081), RS2B2T_WS (wss://w1.rs2b2t.com).
 set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,20 +19,18 @@ case "$VIEWER" in
 esac
 
 [ "$#" -eq 0 ] || { echo 'ERROR: choose a world per profile in the wall; b0t takes no command-line options.' >&2; exit 1; }
+AUTO_PORT=1
+[ -z "${PORT:-}" ] || AUTO_PORT=0
 PORT="${PORT:-8081}"
 case "$PORT" in ''|*[!0-9]*) echo 'ERROR: PORT must be an integer from 1 to 65535.' >&2; exit 1 ;; esac
 [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ] || { echo 'ERROR: PORT must be an integer from 1 to 65535.' >&2; exit 1; }
 case "${RS2B2T_WS:-wss://w1.rs2b2t.com}" in
     wss://w1.rs2b2t.com|wss://w1.rs2b2t.com/|wss://w1.rs2b2t.com:443|wss://w1.rs2b2t.com:443/) DEFAULT_WORLD=1 ;;
     wss://w2.rs2b2t.com|wss://w2.rs2b2t.com/|wss://w2.rs2b2t.com:443|wss://w2.rs2b2t.com:443/) DEFAULT_WORLD=2 ;;
-    wss://w3.rs2b2t.com|wss://w3.rs2b2t.com/|wss://w3.rs2b2t.com:443|wss://w3.rs2b2t.com:443/) DEFAULT_WORLD=3 ;;
-    *) echo 'ERROR: RS2B2T_WS must be the official secure W1, W2 or W3 endpoint. Custom worlds are unsupported by the live wall.' >&2; exit 1 ;;
+    *) echo 'ERROR: RS2B2T_WS must be the official secure W1 or W2 endpoint. Custom worlds are unsupported by the live wall.' >&2; exit 1 ;;
 esac
 HOST="w$DEFAULT_WORLD.rs2b2t.com"
 
-LOCK_DIR="$ROOT/.b0t-launch.lock"
-LOCK_OWNER_FILE="$LOCK_DIR/owner.pid"
-LOCK_HELD=0
 RUN_DIR=''
 RESOURCE_PID_FILE=''
 VIEWER_PID=''
@@ -114,12 +112,7 @@ cleanup() {
         VIEWER_SCOPE_UNIT=''
     fi
 
-    [ -z "$RUN_DIR" ] || rmdir "$RUN_DIR" 2>/dev/null || true
-    if [ "$LOCK_HELD" = "1" ]; then
-        rm -f "$LOCK_OWNER_FILE"
-        rmdir "$LOCK_DIR" 2>/dev/null || true
-        LOCK_HELD=0
-    fi
+    [ -z "$RUN_DIR" ] || rm -rf -- "$RUN_DIR"
     exit "$CLEANUP_STATUS"
 }
 
@@ -194,59 +187,48 @@ trap 'exit 130' INT
 trap 'exit 131' QUIT
 trap 'exit 143' TERM
 
-# No curl -f: any HTTP response means the port is already serving something we must not rebuild over.
-if curl -s --max-time 1 -o /dev/null "http://localhost:$PORT/multibox.html" 2>/dev/null; then
-    echo "ERROR: a wall is already running on :$PORT; refusing to rebuild or interrupt it." >&2
-    exit 1
-fi
-
-# Why: mkdir locks this checkout's build output atomically until the launcher exits, even across different ports.
-if mkdir "$LOCK_DIR" 2>/dev/null; then
-    LOCK_HELD=1
-    printf '%s\n' "$$" > "$LOCK_OWNER_FILE"
-else
-    LOCK_OWNER='unknown'
-    if [ -r "$LOCK_OWNER_FILE" ]; then
-        IFS= read -r LOCK_OWNER < "$LOCK_OWNER_FILE" || true
-        [ -n "$LOCK_OWNER" ] || LOCK_OWNER='unknown'
-    fi
-    echo "ERROR: another b0t launcher owns this checkout (PID $LOCK_OWNER); refusing to rebuild." >&2
-    echo "       If that process was killed uncleanly, verify it is gone before removing $LOCK_DIR." >&2
+if [ "$AUTO_PORT" = "0" ] && curl -s --max-time 1 -o /dev/null "http://localhost:$PORT/multibox.html" 2>/dev/null; then
+    echo "ERROR: port :$PORT is in use; omit PORT to choose a free port automatically." >&2
     exit 1
 fi
 
 [ -d node_modules ] || { echo "→ installing deps…"; bun install; }
 if [ "$VIEWER" = "electron" ]; then
-    [ -d desktop/node_modules/electron ] || { echo "→ installing the Electron wall (first run downloads Electron)…"; ( cd desktop && bun install ); }
+    [ -d desktop/node_modules/electron ] && [ -d desktop/node_modules/proper-lockfile ] || { echo "→ installing the Electron wall dependencies…"; ( cd desktop && bun install ); }
 fi
 
 echo "→ checking all world login keys + building the local proxy client…"
 MOD=''
-for WORLD in 1 2 3; do
+for WORLD in 1 2; do
     HTTP="https://w$WORLD.rs2b2t.com"
     KEY=$(curl -fsS --max-time 15 "$HTTP/client/client.js" | grep -oE '[0-9]+' | awk 'length($0) >= 250 { print; exit }')
     [ -n "$KEY" ] || { echo "ERROR: could not fetch the World $WORLD login modulus from $HTTP/client/client.js" >&2; exit 1; }
     if [ -n "$MOD" ] && [ "$KEY" != "$MOD" ]; then
-        echo 'ERROR: World 1, World 2 and World 3 login keys differ; refusing to build a mixed-world wall.' >&2
+        echo 'ERROR: World 1 and World 2 login keys differ; refusing to build a mixed-world wall.' >&2
         exit 1
     fi
     MOD=$KEY
 done
-TARGET=proxy LIVE_RSAN="$MOD" bun run build:bot >/dev/null
-echo '  built one client for World 1, World 2 and World 3.'
-
-# Why: build:bot does not create the collision pack; navigation needs it, so bake it from the engine cache.
-if [ ! -f out/collision.lcnav.gz ]; then
-    echo "→ collision pack missing — baking it from the engine map cache…"
-    bun tools/nav/build-collision.ts --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}"
-fi
-if [ ! -f out/worldmap-basemap.manifest.json ]; then
-    echo "→ worldmap basemap missing — baking from worldmap.jag…"
-    bun tools/map/build-basemap.ts --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}"
-fi
-
 RUN_DIR=$(mktemp -d "${TMPDIR:-/tmp}/rs2b0t.XXXXXX")
 RESOURCE_PID_FILE="$RUN_DIR/viewer.pid"
+PORT_FILE="$RUN_DIR/port"
+mkdir -p "$RUN_DIR/out" "$RUN_DIR/public-bot"
+cp public-bot/bot.html public-bot/multibox.html "$RUN_DIR/public-bot/"
+TARGET=proxy LIVE_RSAN="$MOD" B0T_OUT_DIR="$RUN_DIR/out" bun run build:bot >/dev/null
+echo '  built one client for World 1 and World 2.'
+
+for ASSET in out/collision.lcnav.gz out/worldmap*; do
+    [ ! -f "$ASSET" ] || cp "$ASSET" "$RUN_DIR/out/"
+done
+if [ ! -f "$RUN_DIR/out/collision.lcnav.gz" ]; then
+    echo "→ collision pack missing — baking it from the engine map cache…"
+    bun tools/nav/build-collision.ts --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}" --out "$RUN_DIR/out/collision.lcnav"
+fi
+if [ ! -f "$RUN_DIR/out/worldmap-basemap.manifest.json" ]; then
+    echo "→ worldmap basemap missing — baking from worldmap.jag…"
+    bun tools/map/build-basemap.ts --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}" --out "$RUN_DIR/out"
+fi
+echo "  instance build: $RUN_DIR"
 
 reap_proxy() {
     REAPED_PROXY_PID="$PROXY_PID"
@@ -305,12 +287,12 @@ supervise_managed_viewer() {
     done
 }
 
-echo "→ starting one local proxy on :$PORT → World 1 + World 2 + World 3 …"
+echo "→ starting a local proxy for World 1 + World 2 …"
 PROXY_RESOURCE_PID=''
 if [ "$VIEWER" = "none" ]; then
     PROXY_RESOURCE_PID="${B0T_RESOURCE_PID:-}"
 fi
-PORT="$PORT" LIVE_HOST="$HOST" B0T_RESOURCE_PID_FILE="$RESOURCE_PID_FILE" B0T_RESOURCE_PID="$PROXY_RESOURCE_PID" bun tools/live-proxy.ts &
+PORT="$PORT" LIVE_HOST="$HOST" B0T_AUTO_PORT="$AUTO_PORT" B0T_PORT_FILE="$PORT_FILE" B0T_INSTANCE_DIR="$RUN_DIR" B0T_RESOURCE_PID_FILE="$RESOURCE_PID_FILE" B0T_RESOURCE_PID="$PROXY_RESOURCE_PID" bun tools/live-proxy.ts &
 PROXY_PID=$!
 
 i=0
@@ -325,13 +307,10 @@ while [ "$i" -lt 40 ]; do
         fi
         exit "$PROXY_EXIT_STATUS"
     fi
-    if curl -s --max-time 1 -o /dev/null "http://localhost:$PORT/multibox.html" 2>/dev/null; then
-        # Don't accept a response from an unrelated server once our own child has lost the bind race.
-        child_state "$PROXY_PID"
-        if [ "$CHILD_STATE" = "running" ]; then
-            PROXY_READY=1
-            break
-        fi
+    if [ -s "$PORT_FILE" ]; then
+        PORT=$(cat "$PORT_FILE")
+        PROXY_READY=1
+        break
     fi
     i=$((i + 1))
     sleep 0.3
@@ -339,6 +318,9 @@ done
 [ "$PROXY_READY" = "1" ] || { echo "ERROR: proxy did not come up on :$PORT" >&2; exit 1; }
 
 URL="http://localhost:$PORT/multibox.html?world=$DEFAULT_WORLD"
+PROFILE_SUFFIX=''
+[ "$PORT" = "8081" ] || PROFILE_SUFFIX="-$PORT"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/rs2b0t"
 echo "  Add bots with REGISTERED rs2b2t accounts; they play on the live server."
 
 case "$VIEWER" in
@@ -353,6 +335,8 @@ case "$VIEWER" in
         exit "$PROXY_EXIT_STATUS"
         ;;
     electron)
+        B0T_RUNTIME_DIR="$RUN_DIR/electron"
+        export B0T_RUNTIME_DIR
         echo "→ opening the Electron wall against LIVE rs2b2t: $URL"
         prepare_viewer_scope
         launch_managed_viewer "$ROOT/desktop" ./node_modules/.bin/electron . --server="$URL"
@@ -371,10 +355,11 @@ case "$VIEWER" in
             done
         fi
         [ -n "$CHROME_BIN" ] && [ -x "$CHROME_BIN" ] || { echo "ERROR: Chrome/Chromium not found; set B0T_CHROME_BIN." >&2; exit 1; }
-        PROFILE_DIR="${B0T_PROFILE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/rs2b0t/chrome-profile}"
-        CDP_PORT="${B0T_CDP_PORT:-9223}"
+        PROFILE_DIR="${B0T_PROFILE_DIR:-$STATE_DIR/chrome-profile$PROFILE_SUFFIX}"
+        CDP_PORT="${B0T_CDP_PORT:-0}"
+        [ -n "$PROFILE_SUFFIX" ] || CDP_PORT="${B0T_CDP_PORT:-9223}"
         mkdir -p "$PROFILE_DIR"
-        echo "→ opening a dedicated Chrome wall (MCP/CDP: http://127.0.0.1:$CDP_PORT)"
+        echo "→ opening a dedicated Chrome wall (CDP port $CDP_PORT; 0 selects a free port, recorded in $PROFILE_DIR/DevToolsActivePort)"
         prepare_viewer_scope
         launch_managed_viewer "$ROOT" "$CHROME_BIN" \
             --user-data-dir="$PROFILE_DIR" \
@@ -394,7 +379,7 @@ case "$VIEWER" in
             FIREFOX_BIN=$(command -v firefox)
         fi
         [ -n "$FIREFOX_BIN" ] && [ -x "$FIREFOX_BIN" ] || { echo "ERROR: Firefox not found; set B0T_FIREFOX_BIN." >&2; exit 1; }
-        PROFILE_DIR="${B0T_PROFILE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/rs2b0t/firefox-profile}"
+        PROFILE_DIR="${B0T_PROFILE_DIR:-$STATE_DIR/firefox-profile$PROFILE_SUFFIX}"
         mkdir -p "$PROFILE_DIR"
         echo "→ opening a dedicated Firefox wall against LIVE rs2b2t: $URL"
         prepare_viewer_scope

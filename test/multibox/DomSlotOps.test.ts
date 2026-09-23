@@ -38,7 +38,7 @@ describe('DomSlotOps', () => {
         runner.meta = { name: 'AutoFighter' };
         runner.state = 'running';
         expect(handle.status()).toMatchObject({ scriptState: 'running', scriptName: 'AutoFighter' });
-        handle.reloadWorld(3);
+        handle.reloadWorld(2);
         expect(handle.status()).toMatchObject({ ready: false, scriptName: null });
     });
 
@@ -51,7 +51,7 @@ describe('DomSlotOps', () => {
         expect(url.searchParams.get('world')).toBe('2');
         expect(url.searchParams.get('box')).toBe('Alice One');
         expect(url.href).not.toContain('secret');
-        expect(document.querySelector('.mbx-world-select')).not.toBeNull();
+        expect(Array.from(document.querySelector<HTMLSelectElement>('.mbx-world-select')!.options).map(option => option.value)).toEqual(['1', '2']);
         expect(document.querySelector('.mbx-world-switch')).not.toBeNull();
         expect(document.querySelector('.mbx-world-cancel')).not.toBeNull();
         expect(handles[0].status().world).toBeNull();
@@ -107,11 +107,13 @@ describe('DomSlotOps', () => {
         handles.push(ops.spawn({ username: 'alice', password: '', world: 2 }));
         let ingame = true;
         Object.assign(document.querySelector('iframe')!.contentWindow!, { rs2b0t: {
-            world: 3, reader: { ingame: () => ingame, localPlayerName: () => 'Alice' },
+            world: 1, reader: { ingame: () => ingame, localPlayerName: () => 'Alice' },
             client: { constructor: { loopCycle: 0 } }, renderGate: { drawn: 0 }, runner: { state: 'idle' }
         } });
         await new Promise(resolve => setTimeout(resolve, 75));
-        expect(handles[0].status().world).toBe(3);
+        expect(handles[0].status().world).toBe(1);
+        Reflect.set(Reflect.get(document.querySelector('iframe')!.contentWindow!, 'rs2b0t'), 'world', 3);
+        expect(handles[0].status().world).toBeNull();
         ingame = false;
         expect(handles[0].status().world).toBeNull();
     });

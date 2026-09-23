@@ -37,10 +37,17 @@ describe('ProfileTransfer', () => {
         const snapshot = { ...snap, profiles: [
             { username: 'alice', password: 'a', world: 1 as const },
             { username: 'bob', password: 'b', world: 2 as const },
-            { username: 'charlie', password: 'c', world: 3 as const },
             { username: 'legacy', password: 'c' }
         ] };
         expect(parseProfileFile(serializeProfileFile(snapshot))).toEqual(snapshot);
+    });
+
+    test('importing a retired world preserves credentials, tabs and script settings', () => {
+        const source = { ...snap, profiles: [{ username: 'alice', password: 'a', tab: 'miners', world: 3 }] };
+        expect(() => serializeProfileFile({ ...source, profiles: source.profiles as Profile[] })).toThrow(/world/i);
+        const parsed = parseProfileFile(JSON.stringify({ kind: PROFILE_FILE_KIND, v: PROFILE_FILE_VERSION, ...source }));
+        expect(parsed).toEqual({ ...source, profiles: [{ username: 'alice', password: 'a', tab: 'miners', world: 2 }] });
+        expect(parseProfileFile(serializeProfileFile(parsed))).toEqual(parsed);
     });
 
     for (const world of [null, '3', 0, 4, true]) {

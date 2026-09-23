@@ -1,10 +1,9 @@
 export const WORLDS = [
     { number: 1, nodeId: 10, origin: 'https://w1.rs2b2t.com' },
-    { number: 2, nodeId: 11, origin: 'https://w2.rs2b2t.com' },
-    { number: 3, nodeId: 12, origin: 'https://w3.rs2b2t.com' }
+    { number: 2, nodeId: 11, origin: 'https://w2.rs2b2t.com' }
 ] as const;
 
-export type WorldNumber = 1 | 2 | 3;
+export type WorldNumber = 1 | 2;
 
 export type BotMode = 'single' | 'wall';
 
@@ -16,8 +15,8 @@ export function hostedWorld(host: string) {
 export function resolveWorldNumber(host: string, params: URLSearchParams): WorldNumber {
     if (params.has('world')) {
         const values = params.getAll('world');
-        if (values.length !== 1 || (values[0] !== '1' && values[0] !== '2' && values[0] !== '3')) {
-            throw new Error('world must be 1, 2 or 3');
+        if (values.length !== 1 || (values[0] !== '1' && values[0] !== '2')) {
+            throw new Error('world must be 1 or 2');
         }
         return Number(values[0]) as WorldNumber;
     }
@@ -64,7 +63,7 @@ export function botFrameUrl(wall: URL, username: string, world?: WorldNumber): U
     copyOptions(wall.searchParams, url.searchParams);
     const selected = world ?? (wall.searchParams.has('world') ? resolveWorldNumber(wall.host, wall.searchParams) : undefined);
     if (selected !== undefined) {
-        if (selected !== 1 && selected !== 2 && selected !== 3) throw new Error('world must be 1, 2 or 3');
+        if (selected !== 1 && selected !== 2) throw new Error('world must be 1 or 2');
         url.searchParams.set('world', String(selected));
     }
     url.searchParams.set('nodeid', String(selected === undefined ? resolveNodeId(wall.host, wall.searchParams) : selected + 9));

@@ -18,6 +18,23 @@ export interface RunState {
     modalOpen: boolean;
 }
 
+/** Script-written session overlay. Unset fields fall through to Global. A later call replaces the whole snapshot. */
+export interface RunPolicyOverride {
+    runAuto?: boolean;
+    energyMin?: number;
+}
+
+export function resolveRunPolicy(
+    over: RunPolicyOverride | null | undefined,
+    globals: { runAuto: boolean; energyMin: number }
+): { runAuto: boolean; energyMin: number } {
+    const energyMin = over?.energyMin ?? globals.energyMin;
+    return {
+        runAuto: over?.runAuto ?? globals.runAuto,
+        energyMin: Math.max(0, Math.min(100, energyMin))
+    };
+}
+
 // under attack the regen floor is ignored: walking away from a fight never loses it
 export function shouldEnableRun(s: RunState): boolean {
     if (s.runOn) {
@@ -34,6 +51,7 @@ export function shouldEnableRun(s: RunState): boolean {
 class RunManagerImpl {
     private enabled = false;
     private nextCheckAt = 0;
+    private policyOverride: RunPolicyOverride | null = null;
 
     enable(): void {
         if (this.enabled) {
@@ -41,6 +59,11 @@ class RunManagerImpl {
         }
         this.enabled = true;
         BotHost.addFrameListener(() => this.onFrame());
+    }
+
+    /** Last call wins as a whole snapshot. `null` returns to Global. Cleared when a script starts or stops. */
+    override(policy: RunPolicyOverride | null): void {
+        this.policyOverride = policy;
     }
 
     private onFrame(): void {
@@ -56,14 +79,18 @@ class RunManagerImpl {
             return;
         }
         const globals = SettingsStore.globalBag();
-        if (!globals.bool('runAuto', RUN_AUTO_DEFAULT)) {
+        const policy = resolveRunPolicy(this.policyOverride, {
+            runAuto: globals.bool('runAuto', RUN_AUTO_DEFAULT),
+            energyMin: globals.num('runEnergyMin', ENERGY_MIN_DEFAULT)
+        });
+        if (!policy.runAuto) {
             return;
         }
         const state: RunState = {
             runOn: Game.runEnabled(),
             inCombat: Game.inCombat(),
             energy: Game.energy(),
-            energyMin: globals.num('runEnergyMin', ENERGY_MIN_DEFAULT),
+            energyMin: policy.energyMin,
             modalOpen: reader.modals().main !== -1
         };
         if (shouldEnableRun(state)) {

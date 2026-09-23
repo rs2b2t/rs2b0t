@@ -10,6 +10,7 @@ import { RecoveryHints } from './RecoveryHints.js';
 import { Scheduler } from './Scheduler.js';
 import { ScriptAborted, ScriptContext } from './ScriptContext.js';
 import type { ScriptMeta } from './ScriptRegistry.js';
+import { RunManager } from './RunManager.js';
 import { SettingsBag, SettingsStore } from './Settings.js';
 import { Supervisor } from './Supervisor.js';
 
@@ -154,6 +155,9 @@ class ScriptRunnerImpl {
         if (this.ctx && (this.ctx.state === 'running' || this.ctx.state === 'paused' || this.ctx.state === 'stopping')) {
             throw new Error(`'${this.meta?.name}' is still ${this.ctx.state}`);
         }
+
+        // Why: a leftover RunManager.override from the previous bot (or a harness) must not apply to this start.
+        RunManager.override(null);
 
         const previous = this.ctx ? { name: this.meta?.name ?? '?', epitaph: endEpitaph(this.ctx) } : null;
         const ctx = new ScriptContext();
@@ -390,6 +394,7 @@ class ScriptRunnerImpl {
         RandomEvents.setIgnoredRandoms([]);
 
         Sustain.set(null);
+        RunManager.override(null);
 
         paintState.reset();
 

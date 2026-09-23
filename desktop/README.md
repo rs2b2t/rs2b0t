@@ -14,11 +14,16 @@ refocus. Measured here: ~51 fps while hidden.
 ## Run
 
 For live bots, run `bun run b0t` from the repository root. One Electron wall can
-run profiles on World 1, World 2 and World 3 together. Choose a world per profile in
+run profiles on World 1 and World 2 together. Choose a world per profile in
 **Add bot**, then use **load all profiles**. Each rail tile shows its script name
 and state; the status panel shows its connected world. A tile's **Switch** stops
 that bot's script and reconnects; log out in-game, click **Retry**, then resume it
 on the destination world.
+
+Run `bun run b0t` again in another terminal to open another instance from the same
+checkout. Each launch gets a private build and a free port. All instances share
+saved accounts and settings, so you can test edits while existing bots keep running.
+See [Live wall](../docs/how-to/run-the-live-wall.md) for profile and port overrides.
 
 For a local development engine:
 

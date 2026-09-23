@@ -40,6 +40,10 @@ function changeWorld(chooser: ProfileChooser, world: number): HTMLSelectElement 
 }
 
 describe('ProfileChooser', () => {
+    test('a retired default cannot assign new profiles to W3', () => {
+        expect(() => make(JSON.parse('{"defaultWorld":3}'))).toThrow(/world/i);
+    });
+
     test('starts hidden; open lists saved profiles', async () => {
         await vault.upsert({ username: 'alice', password: 'a' });
         await vault.upsert({ username: 'bob', password: 'b' });
@@ -152,11 +156,11 @@ describe('ProfileChooser', () => {
         await vault.upsert({ username: 'alice', password: 'a', world: 1 });
         await vault.upsert({ username: 'bob', password: 'b', world: 2 });
         await vault.upsert({ username: 'legacy', password: 'c' });
-        const { chooser, loaded } = make({ defaultWorld: 3 });
+        const { chooser, loaded } = make({ defaultWorld: 2 });
         chooser.open();
-        expect(Array.from(chooser.el.querySelectorAll<HTMLSelectElement>('.mbx-profile-world')).map(el => el.value)).toEqual(['1', '2', '3']);
+        expect(Array.from(chooser.el.querySelectorAll<HTMLSelectElement>('.mbx-profile-world')).map(el => el.value)).toEqual(['1', '2', '2']);
         (chooser.el.querySelector('#mbx-load-all') as HTMLElement).click();
-        expect(loaded.map(p => p.world)).toEqual([1, 2, 3]);
+        expect(loaded.map(p => p.world)).toEqual([1, 2, 2]);
         expect(vault.list()[2].world).toBeUndefined();
     });
 
@@ -217,18 +221,19 @@ describe('ProfileChooser', () => {
         expect(chooser.el.querySelector<HTMLSelectElement>('.mbx-profile-world')!.value).toBe('1');
     });
 
-    test('new profiles default to the wall world and can explicitly choose World 3', async () => {
+    test('new profiles default to the wall world and can explicitly choose World 1', async () => {
         const { chooser, loaded } = make({ defaultWorld: 2 });
         chooser.open();
         const select = chooser.el.querySelector('#mbx-new-world') as HTMLSelectElement;
         expect(select.value).toBe('2');
-        select.value = '3';
+        expect(Array.from(select.options).map(option => option.value)).toEqual(['1', '2']);
+        select.value = '1';
         (chooser.el.querySelector('#mbx-new-user') as HTMLInputElement).value = 'alice';
         (chooser.el.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }));
         expect(loaded).toEqual([]);
         await waitFor(() => loaded.length > 0);
-        expect(loaded[0].world).toBe(3);
-        expect(vault.list()[0].world).toBe(3);
+        expect(loaded[0].world).toBe(1);
+        expect(vault.list()[0].world).toBe(1);
     });
 
     test('re-saving an existing password cannot change its selected world', async () => {

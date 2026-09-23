@@ -1,3 +1,4 @@
+import '../panel/desktopStorage.js';
 import { resolveWorldNumber, type WorldNumber } from '../../client/config/worlds.js';
 import { supportsWorldRouting } from '../../client/config/target.js';
 import { BUILD_INFO, formatBuildInfo } from '../runtime/buildInfo.js';
@@ -269,6 +270,13 @@ function boot(): void {
 
     const prompt = new VaultPrompt(vault);
     document.body.appendChild(prompt.el);
+    window.addEventListener('storage', event => {
+        if (event.key === 'rs2b0t:multibox:profiles') {
+            void vault.refresh().then(() => {
+                if (!chooser.el.hidden && vault.status() === 'unlocked') chooser.open();
+            }).catch(error => console.error('[rs2b0t] failed to refresh saved accounts', error));
+        }
+    });
 
     let tabsHydrated = false;
     function hydrateTabState(): void {
@@ -310,7 +318,7 @@ function boot(): void {
     }
 
     async function changeSlotWorld(id: number, world: WorldNumber): Promise<boolean> {
-        if (!worldRouting || (world !== 1 && world !== 2 && world !== 3)) return false;
+        if (!worldRouting || (world !== 1 && world !== 2)) return false;
         const slot = controller.snapshot().find(candidate => candidate.id === id);
         if (!slot || !(await ensureUnlocked())) return false;
         const profile = vault.list().find(candidate => normalizeUsername(candidate.username) === normalizeUsername(slot.username));

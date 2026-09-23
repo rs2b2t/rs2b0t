@@ -1,0 +1,9 @@
+→ checking all world login keys + building the local proxy client…
+$ bun run bot.bundle.ts
+  built one client for World 1 and World 2.
+  instance build: /var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T//rs2b0t.ZPxpZj
+→ starting a local proxy for World 1 + World 2 …
+live-proxy: http://localhost:8084/multibox.html -> worlds 1 and 2
+Log in with a REGISTERED rs2b2t account.
+  Add bots with REGISTERED rs2b2t accounts; they play on the live server.
+→ proxy up at http://localhost:8084/multibox.html?world=1  (viewer not launched; CPU/RAM telemetry unavailable)
