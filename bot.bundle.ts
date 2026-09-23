@@ -1,5 +1,6 @@
 import fs from 'fs';
 import { createHash } from 'node:crypto';
+import { join } from 'node:path';
 
 import { buildIdentityDefines, buildIdentityLabel, resolveBuildIdentity, writeVersionJson } from './tools/lib/buildIdentity.js';
 
@@ -57,11 +58,10 @@ const define = {
 const args = process.argv.slice(2);
 const prod = args[0] !== 'dev';
 
-if (!fs.existsSync('out')) {
-    fs.mkdirSync('out');
-}
+const out = process.env.B0T_OUT_DIR ?? 'out';
+fs.mkdirSync(out, { recursive: true });
 
-fs.copyFileSync('src/client/3rdparty/tinymidipcm/tinymidipcm.wasm', 'out/tinymidipcm.wasm');
+fs.copyFileSync('src/client/3rdparty/tinymidipcm/tinymidipcm.wasm', join(out, 'tinymidipcm.wasm'));
 
 const entrypoints: [entry: string, output: string][] = [
     ['src/bot/main.ts', 'botclient.js'],
@@ -90,10 +90,19 @@ for (const [entry, output] of entrypoints) {
     const generatedName = build.outputs[0].path.split('/').pop()!;
     source = source.replace(`sourceMappingURL=${generatedName}.map`, `sourceMappingURL=${output}.map`);
 
-    fs.writeFileSync(`out/${output}`, source);
-    fs.writeFileSync(`out/${output}.map`, sourcemap);
+    fs.writeFileSync(join(out, output), source);
+    fs.writeFileSync(join(out, `${output}.map`), sourcemap);
 }
 
-writeVersionJson('out/version.json', identity);
-fs.writeFileSync('out/target.json', JSON.stringify({ target: TARGET_NAME, worldRouting: 1, botclientSha256: createHash('sha256').update(fs.readFileSync('out/botclient.js')).digest('hex') }) + '\n');
-console.log(`bot bundle built (${prod ? 'prod' : 'dev'}): out/botclient.js  git=${buildIdentityLabel(identity)}`);
+writeVersionJson(join(out, 'version.json'), identity);
+fs.writeFileSync(
+    join(out, 'target.json'),
+    JSON.stringify({
+        target: TARGET_NAME,
+        worldRouting: 1,
+        botclientSha256: createHash('sha256')
+            .update(fs.readFileSync(join(out, 'botclient.js')))
+            .digest('hex')
+    }) + '\n'
+);
+console.log(`bot bundle built (${prod ? 'prod' : 'dev'}): ${join(out, 'botclient.js')}  git=${buildIdentityLabel(identity)}`);

@@ -1,6 +1,10 @@
 // Desktop client with background throttling disabled. Hidden browser tabs otherwise stall the 50fps game loop.
 // --server=http://host:port or LCB_SERVER overrides the local engine URL; load from the server to keep assets and WebSockets same-origin.
 const { app, BrowserWindow, Menu, powerSaveBlocker } = require('electron');
+const { join } = require('node:path');
+const { prepareStorage } = require('./storage-session.cjs');
+const storage = prepareStorage(app);
+let starting = true;
 
 // Why: backgroundThrottling alone doesn't disable Chromium's process-level throttling.
 app.commandLine.appendSwitch('disable-background-timer-throttling');
@@ -26,6 +30,10 @@ function createWindow() {
         backgroundColor: '#000000',
         title: 'rs2b0t',
         webPreferences: {
+            preload: join(__dirname, 'preload.cjs'),
+            nodeIntegrationInSubFrames: true,
+            contextIsolation: true,
+            sandbox: true,
             // Keep timers and animation frames running while hidden or minimized.
             backgroundThrottling: false
         }
@@ -35,21 +43,28 @@ function createWindow() {
     return win;
 }
 
-app.whenReady().then(() => {
-    // Why: macOS App Nap can suspend the app while bots are running.
-    powerSaveBlocker.start('prevent-app-suspension');
+app.whenReady()
+    .then(async () => {
+        await storage.start(serverUrl());
+        // Why: macOS App Nap can suspend the app while bots are running.
+        powerSaveBlocker.start('prevent-app-suspension');
 
-    Menu.setApplicationMenu(
-        Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'fileMenu' }, { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' }])
-    );
+        Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'fileMenu' }, { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' }]));
 
-    createWindow();
+        createWindow();
+        starting = false;
 
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) {
-            createWindow();
-        }
+        app.on('activate', () => {
+            if (BrowserWindow.getAllWindows().length === 0) {
+                createWindow();
+            }
+        });
+    })
+    .catch(error => {
+        console.error(error);
+        app.quit();
     });
-});
 
-app.on('window-all-closed', () => app.quit());
+app.on('window-all-closed', () => {
+    if (!starting) app.quit();
+});

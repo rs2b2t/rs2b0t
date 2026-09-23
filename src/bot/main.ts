@@ -1,3 +1,4 @@
+import './panel/desktopStorage.js';
 import { TARGET, supportsWorldRouting } from '../client/config/target.js';
 import { resolveNodeId, hostedWorld } from '../client/config/worlds.js';
 import { worldSelector } from './panel/WorldSelector.js';

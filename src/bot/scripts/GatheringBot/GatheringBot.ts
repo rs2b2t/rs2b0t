@@ -354,7 +354,7 @@ export const GATHERING_SETTINGS: SettingsSchema = {
         default: true,
         label: 'Bank haul',
         group: 'Banking',
-        help: 'true = bank when full (uses the bank behind Bank location below). false = power mode: drop haul when full, only bank for missing tools. Legacy None location also power-mines.'
+        help: 'true = bank when full (uses Bank location below). false = power mode: drop the haul in a batch, keeping tools and food; bank for missing supplies. Legacy None location also power-mines.'
     },
     bankLocation: {
         type: 'string',
@@ -595,7 +595,7 @@ export default class GatheringBot extends TaskBot {
                 this.minerFood !== null && this.minerFoodCount() < this.minerFood.target;
             if (this.minerFood) {
                 this.log(
-                    `food: ${this.minerFood.name} x${this.minerFood.target}; eat when its full heal fits or the pack needs an ore slot`
+                    `food: ${this.minerFood.name} x${this.minerFood.target}; eat to heal; bank mode also eats for ore slots`
                 );
             }
             // Empty multi-select falls back to every ROCK_OPTIONS entry; log so a
@@ -1034,7 +1034,7 @@ export default class GatheringBot extends TaskBot {
         if (this.powerMode) {
             this.log(
                 this.minerFood
-                    ? 'location: Bank=false (power) — eat food for ore slots; nearest-bank restock when empty'
+                    ? 'location: Bank=false (power): batch-drop ore, keep food for healing; restock when empty'
                     : 'location: Bank=false (power) — drop haul; bank only to fetch missing tools (nearest bank)'
             );
         }
@@ -1132,7 +1132,6 @@ export default class GatheringBot extends TaskBot {
                 ? [new SupplierWithdrawRaw(this), new MuleGoMeet(this), new MuleRequestOrWait(this)]
                 : []),
             ...(this.isMuleGatherer() ? [new MuleGoMeet(this), new MuleRequestOrWait(this)] : []),
-            // Opt-in Miner food owns the full→eat→restock loop even under power mode.
             ...(minerFoodLoop ? [bankCatch] : []),
             ...(this.powerMode || tannerPower
                 ? [new DropProduct(this)]
@@ -1759,7 +1758,7 @@ export default class GatheringBot extends TaskBot {
         return this.anchor;
     }
 
-    private paintKind(): string {
+    protected paintKind(): string {
         if (this.fishing) {
             return 'Fisher';
         }
@@ -1884,14 +1883,14 @@ export default class GatheringBot extends TaskBot {
         if (this.burnMode === 'chop-then-burn') {
             return `burning ${this.burnLogs} when full`;
         }
+        if (this.powerMode) {
+            return `Bank=false: batch dropping ${this.productLabel()} when full`;
+        }
         if (this.minerFood) {
             if (this.desertCampRoute) {
                 return `banking when full; retaining ${this.minerFood.name} for Desert Camp travel`;
             }
             return `eating ${this.minerFood.name} for ore slots, then banking to restock`;
-        }
-        if (this.powerMode) {
-            return `Bank=false: dropping ${this.productLabel()} when full`;
         }
         if (this.tickManip.cookEatInterleave) {
             return 'tannerfishing: cook/eat on pier; drop haul when full (may die)';
@@ -1915,11 +1914,11 @@ export default class GatheringBot extends TaskBot {
         if (this.burnMode === 'chop-then-burn') {
             return `Full: burn ${this.burnLogs}`;
         }
-        if (this.minerFood) {
-            return `Full: eat ${this.minerFood.name} → bank`;
-        }
         if (this.powerMode) {
             return `Full: Bank=false drop ${this.productLabel()}`;
+        }
+        if (this.minerFood) {
+            return `Full: eat ${this.minerFood.name} → bank`;
         }
         if (this.tickManip.cookEatInterleave) {
             return 'Full: tanner cook/eat · drop';
@@ -2094,6 +2093,9 @@ export default class GatheringBot extends TaskBot {
 
     isProduct(name: string | null | undefined): boolean {
         const n = (name ?? '').toLowerCase();
+        if (this.mining()) {
+            return this.productKeywords.some(ore => n === (ore === 'clay' || ore === 'coal' ? ore : `${ore} ore`));
+        }
         return this.productKeywords.some(k => n.includes(k));
     }
     matchesRock(id: number): boolean {
@@ -2463,6 +2465,14 @@ export default class GatheringBot extends TaskBot {
         return this.minerFood !== null;
     }
 
+    protected keepMinerFood(): boolean {
+        return this.powerMode || this.desertCampRoute !== null;
+    }
+
+    fullHaulNeedsBank(): boolean {
+        return !this.powerMode && Inventory.isFull() && this.hasDepositable();
+    }
+
     minerFoodCount(): number {
         return this.minerFood ? countFood(Inventory.items(), this.minerFood.name) : 0;
     }
@@ -2471,7 +2481,7 @@ export default class GatheringBot extends TaskBot {
         return minerFoodRestockNeeded({
             configured: this.minerFood !== null,
             foodCount: this.minerFoodCount(),
-            startupPending: this.minerFoodStartupPending
+            startupPending: this.minerFoodStartupPending || (this.powerMode && Inventory.isFull() && this.products().length === 0)
         });
     }
 
@@ -2486,7 +2496,7 @@ export default class GatheringBot extends TaskBot {
             heal: foodHealAmount(config.name),
             foodCount: this.minerFoodCount(),
             inventoryFull: Inventory.isFull(),
-            retainForTravel: this.desertCampRoute !== null,
+            retainForTravel: this.keepMinerFood(),
             hazardMaxHit: this.desertCampRoute ? 9 : undefined
         });
     }
@@ -2495,7 +2505,7 @@ export default class GatheringBot extends TaskBot {
         if (!foodName || Bank.isOpen()) {
             return false;
         }
-        if (this.desertCampRoute && Inventory.isFull() && this.hasDepositable()) {
+        if (this.desertCampRoute && this.fullHaulNeedsBank()) {
             this.desertCampBankTrip = true;
         }
         const food = Inventory.items().find(i => isFoodItem(i.name, foodName));
@@ -2510,7 +2520,7 @@ export default class GatheringBot extends TaskBot {
             id: food.id,
             name: food.name
         };
-        const reason = Inventory.isFull() && !this.desertCampRoute ? 'ore room' : 'full heal';
+        const reason = Inventory.isFull() && !this.keepMinerFood() ? 'ore room' : 'full heal';
         this.setStatus(`food: eating ${food.name} (${reason})`);
         this.log(
             `food: eat ${food.name} (${reason}; hp ${before.hp}/${Skills.level('hitpoints')}, pack ${before.used}/28)`
@@ -2609,19 +2619,20 @@ export default class GatheringBot extends TaskBot {
         const held = this.minerFoodCount();
         const bankForms = this.desertCampRoute ? foodForms(config.name) : [config.name];
         const banked = bankForms.reduce((sum, form) => sum + Bank.count(form), 0);
+        const reserved = Math.max(reservedSlots, this.powerMode ? 1 : 0);
         const plan = planMinerFoodWithdrawal({
             target: config.target,
             held,
             banked,
             freeSlots: Inventory.free(),
-            reservedSlots
+            reservedSlots: reserved
         });
         if (!plan.ok) {
             const detail =
                 plan.reason === 'bank-stock'
                     ? `bank + pack are short by ${plan.missing}`
-                    : reservedSlots > 0
-                        ? `pack needs ${plan.missing} more free slot(s) after reserving ${reservedSlots} for route supplies`
+                    : reserved > 0
+                        ? `pack needs ${plan.missing} more free slot(s) after reserving ${reserved} for supplies and gathering`
                         : `pack needs ${plan.missing} more free slot(s)`;
             const message = `food: cannot prepare ${config.target} ${config.name} (${detail})`;
             this.setStatus(`${message} — stopped`);
@@ -2753,7 +2764,7 @@ export default class GatheringBot extends TaskBot {
     }
 
     private desertCampDirection(): DesertCampRouteDirection {
-        const needsBank = (Inventory.isFull() && this.hasDepositable())
+        const needsBank = this.fullHaulNeedsBank()
             || this.minerFoodRestockNeeded()
             || (this.desertCampRoute !== null && desertCampFoodReserveDepleted(this.minerFoodCount()))
             || this.desertCampStartupBankPending
@@ -2788,7 +2799,7 @@ export default class GatheringBot extends TaskBot {
     }
 
     desertCampBankCatchNeeded(): boolean {
-        return shouldRunDesertCampBankCatch(this.desertCampBankTrip, this.desertCampStartupBankPending, this.minerFoodRestockNeeded(), Inventory.isFull() && this.hasDepositable());
+        return shouldRunDesertCampBankCatch(this.desertCampBankTrip, this.desertCampStartupBankPending, this.minerFoodRestockNeeded(), this.fullHaulNeedsBank());
     }
 
     completeDesertCampBankTrip(): void {
@@ -3424,6 +3435,26 @@ export default class GatheringBot extends TaskBot {
     }
     productLabel(): string {
         return this.productKeywords.join('/');
+    }
+
+    async dropProducts(): Promise<void> {
+        this.setStatus('dropping');
+        const droppable = () => {
+            const keep = this.tickManipProfile().useKnifeDelay
+                ? Inventory.items().find(item => isFletchableLogName(item.name))?.slot
+                : undefined;
+            return this.products().filter(item => item.slot !== keep);
+        };
+        for (let attempt = 0; attempt < 3; attempt++) {
+            const items = droppable();
+            if (items.length === 0) return;
+            await Promise.all(items.map(item => item.interact('Drop')));
+            if (await Execution.delayUntil(() => droppable().length === 0, 6000)) {
+                this.log('drop: haul cleared');
+                return;
+            }
+        }
+        throw new Error('Gathering bot could not clear the haul after three drop batches');
     }
 
     products() {

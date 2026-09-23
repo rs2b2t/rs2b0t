@@ -1,3 +1,4 @@
+import { desktopStorage } from './desktopStorage.js';
 import Tile from '../geometry/Tile.js';
 import { WORLDMAP_KEY_NAMES } from '../../client/mapview/worldmapKeyNames.js';
 import { boxKey } from './box.js';
@@ -566,6 +567,9 @@ class SettingsStoreImpl {
     }
 
     saved(name: string, key: string): string | undefined {
+        if (desktopStorage) {
+            return localStorage.getItem(storageKey(name, key)) ?? undefined;
+        }
         if (hasSession) {
             const v = sessionStorage.getItem(storageKey(name, key));
             if (v !== null) {
