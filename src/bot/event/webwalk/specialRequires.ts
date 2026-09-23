@@ -139,6 +139,9 @@ export function specialRequiresAt(x: number, z: number, level: number): Transpor
                 requires.currency = { name: 'Coins', amount: sc.requires.count };
             }
         }
+        if (sc.questWaivesItems) {
+            requires.questWaivesItems = sc.questWaivesItems;
+        }
         if (sc.requiresSkill) {
             requires.skills = [{ name: sc.requiresSkill.name, level: sc.requiresSkill.level }];
             gated = true;
