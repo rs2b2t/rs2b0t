@@ -3,11 +3,18 @@ import { LoginCoordinator } from '#/bot/multibox/LoginCoordinator.js';
 import { MultiBoxController } from '#/bot/multibox/MultiBoxController.js';
 import type { Account, RenderMode, SlotHandle, SlotOps, SlotStatus } from '#/bot/multibox/types.js';
 import type { LoginCoordination } from '#/bot/runtime/LoginCoordination.js';
+import type { WorldNumber } from '#/client/config/worlds.js';
 
 class FakeHandle implements SlotHandle {
     calls: string[] = [];
     mode: RenderMode = 'background';
     destroyed = false;
+    switchReady = true;
+    ingame = false;
+    world: WorldNumber | null = null;
+    reloadWorld(world: WorldNumber): void { this.calls.push(`world:${world}`); }
+    cancelWorldSwitch(): void { this.calls.push('cancelSwitch'); }
+    prepareWorldSwitch(): boolean { this.calls.push('switch'); return this.switchReady; }
     loginCoordination: LoginCoordination | null = null;
     setRenderMode(m: RenderMode): void { this.mode = m; this.calls.push(`mode:${m}`); }
     startScript(): void { this.calls.push('start'); }
@@ -19,12 +26,13 @@ class FakeHandle implements SlotHandle {
         this.loginCoordination = coordination;
         this.calls.push('loginCoordination');
     }
-    status(): SlotStatus { return { ready: true, ingame: false, player: null, loopCycle: 0, drawn: 0, scriptState: 'idle' }; }
+    status(): SlotStatus { return { ready: true, ingame: this.ingame, world: this.world, player: null, loopCycle: 0, drawn: 0, scriptState: 'idle', scriptName: null }; }
     destroy(): void { this.destroyed = true; this.calls.push('destroy'); }
 }
 class FakeOps implements SlotOps {
     handles: FakeHandle[] = [];
-    spawn(_a: Account): SlotHandle { const h = new FakeHandle(); this.handles.push(h); return h; }
+    accounts: Account[] = [];
+    spawn(a: Account): SlotHandle { const h = new FakeHandle(); this.handles.push(h); this.accounts.push(a); return h; }
     move(handle: SlotHandle, before: SlotHandle | null): void {
         const fromIndex = this.handles.indexOf(handle as FakeHandle);
         const [moving] = this.handles.splice(fromIndex, 1);
@@ -34,6 +42,110 @@ class FakeOps implements SlotOps {
 }
 
 describe('MultiBoxController', () => {
+    test('restored slots carry their own world and older profiles inherit the default', () => {
+        const ops = new FakeOps();
+        const c = new MultiBoxController(ops, undefined, 2);
+        const alice = c.add({ username: 'Alice One', password: 'a' })!;
+        const bob = c.add({ username: 'bob', password: 'b', world: 1 })!;
+        expect([alice.targetWorld, bob.targetWorld]).toEqual([2, 1]);
+        expect(ops.accounts.map(account => account.world)).toEqual([2, 1]);
+        expect(alice.world).toBeNull();
+        expect(alice.switchingWorld).toBeNull();
+        expect(c.add({ username: ' alice_one ', password: 'other', world: 1 })).toBeNull();
+        expect(c.add({ username: '___', password: 'x' })).toBeNull();
+    });
+
+    test('a clean switch reloads only its slot and retains focus, order, tabs and shared login budget', () => {
+        const ops = new FakeOps();
+        const c = new MultiBoxController(ops, new LoginCoordinator({ now: () => 0 }));
+        const alice = c.add({ username: 'alice', password: 'a' })!;
+        c.addTab('alts');
+        c.add({ username: 'bob', password: 'b', tab: 'alts', world: 2 });
+        const [first, second] = ops.handles;
+        const oldCoordination = first.loginCoordination!;
+        expect(second.loginCoordination!.requestPermit()).toBe(true);
+        expect(oldCoordination.requestPermit()).toBe(false);
+        first.calls = [];
+        second.calls = [];
+
+        expect(c.switchWorld(alice.id, 2)).toBe(true);
+        expect(first.destroyed).toBe(false);
+        expect(first.calls).toContain('world:2');
+        expect(first.calls).toContain('autoLogin:false');
+        expect(first.calls).not.toContain('creds:alice');
+        expect(second.calls).toEqual([]);
+        expect(oldCoordination.queueStatus()).toBeNull();
+        expect(first.loginCoordination).not.toBe(oldCoordination);
+        expect(first.loginCoordination!.requestPermit()).toBe(false);
+        expect(c.snapshot().map(slot => [slot.id, slot.username, slot.tab, slot.targetWorld])).toEqual([
+            [alice.id, 'alice', 'Main', 2], [2, 'bob', 'alts', 2]
+        ]);
+        expect(c.focusedId).toBe(alice.id);
+        expect(c.snapshot()[0].world).toBeNull();
+        expect(c.snapshot()[0].switchingWorld).toBeNull();
+    });
+
+    test('an in-flight login or logged-in slot stays alive and pending while other slots remain usable', () => {
+        for (const ingame of [false, true]) {
+            const ops = new FakeOps();
+            const c = new MultiBoxController(ops);
+            const alice = c.add({ username: 'alice', password: 'a' })!;
+            c.add({ username: 'bob', password: 'b', world: 2 });
+            const [first, second] = ops.handles;
+            first.switchReady = false;
+            first.ingame = ingame;
+            first.world = ingame ? 1 : null;
+            first.calls = [];
+            second.calls = [];
+            expect(c.switchWorld(alice.id, 2)).toBe(false);
+            expect(first.calls).toEqual(['switch']);
+            expect(second.calls).toEqual([]);
+            expect(c.snapshot()[0]).toMatchObject({ targetWorld: 1, world: ingame ? 1 : null, switchingWorld: 2 });
+            c.remove(alice.id);
+            expect(first.destroyed).toBe(false);
+            c.startAll();
+            expect(first.calls).not.toContain('start');
+            expect(second.calls).toContain('start');
+            expect(c.add({ username: 'carol', password: 'c' })).not.toBeNull();
+            first.switchReady = true;
+            first.ingame = false;
+            first.world = null;
+            expect(c.switchWorld(alice.id, 2)).toBe(true);
+            expect(first.calls).toContain('world:2');
+        }
+    });
+
+    test('cancel unblocks only the pending slot without restarting login or scripts', () => {
+        const ops = new FakeOps();
+        const c = new MultiBoxController(ops);
+        const alice = c.add()!;
+        c.add();
+        ops.handles[0].switchReady = false;
+        expect(c.switchWorld(alice.id, 2)).toBe(false);
+        ops.handles.forEach(handle => handle.calls = []);
+        c.cancelSlotWorldSwitch(alice.id);
+        expect(ops.handles[0].calls).toEqual(['cancelSwitch']);
+        expect(ops.handles[1].calls).toEqual([]);
+        expect(c.snapshot()[0]).toMatchObject({ targetWorld: 1, switchingWorld: null });
+        c.startAll();
+        expect(ops.handles[0].calls).toContain('start');
+    });
+
+    test('cancelling a whole-wall switch does not cancel a separate pending slot switch', () => {
+        const ops = new FakeOps();
+        const c = new MultiBoxController(ops);
+        const alice = c.add()!;
+        c.add();
+        ops.handles[0].switchReady = false;
+        expect(c.switchWorld(alice.id, 2)).toBe(false);
+        expect(c.prepareWorldSwitch()).toBe(false);
+        ops.handles.forEach(handle => handle.calls = []);
+        c.cancelWorldSwitch();
+        expect(ops.handles[0].calls).toEqual([]);
+        expect(ops.handles[1].calls).toEqual(['cancelSwitch']);
+        expect(c.snapshot()[0].switchingWorld).toBe(2);
+    });
+
     test('add takes no account: the bot starts empty, with no creds and no auto-login', () => {
         const ops = new FakeOps();
         const c = new MultiBoxController(ops);
@@ -518,4 +630,36 @@ describe('MultiBoxController tabs', () => {
         expect(c.activeTab()).toBe('b');
         expect(() => c.setTabState(['a'], 'ghost')).toThrow(/ghost/);
     });
+});
+
+
+test('world switching quiesces every slot, waits for all logouts and prevents new bots', () => {
+    const ops = new FakeOps();
+    const controller = new MultiBoxController(ops);
+    controller.add();
+    controller.add();
+    ops.handles[0].switchReady = false;
+    expect(controller.prepareWorldSwitch()).toBe(false);
+    expect(ops.handles.every(h => h.calls.includes('switch'))).toBe(true);
+    expect(controller.add()).toBeNull();
+    controller.remove(controller.snapshot()[0].id);
+    expect(controller.snapshot()).toHaveLength(2);
+    controller.startAll();
+    expect(ops.handles.every(h => !h.calls.includes('start'))).toBe(true);
+    ops.handles[0].switchReady = true;
+    expect(controller.prepareWorldSwitch()).toBe(true);
+});
+
+
+test('cancelling a wall switch preserves its slots and allows manual additions and starts', () => {
+    const ops = new FakeOps();
+    const controller = new MultiBoxController(ops);
+    controller.add();
+    controller.prepareWorldSwitch();
+    controller.cancelWorldSwitch();
+    expect(ops.handles[0].calls).toContain('cancelSwitch');
+    expect(ops.handles[0].calls).not.toContain('start');
+    expect(controller.add()).not.toBeNull();
+    controller.startAll();
+    expect(ops.handles.every(h => h.calls.includes('start'))).toBe(true);
 });

@@ -3,6 +3,16 @@ import type { Case } from './manifestTypes.js';
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
     {
+        id: 'desktop-instances',
+        harness: 'desktop-instances-test.ts',
+        covers: { subsystems: ['multibox'] },
+        status: 'vetted',
+        provenAt: 'dc9ded2f381c756a06a21483ed733b85b9bf4b5b',
+        manual: true,
+        budgetMin: 3,
+        note: 'Two live launcher builds and real Electron windows share saved accounts/settings across separate ports. Checks migration, concurrent vault edits, iframe storage, zero synchronous settings reads during path drawing, write/revert races, persistence and independent shutdown. Requires desktop dependencies and a display; no game login.'
+    },
+    {
         id: 'lostcity-strike-safespot-live',
         harness: 'lostcity-strike-safespot-live.ts',
         covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
@@ -361,6 +371,15 @@ export const CASES: readonly Case[] = [
         note: 'pauses and resumes in the middle of a walk and proves one loop body comes back, not two (#580 regression)'
     },
     {
+        id: 'run-override-live',
+        harness: 'run-override-live.ts',
+        covers: { scripts: ['DoorOpener'], subsystems: ['infra'] },
+        status: 'unvetted',
+        manual: true,
+        budgetMin: 2,
+        note: 'headed: Global auto-run re-enables, RunManager.override({ runAuto: false }) holds the orb off, and script start/stop clear the overlay'
+    },
+    {
         id: 'autofighter-eat-resume-659-live',
         harness: 'autofighter-eat-resume-659-live.ts',
         covers: { scripts: ['AutoFighter'] },
@@ -663,7 +682,7 @@ export const CASES: readonly Case[] = [
         status: 'vetted',
         budgetMin: 25,
         provenAt: 'b66cb7f3',
-        note: '`--site blue|black|heroes|gutanoth|iron|steel` picks the lair. The black run seeds Sharks and a Superantipoison and passes on the corridor stand, both spawns in view, with no health lost on a safespot. The heroes run sets heroquest itself and asserts no key leg: it casts through the pen fence and walks the drops out through the gate. The gutanoth run sets itwatchtower itself, talks past the Enclave guard, banks at Yanille on the Watchtower spell, and claims it held the stand rather than that nothing hit it, since the cave reaches the tile at range; `--stand n` picks one of its six, one per dragon, and the run also requires a greater demon killed off the same stand while a dragon was respawning. The iron and steel runs need the 289 sim: they set elenaquest for the Ardougne teleport, seed coins, a Rune axe, Antifire potions and the shield, and require Saniboch paid, the walk through the vines, stones, log and pipe, a dose drunk, a kill and a bank trip through Ardougne; the stands are open camps that each see most of one dragon\'s wander, since the breath is 0 through the shield with a dose up, and `--stand 2` is the south-west. `--style melee` there chases the dragon from the camp under Protect from Melee with the Dragon longsword on its stab style, and requires the overhead to go up'
+        note: "`--site blue|black|heroes|gutanoth|iron|steel` picks the lair. The black run seeds Sharks and a Superantipoison and passes on the corridor stand, both spawns in view, with no health lost on a safespot. The heroes run sets heroquest itself and asserts no key leg: it casts through the pen fence and walks the drops out through the gate. The gutanoth run sets itwatchtower itself, talks past the Enclave guard, banks at Yanille on the Watchtower spell, and claims it held the stand rather than that nothing hit it, since the cave reaches the tile at range; `--stand n` picks one of its six, one per dragon, and the run also requires a greater demon killed off the same stand while a dragon was respawning. The iron and steel runs need the 289 sim: they set elenaquest for the Ardougne teleport, seed coins, a Rune axe, Antifire potions and the shield, and require Saniboch paid, the walk through the vines, stones, log and pipe, a dose drunk, a kill and a bank trip through Ardougne; the stands are open camps that each see most of one dragon's wander, since the breath is 0 through the shield with a dose up, and `--stand 2` is the south-west. `--style melee` there chases the dragon from the camp under Protect from Melee with the Dragon longsword on its stab style, and requires the overhead to go up"
     },
     {
         id: 'jivedragons-clue-guardian-live',
@@ -1080,6 +1099,33 @@ export const CASES: readonly Case[] = [
         note: 'starts at Varrock West with the kit banked there; coming within 20 tiles of the Al Kharid booth fails the run'
     },
     {
+        id: 'leathercrafter-hard-bank-gap-live',
+        harness: 'leathercrafter-hard-bank-gap-live.ts',
+        covers: { scripts: ['LeatherCrafter'] },
+        status: 'vetted',
+        provenAt: 'd6bb4f22',
+        budgetMin: 8,
+        note: 'pins the standard 600ms tick and times out-of-leather to bank-opened across ten hard-leather trips; fails when any gap exceeds GAP_MAX_MS'
+    },
+    {
+        id: 'leathercrafter-hard-total-live',
+        harness: 'leathercrafter-hard-total-live.ts',
+        covers: { scripts: ['LeatherCrafter'] },
+        status: 'vetted',
+        provenAt: 'd6bb4f22',
+        budgetMin: 8,
+        note: 'total wall-clock for ten full hard-leather inventories, inventory-only completion so the same harness runs pre-fix and post-fix'
+    },
+    {
+        id: 'gathering-power-drop-test',
+        harness: 'gathering-power-drop-test.ts',
+        covers: { scripts: ['GatheringBot'] },
+        status: 'vetted',
+        provenAt: '8edeb1e4b098c586182585dfbed86bcdcb7c61c1',
+        budgetMin: 12,
+        note: 'checks Miner batch dropping with Bank=false, completes a mining/drop cycle, and preserves supplies across iron, clay and coal camps'
+    },
+    {
         id: 'miner-bank-food-live',
         harness: 'miner-bank-food-live.ts',
         covers: { scripts: ['GatheringBot'] },
@@ -1437,7 +1483,7 @@ export const CASES: readonly Case[] = [
         status: 'vetted',
         provenAt: '683f264f',
         budgetMin: 8,
-        note: 'Shilo Village marked complete and 1000gp banked; passes when the teller hands over the coins, the bot stands at Fernahei\'s counter and feathers land in the pack'
+        note: "Shilo Village marked complete and 1000gp banked; passes when the teller hands over the coins, the bot stands at Fernahei's counter and feathers land in the pack"
     },
     {
         id: 'smelter-swarm-422-live',

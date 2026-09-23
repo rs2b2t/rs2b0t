@@ -191,3 +191,23 @@ test('does not leave with leftover cake when its deposit fails', async () => {
     expect(state.home).toEqual([]);
     expect(stop).toHaveBeenCalled();
 });
+
+test.each([
+    { target: 27, tool: true, ok: false },
+    { target: 26, tool: true, ok: true },
+    { target: 27, tool: false, ok: true }
+])('power food provisioning reserves an ore slot: %j', async ({ target, tool, ok }) => {
+    const { bot, state, stop } = fixture(80, target);
+    bot['powerMode'] = true;
+    state.bankOpen = true;
+    state.pack = tool ? ['Rune pickaxe'] : [];
+    expect(await bot.topUpMinerFoodAtBank(() => {}, 0)).toBe(ok);
+    if (ok) {
+        expect(state.pack.filter(name => name === 'Lobster').length).toBe(target);
+        expect(state.pack.length).toBeLessThan(28);
+        expect(stop).not.toHaveBeenCalled();
+    } else {
+        expect(state.pack).toEqual(['Rune pickaxe']);
+        expect(stop).toHaveBeenCalled();
+    }
+});

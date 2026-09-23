@@ -1,3 +1,5 @@
+import { gameHttpUrl, TARGET, type Target } from './target.js';
+
 // rs2b2t rotates its RSA keypair on restart, so the baked modulus can go stale.
 // Login response 6 triggers one refresh from /loginkey or the server's client bundle.
 
@@ -39,8 +41,8 @@ async function readModulus(url: string, extract: (text: string) => string | null
     }
 }
 
-export async function refreshLoginKey(): Promise<boolean> {
-    const next = (await readModulus('/loginkey', parseLoginModulus)) ?? (await readModulus(CLIENT_BUNDLE, extractLoginModulus));
+export async function refreshLoginKey(target: Target = TARGET): Promise<boolean> {
+    const next = (await readModulus(gameHttpUrl('/loginkey', target), parseLoginModulus)) ?? (await readModulus(gameHttpUrl(CLIENT_BUNDLE, target), extractLoginModulus));
     if (!next || next === modulus) {
         return false;
     }

@@ -1,3 +1,7 @@
+import './panel/desktopStorage.js';
+import { TARGET, supportsWorldRouting } from '../client/config/target.js';
+import { resolveNodeId, hostedWorld } from '../client/config/worlds.js';
+import { worldSelector } from './panel/WorldSelector.js';
 import { CLIENT_VERSION, ClientProt } from '../client/io/ClientProt.js';
 import { actions, reader } from './adapter/ClientAdapter.js';
 import BotClient from './runtime/BotClient.js';
@@ -34,11 +38,28 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
     setNavPackHost(window.top ?? window);
 
     const params = new URLSearchParams(window.location.search);
-    const nodeid = parseInt(params.get('nodeid') ?? '10', 10);
+    const world = TARGET.world ?? hostedWorld(TARGET.wsHost)?.number ?? null;
+    const identity = new URLSearchParams(params);
+    if (!supportsWorldRouting()) identity.delete('world');
+    const nodeid = resolveNodeId(TARGET.wsHost, identity);
     const lowmem = params.get('lowmem') !== '0';
     const members = params.get('members') !== '0';
 
     const client = new BotClient(nodeid, lowmem, members);
+    const prepareWorldSwitch = (): boolean => {
+        panel?.setWorldSwitchPending(true);
+        AutoRelogin.shutdown();
+        ScriptRunner.stop('World switch');
+        const ready = client.prepareWorldSwitch();
+        return ready && !['running', 'paused', 'stopping'].includes(ScriptRunner.state);
+    };
+
+    const cancelWorldSwitch = (): void => {
+        ScriptRunner.stop('World switch cancelled');
+        client.cancelWorldSwitch();
+        AutoRelogin.cancelWorldSwitch();
+        panel?.setWorldSwitchPending(false);
+    };
 
     const panelRoot = document.getElementById('bot-panel');
     let panel: BotPanel | null = null;
@@ -50,6 +71,15 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
                 document.body.classList.toggle('rs2b0t-renderer-off', !enabled);
             }
         });
+    }
+
+    if (panelRoot) {
+        if (window.top === window.self && supportsWorldRouting()) {
+            panelRoot.querySelector('.rs2b0t-title')?.after(worldSelector({
+                mode: 'single', location: new URL(window.location.href), prepare: prepareWorldSwitch, cancel: cancelWorldSwitch,
+                navigate: url => window.location.assign(url)
+            }));
+        }
     }
 
     const overlayCanvas = document.getElementById('overlay');
@@ -90,8 +120,9 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
     console.log(`[rs2b0t] build ${formatBuildInfo()}`);
 
     (globalThis as Record<string, unknown>).rs2b0t = {
+        prepareWorldSwitch, cancelWorldSwitch, world,
         client, host: BotHost, runner: ScriptRunner, registry: ScriptRegistry,
-        reader, actions, navigator: Navigator,
+        reader, actions, navigator: Navigator, runManager: RunManager,
         input: Input, scheduler: Scheduler,
         renderGate: RenderGate,
         build: BUILD_INFO,

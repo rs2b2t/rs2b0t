@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { actions, reader } from '#/bot/adapter/ClientAdapter.js';
+import { ScriptRunner } from '#/bot/runtime/ScriptRunner.js';
 import { BotHost } from '#/bot/runtime/BotHost.js';
-import { AutoRelogin } from '#/bot/runtime/AutoRelogin.js';
+import { AutoRelogin, AutoReloginImpl } from '#/bot/runtime/AutoRelogin.js';
 import type {
     LoginCoordination,
     LoginQueueStatus
@@ -177,4 +178,44 @@ describe('AutoRelogin multibox permit state', () => {
             actions.login = original.login;
         }
     });
+});
+
+
+test('shutdown stops script and checkbox reconnects until explicitly cancelled', () => {
+    const relogin = new AutoReloginImpl();
+    const originalState = Object.getOwnPropertyDescriptor(ScriptRunner, 'state');
+    Object.defineProperty(ScriptRunner, 'state', { configurable: true, value: 'running' });
+    const original = { ingame: reader.ingame, login: actions.login, addFrameListener: BotHost.addFrameListener };
+    let frame = (): void => {};
+    let attempts = 0;
+    try {
+        BotHost.addFrameListener = listener => { frame = listener; return () => {}; };
+        reader.ingame = () => false;
+        actions.login = () => { attempts++; return true; };
+        relogin.setCredentials('switch-test', 'test');
+        relogin.enable(true);
+        frame();
+        expect(attempts).toBe(1);
+        relogin.shutdown();
+        relogin.setAutoLogin(true);
+        relogin.enable(true);
+        frame();
+        expect(relogin.loginNow()).toBe(false);
+        expect(relogin.isAutoLogin()).toBe(false);
+        expect(attempts).toBe(1);
+        Object.defineProperty(ScriptRunner, 'state', { configurable: true, value: 'idle' });
+        relogin.cancelWorldSwitch();
+        frame();
+        expect(attempts).toBe(1);
+        expect(relogin.isAutoLogin()).toBe(false);
+        expect(relogin.loginNow()).toBe(true);
+        expect(attempts).toBe(2);
+    } finally {
+        relogin.setCredentials('', '');
+        if (originalState) Object.defineProperty(ScriptRunner, 'state', originalState);
+        else Reflect.deleteProperty(ScriptRunner, 'state');
+        reader.ingame = original.ingame;
+        actions.login = original.login;
+        BotHost.addFrameListener = original.addFrameListener;
+    }
 });

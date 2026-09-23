@@ -21,6 +21,7 @@ export interface ProfileFile extends ProfileSnapshot {
 const MAIN_TAB = 'Main';
 
 export function serializeProfileFile(data: ProfileSnapshot): string {
+    requireProfiles(data.profiles);
     const file: ProfileFile = {
         kind: PROFILE_FILE_KIND,
         v: PROFILE_FILE_VERSION,
@@ -56,7 +57,7 @@ export function parseProfileFile(text: string): ProfileSnapshot {
         throw new Error('profile file tabs must be strings');
     }
     return {
-        profiles: requireProfiles(obj.profiles),
+        profiles: requireProfiles(obj.profiles, true),
         tabs: obj.tabs as string[],
         activeTab: obj.activeTab,
         storage: parseStorage(obj.storage)
@@ -155,7 +156,7 @@ function parseStorage(raw: unknown): BoxStorageMap {
     return out;
 }
 
-function requireProfiles(v: unknown[]): Profile[] {
+function requireProfiles(v: unknown[], migrateRetired = false): Profile[] {
     const out: Profile[] = [];
     for (const raw of v) {
         if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -166,6 +167,13 @@ function requireProfiles(v: unknown[]): Profile[] {
             throw new Error(`invalid profile entry ${JSON.stringify(raw)}`);
         }
         const entry: Profile = { username: p.username, password: p.password };
+        if (p.world !== undefined) {
+            const world = migrateRetired && p.world === 3 ? 2 : p.world;
+            if (world !== 1 && world !== 2) {
+                throw new Error(`invalid profile world on '${p.username}': expected 1 or 2`);
+            }
+            entry.world = world;
+        }
         if (typeof p.tab === 'string' && p.tab !== MAIN_TAB) {
             entry.tab = p.tab;
         } else if (p.tab !== undefined && p.tab !== MAIN_TAB) {

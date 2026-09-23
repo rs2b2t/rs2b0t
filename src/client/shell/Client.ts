@@ -21,7 +21,7 @@ import VarpType from '#/client/config/VarpType.js';
 import VarBitType from '#/client/config/VarBitType.js';
 import IfType from '#/client/config/IfType.js';
 import { ComponentType, ButtonType } from '#/client/config/IfType.js';
-import { TARGET } from '#/client/config/target.js';
+import { gameHttpUrl, TARGET } from '#/client/config/target.js';
 import { loginExponent, loginModulus, refreshLoginKey } from '#/client/config/loginKey.js';
 
 import ClientEntity from '#/client/dash3d/ClientEntity.js';
@@ -305,6 +305,7 @@ export class Client extends GameShell {
     private loginUser: string = '';
     private loginPass: string = '';
     private loginAttempt: LoginAttempt | null = null;
+    private worldSwitchPending = false;
 
     private imageRunes: Pix8[] = [];
     private titleFlames: TitleFlames | null = null;
@@ -726,7 +727,7 @@ export class Client extends GameShell {
             await this.drawProgress('Connecting to web server', 10);
 
             try {
-                const checksums: Packet = new Packet(await downloadUrl('/crc'));
+                const checksums: Packet = new Packet(await downloadUrl(gameHttpUrl('/crc')));
                 for (let i: number = 0; i < 9; i++) {
                     this.jagChecksum[i] = checksums.g4();
                 }
@@ -795,7 +796,7 @@ export class Client extends GameShell {
             await this.drawProgress(`Requesting ${displayName}`, progress);
 
             try {
-                data = await downloadUrl(`/${filename}${crc}`);
+                data = await downloadUrl(gameHttpUrl(`/${filename}${crc}`));
 
                 const checksum = Packet.getcrc(data, 0, data.length);
                 if (crc === checksum) {
@@ -1730,6 +1731,15 @@ export class Client extends GameShell {
         });
     }
 
+    public cancelWorldSwitch(): void {
+        this.worldSwitchPending = false;
+    }
+
+    public prepareWorldSwitch(): boolean {
+        this.worldSwitchPending = true;
+        return !this.ingame && this.loginAttempt === null;
+    }
+
     public startLogin(username: string, password: string): boolean {
         return this.beginLogin(username, password, false).accepted;
     }
@@ -1738,7 +1748,7 @@ export class Client extends GameShell {
         if (this.loginAttempt) {
             return { accepted: false, done: this.loginAttempt.done };
         }
-        if (this.ingame) {
+        if (this.ingame || this.worldSwitchPending) {
             return { accepted: false, done: Promise.resolve() };
         }
 
@@ -2046,8 +2056,13 @@ export class Client extends GameShell {
                 this.loginMes1 = 'Your account is already logged in.';
                 this.loginMes2 = 'Try again in 60 secs...';
             } else if (response === 6) {
-                if (await refreshLoginKey()) {
-                    await this.login(username, password, reconnect);
+                this.closeLoginStream(attempt);
+                const refreshed = await refreshLoginKey();
+                if (!this.isLoginAttemptActive(attempt) || this.worldSwitchPending) {
+                    return;
+                }
+                if (refreshed) {
+                    await this.performLogin(username, password, reconnect, attempt);
                 } else {
                     this.loginMes1 = 'RuneScape has been updated!';
                     this.loginMes2 = 'Please reload this page.';

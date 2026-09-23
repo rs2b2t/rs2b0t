@@ -1,4 +1,4 @@
-import { reader } from '../../adapter/ClientAdapter.js';
+import { reader, type WorldTile } from '../../adapter/ClientAdapter.js';
 import { BotHost } from '../BotHost.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
@@ -32,6 +32,18 @@ export function pickEventNear(npc: { name: string | null; distance: number }): b
     const name = npc.name?.toLowerCase();
     return name !== undefined && PICK_EVENT_NPCS.includes(name) && npc.distance <= PLANT_REACH;
 }
+
+/** FACE_ENTITY values at or above this are a player slot; below it they are an npc index. */
+const FACE_ENTITY_PLAYER = 32768;
+
+// Why: a talking random follows the player it spawned for, so its FACE_ENTITY names that player and a Talk-to from anyone else only draws "Sorry, but I'm trying to talk to another player".
+/** Whether this event npc is following a player who is not us. An absent facing or an unknown slot of our own stays ours, since abandoning our own event runs it down to its fail teleport. */
+export function eventNpcTargetsAnotherPlayer(npc: { faceEntity: number }, selfSlot: number): boolean {
+    return selfSlot >= 0
+        && npc.faceEntity >= FACE_ENTITY_PLAYER
+        && npc.faceEntity - FACE_ENTITY_PLAYER !== selfSlot;
+}
+
 const idRange = (lo: number, hi: number): number[] => Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
 const HOSTILE_EVENT_NPC_IDS = new Set<number>([
     ...idRange(391, 396), // River troll  (macro_rivertrollguardian_1..6)
@@ -49,6 +61,8 @@ const GAS_CHEST_LOC_ID = 2141;
 const WHIRLPOOL_NPC_IDS = [403, 404, 405, 406];
 const SMOKING_ROCK_ID_MIN = 2119;
 const SMOKING_ROCK_ID_MAX = 2138;
+/** How far to step off a hazard: gas damages the tile beside it and a whirlpool only takes gear from a re-click. */
+export const HAZARD_STEP = 4;
 const FISHING_GEAR = [
     'small fishing net',
     'big fishing net',
@@ -137,6 +151,8 @@ type EventKind =
 interface DetectedEvent {
     kind: EventKind;
     name: string;
+    /** Where a hazard stands, so the step off it goes the other way. */
+    tile?: WorldTile;
 }
 
 const MAX_ATTEMPTS = 4; // bounded retries before the script resumes
@@ -310,12 +326,13 @@ class RandomEventsImpl {
             BotHost.tickCount
         );
 
+        const selfSlot = reader.selfSlot();
         for (const npc of npcs) {
             const name = npc.name?.toLowerCase();
             if (!name) {
                 continue;
             }
-            if (DIALOG_EVENT_NPCS.includes(name) && npc.distance <= 6) {
+            if (DIALOG_EVENT_NPCS.includes(name) && npc.distance <= 6 && !eventNpcTargetsAnotherPlayer(npc, selfSlot)) {
                 return { kind: 'dialog', name };
             }
             if (pickEventNear(npc) && plantStrategy(npc.ops) === 'pick') {
@@ -345,15 +362,15 @@ class RandomEventsImpl {
 
         for (const loc of reader.locs()) {
             if (loc.id === GAS_CHEST_LOC_ID && loc.distance <= 1) {
-                return { kind: 'hazard', name: 'poisonous gas' };
+                return { kind: 'hazard', name: 'poisonous gas', tile: loc.tile };
             }
             if (loc.id >= SMOKING_ROCK_ID_MIN && loc.id <= SMOKING_ROCK_ID_MAX && loc.distance <= 2) {
-                return { kind: 'hazard', name: 'smoking rock' };
+                return { kind: 'hazard', name: 'smoking rock', tile: loc.tile };
             }
         }
         for (const npc of npcs) {
             if (WHIRLPOOL_NPC_IDS.includes(npc.id) && npc.distance <= 3) {
-                return { kind: 'hazard', name: 'whirlpool' };
+                return { kind: 'hazard', name: 'whirlpool', tile: npc.tile };
             }
         }
 
@@ -425,7 +442,7 @@ class RandomEventsImpl {
                 acted = await this.handleEvade(event.name, log);
                 break;
             case 'hazard':
-                acted = await this.handleHazard(event.name, log);
+                acted = await this.handleHazard(event.name, event.tile, log);
                 break;
             case 'hijack':
                 acted = await this.handleHijack(log);
@@ -587,13 +604,14 @@ class RandomEventsImpl {
         return true;
     }
 
-    private async handleHazard(name: string, log: (msg: string) => void): Promise<boolean> {
+    // Why: with our own tile as the threat every candidate sits the same distance away, so the sort is a no-op and the first reachable compass tile can land beside the hazard we are leaving.
+    private async handleHazard(name: string, at: WorldTile | undefined, log: (msg: string) => void): Promise<boolean> {
         const me = Game.tile();
         if (!me) {
             return false;
         }
         log(`random event: ${name} — stepping away`);
-        const flee = fleeCandidates(me, me, 4).find(t => Reachability.canReach(t, { maxSteps: 600 }));
+        const flee = fleeCandidates(me, at ?? me, HAZARD_STEP).find(t => Reachability.canReach(t, { maxSteps: 600 }));
         if (flee) {
             await Traversal.walkTo(flee, { radius: 1, timeoutMs: 15_000, log });
         }

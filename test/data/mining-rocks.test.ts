@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { GAS_ROCK_IDS, ROCK_OPTIONS, ROCK_TYPES, resolveRockIds } from '#/bot/data/miningRocks.js';
+import { GAS_ROCK_IDS, ROCK_OPTIONS, ROCK_TYPES, ROCK_TIER_ORDER, rockTierById, resolveRockIds } from '#/bot/data/miningRocks.js';
 import { PICKAXES, bestPickaxe } from '#/bot/api/acquisition/Tools.js';
 
 test('every ore type maps to exactly two rock loc ids', () => {
@@ -70,5 +70,40 @@ describe('GAS_ROCK_IDS', () => {
                 expect(GAS_ROCK_IDS.has(id)).toBe(false);
             }
         }
+    });
+});
+
+describe('ROCK_TIER_ORDER', () => {
+    test('follows the mining ladder, best ore last', () => {
+        expect(ROCK_TIER_ORDER).toEqual([
+            'Clay',
+            'Copper',
+            'Tin',
+            'Iron',
+            'Silver',
+            'Coal',
+            'Gold',
+            'Mithril',
+            'Adamantite',
+            'Runite'
+        ]);
+    });
+});
+
+describe('rockTierById', () => {
+    test('ranks runite above coal above iron', () => {
+        expect(rockTierById(2106)).toBeGreaterThan(rockTierById(2096));
+        expect(rockTierById(2096)).toBeGreaterThan(rockTierById(2092));
+        expect(rockTierById(2106)).toBe(9);
+    });
+
+    test('depleted rock variants share their ore tier', () => {
+        for (const ids of Object.values(ROCK_TYPES)) {
+            expect(rockTierById(ids[1])).toBe(rockTierById(ids[0]));
+        }
+    });
+
+    test('local ids outside ROCK_TYPES have no tier', () => {
+        expect(rockTierById(450)).toBe(-1);
     });
 });
