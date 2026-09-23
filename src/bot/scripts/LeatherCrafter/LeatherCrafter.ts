@@ -405,8 +405,12 @@ export default class LeatherCrafter extends LoopingBot {
         this.log(`craft leg: making ${recipe.label} (leather ${before}, thread ${invById(THREAD)}, used ${Inventory.used()})`);
 
         if (this.kind.flow === 'single') {
-            // Why: no make-X interface exists for hard leather; the server crafts synchronously, so queue every leather slot at once (GemCutter's packet-burst pattern) and settle on the leather count moving.
-            const bursts = await issueHardLeatherBurst(leathers, target => needle.useOn(target));
+            // Why: no make-X interface exists for hard leather; the server crafts synchronously and always consumes first-in-inventory, so spam the last slot exactly leather-count times (GemCutter pattern, count-capped so no dead packets queue behind the bank open).
+            const lastSlot = leathers[leathers.length - 1]!;
+            const bursts = await issueHardLeatherBurst(
+                Array.from({ length: before }, () => lastSlot),
+                target => needle.useOn(target)
+            );
             this.log(`craft leg: hard leather burst made ${bursts}`);
             if (bursts === 0) {
                 return;
