@@ -205,7 +205,7 @@ export default class LeatherCrafter extends LoopingBot {
     private kindLabel = 'Leather';
     private recipe: Recipe | null = null;
     private threadStock = 100;
-    private threadVendor: typeof THREAD_SHOPS[number] | null = null;
+    private threadVendor: (typeof THREAD_SHOPS)[number] | null = null;
     private restockBank: Tile | null = null;
 
     private crafted = 0;
@@ -214,10 +214,7 @@ export default class LeatherCrafter extends LoopingBot {
     private startedAt = Date.now();
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(
-            () => Game.ingame() && reader.sceneState() === 2 && Game.tile() !== null && Skills.level('crafting') > 0,
-            0
-        );
+        await Execution.delayUntil(() => Game.ingame() && reader.sceneState() === 2 && Game.tile() !== null && Skills.level('crafting') > 0, 0);
 
         this.kindLabel = this.settings.str('leatherType', 'Leather');
         this.kind = LEATHERS[this.kindLabel] ?? LEATHERS.Leather;
@@ -253,18 +250,25 @@ export default class LeatherCrafter extends LoopingBot {
             return;
         }
 
+        const leather = invById(this.kind.leatherId);
+        const thread = invById(THREAD);
+        const used = Inventory.used();
         if (this.threadVendor) {
+            this.log(`loop: buying thread (leather ${leather}, thread ${thread}, used ${used})`);
             await this.buyThread();
             return;
         }
         if (this.restockBank) {
+            this.log(`loop: restock trip — banking (leather ${leather}, thread ${thread}, used ${used})`);
             await this.bankLeg();
             return;
         }
-        if (invById(this.kind.leatherId) >= this.recipe.qty && invById(THREAD) > 0) {
+        if (leather >= this.recipe.qty && thread > 0) {
+            this.log(`loop: crafting (leather ${leather}, thread ${thread}, used ${used})`);
             await this.craftLeg();
             return;
         }
+        this.log(`loop: out of leather or thread — banking (leather ${leather}, thread ${thread}, used ${used})`);
         await this.bankLeg();
     }
 
@@ -273,35 +277,46 @@ export default class LeatherCrafter extends LoopingBot {
         // Why: walk to whichever bank is cheapest to reach rather than an air-nearest tile, so the bot banks from wherever the player already is. Bank contents are account-wide, so nothing else changes.
         const picked = here ? await nearestBankReachable(here, Navigator) : null;
         const stand = this.restockBank ?? picked?.tile ?? BANK_STAND;
+        if (here) {
+            this.log(`bank leg: from (${here.x}, ${here.z}, ${here.level}) standing near ${picked?.name ?? 'no picked bank'} (stand ${stand})`);
+        }
         if (!here || Math.max(Math.abs(here.x - stand.x), Math.abs(here.z - stand.z)) > 4) {
             this.setStatus('walking to the bank');
+            this.log(`bank leg: walking to ${picked?.name ?? stand}`);
             if (!(await Traversal.walkResilient(stand, { radius: 3, attempts: 2, timeoutMs: 45_000, log: m => this.log(`  ${m}`) }))) {
+                this.log('bank leg: walk failed — retrying');
                 return;
             }
+            this.log('bank leg: arrived at the bank');
         }
 
         this.setStatus('banking');
+        this.log('bank leg: opening the bank');
         if (!(await Bank.openNearest('Bank booth', 'Use-quickly', m => this.log(`  ${m}`)))) {
-            this.log('could not open the bank — retrying');
+            this.log('bank leg: could not open the bank — retrying');
             return;
         }
+        this.log('bank leg: bank opened');
         if (!(await Execution.delayUntil(() => Bank.loaded(), 3000))) {
-            this.log('bank contents not ready — retrying');
+            this.log('bank leg: bank contents not ready — retrying');
             return;
         }
+        this.log('bank leg: bank contents loaded');
 
         if (!(await depositAllExceptIds(new Set([NEEDLE, THREAD, this.kind.leatherId])))) {
-            this.log('bank inventory view not ready — retrying');
+            this.log('bank leg: bank inventory view not ready — retrying');
             return;
         }
+        this.log('bank leg: deposited — now restocking');
 
         if (invById(NEEDLE) === 0 && !(await this.withdrawRequired(NEEDLE, 1, 'needle', 'no needle in the bank'))) {
             return;
         }
         if (invById(THREAD) < 5) {
+            this.log('bank leg: thread low — withdrawing thread');
             const result = await withdrawXById(THREAD, this.threadStock);
             if (result === 'retry') {
-                this.log('could not withdraw thread — retrying');
+                this.log('bank leg: could not withdraw thread — retrying');
                 return;
             }
             if (result === 'missing' && invById(THREAD) === 0) {
@@ -311,30 +326,31 @@ export default class LeatherCrafter extends LoopingBot {
         }
 
         const free = reader.inventorySize() - Inventory.used();
-        if (!(await this.withdrawRequired(
-            this.kind.leatherId,
-            free,
-            this.kindLabel,
-            `no ${this.kindLabel} left in the bank`
-        ))) {
+        if (!(await this.withdrawRequired(this.kind.leatherId, free, this.kindLabel, `no ${this.kindLabel} left in the bank`))) {
             return;
         }
+        this.log(`bank leg: withdrew ${free} ${this.kindLabel} (${Inventory.used()}/${reader.inventorySize()} slots used)`);
 
         actions.closeModal();
-        if (await Execution.delayUntil(() => !Bank.isOpen(), 3000)) this.restockBank = null;
+        if (await Execution.delayUntil(() => !Bank.isOpen(), 3000)) {
+            this.restockBank = null;
+            this.log('bank leg: bank closed — back to crafting');
+        } else {
+            this.log('bank leg: bank still open after close — continuing');
+        }
     }
 
     private async fundThread(stand: Tile): Promise<void> {
         if (!(await depositAllExceptIds(new Set([NEEDLE, THREAD, COINS])))) return;
         const available = Bank.items().find(item => item.id === COINS)?.count ?? 0;
         const needed = Math.max(0, this.threadStock * THREAD_MAX_PRICE - invById(COINS));
-        if (needed > 0 && available > 0 && await withdrawXById(COINS, Math.min(available, needed)) !== 'withdrawn') return;
+        if (needed > 0 && available > 0 && (await withdrawXById(COINS, Math.min(available, needed))) !== 'withdrawn') return;
         if (invById(COINS) === 0) {
             ScriptRunner.stop('no thread or coins in the bank');
             return;
         }
         this.restockBank = stand;
-        this.threadVendor = THREAD_SHOPS.reduce((nearest, shop) => stand.distanceTo(shop.tile) < stand.distanceTo(nearest.tile) ? shop : nearest);
+        this.threadVendor = THREAD_SHOPS.reduce((nearest, shop) => (stand.distanceTo(shop.tile) < stand.distanceTo(nearest.tile) ? shop : nearest));
         actions.closeModal();
         await Execution.delayUntil(() => !Bank.isOpen(), 3000);
     }
@@ -386,15 +402,20 @@ export default class LeatherCrafter extends LoopingBot {
 
         const before = invById(this.kind.leatherId);
         this.setStatus(`making ${recipe.label}`);
+        this.log(`craft leg: making ${recipe.label} (leather ${before}, thread ${invById(THREAD)}, used ${Inventory.used()})`);
 
         if (this.kind.flow === 'single') {
             // There is no make-X interface for hard leather. The server crafts
             // synchronously, so use the needle on ten distinct slots at once.
-            if ((await issueHardLeatherBurst(leathers, target => needle.useOn(target))) === 0) {
+            const bursts = await issueHardLeatherBurst(leathers, target => needle.useOn(target));
+            this.log(`craft leg: hard leather burst made ${bursts}`);
+            if (bursts === 0) {
                 return;
             }
             if (await Execution.delayUntil(() => invById(this.kind.leatherId) < before, 5000)) {
                 await Execution.delayTicks(1);
+            } else {
+                this.log('craft leg: hard leather never moved — retrying');
             }
         } else if (!(await needle.useOn(leathers[0]))) {
             return;
@@ -419,6 +440,9 @@ export default class LeatherCrafter extends LoopingBot {
         const used = before - invById(this.kind.leatherId);
         if (used > 0) {
             this.crafted += Math.floor(used / recipe.qty);
+            this.log(`craft leg: made ${Math.floor(used / recipe.qty)} ${recipe.label} (leather now ${invById(this.kind.leatherId)}, used ${Inventory.used()})`);
+        } else {
+            this.log(`craft leg: no leather consumed (leather ${before} unchanged)`);
         }
     }
 
