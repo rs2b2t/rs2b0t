@@ -199,7 +199,7 @@ async function depositAllExceptIds(keep: Set<number>): Promise<boolean> {
 }
 
 export default class LeatherCrafter extends LoopingBot {
-    override loopDelay = 600;
+    override loopDelay = 100;
 
     private kind: LeatherKind = LEATHERS.Leather;
     private kindLabel = 'Leather';
@@ -405,8 +405,7 @@ export default class LeatherCrafter extends LoopingBot {
         this.log(`craft leg: making ${recipe.label} (leather ${before}, thread ${invById(THREAD)}, used ${Inventory.used()})`);
 
         if (this.kind.flow === 'single') {
-            // There is no make-X interface for hard leather. The server crafts
-            // synchronously, so use the needle on ten distinct slots at once.
+            // Why: no make-X interface exists for hard leather; the server crafts synchronously, so queue every leather slot at once (GemCutter's packet-burst pattern) and settle on the leather count moving.
             const bursts = await issueHardLeatherBurst(leathers, target => needle.useOn(target));
             this.log(`craft leg: hard leather burst made ${bursts}`);
             if (bursts === 0) {
