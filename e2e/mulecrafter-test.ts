@@ -2,13 +2,17 @@
 // Usage: bun e2e/mulecrafter-test.ts [base] [budget-min] [num-mules] [rune: "Air rune" (default) or "Mind rune"]
 
 import type { Page } from 'playwright-core';
-import { launchBrowser, parseArgs, cheatQuiet, fail, stopScript, setSettings, type } from './lib/harness.js';
+import { launchBrowser, positionalArgs, cheatQuiet, fail, stopScript, setSettings, type } from './lib/harness.js';
 import { mainlandAccount, startScript } from './tutorial/harness.js';
 
-const { base, rest } = parseArgs(process.argv.slice(2), { base: process.env.BASE ?? 'http://localhost:8890' });
-const budgetMin = Number(rest[0]) || 2.5;
-const NUM_MULES = Number(rest[1]) || 1;
-const RUNE = rest[2] || 'Air rune';
+const args = positionalArgs(process.argv.slice(2), process.env.BASE ?? 'http://localhost:8890');
+const base = args[0];
+const budgetMin = Number(args[1]) || 2.5;
+const NUM_MULES = Number.isFinite(Number(args[2])) ? Number(args[2]) : 1;
+const RUNE = args[3] || 'Air rune';
+const MEETING_POINT = process.env.MEETING_POINT ?? 'Altar (inside)';
+const TRADES_PER_BANK = Number(process.env.TRADES_PER_BANK ?? 1);
+const BANK_FILL = process.env.BANK_FILL === '1';
 
 interface RuneRoute {
     talisman: string;
@@ -39,6 +43,12 @@ const ROUTES: Record<string, RuneRoute> = {
 
 const route = ROUTES[RUNE];
 if (!route) { fail(`unknown rune '${RUNE}' — expected one of: ${Object.keys(ROUTES).join(', ')}`); }
+if (!['Altar (inside)', 'Ruins (outside)'].includes(MEETING_POINT)) {
+    fail(`unknown meeting point '${MEETING_POINT}'`);
+}
+if (!Number.isFinite(TRADES_PER_BANK) || TRADES_PER_BANK < 0) {
+    fail(`invalid TRADES_PER_BANK '${TRADES_PER_BANK}'`);
+}
 
 const FALLY_EAST = { x: 3013, z: 3355, level: 0 };
 
@@ -221,7 +231,14 @@ async function setupAccount(page: Page, user: string, mode: 'Crafter' | 'Mule', 
     await seedItem(page, route.talisman, route.talisman.replace(/_/g, ' '), 1);
     // Keyboard ::give for cert_blankrune, requires keyboard path to stack properly.
     await type(page, '::give cert_blankrune 1000');
-    await setSettings(page, 'MuleCrafter', { rune: RUNE, mode, partner });
+    await setSettings(page, 'MuleCrafter', {
+        rune: RUNE,
+        mode,
+        partner,
+        meetingPoint: MEETING_POINT,
+        tradesPerBank: TRADES_PER_BANK,
+        bankFill: BANK_FILL
+    });
     const arrived = await teleArrive(page, FALLY_EAST);
     if (!arrived) fail(`${user}: could not teleport to Falador East bank`);
     await page.waitForTimeout(1500);
@@ -240,7 +257,7 @@ try {
         mPages.push(await (await browser.newContext()).newPage());
     }
 
-    console.log(`bringing up crafter + ${NUM_MULES} mule(s) for ${RUNE} (sequential)...`);
+    console.log(`bringing up crafter + ${NUM_MULES} mule(s) for ${RUNE} at ${MEETING_POINT} (bankFill=${BANK_FILL}, tradesPerBank=${TRADES_PER_BANK}) (sequential)...`);
 
     const partnerList = M_USERS.join(',');
     await setupAccount(pageC, C_USER, 'Crafter', partnerList);
@@ -284,9 +301,9 @@ try {
         });
 
         const rate = Math.round(craftedEss / Math.max(0.1, (Date.now() - startedAt) / 3_600_000));
-        console.log(`── t=${mins}min | crafter ${cc.runes} ${route.runeName}s · ${craftedEss} ess crafted (+${cc.rcXp - xp0} xp, ~${rate} ess/hr) @${zone(cc.pos)} ${cc.state} | ${inFlight} ess in mule packs`);
+        console.log(`── t=${mins}min | crafter ${cc.runes} ${route.runeName}s · ess=${cc.ess} · ${craftedEss} ess crafted (+${cc.rcXp - xp0} xp, ~${rate} ess/hr) @${zone(cc.pos)} (${cc.pos?.x},${cc.pos?.z}) ${cc.state} · ${cc.lastLog} | ${inFlight} ess in mule packs`);
         rr.forEach((r, i) => {
-            console.log(`   M${i} ${zone(r.pos).padEnd(9)} ess=${String(r.ess).padStart(3)} runes=${String(r.runes).padStart(3)} deliv=${String(deliveries[i]).padStart(3)} ${r.state.padEnd(8)} · ${r.lastLog}`);
+            console.log(`   M${i} ${zone(r.pos).padEnd(9)} (${r.pos?.x},${r.pos?.z}) ess=${String(r.ess).padStart(3)} runes=${String(r.runes).padStart(3)} deliv=${String(deliveries[i]).padStart(3)} ${r.state.padEnd(8)} · ${r.lastLog}`);
         });
 
         if (cc.state === 'crashed' || rr.some(r => r.state === 'crashed')) {
