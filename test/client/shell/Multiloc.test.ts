@@ -130,6 +130,22 @@ describe('multiloc placement', () => {
         expect(menu(4).menuOption).toEqual(['Walk here']);
     });
 
+    test('single-bit varbit uses its selected bit', () => {
+        VarBitType.list[0].endbit = 1;
+        expect(menu(2).menuOption).toEqual(['Walk here']);
+    });
+
+    test('highest selected bit can choose an out of range child', () => {
+        expect(menu(8).menuOption).toEqual(['Walk here']);
+    });
+
+    test('two-bit varbit selects its third child', () => {
+        VarBitType.list[0].endbit = 2;
+        locs.set(10, loc(10, 'Third passage', ['Cross']));
+        locs.get(rawId)!.multiloc = [transformedId, -1, 10];
+        expect(menu(4).menuOption).toContain('Cross @cya@Third passage');
+    });
+
     test('scene builder gives a static multiloc a dynamic model', () => {
         ClientBuild.lowMem = false;
         const builder = Object.assign(Object.create(ClientBuild.prototype), {

@@ -12,7 +12,7 @@ export function resolveMultiloc(loc: LocType, varps: number[]): LocType | null {
     }
 
     const width = varbit.endbit - varbit.startbit;
-    const mask = width === 32 ? -1 : (1 << width) - 1;
+    const mask = 2 ** (width + 1) - 1;
     const index = ((varps[varbit.basevar] ?? 0) >> varbit.startbit) & mask;
     const id = loc.multiloc[index];
     return id === undefined || id === -1 ? null : LocType.list(id);
