@@ -35,7 +35,8 @@ type BankPlan =
     | { action: 'bank'; missing: MissingItem[]; estimatedCost: number };
 
 /** Merge required item counts from a path into a name to count map. */
-export function itemsRequiredByWaypoints(waypoints: Waypoint[]): Record<string, number> {
+export function itemsRequiredByWaypoints(waypoints: Waypoint[], state?: WorldStateData): Record<string, number> {
+    const ws = state ? worldStateFromData(state) : undefined;
     const need: Record<string, number> = {};
     const bump = (name: string, count: number): void => {
         if (count <= 0) {
@@ -75,7 +76,15 @@ export function itemsRequiredByWaypoints(waypoints: Waypoint[]): Record<string, 
             { x: wp.x, z: wp.z, level: wp.level }
         );
         if (sc?.requires) {
-            bump(sc.requires.item, sc.requires.count);
+            // Why: a completed waiver quest (Prince Ali Rescue) lifts the toll, so the bank plan
+            // must not add coins it no longer needs to pay.
+            const waived =
+                sc.questWaivesItems !== undefined
+                && ws !== undefined
+                && ws.questStatus(sc.questWaivesItems) === 'complete';
+            if (!waived) {
+                bump(sc.requires.item, sc.requires.count);
+            }
         }
         // Withdraw a plain Knife unless a held or worn blade can already slash webs.
         if (isSlashWebTransport(t.locName, t.action)) {
@@ -88,7 +97,7 @@ export function itemsRequiredByWaypoints(waypoints: Waypoint[]): Record<string, 
 /** Items on the path the player does not currently hold enough of. */
 export function missingItemsForPath(waypoints: Waypoint[], state: WorldStateData): MissingItem[] {
     const ws = worldStateFromData(state);
-    const need = itemsRequiredByWaypoints(waypoints);
+    const need = itemsRequiredByWaypoints(waypoints, state);
     const missing: MissingItem[] = [];
     for (const [name, count] of Object.entries(need)) {
     // A held slash tool means no Knife withdrawal.

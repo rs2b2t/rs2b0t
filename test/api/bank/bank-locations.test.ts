@@ -4,7 +4,20 @@ import path from 'node:path';
 import { afterEach, describe, expect, test } from 'bun:test';
 import { gunzipSync } from 'fflate';
 
-import { BANK_LOCATIONS, USE_MAGE_BANK, approachOf, bankCostForFinder, bankCostForNavigator, bankDistance, nearestBank, nearestBanks, nearestBankReachable, nearestUsableBank, nearestWalkableBank, nearestWalkableBankAsync } from '#/bot/api/bank/BankLocations.js';
+import {
+    BANK_LOCATIONS,
+    USE_MAGE_BANK,
+    approachOf,
+    bankCostForFinder,
+    bankCostForNavigator,
+    bankDistance,
+    nearestBank,
+    nearestBanks,
+    nearestBankReachable,
+    nearestUsableBank,
+    nearestWalkableBank,
+    nearestWalkableBankAsync
+} from '#/bot/api/bank/BankLocations.js';
 import type { BankLocation, BankPathCost, NavigatorLike } from '#/bot/api/bank/BankLocations.js';
 import Tile from '#/bot/geometry/Tile.js';
 import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
@@ -82,10 +95,11 @@ test('Shantay Pass banks via the Shantay chest (Open then continue chat)', () =>
     expect(shantay?.tile.x).toBe(3308);
     expect(shantay?.tile.z).toBe(3120);
     expect(shantay?.access).toEqual({ name: 'Shantay chest', op: 'Open' });
-    expect(BANK_LOCATIONS.filter(bank => bank.access).map(bank => bank.name).sort()).toEqual([
-        'Duel Arena',
-        'Shantay Pass'
-    ]);
+    expect(
+        BANK_LOCATIONS.filter(bank => bank.access)
+            .map(bank => bank.name)
+            .sort()
+    ).toEqual(['Duel Arena', 'Shantay Pass']);
 });
 
 test('nearestBank returns the closest bank on the same level', () => {
@@ -153,7 +167,9 @@ describe('bank entry gates', () => {
     });
 
     test('every other bank is ungated', () => {
-        const gated = BANK_LOCATIONS.filter(b => b.requires !== undefined).map(b => b.name).sort();
+        const gated = BANK_LOCATIONS.filter(b => b.requires !== undefined)
+            .map(b => b.name)
+            .sort();
         expect(gated).toEqual(['Canifis', 'Fishing Guild', 'Mage Arena', 'Shilo Village', 'Zanaris']);
     });
 });
@@ -219,13 +235,90 @@ describe('nearestBanks', () => {
     });
 });
 
+describe('nearestBankReachable near-bank fast-path', () => {
+    test('standing at a booth returns that bank without a single worker search', async () => {
+        let calls = 0;
+        const navigator: NavigatorLike = {
+            async findPath() {
+                calls++;
+                return { ok: false, reason: 'should never be reached standing at the bank' };
+            }
+        };
+        const picked = await nearestBankReachable({ x: 3185, z: 3440, level: 0 }, navigator);
+        expect(picked?.name).toBe('Varrock West');
+        expect(calls).toBe(0);
+    });
+
+    test('within 4 tiles of a booth also short-circuits', async () => {
+        let calls = 0;
+        const navigator: NavigatorLike = {
+            async findPath() {
+                calls++;
+                return { ok: false, reason: 'should never be reached' };
+            }
+        };
+        const picked = await nearestBankReachable({ x: 3188, z: 3442, level: 0 }, navigator);
+        expect(picked?.name).toBe('Varrock West');
+        expect(calls).toBe(0);
+    });
+
+    test('a bank in reach but far by air still navigates', async () => {
+        // 5 tiles out from the Varrock West stand: the fast-path radius must not fire, and the
+        // walk-cost pick must be attempted rather than silently returning the air-nearest.
+        let calls = 0;
+        const navigator: NavigatorLike = {
+            async findPath() {
+                calls++;
+                return { ok: true, cost: 1000 };
+            }
+        };
+        const picked = await nearestBankReachable({ x: 3180, z: 3440, level: 0 }, navigator);
+        expect(picked).not.toBeNull();
+        // every candidate costs the same, so "navigating" means the batch ran over the shortlist
+        expect(calls).toBeGreaterThan(1);
+    });
+
+    test('a gated booth within 4 tiles still navigates (fast-path respects the gate)', async () => {
+        // Shilo Village's gate is the quest; the stand is right there but the account could not use
+        // it, so nearestBank must not short-circuit onto it.
+        let searched = false;
+        const navigator: NavigatorLike = {
+            async findPath() {
+                searched = true;
+                return { ok: true, cost: 999_999 };
+            }
+        };
+        const picked = await nearestBankReachable({ x: 2852, z: 2954, level: 0 }, navigator);
+        expect(picked?.name).not.toBe('Shilo Village');
+        expect(searched).toBe(true);
+    });
+});
+
 // --- nav-cost edit to nearest bank (dungeon offset) ---
 
 const NAV_SKILLS = Object.fromEntries(
     [
-        'agility', 'prayer', 'mining', 'smithing', 'crafting', 'woodcutting', 'firemaking',
-        'ranged', 'attack', 'strength', 'defence', 'hitpoints', 'magic', 'thieving', 'fishing',
-        'cooking', 'runecraft', 'herblore', 'fletching', 'slayer', 'farming'
+        'agility',
+        'prayer',
+        'mining',
+        'smithing',
+        'crafting',
+        'woodcutting',
+        'firemaking',
+        'ranged',
+        'attack',
+        'strength',
+        'defence',
+        'hitpoints',
+        'magic',
+        'thieving',
+        'fishing',
+        'cooking',
+        'runecraft',
+        'herblore',
+        'fletching',
+        'slayer',
+        'farming'
     ].map(s => [s, 99])
 );
 
@@ -259,16 +352,12 @@ function loadFinder(): PathFinder | null {
 test('bankCostForNavigator maps navigator outcomes to a cost, off by catalog', async () => {
     const navigator = {
         async findPath(_from: unknown, _to: unknown, opts?: unknown) {
-            return (opts as { useTeleportCatalog?: boolean }).useTeleportCatalog === false
-                ? { ok: true, cost: 42 }
-                : { ok: false, reason: 'catalog on' };
+            return (opts as { useTeleportCatalog?: boolean }).useTeleportCatalog === false ? { ok: true, cost: 42 } : { ok: false, reason: 'catalog on' };
         }
     };
     const cost = bankCostForNavigator(navigator);
     await expect(cost({ x: 0, z: 0, level: 0 }, new Tile(1, 1, 0))).resolves.toBe(42);
-    await expect(
-        bankCostForNavigator({ findPath: async () => ({ ok: false, reason: 'blocked' }) })({ x: 0, z: 0, level: 0 }, new Tile(1, 1, 0))
-    ).resolves.toBeNull();
+    await expect(bankCostForNavigator({ findPath: async () => ({ ok: false, reason: 'blocked' }) })({ x: 0, z: 0, level: 0 }, new Tile(1, 1, 0))).resolves.toBeNull();
 });
 
 describe('nearestWalkableBank picks the walkable-nearest bank, not the air-nearest one', () => {

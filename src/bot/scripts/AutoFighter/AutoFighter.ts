@@ -67,6 +67,8 @@ import { HERBS, HERB_OPTIONS } from '../../data/herbs.js';
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const KIT = ['spade', 'sextant', 'watch', 'chart'];
 const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic'];
+// Why: auto-retaliate only fires on a landed hit, so a zero-damage enemy leaves us stuck "in combat". Re-issue Attack after this long with flat combat XP.
+const STALL_REATTACK_MS = 2 * 60_000;
 
 const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
 const SHOW_RANGE = { key: 'combatStyle', anyOf: ['range'] };
@@ -281,6 +283,8 @@ export default class AutoFighter extends TaskBot {
     private startedAt = Date.now();
     private lastBankAt = Date.now();
     private xpAtStart = 0;
+    private combatXpLast = 0;
+    private combatXpGainAt = 0;
     died = false;
     resumeAttack = false;
 
@@ -377,6 +381,8 @@ export default class AutoFighter extends TaskBot {
         this.startedAt = Date.now();
         this.lastBankAt = this.startedAt;
         this.xpAtStart = COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
+        this.combatXpLast = this.combatXpTotal();
+        this.combatXpGainAt = Date.now();
         this.log(`AutoFighter starting — '${targetNames().join(', ')}' at ${spotMode} ${ANCHOR} r${LEASH}, style ${STYLE}${STYLE === 'mage' ? ` (${SPELL}, ${RUNES_WITHDRAW} casts)` : STYLE === 'range' ? ` (${RANGE_MODE === 0 ? 'accurate' : RANGE_MODE === 1 ? 'rapid' : 'longrange'}, ${AMMO}x${AMMO_WITHDRAW})` : ` (${MELEE_STYLE})`}, banking ${AUTO_BANK ? 'auto' : 'none'}${BANK_EVERY_MINUTES > 0 ? ` every ${BANK_EVERY_MINUTES}m` : ''} at ${BANK_LOCATION}, food '${FOOD}'x${FOOD_WITHDRAW}, loot [${LOOT.join(', ')}]${BURY_BONES ? `, burying ${BURIAL_BONE_NAME}` : ''}`);
 
         this.on('chat.message', e => {
@@ -464,6 +470,19 @@ export default class AutoFighter extends TaskBot {
     }
     noteSupplyEmpty(v: boolean): void { this.supplyEmpty = v; }
     supplyKnownEmpty(): boolean { return this.supplyEmpty; }
+    private combatXpTotal(): number {
+        return COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
+    }
+    markCombatXp(): void {
+        const xp = this.combatXpTotal();
+        if (xp > this.combatXpLast) {
+            this.combatXpLast = xp;
+            this.combatXpGainAt = Date.now();
+        }
+    }
+    combatStalled(ms: number): boolean {
+        return Date.now() - this.combatXpGainAt > ms;
+    }
 }
 
 class EnableAutoRetaliate implements Task {
@@ -898,8 +917,15 @@ class Fight implements Task {
         return Npcs.all().find(n => n.index === engaged.index && names.some(name => matchesEntityName(n.name, name))) ?? null;
     }
     validate(): boolean {
+        if (needEat() || Skills.hpFraction() < PANIC_AT) {
+            return false;
+        }
         const target = this.findTarget();
-        return !needEat() && target !== null && (!Game.inCombat() || (this.bot.resumeAttack && target.targetsMe()));
+        // Why: a stalled fight stays Game.inCombat() true, so neither this idle branch nor resumeAttack ever fires. Strike instead when XP has been flat long enough.
+        if (this.bot.combatStalled(STALL_REATTACK_MS)) {
+            return target !== null;
+        }
+        return target !== null && (!Game.inCombat() || (this.bot.resumeAttack && target.targetsMe()));
     }
     async execute(): Promise<void> {
         const target = this.findTarget();
@@ -952,6 +978,8 @@ class Fight implements Task {
                 await Execution.delayTicks(2);
                 return;
             }
+            // Why: auto-retaliate only fires on a landed hit, so the loop never re-triggers it on a zero-damage enemy; keep the XP clock fresh here while the sibling validate() re-issues the attack when XP goes flat.
+            this.bot.markCombatXp();
             if (!Game.inCombat() && !cur.inCombat) {
                 return;
             }

@@ -25,7 +25,7 @@ import {
     resourceWithinCamp,
     spotWithinGatherRange
 } from './GatherCamp.js';
-import { LOCAL_MINE_PREFER_RADIUS, shouldCooldownGatherTile } from './TargetPick.js';
+import { LOCAL_MINE_PREFER_RADIUS, pickBucketNearest, shouldCooldownGatherTile } from './TargetPick.js';
 import { Trade } from '../../api/trade/Trade.js';
 import {
     DEFAULT_TRADE_RANGE,
@@ -33,7 +33,7 @@ import {
     isConfiguredPartner
 } from '../../api/trade/PartnerTrade.js';
 import { driveActivePartnerTrade, tradeScreenState } from '../../api/trade/drivePartnerTrade.js';
-import { BROKEN_PICKAXE, GAS_ROCK_IDS, GAS_ROCK_TICKS } from '../../data/miningRocks.js';
+import { BROKEN_PICKAXE, GAS_ROCK_IDS, GAS_ROCK_TICKS, rockTierById } from '../../data/miningRocks.js';
 import { ENT_LIFE_TICKS, ENT_NPC_IDS } from '../../data/woodcuttingLocations.js';
 import { bestPickaxe } from '../../api/acquisition/Tools.js';
 import { WHIRLPOOL_IDS, fishingRestockPlan } from '../../data/fishingMethods.js';
@@ -2428,11 +2428,24 @@ export class Gather implements Task {
 
     private pickRock() {
         const query = this.rockQuery();
-        if (this.bot.mining() && Math.random() < 0.1) {
-            const rocks = query.results();
-            return rocks[Math.floor(Math.random() * rocks.length)] ?? null;
+        if (!this.bot.mining()) {
+            return query.nearestPreferLocal(LOCAL_MINE_PREFER_RADIUS);
         }
-        return query.nearestPreferLocal(LOCAL_MINE_PREFER_RADIUS);
+        const rocks = query.results();
+        if (rocks.length === 0) {
+            return null;
+        }
+        const best = pickBucketNearest(rocks, l => rockTierById(l.id), l => l.distance());
+        if (!best) {
+            return null;
+        }
+        if (Math.random() < 0.1) {
+            // Why: variety across the tied pads, never a lower tier.
+            const tier = rockTierById(best.id);
+            const tied = rocks.filter(l => rockTierById(l.id) === tier);
+            return tied[Math.floor(Math.random() * tied.length)] ?? best;
+        }
+        return best;
     }
 
     validate(): boolean {
