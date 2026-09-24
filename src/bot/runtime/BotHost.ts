@@ -73,7 +73,10 @@ class BotHostImpl {
             ptype === ServerProt.UPDATE_ZONE_FULL_FOLLOWS ||
             ptype === ServerProt.LOC_ADD_CHANGE ||
             ptype === ServerProt.LOC_DEL ||
-            ptype === ServerProt.LOC_ANIM
+            ptype === ServerProt.LOC_ANIM ||
+            ptype === ServerProt.VARP_SMALL ||
+            ptype === ServerProt.VARP_LARGE ||
+            ptype === ServerProt.VARP_SYNC
         ) {
             invalidateLocSnapshots();
         }

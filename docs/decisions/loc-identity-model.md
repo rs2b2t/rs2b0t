@@ -22,11 +22,12 @@ Why it matters here: rs2b0t wraps a 2004-era client, so it reads that client's l
 scene rather than reproducing a headless state pipeline. Whatever the engine did to
 produce the change, the adapter sees the result.
 
-This client's `LocType` format has no varp/varbit transform table, so multi-state locs
-in this revision are explicit scene replacements, not the multiloc mechanism. If a later
-cache revision adds transforms, resolve them in the client/config layer and export the
-result, scripts must not decode cache transforms themselves, and `rawId` and
-`effectiveId` would then be separate fields rather than a changed meaning for `id`.
+This client's `LocType` supports varbit-selected multilocs. The scene retains the raw
+placement ID and typecode for interaction packets. Menus, rendering, and bot snapshots
+resolve the current child definition for its name and actions, and omit the placement
+when the selected child is hidden or out of range. `LocSnapshot.id` remains the raw
+placement ID; scripts use its effective name and actions without decoding transforms.
+Varp packets invalidate cached snapshots so a new child is visible on the next read.
 
 ## See also
 
