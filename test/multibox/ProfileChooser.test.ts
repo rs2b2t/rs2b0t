@@ -200,7 +200,7 @@ describe('ProfileChooser', () => {
         expect(vault.list().map(p => p.username)).toEqual(['alice']);
         finish(false);
         await waitFor(() => !chooser.el.querySelector<HTMLSelectElement>('.mbx-profile-world')!.disabled);
-        expect(chooser.el.textContent).toContain('Log out in-game, then choose the world again');
+        expect(chooser.el.textContent).toContain('Could not switch worlds. Check the game message or connection.');
         expect(chooser.el.querySelector<HTMLSelectElement>('.mbx-profile-world')!.value).toBe('1');
         expect(vault.list()[0].world).toBe(1);
 

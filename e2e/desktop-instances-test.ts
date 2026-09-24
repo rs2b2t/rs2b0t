@@ -1,3 +1,8 @@
+import type { Page } from 'playwright-core';
+import type { Account, SlotSnapshot } from '../src/bot/multibox/types.js';
+import type { WorldNumber } from '../src/client/config/worlds.js';
+import type { SettingsStore } from '../src/bot/runtime/Settings.js';
+
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -114,6 +119,64 @@ async function unlock(page: import('playwright-core').Page, setup = false) {
     await page.keyboard.press('Escape');
 }
 
+type WallWindow = Window & {
+    multibox: {
+        add(account: Account): SlotSnapshot;
+        setWorld(id: number, world: WorldNumber): Promise<boolean>;
+        controller: { remove(id: number): void };
+    };
+};
+
+type BotWindow = Window & { __rs2b0t?: { SettingsStore: typeof SettingsStore }; rs2b0t?: unknown };
+
+async function verifyDesktopWorldSettings(page: Page): Promise<void> {
+    const id = await page.evaluate(() => {
+        localStorage.setItem('rs2b0t:switch-proof:selectedScript', 'Fisher');
+        return (Reflect.get(window, 'multibox') as WallWindow['multibox']).add({ username: 'switch-proof', password: '', world: 1 }).id;
+    });
+    const selector = 'iframe[title="switch-proof"]';
+    const ready = () => page.waitForFunction(selector => {
+        const win = document.querySelector<HTMLIFrameElement>(selector)?.contentWindow as BotWindow | null;
+        return !!win?.rs2b0t && !!win.__rs2b0t;
+    }, selector);
+    try {
+        await ready();
+        await page.locator(selector).evaluate(element => {
+            const win = (element as HTMLIFrameElement).contentWindow as BotWindow;
+            win.__rs2b0t!.SettingsStore.save('MarketMaker', 'blacklist', 'trade_troll');
+            win.__rs2b0t!.SettingsStore.save('Miner', 'ore', 'Coal');
+
+        });
+        const controls = page.frameLocator(selector);
+        await controls.getByRole('button', { name: '✎ Edit parameters' }).click();
+        const method = controls.locator('.rs2b0t-param-row').filter({ hasText: 'Fishing method' }).locator('select');
+        const [fishMethod] = await method.selectOption({ index: 1 });
+        await method.press('Escape');
+        for (const world of [2, 1] as const) {
+            const results = await page.evaluate(({ id, world }) => Promise.all(Array.from({ length: 10 }, () => (Reflect.get(window, 'multibox') as WallWindow['multibox']).setWorld(id, world))), { id, world });
+            assert.equal(results.filter(Boolean).length, 1);
+            await ready();
+            const saved = await page.locator(selector).evaluate(element => {
+                const win = (element as HTMLIFrameElement).contentWindow as BotWindow;
+                return {
+                    origin: win.location.origin,
+                    box: new URLSearchParams(win.location.search).get('box'),
+                    world: new URLSearchParams(win.location.search).get('world'),
+                    blacklist: win.__rs2b0t!.SettingsStore.saved('MarketMaker', 'blacklist'),
+                    ore: win.__rs2b0t!.SettingsStore.saved('Miner', 'ore'),
+                    selected: win.localStorage.getItem('rs2b0t:switch-proof:selectedScript'),
+                    fishMethod: win.__rs2b0t!.SettingsStore.saved('Fisher', 'fishMethod'),
+                    displayed: win.document.querySelector('.rs2b0t-current-script')?.textContent
+                };
+            });
+            assert.deepEqual(saved, { origin: new URL(page.url()).origin, box: 'switch-proof', world: String(world), blacklist: 'trade_troll', ore: 'Coal', selected: 'Fisher', fishMethod, displayed: 'Fisher' });
+        }
+        console.log('Electron world switches preserve account, script selection and script settings in both directions');
+    } finally {
+        await page.evaluate(id => (Reflect.get(window, 'multibox') as WallWindow['multibox']).controller.remove(id), id);
+    }
+}
+
 async function stopProxy(proxy: Awaited<ReturnType<typeof launchProxy>>) {
     proxy.child.kill('SIGTERM');
     await proxy.exited;
@@ -148,6 +211,7 @@ try {
             return ['legacy-fixture', 'first-fixture', 'second-fixture'].every(name => names.includes(name));
         });
     }
+    await verifyDesktopWorldSettings(firstDesktop.page);
     await firstDesktop.page.evaluate(() => {
         const frame = document.createElement('iframe');
         frame.id = 'storage-proof-frame';
@@ -249,6 +313,7 @@ try {
             'one shared account/settings store',
             'concurrent account additions survive in both windows',
             'bot iframe reads shared settings without exposing Node',
+            'world switches preserve account, script selection and script settings in both directions',
             'path overlay settings workload performs zero synchronous IPC reads',
             'settings cache observes a reverted write even when file notifications coalesce',
             'setting removal propagates between instances',

@@ -44,10 +44,12 @@ profile file. Credentials, tabs and script settings are preserved.
 Each rail tile shows its script name, with a state label when paused, stopped or
 crashed. The bot panel's status shows the connected world, or the target while
 logged out. To move a loaded bot, choose its destination and click **Switch** on
-that tile. Its script and reconnects stop. Log out in-game,
-then click **Retry**. Only that bot reloads; the other bots keep running. Resume
-login and scripts when ready. **Cancel** keeps the original world and leaves
-scripts and auto-login stopped.
+that tile. Its script stops, the client logs out, and the switch completes
+automatically. Only that bot reloads; the other bots keep running. A logged-in
+account signs back in on the destination world. Its selected script and settings
+stay attached to the account; start the script again when ready. **Cancel** keeps
+the original world and leaves scripts and auto-login stopped. The in-game logout
+button also stops the script and auto-login so the account stays logged out.
 
 The launcher builds one local client and starts one proxy for both worlds. No
 second Electron window or launcher is needed. Profile export/import preserves

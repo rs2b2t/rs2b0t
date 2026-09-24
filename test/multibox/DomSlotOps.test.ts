@@ -179,7 +179,7 @@ test('World 2 wall frames inherit World 2 identity and stay same-origin', () => 
 });
 
 
-test('a slot still booting receives both switch preparation and cancellation in order', async () => {
+test('cancelling a booting slot does not leave queued logout requests', async () => {
     const ops = new DomSlotOps(document.getElementById('rail')!, document.getElementById('add')!, true);
     const handle = ops.spawn({ username: 'alice', password: '' });
     handles.push(handle);
@@ -192,7 +192,7 @@ test('a slot still booting receives both switch preparation and cancellation in 
         cancelWorldSwitch: () => calls.push('cancel')
     } });
     await new Promise(resolve => setTimeout(resolve, 75));
-    expect(calls).toEqual(['prepare', 'cancel']);
+    expect(calls).toEqual(['cancel']);
 });
 
 

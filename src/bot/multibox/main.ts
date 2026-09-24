@@ -305,7 +305,7 @@ function boot(): void {
         try {
             const slot = controller.snapshot().find(candidate => normalizeUsername(candidate.username) === identity);
             if (slot && (slot.targetWorld !== world || slot.switchingWorld !== null)) {
-                if (!controller.switchWorld(slot.id, world)) {
+                if (!await controller.switchWorld(slot.id, world)) {
                     return false;
                 }
             }
@@ -324,7 +324,7 @@ function boot(): void {
         const profile = vault.list().find(candidate => normalizeUsername(candidate.username) === normalizeUsername(slot.username));
         try {
             if (profile) return await changeProfileWorld(profile, world);
-            const changed = controller.switchWorld(id, world);
+            const changed = await controller.switchWorld(id, world);
             renderRail();
             return changed;
         } catch {

@@ -112,11 +112,13 @@ test('wall wiring preserves pending slots and retries persistence after a succes
             Reflect.set(bobFrame.contentWindow!, 'rs2b0t', runtime(2));
             await new Promise(resolve => setTimeout(resolve, 75));
 
-            expect(await wall.setWorld(alice.id, 2)).toBe(false);
+            const pending = wall.setWorld(alice.id, 2);
+            await new Promise(resolve => setTimeout(resolve, 10));
             expect(wall.slots()[0]).toMatchObject({ world: 1, targetWorld: 1, switchingWorld: 2 });
             expect(document.querySelector('iframe')).toBe(aliceFrame);
             expect(vault.list()[0].world).toBe(1);
             document.querySelector<HTMLButtonElement>('.mbx-world-cancel')!.click();
+            expect(await pending).toBe(false);
             expect(cancelled).toBe(1);
             expect(wall.slots()[0].switchingWorld).toBeNull();
 

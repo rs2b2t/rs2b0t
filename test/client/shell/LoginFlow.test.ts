@@ -1,5 +1,7 @@
 import { expect, mock, test } from 'bun:test';
 
+import { MiniMenuAction } from '#/client/shell/MiniMenuAction.js';
+import { ClientProt } from '#/client/io/ClientProt.js';
 import LinkList from '#/client/datastruct/LinkList.js';
 import type ClientStream from '#/client/io/ClientStream.js';
 import { resetLoginKey } from '#/client/config/loginKey.js';
@@ -46,6 +48,12 @@ interface LoginClientView {
     cancelLoginAttempt(): void;
     prepareWorldSwitch(): boolean;
     cancelWorldSwitch(): void;
+    requestLogout(): void;
+    doAction(optionId: number): void;
+    gameLoop(): Promise<void>;
+    lostCon(): Promise<void>;
+    clientButton(com: { clientCode: number }): boolean;
+    onLogoutRequested(): void;
     logout(): Promise<void>;
 }
 
@@ -138,10 +146,13 @@ function bareClient(openLoginStream: () => Promise<ClientStream>): LoginClientVi
         statSessionGeneration: 0,
         invUpdateState: new Map(),
         loginAttempt: null,
+        worldLogoutAt: -Infinity,
         stream: null,
         out: {
             pos: 0,
-            data: new Uint8Array(2),
+            data: new Uint8Array(64),
+            p1Enc(this: { p1(value: number): void }, value: number): void { this.p1(value); },
+            p2(this: { p1(value: number): void }, value: number): void { this.p1(value >> 8); this.p1(value); },
             p1(this: { pos: number; data: Uint8Array }, value: number): void {
                 this.data[this.pos++] = value;
             }
@@ -418,13 +429,16 @@ test('world switching blocks new login and waits for an in-flight attempt to fin
     expect(stream.closeCount).toBe(1);
 });
 
-test('world switching refuses an active player without closing their game connection', () => {
+test('world switching requests server logout without dropping the game connection', () => {
     const stream = new FakeLoginStream(5);
     const client = bareClient(async () => asClientStream(stream));
     client.ingame = true;
     client.stream = asClientStream(stream);
     expect(client.prepareWorldSwitch()).toBe(false);
     expect(stream.closeCount).toBe(0);
+    expect(Array.from(client.out.data.slice(0, client.out.pos))).toEqual([ClientProt.IF_BUTTON, 9, 154]);
+    client.prepareWorldSwitch();
+    expect(client.out.pos).toBe(3);
     client.ingame = false;
     expect(client.prepareWorldSwitch()).toBe(true);
 });
@@ -463,4 +477,50 @@ test('a successful admission arriving during a world switch still requires actua
     expect(stream.closeCount).toBe(1);
     expect(client.prepareWorldSwitch()).toBe(true);
     expect(client.startLogin('alice', 'secret')).toBe(false);
+});
+
+test('the in-game logout button notifies the bot before the session closes', () => {
+    const client = bareClient(async () => asClientStream(new FakeLoginStream(5)));
+    let requested = 0;
+    client.onLogoutRequested = () => requested++;
+    expect(client.clientButton({ clientCode: 205 })).toBe(true);
+    expect(requested).toBe(1);
+});
+
+test('logout action works before its interface is loaded', () => {
+    const client = bareClient(async () => asClientStream(new FakeLoginStream(5)));
+    let requested = 0;
+    Object.assign(client, {
+        ingame: true,
+        menuAction: [MiniMenuAction.IF_BUTTON], menuParamA: [0], menuParamB: [0], menuParamC: [2458],
+        onLogoutRequested: () => requested++
+    });
+    client.doAction(0);
+    expect(requested).toBe(1);
+    expect(Array.from(client.out.data.slice(0, client.out.pos))).toEqual([ClientProt.IF_BUTTON, 9, 154]);
+});
+
+test('server socket closure after intentional logout immediately clears the player session', async () => {
+    const stream = new FakeLoginStream(5);
+    const client = bareClient(async () => asClientStream(stream));
+    Object.assign(client, { ingame: true, players: [], stream: Object.assign(stream, { closed: true }) });
+    client.requestLogout();
+    let logouts = 0;
+    client.logout = async () => { logouts++; client.ingame = false; };
+    await client.gameLoop();
+    expect(logouts).toBe(1);
+    expect(client.ingame).toBe(false);
+});
+
+test('an intentional logout never enters native reconnect after the logout timer expires', async () => {
+    let attempts = 0;
+    const client = bareClient(async () => { attempts++; return asClientStream(new FakeLoginStream(5)); });
+    client.ingame = true;
+    client.requestLogout();
+    Object.assign(client, { logoutTimer: 0 });
+    let logouts = 0;
+    client.logout = async () => { logouts++; };
+    await client.lostCon();
+    expect(logouts).toBe(1);
+    expect(attempts).toBe(0);
 });
