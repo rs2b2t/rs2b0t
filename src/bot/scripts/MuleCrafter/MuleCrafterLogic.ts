@@ -60,8 +60,8 @@ export function selectNearestPartner(
     }, null);
 }
 
-export function bankDue(tradesSinceBank: number, tradesPerBank: number): boolean {
-    return tradesPerBank > 0 && tradesSinceBank >= tradesPerBank;
+export function bankDue(tradesSinceBank: number, tradesPerBank: number, bankVisitsEnabled = true): boolean {
+    return bankVisitsEnabled && tradesPerBank > 0 && tradesSinceBank >= tradesPerBank;
 }
 
 export function tradeRequestDue(lastRequestAt: number | null, now: number, intervalMs = TRADE_REQUEST_INTERVAL_MS): boolean {

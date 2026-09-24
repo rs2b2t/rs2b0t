@@ -1054,7 +1054,7 @@ Alfred Grimhand's Barcrawl — banks for the drinks, gets the card from the outp
 
 ### MuleCrafter
 
-Crafter + mule runecrafting loop — both run bank→ruins→bank each cycle. Crafter has the talisman, crafts at the altar, trades runes for essence at the ruins. Mule ferries essence to the ruins and runes back to the bank. Dry mule signals at the bank and the crafter shares 1/N essence. Multi-mule round-robin with comma-separated partner names.
+Crafter + mule runecrafting loop — meet at the altar temple or overworld ruins, and trade with any configured mule that is available. Crafter has the talisman; bankFill=false prevents all crafter bank visits and overrides Bank after trades, while bankFill=true enables scheduled bank trips. Mule ferries essence and runes between the meeting point and bank.
 
 - Tags: `runecrafting`, `trade`, `crafter`, `mule`, `falador`, `edgeville`
 
@@ -1062,8 +1062,10 @@ Crafter + mule runecrafting loop — both run bank→ruins→bank each cycle. Cr
 |---|---|---|---|
 | `rune` | string | `"Air rune"` | Rune — one of: Air rune, Mind rune, Water rune, Earth rune, Fire rune, Body rune, Cosmic rune, Chaos rune, Nature rune, Law rune, Death rune |
 | `mode` | string | `"Crafter"` | Mode — one of: Crafter, Mule |
-| `partner` | string | `""` | Partner name(s) (Optional for Crafter) |
-| `bankFill` | boolean | `true` | Fill essence at bank |
+| `meetingPoint` | string | `"Altar (inside)"` | Meet at — one of: Altar (inside), Ruins (outside) |
+| `partner` | string | `""` | Partner name(s) |
+| `tradesPerBank` | number (0–) | `0` | Bank after trades |
+| `bankFill` | boolean | `false` | Allow crafter bank visits |
 
 ### NatureCrafter
 

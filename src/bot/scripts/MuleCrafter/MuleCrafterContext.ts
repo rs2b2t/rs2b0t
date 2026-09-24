@@ -15,7 +15,7 @@ export interface MuleCrafterContext {
     cfg(): RuneRoute;
     bankTile(): Tile;
     partners(): string[];
-    bankFill(): boolean;
+    bankVisitsEnabled(): boolean;
     tradesPerBank(): number;
     meetingPoint(): MeetingPoint;
     muleModeActive(): boolean;

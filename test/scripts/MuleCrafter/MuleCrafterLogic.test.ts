@@ -192,6 +192,11 @@ describe('MuleCrafterLogic', () => {
             expect(bankDue(99, 0)).toBe(false);
         });
 
+        test('disabled bank visits override the trade threshold', () => {
+            expect(bankDue(3, 1, false)).toBe(false);
+            expect(bankDue(0, 0, false)).toBe(false);
+        });
+
         test('bank becomes due at the configured trade count', () => {
             expect(bankDue(2, 3)).toBe(false);
             expect(bankDue(3, 3)).toBe(true);

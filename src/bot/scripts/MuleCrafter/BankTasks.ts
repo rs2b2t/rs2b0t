@@ -68,15 +68,16 @@ export function createCrafterPrepareTask(bot: MuleCrafterContext): Task {
         validate: () => bot.mode() === 'Crafter'
             && !bot.inTemple()
             && !Trade.active()
+            && bot.bankVisitsEnabled()
             && bot.atBank()
-            && (!Inventory.contains(bot.cfg().talisman) || (bot.bankFill() && bot.essenceCount() === 0)),
+            && (!Inventory.contains(bot.cfg().talisman) || bot.essenceCount() === 0),
         run: async () => {
             bot.setStatus('at bank - preparing');
             if (!await openBank(bot)) return;
             if (!await ensureTalisman(bot)) {
                 throw new Error(`MuleCrafter: ${bot.cfg().talisman} not found`);
             }
-            if (!bot.bankFill() || bot.essenceCount() > 0) {
+            if (!bot.bankVisitsEnabled() || bot.essenceCount() > 0) {
                 await Bank.close();
                 return;
             }
@@ -118,7 +119,7 @@ export function createCrafterBankTask(bot: MuleCrafterContext): Task {
             if (!await ensureTalisman(bot)) {
                 throw new Error(`MuleCrafter: ${bot.cfg().talisman} not found`);
             }
-            if (bot.bankFill() && bot.essenceCount() === 0) {
+            if (bot.bankVisitsEnabled() && bot.essenceCount() === 0) {
                 await Execution.delayUntil(() => Bank.loaded(), 3000);
                 const banked = Bank.count(ESSENCE);
                 if (banked === 0) {

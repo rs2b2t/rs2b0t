@@ -257,7 +257,7 @@ try {
         mPages.push(await (await browser.newContext()).newPage());
     }
 
-    console.log(`bringing up crafter + ${NUM_MULES} mule(s) for ${RUNE} at ${MEETING_POINT} (bankFill=${BANK_FILL}, tradesPerBank=${TRADES_PER_BANK}) (sequential)...`);
+    console.log(`bringing up crafter + ${NUM_MULES} mule(s) for ${RUNE} at ${MEETING_POINT} (bankVisits=${BANK_FILL}, tradesPerBank=${TRADES_PER_BANK}${BANK_FILL ? '' : ', ignored'}) (sequential)...`);
 
     const partnerList = M_USERS.join(',');
     await setupAccount(pageC, C_USER, 'Crafter', partnerList);

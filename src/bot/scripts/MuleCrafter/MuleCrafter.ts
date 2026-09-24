@@ -53,8 +53,8 @@ export const SETTINGS: SettingsSchema = {
     mode: { type: 'string', default: 'Crafter', options: ['Crafter', 'Mule'], label: 'Mode', help: 'Crafter has the talisman, crafts at the altar, and trades with mules. Mule carries essence to the meeting point and runes back to the bank.' },
     meetingPoint: { type: 'string', default: DEFAULT_MEETING_POINT, options: [...MEETING_POINTS], label: 'Meet at', help: 'Altar (inside) keeps the crafter beside the altar and requires the mule to carry the matching talisman. Ruins (outside) is the overworld meeting point and needs no mule talisman.' },
     partner: { type: 'string', default: '', label: 'Partner name(s)', help: 'Crafter: optional mule name(s), comma-separated. Mule: required crafter name.' },
-    tradesPerBank: { type: 'number', default: 0, min: 0, label: 'Bank after trades', help: 'Walk to the bank after this many successful crafter trades. 0 runs the crafter without a mule.', showIf: { key: 'mode', anyOf: ['Crafter'] } },
-    bankFill: { type: 'boolean', default: false, label: 'Crafter fills essence at bank', help: 'Off means mules provide the crafter essence. Scheduled bank trips still deposit and clean up.', showIf: { key: 'mode', anyOf: ['Crafter'] } }
+    tradesPerBank: { type: 'number', default: 0, min: 0, label: 'Bank after trades', help: 'When bank visits are enabled, walk to the bank after this many successful crafter trades. 0 runs the crafter without a mule and banks when out of essence. Ignored when Allow crafter bank visits is off.', showIf: { key: 'mode', anyOf: ['Crafter'] } },
+    bankFill: { type: 'boolean', default: false, label: 'Allow crafter bank visits', help: 'Off prevents the crafter from going to the bank, including Bank after trades trips; mules must provide essence. On allows bank visits, cleanup, and scheduled bank trips.', showIf: { key: 'mode', anyOf: ['Crafter'] } }
 };
 
 function isAtTile(tile: ReturnType<typeof bankTile>, radius = 3): boolean {
@@ -72,7 +72,7 @@ export default class MuleCrafter extends TaskBot implements MuleCrafterContext {
     private partnersValue: string[] = [];
     private meeting: MeetingPoint = DEFAULT_MEETING_POINT;
     private tradeLimit = 0;
-    private fillFromBank = false;
+    private bankVisits = false;
     private tradesSinceBankCount = 0;
     private lastTradeRequestAt: number | null = null;
     private crafted = 0;
@@ -92,7 +92,7 @@ export default class MuleCrafter extends TaskBot implements MuleCrafterContext {
         const meeting = this.settings.str('meetingPoint', DEFAULT_MEETING_POINT) as MeetingPoint;
         this.meeting = MEETING_POINTS.includes(meeting) ? meeting : DEFAULT_MEETING_POINT;
         this.tradeLimit = Math.max(0, Math.floor(this.settings.num('tradesPerBank', 0)));
-        this.fillFromBank = this.settings.bool('bankFill', false);
+        this.bankVisits = this.settings.bool('bankFill', false);
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('runecraft');
         this.tradesSinceBankCount = 0;
@@ -107,8 +107,10 @@ export default class MuleCrafter extends TaskBot implements MuleCrafterContext {
             return;
         }
 
-        if (!this.muleModeActive()) {
-            this.log('MuleCrafter: solo crafter mode; bank fill is enabled');
+        if (!this.bankVisitsEnabled()) {
+            this.log('MuleCrafter crafter: bank visits are disabled; Bank after trades is ignored');
+        } else if (!this.muleModeActive()) {
+            this.log('MuleCrafter: solo crafter mode; bank is enabled for out-of-essence restock');
         } else {
             this.log(`MuleCrafter crafter starting at ${this.meeting}; bank after ${this.tradeLimit} trades`);
         }
@@ -118,6 +120,13 @@ export default class MuleCrafter extends TaskBot implements MuleCrafterContext {
 
     private async cleanCrafterInventory(): Promise<void> {
         this.log('Crafter cleanup: starting');
+        if (!this.bankVisitsEnabled()) {
+            if (!Inventory.contains(this.conf.talisman)) {
+                throw new Error(`MuleCrafter: bankFill is off and ${this.conf.talisman} is missing; cannot visit the bank`);
+            }
+            this.log('Crafter cleanup: skipped because bank visits are disabled');
+            return;
+        }
         const keepNames = new Set([this.conf.talisman.toLowerCase()]);
         const hasExtraItems = Inventory.items().some(item => item.name && !keepNames.has(item.name.toLowerCase()) && item.id !== ESSENCE_ID);
         if (!hasExtraItems && Inventory.contains(this.conf.talisman)) return;
@@ -194,8 +203,9 @@ export default class MuleCrafter extends TaskBot implements MuleCrafterContext {
         const xph = mins > 0.5 ? `${((xpGained / mins) * 60 / 1000).toFixed(1)}k` : '—';
         p.row(`Runtime: ${fmtDuration(mins)}`, this.modeValue === 'Crafter' ? `RC lvl: ${Skills.level('runecraft')}` : `To: ${this.partnersValue[0] ?? '?'}`);
         if (this.modeValue === 'Crafter') {
+            const bankState = !this.bankVisitsEnabled() ? 'disabled' : this.tradeLimit || 'when empty';
             p.row(`Crafted: ${this.crafted}`, `Trades: ${this.trades}`);
-            p.row(`RC xp: ${xpGained}`, `XP/h: ${xph}`, `Trades since bank: ${this.tradesSinceBankCount}/${this.tradeLimit || 'solo'}`);
+            p.row(`RC xp: ${xpGained}`, `XP/h: ${xph}`, `Trades since bank: ${this.tradesSinceBankCount}/${bankState}`);
             p.row(`Pack ess: ${this.essenceCount()}`, `Pack runes: ${this.runeCount()}`, this.meeting);
         } else {
             p.row(`Trades: ${this.trades}`, `Ess received: ${this.received}`, this.meeting);
@@ -210,7 +220,7 @@ export default class MuleCrafter extends TaskBot implements MuleCrafterContext {
     cfg(): RuneRoute { return this.conf; }
     bankTile(): ReturnType<typeof bankTile> { return this.bank; }
     partners(): string[] { return this.partnersValue; }
-    bankFill(): boolean { return this.fillFromBank || !this.muleModeActive(); }
+    bankVisitsEnabled(): boolean { return this.bankVisits; }
     tradesPerBank(): number { return this.tradeLimit; }
     meetingPoint(): MeetingPoint { return this.meeting; }
     muleModeActive(): boolean { return this.modeValue === 'Crafter' && this.tradeLimit > 0 && this.partnersValue.length > 0; }
@@ -221,7 +231,10 @@ export default class MuleCrafter extends TaskBot implements MuleCrafterContext {
     }
     essenceCount(): number { return reader.inventory().filter(item => item.id === ESSENCE_ID).reduce((sum, item) => sum + item.count, 0); }
     runeCount(): number { return Inventory.count(this.conf.rune); }
-    bankDue(): boolean { return this.muleModeActive() ? bankDue(this.tradesSinceBankCount, this.tradeLimit) : this.essenceCount() === 0; }
+    bankDue(): boolean {
+        if (!this.bankVisitsEnabled()) return false;
+        return this.muleModeActive() ? bankDue(this.tradesSinceBankCount, this.tradeLimit) : this.essenceCount() === 0;
+    }
     tradeRequestDue(): boolean { return this.lastTradeRequestAt === null || Date.now() - this.lastTradeRequestAt >= TRADE_REQUEST_INTERVAL_MS; }
     markTradeRequest(): void { this.lastTradeRequestAt = Date.now(); }
     isPartner(name: string | null): boolean { return isConfiguredPartner(name, this.partnersValue); }
