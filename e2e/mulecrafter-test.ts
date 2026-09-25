@@ -19,6 +19,7 @@ interface RuneRoute {
     runeName: string;
     xpPerEssence: number;
     essencePer: number;
+    bank: Tile;
     zones: { name: string; x: [number, number]; z: [number, number] }[];
 }
 
@@ -26,6 +27,7 @@ const ROUTES: Record<string, RuneRoute> = {
     'Air rune': {
         talisman: 'air_talisman', runeName: 'air rune', xpPerEssence: 5,
         essencePer: 5000,
+        bank: { x: 3013, z: 3355, level: 0 },
         zones: [
             { name: 'fally', x: [2995, 3030], z: [3335, 3375] },
             { name: 'altar', x: [2965, 3005], z: [3270, 3305] }
@@ -34,6 +36,7 @@ const ROUTES: Record<string, RuneRoute> = {
     'Mind rune': {
         talisman: 'mind_talisman', runeName: 'mind rune', xpPerEssence: 5.5,
         essencePer: 5000,
+        bank: { x: 3094, z: 3493, level: 0 },
         zones: [
             { name: 'edge', x: [3080, 3110], z: [3480, 3510] },
             { name: 'altar', x: [2970, 3000], z: [3495, 3525] }
@@ -49,8 +52,6 @@ if (!['Altar (inside)', 'Ruins (outside)'].includes(MEETING_POINT)) {
 if (!Number.isFinite(TRADES_PER_BANK) || TRADES_PER_BANK < 0) {
     fail(`invalid TRADES_PER_BANK '${TRADES_PER_BANK}'`);
 }
-
-const FALLY_EAST = { x: 3013, z: 3355, level: 0 };
 
 const stamp = Date.now().toString(36).slice(-5);
 const C_USER = `sokc${stamp}`;
@@ -201,6 +202,12 @@ function sample(page: Page): Promise<{
     ess: number;
     rcXp: number;
     state: string;
+    tradeScreenOpens: number;
+    tradeScreenSuccesses: number;
+    tradeScreenFailures: number;
+    failureEvents: { id: number; reason: string }[];
+    tradeSuccesses: number;
+    craftSuccesses: number;
     lastLog: string;
     stopReason: string;
 }> {
@@ -209,12 +216,26 @@ function sample(page: Page): Promise<{
         const items = g.__rs2b0t.Inventory.items();
         const logs = g.rs2b0t.runner.ctx?.log ?? [];
         const msgs = logs.map(l => l.msg);
+        const maxEvent = (pattern: RegExp): number => msgs.reduce((max, message) => {
+            const match = message.match(pattern);
+            return match ? Math.max(max, Number(match[1])) : max;
+        }, 0);
+        const failureEvents = msgs.flatMap(message => {
+            const match = message.match(/^trade screen failure #(\d+).* reason=([^\s]+)/);
+            return match ? [{ id: Number(match[1]), reason: match[2]! }] : [];
+        });
         return {
             pos: g.__rs2b0t.reader.worldTile(),
             runes: items.filter(i => (i.name ?? '').toLowerCase() === rn).reduce((s, i) => s + Math.max(1, i.count), 0),
             ess: items.filter(i => (i.name ?? '').toLowerCase() === 'rune essence').reduce((s, i) => s + Math.max(1, i.count), 0),
             rcXp: g.__rs2b0t.Skills.xp('runecraft'),
             state: g.rs2b0t.runner.state,
+            tradeScreenOpens: maxEvent(/^trade screen open #(\d+)\b/),
+            tradeScreenSuccesses: maxEvent(/^trade screen success #(\d+)\b/),
+            tradeScreenFailures: maxEvent(/^trade screen failure #(\d+)\b/),
+            failureEvents,
+            tradeSuccesses: maxEvent(/^(?:crafter|mule) trade success #(\d+)\b/),
+            craftSuccesses: maxEvent(/^craft success #(\d+)\b/),
             lastLog: (msgs[msgs.length - 1] ?? '').slice(0, 46),
             stopReason: msgs.filter(m => /Stopping\.|crashed/i.test(m)).slice(-1)[0] ?? ''
         };
@@ -229,8 +250,11 @@ async function setupAccount(page: Page, user: string, mode: 'Crafter' | 'Mule', 
     await maxAccountAndClearDialogs(page);
     await clearInv(page);
     await seedItem(page, route.talisman, route.talisman.replace(/_/g, ' '), 1);
-    // Keyboard ::give for cert_blankrune, requires keyboard path to stack properly.
-    await type(page, '::give cert_blankrune 1000');
+    if (mode === 'Mule' || BANK_FILL) {
+        await type(page, '::give cert_blankrune 1000');
+    } else if (MEETING_POINT === 'Ruins (outside)') {
+        await type(page, '::give blankrune 27');
+    }
     await setSettings(page, 'MuleCrafter', {
         rune: RUNE,
         mode,
@@ -239,8 +263,8 @@ async function setupAccount(page: Page, user: string, mode: 'Crafter' | 'Mule', 
         tradesPerBank: TRADES_PER_BANK,
         bankFill: BANK_FILL
     });
-    const arrived = await teleArrive(page, FALLY_EAST);
-    if (!arrived) fail(`${user}: could not teleport to Falador East bank`);
+    const arrived = await teleArrive(page, route.bank);
+    if (!arrived) fail(`${user}: could not teleport to the ${RUNE} route bank`);
     await page.waitForTimeout(1500);
     await startScript(page, 'MuleCrafter');
     console.log(`  ${user} (${mode}) ready`);
@@ -257,7 +281,7 @@ try {
         mPages.push(await (await browser.newContext()).newPage());
     }
 
-    console.log(`bringing up crafter + ${NUM_MULES} mule(s) for ${RUNE} at ${MEETING_POINT} (bankVisits=${BANK_FILL}, tradesPerBank=${TRADES_PER_BANK}${BANK_FILL ? '' : ', ignored'}) (sequential)...`);
+    console.log(`bringing up crafter + ${NUM_MULES} mule(s) for ${RUNE} at ${MEETING_POINT} (bank=${route.bank.x},${route.bank.z}, bankVisits=${BANK_FILL}, tradesPerBank=${TRADES_PER_BANK}${BANK_FILL ? '' : ', ignored'}) (sequential)...`);
 
     const partnerList = M_USERS.join(',');
     await setupAccount(pageC, C_USER, 'Crafter', partnerList);
@@ -276,6 +300,18 @@ try {
     const stoppedMules = new Map<number, string>();
     let sawCrafterStop = '';
     let cc = await sample(pageC);
+    let crafterScreenOpens = cc.tradeScreenOpens;
+    let crafterScreenSuccesses = cc.tradeScreenSuccesses;
+    let crafterScreenFailures = cc.tradeScreenFailures;
+    let crafterSuccesses = cc.tradeSuccesses;
+    let crafterCrafts = cc.craftSuccesses;
+    const muleScreenOpens = Array(NUM_MULES).fill(0);
+    const muleScreenSuccesses = Array(NUM_MULES).fill(0);
+    const muleScreenFailures = Array(NUM_MULES).fill(0);
+    const muleSuccesses = Array(NUM_MULES).fill(0);
+    const muleCrafts = Array(NUM_MULES).fill(0);
+    const crafterFailureReasons = new Map<number, string>();
+    const muleFailureReasons = Array.from({ length: NUM_MULES }, () => new Map<number, string>());
 
     async function stopAll(): Promise<void> {
         await stopScript(pageC);
@@ -292,8 +328,21 @@ try {
             sawCrafterStop = cc.stopReason || cc.state;
         }
 
+        crafterScreenOpens = Math.max(crafterScreenOpens, cc.tradeScreenOpens);
+        crafterScreenSuccesses = Math.max(crafterScreenSuccesses, cc.tradeScreenSuccesses);
+        crafterScreenFailures = Math.max(crafterScreenFailures, cc.tradeScreenFailures);
+        cc.failureEvents.forEach(event => crafterFailureReasons.set(event.id, event.reason));
+        crafterSuccesses = Math.max(crafterSuccesses, cc.tradeSuccesses);
+        crafterCrafts = Math.max(crafterCrafts, cc.craftSuccesses);
         rr.forEach((r, i) => {
-            if (prevEss[i] > 0 && r.ess === 0) deliveries[i]++;
+            muleScreenOpens[i] = Math.max(muleScreenOpens[i], r.tradeScreenOpens);
+            muleScreenSuccesses[i] = Math.max(muleScreenSuccesses[i], r.tradeScreenSuccesses);
+            muleScreenFailures[i] = Math.max(muleScreenFailures[i], r.tradeScreenFailures);
+            r.failureEvents.forEach(event => muleFailureReasons[i]!.set(event.id, event.reason));
+            muleSuccesses[i] = Math.max(muleSuccesses[i], r.tradeSuccesses);
+            muleCrafts[i] = Math.max(muleCrafts[i], r.craftSuccesses);
+            deliveries[i] = muleSuccesses[i];
+            if (deliveries[i] === 0 && prevEss[i] > 0 && r.ess === 0) deliveries[i]++;
             prevEss[i] = r.ess;
             if (r.state !== 'running' && !stoppedMules.has(i)) {
                 stoppedMules.set(i, r.stopReason || r.state);
@@ -301,15 +350,13 @@ try {
         });
 
         const rate = Math.round(craftedEss / Math.max(0.1, (Date.now() - startedAt) / 3_600_000));
-        console.log(`── t=${mins}min | crafter ${cc.runes} ${route.runeName}s · ess=${cc.ess} · ${craftedEss} ess crafted (+${cc.rcXp - xp0} xp, ~${rate} ess/hr) @${zone(cc.pos)} (${cc.pos?.x},${cc.pos?.z}) ${cc.state} · ${cc.lastLog} | ${inFlight} ess in mule packs`);
+        console.log(`── t=${mins}min | crafter ${cc.runes} ${route.runeName}s · ess=${cc.ess} · ${craftedEss} ess crafted (+${cc.rcXp - xp0} xp, ~${rate} ess/hr) · screens=${crafterScreenOpens}/${crafterScreenSuccesses}/${crafterScreenFailures} crafts=${crafterCrafts} @${zone(cc.pos)} (${cc.pos?.x},${cc.pos?.z}) ${cc.state} · ${cc.lastLog} | ${inFlight} ess in mule packs`);
         rr.forEach((r, i) => {
-            console.log(`   M${i} ${zone(r.pos).padEnd(9)} (${r.pos?.x},${r.pos?.z}) ess=${String(r.ess).padStart(3)} runes=${String(r.runes).padStart(3)} deliv=${String(deliveries[i]).padStart(3)} ${r.state.padEnd(8)} · ${r.lastLog}`);
+            console.log(`   M${i} ${zone(r.pos).padEnd(9)} (${r.pos?.x},${r.pos?.z}) ess=${String(r.ess).padStart(3)} runes=${String(r.runes).padStart(3)} deliv=${String(deliveries[i]).padStart(3)} screens=${muleScreenOpens[i]}/${muleScreenSuccesses[i]}/${muleScreenFailures[i]} ${r.state.padEnd(8)} · ${r.lastLog}`);
         });
 
         if (cc.state === 'crashed' || rr.some(r => r.state === 'crashed')) {
-            console.log('!! a bot crashed — ending the soak early');
-            await stopAll();
-            break;
+            console.log('!! a bot crashed — continuing until the requested soak deadline');
         }
         await pageC.waitForTimeout(30_000);
     }
@@ -319,10 +366,31 @@ try {
     const craftedEss = Math.round((cc.rcXp - xp0) / route.xpPerEssence);
     const elapsedMin = Math.round((Date.now() - startedAt) / 6000) / 10;
     const totalDeliveries = deliveries.reduce((a, b) => a + b, 0);
+    const totalMuleScreenOpens = muleScreenOpens.reduce((a, b) => a + b, 0);
+    const totalMuleScreenSuccesses = muleScreenSuccesses.reduce((a, b) => a + b, 0);
+    const totalMuleScreenFailures = muleScreenFailures.reduce((a, b) => a + b, 0);
+    const totalMuleSuccesses = muleSuccesses.reduce((a, b) => a + b, 0);
+    const totalScreenOpens = crafterScreenOpens + totalMuleScreenOpens;
+    const totalScreenSuccesses = crafterScreenSuccesses + totalMuleScreenSuccesses;
+    const totalScreenFailures = crafterScreenFailures + totalMuleScreenFailures;
+    const totalSuccesses = crafterSuccesses + totalMuleSuccesses;
+    const summarizeReasons = (maps: Map<number, string>[]): string => {
+        const counts = new Map<string, number>();
+        for (const map of maps) {
+            for (const reason of map.values()) counts.set(reason, (counts.get(reason) ?? 0) + 1);
+        }
+        return [...counts].map(([reason, count]) => `${reason}=${count}`).join(', ') || 'none';
+    };
+    const crafterFailureSummary = summarizeReasons([crafterFailureReasons]);
+    const muleFailureSummary = summarizeReasons(muleFailureReasons);
     const idle = deliveries.map((d, i) => ({ d, i })).filter(x => x.d === 0).map(x => `M${x.i}`);
 
     console.log(`\n=== SOAK DONE (${elapsedMin}min, ${NUM_MULES} mule(s), ${RUNE}) ===`);
     console.log(`crafter crafted ${craftedEss} essence (${cc.runes} ${route.runeName}s, +${cc.rcXp - xp0} rc xp) — ~${Math.round(craftedEss / Math.max(0.1, elapsedMin / 60))} essence/hr`);
+    console.log(`trade screens: crafter ${crafterScreenOpens}/${crafterScreenSuccesses}/${crafterScreenFailures}, mules ${totalMuleScreenOpens}/${totalMuleScreenSuccesses}/${totalMuleScreenFailures}, total ${totalScreenOpens}/${totalScreenSuccesses}/${totalScreenFailures}`);
+    console.log(`screen failure reasons: crafter ${crafterFailureSummary}; mules ${muleFailureSummary}`);
+    console.log(`successful trades: crafter ${crafterSuccesses}, mules ${totalMuleSuccesses}, total ${totalSuccesses}`);
+    console.log(`successful crafts: ${crafterCrafts}; crafter screen/craft delta ${crafterScreenOpens - crafterCrafts}`);
     console.log(`deliveries per mule: ${deliveries.join(', ')} (total ${totalDeliveries})`);
     if (stoppedMules.size > 0) {
         for (const [i, why] of stoppedMules) console.log(`   M${i} stopped: ${why}`);
@@ -332,7 +400,7 @@ try {
     if (sawCrafterStop) problems.push(`crafter stopped mid-soak: ${sawCrafterStop}`);
     if (stoppedMules.size > 0) problems.push(`${stoppedMules.size} mule(s) stopped: ${[...stoppedMules.entries()].map(([i, w]) => `M${i} (${w})`).join('; ')}`);
     if (idle.length > 0) problems.push(`${idle.join(', ')} never delivered — wedged or starved`);
-    if (craftedEss === 0) problems.push('crafter crafted nothing');
+    if (crafterCrafts === 0) problems.push('crafter crafted nothing');
 
     if (problems.length === 0) {
         console.log(`\nPASS: ${NUM_MULES} mule(s) fed the crafter for ${elapsedMin}min with no stops, no crashes and every mule delivering.`);

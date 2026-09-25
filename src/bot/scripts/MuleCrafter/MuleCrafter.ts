@@ -75,6 +75,11 @@ export default class MuleCrafter extends TaskBot implements MuleCrafterContext {
     private bankVisits = false;
     private tradesSinceBankCount = 0;
     private lastTradeRequestAt: number | null = null;
+    private tradeScreenOpens = 0;
+    private tradeScreenSuccesses = 0;
+    private tradeScreenFailures = 0;
+    private craftEvents = 0;
+    private successfulDeliveries = 0;
     private crafted = 0;
     private trades = 0;
     private received = 0;
@@ -97,6 +102,11 @@ export default class MuleCrafter extends TaskBot implements MuleCrafterContext {
         this.xpAtStart = Skills.xp('runecraft');
         this.tradesSinceBankCount = 0;
         this.lastTradeRequestAt = null;
+        this.tradeScreenOpens = 0;
+        this.tradeScreenSuccesses = 0;
+        this.tradeScreenFailures = 0;
+        this.craftEvents = 0;
+        this.successfulDeliveries = 0;
 
         if (this.modeValue === 'Mule') {
             if (this.partnersValue.length === 0) {
@@ -204,11 +214,13 @@ export default class MuleCrafter extends TaskBot implements MuleCrafterContext {
         p.row(`Runtime: ${fmtDuration(mins)}`, this.modeValue === 'Crafter' ? `RC lvl: ${Skills.level('runecraft')}` : `To: ${this.partnersValue[0] ?? '?'}`);
         if (this.modeValue === 'Crafter') {
             const bankState = !this.bankVisitsEnabled() ? 'disabled' : this.tradeLimit || 'when empty';
-            p.row(`Crafted: ${this.crafted}`, `Trades: ${this.trades}`);
+            p.row(`Crafts: ${this.craftEvents}`, `Essence: ${this.crafted}`, this.meeting);
+            p.row(`Screens: ${this.tradeScreenOpens}`, `Completed: ${this.tradeScreenSuccesses}`, `Failed: ${this.tradeScreenFailures}`);
             p.row(`RC xp: ${xpGained}`, `XP/h: ${xph}`, `Trades since bank: ${this.tradesSinceBankCount}/${bankState}`);
             p.row(`Pack ess: ${this.essenceCount()}`, `Pack runes: ${this.runeCount()}`, this.meeting);
         } else {
             p.row(`Trades: ${this.trades}`, `Ess received: ${this.received}`, this.meeting);
+            p.row(`Screens: ${this.tradeScreenOpens}`, `Completed: ${this.tradeScreenSuccesses}`, `Failed: ${this.tradeScreenFailures}`);
             p.row(`Pack ess: ${this.essenceCount()}`, `Pack runes: ${this.runeCount()}`, '');
         }
         ScriptRunner.paintControls(p);
@@ -237,6 +249,18 @@ export default class MuleCrafter extends TaskBot implements MuleCrafterContext {
     }
     tradeRequestDue(): boolean { return this.lastTradeRequestAt === null || Date.now() - this.lastTradeRequestAt >= TRADE_REQUEST_INTERVAL_MS; }
     markTradeRequest(): void { this.lastTradeRequestAt = Date.now(); }
+    recordTradeScreenOpen(): number {
+        this.tradeScreenOpens++;
+        return this.tradeScreenOpens;
+    }
+    recordTradeScreenSuccess(): number {
+        this.tradeScreenSuccesses++;
+        return this.tradeScreenSuccesses;
+    }
+    recordTradeScreenFailure(): number {
+        this.tradeScreenFailures++;
+        return this.tradeScreenFailures;
+    }
     isPartner(name: string | null): boolean { return isConfiguredPartner(name, this.partnersValue); }
     nearestPartner(range = MEETING_RANGE): Player | null {
         if (this.partnersValue.length === 0) return null;
@@ -248,9 +272,24 @@ export default class MuleCrafter extends TaskBot implements MuleCrafterContext {
         return tile === undefined ? null : Tile.from(tile);
     }
     setStatus(status: string): void { this.status = status; }
-    countCraft(amount: number): void { this.crafted += amount; }
-    recordCrafterTrade(amount: number): void { this.trades++; this.received += amount; this.tradesSinceBankCount++; }
-    recordMuleDelivery(amount: number): void { this.trades++; this.received += amount; }
+    countCraft(amount: number): number {
+        this.crafted += amount;
+        this.craftEvents++;
+        return this.craftEvents;
+    }
+    craftCount(): number { return this.craftEvents; }
+    recordCrafterTrade(amount: number): number {
+        this.trades++;
+        this.received += amount;
+        this.tradesSinceBankCount++;
+        return this.trades;
+    }
+    recordMuleDelivery(amount: number): number {
+        this.trades++;
+        this.received += amount;
+        if (amount > 0) this.successfulDeliveries++;
+        return this.successfulDeliveries;
+    }
     resetTradeCounter(): void { this.tradesSinceBankCount = 0; }
 
     async walkTo(dest: ReturnType<typeof bankTile>, radius = 2): Promise<void> {

@@ -27,6 +27,9 @@ export interface MuleCrafterContext {
     bankDue(): boolean;
     tradeRequestDue(): boolean;
     markTradeRequest(): void;
+    recordTradeScreenOpen(): number;
+    recordTradeScreenSuccess(): number;
+    recordTradeScreenFailure(): number;
     isPartner(name: string | null): boolean;
     nearestPartner(range?: number): Player | null;
     currentTile(): Tile | null;
@@ -36,8 +39,9 @@ export interface MuleCrafterContext {
     exitAltar(): Promise<boolean>;
     setStatus(status: string): void;
     log(message: string): void;
-    countCraft(amount: number): void;
-    recordCrafterTrade(amount: number): void;
-    recordMuleDelivery(amount: number): void;
+    countCraft(amount: number): number;
+    craftCount(): number;
+    recordCrafterTrade(amount: number): number;
+    recordMuleDelivery(amount: number): number;
     resetTradeCounter(): void;
 }

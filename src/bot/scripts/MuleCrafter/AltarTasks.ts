@@ -57,8 +57,14 @@ export class CraftRunesTask implements Task {
         }
         await Execution.delayUntil(() => this.bot.essenceCount() === 0, 8000);
         const made = before - this.bot.essenceCount();
-        this.bot.countCraft(made);
-        this.bot.log(`crafted ${made} ${this.bot.cfg().rune}s`);
+        if (made > 0) {
+            const craft = this.bot.countCraft(made);
+            this.bot.log(`craft success #${craft} made=${made} ${this.bot.cfg().rune}`);
+        } else if (made === 0) {
+            this.bot.log('craft completed without consuming essence');
+        } else {
+            this.bot.log(`craft essence count increased by ${-made}`);
+        }
     }
 }
 
