@@ -38,8 +38,8 @@ export function solveCube(question: string, models: [number | null, number | nul
 
     const colourQ = /what colour is the (.+)\?/i.exec(question);
     if (colourQ) {
-        const shape = colourQ[1].trim().toLowerCase();
-        const idx = parts.findIndex(p => p!.shape.toLowerCase() === shape);
+        const shape = colourQ[1].replace(/\s+/g, '').toLowerCase();
+        const idx = parts.findIndex(p => p!.shape.replace(/\s+/g, '').toLowerCase() === shape);
         return idx === -1 ? null : idx;
     }
 
