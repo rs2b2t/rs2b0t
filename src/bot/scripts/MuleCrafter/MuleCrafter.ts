@@ -1,734 +1,371 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
+import { Bank } from '../../api/bank/Bank.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
-import Tile from '../../geometry/Tile.js';
-import { Bank } from '../../api/bank/Bank.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
-import { Paint } from '../../paint/Paint.js';
-import { Skills } from '../../api/skills/Skills.js';
-import { Trade } from '../../api/trade/Trade.js';
-import { reader } from '../../adapter/ClientAdapter.js';
-import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import { Locs } from '../../api/locs/Locs.js';
-import { Players } from '../../api/players/Players.js';
 import type { Player } from '../../api/model/Player.js';
+import { Paint } from '../../paint/Paint.js';
+import Tile from '../../geometry/Tile.js';
+import { Skills } from '../../api/skills/Skills.js';
+import { Players } from '../../api/players/Players.js';
+import { Trade } from '../../api/trade/Trade.js';
 import { Traversal } from '../../api/walking/Traversal.js';
+import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import { type SettingsSchema } from '../../runtime/Settings.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
-import { 
-    RUNES, 
-    RUNE_OPTIONS, 
-    DEFAULT_RUNE, 
-    essencePerTrade, 
-    isConfiguredPartner, 
-    classifyMuleState, 
-    bankTile, 
-    type RuneRoute, 
+import { reader } from '../../adapter/ClientAdapter.js';
+import {
+    DEFAULT_MEETING_POINT,
+    DEFAULT_RUNE,
+    MEETING_POINTS,
+    RUNES,
+    RUNE_OPTIONS,
+    TRADE_REQUEST_INTERVAL_MS,
+    bankDue,
+    bankTile,
+    isConfiguredPartner,
+    parsePartnerNames,
+    type MeetingPoint,
+    type RuneRoute
 } from './MuleCrafterLogic.js';
+import {
+    ALTAR_APPROACH_RADIUS,
+    ESSENCE_ID,
+    MEETING_RANGE,
+    TEMPLE_Z,
+    TRADE_RANGE,
+    type MuleCrafterContext
+} from './MuleCrafterContext.js';
+import { createCloseBankTask, createCrafterBankTask, createCrafterPrepareTask, createMuleBankTask } from './BankTasks.js';
+import { CraftRunesTask, EnterAltarTask, ExitAltarTask, crafterCanEnter, muleCanEnter } from './AltarTasks.js';
+import { CrafterTradeScreenTask, MuleTradeScreenTask, TradeRequestTask } from './TradeTasks.js';
+import { ApproachAltarTask, ApproachPartnerTask, WaitTask, WalkToTask } from './MovementTasks.js';
 
-// Why: each crafter-mule trade gives all runes and receives 27 essence, after which the crafter enters the altar again; it walks back to the bank only after every mule has traded.
-
-const ESSENCE = 'Rune essence';
-const ESSENCE_ID = 1436; // blankrune (unnoted essence); the bank-note variant has a different id
-const RUINS = 'Mysterious ruins';
-const ALTAR = { name: 'Altar', op: 'Craft-rune' };
-const PORTAL = { name: 'Portal', op: 'Use' };
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
-const TEMPLE_Z = 4000;
+const PORTAL = { name: 'Portal', op: 'Use' };
+const RUINS = 'Mysterious ruins';
 
 export const SETTINGS: SettingsSchema = {
     rune: { type: 'string', default: DEFAULT_RUNE, options: RUNE_OPTIONS, label: 'Rune', help: 'which rune the pair crafts. Air = Falador East bank; Mind = Edgeville bank.' },
-    mode: { type: 'string', default: 'Crafter', options: ['Crafter', 'Mule'], label: 'Mode', help: 'Crafter has the talisman, crafts at the altar, trades runes at ruins. Mule carries essence to the ruins and runes back to the bank.' },
-    partner: { type: 'string', default: '', label: 'Partner name(s) (Optional for Crafter)', help: 'Crafter: optional mule name(s) to trade with, comma-separated (blank = solo mode). Mule: required crafter to trade with.' },
-    bankFill: { type: 'boolean', default: true, label: 'Fill essence at bank', help: 'When enabled, crafter withdraws essence from bank. When disabled, mules bring all essence (blank rune mode). Only applies to Crafter mode.' }
+    mode: { type: 'string', default: 'Crafter', options: ['Crafter', 'Mule'], label: 'Mode', help: 'Crafter has the talisman, crafts at the altar, and trades with mules. Mule carries essence to the meeting point and runes back to the bank.' },
+    meetingPoint: { type: 'string', default: DEFAULT_MEETING_POINT, options: [...MEETING_POINTS], label: 'Meet at', help: 'Altar (inside) keeps the crafter beside the altar and requires the mule to carry the matching talisman. Ruins (outside) is the overworld meeting point and needs no mule talisman.' },
+    partner: { type: 'string', default: '', label: 'Partner name(s)', help: 'Crafter: optional mule name(s), comma-separated. Mule: required crafter name.' },
+    tradesPerBank: { type: 'number', default: 0, min: 0, label: 'Bank after trades', help: 'When bank visits are enabled, walk to the bank after this many successful crafter trades. 0 runs the crafter without a mule and banks when out of essence. Ignored when Allow crafter bank visits is off.', showIf: { key: 'mode', anyOf: ['Crafter'] } },
+    bankFill: { type: 'boolean', default: false, label: 'Allow crafter bank visits', help: 'Off prevents the crafter from going to the bank, including Bank after trades trips; mules must provide essence. On allows bank visits, cleanup, and scheduled bank trips.', showIf: { key: 'mode', anyOf: ['Crafter'] } }
 };
 
-function inTemple(): boolean {
-    const t = Game.tile();
-    return t !== null && t.z > TEMPLE_Z;
+function isAtTile(tile: ReturnType<typeof bankTile>, radius = 3): boolean {
+    const here = Game.tile();
+    return here !== null && tile.distanceTo(here) <= radius;
 }
 
-function essCount(): number {
-    return reader
-        .inventory()
-        .filter(i => i.id === ESSENCE_ID)
-        .reduce((sum, i) => sum + i.count, 0);
-}
-
-function isAtTile(tile: Tile, radius = 3): boolean {
-    const t = Game.tile();
-    return t !== null && tile.distanceTo(t) <= radius;
-}
-
-export default class MuleCrafter extends TaskBot {
+export default class MuleCrafter extends TaskBot implements MuleCrafterContext {
     override loopDelay = 600;
 
-    private mode = 'Crafter';
-    private rune = DEFAULT_RUNE;
+    private modeValue = 'Crafter';
+    private runeValue = DEFAULT_RUNE;
     private conf: RuneRoute = RUNES[DEFAULT_RUNE];
-    private bankTile: Tile = new Tile(3013, 3355, 0);
-    private partners: string[] = [];
-    private bankFill = true;
+    private bank: ReturnType<typeof bankTile> = bankTile(RUNES[DEFAULT_RUNE].bank);
+    private partnersValue: string[] = [];
+    private meeting: MeetingPoint = DEFAULT_MEETING_POINT;
+    private tradeLimit = 0;
+    private bankVisits = false;
+    private tradesSinceBankCount = 0;
+    private lastTradeRequestAt: number | null = null;
+    private tradeScreenOpens = 0;
+    private tradeScreenSuccesses = 0;
+    private tradeScreenFailures = 0;
+    private craftEvents = 0;
+    private successfulDeliveries = 0;
     private crafted = 0;
     private trades = 0;
+    private received = 0;
     private status = 'starting';
     private startedAt = Date.now();
     private xpAtStart = 0;
-    private tradedMules = new Set<string>();
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
-        this.mode = this.settings.str('mode', 'Crafter');
-        this.rune = this.settings.str('rune', DEFAULT_RUNE);
-        this.conf = RUNES[this.rune] ?? RUNES[DEFAULT_RUNE];
-        this.bankTile = bankTile(this.conf.bank);
-        this.partners = this.settings.str('partner', '').split(',').map(s => s.trim()).filter(Boolean);
-        this.bankFill = this.settings.bool('bankFill', true);
+        this.modeValue = this.settings.str('mode', 'Crafter');
+        this.runeValue = this.settings.str('rune', DEFAULT_RUNE);
+        this.conf = RUNES[this.runeValue] ?? RUNES[DEFAULT_RUNE];
+        this.bank = bankTile(this.conf.bank);
+        this.partnersValue = parsePartnerNames(this.settings.str('partner', ''));
+        const meeting = this.settings.str('meetingPoint', DEFAULT_MEETING_POINT) as MeetingPoint;
+        this.meeting = MEETING_POINTS.includes(meeting) ? meeting : DEFAULT_MEETING_POINT;
+        this.tradeLimit = Math.max(0, Math.floor(this.settings.num('tradesPerBank', 0)));
+        this.bankVisits = this.settings.bool('bankFill', false);
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('runecraft');
-        this.tradedMules = new Set<string>();
+        this.tradesSinceBankCount = 0;
+        this.lastTradeRequestAt = null;
+        this.tradeScreenOpens = 0;
+        this.tradeScreenSuccesses = 0;
+        this.tradeScreenFailures = 0;
+        this.craftEvents = 0;
+        this.successfulDeliveries = 0;
 
-        if (this.mode === 'Mule') {
-            if (this.partners.length === 0) {
-                this.log('MuleCrafter: no partner names set for Mule mode. The mule needs the crafter name. Stopping.');
-                throw new Error('MuleCrafter: no partner configured for mule mode');
+        if (this.modeValue === 'Mule') {
+            if (this.partnersValue.length === 0) {
+                throw new Error('MuleCrafter: no crafter configured for mule mode');
             }
-            this.log(`MuleCrafter mule starting — ferrying essence for ${this.rune} to [${this.partners.join(', ')}]`);
             await this.cleanMuleInventory();
-            this.add(
-                new ContinueDialog(),
-                new MuleWalkToRuins(this),
-                new MuleTradeWithCrafter(this),
-                new MuleTradeExecute(this),
-                new MuleGoBank(this)
-            );
+            this.add(new ContinueDialog(), ...createMuleTasks(this));
             return;
         }
 
-        // Crafter mode.
-        if (this.partners.length === 0) {
-            this.bankFill = true; // Ensure crafter fills essence at bank when running solo
-            this.log('MuleCrafter: No partners configured. Running in Solo Crafter mode.');
+        if (!this.bankVisitsEnabled()) {
+            this.log('MuleCrafter crafter: bank visits are disabled; Bank after trades is ignored');
+        } else if (!this.muleModeActive()) {
+            this.log('MuleCrafter: solo crafter mode; bank is enabled for out-of-essence restock');
         } else {
-            this.log(`MuleCrafter crafter starting — ${this.rune}, accepting essence from [${this.partners.join(', ')}]${this.bankFill ? ', banking for essence' : ', mules bring all essence'}`);
+            this.log(`MuleCrafter crafter starting at ${this.meeting}; bank after ${this.tradeLimit} trades`);
         }
-
         await this.cleanCrafterInventory();
-
-        this.add(
-            new ContinueDialog(),
-            new CrafterAtBank(this),
-            new CrafterWalkToRuins(this),
-            new EnterAltar(this),
-            new CraftRunes(this),
-            new ExitAltar(this),
-            new CrafterRequestTrade(this),
-            new CrafterWaitAtRuins(this),
-            new CrafterTradeAtRuins(this),
-            new CrafterGoBank(this)
-        );
+        this.add(new ContinueDialog(), ...createCrafterTasks(this));
     }
 
     private async cleanCrafterInventory(): Promise<void> {
-        const hasExtraItems = Inventory.items().some(i => i.name && i.id !== ESSENCE_ID && i.name.toLowerCase() !== this.conf.talisman.toLowerCase());
-        const hasTalisman = Inventory.contains(this.conf.talisman);
-
-        if (hasExtraItems || !hasTalisman) {
-            this.log('Crafter inventory contains unauthorized items or missing talisman. Opening bank to clean inventory...');
-            await this.walkTo(this.bankTile, 3);
-            const opened = await Bank.openBooth(this.bankTile, BOOTH.name, BOOTH.op, m => this.log(`  ${m}`))
-                || await Bank.openNearest(BOOTH.name, BOOTH.op, m => this.log(`  ${m}`));
-            if (!opened) {
-                throw new Error('MuleCrafter: Failed to open bank for initial inventory cleanup.');
-            }
-
-            const talismanId = Bank.items().find(i => i.name?.toLowerCase() === this.conf.talisman.toLowerCase())?.id ?? -1;
-            const runeId = Inventory.items().find(i => i.name?.toLowerCase() === this.conf.rune.toLowerCase())?.id
-                ?? Bank.items().find(i => i.name?.toLowerCase() === this.conf.rune.toLowerCase())?.id
-                ?? -1;
-            const crafterKeep = new Set([talismanId, ESSENCE_ID, runeId].filter(id => id !== -1));
-            await Bank.depositAllMatching((name: string, id: number) => name.length > 0 && !crafterKeep.has(id), m => this.log(`  ${m}`));
-            await Execution.delayTicks(1);
-
+        this.log('Crafter cleanup: starting');
+        if (!this.bankVisitsEnabled()) {
             if (!Inventory.contains(this.conf.talisman)) {
-                const tal = Bank.items().find(i => i.name?.toLowerCase() === this.conf.talisman.toLowerCase());
-                if (tal && tal.name) {
-                    await Bank.withdraw(this.conf.talisman, 'Withdraw-1');
-                    await Execution.delayUntil(() => Inventory.contains(this.conf.talisman), 3000);
-                    this.log(`withdrew ${this.conf.talisman} from bank`);
-                } else {
-                    this.log(`MuleCrafter: no ${this.conf.talisman} in inventory or bank. Stopping.`);
-                    throw new Error(`MuleCrafter: ${this.conf.talisman} not found`);
-                }
+                throw new Error(`MuleCrafter: bankFill is off and ${this.conf.talisman} is missing; cannot visit the bank`);
             }
+            this.log('Crafter cleanup: skipped because bank visits are disabled');
+            return;
         }
+        const keepNames = new Set([this.conf.talisman.toLowerCase()]);
+        const hasExtraItems = Inventory.items().some(item => item.name && !keepNames.has(item.name.toLowerCase()) && item.id !== ESSENCE_ID);
+        if (!hasExtraItems && Inventory.contains(this.conf.talisman)) return;
+        this.log('Crafter inventory contains unauthorized items or missing talisman. Opening bank to clean inventory...');
+        this.log(`Crafter cleanup: bank tile ${this.bank.x},${this.bank.z}`);
+        await this.walkTo(this.bank, 3);
+        if (!await this.openBank()) {
+            throw new Error('MuleCrafter: Failed to open bank for initial inventory cleanup.');
+        }
+        this.log('Crafter cleanup: bank opened');
+        const talismanId = Bank.items().find(item => item.name?.toLowerCase() === this.conf.talisman.toLowerCase())?.id
+            ?? Inventory.items().find(item => item.name?.toLowerCase() === this.conf.talisman.toLowerCase())?.id
+            ?? -1;
+        const runeId = Inventory.items().find(item => item.name?.toLowerCase() === this.conf.rune.toLowerCase())?.id
+            ?? Bank.items().find(item => item.name?.toLowerCase() === this.conf.rune.toLowerCase())?.id
+            ?? -1;
+        const keep = new Set([talismanId, runeId, ESSENCE_ID].filter(id => id !== -1));
+        await Bank.depositAllMatching((name, id) => name.length > 0 && !keep.has(id), message => this.log(`  ${message}`));
+        this.log('Crafter cleanup: deposit pass complete');
+        await Execution.delayTicks(1);
+        if (!await this.ensureTalisman()) {
+            throw new Error(`MuleCrafter: ${this.conf.talisman} not found`);
+        }
+        await Bank.close();
+        this.log('Crafter cleanup: bank closed');
     }
 
     private async cleanMuleInventory(): Promise<void> {
-        const hasExtraItems = Inventory.items().some(i => i.name && i.id !== ESSENCE_ID);
-
-        if (hasExtraItems) {
-            this.log('Mule inventory contains unauthorized items. Opening bank to clean inventory...');
-            await this.walkTo(this.bankTile, 3);
-            const opened = await Bank.openBooth(this.bankTile, BOOTH.name, BOOTH.op, m => this.log(`  ${m}`))
-                || await Bank.openNearest(BOOTH.name, BOOTH.op, m => this.log(`  ${m}`));
-            if (!opened) {
-                throw new Error('MuleCrafter: Failed to open bank for initial inventory cleanup.');
-            }
-
-            const runeId = Inventory.items().find(i => i.name?.toLowerCase() === this.conf.rune.toLowerCase())?.id
-                ?? Bank.items().find(i => i.name?.toLowerCase() === this.conf.rune.toLowerCase())?.id
-                ?? -1;
-            const muleKeep = new Set([ESSENCE_ID, runeId].filter(id => id !== -1));
-            await Bank.depositAllMatching((name: string, id: number) => name.length > 0 && !muleKeep.has(id), m => this.log(`  ${m}`));
-            await Execution.delayTicks(1);
+        const keepTalisman = this.meeting === 'Altar (inside)';
+        const keepNames = new Set([this.conf.rune.toLowerCase()]);
+        if (keepTalisman) keepNames.add(this.conf.talisman.toLowerCase());
+        const hasExtraItems = Inventory.items().some(item => item.name && item.id !== ESSENCE_ID && !keepNames.has(item.name.toLowerCase()));
+        const needsTalisman = keepTalisman && !Inventory.contains(this.conf.talisman);
+        if (!hasExtraItems && !needsTalisman) return;
+        this.log('Mule inventory contains unauthorized items or needs a talisman. Opening bank to clean inventory...');
+        await this.walkTo(this.bank, 3);
+        if (!await this.openBank()) {
+            throw new Error('MuleCrafter: Failed to open bank for initial inventory cleanup.');
         }
+        const talismanId = Bank.items().find(item => item.name?.toLowerCase() === this.conf.talisman.toLowerCase())?.id
+            ?? Inventory.items().find(item => item.name?.toLowerCase() === this.conf.talisman.toLowerCase())?.id
+            ?? -1;
+        const runeId = Inventory.items().find(item => item.name?.toLowerCase() === this.conf.rune.toLowerCase())?.id
+            ?? Bank.items().find(item => item.name?.toLowerCase() === this.conf.rune.toLowerCase())?.id
+            ?? -1;
+        const keep = new Set([runeId, ESSENCE_ID]);
+        if (keepTalisman && talismanId !== -1) keep.add(talismanId);
+        await Bank.depositAllMatching((name, id) => name.length > 0 && !keep.has(id), message => this.log(`  ${message}`));
+        await Execution.delayTicks(1);
+        if (keepTalisman && !await this.ensureTalisman()) {
+            throw new Error(`MuleCrafter: ${this.conf.talisman} not found`);
+        }
+        await Bank.close();
+    }
+
+    private async openBank(): Promise<boolean> {
+        return await Bank.openBooth(this.bank, BOOTH.name, BOOTH.op, message => this.log(`  ${message}`))
+            || await Bank.openNearest(BOOTH.name, BOOTH.op, message => this.log(`  ${message}`));
+    }
+
+    private async ensureTalisman(): Promise<boolean> {
+        if (Inventory.contains(this.conf.talisman)) return true;
+        const item = Bank.items().find(row => row.name?.toLowerCase() === this.conf.talisman.toLowerCase());
+        if (!item?.name) return false;
+        await Bank.withdraw(this.conf.talisman, 'Withdraw-1');
+        return Execution.delayUntil(() => Inventory.contains(this.conf.talisman), 3000);
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#a0e6c8' });
-        const partnerInfo = this.partners.length > 0 ? `Partners: ${this.partners.length}` : 'Solo Mode';
-        p.title(`MuleCrafter — ${this.rune} — ${this.mode} — ${this.status}`);
+        p.title(`MuleCrafter — ${this.runeValue} — ${this.modeValue} — ${this.status}`);
         const mins = (Date.now() - this.startedAt) / 60_000;
         const xpGained = Skills.xp('runecraft') - this.xpAtStart;
         const xph = mins > 0.5 ? `${((xpGained / mins) * 60 / 1000).toFixed(1)}k` : '—';
-        p.row(`Runtime: ${fmtDuration(mins)}`, this.mode === 'Crafter' ? `RC lvl: ${Skills.level('runecraft')}` : `To: ${this.partners[0] ?? '?'}`);
-        if (this.mode === 'Crafter') {
-            p.row(`Crafted: ${this.crafted}`, `Trades: ${this.trades}`);
-            p.row(`RC xp: ${xpGained}`, `XP/h: ${xph}`, partnerInfo);
-            p.row(`Pack ess: ${essCount()}`, `Pack runes: ${Inventory.count(this.conf.rune)}`, '');
+        p.row(`Runtime: ${fmtDuration(mins)}`, this.modeValue === 'Crafter' ? `RC lvl: ${Skills.level('runecraft')}` : `To: ${this.partnersValue[0] ?? '?'}`);
+        if (this.modeValue === 'Crafter') {
+            const bankState = !this.bankVisitsEnabled() ? 'disabled' : this.tradeLimit || 'when empty';
+            p.row(`Crafts: ${this.craftEvents}`, `Essence: ${this.crafted}`, this.meeting);
+            p.row(`Screens: ${this.tradeScreenOpens}`, `Completed: ${this.tradeScreenSuccesses}`, `Failed: ${this.tradeScreenFailures}`);
+            p.row(`RC xp: ${xpGained}`, `XP/h: ${xph}`, `Trades since bank: ${this.tradesSinceBankCount}/${bankState}`);
+            p.row(`Pack ess: ${this.essenceCount()}`, `Pack runes: ${this.runeCount()}`, this.meeting);
         } else {
-            p.row(`Trades: ${this.trades}`, `Ess carried: ${this.crafted}`, '');
-            p.row(`Pack ess: ${essCount()}`, `Pack runes: ${Inventory.count(this.conf.rune)}`, '');
+            p.row(`Trades: ${this.trades}`, `Ess received: ${this.received}`, this.meeting);
+            p.row(`Screens: ${this.tradeScreenOpens}`, `Completed: ${this.tradeScreenSuccesses}`, `Failed: ${this.tradeScreenFailures}`);
+            p.row(`Pack ess: ${this.essenceCount()}`, `Pack runes: ${this.runeCount()}`, '');
         }
         ScriptRunner.paintControls(p);
         p.end();
     }
 
+    mode(): string { return this.modeValue; }
+    rune(): string { return this.runeValue; }
     cfg(): RuneRoute { return this.conf; }
-    getMode(): string { return this.mode; }
-    getBankTile(): Tile {return this.bankTile;}
-    fillBank(): boolean { return this.bankFill; }
-    setStatus(s: string): void { this.status = s; }
-    countCraft(n: number): void { this.crafted += n; }
-    countTrade(): void { this.trades++; }
-    hasPartners(): boolean { return this.partners.length > 0; }
-    isPartner(name: string | null): boolean {
-        return isConfiguredPartner(name, this.partners);
+    bankTile(): ReturnType<typeof bankTile> { return this.bank; }
+    partners(): string[] { return this.partnersValue; }
+    bankVisitsEnabled(): boolean { return this.bankVisits; }
+    tradesPerBank(): number { return this.tradeLimit; }
+    meetingPoint(): MeetingPoint { return this.meeting; }
+    muleModeActive(): boolean { return this.modeValue === 'Crafter' && this.tradeLimit > 0 && this.partnersValue.length > 0; }
+    inTemple(): boolean { const tile = Game.tile(); return tile !== null && tile.z > TEMPLE_Z; }
+    atBank(): boolean { return !this.inTemple() && isAtTile(this.bank, 6); }
+    atMeetingPoint(): boolean {
+        return this.meeting === 'Altar (inside)' ? this.inTemple() : !this.inTemple() && isAtTile(this.conf.ruins, MEETING_RANGE);
     }
-    partnerNames(): string[] { return this.partners; }
-    nearestPartner(): Player | null {
-        if (!this.hasPartners()) return null;
-        return Players.query().name(...this.partners).nearest();
+    essenceCount(): number { return reader.inventory().filter(item => item.id === ESSENCE_ID).reduce((sum, item) => sum + item.count, 0); }
+    runeCount(): number { return Inventory.count(this.conf.rune); }
+    bankDue(): boolean {
+        if (!this.bankVisitsEnabled()) return false;
+        return this.muleModeActive() ? bankDue(this.tradesSinceBankCount, this.tradeLimit) : this.essenceCount() === 0;
     }
-    markMuleTraded(name: string): void { this.tradedMules.add(name.toLowerCase()); }
-    hasAllMulesTraded(): boolean { return this.partners.every(p => this.tradedMules.has(p.toLowerCase())); }
-    resetTradedMules(): void { this.tradedMules.clear(); }
+    tradeRequestDue(): boolean { return this.lastTradeRequestAt === null || Date.now() - this.lastTradeRequestAt >= TRADE_REQUEST_INTERVAL_MS; }
+    markTradeRequest(): void { this.lastTradeRequestAt = Date.now(); }
+    recordTradeScreenOpen(): number {
+        this.tradeScreenOpens++;
+        return this.tradeScreenOpens;
+    }
+    recordTradeScreenSuccess(): number {
+        this.tradeScreenSuccesses++;
+        return this.tradeScreenSuccesses;
+    }
+    recordTradeScreenFailure(): number {
+        this.tradeScreenFailures++;
+        return this.tradeScreenFailures;
+    }
+    isPartner(name: string | null): boolean { return isConfiguredPartner(name, this.partnersValue); }
+    nearestPartner(range = MEETING_RANGE): Player | null {
+        if (this.partnersValue.length === 0) return null;
+        return Players.query().name(...this.partnersValue).within(range).nearest();
+    }
+    currentTile(): Tile | null { const tile = Game.tile(); return tile === null ? null : Tile.from(tile); }
+    altarTile(): Tile | null {
+        const tile = Locs.query().name('Altar').action('Craft-rune').nearest()?.tile();
+        return tile === undefined ? null : Tile.from(tile);
+    }
+    setStatus(status: string): void { this.status = status; }
+    countCraft(amount: number): number {
+        this.crafted += amount;
+        this.craftEvents++;
+        return this.craftEvents;
+    }
+    craftCount(): number { return this.craftEvents; }
+    recordCrafterTrade(amount: number): number {
+        this.trades++;
+        this.received += amount;
+        this.tradesSinceBankCount++;
+        return this.trades;
+    }
+    recordMuleDelivery(amount: number): number {
+        this.trades++;
+        this.received += amount;
+        if (amount > 0) this.successfulDeliveries++;
+        return this.successfulDeliveries;
+    }
+    resetTradeCounter(): void { this.tradesSinceBankCount = 0; }
 
-    async walkTo(dest: Tile, radius = 2): Promise<void> {
+    async walkTo(dest: ReturnType<typeof bankTile>, radius = 2): Promise<void> {
         const here = Game.tile();
-        if (here && dest.distanceTo(here) <= radius) {
-            return;
-        }
-        if (!Game.ingame()) {
-            this.log('walkTo: not ingame, waiting...');
-            await Execution.delayUntil(() => Game.ingame(), 30_000);
-        }
-        await Traversal.walkResilient(dest, { radius, attempts: 6, timeoutMs: 240_000, log: m => this.log(`  ${m}`) });
+        if (here && dest.distanceTo(here) <= radius) return;
+        if (!Game.ingame()) await Execution.delayUntil(() => Game.ingame(), 30_000);
+        await Traversal.walkResilient(dest, { radius, attempts: 6, timeoutMs: 240_000, log: message => this.log(`  ${message}`) });
     }
-}
 
-// ── Crafter: at bank - ensure talisman + essence ────────────────────────────────
-class CrafterAtBank implements Task {
-    private emptyReads = 0;
-    constructor(private bot: MuleCrafter) {}
-    validate(): boolean {
-        return this.bot.getMode() === 'Crafter' && !inTemple() && !Trade.active()
-            && isAtTile(this.bot.getBankTile(), 6)
-            && (!Inventory.contains(this.bot.cfg().talisman) || essCount() === 0);
-    }
-    async execute(): Promise<void> {
-        this.bot.setStatus('at bank - preparing');
-
-        const opened = (await Bank.openBooth(this.bot.getBankTile(), BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))
-            || (await Bank.openNearest(BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)));
-        if (!opened) {
-            this.bot.log('could not open the bank — retrying');
-            return;
-        }
-
-        if (!Inventory.contains(this.bot.cfg().talisman)) {
-            const tal = Bank.items().find(i => i.name?.toLowerCase() === this.bot.cfg().talisman.toLowerCase());
-            if (tal && tal.name) {
-                await Bank.withdraw(this.bot.cfg().talisman, 'Withdraw-1');
-                await Execution.delayUntil(() => Inventory.contains(this.bot.cfg().talisman), 3000);
-                this.bot.log(`withdrew ${this.bot.cfg().talisman}`);
-            }
-        }
-
-        const hasEss = essCount() > 0;
-        if (!hasEss) {
-            await Execution.delayUntil(() => Bank.loaded(), 3000);
-            const banked = Bank.count(ESSENCE);
-            if (banked === 0) {
-                if (++this.emptyReads >= 3) {
-                    ScriptRunner.stop('MuleCrafter: no essence left in the bank (three reads)');
-                }
-                return;
-            }
-            this.emptyReads = 0;
-            const maxTake = Math.min(Inventory.free(), essencePerTrade(28, true), banked);
-            await Bank.withdrawX(ESSENCE, maxTake);
-            await Execution.delayUntil(() => essCount() > 0, 4000);
-            this.bot.log(`withdrew ${essCount()} essence from the bank`);
-        }
-    }
-}
-
-// ── Crafter: walk to ruins ─────────────────────────────────────────────────────
-class CrafterWalkToRuins implements Task {
-    constructor(private bot: MuleCrafter) {}
-    validate(): boolean {
-        return this.bot.getMode() === 'Crafter' && !inTemple() && !Trade.active() && !isAtTile(this.bot.cfg().ruins, 3);
-    }
-    async execute(): Promise<void> {
-        this.bot.setStatus('walking to the ruins');
-        await this.bot.walkTo(this.bot.cfg().ruins, 2);
-    }
-}
-
-// ── Crafter: enter altar ───────────────────────────────────────────────────────
-class EnterAltar implements Task {
-    private fails = 0;
-    constructor(private bot: MuleCrafter) {}
-    validate(): boolean { return this.bot.getMode() === 'Crafter' && !inTemple() && essCount() > 0 && !Trade.active(); }
-    async execute(): Promise<void> {
-        this.bot.setStatus('entering the altar');
-        await this.bot.walkTo(this.bot.cfg().ruins, 1);
+    async enterAltar(): Promise<boolean> {
+        if (this.inTemple()) return true;
+        await this.walkTo(this.conf.ruins, 1);
         const ruins = Locs.query().name(RUINS).nearest();
-        const talisman = Inventory.first(this.bot.cfg().talisman);
-        if (!ruins || !talisman) { await Execution.delayTicks(2); return; }
-        this.bot.log(`using the ${this.bot.cfg().talisman} on the mysterious ruins`);
-        if (!(await talisman.useOn(ruins))) { await Execution.delayTicks(2); return; }
-        if (await Execution.delayUntil(() => inTemple(), 10_000)) {
-            this.bot.log('entered the altar');
-            this.fails = 0;
-            return;
-        }
-        if (++this.fails >= 3) {
-            ScriptRunner.stop('MuleCrafter: the talisman didn\'t teleport into the altar');
-        }
+        const talisman = Inventory.first(this.conf.talisman);
+        if (!ruins || !talisman) return false;
+        if (!await talisman.useOn(ruins)) return false;
+        return Execution.delayUntil(() => this.inTemple(), 10_000);
     }
-}
 
-// ── Crafter: craft runes ────────────────────────────────────────────────────────
-class CraftRunes implements Task {
-    constructor(private bot: MuleCrafter) {}
-    validate(): boolean { return this.bot.getMode() === 'Crafter' && inTemple() && essCount() > 0; }
-    async execute(): Promise<void> {
-        const altar = Locs.query().name(ALTAR.name).action(ALTAR.op).nearest();
-        if (!altar) { this.bot.log('CraftRunes: no altar found'); await Execution.delayTicks(2); return; }
-        this.bot.setStatus('crafting runes');
-        const before = essCount();
-        this.bot.log(`crafting ${before} essence at the altar`);
-        if (!(await altar.interact(ALTAR.op))) { this.bot.log('CraftRunes: altar interact failed'); await Execution.delayTicks(2); return; }
-        await Execution.delayUntil(() => essCount() === 0, 8000);
-        const made = before - essCount();
-        this.bot.countCraft(made);
-        this.bot.log(`crafted ${made} ${this.bot.cfg().rune}s - exiting temple`);
-    }
-}
-
-// ── Crafter: exit altar (take portal back to ruins) ──────────────────────────────
-class ExitAltar implements Task {
-    constructor(private bot: MuleCrafter) {}
-    validate(): boolean { return this.bot.getMode() === 'Crafter' && inTemple() && essCount() === 0; }
-    async execute(): Promise<void> {
-        this.bot.setStatus('taking the portal out');
-        this.bot.log('taking the portal back to the ruins');
-        for (let i = 0; i < 15 && inTemple(); i++) {
-            if (ChatDialog.canContinue()) { await ChatDialog.continue(); continue; }
+    async exitAltar(): Promise<boolean> {
+        for (let attempt = 0; attempt < 15 && this.inTemple(); attempt++) {
+            if (ChatDialog.canContinue()) {
+                await ChatDialog.continue();
+                continue;
+            }
             const portal = Locs.query().name(PORTAL.name).action(PORTAL.op).nearest();
-            if (portal) { await portal.interact(PORTAL.op); }
+            if (portal) await portal.interact(PORTAL.op);
             await Execution.delayTicks(1);
         }
-        if (!inTemple()) { this.bot.log('back at the mysterious ruins'); }
+        return !this.inTemple();
     }
 }
 
-// ── Crafter: wait at ruins for mule to arrive and trade ─────────────────────────────
-class CrafterWaitAtRuins implements Task {
-    constructor(private bot: MuleCrafter) {}
-    validate(): boolean {
-        return this.bot.getMode() === 'Crafter' && !inTemple() && !Trade.active() 
-            && isAtTile(this.bot.cfg().ruins, 4)
-            && Inventory.count(this.bot.cfg().rune) > 0
-            && !this.bot.hasAllMulesTraded();
-    }
-    async execute(): Promise<void> {
-        const remaining = this.bot.partnerNames().filter(p => !this.bot['tradedMules'].has(p));
-        this.bot.setStatus(`waiting for mules: ${remaining.join(', ')}`);
-        this.bot.log(`CrafterWaitAtRuins: waiting for ${remaining.join(', ')} — runes=${Inventory.count(this.bot.cfg().rune)}, traded=${Array.from(this.bot['tradedMules']).join(',')}`);
-        await Execution.delayTicks(2);
-    }
+function createCrafterTasks(bot: MuleCrafter): Task[] {
+    const atRuins = () => !bot.inTemple() && !Trade.active() && !isAtTile(bot.cfg().ruins, 3);
+    return [
+        new CrafterTradeScreenTask(bot),
+        createCloseBankTask(bot),
+        new ExitAltarTask(bot, () => bot.mode() === 'Crafter' && bot.inTemple() && bot.essenceCount() === 0 && (bot.meetingPoint() === 'Ruins (outside)' || bot.bankDue())),
+        createCrafterBankTask(bot),
+        createCrafterPrepareTask(bot),
+        new WalkToTask(bot, () => bot.cfg().ruins, atRuins, 2, 'walking to the ruins'),
+        new EnterAltarTask(bot, () => crafterCanEnter(bot), 'entering the altar'),
+        new ApproachAltarTask(bot, () => bot.mode() === 'Crafter' && bot.inTemple(), ALTAR_APPROACH_RADIUS),
+        new CraftRunesTask(bot),
+        new TradeRequestTask(bot, {
+            ready: () => bot.mode() === 'Crafter' && bot.muleModeActive() && !bot.bankDue() && bot.atMeetingPoint() && !Trade.active(),
+            candidate: () => bot.nearestPartner(TRADE_RANGE),
+            status: () => 'requesting trade with {name}'
+        }),
+        new WaitTask(bot, () => bot.mode() === 'Crafter' && bot.muleModeActive() && !bot.bankDue() && bot.atMeetingPoint() && !Trade.active() && bot.nearestPartner(TRADE_RANGE) === null, () => 'waiting for a mule within one tile', 2)
+    ];
 }
 
-// ── Crafter: request trade with next mule at ruins ──────────────────────────────────
-class CrafterRequestTrade implements Task {
-    constructor(private bot: MuleCrafter) {}
-    validate(): boolean {
-        return this.bot.getMode() === 'Crafter' && !inTemple() && !Trade.active() 
-            && isAtTile(this.bot.cfg().ruins, 4)
-            && Inventory.count(this.bot.cfg().rune) > 0
-            && !this.bot.hasAllMulesTraded();
-    }
-    async execute(): Promise<void> {
-        const remaining = this.bot.partnerNames().filter(p => !this.bot['tradedMules'].has(p));
-        if (remaining.length === 0) return;
-        
-        const muleName = remaining[0];
-        const mule = Players.query().name(muleName).nearest();
-        if (!mule || !mule.name) {
-            this.bot.setStatus(`waiting for ${muleName} at ruins`);
-            await Execution.delayTicks(2);
-            return;
-        }
-        
-        this.bot.setStatus(`requesting trade with ${muleName}`);
-        const requested = await Trade.request(muleName);
-        this.bot.log(`CrafterRequestTrade: Trade.request(${muleName}) returned ${requested}`);
-        if (await Execution.delayUntil(() => Trade.active(), 4000)) {
-            this.bot.log(`CrafterRequestTrade: trade became active with ${muleName}`);
-        } else {
-            this.bot.log('CrafterRequestTrade: trade did not become active within 4s');
-        }
-    }
-}
-
-// ── Crafter: trade with ONE mule at ruins ───────────────────────────────────────
-class CrafterTradeAtRuins implements Task {
-    constructor(private bot: MuleCrafter) {}
-    validate(): boolean {
-        return this.bot.getMode() === 'Crafter' && Trade.active() && this.bot.hasPartners();
-    }
-    async execute(): Promise<void> {
-        if (Trade.onConfirmScreen()) {
-            this.bot.setStatus('confirming trade');
-            const beforeEss = essCount();
-            const accepted = await Trade.accept();
-            this.bot.log(`CrafterTradeAtRuins: confirm-screen accept returned ${accepted}`);
-            if (await Execution.delayUntil(() => !Trade.active(), 3000)) {
-                const got = essCount() - beforeEss;
-                this.bot.log(`CrafterTradeAtRuins: trade closed, essCount went ${beforeEss} -> ${essCount()} (delta ${got})`);
-                if (got > 0) {
-                    this.bot.countTrade();
-                    this.bot.log(`received ${got} essence`);
-                    const who = Trade.partner();
-                    if (who) {
-                        this.bot.markMuleTraded(who);
-                        this.bot.log(`marked ${who} as traded (confirm complete)`);
-                    }
-                } else {
-                    this.bot.log('CrafterTradeAtRuins: trade closed but got 0 essence — trade may have failed');
-                }
-            } else {
-                this.bot.log('CrafterTradeAtRuins: trade still active after 3s wait on confirm');
-            }
-            return;
-        }
-
-        if (!Trade.onOfferScreen()) {
-            this.bot.setStatus('waiting for trade screen');
-            await Execution.delayTicks(1);
-            return;
-        }
-
-        const who = Trade.partner();
-        if (who === null) {
-            this.bot.setStatus('reading trade partner');
-            await Execution.delayTicks(1);
-            return;
-        }
-        if (!this.bot.isPartner(who)) {
-            this.bot.setStatus(`declining trade from ${who}`);
-            this.bot.log(`declining a trade from '${who}' — not a configured mule`);
-            await Trade.decline();
-            return;
-        }
-
-        const state = classifyMuleState(Trade.theirOffer());
-        this.bot.log(`CrafterTradeAtRuins: offer screen with ${who}, their offer state=${state}, my runes=${Inventory.count(this.bot.cfg().rune)}, my ess=${essCount()}`);
-
-        if (state === 'has-essence') {
-            const talismanName = this.bot.cfg().talisman;
-            const toOffer = Inventory.items()
-                .filter(i => i.name && i.name.toLowerCase() !== talismanName.toLowerCase());
-            const uniqueNames = [...new Set(toOffer.map(i => i.name!))];
-            if (uniqueNames.length > 0) {
-                this.bot.setStatus(`offering ${uniqueNames.length} item type(s) to ${who}`);
-                for (const name of uniqueNames) {
-                    const ok = await Trade.offerAll(name);
-                    this.bot.log(`CrafterTradeAtRuins: offered ${name} returned ${ok}`);
-                    await Execution.delayTicks(1);
-                }
-            } else {
-                this.bot.setStatus(`accepting essence from ${who} (nothing to offer)`);
-            }
-            const accepted = await Trade.accept();
-            this.bot.log(`CrafterTradeAtRuins: offer-screen accept returned ${accepted}`);
-            return;
-        }
-
-        this.bot.setStatus(`waiting for ${who}'s offer`);
-        this.bot.log(`CrafterTradeAtRuins: waiting for ${who} to offer essence (their offer: ${JSON.stringify(Trade.theirOffer())})`);
-        await Execution.delayTicks(1);
-    }
-}
-
-// ── Crafter: go to the bank ─────────────────────────────────────────────────────
-class CrafterGoBank implements Task {
-    private emptyReads = 0;
-    constructor(private bot: MuleCrafter) {}
-    validate(): boolean {
-        return this.bot.getMode() === 'Crafter' && !inTemple() && !Trade.active()
-            && (
-                isAtTile(this.bot.getBankTile(), 6)
-                || (Inventory.count(this.bot.cfg().rune) > 0 && !isAtTile(this.bot.cfg().ruins, 4) && this.bot.hasPartners())
-                || (essCount() === 0 && !this.bot.hasPartners()) // Solo mode: bank when out of essence
-                || (this.bot.hasPartners() && this.bot.hasAllMulesTraded() && isAtTile(this.bot.cfg().ruins, 4))
-            );
-    }
-
-
-
-    async execute(): Promise<void> {
-        if(!this.bot.fillBank()){
-            this.bot.resetTradedMules();
-            this.bot.setStatus('resetting traded mules (bankFill=false)');
-            return;
-        }
-
-        if (!isAtTile(this.bot.getBankTile(), 6)) {
-            this.bot.setStatus('walking to the bank');
-            await this.bot.walkTo(this.bot.getBankTile(), 3);
-        }
-        this.bot.setStatus('banking');
-
-        const opened = (await Bank.openBooth(this.bot.getBankTile(), BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))
-            || (await Bank.openNearest(BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)));
-        if (!opened) {
-            this.bot.log('could not open the bank — retrying');
-            return;
-        }
-
-        const runesHeld = Inventory.count(this.bot.cfg().rune);
-        await Bank.depositAllMatching((name: string) => name === this.bot.cfg().rune, m => this.bot.log(`  ${m}`));
-        await Execution.delayTicks(1);
-        if (runesHeld > 0) {
-            this.bot.log(`deposited ${runesHeld} ${this.bot.cfg().rune}s`);
-        }
-
-        const crafterKeepIds = (() => {
-            const tid = Bank.items().find(i => i.name?.toLowerCase() === this.bot.cfg().talisman.toLowerCase())?.id ?? -1;
-            return new Set([tid, ESSENCE_ID].filter(id => id !== -1));
-        })();
-        const beforeClean = Inventory.used();
-        await Bank.depositAllMatching(
-            (name: string, id: number) => name.length > 0 && !crafterKeepIds.has(id),
-            m => this.bot.log(`  ${m}`)
+function createMuleTasks(bot: MuleCrafter): Task[] {
+    const tasks: Task[] = [
+        new MuleTradeScreenTask(bot),
+        createCloseBankTask(bot),
+        new ExitAltarTask(bot, () => bot.mode() === 'Mule' && bot.inTemple() && bot.essenceCount() === 0),
+        createMuleBankTask(bot),
+        new WalkToTask(bot, () => bot.cfg().ruins, () => bot.mode() === 'Mule' && !bot.inTemple() && !Trade.active() && bot.essenceCount() > 0 && !isAtTile(bot.cfg().ruins, 3), 2, 'walking to the ruins')
+    ];
+    if (bot.meetingPoint() === 'Altar (inside)') {
+        tasks.push(
+            new EnterAltarTask(bot, () => muleCanEnter(bot), 'entering the altar'),
+            new ApproachAltarTask(bot, () => bot.mode() === 'Mule' && bot.inTemple() && bot.essenceCount() > 0, ALTAR_APPROACH_RADIUS),
+            new ApproachPartnerTask(bot, () => bot.mode() === 'Mule' && bot.inTemple() && bot.essenceCount() > 0, TRADE_RANGE)
         );
-        if (Inventory.used() < beforeClean) {
-            this.bot.log(`cleared ${beforeClean - Inventory.used()} slot(s)`);
-        }
-
-        if (!Inventory.contains(this.bot.cfg().talisman)) {
-            const tal = Bank.items().find(i => i.name?.toLowerCase() === this.bot.cfg().talisman.toLowerCase());
-            if (tal && tal.name) {
-                await Bank.withdraw(this.bot.cfg().talisman, 'Withdraw-1');
-                await Execution.delayUntil(() => Inventory.contains(this.bot.cfg().talisman), 3000);
-            }
-        }
-
-        if (this.bot.fillBank() && essCount() === 0) {
-            await Execution.delayUntil(() => Bank.loaded(), 3000);
-            const banked = Bank.count(ESSENCE);
-            if (banked === 0) {
-                if (essCount() === 0 && ++this.emptyReads >= 3) {
-                    ScriptRunner.stop('MuleCrafter: no essence left in the bank (three reads)');
-                }
-                return;
-            }
-            this.emptyReads = 0;
-            const maxTake = Math.min(Inventory.free(), essencePerTrade(28, true), banked);
-            await Bank.withdrawX(ESSENCE, maxTake);
-            await Execution.delayUntil(() => essCount() > 0, 4000);
-            this.bot.log(`withdrew ${essCount()} essence from the bank`);
-        }
-
-        this.bot.resetTradedMules();
     }
-}
-
-// ── Mule: go to the bank ────────────────────────────────────────────────────────
-class MuleGoBank implements Task {
-    private emptyReads = 0;
-    constructor(private bot: MuleCrafter) {}
-    validate(): boolean {
-        return this.bot.getMode() === 'Mule' && !Trade.active()
-            && (Inventory.count(this.bot.cfg().rune) > 0
-                || (essCount() === 0 && !isAtTile(this.bot.cfg().ruins, 5))
-                || (isAtTile(this.bot.getBankTile(), 6) && (Inventory.count(this.bot.cfg().rune) > 0 || essCount() === 0)));
-    }
-    async execute(): Promise<void> {
-        if (!isAtTile(this.bot.getBankTile(), 6)) {
-            this.bot.setStatus('walking to the bank');
-            await this.bot.walkTo(this.bot.getBankTile(), 3);
-        }
-        this.bot.setStatus('banking');
-
-        const opened = (await Bank.openBooth(this.bot.getBankTile(), BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))
-            || (await Bank.openNearest(BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)));
-        if (!opened) {
-            this.bot.log('could not open the bank — retrying');
-            return;
-        }
-
-        const runesHeld = Inventory.count(this.bot.cfg().rune);
-        if (runesHeld > 0) {
-            await Bank.deposit(this.bot.cfg().rune, 'Deposit-All');
-            await Execution.delayTicks(1);
-            this.bot.log(`deposited ${runesHeld} ${this.bot.cfg().rune}s`);
-            this.bot.countTrade();
-        }
-
-        const muleKeep = new Set([ESSENCE_ID]);
-        const before = Inventory.used();
-        await Bank.depositAllMatching((name: string, id: number) => name.length > 0 && !muleKeep.has(id), m => this.bot.log(`  ${m}`));
-        if (Inventory.used() < before) {
-            this.bot.log(`cleared ${before - Inventory.used()} slot(s)`);
-        }
-
-        await Execution.delayUntil(() => Bank.loaded(), 3000);
-        const banked = Bank.count(ESSENCE);
-        if (banked === 0 && essCount() === 0) {
-            if (++this.emptyReads >= 3) {
-                ScriptRunner.stop('MuleCrafter: out of essence in the bank (three reads)');
-            }
-            return;
-        }
-        this.emptyReads = 0;
-
-        if (essCount() > 0) {
-            return;
-        }
-
-        const maxTake = Math.min(Inventory.free(), essencePerTrade(28, false), banked);
-        await Bank.withdrawX(ESSENCE, maxTake);
-        await Execution.delayUntil(() => essCount() > 0, 4000);
-        this.bot.log(`withdrew ${essCount()} essence from the bank`);
-    }
-}
-
-// ── Mule: walk to ruins ─────────────────────────────────────────────────────────
-class MuleWalkToRuins implements Task {
-    constructor(private bot: MuleCrafter) {}
-    validate(): boolean {
-        return this.bot.getMode() === 'Mule' && !Trade.active() && !isAtTile(this.bot.cfg().ruins, 3)
-            && essCount() > 0;
-    }
-    async execute(): Promise<void> {
-        this.bot.setStatus('walking to the ruins');
-        await this.bot.walkTo(this.bot.cfg().ruins, 2);
-    }
-}
-
-// ── Mule: initiate trade with Crafter at ruins ──────────────────────────────────
-class MuleTradeWithCrafter implements Task {
-    constructor(private bot: MuleCrafter) {}
-
-    validate(): boolean {
-        return this.bot.getMode() === 'Mule' && !Trade.active() 
-            && isAtTile(this.bot.cfg().ruins, 4) 
-            && essCount() > 0;
-    }
-
-    async execute(): Promise<void> {
-        const crafter = this.bot.nearestPartner();
-        if (!crafter || !crafter.name) {
-            this.bot.setStatus('waiting for crafter at ruins');
-            await Execution.delayTicks(2);
-            return;
-        }
-
-        this.bot.setStatus(`requesting trade with ${crafter.name}`);
-        const requested = await Trade.request(crafter.name);
-        this.bot.log(`MuleTradeWithCrafter: Trade.request(${crafter.name}) returned ${requested}`);
-        if (await Execution.delayUntil(() => Trade.active(), 4000)) {
-            this.bot.log(`MuleTradeWithCrafter: trade became active with ${crafter.name}`);
-        } else {
-            this.bot.log('MuleTradeWithCrafter: trade did not become active within 4s');
-        }
-    }
-}
-
-// ── Mule: handle an active trade window (offer essence, accept, confirm) ─────────
-class MuleTradeExecute implements Task {
-    private beforeEss = 0;
-    constructor(private bot: MuleCrafter) {}
-    validate(): boolean { return this.bot.getMode() === 'Mule' && Trade.active(); }
-    async execute(): Promise<void> {
-        if (Trade.onOfferScreen()) {
-            const who = Trade.partner();
-            if (who === null) {
-                this.bot.setStatus('reading trade partner');
-                await Execution.delayTicks(1);
-                return;
-            }
-            if (!this.bot.isPartner(who)) {
-                this.bot.setStatus(`declining trade from ${who}`);
-                this.bot.log(`declining a trade from '${who}' — not the crafter`);
-                await Trade.decline();
-                return;
-            }
-            this.bot.log(`MuleTradeExecute: offer screen with ${who}, myOffer.length=${Trade.myOffer().length}, ess=${essCount()}, runes=${Inventory.count(this.bot.cfg().rune)}`);
-            if (Trade.myOffer().length === 0) {
-                const held = essCount();
-                if (held <= 0) {
-                    this.bot.setStatus('no essence to offer');
-                    this.bot.log('MuleTradeExecute: held 0 essence, waiting');
-                    await Execution.delayTicks(1);
-                    return;
-                }
-                this.beforeEss = held;
-                this.bot.setStatus('offering essence');
-                this.bot.log(`MuleTradeExecute: trade open — offering ${held} essence`);
-                const offered = await Trade.offerAll(ESSENCE, i => i.id === ESSENCE_ID);
-                this.bot.log(`MuleTradeExecute: Trade.offerAll returned ${offered}`);
-            } else {
-                this.bot.setStatus('accepting the offer');
-                const accepted = await Trade.accept();
-                this.bot.log(`MuleTradeExecute: offer-screen accept returned ${accepted}`);
-            }
-            return;
-        }
-        if (Trade.onConfirmScreen()) {
-            this.bot.setStatus('confirming the trade');
-            this.bot.log(`MuleTradeExecute: confirm screen, beforeEss=${this.beforeEss}`);
-            const accepted = await Trade.accept();
-            this.bot.log(`MuleTradeExecute: confirm-screen accept returned ${accepted}`);
-            if (await Execution.delayUntil(() => !Trade.active(), 2500) && this.beforeEss > 0) {
-                const delivered = this.beforeEss - essCount();
-                this.bot.log(`MuleTradeExecute: trade closed, delivered ${delivered} essence (beforeEss=${this.beforeEss}, ess now=${essCount()})`);
-                if (delivered > 0) {
-                    this.bot.countTrade();
-                    this.bot.log(`delivered ${delivered} essence to the crafter`);
-                }
-                this.beforeEss = 0;
-            } else {
-                this.bot.log('MuleTradeExecute: trade still active or beforeEss was 0 after confirm accept');
-            }
-        }
-    }
+    tasks.push(
+        new TradeRequestTask(bot, {
+            ready: () => bot.mode() === 'Mule' && bot.atMeetingPoint() && !Trade.active() && bot.essenceCount() > 0,
+            candidate: () => bot.nearestPartner(TRADE_RANGE),
+            status: () => 'requesting trade with {name}'
+        }),
+        new WaitTask(bot, () => bot.mode() === 'Mule' && bot.atMeetingPoint() && !Trade.active() && bot.essenceCount() > 0 && bot.nearestPartner(TRADE_RANGE) === null, () => 'waiting for the crafter within one tile', 2)
+    );
+    return tasks;
 }

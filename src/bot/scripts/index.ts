@@ -738,7 +738,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'MuleCrafter',
-    description: 'Crafter + mule runecrafting loop — both run bank→ruins→bank each cycle. Crafter has the talisman, crafts at the altar, trades runes for essence at the ruins. Mule ferries essence to the ruins and runes back to the bank. Dry mule signals at the bank and the crafter shares 1/N essence. Multi-mule round-robin with comma-separated partner names.',
+    description: 'Crafter + mule runecrafting loop — meet at the altar temple or overworld ruins, and trade with any configured mule that is available. Crafter has the talisman; bankFill=false prevents all crafter bank visits and overrides Bank after trades, while bankFill=true enables scheduled bank trips. Mule ferries essence and runes between the meeting point and bank.',
     category: 'Runecrafting',
     tags: ['runecrafting', 'trade', 'crafter', 'mule', 'falador', 'edgeville'],
     settingsSchema: MULECRAFTER_SETTINGS,
