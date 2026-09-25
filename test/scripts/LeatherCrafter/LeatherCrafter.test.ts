@@ -76,14 +76,17 @@ function snapshot(id: number, count: number, slot: number): InvItemSnapshot {
 function inventory(): InvItem[] {
     return [...inventoryCounts.entries()]
         .filter(([, count]) => count > 0)
-        .map(([id, count], slot) => new InvItem({
-            id,
-            count,
-            slot,
-            name: itemName(id),
-            comId: 3214,
-            ops: [null, null, null, null, 'Drop']
-        }));
+        .map(
+            ([id, count], slot) =>
+                new InvItem({
+                    id,
+                    count,
+                    slot,
+                    name: itemName(id),
+                    comId: 3214,
+                    ops: [null, null, null, null, 'Drop']
+                })
+        );
 }
 
 function bot(leatherType = 'Hard leather'): LeatherCrafter {
@@ -112,7 +115,7 @@ beforeEach(() => {
     Game.ingame = () => true;
     Game.tile = () => BANK_TILE;
     reader.sceneState = () => 2;
-    Skills.level = name => name === 'crafting' ? 28 : 1;
+    Skills.level = name => (name === 'crafting' ? 28 : 1);
     Skills.xp = () => 100_000;
 
     Bank.items = () => bankContents;
@@ -122,7 +125,7 @@ beforeEach(() => {
     Inventory.items = () => inventory();
     Inventory.used = () => inventory().length;
     reader.inventorySize = () => 28;
-    reader.bankSideItems = () => sideReady ? inventory().map(item => item.snap) : [];
+    reader.bankSideItems = () => (sideReady ? inventory().map(item => item.snap) : []);
     reader.countDialogOpen = () => dialogOpen;
 
     Input.invButton = id => {
@@ -183,7 +186,7 @@ describe('LeatherCrafter startup readiness', () => {
         const readiness: boolean[] = [];
 
         reader.sceneState = () => sceneState;
-        Skills.level = name => name === 'crafting' ? crafting : 1;
+        Skills.level = name => (name === 'crafting' ? crafting : 1);
         Execution.delayUntil = async condition => {
             readiness.push(condition());
             sceneState = 2;
@@ -203,7 +206,7 @@ describe('LeatherCrafter startup readiness', () => {
     });
 
     test('still stops when a loaded Crafting level is genuinely too low', async () => {
-        Skills.level = name => name === 'crafting' ? 27 : 1;
+        Skills.level = name => (name === 'crafting' ? 27 : 1);
 
         await bot().onStart();
 
@@ -237,7 +240,7 @@ describe('LeatherCrafter bank withdrawals', () => {
 
         expect(stops).toEqual([]);
         expect(clickedIds).toEqual([]);
-        expect(logs).toContain('bank contents not ready — retrying');
+        expect(logs).toContain('bank leg: bank contents not ready — retrying');
     });
 
     test('retries without stopping when a visible withdrawal action is rejected', async () => {
@@ -252,7 +255,7 @@ describe('LeatherCrafter bank withdrawals', () => {
 
         expect(stops).toEqual([]);
         expect(clickedIds).toEqual([THREAD]);
-        expect(logs).toContain('could not withdraw thread — retrying');
+        expect(logs).toContain('bank leg: could not withdraw thread — retrying');
     });
 
     test('retries while the main bank view rehydrates after a deposit', async () => {
@@ -265,7 +268,7 @@ describe('LeatherCrafter bank withdrawals', () => {
 
         expect(stops).toEqual([]);
         expect(clickedIds).toEqual([]);
-        expect(logs).toContain('could not withdraw thread — retrying');
+        expect(logs).toContain('bank leg: could not withdraw thread — retrying');
         expect(logs.some(message => message.includes('no thread'))).toBe(false);
     });
 
@@ -279,7 +282,7 @@ describe('LeatherCrafter bank withdrawals', () => {
 
         expect(stops).toEqual([]);
         expect(clickedIds).toEqual([]);
-        expect(logs).toContain('bank inventory view not ready — retrying');
+        expect(logs).toContain('bank leg: bank inventory view not ready — retrying');
     });
 
     test('stops when neither thread nor coins are available', async () => {
