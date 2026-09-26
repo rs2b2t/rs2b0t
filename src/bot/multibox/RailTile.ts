@@ -15,8 +15,8 @@ export function renderRailTile(tile: HTMLElement, slot: SlotSnapshot): void {
     const pending = slot.switchingWorld;
     const status = tile.querySelector<HTMLElement>('.mbx-script-status');
     if (status) {
-        status.textContent = !slot.ready ? 'Loading' : !slot.scriptName ? 'No script running'
-            : slot.scriptState === 'running' ? slot.scriptName : `${slot.scriptName} (${slot.scriptState})`;
+        status.textContent = slot.worldSwitchError ?? (pending !== null ? `Switching to World ${pending}...` : !slot.ready ? 'Loading' : !slot.scriptName ? 'No script running'
+            : slot.scriptState === 'running' ? slot.scriptName : `${slot.scriptName} (${slot.scriptState})`);
     }
     const select = tile.querySelector<HTMLSelectElement>('.mbx-world-select');
     if (select) {
@@ -26,8 +26,8 @@ export function renderRailTile(tile: HTMLElement, slot: SlotSnapshot): void {
         select.disabled = pending !== null;
         const change = tile.querySelector<HTMLButtonElement>('.mbx-world-switch');
         if (change) {
-            change.textContent = pending === null ? 'Switch' : 'Retry';
-            change.disabled = pending === null && select.value === String(slot.targetWorld);
+            change.textContent = pending === null ? 'Switch' : 'Switching...';
+            change.disabled = pending !== null || select.value === String(slot.targetWorld);
         }
     }
     const cancel = tile.querySelector<HTMLButtonElement>('.mbx-world-cancel');

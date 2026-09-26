@@ -3,13 +3,15 @@
 
 //   bun e2e/autofighter-bank-resume-live.ts [http://localhost:8890]
 import { cheatQuiet, deployIsolatedClient, fail, launchBrowser, positionalArgs, setSettings } from './lib/harness.js';
-import { clearChatDialogs, mainlandAccount, seedItemsToBank, teleTo } from './tutorial/harness.js';
+import { clearChatDialogs, mainlandAccount, relog, seedItemsToBank, teleTo } from './tutorial/harness.js';
 
 const args = positionalArgs(process.argv.slice(2), 'http://localhost:8890');
 const base = args[0];
 const user = args[1] ?? `af${Date.now().toString(36).slice(-5)}`;
 
-const GUARD_SPOT = { x: 2661, z: 3306, level: 0 };
+const legends = process.argv.includes('--legends');
+const FIGHT_SPOT = legends ? { x: 2700, z: 9774, level: 0 } : { x: 2661, z: 3306, level: 0 };
+const TARGET = legends ? 'Shadow warrior' : 'Guard';
 const ARDOUGNE_EAST_BANK = { x: 2655, z: 3283, level: 0 };
 const FOOD_WITHDRAW = 5;
 /** The bank should never be the reason the bot stands still for this long. */
@@ -23,6 +25,7 @@ interface Api {
         Inventory: { items(): Array<{ name: string | null; count: number }> };
         Skills: { xp(name: string): number };
         Bank: { isOpen(): boolean };
+        Quests: { status(name: string): string };
     };
     rs2b0t: {
         runner: { state: string; start(meta: unknown): void; stop(reason: string): void; ctx: { log: { msg: string }[] } | null };
@@ -48,12 +51,20 @@ try {
         ARDOUGNE_EAST_BANK
     );
     await cheatQuiet(page, 'give rune_scimitar 1', 1200);
-    if (!(await teleTo(page, GUARD_SPOT, 8, 30_000))) {
-        fail(`could not reach the East Ardougne guard spot (${GUARD_SPOT.x},${GUARD_SPOT.z})`);
+    if (legends) {
+        await cheatQuiet(page, 'setvar legendsquest 75', 1200);
+        await relog(page, user);
+        const status = await page.evaluate(() => (globalThis as never as Api).__rs2b0t.Quests.status('Legends Quest'));
+        if (status !== 'complete') fail(`Legends Quest setup failed: ${status}`);
+    }
+    if (!(await teleTo(page, FIGHT_SPOT, 8, 30_000))) {
+        fail(`could not reach the fighting spot (${FIGHT_SPOT.x},${FIGHT_SPOT.z})`);
     }
 
     await setSettings(page, 'AutoFighter', {
-        target: 'Guard',
+        target: TARGET,
+        food: 'Trout',
+        bankLocation: 'Nearest',
         spot: 'Start position',
         leashRadius: 14,
         combatStyle: 'melee',
@@ -81,6 +92,7 @@ try {
     let bankOpenSince = 0;
     let longestBankOpen = 0;
     let restocked = false;
+    let visitedGuildBank = false;
     let xpAtRestock = 0;
     let xpAfterRestock = 0;
     let logs: string[] = [];
@@ -91,6 +103,7 @@ try {
                 logs: (g.rs2b0t.runner.ctx?.log ?? []).map(l => l.msg),
                 state: g.rs2b0t.runner.state,
                 bankOpen: g.__rs2b0t.Bank.isOpen(),
+                tile: g.rs2b0t.reader.worldTile(),
                 food: g.__rs2b0t.Inventory.items().filter(i => (i.name ?? '').toLowerCase() === 'trout').length,
                 xp: skills.reduce((n, s) => n + g.__rs2b0t.Skills.xp(s), 0)
             };
@@ -98,6 +111,7 @@ try {
         logs = snap.logs;
 
         if (snap.bankOpen) {
+            visitedGuildBank ||= snap.tile?.level === 2 && snap.tile.x >= 2729 && snap.tile.x <= 2734 && snap.tile.z >= 3374 && snap.tile.z <= 3382;
             bankOpenSince = bankOpenSince === 0 ? Date.now() : bankOpenSince;
             longestBankOpen = Math.max(longestBankOpen, Date.now() - bankOpenSince);
         } else {
@@ -110,7 +124,7 @@ try {
         if (!restocked && snap.food >= FOOD_WITHDRAW) {
             restocked = true;
             xpAtRestock = snap.xp;
-            console.log(`restocked ${snap.food} trout, watching for combat to resume`);
+            console.log(`restocked ${snap.food} trout at ${JSON.stringify(snap.tile)}, watching for combat to resume`);
         }
         if (restocked && !snap.bankOpen) {
             xpAfterRestock = Math.max(xpAfterRestock, snap.xp - xpAtRestock);
@@ -128,7 +142,8 @@ try {
     for (const m of logs.slice(-20)) {
         console.log(`  ${m}`);
     }
-    await page.screenshot({ path: 'docs/e2e/autofighter-bank-resume-live.png' });
+    await page.screenshot({ path: `docs/e2e/autofighter-bank-resume${legends ? '-legends' : ''}-live.png` });
+    if (legends && !visitedGuildBank) fail('never opened the bank on the second floor of the Legends Guild');
     const finalOpen = await page.evaluate(() => (globalThis as never as Api).__rs2b0t.Bank.isOpen());
     await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.stop('harness stop'));
 

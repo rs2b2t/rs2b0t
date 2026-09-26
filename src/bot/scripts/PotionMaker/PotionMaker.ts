@@ -3,6 +3,7 @@ import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import { Inventory, type InvItem } from '../../api/inventory/Inventory.js';
 import { Bank } from '../../api/bank/Bank.js';
+import { openBankAccess } from '../../api/bank/Banking.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Paint } from '../../paint/Paint.js';
 import { Traversal } from '../../api/walking/Traversal.js';
@@ -207,7 +208,7 @@ class RestockIngredients implements Task {
             }
 
             const access = bank.access ?? BOOTH;
-            if (!(await Bank.openNearestAccess(access, m => this.bot.log(`  ${m}`)))) {
+            if (!(await openBankAccess(bank, access, m => this.bot.log(`  ${m}`)))) {
                 this.bot.log('could not open the bank — retrying');
                 return;
             }
@@ -355,7 +356,7 @@ class FinishPotions implements Task {
         }
 
         const access = bank.access ?? BOOTH;
-        if (!(await Bank.openNearestAccess(access, m => this.bot.log(`  ${m}`)))) {
+        if (!(await openBankAccess(bank, access, m => this.bot.log(`  ${m}`)))) {
             this.bot.log('could not open the bank — retrying');
             return;
         }
@@ -411,7 +412,7 @@ class FinishPotions implements Task {
 
         // Why: the bank is left open, since the next cycle's RestockIngredients reuses it and each loop runs bank-open → empty pack → bank-open with no reopen.
         this.bot.setStatus('banking finished potions');
-        if (!(await Bank.openNearestAccess(access, m => this.bot.log(`  ${m}`)))) {
+        if (!(await openBankAccess(bank, access, m => this.bot.log(`  ${m}`)))) {
             this.bot.log('could not open the bank — retrying');
             return;
         }

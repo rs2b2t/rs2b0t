@@ -1,6 +1,7 @@
 import { Client } from '#/client/shell/Client.js';
 import { WorkerClock } from '#/bot/runtime/WorkerClock.js';
 
+import { AutoRelogin } from './AutoRelogin.js';
 import { BotHost } from './BotHost.js';
 import { BotDiag } from './diag/BotDiag.js';
 import { paintNavPathInGame } from '../event/webwalk/pathScenePaint.js';
@@ -34,6 +35,10 @@ export default class BotClient extends Client {
         if (this.deltime !== want) {
             this.setFramerate(hz);
         }
+    }
+
+    protected override onLogoutRequested(): void {
+        AutoRelogin.logoutRequested();
     }
 
     protected override async frameDelay(ms: number): Promise<void> {

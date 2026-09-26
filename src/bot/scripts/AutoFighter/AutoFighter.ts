@@ -25,9 +25,10 @@ import { Bank } from '../../api/bank/Bank.js';
 import { Paint } from '../../paint/Paint.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import { Traversal } from '../../api/walking/Traversal.js';
+import { Navigator } from '../../event/webwalk/Navigator.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Sustain } from '../../api/sustain/Sustain.js';
-import { nearestBank, BANK_LOCATIONS, bankUnlocked, type BankLocation } from '../../api/bank/BankLocations.js';
+import { nearestBankReachable, BANK_LOCATIONS, bankUnlocked, type BankLocation } from '../../api/bank/BankLocations.js';
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { GroundItems } from '../../api/grounditems/GroundItems.js';
 import { Npcs, type Npc } from '../../api/npcs/Npcs.js';
@@ -114,7 +115,7 @@ export const SETTINGS: SettingsSchema = {
     buryBones: { type: 'boolean', default: false, label: 'Bury regular bones', group: 'Banking & loot', help: 'pick up and bury regular Bones for Prayer XP (always looted when on)' },
     solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues' },
     banking: { type: 'string', default: 'Auto', options: BANKING_OPTIONS, label: 'Banking', help: 'Auto = bank loot at the nearest bank and return; None = no loot-only bank trips' },
-    bankLocation: { type: 'string', default: 'Nearest', options: BANK_LOCATION_OPTIONS, label: 'Bank location', group: 'Banking & loot', help: 'Nearest = closest unlocked bank; a named bank forces that stand (locked banks fall back to nearest). Used for loot, food, supplies, and panic retreats.' },
+    bankLocation: { type: 'string', default: 'Nearest', options: BANK_LOCATION_OPTIONS, label: 'Bank location', group: 'Banking & loot', help: 'Nearest = closest reachable unlocked bank; a named bank forces that stand (locked banks fall back to nearest). Used for loot, food, supplies, and panic retreats.' },
     bankAtLootSlots: { type: 'number', default: 12, min: 1, max: 27, label: 'Bank at loot slots', showIf: { key: 'banking', anyOf: ['Auto'] } },
     bankEveryMinutes: {
         type: 'number',
@@ -165,12 +166,12 @@ function forcedBank(): BankLocation | null {
 }
 
 /** Bank this bank trip uses: the forced named bank when unlocked, else nearest. */
-function pickBank(here: WorldTile | null): BankLocation | null {
+async function pickBank(here: WorldTile | null): Promise<BankLocation | null> {
     const forced = forcedBank();
     if (here && forced && bankUnlocked(forced)) {
         return forced;
     }
-    return here ? nearestBank(here) : null;
+    return here ? nearestBankReachable(here, Navigator) : null;
 }
 
 /**
@@ -580,7 +581,7 @@ class PanicRetreat implements Task {
     }
     async execute(): Promise<void> {
         const here = Game.tile();
-        const bank = pickBank(here);
+        const bank = await pickBank(here);
         if (!bank) {
             return;
         }
@@ -665,7 +666,7 @@ class BankRun implements Task {
     }
     async execute(): Promise<void> {
         const here = Game.tile();
-        const bank = pickBank(here);
+        const bank = await pickBank(here);
         if (!bank) {
             this.bot.bankAfterSolve = false;
             return;

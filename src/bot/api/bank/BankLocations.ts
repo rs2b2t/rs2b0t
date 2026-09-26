@@ -80,6 +80,7 @@ export const BANK_LOCATIONS: BankLocation[] = [
     },
     { name: 'Zanaris', tile: new Tile(3153, 9576, 0), requires: { quest: 'Lost City', setting: USE_ZANARIS_BANK }, npcAccess: { name: 'Banker', op: 'Bank' } },
     { name: 'Fishing Guild', tile: new Tile(2586, 3420, 0), requires: { skill: { name: 'fishing', level: 68 } } },
+    { name: 'Legends Guild', tile: new Tile(2732, 3378, 2), requires: { quest: 'Legends Quest' }, npcAccess: { name: 'Banker', op: 'Bank' } },
     // Why: the live object is "Shantay chest" (id 2693) with Open; "Bank chest" with Use doesn't exist here, and neither does a Bank booth.
     {
         name: 'Shantay Pass',

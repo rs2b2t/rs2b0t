@@ -3,9 +3,11 @@ import { displayName, resolveByName, type Catalog } from '../../api/market/catal
 import type { Candidate } from '../../api/market/chatProtocol.js';
 import { rowOf, type PriceBook, type PriceRow } from '../../api/market/priceBook.js';
 import { rowValid } from '../../api/market/prices.js';
+import { resolveSet, type MarketSet } from '../../api/market/sets.js';
+import { salePrice } from '../../api/market/saleIntent.js';
 
 /** A chat request naming what the customer wants to buy. Carries no price and no reservation. */
-export interface Intent extends SellIntent {
+export type Intent = SellIntent & {
     customer: string;
     askedAtMs: number;
     /** Set once the clock has been restarted, so a request cannot be kept alive for ever. */
@@ -28,6 +30,7 @@ export interface Window {
     sawOpen: boolean;
     /** Set the moment the bot accepts, and checked again on the confirm screen. */
     accepted: { give: Map<number, number>; get: Map<number, number> } | null;
+    expectedReceipt?: { id: number; expected: number }[];
     /** Consecutive beats spent waiting on the customer to put their side up. */
     waited: number;
 }
@@ -363,7 +366,8 @@ export class RateLimiter {
 export type QuoteTarget =
     | { kind: 'miss'; answer: boolean }
     | { kind: 'ambiguous'; candidates: Candidate[] }
-    | { kind: 'hit'; id: number; name: string };
+    | { kind: 'hit'; id: number; name: string }
+    | { kind: 'set'; set: MarketSet };
 
 /** Resolve a customer's words against the side of the book they are asking about. */
 // Why: an implied count means the line may be ordinary chat opening with "buy", so it has to name an item outright, and a miss goes unanswered instead of quoting back at every passing sentence.
@@ -375,6 +379,12 @@ export function resolveQuote(input: {
     qtyImplied: boolean;
 }): QuoteTarget {
     const { cat, book, query, side, qtyImplied } = input;
+    const set = side === 'selling' ? resolveSet(query) : null;
+    if (set) {
+        return set.itemIds.every(id => cat.byId.has(id)) && salePrice(book, { set, maxQty: 1 }) !== null
+            ? { kind: 'set', set }
+            : { kind: 'miss', answer: !qtyImplied };
+    }
     const candidates = resolveByName(cat, query, { exactOnly: qtyImplied }).filter(r => {
         const row = rowOf(book, r.id);
         return row !== null && row[side] && rowValid(book, row);
