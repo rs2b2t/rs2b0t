@@ -4,12 +4,13 @@ import { Game } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Bank } from '../../api/bank/Bank.js';
+import { openBankAccess } from '../../api/bank/Banking.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Paint } from '../../paint/Paint.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { nearestBank } from '../../api/bank/BankLocations.js';
+import { nearestBank, type BankLocation } from '../../api/bank/BankLocations.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import {
     BAR_OPTIONS,
@@ -56,6 +57,7 @@ export default class Superheater extends TaskBot {
     private natures = NATURES_DEFAULT;
 
     // Why: the bank access is resolved once; every trip only opens the booth.
+    private bank: BankLocation | null = null;
     private bankAccess: { name: string; op: string } = BOOTH;
 
     private smelted = 0;
@@ -112,7 +114,8 @@ export default class Superheater extends TaskBot {
             ScriptRunner.stop('no reachable bank');
             return false;
         }
-        this.bankAccess = bank.access ?? BOOTH;
+        this.bank = bank;
+        this.bankAccess = bank.npcAccess ?? bank.access ?? BOOTH;
         this.log(`banking at ${bank.name} (${this.bankAccess.name} / ${this.bankAccess.op})`);
 
         const near = bank.tile.level === here.level && bank.tile.distanceTo(here) <= 4;
@@ -135,7 +138,7 @@ export default class Superheater extends TaskBot {
         }
         this.setStatus('opening bank');
         this.log(`opening ${this.bankAccess.name} (${this.bankAccess.op})`);
-        if (!(await Bank.openNearest(this.bankAccess.name, this.bankAccess.op, m => this.log(`  ${m}`)))) {
+        if (!(await openBankAccess(this.bank, BOOTH, m => this.log(`  ${m}`)))) {
             this.log('could not open the bank — retrying');
             return false;
         }

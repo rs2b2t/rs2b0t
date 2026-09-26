@@ -3,6 +3,7 @@ import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import { Inventory, type InvItem } from '../../api/inventory/Inventory.js';
 import { Bank } from '../../api/bank/Bank.js';
+import { openBankAccess } from '../../api/bank/Banking.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Paint } from '../../paint/Paint.js';
 import { Traversal } from '../../api/walking/Traversal.js';
@@ -246,7 +247,8 @@ class BankTrip implements Task {
         }
 
         const access = bank.access ?? BOOTH;
-        if (!(await Bank.openNearestAccess(access, m => this.bot.log(`  ${m}`)))) {
+        const log = (m: string) => this.bot.log(`  ${m}`);
+        if (!(await openBankAccess(bank, access, log))) {
             this.bot.log('could not open the bank — retrying');
             return;
         }
