@@ -250,6 +250,12 @@ export interface NpcSnapshot {
     faceEntity: number;
 }
 
+export interface VisiblePlayerState {
+    name: string;
+    networkTile: WorldTile;
+    equipmentIds: number[];
+}
+
 export interface PlayerSnapshot {
     index: number;
     name: string | null;
@@ -895,6 +901,27 @@ export const reader = {
 
     selfFaceEntity(): number {
         return raw?.localPlayer?.faceEntity ?? -1;
+    },
+
+    /** Server positions and visible equipment, including self, without sprite interpolation. */
+    visiblePlayerStates(): VisiblePlayerState[] {
+        const client = raw;
+        if (!client?.localPlayer) return [];
+        const out = new Map<string, VisiblePlayerState>();
+        const add = (player: RawClient['localPlayer']): void => {
+            if (!player?.ready || player.transmog || !player.name) return;
+            const x = player.routeX[0];
+            const z = player.routeZ[0];
+            if (x === undefined || z === undefined) return;
+            out.set(player.name, {
+                name: player.name,
+                networkTile: { x: client.mapBuildBaseX + x, z: client.mapBuildBaseZ + z, level: client.minusedlevel },
+                equipmentIds: Array.from(player.appearance).filter(value => value >= 512).map(value => value - 512)
+            });
+        };
+        add(client.localPlayer);
+        for (let i = 0; i < client.playerCount; i++) add(client.players[client.playerIds[i]] ?? null);
+        return [...out.values()];
     },
 
     players(): PlayerSnapshot[] {
