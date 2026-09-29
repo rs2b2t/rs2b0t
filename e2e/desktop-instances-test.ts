@@ -123,11 +123,78 @@ type WallWindow = Window & {
     multibox: {
         add(account: Account): SlotSnapshot;
         setWorld(id: number, world: WorldNumber): Promise<boolean>;
+        slots(): SlotSnapshot[];
+        tabs(): string[];
+        activeTab(): string;
+        move(id: number, index: number): boolean;
+        importProfiles(profiles: Account[]): Promise<number>;
         controller: { remove(id: number): void };
     };
 };
 
 type BotWindow = Window & { __rs2b0t?: { SettingsStore: typeof SettingsStore }; rs2b0t?: unknown };
+
+async function verifyDesktopTabMove(page: Page, id: number): Promise<void> {
+    const selector = 'iframe[title="switch-proof"]';
+    await page.evaluate(async () => {
+        const wall = (Reflect.get(window, 'multibox') as WallWindow['multibox']);
+        await wall.importProfiles([{ username: 'switch-proof', password: '', world: 1 }]);
+        const peer = wall.add({ username: 'tab-peer', password: '', world: 1 });
+        wall.move(peer.id, 0);
+    });
+    for (const tab of ['clues', 'banking']) {
+        await page.locator('.mbx-tabadd').click();
+        await page.locator('.mbx-tabinput').fill(tab);
+        await page.locator('.mbx-tabinput').press('Enter');
+    }
+    const tile = page.locator('.mbx-slot').filter({ has: page.locator('.mbx-name', { hasText: 'switch-proof' }) });
+    await tile.locator('.mbx-hit').click();
+    await page.frameLocator(selector).getByRole('button', { name: 'Start', exact: true }).click();
+    await page.waitForFunction(id => (Reflect.get(window, 'multibox') as WallWindow['multibox']).slots().find(slot => slot.id === id)?.scriptState === 'running', id);
+    await page.locator('.mbx-slot').filter({ has: page.locator('.mbx-name', { hasText: 'tab-peer' }) }).locator('.mbx-hit').click();
+    const original = await page.locator(selector).evaluateHandle(element => {
+        const frame = element as HTMLIFrameElement;
+        const win = frame.contentWindow as Window & { rs2b0t: { runner: { bot: unknown } } };
+        return { frame, win, bot: win.rs2b0t.runner.bot };
+    });
+    await tile.locator('.mbx-hit').click({ button: 'right' });
+    const menu = page.getByRole('menu', { name: 'Send to tab' });
+    assert(await menu.getByRole('menuitemradio', { name: 'Main', exact: true }).isDisabled());
+    const box = await menu.boundingBox();
+    const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+    assert(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height);
+    await page.screenshot({ path: join(root, 'docs/e2e/electron-send-to-tab.png') });
+    await page.keyboard.press('Escape');
+    assert.equal(await menu.count(), 0);
+    await tile.locator('.mbx-name').click({ button: 'right' });
+    await menu.getByRole('menuitemradio', { name: 'clues', exact: true }).click();
+    let slots = await page.evaluate(() => (Reflect.get(window, 'multibox') as WallWindow['multibox']).slots());
+    assert.deepEqual(slots.map(slot => [slot.username, slot.tab]), [['tab-peer', 'Main'], ['switch-proof', 'clues']]);
+    assert.equal(slots.find(slot => slot.id === id)?.scriptState, 'running');
+    assert(await tile.evaluate(element => element.classList.contains('mbx-tab-hidden')));
+    await page.locator('.mbx-tabchip[data-tab="clues"]').click();
+    assert(await tile.isVisible());
+    assert(await original.evaluate(({ frame, win, bot }) => frame.isConnected && frame.contentWindow === win && win.rs2b0t.runner.bot === bot));
+    await tile.locator('.mbx-hit').click({ button: 'right' });
+    await menu.getByRole('menuitemradio', { name: 'Main', exact: true }).click();
+    await page.locator('.mbx-tabchip[data-tab="Main"]').click();
+    await tile.locator('.mbx-hit').click({ button: 'right' });
+    await menu.getByRole('menuitemradio', { name: 'banking', exact: true }).click();
+    await page.waitForTimeout(1000);
+    await original.dispose();
+    await page.reload();
+    await page.waitForFunction(() => !!Reflect.get(window, 'multibox'));
+    await unlock(page);
+    assert.deepEqual(await page.evaluate(() => (Reflect.get(window, 'multibox') as WallWindow['multibox']).tabs()), ['Main', 'clues', 'banking']);
+    await page.locator('#mbx-add').click();
+    await page.locator('.mbx-profile-name', { hasText: 'switch-proof' }).click();
+    await page.waitForFunction(() => (Reflect.get(window, 'multibox') as WallWindow['multibox']).slots().length === 1);
+    slots = await page.evaluate(() => (Reflect.get(window, 'multibox') as WallWindow['multibox']).slots());
+    assert.equal(slots[0].tab, 'banking');
+    await page.locator('.mbx-tabchip[data-tab="banking"]').click();
+    assert(await tile.isVisible());
+    console.log('Electron right-click tab moves preserve the running bot and restore membership after reload');
+}
 
 async function verifyDesktopWorldSettings(page: Page): Promise<void> {
     const id = await page.evaluate(() => {
@@ -172,6 +239,7 @@ async function verifyDesktopWorldSettings(page: Page): Promise<void> {
             assert.deepEqual(saved, { origin: new URL(page.url()).origin, box: 'switch-proof', world: String(world), blacklist: 'trade_troll', ore: 'Coal', selected: 'Fisher', fishMethod, displayed: 'Fisher' });
         }
         console.log('Electron world switches preserve account, script selection and script settings in both directions');
+        await verifyDesktopTabMove(page, id);
     } finally {
         await page.evaluate(id => (Reflect.get(window, 'multibox') as WallWindow['multibox']).controller.remove(id), id);
     }

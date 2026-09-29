@@ -25,7 +25,10 @@ Each slot is an iframe running the ordinary single-instance `bot.html`, unmodifi
 
 `Main` always exists and cannot be renamed, deleted or moved. Deleting a custom tab
 folds its bots into the tab to its left. New bots join the active tab; dropping a tile
-on a chip files that bot there.
+on a chip files that bot there. Right-click a bot preview or name in the rail and
+choose a destination under **Send to tab** to move it. The current tab is marked.
+Moving a bot keeps its client and running script alive and saves the assignment.
+The active tab stays put; select the destination tab to view the moved bot.
 
 | Fact | Detail |
 |---|---|
