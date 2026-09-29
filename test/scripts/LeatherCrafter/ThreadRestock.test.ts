@@ -35,6 +35,8 @@ function fixture(start: WorldTile) {
     spyOn(reader, 'countDialogOpen').mockImplementation(() => pending !== null);
     spyOn(Bank, 'items').mockImplementation(() => snaps(bank, 5382, ['Withdraw-X']));
     spyOn(Bank, 'loaded').mockReturnValue(true);
+    spyOn(Bank, 'ready').mockImplementation(() => bankOpen);
+    spyOn(Bank, 'snapshotGeneration').mockReturnValue(1);
     spyOn(Bank, 'isOpen').mockImplementation(() => bankOpen);
     spyOn(Bank, 'openNearest').mockImplementation(async () => { bankOpen = true; state.bankVisits.push(here); return true; });
     spyOn(Input, 'invButton').mockImplementation((id, _slot, comId) => {
@@ -54,6 +56,7 @@ function fixture(start: WorldTile) {
     });
     spyOn(actions, 'closeModal').mockImplementation(() => { bankOpen = false; return true; });
     spyOn(Execution, 'delayUntil').mockImplementation(async predicate => predicate());
+    spyOn(Execution, 'delayUntilTicks').mockImplementation(async predicate => predicate());
     spyOn(Execution, 'delayTicks').mockResolvedValue(undefined);
     spyOn(Traversal, 'walkResilient').mockImplementation(async tile => { here = tile; return true; });
     spyOn(Shop, 'open').mockImplementation(async name => { state.shopVisits.push(name); return !state.rejectShop; });

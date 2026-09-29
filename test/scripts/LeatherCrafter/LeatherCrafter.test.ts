@@ -18,6 +18,7 @@ const BANK_TILE: WorldTile = { x: 3269, z: 3167, level: 0 };
 
 const original = {
     delayUntil: Execution.delayUntil,
+    delayUntilTicks: Execution.delayUntilTicks,
     ingame: Game.ingame,
     tile: Game.tile,
     sceneState: reader.sceneState,
@@ -25,6 +26,8 @@ const original = {
     skillXp: Skills.xp,
     bankItems: Bank.items,
     bankLoaded: Bank.loaded,
+    bankReady: Bank.ready,
+    snapshotGeneration: Bank.snapshotGeneration,
     bankOpenNearest: Bank.openNearest,
     bankIsOpen: Bank.isOpen,
     inventoryItems: Inventory.items,
@@ -32,6 +35,8 @@ const original = {
     inventorySize: reader.inventorySize,
     bankSideItems: reader.bankSideItems,
     countDialogOpen: reader.countDialogOpen,
+    modalCloseObservation: reader.modalCloseObservation,
+    modals: reader.modals,
     invButton: Input.invButton,
     answerCountDialog: actions.answerCountDialog,
     closeModal: actions.closeModal,
@@ -47,6 +52,7 @@ let pendingId: number | null;
 let inventoryCounts: Map<number, number>;
 let bankContents: InvItemSnapshot[];
 let clickedIds: number[];
+let countDialogsAnswered: number;
 let occupiedAfterThreadTopUp: number | null;
 
 function itemName(id: number): string {
@@ -110,6 +116,7 @@ beforeEach(() => {
     inventoryCounts = new Map<number, number>();
     bankContents = [];
     clickedIds = [];
+    countDialogsAnswered = 0;
     occupiedAfterThreadTopUp = null;
 
     Game.ingame = () => true;
@@ -120,6 +127,8 @@ beforeEach(() => {
 
     Bank.items = () => bankContents;
     Bank.loaded = () => bankContents.length > 0;
+    Bank.ready = () => bankOpen;
+    Bank.snapshotGeneration = () => 1;
     Bank.openNearest = async () => true;
     Bank.isOpen = () => bankOpen;
     Inventory.items = () => inventory();
@@ -127,14 +136,28 @@ beforeEach(() => {
     reader.inventorySize = () => 28;
     reader.bankSideItems = () => (sideReady ? inventory().map(item => item.snap) : []);
     reader.countDialogOpen = () => dialogOpen;
+    // Bank.close() reads the close observer first; with no observer it takes the polling path,
+    // which still needs the side modal to know when the close landed.
+    reader.modalCloseObservation = () => undefined as never;
+    reader.modals = () => ({ side: -1 }) as never;
 
-    Input.invButton = id => {
+    // Why: ops are ['Withdraw-1', 'Withdraw-5', 'Withdraw-10', 'Withdraw-All', 'Withdraw-X'], so op 4
+    // is Withdraw-All and must credit the pack straight away without a count dialog.
+    const WITHDRAW_ALL_OP = 4;
+    Input.invButton = (id, _slot, _comId, op) => {
         clickedIds.push(id);
+        if (op === WITHDRAW_ALL_OP) {
+            const banked = bankContents.find(item => item.id === id)?.count ?? 0;
+            const room = Math.max(0, reader.inventorySize() - Inventory.used());
+            inventoryCounts.set(id, (inventoryCounts.get(id) ?? 0) + Math.min(room, banked));
+            return true;
+        }
         pendingId = id;
         dialogOpen = true;
         return true;
     };
     actions.answerCountDialog = count => {
+        countDialogsAnswered++;
         if (pendingId === null) {
             return false;
         }
@@ -152,6 +175,7 @@ beforeEach(() => {
         return true;
     };
     Execution.delayUntil = async condition => condition();
+    Execution.delayUntilTicks = async condition => condition();
     ScriptRunner.stop = reason => {
         stops.push(reason);
     };
@@ -159,6 +183,7 @@ beforeEach(() => {
 
 afterEach(() => {
     Execution.delayUntil = original.delayUntil;
+    Execution.delayUntilTicks = original.delayUntilTicks;
     Game.ingame = original.ingame;
     Game.tile = original.tile;
     reader.sceneState = original.sceneState;
@@ -166,6 +191,8 @@ afterEach(() => {
     Skills.xp = original.skillXp;
     Bank.items = original.bankItems;
     Bank.loaded = original.bankLoaded;
+    Bank.ready = original.bankReady;
+    Bank.snapshotGeneration = original.snapshotGeneration;
     Bank.openNearest = original.bankOpenNearest;
     Bank.isOpen = original.bankIsOpen;
     Inventory.items = original.inventoryItems;
@@ -173,6 +200,8 @@ afterEach(() => {
     reader.inventorySize = original.inventorySize;
     reader.bankSideItems = original.bankSideItems;
     reader.countDialogOpen = original.countDialogOpen;
+    reader.modalCloseObservation = original.modalCloseObservation;
+    reader.modals = original.modals;
     Input.invButton = original.invButton;
     actions.answerCountDialog = original.answerCountDialog;
     actions.closeModal = original.closeModal;
@@ -232,9 +261,35 @@ describe('LeatherCrafter bank withdrawals', () => {
         expect(logs.some(message => message.includes('no thread'))).toBe(false);
     });
 
+    test('loads the leather with a single Withdraw-All click instead of the count dialog', async () => {
+        inventoryCounts.set(NEEDLE, 1);
+        inventoryCounts.set(THREAD, 500);
+        bankContents = [snapshot(LEATHER, 500, 3)];
+
+        await runBankLeg();
+
+        // The thread stack is already full, so the only click is the leather load, and it must not
+        // have opened a count dialog: a dialog round-trip costs two server waits per bank leg.
+        expect(clickedIds).toEqual([LEATHER]);
+        expect(countDialogsAnswered).toBe(0);
+        expect(dialogOpen).toBe(false);
+        expect(inventoryCounts.get(LEATHER)).toBe(26);
+        expect(stops).toEqual([]);
+        expect(bankOpen).toBe(false);
+    });
+
+    test('stops on an empty pack when the bank has no leather left', async () => {
+        inventoryCounts.set(NEEDLE, 1);
+        bankContents = [snapshot(THREAD, 500, 2)];
+
+        await runBankLeg();
+
+        expect(stops).toEqual(['no Leather left in the bank']);
+    });
+
     test('retries without stopping when the bank contents have not loaded', async () => {
         inventoryCounts.set(NEEDLE, 1);
-        Bank.loaded = () => false;
+        Bank.ready = () => false;
 
         await runBankLeg();
 
@@ -261,8 +316,8 @@ describe('LeatherCrafter bank withdrawals', () => {
     test('retries while the main bank view rehydrates after a deposit', async () => {
         inventoryCounts.set(NEEDLE, 1);
         bankContents = [snapshot(THREAD, 500, 2), snapshot(LEATHER, 500, 3)];
-        let loadedReads = 0;
-        Bank.loaded = () => ++loadedReads === 1;
+        let readyReads = 0;
+        Bank.ready = () => ++readyReads === 1;
 
         await runBankLeg();
 
