@@ -28,7 +28,7 @@ import { ensureSpade, ensureCoordTools, ensureExtraItems, ensureGateItems } from
 import { SPADE_NAME } from '#/bot/api/ai/clues/data/toolAcquire.js';
 import { GuardianEncounter, sustainUntil, GUARDIAN_DEATH, type GuardianStop } from '#/bot/api/ai/clues/Guardian.js';
 import { GuardianProtection } from './guardianKit.js';
-import { hardClueKit, SHARK_ID } from './hardClueKit.js';
+import { GUARDIAN_MIN_SHARKS, hardClueKit, SHARK_ID } from './hardClueKit.js';
 import { hardKitSnapshot } from './hardCluePreparation.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
 import { FOOD_OPTIONS, isFoodItem } from '#/bot/api/combat/food.js';
@@ -432,6 +432,7 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void 
                 const protection = new GuardianProtection();
                 const prepared = !guardian || await protection.prepare();
                 if (died()) return 'dead';
+                if (EventSignal.pending()) return 'yield';
                 if (!prepared) return 'supplies-needed';
                 if (guardian) guardianEncounter = { clueId: step.id, encounter: new GuardianEncounter(guardian, protection) };
                 await dig();
@@ -692,7 +693,7 @@ export const ClueExecutor = {
                 return end('abandon', reason);
             }
 
-            if (step.type === 'dig' && step.guardian && guardianEncounter?.clueId !== step.id && postKillClue !== step.id && hardClueKit(hardKitSnapshot()) !== 'ready') {
+            if (step.type === 'dig' && step.guardian && guardianEncounter?.clueId !== step.id && postKillClue !== step.id && hardClueKit(hardKitSnapshot(), GUARDIAN_MIN_SHARKS) !== 'ready') {
                 return 'supplies-needed';
             }
             if (step.type !== 'open-casket' && step.coord?.level === 0

@@ -685,6 +685,54 @@ export const CASES: readonly Case[] = [
         note: "`--site blue|black|heroes|gutanoth|iron|steel` picks the lair. The black run seeds Sharks and a Superantipoison and passes on the corridor stand, both spawns in view, with no health lost on a safespot. The heroes run sets heroquest itself and asserts no key leg: it casts through the pen fence and walks the drops out through the gate. The gutanoth run sets itwatchtower itself, talks past the Enclave guard, banks at Yanille on the Watchtower spell, and claims it held the stand rather than that nothing hit it, since the cave reaches the tile at range; `--stand n` picks one of its six, one per dragon, and the run also requires a greater demon killed off the same stand while a dragon was respawning. The iron and steel runs need the 289 sim: they set elenaquest for the Ardougne teleport, seed coins, a Rune axe, Antifire potions and the shield, and require Saniboch paid, the walk through the vines, stones, log and pipe, a dose drunk, a kill and a bank trip through Ardougne; the stands are open camps that each see most of one dragon's wander, since the breath is 0 through the shield with a dose up, and `--stand 2` is the south-west. `--style melee` there chases the dragon from the camp under Protect from Melee with the Dragon longsword on its stab style, and requires the overhead to go up"
     },
     {
+        id: 'jivedragons-melee-clue-live',
+        harness: 'jivedragons-melee-clue-live.ts',
+        covers: { scripts: ['JiveDragons'], subsystems: ['clues'] },
+        status: 'documented',
+        documentedIn: 'docs/how-to/farm-blue-dragon-clues.md',
+        budgetMin: 35,
+        note: 'Melee Taverley blue dragons with three-dose super sets, a final hard map clue, restocking and resumed combat without deaths.'
+    },
+    {
+        id: 'jivedragons-melee-guardian-live',
+        harness: 'jivedragons-melee-clue-live.ts',
+        covers: { scripts: ['JiveDragons'], subsystems: ['clues'] },
+        status: 'unvetted',
+        args: ['--guardian'],
+        budgetMin: 35,
+        note: 'The same melee farming cycle with a Saradomin Wizard on the final hard clue step.'
+    },
+    {
+        id: 'jivedragons-heroes-melee-clue-live',
+        harness: 'jivedragons-melee-clue-live.ts',
+        covers: { scripts: ['JiveDragons'], subsystems: ['clues'] },
+        status: 'documented',
+        documentedIn: 'docs/how-to/farm-blue-dragon-clues.md',
+        args: ['--site', 'heroes-blue'],
+        budgetMin: 35,
+        note: 'Heroes Guild melee through the pen gate, super sets, a final map clue and return to combat.'
+    },
+    {
+        id: 'jivedragons-enclave-melee-clue-live',
+        harness: 'jivedragons-melee-clue-live.ts',
+        covers: { scripts: ['JiveDragons'], subsystems: ['clues'] },
+        status: 'documented',
+        documentedIn: 'docs/how-to/farm-blue-dragon-clues.md',
+        args: ['--site', 'gutanoth-blue', '--targets', 'demons'],
+        budgetMin: 35,
+        note: 'Gu\'Tanoth greater demon melee, super sets, a final map clue and return through the Enclave guard.'
+    },
+    {
+        id: 'jivedragons-enclave-melee-guardian-live',
+        harness: 'jivedragons-melee-clue-live.ts',
+        covers: { scripts: ['JiveDragons'], subsystems: ['clues'] },
+        status: 'documented',
+        documentedIn: 'docs/how-to/farm-blue-dragon-clues.md',
+        args: ['--site', 'gutanoth-blue', '--targets', 'dragons', '--guardian'],
+        budgetMin: 35,
+        note: 'Gu\'Tanoth blue dragon melee through a Saradomin Wizard clue and back to farming.'
+    },
+    {
         id: 'jivedragons-clue-guardian-live',
         harness: 'jivedragons-live.ts',
         covers: { scripts: ['JiveDragons'], subsystems: ['clues'] },

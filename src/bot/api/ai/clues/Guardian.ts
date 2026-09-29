@@ -11,10 +11,12 @@ import { Inventory } from '#/bot/api/inventory/Inventory.js';
 import type { Npc } from '#/bot/api/model/Npc.js';
 import { ddsWorn } from './hardCluePreparation.js';
 import { GuardianProtection } from './guardianKit.js';
+import { GUARDIAN_FOOD_RESERVE } from './hardClueKit.js';
 
 const SPAWN_RADIUS = 12;
 const SPAWN_WAIT_TICKS = 10;
 const FIGHT_MS = 180_000;
+const REATTACK_TICKS = 8;
 const NOT_YOURS = /not after you|someone else is fighting/i;
 export const GUARDIAN_DEATH = /oh dear.*you are dead/i;
 export type GuardianStop = 'supplies-needed' | 'dead' | 'guardian-lost';
@@ -77,7 +79,7 @@ export class GuardianEncounter {
         if (!first) return 'guardian-lost';
         const prayed = await Prayer.set(PROTECT_FROM_MAGIC, true);
         this.owned ||= first.targetsMe();
-        let attacked = false;
+        let attackedAt = -Infinity;
         try {
             const deadline = Date.now() + FIGHT_MS;
             while (Date.now() < deadline) {
@@ -93,7 +95,7 @@ export class GuardianEncounter {
                     await Execution.delayTicks(1);
                     continue;
                 }
-                if (!ddsWorn() || Inventory.count('Shark') === 0) return 'supplies-needed';
+                if (!ddsWorn() || Inventory.count('Shark') <= GUARDIAN_FOOD_RESERVE) return 'supplies-needed';
                 await Sustain.run();
                 await Execution.delayTicks(1);
                 if (GameMessages.sawSince(mark, GUARDIAN_DEATH) || Skills.effective('hitpoints') <= 0) return 'dead';
@@ -111,15 +113,15 @@ export class GuardianEncounter {
                     this.sawDeath = true;
                     continue;
                 }
-                if (!ddsWorn()) return 'supplies-needed';
+                if (!ddsWorn() || Inventory.count('Shark') <= GUARDIAN_FOOD_RESERVE) return 'supplies-needed';
                 if (Special.ready(Special.wielded()) && !Special.armed()) {
                     if (await Special.arm()) {
                         await Execution.delayTicks(1);
                         continue;
                     }
                 }
-                if (!attacked || !(Game.inCombat() && current.targetsMe())) {
-                    attacked = await current.interact('Attack');
+                if (Game.tick() - attackedAt >= REATTACK_TICKS || !(Game.inCombat() && current.targetsMe())) {
+                    if (await current.interact('Attack')) attackedAt = Game.tick();
                 }
             }
             log(`${name}: encounter timed out; stopping without another dig`);

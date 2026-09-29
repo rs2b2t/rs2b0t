@@ -7,6 +7,7 @@ import { GameMessages } from '#/bot/api/chatbox/gameMessages.js';
 import { Special } from '#/bot/api/combat/Special.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
+import { EventSignal } from '#/bot/api/execution/EventSignal.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { InvItem } from '#/bot/api/inventory/Inventory.js';
 import { Npc } from '#/bot/api/model/Npc.js';
@@ -82,9 +83,58 @@ test('equips DDS and confirms the final potion dose before the dig', async () =>
     expect(pack.some(i => i.id === 185)).toBe(false);
     expect(await protection.maintain()).toBe('ready');
 });
+test.each([3, 4])('guardian preparation needs food above the escape reserve: %s Sharks', async count => {
+    pack = pack.map(i => i.id === 385 ? { ...i, count } : i);
+    expect(await new GuardianProtection().prepare()).toBe(count > 3);
+    expect(InvItem.prototype.interact).toHaveBeenCalledTimes(count > 3 ? 1 : 0);
+});
+test.each([3, 4])('guardian stops before attacking with three escape Sharks: starts with %s', async count => {
+    const protection = new GuardianProtection();
+    await protection.prepare();
+    pack = pack.map(i => i.id === 385 ? { ...i, count } : i);
+    Sustain.set(async () => { pack = pack.map(i => i.id === 385 ? { ...i, count: 3 } : i); });
+    advance = () => { if (npcs[0]?.health === 0) npcs = []; };
+
+    expect(await fightGuardian('Saradomin Wizard', () => {}, protection)).toBe('supplies-needed');
+    expect(Npc.prototype.interact).not.toHaveBeenCalled();
+    expect(pack.find(i => i.id === 385)?.count).toBe(3);
+});
 test('does not trust a potion interaction without a dose change', async () => {
     spyOn(InvItem.prototype, 'interact').mockReturnValue(true);
     expect(await new GuardianProtection().prepare()).toBe(false);
+    expect(InvItem.prototype.interact).toHaveBeenCalledTimes(3);
+});
+test.each([false, true])('retries a transient potion preparation failure: click returned %s', async sent => {
+    const attempts: number[] = [];
+    spyOn(InvItem.prototype, 'interact').mockImplementation(function (this: InvItem) {
+        attempts.push(tick);
+        if (attempts.length === 1) return sent;
+        pack = pack.filter(i => i.id !== this.id);
+        return true;
+    });
+    const protection = new GuardianProtection();
+
+    expect(await protection.prepare()).toBe(true);
+    expect(attempts).toHaveLength(2);
+    expect(attempts[1] - attempts[0]).toBeGreaterThanOrEqual(2);
+    expect(await protection.maintain()).toBe('ready');
+});
+test('accepts a late final-dose confirmation without sending another drink', async () => {
+    spyOn(InvItem.prototype, 'interact').mockReturnValue(true);
+    advance = () => { pack = pack.filter(i => i.id !== 185); };
+    const protection = new GuardianProtection();
+
+    expect(await protection.prepare()).toBe(true);
+    expect(InvItem.prototype.interact).toHaveBeenCalledTimes(1);
+    expect(await protection.maintain()).toBe('ready');
+});
+test('stops preparation retries when upkeep reaches the escape food reserve', async () => {
+    spyOn(InvItem.prototype, 'interact').mockReturnValue(false);
+    Sustain.set(async () => { pack = pack.map(i => i.id === 385 ? { ...i, count: 3 } : i); });
+
+    expect(await new GuardianProtection().prepare()).toBe(false);
+    expect(InvItem.prototype.interact).toHaveBeenCalledTimes(1);
+    expect(pack.find(i => i.id === 385)?.count).toBe(3);
 });
 test('refreshes before protection expires and cures a poison message', async () => {
     const protection = new GuardianProtection();
@@ -133,6 +183,57 @@ test('sends the initial DDS attack when only incoming combat is active', async (
     expect(events.filter(e => e.startsWith('attack:'))).toHaveLength(1);
     expect(energy).toBe(750);
 });
+test('resumes attacking after eating cancels outgoing combat with retaliation off', async () => {
+    const protection = new GuardianProtection();
+    await protection.prepare();
+    spyOn(Game, 'inCombat').mockReturnValue(true);
+    spyOn(Special, 'ready').mockReturnValue(false);
+    let attacking = false;
+    let eaten = false;
+    const attacks: number[] = [];
+    spyOn(Npc.prototype, 'interact').mockImplementation(() => {
+        attacks.push(tick);
+        attacking = true;
+        return true;
+    });
+    Sustain.set(async () => {
+        if (attacking && !eaten) {
+            eaten = true;
+            attacking = false;
+            pack = pack.map(i => i.id === 385 ? { ...i, count: 14 } : i);
+        }
+    });
+    advance = () => {
+        if (npcs[0]?.health === 0 || tick > 40) npcs = [];
+        else if (attacking && eaten) npcs = npcs.map(n => ({ ...n, health: 0 }));
+    };
+
+    expect(await fightGuardian('Saradomin Wizard', () => {}, protection)).toBe('killed');
+    expect(eaten).toBe(true);
+    expect(attacks).toHaveLength(2);
+    expect(attacks[1] - attacks[0]).toBeGreaterThanOrEqual(4);
+    expect(attacks[1] - attacks[0]).toBeLessThanOrEqual(10);
+});
+test('bounds attack retries while incoming combat hides a stalled attack', async () => {
+    const protection = new GuardianProtection();
+    await protection.prepare();
+    spyOn(Game, 'inCombat').mockReturnValue(true);
+    spyOn(Special, 'ready').mockReturnValue(false);
+    const attacks: number[] = [];
+    spyOn(Npc.prototype, 'interact').mockImplementation(() => {
+        attacks.push(tick);
+        return true;
+    });
+    const end = tick + 25;
+    advance = () => { if (tick >= end) npcs = []; };
+
+    expect(await fightGuardian('Saradomin Wizard', () => {}, protection)).toBe('guardian-lost');
+    expect(attacks.length).toBeGreaterThanOrEqual(3);
+    for (let i = 1; i < attacks.length; i++) {
+        expect(attacks[i] - attacks[i - 1]).toBeGreaterThanOrEqual(4);
+        expect(attacks[i] - attacks[i - 1]).toBeLessThanOrEqual(10);
+    }
+});
 test('despawn without a witnessed death is not a kill', async () => {
     const protection = new GuardianProtection();
     await protection.prepare();
@@ -163,6 +264,60 @@ function guardedTrail(): void {
     spyOn(ChatDialog, 'canContinue').mockReturnValue(false);
     spyOn(Traversal, 'walkResilient').mockImplementation(async () => { events.push(`walk:${tick}`); return true; });
 }
+
+test.each(['retry', 'prepared'])('yields before spawning a guardian when an event arrives during potion %s', async phase => {
+    guardedTrail();
+    let pending = false;
+    let drinks = 0;
+    let digs = 0;
+    spyOn(EventSignal, 'pending').mockImplementation(() => pending);
+    spyOn(InvItem.prototype, 'interact').mockImplementation(function (this: InvItem, op: string) {
+        if (op === 'Dig') digs++;
+        if (op === 'Drink') {
+            drinks++;
+            if (phase === 'retry') return false;
+            pack = pack.filter(i => i.id !== this.id);
+        }
+        return true;
+    });
+    advance = () => { pending = true; };
+
+    expect(await ClueExecutor.solveHeldClue(() => {})).toBe('yield');
+    expect(drinks).toBe(1);
+    expect(digs).toBe(0);
+    expect(Npc.prototype.interact).not.toHaveBeenCalled();
+});
+
+test.each([14, 15])('guarded trail permits a travel bite with %s Sharks before the leg', async count => {
+    guardedTrail();
+    pack = pack.map(i => i.id === 385 ? { ...i, count } : i);
+    spyOn(Traversal, 'walkResilient').mockImplementation(async () => {
+        pack = pack.map(i => i.id === 385 ? { ...i, count: 14 } : i);
+        return true;
+    });
+    let digs = 0;
+    spyOn(InvItem.prototype, 'interact').mockImplementation(function (this: InvItem, op: string) {
+        if (op === 'Drink') pack = pack.filter(i => i.id !== this.id);
+        if (op === 'Dig' && ++digs === 2) pack = pack.map(i => i.id === 2723 ? { ...i, id: 2725 } : i);
+        return true;
+    });
+    advance = () => { if (npcs[0]?.health === 0) npcs = []; };
+
+    expect(await ClueExecutor.solveHeldClue(() => {})).toBe('supplies-needed');
+    expect(digs).toBe(2);
+    expect(Npc.prototype.interact).toHaveBeenCalledTimes(1);
+    expect(pack.find(i => i.id === 385)?.count).toBe(14);
+});
+
+test('guarded trail preserves three Sharks without spawning a guardian', async () => {
+    guardedTrail();
+    pack = pack.map(i => i.id === 385 ? { ...i, count: 3 } : i);
+
+    expect(await ClueExecutor.solveHeldClue(() => {})).toBe('supplies-needed');
+    expect(Traversal.walkResilient).not.toHaveBeenCalled();
+    expect(InvItem.prototype.interact).not.toHaveBeenCalled();
+    expect(pack.find(i => i.id === 385)?.count).toBe(3);
+});
 
 test('drinks near the dig, finishes the post-kill dig below fifteen, then requests restock', async () => {
     guardedTrail();

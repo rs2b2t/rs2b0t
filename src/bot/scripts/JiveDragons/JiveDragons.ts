@@ -5,7 +5,7 @@ import { paintClueProgress } from '../../api/ai/clues/cluePaint.js';
 import { AXES } from '../../api/acquisition/Tools.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
-import { EMPTY_VIAL, plannedPotions, potionToSip, rangingPlan, type PotionPlan } from '../../api/combat/boostPotions.js';
+import { EMPTY_VIAL, SUPER_SET, plannedPotions, potionToSip, rangingPlan, type PotionPlan } from '../../api/combat/boostPotions.js';
 import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, parseCombatStyle, parseRangeStyle, type MeleeCombatStyle } from '../../api/combat/CombatStyle.js';
 import { castsAvailable } from '../../api/combat/CombatStyleLogic.js';
 import { Special } from '../../api/combat/Special.js';
@@ -36,9 +36,9 @@ import { COMBAT_SKILLS, XpTracker, jiveFrame, paintLevels } from '../../paint/ji
 import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
-import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from '../../api/combat/hunting/combat.js';
+import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, chasesTarget, type CombatHost } from '../../api/combat/hunting/combat.js';
 import { ANTIFIRE_MARGIN_TICKS, ANTIFIRE_TICKS, POTION_PROTECTS, SHIELD_ABSORBS, antifireDue, antifireLapsed, keepDoses, keyStatus, lootHalts, lootReach, siteTileOf, chaseMode, prayerFor, prayerSipDue, styleGate, wantsDrop, type Style } from '../../api/combat/hunting/logic.js';
-import { BRIMHAVEN_IRON, BRIMHAVEN_STEEL, GUTANOTH_BLUE, HEROES_BLUE, MAX_STANDS, SITE_OPTIONS, STAND_SITE_KEYS, TAVERLEY_BLACK, TAVERLEY_BLUE, huntNames, needsShield, siteFor, standFor, type DragonSite } from '../../api/combat/hunting/sites.js';
+import { BRIMHAVEN_IRON, BRIMHAVEN_STEEL, ENCLAVE_TARGET_OPTIONS, GUTANOTH_BLUE, HEROES_BLUE, MAX_STANDS, SITE_OPTIONS, STAND_SITE_KEYS, TAVERLEY_BLACK, TAVERLEY_BLUE, enclaveTargets, huntNames, needsShield, siteFor, standFor, type DragonSite } from '../../api/combat/hunting/sites.js';
 import { ANTIFIRE_DOSES, ANTIPOISON_DOSES, PRAYER_DOSES, prayerPlan, COINS, POISONED, acquireKey, antifirePlan, antipoisonPlan, bankRoutine, doseToDrink, enterLair, escapeRunesFor, feePrepaid, inCell, leaveCell, leaveLair, type BankOpts, type KeyState } from '../../api/combat/hunting/supply.js';
 
 const SHIELD = 'Dragonfire shield';
@@ -103,6 +103,7 @@ const SHOW_IRON = { key: 'site', anyOf: [BRIMHAVEN_IRON.key] };
 const SHOW_STEEL = { key: 'site', anyOf: [BRIMHAVEN_STEEL.key] };
 
 export const SETTINGS: SettingsSchema = {
+    enclaveTargets: { type: 'string', default: 'both', options: ENCLAVE_TARGET_OPTIONS, label: "Gu'Tanoth targets", group: 'Combat', showIf: SHOW_ENCLAVE, help: 'dragons, greater demons, or both. Both prefers dragons and kills demons between spawns. Stand 1 can see both for mage and range; melee follows targets into reach' },
     combatStyle: { type: 'string', default: 'range', options: ['melee', 'mage', 'range'], label: 'Combat style', help: 'mage and range fight from a tile no dragon can path to. Melee stands in the dragonfire and needs the Dragonfire shield' },
     meleeStyle: { type: 'string', default: 'strength', options: COMBAT_STYLE_OPTIONS, label: 'Melee style', group: 'Combat', showIf: SHOW_MELEE },
     weapon: { type: 'string', default: BEST_WEAPON, options: [BEST_WEAPON, ...MELEE_WEAPONS], label: 'Weapon', group: 'Combat', showIf: SHOW_MELEE, help: 'Best available wears whatever the bank, the pack or the body holds that ranks highest and the Attack level allows, stab first on the metal dragons; a name pins that weapon. 1-handed, so the shield slot stays free for the Dragonfire shield' },
@@ -115,7 +116,7 @@ export const SETTINGS: SettingsSchema = {
     ammo: { type: 'string', default: 'Iron arrow', options: ARROWS, label: 'Ammo', group: 'Combat', showIf: SHOW_RANGE },
     ammoWithdraw: { type: 'number', default: 500, min: 1, max: 5000, label: 'Ammo per bank trip', group: 'Combat', showIf: SHOW_RANGE },
     useSpecial: { type: 'boolean', default: true, label: 'Use special attacks', group: 'Combat', showIf: SHOW_SPECIAL, help: 'arms the spec bar whenever the energy covers the wielded weapon\'s special, for the swing or the shot about to go out; a staff has none' },
-    usePotions: { type: 'boolean', default: true, label: 'Drink super attack / strength', group: 'Combat', showIf: SHOW_MELEE, help: 'sips a dose once the boost decays to within a tenth of the base level. The loadout carry list sets the dose form and the count per trip, otherwise one Super attack(3) and one Super strength(3)' },
+    usePotions: { type: 'boolean', default: true, label: 'Drink super sets', group: 'Combat', showIf: SHOW_MELEE, help: 'sips attack, strength and defence potions once each boost decays to within a tenth of the base level. The loadout carry list sets the dose form and count per trip, otherwise one three-dose flask of each' },
     prayMelee: { type: 'boolean', default: true, label: 'Pray Protect from Melee on the metal dragons', group: 'Combat', showIf: SHOW_MELEE, help: 'the metal dragons stop at ten tiles and breathe, so melee walks to one and fights beside it, where it headbutts for up to 22; the overhead makes that 0 and the shield with a dose takes the close breath. Needs 43 Prayer' },
 
     loadout: { ...LOADOUT_SETTING, group: 'Food & healing' },
@@ -140,12 +141,12 @@ export const SETTINGS: SettingsSchema = {
 
     solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues', help: 'blue dragons drop hard clues. The trail leaves the dungeon and comes back' },
 
-    site: { type: 'string', default: 'taverley-blue', options: SITE_OPTIONS, label: 'Dragon site', group: 'Location', help: "below combat 97 the Taverley baby blues aggress on the walk in, above it they never do. The Heroes' Guild dragon is one adult penned behind a fence, so the fight is cast through it and only the loot walk opens the gate; the guild doors need Heroes' Quest. The Gu'Tanoth Enclave is a mage site: the Enclave guard waves you past once Watch Tower is complete, the stand looks at one dragon of the six and nothing else, and the cave shares its floor with greater demons, ogre shamans and chieftains, so melee there is your own risk. The Brimhaven Dungeon metal dragons cost Saniboch 875 coins a trip and the walk in chops two vines and crosses stepping stones, a log and a pipe, so it wants Woodcutting 22, Agility 34 and an axe; they park at ten tiles and breathe, so the stand is the open tile that sees the most of them, every style wears the Dragonfire shield with an Antifire dose up, range is refused, iron and steel finish whichever bites, and the trip banks at Ardougne on the Ardougne teleport, which needs Plague City" },
+    site: { type: 'string', default: 'taverley-blue', options: SITE_OPTIONS, label: 'Dragon site', group: 'Location', help: "below combat 97 the Taverley baby blues aggress on the walk in, above it they never do. The Heroes' Guild dragon is one adult penned behind a fence. Mage and range attack through it; melee and looting open the gate. The guild doors need Heroes' Quest. The Gu'Tanoth Enclave offers dragons, greater demons or both: the Enclave guard waves you past once Watch Tower is complete, the six stands cover different dragons, stand 1 also reaches greater demons, and the cave shares its floor with greater demons, ogre shamans and chieftains. The Brimhaven Dungeon metal dragons cost Saniboch 875 coins a trip and the walk in chops two vines and crosses stepping stones, a log and a pipe, so it wants Woodcutting 22, Agility 34 and an axe; they park at ten tiles and breathe, so the stand is the open tile that sees the most of them, every style wears the Dragonfire shield with an Antifire dose up, range is refused, iron and steel finish whichever bites, and the trip banks at Ardougne on the Ardougne teleport, which needs Plague City" },
     stand: { type: 'number', default: 1, min: 1, max: MAX_STANDS, label: 'Stand', group: 'Location', showIf: SHOW_STAND, help: 'which of the site\'s numbered stands to fight from, one per dragon. The Enclave has six, listed north, west, north-west, south, east, far east; 1 is the roomiest and the one with a live proof behind it. The iron dragons have two open camps, the east side of the room with four in view then the north-east corner with two, both clear of every dragon\'s idle wander. A number past the end takes the last, and a site with one stand ignores it' },
     safespot1: { type: 'tile', default: TAVERLEY_BLUE.safespots[0], label: 'Safespot 1', group: 'Location', showIf: SHOW_SAFESPOT, help: 'the chosen stand fills these; set one to move it off the derived tile' },
     safespot2: { type: 'tile', default: TAVERLEY_BLUE.safespots[1], label: 'Safespot 2', group: 'Location', showIf: SHOW_SAFESPOT, help: 'the ladder rotates here when a hit lands, or when nothing is in range for 20s' },
     safespot3: { type: 'tile', default: TAVERLEY_BLUE.safespots[2], label: 'Safespot 3', group: 'Location', showIf: SHOW_SAFESPOT },
-    meleeTile: { type: 'tile', default: TAVERLEY_BLUE.meleeAnchor, label: 'Melee anchor tile', group: 'Location', showIf: SHOW_MELEE, help: 'derived bordering an adult body no baby can reach; a dragon further out gets leashed in' },
+    meleeTile: { type: 'tile', default: TAVERLEY_BLUE.meleeAnchor, label: 'Melee anchor tile', group: 'Location', showIf: SHOW_MELEE, help: 'starts here; blue dragon and metal dragon melee follows the target into reach' },
     bankTile: { type: 'tile', default: TAVERLEY_BLUE.bank, label: 'Bank stand tile', group: 'Location' },
     leaveVia: { type: 'string', default: 'teleport', options: ['teleport', 'walk'], optionLabels: { teleport: 'The escape teleport this site names', walk: 'Walk out' }, label: 'Leave the lair by', group: 'Location', help: 'the teleport falls back to the walk when the runes or the magic level are short. Each site names the one spell that lands nearest its bank: Falador for Taverley and the guild, Watchtower for the Enclave, Ardougne for Brimhaven' },
     teleStock: { type: 'number', default: 2, min: 0, max: 10, label: 'Spare escape casts', group: 'Location', help: 'casts carried on top of the one needed to leave' },
@@ -197,7 +198,6 @@ let AXE = '';
 let BANK_COMMON = true;
 let VERBOSE = false;
 let USE_SPECIAL = true;
-/** Empty in mage and range mode: an attack or strength boost does nothing for a spell or a bow. */
 let POTIONS: PotionPlan[] = [];
 /** The overhead the run keeps up beside a dragon, or null. */
 let PRAYER: string | null = null;
@@ -271,6 +271,7 @@ function needCoins(): boolean {
 async function bankTrip(bot: JiveDragons): Promise<void> {
     bot.fight?.reset();
     bot.lootRun = null;
+    if (bot.clueRestock && !SITE.inArea(Game.tile()) && !(await walkToBank(SITE.bank, m => bot.log(m)))) return;
     const before = bot.bankTrips;
     await bankRoutine(bot, SITE, bankOpts());
     if (bot.bankTrips > before) {
@@ -919,7 +920,8 @@ class SetRetaliate implements Task {
     private retryAt = 0;
     constructor(private readonly bot: JiveDragons) {}
     validate(): boolean {
-        return !this.bot.solveClue?.ownsEquipment() && SITE.fireAtRange === true && Game.autoRetaliateOn() !== retaliateWanted() && Date.now() >= this.retryAt;
+        const controlled = SITE.fireAtRange === true || chasesTarget(SITE, STYLE);
+        return !this.bot.solveClue?.ownsEquipment() && controlled && Game.autoRetaliateOn() !== retaliateWanted() && Date.now() >= this.retryAt;
     }
     async execute(): Promise<void> {
         const want = retaliateWanted();
@@ -928,7 +930,7 @@ class SetRetaliate implements Task {
         if (await Execution.delayUntil(() => Game.autoRetaliateOn() === want, 3000)) {
             this.bot.log(want
                 ? 'auto-retaliate on, so whichever dragon bites gets the casts and the fight follows it'
-                : 'auto-retaliate off, so the chase stays on the dragon it was sent at');
+                : 'auto-retaliate off; the script handles target selection');
             this.fails = 0;
         } else if (++this.fails >= ASSERT_BATCH) {
             this.fails = 0;
@@ -971,11 +973,19 @@ class SipPotion implements Task {
         return POTIONS.length > 0 && Date.now() >= this.retryAt && (Inventory.contains(EMPTY_VIAL) || (SITE.inArea(Game.tile()) && sipDue() !== null));
     }
     async execute(): Promise<void> {
-        if (await dropVial(this.bot) || await this.sip()) {
-            return;
+        if (await dropVial(this.bot)) return;
+        for (let i = 0; i < POTIONS.length && !EventSignal.pending() && !this.bot.died; i++) {
+            if (sipDue() === null) {
+                if (Inventory.contains(EMPTY_VIAL)) this.retryAt = Date.now() + ASSERT_RETRY_MS;
+                return;
+            }
+            if (!(await this.sip())) {
+                this.retryAt = Date.now() + ASSERT_RETRY_MS;
+                return;
+            }
+            await Execution.delayTicks(2);
+            await Sustain.run();
         }
-        // Why: a vial that refuses to drop keeps this validating forever, and it sits above the bank run and the panic retreat.
-        this.retryAt = Date.now() + ASSERT_RETRY_MS;
     }
     private async sip(): Promise<boolean> {
         const plan = sipDue();
@@ -999,7 +1009,7 @@ class SipPotion implements Task {
 class PanicBank implements Task {
     constructor(private readonly bot: JiveDragons) {}
     validate(): boolean {
-        return !this.bot.parked && !this.bot.bankKnownEmpty() && hpFrac() < PANIC_HP && !hasFood();
+        return !this.bot.solveClue?.ownsEquipment() && !this.bot.parked && !this.bot.bankKnownEmpty() && hpFrac() < PANIC_HP && !hasFood();
     }
     async execute(): Promise<void> {
         if (EventSignal.pending()) {
@@ -1053,10 +1063,11 @@ class FreeSlot implements Task {
 class BankRun implements Task {
     constructor(private readonly bot: JiveDragons) {}
     validate(): boolean {
-        if (this.bot.parked) {
+        if (this.bot.parked || this.bot.solveClue?.ownsEquipment()) {
             return false;
         }
-        if (!this.bot.solveClue?.ownsEquipment() && !this.bot.shieldReady() && Inventory.count(SHIELD) === 0) {
+        if (this.bot.clueRestock) return true;
+        if (!this.bot.shieldReady() && Inventory.count(SHIELD) === 0) {
             return true;
         }
         const returning = this.bot.lootRun !== null && (Inventory.isFull() || this.bot.lootRun.spentFood === true || recoverableFood(this.bot));
@@ -1133,6 +1144,7 @@ class EnterLair implements Task {
 
 export default class JiveDragons extends TaskBot implements CombatHost {
     override loopDelay = 600;
+    clueRestock = false;
 
     status = 'starting';
     startedAt = Date.now();
@@ -1163,7 +1175,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
-        const base = siteFor(this.settings.str('site', 'taverley-blue'));
+        const base = enclaveTargets(siteFor(this.settings.str('site', 'taverley-blue')), this.settings.str('enclaveTargets', 'both'));
         const stand = standFor(base, this.settings.num('stand', 1));
         SITE = {
             ...base,
@@ -1190,7 +1202,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         FOOD_NAME = scriptFood(this.settings, SITE.food ?? 'Lobster');
         LEAVE_WALK = this.settings.str('leaveVia', 'teleport') === 'walk';
         ESCAPE_LABEL = LEAVE_WALK ? 'walk out' : escapeRunesFor(SITE.escapeTeleportId).label;
-        BURY_BONES = this.settings.bool('buryBones', false);
+        BURY_BONES = this.settings.bool('buryBones', false) && SITE.bones !== 'Ashes';
         SOLVE_CLUES = this.settings.bool('solveClues', true);
 
         PANIC_HP = this.settings.num('panicHp', 30) / 100;
@@ -1216,7 +1228,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         VERBOSE = this.settings.str('logDetail', 'Normal') === 'Verbose';
         USE_SPECIAL = this.settings.bool('useSpecial', true);
         const carry = suppliesOf(selectedLoadout(this.settings));
-        POTIONS = STYLE === 'melee' && this.settings.bool('usePotions', true) ? plannedPotions(carry)
+        POTIONS = STYLE === 'melee' && this.settings.bool('usePotions', true) ? plannedPotions(carry, SUPER_SET)
             : STYLE === 'range' && this.settings.bool('rangingPotion', false) ? [rangingPlan(carry)]
                 : [];
         ANTIPOISON_WANT = SITE.antipoison === true ? this.settings.num('antipoisonDoses', 1) : 0;
@@ -1249,7 +1261,10 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             foodWithdraw: () => FOOD_WITHDRAW,
             weaponName: () => WEAPON,
             enabled: () => SOLVE_CLUES && !this.fight?.blocksLoot() && this.lootRun === null,
-            prepareInitialBank: async () => await leaveLair(this, SITE) && await walkToBank(SITE.bank, m => this.log(m))
+            prepareInitialBank: async () => {
+                this.clueRestock = true;
+                return await leaveLair(this, SITE) && await walkToBank(SITE.bank, m => this.log(m));
+            }
         });
 
         const gate = styleGate(STYLE, SITE.fireAtRange === true);
@@ -1461,6 +1476,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
 
     /** What the last bank trip came back with. */
     noteTrip(food: boolean, supplies: boolean): void {
+        this.clueRestock = false;
         this.bankEmpty = !food;
         this.supplyEmpty = !supplies;
         if (!food) {

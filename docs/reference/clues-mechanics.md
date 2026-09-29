@@ -68,7 +68,9 @@ so the bot cannot ask whether it already killed one. It observes instead:
 if a wizard appears it turns on Protect from Magic, fights, then digs again, all
 inside one step attempt, so a level-108 fight does not consume the retry budget.
 
-The 15-Shark threshold gates a new trail or guardian encounter, not a retained fight. An event yield keeps the same `GuardianEncounter`, which may resume below 15 Sharks without another spawn dig while the DDS remains equipped and at least one Shark remains; hard upkeep uses Sharks regardless of the host's food setting, maintains Superantipoison protection and returns `supplies-needed` when the kit is exhausted. Resume revalidates the original guardian by index, id, range and ownership. A missing, replaced, distant or other-player target returns `guardian-lost`, while a witnessed player death returns `dead`; neither starts a fresh guardian attempt.
+The bank prepares 15 Sharks. A guardian can start after food was used during travel, provided at least four Sharks remain. The fight returns `supplies-needed` at three Sharks, preserving food for the retreat. Hard upkeep uses Sharks regardless of the host's food setting and maintains Superantipoison protection. Attacks are reissued every eight ticks because eating cancels the outgoing attack while incoming hits can keep the combat marker active.
+
+An event yield keeps the same `GuardianEncounter` and resumes without another spawn dig. Resume revalidates the original guardian by index, id, range and ownership. A missing, replaced, distant or other-player target returns `guardian-lost`, while a witnessed player death returns `dead`; neither starts a fresh guardian attempt.
 
 The fight waits on the tick through `sustainUntil`, which pumps `Sustain` on every
 pass. This is load-bearing: the loop used to park in a single `delayUntil` for the

@@ -384,6 +384,7 @@ Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought throu
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
+| `enclaveTargets` | string | `"both"` | Gu'Tanoth targets — one of: both, dragons, demons |
 | `combatStyle` | string | `"range"` | Combat style — one of: melee, mage, range |
 | `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
 | `weapon` | string | `"Best available"` | Weapon — one of: Best available, Bronze scimitar, Iron scimitar, Steel scimitar, Black scimitar, Mithril scimitar, Adamant scimitar, Rune scimitar, Bronze sword, Iron sword, Steel sword, Black sword, Mithril sword, Adamant sword, Rune sword, Bronze longsword, Iron longsword, Steel longsword, Black longsword, Mithril longsword, Adamant longsword, Rune longsword, Dragon longsword, Bronze dagger, Iron dagger, Steel dagger, Black dagger, Mithril dagger, Adamant dagger, Rune dagger, Dragon dagger, Dragon dagger(p), Dragon battleaxe, Dragon mace |
@@ -396,7 +397,7 @@ Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought throu
 | `ammo` | string | `"Iron arrow"` | Ammo — one of: Bronze arrow, Iron arrow, Steel arrow, Mithril arrow, Adamant arrow, Rune arrow, Dragon arrow |
 | `ammoWithdraw` | number (1–5000) | `500` | Ammo per bank trip |
 | `useSpecial` | boolean | `true` | Use special attacks |
-| `usePotions` | boolean | `true` | Drink super attack / strength |
+| `usePotions` | boolean | `true` | Drink super sets |
 | `prayMelee` | boolean | `true` | Pray Protect from Melee on the metal dragons |
 | `loadout` | string | `""` | Loadout — one of:  |
 | `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
