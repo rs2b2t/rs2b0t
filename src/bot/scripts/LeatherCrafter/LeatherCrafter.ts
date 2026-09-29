@@ -15,7 +15,7 @@ import { Input } from '../../input/Input.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
-import { issueHardLeatherBurst } from './LeatherCrafterLogic.js';
+import { STALL_TICKS, issueHardLeatherBurst, newDrain, stepDrain } from './LeatherCrafterLogic.js';
 
 const NEEDLE = 1733;
 const THREAD = 1734;
@@ -27,6 +27,21 @@ const THREAD_SHOPS = [
     { npc: 'Fancy dress shop owner', tile: new Tile(3281, 3398, 0) }
 ];
 const BANK_STAND = new Tile(3269, 3167, 0);
+// Why: a full 26-leather burst drains at the server's 5 user events per tick, so ~6 ticks is the
+// floor; the cap leaves room for the re-fires and still bounds a burst the server never drains.
+const SETTLE_TICKS = 40;
+
+// Why: tick-bounded, not ms-bounded, because a wall-clock timeout drifts against game time and burns its budget on a lag spike.
+const DIALOG_OPENS_TICKS = 5;
+const WITHDRAW_LANDS_TICKS = 6;
+const SIDE_READY_TICKS = 2;
+const DEPOSIT_LANDS_TICKS = 3;
+const BANK_LOADS_TICKS = 5;
+const BANK_CLOSES_TICKS = 5;
+const BANK_CLOSES_MS = 3000;
+// Why: budgets, not waits, since every one of these gates a condition and none of them sleeps blind.
+const BANK_SETTLE_MS = 1500;
+const THREAD_STOCK_MS = 4000;
 
 // leather_crafting opens as a main modal, skill_multi3 as a chat one
 const LEATHER_IF = 2311;
@@ -144,7 +159,7 @@ async function withdrawXById(id: number, count: number): Promise<WithdrawResult>
     if (count <= 0) {
         return 'withdrawn';
     }
-    if (!Bank.loaded()) {
+    if (!Bank.ready()) {
         return 'retry';
     }
     const item = Bank.items().find(i => i.id === id);
@@ -159,13 +174,61 @@ async function withdrawXById(id: number, count: number): Promise<WithdrawResult>
     if (!(await Input.invButton(item.id, item.slot, item.comId, op))) {
         return 'retry';
     }
-    if (!(await Execution.delayUntil(() => reader.countDialogOpen(), 3000))) {
+    if (!(await Execution.delayUntilTicks(() => reader.countDialogOpen(), DIALOG_OPENS_TICKS))) {
         return 'retry';
     }
     if (!actions.answerCountDialog(count)) {
         return 'retry';
     }
-    return (await Execution.delayUntil(() => invById(id) > before, 4000)) ? 'withdrawn' : 'retry';
+    return (await Execution.delayUntilTicks(() => invById(id) > before, WITHDRAW_LANDS_TICKS)) ? 'withdrawn' : 'retry';
+}
+
+// Why: the fused bank tail needs to send without waiting, so it resolves the row and dispatches the
+// click in one step and lets a later confirm stand in for all of them.
+async function fireWithdrawAllById(id: number, diag?: (msg: string) => void): Promise<{ ok: boolean; missing: boolean }> {
+    if (!Bank.ready()) {
+        return { ok: false, missing: false };
+    }
+    let item = Bank.items().find(i => i.id === id);
+    if (!item) {
+        // Why: a deposit can leave the bank list briefly rowless, so absence only counts once the list has moved on.
+        const gen = Bank.snapshotGeneration();
+        await Execution.delayUntil(() => Bank.snapshotGeneration() > gen || !Bank.isOpen(), BANK_SETTLE_MS);
+        item = Bank.items().find(i => i.id === id);
+        if (!item) {
+            diag?.(`ready=${Bank.ready()} open=${Bank.isOpen()} gen=${Bank.snapshotGeneration()} rows=${JSON.stringify(Bank.items().map(r => [r.id, r.count]))}`);
+            return { ok: false, missing: true };
+        }
+    }
+    if (!item) {
+        return { ok: false, missing: false };
+    }
+    const op = opIndex(item.ops, /withdraw[\s-]*all/i);
+    if (op === -1) {
+        return { ok: false, missing: false };
+    }
+    return { ok: Input.invButton(item.id, item.slot, item.comId, op), missing: false };
+}
+
+// Why: fires one Deposit-All per distinct id with no wait between them. The server handles the
+// queued inv-button requests in send order, so the withdrawal that follows is the confirmation.
+function fireDepositAllExceptIds(keep: ReadonlySet<number>): boolean {
+    const side = reader.bankSideItems();
+    if (side.length === 0) {
+        return false;
+    }
+    const sent = new Set<number>();
+    for (const item of side) {
+        if (keep.has(item.id) || sent.has(item.id)) {
+            continue;
+        }
+        const op = opIndex(item.ops, /deposit[\s-]*all/i);
+        if (op === -1 || !Input.invButton(item.id, item.slot, item.comId, op)) {
+            return false;
+        }
+        sent.add(item.id);
+    }
+    return true;
 }
 
 // deposits by object id: the leathers and their products share display names in
@@ -174,7 +237,7 @@ async function depositAllExceptIds(keep: Set<number>): Promise<boolean> {
     for (let guard = 0; guard < 32; guard++) {
         let items = reader.bankSideItems();
         if (items.length === 0 && Inventory.used() > 0 && Bank.isOpen()) {
-            await Execution.delayUntil(() => reader.bankSideItems().length > 0 || !Bank.isOpen(), 1200);
+            await Execution.delayUntilTicks(() => reader.bankSideItems().length > 0 || !Bank.isOpen(), SIDE_READY_TICKS);
             items = reader.bankSideItems();
         }
         if (items.length === 0) {
@@ -191,7 +254,7 @@ async function depositAllExceptIds(keep: Set<number>): Promise<boolean> {
         if (!(await Input.invButton(item.id, item.slot, item.comId, op))) {
             return false;
         }
-        if (!(await Execution.delayUntil(() => !reader.bankSideItems().some(i => i.slot === item.slot && i.id === item.id), 2000))) {
+        if (!(await Execution.delayUntilTicks(() => !reader.bankSideItems().some(i => i.slot === item.slot && i.id === item.id), DEPOSIT_LANDS_TICKS))) {
             return false;
         }
     }
@@ -297,15 +360,22 @@ export default class LeatherCrafter extends LoopingBot {
             return;
         }
         this.log('bank leg: bank opened');
-        if (!(await Execution.delayUntil(() => Bank.loaded(), 3000))) {
+        // Why: ready(), not loaded(), because loaded() means "the list is non-empty" and so cannot
+        // tell a still-loading bank from a drained one, which would send us down the "no leather" stop.
+        if (!(await Execution.delayUntilTicks(() => Bank.ready() || !Bank.isOpen(), BANK_LOADS_TICKS))) {
             this.log('bank leg: bank contents not ready — retrying');
             return;
         }
-        this.log('bank leg: bank contents loaded');
+        this.log('bank leg: bank contents ready');
 
-        if (!(await depositAllExceptIds(new Set([NEEDLE, THREAD, this.kind.leatherId])))) {
-            this.log('bank leg: bank inventory view not ready — retrying');
-            return;
+        const before = invById(this.kind.leatherId);
+        const free = reader.inventorySize() - Inventory.used();
+
+        if (!fireDepositAllExceptIds(new Set([NEEDLE, THREAD, this.kind.leatherId]))) {
+            if (!(await depositAllExceptIds(new Set([NEEDLE, THREAD, this.kind.leatherId])))) {
+                this.log('bank leg: bank inventory view not ready — retrying');
+                return;
+            }
         }
         this.log('bank leg: deposited — now restocking');
 
@@ -325,19 +395,29 @@ export default class LeatherCrafter extends LoopingBot {
             }
         }
 
-        const free = reader.inventorySize() - Inventory.used();
-        if (!(await this.withdrawRequired(this.kind.leatherId, free, this.kindLabel, `no ${this.kindLabel} left in the bank`))) {
+        const load = await fireWithdrawAllById(this.kind.leatherId, m => this.log(`bank leg: MISSING ${m}`));
+        if (load.missing) {
+            // Why: missing is only claimed once ready() proved the list landed, so an empty row here
+            // is a drained bank rather than a list still in flight.
+            ScriptRunner.stop(`no ${this.kindLabel} left in the bank`);
             return;
         }
-        this.log(`bank leg: withdrew ${free} ${this.kindLabel} (${Inventory.used()}/${reader.inventorySize()} slots used)`);
-
-        actions.closeModal();
-        if (await Execution.delayUntil(() => !Bank.isOpen(), 3000)) {
-            this.restockBank = null;
-            this.log('bank leg: bank closed — back to crafting');
-        } else {
-            this.log('bank leg: bank still open after close — continuing');
+        if (!load.ok && !(await this.withdrawRequired(this.kind.leatherId, free, this.kindLabel, `no ${this.kindLabel} left in the bank`))) {
+            return;
         }
+        if (load.ok) {
+            // Why: the pack filling is the only confirmation worth waiting on, because a deposit
+            // that did not land leaves no free slot, so the withdrawal is what proves both.
+            await Execution.delayUntilTicks(
+                () => invById(this.kind.leatherId) > before || Inventory.isFull(),
+                WITHDRAW_LANDS_TICKS
+            );
+        }
+        await Bank.close(BANK_CLOSES_MS);
+        if (!Bank.isOpen()) {
+            this.restockBank = null;
+        }
+        this.log(`bank leg: loaded ${invById(this.kind.leatherId)} ${this.kindLabel} (${Inventory.used()}/${reader.inventorySize()} slots used)`);
     }
 
     private async fundThread(stand: Tile): Promise<void> {
@@ -352,14 +432,14 @@ export default class LeatherCrafter extends LoopingBot {
         this.restockBank = stand;
         this.threadVendor = THREAD_SHOPS.reduce((nearest, shop) => (stand.distanceTo(shop.tile) < stand.distanceTo(nearest.tile) ? shop : nearest));
         actions.closeModal();
-        await Execution.delayUntil(() => !Bank.isOpen(), 3000);
+        await Execution.delayUntilTicks(() => !Bank.isOpen(), BANK_CLOSES_TICKS);
     }
 
     private async buyThread(): Promise<void> {
         const vendor = this.threadVendor!;
         if (Bank.isOpen()) {
             actions.closeModal();
-            if (!(await Execution.delayUntil(() => !Bank.isOpen(), 3000))) return;
+            if (!(await Execution.delayUntilTicks(() => !Bank.isOpen(), BANK_CLOSES_TICKS))) return;
         }
         this.setStatus(`buying thread from ${vendor.npc}`);
         const here = Game.tile();
@@ -375,7 +455,7 @@ export default class LeatherCrafter extends LoopingBot {
             ScriptRunner.stop('not enough coins to buy thread');
         } else {
             this.setStatus('waiting for thread stock');
-            await Execution.delayTicks(5);
+            await Execution.delayUntil(() => invById(THREAD) > 0 || invById(COINS) === 0, THREAD_STOCK_MS);
         }
     }
 
@@ -415,11 +495,7 @@ export default class LeatherCrafter extends LoopingBot {
             if (bursts === 0) {
                 return;
             }
-            if (await Execution.delayUntil(() => invById(this.kind.leatherId) < before, 5000)) {
-                await Execution.delayTicks(1);
-            } else {
-                this.log('craft leg: hard leather never moved — retrying');
-            }
+            await this.watchBurst(before);
         } else if (!(await needle.useOn(leathers[0]))) {
             return;
         } else if (this.kind.flow === 'interface') {
@@ -433,7 +509,7 @@ export default class LeatherCrafter extends LoopingBot {
                 return;
             }
             actions.ifButton(MULTI3_MAKEX[recipe.slot!]);
-            if (!(await Execution.delayUntil(() => reader.countDialogOpen(), 3000))) {
+            if (!(await Execution.delayUntilTicks(() => reader.countDialogOpen(), DIALOG_OPENS_TICKS))) {
                 return;
             }
             actions.answerCountDialog(Math.floor(before / recipe.qty));
@@ -447,6 +523,37 @@ export default class LeatherCrafter extends LoopingBot {
         } else {
             this.log(`craft leg: no leather consumed (leather ${before} unchanged)`);
         }
+    }
+
+    // Watches the leather count per tick until the burst stops draining; quiet ticks re-fire at the slots still holding leather.
+    private async watchBurst(before: number): Promise<void> {
+        const needle = Inventory.items().find(i => i.id === NEEDLE);
+        let state = newDrain(before);
+        let left = before;
+        for (let tick = 0; tick < SETTLE_TICKS; tick++) {
+            await Execution.delayTicks(1);
+            left = invById(this.kind.leatherId);
+            const step = stepDrain(state, left, invById(THREAD) === 0);
+            state = step.state;
+            if (step.action === 'done') {
+                return;
+            }
+            if (step.action === 'refire') {
+                const remaining = Inventory.items().filter(i => i.id === this.kind.leatherId);
+                if (!needle || remaining.length === 0) {
+                    return;
+                }
+                const sent = await issueHardLeatherBurst(
+                    Array.from({ length: remaining.length }, () => remaining[remaining.length - 1]!),
+                    target => needle.useOn(target)
+                );
+                this.log(`craft leg: no progress for ${STALL_TICKS} ticks with ${left} leather left, re-fire ${state.refires} sent ${sent} uses`);
+                if (sent === 0) {
+                    return;
+                }
+            }
+        }
+        this.log(`craft leg: burst watcher gave up after ${SETTLE_TICKS} ticks with ${left} leather left`);
     }
 
     // craft batches tick along item by item; stop waiting once the leather stops moving

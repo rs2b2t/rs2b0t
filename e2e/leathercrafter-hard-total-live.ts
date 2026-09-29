@@ -15,6 +15,10 @@ const user = args[1] ?? `lcc${Date.now().toString(36).slice(-5)}`;
 const VARROCK_WEST_BANK = { x: 3185, z: 3440, level: 0 };
 const HARD_LEATHER_QTY = 26 * 10;
 const TRIPS_WANTED = 10;
+// Why: the seeded workload restated in XP, so the finish line does not depend on how the script
+// batches its bursts or how often a pack drains.
+const XP_PER_BODY = 35;
+const TARGET_XP = 260 * XP_PER_BODY;
 const TOTAL_MAX_MS = Number(process.env.TOTAL_MAX_MS) || 300_000;
 const RUN_MS = 420_000;
 
@@ -68,9 +72,11 @@ try {
     });
     console.log('LeatherCrafter started at Varrock West on Hard leather — timing 10 full inventories');
 
-    // Count whole inventories by "leather in the pack → 0 after having been >0" (a drain). Why:
-    // this signal is inventory-only, so it materialises identically on the pre-fix and post-fix
-    // scripts; either way the 10th full drain is the finish line.
+    // The finish line is the seeded workload measured in crafting XP, not a counted number of
+    // inventories. Why: XP is fixed (260 bodies x 35 xp) and monotonic, so the time to reach it
+    // compares two scripts no matter how each batches its bursts. Counting drains by polling the
+    // inventory instead under-counts a script that empties a pack between polls, which makes a
+    // finished run look stalled.
     const deadline = Date.now() + RUN_MS;
     const startedAt = Date.now();
     let trips = 0;
@@ -100,8 +106,10 @@ try {
             }
         }
         xpGained = Math.max(xpGained, snap.xp - xpBefore);
-        if (snap.state !== 'running' && trips === 0) {
-            fail(`script stopped before the first inventory: ${snap.logs.slice(-6).join(' | ')}`);
+        if (xpGained >= TARGET_XP) {
+            finishedAt = Date.now();
+        } else if (snap.state !== 'running' && xpGained === 0) {
+            fail(`script stopped before crafting anything: ${snap.logs.slice(-6).join(' | ')}`);
         }
         await page.waitForTimeout(1200);
     }
@@ -113,9 +121,10 @@ try {
         console.log(`  ${m}`);
     }
 
-    console.log(`PASS, ${trips}/${TRIPS_WANTED} inventories in ${totalMs}ms (xp +${xpGained})`);
-    if (trips < TRIPS_WANTED) {
-        fail(`only ${trips}/${TRIPS_WANTED} inventories in ${RUN_MS / 1000}s; the run stalled (out of leather or thread)`);
+    const bodies = Math.floor(xpGained / XP_PER_BODY);
+    console.log(`PASS, xp +${xpGained} (${bodies} bodies) in ${totalMs}ms, ${trips} pack drains observed`);
+    if (xpGained < TARGET_XP) {
+        fail(`only ${xpGained}/${TARGET_XP} xp in ${RUN_MS / 1000}s; the run stalled (out of leather or thread)`);
     }
     if (totalMs > TOTAL_MAX_MS) {
         fail(`total ${totalMs}ms exceeds ${TOTAL_MAX_MS}ms — the run is slower than the speed budget`);
