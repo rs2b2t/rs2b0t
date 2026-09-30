@@ -5,7 +5,7 @@ import { GameMessages } from '#/bot/api/chatbox/gameMessages.js';
 import { Inventory } from '#/bot/api/inventory/Inventory.js';
 import { Sustain } from '#/bot/api/sustain/Sustain.js';
 import { GUARDIAN_MIN_SHARKS, hardClueKit, superantiDoses, SUPERANTI } from './hardClueKit.js';
-import { ddsWorn, equipDds, hardKitSnapshot } from './hardCluePreparation.js';
+import { guardianWeaponWorn, equipGuardianWeapon, hardKitSnapshot } from './hardCluePreparation.js';
 
 const POISONED = /you have been poisoned/i;
 const IMMUNITY_TICKS = 570;
@@ -16,8 +16,8 @@ export class GuardianProtection {
     private poisonMark = GameMessages.mark();
 
     async prepare(): Promise<boolean> {
-        if (hardClueKit(hardKitSnapshot(), GUARDIAN_MIN_SHARKS) !== 'ready' || !(await equipDds())) return false;
-        return await this.drink(3) && ddsWorn() && Inventory.count('Shark') >= GUARDIAN_MIN_SHARKS;
+        if (hardClueKit(hardKitSnapshot(), GUARDIAN_MIN_SHARKS) !== 'ready' || !(await equipGuardianWeapon())) return false;
+        return await this.drink(3) && guardianWeaponWorn() && Inventory.count('Shark') >= GUARDIAN_MIN_SHARKS;
     }
 
     private async drink(attempts = 1): Promise<boolean> {
@@ -34,7 +34,7 @@ export class GuardianProtection {
             if (EventSignal.pending()) return false;
             confirmed = superantiDoses(Inventory.items()) < before;
             if (confirmed) break;
-            if (attempts > 1 && (hardClueKit(hardKitSnapshot(), GUARDIAN_MIN_SHARKS) !== 'ready' || !ddsWorn())) return false;
+            if (attempts > 1 && (hardClueKit(hardKitSnapshot(), GUARDIAN_MIN_SHARKS) !== 'ready' || !guardianWeaponWorn())) return false;
             const potion = Inventory.items().find(i => SUPERANTI.some(d => d.id === i.id));
             if (!potion) return false;
             confirmed = await potion.interact('Drink') && await Execution.delayUntilTicks(() => superantiDoses(Inventory.items()) < before, 2);

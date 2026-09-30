@@ -1,4 +1,4 @@
-export const DDS_IDS: readonly number[] = [1231, 1215];
+export const GUARDIAN_WEAPON_IDS: readonly number[] = [1231, 1215, 1305];
 export const SUPERANTI = [
     { id: 2448, name: 'Superantipoison(4)', doses: 4 },
     { id: 181, name: 'Superantipoison(3)', doses: 3 },
@@ -10,7 +10,7 @@ export const MIN_SHARKS = 15;
 export const GUARDIAN_FOOD_RESERVE = 3;
 export const GUARDIAN_MIN_SHARKS = GUARDIAN_FOOD_RESERVE + 1;
 export type KitItem = { readonly id: number; readonly count: number };
-export type HardKitStatus = 'ready' | 'attack' | 'lost-city' | 'dds' | 'superantipoison' | 'sharks';
+export type HardKitStatus = 'ready' | 'attack' | 'lost-city' | 'weapon' | 'superantipoison' | 'sharks';
 export type HardKitSnapshot = {
     readonly attack: number;
     readonly lostCity: boolean;
@@ -24,7 +24,7 @@ export function superantiDoses(items: readonly KitItem[]): number {
 export function hardClueKit(kit: HardKitSnapshot, minimumSharks = MIN_SHARKS): HardKitStatus {
     if (kit.attack < 60) return 'attack';
     if (!kit.lostCity) return 'lost-city';
-    if (!kit.items.some(item => DDS_IDS.includes(item.id) && item.count > 0)) return 'dds';
+    if (!kit.items.some(item => GUARDIAN_WEAPON_IDS.includes(item.id) && item.count > 0)) return 'weapon';
     if (superantiDoses(kit.items) === 0) return 'superantipoison';
     if (kit.items.filter(item => item.id === SHARK_ID).reduce((n, item) => n + item.count, 0) < minimumSharks) return 'sharks';
     return 'ready';

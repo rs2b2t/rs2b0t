@@ -31,6 +31,7 @@ try {
         assert(await page.evaluate(item => (globalThis as unknown as Api).__rs2b0t.Equipment.equip(item), name));
     }
     for (const debug of ['1dose2attack', '2dose2strength', '3dose2defense']) await cheatQuiet(page, `give ${debug} 1`);
+    await cheatQuiet(page, 'give cert_lobster 20');
     await setSettings(page, 'JiveDragons', {
         site: 'taverley-blue', combatStyle: 'melee', weapon: 'Bronze sword',
         usePotions: true, useSpecial: false, solveClues: false, foodWithdraw: 5, leaveVia: 'walk'
@@ -46,13 +47,17 @@ try {
             held: ['Super attack(3)', 'Super strength(3)', 'Super defence(3)'].map(name => Inventory.count(name)),
             partials: Inventory.items().filter(i => /^Super .*\([12]\)$/.test(i.name ?? '')).map(i => i.name),
             banked: ['Super attack(1)', 'Super strength(2)', 'Super attack(3)', 'Super strength(3)', 'Super defence(3)'].map(name => Bank.count(name)),
-            food: Inventory.count('Lobster')
+            food: Inventory.count('Lobster'),
+            foodBanked: Bank.countById(379),
+            notedFood: Inventory.countById(380)
         };
     });
     assert.deepEqual(result.held, [1, 1, 1]);
     assert.deepEqual(result.partials, []);
     assert.deepEqual(result.banked, [1, 1, 1, 1, 2]);
     assert.equal(result.food, 5);
+    assert.equal(result.foodBanked, 35);
+    assert.equal(result.notedFood, 0);
     await page.screenshot({ path: 'docs/e2e/jivedragons-potion-restock-live.png' });
     console.log(`PASS: partial supers banked, fresh three-dose set held, full defence flask retained; ${JSON.stringify(result)}`);
 } finally {

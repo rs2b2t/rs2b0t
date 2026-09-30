@@ -303,6 +303,7 @@ export class InvItem {
     readonly id: number;
     readonly slot: number;
     readonly count: number;
+    readonly noted: boolean;
     actions(): string[];
     /** Held op by name, e.g. item.interact('Bury'). */
     interact(action: string): boolean | Promise<boolean>;

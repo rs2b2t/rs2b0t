@@ -83,6 +83,20 @@ test('equips DDS and confirms the final potion dose before the dig', async () =>
     expect(pack.some(i => i.id === 185)).toBe(false);
     expect(await protection.maintain()).toBe('ready');
 });
+test.each([false, true])('prepares and defeats a guardian with a dragon longsword: already worn %s', async alreadyWorn => {
+    pack = pack.filter(i => i.id !== 1231);
+    const sword = item(1305, 'Dragon longsword');
+    if (alreadyWorn) worn = [{ ...sword, slot: 3 }];
+    else pack.push(sword);
+    const protection = new GuardianProtection();
+    expect(await protection.prepare()).toBe(true);
+    expect(worn[0].id).toBe(1305);
+    expect(pack.some(i => i.id === 185)).toBe(false);
+    advance = () => { if (npcs[0]?.health === 0) npcs = []; };
+
+    expect(await fightGuardian('Saradomin Wizard', () => {}, protection)).toBe('killed');
+    expect(events.some(event => event.startsWith('attack:'))).toBe(true);
+});
 test.each([3, 4])('guardian preparation needs food above the escape reserve: %s Sharks', async count => {
     pack = pack.map(i => i.id === 385 ? { ...i, count } : i);
     expect(await new GuardianProtection().prepare()).toBe(count > 3);

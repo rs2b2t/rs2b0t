@@ -13,7 +13,7 @@ import { Prayer } from '../../api/prayer/Prayer.js';
 import { Npcs } from '../../api/npcs/Npcs.js';
 import { ARROWS, BOWS, MELEE_WEAPONS, STAFFS } from '../../api/combat/equipment.js';
 import { bestMeleeWeapon, knownMeleeWeapon } from '../../api/combat/meleeWeapons.js';
-import { foodCount as foodCountIn, foodForms, foodHealAmount, isFoodItem, shouldEatToUseFood } from '../../api/combat/food.js';
+import { foodCount as foodCountIn, foodHealAmount, isEdibleFood, isFoodItem, shouldEatToUseFood } from '../../api/combat/food.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
@@ -252,9 +252,9 @@ function needStyleSupplies(): boolean {
 // Why: every optional field falls back to a supply.ts module default, so a knob left out of this object is one the panel offers and the run ignores.
 
 /** Every setting bankRoutine reads. */
-function bankOpts(): BankOpts {
+function bankOpts(depositInventory: boolean): BankOpts {
     return {
-        withdrawFood: true, runeCasts: RUNE_CASTS, runeBuffer: RUNE_BUFFER, ammo: AMMO_WITHDRAW, escapeStock: ESCAPE_STOCK, healTo: HEAL_TO, potions: POTIONS,
+        depositInventory, withdrawFood: true, runeCasts: RUNE_CASTS, runeBuffer: RUNE_BUFFER, ammo: AMMO_WITHDRAW, escapeStock: ESCAPE_STOCK, healTo: HEAL_TO, potions: POTIONS,
         flasks: [...(ANTIPOISON_WANT > 0 ? [antipoisonPlan(ANTIPOISON_WANT)] : []), ...(ANTIFIRE_WANT > 0 ? [antifirePlan(ANTIFIRE_WANT)] : []), ...(PRAYER_WANT > 0 ? [prayerPlan(PRAYER_WANT)] : [])],
         carry: SITE.axe === true && AXE !== '' ? [AXE] : []
     };
@@ -273,7 +273,7 @@ async function bankTrip(bot: JiveDragons): Promise<void> {
     bot.lootRun = null;
     if (bot.clueRestock && !SITE.inArea(Game.tile()) && !(await walkToBank(SITE.bank, m => bot.log(m)))) return;
     const before = bot.bankTrips;
-    await bankRoutine(bot, SITE, bankOpts());
+    await bankRoutine(bot, SITE, bankOpts(bot.clueRestock));
     if (bot.bankTrips > before) {
         bot.noteTrip(hasFood(), !needStyleSupplies());
     }
@@ -567,8 +567,7 @@ function slotAction(drop: GroundItem | null): SlotAction {
 }
 
 async function eatOnce(bot: JiveDragons): Promise<boolean> {
-    const forms = foodForms(FOOD_NAME);
-    const food = Inventory.items().find(i => forms.includes((i.name ?? '').toLowerCase()));
+    const food = Inventory.items().find(i => isEdibleFood(i, FOOD_NAME));
     if (!food) {
         return false;
     }
@@ -682,7 +681,7 @@ async function freeSlot(bot: JiveDragons): Promise<void> {
     if (!(await returnFromLoot(bot)) || !lootReady(bot) || slotAction(findLoot(bot)) !== 'drop') {
         return;
     }
-    const food = Inventory.items().find(i => isFoodItem(i.name, FOOD_NAME));
+    const food = Inventory.items().find(i => isEdibleFood(i, FOOD_NAME));
     if (!food) {
         return;
     }
@@ -1252,6 +1251,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             setStatus: s => {
                 if (s === 'clue solved') {
                     this.cluesSolved++;
+                    this.clueRestock = true;
                 }
                 this.setStatus(s);
             },

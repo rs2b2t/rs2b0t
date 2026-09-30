@@ -131,6 +131,23 @@ test('finishing a hard clue requires a dragon restock even when food and weapons
     expect(fixture.task('BankRun').validate()).toBe(true);
 });
 
+test('finishing a casket-only trail requires post-clue restocking', async () => {
+    const fixture = await clueScenario('Rune scimitar', 'melee');
+    let pack = [new InvItem({ id: 2714, name: 'Casket', count: 1, slot: 0, comId: 1, ops: ['Open'] })];
+    spyOn(Inventory, 'items').mockImplementation(() => pack);
+    spyOn(ClueExecutor, 'solveHeldClue').mockImplementation(async () => {
+        pack = [new InvItem({ id: 379, name: 'Lobster', count: 1, slot: 0, comId: 1, ops: ['Eat'] })];
+        return 'done';
+    });
+    expect(fixture.bot.clueRestock).toBe(false);
+
+    await fixture.clue.execute();
+
+    expect(fixture.bot.clueRestock).toBe(true);
+    expect(fixture.bot.cluesSolved).toBe(1);
+    expect(fixture.task('BankRun').validate()).toBe(true);
+});
+
 test.each(['teleport', 'missing runes', 'failed teleport', 'failed egress'])('uses existing %s egress before the preferred Falador bank', async mode => {
     const fixture = await clueScenario();
     let here = new Tile(2900, 9800, 0);

@@ -39,7 +39,7 @@ import {
     namesHaveEntranaRestrictedGear
 } from '#/bot/event/webwalk/exec/specialCrossing.js';
 import { snapshotWorldState } from '#/bot/event/webwalk/worldStateLive.js';
-import { hardClueKit, DDS_IDS, SHARK_ID } from './hardClueKit.js';
+import { hardClueKit, GUARDIAN_WEAPON_IDS, SHARK_ID } from './hardClueKit.js';
 import { hardKitSnapshot, hardKitFingerprint, stockHardWeapon, stockHardSupplies } from './hardCluePreparation.js';
 import { sustainUntil } from './Guardian.js';
 
@@ -114,6 +114,7 @@ export class SolveClue implements Task {
     private retreatPending = false;
     private initialBankVisited = false;
     private completionPending = false;
+    private collectingRewards = false;
 
     private async retreatFromGuardian(): Promise<boolean> {
         const here = Game.tile();
@@ -160,11 +161,11 @@ export class SolveClue implements Task {
     private status = 'idle';
 
     constructor(private readonly host: SolveClueHost) {
-        ClueExecutor.retryGuardian();
+        ClueExecutor.resetSession();
     }
 
     ownsEquipment(): boolean {
-        return this.strippedGear.length > 0 || (this.hardTrail && this.bankedThisSolve);
+        return this.collectingRewards || this.strippedGear.length > 0 || (this.hardTrail && this.bankedThisSolve);
     }
 
     clueStatus(): string {
@@ -172,6 +173,7 @@ export class SolveClue implements Task {
     }
 
     noteDeath(): void {
+        this.collectingRewards = false;
         this.bankedThisSolve = false;
         const id = heldClueScrollId();
         if (!this.hardTrail && !(id !== null && CLUE_DB[id]?.obj.includes('_hard_'))) return;
@@ -182,6 +184,7 @@ export class SolveClue implements Task {
     }
 
     validate(): boolean {
+        if (this.collectingRewards) return true;
         if (this.completionPending) return true;
         if (this.retreatPending) return true;
         if (this.strippedGear.length > 0 && (this.restoring || heldClueLikeId() === null)) return true;
@@ -203,7 +206,7 @@ export class SolveClue implements Task {
     /** Why: A trail owns one task call, so install upkeep here to eat between legs and during guardian fights. */
     private async eatIfHurt(): Promise<void> {
         const held = (): { name: string | null; interact(a: string): boolean | Promise<boolean> }[] =>
-            Inventory.items().filter(i => this.hardTrail ? i.id === SHARK_ID : this.host.isFood(i.name ?? ''));
+            Inventory.items().filter(i => this.hardTrail ? i.id === SHARK_ID : !i.noted && this.host.isFood(i.name ?? ''));
         const food = held();
         const maxHp = Skills.level('hitpoints');
         const hp = Skills.effective('hitpoints');
@@ -226,7 +229,7 @@ export class SolveClue implements Task {
     }
 
     async execute(): Promise<void> {
-        if (this.completionPending || this.retreatPending || (this.strippedGear.length > 0 && (this.restoring || heldClueLikeId() === null))) {
+        if (!this.collectingRewards && (this.completionPending || this.retreatPending || (this.strippedGear.length > 0 && (this.restoring || heldClueLikeId() === null)))) {
             const upkeep = Sustain.hook;
             Sustain.set(() => this.eatIfHurt());
             try {
@@ -273,7 +276,7 @@ export class SolveClue implements Task {
         if ((this.host.foodName() ?? '') === '') {
             return false;
         }
-        const held = Inventory.items().some(i => this.host.isFood(i.name ?? ''));
+        const held = Inventory.items().some(i => !i.noted && this.host.isFood(i.name ?? ''));
         if (held) {
             this.triedFoodRestock = false;
             return false;
@@ -330,6 +333,7 @@ export class SolveClue implements Task {
                 return;
             }
         }
+        this.collectingRewards = outcome === 'yield' && heldClueLikeId() === null && ClueExecutor.current !== null;
         if (outcome === 'dead' || outcome === 'guardian-lost') {
             if (outcome === 'dead') this.noteDeath();
             else this.deathBlocked = true;
@@ -495,7 +499,7 @@ export class SolveClue implements Task {
                 const n = worn.name ?? '';
                 if (n !== '' && ENTRANA_RESTRICTED_GEAR_RE.test(n)) {
                     await Equipment.unequip(n);
-                    if ((!this.hardTrail || !DDS_IDS.includes(worn.id)) && !this.strippedGear.some(g => g.toLowerCase() === n.toLowerCase())) {
+                    if ((!this.hardTrail || !GUARDIAN_WEAPON_IDS.includes(worn.id)) && !this.strippedGear.some(g => g.toLowerCase() === n.toLowerCase())) {
                         this.strippedGear.push(n);
                     }
                 }
@@ -519,8 +523,9 @@ export class SolveClue implements Task {
         }
 
         const protectedNames = new Set<string>();
+        const puzzleId = scrollId === null ? undefined : CLUE_DB[scrollId]?.puzzle?.id;
         for (const it of Inventory.items()) {
-            if ((CLUE_DB[it.id] !== undefined || CASKET_IDS[it.id] !== undefined) && it.name) {
+            if ((CLUE_DB[it.id] !== undefined || CASKET_IDS[it.id] !== undefined || it.id === puzzleId) && it.name) {
                 protectedNames.add(it.name.toLowerCase());
             }
         }
@@ -554,6 +559,11 @@ export class SolveClue implements Task {
             return false;
         }
 
+        if (puzzleId !== undefined && Inventory.countById(puzzleId) === 0 && Bank.countById(puzzleId) > 0) {
+            await Bank.withdrawById(puzzleId, 'Withdraw-1');
+            if (!(await Execution.delayUntil(() => Inventory.countById(puzzleId) > 0, 2500))) return false;
+        }
+
         for (const item of trailKit(scrollId)) {
             if (entranaStrip && ENTRANA_RESTRICTED_GEAR_RE.test(item)) {
                 continue;
@@ -577,7 +587,7 @@ export class SolveClue implements Task {
 
         if (this.hardTrail && !(await stockHardWeapon(entranaStrip, name => {
             if (!this.strippedGear.includes(name)) this.strippedGear.push(name);
-        }))) {
+        }, this.host.weaponName?.()))) {
             this.blockHardKit();
             return false;
         }
@@ -615,8 +625,10 @@ export class SolveClue implements Task {
         await this.stockTeleports(kit);
 
         const food = this.host.foodName();
+        const puzzleSlots = puzzleId !== undefined && Inventory.countById(puzzleId) === 0 ? 1 : 0;
         if (this.hardTrail) {
-            if (!(await stockHardSupplies(fetchingCoordTools ? COORD_TOOL_SLOTS : 0, this.strippedGear))) {
+            const bankable = [...this.strippedGear, ...(puzzleId !== undefined ? ['Sextant', 'Watch', 'Chart'] : [])];
+            if (!(await stockHardSupplies((fetchingCoordTools ? COORD_TOOL_SLOTS : 0) + puzzleSlots, bankable))) {
                 this.blockHardKit();
                 return false;
             }

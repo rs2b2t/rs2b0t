@@ -9,7 +9,7 @@ import { Special } from '#/bot/api/combat/Special.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
 import { Inventory } from '#/bot/api/inventory/Inventory.js';
 import type { Npc } from '#/bot/api/model/Npc.js';
-import { ddsWorn } from './hardCluePreparation.js';
+import { guardianWeaponWorn } from './hardCluePreparation.js';
 import { GuardianProtection } from './guardianKit.js';
 import { GUARDIAN_FOOD_RESERVE } from './hardClueKit.js';
 
@@ -95,7 +95,7 @@ export class GuardianEncounter {
                     await Execution.delayTicks(1);
                     continue;
                 }
-                if (!ddsWorn() || Inventory.count('Shark') <= GUARDIAN_FOOD_RESERVE) return 'supplies-needed';
+                if (!guardianWeaponWorn() || Inventory.count('Shark') <= GUARDIAN_FOOD_RESERVE) return 'supplies-needed';
                 await Sustain.run();
                 await Execution.delayTicks(1);
                 if (GameMessages.sawSince(mark, GUARDIAN_DEATH) || Skills.effective('hitpoints') <= 0) return 'dead';
@@ -113,7 +113,7 @@ export class GuardianEncounter {
                     this.sawDeath = true;
                     continue;
                 }
-                if (!ddsWorn() || Inventory.count('Shark') <= GUARDIAN_FOOD_RESERVE) return 'supplies-needed';
+                if (!guardianWeaponWorn() || Inventory.count('Shark') <= GUARDIAN_FOOD_RESERVE) return 'supplies-needed';
                 if (Special.ready(Special.wielded()) && !Special.armed()) {
                     if (await Special.arm()) {
                         await Execution.delayTicks(1);

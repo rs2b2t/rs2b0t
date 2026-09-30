@@ -47,7 +47,7 @@ Some clues do not resolve to a location:
 
 ## Hard trail preparation
 
-Before starting a hard clue scroll, [`SolveClue.ts`](../../src/bot/api/ai/clues/SolveClue.ts) prepares at the host's initial bank when supplied, or the nearest known bank otherwise. The ready snapshot needs Attack 60, Lost City, an eligible DDS (item id 1231 or 1215), at least one Superantipoison dose and 15 Sharks. It equips the DDS, remembers the original weapon, takes the best available Superantipoison dose and stocks 15 Sharks while reserving required tool and teleport slots. A confirmed shortage stays blocked until the kit changes or the host explicitly retries.
+Before starting a hard clue scroll, [`SolveClue.ts`](../../src/bot/api/ai/clues/SolveClue.ts) prepares at the host's initial bank when supplied, or the nearest known bank otherwise. The ready snapshot needs Attack 60, Lost City, an eligible dragon weapon (dagger ids 1231/1215 or longsword id 1305), at least one Superantipoison dose and 15 Sharks. It keeps an eligible equipped weapon or equips the configured eligible weapon when available, remembers the original weapon, takes the best available Superantipoison dose and stocks 15 Sharks while reserving required tool and teleport slots. Puzzle clues reserve one free slot without reducing the initial 15 Sharks and recover their exact banked puzzle box. A confirmed shortage stays blocked until the kit changes or the host explicitly retries.
 
 The generic bank and Entrana rules remain in force: no reachable known bank blocks a hard trail, while an Entrana clue banks restricted gear and records it for restoration. A held casket without a clue scroll bypasses combat-kit preparation, but a hard casket still follows the reward bank flow before opening.
 

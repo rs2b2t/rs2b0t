@@ -28,10 +28,10 @@ import { ensureSpade, ensureCoordTools, ensureExtraItems, ensureGateItems } from
 import { SPADE_NAME } from '#/bot/api/ai/clues/data/toolAcquire.js';
 import { GuardianEncounter, sustainUntil, GUARDIAN_DEATH, type GuardianStop } from '#/bot/api/ai/clues/Guardian.js';
 import { GuardianProtection } from './guardianKit.js';
-import { GUARDIAN_MIN_SHARKS, hardClueKit, SHARK_ID } from './hardClueKit.js';
+import { GUARDIAN_MIN_SHARKS, hardClueKit } from './hardClueKit.js';
 import { hardKitSnapshot } from './hardCluePreparation.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
-import { FOOD_OPTIONS, isFoodItem } from '#/bot/api/combat/food.js';
+import { FOOD_OPTIONS, isEdibleFood } from '#/bot/api/combat/food.js';
 import { namesHaveEntranaRestrictedGear } from '#/bot/event/webwalk/exec/specialCrossing.js';
 import { PuzzleBox } from '#/bot/api/ai/clues/PuzzleBox.js';
 import type { ClueRow, ClueStep } from '#/bot/api/ai/clues/types.js';
@@ -483,7 +483,6 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void 
             // Why: a hard trail is four to six caskets and the server keeps the count, so the only sign the trail ended is that no scroll came back.
             if (heldIds().some(id => CLUE_DB[id] !== undefined)) return;
             if (GameMessages.sawSince(mark, TRAIL_COMPLETE)) log('the trail is complete');
-            await collectReward(log, step.casketObj.includes('_hard_'));
             return;
         }
     }
@@ -543,6 +542,10 @@ async function tryAcquire(step: ClueStep, log: (m: string) => void): Promise<boo
     return false;
 }
 
+function needsPuzzleRoom(step: ClueStep | null): boolean {
+    return step?.type === 'talk' && step.puzzle !== undefined && Inventory.countById(step.puzzle.id) === 0 && Inventory.isFull();
+}
+
 async function solveStep(step: ClueStep, log: (m: string) => void, onAttempt: (n: number) => void): Promise<boolean | GuardianStop | 'yield'> {
     const tracked = trackedId(step);
     const before = heldCounts();
@@ -557,6 +560,7 @@ async function solveStep(step: ClueStep, log: (m: string) => void, onAttempt: (n
             return false;
         }
         await Sustain.run();
+        if (needsPuzzleRoom(step)) return 'supplies-needed';
         onAttempt(attempt + 1);
         await drainChat();
         if (!(await answerChallengeIfOpen(step, log))) {
@@ -570,46 +574,69 @@ async function solveStep(step: ClueStep, log: (m: string) => void, onAttempt: (n
     return progressed();
 }
 
-async function dismissRewardModal(): Promise<void> {
+let rewardCollection: { tile: NavPoint; discarded: Set<number> } | null = null;
+
+async function dismissRewardModal(): Promise<boolean> {
     await Execution.delayUntil(() => reader.modals().main !== -1, REWARD_WAIT_MS);
     for (let i = 0; i < REWARD_CLOSE_TRIES && reader.modals().main !== -1; i++) {
         actions.closeModal();
         await Execution.delayTicks(1);
     }
+    return reader.modals().main === -1;
 }
 
-async function collectReward(log: (m: string) => void, hard: boolean): Promise<void> {
-    await dismissRewardModal();
-    const here = reader.worldTile();
-    if (!here) return;
-    const discarded = new Set([SHARK_ID]);
+async function collectReward(log: (m: string) => void): Promise<boolean> {
+    if (!rewardCollection) {
+        const tile = reader.worldTile();
+        if (!tile) return false;
+        rewardCollection = { tile, discarded: new Set() };
+    }
+    const { tile: here, discarded } = rewardCollection;
+    if (!(await dismissRewardModal())) return false;
+    await Execution.delayTicks(2);
     const onTile = (g: GroundItem): boolean => {
         const t = g.tile();
         return t.x === here.x && t.z === here.z && t.level === here.level && !discarded.has(g.id);
     };
     for (let guard = 0; guard < 28; guard++) {
         const drop = GroundItems.query().where(onTile).nearest();
-        if (!drop) return;
+        if (!drop) {
+            rewardCollection = null;
+            return true;
+        }
         const name = drop.name ?? '';
-        if (Inventory.isFull()) {
-            const food = Inventory.items().find(i => hard ? i.id === SHARK_ID : FOOD_OPTIONS.some(name => isFoodItem(i.name, name)));
+        const stacks = Inventory.items().some(i => i.id === drop.id) && reader.objCatalog().some(i => i.id === drop.id && i.stackable);
+        if (Inventory.isFull() && !stacks) {
+            const food = Inventory.items().find(i => FOOD_OPTIONS.some(name => isEdibleFood(i, name)));
             if (!food) {
-                log(`WARNING: '${name}' is left on the ground, the pack is full with no ${hard ? 'Shark' : 'food'} to drop`);
-                return;
+                log(`WARNING: '${name}' is left on the ground, the pack is full with no food to drop`);
+                return false;
             }
             const used = Inventory.used();
             discarded.add(food.id);
-            if (!(await food.interact('Drop')) || !(await Execution.delayUntil(() => Inventory.used() < used, LOOT_WAIT_MS))) return;
+            if (!(await food.interact('Drop')) || !(await Execution.delayUntil(() => Inventory.used() < used, LOOT_WAIT_MS))) return false;
         }
-        const used = Inventory.used();
-        const count = Inventory.count(name);
-        if (!(await drop.interact('Take')) || !(await Execution.delayUntil(() => Inventory.used() > used || Inventory.count(name) > count, LOOT_WAIT_MS))) return;
-        log(`took '${name}' from the casket`);
+        const count = heldCounts().get(drop.id) ?? 0;
+        const collected = (): boolean => (heldCounts().get(drop.id) ?? 0) > count
+            && GroundItems.query().where(g => onTile(g) && g.id === drop.id).nearest() === null;
+        if (!(await drop.interact('Take')) || !(await Execution.delayUntil(collected, LOOT_WAIT_MS))) return false;
+        log(`took '${name}' from the treasure trail`);
     }
+    return false;
 }
 
 export const ClueExecutor = {
     current: null as ClueProgress | null,
+
+    resetSession(): void {
+        sessionActive = false;
+        rewardCollection = null;
+        sessionLegs = 0;
+        acquireTries = 0;
+        gateItemsTried.clear();
+        ClueExecutor.current = null;
+        ClueExecutor.retryGuardian();
+    },
 
     /** Route clue legs through the teleport catalog (spells, ring of dueling). */
     setTeleports(on: boolean): void {
@@ -639,6 +666,7 @@ export const ClueExecutor = {
                 dumpFailure(reason ?? 'unknown', log);
             }
             sessionActive = false;
+            rewardCollection = null;
             sessionLegs = 0;
             acquireTries = 0;
             gateItemsTried.clear();
@@ -653,13 +681,14 @@ export const ClueExecutor = {
                 return 'yield';
             }
             await Sustain.run();
+            if (needsPuzzleRoom(identifyStep(heldIds(), CLUE_DB, CASKET_IDS))) return 'supplies-needed';
             await drainChat();
             if (EventSignal.pending()) return 'yield';
 
             if (fightArenaAt(Game.tile()) && Inventory.countById(DUEL_CLUE_ID) === 0 && !(await leaveClueDuel(tlog))) return 'yield';
             const step = identifyStep(heldIds(), CLUE_DB, CASKET_IDS);
             if (step === null) {
-                await dismissRewardModal();
+                if (sessionActive && !(await collectReward(tlog))) return 'yield';
                 tlog('trail complete');
                 return end('done');
             }

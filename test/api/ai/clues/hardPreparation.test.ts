@@ -13,6 +13,7 @@ import { Sustain } from '#/bot/api/sustain/Sustain.js';
 import { InvItem } from '#/bot/api/inventory/Inventory.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
 import Tile from '#/bot/geometry/Tile.js';
+import { Input } from '#/bot/input/Input.js';
 
 function item(id: number, name: string, count = 1): InvItemSnapshot {
     return { id, name, count, slot: 0, comId: 1, ops: ['Wield', 'Eat', 'Drink'] };
@@ -277,4 +278,60 @@ test('a failed mid-trail bank trip does not repeat the caller initial-bank hook'
     await task.execute();
     await task.execute();
     expect(initialTrips).toBe(1);
+});
+
+test('a puzzle clue leaves room for its box without reducing the guardian food supply', async () => {
+    pack[0] = item(2799, 'Clue scroll (hard)');
+    pack.push(item(995, 'Coins', 1000), item(1854, 'Shantay pass'));
+    const task = new SolveClue(host);
+    task['stockTeleports'] = async () => {
+        pack.push(...['Air rune', 'Earth rune', 'Fire rune', 'Law rune', 'Water rune'].map((name, i) => item(550 + i, name, 100)));
+    };
+    await task.execute();
+    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
+    expect(pack.filter(i => i.id === 385)).toHaveLength(15);
+    expect(pack.length).toBeLessThan(28);
+    expect(pack.some(i => i.id === 2799)).toBe(true);
+});
+
+test('bank preparation preserves a held puzzle box with its clue', async () => {
+    pack[0] = item(2799, 'Clue scroll (hard)');
+    pack.push(item(2800, 'Puzzle box'));
+    await new SolveClue(host).execute();
+    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
+    expect(pack.some(i => i.id === 2800)).toBe(true);
+    expect(bank.some(i => i.id === 2800)).toBe(false);
+});
+
+test('bank preparation retrieves the current clue puzzle box when it was banked earlier', async () => {
+    pack[0] = item(2799, 'Clue scroll (hard)');
+    bank.push({ ...item(2795, 'Puzzle box'), ops: ['Withdraw-1'] }, { ...item(2800, 'Puzzle box'), ops: ['Withdraw-1'] });
+    spyOn(Input, 'invButton').mockImplementation(id => {
+        const source = bank.find(i => i.id === id && i.count > 0);
+        if (!source || pack.length >= 28) return false;
+        source.count--;
+        pack.push({ ...source, count: 1 });
+        return true;
+    });
+    await new SolveClue(host).execute();
+    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
+    expect(pack.some(i => i.id === 2800)).toBe(true);
+    expect(pack.some(i => i.id === 2795)).toBe(false);
+});
+
+test('reward pickup keeps ownership after the scroll disappears until collection finishes', async () => {
+    const task = new SolveClue(host);
+    spyOn(ClueExecutor, 'solveHeldClue').mockImplementationOnce(async () => {
+        pack = pack.filter(i => i.id !== clue.id);
+        ClueExecutor.current = { clueId: clue.id, name: 'hard clue', step: 'reward', leg: 1, attempt: 1, startedAt: 0, target: null, startDist: 0 };
+        return 'yield';
+    }).mockImplementation(async () => { ClueExecutor.current = null; return 'done'; });
+    await task.execute();
+    expect(task.validate()).toBe(true);
+    expect(task.ownsEquipment()).toBe(true);
+    expect(worn[0].id).toBe(1231);
+    await task.execute();
+    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(2);
+    expect(worn[0].id).toBe(bow.id);
+    expect(task.validate()).toBe(false);
 });

@@ -27,10 +27,11 @@ Banking deposits leftover one- and two-dose supers and replaces them with
 three-dose flasks. An unused three-dose flask stays in the inventory.
 Custom loadouts restock their selected dose form and quantity.
 
-Hard clues require 60 Attack, Lost City complete, a Dragon dagger or
-Dragon dagger(p), Superantipoison, and at least 15 Sharks. These are separate
-from the food and weapon used for dragon farming. The solver checks this kit
-before starting the trail.
+Hard clues require 60 Attack, Lost City complete, a Dragon longsword, Dragon
+dagger or Dragon dagger(p), Superantipoison, and at least 15 Sharks. The solver
+keeps an eligible equipped weapon, including the farming longsword. It reserves
+a slot for a puzzle box without reducing the initial 15 Sharks and retrieves
+the current clue's box if it was banked.
 Food used during travel does not invalidate that initial bank preparation.
 A guardian fight requires more than three Sharks and withdraws when three
 remain, keeping them available for the escape.
@@ -38,8 +39,13 @@ remain, keeping them available for the escape.
 The script leaves the dungeon and banks before solving a clue. While the
 solver owns the equipment, dragon banking cannot interrupt it because the
 inventory contains Sharks instead of the configured farming food. After the
-trail, the script banks again to restore dragon supplies before returning.
-A failed bank attempt keeps that restock pending.
+trail, the script deposits every inventory item and withdraws the configured
+dragon supplies. This banks rewards, clue tools and surplus teleport runes,
+keeping only the route's expected runes, such as Earth and Law for Watchtower.
+A failed bank attempt keeps that restock pending. Before leaving the reward
+tile, the solver drops edible food as needed to collect spilled rewards. A
+failed pickup keeps the clue task active. Noted food counts as loot, so it is
+banked and cannot prevent a food restock or be selected for eating.
 The return to the bank uses the trail's teleport policy. Guardian fights
 reissue attacks periodically because eating cancels the outgoing attack
 even while the wizard keeps hitting the player. Potion preparation confirms
@@ -56,6 +62,8 @@ bun e2e/jivedragons-melee-clue-live.ts --site heroes-blue
 bun e2e/jivedragons-melee-clue-live.ts --site gutanoth-blue --targets demons
 bun e2e/jivedragons-melee-clue-live.ts --site gutanoth-blue --targets dragons --guardian
 bun e2e/jivedragons-potion-restock-live.ts
+bun e2e/jivedragons-longsword-clue-live.ts
+bun e2e/jivedragons-longsword-clue-live.ts --guardian
 ```
 
 Each case creates a fresh account with 75 Attack, Strength and Defence,
@@ -69,7 +77,13 @@ through the script's navigation.
 The potion restock check starts at the bank with Super attack(1), Super
 strength(2), and Super defence(3). It verifies the partial flasks are banked,
 the inventory holds one three-dose flask of each, and the unused defence
-flask does not cause an extra withdrawal.
+flask does not cause an extra withdrawal. It starts with 20 noted Lobsters
+and no edible food, then checks the notes are banked and five edible Lobsters
+are withdrawn.
+
+The longsword checks start with a full inventory and no dagger available.
+They require puzzle-box or Saradomin Wizard completion with the longsword,
+collection of spilled rewards, and a full inventory reset at the bank.
 
 ## Recorded results
 
@@ -86,5 +100,21 @@ complete farming, clue, restock and resumed-kill assertions without deaths.
 The potion restock check passed on 2026-09-30 at normal 600 ms ticks.
 Super attack(1) and Super strength(2) were deposited and replaced with
 three-dose flasks. Super defence(3) stayed in the inventory, with both banked
-defence flasks untouched. The inventory also received five Lobsters.
+defence flasks untouched. The inventory also received five edible Lobsters after banking 20 noted
+Lobsters. The bank held 35 Lobsters afterward (20 stocked plus 20 notes,
+minus five withdrawn).
 [Bank and inventory screenshot](../e2e/jivedragons-potion-restock-live.png).
+
+The longsword puzzle check passed on 2026-09-30 at normal 600 ms ticks.
+It started with a full pack and no dagger, prepared 15 Sharks with three free
+slots, solved General Bentnoze's 79-move puzzle, collected two spilled
+rewards after dropping food, then banked the trail pack. The resulting
+inventory contained only 20 Lobsters, the Dusty key, nine Air runes, three
+Water runes and three Law runes. The longsword stayed equipped throughout.
+[Post-clue inventory screenshot](../e2e/jivedragons-longsword-puzzle-live.png).
+
+The longsword guardian check passed the same day at 600 ms ticks. It defeated
+the Feldip Saradomin Wizard, completed the hard clue with 10 Sharks left,
+then returned to Falador and rebuilt the same farming inventory without a
+death. No dagger was supplied or equipped.
+[Guardian post-clue bank screenshot](../e2e/jivedragons-longsword-guardian-live.png).
