@@ -335,3 +335,97 @@ test('reward pickup keeps ownership after the scroll disappears until collection
     expect(worn[0].id).toBe(bow.id);
     expect(task.validate()).toBe(false);
 });
+
+test.each([
+    { id: 1333, name: 'Rune scimitar', outcome: 'done' as const },
+    { id: 1301, name: 'Adamant longsword', outcome: 'done' as const },
+    { id: 1333, name: 'Rune scimitar', outcome: 'abandon' as const }
+])('a normal trail restores its equipped weapon: %j', async ({ id, name, outcome }) => {
+    pack[0] = item(3599, 'Clue scroll (medium)');
+    worn = [{ ...item(id, name), slot: 3 }];
+    const statuses: string[] = [];
+    const task = new SolveClue({ ...host, setStatus: s => statuses.push(s) });
+    spyOn(ClueExecutor, 'solveHeldClue').mockImplementation(async () => {
+        bank.push(...worn);
+        worn = [];
+        if (outcome === 'done') pack = Array.from({ length: 28 }, () => item(379, 'Lobster'));
+        return outcome;
+    });
+
+    await task.execute();
+
+    expect(worn.map(i => i.id)).toEqual([id]);
+    expect(task.ownsEquipment()).toBe(false);
+    expect(statuses.includes('clue solved')).toBe(outcome === 'done');
+});
+
+test('an ordinary clue keeps restoration pending when the weapon cannot be reclaimed yet', async () => {
+    pack[0] = item(3599, 'Clue scroll (medium)');
+    worn = [{ ...item(1333, 'Rune scimitar'), slot: 3 }];
+    const statuses: string[] = [];
+    const task = new SolveClue({ ...host, setStatus: s => statuses.push(s) });
+    spyOn(ClueExecutor, 'solveHeldClue').mockImplementation(async () => {
+        bank.push(...worn);
+        worn = [];
+        pack = [];
+        spyOn(Traversal, 'walkResilient').mockResolvedValue(false);
+        return 'done';
+    });
+    await task.execute();
+    expect(task.validate()).toBe(true);
+    expect(task.ownsEquipment()).toBe(true);
+    expect(statuses).not.toContain('clue solved');
+
+    spyOn(Traversal, 'walkResilient').mockResolvedValue(true);
+    await task.execute();
+    expect(worn.map(i => i.id)).toEqual([1333]);
+    expect(statuses).toContain('clue solved');
+    expect(task.validate()).toBe(false);
+});
+
+test('each ordinary trail remembers its current weapon rather than the previous trail or host fallback', async () => {
+    const task = new SolveClue(host);
+    spyOn(ClueExecutor, 'solveHeldClue').mockImplementation(async () => {
+        bank.push(...worn);
+        worn = [];
+        pack = [];
+        return 'done';
+    });
+    for (const [id, name] of [[1333, 'Rune scimitar'], [1301, 'Adamant longsword'], [1333, 'Rune scimitar']] as const) {
+        pack = [item(3599, 'Clue scroll (medium)')];
+        worn = [{ ...item(id, name), slot: 3 }];
+        await task.execute();
+        expect(worn.map(i => i.id)).toEqual([id]);
+    }
+});
+
+test('a normal restock preserves the starting weapon in the pack ahead of a stale host weapon', async () => {
+    pack[0] = item(3599, 'Clue scroll (medium)');
+    worn = [{ ...item(1333, 'Rune scimitar'), slot: 3 }];
+    const task = new SolveClue(host);
+    await task.execute();
+    pack.push(...worn, item(995, 'Coins'), item(592, 'Ashes'));
+    worn = [];
+    pack = pack.filter(i => i.name !== 'Lobster');
+
+    await task.execute();
+
+    expect(pack.some(i => i.id === 1333)).toBe(true);
+    expect(bank.some(i => i.id === 1333)).toBe(false);
+    expect(bank.some(i => i.id === 592)).toBe(true);
+    expect(task.ownsEquipment()).toBe(true);
+});
+
+test('a normal trail started unarmed does not require an unavailable host weapon to finish', async () => {
+    pack[0] = item(3599, 'Clue scroll (medium)');
+    worn = [];
+    const statuses: string[] = [];
+    const task = new SolveClue({ ...host, setStatus: s => statuses.push(s) });
+    spyOn(ClueExecutor, 'solveHeldClue').mockImplementation(async () => { pack = []; return 'done'; });
+
+    await task.execute();
+
+    expect(statuses).toContain('clue solved');
+    expect(task.validate()).toBe(false);
+    expect(task.ownsEquipment()).toBe(false);
+});

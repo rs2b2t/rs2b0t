@@ -115,6 +115,7 @@ export class SolveClue implements Task {
     private initialBankVisited = false;
     private completionPending = false;
     private collectingRewards = false;
+    private trailWeapon: string | null = null;
 
     private async retreatFromGuardian(): Promise<boolean> {
         const here = Game.tile();
@@ -155,7 +156,6 @@ export class SolveClue implements Task {
 
     private abandonedClueId: number | null = null;
 
-    /** Equipment banked for Entrana and restored afterward. */
     private strippedGear: string[] = [];
 
     private status = 'idle';
@@ -244,11 +244,10 @@ export class SolveClue implements Task {
         if (this.deathBlocked || this.kitBlocked()) return;
         const held = heldClueLikeId();
         const hard = held !== null && (CLUE_DB[held]?.obj ?? CASKET_IDS[held])?.includes('_hard_') === true;
-        const startingHard = !this.hardTrail && hard;
-        if (startingHard) {
+        if (held !== null && this.trailWeapon === null) {
             const original = Equipment.items().find(i => i.slot === 3);
-            const name = original?.name ?? this.host.weaponName?.() ?? '';
-            if (name !== '' && !this.strippedGear.includes(name)) this.strippedGear.push(name);
+            this.trailWeapon = original?.name ?? this.host.weaponName?.() ?? '';
+            if (this.trailWeapon !== '' && (original || hard) && !this.strippedGear.includes(this.trailWeapon)) this.strippedGear.push(this.trailWeapon);
         }
         if (held !== null) this.hardTrail = hard;
         const prepare = !this.bankedThisSolve && !this.initialBankVisited && heldClueScrollId() !== null ? this.host.prepareInitialBank : undefined;
@@ -352,6 +351,10 @@ export class SolveClue implements Task {
             this.status = 'event: yielding';
             return;
         }
+        if (this.trailWeapon && this.strippedGear.includes(this.trailWeapon) && !Equipment.contains(this.trailWeapon)) {
+            const current = Equipment.items().find(i => i.slot === 3)?.name ?? 'none';
+            this.host.log(`[clue] ${outcome}: restoring starting weapon '${this.trailWeapon}' (equipped: '${current}')`);
+        }
         if (outcome === 'abandon') {
             this.abandonedClueId = heldClueLikeId();
             this.bankedThisSolve = false;
@@ -379,10 +382,6 @@ export class SolveClue implements Task {
         this.host.log('[clue] trail complete');
     }
 
-    /**
-     * Put back what the Entrana strip banked.
-     * Why: the grind bots only re-equip their configured weapon and shield, so nothing else reclaims stripped armour.
-     */
     private async restoreStrippedGear(): Promise<void> {
         this.restoring = true;
         for (const name of this.strippedGear) {
@@ -392,6 +391,7 @@ export class SolveClue implements Task {
         if (want.length === 0) {
             this.strippedGear = [];
             this.restoring = false;
+            this.trailWeapon = null;
             return;
         }
 
@@ -404,7 +404,7 @@ export class SolveClue implements Task {
 
         this.status = 'restoring gear';
         this.host.setStatus('clue: reclaiming stripped gear');
-        this.host.log(`[clue] reclaiming gear banked for Entrana: ${want.join(', ')}`);
+        this.host.log(`[clue] reclaiming trail gear: ${want.join(', ')}`);
 
         if (!(await walkToBank(bank.tile, m => this.host.log(`  ${m}`)))) {
             this.host.log('[clue] walk to the bank failed — gear stays banked, will retry');
@@ -437,6 +437,7 @@ export class SolveClue implements Task {
         // Why: names that would not go back on stay listed so the next trail retries them.
         this.strippedGear = want.filter(n => !Equipment.contains(n));
         this.restoring = this.strippedGear.length > 0;
+        if (!this.restoring) this.trailWeapon = null;
         if (this.strippedGear.length > 0) {
             this.host.log(`[clue] could not re-equip ${this.strippedGear.join(', ')} — will retry`);
         }
@@ -529,7 +530,7 @@ export class SolveClue implements Task {
                 protectedNames.add(it.name.toLowerCase());
             }
         }
-        const weapon = (this.host.weaponName?.() ?? '').toLowerCase();
+        const weapon = (this.trailWeapon ?? this.host.weaponName?.() ?? '').toLowerCase();
         const coordItems = new Set(['sextant', 'watch', 'chart']);
         const rowItems = scrollId !== null ? (CLUE_DB[scrollId]?.items ?? []) : [];
         const rowItemNames = new Set(rowItems.map(n => n.toLowerCase()));
@@ -576,7 +577,7 @@ export class SolveClue implements Task {
             }
         }
 
-        const weaponName = this.host.weaponName?.() ?? '';
+        const weaponName = this.trailWeapon ?? this.host.weaponName?.() ?? '';
         if (
             !this.hardTrail && !entranaStrip
             && weaponNeeded(weaponName, Inventory.first(weaponName) !== null, Equipment.contains(weaponName))

@@ -128,6 +128,7 @@ test('host preserves its original weapon ledger and bank state across a guardian
     task['bankedThisSolve'] = true;
     task['hardTrail'] = true;
     task['strippedGear'] = ['Magic shortbow'];
+    task['trailWeapon'] = 'Magic shortbow';
     const equip = spyOn(Equipment, 'equip').mockResolvedValue(false);
     spyOn(Npc.prototype, 'interact').mockImplementation(function (this: Npc) {
         attacks.push(this.index);

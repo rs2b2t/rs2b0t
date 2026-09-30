@@ -39,6 +39,8 @@ returns `'supplies-needed'`.
 from replacing the guardian kit during that yield. A fresh solver clears the
 previous session's guardian halt; the failed solver stays blocked until retried.
 
+Every trail remembers the weapon equipped when it starts, ahead of the host's configured weapon. That choice survives yields and food restocks. Completion or abandonment restores the starting weapon before returning control to the host; failed bank trips keep restoration pending. Each new trail captures the current equipped weapon again.
+
 `Sustain.run()` is called every pass, so eating and other upkeep continue during a
 trail.
 
