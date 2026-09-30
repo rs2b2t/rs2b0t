@@ -3,6 +3,19 @@ import { gpShort } from '../../engine/provisioning.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { RG_ITEM, RG_TILE, banked, carried, type RegicideItem } from './areas.js';
 import { FOOD_FLOAT } from '../../food.js';
+import { BOW_IDS, bowWorn } from '../upass/supplies.js';
+import { ITEM_DB } from '../../../../../data/itemdb.js';
+
+const BOW_LEVELS: Readonly<Record<string, number>> = { oak: 5, willow: 20, maple: 30, yew: 40, magic: 50, ogre: 30 };
+
+export function usableBows(ranged: number): ReadonlySet<number> {
+    return new Set(ITEM_DB.filter(item => BOW_IDS.has(item.id) && ranged >= (BOW_LEVELS[item.obj.split('_')[0]!] ?? 1)).map(item => item.id));
+}
+
+export function bowCarried(snap: QuestSnapshot): boolean {
+    const usable = usableBows(snap.ranged ?? 99);
+    return bowWorn(snap) || [...snap.invIds ?? []].some(([id, count]) => count > 0 && usable.has(id));
+}
 
 // Why: Tirannwn has one shop and no bank, and the way out is the Arandar palisade or the Underground Pass walked end to end, so everything the forest consumes is bought and drawn in Ardougne before the quest leaves the mainland.
 
@@ -136,7 +149,7 @@ export const KIT: readonly Supply[] = [
     { item: RG_ITEM.SHARK, qty: FOOD_TARGET, reason: 'the traps, the soldiers and the elf warriors', min: 1 }
 ];
 
-export const KEEP_IDS: readonly number[] = Object.values(RG_ITEM).map(item => item.id);
+export const KEEP_IDS: readonly number[] = [...Object.values(RG_ITEM).map(item => item.id), ...BOW_IDS];
 
 // Why: the walk back in carries the crossings and the food and nothing that built the bomb: the wool is already cloth, the limestone already dust, and the pickaxe and pestle have no rock or lump left to work. The full kit would be 9 slots of dead weight beside a barrel bomb that has to fit too.
 const RETURN_IDS = new Set<number>([
@@ -150,6 +163,13 @@ export const RETURN_KIT: readonly Supply[] = KIT.filter(supply => RETURN_IDS.has
 /** The next missing piece of kit, or null once the pack is ready for Tirannwn. */
 export function sourceKit(snap: QuestSnapshot, kit: readonly Supply[] = KIT): QuestStep | null {
     for (const supply of kit) {
+        if (supply.item.id === RG_ITEM.SHORTBOW.id) {
+            if (bowCarried(snap)) continue;
+            if (!snap.bankKnown) return scanBank();
+            const usable = usableBows(snap.ranged ?? 99);
+            const bow = ITEM_DB.find(item => usable.has(item.id) && (snap.bankIds?.get(item.id) ?? 0) > 0);
+            if (bow) return withdraw([{ name: bow.name, id: bow.id, qty: 1 }]);
+        }
         if (carried(snap, supply.item) >= supply.qty) {
             continue;
         }
@@ -172,8 +192,10 @@ export function sourceKit(snap: QuestSnapshot, kit: readonly Supply[] = KIT): Qu
 
 /** What the kit is still short of, for the stop message. */
 export function kitShortfall(snap: QuestSnapshot, kit: readonly Supply[] = KIT): string[] {
-    return kit.filter(supply => carried(snap, supply.item) < (supply.min ?? supply.qty)).map(
-        supply => `${supply.min ?? supply.qty}x ${supply.item.name} (${supply.reason}), have ${carried(snap, supply.item)}`
+    return kit.filter(supply => supply.item.id === RG_ITEM.SHORTBOW.id
+        ? !bowCarried(snap)
+        : carried(snap, supply.item) < (supply.min ?? supply.qty)).map(
+        supply => supply.item.id === RG_ITEM.SHORTBOW.id ? 'a bow (firing the bridge stay rope), have none' : `${supply.min ?? supply.qty}x ${supply.item.name} (${supply.reason}), have ${carried(snap, supply.item)}`
     );
 }
 

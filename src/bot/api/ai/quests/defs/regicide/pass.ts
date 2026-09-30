@@ -1,4 +1,6 @@
 import { Game } from '../../../../game/Game.js';
+import { Equipment } from '../../../../equipment/Equipment.js';
+import { Skills } from '../../../../skills/Skills.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Locs } from '../../../../locs/Locs.js';
 import type { Loc } from '../../../../model/Loc.js';
@@ -20,6 +22,7 @@ import { OUT_OF_CAGES, outstandingCrossing, takeNextCrossing } from '../upass/ra
 import { travelTo } from '../upass/pass.js';
 import { RG_LOC, RG_TILE, regicideArea } from './areas.js';
 import { climbOutOfPit, travelTirannwn } from './pockets.js';
+import { usableBows } from './supplies.js';
 
 // Why: Permanent `%ibanmulti` bits retain the quest gates, leaving only physical crossings for the pocket mover.
 // Why: the way out at the far end is Iban's temple door: `open_iban_door` grows a branch at `%regicide_quest >= ^regicide_spoken_lathas` that teleports you `loc + (-129, +64)`, into the Well of Voyage room.
@@ -58,10 +61,20 @@ async function crossBridge(log: (m: string) => void): Promise<boolean> {
         log('Koftik would not hand over a damp cloth at the bridge');
         return false;
     }
-    if (!(await makeFireArrow(log)) || !(await armFireArrow(log))) {
-        return false;
+    if (!(await makeFireArrow(log))) return false;
+    const gear = Equipment.items().filter(item => item.slot === 3 || item.slot === 5);
+    let crossed = false;
+    try {
+        if (await armFireArrow(log, usableBows(Skills.level('ranged')))) crossed = await shootGuiderope(log);
+    } finally {
+        for (const item of gear) {
+            if (item.name && !Equipment.contains(item.name) && !(await Equipment.equip(item.name))) {
+                log(`could not restore ${item.name} after the bridge shot`);
+                crossed = false;
+            }
+        }
     }
-    return shootGuiderope(log);
+    return crossed;
 }
 
 function locById(id: number, op: string | null, within = 12): Loc | null {
