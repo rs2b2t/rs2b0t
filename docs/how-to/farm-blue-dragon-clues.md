@@ -23,6 +23,9 @@ Each bank trip carries one Super attack(3), Super strength(3), and
 Super defence(3). The loadout carry list can override each potion's dose form
 and quantity. The script drinks another dose when that skill's boost decays
 to within 10% of its base level. Keep food and escape runes stocked as well.
+Banking deposits leftover one- and two-dose supers and replaces them with
+three-dose flasks. An unused three-dose flask stays in the inventory.
+Custom loadouts restock their selected dose form and quantity.
 
 Hard clues require 60 Attack, Lost City complete, a Dragon dagger or
 Dragon dagger(p), Superantipoison, and at least 15 Sharks. These are separate
@@ -52,6 +55,7 @@ bun e2e/jivedragons-melee-clue-live.ts --guardian
 bun e2e/jivedragons-melee-clue-live.ts --site heroes-blue
 bun e2e/jivedragons-melee-clue-live.ts --site gutanoth-blue --targets demons
 bun e2e/jivedragons-melee-clue-live.ts --site gutanoth-blue --targets dragons --guardian
+bun e2e/jivedragons-potion-restock-live.ts
 ```
 
 Each case creates a fresh account with 75 Attack, Strength and Defence,
@@ -61,6 +65,11 @@ it seeds a final hard-clue step, then requires a completed trail, another
 dragon bank trip and a further kill without dying. The guardian case uses
 the Saradomin Wizard clue at Feldip. Travel after the initial placement runs
 through the script's navigation.
+
+The potion restock check starts at the bank with Super attack(1), Super
+strength(2), and Super defence(3). It verifies the partial flasks are banked,
+the inventory holds one three-dose flask of each, and the unused defence
+flask does not cause an extra withdrawal.
 
 ## Recorded results
 
@@ -73,3 +82,9 @@ complete farming, clue, restock and resumed-kill assertions without deaths.
 | Heroes' Guild blue dragon | Final hard map step | [Passed](../e2e/jivedragons-heroes-blue-both-map-live.png) |
 | Gu'Tanoth greater demons | Final hard map step | [Passed](../e2e/jivedragons-gutanoth-blue-demons-map-live.png) |
 | Gu'Tanoth blue dragons | Final hard coordinate step with Saradomin Wizard | [Passed](../e2e/jivedragons-gutanoth-blue-dragons-guardian-live.png) |
+
+The potion restock check passed on 2026-09-30 at normal 600 ms ticks.
+Super attack(1) and Super strength(2) were deposited and replaced with
+three-dose flasks. Super defence(3) stayed in the inventory, with both banked
+defence flasks untouched. The inventory also received five Lobsters.
+[Bank and inventory screenshot](../e2e/jivedragons-potion-restock-live.png).

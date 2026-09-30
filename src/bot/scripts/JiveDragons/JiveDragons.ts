@@ -403,9 +403,8 @@ async function sipAntifire(bot: JiveDragons): Promise<boolean> {
 function potionsHeld(plan: PotionPlan): number {
     return plan.potion.doses.reduce((n, dose) => n + Inventory.count(dose), 0);
 }
-/** Every dose form the run carries, so the deposit keeps a part-used flask. */
-function potionDoseNames(): string[] {
-    return POTIONS.flatMap(plan => [...plan.potion.doses]);
+function potionKeepNames(): string[] {
+    return POTIONS.flatMap(plan => STYLE === 'melee' ? [plan.flask] : [...plan.potion.doses]);
 }
 function sipDue(): PotionPlan | null {
     return potionToSip({
@@ -1404,7 +1403,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         return SPELL;
     }
     keepExtra(): string[] {
-        return [...keepDoses(potionDoseNames(), ANTIPOISON_DOSES, ANTIPOISON_WANT > 0), ...(ANTIFIRE_WANT > 0 ? ANTIFIRE_DOSES : []), ...(PRAYER_WANT > 0 ? PRAYER_DOSES : []), ...(AXE === '' ? [] : [AXE])];
+        return [...keepDoses(potionKeepNames(), ANTIPOISON_DOSES, ANTIPOISON_WANT > 0), ...(ANTIFIRE_WANT > 0 ? ANTIFIRE_DOSES : []), ...(PRAYER_WANT > 0 ? PRAYER_DOSES : []), ...(AXE === '' ? [] : [AXE])];
     }
     leaveByWalk(): boolean {
         return LEAVE_WALK;

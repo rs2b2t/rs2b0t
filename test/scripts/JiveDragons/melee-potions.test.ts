@@ -25,7 +25,7 @@ test('melee drinks the complete due set before handing control to a long fight',
     expect(levels).toEqual({ attack: 91, strength: 91, defence: 91 });
 });
 
-test('blue dragon melee drinks and preserves super defence as part of its super set', async () => {
+test('blue dragon melee drinks super defence as part of its super set', async () => {
     const fixture = await scenario('taverley-blue', 'melee', { usePotions: true });
     const sip = fixture.task('SipPotion');
     spyOn(sip, 'validate').mockRestore();
@@ -41,7 +41,6 @@ test('blue dragon melee drinks and preserves super defence as part of its super 
     expect(sip.validate()).toBe(true);
     await sip.execute();
     expect(defence).toBe(85);
-    expect(fixture.bot.keepExtra()).toContain('Super defence(2)');
 });
 
 test('disabling melee potions does not drink super defence', async () => {
