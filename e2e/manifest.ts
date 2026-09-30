@@ -952,6 +952,15 @@ export const CASES: readonly Case[] = [
         note: 'clean account to journal complete in 4min at --tick 200, no parks; --stage is %hazeelcultquest'
     },
     {
+        id: 'herblore-grinding-live',
+        harness: 'herblore-grinding-live.ts',
+        covers: { scripts: ['HerbloreSecondaries'] },
+        status: 'documented',
+        documentedIn: 'docs/how-to/grind-herblore-secondaries.md',
+        budgetMin: 8,
+        note: 'normal tick speed; chocolate and two bank loads of unicorn horns, with five products per tick'
+    },
+    {
         id: 'herblore-secondaries-test',
         harness: 'herblore-secondaries-test.ts',
         covers: { scripts: ['HerbloreSecondaries'] },
