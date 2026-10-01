@@ -18,6 +18,9 @@ live fight must be escaped before gear restoration or host handoff. A confirmed
 supply shortage restores the host outfit and waits for supplies to change
 without renewing the reset allowance.
 
+During clue upkeep, the solver drops rotten food one slot per pass, after eating
+if needed. Rejected drops are retried on later passes.
+
 ## Guardians behind fences
 
 Guardians explicitly targeting the player can be tracked within 32 tiles;

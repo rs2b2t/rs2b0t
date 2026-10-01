@@ -50,6 +50,7 @@ const ALTAR_RADIUS = 2;
 const ALTAR_WALK_MS = 180_000;
 const ALTAR_RESTORE_MS = 6000;
 const EAT_CONFIRM_TICKS = 2;
+const ROTTEN_FOOD_ID = 2959;
 
 export function heldClueLikeId(): number | null {
     const it = Inventory.items().find(i => CLUE_DB[i.id] !== undefined || CASKET_IDS[i.id] !== undefined);
@@ -243,10 +244,16 @@ export class SolveClue implements Task {
         }
     }
 
+    private async upkeep(): Promise<void> {
+        await this.eatIfHurt();
+        const rotten = Inventory.items().find(item => item.id === ROTTEN_FOOD_ID);
+        if (rotten) await rotten.interact('Drop');
+    }
+
     async execute(): Promise<void> {
         if (!this.collectingRewards && (!this.recoveryPending || this.restoring) && (this.completionPending || this.retreatPending || (this.strippedGear.length > 0 && (this.restoring || heldClueLikeId() === null)))) {
             const upkeep = Sustain.hook;
-            Sustain.set(() => this.eatIfHurt());
+            Sustain.set(() => this.upkeep());
             try {
                 if (this.retreatPending && !(await this.retreatFromGuardian())) return;
                 await this.restoreStrippedGear();
@@ -274,7 +281,7 @@ export class SolveClue implements Task {
         }
         if (prepare) this.initialBankVisited = true;
         const hostUpkeep = Sustain.hook;
-        Sustain.set(() => this.eatIfHurt());
+        Sustain.set(() => this.upkeep());
         try {
             await this.runTrail(prepare !== undefined);
         } finally {
