@@ -132,7 +132,7 @@ export function trailWalkOpts(log: (m: string) => void, radius = ARRIVE_RADIUS):
 async function walkLeg(dest: NavPoint, log: (m: string) => void, radius = ARRIVE_RADIUS): Promise<boolean> {
     if (crossesClueDuel(dest)) return walkAcrossClueDuel(dest, radius, log);
     if (crossesTirannwn(dest)) {
-        return walkAcrossTirannwn(dest, radius, log);
+        return walkAcrossTirannwn(dest, radius, log, trailWalkOpts(log, radius));
     }
     if (crossesKharazi(dest)) {
         return walkAcrossKharazi(dest, radius, log);
@@ -160,10 +160,11 @@ const trace = new ClueTrace({
 let sessionActive = false;
 let sessionLegs = 0;
 let acquireTries = 0;
+let recovery: { clueId: number; used: boolean } | null = null;
 let postKillClue: number | null = null;
 let guardianHalt: 'dead' | 'guardian-lost' | null = null;
 let guardianEncounter: { readonly clueId: number; readonly encounter: GuardianEncounter } | null = null;
-export type ClueOutcome = 'done' | 'abandon' | 'yield' | GuardianStop;
+export type ClueOutcome = 'done' | 'abandon' | 'yield' | 'reset-needed' | GuardianStop;
 
 function heldIds(): number[] {
     return Inventory.items().map(i => i.id);
@@ -368,7 +369,7 @@ async function reachTirannwn(step: ClueStep, log: (m: string) => void): Promise<
     if (target === null || !crossesTirannwn(target)) {
         return;
     }
-    await walkAcrossTirannwn(target, ARRIVE_RADIUS, log);
+    await walkAcrossTirannwn(target, ARRIVE_RADIUS, log, trailWalkOpts(log));
 }
 
 async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void | GuardianStop | 'yield'> {
@@ -623,6 +624,7 @@ export const ClueExecutor = {
         sessionLegs = 0;
         acquireTries = 0;
         ClueExecutor.current = null;
+        recovery = null;
         ClueExecutor.retryGuardian();
     },
 
@@ -658,6 +660,7 @@ export const ClueExecutor = {
             sessionLegs = 0;
             acquireTries = 0;
             postKillClue = null;
+            recovery = null;
             ClueExecutor.current = null;
             return outcome;
         };
@@ -683,6 +686,7 @@ export const ClueExecutor = {
             if (needsBank?.()) return 'supplies-needed';
 
             const clueId = trackedId(step);
+            const legRecovery = recovery?.clueId === clueId ? recovery : (recovery = { clueId, used: false });
             const name = shortClueName(step.type === 'open-casket' ? step.casketObj : step.obj);
             if (!sessionActive) {
                 trace.begin(clueId, name);
@@ -746,20 +750,31 @@ export const ClueExecutor = {
                 }
             };
             const result = await solveStep(step, tlog, onAttempt);
-            if (typeof result === 'string') {
-                if (result === 'dead' || result === 'guardian-lost') {
+            if (typeof result === 'string' && result !== 'guardian-lost') {
+                if (result === 'dead') {
                     guardianHalt = result;
                     guardianEncounter = null;
                     postKillClue = null;
                 }
                 return result;
             }
-            if (!result) {
+            if (!result || result === 'guardian-lost') {
                 if (EventSignal.pending()) {
                     trace.note('yield — event fired mid-step');
                     return 'yield';
                 }
-                const reason = `no progress after ${STEP_ATTEMPTS} attempts`;
+                if (!legRecovery.used) {
+                    legRecovery.used = true;
+                    if (result === 'guardian-lost') guardianEncounter = null;
+                    acquireTries = 0;
+                    ClueExecutor.current = null;
+                    tlog(`${result === 'guardian-lost' ? 'guardian missing or unreachable' : `no progress after ${STEP_ATTEMPTS} attempts`}; resetting at the nearest bank before retrying this clue`);
+                    actions.closeModal();
+                    Traversal.requestRepath('clue recovery');
+                    await Execution.delayTicks(2);
+                    return 'reset-needed';
+                }
+                const reason = result === 'guardian-lost' ? 'guardian still missing or unreachable after a reset' : `no progress after ${STEP_ATTEMPTS} attempts following a reset`;
                 tlog(`abandoning ${describeStep(step)}: ${reason}`);
                 return end('abandon', reason);
             }

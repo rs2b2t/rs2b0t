@@ -153,3 +153,54 @@ test('blocks the initial handoff when the bank opens without a ready snapshot', 
     expect(task['bankedThisSolve']).toBe(false);
     expect(pack[0]).toEqual(clue);
 });
+
+
+test('a stuck clue rebuilds its pack at the nearest bank without repeating the host trip', async () => {
+    const task = new SolveClue({ ...host, prepareInitialBank });
+    task['bankedThisSolve'] = true;
+    here = new Tile(3250, 3420, 0);
+    pack = [clue, ...Array.from({ length: 27 }, (_, slot) => ({ ...clue, id: 952, name: 'Spade', slot: slot + 1 }))];
+    let solves = 0;
+    spyOn(ClueExecutor, 'solveHeldClue').mockImplementation(async () => {
+        events.push('solve');
+        return ++solves === 1 ? 'reset-needed' : 'yield';
+    });
+    await task.execute();
+    expect(events).toEqual(['solve']);
+    expect(task.ownsEquipment()).toBe(true);
+    await task.execute();
+    expect(events).toEqual(['solve', 'walk:3253,3420', 'open:3253,3420', 'deposit', 'solve']);
+    expect(pack).toEqual([clue]);
+    expect(task['bankedThisSolve']).toBe(true);
+});
+
+test('a failed reset deposit blocks the fresh attempt until the pack is rebuilt', async () => {
+    const task = new SolveClue({ ...host, prepareInitialBank });
+    task['bankedThisSolve'] = true;
+    let solves = 0;
+    spyOn(ClueExecutor, 'solveHeldClue').mockImplementation(async () => ++solves === 1 ? 'reset-needed' : 'yield');
+    await task.execute();
+    rejectDeposit = true;
+    await task.execute();
+    expect(solves).toBe(1);
+    expect(task.ownsEquipment()).toBe(true);
+    rejectDeposit = false;
+    await task.execute();
+    expect(solves).toBe(2);
+    expect(pack).toEqual([clue]);
+});
+
+
+test('reset keeps an earned riddle key so the server does not refuse another drop', async () => {
+    const task = new SolveClue(host);
+    task['bankedThisSolve'] = true;
+    const riddle = { ...clue, id: 2831, name: 'Clue scroll (medium)' };
+    const key = { ...clue, id: 2832, name: 'Key', slot: 1 };
+    pack = [riddle, key, { ...clue, id: 536, name: 'Dragon bones', slot: 2 }];
+    let solves = 0;
+    spyOn(ClueExecutor, 'solveHeldClue').mockImplementation(async () => ++solves === 1 ? 'reset-needed' : 'yield');
+    await task.execute();
+    await task.execute();
+    expect(pack).toEqual([riddle, key]);
+    expect(solves).toBe(2);
+});

@@ -58,7 +58,7 @@ inside one step attempt, so a level-108 fight does not consume the retry budget.
 
 The bank prepares 15 Sharks. A guardian can start after food was used during travel, provided at least four Sharks remain. The fight returns `supplies-needed` at three Sharks, preserving food for the retreat. Hard upkeep uses Sharks regardless of the host's food setting and maintains Superantipoison protection. Attacks are reissued every eight ticks because eating cancels the outgoing attack while incoming hits can keep the combat marker active.
 
-An event yield keeps the same `GuardianEncounter` and resumes without another spawn dig. Resume revalidates the original guardian by index, id, range and ownership. A missing, replaced, distant or other-player target returns `guardian-lost`, while a witnessed player death returns `dead`; neither starts a fresh guardian attempt.
+An event yield keeps the same `GuardianEncounter` and resumes without another spawn dig. Resume revalidates the original guardian by index, id, range and ownership. A missing, replaced, distant or other-player target returns `guardian-lost` and requests the one bank reset before another attempt. A witnessed player death returns `dead` and stops recovery. Neither repeats the spawn dig before that handoff.
 
 The fight waits on the tick through `sustainUntil`, which pumps `Sustain` on every
 pass. This is load-bearing: the loop used to park in a single `delayUntil` for the
@@ -142,6 +142,8 @@ Missing runes are not an error: the router walks instead. The `useTeleports` set
 turns teleports off.
 
 ## See also
+
+- [Stuck-clue recovery and routing](clue-recovery.md)
 
 - [Clue database](clues-database.md)
 - [Clue gates](clues-gates.md)

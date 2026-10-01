@@ -738,3 +738,75 @@ test.each([false, true])('retries a stocked jungle-tool withdrawal after interru
     expect(pack.some(i => i.name === 'Bronze axe')).toBe(true);
     expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
 });
+
+test('bank reset rebuilds a full hard-clue pack with twelve Sharks and preserves the original outfit ledger', async () => {
+    const task = new SolveClue({ ...host, hardFoodTarget: 12 });
+    let solves = 0;
+    spyOn(ClueExecutor, 'solveHeldClue').mockImplementation(async () => ++solves === 1 ? 'reset-needed' : 'yield');
+    await task.execute();
+    const remembered = [...task['strippedGear']];
+    expect(remembered).toContain('Magic shortbow');
+    while (pack.length < 28) pack.push(item(536, 'Dragon bones'));
+    await task.execute();
+    expect(solves).toBe(2);
+    expect(pack.some(i => i.id === 536)).toBe(false);
+    expect(pack.filter(i => i.id === 385)).toHaveLength(12);
+    expect(pack.filter(i => i.id === 952)).toHaveLength(1);
+    expect(pack.length).toBeLessThan(28);
+    expect(task['strippedGear']).toEqual(remembered);
+    expect(worn[0].id).toBe(1231);
+    expect(task.ownsEquipment()).toBe(true);
+});
+
+test.each(['abandon', 'reset-needed'] as const)('a %s outcome retains combat gear until retreat succeeds', async outcome => {
+    const task = new SolveClue(host);
+    await task.execute();
+    spyOn(Game, 'inCombat').mockReturnValue(true);
+    spyOn(ClueExecutor, 'solveHeldClue').mockResolvedValue(outcome);
+    const walk = spyOn(Traversal, 'walkResilient').mockResolvedValue(false);
+    await task.execute();
+    await task.execute();
+    expect(task.validate()).toBe(true);
+    expect(task.ownsEquipment()).toBe(true);
+    expect(worn[0].id).toBe(1231);
+    spyOn(Game, 'inCombat').mockReturnValue(false);
+    walk.mockResolvedValue(true);
+    spyOn(ClueExecutor, 'solveHeldClue').mockResolvedValue('yield');
+    await task.execute();
+    expect(worn[0].id).toBe(outcome === 'abandon' ? bow.id : 1231);
+});
+
+test('death during bank recovery releases the recovery flag and restores remembered gear', async () => {
+    const task = new SolveClue(host);
+    spyOn(ClueExecutor, 'solveHeldClue').mockResolvedValue('reset-needed');
+    await task.execute();
+    task.noteDeath();
+    await task.execute();
+    expect(task['recoveryPending']).toBe(false);
+    expect(task['deathBlocked']).toBe(true);
+    expect(task.validate()).toBe(false);
+    expect(worn[0].id).toBe(bow.id);
+});
+
+test('a recovery kit shortage restores the host outfit and resumes after supplies arrive', async () => {
+    const task = new SolveClue(host);
+    spyOn(ClueExecutor, 'solveHeldClue').mockResolvedValueOnce('reset-needed').mockResolvedValue('yield');
+    await task.execute();
+    pack = pack.filter(i => i.id !== 385);
+    bank = bank.filter(i => i.id !== 385);
+    await task.execute();
+    expect(worn[0].id).toBe(bow.id);
+    expect(task.validate()).toBe(false);
+    expect(task.ownsEquipment()).toBe(false);
+    expect(task['recoveryPending']).toBe(true);
+    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
+    open = true;
+    expect(task.validate()).toBe(false);
+    bank.push(item(385, 'Shark', 30));
+    expect(task.validate()).toBe(true);
+    await task.execute();
+    expect(task['recoveryPending']).toBe(false);
+    expect(worn[0].id).toBe(1231);
+    expect(pack.filter(i => i.id === 385)).toHaveLength(15);
+    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(2);
+});

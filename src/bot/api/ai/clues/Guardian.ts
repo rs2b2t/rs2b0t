@@ -1,5 +1,8 @@
 import { Execution } from '#/bot/api/execution/Execution.js';
 import { EventSignal } from '#/bot/api/execution/EventSignal.js';
+import Tile from '#/bot/geometry/Tile.js';
+import { Reachability } from '#/bot/event/webwalk/geometry/Reachability.js';
+import { Traversal } from '#/bot/api/walking/Traversal.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { PROTECT_FROM_MAGIC, Prayer } from '#/bot/api/prayer/Prayer.js';
 import { Sustain } from '#/bot/api/sustain/Sustain.js';
@@ -14,6 +17,7 @@ import { GuardianProtection } from './guardianKit.js';
 import { GUARDIAN_FOOD_RESERVE } from './hardClueKit.js';
 
 const SPAWN_RADIUS = 12;
+const OWNED_RADIUS = 32;
 const SPAWN_WAIT_TICKS = 10;
 const FIGHT_MS = 180_000;
 const REATTACK_TICKS = 8;
@@ -43,7 +47,7 @@ export async function sustainUntil(cond: () => boolean, ms: number, deps: Sustai
 
 function findGuardian(name: string): Npc | null {
     const candidates = Npcs.query().name(name).action('Attack')
-        .where(n => n.distance() <= SPAWN_RADIUS && !n.targetsAnotherPlayer()).results();
+        .where(n => (n.distance() <= SPAWN_RADIUS || (n.targetsMe() && n.distance() <= OWNED_RADIUS)) && !n.targetsAnotherPlayer()).results();
     return candidates.find(n => n.targetsMe()) ?? candidates[0] ?? null;
 }
 
@@ -87,7 +91,7 @@ export class GuardianEncounter {
                 if (EventSignal.pending()) return 'yield';
                 const target = Npcs.query().name(name).where(n => n.index === first.index && n.id === first.id).results()[0];
                 if (!target) return this.sawDeath && this.owned ? 'killed' : 'guardian-lost';
-                if (target.targetsAnotherPlayer() || target.distance() > SPAWN_RADIUS || GameMessages.sawSince(mark, NOT_YOURS)) return 'guardian-lost';
+                if (target.targetsAnotherPlayer() || target.distance() > (this.owned || target.targetsMe() ? OWNED_RADIUS : SPAWN_RADIUS) || GameMessages.sawSince(mark, NOT_YOURS)) return 'guardian-lost';
                 this.owned ||= target.targetsMe();
                 this.sawDeath ||= this.owned && target.health === 0 && target.snap.totalHealth > 0;
                 if (this.sawDeath) {
@@ -107,13 +111,37 @@ export class GuardianEncounter {
                 }
                 if (EventSignal.pending()) return 'yield';
                 const current = Npcs.query().name(name).where(n => n.index === first.index && n.id === first.id).results()[0];
-                if (!current || current.targetsAnotherPlayer() || current.distance() > SPAWN_RADIUS) continue;
+                if (!current || current.targetsAnotherPlayer() || current.distance() > (this.owned || current.targetsMe() ? OWNED_RADIUS : SPAWN_RADIUS)) continue;
                 if (current.targetsMe() && current.health === 0 && current.snap.totalHealth > 0) {
                     this.owned = true;
                     this.sawDeath = true;
                     continue;
                 }
                 if (!guardianWeaponWorn() || Inventory.count('Shark') <= GUARDIAN_FOOD_RESERVE) return 'supplies-needed';
+                const tile = current.tile();
+                const here = Game.tile();
+                const probeable = here !== null && Reachability.probeable(tile);
+                const blockedAdjacent = current.distance() === 1 && probeable && !Reachability.canStep(here!, tile);
+                if (current.distance() > 1 || blockedAdjacent) {
+                    const stand = probeable
+                        ? [[1, 0], [-1, 0], [0, 1], [0, -1]]
+                            .map(([dx, dz]) => new Tile(tile.x + dx!, tile.z + dz!, tile.level))
+                            .filter(p => Reachability.canStep(p, tile) && Reachability.canReach(p, { maxSteps: 2048 }))
+                            .sort((a, b) => a.distanceTo(here!) - b.distanceTo(here!))[0]
+                        : tile;
+                    if (!stand) {
+                        log(`${name}: no reachable melee tile beside (${tile.x},${tile.z},${tile.level})`);
+                        return 'guardian-lost';
+                    }
+                    log(`${name}: approaching guardian at (${tile.x},${tile.z},${tile.level}), ${current.distance()} tiles away`);
+                    const reached = await Traversal.walkTo(stand, {
+                        radius: probeable ? 0 : 1, timeoutMs: 10_000, log, ...Traversal.pureWalk
+                    });
+                    if (GameMessages.sawSince(mark, GUARDIAN_DEATH) || Skills.effective('hitpoints') <= 0) return 'dead';
+                    if (EventSignal.pending()) return 'yield';
+                    if (!reached) return 'guardian-lost';
+                    continue;
+                }
                 if (Special.ready(Special.wielded()) && !Special.armed()) {
                     if (await Special.arm()) {
                         await Execution.delayTicks(1);

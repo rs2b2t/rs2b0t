@@ -17,6 +17,8 @@ import { Sustain } from '#/bot/api/sustain/Sustain.js';
 import { Quests } from '#/bot/api/ui/questlog/Quests.js';
 import { ClueExecutor } from '#/bot/api/ai/clues/ClueExecutor.js';
 import { ChatDialog } from '#/bot/api/ui/dialogue/ChatDialog.js';
+import Tile from '#/bot/geometry/Tile.js';
+import { Reachability } from '#/bot/event/webwalk/geometry/Reachability.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
 
 let tick: number;
@@ -38,7 +40,7 @@ beforeEach(() => {
         tile: { x: 3000, z: 3000, level: 0 }, distance: 1, ops: ['Attack'], inCombat: true,
         health: 40, totalHealth: 40, faceEntity: 32768 }];
     GameMessages.reset();
-    ClueExecutor.retryGuardian();
+    ClueExecutor.resetSession();
     spyOn(reader, 'inventory').mockImplementation(() => pack);
     spyOn(reader, 'equipment').mockImplementation(() => worn);
     spyOn(reader, 'npcs').mockImplementation(() => npcs);
@@ -74,7 +76,7 @@ beforeEach(() => {
     });
     Sustain.set(null);
 });
-afterEach(() => { mock.restore(); Sustain.set(null); ClueExecutor.retryGuardian(); });
+afterEach(() => { mock.restore(); Sustain.set(null); ClueExecutor.resetSession(); });
 
 test('equips DDS and confirms the final potion dose before the dig', async () => {
     const protection = new GuardianProtection();
@@ -409,4 +411,85 @@ test('accepts a guardian appearing on the final spawn-wait tick', async () => {
 test('holds the dig back until the potion delay has cleared on the server', async () => {
     await new GuardianProtection().prepare();
     expect(tick).toBe(3);
+});
+
+test.each([3, 20])('walks to an owned guardian displaced by %s tiles before attacking', async distance => {
+    const protection = new GuardianProtection();
+    await protection.prepare();
+    npcs = npcs.map(n => ({ ...n, distance, tile: { x: 3000 + distance, z: 3000, level: 0 } }));
+    const walk = spyOn(Traversal, 'walkTo').mockImplementation(async (_dest, opts) => {
+        expect(opts?.useTeleportCatalog).toBe(false);
+        expect(opts?.policy?.useTeleports).toBe(false);
+        npcs = npcs.map(n => ({ ...n, distance: 1 }));
+        return true;
+    });
+    advance = () => { if (npcs[0]?.health === 0) npcs = []; };
+    expect(await fightGuardian('Saradomin Wizard', () => {}, protection)).toBe('killed');
+    expect(walk).toHaveBeenCalledTimes(1);
+    expect(events.some(e => e.startsWith('attack:'))).toBe(true);
+});
+
+test('does not chase a displaced guardian belonging to another player', async () => {
+    const protection = new GuardianProtection();
+    await protection.prepare();
+    npcs = npcs.map(n => ({ ...n, distance: 20, faceEntity: 32769 }));
+    const walk = spyOn(Traversal, 'walkTo').mockResolvedValue(true);
+    expect(await fightGuardian('Saradomin Wizard', () => {}, protection)).toBe('guardian-lost');
+    expect(walk).not.toHaveBeenCalled();
+    expect(events.some(e => e.startsWith('attack:'))).toBe(false);
+});
+
+test.each(['blocked', 'event', 'death'] as const)('guardian approach handles %s without attacking', async outcome => {
+    const protection = new GuardianProtection();
+    await protection.prepare();
+    npcs = npcs.map(n => ({ ...n, distance: 3 }));
+    spyOn(Traversal, 'walkTo').mockImplementation(async () => {
+        if (outcome === 'event') spyOn(EventSignal, 'pending').mockReturnValue(true);
+        if (outcome === 'death') GameMessages.record('Oh dear, you are dead!');
+        return false;
+    });
+    expect(await fightGuardian('Saradomin Wizard', () => {}, protection)).toBe(outcome === 'event' ? 'yield' : outcome === 'death' ? 'dead' : 'guardian-lost');
+    expect(events.some(e => e.startsWith('attack:'))).toBe(false);
+});
+
+
+test('walks around a fence to a reachable melee tile instead of attacking through it', async () => {
+    const protection = new GuardianProtection();
+    await protection.prepare();
+    let here = new Tile(3055, 3696, 0);
+    const mage = new Tile(3056, 3696, 0);
+    const stand = new Tile(3056, 3697, 0);
+    npcs = npcs.map(n => ({ ...n, distance: 1, tile: mage }));
+    spyOn(Game, 'tile').mockImplementation(() => here);
+    spyOn(Reachability, 'probeable').mockReturnValue(true);
+    spyOn(Reachability, 'canStep').mockImplementation(from => from.x === stand.x && from.z === stand.z);
+    spyOn(Reachability, 'canReach').mockImplementation(tile => tile.x === stand.x && tile.z === stand.z);
+    const walk = spyOn(Traversal, 'walkTo').mockImplementation(async (tile, opts) => {
+        expect(tile).toEqual(stand);
+        expect(opts?.radius).toBe(0);
+        expect(opts?.policy?.useTeleports).toBe(false);
+        here = stand;
+        return true;
+    });
+    const attack = spyOn(Npc.prototype, 'interact').mockImplementation(() => {
+        expect(here).toEqual(stand);
+        npcs = npcs.map(n => ({ ...n, health: 0 }));
+        return true;
+    });
+    advance = () => { if (npcs[0]?.health === 0) npcs = []; };
+    expect(await fightGuardian('Saradomin Wizard', () => {}, protection)).toBe('killed');
+    expect(walk).toHaveBeenCalledTimes(1);
+    expect(attack).toHaveBeenCalledTimes(1);
+});
+
+test('an enclosed guardian with no reachable melee tile requests recovery without attacking', async () => {
+    const protection = new GuardianProtection();
+    await protection.prepare();
+    spyOn(Game, 'tile').mockReturnValue(new Tile(2999, 3000, 0));
+    spyOn(Reachability, 'probeable').mockReturnValue(true);
+    spyOn(Reachability, 'canStep').mockReturnValue(false);
+    const walk = spyOn(Traversal, 'walkTo').mockResolvedValue(false);
+    expect(await fightGuardian('Saradomin Wizard', () => {}, protection)).toBe('guardian-lost');
+    expect(walk).not.toHaveBeenCalled();
+    expect(events.some(e => e.startsWith('attack:'))).toBe(false);
 });

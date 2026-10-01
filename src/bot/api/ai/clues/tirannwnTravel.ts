@@ -3,7 +3,7 @@
 
 import { Game } from '#/bot/api/game/Game.js';
 import { Quests } from '#/bot/api/ui/questlog/Quests.js';
-import { pocketAt, travelTirannwn } from '#/bot/api/ai/quests/defs/regicide/pockets.js';
+import { pocketAt, travelTirannwn, type TirannwnTravelOptions } from '#/bot/api/ai/quests/defs/regicide/pockets.js';
 import { RG_STAGE } from '#/bot/api/ai/quests/defs/regicide/journal.js';
 import Tile from '#/bot/geometry/Tile.js';
 import type { NavPoint } from '#/bot/event/webwalk/PathFinder.js';
@@ -19,6 +19,6 @@ export function crossesTirannwn(dest: NavPoint | null): boolean {
 }
 
 /** Walk to `dest` over REGICIDE_SEAMS, which is the only way in or out of Isafdar. */
-export function walkAcrossTirannwn(dest: NavPoint, radius: number, log: (m: string) => void): Promise<boolean> {
-    return travelTirannwn(new Tile(dest.x, dest.z, dest.level), radius, tirannwnStage(), log);
+export function walkAcrossTirannwn(dest: NavPoint, radius: number, log: (m: string) => void, options: TirannwnTravelOptions): Promise<boolean> {
+    return travelTirannwn(new Tile(dest.x, dest.z, dest.level), radius, tirannwnStage(), log, options);
 }
