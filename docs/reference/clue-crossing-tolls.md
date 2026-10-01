@@ -24,6 +24,10 @@ Shantay stand is (3304,3118) while its loc is (3302,3116), so the toll was
 invisible and no pass was ever withdrawn. It now resolves through
 `specialCrossingForTransport`, the same way the executor does.
 
+Bank preparation withdraws a pass only for the desert coordinate clue (3552).
+Other current clues deposit leftover passes. A later desert step can buy its pass
+on demand without carrying one throughout unrelated clue steps.
+
 ## See also
 
 - [Clue step mechanics](clues-mechanics.md)

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import type { reader } from '../src/bot/adapter/ClientAdapter.js';
 import type { Equipment } from '../src/bot/api/equipment/Equipment.js';
 import type { Inventory } from '../src/bot/api/inventory/Inventory.js';
 import type { Skills } from '../src/bot/api/skills/Skills.js';
@@ -10,13 +11,14 @@ import { deployIsolatedClient, launchBrowser, positionalArgs, setSettings, stopS
 import { cheatQuiet, clearChatDialogs, mainlandAccount, relog, seedItemsToBank, startScript } from './tutorial/harness.js';
 
 interface Api {
-    __rs2b0t: { Equipment: typeof Equipment; Inventory: typeof Inventory; Skills: typeof Skills; Npcs: typeof Npcs; GroundItems: typeof GroundItems; Game: typeof Game };
-    rs2b0t: { runner: { bot: JiveDragons | null; state: string; ctx: { log: { msg: string }[] } | null } };
+    __rs2b0t: { reader: typeof reader; Equipment: typeof Equipment; Inventory: typeof Inventory; Skills: typeof Skills; Npcs: typeof Npcs; GroundItems: typeof GroundItems; Game: typeof Game };
+    rs2b0t: { runner: { pause(): void; resume(): void; bot: JiveDragons | null; state: string; ctx: { log: { msg: string }[] } | null } };
 }
 
 const base = positionalArgs(process.argv.slice(2), 'http://localhost:8890')[0];
 const guardian = process.argv.includes('--guardian');
-const kind = guardian ? 'guardian' : 'puzzle';
+const pilot = process.argv.includes('--pilot');
+const kind = guardian ? 'guardian' : pilot ? 'pilot' : 'puzzle';
 const user = `jc${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
 const client = deployIsolatedClient(user);
 const browser = await launchBrowser();
@@ -49,7 +51,7 @@ try {
         assert(await page.evaluate(item => (globalThis as unknown as Api).__rs2b0t.Equipment.equip(item), name));
     }
     await cheatQuiet(page, 'setvar trail_status 6');
-    await cheatQuiet(page, `give ${guardian ? 'trail_clue_hard_sextant025' : 'trail_clue_hard_riddle017'} 1`);
+    await cheatQuiet(page, `give ${guardian ? 'trail_clue_hard_sextant025' : pilot ? 'trail_clue_hard_riddle021' : 'trail_clue_hard_riddle017'} 1`);
     await cheatQuiet(page, 'give lobster 27');
     assert.equal(await page.evaluate(() => (globalThis as unknown as Api).__rs2b0t.Inventory.free()), 0);
     await setSettings(page, 'JiveDragons', {
@@ -64,6 +66,9 @@ try {
     let filledPuzzlePack = false;
     let completionBankTrips: number | null = null;
     let lastPrint = 0;
+    let sawWolfCombat = false;
+    let sawSafePuzzle = false;
+    let provokedWolf = false;
     const deadline = Date.now() + 12 * 60_000;
     while (Date.now() < deadline) {
         const s = await page.evaluate(() => {
@@ -77,7 +82,11 @@ try {
                 died: bot?.died, parked: bot?.parked, hp: a.Skills.effective('hitpoints'),
                 weapon: a.Equipment.items().find(i => i.slot === 3)?.name,
                 free: a.Inventory.free(), sharks: a.Inventory.count('Shark'),
-                puzzle: a.Inventory.countById(2800) > 0,
+                puzzle: a.Inventory.countById(2800) > 0 || a.Inventory.countById(3571) > 0,
+                puzzleOpen: a.reader.puzzleBoardSize() === 25,
+                inCombat: a.Game.inCombat(),
+                wolfCombat: a.Game.inCombat() && a.Npcs.all().some(n => /wolf/i.test(n.name ?? '') && n.targetsMe()),
+                tile: a.Game.tile(),
                 remainingLoot: a.GroundItems.query().results().filter(g => {
                     const here = a.Game.tile();
                     const tile = g.tile();
@@ -100,7 +109,32 @@ try {
             if (s.free > 0) await cheatQuiet(page, `give lobster ${s.free}`);
             filledPuzzlePack = true;
         }
+        sawWolfCombat ||= s.wolfCombat;
+        if (pilot && s.puzzleOpen) {
+            assert.deepEqual(s.tile, { x: 2852, z: 3500, level: 0 });
+            assert.equal(s.inCombat, false);
+            sawSafePuzzle = true;
+        }
+        if (pilot && !provokedWolf && s.tile && Math.max(Math.abs(s.tile.x - 2847), Math.abs(s.tile.z - 3499)) < 10) {
+            await page.evaluate(() => (globalThis as unknown as Api).rs2b0t.runner.pause());
+            try {
+                assert(await page.evaluate(() => {
+                    const wolf = (globalThis as unknown as Api).__rs2b0t.Npcs.query().name('Big Wolf').nearest();
+                    return wolf ? wolf.interact('Attack') : false;
+                }), 'no Big Wolf available for the aggression fixture');
+                await page.waitForFunction(() => {
+                    const a = (globalThis as unknown as Api).__rs2b0t;
+                    return a.Game.inCombat() && a.Npcs.all().some(n => n.name === 'Big Wolf' && n.targetsMe());
+                }, null, { timeout: 20_000 });
+                sawWolfCombat = true;
+                provokedWolf = true;
+                console.log('pilot fixture: confirmed Big Wolf combat before resuming the clue');
+            } finally {
+                await page.evaluate(() => (globalThis as unknown as Api).rs2b0t.runner.resume());
+            }
+        }
         if (s.solved > 0) {
+            if (pilot) { assert(sawWolfCombat && sawSafePuzzle, JSON.stringify({ sawWolfCombat, sawSafePuzzle })); complete = true; break; }
             assert.deepEqual(s.remainingLoot, []);
             if (completionBankTrips === null) completionBankTrips = s.bankTrips;
             if (s.bankTrips > completionBankTrips) {
@@ -120,7 +154,7 @@ try {
     assert(complete && sawEncounter && preparedFree !== null, JSON.stringify({ complete, sawEncounter, preparedFree, logs: [...logs] }));
     if (!guardian) assert([...logs].some(l => /puzzle (already solved|solved in)/.test(l)));
     await page.screenshot({ path: `docs/e2e/jivedragons-longsword-${kind}-live.png` });
-    console.log(`PASS: full starting pack, no dagger supplied, Dragon longsword retained through ${kind} and completed clue plus full inventory bank reset; prepared free slots ${preparedFree}; collected ${[...logs].filter(l => l.includes('from the treasure trail')).length} spilled rewards`);
+    console.log(`PASS: full starting pack, no dagger supplied, Dragon longsword retained through ${kind} and completed clue${pilot ? ' after wolf combat and a sheltered puzzle solve' : ' plus full inventory bank reset'}; prepared free slots ${preparedFree}; collected ${[...logs].filter(l => l.includes('from the treasure trail')).length} spilled rewards`);
 } finally {
     console.log(await page.evaluate(() => (globalThis as unknown as Api).rs2b0t?.runner.ctx?.log.map(l => l.msg)).catch(() => []));
     await stopScript(page).catch(() => {});

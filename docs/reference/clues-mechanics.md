@@ -95,6 +95,14 @@ for members objects when the client's `memServer` flag is false. The driver pref
 the label but falls back to sending op 5 directly, which the server validates against
 its own definition rather than against anything the client rendered.
 
+## White Wolf Mountain pilot
+
+The Gnome pilot clue (3570) disables retaliation and uses the pocket behind the
+glider at (2852,3500) to leave wolf combat before opening its puzzle. Food upkeep
+continues while waiting for combat to clear. Interrupted approaches and blocked
+retreats keep the clue retryable; low food requests a restock and death stops the
+trail. The original retaliation setting is restored after each attempt.
+
 ## Prayer between trails
 
 Guardians are fought under Protect from Magic, so the pre-trail bank stop tops

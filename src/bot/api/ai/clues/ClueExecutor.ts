@@ -1,3 +1,4 @@
+import { solveMountainPilot } from './gnomePilot.js';
 import { crossesClueDuel, walkAcrossClueDuel, DUEL_CLUE_ID } from './duelTravel.js';
 import { leaveClueDuel } from '../../duel/ClueDuel.js';
 import { fightArenaAt } from '../../duel/Duel.js';
@@ -449,6 +450,7 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void 
             return;
         }
         case 'talk': {
+            if (step.id === 3570) return solveMountainPilot(tile => walkLeg(tile, log, 0), log);
             const anchor = TALK_ANCHORS[step.id];
             if (!anchor || !step.npc) {
                 return;

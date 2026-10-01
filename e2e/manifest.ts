@@ -701,6 +701,15 @@ export const CASES: readonly Case[] = [
         budgetMin: 15
     },
     {
+        id: 'jivedragons-longsword-pilot-live',
+        harness: 'jivedragons-longsword-clue-live.ts',
+        args: ['--pilot'],
+        covers: { scripts: ['JiveDragons'], subsystems: ['clues'] },
+        status: 'documented',
+        documentedIn: 'docs/how-to/farm-blue-dragon-clues.md',
+        budgetMin: 15
+    },
+    {
         id: 'jivedragons-longsword-guardian-live',
         harness: 'jivedragons-longsword-clue-live.ts',
         args: ['--guardian'],

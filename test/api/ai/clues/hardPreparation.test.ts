@@ -170,6 +170,7 @@ test.each([
     { runeSlots: 0, stock: 20, food: 15, bankBow: false },
     { runeSlots: 0, stock: 19, food: 15, bankBow: false }
 ])('preserves restoration and mandatory items when preparing %j', async ({ runeSlots, stock, food, bankBow }) => {
+    pack[0] = item(3552, 'Clue scroll (hard)');
     pack.push(item(995, 'Coins', 1000), item(1854, 'Shantay pass'));
     bank = bank.map(i => i.id === 385 ? { ...i, count: stock } : i);
     const required = [...pack, item(2448, 'Superantipoison(4)')];
@@ -185,7 +186,7 @@ test.each([
     expect(pack.some(i => i.id === bow.id)).toBe(!bankBow);
     expect(bank.some(i => i.id === bow.id)).toBe(bankBow);
     expect(worn[0].id).toBe(1231);
-    pack = pack.filter(i => i.id !== clue.id);
+    pack = pack.filter(i => i.id !== 3552);
     await task.execute();
     expect(worn[0].id).toBe(bow.id);
 });
@@ -479,4 +480,26 @@ test('clue prayer restoration walks to the reachable Lumbridge altar', async () 
     await new SolveClue({ ...host, restorePrayer: () => true }).execute();
     expect(Traversal.walkResilient).toHaveBeenCalledWith(new Tile(3243, 3205, 0), expect.anything());
     expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
+});
+
+test('an unrelated hard clue leaves Shantay passes in the bank', async () => {
+    bank.push(item(1854, 'Shantay pass', 10));
+    await new SolveClue(host).execute();
+    expect(pack.some(i => i.id === 1854)).toBe(false);
+    expect(bank.find(i => i.id === 1854)?.count).toBe(10);
+});
+
+test('an unrelated clue deposits a pass left over from an earlier trip', async () => {
+    pack.push(item(1854, 'Shantay pass'));
+    await new SolveClue(host).execute();
+    expect(pack.some(i => i.id === 1854)).toBe(false);
+    expect(bank.find(i => i.id === 1854)?.count).toBe(1);
+});
+
+test('the desert dig packs a banked Shantay pass', async () => {
+    pack[0] = item(3552, 'Clue scroll (hard)');
+    bank.push(item(1854, 'Shantay pass', 10));
+    await new SolveClue(host).execute();
+    expect(pack.filter(i => i.id === 1854)).toHaveLength(1);
+    expect(bank.find(i => i.id === 1854)?.count).toBe(9);
 });

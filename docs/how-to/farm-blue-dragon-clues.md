@@ -120,3 +120,16 @@ the Feldip Saradomin Wizard, completed the hard clue with 10 Sharks left,
 then returned to Falador and rebuilt the same farming inventory without a
 death. No dagger was supplied or equipped.
 [Guardian post-clue bank screenshot](../e2e/jivedragons-longsword-guardian-live.png).
+
+For the White Wolf Mountain pilot and wolf-aggression check, run
+`bun e2e/jivedragons-longsword-clue-live.ts --pilot`. It provokes a nearby Big Wolf,
+requires the puzzle to open outside combat in the sheltered glider pocket, and
+checks clue completion with the Dragon longsword still equipped.
+
+The pilot check passed on 2026-10-01 at normal 600 ms ticks. It prepared
+12 Sharks and four free slots, confirmed a Big Wolf attacking, then escaped
+behind the glider. It solved the 29-move puzzle outside combat at
+`(2852,3500,0)`, completed the clue and collected the spilled Rune plateskirt.
+The character finished alive with 84 Hitpoints and its longsword equipped.
+This check ends at clue completion.
+[Pilot completion screenshot](../e2e/jivedragons-longsword-pilot-live.png).

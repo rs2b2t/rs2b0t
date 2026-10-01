@@ -539,6 +539,7 @@ export class SolveClue implements Task {
         const kit = teleportKitFor(snapshotWorldState());
         const keepTeleports = this.host.useTeleports?.() ?? true;
         const SHANTAY_PASS = 'Shantay pass';
+        const needsShantayPass = scrollId === 3552;
         // Why: `start_chop_jungle` checks for the machete, an axe and Radimus's notes, so they survive the deposit and get withdrawn below.
         const jungleClue = scrollId !== null && KHARAZI_CLUES.has(scrollId);
         const jungleKeep = new Set(jungleClue ? jungleKeepNames().map(n => n.toLowerCase()) : []);
@@ -549,7 +550,7 @@ export class SolveClue implements Task {
             }
             // Why: a grind-sized food load fills the pack, so food is banked here and comes back capped below.
             return protectedNames.has(n) || n.includes('clue') || n.includes('casket')
-                || n === SPADE_NAME.toLowerCase() || n === 'coins' || n === SHANTAY_PASS.toLowerCase()
+                || n === SPADE_NAME.toLowerCase() || n === 'coins' || (needsShantayPass && n === SHANTAY_PASS.toLowerCase())
                 || coordItems.has(n) || rowItemNames.has(n) || jungleKeep.has(n)
                 || (!entranaStrip && weapon !== '' && n === weapon)
                 || (keepTeleports && isTeleportItem(name, kit));
@@ -608,7 +609,7 @@ export class SolveClue implements Task {
             this.host.log('[clue] no Coins in the bank — toll-gate routes will detour');
         }
 
-        if (Inventory.count(SHANTAY_PASS) < 1) {
+        if (needsShantayPass && Inventory.count(SHANTAY_PASS) < 1) {
             if (!(await Bank.withdraw(SHANTAY_PASS, 'Withdraw-1'))) {
                 this.host.log('[clue] no Shantay pass in the bank; desert routes will buy one from Shantay');
             } else if (!(await Execution.delayUntil(() => Inventory.count(SHANTAY_PASS) >= 1, 2500))) {
