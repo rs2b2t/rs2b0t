@@ -1258,6 +1258,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             isFood: n => isFoodItem(n, FOOD_NAME),
             foodName: () => FOOD_NAME,
             foodWithdraw: () => FOOD_WITHDRAW,
+            hardFoodTarget: 12,
             weaponName: () => WEAPON,
             enabled: () => SOLVE_CLUES && !this.fight?.blocksLoot() && this.lootRun === null,
             prepareInitialBank: async () => {

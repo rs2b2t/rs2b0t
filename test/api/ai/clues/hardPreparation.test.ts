@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test';
 import { reader, type InvItemSnapshot } from '#/bot/adapter/ClientAdapter.js';
+import JiveDragons from '#/bot/scripts/JiveDragons/JiveDragons.js';
+import { SettingsBag } from '#/bot/runtime/Settings.js';
 import { SolveClue, type SolveClueHost } from '#/bot/api/ai/clues/SolveClue.js';
 import { ClueExecutor } from '#/bot/api/ai/clues/ClueExecutor.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
@@ -428,4 +430,39 @@ test('a normal trail started unarmed does not require an unavailable host weapon
     expect(statuses).toContain('clue solved');
     expect(task.validate()).toBe(false);
     expect(task.ownsEquipment()).toBe(false);
+});
+
+
+test.each([12, 30])('JiveDragons prepares exactly twelve Sharks with %s banked', async stock => {
+    if (stock === 30) pack.push(...Array.from({ length: 20 }, () => item(385, 'Shark')));
+    bank = bank.map(i => i.id === 385 ? { ...i, count: stock } : i);
+    const bot = new JiveDragons();
+    bot.bindLog(() => {});
+    bot.settings = new SettingsBag({ solveClues: true, foodWithdraw: 20 });
+    await bot.onStart();
+
+    await bot.solveClue!.execute();
+
+    expect(pack.filter(i => i.id === 385)).toHaveLength(12);
+    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
+});
+
+test('JiveDragons restocks a hard clue to twelve Sharks after supplies run low', async () => {
+    const bot = new JiveDragons();
+    bot.bindLog(() => {});
+    bot.settings = new SettingsBag({ solveClues: true, foodWithdraw: 20 });
+    await bot.onStart();
+    const loads: number[] = [];
+    spyOn(ClueExecutor, 'solveHeldClue').mockImplementation(async () => {
+        loads.push(pack.filter(i => i.id === 385).length);
+        if (loads.length === 1) {
+            pack = pack.filter(i => i.id !== 385);
+            return 'supplies-needed';
+        }
+        return 'yield';
+    });
+
+    await bot.solveClue!.execute();
+
+    expect(loads).toEqual([12, 12]);
 });

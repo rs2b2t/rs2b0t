@@ -92,7 +92,7 @@ try {
         for (const line of s.logs) logs.add(line);
         if (preparedFree === null && s.logs.some(l => l.includes('trail pack:'))) {
             preparedFree = s.free;
-            assert.equal(s.sharks, 15);
+            assert.equal(s.sharks, 12);
             if (!guardian) assert(preparedFree >= 1, JSON.stringify(s));
         }
         sawEncounter ||= guardian ? s.guardian : s.puzzle;

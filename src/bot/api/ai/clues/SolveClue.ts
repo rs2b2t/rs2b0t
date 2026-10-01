@@ -82,6 +82,7 @@ export interface SolveClueHost {
     isFood(name: string): boolean;
     foodName(): string;
     foodWithdraw(): number;
+    hardFoodTarget?: number;
     weaponName?(): string;
     enabled?(): boolean;
     /** Travel to the initial bank with host upkeep intact; false blocks the trail. */
@@ -516,8 +517,8 @@ export class SolveClue implements Task {
             this.host.setStatus('clue: initial bank is not ready');
             return false;
         }
-        if (this.hardTrail && hardClueKit(hardKitSnapshot(true)) !== 'ready') {
-            this.status = `hard kit: ${hardClueKit(hardKitSnapshot(true))}`;
+        if (this.hardTrail && hardClueKit(hardKitSnapshot(true), this.host.hardFoodTarget) !== 'ready') {
+            this.status = `hard kit: ${hardClueKit(hardKitSnapshot(true), this.host.hardFoodTarget)}`;
             this.blockHardKit();
             await Bank.close();
             return false;
@@ -588,7 +589,7 @@ export class SolveClue implements Task {
 
         if (this.hardTrail && !(await stockHardWeapon(entranaStrip, name => {
             if (!this.strippedGear.includes(name)) this.strippedGear.push(name);
-        }, this.host.weaponName?.()))) {
+        }, this.host.weaponName?.(), this.host.hardFoodTarget))) {
             this.blockHardKit();
             return false;
         }
@@ -629,7 +630,7 @@ export class SolveClue implements Task {
         const puzzleSlots = puzzleId !== undefined && Inventory.countById(puzzleId) === 0 ? 1 : 0;
         if (this.hardTrail) {
             const bankable = [...this.strippedGear, ...(puzzleId !== undefined ? ['Sextant', 'Watch', 'Chart'] : [])];
-            if (!(await stockHardSupplies((fetchingCoordTools ? COORD_TOOL_SLOTS : 0) + puzzleSlots, bankable))) {
+            if (!(await stockHardSupplies((fetchingCoordTools ? COORD_TOOL_SLOTS : 0) + puzzleSlots, bankable, this.host.hardFoodTarget))) {
                 this.blockHardKit();
                 return false;
             }
@@ -664,7 +665,7 @@ export class SolveClue implements Task {
 
         if (this.hardTrail) {
             await Bank.close();
-            if (!entranaStrip && hardClueKit(hardKitSnapshot()) !== 'ready') return false;
+            if (!entranaStrip && hardClueKit(hardKitSnapshot(), this.host.hardFoodTarget) !== 'ready') return false;
         }
 
         await this.topUpPrayer(scrollId);

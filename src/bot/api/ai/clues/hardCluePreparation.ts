@@ -6,7 +6,7 @@ import { Inventory } from '#/bot/api/inventory/Inventory.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
 import { Quests } from '#/bot/api/ui/questlog/Quests.js';
 import { ENTRANA_RESTRICTED_GEAR_RE } from '#/bot/event/webwalk/exec/specialCrossing.js';
-import { GUARDIAN_WEAPON_IDS, hardClueKit, SUPERANTI, SHARK_ID, type HardKitSnapshot } from './hardClueKit.js';
+import { GUARDIAN_WEAPON_IDS, hardClueKit, SUPERANTI, SHARK_ID, MIN_SHARKS, type HardKitSnapshot } from './hardClueKit.js';
 import { hardTrailFoodTarget } from './packPlan.js';
 
 export function hardKitSnapshot(includeBank = false): HardKitSnapshot {
@@ -32,8 +32,8 @@ export async function equipGuardianWeapon(): Promise<boolean> {
     return !!weapon?.name && await Equipment.equip(weapon.name) && guardianWeaponWorn();
 }
 
-export async function stockHardWeapon(entrana: boolean, remember: (name: string) => void, preferredWeapon?: string): Promise<boolean> {
-    if (!Bank.ready() || hardClueKit(hardKitSnapshot(true)) !== 'ready') return false;
+export async function stockHardWeapon(entrana: boolean, remember: (name: string) => void, preferredWeapon?: string, minimumSharks = MIN_SHARKS): Promise<boolean> {
+    if (!Bank.ready() || hardClueKit(hardKitSnapshot(true), minimumSharks) !== 'ready') return false;
     const current = Equipment.items().find(i => i.slot === 3 && i.count > 0);
     const available = [...Inventory.items(), ...Bank.items()].filter(i => GUARDIAN_WEAPON_IDS.includes(i.id) && i.count > 0);
     const weapon = current && GUARDIAN_WEAPON_IDS.includes(current.id) ? current
@@ -53,7 +53,7 @@ export async function stockHardWeapon(entrana: boolean, remember: (name: string)
     return true;
 }
 
-export async function stockHardSupplies(reserveSlots: number, bankableItems: readonly string[]): Promise<boolean> {
+export async function stockHardSupplies(reserveSlots: number, bankableItems: readonly string[], minimumSharks = MIN_SHARKS): Promise<boolean> {
     if (!Bank.ready()) return false;
     if (!Inventory.items().some(i => SUPERANTI.some(d => d.id === i.id))) {
         const dose = SUPERANTI.find(d => Bank.countById(d.id) > 0);
@@ -61,8 +61,8 @@ export async function stockHardSupplies(reserveSlots: number, bankableItems: rea
         await Bank.withdraw(dose.name, 'Withdraw-1');
         if (!(await Execution.delayUntil(() => Inventory.items().some(i => i.id === dose.id), 2500))) return false;
     }
-    const target = (): number | null => hardTrailFoodTarget({ heldFood: Inventory.count('Shark'), freeSlots: Inventory.free(), reserveSlots });
-    const availableTarget = Math.min(15, Inventory.count('Shark') + Bank.countById(SHARK_ID));
+    const target = (): number | null => hardTrailFoodTarget({ heldFood: Inventory.count('Shark'), freeSlots: Inventory.free(), reserveSlots }, minimumSharks);
+    const availableTarget = Math.min(minimumSharks, Inventory.count('Shark') + Bank.countById(SHARK_ID));
     if ((target() ?? 0) < availableTarget) {
         await Bank.depositAllMatching(name => bankableItems.includes(name));
     }
@@ -74,5 +74,5 @@ export async function stockHardSupplies(reserveSlots: number, bankableItems: rea
         await Bank.withdraw('Shark', need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1');
         if (!(await Execution.delayUntil(() => Inventory.count('Shark') > before, 2500))) break;
     }
-    return Inventory.count('Shark') >= 15;
+    return Inventory.count('Shark') >= minimumSharks;
 }

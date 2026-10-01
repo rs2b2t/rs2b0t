@@ -28,9 +28,9 @@ three-dose flasks. An unused three-dose flask stays in the inventory.
 Custom loadouts restock their selected dose form and quantity.
 
 Hard clues require 60 Attack, Lost City complete, a Dragon longsword, Dragon
-dagger or Dragon dagger(p), Superantipoison, and at least 15 Sharks. The solver
+dagger or Dragon dagger(p), Superantipoison, and 12 Sharks. Initial clue banking and restocks both target 12 Sharks. The solver
 keeps an eligible equipped weapon, including the farming longsword. It reserves
-a slot for a puzzle box without reducing the initial 15 Sharks and retrieves
+a slot for a puzzle box without reducing the initial 12 Sharks and retrieves
 the current clue's box if it was banked.
 Food used during travel does not invalidate that initial bank preparation.
 A guardian fight requires more than three Sharks and withdraws when three
