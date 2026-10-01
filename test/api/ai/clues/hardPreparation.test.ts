@@ -677,3 +677,64 @@ test('the desert dig packs a banked Shantay pass', async () => {
     expect(pack.filter(i => i.id === 1854)).toHaveLength(1);
     expect(bank.find(i => i.id === 1854)?.count).toBe(9);
 });
+
+
+test('a Kharazi leg banks for its tools after an earlier ordinary leg', async () => {
+    spyOn(Quests, 'status').mockReturnValue('complete');
+    bank.push(item(975, 'Machete'), item(1351, 'Bronze axe'));
+    const task = new SolveClue(host);
+    await task.execute();
+    pack = pack.map(i => i.id === clue.id ? { ...i, id: 3532 } : i);
+    spyOn(ClueExecutor, 'solveHeldClue').mockResolvedValueOnce('supplies-needed').mockImplementation(async () => {
+        expect(pack.some(i => i.name === 'Machete')).toBe(true);
+        expect(pack.some(i => i.name === 'Bronze axe')).toBe(true);
+        return 'yield';
+    });
+    await task.execute();
+    expect(pack.some(i => i.id === 3532)).toBe(true);
+    expect(task.validate()).toBe(true);
+});
+
+test('missing jungle tools keep the clue and resume when the bank receives the tools', async () => {
+    spyOn(Quests, 'status').mockReturnValue('complete');
+    pack[0] = { ...clue, id: 3532 };
+    const task = new SolveClue(host);
+    await task.execute();
+    expect(ClueExecutor.solveHeldClue).not.toHaveBeenCalled();
+    expect(task.validate()).toBe(false);
+    expect(pack.some(i => i.id === 3532)).toBe(true);
+    bank.push(item(975, 'Machete'), item(1351, 'Bronze axe'));
+    open = true;
+    expect(task.validate()).toBe(true);
+    await task.execute();
+    expect(pack.some(i => i.name === 'Machete')).toBe(true);
+    expect(pack.some(i => i.name === 'Bronze axe')).toBe(true);
+    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
+});
+
+test.each([false, true])('retries a stocked jungle-tool withdrawal after interruption=%s', async interrupt => {
+    spyOn(Quests, 'status').mockReturnValue('complete');
+    pack[0] = { ...clue, id: 3532 };
+    bank.push(item(975, 'Machete'), item(1351, 'Bronze axe'));
+    let failed = false;
+    let pending = false;
+    spyOn(EventSignal, 'pending').mockImplementation(() => pending);
+    spyOn(Bank, 'withdraw').mockImplementation((name, op) => {
+        if (name === 'Machete' && !failed) { failed = true; pending = interrupt; return false; }
+        const source = bank.find(i => i.name === name && i.count > 0);
+        if (!source) return false;
+        const count = Math.min(source.count, op === 'Withdraw-10' ? 10 : op === 'Withdraw-5' ? 5 : 1, 28 - pack.length);
+        source.count -= count;
+        pack.push(...Array.from({ length: count }, () => ({ ...source, count: 1 })));
+        return count > 0;
+    });
+    const task = new SolveClue(host);
+    await task.execute();
+    expect(ClueExecutor.solveHeldClue).not.toHaveBeenCalled();
+    pending = false;
+    expect(task.validate()).toBe(true);
+    await task.execute();
+    expect(pack.some(i => i.name === 'Machete')).toBe(true);
+    expect(pack.some(i => i.name === 'Bronze axe')).toBe(true);
+    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
+});

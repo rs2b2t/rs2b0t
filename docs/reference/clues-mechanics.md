@@ -35,6 +35,10 @@ Before starting a hard clue scroll, [`SolveClue.ts`](../../src/bot/api/ai/clues/
 
 The generic bank and Entrana rules remain in force: no reachable known bank blocks a hard trail, while an Entrana clue clears inventory space before removing and banking every equipped item. It preserves the clue and records the full outfit, including ammunition counts, for restoration. Leaving Entrana for another clue step requires a bank visit to restore that outfit before continuing. Failed withdrawals or equips keep the solver in charge until restoration succeeds. A held casket without a clue scroll bypasses combat-kit preparation, but a hard casket still follows the reward bank flow before opening.
 
+Each new leg gets its own tool-acquisition attempts. A Kharazi leg missing its
+machete, axe or required notes requests bank preparation before travel. Missing
+banked tools leave the clue pending until the supplies change or the user retries.
+
 ## Dig guardians
 
 30 of the hard coordinate digs carry `param=trail_guardian`. The first dig at such

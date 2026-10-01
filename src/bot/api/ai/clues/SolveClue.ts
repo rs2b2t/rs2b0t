@@ -19,6 +19,7 @@ import {
     heldAxe,
     jungleAxe,
     jungleKeepNames,
+    jungleKitMissing,
     walkAcrossKharazi
 } from '#/bot/api/ai/clues/kharaziTravel.js';
 import type { NavPoint } from '#/bot/event/webwalk/PathFinder.js';
@@ -131,14 +132,22 @@ export class SolveClue implements Task {
         return true;
     }
 
+    private preparationFingerprint(includeBank = false): string {
+        const kit = hardKitFingerprint(includeBank);
+        if (!KHARAZI_CLUES.has(heldClueScrollId() ?? -1)) return kit;
+        const items = [...Inventory.items(), ...Equipment.items(), ...(includeBank && Bank.ready() ? Bank.items() : [])];
+        const tools = jungleKeepNames().map(name => items.filter(i => i.name === name).reduce((n, i) => n + i.count, 0));
+        return `${kit}:${tools.join(',')}:${hasJungleMap()}`;
+    }
+
     private kitBlocked(): boolean {
-        return this.blockedKit !== null && this.blockedKit === hardKitFingerprint()
-            && !(Bank.ready() && this.blockedBankKit !== null && this.blockedBankKit !== hardKitFingerprint(true));
+        return this.blockedKit !== null && this.blockedKit === this.preparationFingerprint()
+            && !(Bank.ready() && this.blockedBankKit !== null && this.blockedBankKit !== this.preparationFingerprint(true));
     }
 
     private blockHardKit(): void {
-        this.blockedKit = hardKitFingerprint();
-        if (Bank.ready()) this.blockedBankKit = hardKitFingerprint(true);
+        this.blockedKit = this.preparationFingerprint();
+        if (Bank.ready()) this.blockedBankKit = this.preparationFingerprint(true);
     }
 
     retry(): void {
@@ -467,7 +476,8 @@ export class SolveClue implements Task {
      * Why: `~woodcutting_axe_checker` reads the pack and the right hand, so the axe has to come out of the bank.
      * Why: without them the trail burns its budget swinging at a band that won't open.
      */
-    private async stockJungleKit(): Promise<void> {
+    private async stockJungleKit(): Promise<'ready' | 'retry' | 'missing'> {
+        if (!Bank.isOpen() || !Bank.ready() || EventSignal.pending()) return 'retry';
         const want: string[] = [];
         if (Inventory.first(MACHETE) === null && !Equipment.contains(MACHETE)) {
             want.push(MACHETE);
@@ -476,6 +486,7 @@ export class SolveClue implements Task {
             const axe = jungleAxe();
             if (axe === null) {
                 this.host.log('[clue] no axe in the pack or the bank — the Kharazi band cannot be cut');
+                return 'missing';
             } else {
                 want.push(axe);
             }
@@ -484,13 +495,19 @@ export class SolveClue implements Task {
             want.push(RADIMUS_NOTES);
         }
         for (const name of want) {
-            await Bank.withdraw(name, 'Withdraw-1');
-            if (await Execution.delayUntil(() => Inventory.first(name) !== null, 2500)) {
-                this.host.log(`[clue] took ${name} for the Kharazi Jungle`);
-            } else {
-                this.host.log(`[clue] no '${name}' in the bank — the Kharazi dig will abandon`);
+            if (!Bank.isOpen() || !Bank.ready() || EventSignal.pending()) return 'retry';
+            if (Bank.count(name) < 1) {
+                this.host.log(`[clue] no '${name}' in the bank — keeping the Kharazi clue`);
+                return 'missing';
             }
+            await Bank.withdraw(name, 'Withdraw-1');
+            if (!(await Execution.delayUntil(() => Inventory.first(name) !== null, 2500))) {
+                this.host.log(`[clue] '${name}' withdrawal did not land — will retry`);
+                return 'retry';
+            }
+            this.host.log(`[clue] took ${name} for the Kharazi Jungle`);
         }
+        return jungleKitMissing().length === 0 ? 'ready' : 'retry';
     }
 
     private async bankEntranaEquipment(protectedNames: ReadonlySet<string>): Promise<boolean> {
@@ -654,7 +671,12 @@ export class SolveClue implements Task {
         }
 
         if (jungleClue) {
-            await this.stockJungleKit();
+            const result = await this.stockJungleKit();
+            if (result !== 'ready') {
+                this.host.setStatus(`[clue] needs ${jungleKitMissing().join(', ')}`);
+                if (result === 'missing') this.blockHardKit();
+                return false;
+            }
         }
 
         const scrollIsCoord = scrollId !== null && CLUE_DB[scrollId]?.needsSextant === true;

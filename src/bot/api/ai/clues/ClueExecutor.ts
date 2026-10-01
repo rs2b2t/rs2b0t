@@ -507,13 +507,6 @@ function blockReason(step: ClueStep): string | null {
     if (extras.length > 0) {
         return `needs ${extras.join('+')} (not held)`;
     }
-    // Why: `start_chop_jungle` answers a missing machete, axe or map with a message box the walker can't see, so the leg would swing at the band until its budget ran out.
-    if (step.type !== 'open-casket' && KHARAZI_CLUES.has(step.id)) {
-        const short = jungleKitMissing();
-        if (short.length > 0) {
-            return `Kharazi jungle needs ${short.join('+')}`;
-        }
-    }
     return null;
 }
 
@@ -699,6 +692,7 @@ export const ClueExecutor = {
             }
             const target = stepTarget(step);
             const sameLeg = ClueExecutor.current?.clueId === clueId;
+            if (!sameLeg) acquireTries = 0;
             ClueExecutor.current = {
                 clueId,
                 name,
@@ -724,6 +718,13 @@ export const ClueExecutor = {
                 && step.coord.x >= 2802 && step.coord.x <= 2878 && step.coord.z >= 3329 && step.coord.z <= 3393
                 && (Equipment.items().length > 0 || namesHaveEntranaRestrictedGear(Inventory.items().map(i => i.name ?? '')))) {
                 return 'supplies-needed';
+            }
+            if (step.type !== 'open-casket' && KHARAZI_CLUES.has(step.id)) {
+                const missing = jungleKitMissing();
+                if (missing.length > 0) {
+                    tlog(`Kharazi jungle needs ${missing.join('+')}; banking for tools`);
+                    return 'supplies-needed';
+                }
             }
             const blocked = blockReason(step);
             if (blocked) {
