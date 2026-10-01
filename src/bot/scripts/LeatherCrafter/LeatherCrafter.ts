@@ -15,7 +15,16 @@ import { Input } from '../../input/Input.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
-import { STALL_TICKS, issueHardLeatherBurst, newDrain, stepDrain } from './LeatherCrafterLogic.js';
+import {
+    STALL_TICKS,
+    findOp,
+    issueHardLeatherBurst,
+    newDrain,
+    predictLeatherSlots,
+    sideCacheFrom,
+    stepDrain,
+    type SideCache
+} from './LeatherCrafterLogic.js';
 
 const NEEDLE = 1733;
 const THREAD = 1734;
@@ -26,6 +35,16 @@ const THREAD_SHOPS = [
     { npc: 'Rommik', tile: new Tile(2946, 3205, 0) },
     { npc: 'Fancy dress shop owner', tile: new Tile(3281, 3398, 0) }
 ];
+/** A cached bank row: the Withdraw-All target for the leather, learned on a normal trip. */
+interface BankRow {
+    id: number;
+    slot: number;
+    comId: number;
+    op: number;
+}
+
+const HARD_LEATHER = 1743;
+const HARDLEATHER_BODY = 1131;
 const BANK_STAND = new Tile(3269, 3167, 0);
 // Why: a full 26-leather burst drains at the server's 5 user events per tick, so ~6 ticks is the
 // floor; the cap leaves room for the re-fires and still bounds a burst the server never drains.
@@ -42,6 +61,7 @@ const BANK_CLOSES_MS = 3000;
 // Why: budgets, not waits, since every one of these gates a condition and none of them sleeps blind.
 const BANK_SETTLE_MS = 1500;
 const THREAD_STOCK_MS = 4000;
+const SPECULATIVE_CONFIRM_MS = 4000;
 
 // leather_crafting opens as a main modal, skill_multi3 as a chat one
 const LEATHER_IF = 2311;
@@ -133,7 +153,13 @@ export const CRAFTER_SETTINGS: SettingsSchema = {
         label: 'Leather to use',
         help: 'makes the best item your Crafting level allows for this leather; keeps a needle + thread and banks the rest'
     },
-    threadPerTrip: { type: 'number', default: 100, min: 1, max: 1000, label: 'Thread to keep stocked' }
+    threadPerTrip: { type: 'number', default: 100, min: 1, max: 1000, label: 'Thread to keep stocked' },
+    speculativeLoad: {
+        type: 'boolean',
+        default: true,
+        label: 'Speculative bank load',
+        help: 'predicts where the withdrawn leather lands, then sends deposit, withdraw, close and the craft uses in a single pass instead of waiting between each; on by default, and a miss just falls back to the confirmed route for that trip'
+    }
 };
 
 function invById(id: number): number {
@@ -270,6 +296,10 @@ export default class LeatherCrafter extends LoopingBot {
     private threadStock = 100;
     private threadVendor: (typeof THREAD_SHOPS)[number] | null = null;
     private restockBank: Tile | null = null;
+    private speculative = true;
+    private bankRow: BankRow | null = null;
+    private sideCache: SideCache | null = null;
+    private tabComId: number | null = null;
 
     private crafted = 0;
     private xpAtStart = 0;
@@ -282,6 +312,10 @@ export default class LeatherCrafter extends LoopingBot {
         this.kindLabel = this.settings.str('leatherType', 'Leather');
         this.kind = LEATHERS[this.kindLabel] ?? LEATHERS.Leather;
         this.threadStock = this.settings.num('threadPerTrip', 100);
+        this.speculative = this.settings.bool('speculativeLoad', true);
+        this.bankRow = null;
+        this.sideCache = null;
+        this.tabComId = null;
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('crafting');
 
@@ -335,7 +369,7 @@ export default class LeatherCrafter extends LoopingBot {
         await this.bankLeg();
     }
 
-    private async bankLeg(): Promise<void> {
+    private async bankLeg(): Promise<boolean> {
         const here = Game.tile();
         // Why: walk to whichever bank is cheapest to reach rather than an air-nearest tile, so the bot banks from wherever the player already is. Bank contents are account-wide, so nothing else changes.
         const picked = here ? await nearestBankReachable(here, Navigator) : null;
@@ -348,7 +382,7 @@ export default class LeatherCrafter extends LoopingBot {
             this.log(`bank leg: walking to ${picked?.name ?? stand}`);
             if (!(await Traversal.walkResilient(stand, { radius: 3, attempts: 2, timeoutMs: 45_000, log: m => this.log(`  ${m}`) }))) {
                 this.log('bank leg: walk failed — retrying');
-                return;
+                return true;
             }
             this.log('bank leg: arrived at the bank');
         }
@@ -357,41 +391,61 @@ export default class LeatherCrafter extends LoopingBot {
         this.log('bank leg: opening the bank');
         if (!(await Bank.openNearest('Bank booth', 'Use-quickly', m => this.log(`  ${m}`)))) {
             this.log('bank leg: could not open the bank — retrying');
-            return;
+            return true;
         }
         this.log('bank leg: bank opened');
         // Why: ready(), not loaded(), because loaded() means "the list is non-empty" and so cannot
         // tell a still-loading bank from a drained one, which would send us down the "no leather" stop.
         if (!(await Execution.delayUntilTicks(() => Bank.ready() || !Bank.isOpen(), BANK_LOADS_TICKS))) {
             this.log('bank leg: bank contents not ready — retrying');
-            return;
+            return true;
         }
-        this.log('bank leg: bank contents ready');
+        this.log(`bank leg: bank contents ready (row ${this.bankRow ? `${this.bankRow.id}@${this.bankRow.slot} op${this.bankRow.op}` : 'unseen'}, tab ${this.tabComId}, side ${this.sideCache ? 'yes' : 'no'})`);
+
+        // Why: the speculative leg replaces the rest of this leg, so it runs before anything is spent on
+        // the confirmed path. It needs a cached row from an earlier trip, so the first trip is normal.
+        if (this.speculative && this.bankRow && (await this.speculativeLeg())) {
+            return true;
+        }
 
         const before = invById(this.kind.leatherId);
         const free = reader.inventorySize() - Inventory.used();
 
+        // Why: the rows are only readable while the body is still in the pack, so learn them before the deposit goes out.
+        const firstPackItem = reader.inventory()[0];
+        if (firstPackItem) {
+            this.tabComId = firstPackItem.comId;
+        }
+        this.sideCache = sideCacheFrom(reader.bankSideItems(), this.productId, findOp) ?? this.sideCache;
+        const leatherRow = Bank.items().find(i => i.id === this.kind.leatherId);
+        if (leatherRow) {
+            const op = findOp(leatherRow.ops, /withdraw[\s-]*all/i);
+            if (op !== -1) {
+                this.bankRow = { id: leatherRow.id, slot: leatherRow.slot, comId: leatherRow.comId, op };
+            }
+        }
+
         if (!fireDepositAllExceptIds(new Set([NEEDLE, THREAD, this.kind.leatherId]))) {
             if (!(await depositAllExceptIds(new Set([NEEDLE, THREAD, this.kind.leatherId])))) {
                 this.log('bank leg: bank inventory view not ready — retrying');
-                return;
+                return true;
             }
         }
         this.log('bank leg: deposited — now restocking');
 
         if (invById(NEEDLE) === 0 && !(await this.withdrawRequired(NEEDLE, 1, 'needle', 'no needle in the bank'))) {
-            return;
+            return true;
         }
         if (invById(THREAD) < 5) {
             this.log('bank leg: thread low — withdrawing thread');
             const result = await withdrawXById(THREAD, this.threadStock);
             if (result === 'retry') {
                 this.log('bank leg: could not withdraw thread — retrying');
-                return;
+                return true;
             }
             if (result === 'missing' && invById(THREAD) === 0) {
                 await this.fundThread(stand);
-                return;
+                return true;
             }
         }
 
@@ -400,10 +454,10 @@ export default class LeatherCrafter extends LoopingBot {
             // Why: missing is only claimed once ready() proved the list landed, so an empty row here
             // is a drained bank rather than a list still in flight.
             ScriptRunner.stop(`no ${this.kindLabel} left in the bank`);
-            return;
+            return true;
         }
         if (!load.ok && !(await this.withdrawRequired(this.kind.leatherId, free, this.kindLabel, `no ${this.kindLabel} left in the bank`))) {
-            return;
+            return true;
         }
         if (load.ok) {
             // Why: the pack filling is the only confirmation worth waiting on, because a deposit
@@ -418,6 +472,7 @@ export default class LeatherCrafter extends LoopingBot {
             this.restockBank = null;
         }
         this.log(`bank leg: loaded ${invById(this.kind.leatherId)} ${this.kindLabel} (${Inventory.used()}/${reader.inventorySize()} slots used)`);
+        return true;
     }
 
     private async fundThread(stand: Tile): Promise<void> {
@@ -570,6 +625,74 @@ export default class LeatherCrafter extends LoopingBot {
             }
             last = now;
         }
+    }
+
+    /** One pass for deposit, withdraw, close and every craft use, aimed at the predicted landing slots. */
+    private async speculativeLeg(): Promise<boolean> {
+        const row = this.bankRow;
+        const tab = this.tabComId;
+        if (!row || tab === null || !this.sideCache) {
+            return false;
+        }
+        // Why: the prediction only accounts for the needle, thread, leftover leather and the body it
+        // is about to deposit, so anything else in the pack makes the slot count unknowable.
+        const pack = reader.bankSideItems();
+        const needle = pack.find(i => i.id === NEEDLE);
+        const known = new Set([NEEDLE, THREAD, this.kind.leatherId, this.productId]);
+        if (!needle || pack.some(i => !known.has(i.id))) {
+            return false;
+        }
+        const slots = predictLeatherSlots(
+            pack.map(i => ({ slot: i.slot, id: i.id })),
+            new Set([this.productId]),
+            reader.inventorySize()
+        );
+        if (slots.length === 0) {
+            return false;
+        }
+
+        // Why: the order is the point, and nothing waits. The deposit frees slots, the withdrawal fills the predicted ones, and the uses then name slots the server is about to populate.
+        const body = pack.find(i => i.id === this.productId);
+        if (body && this.sideCache) {
+            Input.invButton(body.id, body.slot, this.sideCache.comId, this.sideCache.op);
+        }
+        Input.invButton(row.id, row.slot, row.comId, row.op);
+        actions.closeModal();
+
+        let sent = 0;
+        for (const slot of slots) {
+            if (!Input.useItemOnItem(NEEDLE, needle.slot, tab, this.kind.leatherId, slot, tab)) {
+                break;
+            }
+            sent++;
+        }
+
+        // Why: a miss falls through to the confirmed path rather than latching, since the server drops a mispredicted use harmlessly.
+        const arrived = await Execution.delayUntil(
+            () => invById(this.kind.leatherId) > 0 || invById(this.productId) > 0,
+            SPECULATIVE_CONFIRM_MS
+        );
+        if (!arrived) {
+            this.log(`speculative load missed (nothing landed from ${sent} uses) — banking the confirmed way`);
+            return false;
+        }
+        const total = invById(this.kind.leatherId) + invById(this.productId);
+        if (total !== slots.length) {
+            this.log(`speculative load missed (pack held ${total}, predicted ${slots.length}) — banking the confirmed way`);
+            return false;
+        }
+        this.log(`speculative load: ${sent} uses at predicted slots`);
+
+        const before = invById(this.kind.leatherId);
+        await this.watchBurst(before);
+        this.crafted += invById(this.productId);
+        this.restockBank = null;
+        return true;
+    }
+
+    /** The crafted product's object id, which is what the bank-side rows carry after a trip. */
+    private get productId(): number {
+        return this.kind.leatherId === HARD_LEATHER ? HARDLEATHER_BODY : this.kind.leatherId;
     }
 
     private setStatus(s: string): void {

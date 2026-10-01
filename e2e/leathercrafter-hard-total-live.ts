@@ -59,7 +59,7 @@ try {
     // and that value persists across sessions on the long-lived engine, so pin the standard 600ms
     // tick. A leftover accelerated tick would compress every measurement and fake a false win.
     await cheatQuiet(page, 'speed 600', 1500);
-    await setSettings(page, 'LeatherCrafter', { leatherType: 'Hard leather', threadPerTrip: 100 });
+    await setSettings(page, 'LeatherCrafter', { leatherType: 'Hard leather', threadPerTrip: 100, speculativeLoad: process.env.SPECULATIVE !== '0' });
 
     const xpBefore = await page.evaluate(() => (globalThis as never as Api).__rs2b0t.Skills.xp('crafting'));
     await page.evaluate(() => {
@@ -83,6 +83,8 @@ try {
     let wasFull = false;
     let finishedAt = 0;
     let xpGained = 0;
+    let specWatermark = 0;
+    let specHits = 0;
     while (Date.now() < deadline && finishedAt === 0) {
         const snap = await page.evaluate(() => {
             const g = globalThis as never as Api;
@@ -105,6 +107,13 @@ try {
                 finishedAt = Date.now();
             }
         }
+        for (; specWatermark < snap.logs.length; specWatermark++) {
+            const line = snap.logs[specWatermark]!;
+            if (/speculative load/i.test(line)) {
+                specHits++;
+                console.log(`  [live] ${line}`);
+            }
+        }
         xpGained = Math.max(xpGained, snap.xp - xpBefore);
         if (xpGained >= TARGET_XP) {
             finishedAt = Date.now();
@@ -122,7 +131,7 @@ try {
     }
 
     const bodies = Math.floor(xpGained / XP_PER_BODY);
-    console.log(`PASS, xp +${xpGained} (${bodies} bodies) in ${totalMs}ms, ${trips} pack drains observed`);
+    console.log(`PASS, xp +${xpGained} (${bodies} bodies) in ${totalMs}ms, ${trips} pack drains observed, speculative load on ${specHits} legs`);
     if (xpGained < TARGET_XP) {
         fail(`only ${xpGained}/${TARGET_XP} xp in ${RUN_MS / 1000}s; the run stalled (out of leather or thread)`);
     }

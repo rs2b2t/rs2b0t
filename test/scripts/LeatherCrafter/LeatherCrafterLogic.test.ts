@@ -4,8 +4,11 @@ import {
     HARD_LEATHER_BURST,
     MAX_REFIRES,
     STALL_TICKS,
+    findOp,
     issueHardLeatherBurst,
     newDrain,
+    predictLeatherSlots,
+    sideCacheFrom,
     stepDrain
 } from '../../../src/bot/scripts/LeatherCrafter/LeatherCrafterLogic.js';
 
@@ -107,5 +110,57 @@ describe('stepDrain', () => {
         expect(resumed.action).toBe('wait');
         expect(resumed.state.idle).toBe(0);
         expect(resumed.state.refires).toBe(0);
+    });
+});
+
+describe('predictLeatherSlots', () => {
+    test('takes the lowest free slots and stops at want', () => {
+        expect(predictLeatherSlots([{ slot: 0, id: 1733 }], new Set(), 28, 3)).toEqual([1, 2, 3]);
+    });
+
+    test('treats a deposited id as freeing its slot', () => {
+        // the body leaves, so its slot is free again and the withdrawal reuses it
+        expect(predictLeatherSlots([{ slot: 0, id: 1733 }, { slot: 1, id: 1131 }], new Set([1131]), 28, 2)).toEqual([1, 2]);
+    });
+
+    test('never predicts a slot that keeps an item', () => {
+        const slots = predictLeatherSlots([{ slot: 5, id: 1734 }], new Set(), 6, 6);
+        expect(slots).not.toContain(5);
+        expect(slots).toEqual([0, 1, 2, 3, 4]);
+    });
+
+    test('returns nothing when the pack is full of kept items', () => {
+        const full = Array.from({ length: 28 }, (_, slot) => ({ slot, id: 1733 }));
+        expect(predictLeatherSlots(full, new Set(), 28, 4)).toEqual([]);
+    });
+});
+
+describe('findOp', () => {
+    test('is 1-based, as the menu actions expect', () => {
+        expect(findOp(['Deposit-1', 'Deposit-5', 'Deposit-All'], /deposit[\s-]*all/i)).toBe(3);
+    });
+
+    test('skips null ops', () => {
+        expect(findOp([null, 'Withdraw-All'], /withdraw[\s-]*all/i)).toBe(2);
+    });
+
+    test('is -1 when nothing matches', () => {
+        expect(findOp(['Deposit-1'], /withdraw[\s-]*all/i)).toBe(-1);
+    });
+});
+
+describe('sideCacheFrom', () => {
+    const rows = [{ id: 1131, comId: 5386, ops: ['Deposit-1', 'Deposit-All'] }];
+
+    test('caches the component and 1-based Deposit-All', () => {
+        expect(sideCacheFrom(rows, 1131, findOp)).toEqual({ comId: 5386, op: 2 });
+    });
+
+    test('is null when the body is absent, which keeps Tier 2 out of the session', () => {
+        expect(sideCacheFrom(rows, 1743, findOp)).toBeNull();
+    });
+
+    test('is null when the row has no Deposit-All', () => {
+        expect(sideCacheFrom([{ id: 1131, comId: 5386, ops: ['Deposit-1'] }], 1131, findOp)).toBeNull();
     });
 });

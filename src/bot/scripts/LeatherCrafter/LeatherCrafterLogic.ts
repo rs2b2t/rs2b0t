@@ -62,3 +62,70 @@ export function stepDrain(state: DrainState, leather: number, threadOut = false)
     }
     return { state: { ...state, idle }, action: 'bank' };
 }
+
+// Why: the speculative load spends the bank leg's ticks on crafting instead of waiting, which needs
+// the landing slots predicted, so the prediction stays pure and unit-tested rather than in the click loop.
+
+/** One pack slot: the slot index and the item sitting in it. */
+export interface SlotItem {
+    slot: number;
+    id: number;
+}
+
+/**
+ * The slots a Withdraw-All fills: the lowest free ones, since the server takes the first empty
+ * slot. Anything `depositIds` covers is treated as leaving, so its slot becomes free.
+ */
+export function predictLeatherSlots(
+    occupied: readonly SlotItem[],
+    depositIds: ReadonlySet<number>,
+    size: number,
+    want: number = size
+): number[] {
+    const kept = new Set<number>();
+    for (const item of occupied) {
+        if (!depositIds.has(item.id)) {
+            kept.add(item.slot);
+        }
+    }
+    const out: number[] = [];
+    for (let slot = 0; slot < size && out.length < want; slot++) {
+        if (!kept.has(slot)) {
+            out.push(slot);
+        }
+    }
+    return out;
+}
+
+/** Where the crafted body's Deposit-All sits in a bank-side row, for the next trip's Tier 2. */
+export interface SideCache {
+    comId: number;
+    op: number;
+}
+
+/**
+ * The body's bank-side deposit target, cached from a trip where the rows were readable.
+ * Why: null when the body is absent or the row has no Deposit-All, which keeps the speculative leg off.
+ */
+export function sideCacheFrom(
+    rows: readonly { id: number; comId: number; ops: readonly (string | null)[] }[],
+    bodyId: number,
+    opIndex: (ops: readonly (string | null)[], pattern: RegExp) => number
+): SideCache | null {
+    const row = rows.find(r => r.id === bodyId);
+    if (!row || row.comId < 0) {
+        return null;
+    }
+    const op = opIndex(row.ops, /deposit[\s-]*all/i);
+    return op === -1 ? null : { comId: row.comId, op };
+}
+
+/** Index (1-based, as the menu actions expect) of the first op matching `pattern`, or -1. */
+export function findOp(ops: readonly (string | null)[], pattern: RegExp): number {
+    for (let i = 0; i < ops.length; i++) {
+        if (ops[i] !== null && pattern.test(ops[i] as string)) {
+            return i + 1;
+        }
+    }
+    return -1;
+}
