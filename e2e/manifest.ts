@@ -701,6 +701,16 @@ export const CASES: readonly Case[] = [
         budgetMin: 15
     },
     {
+        id: 'jivedragons-clue-transitions-live',
+        harness: 'jivedragons-clue-transitions-live.ts',
+        covers: { scripts: ['JiveDragons'], subsystems: ['clues'] },
+        status: 'documented',
+        documentedIn: 'docs/how-to/test-clue-transitions.md',
+        manual: true,
+        budgetMin: 60,
+        note: 'Starts its own local engine on port 8890 with a seeded next-clue selection for fresh test accounts.'
+    },
+    {
         id: 'jivedragons-longsword-entrana-live',
         harness: 'jivedragons-longsword-clue-live.ts',
         args: ['--entrana'],
