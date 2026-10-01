@@ -158,6 +158,8 @@ export class SolveClue implements Task {
     private abandonedClueId: number | null = null;
 
     private strippedGear: string[] = [];
+    private strippedCounts = new Map<string, number>();
+    private entranaStripped = false;
 
     private status = 'idle';
 
@@ -305,7 +307,8 @@ export class SolveClue implements Task {
 
         this.status = 'solving';
         this.host.setStatus('solving clue trail');
-        let outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`));
+        let outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`),
+            () => this.entranaStripped && heldClueScrollId() !== null && !heldClueNeedsEntranaStrip());
         if (outcome === 'supplies-needed') {
             this.bankedThisSolve = false;
             this.retreatPending = Game.inCombat();
@@ -313,7 +316,8 @@ export class SolveClue implements Task {
             if (await this.bankFirst()) {
                 this.retreatPending = false;
                 this.bankedThisSolve = true;
-                outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`));
+                outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`),
+                    () => this.entranaStripped && heldClueScrollId() !== null && !heldClueNeedsEntranaStrip());
             } else if (this.blockedKit === null) {
                 this.status = 'waiting for hard kit bank';
                 return;
@@ -383,24 +387,31 @@ export class SolveClue implements Task {
         this.host.log('[clue] trail complete');
     }
 
-    private async restoreStrippedGear(): Promise<void> {
-        this.restoring = true;
+    private async restoreStrippedGear(preserveTrail = false): Promise<boolean> {
+        this.restoring = !preserveTrail;
+        const count = (name: string): number => this.strippedCounts.get(name) ?? 1;
+        const equipped = (name: string): number => Equipment.items().find(i => i.name?.toLowerCase() === name.toLowerCase())?.count ?? 0;
+        const restored = (name: string): boolean => equipped(name) >= count(name);
         for (const name of this.strippedGear) {
-            if (!Equipment.contains(name) && Inventory.first(name) !== null) await Equipment.equip(name);
+            if (!restored(name) && equipped(name) + Inventory.count(name) >= count(name)) await Equipment.equip(name);
         }
-        const want = this.strippedGear.filter(n => !Equipment.contains(n));
+        const want = this.strippedGear.filter(n => !restored(n));
         if (want.length === 0) {
-            this.strippedGear = [];
+            if (!preserveTrail) {
+                this.strippedGear = [];
+                this.trailWeapon = null;
+            }
             this.restoring = false;
-            this.trailWeapon = null;
-            return;
+            this.entranaStripped = false;
+            this.strippedCounts.clear();
+            return true;
         }
 
         const here = Game.tile();
         const bank = here ? nearestBank(here) : null;
         if (!bank) {
             this.host.log(`[clue] no bank nearby to reclaim ${want.join(', ')} — will retry after the next trail`);
-            return;
+            return false;
         }
 
         this.status = 'restoring gear';
@@ -409,39 +420,46 @@ export class SolveClue implements Task {
 
         if (!(await walkToBank(bank.tile, m => this.host.log(`  ${m}`)))) {
             this.host.log('[clue] walk to the bank failed — gear stays banked, will retry');
-            return;
+            return false;
         }
         if (!(await openClueBank(m => this.host.log(`  ${m}`)))) {
             this.host.log('[clue] could not open the bank — gear stays banked, will retry');
-            return;
+            return false;
         }
-        if (!(await Bank.waitReady())) return;
+        if (!(await Bank.waitReady())) return false;
         if (Inventory.free() < want.filter(n => Inventory.first(n) === null).length) {
             await Bank.depositAllMatching((name, id) => !want.includes(name) && CLUE_DB[id] === undefined && CASKET_IDS[id] === undefined);
         }
         for (const name of want) {
-            if (Inventory.first(name) === null) {
-                await Bank.withdraw(name, 'Withdraw-1');
-                await Execution.delayUntil(() => Inventory.first(name) !== null, 2500);
+            const needed = count(name) - equipped(name) - Inventory.count(name);
+            if (needed > 0) {
+                if (needed > 1) await Bank.withdrawX(name, needed);
+                else await Bank.withdraw(name, 'Withdraw-1');
+                if (!(await Execution.delayUntil(() => equipped(name) + Inventory.count(name) >= count(name), 2500))) return false;
             }
         }
-        await Bank.close();
-        await Execution.delayUntil(() => !Bank.isOpen(), 3000);
+        if (!(await Bank.close()) || !(await Execution.delayUntil(() => !Bank.isOpen(), 3000))) return false;
 
         for (const name of want) {
-            if (!Equipment.contains(name) && Inventory.first(name) !== null) {
+            if (!restored(name) && Inventory.first(name) !== null) {
                 await Equipment.equip(name);
-                await Execution.delayUntil(() => Equipment.contains(name), 2500);
+                await Execution.delayUntil(() => restored(name), 2500);
             }
         }
 
-        // Why: names that would not go back on stay listed so the next trail retries them.
-        this.strippedGear = want.filter(n => !Equipment.contains(n));
-        this.restoring = this.strippedGear.length > 0;
-        if (!this.restoring) this.trailWeapon = null;
-        if (this.strippedGear.length > 0) {
-            this.host.log(`[clue] could not re-equip ${this.strippedGear.join(', ')} — will retry`);
+        const missing = this.strippedGear.filter(n => !restored(n));
+        if (!preserveTrail) this.strippedGear = missing;
+        this.restoring = !preserveTrail && missing.length > 0;
+        if (missing.length > 0) {
+            this.host.log(`[clue] could not re-equip ${missing.join(', ')} — will retry`);
+            return false;
         }
+        this.entranaStripped = false;
+        this.strippedCounts.clear();
+        if (!preserveTrail) {
+            this.trailWeapon = null;
+        }
+        return true;
     }
 
     /**
@@ -475,6 +493,32 @@ export class SolveClue implements Task {
         }
     }
 
+    private async bankEntranaEquipment(protectedNames: ReadonlySet<string>): Promise<boolean> {
+        this.host.log('[clue] Entrana destination: clearing the pack and banking all equipment');
+        const deposit = (): Promise<void> => Bank.depositAllMatching(name => !protectedNames.has(name.toLowerCase()));
+        await deposit();
+        const worn = Equipment.items();
+        if (worn.length > 0) this.entranaStripped = true;
+        if (!Bank.isOpen() || Inventory.free() < worn.length) return false;
+        if (worn.length > 0) {
+            if (!(await Bank.close()) || !(await Execution.delayUntil(() => !Bank.isOpen(), 3000))) return false;
+            for (const item of worn) {
+                const name = item.name;
+                if (!name || EventSignal.pending()) return false;
+                if ((!this.hardTrail || !GUARDIAN_WEAPON_IDS.includes(item.id))
+                    && !this.strippedGear.some(n => n.toLowerCase() === name.toLowerCase())) {
+                    this.strippedGear.push(name);
+                }
+                if (this.strippedGear.includes(name)) this.strippedCounts.set(name, item.count);
+                if (!(await Equipment.unequip(name))) return false;
+            }
+            if (!(await openClueBank()) || !(await Bank.waitReady())) return false;
+            await deposit();
+        }
+        return Bank.isOpen() && Equipment.items().length === 0
+            && Inventory.items().every(i => protectedNames.has((i.name ?? '').toLowerCase()));
+    }
+
     private async bankFirst(initialBankPrepared = false): Promise<boolean> {
         this.status = 'banking';
         this.host.setStatus('clue: banking loot before the trail');
@@ -494,19 +538,6 @@ export class SolveClue implements Task {
 
         const scrollId = heldClueScrollId();
         const entranaStrip = heldClueNeedsEntranaStrip();
-        if (entranaStrip) {
-            this.host.log('[clue] Entrana destination — banking weapons/armour (monk search)');
-            // Unequip before bank open, side-view swaps inventory ops to Deposit-*.
-            for (const worn of Equipment.items()) {
-                const n = worn.name ?? '';
-                if (n !== '' && ENTRANA_RESTRICTED_GEAR_RE.test(n)) {
-                    await Equipment.unequip(n);
-                    if ((!this.hardTrail || !GUARDIAN_WEAPON_IDS.includes(worn.id)) && !this.strippedGear.some(g => g.toLowerCase() === n.toLowerCase())) {
-                        this.strippedGear.push(n);
-                    }
-                }
-            }
-        }
 
         if (!(await openClueBank(m => this.host.log(`  ${m}`)))) {
             this.host.log('[clue] could not open the bank — will retry');
@@ -530,6 +561,11 @@ export class SolveClue implements Task {
             if ((CLUE_DB[it.id] !== undefined || CASKET_IDS[it.id] !== undefined || it.id === puzzleId) && it.name) {
                 protectedNames.add(it.name.toLowerCase());
             }
+        }
+        if (entranaStrip && !(await this.bankEntranaEquipment(protectedNames))) return false;
+        if (!entranaStrip && this.entranaStripped) {
+            if (!(await this.restoreStrippedGear(true))) return false;
+            if (!(await openClueBank()) || !(await Bank.waitReady())) return false;
         }
         const weapon = (this.trailWeapon ?? this.host.weaponName?.() ?? '').toLowerCase();
         const coordItems = new Set(['sextant', 'watch', 'chart']);
@@ -595,10 +631,10 @@ export class SolveClue implements Task {
             return false;
         }
 
-        if (entranaStrip && namesHaveEntranaRestrictedGear([
+        if (entranaStrip && (Equipment.items().length > 0 || namesHaveEntranaRestrictedGear([
             ...Inventory.items().map(i => i.name ?? ''),
             ...Equipment.items().map(i => i.name ?? '')
-        ])) {
+        ]))) {
             this.host.log('[clue] still holding Entrana-banned gear after bank prep — will retry');
             await Bank.close();
             return false;

@@ -650,7 +650,7 @@ export const ClueExecutor = {
         postKillClue = null;
     },
 
-    async solveHeldClue(log: (m: string) => void): Promise<ClueOutcome> {
+    async solveHeldClue(log: (m: string) => void, needsBank?: () => boolean): Promise<ClueOutcome> {
         if (guardianHalt !== null) return guardianHalt;
         const tlog = (m: string): void => {
             trace.note(m);
@@ -687,6 +687,8 @@ export const ClueExecutor = {
                 return end('done');
             }
 
+            if (needsBank?.()) return 'supplies-needed';
+
             const clueId = trackedId(step);
             const name = shortClueName(step.type === 'open-casket' ? step.casketObj : step.obj);
             if (!sessionActive) {
@@ -720,7 +722,7 @@ export const ClueExecutor = {
             }
             if (step.type !== 'open-casket' && step.coord?.level === 0
                 && step.coord.x >= 2802 && step.coord.x <= 2878 && step.coord.z >= 3329 && step.coord.z <= 3393
-                && namesHaveEntranaRestrictedGear([...Inventory.items(), ...Equipment.items()].map(i => i.name ?? ''))) {
+                && (Equipment.items().length > 0 || namesHaveEntranaRestrictedGear(Inventory.items().map(i => i.name ?? '')))) {
                 return 'supplies-needed';
             }
             const blocked = blockReason(step);

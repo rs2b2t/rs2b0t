@@ -18,7 +18,8 @@ interface Api {
 const base = positionalArgs(process.argv.slice(2), 'http://localhost:8890')[0];
 const guardian = process.argv.includes('--guardian');
 const pilot = process.argv.includes('--pilot');
-const kind = guardian ? 'guardian' : pilot ? 'pilot' : 'puzzle';
+const entrana = process.argv.includes('--entrana');
+const kind = guardian ? 'guardian' : pilot ? 'pilot' : entrana ? 'entrana' : 'puzzle';
 const user = `jc${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
 const client = deployIsolatedClient(user);
 const browser = await launchBrowser();
@@ -48,10 +49,17 @@ try {
         ['rune_full_helm', 'Rune full helm'], ['rune_chainbody', 'Rune chainbody'], ['rune_platelegs', 'Rune platelegs']
     ]) {
         await cheatQuiet(page, `give ${debug} 1`, 650);
-        assert(await page.evaluate(item => (globalThis as unknown as Api).__rs2b0t.Equipment.equip(item), name));
+        assert(await page.evaluate(item => (globalThis as unknown as Api).__rs2b0t.Equipment.equip(item), name), `could not equip ${name}`);
     }
+    if (entrana) {
+        for (const [debug, name] of [['leather_boots', 'Leather boots'], ['gold_ring', 'Gold ring'], ['amulet_of_power', 'Amulet of power'], ['red_cape', 'Cape'], ['bronze_arrow', 'Bronze arrow']]) {
+            await cheatQuiet(page, `give ${debug} ${debug === 'bronze_arrow' ? 100 : 1}`, 650);
+            assert(await page.evaluate(item => (globalThis as unknown as Api).__rs2b0t.Equipment.equip(item), name), `could not equip ${name}`);
+        }
+    }
+    const startingGear = await page.evaluate(() => (globalThis as unknown as Api).__rs2b0t.Equipment.items().map(i => ({ id: i.id, name: i.name, count: i.count })));
     await cheatQuiet(page, 'setvar trail_status 6');
-    await cheatQuiet(page, `give ${guardian ? 'trail_clue_hard_sextant025' : pilot ? 'trail_clue_hard_riddle021' : 'trail_clue_hard_riddle017'} 1`);
+    await cheatQuiet(page, `give ${guardian ? 'trail_clue_hard_sextant025' : pilot ? 'trail_clue_hard_riddle021' : entrana ? 'trail_clue_hard_riddle027' : 'trail_clue_hard_riddle017'} 1`);
     await cheatQuiet(page, 'give lobster 27');
     assert.equal(await page.evaluate(() => (globalThis as unknown as Api).__rs2b0t.Inventory.free()), 0);
     await setSettings(page, 'JiveDragons', {
@@ -81,6 +89,7 @@ try {
                 inventory: a.Inventory.items().map(i => ({ name: i.name, count: i.count, noted: i.noted })),
                 died: bot?.died, parked: bot?.parked, hp: a.Skills.effective('hitpoints'),
                 weapon: a.Equipment.items().find(i => i.slot === 3)?.name,
+                equipment: a.Equipment.items().map(i => ({ id: i.id, name: i.name, count: i.count })),
                 free: a.Inventory.free(), sharks: a.Inventory.count('Shark'),
                 puzzle: a.Inventory.countById(2800) > 0 || a.Inventory.countById(3571) > 0,
                 puzzleOpen: a.reader.puzzleBoardSize() === 25,
@@ -97,14 +106,18 @@ try {
             };
         });
         assert(s.state === 'running' && !s.died && !s.parked && s.hp > 0, JSON.stringify(s));
-        assert.equal(s.weapon, 'Dragon longsword');
+        if (!entrana) assert.equal(s.weapon, 'Dragon longsword');
         for (const line of s.logs) logs.add(line);
         if (preparedFree === null && s.logs.some(l => l.includes('trail pack:'))) {
             preparedFree = s.free;
             assert.equal(s.sharks, 12);
             if (!guardian) assert(preparedFree >= 1, JSON.stringify(s));
         }
-        sawEncounter ||= guardian ? s.guardian : s.puzzle;
+        if (entrana && s.tile && s.tile.x >= 2802 && s.tile.x <= 2878 && s.tile.z >= 3329 && s.tile.z <= 3393) {
+            assert.deepEqual(s.equipment, []);
+            assert(!s.inventory.some(i => startingGear.some(g => g.name === i.name)));
+            sawEncounter = true;
+        } else if (!entrana) sawEncounter ||= guardian ? s.guardian : s.puzzle;
         if (!guardian && s.puzzle && !filledPuzzlePack) {
             if (s.free > 0) await cheatQuiet(page, `give lobster ${s.free}`);
             filledPuzzlePack = true;
@@ -134,6 +147,12 @@ try {
             }
         }
         if (s.solved > 0) {
+            if (entrana) {
+                assert.deepEqual(s.equipment.sort((a, b) => a.id - b.id), startingGear.sort((a, b) => a.id - b.id));
+                assert.deepEqual(s.remainingLoot, []);
+                complete = true;
+                break;
+            }
             if (pilot) { assert(sawWolfCombat && sawSafePuzzle, JSON.stringify({ sawWolfCombat, sawSafePuzzle })); complete = true; break; }
             assert.deepEqual(s.remainingLoot, []);
             if (completionBankTrips === null) completionBankTrips = s.bankTrips;
@@ -152,9 +171,10 @@ try {
         await page.waitForTimeout(250);
     }
     assert(complete && sawEncounter && preparedFree !== null, JSON.stringify({ complete, sawEncounter, preparedFree, logs: [...logs] }));
-    if (!guardian) assert([...logs].some(l => /puzzle (already solved|solved in)/.test(l)));
+    if (!guardian && !entrana) assert([...logs].some(l => /puzzle (already solved|solved in)/.test(l)));
     await page.screenshot({ path: `docs/e2e/jivedragons-longsword-${kind}-live.png` });
-    console.log(`PASS: full starting pack, no dagger supplied, Dragon longsword retained through ${kind} and completed clue${pilot ? ' after wolf combat and a sheltered puzzle solve' : ' plus full inventory bank reset'}; prepared free slots ${preparedFree}; collected ${[...logs].filter(l => l.includes('from the treasure trail')).length} spilled rewards`);
+    if (entrana) console.log('PASS: full starting pack, all ten equipment slots banked, Entrana clue completed, original outfit and 100 arrows restored before farming');
+    else console.log(`PASS: full starting pack, no dagger supplied, Dragon longsword retained through ${kind} and completed clue${pilot ? ' after wolf combat and a sheltered puzzle solve' : ' plus full inventory bank reset'}; prepared free slots ${preparedFree}; collected ${[...logs].filter(l => l.includes('from the treasure trail')).length} spilled rewards`);
 } finally {
     console.log(await page.evaluate(() => (globalThis as unknown as Api).rs2b0t?.runner.ctx?.log.map(l => l.msg)).catch(() => []));
     await stopScript(page).catch(() => {});

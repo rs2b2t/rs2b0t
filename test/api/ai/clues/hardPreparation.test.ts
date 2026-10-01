@@ -73,11 +73,13 @@ beforeEach(() => {
         equips.push(name);
         const next = pack.find(i => i.name === name);
         if (!next) return worn.some(i => i.name === name);
-        pack = pack.filter(i => i !== next); pack.push(...worn);
-        worn = [{ ...next, slot: 3 }]; open = false;
+        const slot = next.slot || 3;
+        pack = pack.filter(i => i !== next).concat(worn.filter(i => i.slot === slot));
+        worn = worn.filter(i => i.slot !== slot).concat({ ...next, slot }); open = false;
         return true;
     });
     spyOn(Equipment, 'unequip').mockImplementation(async name => {
+        if (open || pack.length >= 28) return false;
         pack.push(...worn.filter(i => i.name === name)); worn = worn.filter(i => i.name !== name); return true;
     });
     spyOn(ClueExecutor, 'solveHeldClue').mockResolvedValue('yield');
@@ -203,6 +205,178 @@ test('allows an Entrana strip and equips again for a later guardian', async () =
     expect(worn[0].id).toBe(1231);
     expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(2);
 });
+test.each([0, 23])('banks every equipment slot for Entrana with %s extra inventory items', async extra => {
+    pack[0] = { ...clue, id: 3579 };
+    pack.push(...Array.from({ length: extra }, () => item(379, 'Lobster')));
+    const outfit = [
+        { ...bow, slot: 3 }, { ...item(1127, 'Rune platebody'), slot: 4 },
+        { ...item(1061, 'Leather boots'), slot: 10 }, { ...item(1033, 'Zamorak robe'), slot: 7 },
+        { ...item(1731, 'Amulet of power'), slot: 2 }, { ...item(1635, 'Gold ring'), slot: 12 },
+        { ...item(1007, 'Cape'), slot: 1 }, { ...item(882, 'Bronze arrow', 100), slot: 13 }
+    ];
+    worn = outfit.map(i => ({ ...i }));
+    spyOn(Equipment, 'equip').mockImplementation(async name => {
+        open = false;
+        const next = pack.find(i => i.name === name);
+        if (!next) return worn.some(i => i.name === name);
+        const slot = outfit.find(i => i.name === name)?.slot ?? 3;
+        pack = pack.filter(i => i !== next).concat(worn.filter(i => i.slot === slot));
+        worn = worn.filter(i => i.slot !== slot).concat({ ...next, slot });
+        return true;
+    });
+    spyOn(Bank, 'withdrawX').mockImplementation(async (name, count) => {
+        const source = bank.find(i => i.name === name && i.count >= count);
+        if (!source || pack.length >= 28) return false;
+        source.count -= count; pack.push({ ...source, count });
+        return true;
+    });
+    const task = new SolveClue(host);
+    let reachedEntrana = false;
+    spyOn(ClueExecutor, 'solveHeldClue').mockImplementation(async () => {
+        reachedEntrana = true;
+        expect(worn).toEqual([]);
+        expect(pack.some(i => i.id === 3579)).toBe(true);
+        expect(outfit.every(i => bank.some(b => b.id === i.id && b.count >= i.count))).toBe(true);
+        expect(outfit.some(i => pack.some(p => p.id === i.id))).toBe(false);
+        pack = pack.filter(i => i.id !== 3579);
+        return 'done';
+    });
+    await task.execute();
+    expect(reachedEntrana).toBe(true);
+    expect(worn.map(i => [i.name, i.count]).sort()).toEqual(outfit.map(i => [i.name, i.count]).sort());
+    expect(task.validate()).toBe(false);
+});
+
+test('keeps a full Entrana pack and equipment when deposits fail', async () => {
+    pack[0] = { ...clue, id: 3579 };
+    pack.push(...Array.from({ length: 23 }, () => item(379, 'Lobster')));
+    spyOn(Bank, 'depositAllMatching').mockResolvedValue();
+    const task = new SolveClue(host);
+    await task.execute();
+    expect(pack).toHaveLength(28);
+    expect(worn[0].id).toBe(bow.id);
+    expect(task.validate()).toBe(true);
+    expect(ClueExecutor.solveHeldClue).not.toHaveBeenCalled();
+});
+
+test('an Entrana leg requests banking even when only allowed jewellery is equipped', async () => {
+    pack[0] = { ...clue, id: 3579 };
+    worn = [{ ...item(1635, 'Gold ring'), slot: 12 }];
+    let pending = false;
+    spyOn(EventSignal, 'pending').mockImplementation(() => pending);
+    spyOn(Traversal, 'walkResilient').mockImplementation(async () => { pending = true; return false; });
+    spyOn(ClueExecutor, 'solveHeldClue').mockRestore();
+    expect(await ClueExecutor.solveHeldClue(() => {})).toBe('supplies-needed');
+});
+
+test.each(['close', 'remove', 'reopen'])('retries an Entrana %s failure without losing the original equipment', async failure => {
+    pack[0] = { ...clue, id: 3579 };
+    const task = new SolveClue(host);
+    if (failure === 'close') spyOn(Bank, 'close').mockResolvedValueOnce(false);
+    if (failure === 'remove') spyOn(Equipment, 'unequip').mockResolvedValueOnce(false);
+    if (failure === 'reopen') spyOn(Bank, 'openNearest')
+        .mockImplementationOnce(async () => { open = true; return true; }).mockResolvedValueOnce(false);
+    await task.execute();
+    expect(task.validate()).toBe(true);
+    expect(pack.some(i => i.id === 3579)).toBe(true);
+    expect(ClueExecutor.solveHeldClue).not.toHaveBeenCalled();
+    await task.execute();
+    expect(worn).toEqual([]);
+    expect(bank.some(i => i.id === bow.id)).toBe(true);
+    pack = pack.filter(i => i.id !== 3579);
+    await task.execute();
+    expect(worn[0].id).toBe(bow.id);
+});
+
+test.each([false, true])('restores the Entrana outfit before the next fight, with blocked equip=%s', async blocked => {
+    pack[0] = { ...clue, id: 3579 };
+    worn = [{ ...item(1305, 'Dragon longsword'), slot: 3 }, { ...item(1127, 'Rune platebody'), slot: 4 }, { ...item(1635, 'Gold ring'), slot: 12 }];
+    const task = new SolveClue(host);
+    let leg = 0;
+    let fought = false;
+    spyOn(ClueExecutor, 'solveHeldClue').mockImplementation(async (_log, needsBank) => {
+        if (leg++ === 0) {
+            expect(worn).toEqual([]);
+            pack[0] = clue;
+            expect(needsBank?.()).toBe(true);
+            if (blocked) spyOn(Equipment, 'equip').mockResolvedValue(false);
+            return 'supplies-needed';
+        }
+        expect(worn.map(i => i.name).sort()).toEqual(['Dragon longsword', 'Gold ring', 'Rune platebody']);
+        expect(needsBank?.()).toBe(false);
+        fought = true;
+        return 'yield';
+    });
+    await task.execute();
+    expect(fought).toBe(!blocked);
+    expect(task.validate()).toBe(true);
+});
+
+test('keeps restoration pending after a partial ammunition withdrawal', async () => {
+    pack[0] = { ...clue, id: 3579 };
+    worn.push({ ...item(882, 'Bronze arrow', 100), slot: 13 });
+    const task = new SolveClue(host);
+    spyOn(Bank, 'withdrawX').mockImplementation(async (name, count) => {
+        const source = bank.find(i => i.name === name && i.count > 0);
+        if (!source) return false;
+        const taken = Math.min(count, 50, source.count);
+        source.count -= taken;
+        const held = pack.find(i => i.id === source.id);
+        if (held) held.count += taken;
+        else pack.push({ ...source, count: taken });
+        return true;
+    });
+    spyOn(ClueExecutor, 'solveHeldClue').mockImplementation(async () => {
+        pack = pack.filter(i => i.id !== 3579);
+        return 'done';
+    });
+    await task.execute();
+    expect(task.validate()).toBe(true);
+    expect(pack.find(i => i.id === 882)?.count).toBe(50);
+    await task.execute();
+    expect(worn.find(i => i.id === 882)?.count).toBe(100);
+    expect(task.validate()).toBe(false);
+});
+
+test('the executor stops before travel while the host has gear to restore', async () => {
+    let pending = false;
+    spyOn(EventSignal, 'pending').mockImplementation(() => pending);
+    spyOn(Traversal, 'walkResilient').mockImplementation(async () => { pending = true; return false; });
+    spyOn(ClueExecutor, 'solveHeldClue').mockRestore();
+    expect(await ClueExecutor.solveHeldClue(() => {}, () => true)).toBe('supplies-needed');
+    expect(pending).toBe(false);
+});
+
+test('a completed Entrana clue retains ownership until a failed armour equip succeeds', async () => {
+    pack[0] = { ...clue, id: 3579 };
+    worn.push({ ...item(1127, 'Rune platebody'), slot: 4 });
+    let blocked = true;
+    spyOn(Equipment, 'equip').mockImplementation(async name => {
+        if (name === 'Rune platebody' && blocked) return false;
+        open = false;
+        const next = pack.find(i => i.name === name);
+        if (!next) return worn.some(i => i.name === name);
+        const slot = next.slot || 3;
+        pack = pack.filter(i => i !== next).concat(worn.filter(i => i.slot === slot));
+        worn = worn.filter(i => i.slot !== slot).concat({ ...next, slot });
+        return true;
+    });
+    spyOn(ClueExecutor, 'solveHeldClue').mockImplementation(async () => {
+        pack = pack.filter(i => i.id !== 3579);
+        return 'done';
+    });
+    const task = new SolveClue(host);
+    await task.execute();
+    expect(task.validate()).toBe(true);
+    expect(task.ownsEquipment()).toBe(true);
+    expect(worn.some(i => i.id === 1127)).toBe(false);
+    blocked = false;
+    await task.execute();
+    expect(worn.some(i => i.id === 1127)).toBe(true);
+    expect(task.validate()).toBe(false);
+    expect(task.ownsEquipment()).toBe(false);
+});
+
 test('gives supply-needed one restock attempt and preserves the held clue', async () => {
     bank = bank.map(i => i.id === 385 ? { ...i, count: 20 } : i);
     const task = new SolveClue(host);

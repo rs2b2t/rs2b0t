@@ -114,7 +114,8 @@ test('finishing a hard clue requires a dragon restock even when food and weapons
     spyOn(Game, 'tile').mockImplementation(() => here);
     spyOn(Inventory, 'items').mockImplementation(() => pack);
     spyOn(Inventory, 'count').mockReturnValue(100);
-    spyOn(Equipment, 'contains').mockReturnValue(true);
+    spyOn(Equipment, 'contains').mockImplementation(name => name === 'Rune scimitar');
+    spyOn(Equipment, 'items').mockReturnValue([new InvItem({ id: 1333, name: 'Rune scimitar', count: 1, slot: 3, comId: 1688, ops: ['Remove'] })]);
     spyOn(Game, 'teleport').mockImplementation(async () => { here = new Tile(2965, 3379, 0); return true; });
     spyOn(Traversal, 'walkResilient').mockImplementation(async tile => { here = Tile.from(tile); return true; });
     fixture.clue['bankFirst'] = async () => true;

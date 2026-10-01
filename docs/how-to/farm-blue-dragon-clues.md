@@ -133,3 +133,14 @@ behind the glider. It solved the 29-move puzzle outside combat at
 The character finished alive with 84 Hitpoints and its longsword equipped.
 This check ends at clue completion.
 [Pilot completion screenshot](../e2e/jivedragons-longsword-pilot-live.png).
+
+For Entrana preparation and gear restoration, run
+`bun e2e/jivedragons-longsword-clue-live.ts --entrana`. It starts with a full
+backpack and ten equipped slots, checks that every slot is empty on Entrana,
+and requires the original outfit and 100 arrows restored after the clue.
+
+The Entrana check passed on 2026-10-01 at 600 ms ticks with 90 Hitpoints
+remaining. It boarded with all equipment banked, completed the clue, and
+restored all ten slots and 100 Bronze arrows at Catherby before returning
+control to JiveDragons.
+[Restored outfit screenshot](../e2e/jivedragons-longsword-entrana-live.png).
