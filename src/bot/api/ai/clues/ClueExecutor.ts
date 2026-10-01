@@ -124,9 +124,6 @@ export function trailWalkOpts(log: (m: string) => void, radius = ARRIVE_RADIUS):
     };
 }
 
-/** Tolls bought during this trail, preventing repeated shop trips. */
-const gateItemsTried = new Set<string>();
-
 /**
  * Walk a clue leg, treating an unpayable toll as a shopping trip.
  * Why: the navigator names what the route was short of, and the desert's one entrance eats a Shantay pass, so a leg short a 5gp ticket buys one and walks again.
@@ -142,12 +139,9 @@ async function walkLeg(dest: NavPoint, log: (m: string) => void, radius = ARRIVE
     if (await Traversal.walkResilient(dest, trailWalkOpts(log, radius))) {
         return true;
     }
-    const short = WalkExecutor.lastMissingGateItems.filter(m => !gateItemsTried.has(m.name));
+    const short = WalkExecutor.lastMissingGateItems;
     if (short.length === 0) {
         return false;
-    }
-    for (const m of short) {
-        gateItemsTried.add(m.name);
     }
     if (!(await ensureGateItems(short, log))) {
         return false;
@@ -633,7 +627,6 @@ export const ClueExecutor = {
         rewardCollection = null;
         sessionLegs = 0;
         acquireTries = 0;
-        gateItemsTried.clear();
         ClueExecutor.current = null;
         ClueExecutor.retryGuardian();
     },
@@ -669,7 +662,6 @@ export const ClueExecutor = {
             rewardCollection = null;
             sessionLegs = 0;
             acquireTries = 0;
-            gateItemsTried.clear();
             postKillClue = null;
             ClueExecutor.current = null;
             return outcome;
@@ -700,7 +692,6 @@ export const ClueExecutor = {
                 sessionActive = true;
                 sessionLegs = 0;
                 acquireTries = 0;
-                gateItemsTried.clear();
             }
             const target = stepTarget(step);
             const sameLeg = ClueExecutor.current?.clueId === clueId;

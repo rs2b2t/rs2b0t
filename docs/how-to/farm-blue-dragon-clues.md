@@ -36,7 +36,9 @@ Food used during travel does not invalidate that initial bank preparation.
 A guardian fight requires more than three Sharks and withdraws when three
 remain, keeping them available for the escape.
 
-The script leaves the dungeon and banks before solving a clue. While the
+Before solving a clue, the script leaves the dragon lair when needed and
+chooses the nearest reachable bank from its current position. Starting with
+a clue near another bank does not send it back to the dragon farming bank. While the
 solver owns the equipment, dragon banking cannot interrupt it because the
 inventory contains Sharks instead of the configured farming food. After the
 trail, the script deposits every inventory item and withdraws the configured

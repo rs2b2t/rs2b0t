@@ -15,6 +15,8 @@ import { Sustain } from '#/bot/api/sustain/Sustain.js';
 import { InvItem } from '#/bot/api/inventory/Inventory.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
 import Tile from '#/bot/geometry/Tile.js';
+import { Prayer } from '#/bot/api/prayer/Prayer.js';
+import { Navigator } from '#/bot/event/webwalk/Navigator.js';
 import { Input } from '#/bot/input/Input.js';
 
 function item(id: number, name: string, count = 1): InvItemSnapshot {
@@ -465,4 +467,16 @@ test('JiveDragons restocks a hard clue to twelve Sharks after supplies run low',
     await bot.solveClue!.execute();
 
     expect(loads).toEqual([12, 12]);
+});
+
+test('clue prayer restoration walks to the reachable Lumbridge altar', async () => {
+    spyOn(Game, 'tile').mockReturnValue(new Tile(3222, 3218, 0));
+    spyOn(Prayer, 'max').mockReturnValue(60);
+    spyOn(Prayer, 'full').mockReturnValue(false);
+    spyOn(Navigator, 'findPath').mockImplementation(async (_from, to) => to.x === 3243
+        ? { ok: true, cost: 25, waypoints: [], hops: [], expanded: 0 }
+        : { ok: false, reason: 'unreachable', expanded: 0 });
+    await new SolveClue({ ...host, restorePrayer: () => true }).execute();
+    expect(Traversal.walkResilient).toHaveBeenCalledWith(new Tile(3243, 3205, 0), expect.anything());
+    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
 });

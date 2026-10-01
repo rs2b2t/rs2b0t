@@ -610,7 +610,7 @@ export class SolveClue implements Task {
 
         if (Inventory.count(SHANTAY_PASS) < 1) {
             if (!(await Bank.withdraw(SHANTAY_PASS, 'Withdraw-1'))) {
-                this.host.log('[clue] no Shantay pass in the bank — Kharidian desert digs will stay closed (#371)');
+                this.host.log('[clue] no Shantay pass in the bank; desert routes will buy one from Shantay');
             } else if (!(await Execution.delayUntil(() => Inventory.count(SHANTAY_PASS) >= 1, 2500))) {
                 this.host.log('[clue] Shantay pass withdraw did not land');
             }
@@ -719,7 +719,7 @@ export class SolveClue implements Task {
             return;
         }
         const here = Game.tile();
-        const altar = here ? nearestAltar(here) : null;
+        const altar = here ? await nearestAltar(here) : null;
         if (!altar) {
             this.host.log('[clue] prayer is low but no known altar to restore at');
             return;

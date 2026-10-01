@@ -1,4 +1,5 @@
-import { afterEach, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
+import { Navigator } from '#/bot/event/webwalk/Navigator.js';
 import { reader } from '#/bot/adapter/ClientAdapter.js';
 import { Loc } from '#/bot/api/locs/Locs.js';
 import { Inventory, InvItem } from '#/bot/api/inventory/Inventory.js';
@@ -14,6 +15,7 @@ import { Traversal } from '#/bot/api/walking/Traversal.js';
 import Tile from '#/bot/geometry/Tile.js';
 import { scenario, restoreScenario } from './scheduler.fixture.js';
 
+beforeEach(() => { spyOn(Navigator, 'findPath').mockResolvedValue({ ok: false, reason: 'no test route', expanded: 0 }); });
 afterEach(restoreScenario);
 
 test('post-clue restocking keeps the trail teleport policy for the trip back to the bank', async () => {
@@ -29,8 +31,8 @@ test('post-clue restocking keeps the trail teleport policy for the trip back to 
     expect(fixture.bot.clueRestock).toBe(true);
 });
 
-async function clueScenario(weapon = '', style = 'range') {
-    const fixture = await scenario('taverley-blue', style, { solveClues: true, weapon });
+async function clueScenario(weapon = '', style = 'range', site = 'taverley-blue') {
+    const fixture = await scenario(site, style, { solveClues: true, weapon });
     const task = fixture.task('SolveClue');
     if (!(task instanceof SolveClue)) throw new Error('Missing clue task');
     spyOn(task, 'validate').mockRestore();
@@ -148,7 +150,7 @@ test('finishing a casket-only trail requires post-clue restocking', async () => 
     expect(fixture.task('BankRun').validate()).toBe(true);
 });
 
-test.each(['teleport', 'missing runes', 'failed teleport', 'failed egress'])('uses existing %s egress before the preferred Falador bank', async mode => {
+test.each(['teleport', 'missing runes', 'failed teleport', 'failed egress'])('uses existing %s egress before choosing a nearby bank', async mode => {
     const fixture = await clueScenario();
     let here = new Tile(2900, 9800, 0);
     const events: string[] = [];
@@ -225,4 +227,48 @@ test('Jive deposits corpse loot at Falador before invoking the clue executor wit
     expect(events).toEqual(['exit', 'walk:2946,3369', 'open:2946,3369', 'deposit', 'solve']);
     expect(fixture.bot.bankTrips).toBe(0);
     expect(withdrawals).not.toContain('Rune arrow');
+});
+
+
+test.each(['taverley-blue', 'gutanoth-blue'])('starts a held clue at the nearby bank instead of the %s farming bank', async site => {
+    const fixture = await clueScenario('', 'range', site);
+    let here = new Tile(3185, 3440, 0);
+    const destinations: string[] = [];
+    spyOn(Game, 'tile').mockImplementation(() => here);
+    const teleport = spyOn(Game, 'teleport').mockResolvedValue(false);
+    spyOn(Traversal, 'walkResilient').mockImplementation(async tile => {
+        destinations.push(`${tile.x},${tile.z}`);
+        here = Tile.from(tile);
+        return true;
+    });
+    spyOn(Bank, 'openNearest').mockResolvedValue(false);
+
+    await fixture.clue.execute();
+
+    expect(destinations).toEqual(['3185,3440']);
+    expect(teleport).not.toHaveBeenCalled();
+    expect(fixture.bot.clueRestock).toBe(true);
+});
+
+
+test('initial clue banking selects the shortest available bank route', async () => {
+    const fixture = await clueScenario();
+    let here = new Tile(3200, 3430, 0);
+    const destinations: string[] = [];
+    spyOn(Game, 'tile').mockImplementation(() => here);
+    spyOn(Navigator, 'findPath').mockImplementation(async (_from, to) => {
+        if (to.x === 3253 && to.z === 3420) return { ok: true, waypoints: [], hops: [], cost: 10, expanded: 1 };
+        if (to.x === 3185 && to.z === 3440) return { ok: true, waypoints: [], hops: [], cost: 80, expanded: 1 };
+        return { ok: false, reason: 'unreachable', expanded: 1 };
+    });
+    spyOn(Traversal, 'walkResilient').mockImplementation(async tile => {
+        destinations.push(`${tile.x},${tile.z}`);
+        here = Tile.from(tile);
+        return true;
+    });
+    spyOn(Bank, 'openNearest').mockResolvedValue(false);
+
+    await fixture.clue.execute();
+
+    expect(destinations).toEqual(['3253,3420']);
 });

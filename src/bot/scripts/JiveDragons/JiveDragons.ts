@@ -4,6 +4,7 @@ import { SolveClue, walkToBank } from '../../api/ai/clues/SolveClue.js';
 import { paintClueProgress } from '../../api/ai/clues/cluePaint.js';
 import { AXES } from '../../api/acquisition/Tools.js';
 import { Bank } from '../../api/bank/Bank.js';
+import { nearestBankReachable } from '../../api/bank/BankLocations.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { EMPTY_VIAL, SUPER_SET, plannedPotions, potionToSip, rangingPlan, type PotionPlan } from '../../api/combat/boostPotions.js';
 import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, parseCombatStyle, parseRangeStyle, type MeleeCombatStyle } from '../../api/combat/CombatStyle.js';
@@ -31,6 +32,7 @@ import { Traversal } from '../../api/walking/Traversal.js';
 import { DROP_DB } from '../../data/dropdb.js';
 import { SPELL_DB } from '../../data/spelldb.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
+import { Navigator } from '../../event/webwalk/Navigator.js';
 import Tile from '../../geometry/Tile.js';
 import { COMBAT_SKILLS, XpTracker, jiveFrame, paintLevels } from '../../paint/jive.js';
 import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
@@ -1263,7 +1265,15 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             enabled: () => SOLVE_CLUES && !this.fight?.blocksLoot() && this.lootRun === null,
             prepareInitialBank: async () => {
                 this.clueRestock = true;
-                return await leaveLair(this, SITE) && await walkToBank(SITE.bank, m => this.log(m));
+                if (!(await leaveLair(this, SITE))) return false;
+                const here = Game.tile();
+                const bank = here ? await nearestBankReachable(here, Navigator) : null;
+                if (!bank) {
+                    this.log('[clue] no nearby bank available for preparation');
+                    return false;
+                }
+                this.log(`[clue] preparing at the ${bank.name} bank`);
+                return walkToBank(bank.tile, m => this.log(m));
             }
         });
 

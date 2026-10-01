@@ -15,24 +15,8 @@ four-NPC chain, driven by [`data/toolAcquire.ts`](../../src/bot/api/ai/clues/dat
 
 ### Crossing tolls
 
-A toll the bot cannot pay does not read as "too poor", A* prunes the crossing, so
-the region behind it leaves the graph and the leg reports a bare `unreachable`.
-The Kharidian desert is the sharp case: it has one baked entrance and it
-eats a Shantay pass, so a bot without one is told the desert does not exist.
-
-[`gateItems.ts`](../../src/bot/event/webwalk/gateItems.ts) tells the two apart. On an
-`unreachable` verdict the walker re-probes the same route with every crossing item
-virtualized; if the route appears, the blocker is a shopping list and
-`WalkExecutor.lastMissingGateItems` names it. `walkLeg` in the executor then buys
-the toll (`GATE_ITEM_SHOPS`, Shantay stocks his own pass for 5gp, north of his
-own gate) and walks again, once per item per trail. A route that stays unreachable
-with the full kit is a genuine nav-data gap and is reported as one.
-
-The same lookup bug hid this from the bank planner: crossings are keyed at the
-approach stand, but `itemsRequiredByWaypoints` matched on the loc tile alone. The
-Shantay stand is (3304,3118) while its loc is (3302,3116), so the toll was
-invisible and no pass was ever withdrawn. It now resolves through
-`specialCrossingForTransport`, the same way the executor does.
+Missing route tolls are acquired from known shops, including Shantay passes.
+See [Crossing tolls](clue-crossing-tolls.md) for diagnosis and purchase recovery.
 
 ## Challenges and keys
 
@@ -47,7 +31,7 @@ Some clues do not resolve to a location:
 
 ## Hard trail preparation
 
-Before starting a hard clue scroll, [`SolveClue.ts`](../../src/bot/api/ai/clues/SolveClue.ts) prepares at the host's initial bank when supplied, or the nearest known bank otherwise. The ready snapshot needs Attack 60, Lost City, an eligible dragon weapon (dagger ids 1231/1215 or longsword id 1305), at least one Superantipoison dose and 15 Sharks. It keeps an eligible equipped weapon or equips the configured eligible weapon when available, remembers the original weapon, takes the best available Superantipoison dose and stocks 15 Sharks while reserving required tool and teleport slots. Puzzle clues reserve one free slot without reducing the initial 15 Sharks and recover their exact banked puzzle box. A confirmed shortage stays blocked until the kit changes or the host explicitly retries.
+Before starting a hard clue scroll, [`SolveClue.ts`](../../src/bot/api/ai/clues/SolveClue.ts) prepares at the host's initial bank when supplied, or the nearest known bank otherwise. The ready snapshot needs Attack 60, Lost City, an eligible dragon weapon (dagger ids 1231/1215 or longsword id 1305), at least one Superantipoison dose and the host's food target (15 Sharks by default, 12 for JiveDragons). It keeps an eligible equipped weapon or equips the configured eligible weapon when available, remembers the original weapon, takes the best available Superantipoison dose and stocks that many Sharks while reserving required tool and teleport slots. Puzzle clues reserve one free slot without reducing the initial food target and recover their exact banked puzzle box. A confirmed shortage stays blocked until the kit changes or the host explicitly retries.
 
 The generic bank and Entrana rules remain in force: no reachable known bank blocks a hard trail, while an Entrana clue banks restricted gear and records it for restoration. A held casket without a clue scroll bypasses combat-kit preparation, but a hard casket still follows the reward bank flow before opening.
 
@@ -114,8 +98,9 @@ its own definition rather than against anything the client rendered.
 ## Prayer between trails
 
 Guardians are fought under Protect from Magic, so the pre-trail bank stop tops
-prayer up: if it is below full, the solver walks to the nearest altar from
-[`Altars.ts`](../../src/bot/api/altar/Altars.ts) and prays. Low prayer never blocks a trail,
+prayer up: if it is below full, the solver picks the reachable altar with the
+lowest walking cost from [`Altars.ts`](../../src/bot/api/altar/Altars.ts) and prays.
+Lumbridge uses its own church, and unreachable altars are excluded. Low prayer never blocks a trail,
 the fight runs without the protection prayer.
 
 ## Teleports
