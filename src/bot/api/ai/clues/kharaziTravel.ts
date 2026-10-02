@@ -6,7 +6,7 @@ import { Equipment } from '#/bot/api/equipment/Equipment.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { Inventory } from '#/bot/api/inventory/Inventory.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
-import { Traversal } from '#/bot/api/walking/Traversal.js';
+import { Traversal, type WalkResilientOptions } from '#/bot/api/walking/Traversal.js';
 import { Quests } from '#/bot/api/ui/questlog/Quests.js';
 import { AXES, bestAxe } from '#/bot/api/acquisition/Tools.js';
 import { LEGENDS_QUEST, LQ_ITEM, legendsArea } from '#/bot/api/ai/quests/defs/legends/areas.js';
@@ -42,7 +42,7 @@ export function crossesKharazi(dest: NavPoint | null): boolean {
 }
 
 /** Cut through the dense band, then walk the rest on the ordinary graph. */
-export async function walkAcrossKharazi(dest: NavPoint, radius: number, log: (m: string) => void): Promise<boolean> {
+export async function walkAcrossKharazi(dest: NavPoint, radius: number, log: (m: string) => void, options: Pick<WalkResilientOptions, 'useTeleportCatalog' | 'policy'> = {}): Promise<boolean> {
     const cut = jungleCrossing(dest, Game.tile()) === 'leave' ? leaveJungle : enterJungle;
     if (!(await cut(log))) {
         return false;
@@ -51,7 +51,8 @@ export async function walkAcrossKharazi(dest: NavPoint, radius: number, log: (m:
         radius,
         attempts: WALK_ATTEMPTS,
         timeoutMs: WALK_TIMEOUT_MS,
-        log
+        log,
+        ...options
     });
 }
 

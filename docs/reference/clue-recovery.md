@@ -42,11 +42,19 @@ the mainland approach to Arandar and after leaving for a mainland bank.
 Obstacle crossings inside Isafdar stay on foot. A disabled teleport setting is
 respected, and the navigation catalog still checks rune and quest requirements.
 
+When a trail moves from Kharazi to Isafdar, it cuts out of the jungle before
+planning the Arandar approach. In the reverse direction, it leaves Isafdar,
+reaches the Kharazi entrance and cuts into the jungle before walking to the dig.
+A failed cut stops the journey instead of trying to walk through the boundary.
+This includes clue 3562, `01 degrees 24 minutes North, 08 degrees 05 minutes West`.
+
 ## Validation
 
 Regression tests cover the desert-to-Iorwerth approach, outgoing bank travel,
 teleports disabled, full-pack rebuilding, preserved keys and equipment records,
 12-Shark preparation, interrupted deposits, event yields, repeated failures,
 post-kill dig recovery, offset guardians, blocked fence edges and safe retreat.
+A simulated continuous trail covers Kharazi clue 3536 followed by Isafdar clue
+3562; boundary tests cover both directions and failed cuts.
 These changes have automated coverage; the earlier live Entrana and Kharazi
 runs did not exercise these new recovery paths.

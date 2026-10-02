@@ -1,6 +1,9 @@
 // Why: 3 callers walk a clue somewhere and only one is the trail itself; the talk step reaches its NPC through Reach and the bank stop picks its own booth, so each needs the seam graph or the baked pack calls Isafdar unreachable.
 // @see docs/reference/clues-gates.md#proving-a-gate
 
+import { leaveJungle } from '#/bot/api/ai/quests/defs/legends/jungle.js';
+import { LQ_TILE } from '#/bot/api/ai/quests/defs/legends/areas.js';
+import { inKharazi, walkAcrossKharazi } from './kharaziTravel.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { Quests } from '#/bot/api/ui/questlog/Quests.js';
 import { pocketAt, travelTirannwn, type TirannwnTravelOptions } from '#/bot/api/ai/quests/defs/regicide/pockets.js';
@@ -19,6 +22,10 @@ export function crossesTirannwn(dest: NavPoint | null): boolean {
 }
 
 /** Walk to `dest` over REGICIDE_SEAMS, which is the only way in or out of Isafdar. */
-export function walkAcrossTirannwn(dest: NavPoint, radius: number, log: (m: string) => void, options: TirannwnTravelOptions): Promise<boolean> {
-    return travelTirannwn(new Tile(dest.x, dest.z, dest.level), radius, tirannwnStage(), log, options);
+export async function walkAcrossTirannwn(dest: NavPoint, radius: number, log: (m: string) => void, options: TirannwnTravelOptions): Promise<boolean> {
+    if (inKharazi(Game.tile()) && !(await leaveJungle(log))) return false;
+    const jungle = inKharazi(dest);
+    const target = jungle ? LQ_TILE.JUNGLE_MOUTH : new Tile(dest.x, dest.z, dest.level);
+    if (!(await travelTirannwn(target, jungle ? 0 : radius, tirannwnStage(), log, options))) return false;
+    return !jungle || walkAcrossKharazi(dest, radius, log, options);
 }
