@@ -60,7 +60,7 @@ test('sidebar omits chat and low-value status rows', () => {
 });
 
 test('world status identifies the connected world only after login', () => {
-    for (const world of [1, 2]) {
+    for (const world of [1, 2, 3]) {
         setURL(`${PLAIN_URL}?box=alice&world=${world}`);
         Object.assign(TARGET, resolveTarget('proxy', location.host, false, new URLSearchParams(location.search)));
         for (const ingame of [false, true]) {

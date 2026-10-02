@@ -60,7 +60,7 @@ export class MultiBoxController {
         if (this.switchingWorld) return null;
         const acct: Account = { ...(account ?? { username: `bot${this.nextId}`, password: '' }), world: account?.world ?? this.defaultWorld };
         const username = normalizeUsername(acct.username);
-        if (!username || (acct.world !== 1 && acct.world !== 2)) {
+        if (!username || (acct.world !== 1 && acct.world !== 2 && acct.world !== 3)) {
             return null;
         }
         if (this.slots.some(s => normalizeUsername(s.account.username) === username)) {
@@ -275,7 +275,7 @@ export class MultiBoxController {
 
     async switchWorld(id: number, world: WorldNumber): Promise<boolean> {
         const slot = this.slots.find(s => s.id === id);
-        if (this.switchingWorld || !slot || this.worldSwitches.has(id) || (world !== 1 && world !== 2) || world === slot.account.world) return false;
+        if (this.switchingWorld || !slot || this.worldSwitches.has(id) || (world !== 1 && world !== 2 && world !== 3) || world === slot.account.world) return false;
         const pending = new AbortController();
         this.worldSwitches.set(id, pending);
         let reconnect = slot.handle.status().ingame;
