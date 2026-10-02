@@ -1680,7 +1680,7 @@ export const CASES: readonly Case[] = [
         harness: 'wildyagility-lap-timing-live.ts',
         covers: { scripts: ['WildyAgility'] },
         status: 'vetted',
-        provenAt: 'wip',
+        provenAt: 'ca2fe1c53d540841ab15fb351d0767f5fbb00e26',
         budgetMin: 9,
         note: 'Times 10 laps from inside the course at Agility 52 and reports xp/hr plus the per-obstacle clear-tick split. Wall-clock speed proof, so it pins ::speed to the standard 600ms tick.'
     },
