@@ -43,7 +43,6 @@ import {
     nearCourseEntry,
     nearTile,
     onCourse,
-    reactionMs,
     southOfRidge,
     type RidgeOutcome
 } from './WildyAgilityLogic.js';
@@ -892,9 +891,8 @@ class RunLap implements Task {
             }
             this.bot.lastClearedTick = Game.tick();
             this.bot.advance();
-            // Short humanized pause only, do not block on animation (combat/path
-            // jitter can keep animating and previously hung the next lap silently).
-            await Execution.delay(reactionMs());
+            // No settle pause: the xp landing is the settle, and the next loop pass picks up the next
+            // stand. A humanized delay here is 1.2s per obstacle that buys nothing the xp did not.
             return;
         }
 

@@ -1676,6 +1676,15 @@ export const CASES: readonly Case[] = [
         note: "Witch's House by stage; --stage jumps %ballquest, --stocked hands over the cheese and gloves so a staged run does not shop for them"
     },
     {
+        id: 'wildyagility-lap-timing-live',
+        harness: 'wildyagility-lap-timing-live.ts',
+        covers: { scripts: ['WildyAgility'] },
+        status: 'vetted',
+        provenAt: 'wip',
+        budgetMin: 9,
+        note: 'Times 10 laps from inside the course at Agility 52 and reports xp/hr plus the per-obstacle clear-tick split. Wall-clock speed proof, so it pins ::speed to the standard 600ms tick.'
+    },
+    {
         id: 'wildyagility-food-startup-live',
         harness: 'wildyagility-food-startup-live.ts',
         covers: { scripts: ['WildyAgility'] },
