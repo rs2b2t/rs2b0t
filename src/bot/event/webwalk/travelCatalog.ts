@@ -2,6 +2,7 @@
 // Destinations follow content constants; live probes may refine the approach stands.
 
 import type { TransportEdgeData } from './PathFinder.js';
+import { iceQueenRockslideEdges } from './iceQueenRockslide.js';
 import { essenceExitEdges } from './essenceExit.js';
 import { parseLcCoord } from './geometry/lcCoord.js';
 import { REQ } from './transportQuestReqs.js';
@@ -613,7 +614,8 @@ export function curatedTravelEdges(): TransportEdgeData[] {
         ...handelmortDoorEdges(),
         ...agilityShortcutEdges(),
         ...elkoyMazeEdges(),
-        ...desertMiningCampEdges()
+        ...desertMiningCampEdges(),
+        ...iceQueenRockslideEdges()
     ];
 }
 
