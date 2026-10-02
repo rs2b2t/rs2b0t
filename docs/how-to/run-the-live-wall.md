@@ -32,14 +32,16 @@ Chrome and Firefox still use browser storage, with a dedicated profile for each
 port under `~/.local/state/rs2b0t/` (or `$XDG_STATE_HOME/rs2b0t/`). Shared saved data
 across ports is available in the Electron viewer.
 
-One wall can run accounts on both live worlds. Start it with `bun run b0t`, open
-**Add bot**, and choose **World 1** or **World 2** beside each saved profile or in
+One wall can run accounts on all three live worlds. Start it with `bun run b0t`, open
+**Add bot**, and choose **World 1**, **World 2** or **World 3** beside each saved profile or in
 the new-profile form. **load all profiles** uses those saved choices. Existing
 profiles keep the wall's default world until you assign one. Scripts, settings,
 tabs and profile order stay attached to the account.
 
-Saved World 3 profiles now use World 2 when you unlock the vault or import a
-profile file. Credentials, tabs and script settings are preserved.
+Saved world choices survive vault unlocks and profile imports. Profiles already
+assigned to World 2 stay there until you change them. Relaunch Electron with
+`bun run b0t` to load World 3 support. Close older instances before saving World 3
+choices because their vault code still changes World 3 assignments to World 2.
 
 Each rail tile shows its script name, with a state label when paused, stopped or
 crashed. The bot panel's status shows the connected world, or the target while
@@ -51,7 +53,7 @@ stay attached to the account; start the script again when ready. **Cancel** keep
 the original world and leaves scripts and auto-login stopped. The in-game logout
 button also stops the script and auto-login so the account stays logged out.
 
-The launcher builds one local client and starts one proxy for both worlds. No
+The launcher builds one local client and starts one proxy for all three worlds. No
 second Electron window or launcher is needed. Profile export/import preserves
 world choices. Importing over an already-loaded profile changes its saved choice;
 it does not interrupt that profile's current session.
