@@ -4,12 +4,13 @@ import { Game } from '../../api/game/Game.js';
 import { Inventory, type InvItem } from '../../api/inventory/Inventory.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Bank } from '../../api/bank/Bank.js';
+import { openBankAccess } from '../../api/bank/Banking.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Paint } from '../../paint/Paint.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { nearestBankReachable } from '../../api/bank/BankLocations.js';
+import { nearestBankReachable, type BankLocation } from '../../api/bank/BankLocations.js';
 import { Navigator } from '../../event/webwalk/Navigator.js';
 import { liveCatalog } from '../../api/market/catalog.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
@@ -102,6 +103,7 @@ export default class Alcher extends TaskBot {
     private alchs = 27;
 
     // Why: the bank access is resolved once; every trip only opens the booth.
+    private bank: BankLocation | null = null;
     private bankAccess: { name: string; op: string } = BOOTH;
     private bankTile: Tile | null = null;
     private bankName = 'the bank';
@@ -179,7 +181,8 @@ export default class Alcher extends TaskBot {
             ScriptRunner.stop('no reachable bank');
             return false;
         }
-        this.bankAccess = bank.access ?? BOOTH;
+        this.bank = bank;
+        this.bankAccess = bank.npcAccess ?? bank.access ?? BOOTH;
         this.bankTile = bank.tile;
         this.bankName = bank.name;
         this.log(`banking at ${bank.name} (${this.bankAccess.name} / ${this.bankAccess.op})`);
@@ -209,7 +212,7 @@ export default class Alcher extends TaskBot {
         }
         await this.settleCast();
         this.setStatus('opening bank', COOL);
-        if (await Bank.openNearest(this.bankAccess.name, this.bankAccess.op, m => this.log(`  ${m}`))) {
+        if (await openBankAccess(this.bank, BOOTH, m => this.log(`  ${m}`))) {
             return true;
         }
         const here = Game.tile();

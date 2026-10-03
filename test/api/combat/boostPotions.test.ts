@@ -6,6 +6,7 @@ import {
     EMPTY_VIAL,
     SUPER_ATTACK,
     SUPER_STRENGTH,
+    SUPER_SET,
     boostFaded,
     plannedPotions,
     RANGING_POTION,
@@ -86,6 +87,14 @@ describe('potionToSip', () => {
 });
 
 describe('plannedPotions', () => {
+    test('full super sets default to three-dose flasks and honour a defence loadout override', () => {
+        expect(plannedPotions([], SUPER_SET).map(p => p.flask)).toEqual(['Super attack(3)', 'Super strength(3)', 'Super defence(3)']);
+        const plans = plannedPotions([{ item: 'Super defence(4)', qty: 2 }], SUPER_SET);
+        const defence = plans.find(p => p.potion.skill === 'defence');
+        expect(defence?.flask).toBe('Super defence(4)');
+        expect(defence?.want).toBe(2);
+        expect(potionToSip({ plans, held: () => 1, levels: skill => ({ base: 70, effective: skill === 'defence' ? 72 : 85 }) })?.potion.skill).toBe('defence');
+    });
     test('falls back to one three-dose flask of each when the loadout names no potion', () => {
         expect(plannedPotions([])).toEqual([
             { potion: SUPER_ATTACK, flask: 'Super attack(3)', want: 1 },

@@ -7,6 +7,7 @@ import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../geometry/Tile.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Bank } from '../../api/bank/Bank.js';
+import { openBankAccess } from '../../api/bank/Banking.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Paint } from '../../paint/Paint.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
@@ -294,7 +295,8 @@ class FoodBank implements Task {
         }
 
         const access = bank.access ?? { name: 'Bank booth', op: 'Use-quickly' };
-        if (!(await Bank.openNearestAccess(access, message => this.bot.log(`  ${message}`)))) {
+        const log = (message: string) => this.bot.log(`  ${message}`);
+        if (!(await openBankAccess(bank, access, log))) {
             this.bot.stopSafely(`could not open ${bank.name} bank`);
             return;
         }

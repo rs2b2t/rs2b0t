@@ -47,7 +47,7 @@ export interface BankDestination {
 }
 
 /** A bank behind a conversation opens differently from one behind a booth. */
-function openAccess(
+export function openBankAccess(
     dest: { access?: BankObjectAccess; npcAccess?: BankNpcAccess } | null,
     fallback: BankObjectAccess,
     log?: (m: string) => void
@@ -231,7 +231,7 @@ export const Banking = {
         if (route === 'local-bank' && nearest) {
             log(`bank: local ${nearest.name} bank — using it instead of distant preset`);
             await Traversal.walkResilient(asTile(nearest.tile), { radius: 4, timeoutMs: 120_000, log });
-            return openAccess(nearest, { name: boothName, op: boothOp }, log);
+            return openBankAccess(nearest, { name: boothName, op: boothOp }, log);
         }
 
         if (route === 'preset-stand' && opts.stand) {
@@ -249,7 +249,7 @@ export const Banking = {
                 && bankDistance(stand, known.tile) <= nearbyRadius
             ) {
                 log(`bank: ${known.name} uses ${known.npcAccess ? 'npc' : 'object'} access`);
-                return openAccess(known, { name: boothName, op: boothOp }, log);
+                return openBankAccess(known, { name: boothName, op: boothOp }, log);
             }
             return Bank.openBooth(stand, boothName, boothOp, log);
         }
@@ -268,7 +268,7 @@ export const Banking = {
             }
         }
 
-        return openAccess(destination, { name: boothName, op: boothOp }, log);
+        return openBankAccess(destination, { name: boothName, op: boothOp }, log);
     },
 
     async bankNearest(opts: {

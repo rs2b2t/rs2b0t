@@ -13,6 +13,7 @@ import { renderRailTile, slotIsRunning } from './RailTile.js';
 import { ResourcePanel } from './ResourcePanel.js';
 import { SettingsPanel } from './SettingsPanel.js';
 import { TabBar } from './TabBar.js';
+import { BotTabMenu } from './BotTabMenu.js';
 import { VaultPrompt } from './VaultPrompt.js';
 import { applyBoxStorage, collectBoxStorage, type ProfileSnapshot } from './ProfileTransfer.js';
 import type { Account } from './types.js';
@@ -106,6 +107,15 @@ function boot(): void {
         onRemove: name => void mutateTabs(() => controller.removeTab(name)),
         onMove: (name, toIndex) => void mutateTabs(() => controller.moveTab(name, toIndex)),
         onDropBot: (id, tab) => void mutateTabs(() => controller.setSlotTab(id, tab))
+    });
+    const botTabMenu = new BotTabMenu((id, tab) => void mutateTabs(() => controller.setSlotTab(id, tab)));
+    rail.addEventListener('contextmenu', ev => {
+        const tile = (ev.target as HTMLElement).closest<HTMLElement>('.mbx-slot');
+        if (!tile) return;
+        const slot = controller.snapshot()[railTiles().indexOf(tile)];
+        if (!slot) return;
+        ev.preventDefault();
+        botTabMenu.open(slot, controller.tabs(), ev.clientX, ev.clientY, rail);
     });
 
     function moveSlot(id: number, toIndex: number): boolean {
@@ -305,7 +315,7 @@ function boot(): void {
         try {
             const slot = controller.snapshot().find(candidate => normalizeUsername(candidate.username) === identity);
             if (slot && (slot.targetWorld !== world || slot.switchingWorld !== null)) {
-                if (!controller.switchWorld(slot.id, world)) {
+                if (!await controller.switchWorld(slot.id, world)) {
                     return false;
                 }
             }
@@ -324,7 +334,7 @@ function boot(): void {
         const profile = vault.list().find(candidate => normalizeUsername(candidate.username) === normalizeUsername(slot.username));
         try {
             if (profile) return await changeProfileWorld(profile, world);
-            const changed = controller.switchWorld(id, world);
+            const changed = await controller.switchWorld(id, world);
             renderRail();
             return changed;
         } catch {
@@ -436,6 +446,7 @@ function boot(): void {
     window.addEventListener(
         'pagehide',
         () => {
+            botTabMenu.close();
             resources.stop();
             traffic.close();
         },

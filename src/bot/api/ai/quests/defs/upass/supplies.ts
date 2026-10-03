@@ -227,13 +227,16 @@ function bestInBank(snap: QuestSnapshot, kinds: readonly string[]): string | nul
 }
 
 /** A declared loadout is taken literally; declaring nothing takes the best tier the bank holds. */
-export function plannedGear(snap: QuestSnapshot): string[] {
-    const declared = gearOf(QuestLoadout.current);
+export function plannedGear(snap: QuestSnapshot, slots: 'all' | 'weapon' = 'all'): string[] {
+    if (slots === 'weapon' && meleeArmed(snap)) return [];
+    const weapon = QuestLoadout.current?.worn.righthand;
+    const declared = slots === 'weapon' ? (weapon ? [weapon] : []) : gearOf(QuestLoadout.current);
     if (declared.length > 0) {
         return declared.filter(name => !unwearable.has(name.toLowerCase()) && !snap.worn.has(name.toLowerCase()));
     }
     const out: string[] = [];
-    for (const { kinds } of GEAR_SLOTS) {
+    for (const { slot, kinds } of GEAR_SLOTS) {
+        if (slots === 'weapon' && slot !== 'weapon') continue;
         if (wearingSlot(snap, kinds)) {
             continue;
         }
@@ -246,8 +249,8 @@ export function plannedGear(snap: QuestSnapshot): string[] {
 }
 
 /** Draw and wear the melee kit; refusals are shed. */
-export function wearGear(snap: QuestSnapshot): QuestStep | null {
-    const names = plannedGear(snap);
+export function wearGear(snap: QuestSnapshot, slots: 'all' | 'weapon' = 'all'): QuestStep | null {
+    const names = plannedGear(snap, slots);
     if (names.length === 0) {
         return null;
     }
@@ -313,8 +316,8 @@ function packGear(snap: QuestSnapshot, slots: readonly { kinds: readonly string[
 // Why: a rune platebody wants Dragon Slayer, and `equip` answers a refusal and a miss the same way, false, so a plain equip step would retry forever. The piece is written off and the step still succeeds.
 
 /** Wear the next piece of melee kit the pack is still carrying, once the bow has had its turn. */
-export function drawGear(snap: QuestSnapshot): QuestStep | null {
-    const name = packGear(snap, GEAR_SLOTS);
+export function drawGear(snap: QuestSnapshot, slots: 'all' | 'weapon' = 'all'): QuestStep | null {
+    const name = slots === 'weapon' ? packWeapon(snap) : packGear(snap, GEAR_SLOTS);
     if (name === null) {
         return null;
     }

@@ -170,7 +170,7 @@ describe('bank entry gates', () => {
         const gated = BANK_LOCATIONS.filter(b => b.requires !== undefined)
             .map(b => b.name)
             .sort();
-        expect(gated).toEqual(['Canifis', 'Fishing Guild', 'Mage Arena', 'Shilo Village', 'Zanaris']);
+        expect(gated).toEqual(['Canifis', 'Fishing Guild', 'Legends Guild', 'Mage Arena', 'Shilo Village', 'Zanaris']);
     });
 });
 

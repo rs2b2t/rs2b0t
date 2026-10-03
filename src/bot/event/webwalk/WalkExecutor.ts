@@ -15,6 +15,7 @@ import { Reachability } from './geometry/Reachability.js';
 import { Input } from '../../input/Input.js';
 import { Navigator, type PathResult } from './Navigator.js';
 import { DirectNavigator } from './DirectNavigator.js';
+import { ICE_QUEEN_ROCKSLIDE_ID } from './iceQueenRockslide.js';
 import type { TransportInfo, Waypoint } from './PathFinder.js';
 import {
     chebyshev,
@@ -1260,6 +1261,8 @@ class WalkExecutorImpl {
                 return false;
             }
 
+            if (transport.locId === ICE_QUEEN_ROCKSLIDE_ID
+                && !(await DirectNavigator.walkTo(approach, 0, APPROACH_STEP_MS))) return false;
             const before = reader.worldTile();
             const mark = GameMessages.mark();
             if (!loc.interact(transport.action)) {

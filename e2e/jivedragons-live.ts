@@ -370,7 +370,7 @@ const CLUE_TOOLS: BankSeedItem[] = [
     { debugName: 'trail_watch', displayName: 'Watch', qty: 1 },
     { debugName: 'trail_chart', displayName: 'Chart', qty: 1 },
     { debugName: 'coins', displayName: 'Coins', qty: 10_000 },
-    // Why: a hard trail is refused at the bank without Lost City, a Dragon dagger(p), a Superantipoison dose and 15 Sharks, the kit the Saradomin Wizard's poisoned melee under Protect from Magic demands.
+    // Why: a hard trail is refused at the bank without Lost City, a Dragon dagger(p), a Superantipoison dose and 12 Sharks, the kit the Saradomin Wizard's poisoned melee under Protect from Magic demands.
     { debugName: 'dragon_dagger_p', displayName: 'Dragon dagger(p)', qty: 1 },
     { debugName: '4dose2antipoison', displayName: 'Superantipoison(4)', qty: 3 },
     { debugName: 'shark', displayName: 'Shark', qty: 60 }

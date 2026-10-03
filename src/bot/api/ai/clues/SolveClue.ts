@@ -19,6 +19,7 @@ import {
     heldAxe,
     jungleAxe,
     jungleKeepNames,
+    jungleKitMissing,
     walkAcrossKharazi
 } from '#/bot/api/ai/clues/kharaziTravel.js';
 import type { NavPoint } from '#/bot/event/webwalk/PathFinder.js';
@@ -39,7 +40,7 @@ import {
     namesHaveEntranaRestrictedGear
 } from '#/bot/event/webwalk/exec/specialCrossing.js';
 import { snapshotWorldState } from '#/bot/event/webwalk/worldStateLive.js';
-import { hardClueKit, DDS_IDS, SHARK_ID } from './hardClueKit.js';
+import { hardClueKit, GUARDIAN_WEAPON_IDS, SHARK_ID } from './hardClueKit.js';
 import { hardKitSnapshot, hardKitFingerprint, stockHardWeapon, stockHardSupplies } from './hardCluePreparation.js';
 import { sustainUntil } from './Guardian.js';
 
@@ -49,6 +50,7 @@ const ALTAR_RADIUS = 2;
 const ALTAR_WALK_MS = 180_000;
 const ALTAR_RESTORE_MS = 6000;
 const EAT_CONFIRM_TICKS = 2;
+const ROTTEN_FOOD_ID = 2959;
 
 export function heldClueLikeId(): number | null {
     const it = Inventory.items().find(i => CLUE_DB[i.id] !== undefined || CASKET_IDS[i.id] !== undefined);
@@ -82,6 +84,7 @@ export interface SolveClueHost {
     isFood(name: string): boolean;
     foodName(): string;
     foodWithdraw(): number;
+    hardFoodTarget?: number;
     weaponName?(): string;
     enabled?(): boolean;
     /** Travel to the initial bank with host upkeep intact; false blocks the trail. */
@@ -96,7 +99,7 @@ export interface SolveClueHost {
 export function walkToBank(tile: NavPoint, log: (m: string) => void): Promise<boolean> {
     if (crossesClueDuel(tile)) return walkAcrossClueDuel(tile, 3, log);
     if (crossesTirannwn(tile)) {
-        return walkAcrossTirannwn(tile, 3, log);
+        return walkAcrossTirannwn(tile, 3, log, trailWalkOpts(log, 3));
     }
     // Why: a trail that dug in the Kharazi Jungle has to cut back out before any bank is on the graph.
     if (crossesKharazi(tile)) {
@@ -114,6 +117,8 @@ export class SolveClue implements Task {
     private retreatPending = false;
     private initialBankVisited = false;
     private completionPending = false;
+    private collectingRewards = false;
+    private trailWeapon: string | null = null;
 
     private async retreatFromGuardian(): Promise<boolean> {
         const here = Game.tile();
@@ -128,14 +133,22 @@ export class SolveClue implements Task {
         return true;
     }
 
+    private preparationFingerprint(includeBank = false): string {
+        const kit = hardKitFingerprint(includeBank);
+        if (!KHARAZI_CLUES.has(heldClueScrollId() ?? -1)) return kit;
+        const items = [...Inventory.items(), ...Equipment.items(), ...(includeBank && Bank.ready() ? Bank.items() : [])];
+        const tools = jungleKeepNames().map(name => items.filter(i => i.name === name).reduce((n, i) => n + i.count, 0));
+        return `${kit}:${tools.join(',')}:${hasJungleMap()}`;
+    }
+
     private kitBlocked(): boolean {
-        return this.blockedKit !== null && this.blockedKit === hardKitFingerprint()
-            && !(Bank.ready() && this.blockedBankKit !== null && this.blockedBankKit !== hardKitFingerprint(true));
+        return this.blockedKit !== null && this.blockedKit === this.preparationFingerprint()
+            && !(Bank.ready() && this.blockedBankKit !== null && this.blockedBankKit !== this.preparationFingerprint(true));
     }
 
     private blockHardKit(): void {
-        this.blockedKit = hardKitFingerprint();
-        if (Bank.ready()) this.blockedBankKit = hardKitFingerprint(true);
+        this.blockedKit = this.preparationFingerprint();
+        if (Bank.ready()) this.blockedBankKit = this.preparationFingerprint(true);
     }
 
     retry(): void {
@@ -148,23 +161,25 @@ export class SolveClue implements Task {
         this.initialBankVisited = false;
     }
     private bankedThisSolve = false;
+    private recoveryPending = false;
 
     /** One restock trip per dry spell, cleared as soon as food is held again. */
     private triedFoodRestock = false;
 
     private abandonedClueId: number | null = null;
 
-    /** Equipment banked for Entrana and restored afterward. */
     private strippedGear: string[] = [];
+    private strippedCounts = new Map<string, number>();
+    private entranaStripped = false;
 
     private status = 'idle';
 
     constructor(private readonly host: SolveClueHost) {
-        ClueExecutor.retryGuardian();
+        ClueExecutor.resetSession();
     }
 
     ownsEquipment(): boolean {
-        return this.strippedGear.length > 0 || (this.hardTrail && this.bankedThisSolve);
+        return (this.recoveryPending && !this.kitBlocked()) || this.retreatPending || this.collectingRewards || this.strippedGear.length > 0 || (this.hardTrail && this.bankedThisSolve);
     }
 
     clueStatus(): string {
@@ -172,6 +187,8 @@ export class SolveClue implements Task {
     }
 
     noteDeath(): void {
+        this.recoveryPending = false;
+        this.collectingRewards = false;
         this.bankedThisSolve = false;
         const id = heldClueScrollId();
         if (!this.hardTrail && !(id !== null && CLUE_DB[id]?.obj.includes('_hard_'))) return;
@@ -182,6 +199,7 @@ export class SolveClue implements Task {
     }
 
     validate(): boolean {
+        if (this.collectingRewards) return true;
         if (this.completionPending) return true;
         if (this.retreatPending) return true;
         if (this.strippedGear.length > 0 && (this.restoring || heldClueLikeId() === null)) return true;
@@ -190,6 +208,7 @@ export class SolveClue implements Task {
             if (this.kitBlocked()) return false;
             this.blockedKit = null;
         }
+        if (this.recoveryPending) return true;
         if (!(this.host.enabled?.() ?? true) || EventSignal.pending()) {
             return false;
         }
@@ -203,7 +222,7 @@ export class SolveClue implements Task {
     /** Why: A trail owns one task call, so install upkeep here to eat between legs and during guardian fights. */
     private async eatIfHurt(): Promise<void> {
         const held = (): { name: string | null; interact(a: string): boolean | Promise<boolean> }[] =>
-            Inventory.items().filter(i => this.hardTrail ? i.id === SHARK_ID : this.host.isFood(i.name ?? ''));
+            Inventory.items().filter(i => this.hardTrail ? i.id === SHARK_ID : !i.noted && this.host.isFood(i.name ?? ''));
         const food = held();
         const maxHp = Skills.level('hitpoints');
         const hp = Skills.effective('hitpoints');
@@ -225,13 +244,20 @@ export class SolveClue implements Task {
         }
     }
 
+    private async upkeep(): Promise<void> {
+        await this.eatIfHurt();
+        const rotten = Inventory.items().find(item => item.id === ROTTEN_FOOD_ID);
+        if (rotten) await rotten.interact('Drop');
+    }
+
     async execute(): Promise<void> {
-        if (this.completionPending || this.retreatPending || (this.strippedGear.length > 0 && (this.restoring || heldClueLikeId() === null))) {
+        if (!this.collectingRewards && (!this.recoveryPending || this.restoring) && (this.completionPending || this.retreatPending || (this.strippedGear.length > 0 && (this.restoring || heldClueLikeId() === null)))) {
             const upkeep = Sustain.hook;
-            Sustain.set(() => this.eatIfHurt());
+            Sustain.set(() => this.upkeep());
             try {
                 if (this.retreatPending && !(await this.retreatFromGuardian())) return;
                 await this.restoreStrippedGear();
+                if (this.blockedKit !== null) this.blockHardKit();
                 if (this.completionPending && !this.restoring) this.finishTrail();
             } finally {
                 Sustain.set(upkeep);
@@ -241,11 +267,10 @@ export class SolveClue implements Task {
         if (this.deathBlocked || this.kitBlocked()) return;
         const held = heldClueLikeId();
         const hard = held !== null && (CLUE_DB[held]?.obj ?? CASKET_IDS[held])?.includes('_hard_') === true;
-        const startingHard = !this.hardTrail && hard;
-        if (startingHard) {
+        if (held !== null && this.trailWeapon === null) {
             const original = Equipment.items().find(i => i.slot === 3);
-            const name = original?.name ?? this.host.weaponName?.() ?? '';
-            if (name !== '' && !this.strippedGear.includes(name)) this.strippedGear.push(name);
+            this.trailWeapon = original?.name ?? this.host.weaponName?.() ?? '';
+            if (this.trailWeapon !== '' && (original || hard) && !this.strippedGear.includes(this.trailWeapon)) this.strippedGear.push(this.trailWeapon);
         }
         if (held !== null) this.hardTrail = hard;
         const prepare = !this.bankedThisSolve && !this.initialBankVisited && heldClueScrollId() !== null ? this.host.prepareInitialBank : undefined;
@@ -256,7 +281,7 @@ export class SolveClue implements Task {
         }
         if (prepare) this.initialBankVisited = true;
         const hostUpkeep = Sustain.hook;
-        Sustain.set(() => this.eatIfHurt());
+        Sustain.set(() => this.upkeep());
         try {
             await this.runTrail(prepare !== undefined);
         } finally {
@@ -273,7 +298,7 @@ export class SolveClue implements Task {
         if ((this.host.foodName() ?? '') === '') {
             return false;
         }
-        const held = Inventory.items().some(i => this.host.isFood(i.name ?? ''));
+        const held = Inventory.items().some(i => !i.noted && this.host.isFood(i.name ?? ''));
         if (held) {
             this.triedFoodRestock = false;
             return false;
@@ -282,6 +307,21 @@ export class SolveClue implements Task {
     }
 
     private async runTrail(initialBankPrepared = false): Promise<void> {
+        if (this.recoveryPending) {
+            this.retreatPending ||= Game.inCombat();
+            if (this.retreatPending && !(await this.retreatFromGuardian())) return;
+            if (!(await this.bankFirst(false, true))) {
+                if (this.hardTrail && this.blockedKit !== null) {
+                    await Bank.close();
+                    this.restoring = true;
+                    await this.restoreStrippedGear();
+                    this.blockHardKit();
+                }
+                return;
+            }
+            this.recoveryPending = false;
+            this.bankedThisSolve = true;
+        }
         const restock = this.bankedThisSolve && !this.hardTrail && this.needsFood();
         if (heldClueScrollId() !== null && (!this.bankedThisSolve || restock)) {
             if (restock) {
@@ -302,7 +342,8 @@ export class SolveClue implements Task {
 
         this.status = 'solving';
         this.host.setStatus('solving clue trail');
-        let outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`));
+        let outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`),
+            () => this.entranaStripped && heldClueScrollId() !== null && !heldClueNeedsEntranaStrip());
         if (outcome === 'supplies-needed') {
             this.bankedThisSolve = false;
             this.retreatPending = Game.inCombat();
@@ -310,7 +351,8 @@ export class SolveClue implements Task {
             if (await this.bankFirst()) {
                 this.retreatPending = false;
                 this.bankedThisSolve = true;
-                outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`));
+                outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`),
+                    () => this.entranaStripped && heldClueScrollId() !== null && !heldClueNeedsEntranaStrip());
             } else if (this.blockedKit === null) {
                 this.status = 'waiting for hard kit bank';
                 return;
@@ -330,6 +372,16 @@ export class SolveClue implements Task {
                 return;
             }
         }
+        if (outcome === 'reset-needed') {
+            this.recoveryPending = true;
+            this.bankedThisSolve = false;
+            this.initialBankVisited = true;
+            this.triedFoodRestock = false;
+            this.status = 'resetting at nearest bank';
+            this.host.setStatus('clue: resetting at nearest bank');
+            return;
+        }
+        this.collectingRewards = outcome === 'yield' && heldClueLikeId() === null && ClueExecutor.current !== null;
         if (outcome === 'dead' || outcome === 'guardian-lost') {
             if (outcome === 'dead') this.noteDeath();
             else this.deathBlocked = true;
@@ -348,10 +400,17 @@ export class SolveClue implements Task {
             this.status = 'event: yielding';
             return;
         }
+        if (this.trailWeapon && this.strippedGear.includes(this.trailWeapon) && !Equipment.contains(this.trailWeapon)) {
+            const current = Equipment.items().find(i => i.slot === 3)?.name ?? 'none';
+            this.host.log(`[clue] ${outcome}: restoring starting weapon '${this.trailWeapon}' (equipped: '${current}')`);
+        }
         if (outcome === 'abandon') {
             this.abandonedClueId = heldClueLikeId();
             this.bankedThisSolve = false;
             this.initialBankVisited = false;
+            this.restoring = true;
+            this.retreatPending = Game.inCombat();
+            if (this.retreatPending && !(await this.retreatFromGuardian())) return;
             await this.restoreStrippedGear();
             this.status = 'abandoned';
             this.host.log(`[clue] abandoned ${this.abandonedClueId ?? '?'} — leaving it in the pack`);
@@ -375,67 +434,79 @@ export class SolveClue implements Task {
         this.host.log('[clue] trail complete');
     }
 
-    /**
-     * Put back what the Entrana strip banked.
-     * Why: the grind bots only re-equip their configured weapon and shield, so nothing else reclaims stripped armour.
-     */
-    private async restoreStrippedGear(): Promise<void> {
-        this.restoring = true;
+    private async restoreStrippedGear(preserveTrail = false): Promise<boolean> {
+        this.restoring = !preserveTrail;
+        const count = (name: string): number => this.strippedCounts.get(name) ?? 1;
+        const equipped = (name: string): number => Equipment.items().find(i => i.name?.toLowerCase() === name.toLowerCase())?.count ?? 0;
+        const restored = (name: string): boolean => equipped(name) >= count(name);
         for (const name of this.strippedGear) {
-            if (!Equipment.contains(name) && Inventory.first(name) !== null) await Equipment.equip(name);
+            if (!restored(name) && equipped(name) + Inventory.count(name) >= count(name)) await Equipment.equip(name);
         }
-        const want = this.strippedGear.filter(n => !Equipment.contains(n));
+        const want = this.strippedGear.filter(n => !restored(n));
         if (want.length === 0) {
-            this.strippedGear = [];
+            if (!preserveTrail) {
+                this.strippedGear = [];
+                this.trailWeapon = null;
+            }
             this.restoring = false;
-            return;
+            this.entranaStripped = false;
+            this.strippedCounts.clear();
+            return true;
         }
 
         const here = Game.tile();
         const bank = here ? nearestBank(here) : null;
         if (!bank) {
             this.host.log(`[clue] no bank nearby to reclaim ${want.join(', ')} — will retry after the next trail`);
-            return;
+            return false;
         }
 
         this.status = 'restoring gear';
         this.host.setStatus('clue: reclaiming stripped gear');
-        this.host.log(`[clue] reclaiming gear banked for Entrana: ${want.join(', ')}`);
+        this.host.log(`[clue] reclaiming trail gear: ${want.join(', ')}`);
 
         if (!(await walkToBank(bank.tile, m => this.host.log(`  ${m}`)))) {
             this.host.log('[clue] walk to the bank failed — gear stays banked, will retry');
-            return;
+            return false;
         }
         if (!(await openClueBank(m => this.host.log(`  ${m}`)))) {
             this.host.log('[clue] could not open the bank — gear stays banked, will retry');
-            return;
+            return false;
         }
-        if (!(await Bank.waitReady())) return;
+        if (!(await Bank.waitReady())) return false;
         if (Inventory.free() < want.filter(n => Inventory.first(n) === null).length) {
             await Bank.depositAllMatching((name, id) => !want.includes(name) && CLUE_DB[id] === undefined && CASKET_IDS[id] === undefined);
         }
         for (const name of want) {
-            if (Inventory.first(name) === null) {
-                await Bank.withdraw(name, 'Withdraw-1');
-                await Execution.delayUntil(() => Inventory.first(name) !== null, 2500);
+            const needed = count(name) - equipped(name) - Inventory.count(name);
+            if (needed > 0) {
+                if (needed > 1) await Bank.withdrawX(name, needed);
+                else await Bank.withdraw(name, 'Withdraw-1');
+                if (!(await Execution.delayUntil(() => equipped(name) + Inventory.count(name) >= count(name), 2500))) return false;
             }
         }
-        await Bank.close();
-        await Execution.delayUntil(() => !Bank.isOpen(), 3000);
+        if (!(await Bank.close()) || !(await Execution.delayUntil(() => !Bank.isOpen(), 3000))) return false;
 
         for (const name of want) {
-            if (!Equipment.contains(name) && Inventory.first(name) !== null) {
+            if (!restored(name) && Inventory.first(name) !== null) {
                 await Equipment.equip(name);
-                await Execution.delayUntil(() => Equipment.contains(name), 2500);
+                await Execution.delayUntil(() => restored(name), 2500);
             }
         }
 
-        // Why: names that would not go back on stay listed so the next trail retries them.
-        this.strippedGear = want.filter(n => !Equipment.contains(n));
-        this.restoring = this.strippedGear.length > 0;
-        if (this.strippedGear.length > 0) {
-            this.host.log(`[clue] could not re-equip ${this.strippedGear.join(', ')} — will retry`);
+        const missing = this.strippedGear.filter(n => !restored(n));
+        if (!preserveTrail) this.strippedGear = missing;
+        this.restoring = !preserveTrail && missing.length > 0;
+        if (missing.length > 0) {
+            this.host.log(`[clue] could not re-equip ${missing.join(', ')} — will retry`);
+            return false;
         }
+        this.entranaStripped = false;
+        this.strippedCounts.clear();
+        if (!preserveTrail) {
+            this.trailWeapon = null;
+        }
+        return true;
     }
 
     /**
@@ -443,7 +514,8 @@ export class SolveClue implements Task {
      * Why: `~woodcutting_axe_checker` reads the pack and the right hand, so the axe has to come out of the bank.
      * Why: without them the trail burns its budget swinging at a band that won't open.
      */
-    private async stockJungleKit(): Promise<void> {
+    private async stockJungleKit(): Promise<'ready' | 'retry' | 'missing'> {
+        if (!Bank.isOpen() || !Bank.ready() || EventSignal.pending()) return 'retry';
         const want: string[] = [];
         if (Inventory.first(MACHETE) === null && !Equipment.contains(MACHETE)) {
             want.push(MACHETE);
@@ -452,6 +524,7 @@ export class SolveClue implements Task {
             const axe = jungleAxe();
             if (axe === null) {
                 this.host.log('[clue] no axe in the pack or the bank — the Kharazi band cannot be cut');
+                return 'missing';
             } else {
                 want.push(axe);
             }
@@ -460,16 +533,48 @@ export class SolveClue implements Task {
             want.push(RADIMUS_NOTES);
         }
         for (const name of want) {
-            await Bank.withdraw(name, 'Withdraw-1');
-            if (await Execution.delayUntil(() => Inventory.first(name) !== null, 2500)) {
-                this.host.log(`[clue] took ${name} for the Kharazi Jungle`);
-            } else {
-                this.host.log(`[clue] no '${name}' in the bank — the Kharazi dig will abandon`);
+            if (!Bank.isOpen() || !Bank.ready() || EventSignal.pending()) return 'retry';
+            if (Bank.count(name) < 1) {
+                this.host.log(`[clue] no '${name}' in the bank — keeping the Kharazi clue`);
+                return 'missing';
             }
+            await Bank.withdraw(name, 'Withdraw-1');
+            if (!(await Execution.delayUntil(() => Inventory.first(name) !== null, 2500))) {
+                this.host.log(`[clue] '${name}' withdrawal did not land — will retry`);
+                return 'retry';
+            }
+            this.host.log(`[clue] took ${name} for the Kharazi Jungle`);
         }
+        return jungleKitMissing().length === 0 ? 'ready' : 'retry';
     }
 
-    private async bankFirst(initialBankPrepared = false): Promise<boolean> {
+    private async bankEntranaEquipment(protectedNames: ReadonlySet<string>): Promise<boolean> {
+        this.host.log('[clue] Entrana destination: clearing the pack and banking all equipment');
+        const deposit = (): Promise<void> => Bank.depositAllMatching(name => !protectedNames.has(name.toLowerCase()));
+        await deposit();
+        const worn = Equipment.items();
+        if (worn.length > 0) this.entranaStripped = true;
+        if (!Bank.isOpen() || Inventory.free() < worn.length) return false;
+        if (worn.length > 0) {
+            if (!(await Bank.close()) || !(await Execution.delayUntil(() => !Bank.isOpen(), 3000))) return false;
+            for (const item of worn) {
+                const name = item.name;
+                if (!name || EventSignal.pending()) return false;
+                if ((!this.hardTrail || !GUARDIAN_WEAPON_IDS.includes(item.id))
+                    && !this.strippedGear.some(n => n.toLowerCase() === name.toLowerCase())) {
+                    this.strippedGear.push(name);
+                }
+                if (this.strippedGear.includes(name)) this.strippedCounts.set(name, item.count);
+                if (!(await Equipment.unequip(name))) return false;
+            }
+            if (!(await openClueBank()) || !(await Bank.waitReady())) return false;
+            await deposit();
+        }
+        return Bank.isOpen() && Equipment.items().length === 0
+            && Inventory.items().every(i => protectedNames.has((i.name ?? '').toLowerCase()));
+    }
+
+    private async bankFirst(initialBankPrepared = false, rebuild = false): Promise<boolean> {
         this.status = 'banking';
         this.host.setStatus('clue: banking loot before the trail');
         if (!initialBankPrepared) {
@@ -477,7 +582,7 @@ export class SolveClue implements Task {
             const bank = here ? nearestBank(here) : null;
             if (!bank) {
                 this.host.log(this.hardTrail ? '[clue] no known bank; hard kit preparation blocked' : '[clue] no known bank to prep at — solving with the pack as-is');
-                return !this.hardTrail;
+                return !this.hardTrail && !rebuild;
             }
             this.host.log(`[clue] banking loot at the ${bank.name} bank (${bank.tile}) before solving`);
             if (!(await walkToBank(bank.tile, m => this.host.log(`  ${m}`)))) {
@@ -488,43 +593,37 @@ export class SolveClue implements Task {
 
         const scrollId = heldClueScrollId();
         const entranaStrip = heldClueNeedsEntranaStrip();
-        if (entranaStrip) {
-            this.host.log('[clue] Entrana destination — banking weapons/armour (monk search)');
-            // Unequip before bank open, side-view swaps inventory ops to Deposit-*.
-            for (const worn of Equipment.items()) {
-                const n = worn.name ?? '';
-                if (n !== '' && ENTRANA_RESTRICTED_GEAR_RE.test(n)) {
-                    await Equipment.unequip(n);
-                    if ((!this.hardTrail || !DDS_IDS.includes(worn.id)) && !this.strippedGear.some(g => g.toLowerCase() === n.toLowerCase())) {
-                        this.strippedGear.push(n);
-                    }
-                }
-            }
-        }
 
         if (!(await openClueBank(m => this.host.log(`  ${m}`)))) {
             this.host.log('[clue] could not open the bank — will retry');
             return false;
         }
-        if ((initialBankPrepared || this.hardTrail) && !Bank.ready()) {
+        if ((initialBankPrepared || rebuild || this.hardTrail) && !Bank.ready()) {
             this.status = 'bank preparation blocked';
             this.host.setStatus('clue: initial bank is not ready');
             return false;
         }
-        if (this.hardTrail && hardClueKit(hardKitSnapshot(true)) !== 'ready') {
-            this.status = `hard kit: ${hardClueKit(hardKitSnapshot(true))}`;
+        if (this.hardTrail && hardClueKit(hardKitSnapshot(true), this.host.hardFoodTarget) !== 'ready') {
+            this.status = `hard kit: ${hardClueKit(hardKitSnapshot(true), this.host.hardFoodTarget)}`;
             this.blockHardKit();
             await Bank.close();
             return false;
         }
 
         const protectedNames = new Set<string>();
+        const puzzleId = scrollId === null ? undefined : CLUE_DB[scrollId]?.puzzle?.id;
+        const keyId = scrollId === null ? undefined : CLUE_DB[scrollId]?.keyFrom?.keyId;
         for (const it of Inventory.items()) {
-            if ((CLUE_DB[it.id] !== undefined || CASKET_IDS[it.id] !== undefined) && it.name) {
+            if ((CLUE_DB[it.id] !== undefined || CASKET_IDS[it.id] !== undefined || it.id === puzzleId || it.id === keyId) && it.name) {
                 protectedNames.add(it.name.toLowerCase());
             }
         }
-        const weapon = (this.host.weaponName?.() ?? '').toLowerCase();
+        if (entranaStrip && !(await this.bankEntranaEquipment(protectedNames))) return false;
+        if (!entranaStrip && this.entranaStripped) {
+            if (!(await this.restoreStrippedGear(true))) return false;
+            if (!(await openClueBank()) || !(await Bank.waitReady())) return false;
+        }
+        const weapon = (this.trailWeapon ?? this.host.weaponName?.() ?? '').toLowerCase();
         const coordItems = new Set(['sextant', 'watch', 'chart']);
         const rowItems = scrollId !== null ? (CLUE_DB[scrollId]?.items ?? []) : [];
         const rowItemNames = new Set(rowItems.map(n => n.toLowerCase()));
@@ -532,26 +631,33 @@ export class SolveClue implements Task {
         const kit = teleportKitFor(snapshotWorldState());
         const keepTeleports = this.host.useTeleports?.() ?? true;
         const SHANTAY_PASS = 'Shantay pass';
+        const needsShantayPass = scrollId === 3552;
         // Why: `start_chop_jungle` checks for the machete, an axe and Radimus's notes, so they survive the deposit and get withdrawn below.
         const jungleClue = scrollId !== null && KHARAZI_CLUES.has(scrollId);
         const jungleKeep = new Set(jungleClue ? jungleKeepNames().map(n => n.toLowerCase()) : []);
         const isKeep = (name: string): boolean => {
             const n = name.toLowerCase();
+            if (rebuild) return protectedNames.has(n);
             if (entranaStrip && ENTRANA_RESTRICTED_GEAR_RE.test(name)) {
                 return false;
             }
             // Why: a grind-sized food load fills the pack, so food is banked here and comes back capped below.
             return protectedNames.has(n) || n.includes('clue') || n.includes('casket')
-                || n === SPADE_NAME.toLowerCase() || n === 'coins' || n === SHANTAY_PASS.toLowerCase()
+                || n === SPADE_NAME.toLowerCase() || n === 'coins' || (needsShantayPass && n === SHANTAY_PASS.toLowerCase())
                 || coordItems.has(n) || rowItemNames.has(n) || jungleKeep.has(n)
                 || (!entranaStrip && weapon !== '' && n === weapon)
                 || (keepTeleports && isTeleportItem(name, kit));
         };
         await Bank.depositAllMatching(name => !isKeep(name), m => this.host.log(`[clue] deposit: ${m}`));
-        if (initialBankPrepared && (!Bank.isOpen() || Inventory.items().some(item => !isKeep(item.name ?? '')))) {
+        if ((initialBankPrepared || rebuild) && (!Bank.isOpen() || Inventory.items().some(item => !isKeep(item.name ?? '')))) {
             this.status = 'bank preparation blocked';
             this.host.setStatus('clue: loot deposit incomplete');
             return false;
+        }
+
+        if (puzzleId !== undefined && Inventory.countById(puzzleId) === 0 && Bank.countById(puzzleId) > 0) {
+            await Bank.withdrawById(puzzleId, 'Withdraw-1');
+            if (!(await Execution.delayUntil(() => Inventory.countById(puzzleId) > 0, 2500))) return false;
         }
 
         for (const item of trailKit(scrollId)) {
@@ -566,7 +672,7 @@ export class SolveClue implements Task {
             }
         }
 
-        const weaponName = this.host.weaponName?.() ?? '';
+        const weaponName = this.trailWeapon ?? this.host.weaponName?.() ?? '';
         if (
             !this.hardTrail && !entranaStrip
             && weaponNeeded(weaponName, Inventory.first(weaponName) !== null, Equipment.contains(weaponName))
@@ -577,15 +683,15 @@ export class SolveClue implements Task {
 
         if (this.hardTrail && !(await stockHardWeapon(entranaStrip, name => {
             if (!this.strippedGear.includes(name)) this.strippedGear.push(name);
-        }))) {
+        }, this.host.weaponName?.(), this.host.hardFoodTarget))) {
             this.blockHardKit();
             return false;
         }
 
-        if (entranaStrip && namesHaveEntranaRestrictedGear([
+        if (entranaStrip && (Equipment.items().length > 0 || namesHaveEntranaRestrictedGear([
             ...Inventory.items().map(i => i.name ?? ''),
             ...Equipment.items().map(i => i.name ?? '')
-        ])) {
+        ]))) {
             this.host.log('[clue] still holding Entrana-banned gear after bank prep — will retry');
             await Bank.close();
             return false;
@@ -596,16 +702,21 @@ export class SolveClue implements Task {
             this.host.log('[clue] no Coins in the bank — toll-gate routes will detour');
         }
 
-        if (Inventory.count(SHANTAY_PASS) < 1) {
+        if (needsShantayPass && Inventory.count(SHANTAY_PASS) < 1) {
             if (!(await Bank.withdraw(SHANTAY_PASS, 'Withdraw-1'))) {
-                this.host.log('[clue] no Shantay pass in the bank — Kharidian desert digs will stay closed (#371)');
+                this.host.log('[clue] no Shantay pass in the bank; desert routes will buy one from Shantay');
             } else if (!(await Execution.delayUntil(() => Inventory.count(SHANTAY_PASS) >= 1, 2500))) {
                 this.host.log('[clue] Shantay pass withdraw did not land');
             }
         }
 
         if (jungleClue) {
-            await this.stockJungleKit();
+            const result = await this.stockJungleKit();
+            if (result !== 'ready') {
+                this.host.setStatus(`[clue] needs ${jungleKitMissing().join(', ')}`);
+                if (result === 'missing') this.blockHardKit();
+                return false;
+            }
         }
 
         const scrollIsCoord = scrollId !== null && CLUE_DB[scrollId]?.needsSextant === true;
@@ -615,8 +726,10 @@ export class SolveClue implements Task {
         await this.stockTeleports(kit);
 
         const food = this.host.foodName();
+        const puzzleSlots = puzzleId !== undefined && Inventory.countById(puzzleId) === 0 ? 1 : 0;
         if (this.hardTrail) {
-            if (!(await stockHardSupplies(fetchingCoordTools ? COORD_TOOL_SLOTS : 0, this.strippedGear))) {
+            const bankable = [...this.strippedGear, ...(puzzleId !== undefined ? ['Sextant', 'Watch', 'Chart'] : [])];
+            if (!(await stockHardSupplies((fetchingCoordTools ? COORD_TOOL_SLOTS : 0) + puzzleSlots, bankable, this.host.hardFoodTarget))) {
                 this.blockHardKit();
                 return false;
             }
@@ -651,7 +764,7 @@ export class SolveClue implements Task {
 
         if (this.hardTrail) {
             await Bank.close();
-            if (!entranaStrip && hardClueKit(hardKitSnapshot()) !== 'ready') return false;
+            if (!entranaStrip && hardClueKit(hardKitSnapshot(), this.host.hardFoodTarget) !== 'ready') return false;
         }
 
         await this.topUpPrayer(scrollId);
@@ -705,7 +818,7 @@ export class SolveClue implements Task {
             return;
         }
         const here = Game.tile();
-        const altar = here ? nearestAltar(here) : null;
+        const altar = here ? await nearestAltar(here) : null;
         if (!altar) {
             this.host.log('[clue] prayer is low but no known altar to restore at');
             return;

@@ -4,6 +4,12 @@ if (desktopStorage) {
     const shared = desktopStorage;
     const native = window.localStorage;
     const isShared = (key: string) => key.startsWith('rs2b0t:');
+    for (const key of Object.keys(native)) {
+        if (!isShared(key) || (!key.includes(':set:') && !key.endsWith(':selectedScript'))) continue;
+        const value = native.getItem(key);
+        if (value !== null && shared.getItem(key) === null) shared.setItem(key, value);
+        native.removeItem(key);
+    }
     const keys = () => [...shared.keys(), ...Object.keys(native).filter(key => !isShared(key))];
     const storage: Storage = {
         get length() {

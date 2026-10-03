@@ -1,3 +1,5 @@
+import { Skills } from '../../../../skills/Skills.js';
+import { pickaxeAt } from '../knightssword/supplies.js';
 import { Equipment } from '../../../../equipment/Equipment.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
@@ -69,16 +71,13 @@ function glovesOnFloor(): { interact(op: string): boolean | Promise<boolean> } |
     return GroundItems.query().where(g => g.id === HERO_ID.ICE_GLOVES).within(12).nearest();
 }
 
-// Why: on the `:8890` content every entrance to the lair sits on a plateau the map flags seal, so this leg says so once and stops repathing. See docs/decisions/quest-pitfalls-35.md.
-
 /** Kill the Ice Queen and take the gloves she drops. */
 export async function killIceQueen(log: (m: string) => void): Promise<boolean> {
     if (Inventory.countById(HERO_ID.ICE_GLOVES) > 0) {
         return true;
     }
     if (!(await Traversal.walkResilient(HERO_TILE.ICE_QUEEN, { radius: 3, attempts: 2, timeoutMs: 180_000, log }))) {
-        log('no route into the Ice Queen lair: every ladder down sits on a sealed plateau'
-            + ' (x 2800-2861, z 3500-3521) — the map flags admit nobody, so the gloves have no in-world source');
+        log('could not reach the Ice Queen; the rockslide needs 50 Mining and a usable pickaxe');
         return false;
     }
     const won = await fight({
@@ -218,10 +217,14 @@ export function featherStep(snap: QuestSnapshot): QuestStep | null {
         if (bankedId(snap, HERO_ID.ICE_GLOVES) > 0) {
             return { kind: 'withdraw', items: [{ name: HERO_NAMED.ICE_GLOVES, qty: 1, id: HERO_ID.ICE_GLOVES }] };
         }
+        const mining = Skills.level('mining');
+        if (mining < 50) return { kind: 'wait', reason: '50 Mining is required to clear the Ice Queen rockslide' };
         const kit = combatKitStep(snap);
         if (kit) {
             return kit;
         }
+        const pickaxe = pickaxeAt(snap, mining);
+        if (pickaxe) return pickaxe;
         if (heldFood(snap) < FOOD_TARGET) {
             return { kind: 'withdraw', items: [{ name: foodName(), qty: FOOD_TARGET }] };
         }

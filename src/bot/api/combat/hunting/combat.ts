@@ -13,7 +13,7 @@ import { DirectNavigator } from '../../../event/webwalk/DirectNavigator.js';
 import { Reachability } from '../../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../../geometry/Tile.js';
 import { SAFESPOT_BLIND_MS, bodyOrigin, chaseMode, engageRangeFor, gapTo, holdDue, hurtOnSpot, nextSafespot, noteSighting, retreatAim, retreatDue, settled, type Sighting, type Style } from './logic.js';
-import { huntNames, TAVERLEY_BLACK, TAVERLEY_BLUE, type DragonSite } from './sites.js';
+import { huntNames, GUTANOTH_BLUE, HEROES_BLUE, TAVERLEY_BLACK, TAVERLEY_BLUE, type DragonSite } from './sites.js';
 import { waitFed, walkApproach, type JiveHost } from './supply.js';
 
 /** What a fight needs from the bot on top of what supply needs. */
@@ -113,10 +113,14 @@ function usesSafespot(style: Style): boolean {
     return style !== 'melee';
 }
 
-// Why: only the ladder is safespot-only. Every style fights from a fixed tile, melee included, since the anchor is the tile bordering the most adult body tiles that no baby can reach, and the leash pulls a dragon in rather than the bot walking out. A click that does walk us off it is caught below and the dragon skipped.
-// Why: on a fire-at-range site a melee bot chases instead: the dragons stop at ten tiles, so the click walks the bot to the body and the fight happens beside it, with no leash, no pull-off skip and no walk back while a target is live.
+const BLUE_SITES = [TAVERLEY_BLUE.key, HEROES_BLUE.key, GUTANOTH_BLUE.key];
+
+export function chasesTarget(site: DragonSite, style: Style): boolean {
+    return chaseMode(style, site.fireAtRange === true || BLUE_SITES.includes(site.key));
+}
+
 function holdsAnchor(site: DragonSite, style: Style): boolean {
-    return !chaseMode(style, site.fireAtRange === true);
+    return !chasesTarget(site, style);
 }
 
 function spotName(style: Style, index: number): string {
@@ -182,9 +186,8 @@ function retaliationTarget(site: DragonSite): Npc | null {
     return Npcs.all().find(n => n.index === fe && names.includes(n.name ?? '')) ?? null;
 }
 
-function stillThere(site: DragonSite, idx: number): boolean {
-    const names = huntNames(site);
-    return Npcs.all().some(n => n.index === idx && names.includes(n.name ?? ''));
+function stillThere(idx: number, name: string): boolean {
+    return Npcs.all().some(n => n.index === idx && n.name?.toLowerCase() === name);
 }
 
 function onAnySafespot(site: DragonSite): boolean {
@@ -235,7 +238,7 @@ export class Fight implements Task {
         if (this.engaged !== null) {
             return true;
         }
-        if (this.lootTarget !== null && !stillThere(this.site, this.lootTarget)) {
+        if (this.lootTarget !== null && !stillThere(this.lootTarget, this.engagedName || label(this.site))) {
             this.lootTarget = null;
         }
         return this.lootTarget !== null;
@@ -344,6 +347,18 @@ export class Fight implements Task {
                 }
             }
             const field = this.field(FIELD_RADIUS);
+            if (BLUE_SITES.includes(this.site.key) && style === 'melee') {
+                const dying = field.find(n => n.index === this.engaged && n.health === 0 && n.snap.totalHealth > 0);
+                if (dying) {
+                    await this.idle();
+                    continue;
+                }
+                const attacker = field.find(n => n.index === this.engaged && n.targetsMe()) ?? field.find(n => n.targetsMe());
+                if (attacker && attacker.index !== this.engaged) {
+                    this.skip.delete(attacker.index);
+                    if (await this.engage(attacker, name)) continue;
+                }
+            }
             for (const n of field) {
                 this.seen.set(n.index, noteSighting(this.seen.get(n.index), usesSafespot(style) ? n.networkTile() : n.tile(), performance.now()));
             }
@@ -478,7 +493,16 @@ export class Fight implements Task {
             return adultsNear(this.site, this.engaged, Math.min(radius, engageRangeFor('range')), this.anchor())
                 .filter(n => (this.engaged === null || n.index === this.engaged) && (this.skip.get(n.index) ?? 0) < performance.now());
         }
-        return adultsNear(this.site, this.engaged, radius, usesSafespot(this.host.style()) ? this.anchor() : null);
+        const adults = adultsNear(this.site, this.engaged, radius, usesSafespot(this.host.style()) ? this.anchor() : null);
+        if (this.host.style() === 'melee') {
+            const names = this.site.key === TAVERLEY_BLUE.key ? ['Baby blue dragon']
+                : this.site.key === GUTANOTH_BLUE.key ? ['Blue dragon', 'Greater demon', 'Ogre chieftain'] : [];
+            const defenders = names.filter(name => !huntNames(this.site).includes(name))
+                .flatMap(name => huntableNear(this.site, name, this.engaged, radius, null))
+                .filter(n => n.index === this.engaged || n.targetsMe());
+            return [...defenders, ...adults];
+        }
+        return adults;
     }
 
     /** Whether an Attack click from the anchor lands without the server walking the bot closer. */
@@ -512,13 +536,13 @@ export class Fight implements Task {
         if (this.engaged === null) {
             return false;
         }
-        if (stillThere(this.site, this.engaged)) {
+        if (stillThere(this.engaged, this.engagedName || name)) {
             this.seenAt = performance.now();
             return false;
         }
         const killed = performance.now() - this.seenAt < KILL_GRACE_MS;
         if (killed) {
-            this.host.countKill();
+            if (huntNames(this.site).some(target => target.toLowerCase() === (this.engagedName || name))) this.host.countKill();
             this.host.log(`${this.engagedName || name} ${this.engaged} down`);
         }
         this.reset();
@@ -632,12 +656,18 @@ export class Fight implements Task {
         if (this.host.shieldReady?.() === false) {
             return false;
         }
+        if (chasesTarget(this.site, style) && !Reachability.canReach(target.tile())) {
+            if (!(await Traversal.walkResilient(target.tile(), { radius: 1, attempts: 3, timeoutMs: APPROACH_MS, log: m => this.host.vlog?.(m) }))) return false;
+            const current = this.field(FIELD_RADIUS).find(n => n.index === target.index && n.id === target.id && n.name === target.name);
+            if (!current || current.targetsAnotherPlayer() || !Reachability.canReach(current.tile()) || EventSignal.pending() || this.host.died || !this.host.hasFood()) return false;
+            target = current;
+        }
         await this.host.armSpecial?.();
         if (this.host.shieldReady?.() === false) {
             return false;
         }
-        const current = usesSafespot(style) ? this.field(FIELD_RADIUS).find(n => n.index === target.index && n.id === target.id && n.name === target.name) : target;
-        if (!current || (usesSafespot(style) && (!Game.sceneReady() || EventSignal.pending() || this.host.died || current.targetsAnotherPlayer() || !atTile(this.anchor()) || !this.inReach(current) || (this.skip.get(current.index) ?? 0) > performance.now()))) {
+        const current = usesSafespot(style) || chasesTarget(this.site, style) ? this.field(FIELD_RADIUS).find(n => n.index === target.index && n.id === target.id && n.name === target.name) : target;
+        if (!current || !Game.sceneReady() || EventSignal.pending() || this.host.died || current.targetsAnotherPlayer() || (usesSafespot(style) && (!atTile(this.anchor()) || !this.inReach(current) || (this.skip.get(current.index) ?? 0) > performance.now()))) {
             await this.idle();
             return false;
         }
@@ -733,7 +763,7 @@ export class HoldSafespot implements Task {
 
     validate(): boolean {
         // Why: a chase stands beside its dragon through the fight's two-minute hand-backs, and this task walked it home at every one, a six-second round trip and a restarted swing each time.
-        const chasing = chaseMode(this.host.style(), this.site.fireAtRange === true) && this.host.targetIdx !== null;
+        const chasing = !holdsAnchor(this.site, this.host.style()) && this.host.targetIdx !== null;
         return this.site.inArea(Game.tile())
             && !chasing
             && !atTile(this.spot())
@@ -769,7 +799,7 @@ export class WalkToSpot implements Task {
     validate(): boolean {
         const here = Game.tile();
         // Why: a chase stands beside its dragon, tiles off the camp, and this task sits above Fight, so a live target holds it or every pass walked the bot out of its own fight.
-        const chasing = chaseMode(this.host.style(), this.site.fireAtRange === true) && this.host.targetIdx !== null;
+        const chasing = !holdsAnchor(this.site, this.host.style()) && this.host.targetIdx !== null;
         return here !== null
             && this.site.inArea(here)
             && !chasing

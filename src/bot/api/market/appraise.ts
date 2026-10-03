@@ -3,12 +3,9 @@ import { rowOf, type PriceBook } from './priceBook.js';
 import { resolvePrices, rowValid } from './prices.js';
 import { formatGp, truncateChat } from './chatProtocol.js';
 import type { OfferItem, ValuedLine } from './quote.js';
+import { saleItems, saleName, salePrice, saleStock, type SellIntent } from './saleIntent.js';
 
-/** Item requested by the buyer; sell orders omit it. */
-export interface SellIntent {
-    itemId: number;
-    maxQty: number;
-}
+export type { SellIntent } from './saleIntent.js';
 
 /** Current inventory available for the trade. */
 export interface DeskState {
@@ -29,6 +26,7 @@ export interface Appraisal {
 /** Items the customer must remove before acceptance. */
     ignored: { name: string; count: number }[];
     note: string | null;
+    set?: { name: string; count: number };
 }
 
 type Ignored = { name: string; count: number }[];
@@ -103,13 +101,13 @@ function sale(
     coins: number,
     ignored: Ignored
 ): Appraisal {
-    const name = displayName(cat, intent.itemId);
-    const each = priceOf(book, intent.itemId, 'selling');
+    const name = saleName(cat, intent);
+    const each = salePrice(book, intent);
     if (each === null) {
         return nothing(ignored, `I don't sell ${name} any more`);
     }
 
-    const qty = Math.min(intent.maxQty, desk.available(intent.itemId), Math.floor(book.maxTradeValue / each));
+    const qty = Math.min(intent.maxQty, saleStock(intent, desk.available), Math.floor(book.maxTradeValue / each));
     if (qty <= 0) {
         return nothing(ignored, `I'm out of ${name}`);
     }
@@ -120,18 +118,22 @@ function sale(
     }
     return {
         kind: 'sell',
-        owe: new Map([[intent.itemId, qty]]),
+        owe: new Map(saleItems(intent).map(id => [id, qty])),
         want: new Map([[coinId, total]]),
         total,
-        lines: [{ id: intent.itemId, name, count: qty, each, value: total }],
+        lines: saleItems(intent).map(id => {
+            const price = priceOf(book, id, 'selling')!;
+            return { id, name: displayName(cat, id), count: qty, each: price, value: qty * price };
+        }),
         ignored,
-        note: qty < intent.maxQty ? shortNote(name, desk, intent.itemId) : null
+        note: qty < intent.maxQty ? shortNote(name, desk, intent) : null,
+        ...('set' in intent ? { set: { name, count: qty } } : {})
     };
 }
 
 /** Short of what was asked for: the bank still holding some is a different thing from being out. */
-function shortNote(name: string, desk: DeskState, itemId: number): string {
-    return desk.held(itemId) > desk.available(itemId)
+function shortNote(name: string, desk: DeskState, intent: SellIntent): string {
+    return saleStock(intent, desk.held) > saleStock(intent, desk.available)
         ? `that is all the ${name} I am carrying`
         : `that is all the ${name} I have`;
 }
@@ -188,7 +190,9 @@ function purchase(
 export function describeAppraisal(a: Appraisal): string {
     // Why: the line is cut at the chat limit and 2 priced lines already reach it, so the reason goes first or goes unread.
     const parts = a.note === null ? [] : [`${a.note}.`];
-    parts.push(...a.lines.map(l => `${l.name} x${formatGp(l.count)} = ${formatGp(l.value)}.`));
+    parts.push(...(a.set
+        ? [`${a.set.name} x${formatGp(a.set.count)} = ${formatGp(a.total)}.`]
+        : a.lines.map(l => `${l.name} x${formatGp(l.count)} = ${formatGp(l.value)}.`)));
     for (const i of a.ignored) {
         parts.push(`${formatGp(i.count)} ${i.name}: not counted, keep them.`);
     }

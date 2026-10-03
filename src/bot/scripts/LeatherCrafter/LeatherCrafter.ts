@@ -5,7 +5,8 @@ import { Game } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { Bank } from '../../api/bank/Bank.js';
-import { nearestBankReachable } from '../../api/bank/BankLocations.js';
+import { openBankAccess } from '../../api/bank/Banking.js';
+import { nearestBank, nearestBankReachable } from '../../api/bank/BankLocations.js';
 import { Navigator } from '../../event/webwalk/Navigator.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Paint } from '../../paint/Paint.js';
@@ -280,7 +281,7 @@ export default class LeatherCrafter extends LoopingBot {
         if (here) {
             this.log(`bank leg: from (${here.x}, ${here.z}, ${here.level}) standing near ${picked?.name ?? 'no picked bank'} (stand ${stand})`);
         }
-        if (!here || Math.max(Math.abs(here.x - stand.x), Math.abs(here.z - stand.z)) > 4) {
+        if (!here || here.level !== stand.level || Math.max(Math.abs(here.x - stand.x), Math.abs(here.z - stand.z)) > 4) {
             this.setStatus('walking to the bank');
             this.log(`bank leg: walking to ${picked?.name ?? stand}`);
             if (!(await Traversal.walkResilient(stand, { radius: 3, attempts: 2, timeoutMs: 45_000, log: m => this.log(`  ${m}`) }))) {
@@ -292,7 +293,7 @@ export default class LeatherCrafter extends LoopingBot {
 
         this.setStatus('banking');
         this.log('bank leg: opening the bank');
-        if (!(await Bank.openNearest('Bank booth', 'Use-quickly', m => this.log(`  ${m}`)))) {
+        if (!(await openBankAccess(this.restockBank ? nearestBank(stand) : picked, { name: 'Bank booth', op: 'Use-quickly' }, m => this.log(`  ${m}`)))) {
             this.log('bank leg: could not open the bank — retrying');
             return;
         }

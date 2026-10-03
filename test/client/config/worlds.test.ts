@@ -18,9 +18,9 @@ test('local test worlds accept only complete valid node IDs', () => {
 
 test('switches preserve mode and memory, with only approved origins and safe query fields', () => {
     const from = new URL('https://w1.rs2b2t.com/rs2b0t/wall?lowmem=0&members=1&nodeid=10&box=alice&password=secret&autologin=1&next=https://evil.test');
-    expect(worldSwitchUrl(2, 'wall', from).href).toBe('https://w2.rs2b2t.com/rs2b0t/wall?lowmem=0&members=1');
+    expect(worldSwitchUrl(2, 'wall', from).href).toBe('https://w1.rs2b2t.com/rs2b0t/wall?lowmem=0&members=1&world=2');
     expect(() => worldSwitchUrl(3, 'wall', from)).toThrow();
-    expect(worldSwitchUrl(1, 'single', from).href).toBe('https://w1.rs2b2t.com/rs2b0t/?lowmem=0&members=1');
+    expect(worldSwitchUrl(1, 'single', from).href).toBe('https://w1.rs2b2t.com/rs2b0t/?lowmem=0&members=1&world=1&box=alice');
     expect(() => worldSwitchUrl(4, 'wall', from)).toThrow();
 });
 
@@ -66,4 +66,10 @@ test('world resolution rejects malformed explicit choices and otherwise follows 
     const frame = botFrameUrl(new URL('http://localhost:8081/multibox.html?world=2'), 'alice');
     expect(frame.searchParams.get('world')).toBe('2');
     expect(frame.searchParams.get('nodeid')).toBe('11');
+});
+
+test('desktop switches keep the local origin, entrypoint and account namespace', () => {
+    const from = new URL('http://localhost:8081/bot.html?box=alice&world=1');
+    const next = worldSwitchUrl(2, 'single', from);
+    expect(next.href).toBe('http://localhost:8081/bot.html?world=2&box=alice');
 });

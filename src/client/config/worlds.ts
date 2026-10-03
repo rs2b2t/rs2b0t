@@ -53,8 +53,14 @@ export function worldSwitchUrl(number: number, mode: BotMode, current: URL): URL
     if (!world) {
         throw new Error('Unknown world');
     }
-    const url = new URL(mode === 'wall' ? '/rs2b0t/wall' : '/rs2b0t/', world.origin);
+    const path = current.pathname.endsWith('.html')
+        ? mode === 'wall' ? 'multibox.html' : 'bot.html'
+        : mode === 'wall' ? '/rs2b0t/wall' : '/rs2b0t/';
+    const url = new URL(path, current);
     copyOptions(current.searchParams, url.searchParams);
+    url.searchParams.set('world', String(world.number));
+    const box = current.searchParams.get('box');
+    if (mode === 'single' && box) url.searchParams.set('box', box);
     return url;
 }
 

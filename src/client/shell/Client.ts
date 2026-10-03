@@ -306,6 +306,8 @@ export class Client extends GameShell {
     private loginPass: string = '';
     private loginAttempt: LoginAttempt | null = null;
     private worldSwitchPending = false;
+    private worldLogoutAt = -Infinity;
+    private logoutRequested = false;
 
     private imageRunes: Pix8[] = [];
     private titleFlames: TitleFlames | null = null;
@@ -1733,11 +1735,27 @@ export class Client extends GameShell {
 
     public cancelWorldSwitch(): void {
         this.worldSwitchPending = false;
+        this.worldLogoutAt = -Infinity;
     }
 
     public prepareWorldSwitch(): boolean {
         this.worldSwitchPending = true;
+        if (this.ingame && performance.now() - this.worldLogoutAt >= 1000) {
+            this.worldLogoutAt = performance.now();
+            this.requestLogout();
+        }
         return !this.ingame && this.loginAttempt === null;
+    }
+
+    protected onLogoutRequested(): void {}
+
+    public requestLogout(): void {
+        if (!this.ingame) return;
+        this.logoutRequested = true;
+        this.onLogoutRequested();
+        this.logoutTimer = 250;
+        this.out.p1Enc(ClientProt.IF_BUTTON);
+        this.out.p2(2458);
     }
 
     public startLogin(username: string, password: string): boolean {
@@ -1751,6 +1769,8 @@ export class Client extends GameShell {
         if (this.ingame || this.worldSwitchPending) {
             return { accepted: false, done: Promise.resolve() };
         }
+
+        this.logoutRequested = false;
 
         // Stat arrays intentionally survive logout for the title/UI. Give every
         // accepted login its own generation so consumers can distinguish that
@@ -2200,6 +2220,11 @@ export class Client extends GameShell {
     }
 
     private async gameLoop(): Promise<void> {
+        if (this.logoutRequested && this.stream?.closed) {
+            await this.logout();
+            return;
+        }
+
         if (this.players === null) {
             return;
         }
@@ -2652,7 +2677,7 @@ export class Client extends GameShell {
     }
 
     private async lostCon() {
-        if (this.logoutTimer > 0) {
+        if (this.logoutRequested || this.logoutTimer > 0) {
             await this.logout();
             return;
         }
@@ -9361,16 +9386,15 @@ export class Client extends GameShell {
         }
 
         if (action === MiniMenuAction.IF_BUTTON) {
-            const com: IfType = IfType.list[c];
-            let notify: boolean = true;
-
-            if (com.clientCode > 0) {
-                notify = this.clientButton(com);
-            }
-
-            if (notify) {
-                this.out.p1Enc(ClientProt.IF_BUTTON);
-                this.out.p2(c);
+            if (c === 2458) {
+                this.requestLogout();
+            } else {
+                const com: IfType = IfType.list[c];
+                const notify = com.clientCode <= 0 || this.clientButton(com);
+                if (notify) {
+                    this.out.p1Enc(ClientProt.IF_BUTTON);
+                    this.out.p2(c);
+                }
             }
         }
 
@@ -11174,6 +11198,8 @@ export class Client extends GameShell {
         }
 
         if (clientCode === ClientCode.CC_LOGOUT) {
+            this.logoutRequested = true;
+            this.onLogoutRequested();
             this.logoutTimer = 250;
             return true;
         } else if (clientCode === ClientCode.CC_ADD_IGNORE) {

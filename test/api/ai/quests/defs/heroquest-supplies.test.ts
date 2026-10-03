@@ -1,4 +1,5 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { Skills } from '#/bot/api/skills/Skills.js';
 
 import { HERO_ID, HERO_NAMED } from '#/bot/api/ai/quests/defs/heroquest/areas.js';
 import { disguiseOwned, disguiseStep } from '#/bot/api/ai/quests/defs/heroquest/blackarm.js';
@@ -164,6 +165,8 @@ describe('the lava eel chain', () => {
 });
 
 describe('the firebird feather chain', () => {
+    beforeEach(() => { spyOn(Skills, 'level').mockReturnValue(50); });
+    afterEach(() => mock.restore());
     test('a feather anywhere ends the chain', () => {
         expect(featherStep(snap({ bankIds: new Map([[HERO_ID.FEATHER, 1]]) }))).toBeNull();
     });
@@ -181,6 +184,7 @@ describe('the firebird feather chain', () => {
         QuestFood.name = 'Lobster';
         const step = featherStep(snap({
             wornIds: new Set([1113, 1079, 1303]),
+            invIds: new Map([[1265, 1]]),
             inv: new Map([['lobster', 12]])
         }));
         expect(name(step)).toContain('Ice Queen');
@@ -244,4 +248,28 @@ describe('the firebird feather chain', () => {
         expect(name(combatKitStep(snap()))).toContain('buy');
         expect(combatKitStep(snap({ wornIds: new Set([1113, 1079, 1303]) }))).toBeNull();
     });
+});
+
+
+test('the Ice Queen leg withdraws a banked pickaxe without replacing the combat weapon', () => {
+    const level = spyOn(Skills, 'level').mockReturnValue(50);
+    try {
+        expect(featherStep(snap({ wornIds: new Set([1113, 1079, 1303]), bankIds: new Map([[1275, 1]]) })))
+            .toMatchObject({ kind: 'withdraw', items: [{ name: 'Rune pickaxe', qty: 1, id: 1275 }] });
+    } finally { level.mockRestore(); }
+});
+
+test('the Ice Queen leg acquires a free bronze pickaxe when none is owned', () => {
+    const level = spyOn(Skills, 'level').mockReturnValue(50);
+    try {
+        expect(featherStep(snap({ wornIds: new Set([1113, 1079, 1303]) })))
+            .toMatchObject({ kind: 'grabGround', item: 'Bronze pickaxe', waitIfMissing: true });
+    } finally { level.mockRestore(); }
+});
+
+test('the Ice Queen leg reports the Mining requirement before buying equipment', () => {
+    const level = spyOn(Skills, 'level').mockReturnValue(49);
+    try {
+        expect(featherStep(snap())).toMatchObject({ kind: 'wait', reason: expect.stringContaining('50 Mining') });
+    } finally { level.mockRestore(); }
 });

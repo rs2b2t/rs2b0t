@@ -1,3 +1,4 @@
+import { solveMountainPilot } from './gnomePilot.js';
 import { crossesClueDuel, walkAcrossClueDuel, DUEL_CLUE_ID } from './duelTravel.js';
 import { leaveClueDuel } from '../../duel/ClueDuel.js';
 import { fightArenaAt } from '../../duel/Duel.js';
@@ -24,14 +25,15 @@ import { CASKET_IDS, CLUE_DB } from '#/bot/api/ai/clues/data/cluedb.js';
 import { challengeAnswer } from '#/bot/api/ai/clues/data/challengeAnswers.js';
 import { clueGate } from '#/bot/api/ai/clues/data/clueGates.js';
 import { KILL_ANCHORS } from '#/bot/api/ai/clues/data/killAnchors.js';
+import { DIG_ANCHORS } from '#/bot/api/ai/clues/data/digAnchors.js';
 import { ensureSpade, ensureCoordTools, ensureExtraItems, ensureGateItems } from '#/bot/api/ai/clues/AcquireTools.js';
 import { SPADE_NAME } from '#/bot/api/ai/clues/data/toolAcquire.js';
 import { GuardianEncounter, sustainUntil, GUARDIAN_DEATH, type GuardianStop } from '#/bot/api/ai/clues/Guardian.js';
 import { GuardianProtection } from './guardianKit.js';
-import { hardClueKit, SHARK_ID } from './hardClueKit.js';
+import { GUARDIAN_MIN_SHARKS, hardClueKit } from './hardClueKit.js';
 import { hardKitSnapshot } from './hardCluePreparation.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
-import { FOOD_OPTIONS, isFoodItem } from '#/bot/api/combat/food.js';
+import { FOOD_OPTIONS, isEdibleFood } from '#/bot/api/combat/food.js';
 import { namesHaveEntranaRestrictedGear } from '#/bot/event/webwalk/exec/specialCrossing.js';
 import { PuzzleBox } from '#/bot/api/ai/clues/PuzzleBox.js';
 import type { ClueRow, ClueStep } from '#/bot/api/ai/clues/types.js';
@@ -98,7 +100,7 @@ function stepTarget(step: ClueStep): NavPoint | null {
         const a = TALK_ANCHORS[step.id];
         return a ? { x: a.x, z: a.z, level: a.level } : null;
     }
-    return step.coord ?? null;
+    return (step.type === 'dig' ? DIG_ANCHORS[step.id] : undefined) ?? step.coord ?? null;
 }
 
 export function tilesTo(target: NavPoint | null): number | null {
@@ -124,9 +126,6 @@ export function trailWalkOpts(log: (m: string) => void, radius = ARRIVE_RADIUS):
     };
 }
 
-/** Tolls bought during this trail, preventing repeated shop trips. */
-const gateItemsTried = new Set<string>();
-
 /**
  * Walk a clue leg, treating an unpayable toll as a shopping trip.
  * Why: the navigator names what the route was short of, and the desert's one entrance eats a Shantay pass, so a leg short a 5gp ticket buys one and walks again.
@@ -134,7 +133,7 @@ const gateItemsTried = new Set<string>();
 async function walkLeg(dest: NavPoint, log: (m: string) => void, radius = ARRIVE_RADIUS): Promise<boolean> {
     if (crossesClueDuel(dest)) return walkAcrossClueDuel(dest, radius, log);
     if (crossesTirannwn(dest)) {
-        return walkAcrossTirannwn(dest, radius, log);
+        return walkAcrossTirannwn(dest, radius, log, trailWalkOpts(log, radius));
     }
     if (crossesKharazi(dest)) {
         return walkAcrossKharazi(dest, radius, log);
@@ -142,12 +141,9 @@ async function walkLeg(dest: NavPoint, log: (m: string) => void, radius = ARRIVE
     if (await Traversal.walkResilient(dest, trailWalkOpts(log, radius))) {
         return true;
     }
-    const short = WalkExecutor.lastMissingGateItems.filter(m => !gateItemsTried.has(m.name));
+    const short = WalkExecutor.lastMissingGateItems;
     if (short.length === 0) {
         return false;
-    }
-    for (const m of short) {
-        gateItemsTried.add(m.name);
     }
     if (!(await ensureGateItems(short, log))) {
         return false;
@@ -165,10 +161,11 @@ const trace = new ClueTrace({
 let sessionActive = false;
 let sessionLegs = 0;
 let acquireTries = 0;
+let recovery: { clueId: number; used: boolean } | null = null;
 let postKillClue: number | null = null;
 let guardianHalt: 'dead' | 'guardian-lost' | null = null;
 let guardianEncounter: { readonly clueId: number; readonly encounter: GuardianEncounter } | null = null;
-export type ClueOutcome = 'done' | 'abandon' | 'yield' | GuardianStop;
+export type ClueOutcome = 'done' | 'abandon' | 'yield' | 'reset-needed' | GuardianStop;
 
 function heldIds(): number[] {
     return Inventory.items().map(i => i.id);
@@ -206,7 +203,7 @@ function describeStep(step: ClueStep): string {
     if (step.type === 'talk') {
         return `${step.obj} (talk ${step.npc ?? '?'})`;
     }
-    const c = step.coord;
+    const c = stepTarget(step);
     return `${step.obj} (${step.type})${c ? ` at (${c.x},${c.z},${c.level})` : ''}`;
 }
 
@@ -373,7 +370,7 @@ async function reachTirannwn(step: ClueStep, log: (m: string) => void): Promise<
     if (target === null || !crossesTirannwn(target)) {
         return;
     }
-    await walkAcrossTirannwn(target, ARRIVE_RADIUS, log);
+    await walkAcrossTirannwn(target, ARRIVE_RADIUS, log, trailWalkOpts(log));
 }
 
 async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void | GuardianStop | 'yield'> {
@@ -405,11 +402,12 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void 
             if (!step.coord) {
                 return;
             }
-            const coord = step.coord;
+            const anchor = DIG_ANCHORS[step.id];
+            const coord = anchor ?? step.coord;
             const deathMark = GameMessages.mark();
             const died = (): boolean => guardianHalt === 'dead' || GameMessages.sawSince(deathMark, GUARDIAN_DEATH);
             const standOnIt = (): Promise<boolean> =>
-                walkLeg(coord, log);
+                walkLeg(coord, log, anchor ? 0 : ARRIVE_RADIUS);
             const dig = async (): Promise<void> => {
                 if (died()) return;
                 const spade = Inventory.first(SPADE_NAME);
@@ -432,6 +430,7 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void 
                 const protection = new GuardianProtection();
                 const prepared = !guardian || await protection.prepare();
                 if (died()) return 'dead';
+                if (EventSignal.pending()) return 'yield';
                 if (!prepared) return 'supplies-needed';
                 if (guardian) guardianEncounter = { clueId: step.id, encounter: new GuardianEncounter(guardian, protection) };
                 await dig();
@@ -454,6 +453,7 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void 
             return;
         }
         case 'talk': {
+            if (step.id === 3570) return solveMountainPilot(tile => walkLeg(tile, log, 0), log);
             const anchor = TALK_ANCHORS[step.id];
             if (!anchor || !step.npc) {
                 return;
@@ -482,7 +482,6 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void 
             // Why: a hard trail is four to six caskets and the server keeps the count, so the only sign the trail ended is that no scroll came back.
             if (heldIds().some(id => CLUE_DB[id] !== undefined)) return;
             if (GameMessages.sawSince(mark, TRAIL_COMPLETE)) log('the trail is complete');
-            await collectReward(log, step.casketObj.includes('_hard_'));
             return;
         }
     }
@@ -511,13 +510,6 @@ function blockReason(step: ClueStep): string | null {
     if (extras.length > 0) {
         return `needs ${extras.join('+')} (not held)`;
     }
-    // Why: `start_chop_jungle` answers a missing machete, axe or map with a message box the walker can't see, so the leg would swing at the band until its budget ran out.
-    if (step.type !== 'open-casket' && KHARAZI_CLUES.has(step.id)) {
-        const short = jungleKitMissing();
-        if (short.length > 0) {
-            return `Kharazi jungle needs ${short.join('+')}`;
-        }
-    }
     return null;
 }
 
@@ -542,6 +534,10 @@ async function tryAcquire(step: ClueStep, log: (m: string) => void): Promise<boo
     return false;
 }
 
+function needsPuzzleRoom(step: ClueStep | null): boolean {
+    return step?.type === 'talk' && step.puzzle !== undefined && Inventory.countById(step.puzzle.id) === 0 && Inventory.isFull();
+}
+
 async function solveStep(step: ClueStep, log: (m: string) => void, onAttempt: (n: number) => void): Promise<boolean | GuardianStop | 'yield'> {
     const tracked = trackedId(step);
     const before = heldCounts();
@@ -556,6 +552,7 @@ async function solveStep(step: ClueStep, log: (m: string) => void, onAttempt: (n
             return false;
         }
         await Sustain.run();
+        if (needsPuzzleRoom(step)) return 'supplies-needed';
         onAttempt(attempt + 1);
         await drainChat();
         if (!(await answerChallengeIfOpen(step, log))) {
@@ -569,46 +566,69 @@ async function solveStep(step: ClueStep, log: (m: string) => void, onAttempt: (n
     return progressed();
 }
 
-async function dismissRewardModal(): Promise<void> {
+let rewardCollection: { tile: NavPoint; discarded: Set<number> } | null = null;
+
+async function dismissRewardModal(): Promise<boolean> {
     await Execution.delayUntil(() => reader.modals().main !== -1, REWARD_WAIT_MS);
     for (let i = 0; i < REWARD_CLOSE_TRIES && reader.modals().main !== -1; i++) {
         actions.closeModal();
         await Execution.delayTicks(1);
     }
+    return reader.modals().main === -1;
 }
 
-async function collectReward(log: (m: string) => void, hard: boolean): Promise<void> {
-    await dismissRewardModal();
-    const here = reader.worldTile();
-    if (!here) return;
-    const discarded = new Set([SHARK_ID]);
+async function collectReward(log: (m: string) => void): Promise<boolean> {
+    if (!rewardCollection) {
+        const tile = reader.worldTile();
+        if (!tile) return false;
+        rewardCollection = { tile, discarded: new Set() };
+    }
+    const { tile: here, discarded } = rewardCollection;
+    if (!(await dismissRewardModal())) return false;
+    await Execution.delayTicks(2);
     const onTile = (g: GroundItem): boolean => {
         const t = g.tile();
         return t.x === here.x && t.z === here.z && t.level === here.level && !discarded.has(g.id);
     };
     for (let guard = 0; guard < 28; guard++) {
         const drop = GroundItems.query().where(onTile).nearest();
-        if (!drop) return;
+        if (!drop) {
+            rewardCollection = null;
+            return true;
+        }
         const name = drop.name ?? '';
-        if (Inventory.isFull()) {
-            const food = Inventory.items().find(i => hard ? i.id === SHARK_ID : FOOD_OPTIONS.some(name => isFoodItem(i.name, name)));
+        const stacks = Inventory.items().some(i => i.id === drop.id) && reader.objCatalog().some(i => i.id === drop.id && i.stackable);
+        if (Inventory.isFull() && !stacks) {
+            const food = Inventory.items().find(i => FOOD_OPTIONS.some(name => isEdibleFood(i, name)));
             if (!food) {
-                log(`WARNING: '${name}' is left on the ground, the pack is full with no ${hard ? 'Shark' : 'food'} to drop`);
-                return;
+                log(`WARNING: '${name}' is left on the ground, the pack is full with no food to drop`);
+                return false;
             }
             const used = Inventory.used();
             discarded.add(food.id);
-            if (!(await food.interact('Drop')) || !(await Execution.delayUntil(() => Inventory.used() < used, LOOT_WAIT_MS))) return;
+            if (!(await food.interact('Drop')) || !(await Execution.delayUntil(() => Inventory.used() < used, LOOT_WAIT_MS))) return false;
         }
-        const used = Inventory.used();
-        const count = Inventory.count(name);
-        if (!(await drop.interact('Take')) || !(await Execution.delayUntil(() => Inventory.used() > used || Inventory.count(name) > count, LOOT_WAIT_MS))) return;
-        log(`took '${name}' from the casket`);
+        const count = heldCounts().get(drop.id) ?? 0;
+        const collected = (): boolean => (heldCounts().get(drop.id) ?? 0) > count
+            && GroundItems.query().where(g => onTile(g) && g.id === drop.id).nearest() === null;
+        if (!(await drop.interact('Take')) || !(await Execution.delayUntil(collected, LOOT_WAIT_MS))) return false;
+        log(`took '${name}' from the treasure trail`);
     }
+    return false;
 }
 
 export const ClueExecutor = {
     current: null as ClueProgress | null,
+
+    resetSession(): void {
+        sessionActive = false;
+        rewardCollection = null;
+        sessionLegs = 0;
+        acquireTries = 0;
+        ClueExecutor.current = null;
+        recovery = null;
+        ClueExecutor.retryGuardian();
+    },
 
     /** Route clue legs through the teleport catalog (spells, ring of dueling). */
     setTeleports(on: boolean): void {
@@ -627,7 +647,7 @@ export const ClueExecutor = {
         postKillClue = null;
     },
 
-    async solveHeldClue(log: (m: string) => void): Promise<ClueOutcome> {
+    async solveHeldClue(log: (m: string) => void, needsBank?: () => boolean): Promise<ClueOutcome> {
         if (guardianHalt !== null) return guardianHalt;
         const tlog = (m: string): void => {
             trace.note(m);
@@ -638,10 +658,11 @@ export const ClueExecutor = {
                 dumpFailure(reason ?? 'unknown', log);
             }
             sessionActive = false;
+            rewardCollection = null;
             sessionLegs = 0;
             acquireTries = 0;
-            gateItemsTried.clear();
             postKillClue = null;
+            recovery = null;
             ClueExecutor.current = null;
             return outcome;
         };
@@ -652,28 +673,32 @@ export const ClueExecutor = {
                 return 'yield';
             }
             await Sustain.run();
+            if (needsPuzzleRoom(identifyStep(heldIds(), CLUE_DB, CASKET_IDS))) return 'supplies-needed';
             await drainChat();
             if (EventSignal.pending()) return 'yield';
 
             if (fightArenaAt(Game.tile()) && Inventory.countById(DUEL_CLUE_ID) === 0 && !(await leaveClueDuel(tlog))) return 'yield';
             const step = identifyStep(heldIds(), CLUE_DB, CASKET_IDS);
             if (step === null) {
-                await dismissRewardModal();
+                if (sessionActive && !(await collectReward(tlog))) return 'yield';
                 tlog('trail complete');
                 return end('done');
             }
 
+            if (needsBank?.()) return 'supplies-needed';
+
             const clueId = trackedId(step);
+            const legRecovery = recovery?.clueId === clueId ? recovery : (recovery = { clueId, used: false });
             const name = shortClueName(step.type === 'open-casket' ? step.casketObj : step.obj);
             if (!sessionActive) {
                 trace.begin(clueId, name);
                 sessionActive = true;
                 sessionLegs = 0;
                 acquireTries = 0;
-                gateItemsTried.clear();
             }
             const target = stepTarget(step);
             const sameLeg = ClueExecutor.current?.clueId === clueId;
+            if (!sameLeg) acquireTries = 0;
             ClueExecutor.current = {
                 clueId,
                 name,
@@ -692,13 +717,20 @@ export const ClueExecutor = {
                 return end('abandon', reason);
             }
 
-            if (step.type === 'dig' && step.guardian && guardianEncounter?.clueId !== step.id && postKillClue !== step.id && hardClueKit(hardKitSnapshot()) !== 'ready') {
+            if (step.type === 'dig' && step.guardian && guardianEncounter?.clueId !== step.id && postKillClue !== step.id && hardClueKit(hardKitSnapshot(), GUARDIAN_MIN_SHARKS) !== 'ready') {
                 return 'supplies-needed';
             }
             if (step.type !== 'open-casket' && step.coord?.level === 0
                 && step.coord.x >= 2802 && step.coord.x <= 2878 && step.coord.z >= 3329 && step.coord.z <= 3393
-                && namesHaveEntranaRestrictedGear([...Inventory.items(), ...Equipment.items()].map(i => i.name ?? ''))) {
+                && (Equipment.items().length > 0 || namesHaveEntranaRestrictedGear(Inventory.items().map(i => i.name ?? '')))) {
                 return 'supplies-needed';
+            }
+            if (step.type !== 'open-casket' && KHARAZI_CLUES.has(step.id)) {
+                const missing = jungleKitMissing();
+                if (missing.length > 0) {
+                    tlog(`Kharazi jungle needs ${missing.join('+')}; banking for tools`);
+                    return 'supplies-needed';
+                }
             }
             const blocked = blockReason(step);
             if (blocked) {
@@ -720,20 +752,31 @@ export const ClueExecutor = {
                 }
             };
             const result = await solveStep(step, tlog, onAttempt);
-            if (typeof result === 'string') {
-                if (result === 'dead' || result === 'guardian-lost') {
+            if (typeof result === 'string' && result !== 'guardian-lost') {
+                if (result === 'dead') {
                     guardianHalt = result;
                     guardianEncounter = null;
                     postKillClue = null;
                 }
                 return result;
             }
-            if (!result) {
+            if (!result || result === 'guardian-lost') {
                 if (EventSignal.pending()) {
                     trace.note('yield — event fired mid-step');
                     return 'yield';
                 }
-                const reason = `no progress after ${STEP_ATTEMPTS} attempts`;
+                if (!legRecovery.used) {
+                    legRecovery.used = true;
+                    if (result === 'guardian-lost') guardianEncounter = null;
+                    acquireTries = 0;
+                    ClueExecutor.current = null;
+                    tlog(`${result === 'guardian-lost' ? 'guardian missing or unreachable' : `no progress after ${STEP_ATTEMPTS} attempts`}; resetting at the nearest bank before retrying this clue`);
+                    actions.closeModal();
+                    Traversal.requestRepath('clue recovery');
+                    await Execution.delayTicks(2);
+                    return 'reset-needed';
+                }
+                const reason = result === 'guardian-lost' ? 'guardian still missing or unreachable after a reset' : `no progress after ${STEP_ATTEMPTS} attempts following a reset`;
                 tlog(`abandoning ${describeStep(step)}: ${reason}`);
                 return end('abandon', reason);
             }

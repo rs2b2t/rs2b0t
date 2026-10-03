@@ -283,6 +283,7 @@ export interface InvItemSnapshot {
     id: number;
     name: string | null;
     count: number;
+    noted?: boolean;
     ops: (string | null)[];
     comId: number;
 }
@@ -2118,6 +2119,7 @@ function readInvComponent(comId: number, opsOf: (type: ObjType) => (string | nul
             id,
             name: type.name,
             count: com.linkObjNumber[slot],
+            noted: type.certtemplate !== -1,
             ops: opsOf(type),
             comId
         });

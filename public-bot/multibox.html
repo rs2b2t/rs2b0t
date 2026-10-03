@@ -31,6 +31,12 @@
         .mbx-tabmenu { position: absolute; z-index: 45; display: flex; flex-direction: column; background: #111; border: 1px solid #333; border-radius: 3px; }
         .mbx-tabmenu button { background: none; border: 0; color: #999; padding: 4px 10px; cursor: pointer; font: inherit; text-align: left; }
         .mbx-tabmenu button:hover { color: #5be05b; background: #101d11; }
+        .mbx-bot-tabmenu { position: fixed; z-index: 65; min-width: 160px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow-y: auto; box-sizing: border-box; }
+        .mbx-bot-tabmenu-title { padding: 6px 10px; color: #5be05b; border-bottom: 1px solid #333; }
+        .mbx-bot-tabmenu button { overflow-wrap: anywhere; }
+        .mbx-bot-tabmenu button:focus-visible { color: #5be05b; background: #101d11; outline: 1px solid #04A800; outline-offset: -1px; }
+        .mbx-bot-tabmenu button:disabled { color: #666; cursor: default; background: none; }
+        .mbx-bot-tabmenu button:disabled::after { content: ' ✓'; }
         /* Why: reparenting reloads an iframe; hide inactive slots in place. */
         .mbx-slot.mbx-tab-hidden { display: none; }
 

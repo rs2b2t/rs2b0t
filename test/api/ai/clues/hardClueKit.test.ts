@@ -23,9 +23,13 @@ test('requires Attack 60 and Lost City', () => {
     expect(hardClueKit({ ...ready, attack: 59 })).toBe('attack');
     expect(hardClueKit({ ...ready, lostCity: false })).toBe('lost-city');
 });
-test('allows the unpoisoned local DDS but no substitute', () => {
+test('allows either dragon dagger and the dragon longsword', () => {
     expect(hardClueKit({ ...ready, items: [{ id: 1215, count: 1 }, ...ready.items.slice(1)] })).toBe('ready');
-    expect(hardClueKit({ ...ready, items: [{ id: 1305, count: 1 }, ...ready.items.slice(1)] })).toBe('dds');
+    expect(hardClueKit({ ...ready, items: [{ id: 1305, count: 1 }, ...ready.items.slice(1)] })).toBe('ready');
+});
+test('rejects unsupported weapons and zero-count guardian weapons', () => {
+    expect(hardClueKit({ ...ready, items: [{ id: 1333, count: 1 }, ...ready.items.slice(1)] })).not.toBe('ready');
+    expect(hardClueKit({ ...ready, items: [{ id: 1305, count: 0 }, ...ready.items.slice(1)] })).not.toBe('ready');
 });
 test('reserves the mandatory thirteen slots without lowering the minimum', () => {
     expect(hardTrailFoodTarget({ heldFood: 0, freeSlots: 15, reserveSlots: 0 })).toBe(15);

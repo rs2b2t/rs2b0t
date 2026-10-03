@@ -36,10 +36,11 @@ line is the restock rate in ticks, and Valaine's black platelegs are 20 000 of t
 hours at `--tick 300`. The disguise names Louie in Al Kharid first for that reason, and a run that
 finds a shelf empty waits rather than fails.
 
-The bank seed is coins, lobsters and **ice gloves**. The gloves are the one seeded quest item, and
-the reason is in [Hero's Quest pitfalls](../decisions/quest-pitfalls-35.md): every ladder into the
-Ice Queen's lair stands on a plateau the map flags seal, so nothing can walk to the only source of
-them. `--stage armband` avoids the question entirely and is the fast loop for the two-bot dance.
+The bank seed is coins, lobsters and **ice gloves**. These older harnesses skip the Ice Queen
+fight; their results do not validate that route. The solver now acquires a pickaxe and uses
+the mineable rockslide, with 50 Mining required. Automated tests cover carried and worn
+pickaxes, missing requirements, the full map route and resuming after each ladder.
+`--stage armband` remains the fast loop for the two-bot dance.
 
 ## Hero's Quest, items harness
 

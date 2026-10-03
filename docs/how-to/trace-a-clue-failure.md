@@ -12,7 +12,12 @@
            {"m":"no spade at (2574,3331), trying the next spawn"}, …]}
 ```
 
-The trace persists under `TRACE_STORAGE_KEY`, so it survives the bot that produced it.
+The latest five traces persist under the local-storage key `rs2b0t:cluetrace`,
+so they survive the bot that produced them. In Electron on macOS, the shared
+store is `~/Library/Application Support/rs2b0t-desktop/Shared Storage/storage.json`
+unless `B0T_PROFILE_DIR` overrides the profile directory. Its `data` object
+contains that key as a JSON string. Share only the clue traces; the file also
+contains unrelated saved settings.
 
 ## Audit the database
 

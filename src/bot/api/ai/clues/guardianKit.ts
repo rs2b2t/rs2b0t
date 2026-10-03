@@ -1,9 +1,11 @@
 import { Execution } from '#/bot/api/execution/Execution.js';
+import { EventSignal } from '#/bot/api/execution/EventSignal.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { GameMessages } from '#/bot/api/chatbox/gameMessages.js';
 import { Inventory } from '#/bot/api/inventory/Inventory.js';
-import { hardClueKit, superantiDoses, SUPERANTI } from './hardClueKit.js';
-import { equipDds, hardKitSnapshot } from './hardCluePreparation.js';
+import { Sustain } from '#/bot/api/sustain/Sustain.js';
+import { GUARDIAN_MIN_SHARKS, hardClueKit, superantiDoses, SUPERANTI } from './hardClueKit.js';
+import { guardianWeaponWorn, equipGuardianWeapon, hardKitSnapshot } from './hardCluePreparation.js';
 
 const POISONED = /you have been poisoned/i;
 const IMMUNITY_TICKS = 570;
@@ -14,17 +16,30 @@ export class GuardianProtection {
     private poisonMark = GameMessages.mark();
 
     async prepare(): Promise<boolean> {
-        if (hardClueKit(hardKitSnapshot()) !== 'ready' || !(await equipDds())) return false;
-        return this.drink();
+        if (hardClueKit(hardKitSnapshot(), GUARDIAN_MIN_SHARKS) !== 'ready' || !(await equipGuardianWeapon())) return false;
+        return await this.drink(3) && guardianWeaponWorn() && Inventory.count('Shark') >= GUARDIAN_MIN_SHARKS;
     }
 
-    private async drink(): Promise<boolean> {
-        const potion = Inventory.items().find(i => SUPERANTI.some(d => d.id === i.id));
-        if (!potion) return false;
+    private async drink(attempts = 1): Promise<boolean> {
         const before = superantiDoses(Inventory.items());
+        if (before === 0) return false;
         const tick = Game.tick();
-        if (!(await potion.interact('Drink'))) return false;
-        const confirmed = await Execution.delayUntilTicks(() => superantiDoses(Inventory.items()) < before, 2);
+        let confirmed = false;
+        for (let attempt = 0; attempt < attempts; attempt++) {
+            if (attempt > 0) {
+                await Execution.delayTicks(2);
+                if (EventSignal.pending()) return false;
+                await Sustain.run();
+            }
+            if (EventSignal.pending()) return false;
+            confirmed = superantiDoses(Inventory.items()) < before;
+            if (confirmed) break;
+            if (attempts > 1 && (hardClueKit(hardKitSnapshot(), GUARDIAN_MIN_SHARKS) !== 'ready' || !guardianWeaponWorn())) return false;
+            const potion = Inventory.items().find(i => SUPERANTI.some(d => d.id === i.id));
+            if (!potion) return false;
+            confirmed = await potion.interact('Drink') && await Execution.delayUntilTicks(() => superantiDoses(Inventory.items()) < before, 2);
+            if (confirmed) break;
+        }
         if (!confirmed) return false;
         this.drankAt = tick;
         this.poisonMark = GameMessages.mark();

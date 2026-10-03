@@ -185,7 +185,6 @@ class DomSlotHandle implements SlotHandle {
     prepareWorldSwitch(): boolean {
         if (!this.worldRouting) return false;
         if (!this.win?.rs2b0t) {
-            this.whenReady(l => l.prepareWorldSwitch());
             return false;
         }
         return this.win.rs2b0t.prepareWorldSwitch();

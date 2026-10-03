@@ -5,6 +5,7 @@ import type {
 } from '../runtime/LoginCoordination.js';
 import { LoginCoordinator } from './LoginCoordinator.js';
 import JString from '../../client/datastruct/JString.js';
+import { waitForWorldSwitch } from '../runtime/WorldSwitch.js';
 import type { WorldNumber } from '../../client/config/worlds.js';
 
 export const MAIN_TAB = 'Main';
@@ -22,6 +23,7 @@ interface Slot {
     mode: RenderMode;
     tab: string;
     switchingWorld: WorldNumber | null;
+    worldSwitchError?: string;
 }
 
 type RailDirection = -1 | 1;
@@ -31,6 +33,7 @@ export class MultiBoxController {
 
     private slots: Slot[] = [];
     private switchingWorld = false;
+    private worldSwitches = new Map<number, AbortController>();
     private nextId = 1;
     private customTabs: string[] = [];
     private active: string = MAIN_TAB;
@@ -270,26 +273,48 @@ export class MultiBoxController {
         return this.slots.map(s => this.snap(s));
     }
 
-    switchWorld(id: number, world: WorldNumber): boolean {
+    async switchWorld(id: number, world: WorldNumber): Promise<boolean> {
         const slot = this.slots.find(s => s.id === id);
-        if (this.switchingWorld || !slot || (world !== 1 && world !== 2) || world === slot.account.world) return false;
+        if (this.switchingWorld || !slot || this.worldSwitches.has(id) || (world !== 1 && world !== 2) || world === slot.account.world) return false;
+        const pending = new AbortController();
+        this.worldSwitches.set(id, pending);
+        let reconnect = slot.handle.status().ingame;
         slot.switchingWorld = world;
+        slot.worldSwitchError = undefined;
         slot.loginCoordination.leaveQueue();
-        if (!slot.handle.prepareWorldSwitch()) return false;
-        slot.handle.setLoginCoordination(null);
-        slot.handle.reloadWorld(world);
-        slot.loginCoordination = this.loginCoordinator.register();
-        slot.handle.setLoginCoordination(slot.loginCoordination);
-        slot.handle.setAutoLogin(false);
-        slot.handle.setRenderMode(slot.mode);
-        slot.account = { ...slot.account, world };
-        slot.switchingWorld = null;
-        return true;
+        try {
+            if (!await waitForWorldSwitch(() => {
+                reconnect ||= slot.handle.status().ingame;
+                return slot.handle.prepareWorldSwitch();
+            }, pending.signal) || pending.signal.aborted) {
+                if (!pending.signal.aborted) slot.worldSwitchError = 'Could not log out. Check the game message.';
+                return false;
+            }
+            slot.handle.setLoginCoordination(null);
+            slot.handle.reloadWorld(world);
+            slot.loginCoordination = this.loginCoordinator.register();
+            slot.handle.setLoginCoordination(slot.loginCoordination);
+            slot.handle.setAutoLogin(reconnect);
+            slot.handle.setRenderMode(slot.mode);
+            slot.account = { ...slot.account, world };
+            return true;
+        } catch {
+            if (!pending.signal.aborted) slot.worldSwitchError = 'Could not switch worlds. Check the connection.';
+            return false;
+        } finally {
+            if (this.worldSwitches.get(id) === pending) {
+                this.worldSwitches.delete(id);
+                slot.switchingWorld = null;
+                if (slot.account.world !== world) slot.handle.cancelWorldSwitch();
+            }
+        }
     }
 
     cancelSlotWorldSwitch(id: number): void {
         const slot = this.slots.find(s => s.id === id);
         if (this.switchingWorld || !slot || slot.switchingWorld === null) return;
+        this.worldSwitches.get(id)?.abort();
+        this.worldSwitches.delete(id);
         slot.handle.cancelWorldSwitch();
         slot.switchingWorld = null;
     }
@@ -359,6 +384,6 @@ export class MultiBoxController {
     }
 
     private snap(slot: Slot): SlotSnapshot {
-        return { id: slot.id, username: slot.account.username, focused: slot.id === this.focusedId, mode: slot.mode, tab: slot.tab, targetWorld: slot.account.world ?? this.defaultWorld, switchingWorld: slot.switchingWorld, ...slot.handle.status() };
+        return { id: slot.id, username: slot.account.username, focused: slot.id === this.focusedId, mode: slot.mode, tab: slot.tab, targetWorld: slot.account.world ?? this.defaultWorld, switchingWorld: slot.switchingWorld, worldSwitchError: slot.worldSwitchError, ...slot.handle.status() };
     }
 }

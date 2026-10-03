@@ -151,7 +151,7 @@ export class ProfileChooser {
         this.status.textContent = `Switching ${profile.username}...`;
         try {
             const changed = await this.options.onWorldChange(profile, this.selectedWorld(select));
-            this.status.textContent = changed ? '' : 'Log out in-game, then choose the world again';
+            this.status.textContent = changed ? '' : 'Could not switch worlds. Check the game message or connection.';
         } catch (error) {
             this.status.textContent = error instanceof Error ? error.message : 'Could not change the profile world';
         } finally {

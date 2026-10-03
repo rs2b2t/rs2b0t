@@ -25,7 +25,7 @@ const original = {
     skillXp: Skills.xp,
     bankItems: Bank.items,
     bankLoaded: Bank.loaded,
-    bankOpenNearest: Bank.openNearest,
+    bankOpenNearest: Bank.openNearestAccess,
     bankIsOpen: Bank.isOpen,
     inventoryItems: Inventory.items,
     inventoryUsed: Inventory.used,
@@ -120,7 +120,7 @@ beforeEach(() => {
 
     Bank.items = () => bankContents;
     Bank.loaded = () => bankContents.length > 0;
-    Bank.openNearest = async () => true;
+    Bank.openNearestAccess = async () => true;
     Bank.isOpen = () => bankOpen;
     Inventory.items = () => inventory();
     Inventory.used = () => inventory().length;
@@ -166,7 +166,7 @@ afterEach(() => {
     Skills.xp = original.skillXp;
     Bank.items = original.bankItems;
     Bank.loaded = original.bankLoaded;
-    Bank.openNearest = original.bankOpenNearest;
+    Bank.openNearestAccess = original.bankOpenNearest;
     Bank.isOpen = original.bankIsOpen;
     Inventory.items = original.inventoryItems;
     Inventory.used = original.inventoryUsed;

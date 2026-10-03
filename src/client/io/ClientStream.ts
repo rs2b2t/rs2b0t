@@ -39,6 +39,10 @@ export default class ClientStream {
         return parseInt(this.socket.url.split(':')[2], 10);
     }
 
+    get closed(): boolean {
+        return this.dummy || this.remoteClosed;
+    }
+
     get available(): number {
         if (this.dummy || this.remoteClosed) {
             return 0;

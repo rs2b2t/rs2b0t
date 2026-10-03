@@ -172,6 +172,9 @@ export const Traversal = {
                 if (outcome === 'blocked') {
                     return true;
                 }
+                if ((outcome === 'failed' || outcome === 'unreachable') && WalkExecutor.lastMissingGateItems.length > 0) {
+                    return false;
+                }
                 lastOutcome = outcome === 'unreachable' ? 'failed' : outcome;
             } else if (action.kind === 'scene') {
                 await DirectNavigator.walkTo(dest, sceneRadius, SCENE_TIMEOUT_MS);
