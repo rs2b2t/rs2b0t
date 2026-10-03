@@ -38,9 +38,13 @@ a second failure cannot release the host while the guardian is still attacking.
 ## Isafdar teleport policy
 
 Lord Iorwerth and other Isafdar clues preserve the caller's teleport policy on
-the mainland approach to Arandar and after leaving for a mainland bank.
-Obstacle crossings inside Isafdar stay on foot. A disabled teleport setting is
-respected, and the navigation catalog still checks rune and quest requirements.
+the mainland approach to Arandar. When the next clue or bank is outside Isafdar,
+the solver checks for an immediate teleport before walking to an exit crossing.
+This also applies after handing Iorwerth his solved puzzle box. The navigation
+catalog checks rune, level and quest requirements against the current inventory.
+The solver verifies the teleport landing before continuing from the new position.
+An unavailable or failed teleport falls back to the crossings. Travel between
+Isafdar pockets stays on foot, and a disabled teleport setting is respected.
 
 When a trail moves from Kharazi to Isafdar, it cuts out of the jungle before
 planning the Arandar approach. In the reverse direction, it leaves Isafdar,
@@ -51,6 +55,8 @@ This includes clue 3562, `01 degrees 24 minutes North, 08 degrees 05 minutes Wes
 ## Validation
 
 Regression tests cover the desert-to-Iorwerth approach, outgoing bank travel,
+the Iorwerth puzzle hand-in followed by a mainland clue, failed teleport landings,
+missing spell requirements and teleport allowlists, denylists and distance limits,
 teleports disabled, full-pack rebuilding, preserved keys and equipment records,
 12-Shark preparation, interrupted deposits, event yields, repeated failures,
 post-kill dig recovery, offset guardians, blocked fence edges and safe retreat.

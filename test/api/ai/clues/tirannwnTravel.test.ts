@@ -22,6 +22,12 @@ import { Quests } from '#/bot/api/ui/questlog/Quests.js';
 import { ChatDialog } from '#/bot/api/ui/dialogue/ChatDialog.js';
 import { Traversal, type WalkResilientOptions } from '#/bot/api/walking/Traversal.js';
 import Tile from '#/bot/geometry/Tile.js';
+import { Navigator } from '#/bot/event/webwalk/Navigator.js';
+import { PuzzleBox } from '#/bot/api/ai/clues/PuzzleBox.js';
+import { Reach } from '#/bot/api/walking/Reach.js';
+import * as primitives from '#/bot/api/ai/quests/exec/primitives.js';
+import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
+import type { WorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 
 let here: Tile;
 let walks: { tile: Tile; opts: WalkResilientOptions }[];
@@ -32,6 +38,8 @@ beforeEach(() => {
     ClueExecutor.setTeleports(true);
     here = new Tile(3168, 3041, 0);
     walks = [];
+    spyOn(EventSignal, 'pending').mockReturnValue(false);
+    spyOn(Navigator, 'findPath').mockResolvedValue({ ok: false, reason: 'unreachable', expanded: 0 });
     spyOn(Game, 'tile').mockImplementation(() => here);
     spyOn(reader, 'worldTile').mockImplementation(() => here);
     spyOn(Quests, 'status').mockReturnValue('complete');
@@ -39,6 +47,7 @@ beforeEach(() => {
     spyOn(Execution, 'delayTicks').mockResolvedValue();
     spyOn(Execution, 'delayUntil').mockImplementation(async fn => fn());
     spyOn(Traversal, 'walkResilient').mockImplementation(async (dest, opts) => {
+        if (EventSignal.pending()) return false;
         here = new Tile(dest.x, dest.z, dest.level);
         walks.push({ tile: here, opts });
         return true;
@@ -67,12 +76,144 @@ test.each([true, false])('desert to Iorwerth preserves teleport setting %s on th
     expect(here).toEqual(RG_TILE.IORWERTH);
 });
 
-test('leaving Iorwerth for a mainland bank enables teleports after the last crossing', async () => {
+test('without an available teleport, leaving Iorwerth walks the crossings before the mainland bank', async () => {
     here = RG_TILE.IORWERTH;
     expect(await walkToBank(RG_TILE.ARDOUGNE_BANK, log)).toBe(true);
     expect(walks.at(-1)?.opts.policy?.useTeleports).toBe(true);
     for (const walk of walks.slice(0, -1)) expect(walk.opts.policy?.useTeleports).toBe(false);
     expect(here).toEqual(RG_TILE.ARDOUGNE_BANK);
+});
+
+function planTeleport(overrides: Partial<WorldStateData> = {}): void {
+    const squares = [[34, 50], [40, 51], [41, 51], [40, 52], [41, 52], [40, 53], [41, 53], [40, 54], [41, 54]];
+    const size = 3 + 4096 + 512;
+    const pack = new Uint8Array(10 + squares.length * size);
+    pack.set([0x4c, 0x43, 0x4e, 0x56, 1, 1, 0, 0, squares.length, 0]);
+    for (const [i, [x, z]] of squares.entries()) {
+        const offset = 10 + i * size;
+        pack.set([x, z, 1], offset);
+        pack.fill(0xff, offset + 3, offset + size);
+    }
+    const finder = new PathFinder(pack);
+    const state: WorldStateData = { members: true, skills: { magic: 70 }, quests: { 'Plague City': 'complete' },
+        items: { 'Law rune': 2, 'Water rune': 2 }, freeSlots: 4, ...overrides };
+    spyOn(Navigator, 'findPath').mockImplementation(async (from, dest, opts) => {
+        expect(opts?.useTeleportCatalog).toBe(true);
+        expect(opts?.policy?.useTeleports).toBe(true);
+        return finder.findPath(from, dest, { state, useTeleportCatalog: opts?.useTeleportCatalog, policy: opts?.policy });
+    });
+}
+
+test('leaving Iorwerth teleports before approaching any exit crossing', async () => {
+    here = RG_TILE.IORWERTH;
+    planTeleport();
+    const cast = spyOn(Game, 'teleport').mockImplementation(async name => {
+        expect(name).toBe('Ardougne');
+        expect(here).toEqual(RG_TILE.IORWERTH);
+        here = new Tile(2661, 3301, 0);
+        return true;
+    });
+    expect(await walkToBank(RG_TILE.ARDOUGNE_BANK, log)).toBe(true);
+    expect(cast).toHaveBeenCalledTimes(1);
+    expect(Loc.prototype.interact).not.toHaveBeenCalled();
+    expect(here).toEqual(RG_TILE.ARDOUGNE_BANK);
+});
+
+test.each([false, true])('a rejected or unlanded teleport falls back to crossings, cast accepted=%s', async accepted => {
+    here = RG_TILE.IORWERTH;
+    planTeleport();
+    const cast = spyOn(Game, 'teleport').mockResolvedValue(accepted);
+    expect(await walkToBank(RG_TILE.ARDOUGNE_BANK, log)).toBe(true);
+    expect(cast).toHaveBeenCalledTimes(1);
+    expect(Loc.prototype.interact).toHaveBeenCalled();
+    expect(here).toEqual(RG_TILE.ARDOUGNE_BANK);
+});
+
+test('disabled teleports leave Iorwerth using crossings without planning a teleport', async () => {
+    here = RG_TILE.IORWERTH;
+    ClueExecutor.setTeleports(false);
+    expect(await walkAcrossTirannwn(RG_TILE.ARDOUGNE_BANK, 1, log, trailWalkOpts(log))).toBe(true);
+    expect(Navigator.findPath).not.toHaveBeenCalled();
+    expect(Loc.prototype.interact).toHaveBeenCalled();
+});
+
+test.each([
+    { items: { 'Law rune': 1, 'Water rune': 2 } },
+    { skills: { magic: 50 } },
+    { quests: { 'Plague City': 'started' as const } }
+])('an unavailable Ardougne spell uses the crossings: %j', async state => {
+    here = RG_TILE.IORWERTH;
+    planTeleport(state);
+    const cast = spyOn(Game, 'teleport').mockResolvedValue(false);
+    expect(await walkToBank(RG_TILE.ARDOUGNE_BANK, log)).toBe(true);
+    expect(cast).not.toHaveBeenCalled();
+    expect(Loc.prototype.interact).toHaveBeenCalled();
+});
+
+test.each([
+    { denyTeleportIds: ['ardougne'] },
+    { allowTeleportIds: ['falador'] },
+    { distanceBeforeTeleport: 1000 }
+])('exit teleport respects caller policy %j', async policy => {
+    here = RG_TILE.IORWERTH;
+    planTeleport();
+    const cast = spyOn(Game, 'teleport').mockResolvedValue(false);
+    const options = trailWalkOpts(log);
+    options.policy = { ...options.policy, ...policy };
+    expect(await walkAcrossTirannwn(RG_TILE.ARDOUGNE_BANK, 1, log, options)).toBe(true);
+    expect(cast).not.toHaveBeenCalled();
+    expect(Loc.prototype.interact).toHaveBeenCalled();
+});
+
+test('travel between Isafdar pockets stays on foot', async () => {
+    here = RG_TILE.IORWERTH;
+    expect(await walkAcrossTirannwn(new Tile(2181, 3206, 0), 0, log, trailWalkOpts(log))).toBe(true);
+    expect(Navigator.findPath).not.toHaveBeenCalled();
+    expect(Loc.prototype.interact).toHaveBeenCalled();
+});
+
+test('an event while planning the exit prevents both casting and crossing', async () => {
+    here = RG_TILE.IORWERTH;
+    spyOn(Navigator, 'findPath').mockImplementation(async () => {
+        spyOn(EventSignal, 'pending').mockReturnValue(true);
+        return { ok: false, reason: 'unreachable', expanded: 0 };
+    });
+    const cast = spyOn(Game, 'teleport').mockResolvedValue(true);
+    expect(await walkAcrossTirannwn(RG_TILE.ARDOUGNE_BANK, 1, log, trailWalkOpts(log))).toBe(false);
+    expect(cast).not.toHaveBeenCalled();
+    expect(Loc.prototype.interact).not.toHaveBeenCalled();
+    expect(here).toEqual(RG_TILE.IORWERTH);
+});
+
+test('the running solver teleports after handing Iorwerth his solved puzzle', async () => {
+    here = RG_TILE.IORWERTH;
+    planTeleport();
+    const item = (id: number): InvItemSnapshot => ({ id, name: 'Clue item', count: 1, slot: 0, comId: 3214, ops: [] });
+    let pack = [item(3564), item(3565)];
+    let pending = false;
+    let solved = false;
+    spyOn(reader, 'inventory').mockImplementation(() => pack);
+    spyOn(EventSignal, 'pending').mockImplementation(() => pending);
+    spyOn(ChatDialog, 'isOpen').mockReturnValue(false);
+    spyOn(ChatDialog, 'canContinue').mockReturnValue(false);
+    spyOn(PuzzleBox, 'solveHeld').mockImplementation(async id => { expect(id).toBe(3565); solved = true; return true; });
+    spyOn(Reach, 'npcDialog').mockResolvedValue('done');
+    spyOn(primitives, 'talkThrough').mockImplementation(async () => {
+        expect(solved).toBe(true);
+        pack = [item(3574)];
+        return true;
+    });
+    const cast = spyOn(Game, 'teleport').mockImplementation(async () => {
+        expect(here).toEqual(RG_TILE.IORWERTH);
+        expect(pack[0].id).toBe(3574);
+        here = new Tile(2661, 3301, 0);
+        pending = true;
+        return true;
+    });
+    expect(await ClueExecutor.solveHeldClue(log)).toBe('yield');
+    expect(cast).toHaveBeenCalledTimes(1);
+    expect(Loc.prototype.interact).not.toHaveBeenCalled();
+    expect(here).toEqual(new Tile(2661, 3301, 0));
 });
 
 test.each([true, false])('the Iorwerth clue dispatch preserves teleport setting %s', async enabled => {
