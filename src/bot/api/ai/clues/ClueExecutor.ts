@@ -25,6 +25,7 @@ import { CASKET_IDS, CLUE_DB } from '#/bot/api/ai/clues/data/cluedb.js';
 import { challengeAnswer } from '#/bot/api/ai/clues/data/challengeAnswers.js';
 import { clueGate } from '#/bot/api/ai/clues/data/clueGates.js';
 import { KILL_ANCHORS } from '#/bot/api/ai/clues/data/killAnchors.js';
+import { DIG_ANCHORS } from '#/bot/api/ai/clues/data/digAnchors.js';
 import { ensureSpade, ensureCoordTools, ensureExtraItems, ensureGateItems } from '#/bot/api/ai/clues/AcquireTools.js';
 import { SPADE_NAME } from '#/bot/api/ai/clues/data/toolAcquire.js';
 import { GuardianEncounter, sustainUntil, GUARDIAN_DEATH, type GuardianStop } from '#/bot/api/ai/clues/Guardian.js';
@@ -99,7 +100,7 @@ function stepTarget(step: ClueStep): NavPoint | null {
         const a = TALK_ANCHORS[step.id];
         return a ? { x: a.x, z: a.z, level: a.level } : null;
     }
-    return step.coord ?? null;
+    return (step.type === 'dig' ? DIG_ANCHORS[step.id] : undefined) ?? step.coord ?? null;
 }
 
 export function tilesTo(target: NavPoint | null): number | null {
@@ -202,7 +203,7 @@ function describeStep(step: ClueStep): string {
     if (step.type === 'talk') {
         return `${step.obj} (talk ${step.npc ?? '?'})`;
     }
-    const c = step.coord;
+    const c = stepTarget(step);
     return `${step.obj} (${step.type})${c ? ` at (${c.x},${c.z},${c.level})` : ''}`;
 }
 
@@ -401,11 +402,12 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void 
             if (!step.coord) {
                 return;
             }
-            const coord = step.coord;
+            const anchor = DIG_ANCHORS[step.id];
+            const coord = anchor ?? step.coord;
             const deathMark = GameMessages.mark();
             const died = (): boolean => guardianHalt === 'dead' || GameMessages.sawSince(deathMark, GUARDIAN_DEATH);
             const standOnIt = (): Promise<boolean> =>
-                walkLeg(coord, log);
+                walkLeg(coord, log, anchor ? 0 : ARRIVE_RADIUS);
             const dig = async (): Promise<void> => {
                 if (died()) return;
                 const spade = Inventory.first(SPADE_NAME);

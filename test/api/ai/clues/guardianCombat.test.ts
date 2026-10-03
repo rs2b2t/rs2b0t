@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test';
 import { reader, type InvItemSnapshot, type NpcSnapshot } from '#/bot/adapter/ClientAdapter.js';
-import { fightGuardian } from '#/bot/api/ai/clues/Guardian.js';
+import { fightGuardian, GuardianEncounter } from '#/bot/api/ai/clues/Guardian.js';
 import { GuardianProtection } from '#/bot/api/ai/clues/guardianKit.js';
 import { SUPERANTI } from '#/bot/api/ai/clues/hardClueKit.js';
 import { GameMessages } from '#/bot/api/chatbox/gameMessages.js';
@@ -280,6 +280,39 @@ function guardedTrail(): void {
     spyOn(ChatDialog, 'canContinue').mockReturnValue(false);
     spyOn(Traversal, 'walkResilient').mockImplementation(async () => { events.push(`walk:${tick}`); return true; });
 }
+
+test('hard sextant012 digs at 3054,3696 before and after chasing its wizard', async () => {
+    guardedTrail();
+    pack = pack.map(i => i.id === 2723 ? { ...i, id: 2745 } : i);
+    let here = new Tile(3053, 3696, 0);
+    let pending = false;
+    const digs: Tile[] = [];
+    spyOn(Game, 'tile').mockImplementation(() => here);
+    spyOn(reader, 'worldTile').mockImplementation(() => here);
+    spyOn(EventSignal, 'pending').mockImplementation(() => pending);
+    spyOn(ChatDialog, 'isOpen').mockReturnValue(false);
+    spyOn(GuardianProtection.prototype, 'prepare').mockResolvedValue(true);
+    spyOn(GuardianEncounter.prototype, 'fight').mockImplementation(async () => {
+        here = new Tile(3056, 3697, 0);
+        return 'killed';
+    });
+    spyOn(Traversal, 'walkResilient').mockImplementation(async (dest, opts) => {
+        here = new Tile(dest.x + opts.radius, dest.z, dest.level);
+        return true;
+    });
+    spyOn(InvItem.prototype, 'interact').mockImplementation(function (this: InvItem, op) {
+        if (this.id !== 952 || op !== 'Dig') return false;
+        digs.push(here);
+        if (digs.length === 2) {
+            pack = pack.map(i => i.id === 2745 ? { ...i, id: 2746 } : i);
+            pending = true;
+        }
+        return true;
+    });
+    expect(await ClueExecutor.solveHeldClue(() => {})).toBe('yield');
+    expect(digs).toEqual([new Tile(3054, 3696, 0), new Tile(3054, 3696, 0)]);
+    expect(pack.some(i => i.id === 2746)).toBe(true);
+});
 
 test.each(['retry', 'prepared'])('yields before spawning a guardian when an event arrives during potion %s', async phase => {
     guardedTrail();
