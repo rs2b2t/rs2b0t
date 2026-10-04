@@ -6,7 +6,7 @@ import { Execution } from '#/bot/api/execution/Execution.js';
 import { EventSignal } from '#/bot/api/execution/EventSignal.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
 import { Duel } from '#/bot/api/duel/Duel.js';
-import { ClueDuelHandshake } from '#/bot/api/duel/ClueDuel.js';
+import { ClueDuelHandshake, ClueDuelSearch } from '#/bot/api/duel/ClueDuel.js';
 import { ClueExecutor } from '#/bot/api/ai/clues/ClueExecutor.js';
 import { InvItem } from '#/bot/api/inventory/Inventory.js';
 import { Sustain } from '#/bot/api/sustain/Sustain.js';
@@ -78,12 +78,13 @@ test('an event interruption cancels the negotiation before yielding', async () =
     expect(state.challenges).toBe(0);
 });
 
-test('a missing named helper never enters negotiation', async () => {
+test('an unset helper searches lobby players before walking to the dig', async () => {
     const state = fixture();
     spyOn(SettingsStore, 'globalBag').mockReturnValue(new SettingsBag({ clueDuelPartner: '' }));
-    expect(await walkAcrossClueDuel(DUEL_CLUE_TILE, 0, () => {})).toBe(false);
-    expect(state.challenges).toBe(0);
-    expect(state.walks).toEqual([]);
+    spyOn(ClueDuelSearch.prototype, 'tick').mockImplementation(async () => { state.challenges++; state.tile = DUEL_CLUE_TILE; });
+    expect(await walkAcrossClueDuel(DUEL_CLUE_TILE, 0, () => {})).toBe(true);
+    expect(state.challenges).toBe(1);
+    expect(state.walks).toEqual([lobby, DUEL_CLUE_TILE]);
 });
 
 

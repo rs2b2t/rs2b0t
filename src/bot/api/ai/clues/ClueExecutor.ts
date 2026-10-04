@@ -1,8 +1,8 @@
 import { HANS_WAIT_SPOT, solveHans } from './hans.js';
 import { solveMountainPilot } from './gnomePilot.js';
-import { crossesClueDuel, walkAcrossClueDuel, DUEL_CLUE_ID } from './duelTravel.js';
+import { crossesClueDuel, walkAcrossClueDuel, resetClueDuelSearch, DUEL_CLUE_ID } from './duelTravel.js';
 import { leaveClueDuel } from '../../duel/ClueDuel.js';
-import { fightArenaAt } from '../../duel/Duel.js';
+import { fightArenaAt, inDuelChallengeArea } from '../../duel/Duel.js';
 // docs/decisions/clue-host-yielding.md
 import { actions, reader } from '#/bot/adapter/ClientAdapter.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
@@ -420,6 +420,7 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void 
 
             if (guardianEncounter?.clueId !== step.id && !(await standOnIt())) {
                 if (died()) return 'dead';
+                if (step.id === DUEL_CLUE_ID && inDuelChallengeArea(Game.tile())) return 'yield';
                 return;
             }
             if (died()) return 'dead';
@@ -624,6 +625,7 @@ export const ClueExecutor = {
     current: null as ClueProgress | null,
 
     resetSession(): void {
+        resetClueDuelSearch();
         sessionActive = false;
         rewardCollection = null;
         sessionLegs = 0;
@@ -657,6 +659,7 @@ export const ClueExecutor = {
             log(m);
         };
         const end = (outcome: 'done' | 'abandon', reason?: string): 'done' | 'abandon' => {
+            resetClueDuelSearch();
             if (outcome === 'abandon') {
                 dumpFailure(reason ?? 'unknown', log);
             }

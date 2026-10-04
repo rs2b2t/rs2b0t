@@ -3,11 +3,10 @@ import type { CombatStyleResolution, MeleeCombatStyle } from '../../api/combat/C
 
 export type DuelTrainingStyle = Extract<MeleeCombatStyle, 'attack' | 'strength' | 'defence'>;
 
-import { fightArenaAt } from '../../api/duel/Duel.js';
+import { fightArenaAt, inDuelChallengeArea } from '../../api/duel/Duel.js';
 import type { Rect } from '../../api/duel/Duel.js';
-export { DUEL_FIGHT_ARENAS, fightArenaAt, type Rect } from '../../api/duel/Duel.js';
+export { DUEL_FIGHT_ARENAS, fightArenaAt, inDuelChallengeArea, type Rect } from '../../api/duel/Duel.js';
 
-const DUEL_ZONE: Rect = { minX: 3328, maxX: 3393, minZ: 3203, maxZ: 3325 };
 export const DUEL_CHALLENGE_ANCHOR: WorldTile = { x: 3368, z: 3274, level: 0 };
 export const CHALLENGE_INTERVAL_MS = 5000;
 export const DUEL_NEGOTIATION_TIMEOUT_MS = 30_000;
@@ -16,20 +15,12 @@ export const MAX_FIGHT_ATTEMPTS = 4;
 export const MAX_CENTER_SEEK_ATTEMPTS = 2;
 export const BUSY_MESSAGE = /^other player is busy at the moment\.?$/i;
 
-function inside(tile: WorldTile, area: Rect): boolean {
-    return tile.level === 0 && tile.x >= area.minX && tile.x <= area.maxX && tile.z >= area.minZ && tile.z <= area.maxZ;
-}
-
 export function fightArenaCenter(area: Rect): WorldTile {
     return {
         x: Math.floor((area.minX + area.maxX) / 2),
         z: Math.floor((area.minZ + area.maxZ) / 2),
         level: 0
     };
-}
-
-export function inDuelChallengeArea(tile: WorldTile | null): boolean {
-    return tile !== null && inside(tile, DUEL_ZONE) && fightArenaAt(tile) === null;
 }
 
 export function duelRequesterAvailable(tile: WorldTile | null, inCombat: boolean): boolean {
