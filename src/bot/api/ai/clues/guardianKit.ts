@@ -15,9 +15,12 @@ export class GuardianProtection {
     private drankAt: number | null = null;
     private poisonMark = GameMessages.mark();
 
+    constructor(private readonly guardian = 'Saradomin Wizard') {}
+
     async prepare(): Promise<boolean> {
-        if (hardClueKit(hardKitSnapshot(), GUARDIAN_MIN_SHARKS) !== 'ready' || !(await equipGuardianWeapon())) return false;
-        return await this.drink(3) && guardianWeaponWorn() && Inventory.count('Shark') >= GUARDIAN_MIN_SHARKS;
+        const needsAntipoison = this.guardian === 'Saradomin Wizard';
+        if (hardClueKit(hardKitSnapshot(), GUARDIAN_MIN_SHARKS, needsAntipoison) !== 'ready' || !(await equipGuardianWeapon())) return false;
+        return (!needsAntipoison || await this.drink(3)) && guardianWeaponWorn() && Inventory.count('Shark') >= GUARDIAN_MIN_SHARKS;
     }
 
     private async drink(attempts = 1): Promise<boolean> {
@@ -49,6 +52,7 @@ export class GuardianProtection {
     }
 
     async maintain(): Promise<'ready' | 'drank' | 'supplies-needed'> {
+        if (this.guardian !== 'Saradomin Wizard') return 'ready';
         const age = this.drankAt === null ? Infinity : Game.tick() - this.drankAt;
         const poisoned = GameMessages.sawSince(this.poisonMark, POISONED);
         if (age >= 0 && age < REFRESH_TICKS && !poisoned) return 'ready';

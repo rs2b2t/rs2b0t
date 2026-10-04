@@ -30,9 +30,9 @@ function item(id: number, name: string, count = 1): InvItemSnapshot {
 }
 beforeEach(() => {
     tick = 0; pending = false; interrupted = false; digs = 0; drinks = 0; attacks = [];
-    pack = [item(2723, 'Clue scroll (hard)'), item(185, 'Superantipoison(1)'), item(385, 'Shark', 15),
+    pack = [item(3526, 'Clue scroll (hard)'), item(185, 'Superantipoison(1)'), item(385, 'Shark', 15),
         item(952, 'Spade'), item(2574, 'Sextant'), item(2575, 'Watch'), item(2576, 'Chart')];
-    npcs = [{ index: 4, id: 1, anim: -1, name: 'Zamorak Wizard', level: 65, size: 1,
+    npcs = [{ index: 4, id: 1, anim: -1, name: 'Saradomin Wizard', level: 65, size: 1,
         tile: { x: 3000, z: 3000, level: 0 }, distance: 1, ops: ['Attack'], inCombat: true,
         health: 40, totalHealth: 40, faceEntity: 32768 }];
     GameMessages.reset();
@@ -63,7 +63,7 @@ beforeEach(() => {
         if (op === 'Drink') { drinks++; pack = pack.filter(i => i.id !== this.id); }
         if (op === 'Dig') {
             digs++;
-            if (digs === 2) pack = pack.map(i => i.id === 2723 ? { ...i, id: 2725 } : i);
+            if (digs === 2) pack = pack.map(i => i.id === 3526 ? { ...i, id: 3528 } : i);
         }
         return true;
     });
@@ -96,7 +96,7 @@ test('resumes the same guardian below fifteen Sharks with the final dose still a
     expect(attacks).toEqual([4]);
     expect(drinks).toBe(1);
     expect(digs).toBe(2);
-    expect(pack.some(i => i.id === 2725)).toBe(true);
+    expect(pack.some(i => i.id === 3528)).toBe(true);
 });
 
 test.each(['missing', 'index', 'id', 'foreign', 'distant', 'dead'] as const)(
@@ -183,7 +183,7 @@ test('bank reset after a failed post-kill dig preserves guardian kill credit', a
         if (op === 'Drink') { drinks++; pack = pack.filter(i => i.id !== this.id); }
         if (op === 'Dig') {
             digs++;
-            if (digs === 6) { pack = pack.map(i => i.id === 2723 ? { ...i, id: 2724 } : i); pending = true; }
+            if (digs === 6) { pack = pack.map(i => i.id === 3526 ? { ...i, id: 3527 } : i); pending = true; }
         }
         return true;
     });

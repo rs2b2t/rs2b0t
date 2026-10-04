@@ -265,25 +265,25 @@ test('a foreign guardian is never attacked', async () => {
 });
 
 test.each([1231, 185, 385])('executor refuses guarded spawning without %s', async id => {
-    pack = [item(2723, 'Clue scroll (hard)'), ...pack.filter(i => i.id !== id)];
+    pack = [item(3526, 'Clue scroll (hard)'), ...pack.filter(i => i.id !== id)];
     spyOn(ChatDialog, 'canContinue').mockReturnValue(false);
     spyOn(Traversal, 'walkResilient').mockResolvedValue(false);
     expect(await ClueExecutor.solveHeldClue(() => {})).toBe('supplies-needed');
     expect(InvItem.prototype.interact).not.toHaveBeenCalled();
     expect(Traversal.walkResilient).not.toHaveBeenCalled();
-    expect(pack.some(i => i.id === 2723)).toBe(true);
+    expect(pack.some(i => i.id === 3526)).toBe(true);
 });
 
-function guardedTrail(): void {
-    pack.push(item(2723, 'Clue scroll (hard)'), item(952, 'Spade'), item(2574, 'Sextant'), item(2575, 'Watch'), item(2576, 'Chart'));
-    npcs = npcs.map(n => ({ ...n, name: 'Zamorak Wizard' }));
+function guardedTrail(guardian = 'Saradomin Wizard', clue = 3526): void {
+    pack.push(item(clue, 'Clue scroll (hard)'), item(952, 'Spade'), item(2574, 'Sextant'), item(2575, 'Watch'), item(2576, 'Chart'));
+    npcs = npcs.map(n => ({ ...n, name: guardian }));
     spyOn(ChatDialog, 'canContinue').mockReturnValue(false);
     spyOn(Traversal, 'walkResilient').mockImplementation(async () => { events.push(`walk:${tick}`); return true; });
 }
 
 test('hard sextant012 digs at 3054,3696 before and after chasing its wizard', async () => {
     guardedTrail();
-    pack = pack.map(i => i.id === 2723 ? { ...i, id: 2745 } : i);
+    pack = pack.map(i => i.id === 3526 ? { ...i, id: 2745 } : i);
     let here = new Tile(3053, 3696, 0);
     let pending = false;
     const digs: Tile[] = [];
@@ -347,7 +347,7 @@ test.each([14, 15])('guarded trail permits a travel bite with %s Sharks before t
     let digs = 0;
     spyOn(InvItem.prototype, 'interact').mockImplementation(function (this: InvItem, op: string) {
         if (op === 'Drink') pack = pack.filter(i => i.id !== this.id);
-        if (op === 'Dig' && ++digs === 2) pack = pack.map(i => i.id === 2723 ? { ...i, id: 2725 } : i);
+        if (op === 'Dig' && ++digs === 2) pack = pack.map(i => i.id === 3526 ? { ...i, id: 3528 } : i);
         return true;
     });
     advance = () => { if (npcs[0]?.health === 0) npcs = []; };
@@ -375,7 +375,7 @@ test('drinks near the dig, finishes the post-kill dig below fifteen, then reques
         if (op === 'Drink') { events.push(`drink:${tick}`); pack = pack.filter(i => i.id !== this.id); }
         if (op === 'Dig') {
             digs++; events.push(`dig:${tick}`);
-            if (digs === 2) pack = pack.map(i => i.id === 2723 ? { ...i, id: 2725 } : i);
+            if (digs === 2) pack = pack.map(i => i.id === 3526 ? { ...i, id: 3528 } : i);
         }
         return true;
     });
@@ -387,7 +387,7 @@ test('drinks near the dig, finishes the post-kill dig below fifteen, then reques
     expect(digs).toBe(2);
     expect(events.findIndex(e => e.startsWith('walk:'))).toBeLessThan(events.findIndex(e => e.startsWith('drink:')));
     expect(events.findIndex(e => e.startsWith('drink:'))).toBeLessThan(events.findIndex(e => e.startsWith('dig:')));
-    expect(pack.some(i => i.id === 2725)).toBe(true);
+    expect(pack.some(i => i.id === 3528)).toBe(true);
 });
 test('death after spawning prevents every later dig until explicit retry', async () => {
     guardedTrail();
@@ -400,7 +400,7 @@ test('death after spawning prevents every later dig until explicit retry', async
     expect(await ClueExecutor.solveHeldClue(() => {})).toBe('dead');
     expect(await ClueExecutor.solveHeldClue(() => {})).toBe('dead');
     expect(digs).toBe(1);
-    expect(pack.some(i => i.id === 2723)).toBe(true);
+    expect(pack.some(i => i.id === 3526)).toBe(true);
 });
 
 test.each([[2448, 181], [181, 183], [183, 185], [185, 229]])('confirms dose transition %s to %s', async (id, nextId) => {
@@ -525,4 +525,47 @@ test('an enclosed guardian with no reachable melee tile requests recovery withou
     expect(await fightGuardian('Saradomin Wizard', () => {}, protection)).toBe('guardian-lost');
     expect(walk).not.toHaveBeenCalled();
     expect(events.some(e => e.startsWith('attack:'))).toBe(false);
+});
+
+for (const hasPotion of [false, true]) {
+    test(`Zamorak preparation and prolonged combat never drink or require antipoison: carried ${hasPotion}`, async () => {
+        if (!hasPotion) pack = pack.filter(i => i.id !== 185);
+        const protection = new GuardianProtection('Zamorak Wizard');
+        expect(await protection.prepare()).toBe(true);
+        expect(await protection.maintain()).toBe('ready');
+        tick += 600;
+        expect(await protection.maintain()).toBe('ready');
+        expect(events.filter(e => e.startsWith('drink:'))).toEqual([]);
+        expect(worn[0].id).toBe(1231);
+    });
+
+    test(`Zamorak clue completes both digs without consuming a dose: carried ${hasPotion}`, async () => {
+        guardedTrail('Zamorak Wizard', 2723);
+        if (!hasPotion) pack = pack.filter(i => i.id !== 185);
+        let digs = 0;
+        let pending = false;
+        spyOn(EventSignal, 'pending').mockImplementation(() => pending);
+        spyOn(InvItem.prototype, 'interact').mockImplementation(function (this: InvItem, op: string) {
+            if (op === 'Drink') { events.push(`drink:${tick}`); pack = pack.filter(i => i.id !== this.id); }
+            if (op === 'Dig' && ++digs === 2) { pack = pack.map(i => i.id === 2723 ? { ...i, id: 2724 } : i); pending = true; }
+            return true;
+        });
+        advance = () => { if (npcs[0]?.health === 0) npcs = []; };
+        expect(await ClueExecutor.solveHeldClue(() => {})).toBe('yield');
+        expect(digs).toBe(2);
+        expect(events.filter(e => e.startsWith('drink:'))).toEqual([]);
+        expect(pack.some(i => i.id === 185)).toBe(hasPotion);
+        expect(pack.some(i => i.id === 2724)).toBe(true);
+    });
+}
+
+test.each(['function', 'encounter'])('default %s guardian entry does not drink against Zamorak', async entry => {
+    worn = [{ ...item(1305, 'Dragon longsword'), slot: 3 }];
+    npcs = npcs.map(n => ({ ...n, name: 'Zamorak Wizard' }));
+    advance = () => { if (npcs[0]?.health === 0) npcs = []; };
+    const result = entry === 'function' ? await fightGuardian('Zamorak Wizard', () => {})
+        : await new GuardianEncounter('Zamorak Wizard').fight(() => {});
+    expect(result).toBe('killed');
+    expect(events.filter(e => e.startsWith('drink:'))).toEqual([]);
+    expect(pack.some(i => i.id === 185)).toBe(true);
 });

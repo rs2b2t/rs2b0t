@@ -430,7 +430,7 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void 
             }
             const guardian = step.guardian;
             if (guardianEncounter?.clueId !== step.id) {
-                const protection = new GuardianProtection();
+                const protection = new GuardianProtection(guardian);
                 const prepared = !guardian || await protection.prepare();
                 if (died()) return 'dead';
                 if (EventSignal.pending()) return 'yield';
@@ -723,7 +723,7 @@ export const ClueExecutor = {
                 return end('abandon', reason);
             }
 
-            if (step.type === 'dig' && step.guardian && guardianEncounter?.clueId !== step.id && postKillClue !== step.id && hardClueKit(hardKitSnapshot(), GUARDIAN_MIN_SHARKS) !== 'ready') {
+            if (step.type === 'dig' && step.guardian && guardianEncounter?.clueId !== step.id && postKillClue !== step.id && hardClueKit(hardKitSnapshot(), GUARDIAN_MIN_SHARKS, step.guardian === 'Saradomin Wizard') !== 'ready') {
                 return 'supplies-needed';
             }
             if (step.type !== 'open-casket' && step.coord?.level === 0

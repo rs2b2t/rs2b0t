@@ -52,7 +52,7 @@ function findGuardian(name: string): Npc | null {
 }
 
 export async function fightGuardian(
-    name: string, log: (m: string) => void, protection = new GuardianProtection()
+    name: string, log: (m: string) => void, protection = new GuardianProtection(name)
 ): Promise<GuardianOutcome> {
     return new GuardianEncounter(name, protection).fight(log);
 }
@@ -64,7 +64,7 @@ export class GuardianEncounter {
     private sawDeath = false;
     private owned = false;
 
-    constructor(private readonly name: string, private readonly protection = new GuardianProtection()) {}
+    constructor(private readonly name: string, private readonly protection = new GuardianProtection(name)) {}
 
     async fight(log: (m: string) => void): Promise<GuardianOutcome> {
         const { name, mark, protection } = this;

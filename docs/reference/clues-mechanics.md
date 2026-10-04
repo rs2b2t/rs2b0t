@@ -56,7 +56,7 @@ so the bot cannot ask whether it already killed one. It observes instead:
 if a wizard appears it turns on Protect from Magic, fights, then digs again, all
 inside one step attempt, so a level-108 fight does not consume the retry budget.
 
-The bank prepares 15 Sharks. A guardian can start after food was used during travel, provided at least four Sharks remain. The fight returns `supplies-needed` at three Sharks, preserving food for the retreat. Hard upkeep uses Sharks regardless of the host's food setting and maintains Superantipoison protection. Attacks are reissued every eight ticks because eating cancels the outgoing attack while incoming hits can keep the combat marker active.
+The bank prepares 15 Sharks. A guardian can start after food was used during travel, provided at least four Sharks remain. The fight returns `supplies-needed` at three Sharks, preserving food for the retreat. Hard upkeep uses Sharks regardless of the host's food setting and maintains Superantipoison protection only against Saradomin wizards. Zamorak fights neither drink nor require a dose; the bank still carries it for later Saradomin steps. Attacks are reissued every eight ticks because eating cancels the outgoing attack while incoming hits can keep the combat marker active.
 
 An event yield keeps the same `GuardianEncounter` and resumes without another spawn dig. Resume revalidates the original guardian by index, id, range and ownership. A missing, replaced, distant or other-player target returns `guardian-lost` and requests the one bank reset before another attempt. A witnessed player death returns `dead` and stops recovery. Neither repeats the spawn dig before that handoff.
 
