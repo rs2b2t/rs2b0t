@@ -1,3 +1,4 @@
+import { HANS_WAIT_SPOT, solveHans } from './hans.js';
 import { solveMountainPilot } from './gnomePilot.js';
 import { crossesClueDuel, walkAcrossClueDuel, DUEL_CLUE_ID } from './duelTravel.js';
 import { leaveClueDuel } from '../../duel/ClueDuel.js';
@@ -97,6 +98,7 @@ function stepTarget(step: ClueStep): NavPoint | null {
         return null;
     }
     if (step.type === 'talk') {
+        if (step.npc === 'Hans') return HANS_WAIT_SPOT;
         const a = TALK_ANCHORS[step.id];
         return a ? { x: a.x, z: a.z, level: a.level } : null;
     }
@@ -453,6 +455,7 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void 
             return;
         }
         case 'talk': {
+            if (step.npc === 'Hans') return solveHans(step.id, tile => walkLeg(tile, log, 0), log);
             if (step.id === 3570) return solveMountainPilot(tile => walkLeg(tile, log, 0), log);
             const anchor = TALK_ANCHORS[step.id];
             if (!anchor || !step.npc) {

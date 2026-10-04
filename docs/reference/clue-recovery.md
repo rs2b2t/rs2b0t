@@ -52,6 +52,16 @@ reaches the Kharazi entrance and cuts into the jungle before walking to the dig.
 A failed cut stops the journey instead of trying to walk through the boundary.
 This includes clue 3562, `01 degrees 24 minutes North, 08 degrees 05 minutes West`.
 
+## Hans patrol
+
+Hans clues wait at the Lumbridge teleport tile `(3221,3218,0)` for up to 200
+game ticks per pass, including time spent trying to open dialogue. A nearby,
+reachable Hans can be approached without run energy. After waiting, a chase
+requires at least 50% energy and confirmed running, and stops below 20% energy
+or after 40 ticks. Failed approaches return to the waiting tile. Waiting alone
+does not spend the clue's reset allowance. This applies to easy clue 2681 and
+hard clue 2792.
+
 ## Validation
 
 Regression tests cover the desert-to-Iorwerth approach, outgoing bank travel,
