@@ -6,7 +6,7 @@ In JiveDragons, choose **taverley-blue**, **heroes-blue** or **gutanoth-blue**
 under **Dragon site**, set **Combat style** to
 **melee**, and enable **Drink super sets** and **Solve clue drops**. Choose a
 one-handed weapon and keep a Dragonfire shield available. Melee
-follows targets into reach; it returns to the configured anchor
+follows targets into reach; Nearby mode returns to the configured anchor
 between fights. It finishes an attacking dragon before selecting another.
 An attacking baby dragon is handled defensively and does not count toward
 the farming kill total; passive babies are left alone. Heroes' Guild melee
@@ -18,6 +18,9 @@ mage and range. Melee also defends against an attacking dragon, demon or
 ogre chieftain when it blocks combat with the selected target. Ogre shamans
 are never attacked. The guild requires Heroes' Quest; the Enclave requires
 Watch Tower.
+
+See [switching stands and alternating spawns](change-dragon-stands.md) for
+live controls and melee target selection.
 
 Each bank trip carries one Super attack(3), Super strength(3), and
 Super defence(3). The loadout carry list can override each potion's dose form

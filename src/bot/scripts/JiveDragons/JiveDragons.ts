@@ -37,7 +37,7 @@ import Tile from '../../geometry/Tile.js';
 import { COMBAT_SKILLS, XpTracker, jiveFrame, paintLevels } from '../../paint/jive.js';
 import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
-import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
+import { SettingsStore, type SettingsBag, type SettingsSchema } from '../../runtime/Settings.js';
 import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, chasesTarget, type CombatHost } from '../../api/combat/hunting/combat.js';
 import { ANTIFIRE_MARGIN_TICKS, ANTIFIRE_TICKS, POTION_PROTECTS, SHIELD_ABSORBS, antifireDue, antifireLapsed, keepDoses, keyStatus, lootHalts, lootReach, siteTileOf, chaseMode, prayerFor, prayerSipDue, styleGate, wantsDrop, type Style } from '../../api/combat/hunting/logic.js';
 import { BRIMHAVEN_IRON, BRIMHAVEN_STEEL, ENCLAVE_TARGET_OPTIONS, GUTANOTH_BLUE, HEROES_BLUE, MAX_STANDS, SITE_OPTIONS, STAND_SITE_KEYS, TAVERLEY_BLACK, TAVERLEY_BLUE, enclaveTargets, huntNames, needsShield, siteFor, standFor, type DragonSite } from '../../api/combat/hunting/sites.js';
@@ -144,7 +144,8 @@ export const SETTINGS: SettingsSchema = {
     solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues', help: 'blue dragons drop hard clues. The trail leaves the dungeon and comes back' },
 
     site: { type: 'string', default: 'taverley-blue', options: SITE_OPTIONS, label: 'Dragon site', group: 'Location', help: "below combat 97 the Taverley baby blues aggress on the walk in, above it they never do. The Heroes' Guild dragon is one adult penned behind a fence. Mage and range attack through it; melee and looting open the gate. The guild doors need Heroes' Quest. The Gu'Tanoth Enclave offers dragons, greater demons or both: the Enclave guard waves you past once Watch Tower is complete, the six stands cover different dragons, stand 1 also reaches greater demons, and the cave shares its floor with greater demons, ogre shamans and chieftains. The Brimhaven Dungeon metal dragons cost Saniboch 875 coins a trip and the walk in chops two vines and crosses stepping stones, a log and a pipe, so it wants Woodcutting 22, Agility 34 and an axe; they park at ten tiles and breathe, so the stand is the open tile that sees the most of them, every style wears the Dragonfire shield with an Antifire dose up, range is refused, iron and steel finish whichever bites, and the trip banks at Ardougne on the Ardougne teleport, which needs Plague City" },
-    stand: { type: 'number', default: 1, min: 1, max: MAX_STANDS, label: 'Stand', group: 'Location', showIf: SHOW_STAND, help: 'which of the site\'s numbered stands to fight from, one per dragon. The Enclave has six, listed north, west, north-west, south, east, far east; 1 is the roomiest and the one with a live proof behind it. The iron dragons have two open camps, the east side of the room with four in view then the north-east corner with two, both clear of every dragon\'s idle wander. A number past the end takes the last, and a site with one stand ignores it' },
+    rotateSpawns: { type: 'boolean', default: false, label: 'Alternate blue dragon spawns', group: 'Location', showIf: SHOW_MELEE, help: 'Taverley and Gu\'Tanoth melee search all loaded blue dragons inside the chosen site, preferring spawns killed least recently. Finishes each fight and its loot before moving to the next. Other players\' fights are skipped' },
+    stand: { type: 'number', default: 1, min: 1, max: MAX_STANDS, label: 'Stand', group: 'Location', showIf: SHOW_STAND, help: 'which of the site\'s numbered stands to fight from, one per dragon. The Enclave has six, listed north, west, north-west, south, east, far east; 1 is the roomiest and the one with a live proof behind it. The iron dragons have two open camps. Change stands live from the paint\'s Options page; the switch waits for the fight and loot to finish and replaces custom fight tiles. A number past the end takes the last, and a site with one stand ignores it' },
     safespot1: { type: 'tile', default: TAVERLEY_BLUE.safespots[0], label: 'Safespot 1', group: 'Location', showIf: SHOW_SAFESPOT, help: 'the chosen stand fills these; set one to move it off the derived tile' },
     safespot2: { type: 'tile', default: TAVERLEY_BLUE.safespots[1], label: 'Safespot 2', group: 'Location', showIf: SHOW_SAFESPOT, help: 'the ladder rotates here when a hit lands, or when nothing is in range for 20s' },
     safespot3: { type: 'tile', default: TAVERLEY_BLUE.safespots[2], label: 'Safespot 3', group: 'Location', showIf: SHOW_SAFESPOT },
@@ -1094,6 +1095,46 @@ class BankRun implements Task {
     }
 }
 
+class SwitchStand implements Task {
+    constructor(private readonly bot: JiveDragons) {}
+
+    validate(): boolean {
+        return this.bot.pendingStand !== null && SITE.inArea(Game.tile()) && lootReady(this.bot)
+            && this.bot.lootRun === null && findLoot(this.bot) === null && !Npcs.all().some(n => n.targetsMe());
+    }
+
+    async execute(): Promise<void> {
+        if (!this.validate()) return;
+        const selected = this.bot.pendingStand!;
+        const stand = standFor(SITE, selected);
+        const previous = { stand: this.bot.activeStand, safespots: SITE.safespots, anchor: SITE.meleeAnchor, index: this.bot.safespotIndex() };
+        SITE.safespots = [...stand.tiles];
+        SITE.meleeAnchor = stand.anchor;
+        this.bot.activeStand = selected;
+        this.bot.setSafespotIndex(0);
+        this.bot.fight?.reset();
+        this.bot.setStatus(`moving to stand ${selected}`);
+        const spot = anchorFor(SITE, STYLE, 0);
+        await Traversal.walkResilient(spot, { radius: 0, attempts: 4, timeoutMs: 60_000, log: m => this.bot.log(m) });
+        const here = Game.tile();
+        if (here !== null && spot.equals(here)) {
+            for (const key of [...SPOT_KEYS, 'meleeTile']) SettingsStore.save('JiveDragons', key, '');
+            if (this.bot.pendingStand === selected) this.bot.pendingStand = null;
+            this.bot.log(`stand switched to ${selected}: ${stand.label}`);
+            return;
+        }
+        SITE.safespots = previous.safespots;
+        SITE.meleeAnchor = previous.anchor;
+        this.bot.activeStand = previous.stand;
+        this.bot.setSafespotIndex(previous.index);
+        if (this.bot.pendingStand === selected) {
+            this.bot.pendingStand = null;
+            SettingsStore.save('JiveDragons', 'stand', String(previous.stand));
+        }
+        this.bot.log(`could not reach stand ${selected}; keeping stand ${previous.stand}`);
+    }
+}
+
 class LootCorpse implements Task {
     constructor(private readonly bot: JiveDragons) {}
     validate(): boolean {
@@ -1155,6 +1196,9 @@ export default class JiveDragons extends TaskBot implements CombatHost {
     readonly lootCounts = new Map<string, number>();
     cluesSolved = 0;
     safespotIdx = 0;
+    activeStand = 1;
+    pendingStand: number | null = null;
+    private roaming = false;
     keyState: KeyState = 'fetch';
     buried = 0;
     sips = 0;
@@ -1176,7 +1220,9 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
         const base = enclaveTargets(siteFor(this.settings.str('site', 'taverley-blue')), this.settings.str('enclaveTargets', 'both'));
-        const stand = standFor(base, this.settings.num('stand', 1));
+        this.activeStand = Math.min(Math.max(1, Math.trunc(this.settings.num('stand', 1))), base.stands?.length ?? 1);
+        this.pendingStand = null;
+        const stand = standFor(base, this.activeStand);
         SITE = {
             ...base,
             safespots: stand.tiles.map((spot, i) => siteTile(this.settings, SPOT_KEYS[i], spot)),
@@ -1187,6 +1233,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             this.log(`standing at ${stand.label}, stand ${this.settings.num('stand', 1)} of ${base.stands!.length}`);
         }
         STYLE = this.settings.str('combatStyle', 'range') as Style;
+        this.roaming = this.settings.bool('rotateSpawns', false);
         MELEE_STYLE = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
         RANGE_MODE = parseRangeStyle(this.settings.str('rangeStyle', 'rapid'));
         SPELL = this.settings.str('spell', 'Fire Strike');
@@ -1343,6 +1390,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             new FreeSlot(this),
             new BankRun(this),
             new LootCorpse(this),
+            new SwitchStand(this),
             new AcquireKey(this),
             new EnterLair(this),
             new WalkToSpot(this, SITE),
@@ -1376,6 +1424,17 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         this.parkReason = reason;
         this.setStatus('parked');
         this.log(`PARKED: ${reason}`);
+    }
+    requestStand(n: number): void {
+        const count = SITE.stands?.length ?? 1;
+        if (!Number.isInteger(n) || n < 1 || n > count || n === (this.pendingStand ?? this.activeStand)) return;
+        this.pendingStand = n;
+        SettingsStore.save('JiveDragons', 'stand', String(n));
+        this.log(`stand ${n} queued until the current fight and loot finish`);
+    }
+    rotateSpawns(): boolean {
+        return this.roaming && STYLE === 'melee' && SITE.target === 'Blue dragon'
+            && [TAVERLEY_BLUE.key, GUTANOTH_BLUE.key].includes(SITE.key);
     }
     style(): Style {
         return STYLE;
@@ -1538,13 +1597,28 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         const mins = (Date.now() - this.startedAt) / 60_000;
 
         if (page === 'Options') {
+            const stands = SITE.stands ?? [];
+            const canRotate = STYLE === 'melee' && SITE.target === 'Blue dragon' && [TAVERLEY_BLUE.key, GUTANOTH_BLUE.key].includes(SITE.key);
+            const controls = Number(stands.length > 1) + Number(canRotate);
             // Why: the site name runs past a half-width cell, so it takes a row of its own.
             p.statGrid([[{ text: `Site: ${SITE.label}` }]], 1);
-            p.statGrid([
-                [{ text: `Style: ${STYLE}` }, { text: `Weapon: ${WEAPON}` }],
+            if (controls < 2) p.statGrid([[{ text: `Style: ${STYLE}` }, { text: `Weapon: ${WEAPON}` }]]);
+            if (controls === 0) p.statGrid([
                 [{ text: `Food: ${FOOD_NAME}` }, { text: `Escape: ${ESCAPE_LABEL}` }],
                 [{ text: `Bury bones: ${BURY_BONES ? 'on' : 'off'}` }, { text: `Clues: ${SOLVE_CLUES ? 'on' : 'off'}` }]
             ]);
+            if (stands.length > 1) {
+                const labels = stands.map((stand, i) => `${i + 1} @ ${stand.anchor.x},${stand.anchor.z}`);
+                const selected = p.select('stand', this.pendingStand === null ? 'stand' : 'queued', labels, labels[(this.pendingStand ?? this.activeStand) - 1]!);
+                if (selected !== null) this.requestStand(labels.indexOf(selected) + 1);
+            }
+            if (canRotate) {
+                const selected = p.select('spawns', 'spawns', ['Nearby', 'Alternate'], this.roaming ? 'Alternate' : 'Nearby');
+                if (selected && (selected === 'Alternate') !== this.roaming) {
+                    this.roaming = selected === 'Alternate';
+                    SettingsStore.save('JiveDragons', 'rotateSpawns', String(this.roaming));
+                }
+            }
         } else if (section === 'Overview') {
             p.statGrid([
                 [{ text: `Runtime: ${fmtDuration(mins)}` }, { text: `Kills: ${this.killsTotal}` }],
@@ -1585,7 +1659,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
 
         if (this.parked) {
             // Why: the controls are drawn after this, so the reason takes only the rows that still leave them inside the panel.
-            const room = Math.max(0, Math.min(PARK_ROWS, p.rowsLeft() - CONTROL_ROWS));
+            const room = Math.max(0, Math.min(PARK_ROWS, p.rowsLeft() - CONTROL_ROWS - Number(page === 'Options')));
             const lines = wrapText(this.parkReason, p.cols(), 2);
             for (const [i, line] of lines.slice(0, room).entries()) {
                 p.text(i === room - 1 && lines.length > room ? `${line}…` : line, PARK_FG);

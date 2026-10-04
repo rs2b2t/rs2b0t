@@ -1,9 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { reader } from '#/bot/adapter/ClientAdapter.js';
 import { ClueExecutor } from '#/bot/api/ai/clues/ClueExecutor.js';
 import { JIVE_BYLINE } from '#/bot/paint/jive.js';
 import { paintState, resolveDock } from '#/bot/paint/paintLogic.js';
 import JiveDragons from '#/bot/scripts/JiveDragons/JiveDragons.js';
+import { restoreScenario, scenario } from './scheduler.fixture.js';
+import { SettingsStore } from '#/bot/runtime/Settings.js';
 
 const CHAR_W = 7;
 const LINE = 16;
@@ -155,4 +157,49 @@ describe('JiveDragons paint, mid-clue', () => {
         expect(Math.max(...bodyRows(drawn))).toBeLessThanOrEqual(6);
         expect(spills(boxes)).toEqual([]);
     });
+});
+
+
+test('live stand and spawn controls fit the Options panel while parked', async () => {
+    const { bot } = await scenario('gutanoth-blue', 'melee');
+    try {
+        paintState.reset();
+        paintState.set('strip:jive:JiveDragons', 'Options');
+        bot.parked = true;
+        bot.parkReason = PARK_REASON;
+        const { ctx, drawn, boxes } = recorder();
+        bot.onPaint(ctx);
+        expect(drawn.map(d => d.text).join('|')).toContain('stand');
+        expect(drawn.map(d => d.text).join('|')).toContain('spawns');
+        expect(Math.max(...bodyRows(drawn))).toBeLessThanOrEqual(6);
+        expect(spills(boxes)).toEqual([]);
+    } finally {
+        await restoreScenario();
+    }
+});
+
+
+test('paint queues and saves a stand selection and toggles rotation without losing a fight', async () => {
+    const { bot, engage } = await scenario('gutanoth-blue', 'melee');
+    const saved = spyOn(SettingsStore, 'save').mockImplementation(() => {});
+    try {
+        await engage();
+        paintState.reset();
+        paintState.set('strip:jive:JiveDragons', 'Options');
+        const { ctx, drawn } = recorder();
+        bot.onPaint(ctx);
+        const stand = drawn.find(d => d.text.startsWith('stand:'))!;
+        expect(paintState.pointerDown(stand.x, stand.y)).toBe(true);
+        bot.onPaint(ctx);
+        expect(bot.pendingStand).toBe(2);
+        expect(saved).toHaveBeenCalledWith('JiveDragons', 'stand', '2');
+        const spawns = drawn.find(d => d.text.startsWith('spawns:'))!;
+        expect(paintState.pointerDown(spawns.x, spawns.y)).toBe(true);
+        bot.onPaint(ctx);
+        expect(bot.rotateSpawns()).toBe(true);
+        expect(saved).toHaveBeenCalledWith('JiveDragons', 'rotateSpawns', 'true');
+        expect(bot.targetIdx).toBe(17);
+    } finally {
+        await restoreScenario();
+    }
 });

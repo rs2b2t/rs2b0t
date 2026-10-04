@@ -419,6 +419,7 @@ Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought throu
 | `axe` | string | `"Rune axe"` | Axe for the vines — one of: Rune axe, Adamant axe, Mithril axe, Steel axe, Iron axe, Bronze axe |
 | `solveClues` | boolean | `true` | Solve clue drops |
 | `site` | string | `"taverley-blue"` | Dragon site — one of: taverley-blue, taverley-black, heroes-blue, gutanoth-blue, brimhaven-iron, brimhaven-steel |
+| `rotateSpawns` | boolean | `false` | Alternate blue dragon spawns |
 | `stand` | number (1–6) | `1` | Stand |
 | `safespot1` | tile | `{"x":2901,"z":9809,"level":0}` | Safespot 1 |
 | `safespot2` | tile | `{"x":2904,"z":9808,"level":0}` | Safespot 2 |

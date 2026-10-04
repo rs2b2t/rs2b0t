@@ -22,6 +22,7 @@ export interface CombatHost extends JiveHost {
     died: boolean;
     targetIdx: number | null;
     countKill(): void;
+    rotateSpawns?(): boolean;
     countBurial(): void;
     hpFraction(): number;
     panicHp(): number;
@@ -209,6 +210,8 @@ function retreatNeeded(host: CombatHost, site: DragonSite): boolean {
 
 export class Fight implements Task {
     private engaged: number | null = null;
+    private readonly killedSpawns = new Map<number, number>();
+    private kills = 0;
     private lootTarget: number | null = null;
     /** What the engaged npc is called, so a site that fills downtime names the thing it killed. */
     private engagedName = '';
@@ -242,6 +245,11 @@ export class Fight implements Task {
             this.lootTarget = null;
         }
         return this.lootTarget !== null;
+    }
+
+    roamingTarget(): boolean {
+        return this.host.rotateSpawns?.() === true && this.field(FIELD_RADIUS)
+            .some(n => (this.skip.get(n.index) ?? 0) < performance.now() && !(n.health === 0 && n.snap.totalHealth > 0));
     }
 
     reset(): void {
@@ -425,7 +433,7 @@ export class Fight implements Task {
             const target = (this.engaged === null ? undefined : field.find(n => n.index === this.engaged && (this.skip.get(n.index) ?? 0) < now))
                 ?? field
                     .filter(n => (this.skip.get(n.index) ?? 0) < now && (!usesSafespot(style) || this.inReach(n) || settled(this.seen.get(n.index), now, SETTLE_MS)))
-                    .sort((a, b) => (holdsAnchor(this.site, style) ? Number(this.inReach(b)) - Number(this.inReach(a)) : 0) || a.distance() - b.distance())[0];
+                    .sort((a, b) => (this.host.rotateSpawns?.() === true ? (this.killedSpawns.get(a.index) ?? 0) - (this.killedSpawns.get(b.index) ?? 0) : 0) || (holdsAnchor(this.site, style) ? Number(this.inReach(b)) - Number(this.inReach(a)) : 0) || a.distance() - b.distance())[0];
             if (!target) {
                 this.explainEmptyField(now);
                 await this.idle();
@@ -493,7 +501,7 @@ export class Fight implements Task {
             return adultsNear(this.site, this.engaged, Math.min(radius, engageRangeFor('range')), this.anchor())
                 .filter(n => (this.engaged === null || n.index === this.engaged) && (this.skip.get(n.index) ?? 0) < performance.now());
         }
-        const adults = adultsNear(this.site, this.engaged, radius, usesSafespot(this.host.style()) ? this.anchor() : null);
+        const adults = adultsNear(this.site, this.engaged, this.host.rotateSpawns?.() === true ? Infinity : radius, usesSafespot(this.host.style()) ? this.anchor() : null);
         if (this.host.style() === 'melee') {
             const names = this.site.key === TAVERLEY_BLUE.key ? ['Baby blue dragon']
                 : this.site.key === GUTANOTH_BLUE.key ? ['Blue dragon', 'Greater demon', 'Ogre chieftain'] : [];
@@ -542,6 +550,7 @@ export class Fight implements Task {
         }
         const killed = performance.now() - this.seenAt < KILL_GRACE_MS;
         if (killed) {
+            this.killedSpawns.set(this.engaged, ++this.kills);
             if (huntNames(this.site).some(target => target.toLowerCase() === (this.engagedName || name))) this.host.countKill();
             this.host.log(`${this.engagedName || name} ${this.engaged} down`);
         }
@@ -657,7 +666,10 @@ export class Fight implements Task {
             return false;
         }
         if (chasesTarget(this.site, style) && !Reachability.canReach(target.tile())) {
-            if (!(await Traversal.walkResilient(target.tile(), { radius: 1, attempts: 3, timeoutMs: APPROACH_MS, log: m => this.host.vlog?.(m) }))) return false;
+            if (!(await Traversal.walkResilient(target.tile(), { radius: 1, attempts: 3, timeoutMs: APPROACH_MS, log: m => this.host.vlog?.(m) }))) {
+                if (this.host.rotateSpawns?.() === true) this.skip.set(target.index, performance.now() + CHASE_SKIP_MS);
+                return false;
+            }
             const current = this.field(FIELD_RADIUS).find(n => n.index === target.index && n.id === target.id && n.name === target.name);
             if (!current || current.targetsAnotherPlayer() || !Reachability.canReach(current.tile()) || EventSignal.pending() || this.host.died || !this.host.hasFood()) return false;
             target = current;
@@ -766,6 +778,7 @@ export class HoldSafespot implements Task {
         const chasing = !holdsAnchor(this.site, this.host.style()) && this.host.targetIdx !== null;
         return this.site.inArea(Game.tile())
             && !chasing
+            && !this.host.fight?.roamingTarget()
             && !atTile(this.spot())
             && holdDue({ onSafespot: onAnySafespot(this.site), hasFood: this.host.hasFood() })
             && this.host.hpFraction() >= this.host.panicHp();
@@ -803,6 +816,7 @@ export class WalkToSpot implements Task {
         return here !== null
             && this.site.inArea(here)
             && !chasing
+            && !this.host.fight?.roamingTarget()
             && this.host.hpFraction() >= this.host.panicHp()
             && this.anchor().distanceTo(here) > APPROACH_RADIUS;
     }
