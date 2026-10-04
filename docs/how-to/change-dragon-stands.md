@@ -10,8 +10,10 @@ For Taverley and Gu'Tanoth blue dragon melee, choose **spawns: Alternate**
 or enable **Alternate blue dragon spawns** in settings to hunt across all
 loaded spawns in the site. It prefers the least recently killed spawn,
 finishes each fight and its loot, and skips other players' fights.
-**Nearby** keeps the usual ten-tile target search. These controls save
-the selection for the next run.
+**Nearby** keeps the usual ten-tile target search. In either mode, blue
+and metal dragon melee attacks an eligible target before returning to the
+anchor, after finishing any loot. It returns when no eligible target remains.
+These controls save the selection for the next run.
 
 Alternate mode considers loaded NPCs only. It does not travel to discover
 spawns outside the loaded scene. Heroes' Guild has one adult dragon, so it

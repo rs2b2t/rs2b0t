@@ -247,8 +247,8 @@ export class Fight implements Task {
         return this.lootTarget !== null;
     }
 
-    roamingTarget(): boolean {
-        return this.host.rotateSpawns?.() === true && this.field(FIELD_RADIUS)
+    hasChaseTarget(): boolean {
+        return chasesTarget(this.site, this.host.style()) && this.field(FIELD_RADIUS)
             .some(n => (this.skip.get(n.index) ?? 0) < performance.now() && !(n.health === 0 && n.snap.totalHealth > 0));
     }
 
@@ -667,7 +667,7 @@ export class Fight implements Task {
         }
         if (chasesTarget(this.site, style) && !Reachability.canReach(target.tile())) {
             if (!(await Traversal.walkResilient(target.tile(), { radius: 1, attempts: 3, timeoutMs: APPROACH_MS, log: m => this.host.vlog?.(m) }))) {
-                if (this.host.rotateSpawns?.() === true) this.skip.set(target.index, performance.now() + CHASE_SKIP_MS);
+                this.skip.set(target.index, performance.now() + CHASE_SKIP_MS);
                 return false;
             }
             const current = this.field(FIELD_RADIUS).find(n => n.index === target.index && n.id === target.id && n.name === target.name);
@@ -778,7 +778,7 @@ export class HoldSafespot implements Task {
         const chasing = !holdsAnchor(this.site, this.host.style()) && this.host.targetIdx !== null;
         return this.site.inArea(Game.tile())
             && !chasing
-            && !this.host.fight?.roamingTarget()
+            && !this.host.fight?.hasChaseTarget()
             && !atTile(this.spot())
             && holdDue({ onSafespot: onAnySafespot(this.site), hasFood: this.host.hasFood() })
             && this.host.hpFraction() >= this.host.panicHp();
@@ -816,7 +816,7 @@ export class WalkToSpot implements Task {
         return here !== null
             && this.site.inArea(here)
             && !chasing
-            && !this.host.fight?.roamingTarget()
+            && !this.host.fight?.hasChaseTarget()
             && this.host.hpFraction() >= this.host.panicHp()
             && this.anchor().distanceTo(here) > APPROACH_RADIUS;
     }
