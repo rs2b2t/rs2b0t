@@ -41,6 +41,7 @@ export const SETTINGS: SettingsSchema = {
     target: { type: 'string', default: 'Man', options: PICKPOCKET_TARGET_NAMES, label: 'Pickpocket target', help: 'pick by exact in-game name (level in parens): Man/Woman 1, Farmer 10, Rogue 32, Guard 40, Knight of Ardougne 55, Paladin 70, Hero 80' },
     action: { type: 'string', default: 'Pickpocket', label: 'Action', help: 'right-click op, e.g. Pickpocket / Steal-from' },
     loadout: LOADOUT_SETTING,
+    food: { type: 'string', default: '', label: 'Food', help: 'Food to eat and withdraw; blank uses the selected loadout.' },
 
     banking: { type: 'string', default: 'None', options: THIEVER_BANKING_OPTIONS, label: 'Food banking', help: 'Auto = bank non-food items, withdraw food, and return to the starting spot' },
     foodWithdraw: { type: 'number', default: 22, min: 1, max: 27, label: 'Food to carry', showIf: { key: 'banking', anyOf: ['Auto'] } },
@@ -107,7 +108,7 @@ export default class ThievingBot extends TaskBot {
         this.xpAtStart = Skills.xp('thieving');
         if (this.autoBank && !this.food) {
             this.setStatus('Auto banking needs a food name — stopped');
-            ScriptRunner.stop('Auto food banking needs a non-blank food setting');
+            this.requestFinish('Auto food banking needs a non-blank food setting');
             return;
         }
         this.log(
@@ -245,7 +246,7 @@ export default class ThievingBot extends TaskBot {
     }
     stopSafely(reason: string): void {
         this.setStatus(`${reason} — stopped`);
-        ScriptRunner.stop(`${reason}`);
+        this.requestFinish(`${reason}`);
     }
 }
 

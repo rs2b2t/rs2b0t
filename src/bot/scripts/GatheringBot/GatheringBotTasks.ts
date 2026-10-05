@@ -18,7 +18,6 @@ import { Traversal } from '../../api/walking/Traversal.js';
 import { isOpenableObstacle, openOp, walkOpening } from '../../event/webwalk/walkOpening.js';
 import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import { stepOffCandidates } from '../../runtime/randomevents/eventEvade.js';
-import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import {
     gatherHuntRadius,
     gatherSpotRangeOrigin,
@@ -1702,7 +1701,7 @@ export class RepairBrokenGatherTool implements Task {
                         }
                     }
                 }
-                ScriptRunner.stop('pickaxe: no usable pick in bank');
+                this.bot.requestFinish('pickaxe: no usable pick in bank');
                 return;
             }
             const item = Bank.items().find(i => (i.name ?? '').toLowerCase() === pick.toLowerCase());

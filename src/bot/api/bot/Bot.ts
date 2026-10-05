@@ -50,6 +50,18 @@ export abstract class AbstractBot {
 
     private logSink: ((msg: string) => void) | null = null;
     private subscriptions: (() => void)[] = [];
+    private finishSink: ((reason: string) => void) | null = null;
+
+    get delegated(): boolean { return this.finishSink !== null; }
+
+    requestFinish(reason: string): void {
+        if (this.finishSink) this.finishSink(reason);
+        else bus.emit('script.finish', { reason });
+    }
+
+    bindFinish(sink: (reason: string) => void): void {
+        this.finishSink = sink;
+    }
 
     onStart?(): void | Promise<void>;
     onStop?(): void;

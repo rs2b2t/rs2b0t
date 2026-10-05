@@ -204,7 +204,7 @@ class AcquireBestPick implements Task {
         await this.bot.walkTo(BANK_STAND);
         if (!Bank.isOpen() && !(await Bank.openBooth(BANK_STAND, BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))) {
             if (this.bot.countBankFail() >= MAX_BANK_FAILS) {
-                ScriptRunner.stop('EssMiner: could not reach the Varrock East bank to check for the best pickaxe');
+                this.bot.requestFinish('EssMiner: could not reach the Varrock East bank to check for the best pickaxe');
             }
             return;
         }
@@ -344,7 +344,7 @@ class BankEss implements Task {
         if (!(await Bank.openBooth(BANK_STAND, BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))) {
             if (this.bot.countBankFail() >= MAX_BANK_FAILS) {
                 this.bot.setStatus('cannot reach the bank — stopped');
-                ScriptRunner.stop('EssMiner: couldn\'t reach the Varrock East bank — start with a pickaxe equipped or in your inventory, or start nearer Varrock');
+                this.bot.requestFinish('EssMiner: couldn\'t reach the Varrock East bank — start with a pickaxe equipped or in your inventory, or start nearer Varrock');
                 return;
             }
             this.bot.log('could not open the bank — will retry');
@@ -370,7 +370,7 @@ class GetPick implements Task {
         if (!(await Bank.openBooth(BANK_STAND, BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))) {
             if (this.bot.countBankFail() >= MAX_BANK_FAILS) {
                 this.bot.setStatus('cannot reach the bank — stopped');
-                ScriptRunner.stop('EssMiner: couldn\'t reach the Varrock East bank — start with a pickaxe equipped or in your inventory, or start nearer Varrock');
+                this.bot.requestFinish('EssMiner: couldn\'t reach the Varrock East bank — start with a pickaxe equipped or in your inventory, or start nearer Varrock');
                 return;
             }
             this.bot.log('could not open the bank — will retry');
@@ -385,7 +385,7 @@ class GetPick implements Task {
         const res = resolvePick(PICK_CHOICE, Skills.level('mining'), heldNames(), bankNames);
         if (res.kind === 'stop') {
             this.bot.setStatus('no usable pickaxe — stopped');
-            ScriptRunner.stop(`EssMiner: ${res.reason}`);
+            this.bot.requestFinish(`EssMiner: ${res.reason}`);
             return;
         }
         if (res.kind === 'withdraw') {
@@ -436,7 +436,7 @@ class TeleportIn implements Task {
         this.fails++;
         if (this.bot.questRefused || this.fails >= MAX_TELEPORT_FAILS) {
             this.bot.setStatus('teleport failed — stopped');
-            ScriptRunner.stop(this.bot.questRefused
+            this.bot.requestFinish(this.bot.questRefused
                 ? 'Aubury refused the teleport — Rune Mysteries is not complete on the server'
                 : `teleport did not land after ${this.fails} attempts`);
             return;

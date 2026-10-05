@@ -34,6 +34,7 @@ interface TickEvent {
 }
 
 export interface EventMap {
+    'script.finish': { reason: string };
     tick: TickEvent;
     'chat.message': ChatLine;
     'skill.xp': SkillXpEvent;

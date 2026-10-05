@@ -74,11 +74,11 @@ export default class Firemaker extends LoopingBot {
         const need = LOG_LEVELS[this.logName];
         const have = Skills.level('firemaking');
         if (!this.plot || need === undefined) {
-            ScriptRunner.stop(`unknown setting — logType='${this.logName}', location='${this.spotName}'`);
+            this.requestFinish(`unknown setting — logType='${this.logName}', location='${this.spotName}'`);
             return;
         }
         if (have < need) {
-            ScriptRunner.stop(`${this.logName} need Firemaking ${need}, you have ${have}`);
+            this.requestFinish(`${this.logName} need Firemaking ${need}, you have ${have}`);
             return;
         }
         this.log(`Firemaker — ${this.logName} at ${this.spotName}, plot x${this.plot.x0}-${this.plot.x1} z${this.plot.z0}-${this.plot.z1}`);
@@ -150,25 +150,25 @@ export default class Firemaker extends LoopingBot {
         for (const step of plan) {
             await Bank.withdraw(step.name);
             if (!(await Execution.delayUntilTicks(() => Inventory.count(step.name) > 0, 5))) {
-                ScriptRunner.stop(`no ${step.name} in the bank or pack`);
+                this.requestFinish(`no ${step.name} in the bank or pack`);
                 return false;
             }
         }
         if (!hasAllTools(TOOLS, this.skillLevel, this.invCount)) {
-            ScriptRunner.stop('no tinderbox in the bank or pack');
+            this.requestFinish('no tinderbox in the bank or pack');
             return false;
         }
         if (!Bank.ready()) {
             return false;
         }
         if (Bank.count(this.logName) === 0) {
-            ScriptRunner.stop(`no ${this.logName} left in the bank`);
+            this.requestFinish(`no ${this.logName} left in the bank`);
             return false;
         }
         if (!(await Bank.withdrawX(this.logName, reader.inventorySize() - Inventory.used()))) {
             this.log(`could not withdraw ${this.logName} (${++this.failedLogWithdraws}/3)`);
             if (this.failedLogWithdraws >= 3) {
-                ScriptRunner.stop(`could not withdraw ${this.logName}`);
+                this.requestFinish(`could not withdraw ${this.logName}`);
             }
             return false;
         }

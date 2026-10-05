@@ -840,6 +840,7 @@ export interface ChatLine {
  * @see docs/reference/api-events.md
  */
 export interface EventMap {
+    'script.finish': { reason: string };
     tick: { tick: number };
     'chat.message': ChatLine;
     'skill.xp': { skill: number; name: string; xp: number; delta: number };
@@ -882,6 +883,9 @@ export type LoopCadence =
  * @see docs/reference/api-bots.md
  */
 export abstract class AbstractBot {
+    readonly delegated: boolean;
+    requestFinish(reason: string): void;
+    bindFinish(sink: (reason: string) => void): void;
     /** Wall-clock ms between loop() iterations when loop() returns void. */
     loopDelay: number;
     /** When set, overrides the cadence derived from `loopDelay`. */

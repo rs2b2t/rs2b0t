@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 71. Categories: 20.
+- Scripts: 72. Categories: 21.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -18,6 +18,7 @@
 - [Firemaking](#firemaking) — 1
 - [Fishing](#fishing) — 1
 - [Fletching](#fletching) — 2
+- [General](#general) — 1
 - [Herblore](#herblore) — 5
 - [Magic](#magic) — 3
 - [Mining](#mining) — 3
@@ -746,6 +747,19 @@ Spam-attaches feathers to stackable dart tips at the five-action-per-tick server
 |---|---|---|---|
 | `tier` | string | `"Bronze"` | Dart tier — one of: Bronze, Iron, Steel, Mithril, Adamant, Rune |
 
+## General
+
+### AccountLeveler
+
+Trains every enabled members skill to 40, chooses varied combat camps, buys supplies with banked coins, runs required quests, and recovers from death. Wilderness training is optional and enabled by default.
+
+- Tags: `training`, `combat`, `skilling`, `quests`, `banking`, `death-recovery`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `targetLevel` | number (2–40) | `40` | Target level |
+| `wilderness` | boolean | `true` | Allow Wilderness training |
+
 ## Herblore
 
 ### HerbCleaner
@@ -1184,6 +1198,7 @@ Pickpockets an NPC (Man by default), eats after failed steals, and optionally ba
 | `target` | string | `"Man"` | Pickpocket target — one of: Man, Woman, Farmer, Warrior woman, Al-Kharid warrior, Rogue, Guard, Knight of Ardougne, Watchman, Paladin, Hero |
 | `action` | string | `"Pickpocket"` | Action |
 | `loadout` | string | `""` | Loadout — one of:  |
+| `food` | string | `""` | Food |
 | `banking` | string | `"None"` | Food banking — one of: None, Auto |
 | `foodWithdraw` | number (1–27) | `22` | Food to carry |
 | `bankAtFood` | number (0–26) | `0` | Bank at food remaining |

@@ -324,16 +324,16 @@ export default class AutoFighter extends TaskBot {
         }
         // Why: pre-#195 saves stored attack/strength/controlled/defence in combatStyle.
         // Why: settings option validation coerces those to the default "melee" and leaves meleeStyle at strength, so Defence and the rest are ignored (#461).
-        const rawCombatStyle = SettingsStore.displayString('AutoFighter', 'combatStyle', SETTINGS.combatStyle!);
-        const rawMeleeStyle = SettingsStore.saved('AutoFighter', 'meleeStyle');
+        const rawCombatStyle = this.delegated ? this.settings.str('combatStyle', 'melee') : SettingsStore.displayString('AutoFighter', 'combatStyle', SETTINGS.combatStyle!);
+        const rawMeleeStyle = this.delegated ? this.settings.str('meleeStyle', 'strength') : SettingsStore.saved('AutoFighter', 'meleeStyle');
         const split = resolveSplitCombatSettings(rawCombatStyle, rawMeleeStyle);
         STYLE = split.kind;
         MELEE_STYLE = split.meleeStyle;
-        if (split.legacyMigrated !== null) {
+        if (!this.delegated && split.legacyMigrated !== null) {
             SettingsStore.save('AutoFighter', 'combatStyle', 'melee');
             SettingsStore.save('AutoFighter', 'meleeStyle', split.legacyMigrated);
             this.log(`migrated legacy combatStyle='${rawCombatStyle.trim()}' → meleeStyle='${split.legacyMigrated}'`);
-        } else if (tryParseCombatStyle(rawCombatStyle) !== null) {
+        } else if (!this.delegated && tryParseCombatStyle(rawCombatStyle) !== null) {
             // storage still has a training-style value but meleeStyle already set, rewrite combatStyle only
             SettingsStore.save('AutoFighter', 'combatStyle', 'melee');
         }

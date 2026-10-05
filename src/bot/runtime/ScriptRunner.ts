@@ -1,4 +1,5 @@
 import { reader } from '../adapter/ClientAdapter.js';
+import { bus } from '../api/events/EventBus.js';
 import { resolveLoopCadence, type AbstractBot, type LoopCadence } from '../api/bot/Bot.js';
 import { Execution } from '../api/execution/Execution.js';
 import { RandomEvents } from './randomevents/RandomEvents.js';
@@ -115,6 +116,7 @@ class ScriptRunnerImpl {
     private holdReason: LoopHoldReason | null = null;
 
     constructor() {
+        bus.on('script.finish', ({ reason }) => this.stop(reason));
         Scheduler.launchLoop = ctx => this.launchIteration(ctx);
     }
 

@@ -1,3 +1,4 @@
+import AccountLeveler, { SETTINGS as ACCOUNT_LEVELER_SETTINGS } from './AccountLeveler/AccountLeveler.js';
 import { AGILITY_SETTINGS } from './AgilityBot/AgilityBot.js';
 import { FISHING_LOCATION_OPTIONS } from '../data/fishingLocations.js';
 import { FISHING_METHOD_OPTIONS } from '../data/fishingMethods.js';
@@ -861,4 +862,13 @@ ScriptRegistry.register({
     tags: ['crafting', 'fletching', 'flax', 'bow-strings', 'trade', 'two-player', 'afk'],
     settingsSchema: FLAXRUNNER_SETTINGS,
     create: () => new FlaxRunner()
+});
+
+ScriptRegistry.register({
+    name: 'AccountLeveler',
+    description: 'Trains every enabled members skill to 40, chooses varied combat camps, buys supplies with banked coins, runs required quests, and recovers from death. Wilderness training is optional and enabled by default.',
+    category: 'General',
+    tags: ['training', 'combat', 'skilling', 'quests', 'banking', 'death-recovery'],
+    settingsSchema: ACCOUNT_LEVELER_SETTINGS,
+    create: () => new AccountLeveler()
 });
