@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 71. Categories: 20.
+- Scripts: 72. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -29,7 +29,7 @@
 - [Smithing](#smithing) — 3
 - [Thieving](#thieving) — 3
 - [Treasure Trails](#treasure-trails) — 1
-- [Utility](#utility) — 1
+- [Utility](#utility) — 2
 - [Woodcutting](#woodcutting) — 2
 
 ## Agility
@@ -1221,6 +1221,24 @@ Walks to a bank and rewrites the slot order into categories, coins first and jun
 | `sortBank` | boolean | `true` | Sort the bank |
 | `reportQuestJunk` | boolean | `true` | Report obsolete quest items |
 | `dropQuestJunk` | boolean | `false` | Drop what the report found |
+
+### MuleDepot
+
+Shared-bank depot for a group of accounts, in two modes. Dump: every mule withdraws a shared item list and trades the lot to one supermule, which banks each delivery and keeps going. Supply: one supplier hands a fixed loadout to each account once, delivering over as many trades as the loadout needs, then stops. Four roles off two settings — Dump/Mule, Dump/Supermule, Supply/Supplier, Supply/Client — and a designation from the wrong mode is refused at startup. Default bank Seers; both sides use the same one.
+
+- Tags: `trade`, `mule`, `banking`, `logistics`, `multi-account`, `depot`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `mode` | string | `"Dump"` | Mode — one of: Dump, Supply |
+| `designation` | string | `"Mule"` | Designation — one of: Mule, Supermule, Supplier, Client |
+| `bank` | string | `"Seers"` | Bank — one of: Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Legends Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
+| `accounts` | string | `""` | Accounts |
+| `items` | string[] | `["Air rune","water rune","earth rune","fire rune","cosmic rune","law rune","mind rune","body rune","nature rune","chaos rune","death rune","soul rune","blood rune","Bronze arrow","iron arrow","steel arrow","mithril arrow","adamant arrow","rune arrow","rune dart","rune knife","Feather","cowhide","dragonhide","dragon bones","big bones","Snape grass","unicorn horn","limpwurt root","herb","Nature talisman","half of a key","uncut sapphire","uncut emerald","uncut ruby","uncut diamond","chaos talisman","rune javelin","dragon spear","rune spear","shield left half","rune longsword","adamant platebody","rune dagger","adamant full helm","rune sq shield","rune battleaxe","runite bar","runite ore","rune kiteshield","rune scimitar","rune sword","rune full helm","dragon platelegs","dragon plateskirt","dragon chainbody","adamant platelegs","Air talisman","earth talisman","water talisman","fire talisman","mind talisman","body talisman","cosmic talisman","Ashes","eye of newt","vial","vial of water","rune essence","coal","iron ore","gold ore","mithril ore","adamantite ore","runite ore","yew logs","magic logs","hard leather","leather","seaweed"]` | Item list (Dump) |
+| `itemsMode` | string | `"csv"` | Item list entry mode — one of: List (chips), CSV (paste) |
+| `loadout` | string[] | `["10000 Air rune","10000 Mind rune"]` | Loadout (Supply) |
+| `loadoutMode` | string | `"csv"` | Loadout entry mode — one of: List (chips), CSV (paste) |
+| `tradeSlots` | number (1–28) | `28` | Slots per batch |
 
 ## Woodcutting
 
