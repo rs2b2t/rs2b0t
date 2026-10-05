@@ -4,7 +4,7 @@ import { expect, spyOn, test } from 'bun:test';
 import { reader, type InvItemSnapshot } from '#/bot/adapter/ClientAdapter.js';
 import { InvItem } from '#/bot/api/inventory/Inventory.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
-import { gameSupplyPort, provision, stockCounts, type SupplyPort } from '#/bot/scripts/AccountLeveler/supplies.js';
+import { gameSupplyPort, provision, stockCounts, SupplyStockError, type SupplyPort } from '#/bot/scripts/AccountLeveler/supplies.js';
 import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
 import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 import { emptyWorldStateData } from '#/bot/event/webwalk/worldStateData.js';
@@ -267,18 +267,42 @@ test('partial purchases are banked and deficits retried before a vendor complete
 });
 
 
-test('sold out gear reports only the unavailable item for replanning', async () => {
+test('sold out gear banks earlier purchases and reports a temporary stock shortage', async () => {
     const f = fixture();
     f.port.shopStock = name => name === 'Iron platelegs' ? 0 : 3;
     const armor: ActivityPlan = { ...plan, needs: [{ item: 'Iron chainbody', count: 1 }, { item: 'Iron platelegs', count: 1 }] };
-    await expect(provision(armor, f.port)).rejects.toMatchObject({ name: 'SupplyUnavailableError', items: ['iron platelegs'] });
+    await expect(provision(armor, f.port)).rejects.toMatchObject({ name: 'SupplyStockError', items: ['iron platelegs'] });
     expect(f.purchases()).toBe(1);
+    expect(f.bank['Iron chainbody']).toBe(1);
+    expect(f.pack).toEqual({});
 });
 
-test('a purchase with no usable inventory delta reports the unavailable tier', async () => {
+test('a purchase with no usable inventory delta reports a temporary stock shortage', async () => {
     const f = fixture();
     f.port.buy = async () => 1;
-    await expect(provision(plan, f.port)).rejects.toMatchObject({ name: 'SupplyUnavailableError', items: ['iron scimitar'] });
+    await expect(provision(plan, f.port)).rejects.toMatchObject({ name: 'SupplyStockError', items: ['iron scimitar'] });
+});
+
+test('stock disappearing during purchase banks earlier items before a temporary retry', async () => {
+    const f = fixture();
+    let stock = 1;
+    let attempts = 0;
+    const buy = f.port.buy;
+    f.port.shopStock = () => stock;
+    f.port.buy = async (name, count) => {
+        attempts++;
+        if (name === 'Iron platelegs') {
+            stock = 0;
+            return 0;
+        }
+        return buy(name, count);
+    };
+    const armor: ActivityPlan = { ...plan, needs: [{ item: 'Iron chainbody', count: 1 }, { item: 'Iron platelegs', count: 1 }] };
+    await expect(provision(armor, f.port)).rejects.toMatchObject({ name: 'SupplyStockError', items: ['iron platelegs'] });
+    expect(attempts).toBe(2);
+    expect(f.port.shopStock('Iron platelegs')).toBe(0);
+    expect(f.bank['Iron chainbody']).toBe(1);
+    expect(f.pack).toEqual({});
 });
 
 test.each(['walk', 'shop'] as const)('an unavailable vendor during %s reports every item at that stop', async operation => {
@@ -307,4 +331,184 @@ test.skipIf(!existsSync('out/collision.lcnav.gz'))('the navigation graph reaches
         kind: 'dungeon', action: 'Climb-down', to: { x: 3019, z: 9849, level: 0 }
     });
     expect(route.waypoints.at(-1)).toMatchObject({ x: 2997, z: 9844, level: 0 });
+});
+
+test('best effort takes the eight available arrows once instead of refilling a thousand-arrow target', async () => {
+    const f = fixture();
+    f.bank['Bronze arrow'] = 79;
+    f.setPrice(1);
+    const visits: string[] = [];
+    const messages: string[] = [];
+    f.port.shopStock = () => 8;
+    f.port.shop = async keeper => { visits.push(keeper); return true; };
+    await provision({ ...plan, needs: [{ item: 'Bronze arrow', count: 1000 }] }, f.port, event => messages.push(event.message), { bestEffort: true });
+    expect(visits).toEqual(['Lowe']);
+    expect(f.bank['Bronze arrow']).toBe(87);
+    expect(messages.some(message => message.includes('913') && message.includes('Bronze arrow'))).toBe(true);
+});
+
+test('best effort skips sold out supplies and continues buying other items and vendors', async () => {
+    const f = fixture();
+    f.setPrice(1);
+    f.port.shopStock = name => name === 'Bronze arrow' ? 0 : 3;
+    await provision({ ...plan, needs: [
+        { item: 'Bronze arrow', count: 1000 }, { item: 'Shortbow', count: 1 }, { item: 'Hammer', count: 1 }
+    ] }, f.port, undefined, { bestEffort: true });
+    expect(f.bank['Bronze arrow'] ?? 0).toBe(0);
+    expect(f.bank.Shortbow).toBe(1);
+    expect(f.bank.Hammer).toBe(1);
+});
+
+test('best effort does not revisit a vendor after a partially fulfilled purchase', async () => {
+    const f = fixture();
+    f.setPrice(1);
+    f.port.shopStock = () => 1000;
+    const buy = f.port.buy;
+    f.port.buy = (name, count) => buy(name, Math.min(count, 8));
+    await provision({ ...plan, needs: [{ item: 'Bronze arrow', count: 1000 }] }, f.port, undefined, { bestEffort: true });
+    expect(f.purchases()).toBe(1);
+    expect(f.bank['Bronze arrow']).toBe(8);
+});
+
+test('best effort permits capacity-limited batches without exceeding initially available stock', async () => {
+    const f = fixture();
+    f.setPrice(1);
+    f.port.shopStock = () => 27;
+    await provision({ ...plan, needs: [{ item: 'Vial of water', count: 54 }] }, f.port, undefined, { bestEffort: true });
+    expect(f.bank['Vial of water']).toBe(27);
+    expect(f.purchases()).toBe(2);
+});
+
+test.each(['walk', 'shop'] as const)('best effort recovers from a failed %s and continues to another supplier', async operation => {
+    const f = fixture();
+    f.setPrice(1);
+    let calls = 0;
+    f.port[operation] = async () => ++calls > 1;
+    await provision({ ...plan, needs: [{ item: 'Shortbow', count: 1 }, { item: 'Hammer', count: 1 }] }, f.port, undefined, { bestEffort: true });
+    expect(f.bank.Shortbow ?? 0).toBe(0);
+    expect(f.bank.Hammer).toBe(1);
+});
+
+test('purchase progress retains bank counts while the shop has replaced the bank modal', async () => {
+    const f = fixture();
+    f.bank['Iron scimitar'] = 1;
+    let open = true;
+    const stock = f.port.stock;
+    f.port.stock = () => open ? stock() : {};
+    f.port.bank = async () => { open = true; return true; };
+    f.port.closeBank = async () => { open = false; return true; };
+    const messages: string[] = [];
+    await provision({ ...plan, needs: [{ item: 'Iron scimitar', count: 2 }] }, f.port, event => messages.push(event.message));
+    expect(messages.find(message => message.startsWith('Buying'))).toContain('(1/2 banked)');
+});
+
+test('mandatory ammunition uses a partial purchase and rebases the carried training batch', async () => {
+    const f = fixture();
+    f.bank['Bronze arrow'] = 79;
+    f.setPrice(1);
+    f.port.shopStock = () => 8;
+    const activity: ActivityPlan = { ...plan, settings: { ammoWithdraw: 300 }, needs: [
+        { item: 'Bronze arrow', count: 1000, carry: 300, equip: true, minimum: 1 }
+    ] };
+    await provision(activity, f.port);
+    expect(f.purchases()).toBe(1);
+    expect(f.worn['Bronze arrow']).toBe(87);
+    expect(activity.needs[0]).toMatchObject({ count: 87, carry: 87 });
+    expect(activity.settings.ammoWithdraw).toBe(87);
+});
+
+test('mandatory ammunition uses banked arrows when the shop has none', async () => {
+    const f = fixture();
+    f.bank['Bronze arrow'] = 79;
+    f.port.shopStock = () => 0;
+    const activity: ActivityPlan = { ...plan, settings: {}, needs: [
+        { item: 'Bronze arrow', count: 300, carry: 300, equip: true, minimum: 1 }
+    ] };
+    await provision(activity, f.port);
+    expect(f.worn['Bronze arrow']).toBe(79);
+    expect(f.purchases()).toBe(0);
+});
+
+test('mandatory out of stock ammunition reports a retryable shortage after one visit', async () => {
+    const f = fixture();
+    let visits = 0;
+    f.port.shop = async () => { visits++; return true; };
+    f.port.shopStock = () => 0;
+    await expect(provision({ ...plan, needs: [
+        { item: 'Bronze arrow', count: 300, carry: 300, equip: true, minimum: 1 }
+    ] }, f.port)).rejects.toMatchObject({ name: 'SupplyStockError', items: ['bronze arrow'] });
+    expect(visits).toBe(1);
+});
+
+test('rune shortfalls rebase both runes and autocast restocking to the same complete cast batch', async () => {
+    const f = fixture(1000000);
+    f.bank['Chaos rune'] = 79;
+    f.bank['Fire rune'] = 160;
+    f.setPrice(1);
+    f.port.shopStock = () => 8;
+    const activity: ActivityPlan = { ...plan, settings: { combatStyle: 'mage', runesWithdraw: 150 }, needs: [
+        { item: 'Chaos rune', count: 200, carry: 150, minimum: 1 },
+        { item: 'Fire rune', count: 800, carry: 600, minimum: 4 }
+    ] };
+    await provision(activity, f.port);
+    expect(f.purchases()).toBe(2);
+    expect(f.pack).toEqual({ 'Chaos rune': 42, 'Fire rune': 168 });
+    expect(activity.needs.map(need => [need.count, need.carry])).toEqual([[42, 42], [168, 168]]);
+    expect(activity.settings.runesWithdraw).toBe(42);
+});
+
+test('an incomplete elemental rune set never launches autocasting', async () => {
+    const f = fixture(1000000);
+    f.bank['Chaos rune'] = 200;
+    f.bank['Fire rune'] = 3;
+    f.port.shopStock = () => 0;
+    const activity: ActivityPlan = { ...plan, settings: { combatStyle: 'mage' }, needs: [
+        { item: 'Chaos rune', count: 200, carry: 150, minimum: 1 },
+        { item: 'Fire rune', count: 800, carry: 600, minimum: 4 }
+    ] };
+    await expect(provision(activity, f.port)).rejects.toMatchObject({ name: 'SupplyStockError', items: ['fire rune'] });
+    expect(f.pack).toEqual({});
+});
+
+test('partial feathers update the child fishing restock amount', async () => {
+    const f = fixture();
+    f.setPrice(1);
+    f.port.shopStock = () => 8;
+    const activity: ActivityPlan = { ...plan, script: 'Fisher', settings: { baitQty: 200 }, needs: [
+        { item: 'Feather', count: 200, carry: 200, minimum: 1 }
+    ] };
+    await provision(activity, f.port);
+    expect(f.pack.Feather).toBe(8);
+    expect(activity.settings.baitQty).toBe(8);
+});
+
+test('progress uses one logging channel when an action reporter is supplied', async () => {
+    const f = fixture();
+    let logs = 0;
+    let updates = 0;
+    f.port.log = () => { logs++; };
+    await provision(plan, f.port, () => { updates++; });
+    expect(updates).toBeGreaterThan(0);
+    expect(logs).toBe(0);
+});
+
+
+test('a sold out mandatory tool reports a temporary stock shortage', async () => {
+    const f = fixture();
+    f.port.shopStock = () => 0;
+    const result = provision({ ...plan, needs: [{ item: 'Small fishing net', count: 1, carry: 1 }] }, f.port);
+    await expect(result).rejects.toBeInstanceOf(SupplyStockError);
+    await expect(result).rejects.toMatchObject({ name: 'SupplyStockError', items: ['small fishing net'] });
+    expect(f.purchases()).toBe(0);
+    expect(f.pack).toEqual({});
+});
+
+test('partial thread updates the child crafting restock amount', async () => {
+    const f = fixture();
+    f.setPrice(1);
+    f.port.shopStock = () => 8;
+    const activity: ActivityPlan = { ...plan, script: 'LeatherCrafter', settings: { threadPerTrip: 100 }, needs: [{ item: 'Thread', count: 100, carry: 100, minimum: 1 }] };
+    await provision(activity, f.port);
+    expect(f.pack.Thread).toBe(8);
+    expect(activity.settings.threadPerTrip).toBe(8);
 });

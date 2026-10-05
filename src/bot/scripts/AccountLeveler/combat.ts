@@ -1,7 +1,7 @@
 import Tile from '../../geometry/Tile.js';
 import { meleeEquipment, rangedBow } from './equipment.js';
 import { purchaseBudget, supplyOffer } from './offers.js';
-import { canCatch, FISH } from './catalog.js';
+import { canCatch, consumableBatch, FISH } from './catalog.js';
 import { magicEquipment } from './magic.js';
 import type { ActivityPlan, LevelerSnapshot, Requirement, SessionMemory } from './types.js';
 
@@ -58,13 +58,14 @@ export function combatPlan(s: LevelerSnapshot, objective: string, memory: Sessio
     const food = foodFor(s);
     const needs: Requirement[] = [{ item: food, count: 24, carry: 12, equip: false }];
     const magic = style === 'mage' ? magicEquipment(s) : null;
+    const ammo = consumableBatch(s, [{ item: 'Bronze arrow', count: 1 }], 300)[0];
     if (style === 'melee') {
         needs.push(...meleeEquipment(s));
     } else if (style === 'range') {
-        const missingAmmo = Math.max(0, 300 - (s.stock['bronze arrow'] ?? 0));
+        const missingAmmo = Math.max(0, ammo.count - (s.stock['bronze arrow'] ?? 0));
         const ammoBudget = missingAmmo ? purchaseBudget(supplyOffer('Bronze arrow')!, missingAmmo) : 0;
         needs.push(rangedBow({ ...s, stock: { ...s.stock, coins: (s.stock.coins ?? 0) - ammoBudget } }));
-        needs.push({ item: 'Bronze arrow', count: 300, carry: 300, equip: true });
+        needs.push({ ...ammo, equip: true });
     } else {
         needs.push(...magic!.needs);
     }
@@ -77,8 +78,8 @@ export function combatPlan(s: LevelerSnapshot, objective: string, memory: Sessio
         output: resource ? { item: resource, count: resource === '#199' ? 14 : 1 } : undefined,
         settings: {
             target: camp.target, spot: 'Custom coordinates', coordinates: new Tile(camp.x, camp.z, 0), leashRadius: 12,
-            combatStyle: style, meleeStyle, rangeStyle: 'rapid', spell: magic?.spell ?? 'Wind Strike', runesWithdraw: 150,
-            ammo: 'Bronze arrow', ammoWithdraw: 300, useSpecial: false, solveClues: false,
+            combatStyle: style, meleeStyle, rangeStyle: 'rapid', spell: magic?.spell ?? 'Wind Strike', runesWithdraw: magic?.casts ?? 150,
+            ammo: 'Bronze arrow', ammoWithdraw: ammo.carry, useSpecial: false, solveClues: false,
             banking: 'Auto', food, foodWithdraw: 12, panicHp: 15, buryBones: true,
             loot: ['Bones', 'Herb', 'Air talisman', ...(resource === 'Cow hide' ? ['Cow hide'] : [])], avoidHerbs: [], loadout: '', bankEveryMinutes: 8
         }

@@ -140,3 +140,11 @@ test('blocked combat does not send a fragile account on an unrelated training tr
     const next=planNext(s,{...emptyMemory(),objective:'woodcutting'},()=>0);
     expect(next.kind).toBe('blocked');
 });
+
+test('legacy shrimp cooldowns cannot block the food dependency for every melee objective', () => {
+    const s = fresh();
+    const memory = { ...emptyMemory(), cooldowns: { 'fish-shrimps': s.now + 900000 } };
+    const decision = planNext(s, memory, () => 0);
+    expect(decision.kind).toBe('activity');
+    expect(decision.kind === 'activity' && decision.plan.script).toBe('Fisher');
+});

@@ -1,5 +1,7 @@
 import type { ActivityPlan, SessionMemory } from './types.js';
 
+export function usesActivityCooldown(plan: ActivityPlan): boolean { return plan.combat === true || !!plan.quest; }
+
 export class LevelerSession {
     plan: ActivityPlan | null = null;
     remainingMs = 0;
@@ -44,11 +46,12 @@ export class LevelerSession {
         this.plan = null;
     }
 
-    failure(now: number): 'reset' | 'rotate' {
+    failure(now: number): 'reset' | 'rotate' | 'stop' {
         const plan = this.plan;
         if (!plan) return 'reset';
         const count = (this.failures[plan.id] ?? 0) + 1;
         this.failures[plan.id] = count;
+        if (!usesActivityCooldown(plan)) return count < 3 ? 'reset' : 'stop';
         if (count === 1) return 'reset';
         this.memory.cooldowns[plan.id] = now + 15 * 60000;
         this.memory.objective = null;
@@ -56,7 +59,7 @@ export class LevelerSession {
         return 'rotate';
     }
 
-    death(now: number): 'reset' | 'rotate' {
+    death(now: number): 'reset' | 'rotate' | 'stop' {
         this.memory.deaths++;
         return this.failure(now);
     }

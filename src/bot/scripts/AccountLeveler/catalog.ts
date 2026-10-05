@@ -1,5 +1,25 @@
 import { purchaseBudget, supplyOffer } from './offers.js';
-import { stockOf, type LevelerSnapshot } from './types.js';
+import { stockOf, type ActivityPlan, type LevelerSnapshot, type Requirement } from './types.js';
+
+export function refreshConsumables(s: LevelerSnapshot, plan: ActivityPlan): ActivityPlan {
+    const style = plan.script === 'LeatherCrafter' ? 'craft' : plan.script === 'Fisher' ? 'fish' : plan.script === 'AutoFighter' ? plan.settings.combatStyle : null;
+    if (style !== 'craft' && style !== 'fish' && style !== 'range' && style !== 'mage') return plan;
+    const consumables = plan.needs.filter(need => (need.minimum ?? 0) > 0 && (style === 'mage'
+        ? / rune$/i.test(need.item) : need.item === (style === 'craft' ? 'Thread' : style === 'fish' ? 'Feather' : 'Bronze arrow')));
+    if (!consumables.length) return plan;
+    const target = style === 'craft' ? 100 : style === 'range' ? 300 : 200;
+    const batch = consumableBatch(s, consumables.map(need => ({ item: need.item, count: need.minimum! })), target, style === 'mage' ? 150 : target);
+    const replacements = new Map(consumables.map((need, index) => [need, { ...need, ...batch[index] }]));
+    const setting = style === 'craft' ? 'threadPerTrip' : style === 'mage' ? 'runesWithdraw' : style === 'fish' ? 'baitQty' : 'ammoWithdraw';
+    return { ...plan, needs: plan.needs.map(need => replacements.get(need) ?? need),
+        settings: { ...plan.settings, [setting]: batch[0].carry! / batch[0].minimum! } };
+}
+
+export function consumableBatch(s: LevelerSnapshot, costs: readonly Pick<Requirement, 'item' | 'count'>[], target: number, carry = target): Requirement[] {
+    const banked = Math.min(target, ...costs.map(cost => Math.floor(stockOf(s, cost.item) / cost.count)));
+    const uses = banked > 0 ? banked : target;
+    return costs.map(cost => ({ item: cost.item, count: uses * cost.count, carry: Math.min(carry, uses) * cost.count, minimum: cost.count }));
+}
 
 export const WOODS = [
     { level: 1, item: 'Logs', tree: 'Tree', location: 'Draynor (trees)' },
@@ -56,7 +76,7 @@ export function smithProduct(level: number, metal: string): string {
 
 export function canCatch(s: LevelerSnapshot, fish: typeof FISH[number]): boolean {
     if (s.levels.fishing < fish.level) return false;
-    const needs = [{ item: fish.tool, count: 1 }, ...(fish.tool === 'Fly fishing rod' ? [{ item: 'Feather', count: 200 }] : [])];
+    const needs = [{ item: fish.tool, count: 1 }, ...(fish.tool === 'Fly fishing rod' ? consumableBatch(s, [{ item: 'Feather', count: 1 }], 200) : [])];
     let budget = 0;
     for (const need of needs) {
         const missing = Math.max(0, need.count - stockOf(s, need.item));

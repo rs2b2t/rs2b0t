@@ -1,4 +1,5 @@
 import Skill from '../../../client/shell/Skill.js';
+import { usesActivityCooldown } from './session.js';
 import { methodFor, producer } from './methods.js';
 import { purchaseBudget, supplyOffer } from './offers.js';
 import { SHOPPING_RESERVE } from './shopping.js';
@@ -11,7 +12,7 @@ export const emptyMemory = (): SessionMemory => ({ objective: null, recent: [], 
 
 export function resolveActivity(s: LevelerSnapshot, plan: ActivityPlan, memory: SessionMemory, random: () => number, chain: string[] = []): Decision {
     if (chain.includes(plan.id)) return { kind: 'blocked', reason: `Supply dependency cycle: ${[...chain, plan.id].join(' -> ')}` };
-    if ((memory.cooldowns[plan.id] ?? 0) > s.now) return { kind: 'blocked', reason: `${plan.label} is cooling down after a failed attempt` };
+    if (usesActivityCooldown(plan) && (memory.cooldowns[plan.id] ?? 0) > s.now) return { kind: 'blocked', reason: `${plan.label} is cooling down after a failed attempt` };
     let budget = 0;
     for (const need of plan.needs) {
         const missing = need.count - stockOf(s, requirementKey(need));

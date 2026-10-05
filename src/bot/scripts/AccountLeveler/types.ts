@@ -15,6 +15,7 @@ export interface Requirement {
     item: string;
     id?: number;
     count: number;
+    minimum?: number;
     carry?: number;
     equip?: boolean;
 }

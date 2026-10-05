@@ -1,7 +1,7 @@
 import Tile from '../../geometry/Tile.js';
 import { combatPlan, foodFor } from './combat.js';
 import { gatheringTool, meleeEquipment } from './equipment.js';
-import { FISH, FLETCHING, WOODS, POTIONS, canSourceWood, canCatch, nextMilestone, smithProduct } from './catalog.js';
+import { FISH, FLETCHING, WOODS, POTIONS, canSourceWood, canCatch, consumableBatch, nextMilestone, smithProduct } from './catalog.js';
 import { stockOf, type ActivityPlan, type LevelerSnapshot, type Requirement, type SessionMemory } from './types.js';
 
 const banked = (item: string, count = 28): Requirement => ({ item, count });
@@ -51,9 +51,11 @@ function selectMethod(s: LevelerSnapshot, objective: string, memory: SessionMemo
                 ? activity(objective, `smith-${metal.toLowerCase()}`, 'SmithingBot', { bar: metal, product: smithProduct(s.levels.smithing, metal) }, [tool('Hammer'), banked(`${metal} bar`, 14)])
                 : smeltPlan(objective, metal);
         }
-        case 'crafting':
-            if (s.levels.crafting < 10 || stockOf(s, 'Leather') >= 26) return { ...activity(objective, 'craft-soft-leather', 'LeatherCrafter', { leatherType: 'Leather', threadPerTrip: 100 }, [tool('Needle'), { item: 'Thread', count: 100, carry: 100 }, banked('Leather', 26)]), ...(s.levels.crafting < 10 ? { prerequisiteLevels: { crafting: Math.min(10, s.target) } } : {}) };
+        case 'crafting': {
+            const thread = consumableBatch(s, [{ item: 'Thread', count: 1 }], 100)[0];
+            if (s.levels.crafting < 10 || stockOf(s, 'Leather') >= 26) return { ...activity(objective, 'craft-soft-leather', 'LeatherCrafter', { leatherType: 'Leather', threadPerTrip: thread.carry }, [tool('Needle'), thread, banked('Leather', 26)]), ...(s.levels.crafting < 10 ? { prerequisiteLevels: { crafting: Math.min(10, s.target) } } : {}) };
             return withFood(s, activity(objective, 'pick-and-spin-flax', 'FlaxAIO', { picking: true, spinning: true }));
+        }
         case 'agility':
             return withFood(s, activity(objective, 'gnome-course', 'GnomeCourse', {}));
         case 'thieving': {
@@ -95,9 +97,10 @@ function fishPlan(s: LevelerSnapshot, objective: string, raw?: string): Activity
     const recipe = raw ? FISH.find(f => `raw ${f.food.toLowerCase()}` === raw.toLowerCase())!
         : FISH[s.levels.fishing >= 20 && (s.levels.fishing >= 40 || flyReady) ? 1 : 0];
     const fly = recipe.tool === 'Fly fishing rod';
+    const bait = fly ? consumableBatch(s, [{ item: 'Feather', count: 1 }], 200) : [];
     return activity(objective, `fish-${recipe.food.toLowerCase()}`, 'Fisher', {
-        ...gatherSettings, fishMethod: recipe.method, location: recipe.location, cookMode: 'Off', baitQty: 200
-    }, [tool(recipe.tool), ...(fly ? [{ item: 'Feather', count: 200, carry: 200 }] : [])]);
+        ...gatherSettings, fishMethod: recipe.method, location: recipe.location, cookMode: 'Off', baitQty: bait[0]?.carry ?? 200
+    }, [tool(recipe.tool), ...bait]);
 }
 
 function cookPlan(s: LevelerSnapshot, objective: string, requested?: string): ActivityPlan {

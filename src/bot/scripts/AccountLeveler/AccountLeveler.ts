@@ -1,5 +1,7 @@
 import { resolveWorldNumber } from '../../../client/config/worlds.js';
 import { SeersAxeBuyer } from './market.js';
+import { refreshConsumables } from './catalog.js';
+import { COMBAT_CAMPS } from './combat.js';
 import { gatheringTool } from './equipment.js';
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { LoopingBot } from '../../api/bot/Bot.js';
@@ -25,13 +27,15 @@ import type { SettingsSchema } from '../../runtime/Settings.js';
 import { emptyMemory, enabledSkills, planNext, resolveActivity } from './planner.js';
 import { LevelerSession } from './session.js';
 import { LevelerStock } from './stock.js';
-import { gameSupplyPort, provision, SupplyUnavailableError } from './supplies.js';
+import { gameSupplyPort, provision, SupplyUnavailableError, SupplyStockError } from './supplies.js';
 import { auditSupplies } from './shopping.js';
 import { ActionQueue, activityActions, describeActivity, type ActionEvent } from './actions.js';
 import { paintLeveler } from './paint.js';
 import { herbByName } from '../PotionMaker/PotionMakerLogic.js';
 import { canResumeObjective, trainingPriority } from './priority.js';
 import { requirementKey, stockOf, type ActivityPlan, type LevelerSnapshot, type SessionMemory } from './types.js';
+
+interface FailureDiagnostic { at: number; activity: string; phase: string; reason: string; detail: string }
 
 export const SETTINGS: SettingsSchema = {
     targetLevel: { type: 'number', default: 40, min: 2, max: 40, label: 'Target level', help: 'Train every enabled skill to at least this level.' },
@@ -52,6 +56,8 @@ export default class AccountLeveler extends LoopingBot {
     private marketChecked = false;
     private readonly marketBuyer = new SeersAxeBuyer();
     private unavailableItems = new Set<string>();
+    private temporarilyUnavailable = new Map<string, number>();
+    private lastFailure?: FailureDiagnostic;
     private shoppingBudget = 0;
     private detail = '';
     private startedAt = Date.now();
@@ -94,11 +100,22 @@ export default class AccountLeveler extends LoopingBot {
         this.lastTile = Game.tile();
         try {
             if (this.died) {
+                this.died = false;
+                if (this.phase === 'bank') {
+                    this.session.memory.deaths++;
+                    this.fail('Player died while preparing supplies');
+                    return;
+                }
                 const previous = this.session.plan;
                 const decision = this.session.death(Date.now());
+                this.recordFailure('Player died');
+                if (decision === 'stop') {
+                    this.activity.stop();
+                    this.requestFinish(`AccountLeveler stopped after repeated deaths during ${previous?.label ?? 'training'}; check the saved failure diagnostics`);
+                    return;
+                }
                 this.retry = decision === 'reset' ? previous : null;
                 if (decision === 'rotate') this.pendingPlans = [];
-                this.died = false;
                 this.activity.stop();
                 this.phase = 'bank';
                 this.stock.invalidate();
@@ -114,7 +131,9 @@ export default class AccountLeveler extends LoopingBot {
             const snapshot = this.snapshot();
             const reached = this.reached(plan, snapshot);
             const pendingPotions = plan.script === 'PotionMaker' && Inventory.countById(herbByName(String(plan.settings.herb))?.unfId ?? 91) > 0;
-            const exhausted = !pendingPotions && plan.needs.some(need => !need.equip && need.count > 1 && stockOf(snapshot, requirementKey(need)) === 0);
+            const exhausted = !pendingPotions && plan.needs.some(need => need.minimum !== undefined
+                ? stockOf(snapshot, requirementKey(need)) < need.minimum
+                : !need.equip && need.count > 1 && stockOf(snapshot, requirementKey(need)) === 0);
             const depletedOnFinish = this.activity.outcome?.kind === 'finished' && plan.needs.some(need => stockOf(snapshot, requirementKey(need)) < need.count);
             if (!Game.inCombat() && (reached || exhausted || depletedOnFinish || this.session.remainingMs <= 0)) {
                 this.activity.stop();
@@ -143,6 +162,19 @@ export default class AccountLeveler extends LoopingBot {
             if (error instanceof ScriptAborted) {
                 if (this.died && !Scheduler.active?.aborted) return;
                 throw error;
+            }
+            if (error instanceof SupplyStockError) {
+                error.items.forEach(item => this.temporarilyUnavailable.set(item, Date.now() + 60000));
+                this.activity.stop();
+                this.session.resupply(Date.now());
+                this.retry = null;
+                this.pendingPlans = [];
+                this.phase = 'bank';
+                this.stock.invalidate();
+                this.setStatus(`${error.message}; checking available alternatives while the shop restocks`);
+                this.waitingUntil = Date.now() + 3000;
+                this.save();
+                return;
             }
             if (error instanceof SupplyUnavailableError) {
                 error.items.forEach(item => this.unavailableItems.add(item));
@@ -207,7 +239,7 @@ export default class AccountLeveler extends LoopingBot {
             stock: this.stock.total([...Inventory.items(), ...Equipment.items()]),
             bankReady: this.stock.ready,
             quests: Object.fromEntries(['Druidic Ritual', 'Rune Mysteries Quest', 'Dragon Slayer'].map(name => [name, Quests.status(name) === 'complete'])),
-            target: this.target, wilderness: this.wilderness, now: Date.now(), unavailableItems: [...this.unavailableItems]
+            target: this.target, wilderness: this.wilderness, now: Date.now(), unavailableItems: [...this.unavailableItems, ...[...this.temporarilyUnavailable].filter(([, until]) => until > Date.now()).map(([item]) => item)]
         };
     }
 
@@ -228,7 +260,7 @@ export default class AccountLeveler extends LoopingBot {
                 this.setStatus(`Bank audit: ${audit.needs.length} supplies to stock; budget ${audit.budget}gp plus travel reserve`);
                 if (audit.skipped.length) this.setDetail(`Deferred purchases: ${audit.skipped.join('; ')}`);
                 try {
-                    await provision(plan, this.supplies, event => this.report(event));
+                    await provision(plan, this.supplies, event => this.report(event), { bestEffort: true });
                 } finally {
                     this.shoppingBudget = 0;
                 }
@@ -246,6 +278,7 @@ export default class AccountLeveler extends LoopingBot {
             this.pendingPlans = [];
             requested = undefined;
         }
+        if (requested) requested = refreshConsumables(snapshot, requested);
         let decision = requested ? resolveActivity(snapshot, requested, this.session.memory, Math.random) : planNext(snapshot, this.session.memory);
         this.retry = null;
         if (decision.kind === 'blocked') {
@@ -256,7 +289,7 @@ export default class AccountLeveler extends LoopingBot {
         if (decision.kind === 'complete') { await Bank.close(); this.requestFinish(`All ${enabledSkills.length} enabled skills reached ${this.target}`); return; }
         if (decision.kind === 'refresh') return;
         if (decision.kind === 'blocked') {
-            const cooldown = Math.min(...Object.values(this.session.memory.cooldowns).filter(time => time > Date.now()));
+            const cooldown = Math.min(...[...Object.values(this.session.memory.cooldowns), ...this.temporarilyUnavailable.values()].filter(time => time > Date.now()));
             if (Number.isFinite(cooldown)) {
                 this.waitingUntil = cooldown;
                 this.setStatus(`waiting for another method: ${decision.reason}`);
@@ -330,16 +363,25 @@ export default class AccountLeveler extends LoopingBot {
         this.session.observe(signature, Date.now());
     }
 
+    private recordFailure(reason: string): void {
+        this.lastFailure = { at: Date.now(), activity: this.session.plan?.label ?? this.displayPlan?.label ?? 'preparation', phase: this.phase, reason, detail: this.detail };
+        this.save();
+    }
+
     private fail(reason: string): void {
         const previous = this.session.plan;
+        this.recordFailure(reason);
         this.activity.stop();
-        if (!previous) {
-            if (++this.resetCount >= 3) { this.requestFinish(`AccountLeveler could not prepare: ${reason}`); return; }
+        const preparing = this.phase === 'bank' || !previous;
+        const decision = preparing ? ++this.resetCount < 3 ? 'reset' : 'stop' : this.session.failure(Date.now());
+        this.actions.fail(reason);
+        if (decision === 'stop') {
+            this.setStatus(`${reason}; stopped after three unsuccessful ${preparing ? 'preparation' : 'activity'} attempts`);
+            this.requestFinish(`AccountLeveler could not ${preparing ? 'prepare' : 'continue ' + previous?.label}: ${reason}`);
+            return;
         }
-        const decision = this.session.failure(Date.now());
         this.retry = decision === 'reset' ? previous : null;
         if (decision === 'rotate') this.pendingPlans = [];
-        this.actions.fail(reason);
         this.setStatus(`${reason}; ${decision === 'reset' ? 'resetting at the nearest bank' : 'trying another method'}`);
         this.phase = 'bank';
         this.stock.invalidate();
@@ -406,7 +448,7 @@ export default class AccountLeveler extends LoopingBot {
         const key = this.key();
         if (!key) return;
         try {
-            const saved = JSON.parse(this.storage()?.getItem(key) ?? '{}') as Partial<SessionMemory> & { diagnostics?: { history?: { at: number; message: string }[] } };
+            const saved = JSON.parse(this.storage()?.getItem(key) ?? '{}') as Partial<SessionMemory> & { diagnostics?: { history?: { at: number; message: string }[]; failure?: FailureDiagnostic } };
             const memory = emptyMemory();
             memory.objective = typeof saved.objective === 'string' && enabledSkills.includes(saved.objective) ? saved.objective : null;
             memory.recent = Array.isArray(saved.recent) ? saved.recent.filter(v => typeof v === 'string').slice(-6) : [];
@@ -414,6 +456,9 @@ export default class AccountLeveler extends LoopingBot {
                 const values = saved[field];
                 if (values && typeof values === 'object') memory[field] = Object.fromEntries(Object.entries(values).filter(([, v]) => Number.isFinite(v)));
             }
+            memory.cooldowns = Object.fromEntries(Object.entries(memory.cooldowns).filter(([id]) => id.startsWith('quest-') || COMBAT_CAMPS.some(camp => camp.id === id)));
+            const failure = saved.diagnostics?.failure;
+            if (failure && Number.isFinite(failure.at) && [failure.activity, failure.phase, failure.reason, failure.detail].every(value => typeof value === 'string')) this.lastFailure = failure;
             memory.deaths = typeof saved.deaths === 'number' && Number.isFinite(saved.deaths) ? Math.max(0, saved.deaths) : 0;
             this.session = new LevelerSession(memory);
             if (Array.isArray(saved.diagnostics?.history)) this.actions.history = saved.diagnostics.history
@@ -427,7 +472,7 @@ export default class AccountLeveler extends LoopingBot {
         if (!key) return;
         try {
             this.storage()?.setItem(key, JSON.stringify({ ...this.session.memory, diagnostics: {
-                action: this.status, detail: this.detail, plan: this.displayPlan?.label,
+                action: this.status, detail: this.detail, plan: this.displayPlan?.label, failure: this.lastFailure,
                 tile: Game.tile(), destination: this.actions.destination,
                 queue: this.actions.items, history: this.actions.history.slice(-20)
             } }));
