@@ -924,6 +924,7 @@ export abstract class LoopingBot extends AbstractBot {
  * @see docs/reference/api-bots.md#taskbot
  */
 export interface Task {
+    readonly label?: string;
     validate(): boolean | Promise<boolean>;
     execute(): void | Promise<void>;
 }
@@ -957,6 +958,7 @@ export class AcquireTask implements Task {
 
 /** Runs the first task whose validate() returns true, once per loop. */
 export abstract class TaskBot extends LoopingBot {
+    activeTaskName: string | null;
     protected add(...tasks: Task[]): void;
     loop(): Promise<number | void>;
 }

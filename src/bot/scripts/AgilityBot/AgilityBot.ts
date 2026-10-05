@@ -112,6 +112,7 @@ export default class AgilityBot extends TaskBot {
 }
 
 class TravelToCourse implements Task {
+    readonly label = 'Travel to course';
     constructor(private bot: AgilityBot) {}
 
     validate(): boolean {
@@ -132,6 +133,7 @@ class TravelToCourse implements Task {
 }
 
 class DoObstacle implements Task {
+    readonly label = 'Do obstacle';
     private stuck = 0;
 
     constructor(private bot: AgilityBot) {}

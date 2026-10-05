@@ -99,3 +99,22 @@ test('standalone owned completion still stops the script runner', async () => {
     expect(ScriptRunner.state).toBe('stopped');
     expect(ScriptRunner.ctx?.stopReason).toBe('complete');
 });
+
+test('the active delegated task is visible while its operation is awaiting', async () => {
+    const { TaskBot } = await import('#/bot/api/bot/Bot.js');
+    const { Game } = await import('#/bot/api/game/Game.js');
+    const { spyOn } = await import('bun:test');
+    const patch=spyOn(Game,'sceneReady').mockReturnValue(true);
+    let finish!:()=>void;
+    const pending=new Promise<void>(resolve=>{finish=resolve;});
+    class WithdrawSupplies { readonly label='Withdraw supplies'; validate(){return true;} async execute(){await pending;} }
+    class Child extends TaskBot { constructor(){super();this.add(new WithdrawSupplies());} }
+    const activity=host();
+    try {
+        await activity.start({name:'child',description:'',create:()=>new Child()},{});
+        const running=activity.loop();
+        await Promise.resolve();
+        expect(activity.currentTask).toBe('Withdraw supplies');
+        finish();await running;
+    } finally {finish();activity.stop();patch.mockRestore();}
+});

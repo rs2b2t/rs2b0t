@@ -74,7 +74,7 @@ test.each([{ level: 1, unstrung: 50, strung: 841, name: 'Shortbow' }, { level: 5
         snapshot.stock = { coins: 0, shrimps: 30, 'bronze arrow': 300, [name.toLowerCase()]: 20, [`#${unstrung}`]: 20 };
         const blocked = planNext(snapshot, emptyMemory(), () => 0);
         expect(blocked.kind).toBe('blocked');
-        expect(blocked.kind === 'blocked' && blocked.reason).toContain(name);
+        expect(blocked.kind === 'blocked' && blocked.reason).toContain('Shortbow');
         snapshot.stock[`#${strung}`] = 1;
         const ready = planNext(snapshot, emptyMemory(), () => 0);
         expect(ready.kind === 'activity' && ready.plan.script).toBe('AutoFighter');
@@ -85,4 +85,58 @@ test('cowhide gathering selects cows and loots their hides', () => {
     const plan = combatPlan(trained(), 'crafting', emptyMemory(), () => 0, 'Cow hide');
     expect(plan?.settings.target).toBe('Cow');
     expect(plan?.settings.loot).toContain('Cow hide');
+});
+
+test('a shopping dependency accounts for travel money before selecting an unaffordable activity', () => {
+    const s=trained();s.levels.fishing=1;s.stock={coins:100};
+    const result=planNext(s,emptyMemory(),()=>0);
+    expect(result.kind).toBe('blocked');
+    expect(result.kind==='blocked'&&result.reason).toContain('budget 230');
+});
+
+test('unfinished melee takes priority over an older saved skilling objective', () => {
+    const s=fresh();s.stock.shrimps=100;
+    const memory={...emptyMemory(),objective:'agility',attempted:{attack:999,strength:999,defence:999}};
+    for(const random of [0,0.3,0.8,0.99]) {
+        const next=planNext(s,memory,()=>random);
+        expect(next.kind).toBe('activity');
+        if(next.kind==='activity') {
+            expect(['attack','strength','defence']).toContain(next.plan.objective);
+            expect(next.plan.script).toBe('AutoFighter');
+        }
+    }
+});
+
+test('low Defence supersedes a saved higher-level Attack objective', () => {
+    const s=fresh();s.stock.shrimps=100;
+    Object.assign(s.levels,{attack:30,strength:25,defence:5});
+    const next=planNext(s,{...emptyMemory(),objective:'attack'},()=>0);
+    expect(next.kind==='activity'&&next.plan.objective).toBe('defence');
+    expect(next.kind==='activity'&&next.plan.settings.meleeStyle).toBe('defence');
+});
+
+test('food production serves the combat objective even when the saved goal was skilling', () => {
+    const next=planNext(fresh(),{...emptyMemory(),objective:'woodcutting'},()=>0);
+    expect(next.kind==='activity'&&next.plan.script).toBe('Fisher');
+    expect(next.kind==='activity'&&next.plan.objective).toBe('attack');
+});
+
+test('other combat stats precede skilling after melee reaches the target', () => {
+    const s=fresh();s.stock.shrimps=100;
+    Object.assign(s.levels,{attack:40,strength:40,defence:40});
+    const next=planNext(s,{...emptyMemory(),objective:'runecraft'},()=>0);
+    expect(next.kind==='activity'&&['hitpoints','ranged','magic','prayer'].includes(next.plan.objective)).toBe(true);
+});
+
+test('skilling unlocks once combat reaches the configured target', () => {
+    const s=fresh();s.target=10;
+    for(const skill of ['attack','strength','defence','hitpoints','ranged','magic','prayer'])s.levels[skill]=10;
+    const next=planNext(s,{...emptyMemory(),objective:'woodcutting'},()=>0);
+    expect(next.kind==='activity'&&next.plan.objective).toBe('woodcutting');
+});
+
+test('blocked combat does not send a fragile account on an unrelated training trip', () => {
+    const s=fresh();s.stock={coins:0,'bronze axe':1};
+    const next=planNext(s,{...emptyMemory(),objective:'woodcutting'},()=>0);
+    expect(next.kind).toBe('blocked');
 });

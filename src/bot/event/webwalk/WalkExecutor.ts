@@ -303,6 +303,10 @@ class WalkExecutorImpl {
                     }
                 }
 
+                if (!this.checkRouteItems(path.waypoints, log)) {
+                    return false;
+                }
+
                 const hops = path.hops ?? [];
                 log(
                     `path: cost ${path.cost}, ${path.waypoints.length} waypoints, expanded ${path.expanded}, worker ${path.elapsedMs?.toFixed(1)}ms, hops=${hops.length}${repaths > 0 ? ` (repath ${repaths})` : ''}`
@@ -498,10 +502,6 @@ class WalkExecutorImpl {
         maxExpansions: number | undefined,
         log: (msg: string) => void
     ): Promise<boolean> {
-        if (pathHasTeleport(directPath.waypoints)) {
-            return false;
-        }
-
         const knownBank = this.readBankItemCounts();
         // Why: WalkTo passes no bank snapshot, so a Varrock to Ardougne walk never withdrew the second 30gp fare unless a caller had opened the bank (#709).
         const bankItems = knownBank && Object.keys(knownBank).length > 0 ? knownBank : gateItemCandidates();
@@ -513,21 +513,11 @@ class WalkExecutorImpl {
             return false;
         }
 
+        const directMissing = missingItemsForPath(directPath.waypoints, state);
+        if (directMissing.length === 0 && pathHasTeleport(directPath.waypoints)) {
+            return false;
+        }
         const virtual = virtualizeWithItems(state, bankItems);
-        const pathVirtual = await this.requestPath(from, dest, maxExpansions, virtual);
-        if (!pathVirtual.ok) {
-            return false;
-        }
-
-        const missing = missingItemsForPath(pathVirtual.waypoints, state);
-        if (missing.length === 0) {
-            return false;
-        }
-
-        if (!pathHasTeleport(pathVirtual.waypoints) && missing.every(m => !/rune|coins/i.test(m.name))) {
-            // Why: empty on purpose; toll coins and other specials already reach `missing` via bankPlan.
-        }
-
         const bank = nearestBank(from);
         if (!bank) {
             return false;
@@ -535,7 +525,7 @@ class WalkExecutorImpl {
         const stand: WorldTile = { x: bank.tile.x, z: bank.tile.z, level: bank.tile.level };
 
         const toBank = await this.requestPath(from, stand, maxExpansions);
-        if (!toBank.ok) {
+        if (!toBank.ok || missingItemsForPath(toBank.waypoints, state).length > 0) {
             return false;
         }
         const bankToDest = await this.requestPath(stand, dest, maxExpansions, virtual);
@@ -544,11 +534,11 @@ class WalkExecutorImpl {
         }
 
         const plan = planBankLeg({
-            directCost: directPath.cost,
+            directCost: directMissing.length > 0 ? Infinity : directPath.cost,
             directHasTeleport: false,
             toBankCost: toBank.cost,
             bankToDestCost: bankToDest.cost,
-            missing
+            missing: missingItemsForPath(bankToDest.waypoints, state)
         });
         if (plan.action !== 'bank') {
             return false;
@@ -556,7 +546,7 @@ class WalkExecutorImpl {
 
         log(
             `bank plan: withdraw ${plan.missing.map(m => `${m.count}×${m.name}`).join(', ')} `
-                + `(est cost ${plan.estimatedCost} < direct ${directPath.cost})`
+                + `(est cost ${plan.estimatedCost}, direct ${directMissing.length > 0 ? 'underfunded' : directPath.cost})`
         );
 
         this.bankLegDone = true; // prevent recursion while walking to bank
@@ -571,8 +561,8 @@ class WalkExecutorImpl {
             return false;
         }
 
-        // Why: `MissingItem.count` is already the shortage (required minus held at plan time), so withdraw it as is (#336).
-        for (const item of plan.missing) {
+        const missing = missingItemsForPath(bankToDest.waypoints, snapshotWorldStateData());
+        for (const item of missing) {
             const take = item.count;
             if (take <= 0) {
                 continue;
@@ -615,6 +605,9 @@ class WalkExecutorImpl {
                     log(`bank plan: no path to bank: ${path.reason}`);
                     return false;
                 }
+                if (!this.checkRouteItems(path.waypoints, log)) {
+                    return false;
+                }
                 const tiles = expandWaypoints(path.waypoints);
                 this.publishPath(tiles, 0, -1);
                 const result = await this.followPath(tiles, stand, radius, deadline, m => log(`  ${m}`), settleBudget);
@@ -629,6 +622,17 @@ class WalkExecutorImpl {
         } finally {
             this.bankLegDone = saved;
         }
+    }
+
+    private checkRouteItems(waypoints: Waypoint[], log: (msg: string) => void): boolean {
+        const missing = missingItemsForPath(waypoints, snapshotWorldStateData());
+        if (missing.length === 0) {
+            return true;
+        }
+        this.lastMissingGateItems = missing;
+        this.lastOutcome = 'unreachable';
+        log(`route needs ${missing.map(m => `${m.count}×${m.name}`).join(', ')} before departure`);
+        return false;
     }
 
     private readBankItemCounts(): Record<string, number> | null {

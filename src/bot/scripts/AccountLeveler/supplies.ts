@@ -9,7 +9,18 @@ import { unitPrice } from '../../api/shop/StockModel.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import Tile from '../../geometry/Tile.js';
 import { purchaseBudget, supplyOffer } from './offers.js';
-import { requirementKey, type ActivityPlan } from './types.js';
+import { SHOPPING_RESERVE, shoppingStops } from './shopping.js';
+import { requirementKey, type ActivityPlan, type Requirement } from './types.js';
+
+export class SupplyUnavailableError extends Error {
+    readonly items: string[];
+
+    constructor(message: string, items: readonly string[]) {
+        super(message);
+        this.name = 'SupplyUnavailableError';
+        this.items = [...new Set(items.map(item => item.toLowerCase()))];
+    }
+}
 
 export interface CountedItem { name: string | null; id: number; count: number; noted?: boolean }
 
@@ -79,62 +90,106 @@ export function gameSupplyPort(log: (message: string) => void): SupplyPort {
     };
 }
 
+export interface ProvisionProgress {
+    id: string;
+    message: string;
+    destination?: WorldTile;
+    state: 'running' | 'done';
+}
+
 async function bank(port: SupplyPort): Promise<void> {
     if (!(await port.bank())) throw new Error('Could not open a loaded bank');
 }
 
-export async function provision(plan: ActivityPlan, port: SupplyPort): Promise<void> {
+export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress?: (progress: ProvisionProgress) => void): Promise<void> {
+    const report = (id: string, message: string, destination?: WorldTile, state: ProvisionProgress['state'] = 'running') => {
+        port.log(message);
+        onProgress?.({ id, message, destination, state });
+    };
+    report('bank:start', 'Opening bank to prepare supplies');
     await bank(port);
+    report('bank:start', 'Depositing inventory before checking supplies');
     await port.deposit();
     if (!(await port.closeBank())) throw new Error('Could not close bank to remove equipment');
     for (const name of port.equipment()) {
+        report('bank:start', `Removing ${name} before banking equipment`);
         if (!(await port.unequip(name))) throw new Error(`Could not remove ${name}`);
     }
+    report('bank:start', 'Banking equipment and checking the shopping list');
     await bank(port);
     await port.deposit();
+    report('bank:start', 'Bank inventory checked', undefined, 'done');
     for (const need of plan.needs) {
         const key = requirementKey(need);
+        if ((port.stock()[key.toLowerCase()] ?? 0) < need.count && !supplyOffer(need.item)) throw new Error(`Need ${need.count} ${need.item} in bank before ${plan.label}`);
+    }
+    for (const stop of shoppingStops(plan.needs, port.stock())) {
+        const id = `shop:${stop.keeper}`;
+        const missing = (need: Requirement) => Math.max(0, need.count - (port.stock()[requirementKey(need).toLowerCase()] ?? 0));
         let attempts = 0;
-        while ((port.stock()[key.toLowerCase()] ?? 0) < need.count) {
-            if (++attempts > 12) throw new Error(`Supply batch exceeded for ${need.item}`);
-            const offer = supplyOffer(need.item);
-            if (!offer) throw new Error(`Need ${need.count} ${need.item} in bank before ${plan.label}`);
-            const missing = need.count - (port.stock()[key.toLowerCase()] ?? 0);
+        while (stop.needs.some(need => missing(need) > 0)) {
+            if (++attempts > 12) throw new Error(`Supply batch exceeded at ${stop.keeper}`);
             const travelFood = plan.food && (port.stock()[plan.food.toLowerCase()] ?? 0) >= 3 ? plan.food : null;
-            const count = Math.min(missing, offer.item.stackable ? 1000 : travelFood ? 24 : 27);
-            const budget = purchaseBudget(offer, count);
-            if ((port.stock().coins ?? 0) < budget) throw new Error(`Not enough Coins to buy ${need.item} (budget ${budget})`);
+            let slots = travelFood ? 24 : 27;
+            const batch = stop.needs.flatMap(need => {
+                const offer = supplyOffer(need.item)!;
+                const count = Math.min(missing(need), slots > 0 ? offer.item.stackable ? 1000 : slots : 0);
+                if (!count) return [];
+                slots -= offer.item.stackable ? 1 : count;
+                return [{ need, offer, count }];
+            });
+            const budget = batch.reduce((sum, entry) => sum + purchaseBudget(entry.offer, entry.count), 0);
+            const coins = budget + SHOPPING_RESERVE;
+            if ((port.stock().coins ?? 0) < coins) throw new Error(`Not enough Coins for ${stop.keeper} (budget ${budget}, travel reserve ${SHOPPING_RESERVE})`);
+            report(id, `Withdrawing ${coins} Coins for ${stop.keeper}: ${batch.map(entry => `${entry.count} ${entry.need.item}`).join(', ')}`);
             if (travelFood && !(await port.withdraw(travelFood, 3))) throw new Error('Could not withdraw food for shopping');
-            if (!(await port.withdraw('Coins', budget)) || port.held('Coins') < budget) throw new Error('Coin withdrawal did not land');
+            if (!(await port.withdraw('Coins', coins)) || port.held('Coins') < coins) throw new Error('Coin withdrawal did not land');
             if (!(await port.closeBank())) throw new Error('Bank did not close before shopping');
-            if (!(await port.walk(offer.tile))) throw new Error(`Cannot reach ${offer.keeper}`);
-            if (!(await port.shop(offer.keeper))) throw new Error(`Cannot trade ${offer.keeper}`);
+            report(id, `Travelling to ${stop.keeper} for ${batch.map(entry => `${entry.count} ${entry.need.item}`).join(', ')}`, stop.tile);
+            if (!(await port.walk(stop.tile))) throw new SupplyUnavailableError(`Cannot reach ${stop.keeper}`, stop.needs.map(need => need.item));
+            const reserve = Math.max(0, SHOPPING_RESERVE - Math.max(0, coins - port.held('Coins')));
+            let availableBudget = Math.min(budget, port.held('Coins') - reserve);
+            report(id, `Opening ${stop.keeper}'s shop`, stop.tile);
+            if (!(await port.shop(stop.keeper))) throw new SupplyUnavailableError(`Cannot trade ${stop.keeper}`, stop.needs.map(need => need.item));
             try {
-                const available = port.shopStock(key);
-                if (available <= 0) throw new Error(`${offer.keeper} has no stock of ${need.item}`);
-                const amount = Math.min(count, available);
-                let cost = 0;
-                for (let i = 0; i < amount; i++) cost += unitPrice(offer.item, offer.shop, available - i);
-                if (cost > port.held('Coins')) throw new Error(`Cannot afford ${amount} ${need.item} at current shop stock`);
-                port.log(`buying ${amount} ${need.item} from ${offer.keeper}`);
-                const before = port.held(key);
-                await port.buy(key, amount);
-                if (port.held(key) <= before) throw new Error(`Purchase of ${need.item} did not arrive`);
+                for (const { need, offer, count } of batch) {
+                    const key = requirementKey(need);
+                    const available = port.shopStock(key);
+                    if (available <= 0) throw new SupplyUnavailableError(`${stop.keeper} has no stock of ${need.item}`, [need.item]);
+                    const amount = Math.min(count, available);
+                    let cost = 0;
+                    for (let i = 0; i < amount; i++) cost += unitPrice(offer.item, offer.shop, available - i);
+                    if (cost > availableBudget || cost > port.held('Coins') - reserve) throw new Error(`Cannot afford ${amount} ${need.item} at current shop stock`);
+                    report(id, `Buying ${amount} ${need.item} from ${stop.keeper} (${need.count - missing(need)}/${need.count} banked)`, stop.tile);
+                    const before = port.held(key);
+                    const beforeCoins = port.held('Coins');
+                    await port.buy(key, amount);
+                    if (port.held(key) <= before) throw new SupplyUnavailableError(`Purchase of ${need.item} did not arrive`, [need.item]);
+                    availableBudget -= Math.max(0, beforeCoins - port.held('Coins'));
+                }
             } finally {
                 await port.closeShop();
             }
+            report(id, `Banking purchases from ${stop.keeper}`);
             await bank(port);
             await port.deposit();
         }
+        report(id, `${stop.keeper} supplies banked: ${stop.needs.map(need => `${need.count} ${need.item}`).join(', ')}`, undefined, 'done');
     }
+    report('loadout', `Packing supplies for ${plan.label}`);
     for (const need of plan.needs) {
         const count = need.carry ?? 0;
         const key = requirementKey(need);
+        if (count > 0) report('loadout', `Withdrawing ${count} ${need.item} for ${plan.label}`);
         if (count > 0 && (!(await port.withdraw(key, count)) || port.held(key) < count)) throw new Error(`Could not withdraw ${count} usable ${need.item}`);
     }
     if (!(await port.closeBank())) throw new Error('Bank did not close after provisioning');
+    report('loadout', `Supplies packed for ${plan.label}`, undefined, 'done');
+    report('equip', `Preparing equipment for ${plan.label}`);
     for (const need of plan.needs.filter(n => n.equip)) {
         const key = requirementKey(need);
+        report('equip', `Equipping ${need.item}`);
         if (!(await port.equip(key)) || port.worn(key) < (need.carry ?? 1)) throw new Error(`Failed to equip ${need.item}`);
     }
+    report('equip', 'Equipment ready', undefined, 'done');
 }

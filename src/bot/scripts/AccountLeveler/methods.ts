@@ -1,5 +1,7 @@
 import Tile from '../../geometry/Tile.js';
-import { combatPlan, foodFor, scimitarFor } from './combat.js';
+import { combatPlan, foodFor } from './combat.js';
+import { gatheringTool, meleeEquipment } from './equipment.js';
+import { FISH, FLETCHING, WOODS, POTIONS, canSourceWood, canCatch, nextMilestone, smithProduct } from './catalog.js';
 import { stockOf, type ActivityPlan, type LevelerSnapshot, type Requirement, type SessionMemory } from './types.js';
 
 const banked = (item: string, count = 28): Requirement => ({ item, count });
@@ -12,11 +14,7 @@ function activity(objective: string, id: string, script: string, settings: Recor
 
 export function questPlan(s: LevelerSnapshot, objective: string, id: string, name: string): ActivityPlan {
     const food = foodFor(s);
-    const kit: Requirement[] = id === 'druid' ? [
-        { item: scimitarFor(s.levels.attack), count: 1, carry: 1, equip: true },
-        { item: 'Iron chainbody', count: 1, carry: 1, equip: true },
-        { item: 'Iron platelegs', count: 1, carry: 1, equip: true }
-    ] : [];
+    const kit = id === 'druid' ? meleeEquipment(s) : [];
     return { ...activity(objective, `quest-${id}`, 'AIOQuester', { quests: [id], food, loadout: '' }, [{ item: food, count: 24, carry: 12 }, banked('Coins', 2000), ...kit]), quest: name, food };
 }
 
@@ -27,7 +25,7 @@ function prerequisiteCombat(s: LevelerSnapshot, objective: string, memory: Sessi
     return plan ? { ...plan, objective, prerequisiteLevels: { [skill]: levels[skill] } } : null;
 }
 
-export function methodFor(s: LevelerSnapshot, objective: string, memory: SessionMemory, random: () => number): ActivityPlan | null {
+function selectMethod(s: LevelerSnapshot, objective: string, memory: SessionMemory, random: () => number): ActivityPlan | null {
     switch (objective) {
         case 'attack': case 'strength': case 'defence': case 'hitpoints': case 'ranged': case 'magic': case 'prayer':
             return combatPlan(s, objective, memory, random);
@@ -36,25 +34,32 @@ export function methodFor(s: LevelerSnapshot, objective: string, memory: Session
         case 'cooking':
             return cookPlan(s, objective);
         case 'woodcutting':
-            return logsPlan(objective);
-        case 'firemaking':
-            return activity(objective, 'burn-logs', 'Firemaker', { logType: 'Logs', location: 'Varrock East' }, [tool('Tinderbox'), banked('Logs')]);
-        case 'fletching':
-            return activity(objective, 'fletch-logs', 'BankFletcher', { mode: 'cut', material: 'Logs', product: s.levels.fletching >= 5 ? 'Short bow' : 'Arrow shafts' }, [tool('Knife'), banked('Logs')]);
+            return logsPlan(s, objective);
+        case 'firemaking': {
+            const wood = [...WOODS].reverse().find(w => s.levels.firemaking >= w.level && canSourceWood(s, w.item))!;
+            return activity(objective, `burn-${wood.item.toLowerCase().replaceAll(' ', '-')}`, 'Firemaker', { logType: wood.item, location: 'Varrock East' }, [tool('Tinderbox'), banked(wood.item)]);
+        }
+        case 'fletching': {
+            const recipe = [...FLETCHING].reverse().find(r => s.levels.fletching >= r.level && canSourceWood(s, r.item))!;
+            return activity(objective, `fletch-${recipe.item.toLowerCase().replaceAll(' ', '-')}`, 'BankFletcher', { mode: 'cut', material: recipe.item, product: recipe.product }, [tool('Knife'), banked(recipe.item)]);
+        }
         case 'mining':
-            return orePlan(objective, stockOf(s, 'Copper ore') <= stockOf(s, 'Tin ore') ? 'Copper' : 'Tin');
-        case 'smithing':
-            return stockOf(s, 'Bronze bar') >= 14
-                ? activity(objective, 'smith-bronze', 'SmithingBot', { bar: 'Bronze', product: 'Dagger' }, [tool('Hammer'), banked('Bronze bar', 14)])
-                : smeltPlan(objective);
+            return orePlan(s, objective, s.levels.mining >= 30 ? 'Iron' : stockOf(s, 'Copper ore') <= stockOf(s, 'Tin ore') ? 'Copper' : 'Tin');
+        case 'smithing': {
+            const metal = s.levels.smithing >= 15 && (s.levels.mining >= 30 || stockOf(s, 'Iron ore') >= 28 || stockOf(s, 'Iron bar') >= 14) ? 'Iron' : 'Bronze';
+            return stockOf(s, `${metal} bar`) >= 14
+                ? activity(objective, `smith-${metal.toLowerCase()}`, 'SmithingBot', { bar: metal, product: smithProduct(s.levels.smithing, metal) }, [tool('Hammer'), banked(`${metal} bar`, 14)])
+                : smeltPlan(objective, metal);
+        }
         case 'crafting':
-            if (s.levels.crafting < 10) return { ...activity(objective, 'craft-soft-leather', 'LeatherCrafter', { leatherType: 'Leather', threadPerTrip: 100 }, [tool('Needle'), { item: 'Thread', count: 100, carry: 100 }, banked('Leather', 26)]), prerequisiteLevels: { crafting: Math.min(10, s.target) } };
+            if (s.levels.crafting < 10 || stockOf(s, 'Leather') >= 26) return { ...activity(objective, 'craft-soft-leather', 'LeatherCrafter', { leatherType: 'Leather', threadPerTrip: 100 }, [tool('Needle'), { item: 'Thread', count: 100, carry: 100 }, banked('Leather', 26)]), ...(s.levels.crafting < 10 ? { prerequisiteLevels: { crafting: Math.min(10, s.target) } } : {}) };
             return withFood(s, activity(objective, 'pick-and-spin-flax', 'FlaxAIO', { picking: true, spinning: true }));
         case 'agility':
             return withFood(s, activity(objective, 'gnome-course', 'GnomeCourse', {}));
         case 'thieving': {
             const food = foodFor(s);
-            return { ...activity(objective, 'pickpocket-men', 'Thiever', { target: 'Man', action: 'Pickpocket', banking: 'Auto', food, foodWithdraw: 12, suicide: false, loadout: '' }, [{ item: food, count: 24, carry: 12 }]), travel: new Tile(3221, 3219, 0), food };
+            const farmer = s.levels.thieving >= 10;
+            return { ...activity(objective, farmer ? 'pickpocket-farmers' : 'pickpocket-men', 'Thiever', { target: farmer ? 'Farmer' : 'Man', action: 'Pickpocket', banking: 'Auto', food, foodWithdraw: 12, suicide: false, loadout: '' }, [{ item: food, count: 24, carry: 12 }]), travel: farmer ? new Tile(2645, 3367, 0) : new Tile(3221, 3219, 0), food };
         }
         case 'herblore':
             if (!s.quests['Druidic Ritual']) {
@@ -62,7 +67,10 @@ export function methodFor(s: LevelerSnapshot, objective: string, memory: Session
                 if (Object.entries(levels).some(([skill, level]) => s.levels[skill] < level)) return prerequisiteCombat(s, objective, memory, random, levels);
                 return questPlan(s, objective, 'druid', 'Druidic Ritual');
             }
-            return activity(objective, 'make-attack-potions', 'PotionMaker', { herb: 'Guam leaf', secondary: 'Eye of newt' }, [banked('Guam leaf', 14), banked('Vial of water', 14), banked('Eye of newt', 14)]);
+            {
+                const recipe = [...POTIONS].reverse().find(p => s.levels.herblore >= p.level && stockOf(s, p.herb) >= 14 && stockOf(s, p.secondary) >= 14) ?? POTIONS[0];
+                return activity(objective, `make-${recipe.herb.toLowerCase().replaceAll(' ', '-')}-potions`, 'PotionMaker', { herb: recipe.herb, secondary: recipe.secondary }, [banked(recipe.herb, 14), banked('Vial of water', 14), banked(recipe.secondary, 14)]);
+            }
         case 'runecraft':
             if (!s.quests['Rune Mysteries Quest']) return questPlan(s, objective, 'runemysteries', 'Rune Mysteries Quest');
             return activity(objective, 'craft-air-runes', 'RuneCrafter', { rune: 'Air runes', mode: 'Solo' }, [tool('Air talisman'), banked('Rune essence', 27)]);
@@ -76,39 +84,63 @@ function withFood(s: LevelerSnapshot, plan: ActivityPlan): ActivityPlan {
     return { ...plan, food, needs: [...plan.needs, { item: food, count: 24, carry: 12 }] };
 }
 
-function fishPlan(s: LevelerSnapshot, objective: string, raw?: string): ActivityPlan {
-    const fly = raw === 'Raw trout' || (!raw && s.levels.fishing >= 20);
-    return activity(objective, fly ? 'fish-trout' : 'fish-shrimps', 'Fisher', {
-        ...gatherSettings, fishMethod: fly ? 'Fly fishing — trout/salmon' : 'Small net — shrimp/anchovy',
-        location: fly ? 'Barbarian Village' : 'Draynor Village', cookMode: 'Off', baitQty: 200
-    }, fly ? [tool('Fly fishing rod'), { item: 'Feather', count: 200, carry: 200 }] : [tool('Small fishing net')]);
+export function methodFor(s: LevelerSnapshot, objective: string, memory: SessionMemory, random: () => number): ActivityPlan | null {
+    const plan = selectMethod(s, objective, memory, random);
+    const next = nextMilestone(s, objective);
+    return plan && next && !plan.quest && !plan.prerequisiteLevels ? { ...plan, prerequisiteLevels: { [objective]: next } } : plan;
 }
 
-function cookPlan(s: LevelerSnapshot, objective: string, food = s.levels.cooking >= 15 && s.levels.fishing >= 20 ? 'Trout' : 'Shrimps'): ActivityPlan {
+function fishPlan(s: LevelerSnapshot, objective: string, raw?: string): ActivityPlan {
+    const flyReady = canCatch(s, FISH[1]);
+    const recipe = raw ? FISH.find(f => `raw ${f.food.toLowerCase()}` === raw.toLowerCase())!
+        : FISH[s.levels.fishing >= 20 && (s.levels.fishing >= 40 || flyReady) ? 1 : 0];
+    const fly = recipe.tool === 'Fly fishing rod';
+    return activity(objective, `fish-${recipe.food.toLowerCase()}`, 'Fisher', {
+        ...gatherSettings, fishMethod: recipe.method, location: recipe.location, cookMode: 'Off', baitQty: 200
+    }, [tool(recipe.tool), ...(fly ? [{ item: 'Feather', count: 200, carry: 200 }] : [])]);
+}
+
+function cookPlan(s: LevelerSnapshot, objective: string, requested?: string): ActivityPlan {
+    const available = [...FISH].reverse().filter(f => s.levels.cooking >= f.cooking);
+    const food = requested ?? (available.find(f => stockOf(s, `Raw ${f.food.toLowerCase()}`) >= 28)
+        ?? available.find(f => canCatch(s, f)) ?? FISH[0])!.food;
     return activity(objective, `cook-${food.toLowerCase()}`, 'CookBot', { fish: `Raw ${food.toLowerCase()}`, location: 'Draynor', surface: 'Range' }, [banked(`Raw ${food.toLowerCase()}`)]);
 }
 
-function logsPlan(objective: string): ActivityPlan {
-    return activity(objective, 'gather-logs', 'Woodcutter', { ...gatherSettings, treeName: 'Tree', location: 'Draynor (trees)', burnMode: 'Off' }, [tool('Bronze axe')]);
+function logsPlan(s: LevelerSnapshot, objective: string, requested?: string): ActivityPlan {
+    const wood = requested ? WOODS.find(w => w.item.toLowerCase() === requested.toLowerCase())!
+        : [...WOODS].reverse().find(w => s.levels.woodcutting >= w.level)!;
+    return activity(objective, `gather-${wood.item.toLowerCase().replaceAll(' ', '-')}`, 'Woodcutter', {
+        ...gatherSettings, treeName: wood.tree, location: wood.location, burnMode: 'Off'
+    }, [gatheringTool(s, 'axe')]);
 }
 
-function orePlan(objective: string, ore: string): ActivityPlan {
-    return activity(objective, `mine-${ore.toLowerCase()}`, 'Miner', { ...gatherSettings, rocks: [ore], location: 'Southeast Varrock Mine' }, [tool('Bronze pickaxe')]);
+function orePlan(s: LevelerSnapshot, objective: string, ore: string): ActivityPlan {
+    return activity(objective, `mine-${ore.toLowerCase()}`, 'Miner', { ...gatherSettings, rocks: [ore], location: 'Southeast Varrock Mine' }, [gatheringTool(s, 'pickaxe')]);
 }
 
-function smeltPlan(objective: string): ActivityPlan {
-    return activity(objective, 'smelt-bronze', 'SmelterBot', { bar: 'Bronze' }, [banked('Copper ore', 14), banked('Tin ore', 14)]);
+function smeltPlan(objective: string, metal = 'Bronze'): ActivityPlan {
+    return activity(objective, `smelt-${metal.toLowerCase()}`, 'SmelterBot', { bar: metal }, metal === 'Iron' ? [banked('Iron ore')] : [banked('Copper ore', 14), banked('Tin ore', 14)]);
 }
 
 export function producer(s: LevelerSnapshot, objective: string, need: Requirement, memory: SessionMemory, random: () => number): ActivityPlan | null {
     let plan: ActivityPlan | null;
     switch (need.item.toLowerCase()) {
-        case 'shrimps': case 'trout': plan = cookPlan(s, objective, need.item); break;
-        case 'raw shrimps': plan = fishPlan(s, objective, need.item); break;
-        case 'raw trout': plan = s.levels.fishing >= 20 ? fishPlan(s, objective, need.item) : null; break;
-        case 'logs': plan = logsPlan(objective); break;
-        case 'copper ore': plan = orePlan(objective, 'Copper'); break;
-        case 'tin ore': plan = orePlan(objective, 'Tin'); break;
+        case 'shrimps': case 'trout': case 'salmon': case 'lobster':
+            plan = s.levels.cooking >= FISH.find(f => f.food.toLowerCase() === need.item.toLowerCase())!.cooking ? cookPlan(s, objective, need.item) : null;
+            break;
+        case 'raw shrimps': case 'raw trout': case 'raw salmon': case 'raw lobster': {
+            const fish = FISH.find(f => `raw ${f.food.toLowerCase()}` === need.item.toLowerCase())!;
+            plan = s.levels.fishing >= fish.level ? fishPlan(s, objective, need.item) : null;
+            break;
+        }
+        case 'logs': case 'oak logs': case 'willow logs':
+            plan = s.levels.woodcutting >= WOODS.find(w => w.item.toLowerCase() === need.item.toLowerCase())!.level ? logsPlan(s, objective, need.item) : null;
+            break;
+        case 'copper ore': plan = orePlan(s, objective, 'Copper'); break;
+        case 'tin ore': plan = orePlan(s, objective, 'Tin'); break;
+        case 'iron ore': plan = s.levels.mining >= 30 ? orePlan(s, objective, 'Iron') : null; break;
+        case 'iron bar': plan = s.levels.smithing >= 15 ? smeltPlan(objective, 'Iron') : null; break;
         case 'bronze bar': plan = smeltPlan(objective); break;
         case 'leather':
             plan = activity(objective, 'tan-cow-hides', 'TannerBot', { hideType: 'Soft leather', buyThread: false, coinsPerTrip: 100 }, [banked('Cow hide', 26), { item: 'Coins', count: 100, carry: 100 }]);
@@ -125,7 +157,7 @@ export function producer(s: LevelerSnapshot, objective: string, need: Requiremen
             break;
         case '#199': case 'air talisman': plan = combatPlan(s, objective, memory, random, need.item); break;
         case 'rune essence':
-            plan = activity(objective, 'mine-essence', 'EssMiner', {}, [tool('Bronze pickaxe')]);
+            plan = activity(objective, 'mine-essence', 'EssMiner', {}, [gatheringTool(s, 'pickaxe')]);
             break;
         default: return null;
     }

@@ -866,7 +866,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'AccountLeveler',
-    description: 'Trains every enabled members skill to 40, chooses varied combat camps, buys supplies with banked coins, runs required quests, and recovers from death. Wilderness training is optional and enabled by default.',
+    description: 'Trains melee first, then remaining combat skills, then other enabled members skills to 40. Chooses varied combat camps, buys supplies with banked coins, runs required quests, and recovers from death. Wilderness training is optional and enabled by default.',
     category: 'General',
     tags: ['training', 'combat', 'skilling', 'quests', 'banking', 'death-recovery'],
     settingsSchema: ACCOUNT_LEVELER_SETTINGS,

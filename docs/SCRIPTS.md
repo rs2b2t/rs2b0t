@@ -751,13 +751,15 @@ Spam-attaches feathers to stackable dart tips at the five-action-per-tick server
 
 ### AccountLeveler
 
-Trains every enabled members skill to 40, chooses varied combat camps, buys supplies with banked coins, runs required quests, and recovers from death. Wilderness training is optional and enabled by default.
+Trains melee first, then remaining combat skills, then other enabled members skills to 40. Chooses varied combat camps, buys supplies with banked coins, runs required quests, and recovers from death. Wilderness training is optional and enabled by default.
 
 - Tags: `training`, `combat`, `skilling`, `quests`, `banking`, `death-recovery`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `targetLevel` | number (2–40) | `40` | Target level |
+| `marketAxes` | boolean | `true` | Try Seers market axes |
+| `marketAxeBudget` | number (0–1000000) | `50000` | Market axe price limit |
 | `wilderness` | boolean | `true` | Allow Wilderness training |
 
 ## Herblore

@@ -120,6 +120,7 @@ export abstract class LoopingBot extends AbstractBot {
  * @see docs/reference/api-bots.md#taskbot
  */
 export interface Task {
+    readonly label?: string;
     validate(): boolean | Promise<boolean>;
     execute(): void | Promise<void>;
 }
@@ -129,6 +130,7 @@ export interface Task {
  * @see docs/reference/api-bots.md#taskbot
  */
 export abstract class TaskBot extends LoopingBot {
+    activeTaskName: string | null = null;
     private readonly tasks: Task[] = [];
     private lastSceneWaitLogAt = 0;
 
@@ -148,10 +150,13 @@ export abstract class TaskBot extends LoopingBot {
         }
         for (const task of this.tasks) {
             if (await task.validate()) {
+                this.activeTaskName = task.label ?? null;
                 await task.execute();
+                this.activeTaskName = null;
                 return;
             }
         }
+        this.activeTaskName = null;
     }
 }
 

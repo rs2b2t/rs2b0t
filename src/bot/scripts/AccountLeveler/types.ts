@@ -8,6 +8,7 @@ export interface LevelerSnapshot {
     target: number;
     wilderness: boolean;
     now: number;
+    unavailableItems?: readonly string[];
 }
 
 export interface Requirement {
@@ -42,7 +43,7 @@ export interface SessionMemory {
     deaths: number;
 }
 
-export type Decision = { kind: 'activity'; plan: ActivityPlan } | { kind: 'complete' } | { kind: 'refresh' } | { kind: 'blocked'; reason: string };
+export type Decision = { kind: 'activity'; plan: ActivityPlan; queue: ActivityPlan[] } | { kind: 'complete' } | { kind: 'refresh' } | { kind: 'blocked'; reason: string };
 
 export function stockOf(snapshot: LevelerSnapshot, item: string): number {
     return snapshot.stock[item.toLowerCase()] ?? 0;

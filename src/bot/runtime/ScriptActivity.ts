@@ -1,4 +1,4 @@
-import { LoopingBot, resolveLoopCadence } from '../api/bot/Bot.js';
+import { LoopingBot, TaskBot, resolveLoopCadence } from '../api/bot/Bot.js';
 import { EventSignal } from '../api/execution/EventSignal.js';
 import { Sustain } from '../api/sustain/Sustain.js';
 import { BotHost } from './BotHost.js';
@@ -22,6 +22,8 @@ export class ScriptActivity {
     private interrupted = false;
 
     constructor(private readonly log: (message: string) => void) {}
+
+    get currentTask(): string | null { return this.child instanceof TaskBot ? this.child.activeTaskName : null; }
 
     async start(meta: ScriptMeta, overrides: Record<string, unknown>): Promise<void> {
         if (this.child || this.inFlight) throw new Error('An activity is already running');

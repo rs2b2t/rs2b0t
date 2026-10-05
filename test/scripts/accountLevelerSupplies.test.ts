@@ -1,8 +1,13 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { gunzipSync } from 'fflate';
 import { expect, spyOn, test } from 'bun:test';
 import { reader, type InvItemSnapshot } from '#/bot/adapter/ClientAdapter.js';
 import { InvItem } from '#/bot/api/inventory/Inventory.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
 import { gameSupplyPort, provision, stockCounts, type SupplyPort } from '#/bot/scripts/AccountLeveler/supplies.js';
+import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
+import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
+import { emptyWorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 import type { ActivityPlan } from '#/bot/scripts/AccountLeveler/types.js';
 
 function fixture(coins = 10000) {
@@ -150,4 +155,156 @@ test('game adapter equips the strung bow even when an unstrung bow precedes it',
     } finally {
         for (const patch of patches) patch.mockRestore();
     }
+});
+
+test('shops for both armor pieces on one visit and marks the vendor done after banking both', async () => {
+    const f = fixture();
+    const visits: string[] = [];
+    const progress: string[] = [];
+    f.port.shop = async keeper => { visits.push(keeper); return true; };
+    const armor: ActivityPlan = { ...plan, needs: [{ item: 'Iron chainbody', count: 1 }, { item: 'Iron platelegs', count: 1 }] };
+    await provision(armor, f.port, update => {
+        progress.push(`${update.id}:${update.state}`);
+        if (update.id === 'shop:Horvik' && update.state === 'done') {
+            expect(f.bank['Iron chainbody']).toBe(1);
+            expect(f.bank['Iron platelegs']).toBe(1);
+        }
+    });
+    expect(visits).toEqual(['Horvik']);
+    expect(progress).toContain('shop:Horvik:done');
+    expect(f.bank.Coins).toBe(10000 - f.spent());
+});
+
+test('shopping withdraws fare money in addition to the full item budget', async () => {
+    const f = fixture();
+    f.setPrice(1);
+    let departing = 0;
+    f.port.walk = async () => { departing = f.pack.Coins; f.pack.Coins -= 60; return true; };
+    await provision({ ...plan, needs: [{ item: 'Hammer', count: 1 }] }, f.port);
+    expect(departing).toBe(207);
+    expect(f.bank.Hammer).toBe(1);
+    expect(f.bank.Coins).toBe(9939);
+});
+
+test('shopping refuses to use the last travel coins for an item', async () => {
+    const f = fixture(700);
+    await expect(provision(plan, f.port)).rejects.toThrow('Coins');
+    expect(f.purchases()).toBe(0);
+    expect(f.bank.Coins).toBe(700);
+});
+
+test('batches unstackable supplies without filling more than 28 inventory slots', async () => {
+    const f = fixture();
+    let visits = 0;
+    let largestPack = 0;
+    f.setPrice(2);
+    f.port.shopStock = () => 500;
+    f.port.shop = async () => { visits++; return true; };
+    const buy = f.port.buy;
+    f.port.buy = async (name, count) => {
+        const bought = await buy(name, count);
+        const used = Object.entries(f.pack).reduce((slots, [item, quantity]) => slots + (item === 'Coins' ? Number(quantity > 0) : quantity), 0);
+        largestPack = Math.max(largestPack, used);
+        if (used > 28) throw new Error('Inventory full');
+        return bought;
+    };
+    await provision({ ...plan, food: undefined, needs: [{ item: 'Vial of water', count: 54 }] }, f.port);
+    expect(f.bank['Vial of water']).toBe(54);
+    expect(visits).toBe(2);
+    expect(largestPack).toBe(28);
+});
+
+test('progress identifies travel and purchase counts before the external action starts', async () => {
+    const f = fixture();
+    let message = '';
+    let destination: unknown;
+    f.port.walk = async tile => { expect(message).toContain('Zeke'); expect(destination).toEqual(tile); return true; };
+    const buy = f.port.buy;
+    f.port.buy = async (name, count) => { expect(message).toContain('1 Iron scimitar'); return buy(name, count); };
+    await provision(plan, f.port, update => { message = update.message; destination = update.destination; });
+});
+
+test('multiple unstackable needs share a vendor inventory limit including travel food', async () => {
+    const f = fixture();
+    let visits = 0;
+    let largestPack = 0;
+    f.setPrice(2);
+    f.port.shopStock = () => 500;
+    f.port.shop = async () => { visits++; return true; };
+    const buy = f.port.buy;
+    f.port.buy = async (name, count) => {
+        const bought = await buy(name, count);
+        const used = Object.entries(f.pack).reduce((slots, [item, quantity]) => slots + (item === 'Coins' ? Number(quantity > 0) : quantity), 0);
+        largestPack = Math.max(largestPack, used);
+        if (used > 28) throw new Error('Inventory full');
+        return bought;
+    };
+    await provision({ ...plan, needs: [{ item: 'Vial of water', count: 27 }, { item: 'Rope', count: 2 }] }, f.port);
+    expect(f.bank['Vial of water']).toBe(27);
+    expect(f.bank.Rope).toBe(2);
+    expect(visits).toBe(2);
+    expect(largestPack).toBe(28);
+    expect(f.bank.Shrimps).toBe(30);
+});
+
+test('partial purchases are banked and deficits retried before a vendor completes', async () => {
+    const f = fixture();
+    f.setPrice(2);
+    let visits = 0;
+    let done = 0;
+    f.port.shop = async () => { visits++; return true; };
+    const buy = f.port.buy;
+    f.port.buy = (name, count) => buy(name, Math.min(count, 1));
+    await provision({ ...plan, needs: [{ item: 'Small fishing net', count: 2 }, { item: 'Fly fishing rod', count: 2 }] }, f.port, event => {
+        if (event.id === 'shop:Gerrant' && event.state === 'done') {
+            done++;
+            expect(f.bank['Small fishing net']).toBe(2);
+            expect(f.bank['Fly fishing rod']).toBe(2);
+        }
+    });
+    expect(visits).toBe(2);
+    expect(done).toBe(1);
+});
+
+
+test('sold out gear reports only the unavailable item for replanning', async () => {
+    const f = fixture();
+    f.port.shopStock = name => name === 'Iron platelegs' ? 0 : 3;
+    const armor: ActivityPlan = { ...plan, needs: [{ item: 'Iron chainbody', count: 1 }, { item: 'Iron platelegs', count: 1 }] };
+    await expect(provision(armor, f.port)).rejects.toMatchObject({ name: 'SupplyUnavailableError', items: ['iron platelegs'] });
+    expect(f.purchases()).toBe(1);
+});
+
+test('a purchase with no usable inventory delta reports the unavailable tier', async () => {
+    const f = fixture();
+    f.port.buy = async () => 1;
+    await expect(provision(plan, f.port)).rejects.toMatchObject({ name: 'SupplyUnavailableError', items: ['iron scimitar'] });
+});
+
+test.each(['walk', 'shop'] as const)('an unavailable vendor during %s reports every item at that stop', async operation => {
+    const f = fixture();
+    f.port[operation] = async () => false;
+    const armor: ActivityPlan = { ...plan, needs: [{ item: 'Iron chainbody', count: 1 }, { item: 'Iron platelegs', count: 1 }] };
+    await expect(provision(armor, f.port)).rejects.toMatchObject({ name: 'SupplyUnavailableError', items: ['iron chainbody', 'iron platelegs'] });
+    expect(f.purchases()).toBe(0);
+});
+
+test.each(['bank', 'coins'] as const)('%s failure does not blacklist purchasable equipment', async failure => {
+    const f = fixture(failure === 'coins' ? 1 : 10000);
+    if (failure === 'bank') f.port.bank = async () => false;
+    await expect(provision(plan, f.port)).rejects.toMatchObject({ name: 'Error' });
+});
+
+test.skipIf(!existsSync('out/collision.lcnav.gz'))('the navigation graph reaches Nurmof through the surface trapdoor', () => {
+    const finder = new PathFinder(gunzipSync(readFileSync('out/collision.lcnav.gz')));
+    loadDefaultNavEdges(finder);
+    const route = finder.findPath({ x: 3019, z: 3449, level: 0 }, { x: 2997, z: 9844, level: 0 }, {
+        state: { ...emptyWorldStateData(), skills: { agility: 1 }, canSlashWeb: false }, useTeleportCatalog: false
+    });
+    expect(route.ok).toBe(true);
+    if (!route.ok) return;
+    expect(route.hops.find(hop => hop.locId === 1568)).toMatchObject({
+        kind: 'dungeon', action: 'Climb-down', to: { x: 3019, z: 9849, level: 0 }
+    });
+    expect(route.waypoints.at(-1)).toMatchObject({ x: 2997, z: 9844, level: 0 });
 });

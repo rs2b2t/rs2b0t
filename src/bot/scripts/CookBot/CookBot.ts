@@ -238,6 +238,7 @@ export default class CookBot extends TaskBot {
 }
 
 class CookDialog implements Task {
+    readonly label = 'Cook dialog';
     constructor(private bot: CookBot) {}
     validate(): boolean { return ChatDialog.isMakeMenu(); }
     async execute(): Promise<void> {
@@ -250,6 +251,7 @@ class CookDialog implements Task {
 }
 
 class BankTrip implements Task {
+    readonly label = 'Bank trip';
     constructor(private bot: CookBot) {}
     validate(): boolean { return needsBank(this.bot.state()); }
 
@@ -320,6 +322,7 @@ class BankTrip implements Task {
 }
 
 class LightTrip implements Task {
+    readonly label = 'Light trip';
     constructor(private bot: CookBot) {}
     validate(): boolean { return needsLight(this.bot.state()); }
 
@@ -368,6 +371,7 @@ class LightTrip implements Task {
 }
 
 class CookTrip implements Task {
+    readonly label = 'Cook trip';
     constructor(private bot: CookBot) {}
     validate(): boolean { return canCook(this.bot.state()) && !ChatDialog.isOpen(); }
 

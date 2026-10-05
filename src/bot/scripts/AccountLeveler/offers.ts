@@ -12,6 +12,7 @@ export interface SupplyOffer {
 const vendors: [string, string, number, number][] = [
     ['scimitarshop', 'Zeke', 3288, 3190],
     ['axeshop', 'Bob', 3231, 3203],
+    ['pickaxeshop', 'Nurmof', 2997, 9844],
     ['fishingshop', 'Gerrant', 3013, 3224],
     ['archeryshop', 'Lowe', 3231, 3421],
     ['runeshop', 'Aubury', 3253, 3401],

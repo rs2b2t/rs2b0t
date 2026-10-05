@@ -487,6 +487,7 @@ export default class AutoFighter extends TaskBot {
 }
 
 class EnableAutoRetaliate implements Task {
+    readonly label = 'Enable auto retaliate';
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
         return autoRetaliateShouldEnable(Game.autoRetaliateOn());
@@ -506,6 +507,7 @@ class EnableAutoRetaliate implements Task {
 }
 
 class LootDrops implements Task {
+    readonly label = 'Loot drops';
     constructor(private bot: AutoFighter) {}
     private find() {
         return GroundItems.query()
@@ -543,6 +545,7 @@ class LootDrops implements Task {
 }
 
 class EatFood implements Task {
+    readonly label = 'Eat food';
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
         // Why: the bank side shows Deposit ops rather than Eat, so eating with the bank open spins forever and blocks BankRun. Wait for the bank to close.
@@ -575,6 +578,7 @@ class EatFood implements Task {
 }
 
 class PanicRetreat implements Task {
+    readonly label = 'Panic retreat';
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
         return shouldPanic(Skills.hpFraction(), PANIC_AT, foodCount());
@@ -612,6 +616,7 @@ class PanicRetreat implements Task {
 }
 
 class BuryBones implements Task {
+    readonly label = 'Bury bones';
     constructor(private bot: AutoFighter) {}
 
     validate(): boolean {
@@ -647,6 +652,7 @@ class BuryBones implements Task {
 }
 
 class BankRun implements Task {
+    readonly label = 'Bank run';
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
         const outOfSupplies = fullyOutOfSupplies();
@@ -783,6 +789,7 @@ async function withdrawTo(name: string, target: number): Promise<number> {
 }
 
 class SetAttackStyle implements Task {
+    readonly label = 'Set attack style';
     private fails = 0;
     private retryAt = 0;
     private announced = false;
@@ -822,6 +829,7 @@ class SetAttackStyle implements Task {
 }
 
 class ArmAutocast implements Task {
+    readonly label = 'Arm autocast';
     private fails = 0;
     private retryAt = 0;
     constructor(private bot: AutoFighter) {}
@@ -849,6 +857,7 @@ class ArmAutocast implements Task {
 
 // Why: Fight.validate is false while already in combat, so a retaliation fight would never reach the inline arm.
 class ArmSpecial implements Task {
+    readonly label = 'Arm special';
     private fails = 0;
     private retryAt = 0;
     constructor(private bot: AutoFighter) {}
@@ -868,6 +877,7 @@ class ArmSpecial implements Task {
 }
 
 class ReequipGear implements Task {
+    readonly label = 'Reequip gear';
     private lastFailLogAt = 0;
     constructor(private bot: AutoFighter) {}
     private candidates(): string[] {
@@ -901,6 +911,7 @@ class ReequipGear implements Task {
 }
 
 class Fight implements Task {
+    readonly label = 'Fight';
     constructor(private bot: AutoFighter) {}
     private findTarget() {
         const q = Npcs.query()
@@ -992,6 +1003,7 @@ class Fight implements Task {
 }
 
 class ReturnToAnchor implements Task {
+    readonly label = 'Return to anchor';
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
         const here = Game.tile();

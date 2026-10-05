@@ -251,6 +251,7 @@ export default class ThievingBot extends TaskBot {
 }
 
 class EatFood implements Task {
+    readonly label = 'Eat food';
     constructor(private bot: ThievingBot) {}
     private food() {
         return Inventory.items().find(i => this.bot.isFood(i.name)) ?? null;
@@ -274,6 +275,7 @@ class EatFood implements Task {
 }
 
 class FoodBank implements Task {
+    readonly label = 'Food bank';
     constructor(private bot: ThievingBot) {}
 
     validate(): boolean {
@@ -337,6 +339,7 @@ class FoodBank implements Task {
 }
 
 class WaitForHealth implements Task {
+    readonly label = 'Wait for health';
     private announced = false;
 
     constructor(private bot: ThievingBot) {}
@@ -360,6 +363,7 @@ class WaitForHealth implements Task {
 }
 
 class DropJunk implements Task {
+    readonly label = 'Drop junk';
     constructor(private bot: ThievingBot) {}
     private junk() {
         const kw = this.bot.dropKeyword();
@@ -383,6 +387,7 @@ class DropJunk implements Task {
 }
 
 class Loot implements Task {
+    readonly label = 'Loot';
     constructor(private bot: ThievingBot) {}
 
     private find() {
@@ -424,6 +429,7 @@ class Loot implements Task {
 }
 
 class Steal implements Task {
+    readonly label = 'Steal';
     private unreachableStreak = 0;
 
     constructor(private bot: ThievingBot) {}
