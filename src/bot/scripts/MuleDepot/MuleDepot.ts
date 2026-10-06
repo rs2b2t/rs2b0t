@@ -67,13 +67,8 @@ import { TradeRequestTask, TradeScreenTask, giverFlavour, receiverFlavour } from
 
 const CSV_MODE_OPTIONS = ['list', 'csv'];
 
-/** The dump list a fresh install starts on, which is the two-herbs case the e2e runs. */
-/**
- * The dump list a fresh install starts on.
- *
- * Grouped as the operator pasted it. `herb` is lower case on purpose: the engine calls every
- * unidentified herb `Herb`, and name matching ignores case, so one entry drains all of them.
- */
+/** The dump list a fresh install starts on, grouped as the operator pasted it. Why: `herb` is lower
+ *  case on purpose, since the engine calls every unidentified herb `Herb` and matching ignores case. */
 const DEFAULT_ITEMS = [
     'Air rune', 'water rune', 'earth rune', 'fire rune', 'cosmic rune', 'law rune', 'mind rune',
     'body rune', 'nature rune', 'chaos rune', 'death rune', 'soul rune', 'blood rune',
