@@ -37,6 +37,8 @@
         "verify:kq": "bun e2e/jivekq-live.ts",
         "verify:thievingbot": "bun e2e/thievingbot-test.ts",
         "verify:coaltrucks": "bun e2e/coaltrucks-test.ts",
+        "verify:muledepot-dump": "bun e2e/muledepot-dump-test.ts",
+        "verify:muledepot-supply": "bun e2e/muledepot-supply-test.ts",
         "gen:basemap": "bun tools/map/build-basemap.ts",
         "verify:map-picker": "bun e2e/map-picker-basemap-live.ts",
         "verify:map-picker-e2e": "bun e2e/map-picker-walkto-e2e-live.ts",
