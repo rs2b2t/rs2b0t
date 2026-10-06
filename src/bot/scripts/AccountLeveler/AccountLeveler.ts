@@ -70,6 +70,7 @@ export default class AccountLeveler extends LoopingBot {
     private detail = '';
     private startedAt = Date.now();
     private lastSavedAt = 0;
+    private lastLoggedAt = Date.now();
     private status = 'starting';
     private phase: 'bank' | 'train' = 'bank';
     private readonly stock = new LevelerStock();
@@ -84,6 +85,7 @@ export default class AccountLeveler extends LoopingBot {
     private wilderness = true;
 
     override async onStart(): Promise<void> {
+        this.log('Waiting for the game scene before checking bank supplies');
         await Execution.delayUntil(() => Game.sceneReady(), 0);
         this.target = Math.max(2, Math.min(40, this.settings.num('targetLevel', 40)));
         this.wilderness = this.settings.bool('wilderness', true);
@@ -91,6 +93,10 @@ export default class AccountLeveler extends LoopingBot {
         this.stopObserving = BotHost.addFrameListener(() => {
             this.stock.observe(Bank.items(), Bank.ready());
             this.session.sampleWork(Date.now(), this.phase === 'train' && ScriptRunner.state === 'running' && !Bank.isOpen() && (Game.animating() || Game.inCombat()));
+            if (ScriptRunner.state === 'running' && Date.now() - this.lastLoggedAt >= 30000) {
+                const tile = Game.tile();
+                this.log(`Still ${this.status}${this.detail ? `; ${this.detail}` : ''}; position ${tile ? `(${tile.x},${tile.z},${tile.level})` : 'unknown'}`);
+            }
         });
         this.on('chat.message', message => {
             if (!/oh dear.*you are dead/i.test(message.text)) return;
@@ -100,6 +106,11 @@ export default class AccountLeveler extends LoopingBot {
             Scheduler.active?.abortWaiters();
         });
         this.log(`training ${enabledSkills.length} skills to ${this.target}; Wilderness ${this.wilderness ? 'enabled' : 'disabled'}`);
+    }
+
+    override log(message: string): void {
+        this.lastLoggedAt = Date.now();
+        super.log(message);
     }
 
     override async loop(): Promise<void> {

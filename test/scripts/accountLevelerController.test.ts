@@ -14,6 +14,54 @@ import { ScriptRegistry } from '#/bot/runtime/ScriptRegistry.js';
 import { ScriptAborted, ScriptContext } from '#/bot/runtime/ScriptContext.js';
 import { ScriptRunner } from '#/bot/runtime/ScriptRunner.js';
 
+test('a pending bank operation reports its action and position without claiming progress', async () => {
+    let now = 1000;
+    let frame: () => void = () => {};
+    let finish: (opened: boolean) => void = () => {};
+    const pending = new Promise<boolean>(resolve => { finish = resolve; });
+    const previous = ScriptRunner.ctx;
+    ScriptRunner.ctx = new ScriptContext();
+    const patches = [
+        spyOn(Date, 'now').mockImplementation(() => now),
+        spyOn(Execution, 'delayUntil').mockImplementation(async cond => cond()),
+        spyOn(Game, 'sceneReady').mockReturnValue(true),
+        spyOn(Game, 'myName').mockReturnValue(null),
+        spyOn(Game, 'tile').mockReturnValue({ x: 2595, z: 3419, level: 0 }),
+        spyOn(Bank, 'items').mockReturnValue([]),
+        spyOn(Bank, 'ready').mockReturnValue(false),
+        spyOn(BotHost, 'addFrameListener').mockImplementation(callback => { frame = callback; return () => {}; })
+    ];
+    const bot = new AccountLeveler();
+    const logs: string[] = [];
+    bot.bindLog(message => logs.push(message));
+    patches.push(spyOn(bot['supplies'], 'bank').mockImplementation(() => pending));
+    let loop: Promise<void> | undefined;
+    try {
+        await bot.onStart();
+        loop = bot.loop();
+        const before = logs.length;
+        now += 29000;
+        frame();
+        expect(logs.length).toBe(before);
+        const progress = ScriptRunner.ctx!.lastReportedProgressAt;
+        now += 1000;
+        frame();
+        expect(logs.length).toBe(before + 1);
+        expect(logs.at(-1)).toContain('nearest bank');
+        expect(logs.at(-1)).toContain('2595,3419,0');
+        expect(ScriptRunner.ctx!.lastReportedProgressAt).toBe(progress);
+        frame();
+        expect(logs.length).toBe(before + 1);
+    } finally {
+        finish(false);
+        await loop;
+        bot.onStop();
+        bot.disposeSubscriptions();
+        ScriptRunner.ctx = previous;
+        for (const patch of patches) patch.mockRestore();
+    }
+});
+
 test('reaching combat 15 finishes the current fight then banks for food without resuming the death walk', async () => {
     const bot = new AccountLeveler();
     let fighting = true;

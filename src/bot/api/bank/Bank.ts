@@ -1,7 +1,7 @@
 import type { InvItemSnapshot, ModalCloseObservation, WorldTile } from '../../adapter/ClientAdapter.js';
 import { reader, actions } from '../../adapter/ClientAdapter.js';
 import { Input } from '../../input/Input.js';
-import type { BankNpcAccess, BankObjectAccess } from './BankLocations.js';
+import { lockedBankAt, type BankNpcAccess, type BankObjectAccess } from './BankLocations.js';
 import { Execution } from '../execution/Execution.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import { Traversal } from '../walking/Traversal.js';
@@ -345,12 +345,17 @@ export const Bank = {
     },
 
     async openBooth(stand: WorldTile, boothName: string, op: string, log?: (msg: string) => void): Promise<boolean> {
+        const locked = lockedBankAt(stand);
+        if (locked) {
+            log?.(`bank: cannot use ${locked.name}; access requirements not met`);
+            return false;
+        }
         const pick = (acts: string[]): string | undefined =>
             acts.find(a => a.toLowerCase() === op.toLowerCase()) ?? acts.find(a => /^use/i.test(a)) ?? acts[0];
 
         for (let attempt = 0; attempt < 4 && !Bank.isOpen(); attempt++) {
-            const booth = Locs.query().name(boothName).where(l => l.actions().length > 0).nearest()
-                ?? Locs.query().name(boothName).nearest();
+            const booth = Locs.query().name(boothName).where(l => l.actions().length > 0 && !lockedBankAt(l.tile())).nearest()
+                ?? Locs.query().name(boothName).where(l => !lockedBankAt(l.tile())).nearest();
             if (!booth) {
                 log?.(`no '${boothName}' in the scene — waiting`);
                 await Execution.delayTicks(2);
@@ -371,7 +376,7 @@ export const Bank = {
             // 90s: 15s was too short for long camp-to-bank legs (Rimmington to Fally E).
             await Traversal.walkTo(stand, { radius: 1, timeoutMs: 90_000, log });
             await Execution.delayTicks(1);
-            const adj = Locs.query().name(boothName).where(l => l.actions().length > 0 && l.distance() <= 1).nearest();
+            const adj = Locs.query().name(boothName).where(l => l.actions().length > 0 && l.distance() <= 1 && !lockedBankAt(l.tile())).nearest();
             const adjOp = adj ? pick(adj.actions()) : undefined;
             if (adj && adjOp) {
                 await adj.interact(adjOp);
@@ -503,7 +508,7 @@ export const Bank = {
             acts.find(a => a.toLowerCase() === op.toLowerCase()) ?? acts.find(a => /^use|^bank/i.test(a)) ?? acts[0];
 
         for (let attempt = 0; attempt < 6 && !Bank.isOpen(); attempt++) {
-            const booth = Locs.query().name(boothName).where(l => l.actions().length > 0).nearest();
+            const booth = Locs.query().name(boothName).where(l => l.actions().length > 0 && !lockedBankAt(l.tile())).nearest();
             if (!booth) {
                 log?.(`no usable '${boothName}' in the scene`);
                 return false;
@@ -511,6 +516,7 @@ export const Bank = {
 
             const chosen = pick(booth.actions());
             if (chosen) {
+                log?.(`bank: '${chosen}' '${boothName}' at ${booth.tile()} (attempt ${attempt + 1}/6)`);
                 await booth.interact(chosen);
                 if (await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 8000)) {
                     if (ChatDialog.canContinue() && await continueObjectBankDialog(log)) { return openedReady(log); }
@@ -529,7 +535,7 @@ export const Bank = {
                 }
             }
 
-            const adjacent = Locs.query().name(boothName).where(l => l.actions().length > 0 && l.distance() <= 1).nearest() ?? booth;
+            const adjacent = Locs.query().name(boothName).where(l => l.actions().length > 0 && l.distance() <= 1 && !lockedBankAt(l.tile())).nearest() ?? booth;
             const adjOp = pick(adjacent.actions());
             if (adjOp) {
                 await adjacent.interact(adjOp);

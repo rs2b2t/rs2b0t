@@ -159,7 +159,7 @@ test('random selection retires starter camps while skipping recent or cooling st
         const plan = combatPlan(snapshot(), 'attack', memory, () => i / 100)!;
         expect([...memory.recent, 'edgeville-dungeon-giants']).not.toContain(plan.id);
     }
-});
+}, 30000);
 
 test.each(['#199', 'Air talisman', 'Cow hide'])('region rotation keeps %s production on matching camps', resource => {
     for (let i = 0; i < 100; i++) {

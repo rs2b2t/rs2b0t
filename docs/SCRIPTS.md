@@ -144,6 +144,7 @@ Start-or-coordinate fighter — kills any named NPC in its leash, loots selected
 | `lootMode` | string | `"list"` | Loot entry mode — one of: List (chips), CSV (text + copy/paste) |
 | `avoidHerbs` | string[] | `[]` | Herbs to avoid — one of: Guam leaf, Marrentill, Tarromin, Harralander, Ranarr weed, Toadflax, Irit leaf, Avantoe, Kwuarm, Snapdragon, Cadantine, Lantadyme, Dwarf weed, Torstol, Snake weed, Ardrigal, Sito foil, Volencia moss, Rogues purse |
 | `buryBones` | boolean | `false` | Bury regular bones |
+| `buryBigBones` | boolean | `false` | Bury big bones |
 | `solveClues` | boolean | `true` | Solve clue drops |
 | `banking` | string | `"Auto"` | Banking — one of: Auto, None |
 | `bankLocation` | string | `"Nearest"` | Bank location — one of: Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Legends Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
