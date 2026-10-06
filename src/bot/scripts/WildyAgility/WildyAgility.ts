@@ -88,16 +88,14 @@ export const WILDY_AGILITY_SETTINGS: SettingsSchema = {
         default: true,
         label: 'Acquire food at start',
         help: "if the inventory has no 'Food to withdraw' when the script starts (and you're not already on the course), withdraw from the bank before heading out; turn off to skip the startup bank trip even when empty"
-    },
-    obstacleTimeoutTicks: {
-        type: 'number',
-        default: 24,
-        min: 5,
-        max: 60,
-        label: 'Obstacle timeout (ticks)',
-        help: 'max ticks to wait for XP or a known-delaying event before treating as timeout'
     }
 };
+
+/** Why: not a setting. A healthy clear tops out at 18 ticks on the obstacle pipe, so this sits
+ *  above that with margin instead of being a dial; 60 only made a dead obstacle worse. */
+const OBSTACLE_TIMEOUT_TICKS = 24;
+
+
 
 let FOOD = 'lobster';
 
@@ -105,7 +103,6 @@ let ACQUIRE_FOOD_AT_START = true;
 
 let FOOD_WITHDRAW = 28;
 let MIN_FOOD = 1;
-let OBSTACLE_TIMEOUT_TICKS = 24;
 
 /** Disable Auto Retaliate so nearby skeletons cannot pull the bot off course. */
 async function ensureRetaliateOff(log: (m: string) => void): Promise<void> {
@@ -270,7 +267,6 @@ export default class WildyAgility extends TaskBot {
         FOOD_WITHDRAW = this.settings.num('foodWithdraw', 28);
         MIN_FOOD = this.settings.num('minFood', 1);
         ACQUIRE_FOOD_AT_START = this.settings.bool('acquireFoodAtStart', true);
-        OBSTACLE_TIMEOUT_TICKS = this.settings.num('obstacleTimeoutTicks', 24);
         this.course = [...COURSE_OBSTACLES];
 
         const agility = Skills.level('agility');
@@ -794,6 +790,7 @@ class RunLap implements Task {
         let lowHp = false;
         let settled = false;
         let lastTile = Game.tile();
+        let reclicks = 0;
         while (idleTicks < OBSTACLE_TIMEOUT_TICKS) {
             if (performance.now() >= waitDeadline) {
                 break;
@@ -822,6 +819,17 @@ class RunLap implements Task {
             if (EventSignal.pending() || ChatDialog.canContinue()) {
                 settled = true;
                 break;
+            }
+            // Why: click every tick instead of waiting, because standing still is the only cost that matters and the timeout is 29 ticks of it.
+            // Why: the click lands on the tile the character is already on, so a clear in progress turns it into a no-op and the xp still arrives when the animation ends.
+            // Why: only the first one is logged, since a click per tick would flood the 500-line log ring the harness reads.
+            // Why: the guard skips the first pass through the loop, which would click again before any waiting.
+            if (waitedTicks > 0) {
+                reclicks++;
+                if (reclicks === 1) {
+                    this.bot.log(`no xp after ${waitedTicks} ticks — clicking '${op}' again every tick`);
+                }
+                await obstacle.interact(op);
             }
             // Why: yielding lets EatFood run while skeletons near the rocks hit us.
             // Why: it waits a few ticks first, so residual damage does not abort the click.
@@ -874,9 +882,10 @@ class RunLap implements Task {
         }
 
         if (reason === 'timeout') {
+            const again = reclicks > 0 ? `, ${reclicks} re-click${reclicks > 1 ? 's' : ''}` : '';
             this.bot.setStatus(`timeout waiting for ${obstacle.name} (${idleTicks} idle / ${waitedTicks} total ticks)`);
             this.bot.log(
-                `'${this.bot.currentName()}' timed out after ${waitedTicks} ticks (${idleTicks} idle) — no xp/chat`
+                `'${this.bot.currentName()}' timed out after ${waitedTicks} ticks (${idleTicks} idle${again}) — no xp/chat`
             );
         }
 

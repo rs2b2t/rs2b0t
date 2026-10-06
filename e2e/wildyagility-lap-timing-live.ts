@@ -96,7 +96,6 @@ try {
         foodWithdraw: 28,
         minFood: 0,
         acquireFoodAtStart: false,
-        obstacleTimeoutTicks: 24
     });
     // ::speed mutates the engine's in-memory tick rate and it persists across sessions on this engine.
     await cheatQuiet(page, 'speed 600', 1500);

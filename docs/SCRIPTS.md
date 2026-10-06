@@ -85,7 +85,6 @@ Runs the Wilderness Agility Course, eats while running, and on death banks (food
 | `foodWithdraw` | number (1–28) | `28` | Food to withdraw |
 | `minFood` | number (0–28) | `1` | Bank below food count |
 | `acquireFoodAtStart` | boolean | `true` | Acquire food at start |
-| `obstacleTimeoutTicks` | number (5–60) | `24` | Obstacle timeout (ticks) |
 
 ## Combat
 
