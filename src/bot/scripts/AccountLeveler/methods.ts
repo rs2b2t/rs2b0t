@@ -1,6 +1,7 @@
 import Tile from '../../geometry/Tile.js';
 import { combatPlan, foodFor } from './combat.js';
 import { gatheringTool, meleeEquipment } from './equipment.js';
+import { locateMethod, membersReady } from './locations.js';
 import { FISH, FLETCHING, WOODS, POTIONS, canSourceWood, canCatch, consumableBatch, nextMilestone, smithProduct } from './catalog.js';
 import { stockOf, type ActivityPlan, type LevelerSnapshot, type Requirement, type SessionMemory } from './types.js';
 
@@ -87,7 +88,8 @@ function withFood(s: LevelerSnapshot, plan: ActivityPlan): ActivityPlan {
 }
 
 export function methodFor(s: LevelerSnapshot, objective: string, memory: SessionMemory, random: () => number): ActivityPlan | null {
-    const plan = selectMethod(s, objective, memory, random);
+    const selected = selectMethod(s, objective, memory, random);
+    const plan = selected ? locateMethod(s, selected, memory, random) : null;
     const next = nextMilestone(s, objective);
     return plan && next && !plan.quest && !plan.prerequisiteLevels ? { ...plan, prerequisiteLevels: { [objective]: next } } : plan;
 }
@@ -95,7 +97,8 @@ export function methodFor(s: LevelerSnapshot, objective: string, memory: Session
 function fishPlan(s: LevelerSnapshot, objective: string, raw?: string): ActivityPlan {
     const flyReady = canCatch(s, FISH[1]);
     const recipe = raw ? FISH.find(f => `raw ${f.food.toLowerCase()}` === raw.toLowerCase())!
-        : FISH[s.levels.fishing >= 20 && (s.levels.fishing >= 40 || flyReady) ? 1 : 0];
+        : membersReady(s) && canCatch(s, FISH[3]) ? FISH[3]
+            : FISH[s.levels.fishing >= 20 && (s.levels.fishing >= 40 || flyReady) ? 1 : 0];
     const fly = recipe.tool === 'Fly fishing rod';
     const bait = fly ? consumableBatch(s, [{ item: 'Feather', count: 1 }], 200) : [];
     return activity(objective, `fish-${recipe.food.toLowerCase()}`, 'Fisher', {
@@ -104,7 +107,8 @@ function fishPlan(s: LevelerSnapshot, objective: string, raw?: string): Activity
 }
 
 function cookPlan(s: LevelerSnapshot, objective: string, requested?: string): ActivityPlan {
-    const available = [...FISH].reverse().filter(f => s.levels.cooking >= f.cooking);
+    const available = [...FISH].reverse().filter(f => s.levels.cooking >= f.cooking
+        && (f.food !== 'Lobster' || membersReady(s) || stockOf(s, 'Raw lobster') >= 28));
     const food = requested ?? (available.find(f => stockOf(s, `Raw ${f.food.toLowerCase()}`) >= 28)
         ?? available.find(f => canCatch(s, f)) ?? FISH[0])!.food;
     return activity(objective, `cook-${food.toLowerCase()}`, 'CookBot', { fish: `Raw ${food.toLowerCase()}`, location: 'Draynor', surface: 'Range' }, [banked(`Raw ${food.toLowerCase()}`)]);
@@ -164,5 +168,6 @@ export function producer(s: LevelerSnapshot, objective: string, need: Requiremen
             break;
         default: return null;
     }
+    plan = plan ? locateMethod(s, plan, memory, random) : null;
     return plan ? plan.prerequisiteLevels ? plan : { ...plan, output: { item: need.item, count: need.count } } : null;
 }

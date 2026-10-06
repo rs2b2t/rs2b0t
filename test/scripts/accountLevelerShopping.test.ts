@@ -12,7 +12,7 @@ function snapshot(levels: Record<string, number> = {}, stock: Record<string, num
 test('a wealthy bare bank gets a current usable kit and useful consumable batches before training', () => {
     const audit = auditSupplies(snapshot());
     const needs = Object.fromEntries(audit.needs.map(need => [need.item, need.count]));
-    expect(needs).toMatchObject({ 'Mithril scimitar': 1, 'Mithril platebody': 1, 'Iron platelegs': 1,
+    expect(needs).toMatchObject({ 'Mithril scimitar': 1, 'Mithril platebody': 1, 'Mithril platelegs': 1, 'Mithril full helm': 1,
         'Oak shortbow': 1, 'Staff of air': 1, 'Mind rune': 200, 'Bronze arrow': 1000, Feather: 1000,
         'Fly fishing rod': 1, 'Steel axe': 1, 'Iron pickaxe': 1, Tinderbox: 1, Knife: 1,
         Hammer: 1, Needle: 1, Thread: 100, 'Vial of water': 27, 'Eye of newt': 27 });

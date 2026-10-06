@@ -69,13 +69,29 @@ test('a child starting idle is charged for a full fight while its loop remains p
     expect(session.remainingMs).toBe(540000);
 });
 
-test('routine gathering resets twice and reports repeated failure without cooling down food production', () => {
+test('routine gathering keeps recovering without stopping or cooling down food production', () => {
     const session = new LevelerSession(emptyMemory());
     const fish = { ...plan, id: 'fish-shrimps', label: 'fish shrimps', script: 'Fisher', combat: false, output: { item: 'Raw shrimps', count: 28 } };
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= 12; attempt++) {
         session.start(fish, attempt * 1000, () => 0);
-        expect(session.failure(attempt * 1000 + 500)).toBe(attempt < 3 ? 'reset' : 'stop');
+        expect(session.failure(attempt * 1000 + 500)).toBe(attempt % 3 ? 'reset' : 'rotate');
         expect(session.memory.cooldowns).toEqual({});
     }
     expect(session.memory.objective).toBe('attack');
+});
+
+test('early death walking recovers repeatedly without cooling down the camp', () => {
+    const session = new LevelerSession(emptyMemory());
+    const early = { ...plan, deathWalk: true };
+    for (let attempt = 0; attempt < 5; attempt++) {
+        session.start(early, attempt * 10000, () => 0);
+        expect(session.death(attempt * 10000 + 1000)).toBe('reset');
+        expect(session.memory.objective).toBe('attack');
+        expect(session.memory.cooldowns).toEqual({});
+    }
+    expect(session.memory.deaths).toBe(5);
+    session.start(early, 60000, () => 0);
+    expect(session.failure(61000)).toBe('reset');
+    session.start(early, 62000, () => 0);
+    expect(session.failure(63000)).toBe('rotate');
 });

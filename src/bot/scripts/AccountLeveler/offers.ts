@@ -20,6 +20,8 @@ const vendors: [string, string, number, number][] = [
     ['shantayshop', 'Shantay', 3304, 3123],
     ['magicshop', 'Betty', 3012, 3258],
     ['adventurershop', 'Aemad', 2613, 3294],
+    ['legsshop', 'Louie legs', 3316, 3175],
+    ['helmetshop', 'Peksa', 3076, 3429],
     ['armourshop', 'Horvik', 3229, 3438],
     ['craftingshop2', 'Dommik', 3316, 3192]
 ];

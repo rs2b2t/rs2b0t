@@ -2,6 +2,7 @@ import { resolveWorldNumber } from '../../../client/config/worlds.js';
 import { SeersAxeBuyer } from './market.js';
 import { refreshConsumables } from './catalog.js';
 import { COMBAT_CAMPS } from './combat.js';
+import { combatLevel } from './combatProgression.js';
 import { gatheringTool } from './equipment.js';
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { LoopingBot } from '../../api/bot/Bot.js';
@@ -25,7 +26,7 @@ import { ScriptRegistry } from '../../runtime/ScriptRegistry.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import { emptyMemory, enabledSkills, planNext, resolveActivity } from './planner.js';
-import { LevelerSession } from './session.js';
+import { LevelerSession, usesActivityCooldown } from './session.js';
 import { LevelerStock } from './stock.js';
 import { gameSupplyPort, provision, SupplyUnavailableError, SupplyStockError } from './supplies.js';
 import { auditSupplies } from './shopping.js';
@@ -37,9 +38,13 @@ import { requirementKey, stockOf, type ActivityPlan, type LevelerSnapshot, type 
 
 interface FailureDiagnostic { at: number; activity: string; phase: string; reason: string; detail: string }
 
+class ActivityTravelError extends Error {
+    constructor(readonly plan: ActivityPlan) { super(`Cannot reach ${plan.label}`); }
+}
+
 export const SETTINGS: SettingsSchema = {
     targetLevel: { type: 'number', default: 40, min: 2, max: 40, label: 'Target level', help: 'Train every enabled skill to at least this level.' },
-    marketAxes: { type: 'boolean', default: true, label: 'Try Seers market axes', help: 'One optional Rune axe purchase from seers market when already on World 1. Falls back to available tools.' },
+    marketAxes: { type: 'boolean', default: true, label: 'Try Seers market axes', help: 'One optional Rune axe purchase from seers market when near Seers on World 1. Falls back to available tools.' },
     marketAxeBudget: { type: 'number', default: 50000, min: 0, max: 1000000, label: 'Market axe price limit', help: 'Also capped at 10% of banked gold; keeps 200 coins for travel.' },
     wilderness: { type: 'boolean', default: true, label: 'Allow Wilderness training', help: 'Include suitable Wilderness camps in randomized combat training.' }
 };
@@ -48,7 +53,10 @@ export default class AccountLeveler extends LoopingBot {
     override loopDelay = 100;
     private session = new LevelerSession(emptyMemory());
     private readonly activity = new ScriptActivity(message => this.setDetail(message));
-    private readonly supplies = gameSupplyPort(message => this.setDetail(message));
+    private readonly supplies = {
+        ...gameSupplyPort(message => this.setDetail(message)),
+        walk: (tile: WorldTile) => Traversal.walkResilient(Tile.from(tile), { radius: 3, timeoutMs: 120000, avoidZones: ['white-wolf-mountain'], log: message => this.setDetail(message) })
+    };
     private readonly actions = new ActionQueue();
     private pendingPlans: ActivityPlan[] = [];
     private displayPlan: ActivityPlan | null = null;
@@ -108,12 +116,8 @@ export default class AccountLeveler extends LoopingBot {
                 }
                 const previous = this.session.plan;
                 const decision = this.session.death(Date.now());
-                this.recordFailure('Player died');
-                if (decision === 'stop') {
-                    this.activity.stop();
-                    this.requestFinish(`AccountLeveler stopped after repeated deaths during ${previous?.label ?? 'training'}; check the saved failure diagnostics`);
-                    return;
-                }
+                if (previous?.deathWalk) this.actions.note(`Death walk: restocking for ${previous.label}`);
+                else this.recordFailure('Player died');
                 this.retry = decision === 'reset' ? previous : null;
                 if (decision === 'rotate') this.pendingPlans = [];
                 this.activity.stop();
@@ -129,6 +133,17 @@ export default class AccountLeveler extends LoopingBot {
             const plan = this.session.plan;
             if (!plan) { this.phase = 'bank'; return; }
             const snapshot = this.snapshot();
+            if (plan.deathWalk && combatLevel(snapshot.levels) >= 15 && !Game.inCombat()) {
+                this.activity.stop();
+                this.session.resupply(Date.now());
+                this.retry = null;
+                this.pendingPlans = [];
+                this.phase = 'bank';
+                this.stock.invalidate();
+                this.setStatus('Combat 15 reached; banking to prepare food for stronger targets');
+                this.save();
+                return;
+            }
             const reached = this.reached(plan, snapshot);
             const pendingPotions = plan.script === 'PotionMaker' && Inventory.countById(herbByName(String(plan.settings.herb))?.unfId ?? 91) > 0;
             const exhausted = !pendingPotions && plan.needs.some(need => need.minimum !== undefined
@@ -162,6 +177,22 @@ export default class AccountLeveler extends LoopingBot {
             if (error instanceof ScriptAborted) {
                 if (this.died && !Scheduler.active?.aborted) return;
                 throw error;
+            }
+            if (error instanceof ActivityTravelError && error.plan.combat) {
+                const now = Date.now();
+                this.recordFailure(error.message);
+                this.activity.stop();
+                this.session.memory.cooldowns[error.plan.id] = now + 15 * 60000;
+                this.session.resupply(now);
+                this.retry = null;
+                this.pendingPlans = [];
+                this.phase = 'bank';
+                this.stock.invalidate();
+                this.actions.fail(error.message);
+                this.setStatus(`${error.message}; trying another combat camp`);
+                this.waitingUntil = now + 3000;
+                this.save();
+                return;
             }
             if (error instanceof SupplyStockError) {
                 error.items.forEach(item => this.temporarilyUnavailable.set(item, Date.now() + 60000));
@@ -273,6 +304,11 @@ export default class AccountLeveler extends LoopingBot {
             this.shoppingBudget = 0;
         }
         let requested = this.retry ?? this.pendingPlans.shift();
+        if (requested?.deathWalk && combatLevel(snapshot.levels) >= 15) {
+            this.setDetail('Combat 15 reached; replacing the queued death walk with food-backed training');
+            this.pendingPlans = [];
+            requested = undefined;
+        }
         if (requested && !canResumeObjective(snapshot.levels, snapshot.target, requested.objective)) {
             this.setDetail(`${trainingPriority(snapshot.levels, snapshot.target).label}; replanning queued ${requested.objective} work`);
             this.pendingPlans = [];
@@ -289,15 +325,13 @@ export default class AccountLeveler extends LoopingBot {
         if (decision.kind === 'complete') { await Bank.close(); this.requestFinish(`All ${enabledSkills.length} enabled skills reached ${this.target}`); return; }
         if (decision.kind === 'refresh') return;
         if (decision.kind === 'blocked') {
-            const cooldown = Math.min(...[...Object.values(this.session.memory.cooldowns), ...this.temporarilyUnavailable.values()].filter(time => time > Date.now()));
-            if (Number.isFinite(cooldown)) {
-                this.waitingUntil = cooldown;
-                this.setStatus(`waiting for another method: ${decision.reason}`);
-                await Bank.close();
-                return;
-            }
+            const now = Date.now();
+            const cooldown = Math.min(...[...Object.values(this.session.memory.cooldowns), ...this.temporarilyUnavailable.values()].filter(time => time > now));
+            this.waitingUntil = Math.min(cooldown, now + 30000);
+            this.unavailableItems.clear();
+            this.stock.invalidate();
+            this.setStatus(`waiting for another method: ${decision.reason}; rechecking in ${Math.ceil((this.waitingUntil - now) / 1000)}s`);
             await Bank.close();
-            this.requestFinish(`AccountLeveler blocked: ${decision.reason}`);
             return;
         }
         const plan = decision.plan;
@@ -317,8 +351,12 @@ export default class AccountLeveler extends LoopingBot {
         await provision(plan, this.supplies, event => this.report(event));
         await this.recoverNearbyDrops(plan);
         if (plan.travel) {
+            const here = Game.tile();
+            if (here && (here.x < 2840) !== (plan.travel.x < 2840) && Inventory.count('Coins') < 60) {
+                throw new Error('Need 60 Coins for the coastal boat route before crossing between eastern and western training sites');
+            }
             this.report({ id: 'travel', message: `Travelling to ${plan.label}`, state: 'running', destination: plan.travel });
-            if (!(await Traversal.walkResilient(Tile.from(plan.travel), { radius: 4, attempts: 4, timeoutMs: 120000, log: m => this.setDetail(m) }))) throw new Error(`Cannot reach ${plan.label}`);
+            if (!(await Traversal.walkResilient(Tile.from(plan.travel), { radius: 4, attempts: 4, timeoutMs: 120000, avoidZones: ['white-wolf-mountain'], log: m => this.setDetail(m) }))) throw new ActivityTravelError(plan);
             this.report({ id: 'travel', message: `Arrived at ${plan.label}`, state: 'done', destination: plan.travel });
         }
         this.report({ id: 'train', message: `${describeActivity(plan)} using ${plan.script}`, state: 'running', destination: plan.travel });
@@ -333,6 +371,8 @@ export default class AccountLeveler extends LoopingBot {
         if (this.marketChecked || !this.settings.bool('marketAxes', true) || stockOf(snapshot, 'Rune axe') > 0 || typeof location === 'undefined') return false;
         const world = resolveWorldNumber(location.host, new URLSearchParams(location.search));
         if (world !== 1) return false;
+        const here = Game.tile();
+        if (!here || new Tile(2725, 3491, 0).distanceTo(here) > 128) return false;
         this.marketChecked = true;
         const budget = Math.floor(Math.min(this.settings.num('marketAxeBudget', 50000), stockOf(snapshot, 'Coins') * 0.1, stockOf(snapshot, 'Coins') - 200));
         if (budget < 1) return false;
@@ -369,23 +409,24 @@ export default class AccountLeveler extends LoopingBot {
     }
 
     private fail(reason: string): void {
+        const now = Date.now();
         const previous = this.session.plan;
         this.recordFailure(reason);
         this.activity.stop();
         const preparing = this.phase === 'bank' || !previous;
-        const decision = preparing ? ++this.resetCount < 3 ? 'reset' : 'stop' : this.session.failure(Date.now());
+        const decision = preparing ? ++this.resetCount < 3 ? 'reset' : 'rotate' : this.session.failure(now);
         this.actions.fail(reason);
-        if (decision === 'stop') {
-            this.setStatus(`${reason}; stopped after three unsuccessful ${preparing ? 'preparation' : 'activity'} attempts`);
-            this.requestFinish(`AccountLeveler could not ${preparing ? 'prepare' : 'continue ' + previous?.label}: ${reason}`);
-            return;
+        if (preparing && decision === 'rotate') {
+            if (previous && usesActivityCooldown(previous)) this.session.memory.cooldowns[previous.id] = now + 15 * 60000;
+            this.session.resupply(now);
         }
         this.retry = decision === 'reset' ? previous : null;
         if (decision === 'rotate') this.pendingPlans = [];
-        this.setStatus(`${reason}; ${decision === 'reset' ? 'resetting at the nearest bank' : 'trying another method'}`);
+        const delay = preparing ? Math.min(60000, 3000 * 2 ** Math.min(this.resetCount - 1, 5)) : decision === 'rotate' ? 30000 : 3000;
+        this.setStatus(`${reason}; ${decision === 'reset' ? 'resetting at the nearest bank' : 'replanning at the nearest bank'} in ${delay / 1000}s`);
         this.phase = 'bank';
         this.stock.invalidate();
-        this.waitingUntil = Date.now() + 3000;
+        this.waitingUntil = now + delay;
         this.save();
     }
 

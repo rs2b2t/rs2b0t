@@ -5,6 +5,7 @@ import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import { describeActivity, type ActionQueue } from './actions.js';
 import { requirementKey, type ActivityPlan } from './types.js';
 import { trainingPriority } from './priority.js';
+import { combatLevel } from './combatProgression.js';
 
 export interface LevelerPaintView {
     target: number;
@@ -63,6 +64,8 @@ export function levelerLines(v: LevelerPaintView, page: string, cols: number): {
     } else {
         add(`Now: ${v.status}`, COLORS.running);
         add(`Phase: ${trainingPriority(v.levels, v.target).label}`);
+        const combat = combatLevel(v.levels);
+        add(`Combat ${combat}: ${combat < 15 ? 'melee death walking until 15' : 'prepare food for stronger targets'}`);
         if (v.queue.current && v.queue.current !== v.status) add(`Action: ${v.queue.current}`, COLORS.running);
         add(`Goal: ${v.objective ?? 'audit supplies'}${v.objective && v.levels[v.objective] ? ` ${v.levels[v.objective]} -> ${v.target}` : ''}`);
         if (v.plan) add(`Plan: ${describeActivity(v.plan)}`);

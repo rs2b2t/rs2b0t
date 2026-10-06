@@ -45,7 +45,7 @@ export const FISH = [
 ] as const;
 
 export const MILESTONES: Record<string, readonly number[]> = {
-    thieving: [10], herblore: [5, 12, 22, 30, 38],
+    thieving: [10, 25], herblore: [5, 12, 22, 30, 38],
     mining: [6, 21, 30, 31, 41], woodcutting: [15, 30], fishing: [20, 30, 40], cooking: [15, 25, 40],
     firemaking: [15, 30], fletching: [5, 10, 20, 25, 35, 40], smithing: [15, 30],
     attack: [5, 20, 30, 40], defence: [5, 20, 30, 40], ranged: [5, 20, 30, 40], magic: [5, 9, 13, 17, 23, 29, 35]

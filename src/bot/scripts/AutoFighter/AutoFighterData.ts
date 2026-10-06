@@ -40,12 +40,13 @@ export function shouldBankAfterMinutes(
     return minutesSinceLastBank >= everyMinutes;
 }
 
-export function isBurialBone(name: string | null): boolean {
-    return name?.trim().toLowerCase() === BURIAL_BONE_NAME.toLowerCase();
+export function isBurialBone(name: string | null, buryBones = true, buryBigBones = false): boolean {
+    const normalized = name?.trim().toLowerCase();
+    return (buryBones && normalized === BURIAL_BONE_NAME.toLowerCase()) || (buryBigBones && normalized === 'big bones');
 }
 
-export function wantsAutoFighterLoot(name: string | null, configured: string[], buryBones: boolean): boolean {
-    return matchesAny(name, configured) || (buryBones && isBurialBone(name));
+export function wantsAutoFighterLoot(name: string | null, configured: string[], buryBones: boolean, buryBigBones = false): boolean {
+    return matchesAny(name, configured) || isBurialBone(name, buryBones, buryBigBones);
 }
 
 /** Fight.validate is false while Game.inCombat(), so retaliate-off + an attacking random (strange fruit) never picks a new target. */

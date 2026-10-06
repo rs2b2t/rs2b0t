@@ -18,18 +18,18 @@ test('an unread bank cannot turn into a missing-supplies decision', () => {
     expect(planNext({ ...fresh(), bankReady: false }, emptyMemory(), () => 0).kind).toBe('refresh');
 });
 
-test('combat with no supplies first produces food without a combat dependency cycle', () => {
+test('early combat starts without making food first', () => {
     const memory = { ...emptyMemory(), objective: 'attack' };
     const result = planNext(fresh(), memory, () => 0);
     expect(result.kind).toBe('activity');
     if (result.kind !== 'activity') return;
-    expect(result.plan.script).toBe('Fisher');
-    expect(result.plan.output?.item).toBe('Raw shrimps');
-    expect(result.plan.needs.some(n => n.item === 'Small fishing net')).toBe(true);
+    expect(result.plan.script).toBe('AutoFighter');
+    expect(result.plan.deathWalk).toBe(true);
+    expect(result.queue.map(plan => plan.script)).toEqual(['AutoFighter']);
 });
 
 test('cooking uses banked raw fish before gathering more', () => {
-    const snapshot = fresh(); snapshot.stock['raw shrimps'] = 100;
+    const snapshot = fresh(); Object.assign(snapshot.levels,{attack:20,strength:20,defence:20,hitpoints:25}); snapshot.stock['raw shrimps'] = 100;
     const result = planNext(snapshot, { ...emptyMemory(), objective: 'attack' }, () => 0);
     expect(result.kind === 'activity' && result.plan.script).toBe('CookBot');
 });
@@ -116,7 +116,8 @@ test('low Defence supersedes a saved higher-level Attack objective', () => {
 });
 
 test('food production serves the combat objective even when the saved goal was skilling', () => {
-    const next=planNext(fresh(),{...emptyMemory(),objective:'woodcutting'},()=>0);
+    const s=fresh(); Object.assign(s.levels,{attack:20,strength:20,defence:20,hitpoints:25});
+    const next=planNext(s,{...emptyMemory(),objective:'woodcutting'},()=>0);
     expect(next.kind==='activity'&&next.plan.script).toBe('Fisher');
     expect(next.kind==='activity'&&next.plan.objective).toBe('attack');
 });
@@ -142,7 +143,7 @@ test('blocked combat does not send a fragile account on an unrelated training tr
 });
 
 test('legacy shrimp cooldowns cannot block the food dependency for every melee objective', () => {
-    const s = fresh();
+    const s = fresh(); Object.assign(s.levels,{attack:20,strength:20,defence:20,hitpoints:25});
     const memory = { ...emptyMemory(), cooldowns: { 'fish-shrimps': s.now + 900000 } };
     const decision = planNext(s, memory, () => 0);
     expect(decision.kind).toBe('activity');

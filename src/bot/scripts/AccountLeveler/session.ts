@@ -46,12 +46,17 @@ export class LevelerSession {
         this.plan = null;
     }
 
-    failure(now: number): 'reset' | 'rotate' | 'stop' {
+    failure(now: number): 'reset' | 'rotate' {
         const plan = this.plan;
         if (!plan) return 'reset';
         const count = (this.failures[plan.id] ?? 0) + 1;
         this.failures[plan.id] = count;
-        if (!usesActivityCooldown(plan)) return count < 3 ? 'reset' : 'stop';
+        if (!usesActivityCooldown(plan)) {
+            if (count < 3) return 'reset';
+            delete this.failures[plan.id];
+            this.plan = null;
+            return 'rotate';
+        }
         if (count === 1) return 'reset';
         this.memory.cooldowns[plan.id] = now + 15 * 60000;
         this.memory.objective = null;
@@ -59,8 +64,12 @@ export class LevelerSession {
         return 'rotate';
     }
 
-    death(now: number): 'reset' | 'rotate' | 'stop' {
+    death(now: number): 'reset' | 'rotate' {
         this.memory.deaths++;
+        if (this.plan?.deathWalk) {
+            this.resupply(now);
+            return 'reset';
+        }
         return this.failure(now);
     }
 

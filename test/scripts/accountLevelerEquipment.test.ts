@@ -39,9 +39,9 @@ test('pickaxe upgrades have a proven Nurmof shop destination', () => {
 
 test('melee chooses owned or stocked upgrades with independent attack and defence gates', () => {
     const owned = { coins: 500000, 'rune scimitar': 1, 'rune chainbody': 1, 'rune platelegs': 1 };
-    expect(meleeEquipment(snapshot({ attack: 40, defence: 40 }, owned)).map(need => need.item)).toEqual(['Rune scimitar', 'Rune chainbody', 'Rune platelegs']);
-    expect(meleeEquipment(snapshot({ attack: 20, defence: 1 }, owned)).map(need => need.item)).toEqual(['Mithril scimitar', 'Iron platebody', 'Iron platelegs']);
-    expect(meleeEquipment(snapshot({ attack: 1, defence: 20 })).map(need => need.item)).toEqual(['Iron scimitar', 'Mithril platebody', 'Iron platelegs']);
+    expect(meleeEquipment(snapshot({ attack: 40, defence: 40 }, owned)).map(need => need.item)).toEqual(['Rune scimitar', 'Rune chainbody', 'Rune platelegs', 'Adamant full helm']);
+    expect(meleeEquipment(snapshot({ attack: 20, defence: 1 }, owned)).map(need => need.item)).toEqual(['Mithril scimitar', 'Iron platebody', 'Iron platelegs', 'Iron full helm']);
+    expect(meleeEquipment(snapshot({ attack: 1, defence: 20 })).map(need => need.item)).toEqual(['Iron scimitar', 'Mithril platebody', 'Mithril platelegs', 'Mithril full helm']);
 });
 
 test('melee kit keeps existing usable gear when no purchase is affordable', () => {
@@ -82,5 +82,27 @@ test('startup recognizes banked upgrades instead of buying extra bronze tools', 
 });
 
 test('an affordable full melee kit takes priority over spending its leg budget on a stronger body', () => {
-    expect(meleeEquipment(snapshot({}, { coins: 3000 })).map(need => need.item)).toEqual(['Iron scimitar', 'Bronze chainbody', 'Iron platelegs']);
+    expect(meleeEquipment(snapshot({}, { coins: 3000 })).map(need => need.item)).toEqual(['Iron scimitar', 'Iron chainbody', 'Bronze platelegs', 'Bronze full helm']);
+});
+
+test.each([[1, 'Iron', 'Iron'], [5, 'Steel', 'Steel'], [10, 'Black', 'Steel'], [20, 'Mithril', 'Mithril'], [30, 'Adamant', 'Adamant'], [40, 'Adamant', 'Adamant']])(
+    'defence %i buys usable legs and helmets from their specialist shops', (defence, legs, helm) => {
+        const kit = meleeEquipment(snapshot({ defence: Number(defence) }));
+        expect(kit).toContainEqual({ item: `${legs} platelegs`, count: 1, carry: 1, equip: true });
+        expect(kit).toContainEqual({ item: `${helm} full helm`, count: 1, carry: 1, equip: true });
+        expect(supplyOffer(`${legs} platelegs`)?.keeper).toBe('Louie legs');
+        expect(supplyOffer(`${helm} full helm`)?.keeper).toBe('Peksa');
+    }
+);
+
+test('sold-out legs and full helmets fall back to available tiers and medium helmets', () => {
+    const s = { ...snapshot({ defence: 30 }), unavailableItems: ['Adamant platelegs', 'Adamant full helm'] };
+    const kit = meleeEquipment(s);
+    expect(kit.map(need => need.item)).toContain('Mithril platelegs');
+    expect(kit.map(need => need.item)).toContain('Adamant med helm');
+});
+
+test('owned usable helmets are equipped even without a shopping budget', () => {
+    const kit = meleeEquipment(snapshot({ defence: 40 }, { coins: 200, 'iron scimitar': 1, 'iron chainbody': 1, 'iron platelegs': 1, 'rune full helm': 1 }));
+    expect(kit).toContainEqual({ item: 'Rune full helm', count: 1, carry: 1, equip: true });
 });

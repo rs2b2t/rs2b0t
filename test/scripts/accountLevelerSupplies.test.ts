@@ -9,6 +9,8 @@ import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
 import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 import { emptyWorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 import type { ActivityPlan } from '#/bot/scripts/AccountLeveler/types.js';
+import { meleeEquipment } from '#/bot/scripts/AccountLeveler/equipment.js';
+import { supplyOffer } from '#/bot/scripts/AccountLeveler/offers.js';
 
 function fixture(coins = 10000) {
     const bank: Record<string, number> = { Coins: coins, Shrimps: 30 };
@@ -162,12 +164,12 @@ test('shops for both armor pieces on one visit and marks the vendor done after b
     const visits: string[] = [];
     const progress: string[] = [];
     f.port.shop = async keeper => { visits.push(keeper); return true; };
-    const armor: ActivityPlan = { ...plan, needs: [{ item: 'Iron chainbody', count: 1 }, { item: 'Iron platelegs', count: 1 }] };
+    const armor: ActivityPlan = { ...plan, needs: [{ item: 'Iron chainbody', count: 1 }, { item: 'Iron platebody', count: 1 }] };
     await provision(armor, f.port, update => {
         progress.push(`${update.id}:${update.state}`);
         if (update.id === 'shop:Horvik' && update.state === 'done') {
             expect(f.bank['Iron chainbody']).toBe(1);
-            expect(f.bank['Iron platelegs']).toBe(1);
+            expect(f.bank['Iron platebody']).toBe(1);
         }
     });
     expect(visits).toEqual(['Horvik']);
@@ -308,9 +310,37 @@ test('stock disappearing during purchase banks earlier items before a temporary 
 test.each(['walk', 'shop'] as const)('an unavailable vendor during %s reports every item at that stop', async operation => {
     const f = fixture();
     f.port[operation] = async () => false;
-    const armor: ActivityPlan = { ...plan, needs: [{ item: 'Iron chainbody', count: 1 }, { item: 'Iron platelegs', count: 1 }] };
-    await expect(provision(armor, f.port)).rejects.toMatchObject({ name: 'SupplyUnavailableError', items: ['iron chainbody', 'iron platelegs'] });
+    const armor: ActivityPlan = { ...plan, needs: [{ item: 'Iron chainbody', count: 1 }, { item: 'Iron platebody', count: 1 }] };
+    await expect(provision(armor, f.port)).rejects.toMatchObject({ name: 'SupplyUnavailableError', items: ['iron chainbody', 'iron platebody'] });
     expect(f.purchases()).toBe(0);
+});
+
+test('a planned melee kit buys and equips legs and a helmet from their actual vendors', async () => {
+    const f = fixture(100000);
+    const shelves: Record<string, string[]> = {
+        Zeke: ['Mithril scimitar'], Horvik: ['Mithril platebody'], 'Louie legs': ['Mithril platelegs'], Peksa: ['Mithril full helm']
+    };
+    let keeper = '';
+    const visits: string[] = [];
+    f.port.shop = async name => { keeper = name; visits.push(name); return name in shelves; };
+    f.port.shopStock = item => shelves[keeper]?.includes(item) ? 1 : 0;
+    const needs = meleeEquipment({ levels: { attack: 20, defence: 20 }, stock: { coins: 100000 }, bankReady: true, quests: {}, target: 40, wilderness: false, now: 0 });
+    await provision({ ...plan, needs }, f.port);
+    expect(visits).toEqual(['Zeke', 'Horvik', 'Louie legs', 'Peksa']);
+    expect(f.worn).toEqual({ 'Mithril scimitar': 1, 'Mithril platebody': 1, 'Mithril platelegs': 1, 'Mithril full helm': 1 });
+    expect(f.bank.Coins).toBeGreaterThanOrEqual(200);
+});
+
+test.skipIf(!existsSync('out/collision.lcnav.gz')).each(['Mithril platelegs', 'Mithril full helm'])('the shopping route reaches %s without quest unlocks', item => {
+    const offer = supplyOffer(item)!;
+    expect(offer).not.toBeNull();
+    const finder = new PathFinder(gunzipSync(readFileSync('out/collision.lcnav.gz')));
+    loadDefaultNavEdges(finder);
+    const route = finder.findPath({ x: 3185, z: 3436, level: 0 }, offer.tile, {
+        state: { ...emptyWorldStateData(), members: true, items: { Coins: 200 }, skills: { agility: 1 }, canSlashWeb: false }, useTeleportCatalog: false
+    });
+    expect(route.ok).toBe(true);
+    if (route.ok) expect(route.waypoints.at(-1)).toMatchObject(offer.tile);
 });
 
 test.each(['bank', 'coins'] as const)('%s failure does not blacklist purchasable equipment', async failure => {

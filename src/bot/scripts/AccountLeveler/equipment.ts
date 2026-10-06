@@ -48,7 +48,7 @@ export function meleeEquipment(s: LevelerSnapshot): Requirement[] {
             { ...metal, item: `${metal.item} platelegs` }, { ...metal, item: `${metal.item} plateskirt` }
         ]), fallback: { item: 'Iron platelegs', level: 1 } }
     ];
-    return slots.map((slot, index) => {
+    const kit = slots.map((slot, index) => {
         const remaining = slots.slice(index + 1).reduce((sum, next) => {
             const minimum = Math.min(...next.choices.map(choice => cost(s, next.level, choice)));
             return sum + (Number.isFinite(minimum) ? minimum : 0);
@@ -60,6 +60,14 @@ export function meleeEquipment(s: LevelerSnapshot): Requirement[] {
         }
         return { ...need, equip: true };
     });
+    const helmet = metals.flatMap(metal => [
+        { ...metal, item: `${metal.item} full helm` }, { ...metal, item: `${metal.item} med helm` }
+    ]).find(choice => {
+        const price = cost(s, s.levels.defence, choice);
+        return price === 0 || price <= coins - 200;
+    });
+    if (helmet) kit.push({ item: helmet.item, count: 1, carry: 1, equip: true });
+    return kit;
 }
 
 export function rangedBow(s: LevelerSnapshot): Requirement {

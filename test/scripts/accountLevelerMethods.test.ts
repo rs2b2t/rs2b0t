@@ -55,7 +55,7 @@ test('fishing can fall back to a net below 40 but never stays on nets after 40 f
 });
 
 test('higher cooking uses banked salmon and can supply lobster without Karamja ferries', () => {
-    const s = snapshot(); s.stock['raw salmon'] = 28;
+    const s = snapshot(); s.stock['raw salmon'] = 28; s.stock.shrimps = 24;
     expect(method(s, 'cooking').settings.fish).toBe('Raw salmon');
     expect(supply(s, 'Raw lobster').settings).toMatchObject({ fishMethod: 'Lobster cage — lobster', location: 'Catherby' });
     s.levels.cooking = 1;
@@ -67,6 +67,11 @@ test('method milestones let the controller replan when the next useful method un
     expect(method(s, 'woodcutting').prerequisiteLevels).toEqual({ woodcutting: 15 });
     expect(method(s, 'mining').prerequisiteLevels).toEqual({ mining: 6 });
     expect(method(s, 'fletching').prerequisiteLevels).toEqual({ fletching: 5 });
+});
+
+test('thieving replans when warrior women unlock at 25', () => {
+    const s = snapshot(); s.levels.thieving = 24;
+    expect(method(s, 'thieving').prerequisiteLevels).toEqual({ thieving: 25 });
 });
 
 test('magic upgrades spells and provisions every rune while respecting the shopping budget', () => {

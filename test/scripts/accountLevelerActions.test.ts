@@ -6,7 +6,7 @@ import type { LevelerSnapshot } from '#/bot/scripts/AccountLeveler/types.js';
 const snapshot = (): LevelerSnapshot => ({ levels: Object.fromEntries(enabledSkills.map(skill => [skill, skill === 'hitpoints' ? 10 : 1])), stock: {coins: 100000}, quests:{}, bankReady:true, target:40, wilderness:true, now:1000 });
 
 test('a food dependency preserves the chosen fish, cook, combat sequence through bank refreshes', () => {
-    const s=snapshot();
+    const s=snapshot(); Object.assign(s.levels,{attack:20,strength:20,defence:20,hitpoints:25});
     const decision=planNext(s,{...emptyMemory(), objective:'attack'},()=>0);
     expect(decision.kind).toBe('activity');
     if(decision.kind!=='activity')return;
@@ -14,11 +14,14 @@ test('a food dependency preserves the chosen fish, cook, combat sequence through
     s.stock['raw shrimps']=28;
     const next=resolveActivity(s,decision.queue[1],emptyMemory(),()=>0.99);
     expect(next.kind==='activity'&&next.plan.script).toBe('CookBot');
-    expect(decision.queue[2].id).toBe('lumbridge-chickens');
+    s.stock.shrimps=24;
+    const ready=resolveActivity(s,decision.queue[2],emptyMemory(),()=>0.99);
+    expect(ready.kind==='activity'&&ready.plan.id).toBe(decision.queue[2].id);
+    expect(ready.kind==='activity'&&ready.plan.deathWalk).toBe(false);
 });
 
 test('action preview explains the shopping destination and why fishing is queued', () => {
-    const s=snapshot();
+    const s=snapshot(); Object.assign(s.levels,{attack:20,strength:20,defence:20,hitpoints:25});
     const decision=planNext(s,{...emptyMemory(),objective:'attack'},()=>0);
     if(decision.kind!=='activity')throw new Error('expected activity');
     const actions=activityActions(decision.plan,s,decision.queue.slice(1));
@@ -26,7 +29,7 @@ test('action preview explains the shopping destination and why fishing is queued
     expect(actions.find(a=>a.id==='shop:Gerrant')?.destination).toMatchObject({x:3013,z:3224});
     expect(describeActivity(decision.plan)).toContain('28 Raw shrimps');
     expect(actions.some(a=>a.label.includes('cook'))).toBe(true);
-    expect(actions.some(a=>a.label.includes('Chicken'))).toBe(true);
+    expect(actions.find(a=>a.id===`later:${decision.queue[2].id}`)?.detail).toContain('attack');
 });
 
 test('queue advances from real events, retains failures and caps action history', () => {

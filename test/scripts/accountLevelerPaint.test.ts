@@ -31,3 +31,9 @@ test('paint explains combat-first training and the transition to other skills',(
     expect(phase({attack:40,strength:40,defence:40,ranged:1})).toContain('Finish combat stats to 40');
     expect(phase({attack:40,strength:40,defence:40,hitpoints:40,ranged:40,magic:40,prayer:40,agility:1})).toContain('Train remaining skills to 40');
 });
+
+test('paint makes the combat-15 food transition visible', () => {
+    const text = (hitpoints: number) => levelerLines({ ...view, levels: { attack: 12, strength: 12, defence: 12, hitpoints, prayer: 1, ranged: 1, magic: 1 } }, 'Now', 100).lines.map(line => line.text).join(' ');
+    expect(text(16)).toContain('Combat 14: melee death walking until 15');
+    expect(text(17)).toContain('Combat 15: prepare food for stronger targets');
+});

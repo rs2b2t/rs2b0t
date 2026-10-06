@@ -31,6 +31,7 @@ export interface ActivityPlan {
     output?: Requirement;
     quest?: string;
     combat?: boolean;
+    deathWalk?: boolean;
     wilderness?: boolean;
     food?: string;
     prerequisiteLevels?: Record<string, number>;

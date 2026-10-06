@@ -4,7 +4,7 @@ import { ScriptRegistry } from '#/bot/runtime/ScriptRegistry.js';
 import { emptyMemory, enabledSkills, planNext } from '#/bot/scripts/AccountLeveler/planner.js';
 import { methodFor, producer } from '#/bot/scripts/AccountLeveler/methods.js';
 import { supplyOffer } from '#/bot/scripts/AccountLeveler/offers.js';
-import { combatPlan } from '#/bot/scripts/AccountLeveler/combat.js';
+import { COMBAT_CAMPS, combatPlan } from '#/bot/scripts/AccountLeveler/combat.js';
 import { LevelerSession } from '#/bot/scripts/AccountLeveler/session.js';
 import type { ActivityPlan, LevelerSnapshot } from '#/bot/scripts/AccountLeveler/types.js';
 
@@ -27,21 +27,39 @@ function validate(plan:ActivityPlan) {
 }
 
 test('every training adapter uses an installed script and supported settings', () => {
-    for(const level of [1,5,20,39]) {
+    for(const level of [1,5,10,20,25,30,39]) {
         const s=snapshot(level);
-        for(const quests of [false,true]) {
-            s.quests={'Druidic Ritual':quests,'Rune Mysteries Quest':quests};
-            for(const skill of enabledSkills) {
-                const plan=methodFor(s,skill,emptyMemory(),()=>0);
-                expect(plan,skill).not.toBeNull();
-                if(plan)validate(plan);
+        for(const stocked of [false,true]) {
+            s.stock.shrimps=stocked?24:0;
+            for(const quests of [false,true]) {
+                s.quests={'Druidic Ritual':quests,'Rune Mysteries Quest':quests};
+                for(const skill of enabledSkills) {
+                    for (const roll of [0, 0.25, 0.5, 0.75, 0.999]) {
+                        const plan=methodFor(s,skill,emptyMemory(),()=>roll);
+                        expect(plan,skill).not.toBeNull();
+                        if(plan)validate(plan);
+                    }
+                }
             }
         }
     }
 });
 
-test('fresh account supplies progress from catching to cooking to equipped combat', () => {
-    const s=snapshot();const session=new LevelerSession({...emptyMemory(),objective:'attack'});
+test('every eligible combat camp has a valid adapter for all three combat styles', () => {
+    const s=snapshot(39);
+    for (const camp of COMBAT_CAMPS) {
+        const memory=emptyMemory();
+        memory.cooldowns=Object.fromEntries(COMBAT_CAMPS.filter(c=>c.id!==camp.id).map(c=>[c.id,s.now+60000]));
+        for (const objective of ['attack','ranged','magic']) {
+            const plan=combatPlan(s,objective,memory,()=>0);
+            expect(plan?.id,camp.id).toBe(camp.id);
+            if(plan)validate(plan);
+        }
+    }
+});
+
+test('established combat supplies progress from catching to cooking to equipped combat', () => {
+    const s=snapshot();Object.assign(s.levels,{attack:20,strength:20,defence:20,hitpoints:25});const session=new LevelerSession({...emptyMemory(),objective:'attack'});
     const scripts:string[]=[];
     for(let step=0;step<3;step++) {
         const next=planNext(s,session.memory,()=>0);
@@ -63,7 +81,7 @@ test('cooldown and Wilderness preference exclude camps from actual combat select
         expect(plan?.wilderness).not.toBe(true);
     }
     s.wilderness=true;
-    const wild=combatPlan(s,'attack',memory,()=>0.999);
+    const wild=Array.from({length:200},(_,i)=>combatPlan(s,'attack',memory,()=>i/200)).find(plan=>plan?.wilderness);
     expect(wild?.wilderness).toBe(true);
     if(!wild)return;
     memory.cooldowns[wild.id]=s.now+60000;
@@ -74,7 +92,11 @@ test('high attack alone does not qualify a fragile account for stronger camps', 
     const s=snapshot();s.levels.attack=40;
     for(let i=0;i<20;i++) {
         const plan=combatPlan(s,'attack',emptyMemory(),()=>i/20);
-        expect(['lumbridge-chickens','falador-chickens','lumbridge-goblins','lumbridge-men','edgeville-men']).toContain(plan?.id ?? '');
+        const camp=COMBAT_CAMPS.find(c=>c.id===plan?.id);
+        expect(camp).toBeDefined();
+        expect(camp!.hp).toBeLessThanOrEqual(10);
+        expect(camp!.offence).toBe(1);
+        expect(camp!.defence).toBe(1);
     }
 });
 
