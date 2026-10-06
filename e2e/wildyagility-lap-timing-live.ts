@@ -25,6 +25,37 @@ const RUN_MS = Number(process.env.RUN_MS) || 900_000;
 /** Wall-clock budget for the timed window; fails a run that is slower than this, never faster. */
 const LAP_MAX_MS = Number(process.env.LAP_MAX_MS) || Number.POSITIVE_INFINITY;
 
+/**
+ * Bot-side failures: the click or the approach did not do what the script asked.
+ *
+ * These are the ones worth chasing. A click that never sends produces no game message, so nothing
+ * in the script can classify it and no log distinguishes it from a healthy attempt. At Wildy
+ * Agility a failed agility check is not a discrete event either, so nearly every retry here is the
+ * bot's own doing rather than the game's.
+ */
+const BOT_SIDE: ReadonlyArray<readonly [string, RegExp]> = [
+    ['CLICK FAILED', /could not click '.*'|interact\('.*'\) on '.*' failed/],
+    ['no actions', /has no actions/],
+    ['out of range', /within \d+ tiles/],
+    ['wrong side', /wrong side error/],
+    ['cant reach', /can't reach/],
+    ['no progress', /no progress|isn't completing from here/],
+    ['timeout', /timed out after \d+ ticks/],
+    ['start unreachable', /starting side unreachable/],
+    ['SKIPPED (loses xp)', /moving on to the next obstacle/]
+];
+
+/** Game-side events: expected parts of running the course, not defects. */
+const GAME_SIDE: ReadonlyArray<readonly [string, RegExp]> = [
+    ['pit', /fell into the pit|fell \(no pit\)/],
+    ['random event', /random event/i],
+    ['food yield', /yielding '.*' for food/],
+    ['death', /died in the wilderness/]
+];
+
+/** Dead ticks logged between one obstacle clearing and the next being clicked. */
+const GAP = /gap (\d+) ticks since last obstacle/;
+
 interface Api {
     __rs2b0t: {
         Inventory: { items(): Array<{ id: number; name: string | null; count: number }> };
@@ -91,6 +122,10 @@ try {
     let xpGained = 0;
     let deaths = 0;
     const tickSamples = new Map<string, number[]>();
+    const botSide = new Map<string, number>();
+    const gameSide = new Map<string, number>();
+    const gaps: number[] = [];
+    let skipWraps = 0;
     while (Date.now() < deadline && finishedAt === 0) {
         const snap = await page.evaluate(() => {
             const g = globalThis as never as Api;
@@ -122,6 +157,23 @@ try {
                 list.push(Number(cleared[2]));
                 tickSamples.set(name, list);
             }
+            const gap = GAP.exec(line.msg);
+            if (gap) {
+                gaps.push(Number(gap[1]));
+            }
+            if (/obstacle skip wrapped lap/.test(line.msg)) {
+                skipWraps++;
+            }
+            for (const [label, re] of BOT_SIDE) {
+                if (re.test(line.msg)) {
+                    botSide.set(label, (botSide.get(label) ?? 0) + 1);
+                }
+            }
+            for (const [label, re] of GAME_SIDE) {
+                if (re.test(line.msg)) {
+                    gameSide.set(label, (gameSide.get(label) ?? 0) + 1);
+                }
+            }
             if (/died in the wilderness/.test(line.msg)) {
                 deaths++;
             }
@@ -151,6 +203,25 @@ try {
         const avg = list.reduce((n, v) => n + v, 0) / list.length;
         console.log(`  ${name.padEnd(16)} avg ${avg.toFixed(1)}t over ${list.length} (${list.join(',')})`);
     }
+    const clears = [...tickSamples.values()].reduce((sum, list) => sum + list.reduce((n, v) => n + v, 0), 0);
+    console.log(`clear ticks total ${clears} over ${laps} lap(s) = ${(clears / Math.max(1, laps)).toFixed(1)}t/lap of ${(windowMs / timedLaps / 600).toFixed(1)}t/lap`);
+    if (gaps.length > 0) {
+        const avg = gaps.reduce((n, v) => n + v, 0) / gaps.length;
+        console.log(`dead ticks between obstacles: avg ${avg.toFixed(1)}t, max ${Math.max(...gaps)}t, over ${gaps.length} gaps`);
+    }
+    console.log(`obstacle skips that wrapped a lap: ${skipWraps}`);
+    const show = (title: string, rows: Map<string, number>): void => {
+        console.log(`${title}:`);
+        if (rows.size === 0) {
+            console.log('  none');
+            return;
+        }
+        for (const [label, n] of [...rows.entries()].sort((a, b) => b[1] - a[1])) {
+            console.log(`  ${label.padEnd(22)} ${n}`);
+        }
+    };
+    show('bot-side failures (click and approach — the ones to fix)', botSide);
+    show('game-side events (expected on this course)', gameSide);
     if (finishedAt > 0) {
         const xpHr = windowMs > 0 ? Math.round((xpGained / windowMs) * 3_600_000) : 0;
         console.log(`PASS, ${timedLaps} laps in ${windowMs}ms, xp/hr ${xpHr.toLocaleString('en-US')}, ${deaths} deaths`);
