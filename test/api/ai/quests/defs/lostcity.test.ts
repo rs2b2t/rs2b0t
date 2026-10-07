@@ -330,10 +330,10 @@ describe('Lost City Strike provisions', () => {
     }
 
     for (const [magic, wanted] of [
-        [1, { 'Mind rune': 200, 'Air rune': 200 }],
-        [5, { 'Mind rune': 200, 'Air rune': 200, 'Water rune': 200 }],
-        [9, { 'Mind rune': 200, 'Air rune': 200, 'Earth rune': 400 }],
-        [13, { 'Mind rune': 200, 'Air rune': 400, 'Fire rune': 600 }]
+        [1, { 'Mind rune': 150, 'Air rune': 150 }],
+        [5, { 'Mind rune': 150, 'Air rune': 150, 'Water rune': 150 }],
+        [9, { 'Mind rune': 150, 'Air rune': 150, 'Earth rune': 300 }],
+        [13, { 'Mind rune': 150, 'Air rune': 300, 'Fire rune': 450 }]
     ] as const) test(`provisions the highest Strike batch at Magic ${magic}`, () => {
         const step = decide(ready(magic, {}, {
             'Mind rune': 1000, 'Air rune': 1000, 'Water rune': 1000, 'Earth rune': 1000, 'Fire rune': 1000
@@ -343,20 +343,20 @@ describe('Lost City Strike provisions', () => {
     });
 
     test('waits for the bank snapshot before choosing a weaker held spell', () => {
-        const state = ready(13, { 'Mind rune': 200, 'Air rune': 200 });
+        const state = ready(13, { 'Mind rune': 150, 'Air rune': 150 });
         state.bankKnown = false;
         expect(decide(state).kind).toBe('scanBank');
     });
 
-    test('falls back to a complete lower Strike batch when stronger elements are short', () => {
-        const step = decide(ready(13, {}, { 'Mind rune': 200, 'Air rune': 400, 'Fire rune': 3, 'Earth rune': 400 }));
+    test('withdraws available runes before buying the stronger element shortfall', () => {
+        const step = decide(ready(13, {}, { 'Mind rune': 150, 'Air rune': 300, 'Fire rune': 3, 'Earth rune': 300 }));
         expect(step.kind === 'withdraw' && step.items).toEqual([
-            { name: 'Mind rune', qty: 200 }, { name: 'Earth rune', qty: 400 }, { name: 'Air rune', qty: 200 }
+            { name: 'Mind rune', qty: 150 }, { name: 'Fire rune', qty: 3 }, { name: 'Air rune', qty: 300 }
         ]);
     });
 
     test('tops up existing rune stacks without requiring free inventory slots', () => {
-        const state = ready(13, { 'Mind rune': 199, 'Air rune': 399, 'Fire rune': 599 }, { 'Mind rune': 1, 'Air rune': 1, 'Fire rune': 1 });
+        const state = ready(13, { 'Mind rune': 149, 'Air rune': 299, 'Fire rune': 449 }, { 'Mind rune': 1, 'Air rune': 1, 'Fire rune': 1 });
         state.freeSlots = 0;
         const step = decide(state);
         expect(step.kind === 'withdraw' && step.items).toEqual([
@@ -365,7 +365,7 @@ describe('Lost City Strike provisions', () => {
     });
 
     test('waits for room for new stacks in a full preserved pack', () => {
-        const state = ready(1, {}, { 'Mind rune': 200, 'Air rune': 200 });
+        const state = ready(1, {}, { 'Mind rune': 150, 'Air rune': 150 });
         state.freeSlots = 0;
         const step = decide(state);
         expect(step.kind === 'wait' && step.reason).toContain('2 free inventory slots');
@@ -381,15 +381,12 @@ describe('Lost City Strike provisions', () => {
     });
 
     test('does not sail with an incomplete Strike batch', () => {
-        const step = decide(ready(13, { 'Mind rune': 199, 'Air rune': 199 }));
-        expect(step.kind === 'wait' && step.reason).toContain('200');
-        expect(step.kind === 'wait' && step.reason).toContain('Strike');
-        expect(step.kind === 'wait' && step.reason).toContain('1 Mind rune');
-        expect(step.kind === 'wait' && step.reason).toContain('1 Air rune');
+        const step = decide(ready(13, { 'Mind rune': 149, 'Air rune': 149 }));
+        expect(step).toMatchObject({ kind: 'buy', item: 'Mind rune', qty: 1 });
     });
 
     test('a complete held Fire Strike batch sails without an unnecessary bank scan', () => {
-        const state = ready(13, { 'Mind rune': 200, 'Air rune': 400, 'Fire rune': 600 });
+        const state = ready(13, { 'Mind rune': 150, 'Air rune': 300, 'Fire rune': 450 });
         state.bankKnown = false;
         expect(customName(decide(state))).toBe('sail from Port Sarim to Entrana');
     });

@@ -15,8 +15,8 @@ import { QUESTS } from '../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { talkThrough, type NpcStop } from '../exec/primitives.js';
 import { FOOD_FLOAT, QuestFood } from '../food.js';
-import { SPELL_DB } from '../../../../data/spelldb.js';
-import { defeatTreeSpirit, highestLostCityStrike } from './lostcityCombat.js';
+import { prepareStrikes, STRIKE_CASTS } from '../strike.js';
+import { defeatTreeSpirit } from './lostcityCombat.js';
 
 export const LOST_CITY_STAGE = {
     NOT_STARTED: 0,
@@ -66,7 +66,7 @@ const BRANCH = 'Dramen branch';
 const STAFF = 'Dramen staff';
 export const LOST_CITY_FOOD_TARGET = FOOD_FLOAT;
 export const LOST_CITY_STAFF_TARGET = 5;
-export const LOST_CITY_CAST_TARGET = 200;
+export const LOST_CITY_CAST_TARGET = STRIKE_CASTS;
 const STRIKE_RUNES = ['air rune', 'mind rune', 'water rune', 'earth rune', 'fire rune'];
 const AXES = ['Rune axe', 'Adamant axe', 'Mithril axe', 'Black axe', 'Steel axe', 'Iron axe', 'Bronze axe'];
 const DUNGEON_AXES = ['Iron axe', 'Bronze axe'];
@@ -472,26 +472,7 @@ function mainlandTools(snap: QuestSnapshot): QuestStep | null {
 }
 
 function sourceStrikeRunes(snap: QuestSnapshot): QuestStep | null {
-    const magic = snap.magic ?? 1;
-    const best = highestLostCityStrike(magic, () => Infinity);
-    if (!best) return { kind: 'wait', reason: 'need Magic 1 for Lost City Strike spells' };
-    const carried = (rune: string): number => heldCount(snap, rune) / LOST_CITY_CAST_TARGET;
-    if (highestLostCityStrike(magic, carried) === best) return null;
-    if (!snap.bankKnown) return scanBank();
-    const available = (rune: string): number => heldCount(snap, rune) + banked(snap, rune);
-    const spell = highestLostCityStrike(magic, rune => available(rune) / LOST_CITY_CAST_TARGET);
-    if (!spell) {
-        const missing = SPELL_DB['Wind Strike'].runes
-            .map(({ rune, count }) => ({ rune, count: count * LOST_CITY_CAST_TARGET - available(rune) }))
-            .filter(item => item.count > 0)
-            .map(item => `${item.count} ${item.rune}`).join(', ');
-        return { kind: 'wait', reason: `need runes for ${LOST_CITY_CAST_TARGET} Strike casts: ${missing}` };
-    }
-    const items = SPELL_DB[spell].runes
-        .map(({ rune, count }) => ({ name: rune, qty: count * LOST_CITY_CAST_TARGET - heldCount(snap, rune) }))
-        .filter(item => item.qty > 0);
-    if (items.length === 0) return null;
-    return makeAcquisitionSpace(snap, items.filter(item => !held(snap, item.name)).length) ?? withdraw(items);
+    return prepareStrikes(snap, entranaKeep());
 }
 
 function travelToDungeon(snap: QuestSnapshot): QuestStep {

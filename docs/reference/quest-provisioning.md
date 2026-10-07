@@ -65,6 +65,20 @@ Two rules that are easy to get wrong:
   re-fetched by any run resumed past the leg that spent it. Dragon Slayer's Oracle charms
   were, with the map already in Ned's hands.
 
+## Strike spells
+
+Fight Arena, Witch's House, The Grand Tree and Lost City provision 150 casts before their boss
+fights. [`strike.ts`](../../src/bot/api/ai/quests/strike.ts) chooses the strongest Strike the
+Magic level permits, withdraws available bank stacks, and buys the missing runes from Betty.
+Rune stacks survive quest inventory clearing. Combat can use a weaker Strike if its runes are
+all that remain; it never switches to melee when runes run out.
+
+Fight Arena lures around the northern rock, Grand Tree uses the root passage, and Witch's
+House uses the southern gap for the bear and a northeast corner lure for the wolf. Its first
+two forms use ordinary Strike casts. Casting disables retaliation and staff autocast, removes
+melee equipment, and checks position, range and line of sight before each cast. Lost City keeps
+its existing Tree Spirit lure.
+
 ## Prayer
 
 A quest declaring `pray: { protect, potions }` holds that protection prayer through its fights.

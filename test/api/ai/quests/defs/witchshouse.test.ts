@@ -22,7 +22,7 @@ function snap(options: Options = {}): QuestSnapshot {
     }
     return {
         journal: options.journal ?? (stage === WH_STAGE.NOT_STARTED ? 'notStarted' : 'inProgress'),
-        inv: new Map(),
+        inv: new Map([['mind rune', 150], ['air rune', 150]]),
         invIds,
         worn: new Set(),
         wornIds: new Set(options.worn ?? []),

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { KIT_KEEP, decide, fightarena } from '#/bot/api/ai/quests/defs/fightarena/index.js';
+import { decide, fightarena } from '#/bot/api/ai/quests/defs/fightarena/index.js';
 import { FA_OBJ, FA_TILE } from '#/bot/api/ai/quests/defs/fightarena/areas.js';
 import { FA_STAGE } from '#/bot/api/ai/quests/defs/fightarena/journal.js';
 import { QUEST_DEFS } from '#/bot/api/ai/quests/defs/index.js';
@@ -34,7 +34,7 @@ function snap(o: SnapOpts = {}): QuestSnapshot {
     }
     return {
         journal: o.journal ?? 'inProgress',
-        inv: counts(o.inv ?? []),
+        inv: new Map([...counts(o.inv ?? []), ['mind rune', 150], ['air rune', 150]]),
         invIds,
         worn: new Set((o.worn ?? []).map(n => n.toLowerCase())),
         wornIds: new Set(o.wornIds ?? []),
@@ -132,7 +132,7 @@ describe('Fight Arena decide', () => {
         expect(name(step)).toBe('custom:talk to the drunk guard');
     });
 
-    test('stage 5 in the building swaps to combat gear before unlocking the cell', () => {
+    test('stage 5 keeps the disguise until Jeremy is unlocked', () => {
         const step = decide(snap({
             stage: FA_STAGE.GIVEN_KHALI_BREW,
             wornIds: [FA_OBJ.HELMET, FA_OBJ.ARMOUR],
@@ -140,7 +140,7 @@ describe('Fight Arena decide', () => {
             invIds: [FA_OBJ.KEYS, RUNE_FULL_HELM],
             tile: FA_TILE.DOOR1_INSIDE
         }));
-        expect(name(step)).toBe('custom:wear the combat kit');
+        expect(name(step)).toBe('custom:unlock Jeremy\'s cell');
     });
 
     test('stage 5 in combat gear unlocks Jeremy\'s cell', () => {
@@ -216,96 +216,25 @@ describe('Fight Arena decide', () => {
     });
 });
 
-describe('food waits for the kit', () => {
-    test('a banked kit holds the food back, so the pack has room to withdraw it', () => {
-        expect(fightarena.foodReady?.(snap({ stage: FA_STAGE.STARTED, bank: RUNE_KIT }))).toBe(false);
+describe('Strike supplies before entering the arena', () => {
+    test('an empty pack scans the bank before buying runes', () => {
+        const state = snap({ stage: FA_STAGE.STARTED, bankKnown: false, tile: FA_TILE.YANILLE_BANK });
+        state.inv.clear();
+        expect(decide(state).kind).toBe('scanBank');
+        expect(fightarena.foodReady?.(state)).toBe(false);
     });
-
-    test('a carried but unworn kit still holds it back — wearing is what frees the slots', () => {
-        expect(fightarena.foodReady?.(snap({ stage: FA_STAGE.STARTED, inv: RUNE_KIT }))).toBe(false);
+    test('a complete Strike batch releases the food and continues the quest', () => {
+        const state = snap({ stage: FA_STAGE.STARTED, bank: RUNE_KIT, tile: FA_TILE.YANILLE_BANK });
+        expect(fightarena.foodReady?.(state)).toBe(true);
+        expect(name(decide(state))).toBe("custom:search the guards' chest");
     });
-
-    test('a worn kit releases the food', () => {
-        expect(fightarena.foodReady?.(snap({ stage: FA_STAGE.STARTED, worn: RUNE_KIT }))).toBe(true);
+    test('a resume after Bouncer can provision escape food without more runes', () => {
+        const state = snap({ stage: FA_STAGE.DEFEATED_BOUNCER });
+        state.inv.clear();
+        expect(fightarena.foodReady?.(state)).toBe(true);
     });
-
-    test('an account owning no kit is not made to wait for one', () => {
-        expect(fightarena.foodReady?.(snap({ stage: FA_STAGE.STARTED }))).toBe(true);
-    });
-
-    test('the disguise fills the kit slots, and must not hold the food back forever', () => {
-        expect(fightarena.foodReady?.(snap({
-            stage: FA_STAGE.STARTED,
-            bank: RUNE_KIT,
-            wornIds: [FA_OBJ.HELMET, FA_OBJ.ARMOUR]
-        }))).toBe(true);
-    });
-});
-
-describe('arming from the bank', () => {
-    test('an unread bank is scanned before anything is concluded about it', () => {
-        const step = decide(snap({ stage: FA_STAGE.STARTED, bankKnown: false, tile: FA_TILE.YANILLE_BANK }));
-        expect(step.kind).toBe('scanBank');
-    });
-
-    test('a banked melee kit is withdrawn, best tier first', () => {
-        const step = decide(snap({ stage: FA_STAGE.STARTED, bank: RUNE_KIT, tile: FA_TILE.YANILLE_BANK }));
-        expect(step.kind).toBe('withdraw');
-        if (step.kind === 'withdraw') {
-            expect(step.items.map(i => i.name)).toEqual(RUNE_KIT);
-        }
-    });
-
-    test('the chainbody outranks the platebody, which wants Dragon Slayer', () => {
-        const step = decide(snap({
-            stage: FA_STAGE.STARTED,
-            bank: ['Rune platebody', 'Rune chainbody'],
-            tile: FA_TILE.YANILLE_BANK
-        }));
-        expect(step.kind).toBe('withdraw');
-        if (step.kind === 'withdraw') {
-            expect(step.items.map(i => i.name)).toEqual(['Rune chainbody']);
-        }
-    });
-
-    test('a lower tier is taken when the higher one is not owned', () => {
-        const step = decide(snap({ stage: FA_STAGE.STARTED, bank: ['Steel scimitar'], tile: FA_TILE.YANILLE_BANK }));
-        expect(step.kind).toBe('withdraw');
-        if (step.kind === 'withdraw') {
-            expect(step.items.map(i => i.name)).toEqual(['Steel scimitar']);
-        }
-    });
-
-    test('a carried kit is worn rather than withdrawn again', () => {
-        const step = decide(snap({ stage: FA_STAGE.STARTED, inv: RUNE_KIT, bank: RUNE_KIT, tile: FA_TILE.YANILLE_BANK }));
-        expect(name(step)).toBe(`custom:wear ${RUNE_KIT.join(', ')}`);
-    });
-
-    test('a dressed account goes straight to the chest', () => {
-        const step = decide(snap({ stage: FA_STAGE.STARTED, worn: RUNE_KIT, bank: RUNE_KIT, tile: FA_TILE.YANILLE_BANK }));
-        expect(name(step)).toBe('custom:search the guards\' chest');
-    });
-
-    test('an account that owns no melee gear is not wedged at the bank', () => {
-        const step = decide(snap({ stage: FA_STAGE.STARTED, tile: FA_TILE.YANILLE_BANK }));
-        expect(name(step)).toBe('custom:search the guards\' chest');
-    });
-
-    test('the disguise is not mistaken for a missing body slot', () => {
-        const step = decide(snap({
-            stage: FA_STAGE.OBTAINED_ARMOUR,
-            wornIds: [FA_OBJ.HELMET, FA_OBJ.ARMOUR],
-            worn: ['Khazard helmet', 'Khazard armour', 'Rune scimitar'],
-            bank: RUNE_KIT,
-            tile: FA_TILE.CHEST_STAND
-        }));
-        expect(name(step)).toBe('custom:enter the arena building');
-    });
-
-    test('every kit word is on the keep list, so the spillover deposit leaves it alone', () => {
-        for (const word of KIT_KEEP) {
-            expect(fightarena.tools).toContain(word);
-        }
+    test('runes remain protected from spillover banking', () => {
+        for (const rune of ['mind rune', 'air rune', 'fire rune']) expect(fightarena.tools).toContain(rune);
     });
 });
 

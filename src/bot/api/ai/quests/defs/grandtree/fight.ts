@@ -5,6 +5,7 @@ import { Locs } from '../../../../locs/Locs.js';
 import { Npcs, type Npc } from '../../../../npcs/Npcs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { driveUntil, settleScene } from '../../exec/prompts.js';
+import { DEMON_COVER, readyStrikes } from '../../strikeCombat.js';
 import { runFight } from '../fightarena/fights.js';
 import { GT_LOC, GT_NPC, GT_TILE, inCaves } from './areas.js';
 import { climbToPillars, leaveCaves } from './legs.js';
@@ -58,6 +59,7 @@ export async function descendTrapdoor(log: Log): Promise<boolean> {
 
 /** Take the trapdoor, sit through Glough's speech, kill the demon. */
 export async function fightBlackDemon(log: Log): Promise<boolean> {
+    if (!(await readyStrikes(log))) return false;
     const dropping = !inCaves(here());
     if (!(await descendTrapdoor(log))) {
         return false;
@@ -74,9 +76,6 @@ export async function fightBlackDemon(log: Log): Promise<boolean> {
         await leaveCaves(log);
         return false;
     }
-    // Why: Glough sets the demon on you 12 tiles away, and the fight loop calls the target caged after 12 ticks out of combat.
-    const at = target.tile();
-    await Traversal.walkResilient(new Tile(at.x, at.z, at.level), { radius: 2, attempts: 2, timeoutMs: 20_000, log });
-    const result = await runFight({ what: 'Black Demon', npcId: GT_NPC.BLACK_DEMON, guard: DEMON_GUARD }, log);
+    const result = await runFight({ what: 'Black Demon', npcId: GT_NPC.BLACK_DEMON, guard: DEMON_GUARD, cover: DEMON_COVER }, log);
     return result === 'won';
 }

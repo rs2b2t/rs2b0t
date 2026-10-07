@@ -6,13 +6,17 @@ import { Skills } from '../../../../skills/Skills.js';
 import { Sustain } from '../../../../sustain/Sustain.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Npcs, type Npc } from '../../../../npcs/Npcs.js';
-import { FA_NPC } from './areas.js';
+import Tile from '../../../../../geometry/Tile.js';
+import { ARENA_COVER, atCover, castFromCover, castStrike, readyStrikes, takeStrikeCover } from '../../strikeCombat.js';
+import { Inventory } from '../../../../inventory/Inventory.js';
+import { FA_NPC, pocketOf } from './areas.js';
 
 export interface ArenaFight {
     what: string;
     npcId: number;
     /** Ticks before the fight is declared stuck. */
     guard: number;
+    cover?: Tile;
 }
 
 // Why: running out mid-fight hands the tick back to the engine, which reads the journal, and that opens a main modal on top of a boss.
@@ -25,8 +29,6 @@ export const FA_FIGHT: Record<'ogre' | 'scorpion' | 'bouncer', ArenaFight> = {
 
 export const PROTECT_MELEE = 'protect from melee';
 export const PROTECT_LEVEL = 43;
-/** A lobster's worth of damage is enough to eat on; waiting spends the margin. */
-const EAT_AT_MISSING = 15;
 const SEARCH_RADIUS = 20;
 /** Empty-target ticks before the fight counts as won; targets do not respawn within this window. */
 const MISSING_TO_WIN = 3;
@@ -38,22 +40,7 @@ export function fightWon(swings: number, missingTicks: number): boolean {
     return swings > 0 && missingTicks >= MISSING_TO_WIN;
 }
 
-// Why: a caged beast is in the scene and offers Attack but the server drops every op against it, so the swing counter climbs to the guard while hitpoints never move.
-
-/** Swings taken with no combat before the target counts as unreachable. */
-export const ENGAGE_PROOF = 12;
-
-/** Whether the target exposes Attack but cannot enter combat through the cage. */
-export function unengaged(swings: number, everEngaged: boolean): boolean {
-    return !everEngaged && swings >= ENGAGE_PROOF;
-}
-
 export type FightResult = 'won' | 'stuck' | 'unengaged';
-
-function hungry(): boolean {
-    const max = Skills.level('hitpoints');
-    return max > 0 && Skills.effective('hitpoints') <= max - EAT_AT_MISSING;
-}
 
 function target(npcId: number): Npc | null {
     return Npcs.query()
@@ -92,16 +79,15 @@ async function dropPrayer(): Promise<void> {
 /** Run one arena fight to its win. */
 export async function runFight(fight: ArenaFight, log: (m: string) => void): Promise<FightResult> {
     const canPray = Skills.level('prayer') >= PROTECT_LEVEL;
-    if (!canPray) {
-        log(`prayer below ${PROTECT_LEVEL} — ${fight.what} will land hits this fight`);
-    }
-    Game.setAutoRetaliate(true);
+    const cover = fight.cover ?? ARENA_COVER;
+    const initial = target(fight.npcId);
+    if (!fight.cover && initial && pocketOf(initial.networkTile()) !== 'arena') return 'unengaged';
+    if (!(await readyStrikes(log)) || !(await takeStrikeCover(cover, log, !fight.cover && !atCover(cover) ? () => target(fight.npcId) : undefined))) return 'stuck';
     let lastTick = -1;
     let reported = -1;
     let swings = 0;
-    let attacking = -1;
     let missing = 0;
-    let everEngaged = false;
+
     try {
         for (let i = 0; i < fight.guard; i++) {
             if (EventSignal.pending()) {
@@ -123,14 +109,12 @@ export async function runFight(fight: ArenaFight, log: (m: string) => void): Pro
                 await Prayer.set(PROTECT_MELEE, true);
                 continue;
             }
-            if (hungry()) {
-                await Sustain.run();
-                continue;
-            }
+            const foodBefore = Inventory.items().length;
+            await Sustain.run();
+            if (Inventory.items().length < foodBefore) { await Execution.delayTicks(1); continue; }
 
             const npc = target(fight.npcId);
             if (!npc) {
-                attacking = -1;
                 missing++;
                 if (fightWon(swings, missing)) {
                     log(`${fight.what}: down after ${swings} attacks`);
@@ -142,24 +126,31 @@ export async function runFight(fight: ArenaFight, log: (m: string) => void): Pro
                 continue;
             }
             missing = 0;
-            everEngaged = everEngaged || Game.inCombat();
-            if (unengaged(swings, everEngaged)) {
-                log(`${fight.what}: ${swings} attacks and never in combat at (${npc.tile().x},${npc.tile().z}) — still caged`);
-                return 'unengaged';
-            }
             if (now - reported >= 40) {
                 reported = now;
                 log(`${fight.what}: hp=${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}`
                     + ` prayer=${Prayer.points()} attacks=${swings} at (${npc.tile().x},${npc.tile().z})`);
             }
-            // Why: melee keeps swinging on its own, so re-clicking the same target spends the tick's one action on re-targeting.
-            if (npc.index === attacking && Game.inCombat()) {
-                await Execution.delayTicks(1);
+            if (!atCover(cover)) {
+                await takeStrikeCover(cover, log);
+                return 'stuck';
+            }
+            if (!fight.cover && !castFromCover(cover, npc)) {
+                const arrived = await Execution.delayUntilTicks(() => {
+                    const current = target(fight.npcId);
+                    return current !== null && castFromCover(cover, current);
+                }, 12);
+                if (!arrived) {
+                    log(`${fight.what}: luring back around the rock`);
+                    await takeStrikeCover(cover, log, () => target(fight.npcId));
+                }
                 continue;
             }
-            if (await npc.interact('Attack')) {
-                attacking = npc.index;
+            if (await castStrike(cover, npc, log)) {
                 swings++;
+            } else {
+                log(`${fight.what}: no cast landed from cover`);
+                return 'stuck';
             }
             await Execution.delayTicks(1);
         }

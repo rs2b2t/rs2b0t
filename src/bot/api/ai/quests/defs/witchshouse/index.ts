@@ -1,3 +1,4 @@
+import { prepareStrikes, STRIKE_RUNES } from '../../strike.js';
 import { QUESTS } from '../../data/quests.js';
 import { heldId, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { FALADOR_WEST_BANK, BOY, EXPERIMENT_NAMES, SHOP_GP, THESSALIA, WH_NAME, WH_OBJ, WYDIN, inGarden, inShed } from './areas.js';
@@ -28,6 +29,11 @@ export function decide(snap: QuestSnapshot): QuestStep {
     }
     if (stage === undefined) {
         return { kind: 'wait', reason: "Witch's House journal stage unavailable" };
+    }
+
+    if (stage < WH_STAGE.DEFEATED && !inGarden(snap.tile) && !inShed(snap.tile)) {
+        const runes = prepareStrikes(snap, ['door key', 'key', 'magnet', 'cheese', 'ball', 'diary', 'leather gloves']);
+        if (runes) return runes;
     }
 
     if (stage === WH_STAGE.NOT_STARTED) {
@@ -93,8 +99,9 @@ export const witchshouse: QuestModule = {
     bank: FALADOR_WEST_BANK,
     pray: { protect: 'melee', potions: 2 },
     food: WH_FOOD,
+    foodReady: snap => (snap.progress?.stage ?? snap.stage ?? 0) >= WH_STAGE.DEFEATED || prepareStrikes(snap) === null,
     grind: [...EXPERIMENT_NAMES],
-    tools: ['door key', 'key', 'magnet', 'cheese', 'ball', 'diary', 'leather gloves'],
+    tools: ['door key', 'key', 'magnet', 'cheese', 'ball', 'diary', 'leather gloves', 'coins', ...STRIKE_RUNES],
     readProgress: readWitchsHouseProgress,
     sustain: { foods: ['Lobster', 'Swordfish', 'Trout'], eatBelowHp: 0.6 },
     // Why: neither spawns anywhere and the record calls both acquirable, so with an empty bank the engine had no route to either and blocked the quest.
