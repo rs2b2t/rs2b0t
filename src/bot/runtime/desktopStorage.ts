@@ -24,7 +24,7 @@ function resolveDesktopStorage(): DesktopStorage | undefined {
             ...shared,
             subscribe(callback) {
                 const listener = (event: StorageEvent) => {
-                    if (event.key?.startsWith('rs2b0t:')) callback(event.key, event.oldValue, event.newValue);
+                    if (event.storageArea === null && event.key?.startsWith('rs2b0t:')) callback(event.key, event.oldValue, event.newValue);
                 };
                 parent.addEventListener('storage', listener);
                 addEventListener('pagehide', () => parent.removeEventListener('storage', listener), { once: true });
