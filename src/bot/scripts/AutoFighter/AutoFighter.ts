@@ -12,6 +12,7 @@ import {
     tryParseCombatStyle,
     type MeleeCombatStyle
 } from '../../api/combat/CombatStyle.js';
+import { attackRangeFor, bodyOrigin, gapTo } from '../../api/combat/hunting/logic.js';
 import { Autocast } from '../../api/magic/Autocast.js';
 import { castsAvailable, runeWithdrawList } from '../../api/combat/CombatStyleLogic.js';
 import { foodHealAmount } from '../../api/combat/food.js';
@@ -31,6 +32,7 @@ import { Sustain } from '../../api/sustain/Sustain.js';
 import { nearestBankReachable, BANK_LOCATIONS, bankUnlocked, type BankLocation } from '../../api/bank/BankLocations.js';
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { GroundItems } from '../../api/grounditems/GroundItems.js';
+import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import { Npcs, type Npc } from '../../api/npcs/Npcs.js';
 import { matchesEntityName } from '../../api/query/Query.js';
 import { SettingsStore, type SettingsSchema } from '../../runtime/Settings.js';
@@ -920,21 +922,42 @@ class ReequipGear implements Task {
 
 class Fight implements Task {
     readonly label = 'Fight';
+    private skipped = new Map<string, number>();
     constructor(private bot: AutoFighter) {}
+    private key(npc: Npc): string { return `${npc.index}:${npc.id}`; }
+    private eligible(npc: Npc): boolean {
+        return (npc.targetsMe() || !npc.inCombat) && !npc.targetsAnotherPlayer() && npc.tile().distanceTo(ANCHOR) <= LEASH;
+    }
+    private reachable(npc: Npc): boolean {
+        const tile = npc.tile(), here = Game.tile();
+        if (!Reachability.probeable(tile)) return true;
+        if (STYLE !== 'melee' && here && gapTo(here, npc.networkTile(), npc.size) <= attackRangeFor(STYLE)) {
+            const origin = bodyOrigin(npc.networkTile(), npc.size);
+            if (Reachability.lineOfSight(here, { ...origin, level: tile.level }, npc.size)) return true;
+        }
+        return Reachability.canReach(tile, { maxSteps: 2048, adjacentOk: true });
+    }
+    private skip(npc: Npc, reason: string): void {
+        this.skipped.set(this.key(npc), Date.now() + 30_000);
+        this.bot.log(`skipping ${npc.name} at ${npc.tile()} for 30s (${reason})`);
+    }
     private findTarget() {
+        for (const [key, until] of this.skipped) {
+            if (until <= Date.now()) this.skipped.delete(key);
+        }
         const q = Npcs.query()
             .action('Attack')
-            .where(n => (n.targetsMe() || !n.inCombat) && !n.targetsAnotherPlayer() && n.tile().distanceTo(ANCHOR) <= LEASH);
+            .where(n => this.eligible(n) && (n.targetsMe() || !this.skipped.has(this.key(n))));
         const names = targetNames();
         if (names.length > 0) {
             q.name(...names);
         }
         const targets = q.results().sort((a, b) => a.distance() - b.distance());
-        return targets.find(n => n.targetsMe()) ?? targets[0] ?? null;
+        return targets.find(n => n.targetsMe()) ?? targets.find(n => this.reachable(n)) ?? targets[0] ?? null;
     }
     private track(engaged: Npc): Npc | null {
         const names = targetNames();
-        return Npcs.all().find(n => n.index === engaged.index && names.some(name => matchesEntityName(n.name, name))) ?? null;
+        return Npcs.all().find(n => n.index === engaged.index && n.id === engaged.id && names.some(name => matchesEntityName(n.name, name))) ?? null;
     }
     validate(): boolean {
         if (needEat() || Skills.hpFraction() < PANIC_AT) {
@@ -952,13 +975,27 @@ class Fight implements Task {
         if (!target) {
             return;
         }
+        if (!Game.inCombat() && !this.reachable(target)) {
+            this.bot.setStatus(`approaching ${target.name} through obstacles`);
+            const arrived = await Traversal.walkTo(target.tile(), { radius: 1, timeoutMs: 20_000, log: message => this.bot.log(message) });
+            if (EventSignal.pending() || this.bot.died || needEat() || Skills.hpFraction() < PANIC_AT || ChatDialog.canContinue()) return;
+            const current = this.track(target);
+            if (!current || !this.eligible(current)) return;
+            if (!arrived || !this.reachable(current)) {
+                this.skip(current, 'approach blocked');
+                return;
+            }
+        }
         this.bot.setStatus(`attacking ${target.name} at ${target.tile()}`);
         if (this.bot.resumeAttack && target.targetsMe()) {
             if (!(await target.interact('Attack'))) return;
             this.bot.resumeAttack = false;
         }
         const status = await Reach.entityOp({
-            find: () => this.track(target),
+            find: () => {
+                const current = this.track(target);
+                return current && this.eligible(current) ? current : null;
+            },
             op: 'Attack',
             expect: () => Game.inCombat() || ChatDialog.canContinue(),
             // a wandering target postpones the server's can't-reach verdict forever,
@@ -969,6 +1006,7 @@ class Fight implements Task {
             log: message => this.bot.log(message)
         });
         if (status !== 'done' || ChatDialog.canContinue()) {
+            if (status !== 'done' && !EventSignal.pending() && !ChatDialog.canContinue() && !this.bot.died) this.skip(target, status);
             return;
         }
         this.bot.resumeAttack = false;
