@@ -2,6 +2,8 @@
 
 Training methods, equipment and recovery policy are in [the methods guide](ACCOUNT_LEVELER_METHODS.md).
 
+AutoFighter keeps an incoming attacker first, then prefers targets with an accessible path or a clear ranged/magic firing line. Blocked targets get one normal navigation attempt through doors, with a 20-second timeout. It rechecks reachability, camp bounds and target ownership afterward; a closest-tile stop outside a wall is insufficient. Blocked approaches and failed attacks skip that NPC for 30 seconds, unless it attacks us. Interruptions yield without imposing a cooldown.
+
 ## Combat camp eligibility
 
 Melee offence uses the lower of Attack and Strength; ranged and magic use their own levels. All listed HP/offence/Defence requirements must be met. Normal combat prefers the strongest available training group unlocked by the player's actual combat level, then rotates eligible regions and samples camps randomly. It avoids the last three camps when alternatives exist and respects failure cooldowns and the Wilderness setting. Resource tasks select suitable drops independently of training groups, so high-level accounts can still gather cowhides or air talismans.
