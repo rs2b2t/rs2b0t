@@ -1,11 +1,18 @@
 import { describe, expect, test } from 'bun:test';
-import { 
-    RUNES, 
-    bankTile, 
-    RUNE_OPTIONS, 
-    isConfiguredPartner, 
-    classifyMuleState, 
-    type RuneRoute 
+import {
+    DEFAULT_MEETING_POINT,
+    MEETING_POINTS,
+    RUNES,
+    RUNE_OPTIONS,
+    TRADE_REQUEST_INTERVAL_MS,
+    bankDue,
+    bankTile,
+    classifyMuleState,
+    isConfiguredPartner,
+    parsePartnerNames,
+    selectNearestPartner,
+    tradeRequestDue,
+    type RuneRoute
 } from '#/bot/scripts/MuleCrafter/MuleCrafterLogic.js';
 import { type TradeItem } from '#/bot/api/trade/Trade.js';
 
@@ -126,6 +133,80 @@ describe('MuleCrafterLogic', () => {
         test('zero count essence returns empty', () => {
             const offer: TradeItem[] = [{ id: 1436, name: 'Rune essence', count: 0 }];
             expect(classifyMuleState(offer)).toBe('empty');
+        });
+    });
+
+    describe('meeting and cadence policy', () => {
+        test('defaults to the inside altar meeting point', () => {
+            expect(DEFAULT_MEETING_POINT).toBe('Altar (inside)');
+            expect(MEETING_POINTS).toEqual(['Altar (inside)', 'Ruins (outside)']);
+        });
+
+        test('every route has an overworld meeting tile', () => {
+            for (const route of Object.values(RUNES) as RuneRoute[]) {
+                expect(route.ruins).toBeDefined();
+                expect(route.ruins.level).toBe(0);
+            }
+        });
+
+        test('parses and normalizes partner names', () => {
+            expect(parsePartnerNames(' Player_One, stranger ')).toEqual(['player one', 'stranger']);
+        });
+
+        test('selects the nearest configured candidate independent of setting order', () => {
+            const selected = selectNearestPartner(
+                ['first', 'second'],
+                [
+                    { name: 'first', distance: 8 },
+                    { name: 'second', distance: 2 }
+                ]
+            );
+            expect(selected?.name).toBe('second');
+        });
+
+        test('does not select an unconfigured candidate', () => {
+            const selected = selectNearestPartner(
+                ['first'],
+                [
+                    { name: 'stranger', distance: 1 },
+                    { name: 'first', distance: 4 }
+                ]
+            );
+            expect(selected?.name).toBe('first');
+        });
+
+        test('prefers a valid requested candidate', () => {
+            const selected = selectNearestPartner(
+                ['first', 'second'],
+                [
+                    { name: 'first', distance: 1 },
+                    { name: 'second', distance: 4 }
+                ],
+                'second'
+            );
+            expect(selected?.name).toBe('second');
+        });
+
+        test('zero trades per bank means no scheduled bank', () => {
+            expect(bankDue(0, 0)).toBe(false);
+            expect(bankDue(99, 0)).toBe(false);
+        });
+
+        test('disabled bank visits override the trade threshold', () => {
+            expect(bankDue(3, 1, false)).toBe(false);
+            expect(bankDue(0, 0, false)).toBe(false);
+        });
+
+        test('bank becomes due at the configured trade count', () => {
+            expect(bankDue(2, 3)).toBe(false);
+            expect(bankDue(3, 3)).toBe(true);
+            expect(bankDue(4, 3)).toBe(true);
+        });
+
+        test('trade requests are limited to one per interval', () => {
+            expect(tradeRequestDue(null, 100)).toBe(true);
+            expect(tradeRequestDue(100, 100 + TRADE_REQUEST_INTERVAL_MS - 1)).toBe(false);
+            expect(tradeRequestDue(100, 100 + TRADE_REQUEST_INTERVAL_MS)).toBe(true);
         });
     });
 });
