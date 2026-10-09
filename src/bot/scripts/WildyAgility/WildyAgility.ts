@@ -43,7 +43,6 @@ import {
     nearCourseEntry,
     nearTile,
     onCourse,
-    reactionMs,
     southOfRidge,
     type RidgeOutcome
 } from './WildyAgilityLogic.js';
@@ -68,11 +67,13 @@ export const WILDY_AGILITY_SETTINGS: SettingsSchema = {
 
     foodWithdraw: {
         type: 'number',
-        default: 20,
+        default: 28,
         min: 1,
         max: 28,
         label: 'Food to withdraw',
-        help: 'how many to withdraw at startup restock and after death'
+        // Why: 28, not 20. Restock is death-only and a death costs a 444-tile walk back to the
+        // course, about three laps. 28 is what the lap-timing proof ran, at zero deaths over ten laps.
+        help: 'how many to withdraw at startup restock and after death. 28 fills the pack and is what the lap timing proof measured'
     },
     minFood: {
         type: 'number',
@@ -87,24 +88,21 @@ export const WILDY_AGILITY_SETTINGS: SettingsSchema = {
         default: true,
         label: 'Acquire food at start',
         help: "if the inventory has no 'Food to withdraw' when the script starts (and you're not already on the course), withdraw from the bank before heading out; turn off to skip the startup bank trip even when empty"
-    },
-    obstacleTimeoutTicks: {
-        type: 'number',
-        default: 24,
-        min: 5,
-        max: 60,
-        label: 'Obstacle timeout (ticks)',
-        help: 'max ticks to wait for XP or a known-delaying event before treating as timeout'
     }
 };
+
+/** Why: not a setting. A healthy clear tops out at 18 ticks on the obstacle pipe, so this sits
+ *  above that with margin instead of being a dial; 60 only made a dead obstacle worse. */
+const OBSTACLE_TIMEOUT_TICKS = 24;
+
+
 
 let FOOD = 'lobster';
 
 let ACQUIRE_FOOD_AT_START = true;
 
-let FOOD_WITHDRAW = 20;
+let FOOD_WITHDRAW = 28;
 let MIN_FOOD = 1;
-let OBSTACLE_TIMEOUT_TICKS = 24;
 
 /** Disable Auto Retaliate so nearby skeletons cannot pull the bot off course. */
 async function ensureRetaliateOff(log: (m: string) => void): Promise<void> {
@@ -266,10 +264,9 @@ export default class WildyAgility extends TaskBot {
 
         FOOD = (this.settings.str('food', '').trim() || scriptFood(this.settings, 'Lobster')).toLowerCase();
 
-        FOOD_WITHDRAW = this.settings.num('foodWithdraw', 20);
+        FOOD_WITHDRAW = this.settings.num('foodWithdraw', 28);
         MIN_FOOD = this.settings.num('minFood', 1);
         ACQUIRE_FOOD_AT_START = this.settings.bool('acquireFoodAtStart', true);
-        OBSTACLE_TIMEOUT_TICKS = this.settings.num('obstacleTimeoutTicks', 24);
         this.course = [...COURSE_OBSTACLES];
 
         const agility = Skills.level('agility');
@@ -762,8 +759,7 @@ class RunLap implements Task {
 
         const op = obstacle.actions()[0];
         if (!op) {
-            this.bot.log(`'${obstacle.name}' has no actions — retrying`);
-            await Execution.delayTicks(2);
+            await this.escalate(`'${obstacle.name}' has no actions`);
             return;
         }
 
@@ -780,8 +776,7 @@ class RunLap implements Task {
         this.bot.log(`${op} '${this.bot.currentName()}' @ ${ot.x},${ot.z}`);
 
         if (!(await obstacle.interact(op))) {
-            this.bot.log(`interact('${op}') on '${this.bot.currentName()}' failed — retrying`);
-            await Execution.delayTicks(2);
+            await this.escalate(`could not click '${op}'`);
             return;
         }
 
@@ -795,6 +790,7 @@ class RunLap implements Task {
         let lowHp = false;
         let settled = false;
         let lastTile = Game.tile();
+        let reclicks = 0;
         while (idleTicks < OBSTACLE_TIMEOUT_TICKS) {
             if (performance.now() >= waitDeadline) {
                 break;
@@ -823,6 +819,17 @@ class RunLap implements Task {
             if (EventSignal.pending() || ChatDialog.canContinue()) {
                 settled = true;
                 break;
+            }
+            // Why: click every tick instead of waiting, because standing still is the only cost that matters and the timeout is 29 ticks of it.
+            // Why: the click lands on the tile the character is already on, so a clear in progress turns it into a no-op and the xp still arrives when the animation ends.
+            // Why: only the first one is logged, since a click per tick would flood the 500-line log ring the harness reads.
+            // Why: the guard skips the first pass through the loop, which would click again before any waiting.
+            if (waitedTicks > 0) {
+                reclicks++;
+                if (reclicks === 1) {
+                    this.bot.log(`no xp after ${waitedTicks} ticks — clicking '${op}' again every tick`);
+                }
+                await obstacle.interact(op);
             }
             // Why: yielding lets EatFood run while skeletons near the rocks hit us.
             // Why: it waits a few ticks first, so residual damage does not abort the click.
@@ -875,9 +882,10 @@ class RunLap implements Task {
         }
 
         if (reason === 'timeout') {
+            const again = reclicks > 0 ? `, ${reclicks} re-click${reclicks > 1 ? 's' : ''}` : '';
             this.bot.setStatus(`timeout waiting for ${obstacle.name} (${idleTicks} idle / ${waitedTicks} total ticks)`);
             this.bot.log(
-                `'${this.bot.currentName()}' timed out after ${waitedTicks} ticks (${idleTicks} idle) — no xp/chat`
+                `'${this.bot.currentName()}' timed out after ${waitedTicks} ticks (${idleTicks} idle${again}) — no xp/chat`
             );
         }
 
@@ -892,9 +900,8 @@ class RunLap implements Task {
             }
             this.bot.lastClearedTick = Game.tick();
             this.bot.advance();
-            // Short humanized pause only, do not block on animation (combat/path
-            // jitter can keep animating and previously hung the next lap silently).
-            await Execution.delay(reactionMs());
+            // No settle pause: the xp landing is the settle, and the next loop pass picks up the next
+            // stand. A humanized delay here is 1.2s per obstacle that buys nothing the xp did not.
             return;
         }
 
@@ -926,39 +933,42 @@ class RunLap implements Task {
             this.bot.log(`'${this.bot.currentName()}' can't reach — retrying`);
         }
 
+        await this.escalate('isn\'t completing from here', obstacle.name?.toLowerCase());
+    }
+
+    /** Count a failed attempt and escalate. Why: a click that never sends leaves no message, so the
+     *  classifier driving `stuck` never runs and the same impossible click repeats for ever. */
+    private async escalate(reason: string, obstacleName?: string): Promise<void> {
+        const name = this.bot.currentName();
         // stuck=1: in-place retry; stuck=2: walk back to start; stuck>limit: skip.
         // Use > so the walk-back branch is reachable ( >= limit would skip it).
         if (++this.stuck > LAP_RETRY_LIMIT) {
-            const skipped = this.bot.currentName();
-            this.bot.log(
-                `'${skipped}' isn't completing from here after ${this.stuck} tries — moving on to the next obstacle`
-            );
+            this.bot.log(`'${name}' ${reason} after ${this.stuck} tries — moving on to the next obstacle`);
             this.stuck = 0;
             this.bot.advance();
-            // If advance wrapped the lap onto the same / first obstacle, walk to
-            // the first start tile to break a wrong-position loop (e.g. rocks).
             const nextName = this.bot.currentName();
-            if (nextName === skipped || nextName === this.bot.courseNames()[0]) {
-                if (getStartTile(this.bot.courseNames()[0])) {
-                    this.bot.log(`obstacle skip wrapped lap — walking to '${this.bot.courseNames()[0]}' starting side`);
-                    await this.walkToStartTile(this.bot.courseNames()[0]);
+            if (nextName === name || nextName === this.bot.courseNames()[0]) {
+                const first = this.bot.courseNames()[0];
+                if (first && getStartTile(first)) {
+                    this.bot.log(`obstacle skip wrapped lap — walking to '${first}' starting side`);
+                    await this.walkToStartTile(first);
                 }
             }
-        } else if (this.stuck >= 2) {
-            this.bot.log(
-                `'${this.bot.currentName()}' no progress — walking back to starting side (${this.stuck}/${LAP_RETRY_LIMIT})`
-            );
-            const walked = await this.walkToStartTile(obstacle.name?.toLowerCase() ?? this.bot.currentName());
+            return;
+        }
+        if (this.stuck >= 2) {
+            this.bot.log(`'${name}' ${reason} — walking back to starting side (${this.stuck}/${LAP_RETRY_LIMIT})`);
+            const walked = await this.walkToStartTile(obstacleName ?? name.toLowerCase());
             if (!walked) {
-                this.bot.log(`'${this.bot.currentName()}' starting side unreachable — advancing to next obstacle`);
+                this.bot.log(`'${name}' starting side unreachable — advancing to next obstacle`);
                 this.stuck = 0;
                 this.bot.advance();
             }
-        } else {
-            this.bot.setStatus(`retrying ${obstacle.name}`);
-            this.bot.log(`'${this.bot.currentName()}' no progress — retrying (${this.stuck}/${LAP_RETRY_LIMIT})`);
-            await Execution.delayTicks(2);
+            return;
         }
+        this.bot.setStatus(`retrying ${name}`);
+        this.bot.log(`'${name}' ${reason} — retrying (${this.stuck}/${LAP_RETRY_LIMIT})`);
+        await Execution.delayTicks(2);
     }
 
     private nearStart(obstacleName: string, radius: number): boolean {
