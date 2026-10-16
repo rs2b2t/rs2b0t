@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 72. Categories: 21.
+- Scripts: 73. Categories: 21.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -30,7 +30,7 @@
 - [Smithing](#smithing) — 3
 - [Thieving](#thieving) — 3
 - [Treasure Trails](#treasure-trails) — 1
-- [Utility](#utility) — 1
+- [Utility](#utility) — 2
 - [Woodcutting](#woodcutting) — 2
 
 ## Agility
@@ -1239,6 +1239,12 @@ Walks to a bank and rewrites the slot order into categories, coins first and jun
 | `sortBank` | boolean | `true` | Sort the bank |
 | `reportQuestJunk` | boolean | `true` | Report obsolete quest items |
 | `dropQuestJunk` | boolean | `false` | Drop what the report found |
+
+### Pink Skirt Summoning Ritual
+
+Bank your inventory, pickpocket skirt money, and don the sacred pink skirt with no setup required. Join other initiates in leaderless synchronized formations while late arrivals await the next cycle and ordinary passersby are ignored. The Cult of the Pink Hem demands no leader, only matching skirts and a suspicious commitment to geometry.
+
+- Tags: `pink skirt`, `formations`, `leaderless`
 
 ## Woodcutting
 

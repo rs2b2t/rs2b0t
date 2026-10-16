@@ -1,3 +1,4 @@
+import PinkSkirtSummoningRitual from './PinkSkirtSummoningRitual/PinkSkirtSummoningRitual.js';
 import AccountLeveler, { SETTINGS as ACCOUNT_LEVELER_SETTINGS } from './AccountLeveler/AccountLeveler.js';
 import { AGILITY_SETTINGS } from './AgilityBot/AgilityBot.js';
 import { FISHING_LOCATION_OPTIONS } from '../data/fishingLocations.js';
@@ -862,6 +863,15 @@ ScriptRegistry.register({
     tags: ['crafting', 'fletching', 'flax', 'bow-strings', 'trade', 'two-player', 'afk'],
     settingsSchema: FLAXRUNNER_SETTINGS,
     create: () => new FlaxRunner()
+});
+
+ScriptRegistry.register({
+    name: 'Pink Skirt Summoning Ritual',
+    description: 'Bank your inventory, pickpocket skirt money, and don the sacred pink skirt with no setup required. Join other initiates in leaderless synchronized formations while late arrivals await the next cycle and ordinary passersby are ignored. The Cult of the Pink Hem demands no leader, only matching skirts and a suspicious commitment to geometry.',
+    version: '1.1.0',
+    category: 'Utility',
+    tags: ['pink skirt', 'formations', 'leaderless'],
+    create: () => new PinkSkirtSummoningRitual()
 });
 
 ScriptRegistry.register({
