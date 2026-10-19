@@ -446,7 +446,7 @@ export const Bank: {
     /** `withdrawX` by object id; in note mode `landsAsId` names the noted obj the pack receives. */
     withdrawXById(id: number, count: number, landsAsId?: number): Promise<boolean>;
     /** Fill the pack: Withdraw-All when present, otherwise Withdraw-X for free slots. */
-    withdrawLoad(name: string): Promise<boolean>;
+    withdrawLoad(name: string | number): Promise<boolean>;
     deposit(name: string, op?: string): boolean | Promise<boolean>;
     /** Deposit every backpack slot (Deposit-All each). */
     depositInventory(): Promise<void>;

@@ -58,6 +58,12 @@ function selectMethod(s: LevelerSnapshot, objective: string, memory: SessionMemo
             return withFood(s, activity(objective, 'pick-and-spin-flax', 'FlaxAIO', { picking: true, spinning: true }));
         }
         case 'agility':
+            if (s.levels.agility >= 15 && s.wilderness) {
+                const food = foodFor(s);
+                return { ...withFood(s, activity(objective, 'edgeville-monkey-bars', 'EdgevilleMonkeyBars', {
+                    food, foodAmount: 12, minFood: 1, restockMode: 'Dungeon ladder (out of food)', loadout: ''
+                })), wilderness: true };
+            }
             return withFood(s, activity(objective, 'gnome-course', 'GnomeCourse', {}));
         case 'thieving': {
             const food = foodFor(s);
@@ -169,5 +175,5 @@ export function producer(s: LevelerSnapshot, objective: string, need: Requiremen
         default: return null;
     }
     plan = plan ? locateMethod(s, plan, memory, random) : null;
-    return plan ? plan.prerequisiteLevels ? plan : { ...plan, output: { item: need.item, count: need.count } } : null;
+    return plan ? plan.prerequisiteLevels ? plan : { ...plan, output: { item: need.item, count: plan.script === 'EssMiner' ? Math.max(1000, need.count) : need.count } } : null;
 }

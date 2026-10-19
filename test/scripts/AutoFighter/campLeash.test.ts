@@ -10,6 +10,7 @@ import { EventSignal } from '#/bot/api/execution/EventSignal.js';
 import { Traversal, type WalkOptions } from '#/bot/api/walking/Traversal.js';
 import { SettingsBag } from '#/bot/runtime/Settings.js';
 import Tile from '#/bot/geometry/Tile.js';
+import { Reachability } from '#/bot/event/webwalk/geometry/Reachability.js';
 import { stubProps } from '../../lib/stubSingletons.js';
 
 class Fighter extends AutoFighter {
@@ -45,6 +46,7 @@ beforeEach(async () => {
         stubProps(Game, { tile: () => here, ingame: () => true, inCombat: () => false }),
         stubProps(Skills, { xp: () => 0, level: () => 10, effective: () => 10, hpFraction: () => 1 }),
         stubProps(Sustain, { set: () => {} }),
+        stubProps(Reachability, { walkable: () => true }),
         stubProps(Execution, { delayUntil: async check => check() }),
         stubProps(EventSignal, { pending: () => interrupted }),
         stubProps(Traversal, {

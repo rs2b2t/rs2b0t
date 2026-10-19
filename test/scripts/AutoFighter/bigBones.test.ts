@@ -12,6 +12,7 @@ import { Execution } from '#/bot/api/execution/Execution.js';
 import { EventSignal } from '#/bot/api/execution/EventSignal.js';
 import { SettingsBag } from '#/bot/runtime/Settings.js';
 import Tile from '#/bot/geometry/Tile.js';
+import { Reachability } from '#/bot/event/webwalk/geometry/Reachability.js';
 import { stubProps } from '../../lib/stubSingletons.js';
 
 class Fighter extends AutoFighter {
@@ -44,6 +45,7 @@ beforeEach(() => {
         stubProps(Game, { tile: () => new Tile(3200, 3200), ingame: () => true, inCombat: () => false }),
         stubProps(Skills, { xp: () => 0, level: () => 40, effective: () => 40, hpFraction: () => 1 }),
         stubProps(Sustain, { set: () => {} }),
+        stubProps(Reachability, { walkable: () => true }),
         stubProps(Execution, { delayUntil: async check => check(), delayTicks: async () => {} }),
         stubProps(EventSignal, { pending: () => false }),
         stubProps(Input, { heldOp: (_id, slot) => { if (consumed) inventory = inventory.filter(item => item.slot !== slot); return true; } })

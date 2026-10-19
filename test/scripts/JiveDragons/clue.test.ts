@@ -62,12 +62,12 @@ test('hands off after fight and loot finish without changing emergency or ammo p
     expect(tasks.indexOf(fixture.task('Retreat'))).toBeLessThan(tasks.indexOf(fixture.clue));
 });
 
-test('a yielded hard clue keeps its DDS through the host scheduler', async () => {
-    const fixture = await clueScenario('Magic shortbow');
+test('a yielded melee hard clue keeps its guardian weapon through the host scheduler', async () => {
+    const fixture = await clueScenario('Rune scimitar', 'melee');
     const clue = new InvItem({ id: 2723, name: 'Clue scroll (hard)', count: 1, slot: 0, comId: 1, ops: ['Read'] });
-    const bow = new InvItem({ id: 861, name: 'Magic shortbow', count: 1, slot: 1, comId: 1, ops: ['Wield'] });
-    let armed = 'Magic shortbow';
-    spyOn(Inventory, 'items').mockReturnValue([clue, bow]);
+    const weapon = new InvItem({ id: 1333, name: 'Rune scimitar', count: 1, slot: 1, comId: 1, ops: ['Wield'] });
+    let armed = 'Rune scimitar';
+    spyOn(Inventory, 'items').mockReturnValue([clue, weapon]);
     spyOn(Equipment, 'contains').mockImplementation(name => name === armed);
     spyOn(Equipment, 'equip').mockImplementation(async name => { armed = name; return true; });
     fixture.clue['host'].prepareInitialBank = async () => true;

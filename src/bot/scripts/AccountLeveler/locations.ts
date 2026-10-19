@@ -57,6 +57,7 @@ function sites(plan: ActivityPlan): Site[] {
         case 'TannerBot': return [{ name: 'Al Kharid', settings: {}, travel: new Tile(3269, 3167, 0) }];
         case 'RuneCrafter': return [{ name: 'Falador East', settings: {}, travel: new Tile(3013, 3355, 0) }];
         case 'EssMiner': return [{ name: 'Varrock East', settings: {}, travel: new Tile(3251, 3420, 0) }];
+        case 'EdgevilleMonkeyBars': return [{ name: 'Edgeville', settings: {}, travel: new Tile(3094, 3493, 0) }];
         case 'AIOQuester': return [{ name: 'Varrock East', settings: {}, travel: new Tile(3253, 3420, 0) }];
         default: return [];
     }

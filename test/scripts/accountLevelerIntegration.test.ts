@@ -10,7 +10,7 @@ import type { ActivityPlan, LevelerSnapshot } from '#/bot/scripts/AccountLeveler
 
 const snapshot = (level=1): LevelerSnapshot => ({ levels:Object.fromEntries(enabledSkills.map(s=>[s,s==='hitpoints'?Math.max(10,level):level])),stock:{coins:100000},bankReady:true,quests:{},target:40,wilderness:true,now:1000 });
 
-function validate(plan:ActivityPlan) {
+function validate(plan:ActivityPlan, s:LevelerSnapshot) {
     const meta=ScriptRegistry.get(plan.script);
     expect(meta,plan.script).toBeDefined();
     for(const [key,value] of Object.entries(plan.settings)) {
@@ -22,13 +22,13 @@ function validate(plan:ActivityPlan) {
     }
     for(const need of plan.needs) {
         if(need.item==='Coins')continue;
-        expect(supplyOffer(need.item) || producer(snapshot(40),plan.objective,need,emptyMemory(),()=>0),need.item).toBeTruthy();
+        expect(supplyOffer(need.item) || producer(s,plan.objective,need,emptyMemory(),()=>0),need.item).toBeTruthy();
     }
 }
 
 test('every training adapter uses an installed script and supported settings', () => {
-    for(const level of [1,5,10,20,25,30,39]) {
-        const s=snapshot(level);
+    for(const level of [1,5,10,14,15,20,25,30,39,40,41,50,59]) {
+        const s=snapshot(level); s.target=60;
         for(const stocked of [false,true]) {
             s.stock.shrimps=stocked?24:0;
             for(const quests of [false,true]) {
@@ -37,7 +37,7 @@ test('every training adapter uses an installed script and supported settings', (
                     for (const roll of [0, 0.25, 0.5, 0.75, 0.999]) {
                         const plan=methodFor(s,skill,emptyMemory(),()=>roll);
                         expect(plan,skill).not.toBeNull();
-                        if(plan)validate(plan);
+                        if(plan)validate(plan,s);
                     }
                 }
             }
@@ -53,7 +53,7 @@ test('every eligible combat camp has a valid adapter for all three combat styles
         for (const objective of ['attack','ranged','magic']) {
             const plan=combatPlan(s,objective,memory,()=>0);
             expect(plan?.id,camp.id).toBe(camp.id);
-            if(plan)validate(plan);
+            if(plan)validate(plan,s);
         }
     }
 });
@@ -64,7 +64,7 @@ test('established combat supplies progress from catching to cooking to equipped 
     for(let step=0;step<3;step++) {
         const next=planNext(s,session.memory,()=>0);
         expect(next.kind).toBe('activity');if(next.kind!=='activity')return;
-        scripts.push(next.plan.script);validate(next.plan);
+        scripts.push(next.plan.script);validate(next.plan,s);
         session.start(next.plan,s.now,()=>0);
         for(const need of next.plan.needs) if(supplyOffer(need.item))s.stock[need.item.toLowerCase()]=need.count;
         if(next.plan.output)s.stock[next.plan.output.item.toLowerCase()]=next.plan.output.count;

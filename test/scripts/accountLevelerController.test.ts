@@ -296,7 +296,7 @@ test.each([0, 200])('parent travel avoids White Wolf Mountain with fare %i and r
         walk, start,
         spyOn(Game, 'myName').mockReturnValue(null),
         spyOn(Game, 'tile').mockReturnValue({ x: 3092, z: 3245, level: 0 }),
-        spyOn(Skills, 'level').mockImplementation(skill => skill === 'cooking' ? 20 : 40),
+        spyOn(Skills, 'level').mockImplementation(skill => skill === 'cooking' ? 20 : 60),
         spyOn(Skills, 'xp').mockReturnValue(0),
         spyOn(Bank, 'ready').mockReturnValue(true),
         spyOn(Bank, 'items').mockReturnValue([]),
@@ -339,7 +339,7 @@ test.each([true, false])('exhausted route replans without stopping and cools dow
         spyOn(Game, 'sceneReady').mockReturnValue(true),
         spyOn(Game, 'myName').mockReturnValue(null),
         spyOn(Game, 'tile').mockReturnValue({ x: 3092, z: 3245, level: 0 }),
-        spyOn(Skills, 'level').mockImplementation(skill => skill === objective ? 1 : 40),
+        spyOn(Skills, 'level').mockImplementation(skill => skill === objective ? 1 : 60),
         spyOn(Bank, 'ready').mockReturnValue(true),
         spyOn(Bank, 'items').mockReturnValue([{ id: 995, name: 'Coins', count: 100000, slot: 0, comId: 5382, ops: [] }]),
         spyOn(Inventory, 'items').mockReturnValue([]),
@@ -582,7 +582,7 @@ test('reaching every target still finishes the leveler', async () => {
     const patches = [finish,
         spyOn(Game, 'sceneReady').mockReturnValue(true),
         spyOn(Game, 'myName').mockReturnValue(null),
-        spyOn(Skills, 'level').mockReturnValue(40),
+        spyOn(Skills, 'level').mockReturnValue(60),
         spyOn(Bank, 'ready').mockReturnValue(true),
         spyOn(Bank, 'items').mockReturnValue([]),
         spyOn(Bank, 'close').mockResolvedValue(true),
@@ -594,6 +594,6 @@ test('reaching every target still finishes the leveler', async () => {
         bot['shoppingChecked'] = true;
         await bot.loop();
         expect(finish).toHaveBeenCalledTimes(1);
-        expect(finish).toHaveBeenCalledWith('All 19 enabled skills reached 40');
+        expect(finish).toHaveBeenCalledWith('All 19 enabled skills reached 60');
     } finally { bot.onStop(); for (const patch of patches) patch.mockRestore(); }
 });

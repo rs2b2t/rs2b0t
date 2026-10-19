@@ -8,9 +8,10 @@ import { Shop } from '../../api/shop/Shop.js';
 import { unitPrice } from '../../api/shop/StockModel.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import Tile from '../../geometry/Tile.js';
-import { purchaseBudget, supplyOffer } from './offers.js';
+import { purchaseBudget, supplyOffer, supplyOffers } from './offers.js';
 import { SHOPPING_RESERVE, shoppingStops } from './shopping.js';
 import { requirementKey, type ActivityPlan, type Requirement } from './types.js';
+import { fillSupplyVials, VIAL_FOUNTAIN } from './vials.js';
 
 export class SupplyUnavailableError extends Error {
     readonly items: string[];
@@ -55,6 +56,7 @@ export interface SupplyPort {
     shopStock(name: string): number;
     buy(name: string, count: number): Promise<number>;
     closeShop(): Promise<void>;
+    fillVials?(count: number): Promise<boolean>;
     equip(name: string): Promise<boolean>;
     log(message: string): void;
 }
@@ -84,6 +86,7 @@ export function gameSupplyPort(log: (message: string) => void): SupplyPort {
             : Shop.stock().find(i => i.name.toLowerCase() === name.toLowerCase())?.count ?? 0,
         buy: (name, count) => name.startsWith('#') ? Shop.buyById(Number(name.slice(1)), count) : Shop.buy(name, count),
         closeShop: () => Shop.close(),
+        fillVials: count => fillSupplyVials(count, log),
         equip: async name => {
             if (!name.startsWith('#')) return Equipment.equip(name);
             const id = Number(name.slice(1));
@@ -155,6 +158,31 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
             report('bank:start', `Skipping ${need.item}: no shop available`, undefined, 'done');
         }
     }
+    const hasAlternatives = (need: Requirement) => supplyOffers(need.item).length > 1;
+    const water = plan.needs.find(need => need.item.toLowerCase() === 'vial of water');
+    const keepEmpty = plan.needs.filter(need => need.item.toLowerCase() === 'vial').reduce((max, need) => Math.max(max, need.count), 0);
+    if (water && port.fillVials) {
+        for (let attempt = 0; attempt < 12; attempt++) {
+            const travelFood = plan.food && (port.stock()[plan.food.toLowerCase()] ?? 0) >= 3 ? plan.food : null;
+            const count = Math.min(travelFood ? 24 : 27, water.count - (port.stock()[requirementKey(water).toLowerCase()] ?? 0), (port.stock().vial ?? 0) - keepEmpty);
+            if (count <= 0) break;
+            report('vials:fill', `Filling ${count} banked vials at Falador fountain`, VIAL_FOUNTAIN);
+            const coins = Math.min(SHOPPING_RESERVE, port.stock().coins ?? 0);
+            if (coins > 0 && !(await port.withdraw('Coins', coins))) throw new Error('Could not withdraw travel coins for filling vials');
+            if (travelFood && !(await port.withdraw(travelFood, 3))) throw new Error('Could not withdraw food for filling vials');
+            if (!(await port.withdraw('Vial', count))) throw new Error('Could not withdraw empty vials');
+            if (!(await port.closeBank())) throw new Error('Bank did not close before filling vials');
+            const before = port.held('Vial of water');
+            await port.fillVials(count);
+            const filled = port.held('Vial of water') - before;
+            await bank(port);
+            await port.deposit();
+            if (filled < count) {
+                report('vials:fill', `Only ${filled}/${count} vials filled; trying shops`);
+                break;
+            }
+        }
+    }
     for (const stop of shoppingStops(plan.needs, port.stock())) {
         const id = `shop:${stop.keeper}`;
         const missing = (need: Requirement) => Math.max(0, need.count - (port.stock()[requirementKey(need).toLowerCase()] ?? 0));
@@ -169,12 +197,15 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
             const travelFood = plan.food && (port.stock()[plan.food.toLowerCase()] ?? 0) >= 3 ? plan.food : null;
             let slots = travelFood ? 24 : 27;
             const batch = stop.needs.flatMap(need => {
-                const offer = supplyOffer(need.item)!;
+                const offer = supplyOffers(need.item).find(offer => offer.keeper === stop.keeper)!;
+                if (offer.fillVials && !port.fillVials) { allowance.set(requirementKey(need), 0); return []; }
                 const count = Math.min(remaining(need), slots > 0 ? offer.item.stackable ? 1000 : slots : 0);
                 if (!count) return [];
                 slots -= offer.item.stackable ? 1 : count;
                 return [{ need, offer, count, banked: need.count - missing(need) }];
             });
+            if (!batch.length) break;
+            let toFill = 0;
             const budget = batch.reduce((sum, entry) => sum + purchaseBudget(entry.offer, entry.count), 0);
             const coins = budget + SHOPPING_RESERVE;
             if ((port.stock().coins ?? 0) < coins) {
@@ -197,10 +228,12 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
                 try {
                     for (const { need, offer, count, banked } of batch) {
                         const key = requirementKey(need);
-                        const available = port.shopStock(key);
-                        if ((options.bestEffort || need.minimum) && !allowance.has(key)) allowance.set(key, available);
+                        const purchaseKey = offer.fillVials ? offer.item.name : key;
+                        const available = port.shopStock(purchaseKey);
+                        const limited = options.bestEffort || need.minimum || hasAlternatives(need);
+                        if (limited && !allowance.has(key)) allowance.set(key, available);
                         if (available <= 0) {
-                            if (!options.bestEffort && !need.minimum) throw new SupplyStockError(`${stop.keeper} has no stock of ${need.item}`, [need.item]);
+                            if (!limited) throw new SupplyStockError(`${stop.keeper} has no stock of ${need.item}`, [need.item]);
                             allowance.set(key, 0);
                             report(id, `Skipping ${need.item}: ${stop.keeper} has no stock`, stop.tile);
                             continue;
@@ -214,13 +247,14 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
                             report(id, `Skipping ${need.item}: current shop price exceeds the purchase budget`, stop.tile);
                             continue;
                         }
-                        report(id, `Buying ${amount} ${need.item} from ${stop.keeper} (${banked}/${need.count} banked)`, stop.tile);
-                        const before = port.held(key);
+                        report(id, `Buying ${amount} ${offer.item.name} from ${stop.keeper} (${banked}/${need.count} banked)`, stop.tile);
+                        const before = port.held(purchaseKey);
                         const beforeCoins = port.held('Coins');
-                        await port.buy(key, amount);
-                        const bought = Math.max(0, port.held(key) - before);
-                        if (!options.bestEffort && !need.minimum && bought === 0) throw new SupplyStockError(`Purchase of ${need.item} did not arrive`, [need.item]);
-                        if (options.bestEffort || need.minimum) {
+                        await port.buy(purchaseKey, amount);
+                        const bought = Math.max(0, port.held(purchaseKey) - before);
+                        if (offer.fillVials) toFill += bought;
+                        if (!limited && bought === 0) throw new SupplyStockError(`Purchase of ${need.item} did not arrive`, [need.item]);
+                        if (limited) {
                             allowance.set(key, bought < amount ? 0 : Math.max(0, allowance.get(key)! - bought));
                             if (bought < amount) report(id, `Skipping the remaining ${need.item}: only ${bought}/${amount} purchased`, stop.tile);
                         }
@@ -230,14 +264,25 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
                     await port.closeShop();
                 }
             } catch (error) {
-                if (!options.bestEffort && error instanceof SupplyStockError) {
+                const fallback = error instanceof SupplyUnavailableError && error.items.every(item => plan.needs.some(need => need.item.toLowerCase() === item && hasAlternatives(need)));
+                if (!options.bestEffort && !fallback && error instanceof SupplyStockError) {
                     await bank(port);
                     await port.deposit();
                     throw error;
                 }
-                if (!options.bestEffort || !(error instanceof SupplyUnavailableError)) throw error;
-                report(id, `${error.message}; skipping this optional supplier`);
+                if ((!options.bestEffort && !fallback) || !(error instanceof SupplyUnavailableError)) throw error;
+                report(id, `${error.message}; trying remaining suppliers`);
                 for (const need of stop.needs) allowance.set(requirementKey(need), 0);
+            }
+            if (toFill > 0 && port.fillVials) {
+                report(id, `Filling ${toFill} vials at Falador fountain`, VIAL_FOUNTAIN);
+                const before = port.held('Vial of water');
+                await port.fillVials(toFill);
+                const filled = port.held('Vial of water') - before;
+                if (filled < toFill) {
+                    for (const need of stop.needs) if (need.item.toLowerCase() === 'vial of water') allowance.set(requirementKey(need), 0);
+                    report(id, `Only ${filled}/${toFill} vials filled; trying remaining suppliers`);
+                }
             }
             report(id, `Banking purchases from ${stop.keeper}`);
             await bank(port);
@@ -251,6 +296,8 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
         if (!(await port.closeBank())) throw new Error('Bank did not close after shopping');
         return;
     }
+    const shortages = plan.needs.filter(need => hasAlternatives(need) && (port.stock()[requirementKey(need).toLowerCase()] ?? 0) < (need.minimum ?? need.count));
+    if (shortages.length) throw new SupplyStockError(`Suppliers exhausted: ${shortages.map(need => need.item).join(', ')}`, shortages.map(need => need.item));
     rebaseConsumables(plan, port.stock());
     report('loadout', `Packing supplies for ${plan.label}`);
     for (const need of plan.needs) {

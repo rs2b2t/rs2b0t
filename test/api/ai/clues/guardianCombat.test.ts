@@ -85,6 +85,63 @@ test('equips DDS and confirms the final potion dose before the dig', async () =>
     expect(pack.some(i => i.id === 185)).toBe(false);
     expect(await protection.maintain()).toBe('ready');
 });
+
+test('ranged guardians keep the bow, shoot from range, and stop when equipped arrows run out', async () => {
+    const ranged = { weapon: 'Magic shortbow', ammo: 'Rune arrow', quantity: 500, mode: 1 };
+    pack = pack.filter(i => i.id !== 1231);
+    worn = [{ ...item(861, 'Magic shortbow'), slot: 3 }, { ...item(892, 'Rune arrow', 50), slot: 13 }];
+    spyOn(Skills, 'level').mockReturnValue(1);
+    spyOn(Quests, 'status').mockReturnValue('notStarted');
+    spyOn(Game, 'tile').mockReturnValue(new Tile(2995, 3000, 0));
+    let mode = 0;
+    spyOn(Game, 'combatMode').mockImplementation(() => mode);
+    spyOn(Game, 'setCombatMode').mockImplementation(value => { mode = value; return true; });
+    spyOn(Reachability, 'probeable').mockReturnValue(true);
+    spyOn(Reachability, 'lineOfSight').mockReturnValue(true);
+    const walk = spyOn(Traversal, 'walkTo').mockResolvedValue(false);
+    npcs = npcs.map(n => ({ ...n, distance: 5 }));
+    const protection = new GuardianProtection('Saradomin Wizard', ranged);
+    expect(await protection.prepare()).toBe(true);
+    advance = () => { if (npcs[0]?.health === 0) npcs = []; };
+    expect(await fightGuardian('Saradomin Wizard', () => {}, protection)).toBe('killed');
+    expect(walk).not.toHaveBeenCalled();
+    expect(worn[0].id).toBe(861);
+    expect(mode).toBe(1);
+    expect(events.some(e => e.startsWith('attack:'))).toBe(true);
+
+    npcs = [{ index: 4, id: 1, anim: -1, name: 'Saradomin Wizard', level: 65, size: 1,
+        tile: { x: 3000, z: 3000, level: 0 }, distance: 5, ops: ['Attack'], inCombat: true,
+        health: 40, totalHealth: 40, faceEntity: 32768 }];
+    worn = worn.filter(i => i.slot !== 13);
+    const attacks = events.filter(e => e.startsWith('attack:')).length;
+    expect(await fightGuardian('Saradomin Wizard', () => {}, protection)).toBe('supplies-needed');
+    expect(events.filter(e => e.startsWith('attack:'))).toHaveLength(attacks);
+});
+
+test('ranged guardian approach stops at a reachable firing tile instead of walking into melee', async () => {
+    pack = pack.filter(i => i.id !== 1231);
+    worn = [{ ...item(861, 'Magic shortbow'), slot: 3 }, { ...item(892, 'Rune arrow', 50), slot: 13 }];
+    let here = new Tile(2990, 3000, 0);
+    const stand = new Tile(2993, 3000, 0);
+    spyOn(Game, 'tile').mockImplementation(() => here);
+    spyOn(Game, 'combatMode').mockReturnValue(1);
+    spyOn(Reachability, 'probeable').mockReturnValue(true);
+    spyOn(Reachability, 'lineOfSight').mockImplementation(from => stand.equals(from));
+    spyOn(Reachability, 'canReach').mockImplementation(tile => stand.equals(tile));
+    spyOn(Reachability, 'canStep').mockReturnValue(true);
+    const walk = spyOn(Traversal, 'walkTo').mockImplementation(async tile => {
+        expect(tile).toEqual(stand);
+        here = stand;
+        npcs = npcs.map(n => ({ ...n, distance: 7 }));
+        return true;
+    });
+    npcs = npcs.map(n => ({ ...n, distance: 10 }));
+    const protection = new GuardianProtection('Saradomin Wizard', { weapon: 'Magic shortbow', ammo: 'Rune arrow', quantity: 500, mode: 1 });
+    expect(await protection.prepare()).toBe(true);
+    advance = () => { if (npcs[0]?.health === 0) npcs = []; };
+    expect(await fightGuardian('Saradomin Wizard', () => {}, protection)).toBe('killed');
+    expect(walk).toHaveBeenCalledTimes(1);
+});
 test.each([false, true])('prepares and defeats a guardian with a dragon longsword: already worn %s', async alreadyWorn => {
     pack = pack.filter(i => i.id !== 1231);
     const sword = item(1305, 'Dragon longsword');
@@ -280,6 +337,35 @@ function guardedTrail(guardian = 'Saradomin Wizard', clue = 3526): void {
     spyOn(ChatDialog, 'canContinue').mockReturnValue(false);
     spyOn(Traversal, 'walkResilient').mockImplementation(async () => { events.push(`walk:${tick}`); return true; });
 }
+
+test('the executor carries ranged equipment through the spawn, guardian fight, and reward dig', async () => {
+    guardedTrail('Zamorak Wizard', 2723);
+    pack = pack.filter(i => i.id !== 1231);
+    worn = [{ ...item(861, 'Magic shortbow'), slot: 3 }, { ...item(892, 'Rune arrow', 50), slot: 13 }];
+    spyOn(Skills, 'level').mockReturnValue(1);
+    spyOn(Quests, 'status').mockReturnValue('notStarted');
+    spyOn(Game, 'tile').mockReturnValue(new Tile(2995, 3000, 0));
+    spyOn(Game, 'combatMode').mockReturnValue(1);
+    spyOn(Reachability, 'probeable').mockReturnValue(true);
+    spyOn(Reachability, 'lineOfSight').mockReturnValue(true);
+    npcs = npcs.map(n => ({ ...n, distance: 5 }));
+    let digs = 0;
+    let pending = false;
+    spyOn(EventSignal, 'pending').mockImplementation(() => pending);
+    spyOn(InvItem.prototype, 'interact').mockImplementation(function(this: InvItem, op) {
+        if (op === 'Dig' && ++digs === 2) {
+            pack = pack.map(i => i.id === 2723 ? { ...i, id: 2724 } : i);
+            pending = true;
+        }
+        return true;
+    });
+    advance = () => { if (npcs[0]?.health === 0) npcs = []; };
+    expect(await ClueExecutor.solveHeldClue(() => {}, undefined, { weapon: 'Magic shortbow', ammo: 'Rune arrow', quantity: 500, mode: 1 })).toBe('yield');
+    expect(digs).toBe(2);
+    expect(worn.find(i => i.slot === 3)?.id).toBe(861);
+    expect(pack.some(i => i.id === 2724)).toBe(true);
+    expect(events.some(e => e.startsWith('attack:'))).toBe(true);
+});
 
 test('hard sextant012 digs at 3054,3696 before and after chasing its wizard', async () => {
     guardedTrail();

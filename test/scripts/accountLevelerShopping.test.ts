@@ -56,7 +56,8 @@ test('shopping stops group missing purchases by vendor and use exact bow ids', (
     const stops = shoppingStops([{ item: 'Iron chainbody', count: 1 }, { item: 'Shortbow', id: 841, count: 1 },
         { item: 'Bronze arrow', count: 1000 }, { item: 'Iron platelegs', count: 1 }], { shortbow: 20, '#50': 20, 'iron platelegs': 1 });
     expect(stops.map(stop => ({ keeper: stop.keeper, needs: stop.needs.map(need => need.item) }))).toEqual([
-        { keeper: 'Horvik', needs: ['Iron chainbody'] }, { keeper: 'Lowe', needs: ['Shortbow', 'Bronze arrow'] }
+        { keeper: 'Horvik', needs: ['Iron chainbody'] }, { keeper: 'Lowe', needs: ['Shortbow', 'Bronze arrow'] },
+        { keeper: 'Hickton', needs: ['Bronze arrow'] }
     ]);
 });
 
@@ -82,6 +83,16 @@ test('startup rune shopping matches the strongest affordable current spell', () 
     expect(audit.needs).toContainEqual({ item: 'Chaos rune', count: 200 });
     expect(audit.needs).toContainEqual({ item: 'Fire rune', count: 800 });
     expect(audit.needs.some(need => need.item === 'Mind rune')).toBe(false);
+});
+
+test('rune and arrow shopping includes both suppliers at their shop locations', () => {
+    const stops = shoppingStops([{ item: 'Mind rune', count: 200 }, { item: 'Bronze arrow', count: 1000 }], {});
+    expect(stops.map(({ keeper, tile, needs }) => ({ keeper, tile, items: needs.map(need => need.item) }))).toEqual([
+        { keeper: 'Aubury', tile: { x: 3253, z: 3401, level: 0 }, items: ['Mind rune'] },
+        { keeper: 'Betty', tile: { x: 3012, z: 3258, level: 0 }, items: ['Mind rune'] },
+        { keeper: 'Lowe', tile: { x: 3231, z: 3421, level: 0 }, items: ['Bronze arrow'] },
+        { keeper: 'Hickton', tile: { x: 2821, z: 3442, level: 0 }, items: ['Bronze arrow'] }
+    ]);
 });
 
 test('a fresh account defers the underground pickaxe shop until combat is established', () => {

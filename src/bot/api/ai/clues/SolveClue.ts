@@ -40,7 +40,7 @@ import {
     namesHaveEntranaRestrictedGear
 } from '#/bot/event/webwalk/exec/specialCrossing.js';
 import { snapshotWorldState } from '#/bot/event/webwalk/worldStateLive.js';
-import { hardClueKit, GUARDIAN_WEAPON_IDS, SHARK_ID } from './hardClueKit.js';
+import { hardClueKit, GUARDIAN_WEAPON_IDS, SHARK_ID, type GuardianRangedLoadout } from './hardClueKit.js';
 import { hardKitSnapshot, hardKitFingerprint, stockHardWeapon, stockHardSupplies } from './hardCluePreparation.js';
 import { sustainUntil } from './Guardian.js';
 
@@ -86,6 +86,7 @@ export interface SolveClueHost {
     foodWithdraw(): number;
     hardFoodTarget?: number;
     weaponName?(): string;
+    rangedLoadout?(): GuardianRangedLoadout | undefined;
     enabled?(): boolean;
     /** Travel to the initial bank with host upkeep intact; false blocks the trail. */
     prepareInitialBank?(): Promise<boolean>;
@@ -134,7 +135,7 @@ export class SolveClue implements Task {
     }
 
     private preparationFingerprint(includeBank = false): string {
-        const kit = hardKitFingerprint(includeBank);
+        const kit = hardKitFingerprint(includeBank, this.host.rangedLoadout?.());
         if (!KHARAZI_CLUES.has(heldClueScrollId() ?? -1)) return kit;
         const items = [...Inventory.items(), ...Equipment.items(), ...(includeBank && Bank.ready() ? Bank.items() : [])];
         const tools = jungleKeepNames().map(name => items.filter(i => i.name === name).reduce((n, i) => n + i.count, 0));
@@ -343,7 +344,7 @@ export class SolveClue implements Task {
         this.status = 'solving';
         this.host.setStatus('solving clue trail');
         let outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`),
-            () => this.entranaStripped && heldClueScrollId() !== null && !heldClueNeedsEntranaStrip());
+            () => this.entranaStripped && heldClueScrollId() !== null && !heldClueNeedsEntranaStrip(), this.host.rangedLoadout?.());
         if (outcome === 'supplies-needed') {
             this.bankedThisSolve = false;
             this.retreatPending = Game.inCombat();
@@ -352,7 +353,7 @@ export class SolveClue implements Task {
                 this.retreatPending = false;
                 this.bankedThisSolve = true;
                 outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`),
-                    () => this.entranaStripped && heldClueScrollId() !== null && !heldClueNeedsEntranaStrip());
+                    () => this.entranaStripped && heldClueScrollId() !== null && !heldClueNeedsEntranaStrip(), this.host.rangedLoadout?.());
             } else if (this.blockedKit === null) {
                 this.status = 'waiting for hard kit bank';
                 return;
@@ -603,8 +604,8 @@ export class SolveClue implements Task {
             this.host.setStatus('clue: initial bank is not ready');
             return false;
         }
-        if (this.hardTrail && hardClueKit(hardKitSnapshot(true), this.host.hardFoodTarget) !== 'ready') {
-            this.status = `hard kit: ${hardClueKit(hardKitSnapshot(true), this.host.hardFoodTarget)}`;
+        if (this.hardTrail && hardClueKit(hardKitSnapshot(true, this.host.rangedLoadout?.()), this.host.hardFoodTarget) !== 'ready') {
+            this.status = `hard kit: ${hardClueKit(hardKitSnapshot(true, this.host.rangedLoadout?.()), this.host.hardFoodTarget)}`;
             this.blockHardKit();
             await Bank.close();
             return false;
@@ -683,7 +684,7 @@ export class SolveClue implements Task {
 
         if (this.hardTrail && !(await stockHardWeapon(entranaStrip, name => {
             if (!this.strippedGear.includes(name)) this.strippedGear.push(name);
-        }, this.host.weaponName?.(), this.host.hardFoodTarget))) {
+        }, this.host.weaponName?.(), this.host.hardFoodTarget, this.host.rangedLoadout?.()))) {
             this.blockHardKit();
             return false;
         }
@@ -764,7 +765,7 @@ export class SolveClue implements Task {
 
         if (this.hardTrail) {
             await Bank.close();
-            if (!entranaStrip && hardClueKit(hardKitSnapshot(), this.host.hardFoodTarget) !== 'ready') return false;
+            if (!entranaStrip && hardClueKit(hardKitSnapshot(false, this.host.rangedLoadout?.()), this.host.hardFoodTarget) !== 'ready') return false;
         }
 
         await this.topUpPrayer(scrollId);

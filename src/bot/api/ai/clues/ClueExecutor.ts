@@ -31,7 +31,7 @@ import { ensureSpade, ensureCoordTools, ensureExtraItems, ensureGateItems } from
 import { SPADE_NAME } from '#/bot/api/ai/clues/data/toolAcquire.js';
 import { GuardianEncounter, sustainUntil, GUARDIAN_DEATH, type GuardianStop } from '#/bot/api/ai/clues/Guardian.js';
 import { GuardianProtection } from './guardianKit.js';
-import { GUARDIAN_MIN_SHARKS, hardClueKit } from './hardClueKit.js';
+import { GUARDIAN_MIN_SHARKS, hardClueKit, type GuardianRangedLoadout } from './hardClueKit.js';
 import { hardKitSnapshot } from './hardCluePreparation.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
 import { FOOD_OPTIONS, isEdibleFood } from '#/bot/api/combat/food.js';
@@ -375,7 +375,7 @@ async function reachTirannwn(step: ClueStep, log: (m: string) => void): Promise<
     await walkAcrossTirannwn(target, ARRIVE_RADIUS, log, trailWalkOpts(log));
 }
 
-async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void | GuardianStop | 'yield'> {
+async function dispatch(step: ClueStep, log: (m: string) => void, ranged?: GuardianRangedLoadout): Promise<void | GuardianStop | 'yield'> {
     await reachTirannwn(step, log);
     switch (step.type) {
         case 'search': {
@@ -430,7 +430,7 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void 
             }
             const guardian = step.guardian;
             if (guardianEncounter?.clueId !== step.id) {
-                const protection = new GuardianProtection(guardian);
+                const protection = new GuardianProtection(guardian, ranged);
                 const prepared = !guardian || await protection.prepare();
                 if (died()) return 'dead';
                 if (EventSignal.pending()) return 'yield';
@@ -542,7 +542,7 @@ function needsPuzzleRoom(step: ClueStep | null): boolean {
     return step?.type === 'talk' && step.puzzle !== undefined && Inventory.countById(step.puzzle.id) === 0 && Inventory.isFull();
 }
 
-async function solveStep(step: ClueStep, log: (m: string) => void, onAttempt: (n: number) => void): Promise<boolean | GuardianStop | 'yield'> {
+async function solveStep(step: ClueStep, log: (m: string) => void, onAttempt: (n: number) => void, ranged?: GuardianRangedLoadout): Promise<boolean | GuardianStop | 'yield'> {
     const tracked = trackedId(step);
     const before = heldCounts();
     const progressed = (): boolean => !heldIds().includes(tracked) || (!(step.type === 'dig' && step.guardian) && gainedSince(before));
@@ -560,7 +560,7 @@ async function solveStep(step: ClueStep, log: (m: string) => void, onAttempt: (n
         onAttempt(attempt + 1);
         await drainChat();
         if (!(await answerChallengeIfOpen(step, log))) {
-            const stopped = await dispatch(step, log);
+            const stopped = await dispatch(step, log, ranged);
             if (stopped) return stopped;
         }
         if (await Execution.delayUntil(progressed, PROGRESS_MS)) {
@@ -652,7 +652,7 @@ export const ClueExecutor = {
         postKillClue = null;
     },
 
-    async solveHeldClue(log: (m: string) => void, needsBank?: () => boolean): Promise<ClueOutcome> {
+    async solveHeldClue(log: (m: string) => void, needsBank?: () => boolean, ranged?: GuardianRangedLoadout): Promise<ClueOutcome> {
         if (guardianHalt !== null) return guardianHalt;
         const tlog = (m: string): void => {
             trace.note(m);
@@ -723,7 +723,7 @@ export const ClueExecutor = {
                 return end('abandon', reason);
             }
 
-            if (step.type === 'dig' && step.guardian && guardianEncounter?.clueId !== step.id && postKillClue !== step.id && hardClueKit(hardKitSnapshot(), GUARDIAN_MIN_SHARKS, step.guardian === 'Saradomin Wizard') !== 'ready') {
+            if (step.type === 'dig' && step.guardian && guardianEncounter?.clueId !== step.id && postKillClue !== step.id && hardClueKit(hardKitSnapshot(false, ranged), GUARDIAN_MIN_SHARKS, step.guardian === 'Saradomin Wizard') !== 'ready') {
                 return 'supplies-needed';
             }
             if (step.type !== 'open-casket' && step.coord?.level === 0
@@ -757,7 +757,7 @@ export const ClueExecutor = {
                     trace.note(`attempt ${n}/${STEP_ATTEMPTS}`);
                 }
             };
-            const result = await solveStep(step, tlog, onAttempt);
+            const result = await solveStep(step, tlog, onAttempt, ranged);
             if (typeof result === 'string' && result !== 'guardian-lost') {
                 if (result === 'dead') {
                     guardianHalt = result;

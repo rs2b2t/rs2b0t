@@ -11,6 +11,15 @@ and a power-save blocker disable the throttling a backgrounded browser tab impos
 hidden tab drops the game loop to ~1 fps and starves the bot, then replays at 2–5× on
 refocus. Measured here: ~51 fps while hidden.
 
+The shell enables Chromium's `V8CppGCEnableLargerCage` feature before startup.
+Electron 33's Oilpan heap otherwise reserves 4 GB across the wall's renderer;
+this feature raises that address-space reservation to 16 GB. It does not
+preallocate 16 GB of physical RAM. See the
+[Chromium implementation](https://chromium.googlesource.com/chromium/src/+/refs/tags/130.0.6723.191/gin/cppgc.cc).
+This addresses `Oilpan: Large allocation. Ran out of reservation` with many bot
+frames sharing a renderer. It does not remove system RAM limits or fix a leak.
+Restart Electron to apply it; reloading the page keeps the existing reservation.
+
 ## Run
 
 For live bots, run `bun run b0t` from the repository root. One Electron wall can

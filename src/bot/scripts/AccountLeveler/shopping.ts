@@ -2,7 +2,7 @@ import Skill from '../../../client/shell/Skill.js';
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { magicEquipment } from './magic.js';
 import { gatheringTool, meleeEquipment, rangedBow } from './equipment.js';
-import { purchaseBudget, supplyOffer } from './offers.js';
+import { purchaseBudget, supplyOffer, supplyOffers } from './offers.js';
 import { requirementKey, type LevelerSnapshot, type Requirement } from './types.js';
 
 export const SHOPPING_RESERVE = 200;
@@ -69,11 +69,11 @@ export function shoppingStops(needs: readonly Requirement[], stock: Record<strin
     const stops = new Map<string, ShoppingStop>();
     for (const need of needs) {
         if ((stock[requirementKey(need).toLowerCase()] ?? 0) >= need.count) continue;
-        const offer = supplyOffer(need.item);
-        if (!offer) continue;
-        const stop = stops.get(offer.keeper) ?? { keeper: offer.keeper, tile: offer.tile, needs: [] };
-        stop.needs.push(need);
-        stops.set(offer.keeper, stop);
+        for (const offer of supplyOffers(need.item)) {
+            const stop = stops.get(offer.keeper) ?? { keeper: offer.keeper, tile: offer.tile, needs: [] };
+            stop.needs.push(need);
+            stops.set(offer.keeper, stop);
+        }
     }
     return [...stops.values()];
 }

@@ -100,6 +100,7 @@ export function findTransportLoc(transport: TransportInfo): Loc | null {
     if (byMeta) {
         return byMeta;
     }
+    if (locRefFromTransport(transport).slack === 0) return null;
     // Why: adjacent scripted leaves have different handlers, so a missing identity must not select a sibling.
     if (transport.locId !== undefined && DESERT_MINING_CAMP_SCRIPTED_DOOR_IDS.has(transport.locId)) {
         return null;

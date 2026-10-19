@@ -43,10 +43,10 @@ class ActivityTravelError extends Error {
 }
 
 export const SETTINGS: SettingsSchema = {
-    targetLevel: { type: 'number', default: 40, min: 2, max: 40, label: 'Target level', help: 'Train every enabled skill to at least this level.' },
+    targetLevel: { type: 'number', default: 60, min: 2, max: 60, label: 'Target level', help: 'Train every enabled skill to at least this level.' },
     marketAxes: { type: 'boolean', default: true, label: 'Try Seers market axes', help: 'One optional Rune axe purchase from seers market when near Seers on World 1. Falls back to available tools.' },
     marketAxeBudget: { type: 'number', default: 50000, min: 0, max: 1000000, label: 'Market axe price limit', help: 'Also capped at 10% of banked gold; keeps 200 coins for travel.' },
-    wilderness: { type: 'boolean', default: true, label: 'Allow Wilderness training', help: 'Include suitable Wilderness camps in randomized combat training.' }
+    wilderness: { type: 'boolean', default: true, label: 'Allow Wilderness training', help: 'Include suitable Wilderness combat camps and Edgeville monkey bars from Agility 15.' }
 };
 
 export default class AccountLeveler extends LoopingBot {
@@ -81,13 +81,13 @@ export default class AccountLeveler extends LoopingBot {
     private retry: ActivityPlan | null = null;
     private resetCount = 0;
     private waitingUntil = 0;
-    private target = 40;
+    private target = 60;
     private wilderness = true;
 
     override async onStart(): Promise<void> {
         this.log('Waiting for the game scene before checking bank supplies');
         await Execution.delayUntil(() => Game.sceneReady(), 0);
-        this.target = Math.max(2, Math.min(40, this.settings.num('targetLevel', 40)));
+        this.target = Math.max(2, Math.min(60, this.settings.num('targetLevel', 60)));
         this.wilderness = this.settings.bool('wilderness', true);
         this.load();
         this.stopObserving = BotHost.addFrameListener(() => {
@@ -161,7 +161,8 @@ export default class AccountLeveler extends LoopingBot {
                 ? stockOf(snapshot, requirementKey(need)) < need.minimum
                 : !need.equip && need.count > 1 && stockOf(snapshot, requirementKey(need)) === 0);
             const depletedOnFinish = this.activity.outcome?.kind === 'finished' && plan.needs.some(need => stockOf(snapshot, requirementKey(need)) < need.count);
-            if (!Game.inCombat() && (reached || exhausted || depletedOnFinish || this.session.remainingMs <= 0)) {
+            const sessionExpired = this.session.remainingMs <= 0 && !(plan.script === 'EssMiner' && plan.output);
+            if (!Game.inCombat() && (reached || exhausted || depletedOnFinish || sessionExpired)) {
                 this.activity.stop();
                 if (!reached && (exhausted || depletedOnFinish)) {
                     this.session.resupply(Date.now());
@@ -399,6 +400,7 @@ export default class AccountLeveler extends LoopingBot {
     }
 
     private reached(plan: ActivityPlan, snapshot: LevelerSnapshot): boolean {
+        if (plan.script === 'EssMiner' && plan.output && (!Bank.isOpen() || !Bank.ready() || Inventory.count(plan.output.item) > 0)) return false;
         if (plan.output) return stockOf(snapshot, plan.output.item) >= plan.output.count;
         if (plan.prerequisiteLevels) return Object.entries(plan.prerequisiteLevels).every(([skill, level]) => snapshot.levels[skill] >= level);
         if (plan.quest) return snapshot.quests[plan.quest] === true;

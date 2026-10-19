@@ -10,7 +10,7 @@ import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 import { emptyWorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 import type { ActivityPlan } from '#/bot/scripts/AccountLeveler/types.js';
 import { meleeEquipment } from '#/bot/scripts/AccountLeveler/equipment.js';
-import { supplyOffer } from '#/bot/scripts/AccountLeveler/offers.js';
+import { supplyOffer, supplyOffers } from '#/bot/scripts/AccountLeveler/offers.js';
 
 function fixture(coins = 10000) {
     const bank: Record<string, number> = { Coins: coins, Shrimps: 30 };
@@ -363,7 +363,7 @@ test.skipIf(!existsSync('out/collision.lcnav.gz'))('the navigation graph reaches
     expect(route.waypoints.at(-1)).toMatchObject({ x: 2997, z: 9844, level: 0 });
 });
 
-test('best effort takes the eight available arrows once instead of refilling a thousand-arrow target', async () => {
+test('best effort takes the available arrows once per supplier instead of chasing the target', async () => {
     const f = fixture();
     f.bank['Bronze arrow'] = 79;
     f.setPrice(1);
@@ -372,9 +372,9 @@ test('best effort takes the eight available arrows once instead of refilling a t
     f.port.shopStock = () => 8;
     f.port.shop = async keeper => { visits.push(keeper); return true; };
     await provision({ ...plan, needs: [{ item: 'Bronze arrow', count: 1000 }] }, f.port, event => messages.push(event.message), { bestEffort: true });
-    expect(visits).toEqual(['Lowe']);
-    expect(f.bank['Bronze arrow']).toBe(87);
-    expect(messages.some(message => message.includes('913') && message.includes('Bronze arrow'))).toBe(true);
+    expect(visits).toEqual(['Lowe', 'Hickton']);
+    expect(f.bank['Bronze arrow']).toBe(95);
+    expect(messages.some(message => message.includes('905') && message.includes('Bronze arrow'))).toBe(true);
 });
 
 test('best effort skips sold out supplies and continues buying other items and vendors', async () => {
@@ -396,14 +396,16 @@ test('best effort does not revisit a vendor after a partially fulfilled purchase
     const buy = f.port.buy;
     f.port.buy = (name, count) => buy(name, Math.min(count, 8));
     await provision({ ...plan, needs: [{ item: 'Bronze arrow', count: 1000 }] }, f.port, undefined, { bestEffort: true });
-    expect(f.purchases()).toBe(1);
-    expect(f.bank['Bronze arrow']).toBe(8);
+    expect(f.purchases()).toBe(2);
+    expect(f.bank['Bronze arrow']).toBe(16);
 });
 
 test('best effort permits capacity-limited batches without exceeding initially available stock', async () => {
     const f = fixture();
     f.setPrice(1);
-    f.port.shopStock = () => 27;
+    let keeper = '';
+    f.port.shop = async name => { keeper = name; return true; };
+    f.port.shopStock = () => keeper === 'Aemad' ? 27 : 0;
     await provision({ ...plan, needs: [{ item: 'Vial of water', count: 54 }] }, f.port, undefined, { bestEffort: true });
     expect(f.bank['Vial of water']).toBe(27);
     expect(f.purchases()).toBe(2);
@@ -441,10 +443,10 @@ test('mandatory ammunition uses a partial purchase and rebases the carried train
         { item: 'Bronze arrow', count: 1000, carry: 300, equip: true, minimum: 1 }
     ] };
     await provision(activity, f.port);
-    expect(f.purchases()).toBe(1);
-    expect(f.worn['Bronze arrow']).toBe(87);
-    expect(activity.needs[0]).toMatchObject({ count: 87, carry: 87 });
-    expect(activity.settings.ammoWithdraw).toBe(87);
+    expect(f.purchases()).toBe(2);
+    expect(f.worn['Bronze arrow']).toBe(95);
+    expect(activity.needs[0]).toMatchObject({ count: 95, carry: 95 });
+    expect(activity.settings.ammoWithdraw).toBe(95);
 });
 
 test('mandatory ammunition uses banked arrows when the shop has none', async () => {
@@ -459,7 +461,7 @@ test('mandatory ammunition uses banked arrows when the shop has none', async () 
     expect(f.purchases()).toBe(0);
 });
 
-test('mandatory out of stock ammunition reports a retryable shortage after one visit', async () => {
+test('mandatory out of stock ammunition reports a retryable shortage after trying both suppliers', async () => {
     const f = fixture();
     let visits = 0;
     f.port.shop = async () => { visits++; return true; };
@@ -467,7 +469,7 @@ test('mandatory out of stock ammunition reports a retryable shortage after one v
     await expect(provision({ ...plan, needs: [
         { item: 'Bronze arrow', count: 300, carry: 300, equip: true, minimum: 1 }
     ] }, f.port)).rejects.toMatchObject({ name: 'SupplyStockError', items: ['bronze arrow'] });
-    expect(visits).toBe(1);
+    expect(visits).toBe(2);
 });
 
 test('rune shortfalls rebase both runes and autocast restocking to the same complete cast batch', async () => {
@@ -481,10 +483,10 @@ test('rune shortfalls rebase both runes and autocast restocking to the same comp
         { item: 'Fire rune', count: 800, carry: 600, minimum: 4 }
     ] };
     await provision(activity, f.port);
-    expect(f.purchases()).toBe(2);
-    expect(f.pack).toEqual({ 'Chaos rune': 42, 'Fire rune': 168 });
-    expect(activity.needs.map(need => [need.count, need.carry])).toEqual([[42, 42], [168, 168]]);
-    expect(activity.settings.runesWithdraw).toBe(42);
+    expect(f.purchases()).toBe(4);
+    expect(f.pack).toEqual({ 'Chaos rune': 44, 'Fire rune': 176 });
+    expect(activity.needs.map(need => [need.count, need.carry])).toEqual([[44, 44], [176, 176]]);
+    expect(activity.settings.runesWithdraw).toBe(44);
 });
 
 test('an incomplete elemental rune set never launches autocasting', async () => {
@@ -541,4 +543,182 @@ test('partial thread updates the child crafting restock amount', async () => {
     await provision(activity, f.port);
     expect(f.pack.Thread).toBe(8);
     expect(activity.settings.threadPerTrip).toBe(8);
+});
+
+function vialFixture(shelves: Record<string, number>) {
+    const f = fixture();
+    f.setPrice(2);
+    let keeper = '';
+    const visits: string[] = [];
+    f.port.shop = async name => { keeper = name; visits.push(name); return true; };
+    f.port.shopStock = () => shelves[keeper] ?? 0;
+    const buy = f.port.buy;
+    f.port.buy = async (name, count) => {
+        const bought = await buy(name, Math.min(count, shelves[keeper] ?? 0));
+        shelves[keeper] -= bought;
+        return bought;
+    };
+    f.port.fillVials = async count => {
+        const filled = Math.min(count, f.pack.Vial ?? 0);
+        f.pack.Vial = (f.pack.Vial ?? 0) - filled;
+        f.pack['Vial of water'] = (f.pack['Vial of water'] ?? 0) + filled;
+        return filled === count;
+    };
+    return { ...f, visits };
+}
+
+test.each([
+    ['Mind rune', 'Aubury', 'Betty'],
+    ['Bronze arrow', 'Lowe', 'Hickton']
+])('%s uses the alternate supplier for partial, empty, and failed primary purchases', async (item, primary, alternate) => {
+    for (const primaryStock of [0, 6, 20]) {
+        const f = vialFixture({ [primary]: primaryStock, [alternate]: 100 });
+        await provision({ ...plan, needs: [{ item, count: 20, carry: 20, minimum: 1 }] }, f.port);
+        expect(f.visits).toEqual(primaryStock < 20 ? [primary, alternate] : [primary]);
+        expect(f.pack[item]).toBe(20);
+        expect(f.bank[item]).toBe(0);
+        expect(f.spent()).toBe(40);
+    }
+    const f = vialFixture({ [primary]: 100, [alternate]: 100 });
+    const buy = f.port.buy;
+    f.port.buy = (name, count) => f.visits.at(-1) === primary ? Promise.resolve(count) : buy(name, count);
+    await provision({ ...plan, needs: [{ item, count: 20, carry: 20, minimum: 1 }] }, f.port);
+    expect(f.visits).toEqual([primary, alternate]);
+    expect(f.pack[item]).toBe(20);
+    expect(f.spent()).toBe(40);
+});
+
+test.each([
+    ['Mind rune', 'Aubury', 'Betty'],
+    ['Bronze arrow', 'Lowe', 'Hickton']
+])('%s falls back when its primary shop cannot be opened', async (item, primary, alternate) => {
+    const f = vialFixture({ [alternate]: 100 });
+    const shop = f.port.shop;
+    f.port.shop = keeper => keeper === primary ? Promise.resolve(false) : shop(keeper);
+    await provision({ ...plan, needs: [{ item, count: 20, carry: 20, minimum: 1 }] }, f.port);
+    expect(f.visits).toEqual([alternate]);
+    expect(f.pack[item]).toBe(20);
+});
+const vialPlan = (count = 27): ActivityPlan => ({ ...plan, food: undefined, needs: [{ item: 'Vial of water', count }] });
+
+test('a sold out Aemad falls back to Jatix and fills his empty vials', async () => {
+    const f = vialFixture({ Jatix: 800 });
+    await provision(vialPlan(), f.port);
+    expect(f.visits).toEqual(['Aemad', 'Jatix']);
+    expect(f.bank['Vial of water']).toBe(27);
+    expect(f.bank.Vial ?? 0).toBe(0);
+});
+
+test('partial water stock buys only the remaining deficit from the next source', async () => {
+    const f = vialFixture({ Aemad: 5, Jatix: 800 });
+    await provision(vialPlan(), f.port);
+    expect(f.visits).toEqual(['Aemad', 'Jatix']);
+    expect(f.bank['Vial of water']).toBe(27);
+    expect(f.spent()).toBe(54);
+});
+
+test('banked empty vials are filled before shopping, preserving required empty vials', async () => {
+    const f = vialFixture({});
+    f.bank.Vial = 56;
+    await provision({ ...vialPlan(54), needs: [...vialPlan(54).needs, { item: 'Vial', count: 2 }] }, f.port);
+    expect(f.visits).toEqual([]);
+    expect(f.bank.Vial).toBe(2);
+    expect(f.bank['Vial of water']).toBe(54);
+    expect(f.spent()).toBe(0);
+});
+
+test('failed filling banks empty vials and tries another water supplier', async () => {
+    const f = vialFixture({ Jatix: 800, 'Sigmund The Merchant': 10, Jiminua: 50 });
+    f.port.fillVials = async () => false;
+    await provision(vialPlan(), f.port);
+    expect(f.visits).toEqual(['Aemad', 'Jatix', 'Sigmund The Merchant', 'Jiminua']);
+    expect(f.bank.Vial).toBe(27);
+    expect(f.bank['Vial of water']).toBe(27);
+});
+
+test.each([false, true])('exhausted vial sources are bounded and preserve partial purchases (optional=%s)', async bestEffort => {
+    const f = vialFixture({ Aemad: 2 });
+    const result = provision(vialPlan(), f.port, undefined, { bestEffort });
+    if (bestEffort) await result;
+    else await expect(result).rejects.toMatchObject({ name: 'SupplyStockError', items: ['vial of water'] });
+    expect(f.visits).toEqual(['Aemad', 'Jatix', 'Sigmund The Merchant', 'Jiminua']);
+    expect(f.bank['Vial of water']).toBe(2);
+    expect(f.bank.Coins).toBe(9996);
+});
+
+test('empty vial needs use alternate empty-vial shops without filling', async () => {
+    const f = vialFixture({ 'Sigmund The Merchant': 10 });
+    await provision({ ...vialPlan(), needs: [{ item: 'Vial', count: 5 }] }, f.port);
+    expect(f.visits).toEqual(['Jatix', 'Sigmund The Merchant']);
+    expect(f.bank.Vial).toBe(5);
+    expect(f.bank['Vial of water'] ?? 0).toBe(0);
+});
+
+
+test.skipIf(!existsSync('out/collision.lcnav.gz')).each(supplyOffers('Vial of water'))('vial source $keeper is reachable without quest unlocks', offer => {
+    const finder = new PathFinder(gunzipSync(readFileSync('out/collision.lcnav.gz')));
+    loadDefaultNavEdges(finder);
+    const route = finder.findPath({ x: 3185, z: 3436, level: 0 }, offer.tile, {
+        state: { ...emptyWorldStateData(), members: true, items: { Coins: 200 }, skills: { agility: 1 }, canSlashWeb: false }, useTeleportCatalog: false
+    });
+    expect(route.ok).toBe(true);
+    if (route.ok) expect(route.waypoints.at(-1)).toMatchObject(offer.tile);
+});
+
+test.each(['walk', 'shop'] as const)('a failed vial supplier %s proceeds to the next source', async operation => {
+    const f = vialFixture({ Jatix: 800 });
+    let calls = 0;
+    if (operation === 'walk') f.port.walk = async () => ++calls > 1;
+    else {
+        const shop = f.port.shop;
+        f.port.shop = async keeper => ++calls === 1 ? false : shop(keeper);
+    }
+    await provision(vialPlan(), f.port);
+    expect(f.bank['Vial of water']).toBe(27);
+});
+
+test('a lying purchase result does not satisfy vial demand', async () => {
+    const f = vialFixture({ Aemad: 500, Jatix: 800 });
+    const buy = f.port.buy;
+    f.port.buy = (name, count) => name === 'Vial of water' ? Promise.resolve(count) : buy(name, count);
+    await provision(vialPlan(), f.port);
+    expect(f.bank['Vial of water']).toBe(27);
+    expect(f.visits).toEqual(['Aemad', 'Jatix']);
+});
+
+test('partial filling counts only water vials before trying the next supplier', async () => {
+    const f = vialFixture({ Jatix: 800, 'Sigmund The Merchant': 10, Jiminua: 50 });
+    const fill = f.port.fillVials!;
+    f.port.fillVials = async () => { await fill(3); return false; };
+    await provision(vialPlan(), f.port);
+    expect(f.bank['Vial of water']).toBe(27);
+    expect(f.bank.Vial).toBe(24);
+    expect(f.spent()).toBe(102);
+});
+
+test('banked vial filling reserves pack space for travel money and food', async () => {
+    const f = vialFixture({});
+    f.bank.Vial = 54;
+    const fill = f.port.fillVials!;
+    const batches: number[] = [];
+    f.port.fillVials = async count => {
+        batches.push(count);
+        expect(f.pack.Coins).toBe(200);
+        expect(f.pack.Shrimps).toBe(3);
+        expect(count + 4).toBeLessThanOrEqual(28);
+        return fill(count);
+    };
+    await provision({ ...vialPlan(54), food: 'Shrimps' }, f.port);
+    expect(batches).toEqual([24, 24, 6]);
+    expect(f.bank['Vial of water']).toBe(54);
+    expect(f.bank.Shrimps).toBe(30);
+    expect(f.bank.Coins).toBe(10000);
+});
+
+test('purchasing both empty and water vials never fills the reserved empty supplies', async () => {
+    const f = vialFixture({ Jatix: 800 });
+    await provision({ ...vialPlan(14), needs: [...vialPlan(14).needs, { item: 'Vial', count: 14 }] }, f.port);
+    expect(f.bank['Vial of water']).toBe(14);
+    expect(f.bank.Vial).toBe(14);
+    expect(f.spent()).toBe(56);
 });
