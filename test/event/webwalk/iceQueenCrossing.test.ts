@@ -49,3 +49,31 @@ async function runCrossing(approach: typeof west, destination: typeof west, star
     expect(mines).toBe(canStand ? 1 : 0);
     expect(here).toEqual(canStand ? destination : start);
 }
+
+test.each([
+    { z: 3513, action: 'Climb-Down', id: 1759, offset: 6400 },
+    { z: 9913, action: 'Climb-up', id: 1755, offset: -6400 }
+])('Ice Queen $action uses the planned ladder instead of its nearer neighbor', async ({ z, action, id, offset }) => {
+    const approach = { x: 2848, z: z + 1, level: 0 };
+    const destination = { ...approach, z: approach.z + offset };
+    let here = { x: 2845, z: z + 4, level: 0 };
+    spyOn(reader, 'worldTile').mockImplementation(() => here);
+    spyOn(reader, 'locs').mockReturnValue([
+        { id, name: 'Ladder', typecode: 10, ops: [action], tile: { x: 2845, z: z + 3, level: 0 }, distance: 1 },
+        { id, name: 'Ladder', typecode: 10, ops: [action], tile: { x: 2848, z, level: 0 }, distance: 4 }
+    ]);
+    spyOn(Execution, 'delayUntil').mockImplementation(async predicate => predicate());
+    const clicked: number[] = [];
+    spyOn(Loc.prototype, 'interact').mockImplementation(function (this: Loc) {
+        clicked.push(this.tile().x);
+        here = { x: this.tile().x, z: this.tile().z + 1 + offset, level: 0 };
+        return true;
+    });
+    const step = {
+        ...destination,
+        transport: { locId: id, locName: 'Ladder', locX: 2848, locZ: z, action, kind: 'dungeon', toTile: destination }
+    };
+    expect(await WalkExecutor['handleTransport'](approach, step, () => {})).toBe(true);
+    expect(clicked).toEqual([2848]);
+    expect(here).toEqual(destination);
+});

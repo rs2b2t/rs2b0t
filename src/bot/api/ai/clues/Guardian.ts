@@ -12,15 +12,16 @@ import { Special } from '#/bot/api/combat/Special.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
 import { Inventory } from '#/bot/api/inventory/Inventory.js';
 import type { Npc } from '#/bot/api/model/Npc.js';
-import { guardianWeaponWorn } from './hardCluePreparation.js';
 import { GuardianProtection } from './guardianKit.js';
 import { GUARDIAN_FOOD_RESERVE } from './hardClueKit.js';
+import type { WorldTile } from '#/bot/adapter/ClientAdapter.js';
 
 const SPAWN_RADIUS = 12;
 const OWNED_RADIUS = 32;
 const SPAWN_WAIT_TICKS = 10;
 const FIGHT_MS = 180_000;
 const REATTACK_TICKS = 8;
+const RANGED_REACH = 7;
 const NOT_YOURS = /not after you|someone else is fighting/i;
 export const GUARDIAN_DEATH = /oh dear.*you are dead/i;
 export type GuardianStop = 'supplies-needed' | 'dead' | 'guardian-lost';
@@ -49,6 +50,18 @@ function findGuardian(name: string): Npc | null {
     const candidates = Npcs.query().name(name).action('Attack')
         .where(n => (n.distance() <= SPAWN_RADIUS || (n.targetsMe() && n.distance() <= OWNED_RADIUS)) && !n.targetsAnotherPlayer()).results();
     return candidates.find(n => n.targetsMe()) ?? candidates[0] ?? null;
+}
+
+function rangedStand(target: Npc, from: WorldTile): Tile | undefined {
+    const tile = target.tile();
+    const candidates: Tile[] = [];
+    for (let dx = -RANGED_REACH; dx <= RANGED_REACH; dx++) {
+        for (let dz = -RANGED_REACH; dz <= RANGED_REACH; dz++) {
+            if (dx !== 0 || dz !== 0) candidates.push(new Tile(tile.x + dx, tile.z + dz, tile.level));
+        }
+    }
+    return candidates.sort((a, b) => a.distanceTo(from) - b.distanceTo(from))
+        .find(p => Reachability.lineOfSight(p, tile, target.snap.size) && Reachability.canReach(p, { maxSteps: 2048 }));
 }
 
 export async function fightGuardian(
@@ -99,7 +112,7 @@ export class GuardianEncounter {
                     await Execution.delayTicks(1);
                     continue;
                 }
-                if (!guardianWeaponWorn() || Inventory.count('Shark') <= GUARDIAN_FOOD_RESERVE) return 'supplies-needed';
+                if (!protection.weaponReady() || Inventory.count('Shark') <= GUARDIAN_FOOD_RESERVE) return 'supplies-needed';
                 await Sustain.run();
                 await Execution.delayTicks(1);
                 if (GameMessages.sawSince(mark, GUARDIAN_DEATH) || Skills.effective('hitpoints') <= 0) return 'dead';
@@ -117,29 +130,36 @@ export class GuardianEncounter {
                     this.sawDeath = true;
                     continue;
                 }
-                if (!guardianWeaponWorn() || Inventory.count('Shark') <= GUARDIAN_FOOD_RESERVE) return 'supplies-needed';
+                if (!protection.weaponReady() || Inventory.count('Shark') <= GUARDIAN_FOOD_RESERVE) return 'supplies-needed';
                 const tile = current.tile();
                 const here = Game.tile();
                 const probeable = here !== null && Reachability.probeable(tile);
                 const blockedAdjacent = current.distance() === 1 && probeable && !Reachability.canStep(here!, tile);
-                if (current.distance() > 1 || blockedAdjacent) {
+                const canShoot = protection.ranged && here && current.distance() <= RANGED_REACH
+                    && (!probeable || Reachability.lineOfSight(here, tile, current.snap.size));
+                if (protection.ranged ? !canShoot : current.distance() > 1 || blockedAdjacent) {
                     const stand = probeable
-                        ? [[1, 0], [-1, 0], [0, 1], [0, -1]]
+                        ? protection.ranged ? rangedStand(current, here!) : [[1, 0], [-1, 0], [0, 1], [0, -1]]
                             .map(([dx, dz]) => new Tile(tile.x + dx!, tile.z + dz!, tile.level))
                             .filter(p => Reachability.canStep(p, tile) && Reachability.canReach(p, { maxSteps: 2048 }))
                             .sort((a, b) => a.distanceTo(here!) - b.distanceTo(here!))[0]
                         : tile;
                     if (!stand) {
-                        log(`${name}: no reachable melee tile beside (${tile.x},${tile.z},${tile.level})`);
+                        log(`${name}: no reachable ${protection.ranged ? 'ranged' : 'melee'} tile near (${tile.x},${tile.z},${tile.level})`);
                         return 'guardian-lost';
                     }
                     log(`${name}: approaching guardian at (${tile.x},${tile.z},${tile.level}), ${current.distance()} tiles away`);
                     const reached = await Traversal.walkTo(stand, {
-                        radius: probeable ? 0 : 1, timeoutMs: 10_000, log, ...Traversal.pureWalk
+                        radius: probeable ? 0 : protection.ranged ? RANGED_REACH : 1, timeoutMs: 10_000, log, ...Traversal.pureWalk
                     });
                     if (GameMessages.sawSince(mark, GUARDIAN_DEATH) || Skills.effective('hitpoints') <= 0) return 'dead';
                     if (EventSignal.pending()) return 'yield';
                     if (!reached) return 'guardian-lost';
+                    continue;
+                }
+                if (protection.ranged && Game.combatMode() !== protection.ranged.mode) {
+                    if (!Game.setCombatMode(protection.ranged.mode)) return 'supplies-needed';
+                    await Execution.delayTicks(1);
                     continue;
                 }
                 if (Special.ready(Special.wielded()) && !Special.armed()) {

@@ -16,6 +16,7 @@ const originals = {
     bankComId: reader.bankComId,
     bankItems: reader.bankItems,
     bankSideItems: reader.bankSideItems,
+    bankSideSnapshotReady: reader.bankSideSnapshotReady,
     countDialogOpen: reader.countDialogOpen,
     inventory: reader.inventory,
     inventorySize: reader.inventorySize,
@@ -33,6 +34,7 @@ afterEach(() => {
     (reader as any).bankComId = originals.bankComId;
     (reader as any).bankItems = originals.bankItems;
     (reader as any).bankSideItems = originals.bankSideItems;
+    reader.bankSideSnapshotReady = originals.bankSideSnapshotReady;
     (reader as any).countDialogOpen = originals.countDialogOpen;
     (reader as any).inventory = originals.inventory;
     (reader as any).inventorySize = originals.inventorySize;
@@ -73,16 +75,25 @@ async function run(
 ): Promise<boolean> {
     const side = options.side ?? [];
     const bank = options.bank ?? [item(LOBSTER, 'Lobster', 10, 0, true)];
+    let ready = !options.hydrate;
     (reader as any).bankComId = () => 5382;
     (reader as any).bankItems = () => bank;
     (reader as any).bankSideItems = () => side;
+    reader.bankSideSnapshotReady = () => ready;
     // This is the live failure mode: the normal inventory tab is unavailable.
     (reader as any).inventory = () => [];
     (reader as any).inventorySize = () => 0;
     (reader as any).modals = () => ({ main: 5292, side: 5063, chat: -1 });
     (reader as any).countDialogOpen = () => true;
-    (Execution as any).delayTicks = async () => options.hydrate?.(side);
-    (Execution as any).delayUntil = async (condition: () => boolean) => condition();
+    (Execution as any).delayTicks = async () => {};
+    (Execution as any).delayUntil = async (condition: () => boolean) => {
+        if (condition()) return true;
+        if (!ready) {
+            options.hydrate?.(side);
+            ready = true;
+        }
+        return condition();
+    };
     (Input as any).invButton = () => options.click ?? true;
     (actions as any).answerCountDialog = (requested: number) => {
         if (options.answer === false) {

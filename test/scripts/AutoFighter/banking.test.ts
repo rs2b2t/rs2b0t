@@ -79,3 +79,25 @@ test('a foodless panic retreat uses the upstairs guild bank too', async () => {
     expect(opened).toEqual(['Banker:Bank']);
     expect(food).toBe(5);
 });
+
+test('banking preserves Big bones selected for burial and deposits other loot', async () => {
+    let inventory = [
+        new InvItem({ name: 'Big bones', id: 532, count: 1, slot: 0, comId: 1, ops: ['Bury'] }),
+        new InvItem({ name: 'Bones', id: 526, count: 1, slot: 1, comId: 1, ops: ['Bury'] }),
+        new InvItem({ name: 'Uncut ruby', id: 1619, count: 1, slot: 2, comId: 1, ops: ['Drop'] })
+    ];
+    restores.push(
+        stubProps(Inventory, { items: () => inventory }),
+        stubProps(Bank, { depositAllMatching: async match => { inventory = inventory.filter(item => !match(item.name!, item.id)); } })
+    );
+    bot.disposeSubscriptions();
+    bot = new Fighter();
+    bot.bindLog(() => {});
+    bot.settings = new SettingsBag({ foodWithdraw: 0, buryBigBones: true, solveClues: false });
+    await bot.onStart();
+    bot.bankAfterSolve = true;
+    const bank = bot.registered.find(task => task.constructor.name === 'BankRun')!;
+    expect(bank.validate()).toBe(true);
+    await bank.execute();
+    expect(inventory.map(item => item.name)).toEqual(['Big bones']);
+});

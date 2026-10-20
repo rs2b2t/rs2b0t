@@ -3,6 +3,25 @@ import type { Case } from './manifestTypes.js';
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
     {
+        id: 'desktop-storage-ipc',
+        harness: 'desktop-storage-ipc-test.ts',
+        covers: { subsystems: ['multibox'] },
+        status: 'vetted',
+        provenAt: '8c750b2b',
+        manual: true,
+        budgetMin: 3,
+        note: 'Isolated Electron profile checks frame settings sync, frame replacement, reloads, external writes and zero missing IPC bridge errors. Requires desktop dependencies and a display; no game login.'
+    },
+    {
+        id: 'account-leveler-concurrent',
+        harness: 'account-leveler-concurrent-test.ts',
+        covers: { scripts: ['AccountLeveler'], subsystems: ['multibox'] },
+        status: 'unvetted',
+        manual: true,
+        budgetMin: 25,
+        note: 'Twenty disposable local accounts check shopping, combat progress, camp variety and death recovery. Requires the local engine and account fixtures; the full swarm has not been validated.'
+    },
+    {
         id: 'desktop-instances',
         harness: 'desktop-instances-test.ts',
         covers: { subsystems: ['multibox'] },

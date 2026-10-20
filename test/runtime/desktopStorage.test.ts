@@ -25,9 +25,16 @@ test('frames without preload use parent storage and release listeners when remov
         desktopStorage.subscribe((_, __, value) => changes.push(value));
         parent.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:alice:set:Fisher:fishMethod', newValue: 'Shark' }));
         expect(changes).toEqual(['Shark']);
+        for (const storageArea of [sessionStorage, localStorage]) {
+            parent.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:alice:set:Fisher:fishMethod', newValue: 'stale', storageArea }));
+        }
+        parent.dispatchEvent(new StorageEvent('storage', { key: 'unrelated', newValue: 'ignored' }));
+        expect(changes).toEqual(['Shark']);
+        parent.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:alice:set:Fisher:fishMethod', oldValue: 'Shark', newValue: null }));
+        expect(changes).toEqual(['Shark', null]);
         globalThis.dispatchEvent(new Event('pagehide'));
         parent.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:alice:set:Fisher:fishMethod', newValue: 'Lobster' }));
-        expect(changes).toEqual(['Shark']);
+        expect(changes).toEqual(['Shark', null]);
     } finally {
         if (originalParent) Object.defineProperty(globalThis, 'parent', originalParent);
         else Reflect.deleteProperty(globalThis, 'parent');

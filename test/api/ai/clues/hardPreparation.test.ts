@@ -86,6 +86,131 @@ beforeEach(() => {
 });
 afterEach(() => { mock.restore(); Sustain.set(null); ClueExecutor.retryGuardian(); });
 
+const ranged = { weapon: 'Magic shortbow', ammo: 'Rune arrow', quantity: 500, mode: 1 };
+
+function rangedTask(): SolveClue {
+    spyOn(Bank, 'withdrawById').mockImplementation(id => {
+        const source = bank.find(i => i.id === id && i.count > 0);
+        if (!source) return false;
+        source.count--;
+        pack.push({ ...source, count: 1 });
+        return true;
+    });
+    spyOn(Bank, 'withdrawX').mockImplementation(async (name, count) => {
+        const source = bank.find(i => i.name === name && i.count > 0);
+        if (!source) return false;
+        const take = Math.min(count, source.count);
+        source.count -= take;
+        pack.push({ ...source, count: take });
+        return true;
+    });
+    spyOn(InvItem.prototype, 'interact').mockImplementation(function(this: InvItem, op) {
+        if (this.id === 861 && op === 'Wield' && !open) {
+            pack = pack.filter(i => i !== this.snap).concat(worn.filter(i => i.slot === 3));
+            worn = worn.filter(i => i.slot !== 3).concat({ ...this.snap, slot: 3 });
+            return true;
+        }
+        if (this.id !== 892 || op !== 'Wield' || open) return false;
+        const count = worn.filter(i => i.slot === 13 && i.id === 892).reduce((n, i) => n + i.count, 0) + this.count;
+        worn = worn.filter(i => i.slot !== 13).concat({ ...this.snap, slot: 13, count });
+        pack = pack.filter(i => i !== this.snap);
+        return true;
+    });
+    return new SolveClue({ ...host, rangedLoadout: () => ranged });
+}
+
+test.each([0, 50])('ranged clue preparation withdraws and equips arrows with %s already worn', async count => {
+    if (count) worn.push({ ...item(892, 'Rune arrow', count), slot: 13 });
+    bank.push(item(892, 'Rune arrow', 600));
+    await rangedTask().execute();
+    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
+    expect(worn.find(i => i.slot === 3)?.id).toBe(861);
+    expect(worn.find(i => i.slot === 13)?.count).toBe(500);
+    expect(bank.find(i => i.id === 892)?.count).toBe(100 + count);
+    expect(bank.find(i => i.id === 1231)?.count).toBe(1);
+    expect(pack.some(i => i.id === 892)).toBe(false);
+});
+
+test('ranged preparation withdraws the strung bow even when an unstrung namesake comes first', async () => {
+    worn = [];
+    bank.push(item(72, 'Magic shortbow'), { ...bow }, item(892, 'Rune arrow', 500));
+    await rangedTask().execute();
+    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
+    expect(worn.find(i => i.slot === 3)?.id).toBe(861);
+    expect(bank.find(i => i.id === 72)?.count).toBe(1);
+    expect(bank.find(i => i.id === 1231)?.count).toBe(1);
+});
+
+test('a ranged guardian restock replenishes depleted arrows and keeps the bow', async () => {
+    bank.push(item(892, 'Rune arrow', 1000));
+    const task = rangedTask();
+    await task.execute();
+    worn = worn.filter(i => i.slot !== 13);
+    spyOn(ClueExecutor, 'solveHeldClue').mockResolvedValueOnce('supplies-needed').mockResolvedValue('yield');
+    await task.execute();
+    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(3);
+    expect(worn.find(i => i.slot === 3)?.id).toBe(861);
+    expect(worn.find(i => i.slot === 13)?.count).toBe(500);
+    expect(bank.find(i => i.id === 892)?.count).toBe(0);
+    expect(bank.find(i => i.id === 1231)?.count).toBe(1);
+    expect(pack.some(i => i.id === clue.id)).toBe(true);
+});
+
+test('ranged clue preparation resumes when missing ammunition arrives in the bank', async () => {
+    const task = rangedTask();
+    await task.execute();
+    expect(ClueExecutor.solveHeldClue).not.toHaveBeenCalled();
+    expect(worn.find(i => i.slot === 3)?.id).toBe(861);
+    expect(task.validate()).toBe(false);
+    bank.push(item(892, 'Rune arrow', 80));
+    open = true;
+    expect(task.validate()).toBe(true);
+    await task.execute();
+    expect(worn.find(i => i.slot === 13)?.count).toBe(80);
+    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
+});
+
+test('ranged clue preparation banks bow and arrows for Entrana and restores them afterward', async () => {
+    pack[0] = { ...clue, id: 3579 };
+    worn.push({ ...item(892, 'Rune arrow', 500), slot: 13 });
+    const task = rangedTask();
+    await task.execute();
+    expect(worn).toEqual([]);
+    expect(pack.some(i => [861, 892, 1231].includes(i.id))).toBe(false);
+    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
+    pack[0] = clue;
+    spyOn(ClueExecutor, 'solveHeldClue').mockClear().mockResolvedValueOnce('supplies-needed').mockResolvedValue('yield');
+    await task.execute();
+    expect(worn.find(i => i.slot === 3)?.id).toBe(861);
+    expect(worn.find(i => i.slot === 13)?.count).toBe(500);
+    expect(bank.find(i => i.id === 1231)?.count).toBe(1);
+    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(2);
+});
+
+test('JiveDragons ranged clues keep the configured bow and ammunition instead of taking a dagger', async () => {
+    worn.push({ ...item(892, 'Rune arrow', 500), slot: 13 });
+    spyOn(Skills, 'level').mockImplementation(name => name === 'attack' ? 1 : 60);
+    spyOn(Quests, 'status').mockReturnValue('notStarted');
+    const bot = new JiveDragons();
+    bot.bindLog(() => {});
+    bot.settings = new SettingsBag({ combatStyle: 'range', bow: 'Magic shortbow', ammo: 'Rune arrow', ammoWithdraw: 500, solveClues: true });
+    await bot.onStart();
+    try {
+        await bot.solveClue!.execute();
+        expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
+        expect(ClueExecutor.solveHeldClue).toHaveBeenCalledWith(expect.any(Function), expect.any(Function), {
+            weapon: 'Magic shortbow', ammo: 'Rune arrow', quantity: 500, mode: 1
+        });
+        expect(worn.find(i => i.slot === 3)?.id).toBe(861);
+        expect(worn.find(i => i.slot === 13)?.count).toBe(500);
+        expect(bank.find(i => i.id === 1231)?.count).toBe(1);
+        expect(pack.filter(i => i.id === 385)).toHaveLength(12);
+        expect(equips).not.toContain('Dragon dagger(p)');
+    } finally {
+        bot.disposeSubscriptions();
+    }
+});
+
 test.each([1231, 2448, 385])('keeps the clue and suppresses retries when the READY bank lacks %s', async id => {
     bank = bank.filter(i => i.id !== id);
     const task = new SolveClue(host);
@@ -615,7 +740,7 @@ test.each([12, 30])('JiveDragons prepares exactly twelve Sharks with %s banked',
     bank = bank.map(i => i.id === 385 ? { ...i, count: stock } : i);
     const bot = new JiveDragons();
     bot.bindLog(() => {});
-    bot.settings = new SettingsBag({ solveClues: true, foodWithdraw: 20 });
+    bot.settings = new SettingsBag({ combatStyle: 'melee', solveClues: true, foodWithdraw: 20 });
     await bot.onStart();
 
     await bot.solveClue!.execute();
@@ -627,7 +752,7 @@ test.each([12, 30])('JiveDragons prepares exactly twelve Sharks with %s banked',
 test('JiveDragons restocks a hard clue to twelve Sharks after supplies run low', async () => {
     const bot = new JiveDragons();
     bot.bindLog(() => {});
-    bot.settings = new SettingsBag({ solveClues: true, foodWithdraw: 20 });
+    bot.settings = new SettingsBag({ combatStyle: 'melee', solveClues: true, foodWithdraw: 20 });
     await bot.onStart();
     const loads: number[] = [];
     spyOn(ClueExecutor, 'solveHeldClue').mockImplementation(async () => {

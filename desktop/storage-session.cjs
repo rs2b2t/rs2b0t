@@ -46,7 +46,7 @@ function prepareStorage(app) {
     });
     return {
         async start(serverUrl) {
-            const { BrowserWindow, ipcMain, session, net, webContents } = require('electron');
+            const { BrowserWindow, ipcMain, session, net } = require('electron');
             if (!store.initialized()) {
                 const migrationUrl = 'http://localhost:8081/__rs2b0t_profile_migration__';
                 session.defaultSession.protocol.handle('http', request => (request.url === migrationUrl ? new Response('<!doctype html><title>Profile migration</title>') : net.fetch(request, { bypassCustomProtocolHandlers: true })));
@@ -61,14 +61,37 @@ function prepareStorage(app) {
                 }
             }
             const origin = new URL(serverUrl).origin;
+            const clients = new Map();
+            const tracked = new WeakSet();
+            const valid = frame => frame && !frame.isDestroyed() && !frame.detached && new URL(frame.url).origin === origin;
+            function register(event) {
+                const contents = event.sender;
+                if (!tracked.has(contents)) {
+                    const remove = frames => {
+                        for (const [frame, owner] of clients) {
+                            if (owner === contents && (!frames || frames.has(frame))) clients.delete(frame);
+                        }
+                    };
+                    contents.on('did-start-navigation', details => {
+                        if (details.isSameDocument) return;
+                        remove(details.isMainFrame ? null : new Set(details.frame?.framesInSubtree ?? []));
+                    });
+                    contents.once('destroyed', () => remove(null));
+                    tracked.add(contents);
+                }
+                clients.set(event.senderFrame, contents);
+            }
             let snapshot = { version: 0, data: store.snapshot() };
-            function refresh() {
+            function refresh(sender) {
                 const next = store.snapshot();
                 if ([...new Set([...Object.keys(snapshot.data), ...Object.keys(next)])].some(key => snapshot.data[key] !== next[key])) {
                     snapshot = { version: snapshot.version + 1, data: next };
-                    for (const contents of webContents.getAllWebContents()) {
-                        for (const frame of contents.mainFrame.framesInSubtree) {
-                            if (frame.url && new URL(frame.url).origin === origin) frame.send('rs2b0t-storage-changed', snapshot);
+                    for (const frame of clients.keys()) {
+                        try {
+                            if (!valid(frame)) clients.delete(frame);
+                            else if (frame !== sender) frame.send('rs2b0t-storage-changed', snapshot);
+                        } catch {
+                            clients.delete(frame);
                         }
                     }
                 }
@@ -77,9 +100,10 @@ function prepareStorage(app) {
             const methods = new Set(['snapshot', 'getItem', 'keys', 'setItem', 'removeItem', 'compareAndSet']);
             ipcMain.on('rs2b0t-storage', (event, method, ...args) => {
                 try {
-                    if (new URL(event.senderFrame.url).origin !== origin || !methods.has(method)) throw new Error('Invalid storage request');
+                    if (!valid(event.senderFrame) || !methods.has(method)) throw new Error('Invalid storage request');
+                    register(event);
                     const value = method === 'snapshot' ? undefined : store[method](...args);
-                    event.returnValue = { value, snapshot: method === 'getItem' || method === 'keys' ? undefined : refresh() };
+                    event.returnValue = { value, snapshot: method === 'getItem' || method === 'keys' ? undefined : refresh(event.senderFrame) };
                 } catch (error) {
                     event.returnValue = { error: error.message };
                 }

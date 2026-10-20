@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 72. Categories: 20.
+- Scripts: 75. Categories: 21.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -18,10 +18,11 @@
 - [Firemaking](#firemaking) — 1
 - [Fishing](#fishing) — 1
 - [Fletching](#fletching) — 2
+- [General](#general) — 1
 - [Herblore](#herblore) — 5
 - [Magic](#magic) — 3
 - [Mining](#mining) — 3
-- [Money making](#money-making) — 7
+- [Money making](#money-making) — 8
 - [Navigation](#navigation) — 2
 - [Prayer](#prayer) — 1
 - [Quest](#quest) — 3
@@ -29,7 +30,7 @@
 - [Smithing](#smithing) — 3
 - [Thieving](#thieving) — 3
 - [Treasure Trails](#treasure-trails) — 1
-- [Utility](#utility) — 2
+- [Utility](#utility) — 3
 - [Woodcutting](#woodcutting) — 2
 
 ## Agility
@@ -56,6 +57,7 @@ Edgeville dungeon monkey bars — restock via dungeon ladder or after death. NOT
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `loadout` | string | `""` | Loadout — one of:  |
+| `food` | string | `"Lobster"` | Food |
 | `foodAmount` | number (5–28) | `20` | Food to withdraw |
 | `minFood` | number (0–28) | `1` | Bank below food count |
 | `restockMode` | string | `"After death only"` | Restock mode — one of: Dungeon ladder (out of food), After death only |
@@ -143,6 +145,7 @@ Start-or-coordinate fighter — kills any named NPC in its leash, loots selected
 | `lootMode` | string | `"list"` | Loot entry mode — one of: List (chips), CSV (text + copy/paste) |
 | `avoidHerbs` | string[] | `[]` | Herbs to avoid — one of: Guam leaf, Marrentill, Tarromin, Harralander, Ranarr weed, Toadflax, Irit leaf, Avantoe, Kwuarm, Snapdragon, Cadantine, Lantadyme, Dwarf weed, Torstol, Snake weed, Ardrigal, Sito foil, Volencia moss, Rogues purse |
 | `buryBones` | boolean | `false` | Bury regular bones |
+| `buryBigBones` | boolean | `false` | Bury big bones |
 | `solveClues` | boolean | `true` | Solve clue drops |
 | `banking` | string | `"Auto"` | Banking — one of: Auto, None |
 | `bankLocation` | string | `"Nearest"` | Bank location — one of: Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Legends Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
@@ -746,6 +749,21 @@ Spam-attaches feathers to stackable dart tips at the five-action-per-tick server
 |---|---|---|---|
 | `tier` | string | `"Bronze"` | Dart tier — one of: Bronze, Iron, Steel, Mithril, Adamant, Rune |
 
+## General
+
+### AccountLeveler
+
+Trains melee first, then remaining combat skills, then other enabled members skills to 60. Stocks essence in batches of 1,000 and uses Edgeville monkey bars from Agility 15. Buys supplies, runs required quests, and recovers from death. Wilderness training is optional and enabled by default.
+
+- Tags: `training`, `combat`, `skilling`, `quests`, `banking`, `death-recovery`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `targetLevel` | number (2–60) | `60` | Target level |
+| `marketAxes` | boolean | `true` | Try Seers market axes |
+| `marketAxeBudget` | number (0–1000000) | `50000` | Market axe price limit |
+| `wilderness` | boolean | `true` | Allow Wilderness training |
+
 ## Herblore
 
 ### HerbCleaner
@@ -900,14 +918,25 @@ Falador West to Tenzing climbing-boot buyer. Withdraws exact gp so the last pair
 | `useTeleport` | boolean | `true` | Falador teleport back to bank |
 | `runeStock` | number (1–1000) | `50` | Falador teles of runes to carry |
 
+### JiveBalls
+
+Shears sheep and banks raw wool, keeping shears. Select Lumbridge, Varrock south, Falador west, the Monastery or Ardougne north, or randomly choose a flock once per run, weighted by flock size. Retrieves shears from the bank or a free spawn. Waits for wool to regrow and repeats bank trips to the selected flock.
+
+- Tags: `sheep`, `wool`, `shearing`, `banking`, `gathering`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `location` | string | `"random"` | Sheep location — one of: Random (weighted by flock size), Lumbridge (16 sheep, Draynor bank), Varrock south (5 sheep, Varrock East bank), Falador west (3 sheep, Falador West bank), Monastery (3 sheep, Edgeville bank), Ardougne north (10 sheep, north bank) |
+
 ### JiveChests
 
-Opens the Taverley crystal chest with seven keys per trip from Falador West. Drops raw swordfish, body runes, spinach rolls and adamant square shields. Collects overflow in priority order: dragonstones, key halves, runite bars, diamonds, rubies, rune legs or skirts, then other rewards. Banks when full and returns for remaining loot before opening again. Keeps and restocks Falador teleport runes. Stops after the keys are exhausted and remaining loot is collected and banked.
+Opens the Taverley crystal chest with seven keys per trip from Falador West. Keeps food and low-priority rewards unless a full pack blocks valuable ground loot. Collects overflow in priority order: dragonstones, key halves, runite bars, diamonds, rubies, rune legs or skirts, then other rewards. Banks when full and returns for remaining loot before opening again. Walks to the chest and optionally teleports home from it, stocking up to ten Falador casts and accounting for equipped elemental staffs. Stops after the keys are exhausted and remaining loot is collected and banked. Optional bank-only mode withdraws 14 of each key half, combines up to five pairs at a time and deposits the crystal keys, repeating until either half runs out.
 
 - Tags: `chest`, `taverley`, `banking`, `looting`, `afk`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
+| `combineKeys` | boolean | `false` | Combine crystal keys at the bank |
 | `teleportHome` | boolean | `true` | Teleport back to Falador |
 
 ### JiveMarketDumper
@@ -1184,6 +1213,7 @@ Pickpockets an NPC (Man by default), eats after failed steals, and optionally ba
 | `target` | string | `"Man"` | Pickpocket target — one of: Man, Woman, Farmer, Warrior woman, Al-Kharid warrior, Rogue, Guard, Knight of Ardougne, Watchman, Paladin, Hero |
 | `action` | string | `"Pickpocket"` | Action |
 | `loadout` | string | `""` | Loadout — one of:  |
+| `food` | string | `""` | Food |
 | `banking` | string | `"None"` | Food banking — one of: None, Auto |
 | `foodWithdraw` | number (1–27) | `22` | Food to carry |
 | `bankAtFood` | number (0–26) | `0` | Bank at food remaining |
@@ -1221,6 +1251,12 @@ Walks to a bank and rewrites the slot order into categories, coins first and jun
 | `sortBank` | boolean | `true` | Sort the bank |
 | `reportQuestJunk` | boolean | `true` | Report obsolete quest items |
 | `dropQuestJunk` | boolean | `false` | Drop what the report found |
+
+### JiveCaskets
+
+Opens ordinary loot caskets at the bank. Withdraws a full inventory, opens up to five caskets at a time, deposits all inventory items and repeats until the bank is out of caskets. Start at a bank. Clue and quest caskets are left banked.
+
+- Tags: `caskets`, `banking`, `loot`, `members`
 
 ### MuleDepot
 

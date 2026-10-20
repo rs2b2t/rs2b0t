@@ -147,6 +147,11 @@ export function bankUnlocked(bank: BankLocation): boolean {
     return meetsRequirement(bank);
 }
 
+export function lockedBankAt(tile: WorldTile): BankLocation | null {
+    return BANK_LOCATIONS.find(bank => bank.tile.level === tile.level
+        && bank.tile.distanceTo(tile) <= 14 && !bankUnlocked(bank)) ?? null;
+}
+
 function meetsRequirement(bank: BankLocation): boolean {
     const req = bank.requires;
     if (!req) {

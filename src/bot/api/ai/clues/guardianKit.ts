@@ -4,7 +4,7 @@ import { Game } from '#/bot/api/game/Game.js';
 import { GameMessages } from '#/bot/api/chatbox/gameMessages.js';
 import { Inventory } from '#/bot/api/inventory/Inventory.js';
 import { Sustain } from '#/bot/api/sustain/Sustain.js';
-import { GUARDIAN_MIN_SHARKS, hardClueKit, superantiDoses, SUPERANTI } from './hardClueKit.js';
+import { GUARDIAN_MIN_SHARKS, hardClueKit, superantiDoses, SUPERANTI, type GuardianRangedLoadout } from './hardClueKit.js';
 import { guardianWeaponWorn, equipGuardianWeapon, hardKitSnapshot } from './hardCluePreparation.js';
 
 const POISONED = /you have been poisoned/i;
@@ -15,12 +15,16 @@ export class GuardianProtection {
     private drankAt: number | null = null;
     private poisonMark = GameMessages.mark();
 
-    constructor(private readonly guardian = 'Saradomin Wizard') {}
+    constructor(private readonly guardian = 'Saradomin Wizard', readonly ranged?: GuardianRangedLoadout) {}
+
+    weaponReady(): boolean {
+        return guardianWeaponWorn(this.ranged);
+    }
 
     async prepare(): Promise<boolean> {
         const needsAntipoison = this.guardian === 'Saradomin Wizard';
-        if (hardClueKit(hardKitSnapshot(), GUARDIAN_MIN_SHARKS, needsAntipoison) !== 'ready' || !(await equipGuardianWeapon())) return false;
-        return (!needsAntipoison || await this.drink(3)) && guardianWeaponWorn() && Inventory.count('Shark') >= GUARDIAN_MIN_SHARKS;
+        if (hardClueKit(hardKitSnapshot(false, this.ranged), GUARDIAN_MIN_SHARKS, needsAntipoison) !== 'ready' || !(await equipGuardianWeapon(this.ranged))) return false;
+        return (!needsAntipoison || await this.drink(3)) && this.weaponReady() && Inventory.count('Shark') >= GUARDIAN_MIN_SHARKS;
     }
 
     private async drink(attempts = 1): Promise<boolean> {
@@ -37,7 +41,7 @@ export class GuardianProtection {
             if (EventSignal.pending()) return false;
             confirmed = superantiDoses(Inventory.items()) < before;
             if (confirmed) break;
-            if (attempts > 1 && (hardClueKit(hardKitSnapshot(), GUARDIAN_MIN_SHARKS) !== 'ready' || !guardianWeaponWorn())) return false;
+            if (attempts > 1 && (hardClueKit(hardKitSnapshot(false, this.ranged), GUARDIAN_MIN_SHARKS) !== 'ready' || !this.weaponReady())) return false;
             const potion = Inventory.items().find(i => SUPERANTI.some(d => d.id === i.id));
             if (!potion) return false;
             confirmed = await potion.interact('Drink') && await Execution.delayUntilTicks(() => superantiDoses(Inventory.items()) < before, 2);

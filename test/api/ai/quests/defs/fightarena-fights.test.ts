@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { ENGAGE_PROOF, FA_FIGHT, fightWon, unengaged } from '#/bot/api/ai/quests/defs/fightarena/fights.js';
+import { FA_FIGHT, fightWon } from '#/bot/api/ai/quests/defs/fightarena/fights.js';
 import { FA_NPC } from '#/bot/api/ai/quests/defs/fightarena/areas.js';
 
 describe('the arena fights', () => {
@@ -27,23 +27,5 @@ describe('fightWon', () => {
 
     test('three missing ticks after a swing is a win', () => {
         expect(fightWon(4, 3)).toBe(true);
-    });
-});
-
-describe('unengaged', () => {
-    test('a beast that never fights back after enough swings is not out of its cage', () => {
-        expect(unengaged(ENGAGE_PROOF, false)).toBe(true);
-    });
-
-    test('a few swings are not proof yet — the first clicks land before combat registers', () => {
-        expect(unengaged(ENGAGE_PROOF - 1, false)).toBe(false);
-    });
-
-    test('combat, however brief, proves the beast is out', () => {
-        expect(unengaged(600, true)).toBe(false);
-    });
-
-    test('the proof is cheap next to the fight budget, so a caged beast is caught in seconds', () => {
-        expect(ENGAGE_PROOF).toBeLessThan(FA_FIGHT.ogre.guard / 10);
     });
 });

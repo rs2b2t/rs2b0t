@@ -226,7 +226,7 @@ export default class LeatherCrafter extends LoopingBot {
         this.pickRecipe();
         if (!this.recipe) {
             const need = Math.min(...this.kind.recipes.map(r => r.level));
-            ScriptRunner.stop(`Crafting ${Skills.level('crafting')} is too low for ${this.kindLabel} (needs ${need})`);
+            this.requestFinish(`Crafting ${Skills.level('crafting')} is too low for ${this.kindLabel} (needs ${need})`);
             return;
         }
         this.log(`LeatherCrafter — ${this.kindLabel} -> ${this.recipe.label} (level ${this.recipe.level}, ${this.recipe.qty} per item)`);
@@ -347,7 +347,7 @@ export default class LeatherCrafter extends LoopingBot {
         const needed = Math.max(0, this.threadStock * THREAD_MAX_PRICE - invById(COINS));
         if (needed > 0 && available > 0 && (await withdrawXById(COINS, Math.min(available, needed))) !== 'withdrawn') return;
         if (invById(COINS) === 0) {
-            ScriptRunner.stop('no thread or coins in the bank');
+            this.requestFinish('no thread or coins in the bank');
             return;
         }
         this.restockBank = stand;
@@ -373,7 +373,7 @@ export default class LeatherCrafter extends LoopingBot {
         if (invById(THREAD) > 0) {
             this.threadVendor = null;
         } else if (invById(COINS) === 0) {
-            ScriptRunner.stop('not enough coins to buy thread');
+            this.requestFinish('not enough coins to buy thread');
         } else {
             this.setStatus('waiting for thread stock');
             await Execution.delayTicks(5);
@@ -389,7 +389,7 @@ export default class LeatherCrafter extends LoopingBot {
             this.log(`could not withdraw ${label} — retrying`);
             return false;
         }
-        ScriptRunner.stop(stopReason);
+        this.requestFinish(stopReason);
         return false;
     }
 

@@ -12,6 +12,7 @@ import {
     tryParseCombatStyle,
     type MeleeCombatStyle
 } from '../../api/combat/CombatStyle.js';
+import { attackRangeFor, bodyOrigin, gapTo } from '../../api/combat/hunting/logic.js';
 import { Autocast } from '../../api/magic/Autocast.js';
 import { castsAvailable, runeWithdrawList } from '../../api/combat/CombatStyleLogic.js';
 import { foodHealAmount } from '../../api/combat/food.js';
@@ -30,7 +31,8 @@ import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Sustain } from '../../api/sustain/Sustain.js';
 import { nearestBankReachable, BANK_LOCATIONS, bankUnlocked, type BankLocation } from '../../api/bank/BankLocations.js';
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
-import { GroundItems } from '../../api/grounditems/GroundItems.js';
+import { GroundItems, type GroundItem } from '../../api/grounditems/GroundItems.js';
+import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import { Npcs, type Npc } from '../../api/npcs/Npcs.js';
 import { matchesEntityName } from '../../api/query/Query.js';
 import { SettingsStore, type SettingsSchema } from '../../runtime/Settings.js';
@@ -113,6 +115,7 @@ export const SETTINGS: SettingsSchema = {
     },
     avoidHerbs: { type: 'string[]', default: [], options: HERB_OPTIONS, label: 'Herbs to avoid', group: 'Banking & loot', help: 'pick herbs to never pick up; matched by item id for grimy and cleaned forms, since every grimy herb reads as "Herb"' },
     buryBones: { type: 'boolean', default: false, label: 'Bury regular bones', group: 'Banking & loot', help: 'pick up and bury regular Bones for Prayer XP (always looted when on)' },
+    buryBigBones: { type: 'boolean', default: false, label: 'Bury big bones', group: 'Banking & loot', help: 'pick up and bury Big bones for Prayer XP, independently of regular bones (always looted when on)' },
     solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues' },
     banking: { type: 'string', default: 'Auto', options: BANKING_OPTIONS, label: 'Banking', help: 'Auto = bank loot at the nearest bank and return; None = no loot-only bank trips' },
     bankLocation: { type: 'string', default: 'Nearest', options: BANK_LOCATION_OPTIONS, label: 'Bank location', group: 'Banking & loot', help: 'Nearest = closest reachable unlocked bank; a named bank forces that stand (locked banks fall back to nearest). Used for loot, food, supplies, and panic retreats.' },
@@ -142,6 +145,7 @@ let FOOD_WITHDRAW = 10;
 let PANIC_AT = 0.25;
 let LOOT = DEFAULT_LOOT;
 let BURY_BONES = false;
+let BURY_BIG_BONES = false;
 let SOLVE_CLUES = true;
 let BANK_AT = 12;
 let BANK_EVERY_MINUTES = 0;
@@ -199,7 +203,11 @@ function needEat(): boolean {
     return shouldEat(Skills.effective('hitpoints'), Skills.level('hitpoints'), foodHealAmount(FOOD), foodCount());
 }
 function isLoot(name: string | null): boolean {
-    return wantsAutoFighterLoot(name, LOOT, BURY_BONES);
+    return wantsAutoFighterLoot(name, LOOT, BURY_BONES, BURY_BIG_BONES);
+}
+function burialBones() {
+    return Inventory.items().filter(item => !item.noted && isBurialBone(item.name, BURY_BONES, BURY_BIG_BONES)
+        && item.actions().some(action => action.toLowerCase() === 'bury'));
 }
 function lootCount(): number {
     return Inventory.items()
@@ -255,14 +263,14 @@ function fullyOutOfSupplies(): boolean {
     return supplyMetric() === 0;
 }
 
-export function shouldKeepBankItem(name: string, id: number, food: string, bankCommon: boolean, ammo: string[] = [], gear: string[] = [], buryBones = false): boolean {
+export function shouldKeepBankItem(name: string, id: number, food: string, bankCommon: boolean, ammo: string[] = [], gear: string[] = [], buryBones = false, buryBigBones = false): boolean {
     const n = name.toLowerCase();
     const genericCasket = id === RANDOM_EVENT_CASKET_ID;
     const ammoMatch = ammo.some(a => a.toLowerCase() === n);
     const gearMatch = gear.some(g => g.toLowerCase() === n);
     return matchesAny(name, [food]) || n === 'coins' || KIT.includes(n) || n.includes('clue')
         || (n.includes('casket') && !genericCasket) || (genericCasket && !bankCommon)
-        || ammoMatch || gearMatch || (buryBones && isBurialBone(name));
+        || ammoMatch || gearMatch || isBurialBone(name, buryBones && id === 526, buryBigBones && id === 532);
 }
 
 export default class AutoFighter extends TaskBot {
@@ -306,6 +314,7 @@ export default class AutoFighter extends TaskBot {
                 .flatMap(h => [h.id, h.unidId])
         );
         BURY_BONES = this.settings.bool('buryBones', false);
+        BURY_BIG_BONES = this.settings.bool('buryBigBones', false);
         SOLVE_CLUES = this.settings.bool('solveClues', true);
         BANK_AT = this.settings.num('bankAtLootSlots', 12);
         BANK_EVERY_MINUTES = this.settings.num('bankEveryMinutes', 0);
@@ -324,16 +333,16 @@ export default class AutoFighter extends TaskBot {
         }
         // Why: pre-#195 saves stored attack/strength/controlled/defence in combatStyle.
         // Why: settings option validation coerces those to the default "melee" and leaves meleeStyle at strength, so Defence and the rest are ignored (#461).
-        const rawCombatStyle = SettingsStore.displayString('AutoFighter', 'combatStyle', SETTINGS.combatStyle!);
-        const rawMeleeStyle = SettingsStore.saved('AutoFighter', 'meleeStyle');
+        const rawCombatStyle = this.delegated ? this.settings.str('combatStyle', 'melee') : SettingsStore.displayString('AutoFighter', 'combatStyle', SETTINGS.combatStyle!);
+        const rawMeleeStyle = this.delegated ? this.settings.str('meleeStyle', 'strength') : SettingsStore.saved('AutoFighter', 'meleeStyle');
         const split = resolveSplitCombatSettings(rawCombatStyle, rawMeleeStyle);
         STYLE = split.kind;
         MELEE_STYLE = split.meleeStyle;
-        if (split.legacyMigrated !== null) {
+        if (!this.delegated && split.legacyMigrated !== null) {
             SettingsStore.save('AutoFighter', 'combatStyle', 'melee');
             SettingsStore.save('AutoFighter', 'meleeStyle', split.legacyMigrated);
             this.log(`migrated legacy combatStyle='${rawCombatStyle.trim()}' → meleeStyle='${split.legacyMigrated}'`);
-        } else if (tryParseCombatStyle(rawCombatStyle) !== null) {
+        } else if (!this.delegated && tryParseCombatStyle(rawCombatStyle) !== null) {
             // storage still has a training-style value but meleeStyle already set, rewrite combatStyle only
             SettingsStore.save('AutoFighter', 'combatStyle', 'melee');
         }
@@ -384,7 +393,7 @@ export default class AutoFighter extends TaskBot {
         this.xpAtStart = COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
         this.combatXpLast = this.combatXpTotal();
         this.combatXpGainAt = Date.now();
-        this.log(`AutoFighter starting — '${targetNames().join(', ')}' at ${spotMode} ${ANCHOR} r${LEASH}, style ${STYLE}${STYLE === 'mage' ? ` (${SPELL}, ${RUNES_WITHDRAW} casts)` : STYLE === 'range' ? ` (${RANGE_MODE === 0 ? 'accurate' : RANGE_MODE === 1 ? 'rapid' : 'longrange'}, ${AMMO}x${AMMO_WITHDRAW})` : ` (${MELEE_STYLE})`}, banking ${AUTO_BANK ? 'auto' : 'none'}${BANK_EVERY_MINUTES > 0 ? ` every ${BANK_EVERY_MINUTES}m` : ''} at ${BANK_LOCATION}, food '${FOOD}'x${FOOD_WITHDRAW}, loot [${LOOT.join(', ')}]${BURY_BONES ? `, burying ${BURIAL_BONE_NAME}` : ''}`);
+        this.log(`AutoFighter starting — '${targetNames().join(', ')}' at ${spotMode} ${ANCHOR} r${LEASH}, style ${STYLE}${STYLE === 'mage' ? ` (${SPELL}, ${RUNES_WITHDRAW} casts)` : STYLE === 'range' ? ` (${RANGE_MODE === 0 ? 'accurate' : RANGE_MODE === 1 ? 'rapid' : 'longrange'}, ${AMMO}x${AMMO_WITHDRAW})` : ` (${MELEE_STYLE})`}, banking ${AUTO_BANK ? 'auto' : 'none'}${BANK_EVERY_MINUTES > 0 ? ` every ${BANK_EVERY_MINUTES}m` : ''} at ${BANK_LOCATION}, food '${FOOD}'x${FOOD_WITHDRAW}, loot [${LOOT.join(', ')}]${BURY_BONES ? `, burying ${BURIAL_BONE_NAME}` : ''}${BURY_BIG_BONES ? ', burying Big bones' : ''}`);
 
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
@@ -487,6 +496,7 @@ export default class AutoFighter extends TaskBot {
 }
 
 class EnableAutoRetaliate implements Task {
+    readonly label = 'Enable auto retaliate';
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
         return autoRetaliateShouldEnable(Game.autoRetaliateOn());
@@ -506,11 +516,24 @@ class EnableAutoRetaliate implements Task {
 }
 
 class LootDrops implements Task {
+    readonly label = 'Loot drops';
+    private skipped = new Map<string, number>();
     constructor(private bot: AutoFighter) {}
+    private key(drop: GroundItem): string {
+        return `${drop.id}:${drop.tile()}`;
+    }
     private find() {
+        const now = Date.now();
+        for (const [key, until] of this.skipped) {
+            if (until <= now) this.skipped.delete(key);
+        }
         return GroundItems.query()
+            .action('Take')
             .where(g => isLoot(g.name) && !isAvoidedHerb(g.id))
+            .where(g => g.tile().distanceTo(ANCHOR) <= LEASH + 4)
             .within(LEASH + 4)
+            .where(g => !this.skipped.has(this.key(g)))
+            .where(g => Reachability.walkable(g.tile()))
             .nearest();
     }
     validate(): boolean {
@@ -527,22 +550,27 @@ class LootDrops implements Task {
         const find = () => GroundItems.query()
             .where(item => item.id === id && item.tile().equals(tile))
             .nearest();
-        const before = lootCount();
+        const count = () => Inventory.items().reduce((sum, item) => sum + (item.id === id ? item.count : 0), 0);
+        const before = count();
         const status = await Reach.entityOp({
             find,
             op: 'Take',
-            expect: () => lootCount() > before,
+            expect: () => count() > before,
             expectMs: 5000,
             what: drop.name ?? 'loot',
             log: message => this.bot.log(message)
         });
-        if (status === 'done' && lootCount() > before) {
+        if (status === 'done' && count() > before) {
             this.bot.countLoot();
+        } else {
+            this.skipped.set(this.key(drop), Date.now() + 60_000);
+            this.bot.log(`skipping failed loot '${drop.name}' id=${id} at ${tile} for 60s (${status})`);
         }
     }
 }
 
 class EatFood implements Task {
+    readonly label = 'Eat food';
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
         // Why: the bank side shows Deposit ops rather than Eat, so eating with the bank open spins forever and blocks BankRun. Wait for the bank to close.
@@ -575,6 +603,7 @@ class EatFood implements Task {
 }
 
 class PanicRetreat implements Task {
+    readonly label = 'Panic retreat';
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
         return shouldPanic(Skills.hpFraction(), PANIC_AT, foodCount());
@@ -612,41 +641,43 @@ class PanicRetreat implements Task {
 }
 
 class BuryBones implements Task {
+    readonly label = 'Bury bones';
     constructor(private bot: AutoFighter) {}
 
     validate(): boolean {
         return (
             !EventSignal.pending() &&
             shouldBuryRegularBones({
-                enabled: BURY_BONES,
+                enabled: BURY_BONES || BURY_BIG_BONES,
                 inCombat: Game.inCombat(),
                 bankOpen: Bank.isOpen(),
-                boneCount: Inventory.count(BURIAL_BONE_NAME),
+                boneCount: burialBones().length,
                 inventoryFull: Inventory.isFull()
             })
         );
     }
 
     async execute(): Promise<void> {
-        const bones = Inventory.first(BURIAL_BONE_NAME);
+        const bones = burialBones()[0];
         if (!bones) {
             return;
         }
-        this.bot.setStatus(`burying ${BURIAL_BONE_NAME.toLowerCase()}`);
-        const before = Inventory.count(BURIAL_BONE_NAME);
+        this.bot.setStatus(`burying ${bones.name?.toLowerCase()}`);
+        const before = Inventory.countById(bones.id);
         if (!(await bones.interact('Bury'))) {
-            this.bot.log(`no Bury op on ${BURIAL_BONE_NAME}? ops=[${bones.actions().join(', ')}]`);
+            this.bot.log(`could not bury ${bones.name}`);
             await Execution.delayTicks(2);
             return;
         }
-        if (await Execution.delayUntil(() => Inventory.count(BURIAL_BONE_NAME) < before, 3000)) {
+        if (await Execution.delayUntil(() => Inventory.countById(bones.id) < before, 3000)) {
             this.bot.countBurial();
-            this.bot.log(`buried ${BURIAL_BONE_NAME}`);
+            this.bot.log(`buried ${bones.name}`);
         }
     }
 }
 
 class BankRun implements Task {
+    readonly label = 'Bank run';
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
         const outOfSupplies = fullyOutOfSupplies();
@@ -694,7 +725,7 @@ class BankRun implements Task {
         if (!(await openBank(bank, m => this.bot.log(`  ${m}`)))) {
             return;
         }
-        await Bank.depositAllMatching((name, id) => !shouldKeepBankItem(name, id, FOOD, BANK_COMMON, STYLE === 'range' ? [AMMO] : [], TRACKED_GEAR, BURY_BONES), m => this.bot.log(`  ${m}`));
+        await Bank.depositAllMatching((name, id) => !shouldKeepBankItem(name, id, FOOD, BANK_COMMON, STYLE === 'range' ? [AMMO] : [], TRACKED_GEAR, BURY_BONES, BURY_BIG_BONES), m => this.bot.log(`  ${m}`));
         for (let guard = 0; guard < FOOD_WITHDRAW && foodCount() < FOOD_WITHDRAW && !Inventory.isFull(); guard++) {
             const before = foodCount();
             if (!(await Bank.withdraw(FOOD, 'Withdraw-1'))) {
@@ -783,6 +814,7 @@ async function withdrawTo(name: string, target: number): Promise<number> {
 }
 
 class SetAttackStyle implements Task {
+    readonly label = 'Set attack style';
     private fails = 0;
     private retryAt = 0;
     private announced = false;
@@ -822,6 +854,7 @@ class SetAttackStyle implements Task {
 }
 
 class ArmAutocast implements Task {
+    readonly label = 'Arm autocast';
     private fails = 0;
     private retryAt = 0;
     constructor(private bot: AutoFighter) {}
@@ -849,6 +882,7 @@ class ArmAutocast implements Task {
 
 // Why: Fight.validate is false while already in combat, so a retaliation fight would never reach the inline arm.
 class ArmSpecial implements Task {
+    readonly label = 'Arm special';
     private fails = 0;
     private retryAt = 0;
     constructor(private bot: AutoFighter) {}
@@ -868,6 +902,7 @@ class ArmSpecial implements Task {
 }
 
 class ReequipGear implements Task {
+    readonly label = 'Reequip gear';
     private lastFailLogAt = 0;
     constructor(private bot: AutoFighter) {}
     private candidates(): string[] {
@@ -901,21 +936,43 @@ class ReequipGear implements Task {
 }
 
 class Fight implements Task {
+    readonly label = 'Fight';
+    private skipped = new Map<string, number>();
     constructor(private bot: AutoFighter) {}
+    private key(npc: Npc): string { return `${npc.index}:${npc.id}`; }
+    private eligible(npc: Npc): boolean {
+        return (npc.targetsMe() || !npc.inCombat) && !npc.targetsAnotherPlayer() && npc.tile().distanceTo(ANCHOR) <= LEASH;
+    }
+    private reachable(npc: Npc): boolean {
+        const tile = npc.tile(), here = Game.tile();
+        if (!Reachability.probeable(tile)) return true;
+        if (STYLE !== 'melee' && here && gapTo(here, npc.networkTile(), npc.size) <= attackRangeFor(STYLE)) {
+            const origin = bodyOrigin(npc.networkTile(), npc.size);
+            if (Reachability.lineOfSight(here, { ...origin, level: tile.level }, npc.size)) return true;
+        }
+        return Reachability.canReach(tile, { maxSteps: 2048, adjacentOk: true });
+    }
+    private skip(npc: Npc, reason: string): void {
+        this.skipped.set(this.key(npc), Date.now() + 30_000);
+        this.bot.log(`skipping ${npc.name} at ${npc.tile()} for 30s (${reason})`);
+    }
     private findTarget() {
+        for (const [key, until] of this.skipped) {
+            if (until <= Date.now()) this.skipped.delete(key);
+        }
         const q = Npcs.query()
             .action('Attack')
-            .where(n => (n.targetsMe() || !n.inCombat) && !n.targetsAnotherPlayer() && n.tile().distanceTo(ANCHOR) <= LEASH);
+            .where(n => this.eligible(n) && (n.targetsMe() || !this.skipped.has(this.key(n))));
         const names = targetNames();
         if (names.length > 0) {
             q.name(...names);
         }
         const targets = q.results().sort((a, b) => a.distance() - b.distance());
-        return targets.find(n => n.targetsMe()) ?? targets[0] ?? null;
+        return targets.find(n => n.targetsMe()) ?? targets.find(n => this.reachable(n)) ?? targets[0] ?? null;
     }
     private track(engaged: Npc): Npc | null {
         const names = targetNames();
-        return Npcs.all().find(n => n.index === engaged.index && names.some(name => matchesEntityName(n.name, name))) ?? null;
+        return Npcs.all().find(n => n.index === engaged.index && n.id === engaged.id && names.some(name => matchesEntityName(n.name, name))) ?? null;
     }
     validate(): boolean {
         if (needEat() || Skills.hpFraction() < PANIC_AT) {
@@ -933,13 +990,27 @@ class Fight implements Task {
         if (!target) {
             return;
         }
+        if (!Game.inCombat() && !this.reachable(target)) {
+            this.bot.setStatus(`approaching ${target.name} through obstacles`);
+            const arrived = await Traversal.walkTo(target.tile(), { radius: 1, timeoutMs: 20_000, log: message => this.bot.log(message) });
+            if (EventSignal.pending() || this.bot.died || needEat() || Skills.hpFraction() < PANIC_AT || ChatDialog.canContinue()) return;
+            const current = this.track(target);
+            if (!current || !this.eligible(current)) return;
+            if (!arrived || !this.reachable(current)) {
+                this.skip(current, 'approach blocked');
+                return;
+            }
+        }
         this.bot.setStatus(`attacking ${target.name} at ${target.tile()}`);
         if (this.bot.resumeAttack && target.targetsMe()) {
             if (!(await target.interact('Attack'))) return;
             this.bot.resumeAttack = false;
         }
         const status = await Reach.entityOp({
-            find: () => this.track(target),
+            find: () => {
+                const current = this.track(target);
+                return current && this.eligible(current) ? current : null;
+            },
             op: 'Attack',
             expect: () => Game.inCombat() || ChatDialog.canContinue(),
             // a wandering target postpones the server's can't-reach verdict forever,
@@ -950,6 +1021,7 @@ class Fight implements Task {
             log: message => this.bot.log(message)
         });
         if (status !== 'done' || ChatDialog.canContinue()) {
+            if (status !== 'done' && !EventSignal.pending() && !ChatDialog.canContinue() && !this.bot.died) this.skip(target, status);
             return;
         }
         this.bot.resumeAttack = false;
@@ -992,6 +1064,7 @@ class Fight implements Task {
 }
 
 class ReturnToAnchor implements Task {
+    readonly label = 'Return to anchor';
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
         const here = Game.tile();
@@ -999,6 +1072,15 @@ class ReturnToAnchor implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus('heading to the spot');
-        await Traversal.walkResilient(ANCHOR, { radius: 3, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
+        const log = (message: string) => this.bot.log(`  ${message}`);
+        if (this.bot.delegated) {
+            const arrived = await Traversal.walkTo(ANCHOR, { radius: 3, timeoutMs: 90000, log });
+            const here = Game.tile();
+            if ((!arrived || !here || ANCHOR.distanceTo(here) > 3) && !EventSignal.pending()) {
+                this.bot.requestFinish(`Could not return to combat camp at ${ANCHOR}`);
+            }
+        } else {
+            await Traversal.walkResilient(ANCHOR, { radius: 3, attempts: 6, timeoutMs: 300_000, log });
+        }
     }
 }

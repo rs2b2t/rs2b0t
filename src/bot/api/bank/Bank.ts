@@ -1,7 +1,7 @@
 import type { InvItemSnapshot, ModalCloseObservation, WorldTile } from '../../adapter/ClientAdapter.js';
 import { reader, actions } from '../../adapter/ClientAdapter.js';
 import { Input } from '../../input/Input.js';
-import type { BankNpcAccess, BankObjectAccess } from './BankLocations.js';
+import { lockedBankAt, type BankNpcAccess, type BankObjectAccess } from './BankLocations.js';
 import { Execution } from '../execution/Execution.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import { Traversal } from '../walking/Traversal.js';
@@ -40,14 +40,11 @@ async function bankBackpackReady(): Promise<boolean> {
     if (reader.bankComId() === -1) {
         return false;
     }
-    if (reader.modals().side === -1) {
-        await Execution.delayUntil(() => reader.modals().side !== -1 || reader.bankComId() === -1, 2000);
+    const ready = (): boolean => reader.modals().side !== -1 && reader.bankSideSnapshotReady();
+    if (!ready()) {
+        await Execution.delayUntil(() => ready() || reader.bankComId() === -1, 2000);
     }
-    if (reader.bankComId() === -1 || reader.modals().side === -1) {
-        return false;
-    }
-    await Execution.delayTicks(1);
-    return reader.bankComId() !== -1 && reader.modals().side !== -1;
+    return reader.bankComId() !== -1 && ready();
 }
 
 async function continueObjectBankDialog(log?: (msg: string) => void): Promise<boolean> {
@@ -125,12 +122,15 @@ export const Bank = {
 
     /** @internal */
     async backpackReady(
-        expected: readonly BackpackItem[],
+        expected?: readonly BackpackItem[],
         log?: (msg: string) => void
     ): Promise<boolean> {
         if (!(await bankBackpackReady())) {
             log?.('bank: side backpack modal did not become ready');
             return false;
+        }
+        if (!expected) {
+            return true;
         }
         await Execution.delayUntil(
             () => !Bank.isOpen()
@@ -283,32 +283,35 @@ export const Bank = {
      * Fill the pack from one bank item: Withdraw-All when the op exists, otherwise Withdraw-X for the free slots.
      * Why: the 10-at-a-time fallback is several clicks slower than one X (#710).
      */
-    async withdrawLoad(name: string): Promise<boolean> {
+    async withdrawLoad(name: string | number): Promise<boolean> {
         if (!(await bankBackpackReady())) {
             return false;
         }
-        const wanted = name.toLowerCase();
-        const item = reader.bankItems().find(i => i.name?.toLowerCase() === wanted);
-        if (!item?.name) {
+        const wanted = typeof name === 'string' ? name.toLowerCase() : name;
+        const matches = (i: InvItemSnapshot): boolean => typeof wanted === 'number'
+            ? i.id === wanted : i.name?.toLowerCase() === wanted;
+        const item = reader.bankItems().find(matches);
+        if (!item || item.count <= 0) {
             return false;
-        }
-        const itemName = item.name;
-        const allOp = withdrawOp(item.ops, 'all');
-        if (allOp) {
-            const before = Inventory.used();
-            if (!(await Bank.withdraw(itemName, allOp))) {
-                return false;
-            }
-            return Execution.delayUntil(
-                () => Inventory.used() > before || Inventory.isFull() || Bank.count(itemName) === 0,
-                4000
-            );
         }
         const want = Inventory.free();
         if (want <= 0) {
             return true;
         }
-        return Bank.withdrawX(itemName, want);
+        const allOp = withdrawOp(item.ops, 'all');
+        if (allOp) {
+            const count = (): number => backpackSnapshots().filter(matches).reduce((sum, i) => sum + i.count, 0);
+            const before = count();
+            const target = before + Math.min(want, item.count);
+            if (!(await Bank.withdrawById(item.id, allOp))) {
+                return false;
+            }
+            return Execution.delayUntil(
+                () => count() >= target || (count() > before && backpackFull()),
+                4000
+            );
+        }
+        return typeof name === 'number' ? Bank.withdrawXById(name, want) : Bank.withdrawX(name, want);
     },
 
     deposit(name: string, op: string = 'Deposit-1'): boolean | Promise<boolean> {
@@ -322,9 +325,9 @@ export const Bank = {
     async depositAllMatching(match: (name: string, id: number) => boolean, log?: (msg: string) => void): Promise<void> {
         for (let guard = 0; guard < 32; guard++) {
             let items = reader.bankSideItems();
-            if (items.length === 0 && Bank.isOpen()) {
+            if (items.length === 0 && Bank.isOpen() && !reader.bankSideSnapshotReady()) {
                 log?.('deposit view not ready — waiting for the side backpack');
-                await Execution.delayUntil(() => reader.bankSideItems().length > 0 || !Bank.isOpen(), 1200);
+                await Execution.delayUntil(() => reader.bankSideSnapshotReady() || reader.bankSideItems().length > 0 || !Bank.isOpen(), 1200);
                 items = reader.bankSideItems();
             }
             // a nameless obj (cache miss) is still an item taking a slot, let the matcher decide
@@ -345,12 +348,17 @@ export const Bank = {
     },
 
     async openBooth(stand: WorldTile, boothName: string, op: string, log?: (msg: string) => void): Promise<boolean> {
+        const locked = lockedBankAt(stand);
+        if (locked) {
+            log?.(`bank: cannot use ${locked.name}; access requirements not met`);
+            return false;
+        }
         const pick = (acts: string[]): string | undefined =>
             acts.find(a => a.toLowerCase() === op.toLowerCase()) ?? acts.find(a => /^use/i.test(a)) ?? acts[0];
 
         for (let attempt = 0; attempt < 4 && !Bank.isOpen(); attempt++) {
-            const booth = Locs.query().name(boothName).where(l => l.actions().length > 0).nearest()
-                ?? Locs.query().name(boothName).nearest();
+            const booth = Locs.query().name(boothName).where(l => l.actions().length > 0 && !lockedBankAt(l.tile())).nearest()
+                ?? Locs.query().name(boothName).where(l => !lockedBankAt(l.tile())).nearest();
             if (!booth) {
                 log?.(`no '${boothName}' in the scene — waiting`);
                 await Execution.delayTicks(2);
@@ -371,7 +379,7 @@ export const Bank = {
             // 90s: 15s was too short for long camp-to-bank legs (Rimmington to Fally E).
             await Traversal.walkTo(stand, { radius: 1, timeoutMs: 90_000, log });
             await Execution.delayTicks(1);
-            const adj = Locs.query().name(boothName).where(l => l.actions().length > 0 && l.distance() <= 1).nearest();
+            const adj = Locs.query().name(boothName).where(l => l.actions().length > 0 && l.distance() <= 1 && !lockedBankAt(l.tile())).nearest();
             const adjOp = adj ? pick(adj.actions()) : undefined;
             if (adj && adjOp) {
                 await adj.interact(adjOp);
@@ -503,7 +511,7 @@ export const Bank = {
             acts.find(a => a.toLowerCase() === op.toLowerCase()) ?? acts.find(a => /^use|^bank/i.test(a)) ?? acts[0];
 
         for (let attempt = 0; attempt < 6 && !Bank.isOpen(); attempt++) {
-            const booth = Locs.query().name(boothName).where(l => l.actions().length > 0).nearest();
+            const booth = Locs.query().name(boothName).where(l => l.actions().length > 0 && !lockedBankAt(l.tile())).nearest();
             if (!booth) {
                 log?.(`no usable '${boothName}' in the scene`);
                 return false;
@@ -511,6 +519,7 @@ export const Bank = {
 
             const chosen = pick(booth.actions());
             if (chosen) {
+                log?.(`bank: '${chosen}' '${boothName}' at ${booth.tile()} (attempt ${attempt + 1}/6)`);
                 await booth.interact(chosen);
                 if (await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 8000)) {
                     if (ChatDialog.canContinue() && await continueObjectBankDialog(log)) { return openedReady(log); }
@@ -529,7 +538,7 @@ export const Bank = {
                 }
             }
 
-            const adjacent = Locs.query().name(boothName).where(l => l.actions().length > 0 && l.distance() <= 1).nearest() ?? booth;
+            const adjacent = Locs.query().name(boothName).where(l => l.actions().length > 0 && l.distance() <= 1 && !lockedBankAt(l.tile())).nearest() ?? booth;
             const adjOp = pick(adjacent.actions());
             if (adjOp) {
                 await adjacent.interact(adjOp);

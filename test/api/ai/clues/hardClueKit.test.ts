@@ -31,6 +31,17 @@ test('rejects unsupported weapons and zero-count guardian weapons', () => {
     expect(hardClueKit({ ...ready, items: [{ id: 1333, count: 1 }, ...ready.items.slice(1)] })).not.toBe('ready');
     expect(hardClueKit({ ...ready, items: [{ id: 1305, count: 0 }, ...ready.items.slice(1)] })).not.toBe('ready');
 });
+
+test('a ranged hard-clue kit needs its configured bow and ammo, without melee unlocks', () => {
+    const ranged = { weapon: 'Magic shortbow', ammo: 'Rune arrow', quantity: 500, mode: 1 };
+    const kit = { ...ready, attack: 1, lostCity: false, ranged, items: [
+        { id: 861, name: 'Magic shortbow', count: 1 }, { id: 892, name: 'Rune arrow', count: 20 }, ...ready.items.slice(1)
+    ] };
+    expect(hardClueKit(kit)).toBe('ready');
+    expect(hardClueKit({ ...kit, items: kit.items.filter(i => i.id !== 892) })).toBe('ammo');
+    expect(hardClueKit({ ...kit, items: kit.items.filter(i => i.id !== 861) })).toBe('weapon');
+    expect(hardClueKit({ ...kit, items: kit.items.filter(i => i.id !== 385) })).toBe('sharks');
+});
 test('reserves the mandatory thirteen slots without lowering the minimum', () => {
     expect(hardTrailFoodTarget({ heldFood: 0, freeSlots: 15, reserveSlots: 0 })).toBe(15);
     expect(hardTrailFoodTarget({ heldFood: 0, freeSlots: 21, reserveSlots: 1 })).toBe(15);

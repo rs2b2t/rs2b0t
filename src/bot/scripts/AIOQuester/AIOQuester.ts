@@ -294,7 +294,7 @@ export default class AIOQuester extends TaskBot {
     }
 
     finish(reason: string): void {
-        ScriptRunner.stop(reason);
+        this.requestFinish(reason);
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
