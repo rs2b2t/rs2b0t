@@ -72,6 +72,10 @@ const KIT = ['spade', 'sextant', 'watch', 'chart'];
 const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic'];
 // Why: auto-retaliate only fires on a landed hit, so a zero-damage enemy leaves us stuck "in combat". Re-issue Attack after this long with flat combat XP.
 const STALL_REATTACK_MS = 2 * 60_000;
+// Why: a drop the server never lets us take would otherwise pin the loot task forever; only give up after the same item and tile have failed this long.
+const LOOT_STUCK_MS = 30_000;
+// Why: a cooldown lets the drop return later (another bot may have moved it) without spinning on it now.
+const LOOT_SKIP_MS = 30 * 60_000;
 
 const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
 const SHOW_RANGE = { key: 'combatStyle', anyOf: ['range'] };
@@ -104,7 +108,7 @@ export const SETTINGS: SettingsSchema = {
     food: { type: 'string', default: '', label: 'Food to eat', help: 'exact item name to eat (e.g. Shark, Monkfish, Trout). Leave blank to use the loadout’s food, falling back to Trout' },
     foodWithdraw: { type: 'number', default: 10, min: 0, max: 27, label: 'Food to carry' },
     panicHp: { type: 'number', default: 25, min: 0, max: 100, label: 'Panic below HP% (no food)' },
-    loot: { type: 'string[]', default: DEFAULT_LOOT, label: 'Loot item names (contains)', help: 'defaults to gem-table items + clue scrolls, nothing else', csvToggle: 'lootMode' },
+    loot: { type: 'string[]', default: DEFAULT_LOOT, label: 'Loot item names (exact)', help: 'exact item names, case-insensitive; defaults to gem-table items + clue scrolls, nothing else', csvToggle: 'lootMode' },
     lootMode: {
         type: 'string',
         default: 'list',
@@ -518,6 +522,7 @@ class EnableAutoRetaliate implements Task {
 class LootDrops implements Task {
     readonly label = 'Loot drops';
     private skipped = new Map<string, number>();
+    private stuck = new Map<string, { first: number; last: number }>();
     constructor(private bot: AutoFighter) {}
     private key(drop: GroundItem): string {
         return `${drop.id}:${drop.tile()}`;
@@ -547,6 +552,7 @@ class LootDrops implements Task {
         this.bot.setStatus(`looting ${drop.name} at ${drop.tile()}`);
         const id = drop.id;
         const tile = drop.tile();
+        const key = this.key(drop);
         const find = () => GroundItems.query()
             .where(item => item.id === id && item.tile().equals(tile))
             .nearest();
@@ -561,11 +567,30 @@ class LootDrops implements Task {
             log: message => this.bot.log(message)
         });
         if (status === 'done' && count() > before) {
+            this.skipped.delete(key);
+            this.stuck.delete(key);
             this.bot.countLoot();
-        } else {
-            this.skipped.set(this.key(drop), Date.now() + 60_000);
-            this.bot.log(`skipping failed loot '${drop.name}' id=${id} at ${tile} for 60s (${status})`);
+            return;
         }
+        const now = Date.now();
+        if (status === 'unreachable') {
+            this.stuck.delete(key);
+            this.skipped.set(key, now + LOOT_SKIP_MS);
+            this.bot.log(`blacklisting unreachable loot '${drop.name}' id=${id} at ${tile} for ${LOOT_SKIP_MS / 1000}s`);
+            return;
+        }
+        const prev = this.stuck.get(key);
+        const started = prev && now - prev.last <= LOOT_STUCK_MS ? prev.first : now;
+        this.stuck.set(key, { first: started, last: now });
+        if (now - started < LOOT_STUCK_MS) {
+            this.bot.log(`loot '${drop.name}' id=${id} at ${tile} did not complete (${status}); still trying`);
+            return;
+        }
+        this.stuck.delete(key);
+        this.skipped.set(key, now + LOOT_SKIP_MS);
+        this.bot.log(
+            `blacklisting loot '${drop.name}' id=${id} at ${tile} for ${LOOT_SKIP_MS / 1000}s after ${LOOT_STUCK_MS / 1000}s stuck (${status})`
+        );
     }
 }
 

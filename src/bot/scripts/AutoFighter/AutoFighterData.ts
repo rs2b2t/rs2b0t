@@ -1,5 +1,4 @@
 import Tile from '../../geometry/Tile.js';
-import { matchesAny } from '../../api/inventory/packRules.js';
 import { BANK_LOCATIONS } from '../../api/bank/BankLocations.js';
 
 export const START_POSITION = 'Start position';
@@ -46,7 +45,9 @@ export function isBurialBone(name: string | null, buryBones = true, buryBigBones
 }
 
 export function wantsAutoFighterLoot(name: string | null, configured: string[], buryBones: boolean, buryBigBones = false): boolean {
-    return matchesAny(name, configured) || isBurialBone(name, buryBones, buryBigBones);
+    const normalized = name?.trim().toLowerCase();
+    const listed = normalized !== undefined && configured.some(entry => entry.trim().toLowerCase() === normalized);
+    return listed || isBurialBone(name, buryBones, buryBigBones);
 }
 
 /** Fight.validate is false while Game.inCombat(), so retaliate-off + an attacking random (strange fruit) never picks a new target. */
