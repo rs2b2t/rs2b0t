@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 74. Categories: 21.
+- Scripts: 75. Categories: 21.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -22,7 +22,7 @@
 - [Herblore](#herblore) — 5
 - [Magic](#magic) — 3
 - [Mining](#mining) — 3
-- [Money making](#money-making) — 8
+- [Money making](#money-making) — 9
 - [Navigation](#navigation) — 2
 - [Prayer](#prayer) — 1
 - [Quest](#quest) — 3
@@ -1005,6 +1005,23 @@ World shop-run supply loop — cycles shop clusters buying Herblore supplies, fe
 | `maxGpPerLeg` | number (1000–) | `100000` | Max gp per withdrawal |
 | `stopFloorGp` | number (0–) | `5000` | Stop below bank gp |
 | `mageArena` | boolean | `true` | Mage Arena leg |
+
+### WanderLooter
+
+Wanders the overworld looting exact-name drops without fighting. Eats configured food, flees to the nearest bank when low on health without food, banks excess loot and food, and avoids tiles where it took damage.
+
+- Tags: `loot`, `wandering`, `banking`, `food`, `event`, `pumpkin`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `loot` | string[] | `["Pumpkin"]` | Loot item names (exact) |
+| `lootMode` | string | `"list"` | Loot entry mode — one of: List (chips), CSV (text + copy/paste) |
+| `food` | string | `""` | Food to eat |
+| `foodWithdraw` | number (0–27) | `0` | Food to carry |
+| `panicHp` | number (0–100) | `25` | Flee below HP% (no food) |
+| `bankAtLootSlots` | number (1–28) | `28` | Bank at loot slots |
+| `wanderDistance` | number (5–60) | `30` | Wander distance (tiles) |
+| `bankAfterMinutes` | number (1–240) | `10` | Bank after no loot (minutes) |
 
 ## Navigation
 
