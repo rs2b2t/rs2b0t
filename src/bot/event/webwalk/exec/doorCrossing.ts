@@ -199,8 +199,7 @@ export function isOpenBarrierLeaf(name: string | null, ops: readonly (string | n
 export const DOOR_AVOID_STRIKES = 2;
 
 // Why: `resetAvoids` drops the per-walk avoid list on the next `walkTo`, so a door that can't be crossed gets replanned by the next `walkResilient` pass and the walk loops.
-// Why: strikes count across walks, and a placement that refused this many is treated as shut for the session.
-export const DOOR_SESSION_STRIKES = 3;
+export const DOOR_COOLDOWN_STRIKES = 3;
 
 // Why: a gangplank or ladder that "refuses" is usually a scene that has not caught up, and banning it can strand the walker somewhere with one exit.
 // Why: live, 3 missed `Gangplank` frames on the Karamja ship left a bot marooned on the deck.
