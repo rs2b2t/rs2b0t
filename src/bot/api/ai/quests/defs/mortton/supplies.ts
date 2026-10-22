@@ -103,6 +103,38 @@ export function serumsShort(snap: QuestSnapshot, stage: number): number {
     return Math.max(0, Math.ceil((dosesNeeded(stage) - have) / DOSES_PER_VIAL));
 }
 
+export function recoverSerum(snap: QuestSnapshot, stage: number): QuestStep | null {
+    if (stage < SM_STAGE.READ_DIARY || serumsShort(snap, stage) === 0) {
+        return null;
+    }
+    if (!snap.bankKnown) {
+        return scanBank;
+    }
+    const ingredients = [
+        { id: SM_ID.TARROMIN_UNF, name: 'Unfinished potion' },
+        { id: SM_ID.TARROMIN, name: 'Tarromin' },
+        { id: SM_ID.UNID_TARROMIN, name: 'Herb' }
+    ];
+    const serums = stage >= SM_STAGE.MADE_SERUM ? [
+        ...PERM_SERUM_BY_DOSE.map(([id, dose]) => ({ id, name: `Serum 207(p) (${dose})` })),
+        ...SERUM_BY_DOSE.map(([id, dose]) => ({ id, name: `Serum 207 (${dose})` }))
+    ] : [];
+    const candidates = [
+        ...serums,
+        ...(ingredients.some(item => heldId(snap, item.id) > 0) ? [] : ingredients)
+    ];
+    const item = candidates.find(item => bankedId(snap, item.id) > 0);
+    if (!item) {
+        return null;
+    }
+    if (snap.freeSlots === 0) {
+        const keep = ['coins', 'serum 207', 'pyre logs', 'loar remains', 'sacred oil', 'olive oil'];
+        const expendable = [...snap.inv].some(([name, count]) => count > 0 && !keep.some(k => name.toLowerCase().includes(k)));
+        return expendable ? { kind: 'deposit', keep } : { kind: 'wait', reason: 'no pack room for serum recovery' };
+    }
+    return { kind: 'withdraw', items: [{ ...item, qty: 1 }] };
+}
+
 // Why: nothing inside Morytania sells or spawns logs and no axe is carried, so the 2 spawns beside the Varrock east bank feed both the ashes and the pyre.
 
 /** Ashes still to burn: one per serum this quest has yet to brew. */
