@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import {
     JP_STAGE,
     JUNGLE_HERBS,
@@ -8,6 +8,11 @@ import {
     parseJungleJournal
 } from '#/bot/api/ai/quests/defs/junglepotion.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+import { QuestFood } from '#/bot/api/ai/quests/food.js';
+
+let originalFood: typeof QuestFood.name;
+beforeEach(() => { originalFood = QuestFood.name; QuestFood.name = 'Lobster'; });
+afterEach(() => { QuestFood.name = originalFood; });
 
 function snapshot(o: Partial<QuestSnapshot> = {}): QuestSnapshot {
     return {
@@ -116,6 +121,38 @@ describe('parseJungleJournal', () => {
 });
 
 describe('junglepotion decide', () => {
+    test('reads the bank before departing the mainland with an empty pack', () => {
+        expect(decide(snapshot({ journal: 'notStarted', stage: 0, bankKnown: false, tile: { x: 2615, z: 3332, level: 0 } })).kind).toBe('scanBank');
+    });
+
+    test('draws food and money for both crossings before entering the jungle', () => {
+        const step = decide(snapshot({
+            journal: 'notStarted', stage: 0, tile: { x: 2615, z: 3332, level: 0 },
+            bank: new Map([['coins', 6_204_130], ['lobster', 7671]])
+        }));
+        expect(step).toMatchObject({ kind: 'withdraw', items: [{ name: 'Coins', qty: 1000 }, { name: 'Lobster', qty: 8 }] });
+    });
+
+    test('continues a bankless resume without trying to top up food on the mainland', () => {
+        const step = decide(snapshot({ stage: JP_STAGE.GET_SNAKE_WEED, bankKnown: false }));
+        expect(step.kind === 'custom' && step.name).toBe('pick Snake weed');
+    });
+
+    test('Rimmington is mainland and still needs provisions', () => {
+        expect(decide(snapshot({ stage: 1, bankKnown: false, tile: { x: 2955, z: 3204, level: 0 } })).kind).toBe('scanBank');
+    });
+
+    test('makes room for provisions without banking the current quest herb', () => {
+        const step = decide(snapshot({
+            stage: 2, tile: { x: 2615, z: 3332, level: 0 }, freeSlots: 0,
+            inv: new Map([['snake weed', 1], ['logs', 27]]), invIds: new Map([[1526, 1], [1511, 27]]),
+            bank: new Map([['coins', 1000], ['lobster', 8]])
+        }));
+        expect(step.kind).toBe('deposit');
+        expect(step.kind === 'deposit' && step.keepIds).toContain(1526);
+        expect(step.kind === 'deposit' && step.keep).not.toContain('logs');
+    });
+
     test('a complete journal is done', () => {
         expect(decide(snapshot({ journal: 'complete' })).kind).toBe('done');
     });

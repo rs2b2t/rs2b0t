@@ -288,6 +288,9 @@ class WalkExecutorImpl {
                 const path = await this.requestPath(me, dest, maxExpansions);
                 if (!path.ok) {
                     const short = await this.explainUnreachablePath(me, dest, path.reason, maxExpansions);
+                    if (short.length > 0 && !this.bankLegDone && await this.maybeBankForRoute(me, dest, path, maxExpansions, log)) {
+                        continue;
+                    }
                     const why = short.length > 0
                         ? `${path.reason} without ${short.map(m => `${m.count}x ${m.name}`).join(', ')}`
                         : path.reason;
@@ -501,7 +504,7 @@ class WalkExecutorImpl {
     private async maybeBankForRoute(
         from: WorldTile,
         dest: WorldTile,
-        directPath: PathResult & { ok: true },
+        directPath: PathResult,
         maxExpansions: number | undefined,
         log: (msg: string) => void
     ): Promise<boolean> {
@@ -516,8 +519,8 @@ class WalkExecutorImpl {
             return false;
         }
 
-        const directMissing = missingItemsForPath(directPath.waypoints, state);
-        if (directMissing.length === 0 && pathHasTeleport(directPath.waypoints)) {
+        const directMissing = directPath.ok ? missingItemsForPath(directPath.waypoints, state) : [];
+        if (directPath.ok && directMissing.length === 0 && pathHasTeleport(directPath.waypoints)) {
             return false;
         }
         const virtual = virtualizeWithItems(state, bankItems);
@@ -537,7 +540,7 @@ class WalkExecutorImpl {
         }
 
         const plan = planBankLeg({
-            directCost: directMissing.length > 0 ? Infinity : directPath.cost,
+            directCost: !directPath.ok || directMissing.length > 0 ? Infinity : directPath.cost,
             directHasTeleport: false,
             toBankCost: toBank.cost,
             bankToDestCost: bankToDest.cost,
@@ -549,7 +552,7 @@ class WalkExecutorImpl {
 
         log(
             `bank plan: withdraw ${plan.missing.map(m => `${m.count}×${m.name}`).join(', ')} `
-                + `(est cost ${plan.estimatedCost}, direct ${directMissing.length > 0 ? 'underfunded' : directPath.cost})`
+                + `(est cost ${plan.estimatedCost}, direct ${!directPath.ok ? 'unreachable' : directMissing.length > 0 ? 'underfunded' : directPath.cost})`
         );
 
         this.bankLegDone = true; // prevent recursion while walking to bank

@@ -74,6 +74,34 @@ beforeEach(() => {
 afterEach(() => mock.restore());
 
 describe.skipIf(!packExists)('route funding with the real navigation pack', () => {
+    test('withdraws the first fare when every route to Karamja requires coins', async () => {
+        here = { x: 2615, z: 3332, level: 0 };
+        coins = 0;
+        const trufitus = { x: 2809, z: 3086, level: 0 };
+        expect(await WalkExecutor.walkTo(trufitus, { useTeleportCatalog: false })).toBe(true);
+        expect(withdrawn).toBe(30);
+        expect(crossings).toBe(1);
+        expect(here).toEqual(trufitus);
+    });
+
+    test('keeps the missing fare diagnostic when the first withdrawal fails', async () => {
+        here = { x: 2615, z: 3332, level: 0 };
+        coins = 0;
+        withdrawalLands = false;
+        expect(await WalkExecutor.walkTo({ x: 2809, z: 3086, level: 0 }, { useTeleportCatalog: false })).toBe(false);
+        expect(Banking.open).toHaveBeenCalledTimes(1);
+        expect(crossings).toBe(0);
+        expect(WalkExecutor.lastMissingGateItems).toEqual([{ name: 'Coins', count: 30 }]);
+    });
+
+    test('does not invent a bank route when stranded on Karamja without a fare', async () => {
+        here = { x: 2809, z: 3086, level: 0 };
+        coins = 0;
+        expect(await WalkExecutor.walkTo(ardougne, { useTeleportCatalog: false })).toBe(false);
+        expect(Banking.open).not.toHaveBeenCalled();
+        expect(crossings).toBe(0);
+    });
+
     test('funds both ship fares before leaving Draynor with one fare held', async () => {
         expect(await WalkExecutor.walkTo(ardougne, { useTeleportCatalog: false })).toBe(true);
         expect(withdrawn).toBe(30);
