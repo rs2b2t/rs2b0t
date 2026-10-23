@@ -83,6 +83,12 @@ function beforeTheDoor(snap: QuestSnapshot): QuestStep {
         return runes;
     }
     if (heldId(snap, HD_ID.KEY) === 0) {
+        if (!snap.bankKnown) {
+            return { kind: 'scanBank' };
+        }
+        if (bankedId(snap, HD_ID.KEY) > 0) {
+            return { kind: 'withdraw', items: [{ name: HD_ITEM.KEY, qty: 1, id: HD_ID.KEY }] };
+        }
         // Why: The guard refuses a banked card, leaving the tour complete but the gate closed.
         if (heldId(snap, HD_ID.BARCRAWL_CARD) === 0 && bankedId(snap, HD_ID.BARCRAWL_CARD) > 0) {
             return {

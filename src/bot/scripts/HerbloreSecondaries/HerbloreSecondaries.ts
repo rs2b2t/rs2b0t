@@ -1,6 +1,7 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
+import { Sustain } from '../../api/sustain/Sustain.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Game } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
@@ -101,13 +102,20 @@ export default class HerbloreSecondaries extends TaskBot {
             `HerbloreSecondaries — ${def.name} (${def.mode}) bank ${site.bankName}, food '${this.foodName}' x${this.foodWant}${def.needShield ? `, shield '${SHIELD_NAME}'` : ''}`
         );
 
+        const eat = new Eat(this);
+        Sustain.set(async () => {
+            if (!Bank.isOpen() && eat.validate()) {
+                await eat.execute();
+            }
+        });
+
         // Why: ProcessSource sits before BankTrip so swamp toads become legs before the deposit.
         // Why: Eat sits before BankTrip because a full pack with food left is one free slot away from more loot, and BankTrip would otherwise win and bank the food.
         this.add(
             new ContinueDialog(),
             new GearUp(this),
             new ProcessSource(this),
-            new Eat(this),
+            eat,
             new BankTrip(this),
             new BuyTool(this),
             new BuyGoods(this),
@@ -115,6 +123,10 @@ export default class HerbloreSecondaries extends TaskBot {
             new Loot(this),
             new Travel(this)
         );
+    }
+
+    override onStop(): void {
+        Sustain.set(null);
     }
 
     private resolveSite(def: SecondaryDef): Site | null {

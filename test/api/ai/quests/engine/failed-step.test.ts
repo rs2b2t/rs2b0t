@@ -92,7 +92,7 @@ function fixture() {
         engine['deposited'].add(id);
         engine['freshened'].add(id);
     }
-    return { engine, state };
+    return { engine, state, host };
 }
 
 async function execute(engine: QuestEngine, count: number): Promise<void> {
@@ -262,6 +262,8 @@ test('death recovery clears the failed-attempt budget', async () => {
     await execute(engine, 7);
     state.death = true;
     await engine.execute();
+    await engine.execute();
+    expect(state.bankActions).toEqual(['open']);
     await execute(engine, 7);
     expect(engine['runningId']).toBe('runemysteries');
     await execute(engine, 2);
@@ -286,6 +288,46 @@ test('wait steps retain their separate fifteen-step budget', async () => {
     await execute(engine, 2);
     expect(state.running).toBe('doric');
 });
+
+test('an empty pack checks an unknown bank for the coin float before starting a quest', async () => {
+    const { engine, state } = fixture();
+    const { items } = runemysteries.record;
+    const { coinFloat } = runemysteries;
+    restores.push(() => { runemysteries.record.items = items; runemysteries.coinFloat = coinFloat; });
+    runemysteries.record.items = [];
+    runemysteries.coinFloat = 1000;
+    state.picked = new Set(['runemysteries']);
+    state.bankCoins = 6_204_130;
+    engine['provisioned'].delete('runemysteries');
+    engine['freshened'].delete('runemysteries');
+    const used = spyOn(Inventory, 'used').mockImplementation(() => state.coins > 0 ? 1 : 0);
+    restores.push(() => used.mockRestore());
+    const status = spyOn(Quests, 'status').mockReturnValue('notStarted');
+    restores.push(() => status.mockRestore());
+    await execute(engine, 3);
+    expect(state.bankActions).toEqual(['open', 'open', 'withdraw:Coins:1000']);
+    expect(state.coins).toBe(1000);
+    expect(state.attempts).toBe(1);
+});
+
+for (const supply of ['food', 'prayer'] as const) {
+    test(`checks an unknown bank for ${supply} even when the quest needs no coins`, async () => {
+        const { engine, state, host } = fixture();
+        const { items } = runemysteries.record;
+        const { coinFloat, food, pray } = runemysteries;
+        restores.push(() => { runemysteries.record.items = items; runemysteries.coinFloat = coinFloat; runemysteries.food = food; runemysteries.pray = pray; });
+        runemysteries.record.items = [];
+        runemysteries.coinFloat = 0;
+        runemysteries.food = supply === 'food' ? 8 : 0;
+        runemysteries.pray = supply === 'prayer' ? { protect: 'melee', potions: 2 } : undefined;
+        host.foodItem = () => 'Lobster';
+        state.picked = new Set(['runemysteries']);
+        engine['provisioned'].delete('runemysteries');
+        await engine.execute();
+        expect(state.bankActions).toEqual(['open']);
+        expect(state.attempts).toBe(0);
+    });
+}
 
 for (const scenario of [
     { name: 'unknown bank scans then withdraws banked mustHave supplies', bankKnown: false, bankCoins: 20000, coins: 0, ownsInventory: false, ticks: 3, actions: ['open', 'open', 'withdraw:Coins:1'], attempts: 1, blocked: false, held: 1 },

@@ -155,6 +155,16 @@ describe('Horror from the Deep — the bridge', () => {
 describe('Horror from the Deep — the key and the door', () => {
     const bridged = { stage: HD_STAGE.STARTED, flags: [HD_FLAG.BRIDGE] };
 
+    test('withdraws the existing lighthouse key instead of requesting a duplicate', () => {
+        expect(step({ ...bridged, bankIds: [[HD_ID.KEY, 1]] })).toMatchObject({
+            kind: 'withdraw', items: [{ name: 'Lighthouse key', id: HD_ID.KEY, qty: 1 }]
+        });
+    });
+
+    test('a funded resume still scans an unread bank for the lighthouse key', () => {
+        expect(step({ ...bridged, bankKnown: false }).kind).toBe('scanBank');
+    });
+
     test('runs the barcrawl and Gunnjorn once the bridge is up', () => {
         expect(customName(step(bridged))).toContain('barcrawl');
     });
