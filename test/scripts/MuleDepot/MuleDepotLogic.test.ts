@@ -10,6 +10,7 @@ import {
     isConfiguredAccount,
     isGiverRole,
     isReceiverRole,
+    lineKey,
     listedRows,
     nextBatchIndex,
     nextUnserved,
@@ -23,6 +24,7 @@ import {
     planDeliveries,
     planWithdrawal,
     resolveRole,
+    shortfallFor,
     type BankRow,
     type LoadoutLine
 } from '#/bot/scripts/MuleDepot/MuleDepotLogic.js';
@@ -245,6 +247,38 @@ describe('MuleDepotLogic', () => {
         test('a zero slot width still delivers everything', () => {
             const batches = planDeliveries(loadout(['Cooked meat', 3]), stackable, 0);
             expect(batches.flatMap(batch => batch.lines).reduce((sum, line) => sum + line.quantity, 0)).toBe(3);
+        });
+    });
+
+    describe('shortfallFor', () => {
+        const lines = loadout(['Air rune', 100], ['Mind rune', 100]);
+
+        test('nothing is short when every line is in the pack', () => {
+            expect(shortfallFor(lines, () => 100)).toEqual([]);
+        });
+
+        test('names only the line the bank could not supply', () => {
+            const short = shortfallFor(lines, line => (line.name === 'Air rune' ? 100 : 0));
+            expect(short).toEqual([{ id: expect.any(Number), name: 'Mind rune', quantity: 100 }]);
+        });
+
+        test('keeps the remaining quantity of a partly withdrawn line', () => {
+            const short = shortfallFor(lines, line => (line.name === 'Air rune' ? 100 : 40));
+            expect(short).toEqual([{ id: expect.any(Number), name: 'Mind rune', quantity: 60 }]);
+        });
+
+        test('a line held beyond its batch needs nothing', () => {
+            expect(shortfallFor(lines, () => 1_000)).toEqual([]);
+        });
+    });
+
+    describe('lineKey', () => {
+        test('matches a line by its name, ignoring case', () => {
+            expect(lineKey({ id: 558, name: 'Mind rune' })).toBe(lineKey({ id: 999, name: 'mind rune' }));
+        });
+
+        test('falls back to the id when the line has no name', () => {
+            expect(lineKey({ id: 558, name: '' })).toBe('#558');
         });
     });
 

@@ -769,7 +769,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'MuleDepot',
-    description: 'Shared-bank depot for a group of accounts, in two modes. Dump: every mule withdraws a shared item list and trades the lot to one supermule, which banks each delivery and keeps going. Supply: one supplier hands a fixed loadout to each account once, delivering over as many trades as the loadout needs, then stops. Four roles off two settings — Dump/Mule, Dump/Supermule, Supply/Supplier, Supply/Client — and a designation from the wrong mode is refused at startup. Default bank Seers; both sides use the same one.',
+    description: 'Shared-bank depot for a group of accounts, in two modes. Dump: every mule withdraws a shared item list and trades the lot to one supermule, which banks each delivery and keeps going. Supply: one supplier hands a fixed loadout to each account once, delivering over as many trades as the loadout needs, then stops; if the bank cannot supply a line, the rest is still delivered and the shortfall is named when it stops. Four roles off two settings — Dump/Mule, Dump/Supermule, Supply/Supplier, Supply/Client — and a designation from the wrong mode is refused at startup. Default bank Seers; both sides use the same one.',
     category: 'Utility',
     tags: ['trade', 'mule', 'banking', 'logistics', 'multi-account', 'depot'],
     settingsSchema: MULEDEPOT_SETTINGS,

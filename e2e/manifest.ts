@@ -1869,5 +1869,13 @@ export const CASES: readonly Case[] = [
         provenAt: '77b72e2b',
         budgetMin: 4,
         note: 'one supplier and two clients at Seers with a five-line loadout at four slots a trade, so the plan is two batches and the pass needs all four trades. Asserts each client receives both batches and banks them, and the supplier stops itself naming the accounts it served'
+    },
+    {
+        id: 'muledepot-short-supply-live',
+        harness: 'muledepot-short-supply-test.ts',
+        covers: { scripts: ['MuleDepot'] },
+        status: 'unvetted',
+        budgetMin: 4,
+        note: 'one supplier and one client at Seers; the loadout asks for Air and Mind but only Air is seeded. Asserts the supplier still delivers Air and reports Mind as short, rather than claiming a complete supply'
     }
 ];

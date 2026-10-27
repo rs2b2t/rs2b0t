@@ -41,6 +41,7 @@ import {
     isConfiguredAccount,
     isGiverRole,
     isReceiverRole,
+    lineKey,
     nextBatchIndex,
     nextUnserved,
     normalizeAccount,
@@ -50,7 +51,8 @@ import {
     pickRequestTarget,
     planDeliveries,
     planWithdrawal,
-    resolveRole
+    resolveRole,
+    shortfallFor
 } from './MuleDepotLogic.js';
 import {
     bankRows,
@@ -202,6 +204,12 @@ export default class MuleDepot extends TaskBot implements MuleDepotContext {
 
     private batchIndex = 0;
     private served = new Set<string>();
+    // Lines the bank could not supply after enough reads; they are reported, not retried for ever.
+    private unavailable = new Set<string>();
+    // What each client was actually given, by line key, to report a shortfall per account.
+    private delivered = new Map<string, Map<string, number>>();
+    // The lines a completed stake put up, credited to the client when the window confirms.
+    private pendingDelivery: DeliveryLine[] = [];
     private requestCursor = 0;
     private asker: string | null = null;
     private askerAt = 0;
@@ -441,6 +449,19 @@ export default class MuleDepot extends TaskBot implements MuleDepotContext {
         return out;
     }
 
+    /** How much of a line is already on our side of the open trade, if there is one. */
+    private offeredOf(line: DeliveryLine): number {
+        if (!Trade.active()) {
+            return 0;
+        }
+        return Trade.myOffer().reduce((sum, offer) => {
+            const matches = line.name.length > 0
+                ? (offer.name ?? '').toLowerCase() === line.name.toLowerCase()
+                : offer.id === line.id;
+            return sum + (matches ? Math.max(1, offer.count) : 0);
+        }, 0);
+    }
+
     isPartner(name: string | null): boolean {
         return isConfiguredAccount(name, this.accountList);
     }
@@ -454,7 +475,9 @@ export default class MuleDepot extends TaskBot implements MuleDepotContext {
             return this.isPartner(name);
         }
         const client = this.currentClient();
-        return client !== null && normalizeAccount(client) === normalizeAccount(name);
+        return client !== null
+            && this.batchComplete()
+            && normalizeAccount(client) === normalizeAccount(name);
     }
     nearestPartner(range: number = TRADE_RANGE): Player | null {
         if (this.accountList.length === 0) {
@@ -511,9 +534,55 @@ export default class MuleDepot extends TaskBot implements MuleDepotContext {
         return this.transfers;
     }
 
-    /** One batch landed: advance the batch, or the client once its last batch is away. */
+    batchShortfall(): DeliveryLine[] {
+        const batch = this.currentBatch();
+        if (!batch) {
+            return [];
+        }
+        const wanted = batch.lines.filter(line => !this.unavailable.has(lineKey(line)));
+        return shortfallFor(wanted, line => {
+            const held = this.heldOf(line);
+            // Why: staking takes the goods out of the pack, so a batch that is already up must still
+            // count as complete or the supplier declines the window it just opened.
+            return held.unnoted + held.noted + this.offeredOf(line);
+        });
+    }
+
+    batchComplete(): boolean {
+        return this.batchShortfall().length === 0;
+    }
+
+    markUnavailable(line: DeliveryLine): void {
+        this.unavailable.add(lineKey(line));
+    }
+
+    setPendingDelivery(lines: DeliveryLine[]): void {
+        this.pendingDelivery = lines.map(line => ({ ...line }));
+    }
+
+    /** Nothing of the current batch could be supplied: count it as attempted and move on. */
+    skipBatch(): void {
+        this.pendingDelivery = [];
+        this.advanceBatch();
+    }
+
+    /** One batch landed: credit each line to the client, then advance. */
     markBatchServed(_amount: number): void {
-        // Why: the transfer total is already counted by recordTransfer, so this only advances.
+        const client = this.currentClient();
+        if (client === null) {
+            return;
+        }
+        const delivered = this.delivered.get(client) ?? new Map<string, number>();
+        for (const line of this.pendingDelivery) {
+            const key = lineKey(line);
+            delivered.set(key, (delivered.get(key) ?? 0) + line.quantity);
+        }
+        this.delivered.set(client, delivered);
+        this.pendingDelivery = [];
+        this.advanceBatch();
+    }
+
+    private advanceBatch(): void {
         const client = this.currentClient();
         if (client === null) {
             return;
@@ -525,8 +594,47 @@ export default class MuleDepot extends TaskBot implements MuleDepotContext {
         }
         this.served.add(normalizeAccount(client));
         if (this.currentClient() === null) {
-            ScriptRunner.stop(`MuleDepot: supplied ${this.batches.length} batch(es) to ${this.served.size} account(s), ${this.unitsMoved} item(s) moved`);
+            this.finishSupply();
         }
+    }
+
+    /** Stop with what was delivered, and name every shortfall rather than reporting a clean pass. */
+    private finishSupply(): void {
+        const requested = new Map<string, { name: string; quantity: number }>();
+        for (const line of this.lines) {
+            const key = lineKey(line);
+            const held = requested.get(key);
+            if (held) {
+                held.quantity += line.quantity;
+            } else {
+                requested.set(key, { name: line.name || `#${line.id}`, quantity: line.quantity });
+            }
+        }
+
+        const short: string[] = [];
+        for (const client of this.accountList) {
+            const delivered = this.delivered.get(client) ?? new Map<string, number>();
+            const parts: string[] = [];
+            for (const [key, want] of requested) {
+                const got = delivered.get(key) ?? 0;
+                if (got < want.quantity) {
+                    parts.push(`${want.quantity - got} ${want.name}`);
+                }
+            }
+            if (parts.length > 0) {
+                short.push(`${client}: ${parts.join(' + ')}`);
+            }
+        }
+
+        const supplied = `MuleDepot: supplied ${this.batches.length} batch(es) to ${this.served.size} account(s), ${this.unitsMoved} item(s) moved`;
+        if (short.length === 0) {
+            ScriptRunner.stop(supplied);
+            return;
+        }
+
+        const shown = short.slice(0, 4).join('; ');
+        const more = short.length > 4 ? `; +${short.length - 4} more account(s)` : '';
+        ScriptRunner.stop(`${supplied} — short: ${shown}${more}`);
     }
 
     async walkTo(dest: Tile, radius = 2): Promise<void> {
@@ -555,7 +663,9 @@ export default class MuleDepot extends TaskBot implements MuleDepotContext {
     private composeTasks(): Task[] {
         const trade = new TradeScreenTask(this, isGiverRole(this.roleValue) ? giverFlavour(this) : receiverFlavour(this));
         const closeBank = createCloseBankTask(this);
-        const carrying = (): boolean => !Trade.active() && this.packUsed() > 0;
+        const carrying = (): boolean => !Trade.active()
+            && this.packUsed() > 0
+            && (this.roleValue !== 'Supplier' || this.batchComplete());
 
         switch (this.roleValue) {
             case 'Mule':
@@ -594,7 +704,7 @@ export default class MuleDepot extends TaskBot implements MuleDepotContext {
                     new WalkToTask(
                         this,
                         () => this.bankTile(),
-                        () => !Trade.active() && this.packUsed() === 0 && this.currentBatch() !== null && !this.atBank(),
+                        () => !Trade.active() && !this.batchComplete() && !this.atBank(),
                         3,
                         'returning to the bank for the next batch'
                     ),

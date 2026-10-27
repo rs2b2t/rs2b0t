@@ -6,7 +6,7 @@ import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import { liveCatalog, notedId } from '../../api/market/catalog.js';
 import { Trade } from '../../api/trade/Trade.js';
 import { EMPTY_WITHDRAWAL_READS, type MuleDepotContext } from './MuleDepotContext.js';
-import { describeLines, listedRows, pickBankRow, type BankRow } from './MuleDepotLogic.js';
+import { describeLines, lineKey, listedRows, pickBankRow, type BankRow, type DeliveryLine } from './MuleDepotLogic.js';
 
 // Why: the trade window swallows a bank click and the bank window swallows a trade click, so every
 // pass below opens, works and closes, failure paths included.
@@ -214,13 +214,15 @@ export function createSupermuleBankTask(bot: MuleDepotContext): Task {
 
 /** Supply Supplier: withdraw the batch it is on, one pack at a time. */
 export function createSupplierBankTask(bot: MuleDepotContext): Task {
-    let emptyReads = 0;
+    // Consecutive passes a line could not be supplied for. After enough of them it is given up on
+    // for the rest of the run rather than blocking every other line and every account.
+    const misses = new Map<string, number>();
 
     return new BankTripTask({
         validate: () => bot.role() === 'Supplier'
             && !Trade.active()
-            && bot.packUsed() === 0
-            && bot.currentBatch() !== null,
+            && bot.currentBatch() !== null
+            && !bot.batchComplete(),
         run: async () => {
             const batch = bot.currentBatch();
             if (!batch) {
@@ -230,39 +232,64 @@ export function createSupplierBankTask(bot: MuleDepotContext): Task {
             await bankPass(bot, async () => {
                 // Why: note mode on, so a whole stack lands in one slot and the batch plan holds.
                 await Bank.setNoteMode(true);
-                for (const line of batch.lines) {
+
+                // Only what the pack still lacks: a partial withdrawal is kept, not withdrawn twice.
+                const wanted = bot.batchShortfall();
+                const short = new Map<string, DeliveryLine>();
+                for (const line of wanted) {
                     // Why: a name-only loadout line has no id, and the bank is addressed by id, so
                     // the name has to become a row before anything can be clicked.
                     const row = line.id >= 0
                         ? Bank.items().find(r => r.id === line.id)
                         : pickBankRow(line.name, bankRows(), notedIds());
                     if (!row?.name) {
-                        const what = line.name.length > 0 ? line.name : `#${line.id}`;
-                        emptyReads++;
-                        bot.log(`the bank holds none of ${what} for batch ${batch.index + 1} (read ${emptyReads})`);
-                        if (emptyReads >= EMPTY_WITHDRAWAL_READS) {
-                            ScriptRunner.stop(`MuleDepot: the bank cannot supply batch ${batch.index + 1} (${what}) after ${emptyReads} reads`);
-                        }
-                        return false;
+                        short.set(lineKey(line), line);
+                        continue;
                     }
-                    emptyReads = 0;
                     const landsAs = notedId(liveCatalog(), row.id) ?? row.id;
                     bot.setStatus(`withdrawing ${line.quantity} ${row.name}`);
                     if (!(await Bank.withdrawXById(row.id, line.quantity, landsAs))) {
                         bot.log(`could not withdraw ${line.quantity} ${row.name} of batch ${batch.index + 1} (ops: ${rowOpsText(row.id)}), retrying`);
-                        return false;
+                        short.set(lineKey(line), line);
                     }
                 }
-                const have = bot.packUsed();
-                if (have === 0) {
-                    emptyReads++;
-                    if (emptyReads >= EMPTY_WITHDRAWAL_READS) {
-                        ScriptRunner.stop(`MuleDepot: batch ${batch.index + 1} (${describeLines(batch.lines)}) left the pack empty after ${emptyReads} reads`);
+
+                // A line can be short even after a successful withdraw (the bank held fewer).
+                for (const line of bot.batchShortfall()) {
+                    short.set(lineKey(line), line);
+                }
+
+                // A line that is now whole again starts its count over.
+                for (const line of wanted) {
+                    if (!short.has(lineKey(line))) {
+                        misses.delete(lineKey(line));
                     }
+                }
+
+                for (const [key, line] of short) {
+                    const count = (misses.get(key) ?? 0) + 1;
+                    misses.set(key, count);
+                    const what = line.name.length > 0 ? line.name : `#${line.id}`;
+                    if (count >= EMPTY_WITHDRAWAL_READS) {
+                        bot.markUnavailable(line);
+                        bot.log(`the bank cannot supply ${line.quantity} ${what} for batch ${batch.index + 1}; giving up on it after ${count} reads`);
+                    } else {
+                        bot.log(`the bank is short ${line.quantity} ${what} for batch ${batch.index + 1} (read ${count}/${EMPTY_WITHDRAWAL_READS})`);
+                    }
+                }
+
+                if (!bot.batchComplete()) {
+                    return false;
+                }
+
+                // Everything was missing: count the batch as attempted and move on instead of stalling.
+                if (bot.loadoutInPack().length === 0) {
+                    bot.log(`batch ${batch.index + 1} of ${bot.deliveries().length} has nothing the bank can supply; moving on`);
+                    bot.skipBatch();
                     return true;
                 }
-                emptyReads = 0;
-                bot.log(`batch ${batch.index + 1} of ${bot.deliveries().length}: ${describeLines(batch.lines)}`);
+
+                bot.log(`batch ${batch.index + 1} of ${bot.deliveries().length}: ${describeLines(bot.loadoutInPack())}`);
                 return true;
             });
         }

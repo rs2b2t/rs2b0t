@@ -90,6 +90,16 @@ export interface MuleDepotContext {
     planDumpWithdrawal(): WithdrawalLine[];
     /** Whether a line's quantity is already in the pack, so a handoff is not staked twice. */
     loadoutInPack(): DeliveryLine[];
+    /** What the current batch still needs from the bank, ignoring lines already given up on. */
+    batchShortfall(): DeliveryLine[];
+    /** True when every line of the current batch is in the pack, or has been given up on. */
+    batchComplete(): boolean;
+    /** Give up on a line for the rest of the run, after enough empty bank reads. */
+    markUnavailable(line: DeliveryLine): void;
+    /** Nothing of the current batch could be supplied: count it and move on. */
+    skipBatch(): void;
+    /** What a successful stake actually put up, so a transfer can be credited per line. */
+    setPendingDelivery(lines: DeliveryLine[]): void;
 
     // ── trade ──
     isPartner(name: string | null): boolean;

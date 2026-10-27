@@ -180,6 +180,26 @@ export interface DeliveryBatch {
     lines: DeliveryLine[];
 }
 
+/** A line's identity across batches and clients: the name when it has one, else the id. */
+export function lineKey(line: { id: number; name: string }): string {
+    return line.name.length > 0 ? line.name.toLowerCase() : `#${line.id}`;
+}
+
+/** What a batch still needs from the bank, once the pack's share is counted. */
+export function shortfallFor(
+    lines: readonly DeliveryLine[],
+    held: (line: DeliveryLine) => number
+): DeliveryLine[] {
+    const out: DeliveryLine[] = [];
+    for (const line of lines) {
+        const quantity = line.quantity - Math.max(0, held(line));
+        if (quantity > 0) {
+            out.push({ id: line.id, name: line.name, quantity });
+        }
+    }
+    return out;
+}
+
 /** The batches that carry a whole loadout, splitting an oversized line instead of truncating it. */
 export function planDeliveries(lines: readonly LoadoutLine[], slotsFor: SlotsFor, slots: number = PACK): DeliveryBatch[] {
     const width = Math.max(1, Math.floor(slots));

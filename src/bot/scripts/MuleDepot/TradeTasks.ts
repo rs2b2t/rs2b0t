@@ -62,7 +62,8 @@ export function giverFlavour(bot: MuleDepotContext): TradeFlavour {
         delta: (host, baseline) => baseline - host.packUnits(),
         // Why: a giver is ready when it still holds goods to stake or already has them up. Waiting
         // only for an existing offer deadlocks, since staking is what puts one there.
-        ready: host => Trade.myOffer().length > 0 || host.packUnits() > 0,
+        ready: host => (host.role() !== 'Supplier' || host.batchComplete())
+            && (Trade.myOffer().length > 0 || host.packUnits() > 0),
         act: async host => {
             if (Trade.myOffer().length === 0) {
                 if (!await stakeEverything(host)) {
@@ -112,6 +113,12 @@ function packLinesById(): StakedLine[] {
 
 async function stakeEverything(bot: MuleDepotContext): Promise<boolean> {
     const isDumper = bot.role() === 'Mule';
+    // Why: a supplier stakes a batch only once it is complete, or the client is handed a partial
+    // batch and the run reports a supply it never made.
+    if (!isDumper && !bot.batchComplete()) {
+        bot.log('the batch is not complete yet; not staking a partial supply');
+        return false;
+    }
     const lines: StakedLine[] = isDumper ? packLinesById() : bot.loadoutInPack();
 
     if (lines.length === 0) {
@@ -146,6 +153,8 @@ async function stakeEverything(bot: MuleDepotContext): Promise<boolean> {
         bot.log('the offer never showed every line');
         return false;
     }
+    // Why: credit these exact lines when the window confirms, so a shortfall can be named per client.
+    bot.setPendingDelivery(lines);
     bot.log(`offered ${describeLines(lines)}`);
     return true;
 }
