@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test';
+import { existsSync, readFileSync } from 'node:fs';
+import { gunzipSync } from 'fflate';
 
 import { PathFinder, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
 import transports from '#/bot/event/webwalk/data/transports.json';
+import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
+import { emptyWorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 
 const INSIDE = { x: 2465, z: 3493, level: 0 } as const;
 const OUTSIDE = { x: 2465, z: 3491, level: 0 } as const;
@@ -91,4 +95,21 @@ describe('Grand Tree main doors', () => {
         finder.addEdges([], []);
         expect(finder.findPath(INSIDE, OUTSIDE).ok).toBe(false);
     });
+});
+
+test.skipIf(!existsSync('out/collision.lcnav.gz'))('Grand Tree king and bank can reach Hazelmere without quest travel unlocks', () => {
+    const finder = new PathFinder(gunzipSync(readFileSync('out/collision.lcnav.gz')));
+    loadDefaultNavEdges(finder);
+    for (const from of [{ x: 2465, z: 3496, level: 0 }, { x: 2448, z: 3482, level: 1 }]) {
+        const route = finder.findPath(from, { x: 2678, z: 3086, level: 1 }, {
+            state: { ...emptyWorldStateData(), items: { Coins: 2000 } },
+            policy: { useTeleports: false },
+            useTeleportCatalog: false
+        });
+        expect(route.ok).toBe(true);
+        if (!route.ok) continue;
+        expect(route.hops).toContainEqual(expect.objectContaining({ locName: 'Tree Door', to: OUTSIDE }));
+        expect(route.hops.some(hop => hop.locName === 'Spirit Tree')).toBe(false);
+        expect(route.waypoints.at(-1)).toMatchObject({ x: 2678, z: 3086, level: 1 });
+    }
 });

@@ -5,6 +5,7 @@ import { Game } from '#/bot/api/game/Game.js';
 import { GroundItem } from '#/bot/api/grounditems/GroundItems.js';
 import { Inventory } from '#/bot/api/inventory/Inventory.js';
 import { Reachability } from '#/bot/event/webwalk/geometry/Reachability.js';
+import { Reach } from '#/bot/api/walking/Reach.js';
 import AutoFighter from '#/bot/scripts/AutoFighter/AutoFighter.js';
 import { SettingsBag } from '#/bot/runtime/Settings.js';
 import { Sustain } from '#/bot/api/sustain/Sustain.js';
@@ -72,23 +73,50 @@ test('a matching name without Take is not eligible loot', async () => {
     expect(loot.validate()).toBe(false);
 });
 
-test('a refused pickup yields immediately and cools down only that item and tile', async () => {
+test('blacklists only the stuck item and tile after 30s, then retries after the cooldown', async () => {
     const { world, loot, attempts } = await scenario();
     await loot.execute();
+    expect(loot.validate()).toBe(true);
+    world.now += 29_999;
+    await loot.execute();
+    expect(loot.validate()).toBe(true);
+    world.now += 1;
+    await loot.execute();
     expect(loot.validate()).toBe(false);
+    expect(attempts).toEqual([3111, 3111, 3111]);
     world.ground.push(bone(3113));
     expect(loot.validate()).toBe(true);
     await loot.execute();
-    expect(attempts).toEqual([3111, 3113]);
-    world.now += 60_001;
+    expect(attempts).toEqual([3111, 3111, 3111, 3113]);
+    world.now += 30 * 60_001;
     expect(loot.validate()).toBe(true);
 });
 
-test('an accepted pickup without the selected item increasing also yields to combat', async () => {
+test('an unreachable pickup is blacklisted immediately and retried after the cooldown', async () => {
+    const { world, loot } = await scenario();
+    spyOn(Reach, 'entityOp').mockResolvedValue('unreachable');
+    await loot.execute();
+    expect(loot.validate()).toBe(false);
+    world.now += 30 * 60_001;
+    expect(loot.validate()).toBe(true);
+});
+
+test('a gap longer than the stuck window restarts the count', async () => {
+    const { world, loot } = await scenario();
+    await loot.execute();
+    world.now += 30_001;
+    await loot.execute();
+    expect(loot.validate()).toBe(true);
+});
+
+test('an accepted pickup without the selected item increasing is not counted and stays eligible until the stuck window', async () => {
     const { world, loot, take, counted } = await scenario();
     take.mockImplementation(() => { world.pack.push(held(995, 5)); return true; });
     await loot.execute();
     expect(counted).not.toHaveBeenCalled();
+    expect(loot.validate()).toBe(true);
+    world.now += 30_000;
+    await loot.execute();
     expect(loot.validate()).toBe(false);
 });
 

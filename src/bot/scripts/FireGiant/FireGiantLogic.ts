@@ -60,6 +60,17 @@ export function lootWaitMs(distance: number): number {
     return 1200 + Math.max(0, distance) * 700;
 }
 
+// Why: fullness alone cannot tell a pack the restock itself filled from one worth banking, because food and escape runes can take every slot before any loot arrives.
+// Why: banking exists to empty loot, so the trigger counts the slots the bank run would deposit rather than the food still held.
+// Why: one deposited slot is the piece that can top off a fresh restock (24 food plus entry kit leaves one slot), and banking for it before a fight restocks to the same near-full pack and loops.
+// Why: two or more deposited slots are a load the pack can no longer add to, so that pack banks as before.
+// Why: fighting on with one piece held is safe because eating frees slots as the trip proceeds, and the out-of-food and supply triggers still bank with the piece held.
+
+/** Whether the pack alone forces the bank trip. */
+export function packForcesBank(packFull: boolean, bankableLootSlots: number): boolean {
+    return packFull && bankableLootSlots > 1;
+}
+
 export type Room = 'west' | 'east';
 const WEST_ROOM = { minX: 2556, maxX: 2571, minZ: 9880, maxZ: 9902 };
 const EAST_ROOM = { minX: 2572, maxX: 2586, minZ: 9880, maxZ: 9902 };

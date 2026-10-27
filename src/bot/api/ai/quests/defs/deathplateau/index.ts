@@ -671,6 +671,19 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
 
+    if (stage >= DP_STAGE.GIVEN_IOU && heldId(snap, DEATH_ITEM.COMBINATION.id) === 0) {
+        if (heldId(snap, DEATH_ITEM.IOU.id) > 0) {
+            return custom('read the IOU (combination on the back)', readIou);
+        }
+        if (!snap.bankKnown) {
+            return scanBank();
+        }
+        const paper = [DEATH_ITEM.COMBINATION, DEATH_ITEM.IOU].find(item => bankedId(snap, item.id) > 0);
+        if (paper) {
+            return makeSpace(snap, 1) ?? withdraw([{ ...paper, qty: 1 }]);
+        }
+    }
+
     // finish: both tracks done
     if (stage >= DP_STAGE.UNLOCKED_DOOR && map.scouted) {
         if (heldId(snap, DEATH_ITEM.SECRET_MAP.id) === 0 && !map.scouted) {

@@ -98,8 +98,8 @@ export function gpShort(snap: { inv: Map<string, number>; bankCoins: number }, e
 }
 
 export function floatWithdraw(
-    inv: Map<string, number>,
-    bank: Map<string, number>,
+    inv: ReadonlyMap<string, number>,
+    bank: ReadonlyMap<string, number>,
     name: string,
     target: number
 ): { name: string; qty: number } | null {

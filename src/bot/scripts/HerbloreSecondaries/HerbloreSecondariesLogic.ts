@@ -176,7 +176,7 @@ export function shopCoinsToWithdraw(inPack: number, banked: number, want = SHOP_
 }
 
 /**
- * Eat when a full heal fits (no overheal waste), HP is at the safety floor, or
+ * Eat when a full heal fits, HP reaches the 60% safety floor, or
  * the pack is full and eating frees a slot for more loot.
  */
 export function shouldEat(opts: {
@@ -187,7 +187,8 @@ export function shouldEat(opts: {
     freeSlots: number;
     collecting: boolean;
 }): boolean {
-    if (shouldEatToUseFood(opts)) {
+    const minHp = Math.max(5, Math.min(opts.maxHp - 1, Math.ceil(opts.maxHp * 0.6)));
+    if (shouldEatToUseFood({ ...opts, minHp })) {
         return true;
     }
     // pack full while still collecting, free a slot

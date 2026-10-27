@@ -89,6 +89,7 @@ import GnomeMagicChopper, { GNOME_MAGIC_CHOPPER_SETTINGS } from './GnomeMagicCho
 import ArravSupplier, { ARRAV_SUPPLIER_SETTINGS } from './ArravSupplier/ArravSupplier.js';
 import Barcrawl from './Barcrawl/Barcrawl.js';
 import DuelArena, { DUEL_ARENA_SETTINGS } from './DuelArena/DuelArena.js';
+import WanderLooter, { SETTINGS as WANDER_LOOTER_SETTINGS } from './WanderLooter/WanderLooter.js';
 
 // First register = panel default when no script is remembered (BotPanel → list()[0]).
 ScriptRegistry.register({
@@ -900,4 +901,13 @@ ScriptRegistry.register({
     tags: ['training', 'combat', 'skilling', 'quests', 'banking', 'death-recovery'],
     settingsSchema: ACCOUNT_LEVELER_SETTINGS,
     create: () => new AccountLeveler()
+});
+
+ScriptRegistry.register({
+    name: 'WanderLooter',
+    description: 'Wanders the overworld looting exact-name drops without fighting. Eats configured food, flees to the nearest bank when low on health without food, banks excess loot and food, and avoids tiles where it took damage.',
+    category: 'Money making',
+    tags: ['loot', 'wandering', 'banking', 'food', 'event', 'pumpkin'],
+    settingsSchema: WANDER_LOOTER_SETTINGS,
+    create: () => new WanderLooter()
 });

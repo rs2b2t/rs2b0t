@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { AP_RANGE, attackRangeFor, lootWaitMs, BARREL_EXIT, EXIT_OPTIONS, eastFirst, takenByAnother, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, ESCAPE_TELES, legFor, LEDGE, POST_ROCK, RAFT_STAND, ROCK_TILE, roomOf, ROPE_THROW_STAND, sameRoom, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiant/FireGiantLogic.js';
+import { AP_RANGE, attackRangeFor, lootWaitMs, BARREL_EXIT, EXIT_OPTIONS, eastFirst, takenByAnother, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, ESCAPE_TELES, legFor, LEDGE, packForcesBank, POST_ROCK, RAFT_STAND, ROCK_TILE, roomOf, ROPE_THROW_STAND, sameRoom, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiant/FireGiantLogic.js';
 
 const at = (x: number, z: number, level = 0) => ({ x, z, level });
 
@@ -281,4 +281,23 @@ test('ranged attacks respect thrown weapon reach at the safespot', () => {
     expect(attackRangeFor('range', 'Rune javelin')).toBe(5);
     expect(attackRangeFor('range', 'Rune thrownaxe')).toBe(4);
     expect(attackRangeFor('range', 'Crossbow')).toBe(10);
+});
+
+// Why: a restock can fill the pack with the trip's own food and escape runes, so fullness alone would bank again before the first fight.
+// Why: the helper counts deposited loot slots instead, and one slot is the piece that can top off a fresh restock.
+describe('packForcesBank', () => {
+    test('a pack that is not full never forces a bank', () => {
+        expect(packForcesBank(false, 0)).toBe(false);
+        expect(packForcesBank(false, 5)).toBe(false);
+    });
+    test('a full pack holding no bankable loot does not force a bank', () => {
+        expect(packForcesBank(true, 0)).toBe(false);
+    });
+    test('a full pack topped off by one bankable loot slot does not force a bank', () => {
+        expect(packForcesBank(true, 1)).toBe(false);
+    });
+    test('a full pack holding two or more bankable loot slots forces a bank', () => {
+        expect(packForcesBank(true, 2)).toBe(true);
+        expect(packForcesBank(true, 5)).toBe(true);
+    });
 });

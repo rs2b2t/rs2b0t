@@ -49,7 +49,7 @@ import { SettingsStore } from '../../runtime/Settings.js';
 import {
     barrierBannable,
     crossMultiTileDoor,
-    DOOR_SESSION_STRIKES,
+    DOOR_COOLDOWN_STRIKES,
     isOpenableBarrier,
     isOpenBarrierLeaf,
     noteFailedDoor,
@@ -194,6 +194,8 @@ class WalkExecutorImpl {
     /** Session blacklist for quest-locked doors. */
     private sessionBlacklistDoors = new Set<string>();
 
+    private doorRetryAt = new Map<string, number>();
+
     /** Post-quest unlock talks already spent this run (see data/postQuestTalks.ts). */
     private sessionPostQuestTalks = new Set<string>();
 
@@ -286,10 +288,14 @@ class WalkExecutorImpl {
                 const path = await this.requestPath(me, dest, maxExpansions);
                 if (!path.ok) {
                     const short = await this.explainUnreachablePath(me, dest, path.reason, maxExpansions);
+                    if (short.length > 0 && !this.bankLegDone && await this.maybeBankForRoute(me, dest, path, maxExpansions, log)) {
+                        continue;
+                    }
                     const why = short.length > 0
                         ? `${path.reason} without ${short.map(m => `${m.count}x ${m.name}`).join(', ')}`
                         : path.reason;
                     log(`no path to (${dest.x},${dest.z},${dest.level}): ${why}`);
+                    log(`path search from (${me.x},${me.z},${me.level}): expanded ${path.expanded}, excluded doors=${JSON.stringify(this.avoidDoors)}, excluded zones=${JSON.stringify(this.walkAvoidZones)}`);
                     this.lastOutcome = classifyReason(path.reason);
                     return false;
                 }
@@ -498,7 +504,7 @@ class WalkExecutorImpl {
     private async maybeBankForRoute(
         from: WorldTile,
         dest: WorldTile,
-        directPath: PathResult & { ok: true },
+        directPath: PathResult,
         maxExpansions: number | undefined,
         log: (msg: string) => void
     ): Promise<boolean> {
@@ -513,8 +519,8 @@ class WalkExecutorImpl {
             return false;
         }
 
-        const directMissing = missingItemsForPath(directPath.waypoints, state);
-        if (directMissing.length === 0 && pathHasTeleport(directPath.waypoints)) {
+        const directMissing = directPath.ok ? missingItemsForPath(directPath.waypoints, state) : [];
+        if (directPath.ok && directMissing.length === 0 && pathHasTeleport(directPath.waypoints)) {
             return false;
         }
         const virtual = virtualizeWithItems(state, bankItems);
@@ -534,7 +540,7 @@ class WalkExecutorImpl {
         }
 
         const plan = planBankLeg({
-            directCost: directMissing.length > 0 ? Infinity : directPath.cost,
+            directCost: !directPath.ok || directMissing.length > 0 ? Infinity : directPath.cost,
             directHasTeleport: false,
             toBankCost: toBank.cost,
             bankToDestCost: bankToDest.cost,
@@ -546,7 +552,7 @@ class WalkExecutorImpl {
 
         log(
             `bank plan: withdraw ${plan.missing.map(m => `${m.count}×${m.name}`).join(', ')} `
-                + `(est cost ${plan.estimatedCost}, direct ${directMissing.length > 0 ? 'underfunded' : directPath.cost})`
+                + `(est cost ${plan.estimatedCost}, direct ${!directPath.ok ? 'unreachable' : directMissing.length > 0 ? 'underfunded' : directPath.cost})`
         );
 
         this.bankLegDone = true; // prevent recursion while walking to bank
@@ -770,19 +776,34 @@ class WalkExecutorImpl {
         }
     }
 
+    resetSession(): void {
+        this.avoidDoors = [];
+        this.doorStrikes.clear();
+        this.doorRetryAt.clear();
+        this.sessionBlacklistDoors.clear();
+        this.sessionPostQuestTalks.clear();
+        this.sessionSuppressedTeleports.clear();
+    }
+
     private resetAvoids(): void {
-        // Strikes deliberately survive the walk, see DOOR_SESSION_STRIKES.
+        for (const [key, retryAt] of this.doorRetryAt) {
+            if (Date.now() >= retryAt) {
+                this.doorRetryAt.delete(key);
+                this.doorStrikes.delete(key);
+                this.sessionBlacklistDoors.delete(key);
+            }
+        }
+        // Strikes deliberately survive the walk, see DOOR_COOLDOWN_STRIKES.
         this.avoidDoors = [];
         this.refreshSpecialCrossingAvoids();
     }
 
     /** Blacklist a door for this walk session after quest-lock dialogue. */
     blacklistDoor(x: number, z: number): void {
+        this.doorRetryAt.delete(`${x}|${z}`);
         this.sessionBlacklistDoors.add(`${x}|${z}`);
         this.avoidDoors.push({ x, z });
     }
-
-    // Why: past {@link DOOR_SESSION_STRIKES} the placement counts as shut for the run, or the next repath plans straight back through it.
 
     /** Record that a crossing was attempted and the player is still on the near side. */
     private noteDoorRefusal(hop: PathStep, log: (msg: string) => void): void {
@@ -790,14 +811,15 @@ class WalkExecutorImpl {
         const t = hop.transport;
         if (
             t
-            && strikes >= DOOR_SESSION_STRIKES
+            && strikes >= DOOR_COOLDOWN_STRIKES
             && barrierBannable(t.kind, t.locName)
             && !this.sessionBlacklistDoors.has(`${t.locX}|${t.locZ}`)
         ) {
             log(
-                `'${t.locName}' at (${t.locX},${t.locZ}) refused ${strikes} crossings — routing around it for the rest of the run`
+                `'${t.locName}' at (${t.locX},${t.locZ}) refused ${strikes} crossings; retrying after 60s`
             );
             this.blacklistDoor(t.locX, t.locZ);
+            this.doorRetryAt.set(`${t.locX}|${t.locZ}`, Date.now() + 60_000);
         }
     }
 
