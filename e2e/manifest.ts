@@ -1874,7 +1874,8 @@ export const CASES: readonly Case[] = [
         id: 'muledepot-short-supply-live',
         harness: 'muledepot-short-supply-test.ts',
         covers: { scripts: ['MuleDepot'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: '4e7fe196',
         budgetMin: 4,
         note: 'one supplier and one client at Seers; the loadout asks for Air and Mind but only Air is seeded. Asserts the supplier still delivers Air and reports Mind as short, rather than claiming a complete supply'
     }
