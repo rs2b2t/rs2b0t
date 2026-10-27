@@ -27,6 +27,7 @@ import {
     bankDue,
     bankTile,
     isConfiguredPartner,
+    muleTradingActive,
     parsePartnerNames,
     type MeetingPoint,
     type RuneRoute
@@ -235,7 +236,9 @@ export default class MuleCrafter extends TaskBot implements MuleCrafterContext {
     bankVisitsEnabled(): boolean { return this.bankVisits; }
     tradesPerBank(): number { return this.tradeLimit; }
     meetingPoint(): MeetingPoint { return this.meeting; }
-    muleModeActive(): boolean { return this.modeValue === 'Crafter' && this.tradeLimit > 0 && this.partnersValue.length > 0; }
+    muleModeActive(): boolean {
+        return muleTradingActive(this.modeValue, this.partnersValue, this.bankVisitsEnabled(), this.tradeLimit);
+    }
     inTemple(): boolean { const tile = Game.tile(); return tile !== null && tile.z > TEMPLE_Z; }
     atBank(): boolean { return !this.inTemple() && isAtTile(this.bank, 6); }
     atMeetingPoint(): boolean {

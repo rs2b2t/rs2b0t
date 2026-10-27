@@ -13,7 +13,7 @@ export class EnterAltarTask implements Task {
     constructor(
         private bot: MuleCrafterContext,
         private readonly ready: () => boolean,
-        private readonly label: string
+        private readonly statusLabel: string
     ) {}
 
     validate(): boolean {
@@ -21,7 +21,7 @@ export class EnterAltarTask implements Task {
     }
 
     async execute(): Promise<void> {
-        this.bot.setStatus(this.label);
+        this.bot.setStatus(this.statusLabel);
         if (await this.bot.enterAltar()) {
             this.fails = 0;
             return;

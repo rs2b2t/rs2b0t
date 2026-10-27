@@ -1102,7 +1102,7 @@ Alfred Grimhand's Barcrawl — banks for the drinks, gets the card from the outp
 
 ### MuleCrafter
 
-Crafter + mule runecrafting loop — meet at the altar temple or overworld ruins, and trade with any configured mule that is available. Crafter has the talisman; bankFill=false prevents all crafter bank visits and overrides Bank after trades, while bankFill=true enables scheduled bank trips. Mule ferries essence and runes between the meeting point and bank.
+Crafter + mule runecrafting loop — meet at the altar temple or overworld ruins, and trade with any configured mule that is available. Crafter has the talisman; bankFill=false prevents all crafter bank visits and overrides Bank after trades but still trades with configured mules, while bankFill=true enables scheduled bank trips. Mule ferries essence and runes between the meeting point and bank.
 
 - Tags: `runecrafting`, `trade`, `crafter`, `mule`, `falador`, `edgeville`
 

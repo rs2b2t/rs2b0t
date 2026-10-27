@@ -9,6 +9,7 @@ import {
     bankTile,
     classifyMuleState,
     isConfiguredPartner,
+    muleTradingActive,
     parsePartnerNames,
     selectNearestPartner,
     tradeRequestDue,
@@ -201,6 +202,35 @@ describe('MuleCrafterLogic', () => {
             expect(bankDue(2, 3)).toBe(false);
             expect(bankDue(3, 3)).toBe(true);
             expect(bankDue(4, 3)).toBe(true);
+        });
+
+    });
+
+    describe('muleTradingActive', () => {
+        test('bankless mode trades with a configured mule even at zero trades per bank', () => {
+            // The documented configuration: bankFill=false, tradesPerBank=0, partner set.
+            expect(muleTradingActive('Crafter', ['mule1'], false, 0)).toBe(true);
+        });
+
+        test('bankless mode ignores the trades-per-bank number', () => {
+            expect(muleTradingActive('Crafter', ['mule1'], false, 5)).toBe(true);
+        });
+
+        test('scheduled bank visits with zero trades per bank remain a solo crafter', () => {
+            expect(muleTradingActive('Crafter', ['mule1'], true, 0)).toBe(false);
+        });
+
+        test('scheduled bank visits with a trade count trade with the mule', () => {
+            expect(muleTradingActive('Crafter', ['mule1'], true, 5)).toBe(true);
+        });
+
+        test('no configured partner is never mule mode', () => {
+            expect(muleTradingActive('Crafter', [], false, 0)).toBe(false);
+            expect(muleTradingActive('Crafter', [], true, 5)).toBe(false);
+        });
+
+        test('mule mode does not use the crafter predicate', () => {
+            expect(muleTradingActive('Mule', ['crafter1'], false, 0)).toBe(false);
         });
 
         test('trade requests are limited to one per interval', () => {

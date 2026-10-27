@@ -64,6 +64,21 @@ export function bankDue(tradesSinceBank: number, tradesPerBank: number, bankVisi
     return bankVisitsEnabled && tradesPerBank > 0 && tradesSinceBank >= tradesPerBank;
 }
 
+/**
+ * Whether a crafter should trade with its mules. Why: with bank visits off, `tradesPerBank` is ignored,
+ * so a configured partner is enough; with visits on, 0 means a solo crafter that banks on empty.
+ */
+export function muleTradingActive(
+    mode: string,
+    partners: readonly string[],
+    bankVisitsEnabled: boolean,
+    tradesPerBank: number
+): boolean {
+    return mode === 'Crafter'
+        && partners.length > 0
+        && (!bankVisitsEnabled || tradesPerBank > 0);
+}
+
 export function tradeRequestDue(lastRequestAt: number | null, now: number, intervalMs = TRADE_REQUEST_INTERVAL_MS): boolean {
     return lastRequestAt === null || now - lastRequestAt >= intervalMs;
 }
