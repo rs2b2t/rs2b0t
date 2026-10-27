@@ -80,6 +80,7 @@ export const BANK_LOCATIONS: BankLocation[] = [
     },
     { name: 'Zanaris', tile: new Tile(3153, 9576, 0), requires: { quest: 'Lost City', setting: USE_ZANARIS_BANK }, npcAccess: { name: 'Banker', op: 'Bank' } },
     { name: 'Fishing Guild', tile: new Tile(2586, 3420, 0), requires: { skill: { name: 'fishing', level: 68 } } },
+    { name: 'Legends Guild', tile: new Tile(2732, 3378, 2), requires: { quest: 'Legends Quest' }, npcAccess: { name: 'Banker', op: 'Bank' } },
     // Why: the live object is "Shantay chest" (id 2693) with Open; "Bank chest" with Use doesn't exist here, and neither does a Bank booth.
     {
         name: 'Shantay Pass',
@@ -144,6 +145,11 @@ export function nearestUsableBank(from: WorldTile, usable: (bank: BankLocation) 
 /** Whether this account's quests and stats unlock the bank at all. */
 export function bankUnlocked(bank: BankLocation): boolean {
     return meetsRequirement(bank);
+}
+
+export function lockedBankAt(tile: WorldTile): BankLocation | null {
+    return BANK_LOCATIONS.find(bank => bank.tile.level === tile.level
+        && bank.tile.distanceTo(tile) <= 14 && !bankUnlocked(bank)) ?? null;
 }
 
 function meetsRequirement(bank: BankLocation): boolean {

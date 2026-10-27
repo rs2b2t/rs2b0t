@@ -694,7 +694,7 @@ export default class GatheringBot extends TaskBot {
                 const message = `${camp} supports ${supported.join(', ')}; ` + `selected ${unsupported.join(', ')}`;
                 this.setStatus(`${message} — stopped`);
                 this.log(message);
-                ScriptRunner.stop(message);
+                this.requestFinish(message);
                 return;
             }
         }
@@ -727,7 +727,7 @@ export default class GatheringBot extends TaskBot {
                 const message = `${desertCamp.name} does not support Mule mode '${this.muleMode}'`;
                 this.setStatus(`${message} — stopped`);
                 this.log(message);
-                ScriptRunner.stop(message);
+                this.requestFinish(message);
                 return;
             }
             if (this.muleMode !== 'off' && this.powerMode) {
@@ -883,7 +883,7 @@ export default class GatheringBot extends TaskBot {
             const message = `${desertCamp.name} does not support Tool acquire Buy/repair`;
             this.setStatus(`${message} — stopped`);
             this.log(message);
-            ScriptRunner.stop(message);
+            this.requestFinish(message);
             return;
         }
         if (this.toolAcquire === 'on') {
@@ -905,14 +905,14 @@ export default class GatheringBot extends TaskBot {
                 const message = `${camp} requires Food to withdraw greater than 0`;
                 this.setStatus(`${message} — stopped`);
                 this.log(message);
-                ScriptRunner.stop(message);
+                this.requestFinish(message);
                 return;
             }
             if (desertCampFoodReserveDepleted(this.minerFood.target)) {
                 const message = `${camp} requires Food to withdraw of at least 2`;
                 this.setStatus(`${message} — stopped`);
                 this.log(message);
-                ScriptRunner.stop(message);
+                this.requestFinish(message);
                 return;
             }
             const destination = desertCampDestinationFor(camp);
@@ -920,7 +920,7 @@ export default class GatheringBot extends TaskBot {
                 {
                     log: message => this.log(message),
                     setStatus: message => this.setStatus(message),
-                    stop: reason => ScriptRunner.stop(reason),
+                    stop: reason => this.requestFinish(reason),
                     foodCount: () => this.minerFoodCount()
                 },
                 destination
@@ -2558,7 +2558,7 @@ export default class GatheringBot extends TaskBot {
         const fail = (reason: string): false => {
             this.setStatus(`${reason} - stopped`);
             log(reason);
-            ScriptRunner.stop(reason);
+            this.requestFinish(reason);
             return false;
         };
         const reopen = async (): Promise<boolean> => {
@@ -2640,7 +2640,7 @@ export default class GatheringBot extends TaskBot {
             if (Bank.isOpen()) {
                 await this.closeScriptBank(log, { allowForgetful: false });
             }
-            ScriptRunner.stop(message);
+            this.requestFinish(message);
             return false;
         }
 
@@ -2669,7 +2669,7 @@ export default class GatheringBot extends TaskBot {
                 if (Bank.isOpen()) {
                     await this.closeScriptBank(log, { allowForgetful: false });
                 }
-                ScriptRunner.stop(message);
+                this.requestFinish(message);
                 return false;
             }
             await Execution.delayUntilTicks(() => this.minerFoodCount() >= config.target, 7);
@@ -2683,7 +2683,7 @@ export default class GatheringBot extends TaskBot {
             if (Bank.isOpen()) {
                 await this.closeScriptBank(log, { allowForgetful: false });
             }
-            ScriptRunner.stop(message);
+            this.requestFinish(message);
             return false;
         }
         this.minerFoodStartupPending = false;
@@ -2834,7 +2834,7 @@ export default class GatheringBot extends TaskBot {
     stopStrictBankFailure(reason: string): void {
         this.setStatus(`${reason} — stopped`);
         this.log(reason);
-        ScriptRunner.stop(reason);
+        this.requestFinish(reason);
     }
 
     // Why: the Draynor bank is inside ReturnToAnchor slack, so "away from spot" alone could pull a cold-start bot off its resources for a tool upgrade.
@@ -3171,7 +3171,7 @@ export default class GatheringBot extends TaskBot {
     stopMissingGear(reason: string, missing: string[]): void {
         const need = missing.join(' + ') || this.gearLabel();
         this.setStatus(`restock: stop — ${need}`);
-        ScriptRunner.stop(`restock: ${reason} — need ${need}`);
+        this.requestFinish(`restock: ${reason} — need ${need}`);
     }
 
     heldItemNames(): string[] {
@@ -3684,7 +3684,7 @@ export default class GatheringBot extends TaskBot {
         this.inCookBatch = false;
         if (outcome === 'stop') {
             this.setStatus('cook: batch complete — stopped');
-            ScriptRunner.stop(`cook: batch drained (bank raw ${this.bankRawInBank}/${this.bankRawTarget})`);
+            this.requestFinish(`cook: batch drained (bank raw ${this.bankRawInBank}/${this.bankRawTarget})`);
             return;
         }
         this.log(

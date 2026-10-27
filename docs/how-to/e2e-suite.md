@@ -69,6 +69,28 @@ entry".
 The deploy step rebuilds `out/botclient.js` with `TARGET=local`. A live wall serving that
 same file will reject new logins until it is rebuilt with `TARGET=live`.
 
+## Herblore route survival
+
+Run this standalone harness against an existing local engine:
+
+```sh
+ENGINE_DIR=/path/to/engine PROOF_DIR=/path/to/proof \
+  bun e2e/herblore-survival-live.ts http://127.0.0.1:1080
+```
+
+It uses a new level-3 account, ten lobsters, and fifty banked lobsters.
+It collects red spiders' eggs, banks them, and returns for another egg.
+The proof JSON records HP, food, position, and script status on each sample.
+Check the samples for eating during travel; completing the route alone does not prove this.
+Set `HP_FIXTURE=1` to drain only the test account's current HP to six during
+the return walk. This avoids waiting for random spider damage. The harness
+then requires an observed low-HP sample and a bite before arrival, and records
+the command tick, low-HP tick, bite tick, and their positions in the proof.
+The script uses its eating task during long walks and eats at the 60% HP floor
+even when a full heal would not fit. The existing five-HP minimum still applies.
+The harness writes a screenshot and removes its isolated client deployment.
+It does not change the engine's tick speed.
+
 ## Gates judged on output
 
 The generator drift checks print `STALE` and some then exit non-zero on an unrelated
@@ -79,6 +101,45 @@ generator is not reported as a regression.
 
 `hosted-proof-test.ts`, `hosted-wall-test.ts` and `external-script-test.ts` need a
 registered account or a second origin, so no runner can provide their environment.
+
+## FlaxRunner bank failures
+
+Run this local-only regression with an engine that permits account cheats:
+
+```sh
+ENGINE_DIR=/path/to/engine bun e2e/flaxrunner-bank-results-live.ts --base http://127.0.0.1:1080
+```
+
+The harness seeds one bow string per scenario. It tests an unreachable walk, a
+failed bank opening after a successful walk, and a successful deposit.
+Per-account teleports create the failures. The harness records API results
+without replacing them. Failed prerequisites must preserve the string and trip
+count. The successful deposit must remove the string and count one trip.
+
+Set `EXPECT_MODE=before` to assert the original defect. Set `PROOF_DIR` to
+choose the JSON and screenshot directory. The default is
+`out/flaxrunner-bank-results`. The harness removes its isolated client after each run.
+
+## FireGiant full-pack bank loop
+
+Run this local-only regression with an engine that permits account cheats:
+
+```sh
+ENGINE_DIR=/path/to/engine bun e2e/firegiant-full-pack-bank-live.ts --base http://127.0.0.1:1080
+```
+
+The harness uses one maxed account with Waterfall Quest complete. It tests a
+25-food restock that fills all 28 slots, and a 24-food pack at the melee
+anchor with one dropped Big bones on the floor. Neither full pack may bank
+before the first fight. The first scenario must reach the dungeon and gain
+combat XP. The second scenario must stay in the dungeon and log a kill. It
+also samples the pack every 100 ms and fails unless a sample holds 28 used
+slots, 24 food and the bones before any combat XP lands, so a run where the
+bones never arrive or eating comes first cannot pass.
+
+Set `EXPECT_MODE=before` to assert the original defect. Set `PROOF_DIR` to
+choose the JSON and screenshot directory. The default is
+`out/firegiant-full-pack-bank`. The harness removes its isolated client after each run.
 
 ## See also
 

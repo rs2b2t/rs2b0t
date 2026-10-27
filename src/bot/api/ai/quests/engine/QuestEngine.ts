@@ -358,7 +358,10 @@ export class QuestEngine implements Task {
                 }
             }
             const extras = [coinFloat, foodFloat, potionFloat].filter((w): w is { name: string; qty: number } => w !== null);
-            if (!this.bankKnown && plan.blocked.length > 0) {
+            const needsBankSnapshot = plan.blocked.length > 0 || !coinPlan.drawn
+                || (foodReady && foodItem && module.food && !this.foodDrawn.has(id) && (snap.inv.get(foodItem.toLowerCase()) ?? 0) < module.food)
+                || (module.pray?.potions && !this.potionsDrawn.has(id) && (snap.inv.get(PRAYER_POTION.toLowerCase()) ?? 0) < module.pray.potions);
+            if (!this.bankKnown && needsBankSnapshot) {
                 step = { kind: 'scanBank', bank: bankFor(module) };
             } else if (plan.blocked.length > 0 && plan.withdraw.length === 0) {
                 this.host.log(`${module.record.name} short on items: ${plan.blocked.join(', ')} — parking`);
@@ -559,6 +562,9 @@ export class QuestEngine implements Task {
     /** Bank the pack to nothing before a quest opens; true when the loop should yield after the trip. */
     private async freshenPack(module: QuestModule, id: string, snap: QuestSnapshot, rows: QueueRow[]): Promise<boolean> {
         const carried = Inventory.used();
+        if (snap.journal === 'notStarted' && carried === 0) {
+            this.freshened.add(id);
+        }
         if (!shouldFreshenPack(snap.journal, carried, this.freshened.has(id))) {
             return false;
         }

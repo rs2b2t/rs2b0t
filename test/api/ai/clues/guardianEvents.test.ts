@@ -30,13 +30,13 @@ function item(id: number, name: string, count = 1): InvItemSnapshot {
 }
 beforeEach(() => {
     tick = 0; pending = false; interrupted = false; digs = 0; drinks = 0; attacks = [];
-    pack = [item(2723, 'Clue scroll (hard)'), item(185, 'Superantipoison(1)'), item(385, 'Shark', 15),
+    pack = [item(3526, 'Clue scroll (hard)'), item(185, 'Superantipoison(1)'), item(385, 'Shark', 15),
         item(952, 'Spade'), item(2574, 'Sextant'), item(2575, 'Watch'), item(2576, 'Chart')];
-    npcs = [{ index: 4, id: 1, anim: -1, name: 'Zamorak Wizard', level: 65, size: 1,
+    npcs = [{ index: 4, id: 1, anim: -1, name: 'Saradomin Wizard', level: 65, size: 1,
         tile: { x: 3000, z: 3000, level: 0 }, distance: 1, ops: ['Attack'], inCombat: true,
         health: 40, totalHealth: 40, faceEntity: 32768 }];
     GameMessages.reset();
-    ClueExecutor.retryGuardian();
+    ClueExecutor.resetSession();
     spyOn(reader, 'inventory').mockImplementation(() => pack);
     spyOn(reader, 'equipment').mockReturnValue([{ ...item(1231, 'Dragon dagger(p)'), slot: 3 }]);
     spyOn(reader, 'npcs').mockImplementation(() => npcs);
@@ -63,7 +63,7 @@ beforeEach(() => {
         if (op === 'Drink') { drinks++; pack = pack.filter(i => i.id !== this.id); }
         if (op === 'Dig') {
             digs++;
-            if (digs === 2) pack = pack.map(i => i.id === 2723 ? { ...i, id: 2725 } : i);
+            if (digs === 2) pack = pack.map(i => i.id === 3526 ? { ...i, id: 3528 } : i);
         }
         return true;
     });
@@ -76,7 +76,7 @@ beforeEach(() => {
     });
     Sustain.set(null);
 });
-afterEach(() => { mock.restore(); Sustain.set(null); ClueExecutor.retryGuardian(); });
+afterEach(() => { mock.restore(); Sustain.set(null); ClueExecutor.resetSession(); });
 
 test('yields without another attack when an event fires during a combat wait', async () => {
     const result = await ClueExecutor.solveHeldClue(() => {});
@@ -96,7 +96,7 @@ test('resumes the same guardian below fifteen Sharks with the final dose still a
     expect(attacks).toEqual([4]);
     expect(drinks).toBe(1);
     expect(digs).toBe(2);
-    expect(pack.some(i => i.id === 2725)).toBe(true);
+    expect(pack.some(i => i.id === 3528)).toBe(true);
 });
 
 test.each(['missing', 'index', 'id', 'foreign', 'distant', 'dead'] as const)(
@@ -108,13 +108,13 @@ test.each(['missing', 'index', 'id', 'foreign', 'distant', 'dead'] as const)(
             case 'index': npcs = npcs.map(n => ({ ...n, index: 5 })); break;
             case 'id': npcs = npcs.map(n => ({ ...n, id: 2 })); break;
             case 'foreign': npcs = npcs.map(n => ({ ...n, faceEntity: 32769 })); break;
-            case 'distant': npcs = npcs.map(n => ({ ...n, distance: 20 })); break;
+            case 'distant': npcs = npcs.map(n => ({ ...n, distance: 40 })); break;
             case 'dead': GameMessages.record('Oh dear, you are dead!'); break;
         }
 
         const result = await ClueExecutor.solveHeldClue(() => {});
 
-        expect(result).toBe(change === 'dead' ? 'dead' : 'guardian-lost');
+        expect(result).toBe(change === 'dead' ? 'dead' : 'reset-needed');
         expect(attacks).toEqual([]);
         expect(digs).toBe(1);
     }
@@ -128,6 +128,7 @@ test('host preserves its original weapon ledger and bank state across a guardian
     task['bankedThisSolve'] = true;
     task['hardTrail'] = true;
     task['strippedGear'] = ['Magic shortbow'];
+    task['trailWeapon'] = 'Magic shortbow';
     const equip = spyOn(Equipment, 'equip').mockResolvedValue(false);
     spyOn(Npc.prototype, 'interact').mockImplementation(function (this: Npc) {
         attacks.push(this.index);
@@ -173,4 +174,35 @@ test('rechecks expired protection on resume without another spawn dig', async ()
     expect(result).toBe('supplies-needed');
     expect(attacks).toEqual([]);
     expect(digs).toBe(1);
+});
+
+
+test('bank reset after a failed post-kill dig preserves guardian kill credit', async () => {
+    interrupted = true;
+    spyOn(InvItem.prototype, 'interact').mockImplementation(function (this: InvItem, op: string) {
+        if (op === 'Drink') { drinks++; pack = pack.filter(i => i.id !== this.id); }
+        if (op === 'Dig') {
+            digs++;
+            if (digs === 6) { pack = pack.map(i => i.id === 3526 ? { ...i, id: 3527 } : i); pending = true; }
+        }
+        return true;
+    });
+    expect(await ClueExecutor.solveHeldClue(() => {})).toBe('reset-needed');
+    expect(attacks).toEqual([4]);
+    expect(digs).toBe(5);
+    expect(await ClueExecutor.solveHeldClue(() => {})).toBe('yield');
+    expect(digs).toBe(6);
+    expect(attacks).toEqual([4]);
+});
+
+test('a guardian still missing after the bank reset abandons without another reset', async () => {
+    await ClueExecutor.solveHeldClue(() => {});
+    pending = false;
+    npcs = [];
+    expect(await ClueExecutor.solveHeldClue(() => {})).toBe('reset-needed');
+    pack.push(item(2448, 'Superantipoison(4)'));
+    const error = spyOn(console, 'error').mockImplementation(() => {});
+    expect(await ClueExecutor.solveHeldClue(() => {})).toBe('abandon');
+    expect(attacks).toEqual([]);
+    error.mockRestore();
 });

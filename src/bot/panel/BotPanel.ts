@@ -15,6 +15,7 @@ import { PriceBookPanel } from './PriceBookPanel.js';
 import { LoadoutPanel } from './LoadoutPanel.js';
 import { isVisible, summarize } from './paramControls.js';
 import { el } from './dom.js';
+import { desktopStorage } from '../runtime/desktopStorage.js';
 
 // Why: boxId() reads the live URL, so freezing this at module load pins the key to whatever box was current when BotPanel was first imported.
 const selectedScriptKey = (): string => boxKey('selectedScript');
@@ -88,8 +89,8 @@ export default class BotPanel {
         script.appendChild(sectionTitle('script'));
 
         this.library = new ScriptLibrary(name => this.selectScript(name));
-        const remembered = (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(selectedScriptKey()) : null)
-            ?? (typeof localStorage !== 'undefined' ? localStorage.getItem(selectedScriptKey()) : null);
+        const durable = typeof localStorage !== 'undefined' ? localStorage.getItem(selectedScriptKey()) : null;
+        const remembered = desktopStorage ? durable : (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(selectedScriptKey()) : null) ?? durable;
         this.selectedScript = remembered && ScriptRegistry.get(remembered) ? remembered : (ScriptRegistry.list()[0]?.name ?? '');
 
         const pick = el('div', 'rs2b0t-buttons');

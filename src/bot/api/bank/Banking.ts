@@ -1,6 +1,7 @@
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import {
     bankDistance,
+    lockedBankAt,
     nearestBank,
     nearestBankReachable,
     type BankLocation,
@@ -47,7 +48,7 @@ export interface BankDestination {
 }
 
 /** A bank behind a conversation opens differently from one behind a booth. */
-function openAccess(
+export function openBankAccess(
     dest: { access?: BankObjectAccess; npcAccess?: BankNpcAccess } | null,
     fallback: BankObjectAccess,
     log?: (m: string) => void
@@ -110,15 +111,20 @@ export async function purgePackAtBank(opts: {
     return true;
 }
 
-function realBooth(boothName: string) {
-    return Locs.query().name(boothName).where(l => l.actions().length > 0).nearest();
-}
-
-/** Usable booth within Chebyshev `maxDist` of the player (scene-local). */
-function nearbyUsableBooth(boothName: string, maxDist: number) {
+function realBooth(boothName: string, log: (message: string) => void) {
+    const skipped = new Set<string>();
     return Locs.query()
         .name(boothName)
-        .where(l => l.actions().length > 0 && l.distance() <= maxDist)
+        .where(l => {
+            if (l.actions().length === 0) return false;
+            const locked = lockedBankAt(l.tile());
+            if (!locked) return true;
+            if (!skipped.has(locked.name)) {
+                log(`bank: skipping ${locked.name}; access requirements not met`);
+                skipped.add(locked.name);
+            }
+            return false;
+        })
         .nearest();
 }
 
@@ -211,7 +217,8 @@ export const Banking = {
         }
 
         const here = Game.tile();
-        const boothNear = preferNearby ? nearbyUsableBooth(boothName, nearbyRadius) : null;
+        const sceneBooth = realBooth(boothName, log);
+        const boothNear = preferNearby && sceneBooth && sceneBooth.distance() <= nearbyRadius ? sceneBooth : null;
         const nearest = here ? nearestBank(here) : null;
         const route = resolveBankOpenRoute({
             bankOpen: false,
@@ -230,16 +237,21 @@ export const Banking = {
 
         if (route === 'local-bank' && nearest) {
             log(`bank: local ${nearest.name} bank — using it instead of distant preset`);
-            await Traversal.walkResilient(asTile(nearest.tile), { radius: 4, timeoutMs: 120_000, log });
-            return openAccess(nearest, { name: boothName, op: boothOp }, log);
+            if (!(await Traversal.walkResilient(asTile(nearest.tile), { radius: 4, timeoutMs: 120_000, log }))) return false;
+            return openBankAccess(nearest, { name: boothName, op: boothOp }, log);
         }
 
         if (route === 'preset-stand' && opts.stand) {
             const stand = asTile(opts.stand);
+            const locked = lockedBankAt(stand);
+            if (locked) {
+                log(`bank: cannot use ${locked.name}; access requirements not met`);
+                return false;
+            }
             if (obstacles.length > 0) {
                 await walkOpening(stand, 2, obstacles, log);
             } else {
-                await Traversal.walkResilient(stand, { radius: 2, timeoutMs: 120_000, log });
+                if (!(await Traversal.walkResilient(stand, { radius: 2, timeoutMs: 120_000, log }))) return false;
             }
             // Shantay / Duel Arena / Gundai: the known bank's access beats a generic booth name.
             const known = nearestBank(stand);
@@ -249,14 +261,14 @@ export const Banking = {
                 && bankDistance(stand, known.tile) <= nearbyRadius
             ) {
                 log(`bank: ${known.name} uses ${known.npcAccess ? 'npc' : 'object'} access`);
-                return openAccess(known, { name: boothName, op: boothOp }, log);
+                return openBankAccess(known, { name: boothName, op: boothOp }, log);
             }
             return Bank.openBooth(stand, boothName, boothOp, log);
         }
 
         // nearest-fallback (no stand): scene booth anywhere, else web-walk the cheapest reachable bank
         let destination: BankDestination | null = null;
-        if (!realBooth(boothName)) {
+        if (!sceneBooth) {
             // Why: nearestBank is air-ranked and in a dungeon every bank floats ~the same distance, so rank real routes instead; the air-nearest bank remains the no-route fallback.
             const chosen = opts.destination ?? (here ? await nearestBankReachable(here, Navigator) : nearest);
             destination = chosen
@@ -264,11 +276,16 @@ export const Banking = {
                 : null;
             if (destination) {
                 log(`no booth in scene — web-walking to the ${destination.name} bank at ${destination.tile}`);
-                await Traversal.walkResilient(asTile(destination.tile), { radius: 4, timeoutMs: 120_000, log });
+                if (!(await Traversal.walkResilient(asTile(destination.tile), { radius: 4, timeoutMs: 120_000, log }))) {
+                    log(`bank: could not reach ${destination.name}`);
+                    return false;
+                }
             }
+        } else {
+            log(`bank: opening visible '${boothName}' at ${sceneBooth.tile()}`);
         }
 
-        return openAccess(destination, { name: boothName, op: boothOp }, log);
+        return openBankAccess(destination, { name: boothName, op: boothOp }, log);
     },
 
     async bankNearest(opts: {

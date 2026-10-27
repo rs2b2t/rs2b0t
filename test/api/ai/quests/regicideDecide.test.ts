@@ -1,5 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 
+import { QuestLoadout } from '#/bot/api/ai/quests/gear.js';
 import { RG_ITEM } from '#/bot/api/ai/quests/defs/regicide/areas.js';
 import { decide } from '#/bot/api/ai/quests/defs/regicide/index.js';
 import { RG_FLAG, RG_STAGE } from '#/bot/api/ai/quests/defs/regicide/journal.js';
@@ -10,6 +11,8 @@ import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.
 type Stack = number | [number, number];
 const counts = (stacks: Stack[]): Map<number, number> =>
     new Map(stacks.map(s => (Array.isArray(s) ? s : [s, 1])));
+
+afterEach(() => { QuestLoadout.current = null; });
 
 const ARDOUGNE = { x: 2655, z: 3283, level: 0 };
 const ELF_CAMP = { x: 2205, z: 3252, level: 0 };
@@ -89,7 +92,7 @@ describe('Regicide decide()', () => {
             const short = KIT.filter(s => (Array.isArray(s) ? s[0] : s) !== item.id);
             const step = decide(snapshot({ stage: RG_STAGE.SPOKEN_LATHAS, tile: PASS, carried: short }));
             expect(step.kind).toBe('wait');
-            expect(step.kind === 'wait' && step.reason.toLowerCase()).toContain(item.name.toLowerCase());
+            expect(step.kind === 'wait' && step.reason.toLowerCase()).toContain(item.id === 841 ? 'bow' : item.name.toLowerCase());
         });
     }
 
@@ -112,8 +115,7 @@ describe('Regicide decide()', () => {
         );
     });
 
-    // Why: the kit is 24 of the pack's 28 slots and the armour is drawn five pieces at a time, so a bank trip that takes the food first has nowhere to put the set, and `wearGear` withdraws nothing while `sourceKit` is still asking for sharks.
-    test('the armour is drawn before the food, because the kit fills the pack', () => {
+    test('a missing combat weapon is drawn without requiring bank armour', () => {
         const step = decide(
             snapshot({
                 stage: RG_STAGE.SPOKEN_LATHAS,
@@ -126,7 +128,7 @@ describe('Regicide decide()', () => {
         );
         expect(step.kind).toBe('withdraw');
         const drawn = step.kind === 'withdraw' ? step.items.map(i => i.name.toLowerCase()) : [];
-        expect(drawn).toContain('rune chainbody');
+        expect(drawn).toEqual(['rune scimitar']);
         expect(drawn).not.toContain(RG_ITEM.SHARK.name.toLowerCase());
     });
 
@@ -410,4 +412,97 @@ describe('the King\'s message is a prop the quest never reclaims', () => {
         const step = decide(snapshot({ stage: RG_STAGE.SPOKEN_IORWERTH2, tile: ARDOUGNE, carried: shaped }));
         expect(name(step)).toContain('Underground Pass');
     });
+});
+
+describe('Regicide bow choices', () => {
+    const withoutBow = KIT.filter(s => (Array.isArray(s) ? s[0] : s) !== 841);
+    const bows = [841, 839, 843, 845, 849, 847, 853, 851, 857, 855, 861, 859, 2883];
+
+    test.each(bows)('accepts bow %i in the pack on the first crossing', id => {
+        const step = decide(snapshot({ stage: RG_STAGE.SPOKEN_LATHAS, tile: PASS, carried: [...withoutBow, id] }));
+        expect(name(step)).toContain('Underground Pass');
+    });
+
+    test.each(bows)('keeps bow %i when shedding junk before departure', id => {
+        const step = decide(snapshot({ stage: RG_STAGE.SPOKEN_LATHAS, tile: ARDOUGNE, carried: [...withoutBow, id, 592], freeSlots: 1 }));
+        expect(step.kind).toBe('deposit');
+        if (step.kind === 'deposit') {
+            expect(step.keepIds).toContain(id);
+            expect(step.keepIds).not.toContain(592);
+        }
+    });
+
+    test('an equipped magic longbow satisfies the crossing kit', () => {
+        const step = decide(snapshot({ stage: RG_STAGE.SPOKEN_LATHAS, tile: PASS, carried: withoutBow, wornIds: new Set([859]) }));
+        expect(name(step)).toContain('Underground Pass');
+    });
+
+    test('withdraws a banked oak longbow instead of buying a plain shortbow', () => {
+        const step = decide(snapshot({ stage: RG_STAGE.SPOKEN_LATHAS, tile: ARDOUGNE, carried: withoutBow, banked: [845] }));
+        expect(step.kind).toBe('withdraw');
+        if (step.kind === 'withdraw') expect(step.items).toEqual([{ id: 845, name: 'Oak longbow', qty: 1 }]);
+    });
+
+    test.each([837, 842])('rejects crossbows and noted bows (%i)', id => {
+        const step = decide(snapshot({ stage: RG_STAGE.SPOKEN_LATHAS, tile: PASS, carried: [...withoutBow, id] }));
+        expect(step.kind).toBe('wait');
+        if (step.kind === 'wait') expect(step.reason.toLowerCase()).toContain('bow');
+    });
+
+    test('keeps the chosen bow for the return crossing without withdrawing a spare shortbow', () => {
+        const carried = RETURN_KIT.filter(s => s.item.id !== 841).map(s => [s.item.id, s.qty] as [number, number]);
+        const step = decide(snapshot({ stage: RG_STAGE.SPOKEN_IORWERTH2, tile: ARDOUGNE,
+            carried: [...carried, 857, RG_ITEM.BARREL_FUSED.id, RG_ITEM.COOKED_RABBIT.id], banked: [841] }));
+        expect(name(step)).toContain('Underground Pass');
+    });
+
+    test('retrieves the banked bow after the coal run for the return crossing', () => {
+        const carried = RETURN_KIT.filter(s => s.item.id !== 841).map(s => [s.item.id, s.qty] as [number, number]);
+        const step = decide(snapshot({ stage: RG_STAGE.SPOKEN_IORWERTH2, tile: ARDOUGNE,
+            carried: [...carried, RG_ITEM.BARREL_FUSED.id, RG_ITEM.COOKED_RABBIT.id], banked: [861] }));
+        expect(step.kind).toBe('withdraw');
+        if (step.kind === 'withdraw') expect(step.items).toEqual([{ id: 861, name: 'Magic shortbow', qty: 1 }]);
+    });
+});
+
+
+describe('Regicide keeps chosen armour', () => {
+    test.each([{ armour: ['leather body', 'leather chaps', 'coif'] }, { armour: ["monk's robe", 'wizard hat'] }, { armour: [] }])(
+        'does not draw metal armour over the worn setup %j', ({ armour }) => {
+            const step = decide(snapshot({ stage: RG_STAGE.SPOKEN_LATHAS, tile: ARDOUGNE,
+                wornNames: [WEAPON, ...armour],
+                bank: new Map([['rune chainbody', 1], ['rune full helm', 1], ['rune kiteshield', 1]]) }));
+            expect(name(step)).toContain('Underground Pass');
+        }
+    );
+
+    test('does not put packed metal armour on over the chosen outfit', () => {
+        const step = decide(snapshot({ stage: RG_STAGE.SPOKEN_LATHAS, tile: ELF_CAMP,
+            wornNames: [WEAPON, 'leather body'], inv: new Map([['rune chainbody', 1]]) }));
+        expect(name(step)).toContain('elf scouts');
+    });
+});
+
+test.each(['bank', 'pack'])('sources a usable bow when the only bow in the %s needs a higher Ranged level', location => {
+    const carried = KIT.filter(s => (Array.isArray(s) ? s[0] : s) !== 841);
+    const step = decide(snapshot({ stage: RG_STAGE.SPOKEN_LATHAS, tile: ARDOUGNE, ranged: 25,
+        carried: location === 'pack' ? [...carried, 861] : carried, banked: location === 'bank' ? [861] : [] }));
+    expect(step.kind).toBe('buy');
+    if (step.kind === 'buy') expect(step.item).toBe('Shortbow');
+});
+
+test.each([{ id: 843, level: 5 }, { id: 849, level: 20 }, { id: 853, level: 30 }, { id: 857, level: 40 }, { id: 859, level: 50 }, { id: 2883, level: 30 }])(
+    'accepts a bow at its wield level and blocks below it: %j', ({ id, level }) => {
+        const carried = [...KIT.filter(s => (Array.isArray(s) ? s[0] : s) !== 841), id];
+        expect(name(decide(snapshot({ stage: RG_STAGE.SPOKEN_LATHAS, tile: PASS, carried, ranged: level })))).toContain('Underground Pass');
+        expect(decide(snapshot({ stage: RG_STAGE.SPOKEN_LATHAS, tile: PASS, carried, ranged: level - 1 })).kind).toBe('wait');
+    }
+);
+
+
+test('a saved loadout does not replace the armour already worn for Regicide', () => {
+    QuestLoadout.current = { name: 'melee', worn: { torso: 'Rune chainbody', hat: 'Rune full helm' }, carry: [] };
+    const step = decide(snapshot({ stage: RG_STAGE.SPOKEN_LATHAS, tile: ARDOUGNE,
+        wornNames: [WEAPON, 'leather body', 'coif'], bank: new Map([['rune chainbody', 1], ['rune full helm', 1]]) }));
+    expect(name(step)).toContain('Underground Pass');
 });

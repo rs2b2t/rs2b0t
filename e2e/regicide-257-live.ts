@@ -214,6 +214,16 @@ async function seedPack(page: Page, stage: number): Promise<void> {
     if (held !== slots) {
         fail(`pack seed wanted ${slots} slots and the pack holds ${held} — a give was refused, so the run would start short of its kit`);
     }
+    const equipped = await page.evaluate(async () => {
+        const api = (globalThis as typeof globalThis & {
+            __rs2b0t: { Equipment: { equip(name: string): Promise<boolean> } };
+        }).__rs2b0t;
+        for (const name of ['Rune scimitar', 'Rune chainbody', 'Rune platelegs', 'Rune med helm', 'Rune kiteshield']) {
+            if (!(await api.Equipment.equip(name))) return false;
+        }
+        return true;
+    });
+    if (!equipped) fail('could not equip the seeded quest outfit');
     console.log(`pack seeded with ${seed.length} item type(s) in ${slots} slots for a start inside Tirannwn`);
 }
 

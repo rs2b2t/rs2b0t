@@ -10,6 +10,7 @@ import { COMBAT_STYLE_OPTIONS, describeCombatStyle, parseCombatStyle, type Melee
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
+import { Equipment } from '../../api/equipment/Equipment.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { Paint } from '../../paint/Paint.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
@@ -28,7 +29,8 @@ import { SolveClue } from '../../api/ai/clues/SolveClue.js';
 import { paintClueProgress } from '../../api/ai/clues/cluePaint.js';
 import { Sustain } from '../../api/sustain/Sustain.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
-import { LOADOUT_SETTING } from '../../api/loadout/loadoutSetting.js';
+import { LOADOUT_SETTING, selectedLoadout } from '../../api/loadout/loadoutSetting.js';
+import { weaponOf } from '../../api/loadout/loadoutPlan.js';
 
 const DEFAULT_ANCHOR = new Tile(2661, 3306, 0);
 const DEFAULT_BANK_STAND = new Tile(2655, 3286, 0);
@@ -124,6 +126,7 @@ export default class ArdyFighter extends TaskBot {
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
         COMBAT_STYLE = parseCombatStyle(this.settings.str('combatStyle', 'strength'));
         SOLVE_CLUES = this.settings.bool('solveClues', true);
+        const weapon = weaponOf(selectedLoadout(this.settings), Equipment.items().find(i => i.slot === 3)?.name ?? null) ?? '';
         this.solveClue = new SolveClue({
             log: m => this.log(m),
             setStatus: s => {
@@ -135,6 +138,7 @@ export default class ArdyFighter extends TaskBot {
             isFood: n => matchesAny(n, FOOD),
             foodName: () => 'Cake',
             foodWithdraw: () => FOOD_TARGET,
+            weaponName: () => weapon,
             enabled: () => SOLVE_CLUES
         });
         Sustain.set(async () => {

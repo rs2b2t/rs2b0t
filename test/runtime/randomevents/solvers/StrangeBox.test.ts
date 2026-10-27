@@ -18,8 +18,9 @@ describe('solveCube', () => {
     test('answers a shape question by colour position', () => {
         expect(solveCube('Which shape is Blue?', [3063, 3085, 3089])).toBe(2);
     });
-    test('handles Half Moon (two-word shape)', () => {
+    test('handles both Half Moon spellings', () => {
         expect(solveCube('What colour is the Half Moon?', [3089, 3063, 3079])).toBe(0);
+        expect(solveCube('What colour is the Halfmoon?', [3089, 3063, 3079])).toBe(0);
     });
     test('null on unknown question or missing models', () => {
         expect(solveCube('??', [3063, 3071, 3079])).toBeNull();

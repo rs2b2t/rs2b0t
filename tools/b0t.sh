@@ -27,7 +27,8 @@ case "$PORT" in ''|*[!0-9]*) echo 'ERROR: PORT must be an integer from 1 to 6553
 case "${RS2B2T_WS:-wss://w1.rs2b2t.com}" in
     wss://w1.rs2b2t.com|wss://w1.rs2b2t.com/|wss://w1.rs2b2t.com:443|wss://w1.rs2b2t.com:443/) DEFAULT_WORLD=1 ;;
     wss://w2.rs2b2t.com|wss://w2.rs2b2t.com/|wss://w2.rs2b2t.com:443|wss://w2.rs2b2t.com:443/) DEFAULT_WORLD=2 ;;
-    *) echo 'ERROR: RS2B2T_WS must be the official secure W1 or W2 endpoint. Custom worlds are unsupported by the live wall.' >&2; exit 1 ;;
+    wss://w3.rs2b2t.com|wss://w3.rs2b2t.com/|wss://w3.rs2b2t.com:443|wss://w3.rs2b2t.com:443/) DEFAULT_WORLD=3 ;;
+    *) echo 'ERROR: RS2B2T_WS must be the official secure W1, W2 or W3 endpoint. Custom worlds are unsupported by the live wall.' >&2; exit 1 ;;
 esac
 HOST="w$DEFAULT_WORLD.rs2b2t.com"
 
@@ -199,12 +200,12 @@ fi
 
 echo "→ checking all world login keys + building the local proxy client…"
 MOD=''
-for WORLD in 1 2; do
+for WORLD in 1 2 3; do
     HTTP="https://w$WORLD.rs2b2t.com"
     KEY=$(curl -fsS --max-time 15 "$HTTP/client/client.js" | grep -oE '[0-9]+' | awk 'length($0) >= 250 { print; exit }')
     [ -n "$KEY" ] || { echo "ERROR: could not fetch the World $WORLD login modulus from $HTTP/client/client.js" >&2; exit 1; }
     if [ -n "$MOD" ] && [ "$KEY" != "$MOD" ]; then
-        echo 'ERROR: World 1 and World 2 login keys differ; refusing to build a mixed-world wall.' >&2
+        echo 'ERROR: World 1, World 2 and World 3 login keys differ; refusing to build a mixed-world wall.' >&2
         exit 1
     fi
     MOD=$KEY
@@ -215,7 +216,7 @@ PORT_FILE="$RUN_DIR/port"
 mkdir -p "$RUN_DIR/out" "$RUN_DIR/public-bot"
 cp public-bot/bot.html public-bot/multibox.html "$RUN_DIR/public-bot/"
 TARGET=proxy LIVE_RSAN="$MOD" B0T_OUT_DIR="$RUN_DIR/out" bun run build:bot >/dev/null
-echo '  built one client for World 1 and World 2.'
+echo '  built one client for World 1, World 2 and World 3.'
 
 for ASSET in out/collision.lcnav.gz out/worldmap*; do
     [ ! -f "$ASSET" ] || cp "$ASSET" "$RUN_DIR/out/"
@@ -287,7 +288,7 @@ supervise_managed_viewer() {
     done
 }
 
-echo "→ starting a local proxy for World 1 + World 2 …"
+echo "→ starting a local proxy for World 1 + World 2 + World 3 …"
 PROXY_RESOURCE_PID=''
 if [ "$VIEWER" = "none" ]; then
     PROXY_RESOURCE_PID="${B0T_RESOURCE_PID:-}"

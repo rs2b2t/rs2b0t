@@ -56,6 +56,8 @@ Nine, and the first four are geography the quest only happens to expose.
   and only the last takes the rabbit. The sealed barrel and the fused one share a display name too, as do
   the two half-mixes. Match by id.
 
+Regicide keeps the armour already worn. It can source a missing melee weapon, but does not withdraw or equip replacement armour. The bridge accepts every supported shortbow and longbow, plus the ogre bow, from the equipment, backpack or bank; crossbows and noted bows do not qualify. Both pass trips retain that bow, and each bridge shot restores the previous weapon and shield. A plain Shortbow is bought only when no bow is available.
+
 ## See also
 
 - [Quest pitfalls: the map](quest-pitfalls.md)

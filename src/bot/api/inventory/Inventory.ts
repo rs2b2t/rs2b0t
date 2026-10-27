@@ -38,6 +38,10 @@ export class InvItem {
         return this.snap.count;
     }
 
+    get noted(): boolean {
+        return this.snap.noted === true;
+    }
+
     actions(): string[] {
         return this.snap.ops.filter((op): op is string => op !== null);
     }

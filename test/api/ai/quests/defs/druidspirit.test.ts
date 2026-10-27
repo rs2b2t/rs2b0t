@@ -198,6 +198,20 @@ describe('nature spirit decide', () => {
         }))).toBe('kill a ghast');
     });
 
+    test('a resumed ghast hunt withdraws the empty pouch left in the bank', () => {
+        expect(step({
+            stage: NS_STAGE.ADDED_POUCH,
+            invIds: [[NS_ID.SICKLE_BLESSED, 1]], bankIds: [[NS_ID.POUCH_EMPTY, 1]]
+        })).toMatchObject({ kind: 'withdraw', items: [{ name: 'Druid pouch', id: NS_ID.POUCH_EMPTY, qty: 1 }] });
+    });
+
+    test('banked charges outrank an empty pouch on a resumed ghast hunt', () => {
+        expect(step({
+            stage: NS_STAGE.ADDED_POUCH,
+            invIds: [[NS_ID.SICKLE_BLESSED, 1]], bankIds: [[NS_ID.POUCH_EMPTY, 1], [NS_ID.POUCH, 3]]
+        })).toMatchObject({ kind: 'withdraw', items: [{ name: 'Druid pouch', id: NS_ID.POUCH, qty: 3 }] });
+    });
+
     test('three harvests fill the pouch on an empty bar — filling costs no prayer', () => {
         expect(named(step({
             stage: NS_STAGE.PICKED_SICKLE,

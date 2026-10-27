@@ -131,7 +131,7 @@ export default class CookBot extends TaskBot {
         const custom = setting.trim().toLowerCase() === CUSTOM_LOCATION.toLowerCase();
         this.where = custom ? null : resolveCookLocation(setting, Game.tile()!);
         if (!custom && !this.where) {
-            ScriptRunner.stop(`no bank called '${setting}' that this account can open`);
+            this.requestFinish(`no bank called '${setting}' that this account can open`);
             return false;
         }
         this.whereName = this.where?.name ?? CUSTOM_LOCATION;
@@ -147,18 +147,18 @@ export default class CookBot extends TaskBot {
             const need = LOG_LEVELS[this.logName];
             const have = Skills.level('firemaking');
             if (need === undefined) {
-                ScriptRunner.stop(`unknown logType '${this.logName}'`);
+                this.requestFinish(`unknown logType '${this.logName}'`);
                 return false;
             }
             if (have < need) {
-                ScriptRunner.stop(`${this.logName} need Firemaking ${need}, you have ${have}`);
+                this.requestFinish(`${this.logName} need Firemaking ${need}, you have ${have}`);
                 return false;
             }
             return true;
         }
         const plan = this.where?.surface ?? null;
         if (this.where && !plan) {
-            ScriptRunner.stop(
+            this.requestFinish(
                 `nothing cookable within ${MAX_SURFACE_CHEB} tiles of the ${this.where.name} bank, set 'Cook on' to Fire`
             );
             return false;
@@ -238,6 +238,7 @@ export default class CookBot extends TaskBot {
 }
 
 class CookDialog implements Task {
+    readonly label = 'Cook dialog';
     constructor(private bot: CookBot) {}
     validate(): boolean { return ChatDialog.isMakeMenu(); }
     async execute(): Promise<void> {
@@ -250,6 +251,7 @@ class CookDialog implements Task {
 }
 
 class BankTrip implements Task {
+    readonly label = 'Bank trip';
     constructor(private bot: CookBot) {}
     validate(): boolean { return needsBank(this.bot.state()); }
 
@@ -302,7 +304,7 @@ class BankTrip implements Task {
         if (Inventory.count(TINDERBOX) === 0) {
             await Bank.withdraw(TINDERBOX);
             if (!(await Execution.delayUntilTicks(() => Inventory.count(TINDERBOX) > 0, 5))) {
-                ScriptRunner.stop('no tinderbox in the bank or pack');
+                this.bot.requestFinish('no tinderbox in the bank or pack');
                 return false;
             }
         }
@@ -312,7 +314,7 @@ class BankTrip implements Task {
             this.bot.log(`could not withdraw ${logName} — will retry`);
         }
         if (Inventory.count(logName) === 0) {
-            ScriptRunner.stop(`no ${logName} left in the bank`);
+            this.bot.requestFinish(`no ${logName} left in the bank`);
             return false;
         }
         return true;
@@ -320,6 +322,7 @@ class BankTrip implements Task {
 }
 
 class LightTrip implements Task {
+    readonly label = 'Light trip';
     constructor(private bot: CookBot) {}
     validate(): boolean { return needsLight(this.bot.state()); }
 
@@ -368,6 +371,7 @@ class LightTrip implements Task {
 }
 
 class CookTrip implements Task {
+    readonly label = 'Cook trip';
     constructor(private bot: CookBot) {}
     validate(): boolean { return canCook(this.bot.state()) && !ChatDialog.isOpen(); }
 

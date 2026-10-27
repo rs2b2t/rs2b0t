@@ -1,4 +1,6 @@
-import { hostedWorld, WORLDS, worldSwitchUrl, type BotMode } from '../../client/config/worlds.js';
+import { resolveWorldNumber, WORLDS, worldSwitchUrl, type BotMode } from '../../client/config/worlds.js';
+
+import { waitForWorldSwitch } from '../runtime/WorldSwitch.js';
 
 interface WorldSelectorOptions {
     mode: BotMode;
@@ -11,13 +13,10 @@ interface WorldSelectorOptions {
 export function worldSelector(options: WorldSelectorOptions): HTMLElement {
     const root = document.createElement('div');
     root.className = 'rs2b0t-world-selector';
-    const current = hostedWorld(options.location.host);
+    const current = resolveWorldNumber(options.location.host, options.location.searchParams);
     const label = document.createElement('span');
-    label.textContent = current ? `World ${current.number}` : 'Local world';
+    label.textContent = `World ${current}`;
     root.appendChild(label);
-    if (!current) {
-        return root;
-    }
     const select = document.createElement('select');
     select.setAttribute('aria-label', 'Destination world');
     for (const world of WORLDS) {
@@ -26,7 +25,7 @@ export function worldSelector(options: WorldSelectorOptions): HTMLElement {
         option.textContent = `World ${world.number}`;
         select.appendChild(option);
     }
-    select.value = String(current.number);
+    select.value = String(current);
     const button = document.createElement('button');
     button.type = 'button';
     button.textContent = 'Switch';
@@ -37,24 +36,44 @@ export function worldSelector(options: WorldSelectorOptions): HTMLElement {
     const status = document.createElement('span');
     status.className = 'rs2b0t-world-status';
     status.setAttribute('role', 'status');
-    status.textContent = options.mode === 'wall'
-        ? 'One world per wall. Profiles stay on each host; use Export / Import to move them.'
-        : 'Log out before switching. Sign in again on the other world.';
-    button.addEventListener('click', () => {
+    status.textContent = 'Your profile and script settings carry across worlds.';
+    let pending: AbortController | null = null;
+    button.addEventListener('click', async () => {
         const number = Number(select.value);
-        if (number === current.number || !WORLDS.some(world => world.number === number)) {
-            return;
+        if (pending || number === current || !WORLDS.some(world => world.number === number)) return;
+        const attempt = new AbortController();
+        pending = attempt;
+        button.disabled = true;
+        select.disabled = true;
+        cancel.hidden = false;
+        status.textContent = `Switching to World ${number}...`;
+        try {
+            const ready = await waitForWorldSwitch(options.prepare, attempt.signal);
+            if (attempt.signal.aborted) return;
+            if (ready) options.navigate(worldSwitchUrl(number, options.mode, options.location).href);
+            else {
+                options.cancel();
+                status.textContent = 'Could not log out. Check the game message before switching again.';
+            }
+        } catch {
+            options.cancel();
+            status.textContent = 'World switch failed. Check the connection before switching again.';
+        } finally {
+            if (pending === attempt) {
+                pending = null;
+                button.disabled = false;
+                select.disabled = false;
+                cancel.hidden = true;
+            }
         }
-        if (!options.prepare()) {
-            status.textContent = 'Scripts and reconnects stopped. Log out in-game on every client, wait for pending logins, then click Switch again.';
-            cancel.hidden = false;
-            return;
-        }
-        options.navigate(worldSwitchUrl(number, options.mode, options.location).href);
     });
     cancel.addEventListener('click', () => {
+        pending?.abort();
+        pending = null;
         options.cancel();
-        select.value = String(current.number);
+        select.value = String(current);
+        select.disabled = false;
+        button.disabled = false;
         cancel.hidden = true;
         status.textContent = 'Switch cancelled. Scripts and auto-login remain stopped; resume them when ready.';
     });

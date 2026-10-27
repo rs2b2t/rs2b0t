@@ -1,9 +1,11 @@
 import { Execution } from '#/bot/api/execution/Execution.js';
+import { EventSignal } from '#/bot/api/execution/EventSignal.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { GameMessages } from '#/bot/api/chatbox/gameMessages.js';
 import { Inventory } from '#/bot/api/inventory/Inventory.js';
-import { hardClueKit, superantiDoses, SUPERANTI } from './hardClueKit.js';
-import { equipDds, hardKitSnapshot } from './hardCluePreparation.js';
+import { Sustain } from '#/bot/api/sustain/Sustain.js';
+import { GUARDIAN_MIN_SHARKS, hardClueKit, superantiDoses, SUPERANTI, type GuardianRangedLoadout } from './hardClueKit.js';
+import { guardianWeaponWorn, equipGuardianWeapon, hardKitSnapshot } from './hardCluePreparation.js';
 
 const POISONED = /you have been poisoned/i;
 const IMMUNITY_TICKS = 570;
@@ -13,18 +15,38 @@ export class GuardianProtection {
     private drankAt: number | null = null;
     private poisonMark = GameMessages.mark();
 
-    async prepare(): Promise<boolean> {
-        if (hardClueKit(hardKitSnapshot()) !== 'ready' || !(await equipDds())) return false;
-        return this.drink();
+    constructor(private readonly guardian = 'Saradomin Wizard', readonly ranged?: GuardianRangedLoadout) {}
+
+    weaponReady(): boolean {
+        return guardianWeaponWorn(this.ranged);
     }
 
-    private async drink(): Promise<boolean> {
-        const potion = Inventory.items().find(i => SUPERANTI.some(d => d.id === i.id));
-        if (!potion) return false;
+    async prepare(): Promise<boolean> {
+        const needsAntipoison = this.guardian === 'Saradomin Wizard';
+        if (hardClueKit(hardKitSnapshot(false, this.ranged), GUARDIAN_MIN_SHARKS, needsAntipoison) !== 'ready' || !(await equipGuardianWeapon(this.ranged))) return false;
+        return (!needsAntipoison || await this.drink(3)) && this.weaponReady() && Inventory.count('Shark') >= GUARDIAN_MIN_SHARKS;
+    }
+
+    private async drink(attempts = 1): Promise<boolean> {
         const before = superantiDoses(Inventory.items());
+        if (before === 0) return false;
         const tick = Game.tick();
-        if (!(await potion.interact('Drink'))) return false;
-        const confirmed = await Execution.delayUntilTicks(() => superantiDoses(Inventory.items()) < before, 2);
+        let confirmed = false;
+        for (let attempt = 0; attempt < attempts; attempt++) {
+            if (attempt > 0) {
+                await Execution.delayTicks(2);
+                if (EventSignal.pending()) return false;
+                await Sustain.run();
+            }
+            if (EventSignal.pending()) return false;
+            confirmed = superantiDoses(Inventory.items()) < before;
+            if (confirmed) break;
+            if (attempts > 1 && (hardClueKit(hardKitSnapshot(false, this.ranged), GUARDIAN_MIN_SHARKS) !== 'ready' || !this.weaponReady())) return false;
+            const potion = Inventory.items().find(i => SUPERANTI.some(d => d.id === i.id));
+            if (!potion) return false;
+            confirmed = await potion.interact('Drink') && await Execution.delayUntilTicks(() => superantiDoses(Inventory.items()) < before, 2);
+            if (confirmed) break;
+        }
         if (!confirmed) return false;
         this.drankAt = tick;
         this.poisonMark = GameMessages.mark();
@@ -34,6 +56,7 @@ export class GuardianProtection {
     }
 
     async maintain(): Promise<'ready' | 'drank' | 'supplies-needed'> {
+        if (this.guardian !== 'Saradomin Wizard') return 'ready';
         const age = this.drankAt === null ? Infinity : Game.tick() - this.drankAt;
         const poisoned = GameMessages.sawSince(this.poisonMark, POISONED);
         if (age >= 0 && age < REFRESH_TICKS && !poisoned) return 'ready';

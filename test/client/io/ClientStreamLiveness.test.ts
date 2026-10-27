@@ -48,7 +48,9 @@ describe('ClientStream server liveness', () => {
         deliver(socket, [7]);
         expect(stream.msSinceData).toBeLessThan(1000);
 
+        expect(stream.closed).toBe(false);
         socket.onclose?.({});
+        expect(stream.closed).toBe(true);
 
         expect(stream.msSinceData).toBe(Number.POSITIVE_INFINITY);
         expect(stream.available).toBe(0);

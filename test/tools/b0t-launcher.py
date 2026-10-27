@@ -33,7 +33,7 @@ import os,sys,pathlib
 root=pathlib.Path(os.environ['FIXTURE']); url=sys.argv[-1]
 with (root/'events').open('a') as f: f.write('curl '+url+'\\n')
 if '/client/client.js' in url:
-    mismatch = os.environ['FAILURE']=='keys2' and 'w2.' in url
+    mismatch = any(os.environ['FAILURE']==f'keys{world}' and f'w{world}.' in url for world in (2,3))
     print('const rsa='+('2' if mismatch else '1')*309)
     sys.exit(0)
 sys.exit(0 if os.environ['FAILURE']=='port' else 7)
@@ -136,11 +136,11 @@ path.unlink(missing_ok=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn('build:bot', events)
 
-    def test_retired_world_rejected_before_build(self):
-        result, events = self.run_failure('keys2', {'RS2B2T_WS': 'wss://w3.rs2b2t.com'})
+    def test_world3_key_mismatch_fails_before_build(self):
+        result, events = self.run_failure('keys3', {'RS2B2T_WS': 'wss://w3.rs2b2t.com'})
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('RS2B2T_WS', result.stderr)
-        self.assertEqual(events, '')
+        self.assertIn('w3.rs2b2t.com/client/client.js', events)
+        self.assertNotIn('build:bot', events)
 
     def test_second_instance_gets_new_build_without_changing_first(self):
         lock = self.root / '.b0t-launch.lock'
@@ -178,18 +178,18 @@ path.unlink(missing_ok=True)
 
     def test_explicit_port_and_profile_are_preserved(self):
         profile = str(self.root / 'custom profile')
-        child = self.start({'B0T_VIEWER': 'electron', 'RS2B2T_WS': 'wss://w2.rs2b2t.com:443/', 'B0T_PROFILE_DIR': profile})
+        child = self.start({'B0T_VIEWER': 'electron', 'RS2B2T_WS': 'wss://w3.rs2b2t.com:443/', 'B0T_PROFILE_DIR': profile})
         viewer, = self.wait_for_viewers(child, 1)
         proxy, = self.processes('proxy')
         self.assertEqual(proxy['port'], 18081)
         self.assertEqual(viewer['profile'], profile)
-        self.assertIn('--server=http://localhost:18081/multibox.html?world=2', viewer['args'])
+        self.assertIn('--server=http://localhost:18081/multibox.html?world=3', viewer['args'])
         self.stop(child)
         events = (self.root / 'events').read_text()
         self.assertEqual(events.count('bun proxy run build:bot'), 1)
         self.assertEqual(events.count('tools/live-proxy.ts'), 1)
         self.assertEqual(events.count('viewer started'), 1)
-        self.assertNotIn('w3.rs2b2t.com', events)
+        self.assertIn('w3.rs2b2t.com/client/client.js', events)
         self.assertEqual(self.processes('proxy'), [])
         self.assertEqual(self.processes('viewer'), [])
         self.assertFalse(Path(proxy['root']).exists())

@@ -57,7 +57,7 @@ export default class FlaxAIO extends TaskBot {
         this.pickingMode = this.settings.bool('picking', true);
         this.spinningMode = this.settings.bool('spinning', true);
         if (!this.pickingMode && !this.spinningMode) {
-            ScriptRunner.stop('FlaxAIO needs at least one of Pick or Spin enabled');
+            this.requestFinish('FlaxAIO needs at least one of Pick or Spin enabled');
             return;
         }
 

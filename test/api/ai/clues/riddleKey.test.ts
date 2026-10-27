@@ -249,7 +249,8 @@ describe('step progress', () => {
         removeFoodOnWalk = true;
         const lines: string[] = [];
         const outcome = await ClueExecutor.solveHeldClue(m => lines.push(m));
-        expect(outcome).toBe('abandon');
+        expect(outcome).toBe('reset-needed');
+        expect(await ClueExecutor.solveHeldClue(m => lines.push(m))).toBe('abandon');
         expect(lines.some(l => l.includes('no progress after'))).toBe(true);
         expect(lines.some(l => l === 'step done')).toBe(false);
     });

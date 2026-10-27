@@ -2,13 +2,15 @@ import { reader } from '../../adapter/ClientAdapter.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
+import { Equipment } from '../../api/equipment/Equipment.js';
 import { Game } from '../../api/game/Game.js';
 import { GroundItems, type GroundItem } from '../../api/grounditems/GroundItems.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Locs } from '../../api/locs/Locs.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
-import { Traversal } from '../../api/walking/Traversal.js';
+import { NAV_PURE_WALK, Traversal } from '../../api/walking/Traversal.js';
+import { STAFF_RUNES } from '../../data/spelldb.js';
 import Tile from '../../geometry/Tile.js';
 import { XpTracker, jiveFrame, paintLevels } from '../../paint/jive.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
@@ -16,12 +18,14 @@ import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import { escapeRunesFor } from '../../api/combat/hunting/supply.js';
 import { CHEST, CHEST_STAND, JUNK, KEY, KEYS_PER_TRIP, PACK, decide, junkHeld, keysToWithdraw, lootPriority, type PackState, type Step } from './logic.js';
+import { CombineKeys } from './CombineKeys.js';
 
 /** The Falador West booths, the nearest bank to both the chest and the teleport. */
 const BANK_STAND = new Tile(2946, 3369, 0);
 const BOOTH = 'Bank booth';
 const BOOTH_OP = 'Use-quickly';
 const TELEPORT_ID = 'falador';
+const TELEPORT_CASTS = 10;
 const CHEST_REACH = 6;
 const WALK_MS = 180_000;
 /** The chest's own reward runs on the tick after the use, so the pack settles inside this. */
@@ -31,11 +35,18 @@ const CONTROL_ROWS = 2;
 const TOP_LINES = 3;
 
 export const SETTINGS: SettingsSchema = {
+    combineKeys: {
+        type: 'boolean',
+        default: false,
+        label: 'Combine crystal keys at the bank',
+        help: 'withdraws up to 14 tooth halves and 14 loop halves, combines them and banks the keys. Repeats until either half runs out; does not open the chest'
+    },
     teleportHome: {
         type: 'boolean',
         default: true,
         label: 'Teleport back to Falador',
-        help: 'keeps and restocks Falador teleport runes for banking when the keys are spent or the pack is full. Walks through the Taverley gate when runes or Magic are short'
+        showIf: { key: 'combineKeys', anyOf: ['false'] },
+        help: 'stocks up to 10 Falador return teleports, using equipped elemental staffs for free runes. Teleports from the chest when banking and walks from the bank to the chest. Walks home when runes or Magic are short'
     }
 };
 
@@ -46,6 +57,8 @@ export default class JiveChests extends TaskBot {
     private startedAt = Date.now();
     private xp = new XpTracker(['crafting'], Skills);
     opened = 0;
+    combined = 0;
+    combineKeys = false;
     trips = 0;
     private dropped = 0;
     private lootByName = new Map<string, number>();
@@ -57,15 +70,22 @@ export default class JiveChests extends TaskBot {
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
         this.teleportHome = this.settings.bool('teleportHome', true);
+        this.combineKeys = this.settings.bool('combineKeys');
         this.startedAt = Date.now();
         this.xp.begin();
+        if (this.combineKeys) {
+            this.loopDelay = 100;
+            this.log('[chests] combining 14 pairs of key halves per load at the nearest bank');
+            this.add(new CombineKeys(this));
+            return;
+        }
         const esc = escapeRunesFor(TELEPORT_ID);
-        this.log(`[chests] ${KEYS_PER_TRIP} ${KEY}s a trip from Falador West, opening the chest at ${CHEST_STAND.x},${CHEST_STAND.z}, dropping ${JUNK.join(', ')}, home by ${this.teleportHome ? esc.label : 'the walk back'}`);
+        this.log(`[chests] ${KEYS_PER_TRIP} ${KEY}s a trip from Falador West, opening the chest at ${CHEST_STAND.x},${CHEST_STAND.z}, dropping low-priority rewards only for ground loot, home by ${this.teleportHome ? esc.label : 'the walk back'}`);
         this.add(new ContinueDialog(), new DropJunk(this), new CollectLoot(this), new OpenChest(this), new Travel(this), new BankTrip(this));
     }
 
     override recoveryAnchor(): Tile | null {
-        return BANK_STAND;
+        return this.combineKeys ? null : BANK_STAND;
     }
 
     setStatus(s: string): void {
@@ -140,7 +160,14 @@ export default class JiveChests extends TaskBot {
         });
         const mins = (Date.now() - this.startedAt) / 60_000;
 
-        if (page === 'Options') {
+        if (this.combineKeys) {
+            p.statGrid([
+                [{ text: 'Mode: combine keys' }, { text: 'Pairs per load: 14' }],
+                [{ text: `Runtime: ${fmtDuration(mins)}` }, { text: `Combined: ${this.combined}` }],
+                [{ text: `Loads: ${this.trips}` }, { text: `Keys/hr: ${mins > 0.5 ? Math.round(this.combined * 60 / mins) : 'n/a'}` }]
+            ]);
+            p.bar('Pack', Inventory.used() / PACK);
+        } else if (page === 'Options') {
             p.statGrid([
                 [{ text: `Keys a trip: ${KEYS_PER_TRIP}` }, { text: `Home: ${this.teleportHome ? 'teleport' : 'walk'}` }],
                 [{ text: `Chest: ${CHEST_STAND.x},${CHEST_STAND.z}` }, { text: `Bank: ${BANK_STAND.x},${BANK_STAND.z}` }]
@@ -192,7 +219,6 @@ class CollectLoot implements Task {
     }
 }
 
-// Why: the junk goes before anything else, so a roll of five swordfish never costs the slots the next roll needs.
 class DropJunk implements Task {
     constructor(private bot: JiveChests) {}
 
@@ -288,13 +314,19 @@ class Travel implements Task {
     async execute(): Promise<void> {
         const bot = this.bot;
         bot.setStatus(bot.pendingLoot ? 'returning for chest loot' : 'walking to the chest');
-        if (!(await Traversal.walkResilient(CHEST_STAND, { radius: 0, attempts: 4, timeoutMs: WALK_MS, log: m => bot.log(`  ${m}`) }))) {
+        if (!(await Traversal.walkResilient(CHEST_STAND, { ...NAV_PURE_WALK, radius: 0, attempts: 4, timeoutMs: WALK_MS, log: m => bot.log(`  ${m}`) }))) {
             bot.log('[chests] the walk to the chest failed, will retry');
         }
     }
 }
 
-// Why: the teleport lands twenty tiles from the booths and the walk back is the long way through the Taverley gate, so a short rune stack costs a walk rather than the trip.
+function homeSpell() {
+    const spell = escapeRunesFor(TELEPORT_ID);
+    const worn = new Set(Equipment.items().map(i => i.name?.toLowerCase()));
+    const supplied = new Set(Object.entries(STAFF_RUNES).filter(([staff]) => worn.has(staff.toLowerCase())).flatMap(([, runes]) => runes));
+    return { ...spell, runes: spell.runes.filter(r => !supplied.has(r.rune)) };
+}
+
 class BankTrip implements Task {
     constructor(private bot: JiveChests) {}
 
@@ -305,13 +337,11 @@ class BankTrip implements Task {
     async execute(): Promise<void> {
         const bot = this.bot;
         bot.banking = true;
-        const here = Game.tile();
-        const far = here === null || BANK_STAND.distanceTo(here) > 20;
-        if (far && bot.teleportHome && (await this.castHome())) {
+        if (bot.atChest() && !Bank.isOpen() && bot.teleportHome && (await this.castHome())) {
             return;
         }
         bot.setStatus('walking to the bank');
-        if (!(await Traversal.walkResilient(BANK_STAND, { radius: 3, attempts: 4, timeoutMs: WALK_MS, log: m => bot.log(`  ${m}`) }))) {
+        if (!(await Traversal.walkResilient(BANK_STAND, { ...NAV_PURE_WALK, radius: 3, attempts: 4, timeoutMs: WALK_MS, log: m => bot.log(`  ${m}`) }))) {
             bot.log('[chests] the walk to the bank failed, will retry');
             return;
         }
@@ -320,7 +350,7 @@ class BankTrip implements Task {
             return;
         }
         bot.setStatus('banking the haul');
-        const esc = escapeRunesFor(TELEPORT_ID);
+        const esc = homeSpell();
         const keep = new Set([KEY, ...(bot.teleportHome ? esc.runes.map(r => r.rune) : [])].map(name => name.toLowerCase()));
         await Bank.depositAllMatching(name => !keep.has(name.toLowerCase()));
         if (Inventory.items().some(item => !keep.has((item.name ?? '').toLowerCase()))) {
@@ -350,8 +380,8 @@ class BankTrip implements Task {
         }
         if (bot.teleportHome && Skills.level('magic') >= esc.level) {
             for (const rune of esc.runes) {
-                const missing = rune.count - Inventory.count(rune.rune);
-                if (missing > 0 && Bank.count(rune.rune) >= missing && !(await Bank.withdrawX(rune.rune, missing))) {
+                const missing = Math.min(rune.count * TELEPORT_CASTS - Inventory.count(rune.rune), Bank.count(rune.rune));
+                if (missing > 0 && !(await Bank.withdrawX(rune.rune, missing))) {
                     bot.log(`[chests] could not withdraw ${rune.rune}, retrying`);
                     return;
                 }
@@ -369,7 +399,7 @@ class BankTrip implements Task {
     /** Cast the way home, false when the runes or the level are short and the walk has to do it. */
     private async castHome(): Promise<boolean> {
         const bot = this.bot;
-        const esc = escapeRunesFor(TELEPORT_ID);
+        const esc = homeSpell();
         const short = esc.runes.find(r => Inventory.count(r.rune) < r.count);
         if (Skills.level('magic') < esc.level || short) {
             bot.log(`[chests] ${esc.label} is short ${short ? short.rune : `Magic ${esc.level}`}, walking back instead`);

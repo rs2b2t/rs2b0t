@@ -165,7 +165,7 @@ export const GLOBAL_SETTINGS_CORE: SettingsSchema = {
         type: 'string',
         default: '',
         label: 'Clue duel partner',
-        help: 'Named account running Duel Arena in Clue helper mode for the obstacle-arena coordinate clue.'
+        help: 'Optional named account running Duel Arena in Clue helper mode. Leave empty to find nearby lobby players for an unstaked obstacle duel.'
     },
     useZanarisBank: {
         type: 'boolean',

@@ -80,6 +80,79 @@ describe('shades of mortton decide', () => {
 });
 
 describe('the serum chain', () => {
+    test('a resumed shade hunt recovers banked serum before burning or searching for herbs', () => {
+        expect(step({
+            stage: SM_STAGE.KILL_SHADES,
+            invIds: [[SM_ID.ASHES, 0], [SM_ID.LOGS, 0]],
+            bankIds: [[SM_ID.SERUM2, 1], [SM_ID.SERUM3, 1], [SM_ID.UNID_TARROMIN, 37]]
+        })).toEqual({ kind: 'withdraw', items: [{ name: 'Serum 207 (3)', id: SM_ID.SERUM3, qty: 1 }] });
+    });
+
+    test('a missing serum checks an unread bank before reusing the one-shot herb table', () => {
+        expect(decide({ ...snap({ stage: SM_STAGE.KILL_SHADES }), bankKnown: false }).kind).toBe('scanBank');
+    });
+
+    test('banked tarromin replaces the herbs from an exhausted table', () => {
+        expect(step({ stage: SM_STAGE.KILL_SHADES, bankIds: [[SM_ID.UNID_TARROMIN, 37]] }))
+            .toEqual({ kind: 'withdraw', items: [{ name: 'Herb', id: SM_ID.UNID_TARROMIN, qty: 1 }] });
+    });
+
+    test('a carried unfinished potion is brewed before fetching another banked herb', () => {
+        expect(named(step({
+            stage: SM_STAGE.KILL_SHADES,
+            invIds: [[SM_ID.TARROMIN_UNF, 1]], bankIds: [[SM_ID.UNID_TARROMIN, 37]]
+        }))).toBe('mix serum 207');
+    });
+
+    test('banked permanent serum also covers the remaining conversations', () => {
+        expect(step({ stage: SM_STAGE.LIT_PYRE, bankIds: [[SM_ID.SERUM_PERM1, 1]] }))
+            .toEqual({ kind: 'withdraw', items: [{ name: 'Serum 207(p) (1)', id: SM_ID.SERUM_PERM1, qty: 1 }] });
+    });
+
+    test('a character that has never brewed serum still has to make its own', () => {
+        expect(step({
+            stage: SM_STAGE.READ_DIARY,
+            bankIds: [[SM_ID.SERUM4, 1], [SM_ID.UNID_TARROMIN, 37]]
+        })).toEqual({ kind: 'withdraw', items: [{ name: 'Herb', id: SM_ID.UNID_TARROMIN, qty: 1 }] });
+    });
+
+    test('a pack full of surplus logs makes room for the banked serum', () => {
+        const full = snap({ stage: SM_STAGE.KILL_SHADES, bankIds: [[SM_ID.SERUM3, 1]] });
+        full.freeSlots = 0;
+        full.inv = new Map([['logs', 28]]);
+        full.invIds = new Map([[SM_ID.LOGS, 28]]);
+        const action = decide(full);
+        expect(action.kind).toBe('deposit');
+        if (action.kind === 'deposit') {
+            expect(action.keep.some(name => 'logs'.includes(name))).toBe(false);
+            expect(action.keepIds ?? []).not.toContain(SM_ID.LOGS);
+        }
+    });
+
+    test('making room late in the quest preserves the prepared pyre and remains', () => {
+        const full = snap({
+            stage: SM_STAGE.CREATED_PYRE_LOGS,
+            invIds: [[SM_ID.PYRE_LOGS, 1], [SM_ID.REMAINS, 2]],
+            bankIds: [[SM_ID.SERUM1, 1]]
+        });
+        full.freeSlots = 0;
+        const action = decide(full);
+        expect(action.kind).toBe('deposit');
+        if (action.kind === 'deposit') {
+            for (const name of ['pyre logs', 'loar remains', 'sacred oil(2)', 'olive oil(3)']) {
+                expect(action.keep.some(keep => name.includes(keep))).toBe(true);
+            }
+        }
+    });
+
+    test('a full pack containing only protected items does not repeat an ineffective deposit', () => {
+        const full = snap({ stage: SM_STAGE.KILL_SHADES, bankIds: [[SM_ID.SERUM3, 1]] });
+        full.freeSlots = 0;
+        full.inv = new Map([['loar remains', 28]]);
+        full.invIds = new Map([[SM_ID.REMAINS, 28]]);
+        expect(decide(full)).toEqual({ kind: 'wait', reason: 'no pack room for serum recovery' });
+    });
+
     test('a started quest with no herb searches the smashed table', () => {
         expect(named(step({ stage: SM_STAGE.READ_DIARY }))).toBe('search the smashed table for herbs');
     });

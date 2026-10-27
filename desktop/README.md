@@ -11,14 +11,24 @@ and a power-save blocker disable the throttling a backgrounded browser tab impos
 hidden tab drops the game loop to ~1 fps and starves the bot, then replays at 2–5× on
 refocus. Measured here: ~51 fps while hidden.
 
+The shell enables Chromium's `V8CppGCEnableLargerCage` feature before startup.
+Electron 33's Oilpan heap otherwise reserves 4 GB across the wall's renderer;
+this feature raises that address-space reservation to 16 GB. It does not
+preallocate 16 GB of physical RAM. See the
+[Chromium implementation](https://chromium.googlesource.com/chromium/src/+/refs/tags/130.0.6723.191/gin/cppgc.cc).
+This addresses `Oilpan: Large allocation. Ran out of reservation` with many bot
+frames sharing a renderer. It does not remove system RAM limits or fix a leak.
+Restart Electron to apply it; reloading the page keeps the existing reservation.
+
 ## Run
 
 For live bots, run `bun run b0t` from the repository root. One Electron wall can
-run profiles on World 1 and World 2 together. Choose a world per profile in
+run profiles on World 1, World 2 and World 3 together. Choose a world per profile in
 **Add bot**, then use **load all profiles**. Each rail tile shows its script name
 and state; the status panel shows its connected world. A tile's **Switch** stops
-that bot's script and reconnects; log out in-game, click **Retry**, then resume it
-on the destination world.
+that bot's script, logs out, and switches automatically. A logged-in account signs
+back in on the destination world with its saved script settings. Start the script
+again when ready.
 
 Run `bun run b0t` again in another terminal to open another instance from the same
 checkout. Each launch gets a private build and a free port. All instances share

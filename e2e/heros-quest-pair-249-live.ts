@@ -86,11 +86,7 @@ const GRIP_SEED: Record<'phoenix' | 'blackarm', BankSeedItem[]> = {
     blackarm: []
 };
 
-// Why: coins and food only, every other quest item has a source the module walks to.
-// Why: the ice gloves are the one exception, and they are seeded because the Ice Queen's lair has no
-// entrance on this content: all eight ladders down sit on a plateau (x 2800-2861, z 3500-3521) whose
-// every boundary tile carries the map's BLOCK_MAP_SQUARE flag, and the three ladders back up are
-// one-way. The bot still implements the fight; nothing can walk to it.
+// Why: seeded ice gloves keep this harness focused on the paired quest legs.
 const BANK_SEED: BankSeedItem[] = [
     { debugName: 'coins', displayName: 'Coins', qty: 2_000_000 },
     { debugName: 'lobster', displayName: 'Lobster', qty: 60 },

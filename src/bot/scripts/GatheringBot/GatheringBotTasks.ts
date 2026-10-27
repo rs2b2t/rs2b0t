@@ -18,7 +18,6 @@ import { Traversal } from '../../api/walking/Traversal.js';
 import { isOpenableObstacle, openOp, walkOpening } from '../../event/webwalk/walkOpening.js';
 import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import { stepOffCandidates } from '../../runtime/randomevents/eventEvade.js';
-import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import {
     gatherHuntRadius,
     gatherSpotRangeOrigin,
@@ -91,6 +90,7 @@ const FLEE_STEP_HARD = 20;
  * Re-applies after login (combat-mode varp is not persisted).
  */
 export class EnsureShortbowRapid implements Task {
+    readonly label = 'Ensure shortbow rapid';
     private fails = 0;
     private retryAtTick = 0;
     constructor(private bot: GatheringBot) {}
@@ -137,6 +137,7 @@ export class EnsureShortbowRapid implements Task {
 
 /** Keep knife-delay pack at one fletchable log so Make-X does not multi-queue. */
 export class TrimKnifeDelayLogs implements Task {
+    readonly label = 'Trim knife delay logs';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -158,6 +159,7 @@ export class TrimKnifeDelayLogs implements Task {
 
 /** Tannerfishing sustain: eats cooked catch at low HP and cooks raw on a nearby Fire or Range. */
 export class TannerfishSustain implements Task {
+    readonly label = 'Tannerfish sustain';
     constructor(private bot: GatheringBot) {}
 
     private nearestOven() {
@@ -217,6 +219,7 @@ export class TannerfishSustain implements Task {
 
 /** Miner-only smart eating: full-heal boundary or one more ore slot. */
 export class MinerEatFood implements Task {
+    readonly label = 'Miner eat food';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -236,6 +239,7 @@ export class MinerEatFood implements Task {
 
 /** Own every non-bank leg of the gated Desert Mining Camp round trip. */
 export class DesertMiningCampTravel implements Task {
+    readonly label = 'Desert mining camp travel';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -249,6 +253,7 @@ export class DesertMiningCampTravel implements Task {
 
 /** Keep hostile-camp Miner from retaliating after zone entry or relogin. */
 export class MaintainWildernessMinerStance implements Task {
+    readonly label = 'Maintain wilderness miner stance';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -271,6 +276,7 @@ export class MaintainWildernessMinerStance implements Task {
  * Lets burn/gather resume once the cycle drains instead of deadlocking the loop.
  */
 export class WaitStickyCombat implements Task {
+    readonly label = 'Wait sticky combat';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -318,6 +324,7 @@ export class WaitStickyCombat implements Task {
 
 /** Breaks multi-combat pulls from aggressive NPCs such as lava-maze spiders and dark wizards. */
 export class FleeCombat implements Task {
+    readonly label = 'Flee combat';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -444,6 +451,7 @@ function isFletchByproductName(name: string | null | undefined): boolean {
 const MULE_TRADE_GRACE_MS = 2_000;
 
 export class HandleGatherMuleTrade implements Task {
+    readonly label = 'Handle gather mule trade';
     private partnerWait = 0;
     /** Holds task ownership through the frame-wide "no screen" blips between trade screens. */
     private ownTradeUntil = 0;
@@ -584,6 +592,7 @@ export class HandleGatherMuleTrade implements Task {
 }
 
 export class MuleGoMeet implements Task {
+    readonly label = 'Mule go meet';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -619,6 +628,7 @@ export class MuleGoMeet implements Task {
 }
 
 export class MuleRequestOrWait implements Task {
+    readonly label = 'Mule request or wait';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -672,6 +682,7 @@ export class MuleRequestOrWait implements Task {
  * bankRawBeforeCook is the "N ready" gate (default 28) before a trip starts.
  */
 export class SupplierWithdrawRaw implements Task {
+    readonly label = 'Supplier withdraw raw';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -732,6 +743,7 @@ export class SupplierWithdrawRaw implements Task {
 }
 
 export class MuleBankHaul implements Task {
+    readonly label = 'Mule bank haul';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -767,6 +779,7 @@ export class MuleBankHaul implements Task {
 
 /** Clears random-event leftovers that steal pack slots. */
 export class ClearPackJunk implements Task {
+    readonly label = 'Clear pack junk';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -839,6 +852,7 @@ export class ClearPackJunk implements Task {
 }
 
 export class DropProduct implements Task {
+    readonly label = 'Drop product';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -929,6 +943,7 @@ async function dropFletchByproducts(bot: GatheringBot): Promise<void> {
 }
 
 export class BankCatch implements Task {
+    readonly label = 'Bank catch';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -1110,6 +1125,7 @@ export class BankCatch implements Task {
 }
 
 export class FishCookDialog implements Task {
+    readonly label = 'Fish cook dialog';
     constructor(private bot: GatheringBot) {}
     validate(): boolean {
         return this.bot.cookEnabled() && ChatDialog.isMakeMenu();
@@ -1128,6 +1144,7 @@ export class FishCookDialog implements Task {
 }
 
 export class FishCookLoad implements Task {
+    readonly label = 'Fish cook load';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -1406,6 +1423,7 @@ export class FishCookLoad implements Task {
 }
 
 export class FishBankCooked implements Task {
+    readonly label = 'Fish bank cooked';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -1497,6 +1515,7 @@ export class FishBankCooked implements Task {
 }
 
 export class FishWithdrawCookBatch implements Task {
+    readonly label = 'Fish withdraw cook batch';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -1606,6 +1625,7 @@ async function dropBurnt(bot: GatheringBot): Promise<void> {
  * for a replacement pick (legacy). Broken axe without acquire falls through to restock.
  */
 export class RepairBrokenGatherTool implements Task {
+    readonly label = 'Repair broken gather tool';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -1702,7 +1722,7 @@ export class RepairBrokenGatherTool implements Task {
                         }
                     }
                 }
-                ScriptRunner.stop('pickaxe: no usable pick in bank');
+                this.bot.requestFinish('pickaxe: no usable pick in bank');
                 return;
             }
             const item = Bank.items().find(i => (i.name ?? '').toLowerCase() === pick.toLowerCase());
@@ -1748,6 +1768,7 @@ export class RepairBrokenGatherTool implements Task {
 
 /** Wield axes/picks already in the pack (hasGear is true when held unworn). */
 export class EnsureGatherToolEquipped implements Task {
+    readonly label = 'Ensure gather tool equipped';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -1776,6 +1797,7 @@ export class EnsureGatherToolEquipped implements Task {
 
 // Why: Roachey's feathers come back one a tick toward 1500, so a bought-out stack is fifteen minutes from full and the trip is worth taking on that clock rather than only when the pack runs dry. The shop is a short walk from the guild pier, and the run banks nothing on the way.
 export class BuyGuildFeathers implements Task {
+    readonly label = 'Buy guild feathers';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -1842,6 +1864,7 @@ export class BuyGuildFeathers implements Task {
 }
 
 export class BuyShiloSupplies implements Task {
+    readonly label = 'Buy shilo supplies';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -1856,6 +1879,7 @@ export class BuyShiloSupplies implements Task {
 }
 
 export class RestockFishingGear implements Task {
+    readonly label = 'Restock fishing gear';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -2058,6 +2082,7 @@ export class RestockFishingGear implements Task {
 }
 
 export class RestockGatherTool implements Task {
+    readonly label = 'Restock gather tool';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -2278,6 +2303,7 @@ export class RestockGatherTool implements Task {
 
 /** Optional bank, shop or smith upgrade when Acquire tools is on. */
 export class UpgradeGatherTool implements Task {
+    readonly label = 'Upgrade gather tool';
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -2321,6 +2347,7 @@ export class UpgradeGatherTool implements Task {
  * Why: it must run before the first camp walk (a coin-gated transport edge otherwise strands the run); gives up after 3 attempts so an empty bank does not thrash.
  */
 export class StartupProvision implements Task {
+    readonly label = 'Startup provision';
     constructor(private bot: GatheringBot) {}
     private attempts = 0;
 
@@ -2340,6 +2367,7 @@ export class StartupProvision implements Task {
 }
 
 export class Gather implements Task {
+    readonly label = 'Gather';
     constructor(private bot: GatheringBot) {}
 
     /** NPC index of the spot we last successfully started fishing on (null = no active session). */

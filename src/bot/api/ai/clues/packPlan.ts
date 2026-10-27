@@ -1,3 +1,5 @@
+import { MIN_SHARKS } from './hardClueKit.js';
+
 /** Pack budgeting for a clue trail. Pure, so the slot arithmetic is testable without a bank. */
 
 /** Hosts size foodWithdraw() for sustained combat (20+), which fills the pack and starves the trail kit, the runes especially. */
@@ -35,9 +37,9 @@ export function trailFoodTarget(b: TrailFoodBudget): number {
     return Math.max(0, Math.min(capped, room));
 }
 
-export function hardTrailFoodTarget(b: Omit<TrailFoodBudget, 'hostWant'>): number | null {
-    const target = Math.min(15, b.heldFood + Math.max(0, b.freeSlots - b.reserveSlots));
-    return target >= 15 ? target : null;
+export function hardTrailFoodTarget(b: Omit<TrailFoodBudget, 'hostWant'>, minimumSharks = MIN_SHARKS): number | null {
+    const target = Math.min(minimumSharks, b.heldFood + Math.max(0, b.freeSlots - b.reserveSlots));
+    return target >= minimumSharks ? target : null;
 }
 
 /**

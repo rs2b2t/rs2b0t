@@ -33,6 +33,7 @@ export interface SlotSnapshot extends SlotStatus {
     tab: string;
     targetWorld: WorldNumber;
     switchingWorld: WorldNumber | null;
+    worldSwitchError?: string;
 }
 
 export interface SlotHandle {

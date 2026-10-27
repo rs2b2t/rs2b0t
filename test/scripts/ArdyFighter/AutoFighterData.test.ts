@@ -32,6 +32,12 @@ describe('AutoFighter data', () => {
             'chaos talisman', 'nature talisman'
         ]);
     });
+    test('loot names match exactly, not as substrings', () => {
+        expect(wantsAutoFighterLoot('Uncut sapphire', ['uncut sapphire'], false)).toBe(true);
+        expect(wantsAutoFighterLoot('  UNCUT SAPPHIRE  ', ['uncut sapphire'], false)).toBe(true);
+        expect(wantsAutoFighterLoot('Uncut sapphire', ['sapphire'], false)).toBe(false);
+        expect(wantsAutoFighterLoot('Clue scroll (easy)', ['clue scroll'], false)).toBe(false);
+    });
     test('target is a freeform text control', () => {
         expect(SETTINGS.target.options).toBeUndefined();
         expect(resolveControl(SETTINGS.target)).toBe('text');

@@ -35,7 +35,7 @@ import { Locs } from '../../api/locs/Locs.js';
 import {
     AMULET, BARREL_BANK, BARREL_EXIT, BARREL_LOC, BARREL_OP, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, DUNGEON_MIN_Z, EXIT_DOOR, EXIT_DOOR_LOC, EXIT_OPTIONS, ESCAPE_TELES,
     LEDGE_DOOR, LEDGE_LOC, LEDGE_OP, legFor, RAFT_LOC, RAFT_OP, RAFT_STAND,
-    attackRangeFor, eastFirst, lootWaitMs, ROCK_LOC, sameRoom, takenByAnother, ROPE, ROPE_THROW_STAND, TREE_LOC, TREE_STAND, type EscapeTele
+    attackRangeFor, eastFirst, lootWaitMs, packForcesBank, ROCK_LOC, sameRoom, takenByAnother, ROPE, ROPE_THROW_STAND, TREE_LOC, TREE_STAND, type EscapeTele
 } from './FireGiantLogic.js';
 import { scriptFood } from '../../api/loadout/loadoutPlan.js';
 import { LOADOUT_SETTING } from '../../api/loadout/loadoutSetting.js';
@@ -279,6 +279,30 @@ function findLoot() {
 /** Inventory names held back from the deposit. */
 function keepNames(): string[] {
     return combatKeepNames({ food: FOOD_NAME, style: STYLE, ammo: AMMO, weapon: WEAPON, extra: [AMULET, ROPE] });
+}
+
+// Why: the drop table overlaps the trip kit (lobster, law runes and arrows all drop), so a wanted name is loot only when the bank run would deposit it instead of carrying it back out.
+// Why: bones set to bury are spent on Prayer xp in the room, so they are not a load to bank either.
+// Why: the spell runes in the kit come from the withdrawal list, so a rune the wielded staff supplies is loot: the deposit drops the stack and the restock does not withdraw it again.
+
+/** Pack slots holding wanted loot that a bank run would deposit. */
+function bankableLootSlots(): number {
+    const kit = new Set(keepNames().map(n => n.toLowerCase()));
+    for (const { rune } of TELE.runes) {
+        kit.add(rune.toLowerCase());
+    }
+    if (STYLE === 'mage') {
+        for (const { rune } of runeWithdrawList(SPELL, wieldedNames(), 1)) {
+            kit.add(rune.toLowerCase());
+        }
+    }
+    return Inventory.items().filter(i => {
+        const name = (i.name ?? '').toLowerCase();
+        if (name.length === 0 || kit.has(name) || (BURY_BONES && name === 'big bones')) {
+            return false;
+        }
+        return LOOT_SET.has(name) || (BANK_COMMON && matchesCommonBankLoot(i.name ?? ''));
+    }).length;
 }
 
 async function eatOnce(bot: FireGiant): Promise<boolean> {
@@ -811,7 +835,7 @@ class BankRun implements Task {
         if (!hasFood() && !this.bot.bankKnownEmpty()) {
             return true;
         }
-        return Inventory.isFull();
+        return packForcesBank(Inventory.isFull(), bankableLootSlots());
     }
     async execute(): Promise<void> {
         if (EventSignal.pending()) {

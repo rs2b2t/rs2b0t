@@ -1,3 +1,4 @@
+import AccountLeveler, { SETTINGS as ACCOUNT_LEVELER_SETTINGS } from './AccountLeveler/AccountLeveler.js';
 import { AGILITY_SETTINGS } from './AgilityBot/AgilityBot.js';
 import { FISHING_LOCATION_OPTIONS } from '../data/fishingLocations.js';
 import { FISHING_METHOD_OPTIONS } from '../data/fishingMethods.js';
@@ -74,6 +75,8 @@ import MuleCrafter, { SETTINGS as MULECRAFTER_SETTINGS } from './MuleCrafter/Mul
 import RoguesPurse from './RoguesPurse/RoguesPurse.js';
 import HerbloreSecondaries, { HERBLORE_SECONDARIES_SETTINGS } from './HerbloreSecondaries/HerbloreSecondaries.js';
 import HerbCleaner, { HERB_CLEANER_SETTINGS } from './HerbCleaner/HerbCleaner.js';
+import JiveCaskets from './JiveCaskets/JiveCaskets.js';
+import JiveBalls, { SETTINGS as JIVEBALLS_SETTINGS } from './JiveBalls/JiveBalls.js';
 import PotionMaker, { POTION_MAKER_SETTINGS } from './PotionMaker/PotionMaker.js';
 import MarketMaker, { MARKET_MAKER_SETTINGS } from './MarketMaker/MarketMaker.js';
 import ClimbingBoots, { CLIMBING_BOOTS_SETTINGS } from './ClimbingBoots/ClimbingBoots.js';
@@ -85,6 +88,7 @@ import GnomeMagicChopper, { GNOME_MAGIC_CHOPPER_SETTINGS } from './GnomeMagicCho
 import ArravSupplier, { ARRAV_SUPPLIER_SETTINGS } from './ArravSupplier/ArravSupplier.js';
 import Barcrawl from './Barcrawl/Barcrawl.js';
 import DuelArena, { DUEL_ARENA_SETTINGS } from './DuelArena/DuelArena.js';
+import WanderLooter, { SETTINGS as WANDER_LOOTER_SETTINGS } from './WanderLooter/WanderLooter.js';
 
 // First register = panel default when no script is remembered (BotPanel → list()[0]).
 ScriptRegistry.register({
@@ -277,11 +281,20 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'JiveChests',
-    description: 'Opens the Taverley crystal chest with seven keys per trip from Falador West. Drops raw swordfish, body runes, spinach rolls and adamant square shields. Collects overflow in priority order: dragonstones, key halves, runite bars, diamonds, rubies, rune legs or skirts, then other rewards. Banks when full and returns for remaining loot before opening again. Keeps and restocks Falador teleport runes. Stops after the keys are exhausted and remaining loot is collected and banked.',
+    description: 'Opens the Taverley crystal chest with seven keys per trip from Falador West. Keeps food and low-priority rewards unless a full pack blocks valuable ground loot. Collects overflow in priority order: dragonstones, key halves, runite bars, diamonds, rubies, rune legs or skirts, then other rewards. Banks when full and returns for remaining loot before opening again. Walks to the chest and optionally teleports home from it, stocking up to ten Falador casts and accounting for equipped elemental staffs. Stops after the keys are exhausted and remaining loot is collected and banked. Optional bank-only mode withdraws 14 of each key half, combines up to five pairs at a time and deposits the crystal keys, repeating until either half runs out.',
     category: 'Money making',
     tags: ['chest', 'taverley', 'banking', 'looting', 'afk'],
     settingsSchema: JIVECHESTS_SETTINGS,
     create: () => new JiveChests()
+});
+
+ScriptRegistry.register({
+    name: 'JiveBalls',
+    description: 'Shears sheep and banks raw wool, keeping shears. Select Lumbridge, Varrock south, Falador west, the Monastery or Ardougne north, or randomly choose a flock once per run, weighted by flock size. Retrieves shears from the bank or a free spawn. Waits for wool to regrow and repeats bank trips to the selected flock.',
+    category: 'Money making',
+    tags: ['sheep', 'wool', 'shearing', 'banking', 'gathering'],
+    settingsSchema: JIVEBALLS_SETTINGS,
+    create: () => new JiveBalls()
 });
 
 ScriptRegistry.register({
@@ -560,6 +573,14 @@ ScriptRegistry.register({
     tags: ['bank', 'sort', 'tidy', 'quest'],
     settingsSchema: BANKSORTER_SETTINGS,
     create: () => new BankSorter()
+});
+
+ScriptRegistry.register({
+    name: 'JiveCaskets',
+    description: 'Opens ordinary loot caskets at the bank. Withdraws a full inventory, opens up to five caskets at a time, deposits all inventory items and repeats until the bank is out of caskets. Start at a bank. Clue and quest caskets are left banked.',
+    category: 'Utility',
+    tags: ['caskets', 'banking', 'loot', 'members'],
+    create: () => new JiveCaskets()
 });
 
 ScriptRegistry.register({
@@ -861,4 +882,22 @@ ScriptRegistry.register({
     tags: ['crafting', 'fletching', 'flax', 'bow-strings', 'trade', 'two-player', 'afk'],
     settingsSchema: FLAXRUNNER_SETTINGS,
     create: () => new FlaxRunner()
+});
+
+ScriptRegistry.register({
+    name: 'AccountLeveler',
+    description: 'Trains melee first, then remaining combat skills, then other enabled members skills to 60. Stocks essence in batches of 1,000 and uses Edgeville monkey bars from Agility 15. Buys supplies, runs required quests, and recovers from death. Wilderness training is optional and enabled by default.',
+    category: 'General',
+    tags: ['training', 'combat', 'skilling', 'quests', 'banking', 'death-recovery'],
+    settingsSchema: ACCOUNT_LEVELER_SETTINGS,
+    create: () => new AccountLeveler()
+});
+
+ScriptRegistry.register({
+    name: 'WanderLooter',
+    description: 'Wanders the overworld looting exact-name drops without fighting. Eats configured food, flees to the nearest bank when low on health without food, banks excess loot and food, and avoids tiles where it took damage.',
+    category: 'Money making',
+    tags: ['loot', 'wandering', 'banking', 'food', 'event', 'pumpkin'],
+    settingsSchema: WANDER_LOOTER_SETTINGS,
+    create: () => new WanderLooter()
 });

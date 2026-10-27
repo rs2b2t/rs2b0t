@@ -1,5 +1,4 @@
 import Tile from '../../geometry/Tile.js';
-import { matchesAny } from '../../api/inventory/packRules.js';
 import { BANK_LOCATIONS } from '../../api/bank/BankLocations.js';
 
 export const START_POSITION = 'Start position';
@@ -40,12 +39,15 @@ export function shouldBankAfterMinutes(
     return minutesSinceLastBank >= everyMinutes;
 }
 
-export function isBurialBone(name: string | null): boolean {
-    return name?.trim().toLowerCase() === BURIAL_BONE_NAME.toLowerCase();
+export function isBurialBone(name: string | null, buryBones = true, buryBigBones = false): boolean {
+    const normalized = name?.trim().toLowerCase();
+    return (buryBones && normalized === BURIAL_BONE_NAME.toLowerCase()) || (buryBigBones && normalized === 'big bones');
 }
 
-export function wantsAutoFighterLoot(name: string | null, configured: string[], buryBones: boolean): boolean {
-    return matchesAny(name, configured) || (buryBones && isBurialBone(name));
+export function wantsAutoFighterLoot(name: string | null, configured: string[], buryBones: boolean, buryBigBones = false): boolean {
+    const normalized = name?.trim().toLowerCase();
+    const listed = normalized !== undefined && configured.some(entry => entry.trim().toLowerCase() === normalized);
+    return listed || isBurialBone(name, buryBones, buryBigBones);
 }
 
 /** Fight.validate is false while Game.inCombat(), so retaliate-off + an attacking random (strange fruit) never picks a new target. */

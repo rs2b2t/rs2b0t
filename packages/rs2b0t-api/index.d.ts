@@ -303,6 +303,7 @@ export class InvItem {
     readonly id: number;
     readonly slot: number;
     readonly count: number;
+    readonly noted: boolean;
     actions(): string[];
     /** Held op by name, e.g. item.interact('Bury'). */
     interact(action: string): boolean | Promise<boolean>;
@@ -445,7 +446,7 @@ export const Bank: {
     /** `withdrawX` by object id; in note mode `landsAsId` names the noted obj the pack receives. */
     withdrawXById(id: number, count: number, landsAsId?: number): Promise<boolean>;
     /** Fill the pack: Withdraw-All when present, otherwise Withdraw-X for free slots. */
-    withdrawLoad(name: string): Promise<boolean>;
+    withdrawLoad(name: string | number): Promise<boolean>;
     deposit(name: string, op?: string): boolean | Promise<boolean>;
     /** Deposit every backpack slot (Deposit-All each). */
     depositInventory(): Promise<void>;
@@ -839,6 +840,7 @@ export interface ChatLine {
  * @see docs/reference/api-events.md
  */
 export interface EventMap {
+    'script.finish': { reason: string };
     tick: { tick: number };
     'chat.message': ChatLine;
     'skill.xp': { skill: number; name: string; xp: number; delta: number };
@@ -881,6 +883,9 @@ export type LoopCadence =
  * @see docs/reference/api-bots.md
  */
 export abstract class AbstractBot {
+    readonly delegated: boolean;
+    requestFinish(reason: string): void;
+    bindFinish(sink: (reason: string) => void): void;
     /** Wall-clock ms between loop() iterations when loop() returns void. */
     loopDelay: number;
     /** When set, overrides the cadence derived from `loopDelay`. */
@@ -919,6 +924,7 @@ export abstract class LoopingBot extends AbstractBot {
  * @see docs/reference/api-bots.md#taskbot
  */
 export interface Task {
+    readonly label?: string;
     validate(): boolean | Promise<boolean>;
     execute(): void | Promise<void>;
 }
@@ -952,6 +958,7 @@ export class AcquireTask implements Task {
 
 /** Runs the first task whose validate() returns true, once per loop. */
 export abstract class TaskBot extends LoopingBot {
+    activeTaskName: string | null;
     protected add(...tasks: Task[]): void;
     loop(): Promise<number | void>;
 }

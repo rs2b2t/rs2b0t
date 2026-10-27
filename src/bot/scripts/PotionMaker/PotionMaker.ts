@@ -3,6 +3,7 @@ import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import { Inventory, type InvItem } from '../../api/inventory/Inventory.js';
 import { Bank } from '../../api/bank/Bank.js';
+import { openBankAccess } from '../../api/bank/Banking.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Paint } from '../../paint/Paint.js';
 import { Traversal } from '../../api/walking/Traversal.js';
@@ -84,7 +85,7 @@ export default class PotionMaker extends TaskBot {
         this.herb = herbByName(herbRaw);
         if (!this.herb) {
             this.log(`Unknown herb "${herbRaw}" — stopping`);
-            ScriptRunner.stop('unknown herb');
+            this.requestFinish('unknown herb');
             return;
         }
 
@@ -93,7 +94,7 @@ export default class PotionMaker extends TaskBot {
         this.secondary = secondaryByName(secondaryRaw);
         if (!this.secondary) {
             this.log(`Unknown secondary "${secondaryRaw}" — stopping`);
-            ScriptRunner.stop('unknown secondary');
+            this.requestFinish('unknown secondary');
             return;
         }
 
@@ -207,7 +208,7 @@ class RestockIngredients implements Task {
             }
 
             const access = bank.access ?? BOOTH;
-            if (!(await Bank.openNearestAccess(access, m => this.bot.log(`  ${m}`)))) {
+            if (!(await openBankAccess(bank, access, m => this.bot.log(`  ${m}`)))) {
                 this.bot.log('could not open the bank — retrying');
                 return;
             }
@@ -227,14 +228,14 @@ class RestockIngredients implements Task {
         if (vialCount === 0 || herbCount === 0) {
             const missing = vialCount === 0 ? 'vials of water' : herb.name;
             this.bot.log(`no ${missing} in the bank — stopping`);
-            ScriptRunner.stop(`no ${missing} in the bank`);
+            this.bot.requestFinish(`no ${missing} in the bank`);
             return;
         }
         if (!(await Bank.withdrawXById(VIAL_OF_WATER_ID, BATCH))) {
             this.bot.log(`ingredient withdrawal failed (${++this.failedWithdraws}/3)`);
             if (this.failedWithdraws >= 3) {
                 this.bot.log('withdrawing vials of water failed three times — stopping');
-                ScriptRunner.stop('could not withdraw vials of water');
+                this.bot.requestFinish('could not withdraw vials of water');
             }
             return;
         }
@@ -242,7 +243,7 @@ class RestockIngredients implements Task {
             this.bot.log(`ingredient withdrawal failed (${++this.failedWithdraws}/3)`);
             if (this.failedWithdraws >= 3) {
                 this.bot.log(`withdrawing ${herb.name} failed three times — stopping`);
-                ScriptRunner.stop(`could not withdraw ${herb.name}`);
+                this.bot.requestFinish(`could not withdraw ${herb.name}`);
             }
             return;
         }
@@ -355,7 +356,7 @@ class FinishPotions implements Task {
         }
 
         const access = bank.access ?? BOOTH;
-        if (!(await Bank.openNearestAccess(access, m => this.bot.log(`  ${m}`)))) {
+        if (!(await openBankAccess(bank, access, m => this.bot.log(`  ${m}`)))) {
             this.bot.log('could not open the bank — retrying');
             return;
         }
@@ -371,7 +372,7 @@ class FinishPotions implements Task {
         if (needed > 0 && Bank.countById(secondary.id) === 0) {
             this.bot.log(`no ${secondary.name} in the bank — stopping at the booth holding the batch`);
             await Bank.close();
-            ScriptRunner.stop(`no ${secondary.name} in the bank`);
+            this.bot.requestFinish(`no ${secondary.name} in the bank`);
             return;
         }
         if (needed > 0 && !(await Bank.withdrawXById(secondary.id, needed))) {
@@ -379,7 +380,7 @@ class FinishPotions implements Task {
             this.bot.log(`could not withdraw ${secondary.name} (${++this.failedSecondaryWithdraws}/3)`);
             if (this.failedSecondaryWithdraws >= 3) {
                 this.bot.log(`withdrawing ${secondary.name} failed three times — stopping`);
-                ScriptRunner.stop(`could not withdraw ${secondary.name}`);
+                this.bot.requestFinish(`could not withdraw ${secondary.name}`);
             }
             return;
         }
@@ -411,7 +412,7 @@ class FinishPotions implements Task {
 
         // Why: the bank is left open, since the next cycle's RestockIngredients reuses it and each loop runs bank-open → empty pack → bank-open with no reopen.
         this.bot.setStatus('banking finished potions');
-        if (!(await Bank.openNearestAccess(access, m => this.bot.log(`  ${m}`)))) {
+        if (!(await openBankAccess(bank, access, m => this.bot.log(`  ${m}`)))) {
             this.bot.log('could not open the bank — retrying');
             return;
         }

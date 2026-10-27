@@ -84,7 +84,7 @@ export function parseCommand(text: string): Command {
 // Why: the engine's filter eats "pric" and a line leading with buy or sell parses back as a command, so the shop "values" things and no line starts on a keyword.
 export const HELP_LINES: readonly string[] = [
     'To SELL to me: trade me and add items. I value each one as you put it up.',
-    "To BUY from me: say 'buying 100 iron ore', then trade me and put up coins.",
+    "To BUY: 'buying 100 iron ore' or 'buying 10 rune sets', then trade with coins.",
     "Say 'list' for what I hold now. 'buying' and 'selling' show one side each.",
     "Repeated names need a word: 'blue dragonhide', 'loop half of key', 'yew u'.",
     "If I name several and ask which, answer with the '#number' I gave you.",

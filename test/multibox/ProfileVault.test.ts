@@ -288,37 +288,40 @@ describe('ProfileVault tabs', () => {
 });
 
 describe('ProfileVault worlds', () => {
-    test('retired encrypted assignments move to W2 without changing credentials or tabs', async () => {
+    test('W3 encrypted assignments survive reloads without changing credentials or tabs', async () => {
         await writeBlob('pw', { profiles: [{ username: 'alice', password: 'a', world: 3, tab: 'miners' }], tabs: ['miners'], activeTab: 'miners' });
         localStorage.setItem('rs2b0t:alice:selectedScript', 'Miner');
         const v = new ProfileVault();
         expect(await v.unlock('pw')).toBe(true);
-        expect(v.snapshot()).toEqual({ profiles: [{ username: 'alice', password: 'a', world: 2, tab: 'miners' }], tabs: ['miners'], activeTab: 'miners' });
+        expect(v.snapshot()).toEqual({ profiles: [{ username: 'alice', password: 'a', world: 3, tab: 'miners' }], tabs: ['miners'], activeTab: 'miners' });
         expect(localStorage.getItem('rs2b0t:alice:selectedScript')).toBe('Miner');
         await v.upsert({ username: 'alice', password: 'new' });
         const reopened = new ProfileVault();
         expect(await reopened.unlock('pw')).toBe(true);
-        expect(reopened.list()[0]).toEqual({ username: 'alice', password: 'new', world: 2, tab: 'miners' });
+        expect(reopened.list()[0]).toEqual({ username: 'alice', password: 'new', world: 3, tab: 'miners' });
     });
 
-    test('retired plaintext assignments migrate when encrypted', async () => {
+    test('W3 plaintext assignments survive encryption', async () => {
         localStorage.setItem(LEGACY_KEY, JSON.stringify([{ username: 'alice', password: 'a', world: 3 }]));
         const v = new ProfileVault();
         await v.setup('pw');
-        expect(v.list()).toEqual([{ username: 'alice', password: 'a', world: 2, tab: 'Main' }]);
+        expect(v.list()).toEqual([{ username: 'alice', password: 'a', world: 3, tab: 'Main' }]);
         const reopened = new ProfileVault();
         expect(await reopened.unlock('pw')).toBe(true);
         expect(reopened.list()).toEqual(v.list());
     });
 
-    test('new assignments cannot select the retired world', async () => {
+    test('W2 assignments stay on W2 until explicitly switched to W3', async () => {
         const v = new ProfileVault();
         await v.setup('pw');
-        const retired = JSON.parse('{"username":"alice","password":"a","world":3}') as Profile;
-        await expect(v.upsert(retired)).rejects.toThrow(/world/i);
-        await v.upsert({ username: 'alice', password: 'a', world: 1 });
-        await expect(v.setWorld('alice', retired.world!)).rejects.toThrow(/world/i);
-        expect(v.list()[0].world).toBe(1);
+        await v.upsert({ username: 'alice', password: 'a', world: 2 });
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.list()[0].world).toBe(2);
+        await reopened.setWorld('alice', 3);
+        const switched = new ProfileVault();
+        expect(await switched.unlock('pw')).toBe(true);
+        expect(switched.list()[0].world).toBe(3);
     });
     test('world assignments survive password saves, tab changes, reorder, and encryption', async () => {
         const v = new ProfileVault();

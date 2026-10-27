@@ -2,6 +2,7 @@
 // Destinations follow content constants; live probes may refine the approach stands.
 
 import type { TransportEdgeData } from './PathFinder.js';
+import { iceQueenRockslideEdges } from './iceQueenRockslide.js';
 import { essenceExitEdges } from './essenceExit.js';
 import { parseLcCoord } from './geometry/lcCoord.js';
 import { REQ } from './transportQuestReqs.js';
@@ -360,6 +361,13 @@ export function handelmortDoorEdges(): TransportEdgeData[] {
 
 /** Agility shortcuts from skill_agility/shortcuts.rs2 that fill OD gaps; coal logs and island ropes already live in transports.json. */
 export function agilityShortcutEdges(): TransportEdgeData[] {
+    const sheepStile = (fromX: number, toX: number): TransportEdgeData => ({
+        from: { x: fromX, z: 3375, level: 0 },
+        to: { x: toX, z: 3375, level: 0 },
+        locName: 'Stile', action: 'Climb-over', kind: 'shortcut',
+        locId: 993, locX: 2647, locZ: 3375,
+        debugName: 'ardougne_sheep_stile', options: ['Climb-over']
+    });
     const agi = (level: number): TransportRequires => ({
         skills: [{ name: 'agility', level }]
     });
@@ -405,7 +413,9 @@ export function agilityShortcutEdges(): TransportEdgeData[] {
         edge(mbA, mbB, 'Monkeybars', 'Swing across', 'shortcut', 'agi_edgeville_monkeybars_n', agi(15)),
         edge(mbB, mbA, 'Monkeybars', 'Swing across', 'shortcut', 'agi_edgeville_monkeybars_s', agi(15)),
         yanilleLedge(yanilleLedgeN, yanilleLedgeS, 9519, 'agi_yanille_balancing_ledge_ns'),
-        yanilleLedge(yanilleLedgeS, yanilleLedgeN, 9513, 'agi_yanille_balancing_ledge_sn')
+        yanilleLedge(yanilleLedgeS, yanilleLedgeN, 9513, 'agi_yanille_balancing_ledge_sn'),
+        sheepStile(2646, 2649),
+        sheepStile(2649, 2646)
     ];
 }
 
@@ -613,7 +623,8 @@ export function curatedTravelEdges(): TransportEdgeData[] {
         ...handelmortDoorEdges(),
         ...agilityShortcutEdges(),
         ...elkoyMazeEdges(),
-        ...desertMiningCampEdges()
+        ...desertMiningCampEdges(),
+        ...iceQueenRockslideEdges()
     ];
 }
 

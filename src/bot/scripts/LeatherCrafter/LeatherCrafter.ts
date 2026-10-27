@@ -5,7 +5,8 @@ import { Game } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { Bank } from '../../api/bank/Bank.js';
-import { nearestBankReachable } from '../../api/bank/BankLocations.js';
+import { openBankAccess } from '../../api/bank/Banking.js';
+import { nearestBank, nearestBankReachable } from '../../api/bank/BankLocations.js';
 import { Navigator } from '../../event/webwalk/Navigator.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Paint } from '../../paint/Paint.js';
@@ -225,7 +226,7 @@ export default class LeatherCrafter extends LoopingBot {
         this.pickRecipe();
         if (!this.recipe) {
             const need = Math.min(...this.kind.recipes.map(r => r.level));
-            ScriptRunner.stop(`Crafting ${Skills.level('crafting')} is too low for ${this.kindLabel} (needs ${need})`);
+            this.requestFinish(`Crafting ${Skills.level('crafting')} is too low for ${this.kindLabel} (needs ${need})`);
             return;
         }
         this.log(`LeatherCrafter — ${this.kindLabel} -> ${this.recipe.label} (level ${this.recipe.level}, ${this.recipe.qty} per item)`);
@@ -280,7 +281,7 @@ export default class LeatherCrafter extends LoopingBot {
         if (here) {
             this.log(`bank leg: from (${here.x}, ${here.z}, ${here.level}) standing near ${picked?.name ?? 'no picked bank'} (stand ${stand})`);
         }
-        if (!here || Math.max(Math.abs(here.x - stand.x), Math.abs(here.z - stand.z)) > 4) {
+        if (!here || here.level !== stand.level || Math.max(Math.abs(here.x - stand.x), Math.abs(here.z - stand.z)) > 4) {
             this.setStatus('walking to the bank');
             this.log(`bank leg: walking to ${picked?.name ?? stand}`);
             if (!(await Traversal.walkResilient(stand, { radius: 3, attempts: 2, timeoutMs: 45_000, log: m => this.log(`  ${m}`) }))) {
@@ -292,7 +293,7 @@ export default class LeatherCrafter extends LoopingBot {
 
         this.setStatus('banking');
         this.log('bank leg: opening the bank');
-        if (!(await Bank.openNearest('Bank booth', 'Use-quickly', m => this.log(`  ${m}`)))) {
+        if (!(await openBankAccess(this.restockBank ? nearestBank(stand) : picked, { name: 'Bank booth', op: 'Use-quickly' }, m => this.log(`  ${m}`)))) {
             this.log('bank leg: could not open the bank — retrying');
             return;
         }
@@ -346,7 +347,7 @@ export default class LeatherCrafter extends LoopingBot {
         const needed = Math.max(0, this.threadStock * THREAD_MAX_PRICE - invById(COINS));
         if (needed > 0 && available > 0 && (await withdrawXById(COINS, Math.min(available, needed))) !== 'withdrawn') return;
         if (invById(COINS) === 0) {
-            ScriptRunner.stop('no thread or coins in the bank');
+            this.requestFinish('no thread or coins in the bank');
             return;
         }
         this.restockBank = stand;
@@ -372,7 +373,7 @@ export default class LeatherCrafter extends LoopingBot {
         if (invById(THREAD) > 0) {
             this.threadVendor = null;
         } else if (invById(COINS) === 0) {
-            ScriptRunner.stop('not enough coins to buy thread');
+            this.requestFinish('not enough coins to buy thread');
         } else {
             this.setStatus('waiting for thread stock');
             await Execution.delayTicks(5);
@@ -388,7 +389,7 @@ export default class LeatherCrafter extends LoopingBot {
             this.log(`could not withdraw ${label} — retrying`);
             return false;
         }
-        ScriptRunner.stop(stopReason);
+        this.requestFinish(stopReason);
         return false;
     }
 

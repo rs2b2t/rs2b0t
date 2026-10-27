@@ -69,6 +69,9 @@ test('world controls preserve pending switches and user selections', () => {
     renderRailTile(tile, { ...slot(true, 'idle'), switchingWorld: 2 });
     expect(select.value).toBe('2');
     expect(select.disabled).toBe(true);
+    const change = tile.querySelector<HTMLButtonElement>('.mbx-world-switch')!;
+    expect(change.textContent).toBe('Switching...');
+    expect(change.disabled).toBe(true);
     expect(tile.querySelector<HTMLButtonElement>('.mbx-world-cancel')!.hidden).toBe(false);
     renderRailTile(tile, { ...slot(false, 'idle'), targetWorld: 2 });
     expect(select.disabled).toBe(false);

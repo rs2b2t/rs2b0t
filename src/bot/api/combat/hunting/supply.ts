@@ -5,7 +5,7 @@ import { Bank } from '../../bank/Bank.js';
 import { depositAllExcept } from '../../bank/bankRules.js';
 import type { PotionPlan } from '../boostPotions.js';
 import { castsAvailable, runeWithdrawList } from '../CombatStyleLogic.js';
-import { foodCount as foodCountIn, foodForms } from '../food.js';
+import { foodCount as foodCountIn, isEdibleFood } from '../food.js';
 import { combatKeepNames } from '../keepList.js';
 import { Equipment } from '../../equipment/Equipment.js';
 import { EventSignal } from '../../execution/EventSignal.js';
@@ -59,6 +59,7 @@ export interface FlaskPlan {
 
 export interface BankOpts {
     withdrawFood: boolean;
+    depositInventory?: boolean;
     /** Casts of spell runes to withdraw. */
     runeCasts?: number;
     /** Spare runes per type, on top of the cast budget. */
@@ -537,6 +538,12 @@ async function openSiteBank(h: JiveHost, site: DragonSite): Promise<boolean> {
     return Execution.delayUntil(() => Bank.isOpen() && Bank.loaded(), 5000);
 }
 
+function depositLoot(h: JiveHost, site: DragonSite): Promise<void> {
+    const deposit = depositAllExcept(keepNames(h, site));
+    const notes = new Set(Inventory.items().filter(i => i.noted).map(i => i.id));
+    return Bank.depositAllMatching((name, id) => notes.has(id) || deposit(name), say(h));
+}
+
 /** Bank the load, restock, heal, and end the trip ready for the next one. */
 export async function bankRoutine(h: JiveHost, site: DragonSite, opts: BankOpts): Promise<void> {
     if (!(await (opts.leave ?? leaveLair)(h, site))) {
@@ -549,7 +556,8 @@ export async function bankRoutine(h: JiveHost, site: DragonSite, opts: BankOpts)
     if (h.style() === 'melee' && h.pickWeapon) {
         h.pickWeapon([...Bank.items(), ...Inventory.items(), ...Equipment.items()].map(i => i.name ?? ''));
     }
-    await Bank.depositAllMatching(depositAllExcept(keepNames(h, site)), say(h));
+    if (opts.depositInventory) await Bank.depositAllMatching(() => true, say(h));
+    else await depositLoot(h, site);
     if (opts.withdrawFood) {
         await withdrawFoodTo(h);
     }
@@ -620,8 +628,7 @@ async function withdrawGear(h: JiveHost, site: DragonSite, wear: readonly string
     }
     if (needsShield(site, h.style())) {
         if (!Equipment.contains(SHIELD) && Inventory.count(SHIELD) === 0 && Bank.count(SHIELD) > 0 && Inventory.isFull()) {
-            const forms = foodForms(h.foodName());
-            const food = Inventory.items().find(i => forms.includes((i.name ?? '').toLowerCase()));
+            const food = Inventory.items().find(i => isEdibleFood(i, h.foodName()));
             const used = Inventory.used();
             if (!food?.name || !(await Bank.deposit(food.name, 'Deposit-1'))) {
                 return false;
@@ -740,8 +747,7 @@ async function withdrawFlasks(h: JiveHost, plans: readonly FlaskPlan[]): Promise
 }
 
 async function eatOnce(h: JiveHost): Promise<boolean> {
-    const forms = foodForms(h.foodName());
-    const food = Inventory.items().find(i => forms.includes((i.name ?? '').toLowerCase()));
+    const food = Inventory.items().find(i => isEdibleFood(i, h.foodName()));
     if (!food) {
         return false;
     }
@@ -984,7 +990,7 @@ export async function acquireKey(h: JiveHost, site: DragonSite): Promise<KeyStat
     if (!(await openSiteBank(h, site))) {
         return state();
     }
-    await Bank.depositAllMatching(depositAllExcept(keepNames(h, site)), say(h));
+    await depositLoot(h, site);
     const fromBank = await withdrawKey(h, site);
     // Why: this leg walks into the Jailer fight and on into the lair, so the gear leaves the booth with the key rather than waiting for a bank run that only comes after the first kill.
     if (!(await withdrawGear(h, site))) {

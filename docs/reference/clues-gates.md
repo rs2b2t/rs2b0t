@@ -39,14 +39,17 @@ mean the clue solver cannot get there.
   the mainland. Those seams are separate from the ordinary nav graph.
 - **Duel Arena, 3554.** The dig at `(3374,3250,0)` is inside the obstacle arena
   bounded by `(3364,3244)` and `(3388,3258)`. Entry requires an accepted duel
-  with another player and obstacles enabled. Set **Global > Clue duel partner**
-  to a second account's name. On that account, run **Duel Arena Combat Trainer**
-  in **Clue helper** mode with **Clue solver partner** set to the solver's name.
-  Both accounts must be online. The helper walks to the lobby and stays idle
-  during the duel. Both screens require the named partner, empty stakes, and
-  only obstacles enabled. The solver checks the assigned arena, tries
-  entry at most twice when assigned a different arena, then forfeits after digging before opening
-  the casket or continuing the trail. A Shantay pass does not open this arena.
+  with another player and obstacles enabled. With **Global > Clue duel partner**
+  empty, the solver tries available lobby players, moves on after 30 seconds
+  without agreement, and keeps the clue while waiting. Both screens must have
+  empty stakes and only obstacles enabled. Busy players and arena fighters
+  are excluded. A rejected or staked duel causes it to try another player.
+  To use a specific helper, set that global field to the helper's name and run
+  **Duel Arena Combat Trainer** on that account in **Clue helper** mode with
+  **Clue solver partner** set to the solver's name. The helper stays idle
+  during the duel. The solver forfeits and retries when assigned another
+  arena. After digging, it forfeits before opening the casket or continuing
+  the trail. A Shantay pass does not open this arena.
 
 The Duel Arena bounds come from `duelarena.dbrow`; `duel_arena_start.rs2`
 places the accepted duel participants in a selected arena. These are in

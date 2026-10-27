@@ -1,5 +1,8 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
+import { EventSignal } from '../../api/execution/EventSignal.js';
+import { Sustain } from '../../api/sustain/Sustain.js';
+import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Game } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { Traversal } from '../../api/walking/Traversal.js';
@@ -99,13 +102,20 @@ export default class HerbloreSecondaries extends TaskBot {
             `HerbloreSecondaries — ${def.name} (${def.mode}) bank ${site.bankName}, food '${this.foodName}' x${this.foodWant}${def.needShield ? `, shield '${SHIELD_NAME}'` : ''}`
         );
 
+        const eat = new Eat(this);
+        Sustain.set(async () => {
+            if (!Bank.isOpen() && eat.validate()) {
+                await eat.execute();
+            }
+        });
+
         // Why: ProcessSource sits before BankTrip so swamp toads become legs before the deposit.
         // Why: Eat sits before BankTrip because a full pack with food left is one free slot away from more loot, and BankTrip would otherwise win and bank the food.
         this.add(
             new ContinueDialog(),
             new GearUp(this),
             new ProcessSource(this),
-            new Eat(this),
+            eat,
             new BankTrip(this),
             new BuyTool(this),
             new BuyGoods(this),
@@ -113,6 +123,10 @@ export default class HerbloreSecondaries extends TaskBot {
             new Loot(this),
             new Travel(this)
         );
+    }
+
+    override onStop(): void {
+        Sustain.set(null);
     }
 
     private resolveSite(def: SecondaryDef): Site | null {
@@ -429,29 +443,37 @@ class Grind implements Task {
             grinds(def) &&
             !!def.grindFrom &&
             !!def.toolName &&
+            Game.ingame() && Game.sceneReady() &&
+            !EventSignal.pending() && !ChatDialog.isOpen() && !Bank.isOpen() &&
             Inventory.contains(def.grindFrom) &&
             Inventory.contains(def.toolName)
         );
     }
     async execute(): Promise<void> {
         const { def } = this.bot.cfg();
-        const bar = Inventory.first(def.grindFrom!);
-        const pestle = Inventory.first(def.toolName!);
-        if (!bar || !pestle) {
-            return;
-        }
         this.bot.setStatus(`grinding ${def.grindFrom}`);
-        const before = this.bot.productCount();
-        // content handles either order; try bar→pestle then pestle→bar
-        await bar.useOn(pestle);
-        if (!(await Execution.delayUntil(() => this.bot.productCount() > before, 8000))) {
-            await pestle.useOn(bar);
-            await Execution.delayUntil(() => this.bot.productCount() > before, 8000);
-        }
-        const got = this.bot.productCount() - before;
-        if (got > 0) {
-            this.bot.countGathered(got);
-            this.bot.log(`ground ${got}× ${def.name}`);
+        let noProgress = 0;
+        for (let batch = 0; batch < 28 && this.validate(); batch++) {
+            const source = Inventory.items().filter(item => item.name === def.grindFrom).sort((a, b) => b.slot - a.slot)[0];
+            const pestle = Inventory.first(def.toolName!);
+            if (!source || !pestle) return;
+            const before = this.bot.productCount();
+            const want = Math.min(5, this.bot.grindLeft());
+            let sent = 0;
+            for (let i = 0; i < want && !EventSignal.pending(); i++) {
+                if (!(await pestle.useOn(source))) break;
+                sent++;
+            }
+            if (sent === 0) return;
+            await Execution.delayTicks(1);
+            const got = this.bot.productCount() - before;
+            if (got > 0) {
+                this.bot.countGathered(got);
+                this.bot.log(`ground ${got}× ${def.name}`);
+                noProgress = 0;
+            } else if (++noProgress >= 3) {
+                return;
+            }
         }
     }
 }

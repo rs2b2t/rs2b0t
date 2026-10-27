@@ -75,8 +75,14 @@ export function isFoodItem(name: string | null | undefined, foodName: string): b
     return foodForms(foodName).includes((name ?? '').toLowerCase());
 }
 
-export function foodCount(items: readonly { name: string | null | undefined }[], foodName: string): number {
-    return items.filter(i => isFoodItem(i.name, foodName)).length;
+type FoodItem = { name: string | null | undefined; noted?: boolean };
+
+export function isEdibleFood(item: FoodItem, foodName: string): boolean {
+    return !item.noted && isFoodItem(item.name, foodName);
+}
+
+export function foodCount(items: readonly FoodItem[], foodName: string): number {
+    return items.filter(i => isEdibleFood(i, foodName)).length;
 }
 
 /**

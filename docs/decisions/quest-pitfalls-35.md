@@ -2,17 +2,15 @@
 
 # Quest pitfalls: Hero's Quest
 
-Sixteen, and the first one is a wall the quest cannot be finished through.
-
-- **An area with a one-way exit has no entrance.** The Ice Queen's lair is reachable from the surface
-  only by eight `ladder_cellar_inside_down` locs, and every one of them stands on a White Wolf Mountain
-  plateau (x 2800-2861, z 3500-3521) whose boundary carries the map's `BLOCK_MAP_SQUARE` flag on every side.
-  Three `ladder_from_cellar` locs climb *out* of it onto walkable ground, so a flood from the lair
-  reaches 531 012 nodes and a flood from Varrock reaches 528 821. The lair can reach the world and the
-  world cannot reach the lair. `GameMap.loadLands` blocks on the same flag the collision builder
-  reads, so the engine agrees with the pack. `ice_gloves` drops from nothing else, which puts the
-  Entranan firebird feather out of reach on this content. Diff the two floods before believing a
-  reachability failure is the walker's fault.
+- **A sealed map component can have a scripted entrance.** The Ice Queen route crosses
+  `herorockslide` (2634) at (2838,3517). Its `Mine` action needs 50 Mining and a usable
+  pickaxe, then force-moves the player between (2837,3518) and (2840,3517). The navigation
+  graph includes both directions for carried or worn pickaxes. The executor stands on
+  the planned approach tile before mining because the landing is relative to the player.
+  Five ladder transitions
+  connect the inner plateau to the Queen at (2866,9955). Collision floods without this
+  scripted crossing incorrectly diagnosed the lair as inaccessible. The quest withdraws
+  an owned pickaxe or collects the free bronze pickaxe before travelling there.
 - **A wall with `blockrange=no` is the intended route.** Grip is sealed from the side room by
   `snipable_wall` (2637) at (2780,3198), beside a `castlearrowslit`. Nothing walks between the two
   pockets; the Phoenix bot shoots him through the wall from three tiles away while the Black Arm bot
@@ -59,8 +57,8 @@ Sixteen, and the first one is a wall the quest cannot be finished through.
   `prefer` list has to name both, in that order, and one that leaves the tree.
 - **A trapdoor model is not a trapdoor.** `trapdoor_nonactive` and `ikov_trapdoor` carry a model and
   nothing else: the type carries neither a name, an op nor a script, so a loc search finds a handle
-  nothing can be clicked on. Three of them sit where the Ice Queen lair's one-way exits surface, which
-  is what makes the sealed plateau look like it has entrances.
+  nothing can be clicked on. Three sit where the Ice Queen lair's one-way exits surface;
+  its actual entrance is the mineable rockslide.
 - **A bought-out shop is a dead shop.** `World.restock` reads `inv.items[index]` and skips a null
   slot, and a shared `allstock=no` shop that sells its last unit loses the slot, so Valaine's one
   pair of black platelegs never came back, and the bot spent 188 attempts over four minutes buying
