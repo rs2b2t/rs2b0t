@@ -206,7 +206,7 @@ export default class MuleDepot extends TaskBot implements MuleDepotContext {
     private served = new Set<string>();
     // Lines the bank could not supply after enough reads; they are reported, not retried for ever.
     private unavailable = new Set<string>();
-    // What each client was actually given, by line key, to report a shortfall per account.
+    // What each client was given, by line key, to report a shortfall per account.
     private delivered = new Map<string, Map<string, number>>();
     // The lines a completed stake put up, credited to the client when the window confirms.
     private pendingDelivery: DeliveryLine[] = [];

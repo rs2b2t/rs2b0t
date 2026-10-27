@@ -98,7 +98,7 @@ export interface MuleDepotContext {
     markUnavailable(line: DeliveryLine): void;
     /** Nothing of the current batch could be supplied: count it and move on. */
     skipBatch(): void;
-    /** What a successful stake actually put up, so a transfer can be credited per line. */
+    /** What a successful stake put up, so a transfer can be credited per line. */
     setPendingDelivery(lines: DeliveryLine[]): void;
 
     // ── trade ──
