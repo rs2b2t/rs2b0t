@@ -41,6 +41,14 @@ try {
     assert.equal(SettingsStore.saved('Miner', 'ore'), undefined);
     browser.setURL('http://localhost:8081/bot.html?box=alice&world=1');
     assert.equal(SettingsStore.saved('Miner', 'ore'), 'Gold');
+    SettingsStore.save('NatureCrafter', 'rune', 'Cosmic runes');
+    sessionStorage.setItem('rs2b0t:alice:set:NatureCrafter:rune', 'Air runes');
+    assert.equal(SettingsStore.saved('JiveRC', 'rune'), 'Cosmic runes');
+    SettingsStore.save('JiveRC', 'rune', 'Nature runes');
+    assert.equal(SettingsStore.saved('JiveRC', 'rune'), 'Nature runes');
+    SettingsStore.clear('JiveRC', 'rune');
+    assert.equal(SettingsStore.saved('JiveRC', 'rune'), undefined);
+    assert.equal(SettingsStore.saved('NatureCrafter', 'rune'), undefined);
     const first = new ProfileVault();
     await first.setup('fixture-passphrase');
     const second = new ProfileVault();

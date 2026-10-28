@@ -414,7 +414,7 @@ Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought throu
 | `lootBlack` | string[] | `["Adamant dart(p)","Adamant javelin","Adamant platebody","Adamantite bar","Air rune","Blood rune","Chaos talisman","Death rune","Dragon bones","Dragon med helm","Dragon spear","Dragonhide","Dragonstone","Fire rune","Half of a key","Law rune","Mithril 2h sword","Mithril axe","Mithril battleaxe","Mithril kiteshield","Nature rune","Nature talisman","Rune 2h sword","Rune arrow","Rune battleaxe","Rune javelin","Rune kiteshield","Rune knife","Rune longsword","Rune spear","Rune sq shield","Runite bar","Shield left half","Silver ore","Steel arrow","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire"]` | Loot to pick up (drop table) — one of: Adamant dart(p), Adamant javelin, Adamant platebody, Adamantite bar, Air rune, Blood rune, Chaos talisman, Chocolate cake, Coins, Death rune, Dragon bones, Dragon med helm, Dragon spear, Dragonhide, Dragonstone, Fire rune, Half of a key, Law rune, Mithril 2h sword, Mithril axe, Mithril battleaxe, Mithril kiteshield, Nature rune, Nature talisman, Rune 2h sword, Rune arrow, Rune battleaxe, Rune javelin, Rune kiteshield, Rune knife, Rune longsword, Rune spear, Rune sq shield, Runite bar, Shield left half, Silver ore, Steel arrow, Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire |
 | `lootEnclave` | string[] | `["Adamant full helm","Adamant platelegs","Adamantite ore","Chaos rune","Chaos talisman","Death rune","Dragon bones","Dragon spear","Dragonhide","Fire rune","Gold bar","Half of a key","Herb","Law rune","Mithril axe","Mithril kiteshield","Mithril spear","Nature rune","Nature talisman","Rune dagger","Rune full helm","Rune javelin","Rune spear","Shield left half","Steel 2h sword","Steel axe","Steel battleaxe","Steel platelegs","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire","Water rune"]` | Loot to pick up (drop table) — one of: Adamant full helm, Adamant platelegs, Adamantite ore, Ashes, Bass, Chaos rune, Chaos talisman, Coins, Death rune, Dragon bones, Dragon spear, Dragonhide, Fire rune, Gold bar, Half of a key, Herb, Law rune, Mithril axe, Mithril kiteshield, Mithril spear, Nature rune, Nature talisman, Rune dagger, Rune full helm, Rune javelin, Rune spear, Shield left half, Steel 2h sword, Steel axe, Steel battleaxe, Steel platelegs, Thread, Tuna, Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire, Water rune |
 | `lootIron` | string[] | `["Adamant 2h sword","Adamant axe","Adamant battleaxe","Adamant javelin","Adamant sq shield","Adamantite bar","Blood rune","Chaos talisman","Coins","Death rune","Dragon bones","Dragon med helm","Dragon platelegs","Dragon spear","Dragonstone","Half of a key","Iron bar","Law rune","Nature rune","Nature talisman","Rune 2h sword","Rune arrow","Rune battleaxe","Rune dart(p)","Rune javelin","Rune kiteshield","Rune knife","Rune med helm","Rune spear","Rune sq shield","Runite bar","Shield left half","Silver ore","Soul rune","Steel arrow","Super strength(1)","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire"]` | Loot to pick up (drop table) — one of: Adamant 2h sword, Adamant axe, Adamant battleaxe, Adamant javelin, Adamant sq shield, Adamantite bar, Blood rune, Bolts, Chaos talisman, Coins, Curry, Death rune, Dragon bones, Dragon med helm, Dragon platelegs, Dragon spear, Dragonstone, Half of a key, Iron bar, Law rune, Nature rune, Nature talisman, Rune 2h sword, Rune arrow, Rune battleaxe, Rune dart(p), Rune javelin, Rune kiteshield, Rune knife, Rune med helm, Rune spear, Rune sq shield, Runite bar, Shield left half, Silver ore, Soul rune, Steel arrow, Super strength(1), Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire |
-| `lootSteel` | string[] | `["Adamant kiteshield","Blood rune","Coins","Dragon bones","Dragon platelegs","Rune axe","Rune dart(p)","Rune full helm","Rune javelin","Rune knife","Rune mace","Runite bar","Soul rune","Steel bar","Super attack(3)","Super defence(2)"]` | Loot to pick up (drop table) — one of: Adamant kiteshield, Blood rune, Bolts, Coins, Curry, Dragon bones, Dragon platelegs, Rune axe, Rune dart(p), Rune full helm, Rune javelin, Rune knife, Rune mace, Runite bar, Soul rune, Steel bar, Super attack(3), Super defence(2) |
+| `lootSteel` | string[] | `["Adamant javelin","Adamant kiteshield","Blood rune","Chaos talisman","Coins","Death rune","Dragon bones","Dragon med helm","Dragon platelegs","Dragon spear","Dragonstone","Half of a key","Law rune","Nature rune","Nature talisman","Rune 2h sword","Rune arrow","Rune axe","Rune battleaxe","Rune dart(p)","Rune full helm","Rune javelin","Rune kiteshield","Rune knife","Rune mace","Rune spear","Rune sq shield","Runite bar","Shield left half","Silver ore","Soul rune","Steel arrow","Steel bar","Super attack(3)","Super defence(2)","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire"]` | Loot to pick up (drop table) — one of: Adamant javelin, Adamant kiteshield, Blood rune, Bolts, Chaos talisman, Coins, Curry, Death rune, Dragon bones, Dragon med helm, Dragon platelegs, Dragon spear, Dragonstone, Half of a key, Law rune, Nature rune, Nature talisman, Rune 2h sword, Rune arrow, Rune axe, Rune battleaxe, Rune dart(p), Rune full helm, Rune javelin, Rune kiteshield, Rune knife, Rune mace, Rune spear, Rune sq shield, Runite bar, Shield left half, Silver ore, Soul rune, Steel arrow, Steel bar, Super attack(3), Super defence(2), Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire |
 | `bankCommonJunk` | boolean | `true` | Also grab shared gems/junk |
 | `buryBones` | boolean | `false` | Bury dragon bones |
 | `rangingPotion` | boolean | `false` | Drink a ranging potion |
@@ -1103,6 +1103,22 @@ Alfred Grimhand's Barcrawl — banks for the drinks, gets the card from the outp
 
 ## Runecrafting
 
+### JiveRC
+
+Master/runner crafting for Nature, Air and Cosmic runes. Nature runners unnote at Jiminua, Air runners bank at Falador East, and Cosmic runners bank in Zanaris. Start Cosmic accounts in Zanaris or the cosmic altar.
+
+- Tags: `runecrafting`, `nature`, `air`, `cosmic`, `trade`, `master`, `runner`, `jive`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `rune` | string | `"Nature runes"` | Rune — one of: Nature runes, Air runes, Cosmic runes |
+| `mode` | string | `"Master"` | Mode — one of: Master, Runner |
+| `partner` | string | `""` | Partner name(s) |
+| `bankEvery` | number (0–) | `60` | Bank everything every N minutes (0 = never) |
+| `withdrawEss` | number (0–) | `0` | Essence per restock (0 = default) |
+| `withdrawCoins` | number (0–) | `10000` | Coins target at restock |
+| `stayInAltar` | boolean | `false` | Stay in the altar |
+
 ### MuleCrafter
 
 Crafter + mule runecrafting loop — both run bank→ruins→bank each cycle. Crafter has the talisman, crafts at the altar, trades runes for essence at the ruins. Mule ferries essence to the ruins and runes back to the bank. Dry mule signals at the bank and the crafter shares 1/N essence. Multi-mule round-robin with comma-separated partner names.
@@ -1115,22 +1131,6 @@ Crafter + mule runecrafting loop — both run bank→ruins→bank each cycle. Cr
 | `mode` | string | `"Crafter"` | Mode — one of: Crafter, Mule |
 | `partner` | string | `""` | Partner name(s) (Optional for Crafter) |
 | `bankFill` | boolean | `true` | Fill essence at bank |
-
-### NatureCrafter
-
-Master Nature Crafter — a master stands at the nature altar (Karamja), takes essence from configured runners via trade, and crafts natures; runners bank essence at Ardougne, un-note it at the general store, and ship it to the master. Mode + partner name(s) via settings
-
-- Tags: `runecrafting`, `nature`, `trade`, `master`, `runner`, `karamja`
-
-| Setting | Type | Default | Notes |
-|---|---|---|---|
-| `rune` | string | `"Nature runes"` | Rune — one of: Nature runes, Air runes |
-| `mode` | string | `"Master"` | Mode — one of: Master, Runner |
-| `partner` | string | `""` | Partner name(s) |
-| `bankEvery` | number (0–) | `60` | Bank everything every N minutes (0 = never) |
-| `withdrawEss` | number (0–) | `0` | Essence per restock (0 = default) |
-| `withdrawCoins` | number (0–) | `10000` | Coins target at restock |
-| `stayInAltar` | boolean | `false` | Stay in the altar |
 
 ### RuneCrafter
 

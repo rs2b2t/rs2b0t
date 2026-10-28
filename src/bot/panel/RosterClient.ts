@@ -16,7 +16,7 @@ export function createRosterClient(panel: BotPanel): RosterClient {
             const meta = ScriptRegistry.get(script);
             if (!meta) throw new Error(`Unknown script: ${script}`);
             return Object.fromEntries(Object.entries(meta.settingsSchema ?? {}).map(([key, def]) =>
-                [key, SettingsStore.displayString(script, key, def)]));
+                [key, SettingsStore.displayString(meta.name, key, def)]));
         },
         assignScript: script => { requireScript(script); panel.assignScript(script); },
         copySettings: (script, values) => { requireScript(script); panel.copyScriptSettings(script, values); },

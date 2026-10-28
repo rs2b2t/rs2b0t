@@ -96,7 +96,7 @@ export default class BotPanel {
         this.library = new ScriptLibrary(name => this.selectScript(name));
         const durable = typeof localStorage !== 'undefined' ? localStorage.getItem(selectedScriptKey()) : null;
         const remembered = desktopStorage ? durable : (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(selectedScriptKey()) : null) ?? durable;
-        this.selectedScript = remembered && ScriptRegistry.get(remembered) ? remembered : (ScriptRegistry.list()[0]?.name ?? '');
+        this.selectedScript = (remembered ? ScriptRegistry.get(remembered)?.name : undefined) ?? ScriptRegistry.list()[0]?.name ?? '';
 
         const pick = el('div', 'rs2b0t-buttons');
         this.scriptName = el('span', 'rs2b0t-current-script');
@@ -247,22 +247,24 @@ export default class BotPanel {
 
     assignScript(name: string): void {
         this.assertScriptIdle();
-        this.requireScript(name);
-        this.selectScript(name);
+        this.selectScript(this.requireScript(name).name);
     }
 
     copyScriptSettings(name: string, values: Record<string, string>): void {
         this.assertScriptIdle();
-        const schema = this.requireScript(name).settingsSchema ?? {};
+        const meta = this.requireScript(name);
+        name = meta.name;
+        const schema = meta.settingsSchema ?? {};
         for (const [key, value] of Object.entries(values)) {
             if (!Object.hasOwn(schema, key) || typeof value !== 'string') throw new Error(`Invalid setting: ${name}.${key}`);
         }
         const keys = new Set(Object.keys(schema));
-        const prefix = boxKey(`set:${name}:`);
+        const prefixes = (name === 'JiveRC' ? ['NatureCrafter', name] : [name]).map(script => boxKey(`set:${script}:`));
         for (const storage of [sessionStorage, localStorage]) {
             for (let i = 0; i < storage.length; i++) {
                 const key = storage.key(i);
-                if (key?.startsWith(prefix)) keys.add(key.slice(prefix.length));
+                const prefix = key && prefixes.find(prefix => key.startsWith(prefix));
+                if (key && prefix) keys.add(key.slice(prefix.length));
             }
         }
         this.assertNoUrlOverrides(name, keys);

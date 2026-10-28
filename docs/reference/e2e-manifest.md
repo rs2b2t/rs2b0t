@@ -111,3 +111,4 @@ Why `SCRIPT_NAMES` is a runtime array rather than a bare type union: a type unio
 
 - [Live-harness boundary](live-harness-boundary.md)
 - [The live-harness ABI](../how-to/write-a-harness.md)
+- [JiveRC Cosmic crafting validation](../e2e/jiverc-cosmic.md)

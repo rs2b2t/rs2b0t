@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // Why: e2e-report stays on the tools side because it needs no browser; e2e may import tools.
-import { errorTail } from '../tools/lib/e2e-report.js';
+import { driftVerdict, errorTail } from '../tools/lib/e2e-report.js';
 import { CASES } from './manifest.js';
 import { casesForLevel, selectByChanges } from './manifestQuery.js';
 import type { Case, Level } from './manifestTypes.js';
@@ -31,7 +31,7 @@ const DEFAULT_BUDGET = 12;
 
 /** Optional output verdict that overrides the process exit code. */
 // Why: generators may report STALE before an unrelated audio-shim teardown failure.
-const DRIFT = (text: string): Status => (/\bSTALE\b|does not match/i.test(text) ? 'fail' : 'pass');
+const DRIFT = driftVerdict;
 
 interface Gate { name: string; cmd: string[]; verdict?: (text: string) => Status; }
 const OFFLINE_GATES: Gate[] = [
