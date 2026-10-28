@@ -16,8 +16,12 @@ function read(key: string): string | null {
 
 function keys(prefix: string): string[] {
     const result = new Set<string>();
-    for (const store of stores()) {
-        for (let i = 0; i < store.length; i++) {
+    if (desktopStorage) {
+        for (const key of desktopStorage.keys()) if (key.startsWith(prefix)) result.add(key);
+    }
+    for (const store of desktopStorage ? [sessionStorage] : stores()) {
+        const length = store.length;
+        for (let i = 0; i < length; i++) {
             const key = store.key(i);
             if (key?.startsWith(prefix)) result.add(key);
         }
@@ -55,11 +59,13 @@ export function replaceScriptSettings(username: string, script: string, values: 
 
 export function storedScripts(usernames: string[]): string[] {
     const scripts = new Set<string>();
+    const savedKeys = keys('rs2b0t:');
     for (const username of usernames) {
         const selected = readProfileScript(username);
         if (selected) scripts.add(selected);
         const prefix = `${boxStoragePrefix(username)}set:`;
-        for (const key of keys(prefix)) {
+        for (const key of savedKeys) {
+            if (!key.startsWith(prefix)) continue;
             const suffix = key.slice(prefix.length);
             const end = suffix.indexOf(':');
             if (end > 0) scripts.add(suffix.slice(0, end));

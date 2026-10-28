@@ -72,3 +72,14 @@ for (const reserved of ['Global', 'MapPicker', 'Loadouts', 'PriceBooks']) test(`
         expect(store.getItem('rs2b0t:alice:selectedScript')).toBe(reserved);
     }
 });
+
+test('desktop roster opens and refreshes without enumerating shared storage for every setting', () => {
+    const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--roster'], { cwd: process.cwd(), stdout: 'pipe', stderr: 'pipe' });
+    expect(result.exitCode).toBe(0);
+    const report = JSON.parse(result.stdout.toString().trim().split('\n').at(-1)!);
+    expect(report.rows).toBe(12);
+    expect(report.scripts).toEqual(['Fisher', 'Miner']);
+    expect(report.updated).toBe(true);
+    expect(report.openReads).toBeLessThan(100);
+    expect(report.refreshReads).toBeLessThan(100);
+});
