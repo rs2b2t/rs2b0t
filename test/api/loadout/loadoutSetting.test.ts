@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { SettingsBag } from '#/bot/runtime/Settings.js';
 import { LOADOUT_SETTING, selectedLoadout } from '#/bot/api/loadout/loadoutSetting.js';
 import { Loadouts } from '#/bot/api/loadout/loadoutStore.js';
@@ -10,6 +10,8 @@ const range: Loadout = { name: 'range', worn: {}, carry: [] };
 beforeEach(() => {
     Loadouts.save([melee, range]);
 });
+
+afterEach(() => Loadouts.save([]));
 
 describe('LOADOUT_SETTING', () => {
     test('is a dropdown fed from the loadout list', () => {
