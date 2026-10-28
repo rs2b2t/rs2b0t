@@ -1,4 +1,5 @@
 import '../setup-dom.js';
+import assert from 'node:assert/strict';
 
 const data = new Map<string, string>();
 let keyReads = 0;
@@ -12,6 +13,18 @@ Reflect.set(globalThis, 'rs2b0tDesktopStorage', {
 });
 await import('../../src/bot/panel/desktopStorage.js');
 const { readProfileScript, readScriptSettings, replaceScriptSettings } = await import('../../src/bot/multibox/RosterStorage.js');
+localStorage.setItem('rs2b0t:legacy:selectedScript', 'NatureCrafter');
+localStorage.setItem('rs2b0t:legacy:set:NatureCrafter:rune', 'Cosmic runes');
+sessionStorage.setItem('rs2b0t:legacy:set:NatureCrafter:rune', 'Air runes');
+sessionStorage.setItem('rs2b0t:legacy:set:NatureCrafter:obsolete', 'stale');
+localStorage.setItem('rs2b0t:legacy:set:NatureCrafter:partner', 'old runner');
+localStorage.setItem('rs2b0t:legacy:set:JiveRC:partner', 'current runner');
+sessionStorage.setItem('rs2b0t:legacy:set:JiveRC:partner', 'stale runner');
+assert.equal(readProfileScript('legacy'), 'JiveRC');
+assert.deepEqual(readScriptSettings('legacy', 'JiveRC'), { rune: 'Cosmic runes', partner: 'current runner' });
+replaceScriptSettings('legacy', 'JiveRC', {});
+assert.deepEqual(readScriptSettings('legacy', 'JiveRC'), {});
+assert.equal(sessionStorage.getItem('rs2b0t:legacy:set:NatureCrafter:obsolete'), null);
 localStorage.setItem('rs2b0t:source:selectedScript', 'Miner');
 sessionStorage.setItem('rs2b0t:source:selectedScript', 'Fisher');
 localStorage.setItem('rs2b0t:source:set:Miner:rock', 'coal');

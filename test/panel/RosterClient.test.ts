@@ -24,7 +24,7 @@ class Runner implements PanelRunner {
     setState(state: string): void { this.state = state; for (const listener of this.listeners) listener(); }
 }
 
-const names = ['RosterDemo', 'RosterOther', 'WalkTo'];
+const names = ['RosterDemo', 'RosterOther', 'WalkTo', 'JiveRC'];
 let previousMetas: Array<ScriptMeta | undefined>;
 let runner: Runner;
 let panel: BotPanel;
@@ -62,6 +62,8 @@ afterEach(() => {
     Object.assign(TARGET, previousTarget);
     for (const name of names) ScriptRegistry.unregister(name);
     for (const meta of previousMetas) if (meta) ScriptRegistry.register(meta);
+    localStorage.clear();
+    sessionStorage.clear();
 });
 
 test('assign changes the actual panel selection and persisted selection', () => {
@@ -283,4 +285,28 @@ for (const reserved of ['Global', 'MapPicker', 'Loadouts', 'PriceBooks']) test(`
         ScriptRegistry.unregister(reserved);
         if (previous) ScriptRegistry.register(previous);
     }
+});
+
+
+test('legacy roster reads and assignment resolve to the canonical JiveRC registration', () => {
+    SettingsStore.save('NatureCrafter', 'leash', '12');
+    SettingsStore.save('JiveRC', 'leash', '21');
+    client.assignScript('NatureCrafter');
+    expect(client.selectedScript()).toBe('JiveRC');
+    expect(localStorage.getItem('rs2b0t:selectedScript')).toBe('JiveRC');
+    expect(client.readSettings('NatureCrafter')).toEqual({ leash: '21', mode: 'Auto' });
+});
+
+test.each(['JiveRC', 'NatureCrafter'])('live %s default copies clear legacy settings including removed parameters', name => {
+    SettingsStore.save('NatureCrafter', 'leash', '12');
+    SettingsStore.save('NatureCrafter', 'obsolete', 'old');
+    SettingsStore.save('JiveRC', 'mode', 'None');
+    SettingsStore.save('RosterOther', 'leash', '19');
+    SettingsStore.save('Global', 'lampSkill', 'mining');
+    client.copySettings(name, {});
+    expect(client.readSettings('JiveRC')).toEqual({ leash: '8', mode: 'Auto' });
+    expect(SettingsStore.saved('JiveRC', 'obsolete')).toBeUndefined();
+    expect(SettingsStore.saved('NatureCrafter', 'leash')).toBeUndefined();
+    expect(SettingsStore.saved('RosterOther', 'leash')).toBe('19');
+    expect(SettingsStore.saved('Global', 'lampSkill')).toBe('mining');
 });
