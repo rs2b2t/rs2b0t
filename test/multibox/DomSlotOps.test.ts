@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { DomSlotOps, orderedSlotElements } from '#/bot/multibox/DomSlotOps.js';
 import type { SlotHandle } from '#/bot/multibox/types.js';
+import type { RosterClient } from '#/bot/multibox/RosterTypes.js';
 
 let handles: SlotHandle[] = [];
 
@@ -18,6 +19,29 @@ afterEach(() => {
 });
 
 describe('DomSlotOps', () => {
+    test('roster exposes only the live ready bridge without queueing access', async () => {
+        const ops = new DomSlotOps(document.getElementById('rail')!, document.getElementById('add')!, true);
+        const handle = ops.spawn({ username: 'alice', password: '', world: 1 });
+        handles.push(handle);
+        expect(handle.roster?.()).toBeNull();
+        const bridge: RosterClient = {
+            scripts: () => ['WalkTo'], selectedScript: () => 'WalkTo', readSettings: () => ({}),
+            assignScript() {}, copySettings() {}, startScript() {}, stopScript() {},
+            travelTo: async () => {}, editSettings() {}
+        };
+        Object.assign(document.querySelector('iframe')!.contentWindow!, { rs2b0t: { roster: bridge } });
+        await new Promise(resolve => setTimeout(resolve, 75));
+        expect(handle.roster?.()).toBe(bridge);
+        handle.reloadWorld(2);
+        expect(handle.roster?.()).toBeNull();
+        const next: RosterClient = { ...bridge, scripts: () => ['Fisher'] };
+        Object.assign(document.querySelector('iframe')!.contentWindow!, { rs2b0t: { roster: next } });
+        await new Promise(resolve => setTimeout(resolve, 75));
+        expect(handle.roster?.()).toBe(next);
+        handle.destroy();
+        expect(handle.roster?.()).toBeNull();
+    });
+
     test('script status follows runner metadata through switches and reloads', async () => {
         const ops = new DomSlotOps(document.getElementById('rail')!, document.getElementById('add')!, true);
         const handle = ops.spawn({ username: 'alice', password: '', world: 1 });

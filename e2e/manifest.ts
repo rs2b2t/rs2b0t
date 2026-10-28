@@ -1339,6 +1339,14 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'multibox-roster-test',
+        harness: 'multibox-roster-test.ts',
+        covers: { subsystems: ['multibox'] },
+        status: 'unvetted',
+        budgetMin: 3,
+        note: 'Roster modal with fixture clients checks settings copies, individual edits, world changes, travel and keyboard focus. No game login.'
+    },
+    {
         id: 'multibox-tab-renderer-test',
         harness: 'multibox-tab-renderer-test.ts',
         covers: { subsystems: ['multibox'] },

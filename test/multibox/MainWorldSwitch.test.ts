@@ -29,6 +29,8 @@ function captureListeners(target: EventTarget): () => void {
     };
 }
 
+let fixtureId = 0;
+
 async function withWall(mode: 'local' | 'proxy', check: (wall: Wall) => Promise<void>): Promise<void> {
     const previousMode = process.env.RS2B0T_TARGET;
     process.env.RS2B0T_TARGET = mode;
@@ -55,12 +57,12 @@ async function withWall(mode: 'local' | 'proxy', check: (wall: Wall) => Promise<
         await vault.upsert({ username: 'alice', password: 'a', world: 1 });
         await vault.upsert({ username: 'bob', password: 'b', world: 2 });
         document.body.innerHTML = '<div id="mbx-app"><div id="mbx-rail"><div id="mbx-tabs"></div><div id="mbx-add"></div></div></div>';
-        for (const id of ['build', 'start-all', 'stop-all', 'renderers-off', 'renderers-on', 'resource-bots', 'resource-cpu', 'resource-memory', 'resource-traffic', 'resource-cpu-row', 'resource-memory-row', 'settings', 'drawer']) {
+        for (const id of ['build', 'start-all', 'stop-all', 'renderers-off', 'renderers-on', 'resource-bots', 'resource-cpu', 'resource-memory', 'resource-traffic', 'resource-cpu-row', 'resource-memory-row', 'settings', 'manage', 'drawer']) {
             const el = document.createElement('button');
             el.id = `mbx-${id}`;
             document.body.appendChild(el);
         }
-        const entry = `../../src/bot/multibox/main.ts?fixture=${mode}`;
+        const entry = `../../src/bot/multibox/main.ts?fixture=${mode}-${fixtureId++}`;
         await import(entry);
         if (!Reflect.get(globalThis, 'multibox')) document.dispatchEvent(new Event('DOMContentLoaded'));
         wall = Reflect.get(globalThis, 'multibox') as Wall;
@@ -88,6 +90,23 @@ async function withWall(mode: 'local' | 'proxy', check: (wall: Wall) => Promise<
         else process.env.RS2B0T_TARGET = previousMode;
     }
 }
+
+test('roster closes when shared profiles are reset or relocked', async () => {
+    await withWall('proxy', async () => {
+        document.getElementById('mbx-manage')!.click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const roster = document.getElementById('mbx-roster')!;
+        expect(roster.hidden).toBe(false);
+        const refresh = spyOn(vault, 'refresh').mockImplementation(async () => { vault.reset(); });
+        try {
+            window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
+            await new Promise(resolve => setTimeout(resolve, 0));
+            expect(roster.hidden).toBe(true);
+        } finally {
+            refresh.mockRestore();
+        }
+    });
+});
 
 test('wall wiring preserves pending slots and retries persistence after a successful frame switch', async () => {
     await withWall('proxy', async wall => {
