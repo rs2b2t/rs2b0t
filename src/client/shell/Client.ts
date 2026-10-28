@@ -13,6 +13,7 @@ import TitleFlames from '#/client/shell/TitleFlames.js';
 import FloType from '#/client/config/FloType.js';
 import SeqType, { PostanimMove, PreanimMove, RestartMode } from '#/client/config/SeqType.js';
 import LocType from '#/client/config/LocType.js';
+import { resolveMultiloc } from '#/client/config/resolveMultiloc.js';
 import ObjType from '#/client/config/ObjType.js';
 import NpcType from '#/client/config/NpcType.js';
 import IdkType from '#/client/config/IdkType.js';
@@ -503,7 +504,7 @@ export class Client extends GameShell {
     private runenergy: number = 0;
     private runweight: number = 0;
     private staffmodlevel: number = 0;
-    private var: number[] = [];
+    var: number[] = [];
     private varServ: number[] = [];
 
     private chatInterface: IfType = new IfType();
@@ -1180,6 +1181,7 @@ export class Client extends GameShell {
             SpotType.init(config);
             VarpType.init(config);
             VarBitType.init(config);
+            ClientLocAnim.app = this;
 
             if (!Client.lowMem) {
                 await this.drawProgress('Unpacking sounds', 90);
@@ -9539,7 +9541,10 @@ export class Client extends GameShell {
             lastTypecode = typecode;
 
             if (entityType === 2 && this.world && this.world.typeCode2(this.minusedlevel, x, z, typecode) >= 0) {
-                const loc: LocType = LocType.list(typeId);
+                const loc = resolveMultiloc(LocType.list(typeId), this.var);
+                if (!loc) {
+                    continue;
+                }
 
                 if (this.useMode === 1) {
                     this.menuOption[this.menuNumEntries] = 'Use ' + this.objSelectedName + ' with @cya@' + loc.name;
