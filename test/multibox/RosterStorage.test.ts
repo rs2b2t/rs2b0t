@@ -1,10 +1,9 @@
-import { beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { readProfileScript, writeProfileScript, readScriptSettings, replaceScriptSettings, storedScripts } from '#/bot/multibox/RosterStorage.js';
 
-beforeEach(() => {
-    localStorage.clear();
-    sessionStorage.clear();
-});
+const clearStorage = () => { localStorage.clear(); sessionStorage.clear(); };
+beforeEach(clearStorage);
+afterEach(clearStorage);
 
 test('copy replaces one script, preserves other settings, and leaves independent values', () => {
     localStorage.setItem('rs2b0t:source:set:Miner:rock', 'iron');
@@ -23,7 +22,7 @@ test('copy replaces one script, preserves other settings, and leaves independent
     expect(localStorage.getItem('rs2b0t:target:set:Global:runAuto')).toBe('false');
     expect(localStorage.getItem('rs2b0t:target:set:MinerPlus:rock')).toBe('gold');
     expect(localStorage.getItem('rs2b0t:target:creds')).toBe('private');
-    expect(readProfileScript('target')).toBe('NatureCrafter');
+    expect(readProfileScript('target')).toBe('JiveRC');
     replaceScriptSettings('target', 'Miner', { rock: 'iron' });
     expect(readScriptSettings('source', 'Miner')).toEqual({ rock: 'coal' });
 });
@@ -42,10 +41,10 @@ test('script assignment persists without copying parameters and catalog excludes
     localStorage.setItem('rs2b0t:a:set:Global:runAuto', 'false');
     localStorage.setItem('rs2b0t:other:set:Fisher:fish', 'trout');
     writeProfileScript('a', 'NatureCrafter');
-    expect(localStorage.getItem('rs2b0t:a:selectedScript')).toBe('NatureCrafter');
-    expect(sessionStorage.getItem('rs2b0t:a:selectedScript')).toBe('NatureCrafter');
+    expect(localStorage.getItem('rs2b0t:a:selectedScript')).toBe('JiveRC');
+    expect(sessionStorage.getItem('rs2b0t:a:selectedScript')).toBe('JiveRC');
     expect(readScriptSettings('a', 'Miner')).toEqual({ rock: 'iron' });
-    expect(storedScripts(['a'])).toEqual(['Miner', 'NatureCrafter']);
+    expect(storedScripts(['a'])).toEqual(['JiveRC', 'Miner']);
     expect(() => replaceScriptSettings('a', 'Global', {})).toThrow();
     expect(() => writeProfileScript('a', '')).toThrow();
 });
@@ -82,4 +81,39 @@ test('desktop roster opens and refreshes without enumerating shared storage for 
     expect(report.updated).toBe(true);
     expect(report.openReads).toBeLessThan(100);
     expect(report.refreshReads).toBeLessThan(100);
+});
+
+
+test('unloaded NatureCrafter profiles copy inherited values into the JiveRC namespace', () => {
+    localStorage.setItem('rs2b0t:source:selectedScript', 'NatureCrafter');
+    localStorage.setItem('rs2b0t:source:set:NatureCrafter:rune', 'Nature runes');
+    sessionStorage.setItem('rs2b0t:source:set:NatureCrafter:rune', 'Cosmic runes');
+    sessionStorage.setItem('rs2b0t:source:set:NatureCrafter:partner', 'legacy runner');
+    localStorage.setItem('rs2b0t:source:set:JiveRC:partner', 'current runner');
+    const values = readScriptSettings('source', 'JiveRC');
+    expect(values).toEqual({ rune: 'Cosmic runes', partner: 'current runner' });
+    replaceScriptSettings('target', 'JiveRC', values);
+    expect(readScriptSettings('target', 'JiveRC')).toEqual(values);
+    expect(localStorage.getItem('rs2b0t:target:set:JiveRC:rune')).toBe('Cosmic runes');
+    expect(readProfileScript('source')).toBe('JiveRC');
+    expect(storedScripts(['source', 'target'])).toEqual(['JiveRC']);
+    localStorage.setItem('rs2b0t:unselected:set:NatureCrafter:mode', 'Runner');
+    expect(storedScripts(['unselected'])).toEqual(['JiveRC']);
+});
+
+test('replacing JiveRC defaults clears both namespaces without touching other scripts', () => {
+    for (const storage of [localStorage, sessionStorage]) {
+        storage.setItem('rs2b0t:target:set:NatureCrafter:rune', 'Cosmic runes');
+        storage.setItem('rs2b0t:target:set:NatureCrafter:obsolete', 'old');
+        storage.setItem('rs2b0t:target:set:JiveRC:partner', 'runner');
+        storage.setItem('rs2b0t:target:set:Miner:rock', 'iron');
+        storage.setItem('rs2b0t:target:set:Global:runAuto', 'false');
+    }
+    replaceScriptSettings('target', 'JiveRC', {});
+    expect(readScriptSettings('target', 'JiveRC')).toEqual({});
+    for (const storage of [localStorage, sessionStorage]) {
+        expect(storage.getItem('rs2b0t:target:set:NatureCrafter:obsolete')).toBeNull();
+        expect(storage.getItem('rs2b0t:target:set:Miner:rock')).toBe('iron');
+        expect(storage.getItem('rs2b0t:target:set:Global:runAuto')).toBe('false');
+    }
 });

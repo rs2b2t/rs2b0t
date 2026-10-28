@@ -2,8 +2,17 @@ import { isRosterScript } from './RosterTypes.js';
 import { desktopStorage } from '../runtime/desktopStorage.js';
 import { boxStoragePrefix } from './ProfileTransfer.js';
 
-function requireScript(script: string): void {
+function canonicalScript(script: string): string {
+    return script === 'NatureCrafter' ? 'JiveRC' : script;
+}
+
+function requireScript(script: string): string {
     if (!isRosterScript(script)) throw new Error('Choose a script.');
+    return canonicalScript(script);
+}
+
+function settingPrefixes(username: string, script: string): string[] {
+    return (script === 'JiveRC' ? ['NatureCrafter', script] : [script]).map(name => `${boxStoragePrefix(username)}set:${name}:`);
 }
 
 function stores(): Storage[] {
@@ -30,27 +39,26 @@ function keys(prefix: string): string[] {
 }
 
 export function readProfileScript(username: string): string {
-    return read(`${boxStoragePrefix(username)}selectedScript`) ?? '';
+    return canonicalScript(read(`${boxStoragePrefix(username)}selectedScript`) ?? '');
 }
 
 export function writeProfileScript(username: string, script: string): void {
-    requireScript(script);
+    script = requireScript(script);
     for (const store of stores()) store.setItem(`${boxStoragePrefix(username)}selectedScript`, script);
 }
 
 export function readScriptSettings(username: string, script: string): Record<string, string> {
-    requireScript(script);
-    const prefix = `${boxStoragePrefix(username)}set:${script}:`;
-    return Object.fromEntries(keys(prefix).flatMap(key => {
+    script = requireScript(script);
+    return Object.fromEntries(settingPrefixes(username, script).flatMap(prefix => keys(prefix).flatMap(key => {
         const value = read(key);
         return value === null ? [] : [[key.slice(prefix.length), value]];
-    }));
+    })));
 }
 
 export function replaceScriptSettings(username: string, script: string, values: Record<string, string>): void {
-    requireScript(script);
+    script = requireScript(script);
     const prefix = `${boxStoragePrefix(username)}set:${script}:`;
-    const previous = keys(prefix);
+    const previous = settingPrefixes(username, script).flatMap(keys);
     for (const store of stores()) {
         for (const key of previous) store.removeItem(key);
         for (const [key, value] of Object.entries(values)) store.setItem(prefix + key, value);
@@ -68,7 +76,7 @@ export function storedScripts(usernames: string[]): string[] {
             if (!key.startsWith(prefix)) continue;
             const suffix = key.slice(prefix.length);
             const end = suffix.indexOf(':');
-            if (end > 0) scripts.add(suffix.slice(0, end));
+            if (end > 0) scripts.add(canonicalScript(suffix.slice(0, end)));
         }
     }
     return [...scripts].filter(isRosterScript).sort();
