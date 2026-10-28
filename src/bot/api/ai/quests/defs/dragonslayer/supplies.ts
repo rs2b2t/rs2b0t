@@ -17,6 +17,8 @@ import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 
 // Why: 4 of the 7 shopping items are bought; planks only lie on the ground (nearest pile outside Crandor is the Graveyard of Shadows), nails are 2 to a steel bar, and an unfired bowl is clay, water and a potter's wheel.
 
+export const DragonSupplies = { wildernessPlanks: true };
+
 export const SUPPLY = {
     /** Hammers, buckets and jugs: any general store, and Falador's is by the bank. */
     GENERAL_STORE: { npc: 'Shop keeper', anchor: new Tile(2955, 3389, 0) },
@@ -479,6 +481,8 @@ export const SUPPLY_GATHERS: Record<string, (snap: QuestSnapshot, need: number) 
     'unfired bowl': snap => Skills.effective('crafting') < 8
         ? { kind: 'wait', reason: 'Crafting 8 is required to make an unfired bowl; train Crafting or obtain and bank an Unfired bowl' }
         : makeRoom(snap) ?? custom('make an unfired bowl', makeUnfiredBowl),
-    plank: (snap, need) => makeRoom(snap, need) ?? custom(`fetch ${need} plank${need === 1 ? '' : 's'}`, log => grabPlanks(need, log))
+    plank: (snap, need) => !DragonSupplies.wildernessPlanks
+        ? { kind: 'wait', reason: 'Wilderness plank gathering is disabled; bank the remaining Planks to continue Dragon Slayer' }
+        : makeRoom(snap, need) ?? custom(`fetch ${need} plank${need === 1 ? '' : 's'}`, log => grabPlanks(need, log))
 };
 

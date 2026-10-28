@@ -14,6 +14,8 @@ import { GroundItems } from '../../api/grounditems/GroundItems.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Sustain } from '../../api/sustain/Sustain.js';
+import { readDragonProgress } from '../../api/ai/quests/defs/dragonslayer/journal.js';
+import { DRAGON_CAMPS, dragonReady } from './dragons.js';
 import { Quests } from '../../api/ui/questlog/Quests.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import Tile from '../../geometry/Tile.js';
@@ -46,7 +48,7 @@ export const SETTINGS: SettingsSchema = {
     targetLevel: { type: 'number', default: 60, min: 2, max: 60, label: 'Target level', help: 'Train every enabled skill to at least this level.' },
     marketAxes: { type: 'boolean', default: true, label: 'Try Seers market axes', help: 'One optional Rune axe purchase from seers market when near Seers on World 1. Falls back to available tools.' },
     marketAxeBudget: { type: 'number', default: 50000, min: 0, max: 1000000, label: 'Market axe price limit', help: 'Also capped at 10% of banked gold; keeps 200 coins for travel.' },
-    wilderness: { type: 'boolean', default: true, label: 'Allow Wilderness training', help: 'Include suitable Wilderness combat camps and Edgeville monkey bars from Agility 15.' }
+    wilderness: { type: 'boolean', default: true, label: 'Allow Wilderness training', help: 'Include green dragons, Wilderness combat camps and Edgeville monkey bars; allow Dragon Slayer to gather Wilderness planks.' }
 };
 
 export default class AccountLeveler extends LoopingBot {
@@ -82,6 +84,7 @@ export default class AccountLeveler extends LoopingBot {
     private resetCount = 0;
     private waitingUntil = 0;
     private target = 60;
+    private dragonStage?: number;
     private wilderness = true;
 
     override async onStart(): Promise<void> {
@@ -281,7 +284,9 @@ export default class AccountLeveler extends LoopingBot {
             levels: Object.fromEntries(enabledSkills.map(skill => [skill, Skills.level(skill)])),
             stock: this.stock.total([...Inventory.items(), ...Equipment.items()]),
             bankReady: this.stock.ready,
-            quests: Object.fromEntries(['Druidic Ritual', 'Rune Mysteries Quest', 'Dragon Slayer'].map(name => [name, Quests.status(name) === 'complete'])),
+            quests: Object.fromEntries(Quests.all().map(({ name, status }) => [name, status === 'complete'])),
+            dragonStage: this.dragonStage,
+            questPoints: Quests.points(),
             target: this.target, wilderness: this.wilderness, now: Date.now(), unavailableItems: [...this.unavailableItems, ...[...this.temporarilyUnavailable].filter(([, until]) => until > Date.now()).map(([item]) => item)]
         };
     }
@@ -292,6 +297,12 @@ export default class AccountLeveler extends LoopingBot {
         this.setStatus('checking supplies at the nearest bank');
         if (!(await this.supplies.bank())) throw new Error('Nearest bank could not be opened');
         let snapshot = this.snapshot();
+        if (dragonReady(snapshot) && Quests.status('Dragon Slayer') === 'inProgress') {
+            await Bank.close();
+            this.dragonStage = (await readDragonProgress())?.stage;
+            if (!(await this.supplies.bank())) throw new Error('Could not reopen bank after reading Dragon Slayer progress');
+            snapshot = this.snapshot();
+        }
         if (!this.shoppingChecked) {
             const audit = auditSupplies(snapshot);
             this.shoppingBudget = audit.budget;
@@ -510,7 +521,7 @@ export default class AccountLeveler extends LoopingBot {
                 const values = saved[field];
                 if (values && typeof values === 'object') memory[field] = Object.fromEntries(Object.entries(values).filter(([, v]) => Number.isFinite(v)));
             }
-            memory.cooldowns = Object.fromEntries(Object.entries(memory.cooldowns).filter(([id]) => id.startsWith('quest-') || COMBAT_CAMPS.some(camp => camp.id === id)));
+            memory.cooldowns = Object.fromEntries(Object.entries(memory.cooldowns).filter(([id]) => id.startsWith('quest-') || DRAGON_CAMPS.includes(id) || COMBAT_CAMPS.some(camp => camp.id === id)));
             const failure = saved.diagnostics?.failure;
             if (failure && Number.isFinite(failure.at) && [failure.activity, failure.phase, failure.reason, failure.detail].every(value => typeof value === 'string')) this.lastFailure = failure;
             memory.deaths = typeof saved.deaths === 'number' && Number.isFinite(saved.deaths) ? Math.max(0, saved.deaths) : 0;

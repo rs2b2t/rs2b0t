@@ -1,3 +1,6 @@
+import { DRAGON_STAGE } from '../../api/ai/quests/defs/dragonslayer/journal.js';
+import { dragonFoodLevels, dragonPlanks, dragonPrayer, dragonReady, dragonSupplyLevels, nextDragonQuest } from './dragons.js';
+import { canStealChaos } from './runes.js';
 import Tile from '../../geometry/Tile.js';
 import { combatPlan, foodFor } from './combat.js';
 import { gatheringTool, meleeEquipment } from './equipment.js';
@@ -13,10 +16,13 @@ function activity(objective: string, id: string, script: string, settings: Recor
     return { objective, id, label: id.replaceAll('-', ' '), script, settings, needs };
 }
 
-export function questPlan(s: LevelerSnapshot, objective: string, id: string, name: string): ActivityPlan {
-    const food = foodFor(s);
-    const kit = id === 'druid' ? meleeEquipment(s) : [];
-    return { ...activity(objective, `quest-${id}`, 'AIOQuester', { quests: [id], food, loadout: '' }, [{ item: food, count: 24, carry: 12 }, banked('Coins', 2000), ...kit]), quest: name, food };
+export function questPlan(s: LevelerSnapshot, objective: string, id: string, name: string, combat = false): ActivityPlan {
+    const dragon = name === 'Dragon Slayer';
+    const food = dragon || combat ? 'Lobster' : foodFor(s);
+    const repaired = (s.dragonStage ?? 0) >= DRAGON_STAGE.REPAIRED_SHIP;
+    const coins = !dragon ? 2000 : repaired ? 200 : s.dragonStage ? Math.max(200, Math.min(15000, stockOf(s, 'Coins'))) : 15000;
+    const kit = id === 'druid' || dragon || combat ? meleeEquipment({ ...s, stock: { ...s.stock, coins: Math.max(0, stockOf(s, 'Coins') - coins) } }) : [];
+    return { ...activity(objective, `quest-${id}`, 'AIOQuester', { quests: [id], food, loadout: '', gatherWildernessPlanks: s.wilderness }, [{ item: food, count: 24, carry: 12 }, banked('Coins', coins), ...kit, ...(!s.wilderness && dragon && !repaired ? [{ item: 'Plank', count: dragonPlanks(s), carry: dragonPlanks(s) }] : [])]), quest: name, food };
 }
 
 function prerequisiteCombat(s: LevelerSnapshot, objective: string, memory: SessionMemory, random: () => number, levels: Record<string, number>): ActivityPlan | null {
@@ -27,6 +33,24 @@ function prerequisiteCombat(s: LevelerSnapshot, objective: string, memory: Sessi
 }
 
 function selectMethod(s: LevelerSnapshot, objective: string, memory: SessionMemory, random: () => number): ActivityPlan | null {
+    if (['attack', 'strength', 'defence', 'prayer'].includes(objective) && s.levels[objective] < s.target) {
+        const quest = nextDragonQuest(s, memory);
+        if (quest || objective === 'prayer' && dragonReady(s) && stockOf(s, 'Dragonfire shield') > 0) {
+            const levels = { ...dragonFoodLevels(s),
+                ...(quest?.id === 'dragon' ? dragonSupplyLevels(s) : {}) };
+            for (const req of quest?.requirements.skills ?? []) levels[req.skill] = Math.max(levels[req.skill] ?? 0, req.level);
+            const missing = Object.entries(levels).find(([skill, level]) => s.levels[skill] < level);
+            if (missing) {
+                const [skill, level] = missing;
+                const plan = selectMethod(s, skill, memory, random);
+                if (plan) return { ...plan, objective, prerequisiteLevels: { [skill]: level } };
+            } else if (quest) return questPlan(s, objective, quest.id, quest.name, true);
+        }
+        if (objective === 'prayer') {
+            const plan = dragonPrayer(s, memory, random);
+            if (plan) return plan;
+        }
+    }
     switch (objective) {
         case 'attack': case 'strength': case 'defence': case 'hitpoints': case 'ranged': case 'magic': case 'prayer':
             return combatPlan(s, objective, memory, random);
@@ -139,6 +163,14 @@ function smeltPlan(objective: string, metal = 'Bronze'): ActivityPlan {
 export function producer(s: LevelerSnapshot, objective: string, need: Requirement, memory: SessionMemory, random: () => number): ActivityPlan | null {
     let plan: ActivityPlan | null;
     switch (need.item.toLowerCase()) {
+        case 'chaos rune': {
+            if (!canStealChaos(s)) return null;
+            const food = foodFor(s);
+            plan = { ...activity(objective, 'pickpocket-paladins', 'Thiever', {
+                target: 'Paladin', action: 'Pickpocket', banking: 'Auto', food, foodWithdraw: 12, suicide: false, loadout: ''
+            }, [{ item: food, count: 24, carry: 12 }]), food };
+            break;
+        }
         case 'shrimps': case 'trout': case 'salmon': case 'lobster':
             plan = s.levels.cooking >= FISH.find(f => f.food.toLowerCase() === need.item.toLowerCase())!.cooking ? cookPlan(s, objective, need.item) : null;
             break;

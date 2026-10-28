@@ -122,6 +122,7 @@ export const SETTINGS: SettingsSchema = {
     prayMelee: { type: 'boolean', default: true, label: 'Pray Protect from Melee on the metal dragons', group: 'Combat', showIf: SHOW_MELEE, help: 'the metal dragons stop at ten tiles and breathe, so melee walks to one and fights beside it, where it headbutts for up to 22; the overhead makes that 0 and the shield with a dose takes the close breath. Needs 43 Prayer' },
 
     loadout: { ...LOADOUT_SETTING, group: 'Food & healing' },
+    food: { type: 'string', default: '', label: 'Food', group: 'Food & healing', help: 'blank uses the selected loadout or the site default' },
     foodWithdraw: { type: 'number', default: 20, min: 1, max: 27, label: 'Food to withdraw per bank run', group: 'Food & healing' },
     panicHp: { type: 'number', default: 30, min: 1, max: 98, label: 'Panic-to-bank below HP%', group: 'Food & healing', help: 'out of food and this low, the run leaves the lair for the bank' },
     retreatHp: { type: 'number', default: 50, min: 0, max: 99, label: 'Retreat to a safespot below HP%', group: 'Food & healing', help: 'off the safespot and this hurt, the run walks back to the nearest one and heals there. Eating in dragonfire loses the race, so this outranks the bite. An empty pack sends it back whatever the HP, since nothing in the lair heals. 0 turns off both' },
@@ -1246,7 +1247,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         if (WEAPON_PICKED) {
             WEAPON = meleeWeaponHeld() ?? '';
         }
-        FOOD_NAME = scriptFood(this.settings, SITE.food ?? 'Lobster');
+        FOOD_NAME = this.settings.str('food', '').trim() || scriptFood(this.settings, SITE.food ?? 'Lobster');
         LEAVE_WALK = this.settings.str('leaveVia', 'teleport') === 'walk';
         ESCAPE_LABEL = LEAVE_WALK ? 'walk out' : escapeRunesFor(SITE.escapeTeleportId).label;
         BURY_BONES = this.settings.bool('buryBones', false) && SITE.bones !== 'Ashes';
