@@ -9041,16 +9041,10 @@ export class Client extends GameShell {
 
         if (action === MiniMenuAction.OP_LOC6) {
             const locId: number = (a >> 14) & 0x7fff;
-            const loc: LocType = LocType.list(locId);
-
-            let examine: string;
-            if (!loc.desc) {
-                examine = "It's a " + loc.name + '.';
-            } else {
-                examine = loc.desc;
+            const loc = resolveMultiloc(LocType.list(locId), this.var);
+            if (loc) {
+                this.addChat(0, loc.desc || "It's a " + loc.name + '.', '');
             }
-
-            this.addChat(0, examine, '');
         }
 
         if (action === MiniMenuAction.TGT_LOC) {

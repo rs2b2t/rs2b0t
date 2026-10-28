@@ -33,7 +33,7 @@ function loc(id: number, name: string, op: string[], multiloc: number[] = []): L
     result.multivarbit = multiloc.length ? 0 : -1;
     result.multiloc = multiloc;
     result.anim = -1;
-    result.getModel = () => ({ id }) as never;
+    result.getModel = (shape, angle) => ({ id, shape, angle }) as never;
     return result;
 }
 
@@ -76,7 +76,14 @@ afterAll(() => {
     ClientLocAnim.app = origApp;
 });
 
-function menu(varValue: number): { menuOption: string[]; menuNumEntries: number; menuParamA: Int32Array } {
+function menu(varValue: number): {
+    menuOption: string[];
+    menuNumEntries: number;
+    menuParamA: Int32Array;
+    var: number[];
+    doAction(optionId: number): void;
+    addChat(type: number, text: string, from: string): void;
+} {
     const client = Object.assign(Object.create(Client.prototype), scene(varValue), {
         useMode: 0,
         targetMode: 0,
@@ -150,15 +157,53 @@ describe('multiloc placement', () => {
         expect(menu(4).menuOption).toContain('Cross @cya@Third passage');
     });
 
-    test('scene builder gives a static multiloc a dynamic model', () => {
-        ClientBuild.lowMem = false;
-        const builder = Object.assign(Object.create(ClientBuild.prototype), {
-            groundh: [[Int32Array.of(0, 0), Int32Array.of(0, 0)]]
+    for (const path of ['add', 'change']) {
+        test.each([0, 1, 2, 3])(`${path} ground decoration preserves placement angle %i`, angle => {
+            ClientBuild.lowMem = false;
+            ClientLocAnim.app = { var: [0] } as InstanceType<typeof Client>;
+            const groundh = [[Int32Array.of(0, 0), Int32Array.of(0, 0)]];
+            const builder = Object.assign(Object.create(ClientBuild.prototype), { groundh });
+            let built: unknown;
+            const world = { setGroundDecor: (model: unknown) => { built = model; } };
+            if (path === 'add') {
+                builder.addLoc(0, 0, 0, rawId, 22, angle, world, null);
+            } else {
+                ClientBuild.changeLocUnchecked(0, 0, 0, rawId, 22, angle, 0, groundh, world as never, null);
+            }
+            expect(built).toBeInstanceOf(ClientLocAnim);
+            if (!(built instanceof ClientLocAnim)) throw new Error('Missing dynamic ground decoration');
+            expect(built.index).toBe(rawId);
+            expect(built.getTempModel()).toMatchObject({ id: transformedId, shape: 22, angle });
         });
-        let built: unknown;
-        const world = { setGroundDecor: (model: unknown) => { built = model; } };
-        builder.addLoc(0, 0, 0, rawId, 22, 0, world, null);
-        expect(built).toBeInstanceOf(ClientLocAnim);
+    }
+
+    test.each(['A hidden entrance.', null])('examine uses the visible child description %s', description => {
+        locs.get(rawId)!.desc = 'An ordinary door.';
+        locs.get(transformedId)!.desc = description;
+        const client = menu(0);
+        const messages: string[] = [];
+        client.addChat = (_type, text) => { messages.push(text); };
+        client.doAction(client.menuNumEntries - 1);
+        expect(messages).toEqual([description ?? "It's a Secret passage."]);
+    });
+
+    test.each([2, 4])('examine ignores a menu entry whose child is now hidden at state %i', state => {
+        const client = menu(0);
+        const messages: string[] = [];
+        client.addChat = (_type, text) => { messages.push(text); };
+        client.var[0] = state;
+        client.doAction(client.menuNumEntries - 1);
+        expect(messages).toEqual([]);
+    });
+
+    test('ordinary loc keeps its examine description', () => {
+        locs.set(rawId, loc(rawId, 'Raw door', ['Open']));
+        locs.get(rawId)!.desc = 'An ordinary door.';
+        const client = menu(0);
+        const messages: string[] = [];
+        client.addChat = (_type, text) => { messages.push(text); };
+        client.doAction(client.menuNumEntries - 1);
+        expect(messages).toEqual(['An ordinary door.']);
     });
 
     test('ordinary loc keeps its own menu and snapshot definition', () => {
