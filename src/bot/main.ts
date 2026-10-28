@@ -25,6 +25,7 @@ import { SettingsStore } from './runtime/Settings.js';
 import { StallGuard } from './runtime/StallGuard.js';
 import { RandomEventGuardian } from './runtime/RandomEventGuardian.js';
 import BotPanel from './panel/BotPanel.js';
+import { createRosterClient } from './panel/RosterClient.js';
 import Overlay from './panel/Overlay.js';
 import { installPaintInput } from './panel/PaintInput.js';
 import { paintState } from './paint/paintLogic.js';
@@ -132,6 +133,7 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
 
     (globalThis as Record<string, unknown>).rs2b0t = {
         prepareWorldSwitch, cancelWorldSwitch, world,
+        roster: panel ? createRosterClient(panel) : null,
         client, host: BotHost, runner: ScriptRunner, registry: ScriptRegistry,
         reader, actions, navigator: Navigator, runManager: RunManager,
         input: Input, scheduler: Scheduler,

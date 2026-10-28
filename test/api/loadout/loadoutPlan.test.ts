@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { SettingsBag } from '#/bot/runtime/Settings.js';
 import { foodOf, gearOf, scriptFood, scriptFoods, suppliesOf, weaponOf } from '#/bot/api/loadout/loadoutPlan.js';
 import { Loadouts } from '#/bot/api/loadout/loadoutStore.js';
@@ -15,6 +15,8 @@ const empty: Loadout = { name: 'empty', worn: {}, carry: [] };
 beforeEach(() => {
     Loadouts.save([]);
 });
+
+afterEach(() => Loadouts.save([]));
 
 describe('foodOf', () => {
     test('is the first carried item the catalog calls edible', () => {
