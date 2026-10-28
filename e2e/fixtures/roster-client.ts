@@ -28,7 +28,7 @@ ctx.fillText(`${username} · World ${world}`, 28, 40);
 ctx.fillText('Fixture client', 28, 75);
 document.body.append(canvas);
 const roster: RosterClient = {
-    scripts: () => ['Miner', 'NatureCrafter', 'WalkTo'],
+    scripts: () => ['Miner', 'JiveRC', 'WalkTo'],
     selectedScript: () => readProfileScript(username),
     readSettings: script => ({ rock: 'iron', ...readScriptSettings(username, script) }),
     assignScript: script => writeProfileScript(username, script),

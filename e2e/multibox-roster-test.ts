@@ -92,9 +92,9 @@ try {
     await modal.getByRole('button', { name: /^Miners/ }).click();
     await modal.getByRole('button', { name: 'Select tab', exact: true }).click();
     await action('assign').click();
-    await page.selectOption('#mbx-roster-script', 'NatureCrafter');
+    await page.selectOption('#mbx-roster-script', 'JiveRC');
     await apply();
-    await page.waitForFunction(() => localStorage.getItem('rs2b0t:miner_saved:selectedScript') === 'NatureCrafter');
+    await page.waitForFunction(() => localStorage.getItem('rs2b0t:miner_saved:selectedScript') === 'JiveRC');
     console.log('assignment persisted');
     await action('copy').click();
     await page.selectOption('#mbx-roster-script', 'Miner');
@@ -108,7 +108,7 @@ try {
         selected: localStorage.getItem('rs2b0t:miner_target:selectedScript'),
         busy: localStorage.getItem('rs2b0t:miner_busy:set:Miner:rock')
     }));
-    if (JSON.stringify(stored) !== JSON.stringify({ target: 'iron', stale: null, global: 'false', selected: 'NatureCrafter', busy: null })) throw new Error(`Bad copy: ${JSON.stringify(stored)}`);
+    if (JSON.stringify(stored) !== JSON.stringify({ target: 'iron', stale: null, global: 'false', selected: 'JiveRC', busy: null })) throw new Error(`Bad copy: ${JSON.stringify(stored)}`);
     if (!(await modal.locator('tr[data-username="miner_fail"]').textContent())?.includes('Fixture copy failure')) throw new Error('Missing partial-failure result');
     await page.screenshot({ path: join(out, 'roster-modal.png') });
 
