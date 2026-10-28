@@ -91,7 +91,7 @@ export default class BotPanel {
         this.library = new ScriptLibrary(name => this.selectScript(name));
         const durable = typeof localStorage !== 'undefined' ? localStorage.getItem(selectedScriptKey()) : null;
         const remembered = desktopStorage ? durable : (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(selectedScriptKey()) : null) ?? durable;
-        this.selectedScript = remembered && ScriptRegistry.get(remembered) ? remembered : (ScriptRegistry.list()[0]?.name ?? '');
+        this.selectedScript = (remembered ? ScriptRegistry.get(remembered)?.name : undefined) ?? ScriptRegistry.list()[0]?.name ?? '';
 
         const pick = el('div', 'rs2b0t-buttons');
         this.scriptName = el('span', 'rs2b0t-current-script');

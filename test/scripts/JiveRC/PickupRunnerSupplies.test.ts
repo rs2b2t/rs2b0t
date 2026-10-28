@@ -8,9 +8,9 @@ import { Skills } from '#/bot/api/skills/Skills.js';
 import { Trade } from '#/bot/api/trade/Trade.js';
 import { Input } from '#/bot/input/Input.js';
 import { SettingsBag } from '#/bot/runtime/Settings.js';
-import NatureCrafter from '#/bot/scripts/NatureCrafter/NatureCrafter.js';
+import JiveRC from '#/bot/scripts/JiveRC/JiveRC.js';
 
-class Runner extends NatureCrafter {
+class Runner extends JiveRC {
     readonly registered: Task[] = [];
     protected override add(...tasks: Task[]): void { this.registered.push(...tasks); }
 }

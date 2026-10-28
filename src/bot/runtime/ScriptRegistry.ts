@@ -46,7 +46,7 @@ class ScriptRegistryImpl {
     }
 
     get(name: string): ScriptMeta | undefined {
-        return this.metas.get(name);
+        return this.metas.get(name) ?? (name === 'NatureCrafter' ? this.metas.get('JiveRC') : undefined);
     }
 
     onChange(cb: () => void): () => void {

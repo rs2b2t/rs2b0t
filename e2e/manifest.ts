@@ -171,7 +171,7 @@ export const CASES: readonly Case[] = [
     {
         id: 'nature-runner-coins-739-live',
         harness: 'nature-runner-coins-739-live.ts',
-        covers: { scripts: ['NatureCrafter'] },
+        covers: { scripts: ['JiveRC'] },
         status: 'vetted',
         provenAt: '39e3095468c329823aabd554db5455c2cef02401',
         budgetMin: 3,
@@ -1360,9 +1360,19 @@ export const CASES: readonly Case[] = [
         note: 'Murder Mystery start to finish; --stage seeds the guilty sibling as well as the evidence'
     },
     {
+        id: 'jiverc-cosmic-live',
+        harness: 'jiverc-cosmic-live.ts',
+        covers: { scripts: ['JiveRC'] },
+        status: 'documented',
+        manual: true,
+        budgetMin: 22,
+        documentedIn: 'docs/e2e/jiverc-cosmic.md',
+        note: 'Local server: outside and inside altar trades, repeated Cosmic crafting, runner restocks, and master banking with a return to crafting.'
+    },
+    {
         id: 'naturecrafter-soak-test',
         harness: 'naturecrafter-soak-test.ts',
-        covers: { scripts: ['NatureCrafter'] },
+        covers: { scripts: ['JiveRC'] },
         status: 'unvetted'
     },
     {

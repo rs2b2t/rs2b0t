@@ -568,7 +568,7 @@ class SettingsStoreImpl {
 
     saved(name: string, key: string): string | undefined {
         if (desktopStorage) {
-            return localStorage.getItem(storageKey(name, key)) ?? undefined;
+            return localStorage.getItem(storageKey(name, key)) ?? (name === 'JiveRC' ? this.saved('NatureCrafter', key) : undefined);
         }
         if (hasSession) {
             const v = sessionStorage.getItem(storageKey(name, key));
@@ -582,7 +582,7 @@ class SettingsStoreImpl {
                 return v;
             }
         }
-        return undefined;
+        return name === 'JiveRC' ? this.saved('NatureCrafter', key) : undefined;
     }
 
     save(name: string, key: string, rawString: string): void {
@@ -620,6 +620,9 @@ class SettingsStoreImpl {
         }
         if (hasLocal) {
             localStorage.removeItem(storageKey(name, key));
+        }
+        if (name === 'JiveRC') {
+            this.clear('NatureCrafter', key);
         }
     }
 

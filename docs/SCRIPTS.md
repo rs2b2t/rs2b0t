@@ -1103,6 +1103,22 @@ Alfred Grimhand's Barcrawl — banks for the drinks, gets the card from the outp
 
 ## Runecrafting
 
+### JiveRC
+
+Master/runner crafting for Nature, Air and Cosmic runes. Nature runners unnote at Jiminua, Air runners bank at Falador East, and Cosmic runners bank in Zanaris. Start Cosmic accounts in Zanaris or the cosmic altar.
+
+- Tags: `runecrafting`, `nature`, `air`, `cosmic`, `trade`, `master`, `runner`, `jive`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `rune` | string | `"Nature runes"` | Rune — one of: Nature runes, Air runes, Cosmic runes |
+| `mode` | string | `"Master"` | Mode — one of: Master, Runner |
+| `partner` | string | `""` | Partner name(s) |
+| `bankEvery` | number (0–) | `60` | Bank everything every N minutes (0 = never) |
+| `withdrawEss` | number (0–) | `0` | Essence per restock (0 = default) |
+| `withdrawCoins` | number (0–) | `10000` | Coins target at restock |
+| `stayInAltar` | boolean | `false` | Stay in the altar |
+
 ### MuleCrafter
 
 Crafter + mule runecrafting loop — both run bank→ruins→bank each cycle. Crafter has the talisman, crafts at the altar, trades runes for essence at the ruins. Mule ferries essence to the ruins and runes back to the bank. Dry mule signals at the bank and the crafter shares 1/N essence. Multi-mule round-robin with comma-separated partner names.
@@ -1115,22 +1131,6 @@ Crafter + mule runecrafting loop — both run bank→ruins→bank each cycle. Cr
 | `mode` | string | `"Crafter"` | Mode — one of: Crafter, Mule |
 | `partner` | string | `""` | Partner name(s) (Optional for Crafter) |
 | `bankFill` | boolean | `true` | Fill essence at bank |
-
-### NatureCrafter
-
-Master Nature Crafter — a master stands at the nature altar (Karamja), takes essence from configured runners via trade, and crafts natures; runners bank essence at Ardougne, un-note it at the general store, and ship it to the master. Mode + partner name(s) via settings
-
-- Tags: `runecrafting`, `nature`, `trade`, `master`, `runner`, `karamja`
-
-| Setting | Type | Default | Notes |
-|---|---|---|---|
-| `rune` | string | `"Nature runes"` | Rune — one of: Nature runes, Air runes |
-| `mode` | string | `"Master"` | Mode — one of: Master, Runner |
-| `partner` | string | `""` | Partner name(s) |
-| `bankEvery` | number (0–) | `60` | Bank everything every N minutes (0 = never) |
-| `withdrawEss` | number (0–) | `0` | Essence per restock (0 = default) |
-| `withdrawCoins` | number (0–) | `10000` | Coins target at restock |
-| `stayInAltar` | boolean | `false` | Stay in the altar |
 
 ### RuneCrafter
 
