@@ -39,6 +39,42 @@ The active tab stays put; select the destination tab to view the moved bot.
 | Persistence | Tab list, per-account membership and active tab live in the encrypted vault payload |
 | Deleting a tab | Also clears it from saved profiles not currently loaded; those land in Main |
 
+## Manage bots
+
+**manage bots**, below the rail tabs, opens a roster modal over the current client.
+Close, Done, Escape or clicking outside returns to the focused bot. Opening the
+modal does not reload clients or change which wall tab is active.
+
+Filter by tab or profile name, then select profiles individually or use **Select
+tab**. Changing a filter clears the selection. The list includes loaded bots and
+unloaded profiles from the unlocked vault. Results appear next to each profile;
+one failed or skipped bot does not stop the others.
+
+| Action | Behavior |
+|---|---|
+| Assign script | Changes the selected script without starting it or changing its settings |
+| Copy settings | Copies one script's configuration from a source profile, replacing the target's settings for that script only; leaves the selected script unchanged |
+| Travel to | Stops the current script, waits for it to finish stopping, then starts WalkTo to a named destination such as Seers' Village; stops on arrival |
+| Join world | Uses the existing world-switch and login queue; saves the preferred world for unloaded profiles; scripts remain stopped |
+| Start / Stop | Applies to the selected loaded bots |
+| Edit | Closes the roster, focuses that bot, and opens its existing parameter editor |
+
+Copied settings are independent. Later edits to a source or target do not change
+other profiles. Global settings, credentials, loadouts, order books and other
+scripts are not copied.
+Running, paused, stopping, loading and world-switching bots skip configuration
+changes; stop the script first. Travel requires a loaded, logged-in bot. Edit
+requires a loaded client.
+
+Ready clients supply the script catalog. Previously saved script selections and
+settings also appear when their clients are unloaded. Load a bot to discover more
+scripts. A ready source supplies its effective script settings; an unloaded source
+supplies its saved overrides, and target-only overrides are cleared to defaults.
+
+World-switch results report the request, while the world column reports the
+connected world and switch progress. World controls are unavailable on a local
+engine without world routing.
+
 ## Profiles and the vault
 
 `ProfileVault` encrypts profiles at rest in `localStorage` with AES-GCM under a

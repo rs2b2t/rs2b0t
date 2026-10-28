@@ -2,6 +2,7 @@ import { botFrameUrl, type WorldNumber } from '../../client/config/worlds.js';
 import { supportsWorldRouting } from '../../client/config/target.js';
 import type { Account, RenderMode, SlotHandle, SlotOps, SlotStatus } from './types.js';
 import type { LoginCoordination } from '../runtime/LoginCoordination.js';
+import type { RosterClient } from './RosterTypes.js';
 import { paintThumbnail } from './ThumbnailPainter.js';
 
 const LOGICAL_W = 1100;
@@ -41,6 +42,7 @@ function railWidth(): number {
 }
 
 interface Lcb {
+    roster?: RosterClient | null;
     readonly world: WorldNumber | null;
     prepareWorldSwitch(): boolean;
     cancelWorldSwitch(): void;
@@ -197,6 +199,10 @@ class DomSlotHandle implements SlotHandle {
             l.setRenderMode(mode);
         });
         this.applyLayout();
+    }
+
+    roster(): RosterClient | null {
+        return this.destroyed ? null : this.win?.rs2b0t?.roster ?? null;
     }
 
     startScript(): void {

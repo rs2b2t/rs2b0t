@@ -4,6 +4,7 @@ import { MultiBoxController } from '#/bot/multibox/MultiBoxController.js';
 import type { Account, RenderMode, SlotHandle, SlotOps, SlotStatus } from '#/bot/multibox/types.js';
 import type { LoginCoordination } from '#/bot/runtime/LoginCoordination.js';
 import type { WorldNumber } from '#/client/config/worlds.js';
+import type { RosterClient } from '#/bot/multibox/RosterTypes.js';
 
 class FakeHandle implements SlotHandle {
     calls: string[] = [];
@@ -11,6 +12,9 @@ class FakeHandle implements SlotHandle {
     destroyed = false;
     switchReady = true;
     ingame = false;
+    ready = true;
+    rosterBridge: RosterClient | null = null;
+    roster(): RosterClient | null { return this.rosterBridge; }
     world: WorldNumber | null = null;
     reloadWorld(world: WorldNumber): void { this.calls.push(`world:${world}`); }
     cancelWorldSwitch(): void { this.calls.push('cancelSwitch'); }
@@ -26,7 +30,7 @@ class FakeHandle implements SlotHandle {
         this.loginCoordination = coordination;
         this.calls.push('loginCoordination');
     }
-    status(): SlotStatus { return { ready: true, ingame: this.ingame, world: this.world, player: null, loopCycle: 0, drawn: 0, scriptState: 'idle', scriptName: null }; }
+    status(): SlotStatus { return { ready: this.ready, ingame: this.ingame, world: this.world, player: null, loopCycle: 0, drawn: 0, scriptState: 'idle', scriptName: null }; }
     destroy(): void { this.destroyed = true; this.calls.push('destroy'); }
 }
 class FakeOps implements SlotOps {
@@ -42,6 +46,36 @@ class FakeOps implements SlotOps {
 }
 
 describe('MultiBoxController', () => {
+    test('roster access rejects missing, loading and switching slots', async () => {
+        const ops = new FakeOps();
+        const c = new MultiBoxController(ops);
+        const slot = c.add({ username: 'alice', password: '' })!;
+        const handle = ops.handles[0];
+        const bridge: RosterClient = {
+            scripts: () => [], selectedScript: () => '', readSettings: () => ({}),
+            assignScript() {}, copySettings() {}, startScript() {}, stopScript() {},
+            travelTo: async () => {}, editSettings() {}
+        };
+        expect(c.rosterClient(999)).toBeNull();
+        expect(c.rosterClient(slot.id)).toBeNull();
+        handle.rosterBridge = bridge;
+        expect(c.rosterClient(slot.id)).toBe(bridge);
+        handle.ready = false;
+        expect(c.rosterClient(slot.id)).toBeNull();
+        handle.ready = true;
+        handle.switchReady = false;
+        const switching = c.switchWorld(slot.id, 2);
+        expect(c.rosterClient(slot.id)).toBeNull();
+        c.cancelSlotWorldSwitch(slot.id);
+        await switching;
+        expect(c.rosterClient(slot.id)).toBe(bridge);
+        c.prepareWorldSwitch();
+        expect(c.rosterClient(slot.id)).toBeNull();
+        c.cancelWorldSwitch();
+        c.remove(slot.id);
+        expect(c.rosterClient(slot.id)).toBeNull();
+    });
+
     test('restored slots carry their own world and older profiles inherit the default', () => {
         const ops = new FakeOps();
         const c = new MultiBoxController(ops, undefined, 3);
