@@ -1,3 +1,4 @@
+import { canStealChaos } from './runes.js';
 import { cookLocation } from '../../api/cooking/CookLocations.js';
 import { FIRE_SPOTS } from '../../api/firemaking/Firemaking.js';
 import { FISHING_LOCATIONS } from '../../data/fishingLocations.js';
@@ -46,6 +47,7 @@ function sites(plan: ActivityPlan): Site[] {
                 { name: 'Al Kharid', settings: { bankStand: new Tile(3269, 3167, 0), furnaceStand: new Tile(3275, 3185, 0) }, travel: new Tile(3269, 3167, 0) }
             ];
         case 'Thiever':
+            if (plan.settings.target === 'Paladin') return [{ name: 'Ardougne paladins', settings: {}, travel: new Tile(2655, 3311, 0), members: true }];
             if (plan.settings.target === 'Warrior woman') return [{ name: 'Ardougne warrior women', settings: {}, travel: new Tile(2629, 3295, 0), members: true }];
             if (plan.settings.target === 'Farmer') return [
                 { name: 'Ardougne farm', settings: {}, travel: new Tile(2645, 3367, 0), members: true },
@@ -78,8 +80,8 @@ export function locateMethod(s: LevelerSnapshot, input: ActivityPlan, memory: Se
         ...input, travel: input.script === 'GnomeCourse' ? new Tile(2474, 3436, 0) : new Tile(2725, 3493, 0),
         needs: [...input.needs, { item: 'Coins', count: 200, carry: 200 }]
     };
-    const ready = membersReady(s);
-    const plan = input.script === 'Thiever' && s.levels.thieving >= 25 && ready
+    const ready = input.settings.target === 'Paladin' ? canStealChaos(s) : membersReady(s);
+    const plan = input.script === 'Thiever' && input.settings.target !== 'Paladin' && s.levels.thieving >= 25 && ready
         ? { ...input, id: 'pickpocket-warrior-women', label: 'pickpocket warrior women', settings: { ...input.settings, target: 'Warrior woman' } } : input;
     const options = sites(plan);
     if (!options.length) return plan;
@@ -95,5 +97,5 @@ export function locateMethod(s: LevelerSnapshot, input: ActivityPlan, memory: Se
     const chosen = choices[Math.min(choices.length - 1, Math.floor(Math.max(0, random()) * choices.length))];
     const located = { ...plan, id: chosen.id, label: `${plan.label} at ${chosen.site.name}`, travel: chosen.site.travel,
         settings: { ...plan.settings, ...chosen.site.settings } };
-    return stockOf(s, 'Coins') >= 200 ? transit(located, travelFood(s)) : located;
+    return stockOf(s, 'Coins') >= 200 ? transit(located, plan.food ?? travelFood(s)) : located;
 }

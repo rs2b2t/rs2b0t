@@ -316,6 +316,7 @@ Wilderness green dragons N of Edgeville: melee/mage w/ anti-dragon shield, banks
 | `shield` | string | `"Dragonfire shield"` | Anti-dragon shield — one of: Dragonfire shield |
 | `usePotions` | boolean | `true` | Drink super attack / strength |
 | `loadout` | string | `""` | Loadout — one of:  |
+| `food` | string | `""` | Food |
 | `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
 | `panicHp` | number (1–98) | `30` | Escape below HP% |
 | `foodReserve` | number (0–27) | `4` | Food kept back from slot-freeing |
@@ -403,6 +404,7 @@ Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought throu
 | `usePotions` | boolean | `true` | Drink super sets |
 | `prayMelee` | boolean | `true` | Pray Protect from Melee on the metal dragons |
 | `loadout` | string | `""` | Loadout — one of:  |
+| `food` | string | `""` | Food |
 | `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
 | `panicHp` | number (1–98) | `30` | Panic-to-bank below HP% |
 | `retreatHp` | number (0–99) | `50` | Retreat to a safespot below HP% |
@@ -1072,6 +1074,7 @@ All-in-one quest completer — queues the implemented quests (empty selection = 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `quests` | string[] | `[]` | Quest queue (empty = all) — one of: Big Chompy Bird Hunting, Biohazard, Black Knight's Fortress, Clock Tower, Cook's Assistant, Death Plateau, Demon Slayer, Digsite Quest, Doric's Quest, Dragon Slayer, Druidic Ritual, Dwarf Cannon, Eadgar's Ruse, Elemental Workshop, Ernest the Chicken, Family Crest, Fight Arena, Fishing Contest, Gertrude's Cat, Goblin Diplomacy, Hazeel Cult, Hero's Quest, Holy Grail, Horror from the Deep, Imp Catcher, Jungle Potion, Legends Quest, Lost City, Merlin's Crystal, Monk's Friend, Murder Mystery, Nature Spirit, Observatory Quest, Pirate's Treasure, Plague City, Priest in Peril, Prince Ali Rescue, Regicide, Romeo & Juliet, Rune Mysteries Quest, Scorpion Catcher, Sea Slug Quest, Shades of Mortton, Sheep Herder, Sheep Shearer, Shield of Arrav, Shilo Village, Tai Bwo Wannai Trio, Temple of Ikov, The Fremennik Trials, The Grand Tree, The Knight's Sword, The Restless Ghost, The Tourist Trap, Tree Gnome Village, Tribal Totem, Troll Stronghold, Underground Pass, Vampire Slayer, Watch Tower, Waterfall Quest, Witch's House, Witch's Potion |
+| `gatherWildernessPlanks` | boolean | `true` | Gather Wilderness planks |
 | `loadout` | string | `""` | Loadout — one of:  |
 | `food` | string | `"Lobster"` | Food — one of: Shark, Lobster, Swordfish, Tuna, Salmon, Trout, Pike, Bass, Herring, Sardine, Anchovies, Shrimps, Cooked meat, Cooked chicken, Bread, Stew, Cake, Chocolate cake, Plain pizza, Meat pizza, Anchovy pizza, Pineapple pizza, Redberry pie, Meat pie, Apple pie |
 | `arravGang` | string | `"random"` | Shield of Arrav gang — one of: random, phoenix, blackarm |
