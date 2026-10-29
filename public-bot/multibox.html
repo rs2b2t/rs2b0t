@@ -119,6 +119,62 @@
         .rs2b0t-world-selector { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 0; font-size: 11px; color: #9bd49b; }
         .rs2b0t-world-selector select, .rs2b0t-world-selector button { background: #101d11; border: 1px solid #28522a; color: #9bd49b; font: inherit; padding: 3px; cursor: pointer; }
         .rs2b0t-world-status { flex-basis: 100%; color: #999; line-height: 1.4; }
+        #mbx-manage { order: -99999; flex: 0 0 auto; padding: 8px; background: #07330a; color: #9bd49b; border: 1px solid #28522a; border-radius: 3px; font: inherit; cursor: pointer; }
+        #mbx-manage:hover { border-color: #04A800; color: #5be05b; }
+        .mbx-roster-overlay { position: fixed; inset: 0; z-index: 68; background: rgba(0,0,0,.72); display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; }
+        .mbx-roster-overlay[hidden], .mbx-roster-dialog [hidden] { display: none; }
+        .mbx-roster-dialog { width: 1040px; max-width: 100%; max-height: calc(100vh - 40px); display: flex; flex-direction: column; background: #111; border: 1px solid #444; border-radius: 4px; box-shadow: 0 20px 80px #000; overflow: hidden; font-size: 11px; }
+        .mbx-roster-dialog header, .mbx-roster-dialog footer { display: flex; align-items: center; gap: 20px; padding: 14px 16px; background: #141414; flex-shrink: 0; }
+        .mbx-roster-dialog header { border-bottom: 1px solid #333; }
+        .mbx-roster-dialog header strong { color: #5be05b; font-size: 12px; }
+        .mbx-roster-dialog button, .mbx-roster-dialog input, .mbx-roster-dialog select { font: inherit; }
+        .mbx-roster-dialog button { padding: 6px 8px; color: #a6d9a6; border: 1px solid #28522a; background: #101d11; border-radius: 2px; cursor: pointer; }
+        .mbx-roster-dialog button:hover, .mbx-roster-dialog button[aria-pressed="true"] { color: #5be05b; border-color: #04A800; background: #07330a; }
+        .mbx-roster-dialog button:disabled, .mbx-roster-dialog input:disabled, .mbx-roster-dialog select:disabled { opacity: .45; cursor: default; }
+        .mbx-roster-dialog :focus-visible { outline: 1px solid #5be05b; outline-offset: 2px; }
+        #mbx-roster-close { margin-left: auto; padding: 0 3px; border: 0; background: transparent; color: #888; font-size: 18px; line-height: 1; }
+        .mbx-roster-filters { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 16px 16px 12px; flex-shrink: 0; }
+        .mbx-roster-tabs { display: flex; flex-wrap: wrap; gap: 5px; }
+        #mbx-roster-search { width: 150px; background: #000; border: 1px solid #333; color: #ddd; border-radius: 3px; padding: 7px 8px; }
+        .mbx-roster-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 16px; padding: 10px 12px; border: 1px solid #333; background: #141414; flex-shrink: 0; }
+        #mbx-roster-count { color: #5be05b; margin-right: 6px; }
+        .mbx-roster-content { display: grid; grid-template-columns: minmax(0, 1fr) 258px; min-height: 260px; overflow-y: auto; margin: 0 16px; border: 1px solid #333; border-top: 0; }
+        .mbx-roster-list { min-width: 0; overflow-x: auto; }
+        .mbx-roster-scope { display: flex; align-items: center; gap: 5px; padding: 8px 12px; border-bottom: 1px solid #333; color: #999; font-size: 10px; }
+        .mbx-roster-scope span { margin-right: auto; }
+        .mbx-roster-scope button { padding: 2px 4px; border: 0; background: transparent; color: #999; }
+        #mbx-roster-table { width: 100%; min-width: 650px; border-collapse: collapse; table-layout: fixed; text-align: left; }
+        #mbx-roster-table th { color: #999; font-weight: normal; font-size: 10px; padding: 9px 4px; }
+        #mbx-roster-table th:first-child { width: 25px; }
+        #mbx-roster-table th:nth-child(2) { width: 42%; }
+        #mbx-roster-table th:nth-child(3) { width: 16%; }
+        #mbx-roster-table th:nth-child(4) { width: 9%; }
+        #mbx-roster-table th:last-child { width: 45px; }
+        #mbx-roster-table td { padding: 10px 4px; border-top: 1px solid #292929; overflow-wrap: anywhere; vertical-align: middle; }
+        #mbx-roster-table td:first-child, #mbx-roster-table th:first-child { padding-left: 12px; }
+        #mbx-roster-table small { display: block; margin-top: 5px; font-size: 10px; line-height: 1.4; }
+        #mbx-roster-table input { accent-color: #7ed387; margin: 0; }
+        #mbx-roster-table tr.is-selected { background: #0b1c0d; }
+        #mbx-roster-table [data-edit] { border: 0; background: transparent; color: #999; padding: 3px 0; font-size: 10px; }
+        .mbx-roster-muted { color: #999; }
+        .mbx-roster-pane { padding: 14px; border-left: 1px solid #333; background: #141414; min-width: 0; }
+        .mbx-roster-pane h3 { color: #5be05b; font-size: 12px; font-weight: normal; margin: 0 0 10px; }
+        .mbx-roster-pane p { line-height: 1.5; color: #aaa; }
+        .mbx-roster-field { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; color: #999; }
+        .mbx-roster-field select { width: 100%; box-sizing: border-box; min-width: 0; background: #000; color: #ddd; border: 1px solid #333; border-radius: 2px; padding: 6px; }
+        .mbx-roster-preview { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 8px; margin: 12px 0; padding: 10px; border: 1px solid #333; border-radius: 2px; background: #0c0c0c; overflow-wrap: anywhere; font-size: 10px; }
+        .mbx-roster-preview dt:first-child { grid-column: 1 / -1; font-size: 9px; margin-bottom: 4px; }
+        .mbx-roster-preview dd { margin: 0; text-align: right; }
+        .mbx-roster-note { border-left: 2px solid #28522a; padding-left: 8px; }
+        #mbx-roster-apply { width: 100%; border-color: #04A800; color: #5be05b; background: #07330a; padding: 9px; }
+        .mbx-roster-status { display: flex; justify-content: space-between; gap: 12px; padding: 12px 16px; font-size: 10px; color: #999; flex-shrink: 0; }
+        #mbx-roster-message { text-align: right; }
+        .mbx-roster-dialog footer { justify-content: space-between; border-top: 1px solid #333; }
+        #mbx-roster-done { padding: 7px 20px; }
+        .mbx-roster-dialog .is-running, .mbx-roster-dialog .is-done { color: #5be05b; }
+        .mbx-roster-dialog .is-failed { color: #e05b5b; }
+        .mbx-roster-dialog .is-skipped { color: #d9a45b; }
+        @media (max-width: 1000px) { .mbx-roster-overlay { padding: 8px; } .mbx-roster-dialog { max-height: calc(100vh - 16px); } .mbx-roster-content { grid-template-columns: 1fr; } .mbx-roster-pane { border-left: 0; border-top: 1px solid #333; } .mbx-roster-filters { align-items: stretch; flex-direction: column; } #mbx-roster-search { width: auto; } }
     </style>
 </head>
 <body>
@@ -126,6 +182,7 @@
         <div id="mbx-main"></div>
         <div id="mbx-rail" tabindex="0" aria-label="running bots">
             <div id="mbx-tabs" aria-label="bot tabs"></div>
+            <button id="mbx-manage" type="button">manage bots</button>
             <div id="mbx-add" class="mbx-addtile">+ add bot</div>
             <div id="mbx-resources" class="mbx-resources">
                 <div id="mbx-resource-bots" class="mbx-resource-bots">0 bots (0 running)</div>

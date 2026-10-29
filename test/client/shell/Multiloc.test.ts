@@ -1,0 +1,220 @@
+import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+
+mock.module('#/client/3rdparty/audio.js', () => ({ playWave: async (): Promise<void> => {}, setWaveVolume: (): void => {} }));
+mock.module('#/client/3rdparty/tinymidipcm.js', () => ({ playMidi: (): void => {}, setMidiVolume: (): void => {}, stopMidi: (): void => {} }));
+
+const { Client } = await import('#/client/shell/Client.js');
+const { default: ClientLocAnim } = await import('#/client/dash3d/ClientLocAnim.js');
+const { default: ClientBuild } = await import('#/client/shell/ClientBuild.js');
+const { default: LocType } = await import('#/client/config/LocType.js');
+const { default: VarBitType } = await import('#/client/config/VarBitType.js');
+const { default: Model } = await import('#/client/dash3d/Model.js');
+const { BotHost } = await import('#/bot/runtime/BotHost.js');
+const { ServerProt } = await import('#/client/io/ServerProt.js');
+const { attach, detach, invalidateLocSnapshots, reader } = await import('#/bot/adapter/ClientAdapter.js');
+
+type Loc = InstanceType<typeof LocType>;
+const rawId = 5;
+const transformedId = 9;
+const typecode = (2 << 29) | (rawId << 14) | (2 << 7) | 1;
+const locs = new Map<number, Loc>();
+const origList = LocType.list;
+const origVarbits = VarBitType.list;
+const origPickedCount = Model.pickedCount;
+const origPickedTypecode = Model.pickedEntityTypecode[0];
+const origLowMem = ClientBuild.lowMem;
+const origApp = ClientLocAnim.app;
+
+function loc(id: number, name: string, op: string[], multiloc: number[] = []): Loc {
+    const result = Object.create(LocType.prototype) as Loc;
+    result.id = id;
+    result.name = name;
+    result.op = [op[0], null, null, null, null];
+    result.multivarbit = multiloc.length ? 0 : -1;
+    result.multiloc = multiloc;
+    result.anim = -1;
+    result.getModel = (shape, angle) => ({ id, shape, angle }) as never;
+    return result;
+}
+
+function scene(varValue: number) {
+    return {
+        world: {
+            wallType: () => 0,
+            sceneType: (_level: number, x: number, z: number) => x === 1 && z === 2 ? typecode : 0,
+            gdType: () => 0,
+            decorType: () => 0,
+            typeCode2: () => 0
+        },
+        localPlayer: { x: 0, z: 0 },
+        minusedlevel: 0,
+        mapBuildBaseX: 3200,
+        mapBuildBaseZ: 3200,
+        var: [varValue]
+    };
+}
+
+beforeEach(() => {
+    locs.set(rawId, loc(rawId, 'Raw door', ['Open'], [transformedId, -1]));
+    locs.set(transformedId, loc(transformedId, 'Secret passage', ['Enter']));
+    LocType.list = (id: number) => locs.get(id)!;
+    VarBitType.list = [{ basevar: 0, startbit: 1, endbit: 3 } as InstanceType<typeof VarBitType>];
+    invalidateLocSnapshots();
+});
+
+afterEach(() => {
+    detach();
+    invalidateLocSnapshots();
+});
+
+afterAll(() => {
+    LocType.list = origList;
+    VarBitType.list = origVarbits;
+    Model.pickedCount = origPickedCount;
+    Model.pickedEntityTypecode[0] = origPickedTypecode;
+    ClientBuild.lowMem = origLowMem;
+    ClientLocAnim.app = origApp;
+});
+
+function menu(varValue: number): {
+    menuOption: string[];
+    menuNumEntries: number;
+    menuParamA: Int32Array;
+    var: number[];
+    doAction(optionId: number): void;
+    addChat(type: number, text: string, from: string): void;
+} {
+    const client = Object.assign(Object.create(Client.prototype), scene(varValue), {
+        useMode: 0,
+        targetMode: 0,
+        menuOption: [] as string[],
+        menuAction: new Int32Array(20),
+        menuParamA: new Int32Array(20),
+        menuParamB: new Int32Array(20),
+        menuParamC: new Int32Array(20),
+        menuNumEntries: 0
+    });
+    Model.pickedCount = 1;
+    Model.pickedEntityTypecode[0] = typecode;
+    client.addWorldOptions();
+    return client;
+}
+
+describe('multiloc placement', () => {
+    test('menu uses the visible child but retains the placement typecode', () => {
+        const result = menu(0);
+        expect(result.menuOption).toContain('Enter @cya@Secret passage');
+        expect(result.menuOption).not.toContain('Open @cya@Raw door');
+        expect(result.menuParamA[1]).toBe(typecode);
+    });
+
+    test('hidden child has no menu or snapshot entry', () => {
+        expect(menu(2).menuOption).toEqual(['Walk here']);
+        attach(scene(2) as never);
+        expect(reader.locs()).toEqual([]);
+    });
+
+    test('snapshot exposes visible child actions but preserves placement id', () => {
+        attach(scene(0) as never);
+        expect(reader.locs()[0]).toMatchObject({ id: rawId, typecode, name: 'Secret passage' });
+        expect(reader.locs()[0].ops[0]).toBe('Enter');
+    });
+
+    test('nonanimated multiloc renders selected child and disappears for hidden child', () => {
+        ClientLocAnim.app = { var: [0] } as InstanceType<typeof Client>;
+        const model = new ClientLocAnim(rawId, 10, 0, 0, 0, 0, 0, -1, true);
+        expect((model.getTempModel() as unknown as { id: number }).id).toBe(transformedId);
+        ClientLocAnim.app.var[0] = 2;
+        expect(model.getTempModel()).toBeNull();
+    });
+
+    test.each([ServerProt.VARP_SMALL, ServerProt.VARP_LARGE, ServerProt.VARP_SYNC])('varp packet %i refreshes cached snapshot', ptype => {
+        const client = scene(0);
+        attach(client as never);
+        expect(reader.locs()[0].name).toBe('Secret passage');
+        client.var[0] = 2;
+        (BotHost as unknown as { handlePacket(ptype: number): void }).handlePacket(ptype);
+        expect(reader.locs()).toEqual([]);
+    });
+
+    test('out of range transform state hides placement', () => {
+        expect(menu(4).menuOption).toEqual(['Walk here']);
+    });
+
+    test('single-bit varbit uses its selected bit', () => {
+        VarBitType.list[0].endbit = 1;
+        expect(menu(2).menuOption).toEqual(['Walk here']);
+    });
+
+    test('highest selected bit can choose an out of range child', () => {
+        expect(menu(8).menuOption).toEqual(['Walk here']);
+    });
+
+    test('two-bit varbit selects its third child', () => {
+        VarBitType.list[0].endbit = 2;
+        locs.set(10, loc(10, 'Third passage', ['Cross']));
+        locs.get(rawId)!.multiloc = [transformedId, -1, 10];
+        expect(menu(4).menuOption).toContain('Cross @cya@Third passage');
+    });
+
+    for (const path of ['add', 'change']) {
+        test.each([0, 1, 2, 3])(`${path} ground decoration preserves placement angle %i`, angle => {
+            ClientBuild.lowMem = false;
+            ClientLocAnim.app = { var: [0] } as InstanceType<typeof Client>;
+            const groundh = [[Int32Array.of(0, 0), Int32Array.of(0, 0)]];
+            const builder = Object.assign(Object.create(ClientBuild.prototype), { groundh });
+            let built: unknown;
+            const world = { setGroundDecor: (model: unknown) => { built = model; } };
+            if (path === 'add') {
+                builder.addLoc(0, 0, 0, rawId, 22, angle, world, null);
+            } else {
+                ClientBuild.changeLocUnchecked(0, 0, 0, rawId, 22, angle, 0, groundh, world as never, null);
+            }
+            expect(built).toBeInstanceOf(ClientLocAnim);
+            if (!(built instanceof ClientLocAnim)) throw new Error('Missing dynamic ground decoration');
+            expect(built.index).toBe(rawId);
+            expect(built.getTempModel()).toMatchObject({ id: transformedId, shape: 22, angle });
+        });
+    }
+
+    test.each(['A hidden entrance.', null])('examine uses the visible child description %s', description => {
+        locs.get(rawId)!.desc = 'An ordinary door.';
+        locs.get(transformedId)!.desc = description;
+        const client = menu(0);
+        const messages: string[] = [];
+        client.addChat = (_type, text) => { messages.push(text); };
+        client.doAction(client.menuNumEntries - 1);
+        expect(messages).toEqual([description ?? "It's a Secret passage."]);
+    });
+
+    test.each([2, 4])('examine ignores a menu entry whose child is now hidden at state %i', state => {
+        const client = menu(0);
+        const messages: string[] = [];
+        client.addChat = (_type, text) => { messages.push(text); };
+        client.var[0] = state;
+        client.doAction(client.menuNumEntries - 1);
+        expect(messages).toEqual([]);
+    });
+
+    test('ordinary loc keeps its examine description', () => {
+        locs.set(rawId, loc(rawId, 'Raw door', ['Open']));
+        locs.get(rawId)!.desc = 'An ordinary door.';
+        const client = menu(0);
+        const messages: string[] = [];
+        client.addChat = (_type, text) => { messages.push(text); };
+        client.doAction(client.menuNumEntries - 1);
+        expect(messages).toEqual(['An ordinary door.']);
+    });
+
+    test('ordinary loc keeps its own menu and snapshot definition', () => {
+        locs.set(rawId, loc(rawId, 'Raw door', ['Open']));
+        expect(menu(0).menuOption).toContain('Open @cya@Raw door');
+        attach(scene(0) as never);
+        expect(reader.locs()[0]).toMatchObject({ id: rawId, typecode, name: 'Raw door' });
+    });
+
+    test('ordinary loc with no transform still renders', () => {
+        const model = new ClientLocAnim(transformedId, 10, 0, 0, 0, 0, 0, -1, true);
+        expect((model.getTempModel() as unknown as { id: number }).id).toBe(transformedId);
+    });
+});

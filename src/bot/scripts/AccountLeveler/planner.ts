@@ -14,17 +14,19 @@ export function resolveActivity(s: LevelerSnapshot, plan: ActivityPlan, memory: 
     if (chain.includes(plan.id)) return { kind: 'blocked', reason: `Supply dependency cycle: ${[...chain, plan.id].join(' -> ')}` };
     if (usesActivityCooldown(plan) && (memory.cooldowns[plan.id] ?? 0) > s.now) return { kind: 'blocked', reason: `${plan.label} is cooling down after a failed attempt` };
     let budget = 0;
+    const reserve = Math.max(SHOPPING_RESERVE, plan.needs.find(need => need.item === 'Coins')?.count ?? 0);
     for (const need of plan.needs) {
         const missing = need.count - stockOf(s, requirementKey(need));
         if (missing <= 0) continue;
-        if (s.unavailableItems?.includes(need.item.toLowerCase())) return { kind: 'blocked', reason: `${need.item} is unavailable from its supplier this run` };
+        const alternative = need.item === 'Chaos rune' ? producer(s, plan.objective, need, memory, random) : null;
+        if (!alternative && s.unavailableItems?.includes(need.item.toLowerCase())) return { kind: 'blocked', reason: `${need.item} is unavailable from its supplier this run` };
         const offer = supplyOffer(need.item);
-        if (offer) {
+        if (offer && !alternative) {
             budget += purchaseBudget(offer, missing);
-            if (budget + SHOPPING_RESERVE > stockOf(s, 'Coins')) return { kind: 'blocked', reason: `Not enough banked Coins to buy ${need.item} (budget ${budget + SHOPPING_RESERVE}, including travel reserve)` };
+            if (budget + reserve > stockOf(s, 'Coins')) return { kind: 'blocked', reason: `Not enough banked Coins to buy ${need.item} (budget ${budget + reserve}, including activity coin reserve)` };
             continue;
         }
-        const dependency = producer(s, plan.objective, need, memory, random);
+        const dependency = alternative ?? producer(s, plan.objective, need, memory, random);
         if (!dependency) return { kind: 'blocked', reason: `Cannot source ${need.count} ${need.item} for ${plan.label}` };
         const resolved = resolveActivity(s, dependency, memory, random, [...chain, plan.id]);
         return resolved.kind === 'activity' ? { ...resolved, queue: [...resolved.queue, plan] } : resolved;

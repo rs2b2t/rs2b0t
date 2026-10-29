@@ -5,6 +5,8 @@ export interface LevelerSnapshot {
     stock: Record<string, number>;
     bankReady: boolean;
     quests: Record<string, boolean>;
+    questPoints?: number;
+    dragonStage?: number;
     target: number;
     wilderness: boolean;
     now: number;

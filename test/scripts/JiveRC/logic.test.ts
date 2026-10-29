@@ -1,6 +1,6 @@
 import { expect, test, describe } from 'bun:test';
 
-import { planStoreStep, offerCount, coinTargetFor, shortRouteWithdraw, RUNES, RUNE_OPTIONS, DEFAULT_RUNE, TRADE_CAP, TRADE_ADJACENT, TRADE_NO_WALK, RUNNER_ASK_MS, MASTER_HANDSHAKE_MS, BUY_ONLY_STOCK, LOW_COINS, MIN_COIN_TARGET, SPIDER_SAFE, spiderSafeVia, tradeDelivered, runnerShouldWalkToMeet, runnerMayLeaveAltar, masterPickTradeTarget, masterOfferDecision, tradeWindowIsFor, masterShouldExitTemple, masterShouldEnterAltar, keepNames, isLitter, isEventHeld, isDroppableLitter, runnerShouldRequestTrade } from '#/bot/scripts/NatureCrafter/NatureRunnerLogic.js';
+import { planStoreStep, offerCount, coinTargetFor, shortRouteWithdraw, RUNES, RUNE_OPTIONS, DEFAULT_RUNE, TRADE_CAP, TRADE_ADJACENT, TRADE_NO_WALK, RUNNER_ASK_MS, MASTER_HANDSHAKE_MS, BUY_ONLY_STOCK, LOW_COINS, MIN_COIN_TARGET, SPIDER_SAFE, spiderSafeVia, tradeDelivered, runnerShouldWalkToMeet, runnerMayLeaveAltar, masterPickTradeTarget, masterOfferDecision, tradeWindowIsFor, masterShouldExitTemple, masterShouldEnterAltar, keepNames, isLitter, isEventHeld, isDroppableLitter, runnerShouldRequestTrade } from '#/bot/scripts/JiveRC/logic.js';
 
 describe('litter keep-list', () => {
     const runnerKeep = keepNames('Nature talisman', null);
@@ -93,7 +93,7 @@ describe('RUNES (one row per rune the pair can run)', () => {
     });
 
     test('the dropdown offers exactly the configured runes, defaulting to the original nature loop', () => {
-        expect(RUNE_OPTIONS).toEqual(['Nature runes', 'Air runes']);
+        expect(RUNE_OPTIONS).toEqual(['Nature runes', 'Air runes', 'Cosmic runes']);
         expect(RUNES[DEFAULT_RUNE]).toBeDefined();
         expect(DEFAULT_RUNE).toBe('Nature runes');
     });

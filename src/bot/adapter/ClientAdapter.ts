@@ -4,6 +4,7 @@ import Skill from '#/client/shell/Skill.js';
 import { ButtonType, ComponentType } from '#/client/config/IfType.js';
 import IfType from '#/client/config/IfType.js';
 import LocType from '#/client/config/LocType.js';
+import { resolveMultiloc } from '#/client/config/resolveMultiloc.js';
 import ObjType from '#/client/config/ObjType.js';
 import CollisionMap from '#/client/dash3d/CollisionMap.js';
 import Model from '#/client/dash3d/Model.js';
@@ -971,7 +972,10 @@ export const reader = {
                     }
 
                     const id = (typecode >> 14) & 0x7fff;
-                    const loc = LocType.list(id);
+                    const loc = resolveMultiloc(LocType.list(id), raw.var);
+                    if (!loc) {
+                        continue;
+                    }
                     const x = raw.mapBuildBaseX + lx;
                     const z = raw.mapBuildBaseZ + lz;
 

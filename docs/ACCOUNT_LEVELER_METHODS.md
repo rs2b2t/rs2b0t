@@ -4,6 +4,18 @@ The default target is every enabled skill to 60. Lower targets remain selectable
 
 The planner checks loaded bank contents, inventory, equipment, levels, quest completion, supplier failures and available gold before choosing work. It buys tools separately from choosing resources: a better pickaxe doesn't force a switch to a higher ore. Completed resource dependencies return to their queued objective.
 
+## Dragon Slayer and dragon bones
+
+While melee or Prayer remains below target, accounts with Attack, Strength, Defence and Hitpoints 40 can prepare for Dragon Slayer. The planner completes supported solo quests until it has 32 quest points, skips completed quests, and respects quest cooldowns. It prepares Fishing and Cooking 40 when Lobsters are not stocked. Missing quest supplies can also require Smithing 34, Mining 30 and Crafting 8. Banked Nails and an Unfired bowl satisfy those material prerequisites directly.
+
+Starting Dragon Slayer reserves 15,000 coins separately from equipment purchases. Resumed quests read the journal and account for consumed ship supplies. With Wilderness disabled, bring the required Planks; the delegated quest is also forbidden from gathering replacements in the Wilderness. Completing the quest enables owned Rune platebodies through the existing equipment selector.
+
+Prayer training rotates between eligible green and blue dragon sites. It disables clue detours and potion use, explicitly chooses Lobsters so another saved loadout cannot replace the food, and stops at the Prayer target. Blue dragons handle their own dusty-key acquisition. Green dragons use the existing escape-to-bank behavior. Questing is part of unfinished combat progression; accounts whose combat targets are already complete keep the existing skilling and completion behavior.
+
+## Paladin rune supplies
+
+Accounts already at Thieving 70, Hitpoints 30 and melee stats 20 can pickpocket Ardougne Paladins for missing chaos runes. The trip prepares food, collects the requested rune batch and returns to the queued Magic activity, even when shops have marked chaos runes unavailable. It does not train Thieving to unlock Paladins. Lower-level accounts retain shop supplies and Strike spells.
+
 ## Training catalog
 
 Levels below are **selection thresholds**, which can deliberately differ from the game's minimum. Methods remain in use until the next useful threshold or the configured target. The controller returns to the bank to reconsider methods and equipment at those thresholds and between training sessions.
@@ -15,8 +27,8 @@ Levels below are **selection thresholds**, which can deliberately differ from th
 | Defence | Same weapon rules; improve body, legs and helmet as Defence permits. | Same camps, Defence style. | Armour budget preserves money for the other kit slots. Helmets use the remaining budget after weapon, body and legs. |
 | Hitpoints | Train alongside melee. If still below target, continue combat using the lowest melee stat. | Same camps and supplies. | Does not require a separate XP method. |
 | Ranged | Bow gates: normal 1, oak 5, willow 20, maple 30, yew 40. Best available usable shortbow, then same-tier longbow. | Lowe stocks normal/oak bows; bronze arrows come from Lowe, then Hickton in Catherby. Higher bows must already be owned. Rapid style, up to 300 bronze arrows carried. | Bronze arrows remain compatible with all selected bows. Strung bows are identified by item ID, never by display name alone. |
-| Magic | Wind/Water/Earth/Fire Strike at 1/5/9/13; Wind/Water/Earth/Fire Bolt at 17/23/29/35. | Staff of air from Zaff; mind/chaos and elemental runes from Aubury, then Betty in Port Sarim. Carry up to 150 casts, reserve up to 200 casts. | Strongest usable banked spell first, then the strongest affordable refill; lower strikes remain valid. Air runes supplied by the staff. |
-| Prayer | Bury bones while training combat; continue fighting if Prayer remains below target. | Same camps; AutoFighter loots and buries Bones and Big bones. | Giant camps contribute Prayer XP; no assumed dragon-bone stock. |
+| Magic | Wind/Water/Earth/Fire Strike at 1/5/9/13; Wind/Water/Earth/Fire Bolt at 17/23/29/35. | Staff of air from Zaff; mind/chaos and elemental runes from Aubury, then Betty in Port Sarim. Eligible accounts pickpocket Paladins for missing chaos runes. Carry up to 150 casts, reserve up to 200 casts. | Paladin-eligible accounts prefer affordable Bolt spells; otherwise use the strongest banked spell, then an affordable refill. Strikes remain available. Air runes come from the staff. |
+| Prayer | Bury ordinary bones early, then hunt green or Taverley blue dragons when prepared. | Dragonfire shield, melee kit, 20 Lobsters carried and 40 stocked, plus 200 travel coins. Dragon scripts loot and bury Dragon bones. | Requires Attack, Strength, Defence and Hitpoints 40. Green dragons require Wilderness enabled. Missing protection or cooling-down dragon sites fall back to ordinary combat. |
 | Fishing | 1–19 small net; 20+ fly fishing for trout/salmon. Salmon joins the catch at 30. | Net: Draynor. Fly rod + up to 200 feathers: Seers or Barbarian Village, with local banking. | Net remains a cheap fallback below 40 if fly supplies are unaffordable/unavailable. At 40+, prepared accounts can use Catherby lobsters; fly fishing remains the fallback. Exact shrimp requests still use a net. |
 | Fishing for food | Trout at 20; salmon at 30; lobster at 40 when requested by cooking. | Lobster pot at Catherby with its local bank. | No Karamja ferry loop. Lobsters can supply food or train Fishing from 40. |
 | Cooking | Shrimps 1, trout 15, salmon 25, lobster 40. | CookBot, Catherby, Seers or Draynor range; 28 raw fish per batch. | Prefer the highest eligible **banked batch**, then the highest fish the account can catch. Cooking 1 never selects banked trout. |
@@ -91,6 +103,6 @@ Failures never finish the account leveler. Preparation retries from the bank twi
 
 When no method is currently possible, the leveler rechecks bank supplies and supplier availability at least every 30 seconds, or when an earlier cooldown expires. The blocking reason stays visible. Old gathering cooldowns are discarded, and the latest failure reason is saved separately from the short diagnostic history. Reaching every target still finishes successfully, and the Stop button still stops the script.
 
-Source of truth: `src/bot/scripts/AccountLeveler/catalog.ts`, `methods.ts`, `equipment.ts`, `magic.ts`, `combat.ts`, `combatProgression.ts`, `trainingCamps.ts`, and the existing gathering-location, tool-tier, spell and shop databases. These choices use this repository's game revision, not modern OSRS requirements.
+Source of truth: `src/bot/scripts/AccountLeveler/catalog.ts`, `methods.ts`, `equipment.ts`, `magic.ts`, `dragons.ts`, `runes.ts`, `combat.ts`, `combatProgression.ts`, `trainingCamps.ts`, and the existing gathering-location, tool-tier, spell and shop databases. These choices use this repository's game revision, not modern OSRS requirements.
 
 Vial provisioning banks partial purchases and moves to the next supplier when stock runs out, a purchase fails, or the supplier cannot be reached. Empty-vial requirements use Jatix, Sigmund, then Jiminua. The leveler checks actual inventory changes, keeps the travel coin reserve, and fills one vial at a time at Falador fountain. If every source is exhausted, mandatory provisioning reports a temporary stock shortage; optional startup shopping defers the deficit. Quest-gated shops are excluded.
