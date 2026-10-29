@@ -38,8 +38,8 @@ try {
     const before = await snapshot();
     await mkdir('docs/e2e', { recursive: true });
     await page.screenshot({ path: 'docs/e2e/issue-739-before.png', fullPage: true });
-    await setSettings(page, 'NatureCrafter', { mode: 'Runner', rune: 'Nature runes', partner: 'fixturemaster', bankEvery: 0 });
-    await startScript(page, 'NatureCrafter');
+    await setSettings(page, 'JiveRC', { mode: 'Runner', rune: 'Nature runes', partner: 'fixturemaster', bankEvery: 0 });
+    await startScript(page, 'JiveRC');
     await page.waitForFunction(() => {
         const g = globalThis as never as Api;
         return g.__rs2b0t.Inventory.count('Coins') === 450 && !g.rs2b0t.reader.groundItems().some(item => item.id === 995 && item.distance <= 2);

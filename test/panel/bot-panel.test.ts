@@ -224,3 +224,29 @@ test('local status and wall link preserve a custom engine node despite an unused
         else process.env.RS2B0T_TARGET = previousMode;
     }
 });
+
+
+test.each(['local', 'session'])('restores a NatureCrafter selection from %s storage as JiveRC', async layer => {
+    const previous = ScriptRegistry.get('JiveRC');
+    class SelectedBot extends LoopingBot { override loop(): void {} }
+    ScriptRegistry.register({ name: 'Legacy selection fallback', description: 'test fixture', create: () => new SelectedBot() });
+    ScriptRegistry.register({ name: 'JiveRC', description: 'test fixture', create: () => new SelectedBot() });
+    localStorage.clear();
+    sessionStorage.clear();
+    const storage = layer === 'local' ? localStorage : sessionStorage;
+    storage.setItem('rs2b0t:selectedScript', 'NatureCrafter');
+    const root = document.createElement('div');
+    const host = { selfTestMissing: [], addDrawListener: () => {} } as unknown as BotHostImpl;
+    try {
+        const panel = new BotPanel(root, host);
+        expect(root.querySelector('.rs2b0t-current-script')?.textContent).toBe('JiveRC');
+        panel.startSelectedScript();
+        await Promise.resolve();
+        expect(ScriptRunner.meta?.name).toBe('JiveRC');
+    } finally {
+        ScriptRunner.stop('test teardown');
+        ScriptRegistry.unregister('JiveRC');
+        ScriptRegistry.unregister('Legacy selection fallback');
+        if (previous) ScriptRegistry.register(previous);
+    }
+});

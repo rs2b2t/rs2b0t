@@ -11,6 +11,7 @@ import { Sustain } from '../../api/sustain/Sustain.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import { QuestEngine } from '../../api/ai/quests/engine/QuestEngine.js';
 import { QUEST_DEFS, defById } from '../../api/ai/quests/defs/index.js';
+import { DragonSupplies } from '../../api/ai/quests/defs/dragonslayer/supplies.js';
 import { QuestFood } from '../../api/ai/quests/food.js';
 import { prayerUpkeep, setQuestPrayer } from '../../api/ai/quests/prayer.js';
 import { QuestLoadout } from '../../api/ai/quests/gear.js';
@@ -62,6 +63,7 @@ export const AIO_SETTINGS: SettingsSchema = {
         label: 'Quest queue (empty = all)',
         help: 'which implemented quests to complete; leave empty to run every implemented quest. Tick order does not matter, the queue runs the built-in order that puts prerequisites first'
     },
+    gatherWildernessPlanks: { type: 'boolean', default: true, label: 'Gather Wilderness planks', help: 'Dragon Slayer gathers missing planks in the Wilderness; disable to require banked planks' },
     loadout: LOADOUT_SETTING,
     food: {
         type: 'string',
@@ -159,6 +161,7 @@ export default class AIOQuester extends TaskBot {
 
         QuestLoadout.current = selectedLoadout(this.settings);
         QuestFood.name = this.foodItem();
+        DragonSupplies.wildernessPlanks = this.settings.bool('gatherWildernessPlanks', true);
         applyArravSettings({
             gang: this.settings.str('arravGang', 'random'),
             partner: this.settings.str('arravPartner', ''),
@@ -183,6 +186,7 @@ export default class AIOQuester extends TaskBot {
     }
 
     override async onStop(): Promise<void> {
+        DragonSupplies.wildernessPlanks = true;
         EventSignal.setInterrupt(null);
         Sustain.set(null);
         setQuestPrayer(null, null);
