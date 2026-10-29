@@ -64,7 +64,9 @@ The level buys the tier; within a tier any type will do. `tier60.rs2` gates drag
 as well as the level, so a level check alone withdraws a weapon the wield is refused for and the
 quest fights bare-handed. `snap.attack` carries the level, the way `snap.prayer` carries points.
 
-Goblin Diplomacy checks banked mail and dye ingredients before gathering. When mail still needs
+Goblin Diplomacy checks banked mail and dye ingredients before gathering. Missing redberries
+get one purchase attempt at Wydin, then ground gathering southeast of Varrock; shared shop
+stock cannot trap the quest in repeated purchase attempts. When mail still needs
 farming, it equips the best usable carried or banked melee weapon, including two-handed swords,
 and clears space for displaced equipment. It selects reachable targets before attacking. Its
 combat loop tracks an encounter through death or a bounded stall, resumes attacks after eating, and keeps incoming damage separate from

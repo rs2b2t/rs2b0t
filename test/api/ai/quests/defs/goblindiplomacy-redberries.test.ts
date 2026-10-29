@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import { EventSignal } from '#/bot/api/execution/EventSignal.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
+import { Game } from '#/bot/api/game/Game.js';
 import { Inventory } from '#/bot/api/inventory/Inventory.js';
 import { Sustain } from '#/bot/api/sustain/Sustain.js';
 import { SHOP_DB } from '#/bot/data/shopdb.js';
@@ -12,6 +13,7 @@ let ticks = 0;
 let stopAt = Infinity;
 let full = false;
 let stock = 1;
+let groundStock = 0;
 let restock = true;
 const spies: { mockRestore(): void }[] = [];
 const quantities: number[] = [];
@@ -22,20 +24,27 @@ beforeEach(() => {
     stopAt = Infinity;
     full = false;
     stock = 1;
+    groundStock = 0;
     restock = true;
     quantities.length = 0;
+    spies.push(spyOn(Game, 'tile').mockReturnValue({x: 3014, z: 3204, level: 0}));
     spies.push(spyOn(Inventory, 'count').mockImplementation(name => name === 'Redberries' ? held : 1000));
     spies.push(spyOn(Inventory, 'isFull').mockImplementation(() => full));
     spies.push(spyOn(EventSignal, 'pending').mockImplementation(() => ticks >= stopAt));
     spies.push(spyOn(Sustain, 'run').mockResolvedValue(undefined));
     spies.push(spyOn(Execution, 'delayTicks').mockImplementation(async count => {
         const next = ticks + count;
-        if (restock && Math.floor(next / 100) > Math.floor(ticks / 100)) stock = 1;
+        if (restock && Math.floor(next / 100) > Math.floor(ticks / 100)) groundStock = 1;
         ticks = next;
     }));
     spies.push(spyOn(steps, 'executeStep').mockImplementation(async step => {
-        expect(step.kind).toBe('buy');
-        if (step.kind !== 'buy') return false;
+        if (step.kind === 'grabGround') {
+            if (groundStock === 0) return false;
+            groundStock--;
+            held++;
+            return true;
+        }
+        if (step.kind !== 'buy') throw new Error('unexpected acquisition step');
         expect(step.item).toBe('Redberries');
         expect(step.shop.npc).toBe('Wydin');
         quantities.push(step.qty);
@@ -50,13 +59,13 @@ afterEach(() => {
     for (const spy of spies.splice(0)) spy.mockRestore();
 });
 
-test('collects all three across Wydin restocks before returning to the engine', async () => {
+test('collects missing ground berries across respawns after one shop visit', async () => {
     const berries = SHOP_DB.wydinstore.items.find(item => item.name === 'Redberries');
     expect(berries?.baseline).toBe(1);
     expect(berries?.restockTicks).toBe(100);
     expect(await acquireRedberries(() => {})).toBe(true);
     expect(held).toBe(3);
-    expect(quantities).toEqual([3, 2, 1]);
+    expect(quantities).toEqual([3]);
     expect(ticks).toBe(200);
     expect(Sustain.run).toHaveBeenCalled();
 });
@@ -70,19 +79,19 @@ test('buys only the missing berry and skips waits when already stocked', async (
     expect(quantities).toEqual([1]);
 });
 
-test('caps an empty shared shop at three restock waits', async () => {
+test('bounds waiting when both the shop and ground spawns are exhausted', async () => {
     stock = 0;
     restock = false;
     expect(await acquireRedberries(() => {})).toBe(false);
-    expect(quantities).toEqual([3, 3, 3, 3]);
+    expect(quantities).toEqual([3]);
     expect(ticks).toBe(300);
 });
 
-test('reports real partial acquisition when other shoppers exhaust later restocks', async () => {
+test('reports partial acquisition when other players exhaust the ground spawns', async () => {
     restock = false;
     expect(await acquireRedberries(() => {})).toBe(true);
     expect(held).toBe(1);
-    expect(quantities).toEqual([3, 2, 2, 2]);
+    expect(quantities).toEqual([3]);
     expect(ticks).toBe(300);
 });
 
@@ -113,4 +122,14 @@ test('propagates a stop thrown by sustain', async () => {
     spyOn(Sustain, 'run').mockRejectedValue(stopped);
     await expect(acquireRedberries(() => {})).rejects.toBe(stopped);
     expect(quantities).toHaveLength(1);
+});
+
+test('resumes gathering near Varrock without returning to Wydin', async () => {
+    held = 1;
+    groundStock = 2;
+    spyOn(Game, 'tile').mockReturnValue({x: 3271, z: 3371, level: 0});
+    expect(await acquireRedberries(() => {})).toBe(true);
+    expect(held).toBe(3);
+    expect(quantities).toEqual([]);
+    expect(ticks).toBe(0);
 });
