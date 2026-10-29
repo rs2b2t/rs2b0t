@@ -35,7 +35,7 @@ import { Locs } from '../../api/locs/Locs.js';
 import {
     AMULET, BARREL_BANK, BARREL_EXIT, BARREL_LOC, BARREL_OP, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, DUNGEON_MIN_Z, EXIT_DOOR, EXIT_DOOR_LOC, EXIT_OPTIONS, ESCAPE_TELES,
     LEDGE_DOOR, LEDGE_LOC, LEDGE_OP, legFor, RAFT_LOC, RAFT_OP, RAFT_STAND,
-    attackRangeFor, eastFirst, lootWaitMs, packForcesBank, ROCK_LOC, sameRoom, takenByAnother, ROPE, ROPE_THROW_STAND, TREE_LOC, TREE_STAND, type EscapeTele
+    attackRangeFor, lootWaitMs, mustResupply, packForcesBank, pickOrder, ROCK_LOC, sameRoom, takenByAnother, ROPE, ROPE_THROW_STAND, TREE_LOC, TREE_STAND, type EscapeTele
 } from './FireGiantLogic.js';
 import { scriptFood } from '../../api/loadout/loadoutPlan.js';
 import { LOADOUT_SETTING } from '../../api/loadout/loadoutSetting.js';
@@ -176,6 +176,16 @@ function needStyleSupplies(): boolean {
         return ammoLeft() === 0;
     }
     return false;
+}
+
+/** Out of the consumables the grind runs on, only the bank fixes this. */
+function needsResupply(bot: FireGiant): boolean {
+    return mustResupply({
+        hasFood: hasFood(),
+        bankKnownEmpty: bot.bankKnownEmpty(),
+        needSupplies: needStyleSupplies(),
+        supplyKnownEmpty: bot.supplyKnownEmpty()
+    });
 }
 
 function usesSafespot(): boolean {
@@ -829,13 +839,7 @@ class BuryBones implements Task {
 class BankRun implements Task {
     constructor(private bot: FireGiant) {}
     validate(): boolean {
-        if (needStyleSupplies() && !this.bot.supplyKnownEmpty()) {
-            return true;
-        }
-        if (!hasFood() && !this.bot.bankKnownEmpty()) {
-            return true;
-        }
-        return packForcesBank(Inventory.isFull(), bankableLootSlots());
+        return needsResupply(this.bot) || packForcesBank(Inventory.isFull(), bankableLootSlots());
     }
     async execute(): Promise<void> {
         if (EventSignal.pending()) {
@@ -1022,6 +1026,12 @@ class Fight implements Task {
             if (EventSignal.pending() || this.bot.died || ChatDialog.canContinue()) {
                 return;
             }
+            // Hand back to the loop so BankRun can restock, this inner cycle
+            // owns the bot for up to two minutes, long enough to die foodless.
+            if (needsResupply(this.bot)) {
+                this.bot.log('out of supplies mid-fight — yielding to the bank run');
+                return;
+            }
             if (needEat()) {
                 await eatOnce(this.bot);
                 continue;
@@ -1057,6 +1067,24 @@ class Fight implements Task {
                 continue;
             }
 
+            // Why: with no target held, the giant already on us is the fight the engine will accept, so it takes the hold. Several can face us at once, so the shared pick order decides between them, as in the re-pick below.
+            // Why: faceEntity flickers and several giants can face us at once, so a held target is never traded on it. The stall re-pick below, which also prefers the giant on us, owns later switches.
+            const attacker = this.targetIdx === null ? giants.filter(g => g.targetsMe()).sort((a, b) => pickOrder({ targetsMe: a.targetsMe(), x: a.tile().x, distance: a.distance() }, { targetsMe: b.targetsMe(), x: b.tile().x, distance: b.distance() }, usesSafespot()))[0] : undefined;
+            if (attacker) {
+                this.skip.delete(attacker.index);
+                this.bot.log(`fire giant ${attacker.index} is on us — switching to it`);
+                this.targetIdx = attacker.index;
+                this.bot.targetIdx = attacker.index;
+                engagedIdx = attacker.index;
+                this.engagedAt = performance.now();
+                this.engagedHealth = -1;
+                // Why: the hold below waits for the giant's health to move, so the switch must swing at once or nothing moves it.
+                // Why: at a safespot an out-of-range click would walk us off the tile, so there the leash below owns the first shot.
+                if (!usesSafespot() || attacker.distance() <= attackRangeFor(STYLE, WEAPON)) {
+                    await attacker.interact('Attack');
+                }
+            }
+
             // Why: you stay in combat with a giant until one of you dies, so re-clicking a live target is noise.
             // Why: Game.inCombat() reads our own combat bar, which never lights up while safespotting, so the target is held instead.
             // Why: the hold breaks early on a random event, a hit landing on us, or the giant's health changing, which proves we are connecting and resets the clock.
@@ -1088,9 +1116,7 @@ class Fight implements Task {
 
             const now = performance.now();
             const candidates = giants.filter(g => !usesSafespot() || (this.skip.get(g.index) ?? 0) < now);
-            const target = usesSafespot()
-                ? candidates.sort((a, b) => eastFirst({ x: a.tile().x, distance: a.distance() }, { x: b.tile().x, distance: b.distance() }))[0]
-                : candidates.sort((a, b) => a.distance() - b.distance())[0];
+            const target = candidates.sort((a, b) => pickOrder({ targetsMe: a.targetsMe(), x: a.tile().x, distance: a.distance() }, { targetsMe: b.targetsMe(), x: b.tile().x, distance: b.distance() }, usesSafespot()))[0];
             if (!target) {
                 await Execution.delayTicks(2);
                 return;
@@ -1142,6 +1168,9 @@ class Fight implements Task {
         const deadline = performance.now() + LEASH_WAIT_MS;
         while (performance.now() < deadline) {
             if (EventSignal.pending() || this.bot.died || ChatDialog.canContinue()) {
+                return true;
+            }
+            if (needsResupply(this.bot)) {
                 return true;
             }
             if (needEat()) {

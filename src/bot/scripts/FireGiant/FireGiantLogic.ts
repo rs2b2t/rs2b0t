@@ -53,6 +53,44 @@ export function takenByAnother(e: Engagement): boolean {
     return e.targetsAnother || (e.inCombat && !e.targetsMe);
 }
 
+// Why: the engine bars an attack on any other npc while one has hit us in the last 8 ticks, so the giant on us outranks the nearer or more eastern one.
+
+/** Orders the giant that is hitting us ahead of every bystander. */
+interface AttackerLike {
+    targetsMe: boolean;
+}
+
+export function attackerFirst(a: AttackerLike, b: AttackerLike): number {
+    return Number(b.targetsMe) - Number(a.targetsMe);
+}
+
+// Why: adoption and the stall re-pick take the same fight, so one order decides both. At a safespot the east-first tie-break keeps the wall-blocked west giant out, and in the open the nearest wins.
+
+/** The one target pick order: the giant on us first, then the stand's tie-break. */
+interface PickLike {
+    targetsMe: boolean;
+    x: number;
+    distance: number;
+}
+
+export function pickOrder(a: PickLike, b: PickLike, atSafespot: boolean): number {
+    return attackerFirst(a, b) || (atSafespot ? eastFirst(a, b) : a.distance - b.distance);
+}
+
+// Why: a bank already found empty is no reason to leave a fight, so only a trip that would fix the shortage counts.
+
+/** Whether the consumables the grind runs on are out and only the bank fixes it. */
+interface SupplyState {
+    hasFood: boolean;
+    bankKnownEmpty: boolean;
+    needSupplies: boolean;
+    supplyKnownEmpty: boolean;
+}
+
+export function mustResupply(s: SupplyState): boolean {
+    return (!s.hasFood && !s.bankKnownEmpty) || (s.needSupplies && !s.supplyKnownEmpty);
+}
+
 // Why: scale pickup wait by distance so safespot recovery does not cancel an in-flight Take.
 
 /** How long to wait for a Take to land, given how far the drop is. */

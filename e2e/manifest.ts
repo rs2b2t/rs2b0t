@@ -714,6 +714,16 @@ export const CASES: readonly Case[] = [
         note: 'Local engine only. A restock that fills the pack, and one dropped Big bones after a 24-food restock, must not bank before the first fight.'
     },
     {
+        id: 'firegiant-last-food-live',
+        harness: 'firegiant-last-food-live.ts',
+        covers: { scripts: ['FireGiant'] },
+        status: 'documented',
+        documentedIn: 'docs/how-to/firegiant-last-food.md',
+        manual: true,
+        budgetMin: 20,
+        note: 'Local engine only. Three lobsters at the melee anchor: after the last food the bot must bank at once, not fight on to the panic line. Every target change must be accounted for, and any refused attack must be corrected by a re-pick within 8 seconds.'
+    },
+    {
         id: 'jivedragons-live',
         harness: 'jivedragons-live.ts',
         covers: { scripts: ['JiveDragons'] },
