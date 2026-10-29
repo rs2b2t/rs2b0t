@@ -72,6 +72,12 @@ and clears space for displaced equipment. It selects reachable targets before at
 combat loop tracks an encounter through death or a bounded stall, resumes attacks after eating, and keeps incoming damage separate from
 the player's own attack progress.
 
+Merlin's Crystal excludes the Wilderness north of the Chaos temple approach on both altar
+journeys. This prevents the Ardougne lever shortcut through poison spiders. A blocked route
+returns to the quest engine without an unrestricted scene-walking fallback.
+The crystal step waits for the shatter result and recognizes the already-freed dialogue after
+the crystal respawns, then proceeds to King Arthur instead of repeating the altar journey.
+
 ## See also
 
 - [Quest provisioning](quest-provisioning.md)
