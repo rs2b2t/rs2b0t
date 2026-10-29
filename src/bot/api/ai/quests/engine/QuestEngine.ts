@@ -372,7 +372,7 @@ export class QuestEngine implements Task {
                 }
             }
             const extras = [coinFloat, foodFloat, potionFloat].filter((w): w is { name: string; qty: number } => w !== null);
-            const needsBankSnapshot = plan.blocked.length > 0 || !coinPlan.drawn
+            const needsBankSnapshot = plan.blocked.length > 0 || plan.gather.length > 0 || !coinPlan.drawn
                 || (foodReady && foodItem && module.food && !this.foodDrawn.has(id) && (snap.inv.get(foodItem.toLowerCase()) ?? 0) < module.food)
                 || (module.pray?.potions && !this.potionsDrawn.has(id) && (snap.inv.get(PRAYER_POTION.toLowerCase()) ?? 0) < module.pray.potions);
             if (!this.bankKnown && needsBankSnapshot) {
@@ -737,6 +737,7 @@ export class QuestEngine implements Task {
     }
 
     private parkOrGiveUp(id: string, name: string, reasons: string[] = []): void {
+        if (!reasons.length && this.lastStepLogged) reasons = [`no progress on ${this.lastStepLogged}`];
         if (reasons.length) this.parkedReasons.set(id, reasons);
         else this.parkedReasons.delete(id);
         const count = (this.parkCounts.get(id) ?? 0) + 1;

@@ -13,6 +13,7 @@ import {
     parseFamilyCrestJournal
 } from '#/bot/api/ai/quests/defs/familycrest/index.js';
 import { sourceCalebFish } from '#/bot/api/ai/quests/defs/familycrest/fish.js';
+import { SHOP_DB } from '#/bot/data/shopdb.js';
 import type { WorldTile } from '#/bot/adapter/ClientAdapter.js';
 import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
 
@@ -714,6 +715,24 @@ describe('Family Crest module wiring', () => {
 describe('Family Crest missing fish', () => {
     const bass = [{ id: FC_ID.BASS, name: 'Bass' }];
     const tuna = [{ id: FC_ID.TUNA, name: 'Tuna' }];
+
+    for (const [id, name, tool, keeper, rodHeld] of [
+        [FC_ID.SALMON, 'Salmon', 'Fly fishing rod', 'Gerrant', false],
+        [FC_ID.SALMON, 'Salmon', 'Feather', 'Gerrant', true],
+        [FC_ID.BASS, 'Bass', 'Big fishing net', 'Harry', false],
+        [FC_ID.TUNA, 'Tuna', 'Harpoon', 'Harry', false],
+        [FC_ID.SHRIMP, 'Shrimps', 'Small fishing net', 'Harry', false]
+    ] as const) {
+        test(`sources ${tool} for ${name} from a shop that restocks it`, () => {
+            const step = sourceCalebFish(snap({ inv: rodHeld ? [['Fly fishing rod', 1]] : [] }), [{ id, name }], 83, 83);
+            expect(step.kind).toBe('buy');
+            if (step.kind !== 'buy') throw new Error('expected fishing equipment purchase');
+            expect(step.item).toBe(tool);
+            expect(step.shop.npc).toBe(keeper);
+            const shop = Object.values(SHOP_DB).find(shop => shop.keepers.includes(step.shop.npc));
+            expect(shop?.items.find(item => item.name === tool)?.baseline ?? 0).toBeGreaterThan(0);
+        });
+    }
 
     test('Ownageie can draw its net to source missing bass at 83 Fishing and Cooking', () => {
         const step = sourceCalebFish(snap({ bank: [['Big fishing net', 2]] }), bass, 83, 83);

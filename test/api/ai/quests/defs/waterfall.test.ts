@@ -39,7 +39,11 @@ const ITEM = {
     ROPE: { id: 954, name: 'Rope' },
     SWORD: { id: 1277, name: 'Bronze sword' },
     EMPTY_CUP: { id: 1980, name: 'Empty cup' },
-    FOOD: { id: 333, name: 'Trout' }
+    FOOD: { id: 1891, name: 'Cake' },
+    PARTIAL_CAKE: { id: 1893, name: '2/3 cake' },
+    CAKE_SLICE: { id: 1895, name: 'Slice of cake' },
+    BREAD: { id: 2309, name: 'Bread' },
+    CHOCOLATE_SLICE: { id: 1901, name: 'Chocolate slice' }
 } as const satisfies Record<string, ItemSpec>;
 
 type ItemQty = readonly [ItemSpec, number];
@@ -304,7 +308,8 @@ describe('food is refilled at a low mark, not on every bite', () => {
     const pack = (held: number): QuestSnapshot => snapshot({
         stage: WATERFALL_STAGE.ENTERED_WATERFALL,
         inv: [[ITEM.FOOD, held]],
-        bank: [[ITEM.FOOD, 100]]
+        bank: [[ITEM.FOOD, 100]],
+        tile: [2509, 3493]
     });
 
     test('a pack above the low mark asks for nothing', () => {
@@ -314,14 +319,81 @@ describe('food is refilled at a low mark, not on every bite', () => {
     });
 
     test('at or under the low mark it refills to the float in one trip', () => {
-        expect(withdrawal(sourceFood(pack(3))!).items).toEqual([{ name: 'Trout', id: 333, qty: 5 }]);
-        expect(withdrawal(sourceFood(pack(0))!).items).toEqual([{ name: 'Trout', id: 333, qty: 8 }]);
+        expect(withdrawal(sourceFood(pack(3))!).items).toEqual([{ name: 'Cake', id: 1891, qty: 5 }]);
+        expect(withdrawal(sourceFood(pack(0))!).items).toEqual([{ name: 'Cake', id: 1891, qty: 8 }]);
     });
 
-    test('an empty bank parks rather than walking there for nothing', () => {
-        const dry = snapshot({ stage: WATERFALL_STAGE.ENTERED_WATERFALL, inv: [[ITEM.FOOD, 1]], bank: [] });
-        expect(sourceFood(dry)?.kind).toBe('wait');
+    test('a caught stall trip keeps refilling until eight foods are held', () => {
+        for (const tile of [[2616, 3332], [2668, 3312], [2655, 3298]] as const) {
+            for (const held of [3, 4, 5, 6, 7]) {
+                const snap = snapshot({ inv: [[ITEM.FOOD, held]], tile });
+                expect(customName(sourceFood(snap)!)).toBe('steal Waterfall cakes');
+            }
+            expect(sourceFood(snapshot({ inv: [[ITEM.FOOD, 8]], tile }))).toBeNull();
+        }
     });
+
+    test('tops off nearby bank food before leaving the resupply area', () => {
+        expect(withdrawal(sourceFood(snapshot({
+            inv: [[ITEM.FOOD, 4]], bank: [[ITEM.FOOD, 100]]
+        }))!).items).toEqual([{ name: 'Cake', id: 1891, qty: 4 }]);
+    });
+
+    test('a missing bite at the tourist office does not trigger a new bank trip', () => {
+        expect(sourceFood(snapshot({ inv: [[ITEM.FOOD, 7]], tile: [2519, 3426] }))).toBeNull();
+    });
+
+    test('finishes gathering food before leaving Ardougne for the Golrie leg', () => {
+        const step = decide(snapshot({
+            stage: WATERFALL_STAGE.READ_BOOK,
+            inv: [[ITEM.COINS, 500], [ITEM.FOOD, 4]],
+            tile: [2655, 3298]
+        }));
+        expect(customName(step)).toBe('steal Waterfall cakes');
+    });
+
+    test('an empty bank sources food from the cake stall', () => {
+        const dry = snapshot({ stage: WATERFALL_STAGE.ENTERED_WATERFALL, inv: [[ITEM.FOOD, 1]], bank: [] });
+        expect(customName(sourceFood(dry)!)).toBe('steal Waterfall cakes');
+    });
+
+    test('scans the bank before stealing even when Lobster is configured', () => {
+        QuestFood.name = 'Lobster';
+        expect(sourceFood(snapshot({ bankKnown: false }))?.kind).toBe('scanBank');
+        expect(withdrawal(sourceFood(snapshot({ bank: [[ITEM.FOOD, 20]] }))!).items)
+            .toEqual([{ name: 'Cake', id: 1891, qty: 8 }]);
+    });
+
+    test('withdraws exact partial cake IDs before resorting to the stall', () => {
+        expect(withdrawal(sourceFood(snapshot({
+            inv: [[ITEM.FOOD, 1]],
+            bank: [[ITEM.FOOD, 2], [ITEM.PARTIAL_CAKE, 3], [ITEM.CAKE_SLICE, 10]]
+        }))!).items).toEqual([
+            { name: 'Cake', id: 1891, qty: 2 },
+            { name: '2/3 cake', id: 1893, qty: 3 },
+            { name: 'Slice of cake', id: 1895, qty: 2 }
+        ]);
+    });
+
+    test('counts partial cakes and stall byproducts together on the quest route', () => {
+        expect(sourceFood(snapshot({ tile: [2509, 3493], inv: [
+            [ITEM.FOOD, 1], [ITEM.PARTIAL_CAKE, 1], [ITEM.CAKE_SLICE, 1],
+            [ITEM.BREAD, 1], [ITEM.CHOCOLATE_SLICE, 1]
+        ] }))).toBeNull();
+    });
+
+    test('retains partial cakes in the exact start loadout', () => {
+        expect(decide(snapshot({ stage: 0, inv: [
+            [ITEM.ROPE, 1], [ITEM.COINS, 992], [ITEM.PARTIAL_CAKE, 4], [ITEM.CAKE_SLICE, 4]
+        ] })).kind).toBe('talk');
+    });
+
+    test('normalizes a full mixed cake pack before acquiring quest supplies', () => {
+        expect(customName(decide(snapshot({ stage: 0, inv: [
+            [ITEM.FOOD, 8], [ITEM.PARTIAL_CAKE, 8], [ITEM.CAKE_SLICE, 8], [ITEM.BREAD, 4]
+        ] })))).toBe('bank everything except Waterfall supplies');
+    });
+
 });
 
 describe('coin funding', () => {
@@ -551,7 +623,7 @@ describe('stage 5/6 dungeon loadout and dispatch', () => {
             bank: [...relics.map(item => [item, 1] as ItemQty), [ITEM.FOOD, 20]],
             tile: [3222, 3218]
         }));
-        expect(withdrawal(refill).items).toEqual([{ name: 'Trout', id: 333, qty: 8 }]);
+        expect(withdrawal(refill).items).toEqual([{ name: 'Cake', id: 1891, qty: 8 }]);
 
         // Why: the supply bank no longer moves with the player, so east and west both restore from Ardougne.
         for (const tile of [[3222, 3218], [2616, 3332]] as const) {
@@ -579,7 +651,7 @@ describe('stage 5/6 dungeon loadout and dispatch', () => {
             inv: [[ITEM.COINS, 500], [ITEM.ROPE, 1], [ITEM.FOOD, 2]],
             bank: [[ITEM.FOOD, 10], [ITEM.AMULET, 1], [ITEM.FULL_URN, 1]],
             tile: [2616, 3332]
-        }))).items).toEqual([{ name: 'Trout', id: 333, qty: 6 }]);
+        }))).items).toEqual([{ name: 'Cake', id: 1891, qty: 6 }]);
 
         const shortAir = DUNGEON_PACK.map(([item, qty]) => [item, item.id === ITEM.AIR_RUNE.id ? 2 : qty] as ItemQty);
         expect(withdrawal(decide(snapshot({
@@ -852,7 +924,7 @@ describe('mainland death and restart states', () => {
             bank: [[ITEM.COINS, 1_999_400], [ITEM.FOOD, 20]],
             tile: [2616, 3332]
         })));
-        expect(food.items).toEqual([{ name: 'Trout', id: 333, qty: 8 }]);
+        expect(food.items).toEqual([{ name: 'Cake', id: 1891, qty: 8 }]);
 
         expect(customName(decide(snapshot({
             stage: WATERFALL_STAGE.ENTERED_PUZZLE,
@@ -906,7 +978,7 @@ describe('Waterfall module wiring', () => {
         expect(waterfall.food).toBeUndefined();
     });
 
-    test('names no food of its own, so the configured one is what gets eaten', () => {
-        expect(waterfall.sustain).toEqual({ foods: [], eatBelowHp: 1 });
+    test('eats cakes, partial cakes and stall byproducts regardless of configured food', () => {
+        expect(waterfall.sustain).toEqual({ foods: ['Cake', 'Bread', 'Chocolate slice'], eatBelowHp: 1 });
     });
 });

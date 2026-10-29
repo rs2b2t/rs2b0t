@@ -86,6 +86,15 @@ Magic level permits, withdraws available bank stacks, and buys the missing runes
 Rune stacks survive quest inventory clearing. Combat can use a weaker Strike if its runes are
 all that remain; it never switches to melee when runes run out.
 
+Waterfall uses cakes independently of the global food setting. It preserves partial cakes and
+uses banked supplies before stealing from the Ardougne cake stall. Stall bread and chocolate
+slices count toward the same food loadout.
+
+Witch's House equips a held or banked usable fire staff before provisioning Fire Strike. If fire
+runes are short, it can buy a Staff of fire from Zaff. A complete rune supply or insufficient
+staff funds keeps the rune path available. Casting and provisioning both account for the
+equipped staff's elemental runes.
+
 Fight Arena lures around the northern rock, Grand Tree uses the root passage, and Witch's
 House uses the southern gap for the bear and a northeast corner lure for the wolf. Its first
 two forms use ordinary Strike casts. Casting disables retaliation and staff autocast, removes
@@ -134,6 +143,13 @@ and a quest asks only for "a weapon".
 The level buys the tier; within a tier any type will do. `tier60.rs2` gates dragon melee on a quest
 as well as the level, so a level check alone withdraws a weapon the wield is refused for and the
 quest fights bare-handed. `snap.attack` carries the level, the way `snap.prayer` carries points.
+
+Goblin Diplomacy checks banked mail and dye ingredients before gathering. When mail still needs
+farming, it equips the best usable carried or banked melee weapon, including two-handed swords,
+and clears space for displaced equipment. It selects reachable targets before attacking. Its
+combat loop tracks an encounter through death
+or a bounded stall, resumes attacks after eating, and keeps incoming damage separate from
+the player's own attack progress.
 
 ## See also
 

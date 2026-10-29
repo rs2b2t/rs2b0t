@@ -15,6 +15,7 @@ const SHORE = new Tile(2845, 3431, 0);
 const RIVER = new Tile(3104, 3424, 0);
 const RANGE = new Tile(2817, 3443, 0);
 const HARRY = { npc: 'Harry', anchor: new Tile(2831, 3446, 0) };
+const GERRANT = { npc: 'Gerrant', anchor: new Tile(3013, 3225, 0) };
 
 const FISH = [
     { id: 373, name: 'Swordfish', raw: 371, fishing: 50, cooking: 45, tool: 'Harpoon', op: 'Harpoon', pair: 'Cage', spot: SHORE },
@@ -71,7 +72,7 @@ export function sourceCalebFish(
         const available = snap.bank?.get(tool.toLowerCase()) ?? 0;
         const qty = tool === 'Feather' ? Math.min(20, available || 20) : 1;
         if (available > 0) return { kind: 'withdraw', items: [{ name: tool, qty }], bank: FC_BANK.CATHERBY };
-        return { kind: 'buy', item: tool, qty, shop: HARRY, estGp: 1000 };
+        return { kind: 'buy', item: tool, qty, shop: fish.op === 'Lure' ? GERRANT : HARRY, estGp: 1000 };
     }
     return { kind: 'custom', name: `catch ${fish.name} for Caleb`, run: log => catchFish(fish, log) };
 }

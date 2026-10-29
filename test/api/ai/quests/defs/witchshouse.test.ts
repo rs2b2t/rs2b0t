@@ -3,6 +3,7 @@ import type { WorldTile } from '#/bot/adapter/ClientAdapter.js';
 import { WH_OBJ, inGarden, inShed } from '#/bot/api/ai/quests/defs/witchshouse/areas.js';
 import { DiaryState, decide, resetDiaryState, witchshouse } from '#/bot/api/ai/quests/defs/witchshouse/index.js';
 import { WH_STAGE } from '#/bot/api/ai/quests/defs/witchshouse/journal.js';
+import { leaveGarden } from '#/bot/api/ai/quests/defs/witchshouse/garden.js';
 import { defById } from '#/bot/api/ai/quests/defs/index.js';
 import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
 
@@ -168,6 +169,121 @@ describe('witchshouse finishes at the shed', () => {
             tile: { x: 2929, z: 3456, level: 0 }
         }));
         expect(named(step)).toContain('take the ball');
+    });
+});
+
+describe('witchshouse recovers a banked shed key', () => {
+    const garden = { x: 2911, z: 3469, level: 0 };
+    const porch = { x: 2901, z: 3466, level: 0 };
+    const base = () => snap({ stage: WH_STAGE.UNLOCKED_DOOR, ids: [WH_OBJ.DOOR_KEY] });
+
+    test('withdraws the exact shed key instead of checking a fountain that counts the bank', () => {
+        const state = { ...base(), bankIds: new Map([[2411, 1]]) };
+        expect(decide(state)).toMatchObject({ kind: 'withdraw', items: [{ name: 'Key', id: 2411, qty: 1 }] });
+    });
+
+    test('scans an unread bank before concluding the shed key is missing', () => {
+        expect(decide({ ...base(), bankKnown: false })).toMatchObject({ kind: 'scanBank' });
+    });
+
+    test('leaves the garden through its safe route before recovering the banked key', () => {
+        const state = { ...base(), tile: garden, bankIds: new Map([[2411, 1]]) };
+        const step = decide(state);
+        expect(step.kind === 'custom' && step.run).toBe(leaveGarden);
+        expect(decide({ ...state, tile: porch })).toMatchObject({ kind: 'withdraw', items: [{ id: 2411, qty: 1 }] });
+    });
+
+    test('leaves the garden safely before its first bank scan', () => {
+        const state = { ...base(), tile: garden, bankKnown: false };
+        const step = decide(state);
+        expect(step.kind === 'custom' && step.run).toBe(leaveGarden);
+        expect(decide({ ...state, tile: porch })).toMatchObject({ kind: 'scanBank' });
+    });
+
+    test('a held key and an unfinished fight outrank an unknown bank', () => {
+        const state = { ...base(), tile: garden, bankKnown: false, invIds: new Map([[2409, 1], [2411, 1]]) };
+        expect(named(decide(state))).toContain('kill the experiment');
+        expect(named(decide({ ...base(), tile: { x: 2935, z: 3461, level: 0 }, bankKnown: false })))
+            .toContain('kill the experiment');
+    });
+
+    test('a different banked Key does not suppress the fountain after a known bank scan', () => {
+        DiaryState.read = true;
+        const state = { ...base(), tile: garden, bank: new Map([['key', 1]]), bankIds: new Map([[1540, 1]]) };
+        expect(named(decide(state))).toContain('fountain');
+    });
+});
+
+describe('witchshouse uses a fire staff', () => {
+    const base = (): QuestSnapshot => ({
+        ...snap({ stage: WH_STAGE.UNLOCKED_DOOR, ids: [WH_OBJ.DOOR_KEY] }),
+        magic: 50, attack: 50, inv: new Map([['mind rune', 150], ['air rune', 300], ['coins', 2000]])
+    });
+
+    test('equips a carried staff before checking the bank or buying runes', () => {
+        const state = { ...base(), bankKnown: false, invIds: new Map([[2409, 1], [1387, 1]]) };
+        expect(decide(state)).toEqual({ kind: 'equip', item: 'Staff of fire' });
+    });
+
+    test('withdraws the cheapest usable banked fire staff', () => {
+        const state = { ...base(), bankIds: new Map([[1401, 1], [1393, 1], [1387, 1]]) };
+        expect(decide(state)).toMatchObject({ kind: 'withdraw', items: [{ name: 'Staff of fire', id: 1387, qty: 1 }] });
+        expect(decide({ ...state, bankIds: new Map([[1401, 1], [1393, 1]]) }))
+            .toMatchObject({ kind: 'withdraw', items: [{ name: 'Fire battlestaff', id: 1393, qty: 1 }] });
+    });
+
+    test('scans before buying and buys a basic fire staff from Zaff when no usable one is owned', () => {
+        expect(decide({ ...base(), bankKnown: false })).toMatchObject({ kind: 'scanBank' });
+        expect(decide(base())).toMatchObject({ kind: 'buy', item: 'Staff of fire', qty: 1, shop: { npc: 'Zaff' } });
+        expect(decide({ ...base(), attack: 1, bankIds: new Map([[1393, 1]]) }))
+            .toMatchObject({ kind: 'buy', item: 'Staff of fire', shop: { npc: 'Zaff' } });
+    });
+
+    test('tops up the standard coin float before attempting the staff purchase', () => {
+        const state = { ...base(), inv: new Map([['coins', 1000]]) };
+        expect(decide(state)).toMatchObject({ kind: 'withdraw', items: [{ name: 'Coins', qty: 1000 }] });
+    });
+
+    test('a fully supplied fight proceeds without staff money or a bank detour', () => {
+        const state = { ...base(), bankKnown: false, bankCoins: 0,
+            inv: new Map([['mind rune', 150], ['air rune', 300], ['fire rune', 450]]),
+            invIds: new Map([[2409, 1], [2411, 1]]) };
+        expect(named(decide(state))).toContain('kill the experiment');
+        expect(witchshouse.foodReady?.(state)).toBe(true);
+    });
+
+    test.each([[0, 450], [100, 350]])('uses held %i plus banked %i fire runes before buying a staff', (held, banked) => {
+        const state = { ...base(), inv: new Map([...base().inv, ['fire rune', held]]), bank: new Map([['fire rune', banked]]) };
+        expect(decide(state)).toMatchObject({ kind: 'withdraw', items: [{ name: 'Fire rune', qty: banked }] });
+    });
+
+    test('an unaffordable staff does not block buying a small rune shortfall', () => {
+        const state = { ...base(), bankCoins: 0,
+            inv: new Map([['mind rune', 150], ['air rune', 300], ['fire rune', 449], ['coins', 1000]]) };
+        expect(decide(state)).toMatchObject({ kind: 'buy', item: 'Fire rune', qty: 1, shop: { npc: 'Betty' } });
+    });
+
+    test('an equipped staff removes fire rune purchases and still recovers the banked shed key', () => {
+        const state = { ...base(), worn: new Set(['staff of fire']), wornIds: new Set([1387]), bankIds: new Map([[2411, 1]]) };
+        expect(decide(state)).toMatchObject({ kind: 'withdraw', items: [{ name: 'Key', id: 2411, qty: 1 }] });
+        expect(decide({ ...state, inv: new Map([['mind rune', 150], ['air rune', 100]]) }))
+            .toMatchObject({ kind: 'buy', item: 'Air rune', qty: 200 });
+    });
+
+    test('does not leave a resumed garden fight to shop but equips an already carried staff', () => {
+        const state = { ...base(), tile: { x: 2911, z: 3469, level: 0 }, invIds: new Map([[2409, 1], [2411, 1]]) };
+        expect(named(decide(state))).toContain('kill the experiment');
+        expect(decide({ ...state, invIds: new Map([...state.invIds, [1387, 1]]) }))
+            .toEqual({ kind: 'equip', item: 'Staff of fire' });
+    });
+
+    test('rune inventory clearing keeps a carried fire staff and the shed key', () => {
+        const state = { ...base(), worn: new Set(['staff of fire']), invIds: new Map([[2409, 1], [2411, 1]]),
+            inv: new Map([['staff of fire', 1], ['key', 1], ['logs', 26]]), freeSlots: 0 };
+        const step = decide(state);
+        expect(step.kind).toBe('deposit');
+        expect(step.kind === 'deposit' && step.keep).toContain('staff of fire');
+        expect(step.kind === 'deposit' && step.keep).toContain('key');
     });
 });
 

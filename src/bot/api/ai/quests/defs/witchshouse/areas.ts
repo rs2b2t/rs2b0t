@@ -80,6 +80,14 @@ export const THESSALIA = { npc: 'Thessalia', anchor: new Tile(3204, 3417, 0) };
 export const SHOP_GP = 200;
 
 export const FALADOR_WEST_BANK = new Tile(2946, 3369, 0);
+export const ZAFF = { npc: 'Zaff', anchor: new Tile(3203, 3433, 0) };
+export const FIRE_STAVES = [
+    { id: 1387, name: 'Staff of fire', level: 1 },
+    { id: 1393, name: 'Fire battlestaff', level: 30 },
+    { id: 3053, name: 'Lava battlestaff', level: 30 },
+    { id: 1401, name: 'Mystic fire staff', level: 40 },
+    { id: 3054, name: 'Mystic lava staff', level: 40 }
+];
 
 function within(t: WorldTile | null | undefined, x0: number, x1: number, z0: number, z1: number, level: number): boolean {
     return !!t && t.level === level && t.x >= x0 && t.x <= x1 && t.z >= z0 && t.z <= z1;

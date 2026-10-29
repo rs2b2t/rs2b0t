@@ -17,6 +17,8 @@ import { Quests } from '#/bot/api/ui/questlog/Quests.js';
 import { Modals } from '#/bot/api/ui/widgets/Modals.js';
 import { GameMessages } from '#/bot/api/chatbox/gameMessages.js';
 import { Sustain } from '#/bot/api/sustain/Sustain.js';
+import { Input } from '#/bot/input/Input.js';
+import { Reachability } from '#/bot/event/webwalk/geometry/Reachability.js';
 
 const restores: (() => void)[] = [];
 afterEach(() => { for (const restore of restores.splice(0).reverse()) restore(); });
@@ -140,6 +142,7 @@ test('parks eight unchanged failures and runs the next quest', async () => {
     expect(state.attempts).toBe(8);
     expect(state.running).toBe('doric');
     expect(state.rows.find(row => row.id === 'runemysteries')?.status).toBe('PARKED');
+    expect(state.rows.find(row => row.id === 'runemysteries')?.reasons.join(' ')).toContain('gather ore');
 });
 
 test('confirms an unchanged oracle without executing a ninth failed step', async () => {
@@ -189,8 +192,23 @@ test('keeps a cooperative fight active through misses while combat XP advances',
     expect(engine['runningId']).toBe('runemysteries');
 });
 
+test('recognizes combat XP progress without the local health-bar combat flag', async () => {
+    const {engine, state} = fixture();
+    const decide = spyOn(runemysteries, 'decide').mockReturnValue({kind: 'custom', name: 'kill a goblin', run: async () => {
+        state.attempts++;
+        state.xp += 16;
+        return false;
+    }});
+    restores.push(() => decide.mockRestore());
+    await execute(engine, 30);
+    expect(state.attempts).toBe(30);
+    expect(engine['runningId']).toBe('runemysteries');
+    expect(engine['noProgressCount']).toBe(0);
+});
+
 test('goblin mail gathering keeps fighting when its step yields before the drop', async () => {
     const { engine, state } = fixture();
+    engine['bankKnown'] = true;
     state.coins = 500;
     state.combat = true;
     let hp = 30;
@@ -198,8 +216,11 @@ test('goblin mail gathering keeps fighting when its step yields before the drop'
     const spies = [
         spyOn(Game, 'tile').mockReturnValue(tile),
         spyOn(Game, 'myName').mockReturnValue('quest-combat-fixture'),
+        spyOn(Reachability, 'probeable').mockReturnValue(true),
+        spyOn(Reachability, 'canReach').mockReturnValue(true),
         spyOn(reader, 'worldTile').mockReturnValue(tile),
         spyOn(reader, 'selfSlot').mockReturnValue(0),
+        spyOn(Input, 'interactNpc').mockReturnValue(true),
         spyOn(reader, 'groundItems').mockReturnValue([]),
         spyOn(reader, 'npcs').mockImplementation(() => [{ id: 100, index: 1, name: 'Goblin', level: 2, size: 1,
             tile: { ...tile, z: tile.z + 1 }, distance: 1, ops: ['Attack'], inCombat: true,
@@ -208,10 +229,23 @@ test('goblin mail gathering keeps fighting when its step yields before the drop'
         spyOn(runemysteries, 'decide').mockImplementation(snap => goblinMailGatherStep(snap))
     ];
     restores.push(...spies.map(spy => () => spy.mockRestore()));
-    await execute(engine, 12);
+    await execute(engine, 1);
     expect(hp).toBeLessThan(22);
     expect(engine['runningId']).toBe('runemysteries');
     expect(engine['noProgressCount']).toBe(0);
+});
+
+test('checks the bank before gathering acquirable supplies even with the coin float held', async () => {
+    const {engine, state} = fixture();
+    const items = runemysteries.record.items;
+    restores.push(() => { runemysteries.record.items = items; });
+    runemysteries.record.items = [{name: 'Copper ore', qty: 1, kind: 'acquirable'}];
+    state.picked = new Set(['runemysteries']);
+    state.coins = 1000;
+    engine['provisioned'].delete('runemysteries');
+    await engine.execute();
+    expect(state.bankActions).toEqual(['open']);
+    expect(engine['bankKnown']).toBe(true);
 });
 
 test('still parks a fight that makes no combat progress for over a minute', async () => {

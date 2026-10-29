@@ -34,4 +34,14 @@ describe('quest Strike supplies', () => {
     test('no runes means no castable spell', () => {
         expect(strikeSpell(13, () => 0)).toBeNull();
     });
+    test('an equipped fire staff supplies Fire Strike without loose fire runes', () => {
+        const count = (name: string) => ({ 'mind rune': 150, 'air rune': 300 }[name.toLowerCase()] ?? 0);
+        expect(strikeSpell(13, count, ['Staff of fire'])).toBe('Fire Strike');
+        expect(prepareStrikes(snapshot({ magic: 13, inv: new Map([['mind rune', 150], ['air rune', 300]]) }), [], ['Staff of fire']))
+            .toBeNull();
+    });
+    test('staff-aware provisioning buys only uncovered runes', () => {
+        expect(prepareStrikes(snapshot({ magic: 13, inv: new Map([['mind rune', 150], ['air rune', 100]]) }), [], ['Staff of fire']))
+            .toMatchObject({ kind: 'buy', item: 'Air rune', qty: 200 });
+    });
 });

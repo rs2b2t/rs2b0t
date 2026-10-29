@@ -50,7 +50,7 @@ export async function readyStrikes(log: (m: string) => void): Promise<boolean> {
         if (!item.name || /staff|amulet|cape|leather gloves|leather boots|robe|wizard/i.test(item.name)) continue;
         if (!(await Equipment.unequip(item.name))) { log(`need room to remove ${item.name} before casting`); return false; }
     }
-    return strikeSpell(Skills.effective('magic'), rune => Inventory.count(rune)) !== null;
+    return strikeSpell(Skills.effective('magic'), rune => Inventory.count(rune), Equipment.items().flatMap(item => item.name ? [item.name] : [])) !== null;
 }
 
 export async function takeStrikeCover(spot: Tile, log: (m: string) => void, lureTarget?: () => Npc | null): Promise<boolean> {
@@ -72,7 +72,7 @@ export async function takeStrikeCover(spot: Tile, log: (m: string) => void, lure
 
 export async function castStrike(spot: Tile, target: Npc, log: (m: string) => void): Promise<boolean> {
     if (EventSignal.pending() || Game.autoRetaliateOn() || !atCover(spot) || !castFromCover(spot, target)) return false;
-    const spell = strikeSpell(Skills.effective('magic'), rune => Inventory.count(rune));
+    const spell = strikeSpell(Skills.effective('magic'), rune => Inventory.count(rune), Equipment.items().flatMap(item => item.name ? [item.name] : []));
     if (!spell) { log('out of Strike runes; holding cover'); return false; }
     const before = Inventory.count('Mind rune');
     let settled = false;

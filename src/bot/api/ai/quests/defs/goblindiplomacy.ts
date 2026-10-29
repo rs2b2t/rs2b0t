@@ -3,16 +3,18 @@ import { Game } from '../../../game/Game.js';
 import { ChatDialog } from '../../../ui/dialogue/ChatDialog.js';
 import { Inventory, type InvItem } from '../../../inventory/Inventory.js';
 import { Skills } from '../../../skills/Skills.js';
-import { Sustain } from '../../../sustain/Sustain.js';
-import { GroundItems } from '../../../grounditems/GroundItems.js';
-import { Npcs, type Npc } from '../../../npcs/Npcs.js';
+import { Npcs } from '../../../npcs/Npcs.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import Tile from '../../../../geometry/Tile.js';
+import { ITEM_DB } from '../../../../data/itemdb.js';
 import { gotoNpc, talkThrough, type NpcStop } from '../exec/primitives.js';
 import { executeStep } from '../exec/steps.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { QUESTS } from '../data/quests.js';
 import { QuestFood } from '../food.js';
+import { questDone, wieldable } from '../weapons.js';
+import { farmGoblinMail, inGoblinMailField, resetGoblinMailCombat } from './goblindiplomacy/combat.js';
+import { acquireRedberries } from './goblindiplomacy/redberries.js';
 
 /** Named so the step literals below get a Tile type. */
 const DRAYNOR_BANK = new Tile(3093, 3243, 0);
@@ -26,11 +28,9 @@ const AGGIE_RED: NpcStop = { npc: 'Aggie', anchor: AGGIE_ANCHOR, leash: 6, prefe
 const AGGIE_YELLOW: NpcStop = { npc: 'Aggie', anchor: AGGIE_ANCHOR, leash: 6, prefer: ['Can you make dyes for me please?', 'What do you need to make yellow dye?', 'Okay, make me some yellow dye please.'] };
 const AGGIE_BLUE: NpcStop = { npc: 'Aggie', anchor: AGGIE_ANCHOR, leash: 6, prefer: ['Can you make dyes for me please?', 'What do you need to make blue dye?', 'Okay, make me some blue dye please.'] };
 
-const WYSON: NpcStop = { npc: 'Wyson the gardener', anchor: new Tile(3013, 3377, 0), leash: 10, prefer: ["I'm looking for woad leaves.", 'How about 20 coins?'] };
+const WYSON: NpcStop = { npc: 'Wyson the gardener', anchor: new Tile(3027, 3379, 0), leash: 10, prefer: ["I'm looking for woad leaves.", 'How about 20 coins?'] };
 
-const GOBLIN_FARM = new Tile(2958, 3507, 0);
 const ONION_PATCH = new Tile(3188, 3267, 0);
-const PORT_SARIM_SHOP = { npc: 'Wydin', anchor: new Tile(3014, 3204, 0) };
 const VARROCK_FUNDING_MAN = new Tile(3240, 3405, 0);
 const AL_KHARID_FUNDING_MAN = new Tile(3279, 3188, 0);
 const KEBAB_SELLER = new Tile(3272, 3182, 0);
@@ -45,30 +45,6 @@ const FUNDING_MAN_LEASH = 24;
 const SAFE_PICKPOCKET_HP = 3;
 const FUNDING_STALL_MS = 120_000;
 const FUNDING_REGEN_WAIT_MS = 60_000;
-const GOBLIN_REATTACK_MS = 5000;
-const GOBLIN_REJECT_MS = 15_000;
-const GOBLIN_DISENGAGE_GRACE_MS = 5000;
-let goblinMailTargetIndex: number | null = null;
-let goblinMailTargetEngaged = false;
-let goblinMailLastAttackAt = 0;
-let goblinMailDisengagedAt = 0;
-let goblinMailRejectedTargetIndex: number | null = null;
-let goblinMailRejectedUntil = 0;
-let goblinMailOwner: string | null = null;
-
-function releaseGoblinMailTarget(): void {
-    goblinMailTargetIndex = null;
-    goblinMailTargetEngaged = false;
-    goblinMailLastAttackAt = 0;
-    goblinMailDisengagedAt = 0;
-}
-
-function resetGoblinMailCombat(): void {
-    releaseGoblinMailTarget();
-    goblinMailRejectedTargetIndex = null;
-    goblinMailRejectedUntil = 0;
-}
-
 const has = (snap: QuestSnapshot, name: string): boolean => (snap.inv.get(name) ?? 0) > 0;
 const qty = (snap: QuestSnapshot, name: string): number => snap.inv.get(name) ?? 0;
 
@@ -83,10 +59,6 @@ function liveCombatFoodCount(): number {
 
 function liveItem(name: string): InvItem | null {
     return Inventory.items().find(item => item.name?.toLowerCase() === name.toLowerCase()) ?? null;
-}
-
-function inGoblinMailField(tile: QuestSnapshot['tile']): boolean {
-    return tile !== null && tile !== undefined && tile.level === GOBLIN_FARM.level && Math.max(Math.abs(tile.x - GOBLIN_FARM.x), Math.abs(tile.z - GOBLIN_FARM.z)) <= 18;
 }
 
 function inAlKharidFundingArea(tile: ReturnType<typeof Game.tile>): boolean {
@@ -295,11 +267,12 @@ function foodAcquisitionSpace(snap: QuestSnapshot, slots: number): QuestStep | n
         return null;
     }
     const mail = ['goblin mail', 'orange goblin mail', 'blue goblin mail'];
-    const withFood = ['coins', ...mail, ...combatFoodNames().map(name => name.toLowerCase())];
+    const supplies = [...mail, 'orange dye', 'blue dye', 'red dye', 'yellow dye', 'redberries', 'onion', 'woad leaf'];
+    const withFood = ['coins', ...supplies, ...combatFoodNames().map(name => name.toLowerCase())];
     const hasSpillover = [...snap.inv.keys()].some(name => !withFood.includes(name.toLowerCase()));
     return {
         kind: 'deposit',
-        keep: hasSpillover ? withFood : ['coins', ...mail],
+        keep: hasSpillover ? withFood : ['coins', ...supplies],
         bank: DRAYNOR_BANK,
         exactKeep: true
     };
@@ -311,15 +284,37 @@ export function goblinMailGatherStep(snap: QuestSnapshot, need = 1): QuestStep {
     if (!inGoblinMailField(snap.tile)) {
         resetGoblinMailCombat();
     }
+    if (!snap.bankKnown) return { kind: 'scanBank', bank: DRAYNOR_BANK };
+    const bankedMail = snap.bank?.get('goblin mail') ?? 0;
+    if (bankedMail > 0) {
+        const amount = Math.min(need, bankedMail);
+        return foodAcquisitionSpace(snap, amount)
+            ?? { kind: 'withdraw', items: [{ name: 'Goblin mail', qty: amount }], bank: DRAYNOR_BANK };
+    }
+    if (heldCoins >= GOBLIN_DIPLOMACY_QUEST_COIN_RESERVE) {
+        const weapon = wieldable(snap.attack ?? Skills.level('attack'), questDone, true).find(weapon =>
+            snap.wornIds?.has(weapon.id) || snap.worn.has(weapon.name.toLowerCase())
+            || (snap.invIds?.get(weapon.id) ?? snap.inv.get(weapon.name.toLowerCase()) ?? 0) > 0
+            || (snap.bankIds?.get(weapon.id) ?? snap.bank?.get(weapon.name.toLowerCase()) ?? 0) > 0);
+        if (weapon && !snap.wornIds?.has(weapon.id) && !snap.worn.has(weapon.name.toLowerCase())) {
+            if ((snap.invIds?.get(weapon.id) ?? snap.inv.get(weapon.name.toLowerCase()) ?? 0) > 0) {
+                const displaced = new Set(ITEM_DB.filter(item => (item.slot === 'righthand' || item.slot === 'lefthand')
+                    && (snap.wornIds?.has(item.id) || snap.worn.has(item.name.toLowerCase()))).map(item => item.slot)).size;
+                if (ITEM_DB.find(item => item.id === weapon.id)?.twoHanded && displaced > (snap.freeSlots ?? 28) + 1) {
+                    return foodAcquisitionSpace(snap, displaced - 1)!;
+                }
+                return { kind: 'equip', item: weapon.name };
+            }
+            return foodAcquisitionSpace(snap, Math.max(need + 2, 3))
+                ?? { kind: 'withdraw', items: [{ name: weapon.name, id: weapon.id, qty: 1 }], bank: DRAYNOR_BANK };
+        }
+    }
     const makeMailSpace = foodAcquisitionSpace(snap, Math.max(1, need) + (heldCoins > 0 ? 0 : 1));
     if (makeMailSpace) {
         return makeMailSpace;
     }
     if (heldCoins >= GOBLIN_DIPLOMACY_QUEST_COIN_RESERVE) {
         return { kind: 'custom', name: 'farm goblin mail', run: farmGoblinMail };
-    }
-    if (!snap.bankKnown) {
-        return { kind: 'scanBank', bank: DRAYNOR_BANK };
     }
     if (heldCoins < GOBLIN_DIPLOMACY_COIN_TARGET && snap.bankCoins > 0) {
         return {
@@ -336,143 +331,20 @@ export function goblinMailGatherStep(snap: QuestSnapshot, need = 1): QuestStep {
     return { kind: 'custom', name: `earn ${GOBLIN_DIPLOMACY_COIN_TARGET} gp`, run: earnGoblinDiplomacyCoins };
 }
 
-async function farmGoblinMail(log: (m: string) => void): Promise<boolean> {
-    const owner = Game.myName();
-    if (goblinMailOwner !== owner || !inGoblinMailField(Game.tile())) {
-        resetGoblinMailCombat();
-        goblinMailOwner = owner;
-    }
-    const drop = GroundItems.query().name('Goblin mail').within(15).nearest();
-    if (drop) {
-        resetGoblinMailCombat();
-        const before = Inventory.count('Goblin mail');
-        if (!(await drop.interact('Take'))) {
-            return false;
-        }
-        return Execution.delayUntil(() => Inventory.count('Goblin mail') > before, 6000);
-    }
-    const rejectGoblin = (goblin: Npc): void => {
-        goblinMailRejectedTargetIndex = goblin.index;
-        goblinMailRejectedUntil = performance.now() + GOBLIN_REJECT_MS;
-        releaseGoblinMailTarget();
-    };
-    const trackedGoblin = (): Npc | null => goblinMailTargetIndex === null
-        ? null
-        : (Npcs.all().find(npc => npc.index === goblinMailTargetIndex
-            && npc.name === 'Goblin'
-            && npc.actions().some(action => /^attack$/i.test(action))
-            && npc.distance() <= 15
-            && npc.tile().distanceTo(GOBLIN_FARM) <= 18) ?? null);
-    const hadEngagedTarget = goblinMailTargetIndex !== null && goblinMailTargetEngaged;
-    let goblin = trackedGoblin();
-    if (!goblin && hadEngagedTarget) {
-        await Sustain.run();
-        await Execution.delayTicks(2);
-        releaseGoblinMailTarget();
-        return false;
-    }
-    const attacker = Npcs.query().name('Goblin').action('Attack').within(15)
-        .where(npc => npc.targetsMe() && npc.tile().distanceTo(GOBLIN_FARM) <= 18).nearest();
-    if (attacker && (attacker.index !== goblinMailTargetIndex || goblin === null)) {
-        goblinMailTargetIndex = attacker.index;
-        goblinMailTargetEngaged = false;
-        goblinMailLastAttackAt = 0;
-        goblinMailDisengagedAt = 0;
-        goblin = attacker;
-        log(`Goblin ${attacker.index} attacked first — switching the lock to it`);
-    }
-    if (goblin && (!goblin.valid() || (goblin.health === 0 && goblin.snap.totalHealth > 0))) {
-        await Sustain.run();
-        await Execution.delayTicks(2);
-        releaseGoblinMailTarget();
-        return false;
-    }
-    if (goblin && (goblin.targetsAnotherPlayer()
-        || (goblin.inCombat && !goblinMailTargetEngaged && !goblin.targetsMe() && !Game.inCombat()))) {
-        log(`Goblin ${goblin.index} belongs to another player — releasing it`);
-        rejectGoblin(goblin);
-        goblin = null;
-    }
-    if (goblin && goblinMailTargetEngaged && !Game.inCombat() && !goblin.targetsMe()) {
-        if (goblinMailDisengagedAt === 0) {
-            goblinMailDisengagedAt = performance.now();
-        }
-        if (performance.now() - goblinMailDisengagedAt < GOBLIN_DISENGAGE_GRACE_MS) {
-            await Sustain.run();
-            await Execution.delayTicks(1);
-            return false;
-        }
-        log(`combat with live Goblin ${goblin.index} made no progress for ${GOBLIN_DISENGAGE_GRACE_MS / 1000}s — choosing another target`);
-        rejectGoblin(goblin);
-        goblin = null;
-    }
-    if (!goblin) {
-        const rejectedIndex = performance.now() < goblinMailRejectedUntil ? goblinMailRejectedTargetIndex : null;
-        goblin = Npcs.query().name('Goblin').action('Attack').within(15)
-            .where(n => !n.inCombat && !n.targetsAnotherPlayer() && n.index !== rejectedIndex).nearest();
-        if (goblin) {
-            goblinMailTargetIndex = goblin.index;
-            goblinMailTargetEngaged = false;
-            goblinMailLastAttackAt = 0;
-            goblinMailDisengagedAt = 0;
-            log(`holding Goblin ${goblin.index} until it dies`);
-        }
-    }
-    if (goblin) {
-        if (Game.inCombat() || goblin.targetsMe()) {
-            goblinMailTargetEngaged = true;
-            goblinMailDisengagedAt = 0;
-            await Sustain.run();
-            await Execution.delayTicks(1);
-            return false;
-        }
-        if (performance.now() - goblinMailLastAttackAt < GOBLIN_REATTACK_MS) {
-            await Sustain.run();
-            await Execution.delayTicks(2);
-            return false;
-        }
-        if (!(await goblin.interact('Attack'))) {
-            log(`Attack on Goblin ${goblin.index} was rejected — choosing another target`);
-            rejectGoblin(goblin);
-            await Execution.delayTicks(2);
-            return false;
-        }
-        goblinMailLastAttackAt = performance.now();
-        const attackDeadline = performance.now() + 8000;
-        let attackObserved = false;
-        while (performance.now() < attackDeadline) {
-            await Sustain.run();
-            const live = trackedGoblin();
-            if (live === null || Game.inCombat() || live.targetsMe() || live.targetsAnotherPlayer()) {
-                attackObserved = true;
-                break;
-            }
-            await Execution.delayTicks(1);
-        }
-        if (!attackObserved) {
-            log(`Attack on Goblin ${goblin.index} produced no combat within 8s — choosing another target`);
-            rejectGoblin(goblin);
-            return false;
-        }
-        const live = trackedGoblin();
-        if (live?.targetsAnotherPlayer()) {
-            log(`Goblin ${live.index} engaged another player after our attack — releasing it`);
-            rejectGoblin(live);
-            return false;
-        }
-        if (live === null) {
-            releaseGoblinMailTarget();
-            return false;
-        }
-        goblinMailTargetEngaged ||= Game.inCombat() || live.targetsMe();
-        if (goblinMailTargetEngaged) {
-            goblinMailDisengagedAt = 0;
-        }
-        return false;
-    }
-    releaseGoblinMailTarget();
-    await Traversal.walkResilient(GOBLIN_FARM, { radius: 4, attempts: 2, timeoutMs: 90_000, log });
-    return false;
+function bankedDyeSupplies(snap: QuestSnapshot, dye: 'Orange dye' | 'Blue dye'): QuestStep | null {
+    if (!snap.bankKnown) return { kind: 'scanBank', bank: DRAYNOR_BANK };
+    const stocked = (name: string): number => snap.bank?.get(name.toLowerCase()) ?? 0;
+    const needs = stocked(dye) > 0 ? [{ name: dye, qty: 1 }] : dye === 'Blue dye'
+        ? [{ name: 'Woad leaf', qty: 2 }]
+        : [
+            ...(has(snap, 'red dye') ? [] : stocked('Red dye') > 0 ? [{ name: 'Red dye', qty: 1 }] : [{ name: 'Redberries', qty: 3 }]),
+            ...(has(snap, 'yellow dye') ? [] : stocked('Yellow dye') > 0 ? [{ name: 'Yellow dye', qty: 1 }] : [{ name: 'Onion', qty: 2 }])
+        ];
+    const items = needs.map(item => ({name: item.name, qty: Math.min(Math.max(0, item.qty - qty(snap, item.name.toLowerCase())), stocked(item.name))}))
+        .filter(item => item.qty > 0);
+    return items.length > 0
+        ? foodAcquisitionSpace(snap, items.reduce((sum, item) => sum + item.qty, 0)) ?? { kind: 'withdraw', items, bank: DRAYNOR_BANK }
+        : null;
 }
 
 async function makeBlueDye(log: (m: string) => void): Promise<boolean> {
@@ -507,7 +379,7 @@ async function makeOrangeDye(log: (m: string) => void): Promise<boolean> {
     }
     if (!Inventory.contains('Red dye')) {
         if (Inventory.count('Redberries') < 3) {
-            return executeStep({ kind: 'buy', item: 'Redberries', qty: 3, shop: PORT_SARIM_SHOP, estGp: 60 }, [], log);
+            return acquireRedberries(log);
         }
         if (Inventory.count('Coins') < 5) {
             log('need ~5 coins for red dye');
@@ -539,7 +411,6 @@ async function makeOrangeDye(log: (m: string) => void): Promise<boolean> {
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') {
         resetGoblinMailCombat();
-        goblinMailOwner = null;
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') { return { kind: 'wait', reason: 'quest journal not loaded' }; }
@@ -562,6 +433,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 export const goblindiplomacy: QuestModule = {
     record: QUESTS.find(r => r.id === 'gobdip')!,
     bank: DRAYNOR_BANK,
+    onStart: resetGoblinMailCombat,
     sustain: { foods: [FALLBACK_FOOD], eatBelowHp: 0.6 },
     get tools() {
         return ['goblin mail', 'dye', 'woad', 'redberries', 'onion', 'coins', ...combatFoodNames().map(name => name.toLowerCase())];
@@ -569,8 +441,8 @@ export const goblindiplomacy: QuestModule = {
     grind: ['Goblin'],
     gather: {
         'goblin mail': goblinMailGatherStep,
-        'orange dye': () => ({ kind: 'custom', name: 'make orange dye', run: makeOrangeDye }),
-        'blue dye': () => ({ kind: 'custom', name: 'make blue dye', run: makeBlueDye })
+        'orange dye': snap => bankedDyeSupplies(snap, 'Orange dye') ?? ({ kind: 'custom', name: 'make orange dye', run: makeOrangeDye }),
+        'blue dye': snap => bankedDyeSupplies(snap, 'Blue dye') ?? ({ kind: 'custom', name: 'make blue dye', run: makeBlueDye })
     },
     decide
 };

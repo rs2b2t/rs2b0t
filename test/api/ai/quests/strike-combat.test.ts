@@ -8,7 +8,7 @@ import { EventSignal } from '#/bot/api/execution/EventSignal.js';
 import { Autocast } from '#/bot/api/magic/Autocast.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
 import { Game } from '#/bot/api/game/Game.js';
-import { Inventory } from '#/bot/api/inventory/Inventory.js';
+import { Inventory, InvItem } from '#/bot/api/inventory/Inventory.js';
 import { Npc } from '#/bot/api/model/Npc.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
@@ -40,6 +40,7 @@ beforeEach(() => {
         stubProps(Game, { autoRetaliateOn: () => false, setAutoRetaliate: () => true,
             castOnNpc: async spell => { casts.push(spell); runes--; return true; } }),
         stubProps(Inventory, { count: () => runes }),
+        stubProps(Equipment, { items: () => [] }),
         stubProps(Skills, { effective: () => 1 }),
         stubProps(Sustain, { run: async () => {} }),
         stubProps(Execution, { delayTicks: async () => { delay(); } }),
@@ -73,6 +74,18 @@ describe('guarded quest Strikes', () => {
     test('casts without requiring the player to take damage', async () => {
         expect(await castStrike(DEMON_COVER, npc, () => {})).toBe(true);
         expect(casts).toEqual(['Wind Strike']);
+    });
+    test('prepares and casts Fire Strike using the worn staff instead of fire runes', async () => {
+        restore.push(
+            stubProps(Skills, { effective: () => 13 }),
+            stubProps(Inventory, { count: name => /^(mind|air) rune$/i.test(name) ? runes : 0 }),
+            stubProps(Equipment, { items: () => [new InvItem({ id: 1387, name: 'Staff of fire', count: 1, slot: 3, comId: 1688, ops: [] })] }),
+            stubProps(Autocast, { armed: () => false }),
+            stubProps(Execution, { delayUntilTicks: async condition => condition() })
+        );
+        expect(await readyStrikes(() => {})).toBe(true);
+        expect(await castStrike(DEMON_COVER, npc, () => {})).toBe(true);
+        expect(casts).toEqual(['Fire Strike']);
     });
     test('empty runes never fall back to melee', async () => {
         runes = 0;

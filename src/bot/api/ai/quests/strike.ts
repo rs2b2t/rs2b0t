@@ -1,6 +1,6 @@
 import Tile from '../../../geometry/Tile.js';
 import { SPELL_DB } from '../../../data/spelldb.js';
-import { castsAvailable } from '../../combat/CombatStyleLogic.js';
+import { castsAvailable, runesPerCast } from '../../combat/CombatStyleLogic.js';
 import type { QuestSnapshot, QuestStep } from './engine/types.js';
 
 export const STRIKE_CASTS = 150;
@@ -8,14 +8,14 @@ export const STRIKE_RUNES = ['mind rune', 'air rune', 'water rune', 'earth rune'
 const STRIKES = ['Fire Strike', 'Earth Strike', 'Water Strike', 'Wind Strike'];
 const BETTY = { npc: 'Betty', anchor: new Tile(3012, 3259, 0) };
 
-export function strikeSpell(magic: number, count: (rune: string) => number = () => Infinity): string | null {
-    return STRIKES.find(name => SPELL_DB[name]!.level <= magic && castsAvailable(name, [], count) > 0) ?? null;
+export function strikeSpell(magic: number, count: (rune: string) => number = () => Infinity, wielded: string[] = []): string | null {
+    return STRIKES.find(name => SPELL_DB[name]!.level <= magic && castsAvailable(name, wielded, count) > 0) ?? null;
 }
 
-export function prepareStrikes(snap: QuestSnapshot, keep: readonly string[] = []): QuestStep | null {
+export function prepareStrikes(snap: QuestSnapshot, keep: readonly string[] = [], wielded: string[] = []): QuestStep | null {
     const spell = strikeSpell(snap.magic ?? 1);
     if (!spell) return { kind: 'wait', reason: 'need Magic 1 for Strike spells' };
-    const missing = SPELL_DB[spell]!.runes.map(({ rune, count }) => ({
+    const missing = (runesPerCast(spell, wielded) ?? []).map(({ rune, count }) => ({
         name: rune, qty: count * STRIKE_CASTS - (snap.inv.get(rune.toLowerCase()) ?? 0)
     })).filter(item => item.qty > 0);
     if (!missing.length) return null;

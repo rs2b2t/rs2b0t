@@ -5,12 +5,14 @@ import { Locs } from '../../../locs/Locs.js';
 import { Npcs } from '../../../npcs/Npcs.js';
 import Tile from '../../../../geometry/Tile.js';
 import { talkThrough, walkWithHops, type NpcStop } from '../exec/primitives.js';
-import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
+import { bankedId, type QuestModule, type QuestSnapshot, type QuestStep } from '../engine/types.js';
 import { QUESTS } from '../data/quests.js';
 import { WIZARD_HOPS } from './runemysteries.js';
 
 const AMULET = 'Ghostspeak amulet';
+const AMULET_ID = 552;
 const SKULL = 'Skull';
+const DRAYNOR_BANK = new Tile(3093, 3243, 0);
 
 const AERECK: NpcStop = { npc: 'Father Aereck', anchor: new Tile(3244, 3206, 0), leash: 6, prefer: ["I'm looking for a quest!"] };
 const URHNEY: NpcStop = {
@@ -88,6 +90,10 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.inv.has('skull')) { return { kind: 'custom', name: 'return skull', run: returnSkull }; }
     const amuletLower = AMULET.toLowerCase();
     if (!snap.inv.has(amuletLower) && !snap.worn.has(amuletLower)) {
+        if (!snap.bankKnown) return { kind: 'scanBank', bank: DRAYNOR_BANK };
+        if (bankedId(snap, AMULET_ID) > 0) {
+            return { kind: 'withdraw', items: [{ name: AMULET, id: AMULET_ID, qty: 1 }], bank: DRAYNOR_BANK };
+        }
         return { kind: 'talk', stop: URHNEY };
     }
     if (!snap.worn.has(amuletLower)) {
@@ -98,7 +104,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const restlessghost: QuestModule = {
     record: QUESTS.find(r => r.id === 'priest')!,
-    bank: new Tile(3093, 3243, 0),
+    bank: DRAYNOR_BANK,
     tools: ['ghostspeak amulet', 'skull'],
     hops: WIZARD_HOPS,
     decide

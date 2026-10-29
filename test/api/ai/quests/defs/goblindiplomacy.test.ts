@@ -67,7 +67,7 @@ describe('goblindiplomacy goblin-mail survival', () => {
         QuestFood.name = 'Trout';
         expect(goblindiplomacy.tools).toContain('trout');
         const step = goblinMailGatherStep({
-            ...snap('inProgress', [['trout', 20], ['bronze dagger', 1]]),
+            ...snap('inProgress', [['trout', 20], ['rune essence', 1]]),
             bankKnown: true,
             freeSlots: 0
         });
