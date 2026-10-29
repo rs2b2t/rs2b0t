@@ -1333,6 +1333,16 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'mulecrafter-bankless-test',
+        harness: 'mulecrafter-test.ts',
+        covers: { scripts: ['MuleCrafter'] },
+        env: { TRADES_PER_BANK: '0', BANK_FILL: '0' },
+        status: 'vetted',
+        provenAt: 'a52af7e2',
+        budgetMin: 3,
+        note: 'crafter + one mule with bankFill=false and tradesPerBank=0; the documented bankless setup must still trade, enter the altar on empty, and craft'
+    },
+    {
         id: 'multibox-profile-transfer-test',
         harness: 'multibox-profile-transfer-test.ts',
         covers: { subsystems: ['multibox'] },
