@@ -231,7 +231,7 @@ async function keyHunt(log: (m: string) => void): Promise<boolean> {
         const level = Game.tile()?.level ?? 0;
         const bones = Inventory.count('Bones');
 
-        if (!(bones > 0 && Inventory.isFull())) {
+        if (bones < BONES_NEEDED && !(bones > 0 && Inventory.isFull())) {
             if (level === 1) {
                 await Reach.locOp({
                     name: 'Staircase', op: 'Climb-down', near: WIZ_L1_STAND,

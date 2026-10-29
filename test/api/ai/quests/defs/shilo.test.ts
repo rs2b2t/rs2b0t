@@ -2,6 +2,7 @@ import { Bank } from '#/bot/api/bank/Bank.js';
 import { Banking } from '#/bot/api/bank/Banking.js';
 import { executeStep } from '#/bot/api/ai/quests/exec/steps.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
+import { Inventory, InvItem } from '#/bot/api/inventory/Inventory.js';
 import { combatGear, resetCombatGear } from '#/bot/api/ai/quests/defs/shilo/gear.js';
 import { stubProps } from '../../../../lib/stubSingletons.js';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
@@ -928,8 +929,12 @@ test('Shilo deposits a rejected warhammer while preserving the quest hammer', as
     const restores = [
         stubProps(Equipment, { contains: () => false, equip: async () => false }),
         stubProps(Banking, { open: async () => true }),
-        stubProps(Bank, { depositAllMatching: async predicate => {
-            for (const item of s.inv.keys()) if (predicate(item, 0)) deposited.push(item);
+        stubProps(Inventory, { items: () => Array.from(s.inv, ([name, count], slot) => new InvItem({name, count, slot, id: slot, comId: 3214, ops: []})) }),
+        stubProps(Bank, { backpackReady: async () => true, depositAllMatching: async predicate => {
+            for (const item of s.inv.keys()) if (predicate(item, 0)) {
+                deposited.push(item);
+                s.inv.delete(item);
+            }
         } })
     ];
     try {

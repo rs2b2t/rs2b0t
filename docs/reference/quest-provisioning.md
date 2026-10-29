@@ -23,18 +23,31 @@ the quest's own withdrawal is the only thing that fills it. Both constants live 
 | When | Empties the pack |
 |---|---|
 | journal `notStarted` | yes |
-| already underway | no, the pack may hold the only copy of something |
+| already underway | keeps quest items; trims a crowded pack at a safe bank opportunity |
 | journal unread | no |
 | pack already empty | no |
 
-The journal is the only gate, and the session's first quest is no exception. A quest underway can
+The session's first quest is no exception. A quest underway can
 be carrying an item the server will not hand out twice: Shield of Arrav's chest reads
 `inv_total(bank, arravshield1)` and Straven's `~obj_gettotal(phoenixkey2)` counts the bank, so a
-swept half and store key are gone for good. A resumed quest can also be standing with no route back
-to a bank. Emptying a pack the quest owns costs more than the junk it clears, and the module's own
-`ownsInventory` deposits are what tidy a resumed pack instead.
+swept half and store key cannot be gathered again.
 
-Three failed bank trips and the quest starts on the pack as it stands rather than deadlocking.
+For a resumed quest with four or fewer free slots, `resumePreparation` preserves untradeables,
+quest materials, tools, equipment, coins, runes and potions. It deposits unrelated items and caps
+ordinary food to the quest's allowance, normally eight. Quest food materials keep their required
+quantities. Notes are banked in bulk; duplicate spare equipment retains one physical copy while
+quest equipment and ammunition stacks are preserved. This also applies to modules declaring
+`ownsInventory`.
+
+Preparation runs near a usable bank or before a bank trip the module already requested. On the
+central mainland surface (x 2944–3391, z 3200–3519), it can also walk to the nearest bank without
+teleporting before the first quest action. It defers in combat and in bankless areas. Pirate rum
+and Legends' filled water bowl defer cleanup because travel can destroy them. The module handles
+those stages and any required equipment changes, including Entrana restrictions and Ikov's bridge
+weight limit. A pack containing only protected items stays with the module's own recovery logic.
+
+Deposits succeed only after the bank backpack snapshot confirms the unwanted items are gone.
+Three failed preparation attempts block the quest with a bank or deposit failure reason.
 
 ## The food float
 

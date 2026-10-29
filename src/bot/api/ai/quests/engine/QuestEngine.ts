@@ -6,6 +6,10 @@ import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
 import Tile from '../../../../geometry/Tile.js';
 import { Bank } from '../../../bank/Bank.js';
+import { bankCostForNavigator, nearestBank, nearestWalkableBankAsync } from '../../../bank/BankLocations.js';
+import { Navigator } from '../../../../event/webwalk/Navigator.js';
+import { NEARBY_BANK_RADIUS } from '../../../bank/Banking.js';
+import { NAV_PURE_WALK, Traversal } from '../../../walking/Traversal.js';
 import { ChatDialog } from '../../../ui/dialogue/ChatDialog.js';
 import { Equipment } from '../../../equipment/Equipment.js';
 import { Inventory } from '../../../inventory/Inventory.js';
@@ -20,6 +24,7 @@ import { COIN_FLOAT, coinFloatPlan, depositPlan, floatDrawPlan, planProvisioning
 
 export { COIN_FLOAT };
 import { nextQuest, queueRows, type QueueRow } from './queue.js';
+import { resumePreparation } from './resumePreparation.js';
 import type { QuestModule, QuestProgress, QuestSnapshot, QuestStep } from './types.js';
 import { NO_PROGRESS_PARK, NO_PROGRESS_WARN, ProgressWatchdog, progressSignature } from './watchdog.js';
 import { PRAYER_POTION, prayerUpkeep } from '../prayer.js';
@@ -255,6 +260,8 @@ export class QuestEngine implements Task {
             return;
         }
 
+        if (await this.prepareResume(module, id, snap, rows)) return;
+
         if (module.ownsInventory) {
             // Some quests have one-way, bankless areas, so their stage oracle runs before any generic spillover banking or provisioning on the mainland.
             this.deposited.add(id);
@@ -302,6 +309,13 @@ export class QuestEngine implements Task {
                 const banked = await executeStep({ kind: 'deposit', keep, bank: bankFor(module), leaveOpen: true }, module.hops ?? [], m => this.host.log(`  ${m}`));
                 if (banked) {
                     this.deposited.add(id);
+                } else {
+                    const tries = (this.freshenTries.get(id) ?? 0) + 1;
+                    this.freshenTries.set(id, tries);
+                    if (tries >= FRESH_GIVE_UP) {
+                        this.block(id, ['could not prepare inventory: bank unreachable or deposit refused']);
+                        this.runningId = null;
+                    }
                 }
                 await Execution.delayUntil(() => Bank.loaded(), 3000);
                 this.refreshBankCounts(true);
@@ -395,6 +409,8 @@ export class QuestEngine implements Task {
         } else {
             step = module.decide(snap);
         }
+
+        if (await this.prepareResume(module, id, snap, rows, step)) return;
 
         const stepDesc = describeStep(step);
         this.host.noteState(rows, id, stepDesc, this.noProgressCount, this.parked.size);
@@ -575,15 +591,69 @@ export class QuestEngine implements Task {
             module.hops ?? [],
             m => this.host.log(`  ${m}`)
         );
-        if (emptied || tries >= FRESH_GIVE_UP) {
-            this.freshened.add(id);
-        }
-        if (!emptied && tries >= FRESH_GIVE_UP) {
-            this.host.log(`${module.record.name}: no bank reachable after ${FRESH_GIVE_UP} tries — starting on the pack as it stands`);
+        if (emptied) this.freshened.add(id);
+        else if (tries >= FRESH_GIVE_UP) {
+            this.block(id, ['could not prepare inventory: bank unreachable or deposit refused']);
+            this.runningId = null;
         }
         await Execution.delayUntil(() => Bank.loaded(), 3000);
         this.refreshBankCounts(true);
         await Modals.closeIfOpen();
+        return true;
+    }
+
+    private async prepareResume(module: QuestModule, id: string, snap: QuestSnapshot, rows: QueueRow[], step?: QuestStep): Promise<boolean> {
+        if (this.freshened.has(id) || snap.journal !== 'inProgress') return false;
+        if (Inventory.countById(431) > 0) return false;
+        const plan = resumePreparation(module, snap, Inventory.items(), this.host.foodItem());
+        if (!plan) {
+            this.freshened.add(id);
+            return false;
+        }
+        if (!snap.tile || Game.inCombat() || step?.kind === 'deposit') return false;
+        const nearby = nearestBank(snap.tile);
+        const atBank = nearby?.tile.level === snap.tile.level && nearby.tile.distanceTo(snap.tile) <= NEARBY_BANK_RADIUS;
+        const bankStep = step?.kind === 'scanBank' || step?.kind === 'withdraw';
+        const mainland = snap.tile.level === 0 && snap.tile.x >= 2944 && snap.tile.x < 3392 && snap.tile.z >= 3200 && snap.tile.z < 3520;
+        const detour = !atBank && !bankStep && mainland && nearby !== null;
+        if (!atBank && !bankStep && !detour) return false;
+        const bank = detour
+            ? (await nearestWalkableBankAsync(snap.tile, bankCostForNavigator(Navigator, {
+                ...NAV_PURE_WALK, maxExpansions: 500_000, timeoutMs: 5_000
+            })))?.tile
+            : atBank ? nearby!.tile : bankStep ? step.bank : undefined;
+        const tries = (this.freshenTries.get(id) ?? 0) + 1;
+        this.freshenTries.set(id, tries);
+        this.host.noteState(rows, id, 'preparing inventory for resumed quest', this.noProgressCount, this.parked.size);
+        const log = (message: string): void => this.host.log(`  ${message}`);
+        const arrived = !detour || (bank !== undefined && await Traversal.walkResilient(bank, { ...NAV_PURE_WALK, radius: 3, attempts: 2, timeoutMs: 90_000, log }));
+        let prepared = arrived && await executeStep({ kind: 'deposit', keep: [], keepIds: plan.keepIds, bank, leaveOpen: true }, module.hops ?? [], log);
+        if (prepared) {
+            for (const cap of plan.caps) {
+                while (Inventory.countById(cap.id) > cap.qty) {
+                    if (!(await Bank.backpackReady())) {
+                        prepared = false;
+                        break;
+                    }
+                    const item = Inventory.items().find(item => item.id === cap.id);
+                    const op = item?.actions().find(op => /^deposit[\s-]+1$/i.test(op));
+                    const before = Inventory.countById(cap.id);
+                    if (!item || !op || !(await item.interact(op))
+                        || !(await Execution.delayUntil(() => Inventory.countById(cap.id) < before, 3000))) {
+                        prepared = false;
+                        break;
+                    }
+                }
+                if (!prepared) break;
+            }
+        }
+        this.refreshBankCounts(true);
+        await Modals.closeIfOpen();
+        if (prepared) this.freshened.add(id);
+        else if (tries >= FRESH_GIVE_UP) {
+            this.block(id, ['could not prepare inventory: bank unreachable or deposit refused']);
+            this.runningId = null;
+        }
         return true;
     }
 
