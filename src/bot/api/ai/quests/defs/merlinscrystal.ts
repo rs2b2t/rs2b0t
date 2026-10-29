@@ -601,7 +601,7 @@ async function summonAndBreak(log: (m: string) => void): Promise<boolean> {
     return false;
 }
 
-async function tryBreakCrystal(log: (m: string) => void): Promise<'broke' | 'need-summon' | 'fail'> {
+export async function tryBreakCrystal(log: (m: string) => void): Promise<'broke' | 'need-summon' | 'fail'> {
     if ((Game.tile()?.level ?? 0) < 1 && !(await climbAt(TOWER_LADDER_0, 'Climb-up', log))) {
         return 'fail';
     }
@@ -627,11 +627,13 @@ async function tryBreakCrystal(log: (m: string) => void): Promise<'broke' | 'nee
         log('tryBreakCrystal: no Excalibur to break the crystal');
         return 'fail';
     }
-    await excal.useOn(crystal);
-    await Execution.delayTicks(3);
-    const gone = Locs.query().name('Giant crystal').within(8).nearest() === null
-        || Npcs.query().name('Merlin').within(8).nearest() !== null;
-    return gone ? 'broke' : 'need-summon';
+    if (!(await excal.useOn(crystal))) return 'fail';
+    const freed = await Execution.delayUntil(() => crystalQ() === null
+        || Npcs.query().name('Merlin').within(8).nearest() !== null
+        || ChatDialog.texts().some(text => /already freed Merlin|set Merlin free/i.test(text)), 8000);
+    if (EventSignal.pending()) return 'fail';
+    if (freed) await driveDialogue([], log);
+    return freed ? 'broke' : 'need-summon';
 }
 
 async function summonThrantax(log: (m: string) => void): Promise<boolean> {
