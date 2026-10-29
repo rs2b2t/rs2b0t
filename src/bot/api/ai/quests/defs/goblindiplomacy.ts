@@ -389,7 +389,7 @@ async function makeOrangeDye(log: (m: string) => void): Promise<boolean> {
             return false;
         }
         await talkThrough(AGGIE_RED.npc, AGGIE_RED.prefer, log);
-        return false;
+        return Execution.delayUntil(() => Inventory.contains('Red dye'), 8000);
     }
     if (!Inventory.contains('Yellow dye')) {
         if (Inventory.count('Onion') < 2) {
@@ -403,7 +403,7 @@ async function makeOrangeDye(log: (m: string) => void): Promise<boolean> {
             return false;
         }
         await talkThrough(AGGIE_YELLOW.npc, AGGIE_YELLOW.prefer, log);
-        return false;
+        return Execution.delayUntil(() => Inventory.contains('Yellow dye'), 8000);
     }
     return executeStep({ kind: 'useOn', item: 'Red dye', targetKind: 'item', target: 'Yellow dye', anchor: AGGIE_ANCHOR, product: 'Orange dye' }, [], log);
 }

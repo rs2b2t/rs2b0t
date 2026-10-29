@@ -3,6 +3,7 @@ import { goblindiplomacy, goblinMailGatherStep } from '#/bot/api/ai/quests/defs/
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 import { Quests } from '#/bot/api/ui/questlog/Quests.js';
 import { Inventory } from '#/bot/api/inventory/Inventory.js';
+import { Execution } from '#/bot/api/execution/Execution.js';
 import * as primitives from '#/bot/api/ai/quests/exec/primitives.js';
 import Tile from '#/bot/geometry/Tile.js';
 
@@ -91,3 +92,22 @@ test('approaches Wyson at his Falador park spawn before buying woad', async () =
     if (step.kind === 'custom') await step.run(() => {});
     expect(approach).toHaveBeenCalledWith(expect.objectContaining({anchor: new Tile(3027, 3379, 0)}), [], expect.any(Function));
 });
+
+for (const dye of ['Red dye', 'Yellow dye']) {
+    for (const made of [true, false]) {
+        test(`orange dye gathering reports ${made ? 'progress' : 'failure'} when Aggie ${made ? 'makes' : 'does not make'} ${dye}`, async () => {
+            const held = new Set(dye === 'Yellow dye' ? ['Red dye'] : []);
+            spyOn(Inventory, 'contains').mockImplementation(name => held.has(name));
+            spyOn(Inventory, 'count').mockImplementation(name => name === 'Coins' ? 1000 : name === 'Redberries' ? 3 : name === 'Onion' ? 2 : 0);
+            spyOn(primitives, 'gotoNpc').mockResolvedValue(true);
+            spyOn(primitives, 'talkThrough').mockImplementation(async () => {
+                if (made) held.add(dye);
+                return true;
+            });
+            spyOn(Execution, 'delayUntil').mockImplementation(async predicate => predicate());
+            const step = gather('orange dye', snap());
+            if (step.kind !== 'custom') throw new Error('expected dye gathering');
+            expect(await step.run(() => {})).toBe(made);
+        });
+    }
+}
