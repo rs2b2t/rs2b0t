@@ -1,4 +1,6 @@
 import Tile from '../../geometry/Tile.js';
+import type { WorldTile } from '../../adapter/ClientAdapter.js';
+import type { BankNpcAccess } from '../../api/bank/BankLocations.js';
 
 export const TRADE_CAP = 25; // essence per trade and store-visit target
 export const TRADE_ADJACENT = 2; // runner counts as nearby
@@ -21,6 +23,10 @@ export interface RuneType {
     ruins: Tile; // the Mysterious ruins, altar entrance for the master, trade spot for both
     runnerBank: Tile;
     masterBank: Tile;
+    templeMapX: number;
+    insideMeet?: Tile;
+    bankNpc?: BankNpcAccess;
+    keepItems?: readonly string[];
     // set when the bank is too far to carry unnoted: the runner banks a NOTE and un-notes here.
     // null = short bank<->altar hop, so it carries unnoted essence (no store, no fares, no ship)
     unnote: { npc: string; tile: Tile } | null;
@@ -32,6 +38,7 @@ export const RUNES: Record<string, RuneType> = {
         ruins: new Tile(2865, 3022, 0),
         runnerBank: new Tile(2655, 3283, 0), // Ardougne East, by Captain Barnaby's pier
         masterBank: new Tile(2852, 2954, 0), // Shilo Village (needs the Shilo Village quest)
+        templeMapX: 37,
         unnote: { npc: 'Jiminua', tile: new Tile(2767, 3122, 0) } // Jiminua's Jungle Store, Karamja
     },
     'Air runes': {
@@ -39,11 +46,32 @@ export const RUNES: Record<string, RuneType> = {
         ruins: new Tile(2983, 3288, 0), // south of Falador
         runnerBank: new Tile(3013, 3355, 0), // Falador East
         masterBank: new Tile(3013, 3355, 0),
+        templeMapX: 44,
+        unnote: null
+    },
+    'Cosmic runes': {
+        talisman: 'Cosmic talisman', rune: 'Cosmic rune', level: 27,
+        ruins: new Tile(3173, 9501, 0),
+        runnerBank: new Tile(3152, 9575, 0),
+        masterBank: new Tile(3152, 9575, 0),
+        templeMapX: 33,
+        insideMeet: new Tile(2142, 4830, 0),
+        bankNpc: { name: 'Banker', op: 'Bank', choose: "I'd like to access my bank account" },
+        keepItems: ['Dramen staff'],
         unnote: null
     }
 };
 export const RUNE_OPTIONS = Object.keys(RUNES);
 export const DEFAULT_RUNE = 'Nature runes';
+
+export function inRuneTemple(tile: WorldTile | null, rune: RuneType): boolean {
+    return tile !== null && tile.level === 0 && (tile.x >> 6) === rune.templeMapX && (tile.z >> 6) === 75;
+}
+
+export function inZanaris(tile: WorldTile | null): boolean {
+    return tile !== null && tile.level === 0
+        && tile.x >= 3136 && tile.x < 3264 && tile.z >= 9472 && tile.z < 9600;
+}
 
 type StoreStep = { op: 'buy' | 'sell'; n: number } | { op: 'done' };
 
@@ -79,8 +107,8 @@ const COINS_NAME = 'coins';
 const EVENT_HELD = new Set(['strange box', 'lamp']);
 
 /** Coins, noted/unnoted essence, talisman; master also keeps the rune it crafts. Nameless slots are litter. */
-export function keepNames(talisman: string, productRune: string | null): string[] {
-    const keep = [ESSENCE_NAME, COINS_NAME, talisman.toLowerCase()];
+export function keepNames(talisman: string, productRune: string | null, items: readonly string[] = []): string[] {
+    const keep = [ESSENCE_NAME, COINS_NAME, talisman.toLowerCase(), ...items.map(name => name.toLowerCase())];
     if (productRune) {
         keep.push(productRune.toLowerCase());
     }

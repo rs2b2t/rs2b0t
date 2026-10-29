@@ -1,3 +1,4 @@
+import type { RosterClient } from './RosterTypes.js';
 import type { Account, RenderMode, SlotHandle, SlotOps, SlotSnapshot } from './types.js';
 import type {
     LoginCoordination,
@@ -267,6 +268,12 @@ export class MultiBoxController {
         this.customTabs = [...customTabs];
         this.active = activeTab;
         this.applyModes();
+    }
+
+    rosterClient(id: number): RosterClient | null {
+        const slot = this.slots.find(slot => slot.id === id);
+        if (this.switchingWorld || !slot || slot.switchingWorld !== null || !slot.handle.status().ready) return null;
+        return slot.handle.roster?.() ?? null;
     }
 
     snapshot(): SlotSnapshot[] {

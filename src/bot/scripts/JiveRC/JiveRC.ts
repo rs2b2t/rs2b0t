@@ -7,7 +7,7 @@ import { depositAllExcept } from '../../api/bank/Banking.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
-import { Paint } from '../../paint/Paint.js';
+import { XpTracker, jiveFrame, paintLevels } from '../../paint/jive.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Shop } from '../../api/shop/Shop.js';
 import { Trade } from '../../api/trade/Trade.js';
@@ -21,7 +21,7 @@ import { Traversal } from '../../api/walking/Traversal.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import { type SettingsSchema } from '../../runtime/Settings.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
-import { planStoreStep, offerCount, coinTargetFor, shortRouteWithdraw, RUNES, RUNE_OPTIONS, DEFAULT_RUNE, type RuneType, LOW_COINS, STORE_PASSES, TRADE_CAP, TRADE_ADJACENT, PICKUP_RANGE, SPIDER_SAFE, spiderSafeVia, runnerShouldWalkToMeet, runnerMayLeaveAltar, masterPickTradeTarget, masterOfferDecision, tradeWindowIsFor, masterShouldExitTemple, masterShouldEnterAltar, keepNames, isDroppableLitter, MASTER_HANDSHAKE_MS, runnerShouldRequestTrade } from './NatureRunnerLogic.js';
+import { inRuneTemple, inZanaris, planStoreStep, offerCount, coinTargetFor, shortRouteWithdraw, RUNES, RUNE_OPTIONS, DEFAULT_RUNE, type RuneType, LOW_COINS, STORE_PASSES, TRADE_CAP, TRADE_ADJACENT, PICKUP_RANGE, SPIDER_SAFE, spiderSafeVia, runnerShouldWalkToMeet, runnerMayLeaveAltar, masterPickTradeTarget, masterOfferDecision, tradeWindowIsFor, masterShouldExitTemple, masterShouldEnterAltar, keepNames, isDroppableLitter, MASTER_HANDSHAKE_MS, runnerShouldRequestTrade } from './logic.js';
 
 const ESSENCE = 'Rune essence';
 const ESSENCE_ID = 1436; // blankrune (unnoted essence); the bank-note variant has a different id
@@ -29,7 +29,6 @@ const RUINS = 'Mysterious ruins';
 const ALTAR = { name: 'Altar', op: 'Craft-rune' };
 const PORTAL = { name: 'Portal', op: 'Use' };
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
-const TEMPLE_Z = 4000; // altar temples sit at z ~4800; the overworld is < 4000
 const TRADEREQ_CHAT = 4; // Client.addChat(4, 'wishes to trade with you.', player)
 const TRADE_REQ_TEXT = /wishes to trade with you/i;
 const COINS = 'Coins';
@@ -40,23 +39,19 @@ const AGGRO_SHAKE_TICKS = 5; // ~3s upstairs, long enough for the spiders to dro
 const SHAKE_COOLDOWN_MS = 60_000;
 
 export const SETTINGS: SettingsSchema = {
-    rune: { type: 'string', default: DEFAULT_RUNE, options: RUNE_OPTIONS, label: 'Rune', help: 'which rune the pair crafts. Nature = Ardougne bank + ship + Jiminua un-noting; Air = Falador East bank, straight there and back' },
+    rune: { type: 'string', default: DEFAULT_RUNE, options: RUNE_OPTIONS, label: 'Rune', help: 'Nature uses Ardougne bank and Jiminua unnoting. Air uses Falador East bank. Cosmic uses Zanaris bank; start in Zanaris or the cosmic altar.' },
     mode: { type: 'string', default: 'Master', options: ['Master', 'Runner'], label: 'Mode', help: 'Master crafts at the altar and takes essence from runners; Runner ferries essence to the master' },
     partner: { type: 'string', default: '', label: 'Partner name(s)', help: 'Master: runner name(s) to accept essence from, comma-separated. Runner: the master to deliver to.' },
-    bankEvery: { type: 'number', default: 60, min: 0, label: 'Bank everything every N minutes (0 = never)', help: 'Master: walks to the bank on this timer and deposits everything except the talisman — banks the runes and clears out whatever random events have left in the pack. Air banks at Falador East; the nature master\'s nearest bank is the quest-gated Shilo Village one, so it may not be reachable' },
-    withdrawEss: { type: 'number', default: 0, min: 0, label: 'Essence per restock (0 = default)', help: 'Runner: essence withdrawn per bank restock. 0 = the full bank stack when noting (nature), or one trade-load (air)' },
-    withdrawCoins: { type: 'number', default: 10000, min: 0, label: 'Coins target at restock', help: 'Runner: top coins up to this at each restock (boat fares + shop buy-backs). Unused by air.' },
-    stayInAltar: { type: 'boolean', default: false, label: 'Stay in the altar', help: 'Master and runner wait and trade inside the altar. Runners need a nature talisman.' }
+    bankEvery: { type: 'number', default: 60, min: 0, label: 'Bank everything every N minutes (0 = never)', help: 'Master: bank runes and junk on this timer, keeping the talisman and travel gear. Air banks at Falador East, Cosmic in Zanaris, and Nature in Shilo Village (quest required).' },
+    withdrawEss: { type: 'number', default: 0, min: 0, label: 'Essence per restock (0 = default)', help: 'Runner: 0 withdraws the full bank stack as notes for Nature, or one unnoted trade load for Air and Cosmic.' },
+    withdrawCoins: { type: 'number', default: 10000, min: 0, label: 'Coins target at restock', help: 'Runner: coins for Nature boat fares and shop buybacks. Air and Cosmic do not spend coins.' },
+    stayInAltar: { type: 'boolean', default: false, label: 'Stay in the altar', help: 'Master and runner trade inside the selected altar. Each runner needs the matching talisman.' }
 };
 
-function inTemple(): boolean {
-    const t = Game.tile();
-    return t !== null && t.z > TEMPLE_Z;
-}
 function essCount(): number {
     return Inventory.count(ESSENCE);
 }
-function runeCount(bot: NatureCrafter): number {
+function runeCount(bot: JiveRC): number {
     return Inventory.count(bot.cfg().rune);
 }
 function notedEssence(): number {
@@ -77,7 +72,7 @@ function tradeSnap(): string {
     return `${screen} with=${Trade.partner() ?? '-'} mine=${offerEss(Trade.myOffer())} theirs=${offerEss(Trade.theirOffer())} unnoted=${unnotedEssence()}`;
 }
 
-export default class NatureCrafter extends TaskBot {
+export default class JiveRC extends TaskBot {
     override loopDelay = 600;
 
     private mode = 'Master';
@@ -100,7 +95,7 @@ export default class NatureCrafter extends TaskBot {
     private loadDelivered = false;
     private status = 'starting';
     private startedAt = Date.now();
-    private xpAtStart = 0;
+    private xp = new XpTracker(['runecraft'], Skills);
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -114,23 +109,27 @@ export default class NatureCrafter extends TaskBot {
         this.stayInAltar = this.settings.bool('stayInAltar', false);
         this.nextBankAt = Date.now() + this.bankMs;
         this.startedAt = Date.now();
-        this.xpAtStart = Skills.xp('runecraft');
+        this.xp.begin();
 
         if (this.partners.length === 0) {
-            this.log(`NatureCrafter: no partner names set — ${this.mode === 'Runner' ? 'the runner needs the master name' : 'the master only trades with configured runners'}. Stopping.`);
-            throw new Error('NatureCrafter: no partner configured');
+            this.log(`JiveRC: no partner names set — ${this.mode === 'Runner' ? 'the runner needs the master name' : 'the master only trades with configured runners'}. Stopping.`);
+            throw new Error('JiveRC: no partner configured');
+        }
+
+        if (this.conf.rune === 'Cosmic rune' && !inZanaris(Game.tile()) && !this.inTemple()) {
+            throw new Error('JiveRC: start Cosmic crafting in Zanaris or the cosmic altar');
         }
 
         if (this.mode === 'Runner') {
             if (this.stayInAltar) {
                 await Execution.delayUntil(() => Inventory.first(this.conf.talisman) !== null, 3000);
                 if (Inventory.first(this.conf.talisman) === null) {
-                    ScriptRunner.stop('NatureCrafter runner: stay-in-altar needs a talisman in the pack');
+                    ScriptRunner.stop('JiveRC runner: stay-in-altar needs a talisman in the pack');
                     return;
                 }
             }
             const route = this.conf.unnote ? `via the bank + ship + ${this.conf.unnote.npc}` : 'straight from the bank (unnoted)';
-            this.log(`NatureCrafter runner starting — ferrying essence for ${this.rune} to [${this.partners.join(', ')}] ${route}${this.stayInAltar ? ', staying in the altar' : ''}`);
+            this.log(`JiveRC runner starting — ferrying essence for ${this.rune} to [${this.partners.join(', ')}] ${route}${this.stayInAltar ? ', staying in the altar' : ''}`);
             this.add(
                 new DriveTrade(this),
                 new ContinueDialog(),
@@ -147,8 +146,8 @@ export default class NatureCrafter extends TaskBot {
         }
 
         if (Skills.level('runecraft') < this.conf.level) {
-            this.log(`NatureCrafter: Runecrafting ${this.conf.level} required for ${this.rune} (have ${Skills.level('runecraft')}) — stopping.`);
-            throw new Error('NatureCrafter: runecrafting level too low');
+            this.log(`JiveRC: Runecrafting ${this.conf.level} required for ${this.rune} (have ${Skills.level('runecraft')}) — stopping.`);
+            throw new Error('JiveRC: runecrafting level too low');
         }
         this.on('chat.message', e => {
             if (e.type === TRADEREQ_CHAT && e.username && TRADE_REQ_TEXT.test(e.text) && this.isPartner(e.username)) {
@@ -160,12 +159,12 @@ export default class NatureCrafter extends TaskBot {
                 this.lastAskAt = Date.now();
             }
         });
-        this.log(`NatureCrafter master starting — ${this.rune} at ${this.conf.ruins}, accepting essence from [${this.partners.join(', ')}], ${this.bankMs > 0 ? `banking everything every ${Math.round(this.bankMs / 60_000)}min` : 'never banking'}${this.stayInAltar ? ', staying in the altar' : ''}`);
+        this.log(`JiveRC master starting — ${this.rune} at ${this.conf.ruins}, accepting essence from [${this.partners.join(', ')}], ${this.bankMs > 0 ? `banking everything every ${Math.round(this.bankMs / 60_000)}min` : 'never banking'}${this.stayInAltar ? ', staying in the altar' : ''}`);
         this.add(
             new HandleOpenTrade(this),
             new ContinueDialog(),
             new DropLitter(this, true),
-            new CraftNatures(this),
+            new CraftRunes(this),
             new AcceptRunner(this),
             new ExitTemple(this),
             new BankEverything(this),
@@ -175,24 +174,42 @@ export default class NatureCrafter extends TaskBot {
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#a0e6c8' });
-        p.title(`NatureCrafter — ${this.rune} — ${this.mode.toLowerCase()} — ${this.status}`);
+        const { frame: p, page, section } = jiveFrame(ctx, {
+            script: 'JiveRC',
+            status: this.status,
+            pages: ['Statistics', 'Options'],
+            sections: ['Overview', 'Supplies']
+        });
         const mins = (Date.now() - this.startedAt) / 60_000;
-        const xpGained = Skills.xp('runecraft') - this.xpAtStart;
-        const xph = mins > 0.5 ? `${((xpGained / mins) * 60 / 1000).toFixed(1)}k` : '—';
-        p.row(`Runtime: ${fmtDuration(mins)}`, `Mode: ${this.mode}`, this.mode === 'Master' ? `RC lvl: ${Skills.level('runecraft')}` : `To: ${this.partners[0] ?? '?'}`);
-        if (this.mode === 'Master') {
-            p.row(`Crafted: ${this.crafted}`, `Trades: ${this.trades}`, `Ess in: ${this.received}`);
-            p.row(`RC xp: ${xpGained}`, `RC xp/h: ${xph}`, `Runners: ${this.partners.length}`);
-            p.row(`Pack ess: ${essCount()}`, `Pack runes: ${runeCount(this)}`, '');
+        const runner = this.mode === 'Runner';
+
+        if (page === 'Options') {
+            p.statGrid([[{ text: `Rune: ${this.rune}` }, { text: `Mode: ${this.mode}` }]]);
+            p.text(`Partners: ${this.partners.join(', ') || 'none'}`);
+            p.statGrid([[{ text: `Trading: ${this.stayInAltar ? 'inside' : 'outside'}` }, { text: `Bank: ${this.bankMs > 0 ? `${this.bankMs / 60_000}m` : 'never'}` }]]);
+        } else if (section === 'Overview') {
+            p.statGrid([
+                [{ text: `Runtime: ${fmtDuration(mins)}` }, { text: `Mode: ${this.mode}` }],
+                [{ text: `Rune: ${this.rune}` }, { text: runner ? `Deliveries: ${this.trades}` : `Crafted: ${this.crafted}` }],
+                [{ text: `${runner ? 'Ess sent' : 'Ess in'}: ${this.received}` }, { text: runner ? `To: ${this.partners[0] ?? '?'}` : `Trades: ${this.trades}` }]
+            ]);
+            if (!runner) {
+                paintLevels(p, this.xp.progress(), mins, 2);
+            }
         } else {
-            p.row(`Deliveries: ${this.trades}`, `Ess sent: ${this.received}`, `Coins: ${Inventory.count(COINS)}`);
-            p.row(`Pack ess: ${essCount()}`, `noted: ${notedEssence()}`, `unnoted: ${unnotedEssence()}`);
-            p.gap();
+            p.statGrid([
+                [{ text: `Unnoted: ${unnotedEssence()}` }, { text: `Noted: ${notedEssence()}` }],
+                [{ text: `Coins: ${Inventory.count(COINS)}` }, { text: `${this.conf.rune}: ${runeCount(this)}` }]
+            ]);
+            p.bar('Pack', Inventory.used() / 28);
+        }
+
+        p.gap();
+        if (runner) {
             const clicked = p.buttons([{ id: 'gobank', label: this.goBank ? 'Resume' : 'Go bank' }]);
             if (clicked === 'gobank') {
                 this.goBank = !this.goBank;
-                this.log(this.goBank ? 'Go bank pressed — heading to the bank to park' : 'Resume pressed — back to the loop');
+                this.log(this.goBank ? 'Go bank pressed, heading to the bank to park' : 'Resume pressed, back to the loop');
             }
         }
         ScriptRunner.paintControls(p);
@@ -206,8 +223,18 @@ export default class NatureCrafter extends TaskBot {
         this.loopCadence = on ? { kind: 'frame' } : null;
     }
     cfg(): RuneType { return this.conf; }
+    inTemple(): boolean { return inRuneTemple(Game.tile(), this.conf); }
     keepList(keepProductRune: boolean): string[] {
-        return keepNames(this.conf.talisman, keepProductRune ? this.conf.rune : null);
+        return keepNames(this.conf.talisman, keepProductRune ? this.conf.rune : null, this.conf.keepItems);
+    }
+
+    async openBank(stand: Tile): Promise<boolean> {
+        const log = (message: string) => this.log(`  ${message}`);
+        if (this.conf.bankNpc) {
+            return Bank.openNpcAccess(this.conf.bankNpc, log);
+        }
+        return await Bank.openBooth(stand, BOOTH.name, BOOTH.op, log)
+            || await Bank.openNearest(BOOTH.name, BOOTH.op, log);
     }
     // the client is never told whether an obj is tradeable or bankable (ObjType has no such
     // field. It is server-side only), so the only way to know is to try and watch it refuse
@@ -270,7 +297,7 @@ export default class NatureCrafter extends TaskBot {
 }
 
 class DropLitter implements Task {
-    constructor(private bot: NatureCrafter, private keepProductRune: boolean) {}
+    constructor(private bot: JiveRC, private keepProductRune: boolean) {}
     private droppable() {
         const keep = this.bot.keepList(this.keepProductRune);
         return Inventory.items().filter(i => isDroppableLitter(i.name, keep, i.actions()));
@@ -301,7 +328,7 @@ class DropLitter implements Task {
 class HandleOpenTrade implements Task {
     private lastWait = '';
     private awaitingConfirm = false;
-    constructor(private bot: NatureCrafter) {}
+    constructor(private bot: JiveRC) {}
     validate(): boolean {
         const on = Trade.active() || this.awaitingConfirm;
         if (!on) {
@@ -383,9 +410,9 @@ class HandleOpenTrade implements Task {
     }
 }
 
-class CraftNatures implements Task {
-    constructor(private bot: NatureCrafter) {}
-    validate(): boolean { return inTemple() && essCount() > 0; }
+class CraftRunes implements Task {
+    constructor(private bot: JiveRC) {}
+    validate(): boolean { return this.bot.inTemple() && essCount() > 0; }
     async execute(): Promise<void> {
         const altar = Locs.query().name(ALTAR.name).action(ALTAR.op).nearest();
         if (!altar) { await Execution.delayTicks(2); return; }
@@ -404,9 +431,9 @@ class CraftNatures implements Task {
 }
 
 class ExitTemple implements Task {
-    constructor(private bot: NatureCrafter) {}
+    constructor(private bot: JiveRC) {}
     validate(): boolean {
-        return masterShouldExitTemple(inTemple(), essCount(), this.bot.stayInsideAltar(), this.bot.bankTripDue());
+        return masterShouldExitTemple(this.bot.inTemple(), essCount(), this.bot.stayInsideAltar(), this.bot.bankTripDue());
     }
     async execute(): Promise<void> {
         if (this.bot.bankTripDue()) {
@@ -418,9 +445,9 @@ class ExitTemple implements Task {
 
 class EnterAltar implements Task {
     private fails = 0;
-    constructor(private bot: NatureCrafter) {}
+    constructor(private bot: JiveRC) {}
     validate(): boolean {
-        return masterShouldEnterAltar(inTemple(), essCount(), this.bot.stayInsideAltar(), this.bot.bankTripDue());
+        return masterShouldEnterAltar(this.bot.inTemple(), essCount(), this.bot.stayInsideAltar(), this.bot.bankTripDue());
     }
     async execute(): Promise<void> {
         this.bot.setStatus(essCount() > 0 ? 'entering the altar to craft' : 'entering the altar to wait');
@@ -429,7 +456,7 @@ class EnterAltar implements Task {
             return;
         }
         if (++this.fails >= 3) {
-            ScriptRunner.stop('NatureCrafter: the talisman didn\'t teleport into the altar');
+            ScriptRunner.stop('JiveRC: the talisman didn\'t teleport into the altar');
         }
     }
 }
@@ -438,10 +465,10 @@ class EnterAltar implements Task {
 // have dropped in the pack. Cheaper than reasoning about which litter can be traded or dropped.
 class BankEverything implements Task {
     private backoffUntil = 0;
-    constructor(private bot: NatureCrafter) {}
+    constructor(private bot: JiveRC) {}
     validate(): boolean {
         return this.bot.bankTripDue()
-            && !inTemple() && essCount() === 0 && !Trade.active() && Date.now() >= this.backoffUntil;
+            && !this.bot.inTemple() && essCount() === 0 && !Trade.active() && Date.now() >= this.backoffUntil;
     }
     async execute(): Promise<void> {
         const cfg = this.bot.cfg();
@@ -450,17 +477,16 @@ class BankEverything implements Task {
         this.bot.log(`${Math.round(this.bot.bankIntervalMs() / 60_000)}min bank trip — ${runeCount(this.bot)} ${cfg.rune}s and anything else in the pack`);
         // short timeout so an unreachable quest-gated bank fails fast, not after the default 240s
         const reached = await Traversal.walkResilient(cfg.masterBank, { radius: 3, attempts: 2, timeoutMs: 30_000, log: m => this.bot.log(`  ${m}`) });
-        const opened = reached && ((await Bank.openBooth(cfg.masterBank, BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))
-            || (await Bank.openNearest(BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`))));
+        const opened = reached && await this.bot.openBank(cfg.masterBank);
         if (!opened) {
-            this.bot.log('NatureCrafter: bank unreachable (Shilo Village quest?) — holding runes (they stack) and continuing to serve runners');
+            this.bot.log('JiveRC: could not open the bank; holding runes and continuing to serve runners');
             this.backoffUntil = Date.now() + 300_000;
             await this.bot.walkTo(cfg.ruins, 1);
             return;
         }
         const made = runeCount(this.bot);
         const before = Inventory.used();
-        await Bank.depositAllMatching(depositAllExcept([cfg.talisman]), m => this.bot.log(`  ${m}`));
+        await Bank.depositAllMatching(depositAllExcept([cfg.talisman, ...cfg.keepItems ?? []]), m => this.bot.log(`  ${m}`));
         await Execution.delayTicks(1);
         this.bot.log(`banked ${made} ${cfg.rune}s, cleared ${before - Inventory.used()} slot(s); back to the altar`);
         await this.bot.walkTo(cfg.ruins, 1);
@@ -469,12 +495,12 @@ class BankEverything implements Task {
 
 class AcceptRunner implements Task {
     private nextClickAt = 0;
-    constructor(private bot: NatureCrafter) {}
+    constructor(private bot: JiveRC) {}
     validate(): boolean {
         return essCount() === 0 && !Trade.active()
             && Date.now() >= this.nextClickAt
             && this.bot.tradeTarget() !== null
-            && (this.bot.stayInsideAltar() || !inTemple());
+            && (this.bot.stayInsideAltar() || !this.bot.inTemple());
     }
     async execute(): Promise<void> {
         const name = this.bot.tradeTarget();
@@ -505,15 +531,19 @@ class AcceptRunner implements Task {
 }
 
 class WaitForRunner implements Task {
-    constructor(private bot: NatureCrafter) {}
-    validate(): boolean { return essCount() === 0 && (this.bot.stayInsideAltar() || !inTemple()); }
+    constructor(private bot: JiveRC) {}
+    validate(): boolean { return essCount() === 0 && (this.bot.stayInsideAltar() || !this.bot.inTemple()); }
     async execute(): Promise<void> {
-        if (this.bot.nearestPartner() !== null || this.bot.pendingRequester() !== null) {
+        if (this.bot.nearestPartner() !== null) {
             this.bot.setStatus('runner in sight — standing for the trade');
             await Execution.delayTicks(1);
             return;
         }
-        if (this.bot.stayInsideAltar() && inTemple()) {
+        if (this.bot.stayInsideAltar() && this.bot.inTemple()) {
+            const meet = this.bot.cfg().insideMeet;
+            if (meet) {
+                await this.bot.walkTo(meet, 1);
+            }
             this.bot.setStatus('waiting for a runner in the altar');
             await Execution.delayTicks(1);
             return;
@@ -531,7 +561,7 @@ class WaitForRunner implements Task {
 
 // jungle spiders chase the runner all the way to the store; a trip up the ladder next to
 // Jiminua (2766,3121) and straight back down drops their aggro
-async function shakeAggroOnLadder(bot: NatureCrafter): Promise<void> {
+async function shakeAggroOnLadder(bot: JiveRC): Promise<void> {
     const level = (): number => Game.tile()?.level ?? 0;
     const ground = level();
     const up = Locs.query().name(LADDER).action(CLIMB_UP).nearest();
@@ -586,7 +616,7 @@ class DriveTrade implements Task {
     private beforeUnnoted = 0;
     private settling = false;
     private settleFromTick = -1;
-    constructor(private bot: NatureCrafter) {}
+    constructor(private bot: JiveRC) {}
     validate(): boolean {
         const on = Trade.active() || this.settling;
         if (!on) {
@@ -669,9 +699,13 @@ class DriveTrade implements Task {
 }
 
 class GoBankPark implements Task {
-    constructor(private bot: NatureCrafter) {}
+    constructor(private bot: JiveRC) {}
     validate(): boolean { return this.bot.goBankActive() && !Trade.active(); }
     async execute(): Promise<void> {
+        if (this.bot.inTemple()) {
+            await portalOut(this.bot);
+            return;
+        }
         const here = Game.tile();
         if (!here || this.bot.cfg().runnerBank.distanceTo(here) > 4) {
             this.bot.setStatus('Go bank: walking to the bank');
@@ -693,9 +727,9 @@ function groundRunnerSupplies(): GroundItem | null {
 class PickupRunnerSupplies implements Task {
     private fails = 0;
     private blockedUntil = 0;
-    constructor(private bot: NatureCrafter) {}
+    constructor(private bot: JiveRC) {}
     validate(): boolean {
-        return !inTemple() && unnotedEssence() === 0 && !Trade.active() && Date.now() >= this.blockedUntil && groundRunnerSupplies() !== null;
+        return !this.bot.inTemple() && unnotedEssence() === 0 && !Trade.active() && Date.now() >= this.blockedUntil && groundRunnerSupplies() !== null;
     }
     async execute(): Promise<void> {
         const drop = groundRunnerSupplies();
@@ -730,7 +764,7 @@ class DeliverEssence implements Task {
     private meeting = false;
     private lastReqKey = '';
     private lastReqAt = 0;
-    constructor(private bot: NatureCrafter) {}
+    constructor(private bot: JiveRC) {}
     validate(): boolean {
         if (unnotedEssence() === 0) {
             this.meeting = false;
@@ -740,7 +774,11 @@ class DeliverEssence implements Task {
     }
     async execute(): Promise<void> {
         const masterName = this.bot.partnerNames()[0];
-        if (this.bot.stayInsideAltar() && !inTemple()) {
+        if (!this.bot.stayInsideAltar() && this.bot.inTemple()) {
+            await portalOut(this.bot);
+            return;
+        }
+        if (this.bot.stayInsideAltar() && !this.bot.inTemple()) {
             this.bot.setStatus('entering the altar to deliver');
             if (!(await enterAltar(this.bot))) {
                 this.bot.log('could not enter the altar — retrying');
@@ -751,12 +789,16 @@ class DeliverEssence implements Task {
         if (master) {
             this.meeting = true;
         }
-        if (runnerShouldWalkToMeet(master !== null, this.meeting, inTemple(), this.bot.stayInsideAltar())) {
+        if (runnerShouldWalkToMeet(master !== null, this.meeting, this.bot.inTemple(), this.bot.stayInsideAltar())) {
             this.bot.setStatus(`walking to ${masterName}`);
             await this.bot.walkTo(this.bot.cfg().ruins, 2);
             return;
         }
         if (!master) {
+            const meet = this.bot.cfg().insideMeet;
+            if (this.bot.inTemple() && meet) {
+                await this.bot.walkTo(meet, 1);
+            }
             this.bot.setStatus(`waiting for ${masterName} — holding the essence`);
             await Execution.delayTicks(1);
             return;
@@ -782,9 +824,9 @@ class DeliverEssence implements Task {
 }
 
 class ExitAltarForRestock implements Task {
-    constructor(private bot: NatureCrafter) {}
+    constructor(private bot: JiveRC) {}
     validate(): boolean {
-        return this.bot.stayInsideAltar() && inTemple()
+        return this.bot.inTemple()
             && runnerMayLeaveAltar(Trade.active(), unnotedEssence());
     }
     async execute(): Promise<void> {
@@ -800,9 +842,9 @@ function shopEssStock(): number {
 
 class UnNoteEssence implements Task {
     private lastShakeAt = 0;
-    constructor(private bot: NatureCrafter) {}
+    constructor(private bot: JiveRC) {}
     validate(): boolean {
-        return this.bot.cfg().unnote !== null && !inTemple() && !Trade.active()
+        return this.bot.cfg().unnote !== null && !this.bot.inTemple() && !Trade.active()
             && notedEssence() > 0 && unnotedEssence() === 0 && Inventory.count(COINS) >= LOW_COINS;
     }
     async execute(): Promise<void> {
@@ -847,15 +889,14 @@ class UnNoteEssence implements Task {
 
 class BankRestock implements Task {
     private emptyReads = 0;
-    constructor(private bot: NatureCrafter) {}
+    constructor(private bot: JiveRC) {}
     // coins only matter on the noting route (fares + buy-backs); the short route never spends any
     validate(): boolean { return essCount() === 0 || (this.bot.cfg().unnote !== null && Inventory.count(COINS) < LOW_COINS); }
     async execute(): Promise<void> {
         const cfg = this.bot.cfg();
         this.bot.setStatus('restocking at the bank');
         await this.bot.walkTo(cfg.runnerBank, 3);
-        const opened = (await Bank.openBooth(cfg.runnerBank, BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))
-            || (await Bank.openNearest(BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)));
+        const opened = await this.bot.openBank(cfg.runnerBank);
         if (!opened) {
             this.bot.log('could not open the bank — retrying');
             return;
@@ -865,6 +906,7 @@ class BankRestock implements Task {
         // random events hand out items that eat the slots essence needs, dump anything unrelated
         const keep = [
             ESSENCE,
+            ...cfg.keepItems ?? [],
             ...(cfg.unnote ? [COINS] : []),
             ...(this.bot.stayInsideAltar() ? [cfg.talisman] : [])
         ];
@@ -884,7 +926,7 @@ class BankRestock implements Task {
                 await Bank.withdrawX(COINS, Math.min(needCoins, Bank.count(COINS)));
             }
             if (Inventory.count(COINS) < LOW_COINS && Bank.loaded()) {
-                ScriptRunner.stop('NatureCrafter runner: out of coins (bank + pack) for fares and buy-backs');
+                ScriptRunner.stop('JiveRC runner: out of coins (bank + pack) for fares and buy-backs');
                 return;
             }
         }
@@ -893,7 +935,7 @@ class BankRestock implements Task {
         if (banked === 0) {
             // only believe an empty bank after it reads empty on three separate restocks
             if (essCount() === 0 && ++this.emptyReads >= 3) {
-                ScriptRunner.stop('NatureCrafter runner: out of Rune essence in the bank (three reads)');
+                ScriptRunner.stop('JiveRC runner: out of Rune essence in the bank (three reads)');
             }
             return;
         }
@@ -915,7 +957,7 @@ class BankRestock implements Task {
     }
 }
 
-async function enterAltar(bot: NatureCrafter): Promise<boolean> {
+async function enterAltar(bot: JiveRC): Promise<boolean> {
     await bot.walkTo(bot.cfg().ruins, 1);
     const ruins = Locs.query().name(RUINS).nearest();
     const talisman = Inventory.first(bot.cfg().talisman);
@@ -928,7 +970,7 @@ async function enterAltar(bot: NatureCrafter): Promise<boolean> {
         await Execution.delayTicks(2);
         return false;
     }
-    if (await Execution.delayUntil(() => inTemple(), 10_000)) {
+    if (await Execution.delayUntil(() => bot.inTemple(), 10_000)) {
         bot.log('entered the altar');
         return true;
     }
@@ -936,14 +978,14 @@ async function enterAltar(bot: NatureCrafter): Promise<boolean> {
 }
 
 // craft locks the player (p_delay 3); tight-loop the portal so Use fires the instant it clears
-async function portalOut(bot: NatureCrafter): Promise<void> {
+async function portalOut(bot: JiveRC): Promise<void> {
     bot.setStatus('taking the portal out');
     bot.log('taking the portal back to the ruins');
-    for (let i = 0; i < 15 && inTemple(); i++) {
+    for (let i = 0; i < 15 && bot.inTemple(); i++) {
         if (ChatDialog.canContinue()) { await ChatDialog.continue(); continue; }
         const portal = Locs.query().name(PORTAL.name).action(PORTAL.op).nearest();
         if (portal) { await portal.interact(PORTAL.op); }
         await Execution.delayTicks(1);
     }
-    if (!inTemple()) { bot.log('back at the mysterious ruins'); }
+    if (!bot.inTemple()) { bot.log('back at the mysterious ruins'); }
 }

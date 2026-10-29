@@ -70,7 +70,7 @@ import GemCutter, { GEM_CUTTER_SETTINGS } from './GemCutter/GemCutter.js';
 import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner/EssMiner.js';
 import CoalTrucks from './CoalTrucks/CoalTrucks.js';
 import RuneCrafter, { SETTINGS as RUNECRAFTER_SETTINGS } from './RuneCrafter/RuneCrafter.js';
-import NatureCrafter, { SETTINGS as NATURECRAFTER_SETTINGS } from './NatureCrafter/NatureCrafter.js';
+import JiveRC, { SETTINGS as JIVERC_SETTINGS } from './JiveRC/JiveRC.js';
 import MuleCrafter, { SETTINGS as MULECRAFTER_SETTINGS } from './MuleCrafter/MuleCrafter.js';
 import MuleDepot, { SETTINGS as MULEDEPOT_SETTINGS } from './MuleDepot/MuleDepot.js';
 import RoguesPurse from './RoguesPurse/RoguesPurse.js';
@@ -400,12 +400,12 @@ ScriptRegistry.register({
 });
 
 ScriptRegistry.register({
-    name: 'NatureCrafter',
-    description: 'Master Nature Crafter — a master stands at the nature altar (Karamja), takes essence from configured runners via trade, and crafts natures; runners bank essence at Ardougne, un-note it at the general store, and ship it to the master. Mode + partner name(s) via settings',
+    name: 'JiveRC',
+    description: 'Master/runner crafting for Nature, Air and Cosmic runes. Nature runners unnote at Jiminua, Air runners bank at Falador East, and Cosmic runners bank in Zanaris. Start Cosmic accounts in Zanaris or the cosmic altar.',
     category: 'Runecrafting',
-    tags: ['runecrafting', 'nature', 'trade', 'master', 'runner', 'karamja'],
-    settingsSchema: NATURECRAFTER_SETTINGS,
-    create: () => new NatureCrafter()
+    tags: ['runecrafting', 'nature', 'air', 'cosmic', 'trade', 'master', 'runner', 'jive'],
+    settingsSchema: JIVERC_SETTINGS,
+    create: () => new JiveRC()
 });
 
 ScriptRegistry.register({
