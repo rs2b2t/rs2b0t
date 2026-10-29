@@ -59,6 +59,14 @@ Eating during the quest does not reopen it, the provisioning block re-runs every
 quest is still gathering, and topping the float up sent the bot back to the bank after every
 meal. A death reopens it, because the pack is gone.
 
+Waterfall uses cakes independently of the global food setting. It preserves partial cakes and
+uses banked supplies before stealing from the Ardougne cake stall. Stall bread and chocolate
+slices count toward the same food loadout.
+
+Near the Ardougne bank and stall, Waterfall finishes stocking eight foods. During travel, it
+refills at three or fewer. Cake healing waits through eating cooldowns and verifies consumed
+portions; the hostile crate uses a bounded health target while the safe ledge requires full HP.
+
 ## The coin float
 
 `COIN_FLOAT` (1000) is walking-around money unless a module names another figure. The engine
@@ -78,81 +86,9 @@ Two rules that are easy to get wrong:
   re-fetched by any run resumed past the leg that spent it. Dragon Slayer's Oracle charms
   were, with the map already in Ned's hands.
 
-## Strike spells
-
-Fight Arena, Witch's House, The Grand Tree and Lost City provision 150 casts before their boss
-fights. [`strike.ts`](../../src/bot/api/ai/quests/strike.ts) chooses the strongest Strike the
-Magic level permits, withdraws available bank stacks, and buys the missing runes from Betty.
-Rune stacks survive quest inventory clearing. Combat can use a weaker Strike if its runes are
-all that remain; it never switches to melee when runes run out.
-
-Waterfall uses cakes independently of the global food setting. It preserves partial cakes and
-uses banked supplies before stealing from the Ardougne cake stall. Stall bread and chocolate
-slices count toward the same food loadout.
-
-Witch's House equips a held or banked usable fire staff before provisioning Fire Strike. If fire
-runes are short, it can buy a Staff of fire from Zaff. A complete rune supply or insufficient
-staff funds keeps the rune path available. Casting and provisioning both account for the
-equipped staff's elemental runes.
-
-Fight Arena lures around the northern rock, Grand Tree uses the root passage, and Witch's
-House uses the southern gap for the bear and a northeast corner lure for the wolf. Its first
-two forms use ordinary Strike casts. Casting disables retaliation and staff autocast, removes
-melee equipment, and checks position, range and line of sight before each cast. Lost City keeps
-its existing Tree Spirit lure.
-
-## Prayer
-
-A quest declaring `pray: { protect, potions }` holds that protection prayer through its fights.
-One op per tick: food first, then prayer, because the server drops the rest. Quest fights come in
-three shapes and `prayerUpkeep()` is called from each:
-
-| Fight shape | Called from | Quests |
-|---|---|---|
-| a step that returns to the engine each pass | `QuestEngine` tick | Dragon Slayer, Witch's House |
-| a loop that already runs `Sustain` | the quester's `Sustain` hook | Fight Arena, Heroes' Quest, Horror from the Deep, Troll Stronghold |
-| a loop that owns the bot for minutes | the loop itself | Fremennik Trials, Underground Pass (via `driveUntil`), Vampire Slayer |
-
-| Situation | Action |
-|---|---|
-| in combat, points at `PRAYER_FLOOR`, a dose held | drink |
-| in combat, protection down and available | raise it |
-| the fight ends | drop it, held through the walk out it empties the flask |
-| Prayer below the prayer's level | log once, fight on food alone |
-
-Doses join the float like food, drawn once. Declared only on the nine quests above, whose fights
-threaten the account. Lost City, Scorpion Catcher and Legends drive prayer inside their own fight
-loops and declare nothing here.
-
-## Weapons
-
-No quest names a weapon. [`quests/weapons.ts`](../../src/bot/api/ai/quests/weapons.ts) derives the
-table from `ITEM_DB`, so every one-handed melee type the item db knows is offered at every tier,
-and a quest asks only for "a weapon".
-
-| Tier | Attack | Also needs |
-|---|---|---|
-| Dragon | 60 | Lost City for the longsword and dagger, Hero's Quest for the battleaxe and mace |
-| Rune | 40 | |
-| Adamant | 30 | |
-| Mithril | 20 | |
-| Black | 10 | |
-| Steel | 5 | |
-| Iron, Bronze | 1 | |
-
-The level buys the tier; within a tier any type will do. `tier60.rs2` gates dragon melee on a quest
-as well as the level, so a level check alone withdraws a weapon the wield is refused for and the
-quest fights bare-handed. `snap.attack` carries the level, the way `snap.prayer` carries points.
-
-Goblin Diplomacy checks banked mail and dye ingredients before gathering. When mail still needs
-farming, it equips the best usable carried or banked melee weapon, including two-handed swords,
-and clears space for displaced equipment. It selects reachable targets before attacking. Its
-combat loop tracks an encounter through death
-or a bounded stall, resumes attacks after eating, and keeps incoming damage separate from
-the player's own attack progress.
-
 ## See also
 
+- [Quest combat](quest-combat.md)
 - [Quest engine](quest-engine.md)
 - [Quest eligibility](quest-eligibility.md)
 - [Add a quest](../how-to/add-a-quest.md)
