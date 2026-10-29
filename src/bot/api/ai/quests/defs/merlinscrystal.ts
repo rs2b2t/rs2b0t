@@ -67,6 +67,7 @@ const KEEP_STAIR_L2_DOWN = new Tile(2769, 3399, 2);
 const RETURN_CRATE_STAND = new Tile(2778, 3401, 0);
 const MAGIC_SYMBOL = new Tile(2780, 3515, 0);
 const CHAOS_ALTAR_STAND = new Tile(3239, 3607, 0);
+const ALTAR_AVOID_ZONES = [{ minX: 2944, maxX: 3455, minZ: 3648, maxZ: 4095, level: 0 }];
 const TOWER_LADDER_0 = new Tile(2769, 3493, 0);
 const TOWER_LADDER_1 = new Tile(2767, 3491, 1);
 const CRYSTAL_STAND = new Tile(2767, 3494, 2);
@@ -124,7 +125,7 @@ async function driveDialogue(prefer: string[], log: (m: string) => void, maxPage
 }
 
 async function climbAt(stand: Tile, op: string, log: (m: string) => void): Promise<boolean> {
-    if (!(await Traversal.walkResilient(stand, { radius: 1, attempts: 3, timeoutMs: 60_000, log }))) {
+    if (!(await Traversal.walkTo(stand, { radius: 1, timeoutMs: 600_000, avoidZones: ALTAR_AVOID_ZONES, log }))) {
         return false;
     }
     const stair = Locs.query().action(op).within(4).nearest();
@@ -634,7 +635,7 @@ async function tryBreakCrystal(log: (m: string) => void): Promise<'broke' | 'nee
 }
 
 async function summonThrantax(log: (m: string) => void): Promise<boolean> {
-    if (!(await Traversal.walkResilient(CHAOS_ALTAR_STAND, { radius: 2, attempts: 4, timeoutMs: 180_000, log }))) {
+    if (!(await Traversal.walkTo(CHAOS_ALTAR_STAND, { radius: 2, timeoutMs: 600_000, avoidZones: ALTAR_AVOID_ZONES, log }))) {
         return false;
     }
     const altar = Locs.query().name('Chaos altar').action('Check').within(8).nearest();
@@ -642,7 +643,7 @@ async function summonThrantax(log: (m: string) => void): Promise<boolean> {
         await altar.interact('Check');
         await Execution.delayTicks(2);
     }
-    if (!(await Traversal.walkResilient(MAGIC_SYMBOL, { radius: 1, attempts: 3, timeoutMs: 120_000, log }))) {
+    if (!(await Traversal.walkTo(MAGIC_SYMBOL, { radius: 1, timeoutMs: 600_000, avoidZones: ALTAR_AVOID_ZONES, log }))) {
         return false;
     }
     if (!Inventory.contains(LIT_CANDLE) && !(await lightCandle(log))) {
