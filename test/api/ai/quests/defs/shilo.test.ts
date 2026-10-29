@@ -431,8 +431,28 @@ describe('shilo decide — Ah Za Rhoon and the crafts', () => {
         expect(name(step)).toContain("Bervirius' tomb");
     });
 
+    test('recovers a lost bone shard after searching the Bervirius dolmen', () => {
+        const flags = ['pommel-taken', 'found-door'];
+        for (const tile of [at(2898, 9401), at(2888, 9283)]) {
+            expect(name(middle(flags, [], tile))).toContain('gallows');
+        }
+        expect(name(middle(flags, [[SV_ITEM.ZADIMUS_CORPSE.id, 1]]))).toContain('bury Zadimus');
+        expect(name(middle(flags, [[SV_ITEM.ZADIMUS_CORPSE.id, 1]], at(2888, 9283))))
+            .toContain('climb out of Ah Za Rhoon');
+    });
+
+    test('leaves the caves before retrieving a banked bone key', () => {
+        const step = decide(snapshot({
+            progress: progress(SV_STAGE.ENTERED_AH_ZA_RHOON, ['pommel-taken', 'found-door']),
+            bankIds: new Map([[SV_ITEM.BONE_KEY.id, 1]]),
+            invIds: PROVISIONED,
+            tile: at(2898, 9401)
+        }));
+        expect(name(step)).toContain('climb out of Ah Za Rhoon');
+    });
+
     test('inside the caves it climbs out before any of the mainland crafts', () => {
-        const step = middle(['read-tattered', 'read-crumpled', 'pommel-taken'], [], at(2898, 9401));
+        const step = middle(['read-tattered', 'read-crumpled', 'pommel-taken'], [[SV_ITEM.BONE_SHARD.id, 1]], at(2898, 9401));
         expect(name(step)).toContain('climb out of Ah Za Rhoon');
     });
 

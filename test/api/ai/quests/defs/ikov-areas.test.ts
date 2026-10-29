@@ -88,6 +88,11 @@ describe('Temple of Ikov regions', () => {
         }
     });
 
+    test('surface banks cannot prove the dungeon gate is unlocked', () => {
+        expect(pastSouthGate({ x: 2615, z: 3332, level: 0 })).toBe(false);
+        expect(pastSouthGate({ x: 2809, z: 3441, level: 0 })).toBe(false);
+    });
+
     // Why: the far side wraps around the Fire Warrior's room, so the temple box has to stop at the corridor the wall opens into.
     test('the guardian temple box excludes the far side that shares its rows', () => {
         expect(inGuardianTemple(IKOV_TILE.SECRET_WALL_INSIDE)).toBe(true);

@@ -22,6 +22,9 @@ const restores: (() => void)[] = [];
 afterEach(() => { for (const restore of restores.splice(0).reverse()) restore(); });
 
 function fixture() {
+    const originalStage = runemysteries.readStage;
+    restores.push(() => { runemysteries.readStage = originalStage; });
+    runemysteries.readStage = undefined;
     const state: {
         ore: number; ok: boolean; gain: boolean; skip: boolean; death: boolean;
         combat: boolean; xp: number; now: number;
@@ -355,3 +358,13 @@ for (const scenario of [
         expect(engine['blocked'].has('runemysteries')).toBe(scenario.blocked);
     });
 }
+
+test('keeps the actionable wait reason after exhausting retries', async () => {
+    const { engine, state } = fixture();
+    state.wait = true;
+    state.picked = new Set(['runemysteries']);
+    await execute(engine, 50);
+    const row = state.rows.find(row => row.id === 'runemysteries');
+    expect(row?.status).toBe('BLOCKED');
+    expect(row?.reasons).toContain('waiting: fixture wait');
+});

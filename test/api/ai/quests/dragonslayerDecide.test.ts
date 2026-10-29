@@ -400,3 +400,27 @@ describe('Dragon Slayer sources its own shopping at the point of use', () => {
         expect((step as { name: string }).name).toBe('go ashore');
     });
 });
+
+test.each([DRAGON_STAGE.BOUGHT_SHIP, DRAGON_STAGE.REPAIRED_SHIP])(
+    'recovers the banked Crandor map before hiring Ned at stage %i', stage => {
+        const step = decide(snapshot({
+            progress: { stage, flags: new Set(['ship-repaired']) },
+            banked: [DS_ID.MAP]
+        }));
+        expect(step).toMatchObject({ kind: 'withdraw', items: [{ name: 'Crandor map', qty: 1, id: 1538 }] });
+    }
+);
+
+test('scans an unknown bank before returning to Ned without a map', () => {
+    expect(decide(snapshot({
+        progress: { stage: DRAGON_STAGE.REPAIRED_SHIP, flags: new Set(['ship-repaired']) },
+        bankKnown: false
+    }))).toMatchObject({ kind: 'scanBank' });
+});
+
+test('leaves the repaired ship before recovering a banked map', () => {
+    expect(decide(snapshot({
+        progress: { stage: DRAGON_STAGE.REPAIRED_SHIP, flags: new Set(['ship-repaired']) },
+        tile: { x: 3047, z: 3208, level: 1 }, banked: [DS_ID.MAP]
+    }))).toMatchObject({ kind: 'custom', name: 'go ashore' });
+});

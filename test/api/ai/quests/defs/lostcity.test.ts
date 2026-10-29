@@ -163,9 +163,30 @@ describe('Lost City stages 0-3', () => {
         expect(step.kind === 'wait' && step.reason).toContain(`${LOST_CITY_FOOD_TARGET} free inventory slots`);
     });
 
+    test('food shortage accounts for both held and banked food', () => {
+        for (const [held, banked, missing] of [[0, 1, 7], [2, 3, 3]]) {
+            const step = decide(snap({
+                stage: 2,
+                inv: ['Knife', ...Array(held).fill('Lobster')],
+                bank: Array(banked).fill('Lobster')
+            }));
+            expect(step.kind === 'wait' && step.reason).toContain(`need ${missing} more Lobster in the bank`);
+        }
+    });
+
     test('stage 2 resumes aboard the ship and on Entrana', () => {
         expect(customName(decide(snap({ stage: 2, tile: ENTRANA_SHIP })))).toBe('disembark on Entrana');
         expect(customName(decide(snap({ stage: 2, tile: ENTRANA })))).toBe('descend the one-way Entrana ladder');
+    });
+
+    test('resuming at the Catherby bank exit provisions before boarding Entrana', () => {
+        const step = decide(snap({
+            stage: 2,
+            tile: { x: 2809, z: 3438, level: 0 },
+            inv: COMBAT_FOOD,
+            bank: ['Knife']
+        }));
+        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Knife', qty: 1 }]);
     });
 
     test('stage 2 dungeon restart obtains, equips, then uses a dropped axe', () => {

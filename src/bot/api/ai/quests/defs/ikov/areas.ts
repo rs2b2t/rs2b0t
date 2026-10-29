@@ -228,8 +228,8 @@ export function inIceCavern(t: { x: number; z: number }): boolean {
 // Why: `inIceCavern` is a half-plane and the boots room sits inside it, so only this may stand in for "through the south gate".
 
 /** Through the south gate; the boots room doesn't count however far south it lies. */
-export function pastSouthGate(t: { x: number; z: number }): boolean {
-    return inIceCavern(t) && !inDarkRoom(t);
+export function pastSouthGate(t: { x: number; z: number; level: number }): boolean {
+    return inTemple(t) && inIceCavern(t) && !inDarkRoom(t);
 }
 
 export function inTrapPit(t: { x: number; z: number }): boolean {

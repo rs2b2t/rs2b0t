@@ -1,11 +1,13 @@
 import { Skills } from '../../../../skills/Skills.js';
 import { QUESTS } from '../../data/quests.js';
+import { FOOD_FLOAT, QuestFood } from '../../food.js';
+import { isUnderground } from '../../exec/primitives.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { KS_ID, KS_NAME, KS_STAGE, RELDO, SQUIRE, THURGO } from './areas.js';
 import { mineBlurite } from './dungeon.js';
 import { readKnightsSwordProgress } from './journal.js';
 import { fetchPortrait } from './portrait.js';
-import { bankedId, heldId, ironBarsAt, kit, pie, pieDish } from './supplies.js';
+import { bankedId, heldId, ironBarsAt, kit, pickaxeAt, pie, pieDish } from './supplies.js';
 
 
 const talk = (stop: typeof SQUIRE): QuestStep => ({ kind: 'talk', stop });
@@ -40,7 +42,7 @@ function materials(snap: QuestSnapshot, miningLevel: number, smithingLevel: numb
     }
     if (heldId(snap, KS_ID.BLURITE_ORE) === 0) {
         // Stock up above ground; kit() refuses to send the bot back out of the cave.
-        return kit(snap) ?? { kind: 'custom', name: 'mine blurite', run: mineBlurite };
+        return kit(snap) ?? pickaxeAt(snap, miningLevel) ?? { kind: 'custom', name: 'mine blurite', run: mineBlurite };
     }
     return talk(THURGO);
 }
@@ -56,7 +58,17 @@ export function decideAt(snap: QuestSnapshot, miningLevel: number, smithingLevel
     if (stage === undefined) {
         return { kind: 'wait', reason: 'quest stage not readable' };
     }
-    const float = kit(snap);
+    const food = QuestFood.name;
+    const heldFood = food ? (snap.inv.get(food.toLowerCase()) ?? 0) : 0;
+    const bankedFood = food ? (snap.bank?.get(food.toLowerCase()) ?? 0) : 0;
+    const keep = [...(knightssword.tools ?? []), ...(food && heldFood <= FOOD_FLOAT ? [food] : [])];
+    if ((snap.freeSlots ?? 28) < 8 && !(snap.tile && isUnderground(snap.tile))
+        && [...snap.inv.keys()].some(name => !keep.some(item => name.toLowerCase().includes(item.toLowerCase())))) {
+        return { kind: 'deposit', keep };
+    }
+    const float = kit(snap, food && bankedFood > 0 ? {
+        name: food, held: heldFood, target: Math.min(FOOD_FLOAT, heldFood + bankedFood), low: 4
+    } : null);
     if (float) {
         return float;
     }
@@ -96,7 +108,7 @@ export const knightssword: QuestModule = {
     // Why: Keep coins through spillover deposits so purchases do not stop on "need gp".
     tools: [
         'coins', 'pickaxe', 'pie dish', 'pot of flour', 'redberries', 'bucket',
-        'pastry dough', 'pie shell', 'uncooked berry pie', 'redberry pie',
+        'pastry dough', 'pie shell', 'uncooked berry pie', 'redberry pie', 'burnt pie',
         'iron ore', 'iron bar', 'blurite ore', 'portrait', 'blurite sword'
     ],
     ownsInventory: true,

@@ -356,8 +356,11 @@ interface SupplyWants {
  * The next surface acquisition for the wanted parts of the kit, or null when they are all in hand.
  * @see docs/decisions/quest-pitfalls-26.md
  */
-export function suppliesStep(snap: QuestSnapshot, wants: SupplyWants): QuestStep | null {
+export function suppliesStep(snap: QuestSnapshot, wants: SupplyWants, fletchingLevel?: number): QuestStep | null {
     const needBow = wants.bow && heldOrBanked(snap, IKOV_OBJ.YEW_SHORTBOW) === 0;
+    if (needBow && fletchingLevel !== undefined && fletchingLevel < 65) {
+        return { kind: 'wait', reason: 'need Fletching 65 to make a Yew shortbow, or a banked Yew shortbow' };
+    }
     // Why: Aemad's is in East Ardougne and the rest of the kit is a Catherby-Seers loop, so the axe is bought on the way out.
     if (needBow && axeOutstanding(snap)) {
         return { kind: 'buy', item: IKOV_NAME.IRON_AXE, qty: 1, shop: { npc: 'Aemad', anchor: IKOV_TILE.AEMAD }, estGp: AXE_GP };

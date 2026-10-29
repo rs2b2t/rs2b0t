@@ -365,8 +365,7 @@ export class QuestEngine implements Task {
                 step = { kind: 'scanBank', bank: bankFor(module) };
             } else if (plan.blocked.length > 0 && plan.withdraw.length === 0) {
                 this.host.log(`${module.record.name} short on items: ${plan.blocked.join(', ')} — parking`);
-                this.parkedReasons.set(id, plan.blocked.map(b => `missing: ${b}`));
-                this.parkOrGiveUp(id, module.record.name);
+                this.parkOrGiveUp(id, module.record.name, plan.blocked.map(b => `missing: ${b}`));
                 this.resetWatchdog();
                 this.runningId = null;
                 const blk = this.applyBlocked(queueRows(this.order, picked, elig, this.parked, null));
@@ -429,8 +428,7 @@ export class QuestEngine implements Task {
             this.waitKey = key;
             if (this.waitCount >= WAIT_PARK) {
                 this.host.log(`${module.record.name} waiting on '${step.reason}' with no way to resolve it — parking`);
-                this.parkedReasons.set(id, [`waiting: ${step.reason}`]);
-                this.parkOrGiveUp(id, module.record.name);
+                this.parkOrGiveUp(id, module.record.name, [`waiting: ${step.reason}`]);
                 this.resetWatchdog();
                 this.runningId = null;
                 this.waitKey = '';
@@ -668,12 +666,14 @@ export class QuestEngine implements Task {
         this.resetWatchdog();
     }
 
-    private parkOrGiveUp(id: string, name: string): void {
+    private parkOrGiveUp(id: string, name: string, reasons: string[] = []): void {
+        if (reasons.length) this.parkedReasons.set(id, reasons);
+        else this.parkedReasons.delete(id);
         const count = (this.parkCounts.get(id) ?? 0) + 1;
         this.parkCounts.set(id, count);
         if (count >= PARK_GIVE_UP) {
             this.host.log(`${name} parked ${PARK_GIVE_UP}x with no progress — giving up`);
-            this.block(id, [`parked ${PARK_GIVE_UP}x with no progress — giving up`]);
+            this.block(id, [...reasons, `parked ${PARK_GIVE_UP}x with no progress — giving up`]);
             return;
         }
         this.host.log(`parking ${name} (park ${count}/${PARK_GIVE_UP})`);

@@ -74,7 +74,7 @@ const JEWELLER_DOOR_STAND = new Tile(3016, 3247, 0);
 const BEEHIVE_STAND = new Tile(2758, 3444, 0);
 const REPELLENT_SPAWN = new Tile(2807, 3450, 0);
 const BAT_ANCHOR = new Tile(2589, 3478, 0);
-const WYDIN_SHOP = { npc: 'Wydin', anchor: new Tile(3014, 3204, 0) };
+const BAKER_SHOP = { npc: 'Baker', anchor: new Tile(2669, 3310, 0) };
 const RIMMINGTON_SHOP = { npc: 'Shop keeper', anchor: new Tile(2947, 3216, 0) };
 
 const has = (snap: QuestSnapshot, name: string): boolean => (snap.inv.get(name.toLowerCase()) ?? 0) > 0;
@@ -95,9 +95,8 @@ function buyOrWait(snap: QuestSnapshot, step: Extract<QuestStep, { kind: 'buy' }
     return step;
 }
 
-// The East Ardougne Baker's stall has no bread in rev 274 and the beggar needs Bread, so buy from Wydin's in Port Sarim.
 export function breadPlan(snap: QuestSnapshot, _thievingLevel = 0, _passesUsed = 0): QuestStep {
-    return buyOrWait(snap, { kind: 'buy', item: 'Bread', qty: 1, shop: WYDIN_SHOP, estGp: 20 });
+    return buyOrWait(snap, { kind: 'buy', item: 'Bread', qty: 1, shop: BAKER_SHOP, estGp: 20 });
 }
 
 async function driveDialogue(prefer: string[], log: (m: string) => void, maxPages = 60): Promise<void> {

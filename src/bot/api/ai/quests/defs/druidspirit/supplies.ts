@@ -116,7 +116,7 @@ function pickaxe(snap: QuestSnapshot, miningLevel: number): QuestStep | null {
 }
 
 /** Bank first, then Al Kharid: mould, ore, bar, cast. Null once a sickle is in hand. */
-export function sickleStep(snap: QuestSnapshot, miningLevel?: number): QuestStep | null {
+export function sickleStep(snap: QuestSnapshot, miningLevel?: number, smithingLevel?: number): QuestStep | null {
     if (heldId(snap, NS_ID.SICKLE_BLESSED) > 0 || heldId(snap, NS_ID.SICKLE) > 0) {
         return null;
     }
@@ -141,6 +141,9 @@ export function sickleStep(snap: QuestSnapshot, miningLevel?: number): QuestStep
     }
     if (bankedId(snap, NS_ID.SILVER_BAR) > 0) {
         return withdraw(NS_NAME.SILVER_BAR, NS_ID.SILVER_BAR);
+    }
+    if ((smithingLevel ?? Skills.level('smithing')) < 20) {
+        return { kind: 'wait', reason: 'need 20 Smithing to smelt silver, or a Silver bar or Silver sickle in the bank' };
     }
     if (heldId(snap, NS_ID.SILVER_ORE) > 0) {
         return { kind: 'custom', name: 'smelt a silver bar', run: smeltSilver };

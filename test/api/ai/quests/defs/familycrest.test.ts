@@ -12,6 +12,7 @@ import {
     mineRegion,
     parseFamilyCrestJournal
 } from '#/bot/api/ai/quests/defs/familycrest/index.js';
+import { sourceCalebFish } from '#/bot/api/ai/quests/defs/familycrest/fish.js';
 import type { WorldTile } from '#/bot/adapter/ClientAdapter.js';
 import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
 
@@ -245,6 +246,17 @@ describe('Family Crest decide', () => {
         expect(step.kind === 'wait' && step.reason).not.toContain('Swordfish');
     });
 
+    test('Caleb withdraws banked raw fish instead of parking', () => {
+        const step = decide(snap({
+            stage: FC_STAGE.SPOKEN_CALEB,
+            invIds: ALL_FISH.filter(([id]) => id !== FC_ID.BASS),
+            bankIds: [[363, 2]],
+            bank: [['Raw bass', 2]]
+        }));
+        expect(step.kind).toBe('withdraw');
+        if (step.kind === 'withdraw') expect(step.items).toEqual([{ name: 'Raw bass', id: 363, qty: 1 }]);
+    });
+
     test('Caleb withdraws the fish the bank does hold', () => {
         const step = decide(snap({
             stage: FC_STAGE.SPOKEN_CALEB,
@@ -329,6 +341,21 @@ describe('Family Crest perfect-gold leg', () => {
         expect(step.kind === 'withdraw' && step.items[0]?.name).toBe('Coins');
     });
 
+    test('banks combat food before buying jewellery supplies with a full pack', () => {
+        const step = decide(snap({
+            stage: FC_STAGE.SPOKEN_BOOT,
+            invIds: [[FC_ID.PERFECT_GOLD_ORE, 2], [995, 50_000], [385, 10]],
+            inv: [["'perfect' gold ore", 2], ['Coins', 50_000], ['Shark', 10]],
+            freeSlots: 0
+        }));
+        expect(step.kind).toBe('deposit');
+        if (step.kind !== 'deposit') return;
+        expect(step.keep).toContain("'perfect' gold ore");
+        expect(step.keep).toContain('ring mould');
+        expect(step.keep).not.toContain('shark');
+        expect(step.keepIds).toContain(FC_ID.CREST_FROM_CALEB);
+    });
+
     test('with ore but no moulds, the moulds come before the furnace trip', () => {
         const step = decide(snap({
             stage: FC_STAGE.SPOKEN_BOOT,
@@ -348,6 +375,25 @@ describe('Family Crest perfect-gold leg', () => {
         expect(step.kind).toBe('buy');
         expect(step.kind === 'buy' && step.item).toBe('Ruby');
         expect(step.kind === 'buy' && step.shop.npc).toBe('Gem merchant');
+    });
+
+    test('withdraws banked uncut rubies before relying on shop stock', () => {
+        const step = decide(snap({
+            stage: FC_STAGE.SPOKEN_BOOT,
+            invIds: [[FC_ID.PERFECT_GOLD_ORE, 2], [FC_ID.RING_MOULD, 1], [FC_ID.NECKLACE_MOULD, 1]],
+            bankIds: [[1619, 107]], bank: [['Uncut ruby', 107]]
+        }));
+        expect(step.kind).toBe('withdraw');
+        if (step.kind === 'withdraw') expect(step.items).toEqual([{ name: 'Uncut ruby', id: 1619, qty: 2 }]);
+    });
+
+    test('cuts carried rubies using a chisel', () => {
+        const step = decide(snap({
+            stage: FC_STAGE.SPOKEN_BOOT,
+            invIds: [[FC_ID.PERFECT_GOLD_ORE, 2], [FC_ID.RING_MOULD, 1], [FC_ID.NECKLACE_MOULD, 1], [1619, 2], [1755, 1]]
+        }));
+        expect(step.kind).toBe('useOn');
+        if (step.kind === 'useOn') expect([step.item, step.target, step.product]).toEqual(['Chisel', 'Uncut ruby', 'Ruby']);
     });
 
     test('fully supplied but still holding ore, it smelts first', () => {
@@ -663,4 +709,67 @@ describe('Family Crest module wiring', () => {
         expect({ x: SAFESPOT.x, z: SAFESPOT.z, level: SAFESPOT.level })
             .toEqual({ x: 3089, z: 9932, level: 0 });
     });
+});
+
+describe('Family Crest missing fish', () => {
+    const bass = [{ id: FC_ID.BASS, name: 'Bass' }];
+    const tuna = [{ id: FC_ID.TUNA, name: 'Tuna' }];
+
+    test('Ownageie can draw its net to source missing bass at 83 Fishing and Cooking', () => {
+        const step = sourceCalebFish(snap({ bank: [['Big fishing net', 2]] }), bass, 83, 83);
+        expect(step.kind).toBe('withdraw');
+        if (step.kind === 'withdraw') expect(step.items).toEqual([{ name: 'Big fishing net', qty: 1 }]);
+    });
+
+    test('a carried raw bass is cooked without needing the Fishing level to catch another', () => {
+        const step = sourceCalebFish(snap({ invIds: [[363, 1]] }), bass, 1, 43);
+        expect(step.kind === 'custom' && step.name).toBe('cook Bass for Caleb');
+    });
+
+    test('cooking requirements produce an actionable shortage instead of retrying a range', () => {
+        const step = sourceCalebFish(snap({ invIds: [[363, 1]] }), bass, 83, 42);
+        expect(step.kind === 'wait' && step.reason).toContain('Cooking 43 (have 83/42)');
+    });
+
+    test('the next tuna attempt resumes fishing after a burn consumes its raw fish', () => {
+        const step = sourceCalebFish(snap({ inv: [['Harpoon', 1], ['Burnt fish', 1]] }), tuna, 83, 83);
+        expect(step.kind === 'custom' && step.name).toBe('catch Tuna for Caleb');
+    });
+
+    test('fish are banked while fishing tools are retained', () => {
+        const step = sourceCalebFish(snap({ freeSlots: 0, inv: [['Harpoon', 1], ['Raw swordfish', 20]] }), tuna, 83, 83);
+        expect(step.kind).toBe('deposit');
+        if (step.kind === 'deposit') {
+            expect(step.keep).toContain('Harpoon');
+            expect(step.keep).not.toContain('Bass');
+            expect(step.keep).not.toContain('Raw swordfish');
+        }
+    });
+});
+
+test('Caleb clears bulk cooked fish before acquiring the missing types', () => {
+    for (const [id, name] of [[385, 'Shark'], [FC_ID.SWORDFISH, 'Swordfish']] as const) {
+        const step = decide(snap({
+            stage: FC_STAGE.SPOKEN_CALEB, freeSlots: 0,
+            inv: [[name, 27], ['Coins', 1000]], invIds: [[id, 27], [995, 1000]]
+        }));
+        expect(step.kind).toBe('deposit');
+        if (step.kind !== 'deposit') throw new Error('expected deposit');
+        expect(step.keep.some(kept => name.toLowerCase().includes(kept.toLowerCase()))).toBe(false);
+    }
+    const after = decide(snap({
+        stage: FC_STAGE.SPOKEN_CALEB,
+        bank: [['Swordfish', 27]], bankIds: [[FC_ID.SWORDFISH, 27]]
+    }));
+    expect(after).toMatchObject({ kind: 'withdraw', items: [{ name: 'Swordfish', id: FC_ID.SWORDFISH, qty: 1 }] });
+});
+
+test('fish gathering clears excess cooked fish when three slots remain', () => {
+    const step = sourceCalebFish(snap({
+        freeSlots: 3, inv: [['Swordfish', 24], ['Harpoon', 1]], invIds: [[FC_ID.SWORDFISH, 24]]
+    }), [{ name: 'Tuna', id: FC_ID.TUNA }], 83, 83);
+    expect(step.kind).toBe('deposit');
+    if (step.kind !== 'deposit') throw new Error('expected deposit');
+    expect(step.keep.some(kept => 'swordfish'.includes(kept.toLowerCase()))).toBe(false);
+    expect(step.keep.some(kept => 'harpoon'.includes(kept.toLowerCase()))).toBe(true);
 });

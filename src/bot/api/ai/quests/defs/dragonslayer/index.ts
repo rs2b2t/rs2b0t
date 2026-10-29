@@ -615,6 +615,19 @@ function bankedPieces(snap: QuestSnapshot): { name: string; qty: number; id: num
     return want.map(id => ({ name: id === DS_ID.MAP ? DS_ITEM.MAP : DS_ITEM.MAP_PART, qty: 1, id }));
 }
 
+function hireNed(snap: QuestSnapshot): QuestStep {
+    if (aboard(snap.tile)) {
+        return custom('go ashore', leaveShip);
+    }
+    if (heldId(snap, DS_ID.MAP) === 0) {
+        if (!snap.bankKnown) return { kind: 'scanBank' };
+        if (bankedId(snap, DS_ID.MAP) > 0) {
+            return { kind: 'withdraw', items: [{ name: DS_ITEM.MAP, qty: 1, id: DS_ID.MAP }] };
+        }
+    }
+    return { kind: 'talk', stop: NED_HIRE };
+}
+
 // Why: Elvarg is level 83 with no bank on the island, and by now the shield is worn and the shopping spent, so the pack has the slots.
 const ELVARG_FOOD = 18;
 
@@ -811,23 +824,17 @@ export function decide(snap: QuestSnapshot): QuestStep {
     }
 
     if (stage === DRAGON_STAGE.BOUGHT_SHIP) {
+        if (hasFlag(snap.progress, 'ship-repaired')) {
+            return hireNed(snap);
+        }
         const errand = hullErrand(snap);
         if (errand) {
             return aboard(snap.tile) ? custom('go ashore', leaveShip) : errand;
         }
-        // Why: hiring Ned leaves no journal trace, so the repair, which the journal can confirm, gates it.
-        if (!hasFlag(snap.progress, 'ship-repaired')) {
-            return custom('patch the Lady Lumbridge', repairShip);
-        }
-        return { kind: 'talk', stop: NED_HIRE };
+        return custom('patch the Lady Lumbridge', repairShip);
     }
     if (stage === DRAGON_STAGE.REPAIRED_SHIP) {
-        // The patch leaves the bot a deck below where it boarded, off the nav graph.
-        if (aboard(snap.tile)) {
-            return custom('go ashore', leaveShip);
-        }
-        // Hire and hand-over are two dialogues: the first visit gets his promise, the second takes the map.
-        return { kind: 'talk', stop: NED_HIRE };
+        return hireNed(snap);
     }
     if (stage === DRAGON_STAGE.NED_GIVEN_MAP) {
         const here = snap.tile;

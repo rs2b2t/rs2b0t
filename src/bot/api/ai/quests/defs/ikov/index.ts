@@ -1,5 +1,7 @@
 // docs/QUESTS.md
 import { Game } from '../../../../game/Game.js';
+import { Equipment } from '../../../../equipment/Equipment.js';
+import { Skills } from '../../../../skills/Skills.js';
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { talkStrict } from '../../exec/primitives.js';
@@ -59,6 +61,7 @@ const WARRIOR_FOOD_FLOOR = 2;
 
 // Why: the lava bridge weighs the pack, and stackables are free, so the trim is about the non-stackables the surface legs leave behind, the yew shortbow (3lb) and the iron axe most of all.
 const BRIDGE_KEEP = ['coins', 'candle', 'tinderbox', 'knife', 'pendant', 'boots of lightness', 'ice arrows', 'lever', ...IKOV_FOODS];
+const BRIDGE_WORN = new Set(['boots of lightness', 'pendant of lucien']);
 
 function held(snap: QuestSnapshot, id: number): number {
     return snap.invIds?.get(id) ?? 0;
@@ -66,7 +69,17 @@ function held(snap: QuestSnapshot, id: number): number {
 
 /** Bank whatever the crossing cannot afford to carry, before the bot is underground with no booth. */
 function bridgeTrimStep(snap: QuestSnapshot): QuestStep | null {
-    return trimStep(snap, BRIDGE_KEEP);
+    const trim = trimStep(snap, BRIDGE_KEEP);
+    if (trim) return trim;
+    if ([...snap.worn].some(name => !BRIDGE_WORN.has(name))) {
+        return { kind: 'custom', name: 'remove equipment for the lava bridge', run: async () => {
+            for (const item of Equipment.items()) {
+                if (item.name && !BRIDGE_WORN.has(item.name.toLowerCase()) && !(await Equipment.unequip(item.name))) return false;
+            }
+            return true;
+        } };
+    }
+    return null;
 }
 
 /** Winelda's 20 roots are 20 slots; only coins, food and the pendant ride with them. */
@@ -163,7 +176,7 @@ async function finishForArmadyl(log: (m: string) => void): Promise<boolean> {
     return killLucien(log);
 }
 
-export function decide(snap: QuestSnapshot): QuestStep {
+export function decide(snap: QuestSnapshot, fletchingLevel?: number): QuestStep {
     if (snap.journal === 'complete') {
         return { kind: 'done' };
     }
@@ -200,7 +213,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
     if (stage >= IKOV_STAGE.SPOKEN_WINELDA) {
         if (heldOrBanked(snap, IKOV_OBJ.LIMPWURT_ROOT) < ROOTS_WANTED) {
-            const roots = suppliesStep(snap, { candle: false, bow: false, roots: true });
+            const roots = suppliesStep(snap, { candle: false, bow: false, roots: true }, fletchingLevel);
             if (roots) {
                 return roots;
             }
@@ -224,7 +237,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
     // Why: the candle only lights the stairs down to the boots, so it leaves the kit once the boots are had.
     const needBoots = !wearingBoots() && heldOrBanked(snap, IKOV_OBJ.BOOTS) === 0;
-    const supplies = suppliesStep(snap, { candle: needBoots, bow: true, roots: false });
+    const supplies = suppliesStep(snap, { candle: needBoots, bow: true, roots: false }, fletchingLevel);
     if (supplies) {
         return supplies;
     }
@@ -289,7 +302,7 @@ export const ikov: QuestModule = {
                 + ` weight=${Game.weight()}kg`
         ];
     },
-    decide
+    decide: snap => decide(snap, Skills.effective('fletching'))
 };
 
 export { IKOV_STAGE };
