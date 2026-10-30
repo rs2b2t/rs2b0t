@@ -14,6 +14,7 @@ const DOOR_SKILL_GATES: readonly {
     worn?: { name: string; count: number }[];
     note?: string;
 }[] = [
+    { x: 3046, z: 9756, level: 0, skill: 'mining', levelReq: 60 },
     // fishing_guild.rs2 loc_2025, fishing 68
     { x: 2611, z: 3394, level: 0, skill: 'fishing', levelReq: 68 },
     { x: 2611, z: 3398, level: 0, skill: 'fishing', levelReq: 68 },
@@ -48,7 +49,7 @@ const TRANSPORT_SKILL_GATES: readonly {
 }[] = [
     // mining_guild.rs2 miningguildladder, mining 60 to descend; all 4 surface from-tiles in transports.json (locId 2113)
     { x: 3018, z: 3340, level: 0, skill: 'mining', levelReq: 60 },
-    { x: 3019, z: 3339, level: 0, skill: 'mining', levelReq: 60 },
+    { x: 3018, z: 3338, level: 0, skill: 'mining', levelReq: 60 },
     { x: 3019, z: 3341, level: 0, skill: 'mining', levelReq: 60 },
     { x: 3020, z: 3340, level: 0, skill: 'mining', levelReq: 60 },
     // Why: skill_agility/shortcuts.rs2 _island_rope_swing needs agility 10 on the outer swings.

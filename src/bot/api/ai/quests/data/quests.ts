@@ -173,8 +173,8 @@ export const QUESTS: QuestRecord[] = [
         questPoints: 3,
         requirements: { minQuestPoints: 12 },
         items: [
-            { name: 'Iron chainbody', qty: 1, kind: 'mustHave' },
-            { name: 'Bronze med helm', qty: 1, kind: 'mustHave' },
+            { name: 'Iron chainbody', qty: 1, kind: 'acquirable' },
+            { name: 'Bronze med helm', qty: 1, kind: 'acquirable' },
             { name: 'Cabbage', qty: 1, kind: 'acquirable' }
         ]
     },

@@ -1,6 +1,8 @@
 import Skill from '../../../client/shell/Skill.js';
 import { usesActivityCooldown } from './session.js';
-import { methodFor, producer } from './methods.js';
+import { methodFor, producer, questPlan } from './methods.js';
+import { zanarisExitNeeds } from './dragonWeapons.js';
+import { QUESTS } from '../../api/ai/quests/data/quests.js';
 import { purchaseBudget, supplyOffer } from './offers.js';
 import { SHOPPING_RESERVE } from './shopping.js';
 import { canResumeObjective, trainingPriority } from './priority.js';
@@ -9,6 +11,7 @@ import { requirementKey, stockOf, type ActivityPlan, type Decision, type Leveler
 export { scimitarFor } from './combat.js';
 export const enabledSkills = Skill.names.filter((name, index) => Skill.used[index] && name !== '-unused-');
 export const emptyMemory = (): SessionMemory => ({ objective: null, recent: [], cooldowns: {}, attempted: {}, deaths: 0 });
+const LOST_CITY = QUESTS.find(quest => quest.id === 'zanaris')!;
 
 export function resolveActivity(s: LevelerSnapshot, plan: ActivityPlan, memory: SessionMemory, random: () => number, chain: string[] = []): Decision {
     if (chain.includes(plan.id)) return { kind: 'blocked', reason: `Supply dependency cycle: ${[...chain, plan.id].join(' -> ')}` };
@@ -37,6 +40,12 @@ export function resolveActivity(s: LevelerSnapshot, plan: ActivityPlan, memory: 
 export function planNext(s: LevelerSnapshot, memory: SessionMemory, random: () => number = Math.random): Decision {
     if (!s.bankReady) return { kind: 'refresh' };
     if (enabledSkills.some(skill => !Number.isFinite(s.levels[skill]) || s.levels[skill] <= 0)) return { kind: 'blocked', reason: 'Skill levels have not loaded' };
+    if (!s.quests[LOST_CITY.name] && zanarisExitNeeds(s) && LOST_CITY.requirements.skills?.every(req => s.levels[req.skill] >= req.level)
+        && (memory.cooldowns['quest-zanaris'] ?? 0) <= s.now) {
+        const objective = trainingPriority(s.levels, s.target).skills[0] ?? 'attack';
+        const decision = resolveActivity(s, questPlan(s, objective, LOST_CITY.id, LOST_CITY.name, true), memory, random);
+        if (decision.kind === 'activity') return decision;
+    }
     const unfinished = enabledSkills.filter(skill => s.levels[skill] < s.target);
     if (!unfinished.length) return { kind: 'complete' };
     const priority = trainingPriority(s.levels, s.target);

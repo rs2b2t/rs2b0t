@@ -33,7 +33,7 @@ const refused = new Set<string>();
 
 function stocked(snap: QuestSnapshot, name: string): number {
     const key = name.toLowerCase();
-    return (snap.inv.get(key) ?? 0) + (snap.bank?.get(key) ?? 0);
+    return (snap.inv.get(key) ?? 0) + (snap.bank?.get(key) ?? 0) + Number(snap.worn.has(key));
 }
 
 function dressed(snap: QuestSnapshot, slot: readonly string[]): boolean {

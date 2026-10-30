@@ -135,3 +135,47 @@ test('group headers collapse/expand and remember state across re-renders', () =>
     expect(document.querySelectorAll('.rs2b0t-param-row').length).toBe(4);
     modal.close();
 });
+
+test('live option status refresh preserves input drafts and stops when the modal closes', async () => {
+    let complete = false;
+    let reads = 0;
+    const liveSchema: SettingsSchema = {
+        choices: {
+            type: 'string[]', default: [], options: ['cook'], selectionMode: 'includeExclude',
+            optionStatuses: () => {
+                reads++;
+                return { cook: complete ? 'complete' : 'unknown' };
+            }
+        },
+        note: { type: 'string', default: '' }
+    };
+    const modal = new ParamsModal(() => false, () => {});
+    try {
+        modal.open('LiveChoices', liveSchema);
+        const input = document.querySelector<HTMLInputElement>('input[type=text]')!;
+        input.value = 'unfinished draft';
+        const skip = document.querySelector<HTMLButtonElement>('button[aria-label="Skip cook"]');
+        expect(skip).not.toBeNull();
+        skip!.click();
+        complete = true;
+        await Bun.sleep(1100);
+        expect(document.querySelector('.is-complete')?.textContent).toContain('✓ Complete');
+        expect(document.querySelector('input[type=text]')).toBe(input);
+        expect(input.value).toBe('unfinished draft');
+        expect(skip!.getAttribute('aria-pressed')).toBe('true');
+        modal.close();
+        const afterClose = reads;
+        complete = false;
+        await Bun.sleep(1100);
+        expect(reads).toBe(afterClose);
+        modal.open('LiveChoices', liveSchema);
+        expect(document.querySelector('.is-complete')).toBeNull();
+        expect(document.querySelector('button[aria-label="Skip cook"]')?.getAttribute('aria-pressed')).toBe('true');
+        modal.open('Demo', schema);
+        const afterSwitch = reads;
+        await Bun.sleep(1100);
+        expect(reads).toBe(afterSwitch);
+    } finally {
+        modal.close();
+    }
+});

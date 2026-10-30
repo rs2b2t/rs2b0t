@@ -1,3 +1,4 @@
+import { Quests } from '#/bot/api/ui/questlog/Quests.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
 import { Banking } from '#/bot/api/bank/Banking.js';
 import { executeStep } from '#/bot/api/ai/quests/exec/steps.js';
@@ -948,5 +949,40 @@ test('Shilo deposits a rejected warhammer while preserving the quest hammer', as
         expect(deposited).toEqual(['rune warhammer']);
     } finally {
         for (const restore of restores.reverse()) restore();
+    }
+});
+
+test('Shilo resumes inside its caves before another quest tries to bank', () => {
+    for (const [x, z] of [[2898, 9401], [2888, 9283], [2760, 9389], [2929, 9525], [2929, 9515], [2892, 9487]]) {
+        expect(shilo.resumeAt?.({ x, z, level: 0 })).toBe(true);
+        expect(shilo.resumeAt?.({ x, z, level: 1 })).toBe(false);
+    }
+    for (const [x, z] of [[2852, 2954], [2800, 3086], [3200, 3200], [2520, 9995]]) {
+        expect(shilo.resumeAt?.({ x, z, level: 0 })).toBe(false);
+    }
+});
+
+
+test('completed Shilo escapes every cave before the next quest starts', () => {
+    const restore = stubProps(Quests, { status: () => 'complete' });
+    try {
+        for (const [x, z] of [[2898, 9401], [2888, 9283], [2760, 9389], [2929, 9525], [2929, 9515], [2892, 9487]]) {
+            expect(shilo.recover?.(at(x, z))?.kind).toBe('custom');
+            expect(shilo.recover?.(at(x, z, 1))).toBeNull();
+        }
+        expect(shilo.recover?.(at(2760, 9389))).toMatchObject({ name: "climb out of Bervirius' tomb" });
+        expect(shilo.recover?.(MAINLAND)).toBeNull();
+        expect(shilo.recover?.(KARAMJA)).toBeNull();
+    } finally {
+        restore();
+    }
+});
+
+test('Shilo recovery leaves active cave progress to the quest', () => {
+    const restore = stubProps(Quests, { status: () => 'inProgress' });
+    try {
+        expect(shilo.recover?.(at(2760, 9389))).toBeNull();
+    } finally {
+        restore();
     }
 });

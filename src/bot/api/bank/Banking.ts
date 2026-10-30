@@ -12,7 +12,7 @@ import { Navigator } from '../../event/webwalk/Navigator.js';
 import { Execution } from '../execution/Execution.js';
 import { Game } from '../game/Game.js';
 import Tile from '../../geometry/Tile.js';
-import { Traversal } from '../walking/Traversal.js';
+import { Traversal, type WalkResilientOptions } from '../walking/Traversal.js';
 import { Bank } from './Bank.js';
 import { Inventory } from '../inventory/Inventory.js';
 import { Locs } from '../locs/Locs.js';
@@ -129,6 +129,7 @@ function realBooth(boothName: string, log: (message: string) => void) {
 }
 
 export interface OpenBankOpts {
+    avoidZones?: WalkResilientOptions['avoidZones'];
     /**
      * Preset bank stand (location table). Used when no bank is already nearby.
      * Nearby booth / local nearestBank always wins when {@link preferNearby} is on.
@@ -237,7 +238,7 @@ export const Banking = {
 
         if (route === 'local-bank' && nearest) {
             log(`bank: local ${nearest.name} bank — using it instead of distant preset`);
-            if (!(await Traversal.walkResilient(asTile(nearest.tile), { radius: 4, timeoutMs: 120_000, log }))) return false;
+            if (!(await Traversal.walkResilient(asTile(nearest.tile), { radius: 4, timeoutMs: 120_000, avoidZones: opts.avoidZones, log }))) return false;
             return openBankAccess(nearest, { name: boothName, op: boothOp }, log);
         }
 
@@ -251,7 +252,7 @@ export const Banking = {
             if (obstacles.length > 0) {
                 await walkOpening(stand, 2, obstacles, log);
             } else {
-                if (!(await Traversal.walkResilient(stand, { radius: 2, timeoutMs: 120_000, log }))) return false;
+                if (!(await Traversal.walkResilient(stand, { radius: 2, timeoutMs: 120_000, avoidZones: opts.avoidZones, log }))) return false;
             }
             // Shantay / Duel Arena / Gundai: the known bank's access beats a generic booth name.
             const known = nearestBank(stand);
@@ -276,7 +277,7 @@ export const Banking = {
                 : null;
             if (destination) {
                 log(`no booth in scene — web-walking to the ${destination.name} bank at ${destination.tile}`);
-                if (!(await Traversal.walkResilient(asTile(destination.tile), { radius: 4, timeoutMs: 120_000, log }))) {
+                if (!(await Traversal.walkResilient(asTile(destination.tile), { radius: 4, timeoutMs: 120_000, avoidZones: opts.avoidZones, log }))) {
                     log(`bank: could not reach ${destination.name}`);
                     return false;
                 }

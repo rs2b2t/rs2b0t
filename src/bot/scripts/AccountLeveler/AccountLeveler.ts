@@ -4,6 +4,8 @@ import { refreshConsumables } from './catalog.js';
 import { COMBAT_CAMPS } from './combat.js';
 import { combatLevel } from './combatProgression.js';
 import { gatheringTool } from './equipment.js';
+import { auditDragonWeapons, DRAGON_SHOP_COOLDOWN } from './dragonWeapons.js';
+import { gameZanarisPort, inZanaris, leaveZanaris } from './zanaris.js';
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { LoopingBot } from '../../api/bot/Bot.js';
 import { Bank } from '../../api/bank/Bank.js';
@@ -18,6 +20,7 @@ import { readDragonProgress } from '../../api/ai/quests/defs/dragonslayer/journa
 import { DRAGON_CAMPS, dragonReady } from './dragons.js';
 import { Quests } from '../../api/ui/questlog/Quests.js';
 import { Traversal } from '../../api/walking/Traversal.js';
+import { levelerTravelZones } from './travel.js';
 import Tile from '../../geometry/Tile.js';
 import { desktopStorage } from '../../runtime/desktopStorage.js';
 import { BotHost } from '../../runtime/BotHost.js';
@@ -57,7 +60,8 @@ export default class AccountLeveler extends LoopingBot {
     private readonly activity = new ScriptActivity(message => this.setDetail(message));
     private readonly supplies = {
         ...gameSupplyPort(message => this.setDetail(message)),
-        walk: (tile: WorldTile) => Traversal.walkResilient(Tile.from(tile), { radius: 3, timeoutMs: 120000, avoidZones: ['white-wolf-mountain'], log: message => this.setDetail(message) })
+        walk: async (tile: WorldTile) => (inZanaris(tile) || await leaveZanaris(gameZanarisPort(message => this.setDetail(message))))
+            && await Traversal.walkResilient(Tile.from(tile), { radius: 3, attempts: 4, timeoutMs: 120000, avoidZones: levelerTravelZones(tile, this.wilderness), log: message => this.setDetail(message) })
     };
     private readonly actions = new ActionQueue();
     private pendingPlans: ActivityPlan[] = [];
@@ -303,6 +307,13 @@ export default class AccountLeveler extends LoopingBot {
             if (!(await this.supplies.bank())) throw new Error('Could not reopen bank after reading Dragon Slayer progress');
             snapshot = this.snapshot();
         }
+        if (await this.tryDragonWeapons(snapshot)) snapshot = this.snapshot();
+        if (inZanaris(Game.tile())) {
+            this.setStatus('Leaving Zanaris before preparing the next activity');
+            if (!(await leaveZanaris(gameZanarisPort(message => this.setDetail(message))))) throw new Error('Could not leave Zanaris before preparing the next activity');
+            if (!(await this.supplies.bank())) throw new Error('Could not reopen a mainland bank after leaving Zanaris');
+            snapshot = this.snapshot();
+        }
         if (!this.shoppingChecked) {
             const audit = auditSupplies(snapshot);
             this.shoppingBudget = audit.budget;
@@ -379,7 +390,7 @@ export default class AccountLeveler extends LoopingBot {
                 throw new Error('Need 60 Coins for the coastal boat route before crossing between eastern and western training sites');
             }
             this.report({ id: 'travel', message: `Travelling to ${plan.label}`, state: 'running', destination: plan.travel });
-            if (!(await Traversal.walkResilient(Tile.from(plan.travel), { radius: 4, attempts: 4, timeoutMs: 120000, avoidZones: ['white-wolf-mountain'], log: m => this.setDetail(m) }))) throw new ActivityTravelError(plan);
+            if (!(await this.supplies.walk(plan.travel))) throw new ActivityTravelError(plan);
             this.report({ id: 'travel', message: `Arrived at ${plan.label}`, state: 'done', destination: plan.travel });
         }
         this.report({ id: 'train', message: `${describeActivity(plan)} using ${plan.script}`, state: 'running', destination: plan.travel });
@@ -388,6 +399,33 @@ export default class AccountLeveler extends LoopingBot {
         this.phase = 'train';
         this.resetCount = 0;
         this.observe();
+    }
+
+    private async tryDragonWeapons(snapshot: LevelerSnapshot): Promise<boolean> {
+        if ((this.session.memory.cooldowns[DRAGON_SHOP_COOLDOWN] ?? 0) > snapshot.now) return false;
+        const audit = auditDragonWeapons(snapshot);
+        if (!audit.needs.length) {
+            if (audit.skipped.length) this.setDetail(audit.skipped.join('; '));
+            return false;
+        }
+        this.session.memory.cooldowns[DRAGON_SHOP_COOLDOWN] = snapshot.now + 15 * 60000;
+        const plan: ActivityPlan = { id: DRAGON_SHOP_COOLDOWN, label: 'Buy dragon weapons in Zanaris', objective: 'attack', script: '', settings: {}, needs: audit.needs };
+        this.displayPlan = plan;
+        this.actions.reset(activityActions(plan, snapshot, [], true));
+        this.shoppingBudget = audit.budget;
+        this.setStatus(`Buying dragon weapons; budget ${audit.budget} coins`);
+        this.save();
+        try {
+            await provision(plan, this.supplies, event => this.report(event));
+        } catch (error) {
+            if (error instanceof ScriptAborted) throw error;
+            this.setDetail(`Dragon weapon purchase deferred for 15 minutes: ${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+            this.shoppingBudget = 0;
+        }
+        if (!(await this.supplies.bank())) throw new Error('Could not return to a bank after checking dragon weapons');
+        await this.supplies.deposit();
+        return true;
     }
 
     private async tryMarketAxe(snapshot: LevelerSnapshot): Promise<boolean> {
@@ -466,7 +504,7 @@ export default class AccountLeveler extends LoopingBot {
         this.deathTile = null;
         const here = Game.tile();
         if (!death || !here || death.level !== here.level || plan.wilderness || Math.max(Math.abs(death.x - here.x), Math.abs(death.z - here.z)) > 64) return;
-        if (!(await Traversal.walkResilient(Tile.from(death), { radius: 3, timeoutMs: 30000 }))) return;
+        if (!(await Traversal.walkResilient(Tile.from(death), { radius: 3, timeoutMs: 30000, avoidZones: levelerTravelZones(death, this.wilderness) }))) return;
         const wanted = new Set(plan.needs.map(n => n.item.toLowerCase()));
         for (let tries = 0; tries < 10 && !Inventory.isFull(); tries++) {
             const item = GroundItems.query().where(i => i.distance() <= 8 && wanted.has(i.name?.toLowerCase() ?? '')).nearest();

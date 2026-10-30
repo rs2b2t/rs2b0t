@@ -48,7 +48,7 @@ export function dragonPrayer(s: LevelerSnapshot, memory: SessionMemory, random: 
     const id = choices[Math.min(choices.length - 1, Math.floor(Math.max(0, random()) * choices.length))];
     const green = id === DRAGON_CAMPS[0];
     const gear = meleeEquipment(s);
-    const weapon = gear.find(need => need.item.endsWith('scimitar'))!.item;
+    const weapon = gear[0].item;
     return {
         id, objective: 'prayer', label: `${green ? 'Green' : 'Blue'} dragons for Prayer`, script: green ? 'GreenDragon' : 'JiveDragons',
         combat: true, wilderness: green, food: 'Lobster', travel: green ? new Tile(3094, 3493, 0) : new Tile(2946, 3368, 0),

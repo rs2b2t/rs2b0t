@@ -62,7 +62,7 @@ export async function takeStrikeCover(spot: Tile, log: (m: string) => void, lure
         if (!(await Traversal.walkResilient(tile, { radius: 0, attempts: 2, timeoutMs: 30_000, log }))) return false;
         if (tile.equals(ARENA_LURE[0]!)) {
             const target = lureTarget?.();
-            if (target && !target.targetsMe() && castFromCover(tile, target)) {
+            if (target && castFromCover(tile, target)) {
                 if (!(await castStrike(tile, target, log))) return false;
             }
         }

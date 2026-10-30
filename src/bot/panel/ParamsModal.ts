@@ -17,6 +17,8 @@ export default class ParamsModal {
     /** When false, skip credentials strip even if scriptName is Global (Nav settings). */
     private showGlobalExtra = true;
     private collapsed = new Map<string, Set<string>>();
+    private refreshers: Array<() => void> = [];
+    private refreshTimer: ReturnType<typeof setInterval> | null = null;
     /** Set once by BotPanel; opens the order book window over this modal. */
     onEditPriceBook: ((bookName: string) => void) | null = null;
 
@@ -93,6 +95,7 @@ export default class ParamsModal {
     }
 
     close(): void {
+        this.stopRefreshing();
         if (!this.isOpen()) {
             return;
         }
@@ -110,6 +113,7 @@ export default class ParamsModal {
     }
 
     private render(): void {
+        this.stopRefreshing();
         this.titleEl.textContent = this.openTitle ?? `${this.scriptName} · parameters`;
         this.bodyEl.replaceChildren();
         if (this.openIntro) {
@@ -185,6 +189,15 @@ export default class ParamsModal {
                 host.appendChild(this.renderRow(key, disabled, deps, valueOf));
             }
         }
+        if (this.refreshers.length > 0) {
+            this.refreshTimer = setInterval(() => this.refreshers.forEach(refresh => refresh()), 1000);
+        }
+    }
+
+    private stopRefreshing(): void {
+        if (this.refreshTimer !== null) clearInterval(this.refreshTimer);
+        this.refreshTimer = null;
+        this.refreshers = [];
     }
 
     private renderRow(key: string, disabled: boolean, deps: Set<string>, valueOf: (key: string) => string): HTMLElement {
@@ -208,7 +221,7 @@ export default class ParamsModal {
             if (deps.has(key)) {
                 this.render();
             }
-        }, { disabled }, valueOf);
+        }, { disabled, registerRefresh: refresh => this.refreshers.push(refresh) }, valueOf);
         control.classList.add('rs2b0t-param-control');
 
         // Why: an order book is a table of rows, so the dropdown picks one and the button opens the editor.

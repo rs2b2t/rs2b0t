@@ -1,4 +1,5 @@
 import type { WorldTile } from '../../../../../adapter/ClientAdapter.js';
+import { Quests } from '../../../../ui/questlog/Quests.js';
 import { QUESTS } from '../../data/quests.js';
 import { flagValue, hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { FOOD_FLOAT } from '../../food.js';
@@ -398,6 +399,8 @@ export const shilo: QuestModule = {
     record: QUESTS.find(record => record.id === 'zombiequeen')!,
     onStart: resetCombatGear,
     exit: leaveBerviriusTomb,
+    recover: tile => tile.level === 0 && Quests.status('Shilo Village') === 'complete' ? escapePocket(shiloArea(tile)) : null,
+    resumeAt: tile => tile.level === 0 && ['ahZaRhoonNorth', 'ahZaRhoonSouth', 'berviriusTomb', 'rashEntry', 'rashLedge', 'rashInner'].includes(shiloArea(tile)),
     bank: SV_TILE.ARDOUGNE_BANK,
     ownsInventory: true,
     readProgress: readShiloProgress,

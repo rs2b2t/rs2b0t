@@ -1,4 +1,5 @@
 import { settingOptionLabel, type SettingDef, type SettingsSchema } from '../runtime/Settings.js';
+import { selectedOptions } from '../runtime/optionSelection.js';
 import { el } from './dom.js';
 import { WorldMapPicker } from './WorldMapPicker';
 
@@ -51,7 +52,7 @@ export function refreshDeps(schema: SettingsSchema): Set<string> {
 }
 
 type ControlKind =
-    | 'checkbox' | 'slider' | 'number' | 'dropdown' | 'text' | 'color' | 'multiselect' | 'taglist' | 'tile' | 'csv';
+    | 'checkbox' | 'slider' | 'number' | 'dropdown' | 'text' | 'color' | 'multiselect' | 'choices' | 'taglist' | 'tile' | 'csv';
 
 export function resolveControl(def: SettingDef, valueOf?: (key: string) => string): ControlKind {
     switch (def.type) {
@@ -67,6 +68,7 @@ export function resolveControl(def: SettingDef, valueOf?: (key: string) => strin
             }
             return def.options && def.options.length > 0 ? 'dropdown' : 'text';
         case 'string[]':
+            if (def.selectionMode === 'includeExclude') return 'choices';
             if (def.csvToggle && valueOf && valueOf(def.csvToggle) === 'csv') {
                 return 'csv';
             }
@@ -118,6 +120,11 @@ export function summarize(def: SettingDef, value: string, valueOf?: (key: string
     switch (resolveControl(def, valueOf)) {
         case 'checkbox':
             return isTruthy(value) ? 'on' : 'off';
+        case 'choices': {
+            const options = def.options ?? [];
+            const count = selectedOptions(listItems(value), options).length;
+            return `${count} do, ${options.length - count} skip`;
+        }
         case 'multiselect':
         case 'taglist':
         case 'csv': {
@@ -141,8 +148,13 @@ export function summarize(def: SettingDef, value: string, valueOf?: (key: string
     }
 }
 
+interface ControlOptions {
+    disabled: boolean;
+    registerRefresh?: (refresh: () => void) => void;
+}
+
 interface ParamControl {
-    edit(def: SettingDef, current: string, onChange: (raw: string) => void, opts: { disabled: boolean }): HTMLElement;
+    edit(def: SettingDef, current: string, onChange: (raw: string) => void, opts: ControlOptions): HTMLElement;
 }
 
 const CONTROLS: Record<ControlKind, ParamControl> = {
@@ -280,6 +292,65 @@ const CONTROLS: Record<ControlKind, ParamControl> = {
             input.addEventListener('change', () => onChange(input.value.trim()));
             const wrap = el('div', 'rs2b0t-ctl-text');
             wrap.appendChild(input);
+            return wrap;
+        }
+    },
+    choices: {
+        edit(def, current, onChange, { disabled, registerRefresh }) {
+            const wrap = el('div', 'rs2b0t-ctl-choices');
+            const options = def.options ?? [];
+            const selected = new Set(selectedOptions(listItems(current), options));
+            const controls: Array<{ option: string; row: HTMLElement; status: HTMLElement; yes: HTMLButtonElement; no: HTMLButtonElement }> = [];
+            const updateChoices = () => {
+                for (const { option, yes, no } of controls) {
+                    yes.setAttribute('aria-pressed', String(selected.has(option)));
+                    no.setAttribute('aria-pressed', String(!selected.has(option)));
+                }
+            };
+            const save = () => {
+                updateChoices();
+                onChange(options.map(option => `${selected.has(option) ? '+' : '-'}${option}`).join(', '));
+            };
+            const button = (text: string, label: string, click: () => void) => {
+                const control = el('button', 'rs2b0t-button');
+                control.type = 'button';
+                control.textContent = text;
+                control.setAttribute('aria-label', label);
+                control.disabled = disabled;
+                control.addEventListener('click', click);
+                return control;
+            };
+            const bulk = el('div', 'rs2b0t-param-choice-actions');
+            bulk.append(
+                button('+ Do all', 'Do all', () => { options.forEach(option => selected.add(option)); save(); }),
+                button('- Skip all', 'Skip all', () => { selected.clear(); save(); })
+            );
+            wrap.appendChild(bulk);
+            for (const option of options) {
+                const row = el('div', 'rs2b0t-param-choice');
+                const label = settingOptionLabel(def, option);
+                const name = el('span', 'rs2b0t-param-choice-name');
+                name.textContent = label;
+                const status = el('span', 'rs2b0t-param-choice-status');
+                const yes = button('+', `Do ${label}`, () => { selected.add(option); save(); });
+                const no = button('-', `Skip ${label}`, () => { selected.delete(option); save(); });
+                row.append(yes, no, name, status);
+                wrap.appendChild(row);
+                controls.push({ option, row, status, yes, no });
+            }
+            updateChoices();
+            if (def.optionStatuses) {
+                const refresh = () => {
+                    const statuses = def.optionStatuses!();
+                    for (const { option, row, status } of controls) {
+                        const state = statuses[option] ?? 'unknown';
+                        row.classList.toggle('is-complete', state === 'complete');
+                        status.textContent = state === 'complete' ? '✓ Complete' : state === 'unknown' ? 'Status unknown' : '';
+                    }
+                };
+                refresh();
+                registerRefresh?.(refresh);
+            }
             return wrap;
         }
     },
@@ -445,6 +516,6 @@ const CONTROLS: Record<ControlKind, ParamControl> = {
     }
 };
 
-export function renderControl(def: SettingDef, current: string, onChange: (raw: string) => void, opts: { disabled: boolean }, valueOf?: (key: string) => string): HTMLElement {
+export function renderControl(def: SettingDef, current: string, onChange: (raw: string) => void, opts: ControlOptions, valueOf?: (key: string) => string): HTMLElement {
     return CONTROLS[resolveControl(def, valueOf)].edit(def, current, onChange, opts);
 }

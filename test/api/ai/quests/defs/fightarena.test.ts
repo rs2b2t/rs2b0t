@@ -253,3 +253,10 @@ describe('the Fight Arena module', () => {
         expect(fightarena.tools).toContain('coins');
     });
 });
+
+test('only sealed ground-floor arena and prison pockets claim startup recovery', () => {
+    expect(fightarena.resumeAt?.(FA_TILE.ARENA_CENTRE)).toBe(true);
+    expect(fightarena.resumeAt?.({ x: 2600, z: 3142, level: 0 })).toBe(true);
+    expect(fightarena.resumeAt?.({ x: 2600, z: 3142, level: 1 })).toBe(false);
+    expect(fightarena.resumeAt?.(FA_TILE.YANILLE_BANK)).toBe(false);
+});

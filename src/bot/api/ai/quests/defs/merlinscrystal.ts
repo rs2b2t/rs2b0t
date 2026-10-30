@@ -1,3 +1,5 @@
+import { actions, reader } from '../../../../adapter/ClientAdapter.js';
+import { Quests } from '../../../ui/questlog/Quests.js';
 import { EventSignal } from '../../../execution/EventSignal.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
@@ -10,7 +12,7 @@ import { Npcs } from '../../../npcs/Npcs.js';
 import { Sustain } from '../../../sustain/Sustain.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import Tile from '../../../../geometry/Tile.js';
-import { gotoNpc, pickPreferred, talkThrough, type NpcStop } from '../exec/primitives.js';
+import { gotoNpc, openDialogue, pickPreferred, talkThrough, type NpcStop } from '../exec/primitives.js';
 import { gpShort } from '../engine/provisioning.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { QUESTS } from '../data/quests.js';
@@ -54,6 +56,8 @@ const LADY_LAKE: NpcStop = { npc: 'The Lady of the Lake', anchor: new Tile(2924,
 const CANDLE_MAKER: NpcStop = { npc: 'Candle maker', anchor: new Tile(2800, 3439, 0), leash: 6, prefer: ['Have you got any black candles?'] };
 
 const CATHERBY_CRATE_STAND = new Tile(2801, 3443, 0);
+const CRATE_INTERIOR = new Tile(2778, 9839, 0);
+const insideCrate = (tile: { x: number; z: number; level: number }): boolean => tile.level === 0 && CRATE_INTERIOR.distanceTo(tile) <= 2;
 function insideKeep(t: { x: number; z: number }): boolean {
     return t.x >= 2762 && t.x <= 2782 && t.z >= 3396 && t.z <= 3410;
 }
@@ -67,6 +71,7 @@ const KEEP_STAIR_L2_DOWN = new Tile(2769, 3399, 2);
 const RETURN_CRATE_STAND = new Tile(2778, 3401, 0);
 const MAGIC_SYMBOL = new Tile(2780, 3515, 0);
 const CHAOS_ALTAR_STAND = new Tile(3239, 3607, 0);
+const ALTAR_AVOID_ZONES = [{ minX: 2944, maxX: 3455, minZ: 3648, maxZ: 4095, level: 0 }];
 const TOWER_LADDER_0 = new Tile(2769, 3493, 0);
 const TOWER_LADDER_1 = new Tile(2767, 3491, 1);
 const CRYSTAL_STAND = new Tile(2767, 3494, 2);
@@ -99,11 +104,14 @@ export function breadPlan(snap: QuestSnapshot, _thievingLevel = 0, _passesUsed =
     return buyOrWait(snap, { kind: 'buy', item: 'Bread', qty: 1, shop: BAKER_SHOP, estGp: 20 });
 }
 
-async function driveDialogue(prefer: string[], log: (m: string) => void, maxPages = 60): Promise<void> {
-    for (let i = 0; i < maxPages && (ChatDialog.isOpen() || ChatDialog.canContinue()); i++) {
+async function driveDialogue(prefer: string[], log: (m: string) => void, maxPages = 60): Promise<boolean> {
+    let matched = false;
+    for (let i = 0; i < maxPages; i++) {
         if (EventSignal.pending()) {
-            return;
+            return false;
         }
+        if (!ChatDialog.isOpen() && !ChatDialog.canContinue()
+            && !(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 1500))) return matched;
         if (ChatDialog.canContinue()) {
             await ChatDialog.continue();
             await Execution.delayTicks(1);
@@ -112,6 +120,7 @@ async function driveDialogue(prefer: string[], log: (m: string) => void, maxPage
         const opts = ChatDialog.options();
         if (opts.length > 0) {
             const pick = pickPreferred(opts, prefer);
+            matched ||= pick !== null;
             if (!pick) {
                 log(`  driveDialogue: no preferred option in [${opts.join(' | ')}] — taking the last`);
             }
@@ -121,10 +130,11 @@ async function driveDialogue(prefer: string[], log: (m: string) => void, maxPage
         }
         await Execution.delayTicks(1);
     }
+    return matched;
 }
 
 async function climbAt(stand: Tile, op: string, log: (m: string) => void): Promise<boolean> {
-    if (!(await Traversal.walkResilient(stand, { radius: 1, attempts: 3, timeoutMs: 60_000, log }))) {
+    if (!(await Traversal.walkTo(stand, { radius: 1, timeoutMs: 600_000, avoidZones: ALTAR_AVOID_ZONES, log }))) {
         return false;
     }
     const stair = Locs.query().action(op).within(4).nearest();
@@ -214,39 +224,24 @@ async function talkKnights(log: (m: string) => void): Promise<void> {
     }
 }
 
-async function candleMakerStageFour(log: (m: string) => void): Promise<boolean> {
-    if (!(await gotoNpc(CANDLE_MAKER, [], log))) {
-        return false;
+async function recoverCrate(log: (m: string) => void): Promise<boolean> {
+    const outside = (): boolean => {
+        const tile = Game.tile();
+        return tile !== null && !insideCrate(tile);
+    };
+    if (outside()) return true;
+    await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 1500);
+    if (ChatDialog.isOpen() || ChatDialog.canContinue()) {
+        await driveDialogue(['Yes.'], log);
+        if (outside()) return true;
     }
-    const npc = Npcs.query().name('Candle maker').action('Talk-to').nearest();
-    if (!npc || !(await npc.interact('Talk-to'))) {
-        return false;
-    }
-    if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 8000))) {
-        return false;
-    }
-    let stage4 = false;
-    for (let i = 0; i < 40 && (ChatDialog.isOpen() || ChatDialog.canContinue()); i++) {
-        if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
-            continue;
-        }
-        const opts = ChatDialog.options();
-        if (opts.length > 0) {
-            if (opts.some(o => /black candles/i.test(o))) {
-                stage4 = true;
-                await ChatDialog.chooseOption('black candles');
-            } else {
-                await ChatDialog.chooseOption('No thank you');
-            }
-            await Execution.delayTicks(1);
-            continue;
-        }
-        await Execution.delayTicks(1);
-    }
-    // Only succeed once Morgan is briefed and the black-candle option appears; treating an empty dialogue as success skipped the fortress.
-    return stage4;
+    if (EventSignal.pending()) return false;
+    const wall = Locs.query().name('Crate wall').action('Climb-out').within(3)
+        .where(loc => loc.tile().x === CRATE_INTERIOR.x || loc.tile().z === CRATE_INTERIOR.z).nearest();
+    if (!wall || !(await wall.interact('Climb-out'))) return false;
+    if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 6000))) return false;
+    await driveDialogue(['Yes.'], log);
+    return Execution.delayUntil(outside, 6000);
 }
 
 async function fortress(log: (m: string) => void): Promise<boolean> {
@@ -254,6 +249,7 @@ async function fortress(log: (m: string) => void): Promise<boolean> {
     if (!t) {
         return false;
     }
+    if (insideCrate(t)) return recoverCrate(log);
     // After Morgan's brief the keep is done, never re-board the Catherby crate.
     if (mordredBriefed && !insideKeep(t)) {
         log('fortress: Morgan brief already done and outside the keep');
@@ -358,7 +354,8 @@ async function fortress(log: (m: string) => void): Promise<boolean> {
 
 async function leaveKeep(log: (m: string) => void): Promise<boolean> {
     let here = Game.tile();
-    if (here && !insideKeep(here)) {
+    if (here && insideCrate(here)) return recoverCrate(log);
+    if (here && !insideKeep(here) && !insideCrate(here)) {
         return true;
     }
     // Mordred is L2; the exit crate is ground-floor (keep_crate_coord). Descend fully first.
@@ -395,31 +392,16 @@ async function leaveKeep(log: (m: string) => void): Promise<boolean> {
     if (crate) {
         await crate.interact('Hide-in');
         await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 6000);
-        for (let i = 0; i < 40 && (ChatDialog.isOpen() || ChatDialog.canContinue()); i++) {
-            if (EventSignal.pending()) {
-                break;
-            }
-            if (ChatDialog.canContinue()) {
-                await ChatDialog.continue();
-                await Execution.delayTicks(1);
-                continue;
-            }
-            const opts = ChatDialog.options();
-            if (opts.length > 0) {
-                const yes = opts.find(o => /^yes\.?$/i.test(o.trim())) ?? opts[0];
-                await ChatDialog.chooseOption(yes);
-                await Execution.delayTicks(2);
-                continue;
-            }
-            await Execution.delayTicks(1);
-        }
+        await driveDialogue(['Yes.'], log);
+        const riding = Game.tile();
+        if (riding && insideCrate(riding) && !(await recoverCrate(log))) return false;
         // Crate ride is a multi-mesbox teleport sequence, give it time.
         await Execution.delayUntil(() => {
             const g = Game.tile();
-            return g !== null && !insideKeep(g);
+            return g !== null && !insideKeep(g) && !insideCrate(g);
         }, 25_000);
         here = Game.tile();
-        if (here && !insideKeep(here)) {
+        if (here && !insideKeep(here) && !insideCrate(here)) {
             log('leaveKeep: crate ride out of the keep');
             return true;
         }
@@ -430,7 +412,7 @@ async function leaveKeep(log: (m: string) => void): Promise<boolean> {
     const KEEP_WEST_EXIT = new Tile(2758, 3401, 0);
     for (let attempt = 0; attempt < 8; attempt++) {
         here = Game.tile();
-        if (here && !insideKeep(here)) {
+        if (here && !insideKeep(here) && !insideCrate(here)) {
             return true;
         }
         const door = Locs.query().name('Large door').action('Open').within(6).nearest();
@@ -441,25 +423,13 @@ async function leaveKeep(log: (m: string) => void): Promise<boolean> {
         await Traversal.walkResilient(KEEP_WEST_EXIT, { radius: 1, attempts: 2, timeoutMs: 30_000, log });
     }
     here = Game.tile();
-    return here !== null && !insideKeep(here);
+    return here !== null && !insideKeep(here) && !insideCrate(here);
 }
 
 async function openingLeg(log: (m: string) => void): Promise<boolean> {
     const t = Game.tile();
-    if (t && insideKeep(t)) {
-        return fortress(log);
-    }
-    if (mordredBriefed) {
-        // Keep is done. Don't thrash the candle maker every tick; decide() does the wax exchange once bones/wax are in the pack.
-        return killGiantBat(log);
-    }
-    if (t && BAT_ANCHOR.distanceTo(t) <= 25) {
-        return killGiantBat(log);
-    }
+    if (t && insideKeep(t)) return fortress(log);
     await talkKnights(log);
-    if (await candleMakerStageFour(log)) {
-        return killGiantBat(log);
-    }
     return fortress(log);
 }
 
@@ -552,9 +522,13 @@ async function getExcalibur(log: (m: string) => void): Promise<boolean> {
     if (Inventory.contains(EXCALIBUR)) {
         return true;
     }
-    if (await gotoNpc(LADY_LAKE, [], log)) {
-        await talkThrough('The Lady of the Lake', LADY_LAKE.prefer, log);
+    if (!(await gotoNpc(LADY_LAKE, [], log))) return false;
+    if (!(await openDialogue('The Lady of the Lake', log))) return false;
+    if (!(await driveDialogue(LADY_LAKE.prefer, log))) {
+        log('getExcalibur: Lady did not offer her sword test');
+        return false;
     }
+    if (Inventory.contains(EXCALIBUR)) return true;
     if (!Inventory.contains(BREAD)) {
         log('getExcalibur: no Bread for the Beggar (should be provisioned)');
         return false;
@@ -562,8 +536,8 @@ async function getExcalibur(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(JEWELLER_DOOR_STAND, { radius: 2, attempts: 3, timeoutMs: 120_000, log }))) {
         return false;
     }
-    const beggar = Npcs.query().name('Beggar').action('Talk-to').within(6).nearest();
-    if (beggar) {
+    const beggar = () => Npcs.query().name('Beggar').action('Talk-to').within(6).nearest();
+    if (beggar()) {
         await talkThrough('Beggar', ['Yes, here you go.', 'Yes certainly.'], log);
     } else {
         const door = Locs.query().name('Door').action('Open').within(6).nearest();
@@ -574,11 +548,15 @@ async function getExcalibur(log: (m: string) => void): Promise<boolean> {
         if (!(await door.interact('Open'))) {
             return false;
         }
-        if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 8000))) {
-            log('getExcalibur: jeweller door opened but the Beggar dialogue never appeared — retry');
+        if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue() || beggar() !== null, 8000))) {
+            log('getExcalibur: jeweller door produced no Beggar or dialogue');
             return false;
         }
-        await driveDialogue(['Yes certainly.', 'Yes, here you go.'], log);
+        if (ChatDialog.isOpen() || ChatDialog.canContinue()) {
+            await driveDialogue(['Yes certainly.', 'Yes, here you go.'], log);
+        } else {
+            await talkThrough('Beggar', ['Yes, here you go.', 'Yes certainly.'], log);
+        }
     }
     return Inventory.contains(EXCALIBUR);
 }
@@ -600,7 +578,7 @@ async function summonAndBreak(log: (m: string) => void): Promise<boolean> {
     return false;
 }
 
-async function tryBreakCrystal(log: (m: string) => void): Promise<'broke' | 'need-summon' | 'fail'> {
+export async function tryBreakCrystal(log: (m: string) => void): Promise<'broke' | 'need-summon' | 'fail'> {
     if ((Game.tile()?.level ?? 0) < 1 && !(await climbAt(TOWER_LADDER_0, 'Climb-up', log))) {
         return 'fail';
     }
@@ -621,20 +599,23 @@ async function tryBreakCrystal(log: (m: string) => void): Promise<'broke' | 'nee
         }
         return 'broke';
     }
+    if (!Inventory.contains(EXCALIBUR) && Equipment.contains(EXCALIBUR) && !(await Equipment.unequip(EXCALIBUR))) return 'fail';
     const excal = Inventory.first(EXCALIBUR);
     if (!excal) {
         log('tryBreakCrystal: no Excalibur to break the crystal');
         return 'fail';
     }
-    await excal.useOn(crystal);
-    await Execution.delayTicks(3);
-    const gone = Locs.query().name('Giant crystal').within(8).nearest() === null
-        || Npcs.query().name('Merlin').within(8).nearest() !== null;
-    return gone ? 'broke' : 'need-summon';
+    if (!(await excal.useOn(crystal))) return 'fail';
+    const freed = await Execution.delayUntil(() => crystalQ() === null
+        || Npcs.query().name('Merlin').within(8).nearest() !== null
+        || ChatDialog.texts().some(text => /already freed Merlin|set Merlin free/i.test(text)), 8000);
+    if (EventSignal.pending()) return 'fail';
+    if (freed) await driveDialogue([], log);
+    return freed ? 'broke' : 'need-summon';
 }
 
 async function summonThrantax(log: (m: string) => void): Promise<boolean> {
-    if (!(await Traversal.walkResilient(CHAOS_ALTAR_STAND, { radius: 2, attempts: 4, timeoutMs: 180_000, log }))) {
+    if (!(await Traversal.walkTo(CHAOS_ALTAR_STAND, { radius: 2, timeoutMs: 600_000, avoidZones: ALTAR_AVOID_ZONES, log }))) {
         return false;
     }
     const altar = Locs.query().name('Chaos altar').action('Check').within(8).nearest();
@@ -642,7 +623,7 @@ async function summonThrantax(log: (m: string) => void): Promise<boolean> {
         await altar.interact('Check');
         await Execution.delayTicks(2);
     }
-    if (!(await Traversal.walkResilient(MAGIC_SYMBOL, { radius: 1, attempts: 3, timeoutMs: 120_000, log }))) {
+    if (!(await Traversal.walkTo(MAGIC_SYMBOL, { radius: 1, timeoutMs: 600_000, avoidZones: ALTAR_AVOID_ZONES, log }))) {
         return false;
     }
     if (!Inventory.contains(LIT_CANDLE) && !(await lightCandle(log))) {
@@ -680,6 +661,28 @@ export function liveMordredBriefed(): boolean {
     return mordredBriefed;
 }
 
+async function readMerlinStage(): Promise<number | undefined> {
+    const status = Quests.status("Merlin's Crystal");
+    if (status === 'complete') return 7;
+    if (status === 'notStarted') return 0;
+    if (status !== 'inProgress') return undefined;
+    const text = (await Quests.journal("Merlin's Crystal")).join(' ')
+        .replace(/@[a-z0-9]{3}@/gi, ' ').replace(/[|\s]+/g, ' ').toLowerCase();
+    if (reader.modals().main !== -1) {
+        actions.closeModal();
+        await Execution.delayTicks(1);
+    }
+    if (text.includes('quest complete!')) return 7;
+    if (text.includes('i freed merlin by shattering')) return 6;
+    if (text.includes('i summoned the spirit thrantax')) return 5;
+    if (text.includes('in return for sparing her son')) return 4;
+    if (text.includes('delivery by sea')) return 3;
+    if (text.includes('impenetrable fortress')) return 2;
+    if (text.includes('i should ask the')) return 1;
+    if (text.includes('i can start this quest')) return 0;
+    return undefined;
+}
+
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') {
         mordredBriefed = false;
@@ -691,16 +694,28 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'talk', stop: KING_ARTHUR };
     }
 
-    const hasExcalibur = has(snap, EXCALIBUR);
+    if (snap.stage === undefined) return { kind: 'wait', reason: 'Merlin journal stage unavailable' };
+    mordredBriefed = snap.stage >= 4;
+    if (snap.stage < 3) return { kind: 'custom', name: 'opening (knights + fortress)', run: openingLeg };
+    if (snap.stage === 3) return { kind: 'custom', name: 'fortress (Mordred + Morgan)', run: fortress };
+    const here = snap.tile ?? Game.tile();
+    if (here && insideKeep(here)) return { kind: 'custom', name: 'leave Mordred fortress', run: leaveKeep };
+    if (snap.stage >= 6) return { kind: 'talk', stop: KING_ARTHUR };
+
+    const hasExcalibur = has(snap, EXCALIBUR) || snap.worn.has('excalibur');
+    if (!hasExcalibur) {
+        if (!snap.bankKnown) return { kind: 'scanBank' };
+        if ((snap.bank?.get('excalibur') ?? 0) > 0) return { kind: 'withdraw', items: [{ name: EXCALIBUR, qty: 1 }] };
+    }
+    if (snap.stage === 5) {
+        return hasExcalibur
+            ? { kind: 'custom', name: 'summon Thrantax + break the crystal', run: summonAndBreak }
+            : { kind: 'custom', name: 'get Excalibur (Lady of the Lake + Beggar)', run: getExcalibur };
+    }
     const hasUnlit = has(snap, UNLIT_CANDLE);
     const hasLit = has(snap, LIT_CANDLE);
     const hasBones = has(snap, BAT_BONES);
     const hasWax = has(snap, WAX);
-    const anyProduct = hasExcalibur || hasUnlit || hasLit || hasBones || hasWax;
-
-    if (!anyProduct) {
-        return { kind: 'custom', name: 'opening (knights + fortress)', run: openingLeg };
-    }
 
     if (!hasBones) {
         return { kind: 'custom', name: 'kill a Giant bat for bones', run: killGiantBat };
@@ -723,6 +738,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
 export const merlinscrystal: QuestModule = {
     record: QUESTS.find(r => r.id === 'arthur')!,
     bank: new Tile(2725, 3491, 0),
+    readStage: readMerlinStage,
+    recover: tile => insideCrate(tile) ? { kind: 'custom', name: 'climb out of Merlin crate', run: recoverCrate } : null,
     food: FOOD_FLOAT,
     gather: {
         'insect repellent': () => ({ kind: 'grabGround', item: 'Insect repellent', anchor: REPELLENT_SPAWN }),

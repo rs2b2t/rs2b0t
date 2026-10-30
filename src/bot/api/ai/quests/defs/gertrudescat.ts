@@ -2,6 +2,7 @@ import { normalizeJournal as normalize } from '../journalText.js';
 // docs/QUESTS.md
 import { actions, reader } from '../../../../adapter/ClientAdapter.js';
 import { DirectNavigator } from '../../../../event/webwalk/DirectNavigator.js';
+import { Reachability } from '../../../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../../../geometry/Tile.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
@@ -106,11 +107,8 @@ const FOUND_NOTHING = /you find nothing/i;
 /** Long enough for the server to walk the yard's full width before the 4-tick search starts. */
 const CRATE_SEARCH_MS = 30_000;
 
-// Why: `npc_find` measures the brothers against each other, and both wander 2 tiles from their own spawn.
-// Why: the check runs 4 chat lines in, so the gap has to start inside the script's limit of 3; at 2 the pair drifted out of range 2 attempts in 3.
-
-/** How close the brothers must stand before the dialogue is opened. */
-const BROTHER_GAP = 1;
+// Why: talking freezes both boys beside the player, where their gap can stay 2 until the player moves.
+const BROTHER_GAP = 3;
 
 const PAY_ATTEMPTS = 6;
 const SEASON_ATTEMPTS = 3;
@@ -390,7 +388,9 @@ async function payBrothers(log: (m: string) => void): Promise<boolean> {
         if (!shilop || !wilough) {
             return null;
         }
-        return shilop.tile().distanceTo(wilough.tile()) <= BROTHER_GAP ? shilop : null;
+        const from = shilop.networkTile();
+        const to = wilough.networkTile();
+        return from.distanceTo(to) <= BROTHER_GAP && Reachability.lineOfSight(from, to) ? shilop : null;
     };
     for (let attempt = 0; attempt < PAY_ATTEMPTS; attempt++) {
         if (!(await Traversal.walkResilient(MARKET, { radius: 3, attempts: 3, timeoutMs: 180_000, log }))) {
@@ -409,7 +409,7 @@ async function payBrothers(log: (m: string) => void): Promise<boolean> {
         if (await Execution.delayUntil(() => Inventory.count('Coins') <= before - BOY_PAYMENT, 5000)) {
             return true;
         }
-        log('gertrudescat: the dialogue ended without paying — the brothers had drifted apart');
+        log('gertrudescat: the dialogue ended without paying');
     }
     return false;
 }

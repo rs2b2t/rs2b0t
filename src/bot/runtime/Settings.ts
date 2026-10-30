@@ -2,6 +2,7 @@ import { desktopStorage } from './desktopStorage.js';
 import Tile from '../geometry/Tile.js';
 import { WORLDMAP_KEY_NAMES } from '../../client/mapview/worldmapKeyNames.js';
 import { boxKey } from './box.js';
+import { signedOptions } from './optionSelection.js';
 
 type SettingType = 'boolean' | 'number' | 'string' | 'string[]' | 'tile';
 
@@ -17,6 +18,8 @@ export interface SettingDef {
     options?: string[];
     /** Optional display labels keyed by the persisted option value. */
     optionLabels?: Record<string, string>;
+    selectionMode?: 'includeExclude';
+    optionStatuses?: () => Record<string, 'complete' | 'incomplete' | 'unknown'>;
     group?: string;
     showIf?: { key: string; anyOf: string[] };
     /** Render a freeform string as an HTML colour picker + hex field. */
@@ -95,6 +98,9 @@ function parseValue(def: SettingDef, raw: string): unknown {
                 .filter(s => s.length > 0);
             if (!def.options || def.options.length === 0) {
                 return values;
+            }
+            if (def.selectionMode === 'includeExclude' && values.some(value => /^[+-]/.test(value))) {
+                return signedOptions(values, def.options);
             }
             return values.flatMap(value => {
                 const wanted = value.toLowerCase();

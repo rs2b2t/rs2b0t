@@ -71,6 +71,37 @@ describe('guarded quest Strikes', () => {
         expect(route.map(tile => [tile.x, tile.z])).toEqual([[2598, 3167], [2598, 3169], [2594, 3169], [2594, 3167]]);
         expect(casts).toEqual(['Wind Strike']);
     });
+    for (const inCombat of [false, true]) test(`arena lure confirms a cast before moving when its target faces us (combat=${inCombat})`, async () => {
+        here = ARENA_COVER;
+        npc = new Npc({ ...makeNpc(new Tile(2595, 3160, 0), 2).snap, faceEntity: 32769, inCombat });
+        let queued = false;
+        const observations: number[] = [];
+        restore.push(
+            stubProps(reader, { selfSlot: () => 1 }),
+            stubProps(Game, { castOnNpc: async spell => { casts.push(spell); queued = true; return true; } }),
+            stubProps(Traversal, { walkResilient: async tile => {
+                observations.push(runes);
+                here = new Tile(tile.x, tile.z, tile.level);
+                return true;
+            } })
+        );
+        delay = () => { if (queued) { runes--; queued = false; } };
+        expect(npc.targetsMe()).toBe(true);
+        expect(await takeStrikeCover(ARENA_COVER, () => {}, () => npc)).toBe(true);
+        expect(casts).toEqual(['Wind Strike']);
+        expect(observations).toEqual([150, 149, 149, 149]);
+    });
+    test('an arena lure never casts through a blocked ray even when the target faces us', async () => {
+        here = ARENA_COVER;
+        npc = new Npc({ ...makeNpc(new Tile(2595, 3160, 0), 2).snap, faceEntity: 32769 });
+        restore.push(
+            stubProps(reader, { selfSlot: () => 1 }),
+            stubProps(Reachability, { lineOfSight: () => false }),
+            stubProps(Traversal, { walkResilient: async tile => { here = new Tile(tile.x, tile.z, tile.level); return true; } })
+        );
+        expect(await takeStrikeCover(ARENA_COVER, () => {}, () => npc)).toBe(true);
+        expect(casts).toEqual([]);
+    });
     test('casts without requiring the player to take damage', async () => {
         expect(await castStrike(DEMON_COVER, npc, () => {})).toBe(true);
         expect(casts).toEqual(['Wind Strike']);

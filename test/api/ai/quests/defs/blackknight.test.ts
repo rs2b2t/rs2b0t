@@ -3,7 +3,7 @@ import { decide } from '#/bot/api/ai/quests/defs/blackknight.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 function snap(over: Partial<QuestSnapshot> = {}): QuestSnapshot {
-    return { journal: 'inProgress', inv: new Map(), worn: new Set(), noProgress: 0, bankCoins: 0, ...over };
+    return { journal: 'inProgress', stage: 1, inv: new Map(), worn: new Set(), noProgress: 0, bankCoins: 0, ...over };
 }
 const held = (...names: string[]) => new Map(names.map(n => [n.toLowerCase(), 1] as const));
 const wearing = (...names: string[]) => new Set(names.map(n => n.toLowerCase()));
@@ -25,10 +25,10 @@ describe('Black Knight decide', () => {
     test('in progress, disguise worn, cabbage held → infiltrate', () => {
         const s = decide(snap({ worn: wearing('iron chainbody', 'bronze med helm'), inv: held('Cabbage') }));
         expect(s.kind).toBe('custom');
-        expect(s.kind === 'custom' && s.name).toBe('infiltrate');
+        expect(s.kind === 'custom' && s.name).toBe('listen at the grill');
     });
-    test('in progress, disguise worn, cabbage GONE (sabotaged) → talk Sir Amik', () => {
-        const s = decide(snap({ worn: wearing('iron chainbody', 'bronze med helm'), inv: new Map() }));
+    test('confirmed sabotage → talk Sir Amik', () => {
+        const s = decide(snap({ stage: 3, worn: wearing('iron chainbody', 'bronze med helm'), inv: new Map() }));
         expect(s.kind).toBe('talk');
         expect(s.kind === 'talk' && s.stop.npc).toBe('Sir Amik Varze');
     });

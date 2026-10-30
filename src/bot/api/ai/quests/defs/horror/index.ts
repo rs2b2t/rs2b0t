@@ -1,13 +1,14 @@
 import { Execution } from '../../../../execution/Execution.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
+import { Quests } from '../../../../ui/questlog/Quests.js';
 import { QUESTS } from '../../data/quests.js';
 import { hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { talkThrough } from '../../exec/primitives.js';
-import { GUNNJORN, HD_ID, HD_ITEM, HD_STAGE, HD_TILE, LARRISSA } from './areas.js';
+import { GUNNJORN, HD_ID, HD_ITEM, HD_QUEST, HD_STAGE, HD_TILE, LARRISSA } from './areas.js';
 import { ensureBarcrawl } from '../../barcrawl/RunBarcrawl.js';
 import { barcrawlFunds } from './barcrawl.js';
-import { exitAfterQuest, inCavern, openWallAndDescend } from './dungeon.js';
+import { exitAfterQuest, inCavern, inLighthouse, inPostquestCavern, openWallAndDescend } from './dungeon.js';
 import { fightJunior, fightMother } from './fight.js';
 import { HD_FLAG, readHorrorProgress } from './journal.js';
 import {
@@ -193,6 +194,8 @@ export const horror: QuestModule = {
     sustain: { foods: ['Shark', 'Swordfish', 'Lobster', 'Tuna'], eatBelowHp: 0.6 },
     warnReadiness: warnHorrorReadiness,
     readProgress: readHorrorProgress,
+    recover: tile => inPostquestCavern(tile) || (inLighthouse(tile) && Quests.status(HD_QUEST) === 'complete')
+        ? custom('leave the lighthouse for the mainland', exitAfterQuest) : null,
     exit: exitAfterQuest,
     decide
 };

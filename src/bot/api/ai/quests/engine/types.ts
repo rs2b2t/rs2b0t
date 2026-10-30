@@ -119,6 +119,8 @@ export interface QuestModule {
 
     /** Walked when the quest is finished, before the retreat to a bank; true once a bank walk can start. */
     exit?: (log: (m: string) => void) => Promise<boolean>;
+    recover?: (tile: WorldTile) => QuestStep | null;
+    resumeAt?: (tile: WorldTile) => boolean;
     /** The module owns all banking/loadout decisions, including restarts in bankless areas. */
     ownsInventory?: boolean;
     // Why: food is the bulkiest withdrawal, so a module that arms itself from the bank has to be dressed before the pack fills.

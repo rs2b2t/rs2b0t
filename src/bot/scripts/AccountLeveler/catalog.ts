@@ -1,16 +1,22 @@
 import { purchaseBudget, supplyOffer } from './offers.js';
+import { magicEquipment } from './magic.js';
 import { stockOf, type ActivityPlan, type LevelerSnapshot, type Requirement } from './types.js';
 
 export function refreshConsumables(s: LevelerSnapshot, plan: ActivityPlan): ActivityPlan {
     const style = plan.script === 'LeatherCrafter' ? 'craft' : plan.script === 'Fisher' ? 'fish' : plan.script === 'AutoFighter' ? plan.settings.combatStyle : null;
-    if (style !== 'craft' && style !== 'fish' && style !== 'range' && style !== 'mage') return plan;
-    const consumables = plan.needs.filter(need => (need.minimum ?? 0) > 0 && (style === 'mage'
-        ? / rune$/i.test(need.item) : need.item === (style === 'craft' ? 'Thread' : style === 'fish' ? 'Feather' : 'Bronze arrow')));
+    if (style === 'mage') {
+        const magic = magicEquipment(s);
+        return { ...plan, needs: [...plan.needs.filter(need => !/ rune$/i.test(need.item) && need.item !== 'Staff of air'), ...magic.needs],
+            settings: { ...plan.settings, spell: magic.spell, runesWithdraw: magic.casts } };
+    }
+    if (style !== 'craft' && style !== 'fish' && style !== 'range') return plan;
+    const consumables = plan.needs.filter(need => (need.minimum ?? 0) > 0
+        && need.item === (style === 'craft' ? 'Thread' : style === 'fish' ? 'Feather' : 'Bronze arrow'));
     if (!consumables.length) return plan;
     const target = style === 'craft' ? 100 : style === 'range' ? 300 : 200;
-    const batch = consumableBatch(s, consumables.map(need => ({ item: need.item, count: need.minimum! })), target, style === 'mage' ? 150 : target);
+    const batch = consumableBatch(s, consumables.map(need => ({ item: need.item, count: need.minimum! })), target);
     const replacements = new Map(consumables.map((need, index) => [need, { ...need, ...batch[index] }]));
-    const setting = style === 'craft' ? 'threadPerTrip' : style === 'mage' ? 'runesWithdraw' : style === 'fish' ? 'baitQty' : 'ammoWithdraw';
+    const setting = style === 'craft' ? 'threadPerTrip' : style === 'fish' ? 'baitQty' : 'ammoWithdraw';
     return { ...plan, needs: plan.needs.map(need => replacements.get(need) ?? need),
         settings: { ...plan.settings, [setting]: batch[0].carry! / batch[0].minimum! } };
 }

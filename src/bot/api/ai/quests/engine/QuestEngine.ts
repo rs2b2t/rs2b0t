@@ -57,6 +57,16 @@ const FRESH_GIVE_UP = 3;
 
 export const PROVISION_BANK = new Tile(3093, 3243, 0);
 
+function equipmentCounts(): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const item of Equipment.items()) {
+        if (!item.name) continue;
+        const key = item.name.toLowerCase();
+        counts.set(key, (counts.get(key) ?? 0) + item.count);
+    }
+    return counts;
+}
+
 import { Skills } from '../../../skills/Skills.js';
 
 /** `'nearest'` means "let the step work it out from where the bot is standing". */
@@ -115,6 +125,7 @@ export class QuestEngine implements Task {
     private readonly provisioned = new Set<string>();
     private readonly retreated = new Set<string>();
     private readonly retreatTries = new Map<string, number>();
+    private readonly recoveryTries = new Map<string, number>();
     private readonly deposited = new Set<string>();
     private readonly freshened = new Set<string>();
     private readonly freshenTries = new Map<string, number>();
@@ -200,9 +211,23 @@ export class QuestEngine implements Task {
             this.applyUserSkip(this.runningId, elig);
         }
 
+        if (await this.recoverArea(picked, elig)) return;
+
         if (this.runningId === null) {
             const selectable = new Set([...picked].filter(id => !this.blocked.has(id)));
-            this.runningId = nextQuest(this.order, selectable, elig, this.parked);
+            const tile = Game.tile();
+            const owner = tile && QUEST_DEFS.find(module => module.resumeAt?.(tile) && Quests.status(module.record.name) === 'inProgress');
+            if (owner) {
+                const id = owner.record.id;
+                if (!selectable.has(id) || elig.get(id)?.status !== 'READY') {
+                    const reasons = !picked.has(id) ? ['quest not selected'] : this.blocked.get(id) ?? elig.get(id)?.reasons ?? ['quest unavailable'];
+                    this.host.finish(`${owner.record.name}: cannot switch quests from this area: ${reasons.join('; ')}`);
+                    return;
+                }
+                this.runningId = id;
+            } else {
+                this.runningId = nextQuest(this.order, selectable, elig, this.parked);
+            }
         }
         const rows = this.applyBlocked(queueRows(this.order, picked, elig, this.parked, this.runningId));
 
@@ -234,6 +259,7 @@ export class QuestEngine implements Task {
         const progress = await module.readProgress?.();
         const stage = progress ? progress.stage : await module.readStage?.();
         const snap = this.buildSnapshot(module, stage, progress);
+        const inQuestArea = snap.tile !== null && snap.tile !== undefined && module.resumeAt?.(snap.tile) === true;
         const combatActive = this.combatAdvancing(snap);
 
         if (this.pendingFailedSignature !== null) {
@@ -256,11 +282,11 @@ export class QuestEngine implements Task {
             return;
         }
 
-        if (await this.freshenPack(module, id, snap, rows)) {
+        if (!inQuestArea && await this.freshenPack(module, id, snap, rows)) {
             return;
         }
 
-        if (await this.prepareResume(module, id, snap, rows)) return;
+        if (!inQuestArea && await this.prepareResume(module, id, snap, rows)) return;
 
         if (module.ownsInventory) {
             // Some quests have one-way, bankless areas, so their stage oracle runs before any generic spillover banking or provisioning on the mainland.
@@ -294,7 +320,7 @@ export class QuestEngine implements Task {
         }
 
         let step: QuestStep;
-        if (!this.deposited.has(id)) {
+        if (!inQuestArea && !this.deposited.has(id)) {
             const foodName = this.host.foodItem()?.toLowerCase();
             const keep = [
                 ...module.record.items.map(i => i.name.toLowerCase()),
@@ -323,8 +349,8 @@ export class QuestEngine implements Task {
                 return;
             }
         }
-        if (!this.provisioned.has(id)) {
-            const plan = planProvisioning(module.record.items, snap.inv, this.lastBankCounts);
+        if (!inQuestArea && !this.provisioned.has(id)) {
+            const plan = planProvisioning(module.record.items, snap.inv, this.lastBankCounts, equipmentCounts());
             // Why: restoring the float after every purchase made a 10gp gate emit withdraw Coins every tick while egg/milk/flour were outstanding.
             const coinPlan = coinFloatPlan(
                 snap.inv.get('coins') ?? 0,
@@ -410,7 +436,7 @@ export class QuestEngine implements Task {
             step = module.decide(snap);
         }
 
-        if (await this.prepareResume(module, id, snap, rows, step)) return;
+        if (!inQuestArea && await this.prepareResume(module, id, snap, rows, step)) return;
 
         const stepDesc = describeStep(step);
         this.host.noteState(rows, id, stepDesc, this.noProgressCount, this.parked.size);
@@ -659,16 +685,14 @@ export class QuestEngine implements Task {
 
     // Why: `exit` comes first for the quests whose last step leaves them somewhere the navigator has no route out of.
     // Why: the bank walk itself is a `scanBank`, so it picks the nearest reachable bank like every other bank leg.
-    // Why: bounded, since a bot parked on the wrong side of a broken route still finishes its queue.
 
     /** Drive a finished quest's character back to a bank before the queue moves on. */
     private async retreatToBank(module: QuestModule, id: string, rows: QueueRow[]): Promise<boolean> {
         const tries = (this.retreatTries.get(id) ?? 0) + 1;
         this.retreatTries.set(id, tries);
         if (tries > RETREAT_GIVE_UP) {
-            this.host.log(`${module.record.name}: no way back to a bank after ${RETREAT_GIVE_UP} tries — leaving the character where it finished`);
-            this.retreated.add(id);
-            return true;
+            this.host.finish(`could not leave ${module.record.name} after ${RETREAT_GIVE_UP} attempts`);
+            return false;
         }
         this.host.noteState(rows, id, 'walking back to a bank', this.noProgressCount, this.parked.size);
         this.host.log(`${module.record.name} finished — walking back to a bank (${tries}/${RETREAT_GIVE_UP})`);
@@ -681,6 +705,31 @@ export class QuestEngine implements Task {
         }
         this.retreated.add(id);
         return true;
+    }
+
+    private async recoverArea(picked: Set<string>, elig: Map<string, QuestEligibility>): Promise<boolean> {
+        const tile = Game.tile();
+        if (!tile) return false;
+        for (const module of QUEST_DEFS) {
+            const step = module.recover?.(tile);
+            if (!step) continue;
+            const id = module.record.id;
+            const rows = this.applyBlocked(queueRows(this.order, picked, elig, this.parked, this.runningId));
+            const description = describeStep(step);
+            this.host.noteState(rows, id, description, this.noProgressCount, this.parked.size);
+            this.host.log(`${module.record.name}: recovering: ${description}`);
+            if (await executeStep(step, module.hops ?? [], message => this.host.log(`  ${message}`))) {
+                this.recoveryTries.delete(id);
+                this.resetWatchdog();
+            } else {
+                const tries = (this.recoveryTries.get(id) ?? 0) + 1;
+                this.recoveryTries.set(id, tries);
+                if (tries >= RETREAT_GIVE_UP) this.host.finish(`could not recover from ${module.record.name}: ${description} after ${tries} attempts`);
+            }
+            return true;
+        }
+        this.recoveryTries.clear();
+        return false;
     }
 
     private resetWatchdog(): void {
@@ -832,6 +881,7 @@ export class QuestEngine implements Task {
     }
 
     private readItemSnapshot(): BankInventorySnapshot {
+        const worn = equipmentCounts();
         const wanted = new Set<string>();
         for (const r of this.records) {
             for (const it of r.items) {
@@ -841,7 +891,7 @@ export class QuestEngine implements Task {
         const counts = new Map<string, number>();
         for (const name of wanted) {
             const key = name.toLowerCase();
-            counts.set(key, Inventory.count(name) + (this.lastBankCounts.get(key) ?? 0));
+            counts.set(key, Inventory.count(name) + (this.lastBankCounts.get(key) ?? 0) + (worn.get(key) ?? 0));
         }
         return { counts, bankKnown: this.bankKnown };
     }

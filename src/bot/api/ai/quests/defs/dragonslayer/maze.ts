@@ -6,6 +6,7 @@ import { Locs, type Loc } from '../../../../locs/Locs.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import Tile from '../../../../../geometry/Tile.js';
+import { reader } from '../../../../../adapter/ClientAdapter.js';
 import { DS_ID } from './areas.js';
 
 // Why: the route is the shortest path the baked collision pack admits from the front door to the chest, with each coloured door opened in key order.
@@ -134,8 +135,7 @@ async function killFor(leg: MazeLeg & { kind: 'kill' }, log: (m: string) => void
         await Execution.delayTicks(3);
         return false;
     }
-    // Why: every floor has aggressive same-named decoys, and Game.inCombat() reads our own health bar, so only the right NPC targeting us is a reason to wait.
-    if (target.targetsMe()) {
+    if (target.targetsMe() && reader.selfFaceEntity() === target.index) {
         await Execution.delayTicks(2);
         return heldById(leg.keyId);
     }
