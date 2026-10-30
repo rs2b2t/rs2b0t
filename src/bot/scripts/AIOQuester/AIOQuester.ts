@@ -21,6 +21,7 @@ import type { QueueRow } from '../../api/ai/quests/engine/queue.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import { LEGENDS_REWARD_OPTIONS } from '../../api/ai/quests/defs/legends/config.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
+import { selectedOptions } from '../../runtime/optionSelection.js';
 import {
     ARRAV_GANG_OPTIONS,
     applyArravSettings,
@@ -39,7 +40,6 @@ export const QUEST_OPTION_LABELS: Record<string, string> = Object.fromEntries(
     QUEST_DEFS.map(def => [def.record.id, def.record.name])
 );
 
-// Why: the picker is 63 chips deep, so it is sorted by name to be searchable by eye; the engine runs QUEST_DEFS order, so ticking A-Z cannot reorder the run.
 const QUEST_OPTION_IDS = QUEST_DEFS
     .map(def => def.record.id)
     .sort((a, b) => QUEST_OPTION_LABELS[a].localeCompare(QUEST_OPTION_LABELS[b]));
@@ -60,8 +60,17 @@ export const AIO_SETTINGS: SettingsSchema = {
         default: [],
         options: QUEST_OPTION_IDS,
         optionLabels: QUEST_OPTION_LABELS,
-        label: 'Quest queue (empty = all)',
-        help: 'which implemented quests to complete; leave empty to run every implemented quest. Tick order does not matter, the queue runs the built-in order that puts prerequisites first'
+        selectionMode: 'includeExclude',
+        optionStatuses: () => {
+            if (!Game.ingame()) return {};
+            const statuses = new Map(Quests.all().map(quest => [quest.name.toLowerCase(), quest.status]));
+            return Object.fromEntries(QUEST_DEFS.map(def => {
+                const status = statuses.get(def.record.name.toLowerCase()) ?? 'unknown';
+                return [def.record.id, status === 'complete' ? 'complete' : status === 'unknown' ? 'unknown' : 'incomplete'];
+            }));
+        },
+        label: 'Quest queue',
+        help: '+ Do queues a quest; - Skip leaves it out. Green ✓ Complete comes from your quest tab. The queue runs prerequisites first and skips completed quests.'
     },
     gatherWildernessPlanks: { type: 'boolean', default: true, label: 'Gather Wilderness planks', help: 'Dragon Slayer gathers missing planks in the Wilderness; disable to require banked planks' },
     loadout: LOADOUT_SETTING,
@@ -149,8 +158,7 @@ export default class AIOQuester extends TaskBot {
         this.questSince = this.startedAt;
 
         const all = QUEST_DEFS.map(d => d.record.id);
-        const chosen = this.settings.list('quests', []).filter(id => all.includes(id));
-        this.picked = new Set(chosen.length > 0 ? chosen : all);
+        this.picked = new Set(selectedOptions(this.settings.list('quests', []), all));
 
         this.on('chat.message', e => {
             if (DEATH_RE.test(e.text)) {

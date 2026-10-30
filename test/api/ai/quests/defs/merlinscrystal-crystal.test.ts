@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { tryBreakCrystal } from '#/bot/api/ai/quests/defs/merlinscrystal.js';
+import { Equipment } from '#/bot/api/equipment/Equipment.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { Inventory, InvItem } from '#/bot/api/inventory/Inventory.js';
 import { Locs, Loc } from '#/bot/api/locs/Locs.js';
@@ -55,3 +56,30 @@ for (const outcome of ['delayed shatter', 'already freed', 'protected']) {
         }
     });
 }
+
+test('Merlin removes worn Excalibur before using it on the crystal', async () => {
+    let worn = true;
+    let used = false;
+    const query = Locs.query();
+    const tile = { x: 2767, z: 3494, level: 2 };
+    const crystal = new Loc({ typecode: 0, id: 62, name: 'Giant crystal', tile, ops: [], distance: 1 });
+    const sword = new InvItem({ id: 35, name: 'Excalibur', count: 1, slot: 0, comId: 3214, ops: [] });
+    const restores = [
+        stubProps(Game, { tile: () => tile }),
+        stubProps(Traversal, { walkResilient: async () => true }),
+        stubProps(reader, { npcs: () => [] }),
+        stubProps(Inventory, { first: () => worn ? null : sword, contains: () => !worn }),
+        stubProps(Equipment, { contains: () => worn, unequip: async name => { expect(name).toBe('Excalibur'); worn = false; return true; } }),
+        stubProps(sword, { useOn: async () => { used = true; return true; } }),
+        stubProps(Locs, { query: () => query }),
+        stubProps(query, { name: () => query, action: () => query, within: () => query, nearest: () => used ? null : crystal }),
+        stubProps(ChatDialog, { isOpen: () => false, canContinue: () => false }),
+        stubProps(Execution, { delayTicks: async () => {}, delayUntil: async check => check() })
+    ];
+    try {
+        expect(await tryBreakCrystal(() => {})).toBe('broke');
+        expect(used).toBe(true);
+    } finally {
+        for (const restore of restores.reverse()) restore();
+    }
+});

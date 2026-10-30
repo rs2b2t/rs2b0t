@@ -3,12 +3,13 @@ import { Inventory } from '../../api/inventory/Inventory.js';
 import { Locs } from '../../api/locs/Locs.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import Tile from '../../geometry/Tile.js';
+import { levelerTravelZones } from './travel.js';
 
 export const VIAL_FOUNTAIN = new Tile(2949, 3381, 0);
 
 export async function fillSupplyVials(count: number, log: (message: string) => void): Promise<boolean> {
     if (count < 1 || count > 28) return false;
-    if (!(await Traversal.walkResilient(VIAL_FOUNTAIN, { radius: 3, timeoutMs: 120000, log }))) return false;
+    if (!(await Traversal.walkResilient(VIAL_FOUNTAIN, { radius: 3, timeoutMs: 120000, avoidZones: levelerTravelZones(), log }))) return false;
     for (let i = 0; i < count; i++) {
         const fountain = Locs.query().name('Fountain').within(6).nearest();
         const vial = Inventory.items().find(item => item.id === 229 && !item.noted);

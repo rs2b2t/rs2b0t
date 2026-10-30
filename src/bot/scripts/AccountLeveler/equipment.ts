@@ -3,6 +3,7 @@ import { purchaseBudget, supplyOffer } from './offers.js';
 import { requirementKey, type LevelerSnapshot, type Requirement } from './types.js';
 
 interface Choice { item: string; level: number; id?: number; quest?: string }
+export const DRAGON_WEAPONS = ['Dragon longsword', 'Dragon dagger'];
 const metals = [{ item: 'Rune', level: 40 }, { item: 'Adamant', level: 30 }, { item: 'Mithril', level: 20 },
     { item: 'Black', level: 10 }, { item: 'Steel', level: 5 }, { item: 'Iron', level: 1 }, { item: 'Bronze', level: 1 }];
 const bows: Choice[] = [
@@ -38,8 +39,10 @@ export function gatheringTool(s: LevelerSnapshot, kind: 'axe' | 'pickaxe'): Requ
 
 export function meleeEquipment(s: LevelerSnapshot): Requirement[] {
     let coins = s.stock.coins ?? 0;
+    const dragons = DRAGON_WEAPONS.filter(item => (s.stock[item.toLowerCase()] ?? 0) > 0)
+        .map(item => ({ item, level: 60, quest: 'Lost City' }));
     const slots: { level: number; choices: Choice[]; fallback: Choice }[] = [
-        { level: s.levels.attack, choices: metals.map(metal => ({ ...metal, item: `${metal.item} scimitar` })), fallback: { item: 'Iron scimitar', level: 1 } },
+        { level: s.levels.attack, choices: [...dragons, ...metals.map(metal => ({ ...metal, item: `${metal.item} scimitar` }))], fallback: { item: 'Iron scimitar', level: 1 } },
         { level: s.levels.defence, choices: metals.flatMap(metal => [
             { ...metal, item: `${metal.item} platebody`, ...(metal.item === 'Rune' ? { quest: 'Dragon Slayer' } : {}) },
             { ...metal, item: `${metal.item} chainbody` }

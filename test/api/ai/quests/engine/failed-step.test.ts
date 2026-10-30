@@ -402,3 +402,135 @@ test('keeps the actionable wait reason after exhausting retries', async () => {
     expect(row?.status).toBe('BLOCKED');
     expect(row?.reasons).toContain('waiting: fixture wait');
 });
+
+test('worn Excalibur passes the shared supply check and reaches the quest step', async () => {
+    const { engine, state } = fixture();
+    const items = runemysteries.record.items;
+    restores.push(() => { runemysteries.record.items = items; });
+    runemysteries.record.items = [{ name: 'Excalibur', qty: 1, kind: 'acquirable' }];
+    const equipment = spyOn(Equipment, 'items').mockReturnValue([
+        new InvItem({ id: 35, name: 'Excalibur', count: 1, slot: 3, comId: 1688, ops: [] })
+    ]);
+    restores.push(() => equipment.mockRestore());
+    state.picked = new Set(['runemysteries']);
+    state.coins = 1000;
+    engine['bankKnown'] = true;
+    engine['provisioned'].delete('runemysteries');
+    expect(engine['readItemSnapshot']().counts.get('excalibur')).toBe(1);
+    await engine.execute();
+    expect(state.attempts).toBe(1);
+    expect(state.bankActions).toEqual([]);
+    expect(engine['provisioned'].has('runemysteries')).toBe(true);
+});
+
+test('escapes a completed unselected quest area before preparing the next quest', async () => {
+    const { engine, state } = fixture();
+    const original = doric.recover;
+    restores.push(() => { doric.recover = original; });
+    let inside = true;
+    doric.recover = () => inside ? { kind: 'custom', name: 'leave trapped area', run: async () => { inside = false; return true; } } : null;
+    state.picked = new Set(['runemysteries']);
+    const status = spyOn(Quests, 'status').mockImplementation(name => name === doric.record.name ? 'complete' : 'inProgress');
+    restores.push(() => status.mockRestore());
+    await engine.execute();
+    expect(inside).toBe(false);
+    expect(state.attempts).toBe(0);
+    expect(state.bankActions).toEqual([]);
+    await engine.execute();
+    expect(state.attempts).toBe(1);
+});
+
+test('failed escape stops with its cause instead of parking unrelated quests', async () => {
+    const { engine, state, host } = fixture();
+    const original = doric.recover;
+    restores.push(() => { doric.recover = original; });
+    doric.recover = () => ({ kind: 'custom', name: 'leave trapped area', run: async () => false });
+    const messages: string[] = [];
+    host.finish = reason => { messages.push(reason); };
+    await execute(engine, 4);
+    expect(messages).toEqual(['could not recover from Doric\'s Quest: leave trapped area after 4 attempts']);
+    expect(state.attempts).toBe(0);
+    expect(state.bankActions).toEqual([]);
+    expect(engine['parked'].size).toBe(0);
+});
+
+test('failed completion retreat does not discard its exit and advance the queue', async () => {
+    const { engine, host } = fixture();
+    const original = doric.exit;
+    restores.push(() => { doric.exit = original; });
+    doric.exit = async () => false;
+    const messages: string[] = [];
+    host.finish = reason => { messages.push(reason); };
+    for (let i = 0; i < 5; i++) expect(await engine['retreatToBank'](doric, 'doric', [])).toBe(false);
+    expect(engine['retreated'].has('doric')).toBe(false);
+    expect(messages).toEqual(['could not leave Doric\'s Quest after 4 attempts']);
+});
+
+for (const parked of [false, true]) {
+    test(`resumes the quest owning the current area before queue order, parked=${parked}`, async () => {
+        const { engine, state } = fixture();
+        const original = doric.resumeAt;
+        restores.push(() => { doric.resumeAt = original; });
+        doric.resumeAt = tile => tile.x === 3093;
+        if (parked) {
+            engine['parked'].add('doric');
+            engine['parkCounts'].set('doric', 1);
+        }
+        await engine.execute();
+        expect(state.running).toBe('doric');
+        expect(state.attempts).toBe(0);
+        if (parked) expect(engine['parkCounts'].get('doric')).toBe(1);
+    });
+}
+
+test('bankless quest areas bypass generic preparation without marking supplies stocked', async () => {
+    const { engine, state } = fixture();
+    const original = runemysteries.resumeAt;
+    restores.push(() => { runemysteries.resumeAt = original; });
+    runemysteries.resumeAt = () => true;
+    engine['deposited'].delete('runemysteries');
+    engine['provisioned'].delete('runemysteries');
+    engine['freshened'].delete('runemysteries');
+    const items = spyOn(Inventory, 'items').mockReturnValue([
+        new InvItem({ id: 373, name: 'Swordfish', count: 1, slot: 0, comId: 3214, ops: [] })
+    ]);
+    restores.push(() => items.mockRestore());
+    await engine.execute();
+    expect(state.attempts).toBe(1);
+    expect(state.bankActions).toEqual([]);
+    expect(engine['provisioned'].has('runemysteries')).toBe(false);
+    expect(engine['deposited'].has('runemysteries')).toBe(false);
+});
+
+for (const reason of ['blocked', 'skipped', 'unselected'] as const) {
+    test(`does not attempt unrelated banking when the area owner is ${reason}`, async () => {
+        const { engine, state, host } = fixture();
+        const original = doric.resumeAt;
+        restores.push(() => { doric.resumeAt = original; });
+        doric.resumeAt = () => true;
+        if (reason === 'blocked') engine['blocked'].set('doric', ['no progress after three parks']);
+        if (reason === 'skipped') {
+            engine['runningId'] = 'doric';
+            state.skip = true;
+        }
+        if (reason === 'unselected') state.picked.delete('doric');
+        const messages: string[] = [];
+        host.finish = message => { messages.push(message); };
+        await engine.execute();
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toContain('Doric\'s Quest');
+        expect(messages[0]).toContain('cannot switch quests from this area');
+        expect(state.attempts).toBe(0);
+        expect(state.bankActions).toEqual([]);
+    });
+}
+
+test('normal queue order is preserved outside quest-owned areas', async () => {
+    const { engine, state } = fixture();
+    const original = doric.resumeAt;
+    restores.push(() => { doric.resumeAt = original; });
+    doric.resumeAt = tile => tile.x === 7777;
+    await engine.execute();
+    expect(state.running).toBe('runemysteries');
+    expect(state.attempts).toBe(1);
+});

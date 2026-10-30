@@ -4,6 +4,14 @@ The default target is every enabled skill to 60. Lower targets remain selectable
 
 The planner checks loaded bank contents, inventory, equipment, levels, quest completion, supplier failures and available gold before choosing work. It buys tools separately from choosing resources: a better pickaxe doesn't force a switch to a higher ore. Completed resource dependencies return to their queued objective.
 
+## Lost City and dragon weapons
+
+Lost City takes priority once Crafting reaches 31 and Woodcutting reaches 36. The planner prepares food and Strike runes, leaves melee equipment behind for Entrana, and reserves a way out of Zanaris: a Diamond, a cuttable Uncut diamond, or Varrock teleport supplies with Magic 25. Unavailable supplies defer the quest while other training continues.
+
+At Attack 60 with Lost City complete, the bank audit buys any missing Dragon longsword and Dragon dagger from Jakut. It checks bank, inventory and equipment before buying, reserves money for other supplies, and requires a Dramen staff and the marketplace's Diamond tax. Owned dragon weapons take priority over scimitars. Failed optional purchases retry after 15 minutes.
+
+Routine supply and bank trips avoid the Wilderness. Explicitly enabled Wilderness training remains available, and accounts already inside can still leave for a bank.
+
 ## Dragon Slayer and dragon bones
 
 While melee or Prayer remains below target, accounts with Attack, Strength, Defence and Hitpoints 40 can prepare for Dragon Slayer. The planner completes supported solo quests until it has 32 quest points, skips completed quests, and respects quest cooldowns. It prepares Fishing and Cooking 40 when Lobsters are not stocked. Missing quest supplies can also require Smithing 34, Mining 30 and Crafting 8. Banked Nails and an Unfired bowl satisfy those material prerequisites directly.
@@ -14,7 +22,7 @@ Prayer training rotates between eligible green and blue dragon sites. It disable
 
 ## Paladin rune supplies
 
-Accounts already at Thieving 70, Hitpoints 30 and melee stats 20 can pickpocket Ardougne Paladins for missing chaos runes. The trip prepares food, collects the requested rune batch and returns to the queued Magic activity, even when shops have marked chaos runes unavailable. It does not train Thieving to unlock Paladins. Lower-level accounts retain shop supplies and Strike spells.
+Accounts already at Thieving 70, Hitpoints 30 and melee stats 20 can pickpocket Ardougne Paladins for missing chaos runes. The trip prepares food, collects the requested rune batch and returns to the queued Magic activity, even when shops have marked chaos runes unavailable. Bank preparation reselects the spell and rune requirements for queued Magic activities, so an earlier Strike plan can upgrade to Bolt after gathering chaos runes or reaching the required Magic level. It does not train Thieving to unlock Paladins. Accounts unable to pickpocket Paladins still use owned chaos runes, with shop supplies and Strike spells as fallbacks.
 
 ## Training catalog
 
@@ -22,7 +30,7 @@ Levels below are **selection thresholds**, which can deliberately differ from th
 
 | Skill | Levels / preferred method | Location and supplies | Fallback / constraints |
 | --- | --- | --- | --- |
-| Attack | 1–4 iron scimitar; 5–19 steel; 20+ mithril from Zeke. Use owned higher eligible scimitars. | [Eligible combat camps](ACCOUNT_LEVELER_COMBAT.md); armour; Attack style. Melee below combat 15 uses no food. | Best affordable available tier. Do not request adamant/rune stock from Zeke. |
+| Attack | 1–4 iron scimitar; 5–19 steel; 20+ mithril from Zeke. Use owned higher eligible scimitars; at 60 with Lost City complete, prefer a Dragon longsword or dagger. | [Eligible combat camps](ACCOUNT_LEVELER_COMBAT.md); armour; Attack style. Melee below combat 15 uses no food. | Best affordable available tier. Do not request adamant/rune stock from Zeke. |
 | Strength | Same weapon rules, based on Attack level. | Same camps, Strength style. | Train lowest melee stat first. |
 | Defence | Same weapon rules; improve body, legs and helmet as Defence permits. | Same camps, Defence style. | Armour budget preserves money for the other kit slots. Helmets use the remaining budget after weapon, body and legs. |
 | Hitpoints | Train alongside melee. If still below target, continue combat using the lowest melee stat. | Same camps and supplies. | Does not require a separate XP method. |

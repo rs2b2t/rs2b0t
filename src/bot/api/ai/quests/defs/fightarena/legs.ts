@@ -259,8 +259,9 @@ export async function fightWithRelease(
     releaseNpcId: number,
     log: (m: string) => void
 ): Promise<boolean> {
-    const loose = (): boolean => Npcs.query().where(n => n.id === fight.npcId).action('Attack').within(20).exists();
-    // Why: a caged beast still renders and offers Attack, so the first pass may only learn it's caged by swinging; either way the Servil lets it out.
+    const loose = (): boolean => Npcs.query().where(n => n.id === fight.npcId)
+        .action('Attack').within(20).where(n => !n.targetsAnotherPlayer()
+            && (fight.cover !== undefined || pocketOf(n.networkTile()) === 'arena')).exists();
     const result = loose() ? await runFight(fight, log) : 'unengaged';
     if (result !== 'unengaged') {
         return result === 'won';
@@ -273,6 +274,7 @@ export async function fightWithRelease(
         log(`${fight.what} did not come out after the dialogue`);
         return false;
     }
+    await Execution.delayTicks(2);
     return (await runFight(fight, log)) === 'won';
 }
 

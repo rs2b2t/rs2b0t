@@ -732,7 +732,8 @@ function hullErrand(snap: QuestSnapshot): QuestStep | null {
     const planksToFetch = inPlankGraveyard(snap.tile) ? SHIP_REPAIR.planks : planksWanted;
     // Why: smithing belongs to the boat leg rather than the shopping, as it is eighteen slots of ore and wants the pack the map pieces and the Oracle's four charms were using.
     // Why: the hammer comes before it, as the anvil answers nothing without one, and the planks after, as three slots the ore leg would only bank and draw again.
-    return stock(snap, [bought(DS_ID.HAMMER, DS_ITEM.HAMMER), nails, bought(DS_ID.PLANK, DS_ITEM.PLANK, planksToFetch)]);
+    return stock(snap, [bought(DS_ID.HAMMER, DS_ITEM.HAMMER), nails])
+        ?? stock(snap, [bought(DS_ID.PLANK, DS_ITEM.PLANK, planksToFetch)]);
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {

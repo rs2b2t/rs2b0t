@@ -53,7 +53,7 @@ for (const scenario of ['round trip', 'blocked outbound', 'blocked return', 'ret
             })
         ];
         try {
-            const step = decide({ journal: 'inProgress', inv: new Map([['excalibur', 1], ['lit black candle', 1], ['bat bones', 1]]), worn: new Set(), noProgress: 0, bankCoins: 0 });
+            const step = decide({ journal: 'inProgress', stage: 4, inv: new Map([['excalibur', 1], ['lit black candle', 1], ['bat bones', 1]]), worn: new Set(), noProgress: 0, bankCoins: 0 });
             if (step.kind !== 'custom') throw new Error('expected summoning step');
             await step.run(() => {});
             const journeys = walks.filter(walk => [ALTAR, SYMBOL, TOWER].some(tile => tile.equals(walk.dest)));

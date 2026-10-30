@@ -347,11 +347,13 @@ async function ringBell(log: (m: string) => void): Promise<boolean> {
         if (!(await bell.interact('Ring'))) {
             return false;
         }
-        const landed = await Execution.delayUntil(() => {
+        const inside = (): boolean => {
             const now = Game.tile();
-            return now !== null && GRAIL_TILE.CASTLE_LANDING.distanceTo(now) <= 2 && now.level === 0;
-        }, 8000);
-        await drain();
+            return now !== null && GRAIL_TILE.CASTLE_LANDING.equals(now);
+        };
+        if (!(await Execution.delayUntil(() => inside() || ChatDialog.isOpen() || ChatDialog.canContinue(), 8000))) continue;
+        await driveDialog([], log);
+        const landed = await Execution.delayUntil(inside, 8000);
         if (landed) {
             log('bell: inside the Grail castle');
             insideCastle = true;

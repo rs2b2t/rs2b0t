@@ -215,6 +215,26 @@ describe('Dragon Slayer decide()', () => {
         expect(step.kind).toBe('withdraw');
     });
 
+    test('banked planks stay in the bank until nail production is finished', () => {
+        const given = snapshot({
+            carried: [DS_ID.MAP, DS_ID.HAMMER],
+            banked: [[DS_ID.PLANK, 3]],
+            progress: { stage: DRAGON_STAGE.BOUGHT_SHIP, flags: new Set<string>() }
+        });
+        const step = decide(given);
+        expect(step.kind).toBe('custom');
+        expect(step.kind === 'custom' && step.name).toContain('smith 12 nails');
+    });
+
+    test('finished nails allow banked planks to be withdrawn for the hull', () => {
+        const step = decide(snapshot({
+            carried: [DS_ID.MAP, DS_ID.HAMMER, NAILS],
+            banked: [[DS_ID.PLANK, 3]],
+            progress: { stage: DRAGON_STAGE.BOUGHT_SHIP, flags: new Set<string>() }
+        }));
+        expect(step).toMatchObject({ kind: 'withdraw', items: [{ id: DS_ID.PLANK, qty: 3 }] });
+    });
+
     test('map pieces left in the bank are withdrawn, not re-earned', () => {
         const step = decide(snapshot({
             carried: [DS_ID.MAZE_KEY, DS_ID.SHIELD],
