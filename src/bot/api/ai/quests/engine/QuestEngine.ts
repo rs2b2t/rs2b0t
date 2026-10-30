@@ -854,6 +854,7 @@ export class QuestEngine implements Task {
             attack: Skills.level('attack'),
             ranged: Skills.level('ranged'),
             magic: Skills.effective('magic'),
+            mining: Skills.effective('mining'),
             freeSlots: Inventory.free(),
             combatXp: Skills.xp('attack') + Skills.xp('strength') + Skills.xp('defence') + Skills.xp('ranged') + Skills.xp('magic') + Skills.xp('hitpoints')
         };

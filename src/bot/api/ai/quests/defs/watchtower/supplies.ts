@@ -1,6 +1,6 @@
 import Tile from '../../../../../geometry/Tile.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
-import { WT_ITEM, WT_TILE, type WatchtowerItem } from './areas.js';
+import { RELIC_PARTS, WT_ITEM, WT_TILE, type WatchtowerItem } from './areas.js';
 import { QuestFood } from '../../food.js';
 
 // Why: every shop here was read out of the engine's own configs.
@@ -30,6 +30,7 @@ export function owned(snap: QuestSnapshot, id: number): number {
 
 /** The kit the bank can supply, one of each. */
 const KIT_ITEMS: readonly WatchtowerItem[] = [
+    ...RELIC_PARTS,
     WT_ITEM.ROPE,
     WT_ITEM.LIT_CANDLE,
     WT_ITEM.VIAL_WATER,

@@ -53,6 +53,7 @@ export interface QuestSnapshot {
     /** Ranged level, which is the tier of bow the account can wield. */
     ranged?: number;
     magic?: number;
+    mining?: number;
     freeSlots?: number;
     combatXp?: number;
 }
