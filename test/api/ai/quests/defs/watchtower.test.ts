@@ -216,10 +216,10 @@ describe('watchtower decide — terminal cases', () => {
         expect(watchtower.record.name).toBe('Watch Tower');
     });
 
-    test('the record demands exactly the four bank-supplied items', () => {
+    test('the record permits gathering dragon bones', () => {
         expect(watchtower.record.items.map(i => i.name).sort())
             .toEqual(['Bat bones', 'Dragon bones', 'Gold bar', 'Guam leaf']);
-        expect(watchtower.record.items.every(i => i.kind === 'mustHave')).toBe(true);
+        expect(watchtower.record.items.find(i => i.name === 'Dragon bones')?.kind).toBe('acquirable');
     });
 });
 
@@ -295,10 +295,36 @@ describe('watchtower decide — the tribes', () => {
         expect(step.kind).toBe('withdraw');
     });
 
-    test('with no dragon bones anywhere it parks naming the item', () => {
+    test('with no dragon bones anywhere it hunts a dragon', () => {
         const step = decide(snapshot({ progress: P(2, 'helped-og', 'spoken-toban') }));
-        expect(step.kind).toBe('wait');
-        expect(step.kind === 'wait' && step.reason).toMatch(/dragon bones/i);
+        expect(step.kind === 'custom' && step.name).toMatch(/kill.*dragon.*bones/i);
+    });
+
+    test('an unread bank is checked before hunting a dragon', () => {
+        const step = decide(snapshot({ progress: P(2, 'helped-og', 'spoken-toban'), bankKnown: false }));
+        expect(step.kind).toBe('scanBank');
+    });
+
+    test('leaves Toban camp before hunting a dragon', () => {
+        const step = decide(snapshot({ progress: P(2, 'helped-og', 'spoken-toban'), tile: at(2576, 3027) }));
+        expect(step.kind === 'custom' && step.name).toBe("leave Toban's camp");
+    });
+
+    test('leaves the dragon lair before taking banked quest supplies or handing in bones', () => {
+        const step = decide(snapshot({
+            progress: P(2, 'helped-og', 'spoken-toban'), tile: at(2900, 9808),
+            invIds: new Map([[536, 1]]), bankIds: new Map([[WT_ITEM.ROPE.id, 1]])
+        }));
+        expect(step.kind === 'custom' && step.name).toMatch(/leave.*dragon/i);
+    });
+
+    test('recovers a relic part banked during the dragon hunt', () => {
+        const step = decide(snapshot({
+            progress: P(2, 'helped-og', 'helped-toban', 'helped-grew'),
+            bankIds: new Map([[WT_ITEM.RELIC_PART1.id, 1]])
+        }));
+        expect(step.kind).toBe('withdraw');
+        if (step.kind === 'withdraw') expect(step.items).toContainEqual({ ...WT_ITEM.RELIC_PART1, qty: 1 });
     });
 
     test('Grew is spoken to before Gorad is attacked', () => {
