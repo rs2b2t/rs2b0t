@@ -236,6 +236,60 @@ export const ARENA_EDGES: readonly ArenaEdge[] = [
     { a: 24, b: 23, kind: 'plank', minLevel: 1, mode: 'interact', locName: 'Plank', op: 'Walk-on' }
 ];
 
+// Why: the clerk rebuilds each plank bridge as three rows. One row gets only intact planks, and the other two ALWAYS get `plank_broke1` on both outer tiles (agilityarena_clerk.rs2 `agilityarena_change_planks`), so one row is safe and the clerk picks a new one on every ticket pillar.
+// Why: `plank_broke1` shares the name "Plank" with the intact planks, so only the loc type id tells them apart. The ids are the content pack's `agilityarena_plank_*` entries.
+export const PLANK_BROKEN_LOC = 3576; // agilityarena_plank_broke1
+export const PLANK_INTACT_LOCS: readonly number[] = [
+    3573, // agilityarena_plank_middle
+    3574, // agilityarena_plank2_middle
+    3575 // agilityarena_plank3_middle
+];
+
+/** A plank bridge between two platforms: three west–east rows with a Walk-on entry loc one tile outside each end. */
+export interface PlankBridge {
+    a: number;
+    b: number;
+    /** Row z coordinates. */
+    rows: readonly number[];
+    /** x of the west and east outer plank tiles, the first tile a walker steps onto from either end. */
+    outerX: readonly [number, number];
+}
+
+export const PLANK_BRIDGES: readonly PlankBridge[] = [
+    { a: 5, b: 6, rows: [9556, 9557, 9558], outerX: [2765, 2768] },
+    { a: 24, b: 23, rows: [9589, 9590, 9591], outerX: [2798, 2801] }
+];
+
+/** The plank bridge an edge crosses, or null when the edge is not a plank. */
+export function plankBridgeOf(edge: ArenaEdge): PlankBridge | null {
+    if (edge.kind !== 'plank') {
+        return null;
+    }
+    return PLANK_BRIDGES.find(b => Math.min(b.a, b.b) === Math.min(edge.a, edge.b) && Math.max(b.a, b.b) === Math.max(edge.a, edge.b)) ?? null;
+}
+
+/** Whether a Walk-on entry tile belongs to the bridge: one tile outside an outer plank tile, on one of its rows. */
+export function isPlankEntry(bridge: PlankBridge, x: number, z: number): boolean {
+    return bridge.rows.includes(z) && (x === bridge.outerX[0] - 1 || x === bridge.outerX[1] + 1);
+}
+
+/**
+ * Rows whose two outer tiles both show an intact plank and neither shows a broken one.
+ * A tile missing from `locs` counts as unseen, so an empty scene yields no row rather than the middle one.
+ */
+export function intactPlankRows(bridge: PlankBridge, locs: Iterable<{ id: number; x: number; z: number }>): number[] {
+    const intact = new Set<string>();
+    const broken = new Set<string>();
+    for (const loc of locs) {
+        if (loc.id === PLANK_BROKEN_LOC) {
+            broken.add(`${loc.x},${loc.z}`);
+        } else if (PLANK_INTACT_LOCS.includes(loc.id)) {
+            intact.add(`${loc.x},${loc.z}`);
+        }
+    }
+    return bridge.rows.filter(z => bridge.outerX.every(x => intact.has(`${x},${z}`) && !broken.has(`${x},${z}`)));
+}
+
 /** Spike trap between platforms 13↔14. */
 export const SPIKE_EDGE: ArenaEdge = ARENA_EDGES.find(e => e.a === 13 && e.b === 14)!;
 export const CENTRE_PLATFORM = 12;

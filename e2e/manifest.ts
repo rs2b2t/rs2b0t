@@ -473,6 +473,16 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'brimhaven-landing-plank-live',
+        harness: 'brimhaven-landing-plank-live.ts',
+        covers: { scripts: ['BrimhavenAgility'] },
+        status: 'documented',
+        documentedIn: 'docs/how-to/brimhaven-landing-plank.md',
+        manual: true,
+        budgetMin: 12,
+        note: 'Local engine only. Waits at the landing for a plank-route pillar whose intact plank row is not the middle one, then requires the script to cross that row with no fall. EXPECT_MODE=before expects a fall on the broken middle row.'
+    },
+    {
         id: 'brimhaven-mossgiants-live',
         harness: 'brimhaven-mossgiants-live.ts',
         covers: { scripts: ['BrimhavenMossGiants'] },
