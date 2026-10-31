@@ -20,9 +20,10 @@ export function createRosterClient(panel: BotPanel): RosterClient {
         },
         assignScript: script => { requireScript(script); panel.assignScript(script); },
         copySettings: (script, values) => { requireScript(script); panel.copyScriptSettings(script, values); },
+        configureScript: async (script, values, start) => { requireScript(script); await panel.configureScript(script, values, start); },
         startScript: () => panel.startRosterScript(),
         stopScript: () => panel.stopScript(),
         travelTo: destination => panel.travelTo(destination),
-        editSettings: () => panel.editScriptSettings()
+        editSettings: () => panel.editRosterSettings()
     };
 }

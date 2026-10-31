@@ -694,7 +694,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'FlaxSpinner',
-    description: 'Seers flax spinner — withdraw flax, climb to the spinning wheel, Spin-X into bow string, bank, repeat',
+    description: 'Seers spinner: withdraw flax for bow strings or wool for balls of wool, spin upstairs, bank the output, and repeat',
     category: 'Crafting',
     tags: ['seers', 'crafting', 'banking', 'afk'],
     settingsSchema: FLAXSPINNER_SETTINGS,

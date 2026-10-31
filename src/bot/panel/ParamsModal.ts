@@ -9,6 +9,8 @@ export default class ParamsModal {
     private titleEl: HTMLElement;
     private bodyEl: HTMLElement;
     private scriptName = '';
+    private startButton: HTMLButtonElement;
+    private onStart: (() => void) | null = null;
     private schema: SettingsSchema = {};
     private openTitle: string | null = null;
     private openIntro: string | null = null;
@@ -44,6 +46,13 @@ export default class ParamsModal {
 
         this.bodyEl = el('div', 'rs2b0t-params-body');
         modal.appendChild(this.bodyEl);
+        this.startButton = el('button', 'rs2b0t-button');
+        this.startButton.type = 'button';
+        this.startButton.dataset.action = 'start-script';
+        this.startButton.textContent = 'Start script';
+        this.startButton.hidden = true;
+        this.startButton.addEventListener('click', () => { if (this.isOpen() && !this.isActive()) this.onStart?.(); });
+        modal.appendChild(this.startButton);
 
         this.backdrop.appendChild(modal);
         document.body.appendChild(this.backdrop);
@@ -69,6 +78,7 @@ export default class ParamsModal {
             title?: string;
             zIndex?: number;
             onClose?: () => void;
+            onStart?: () => void;
             intro?: string;
             /** Default true when scriptName is Global. Set false for Nav settings. */
             showGlobalExtra?: boolean;
@@ -83,6 +93,8 @@ export default class ParamsModal {
                 def.options = PriceBooks.names();
             }
         }
+        this.onStart = opts?.onStart ?? null;
+        this.startButton.hidden = !this.onStart;
         this.scriptName = scriptName;
         this.schema = schema;
         this.openTitle = opts?.title ?? null;

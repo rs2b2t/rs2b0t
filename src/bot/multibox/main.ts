@@ -422,14 +422,13 @@ function boot(): void {
         tabs: () => controller.tabs(),
         activeTab: () => controller.activeTab(),
         worldRouting,
-        edit: profile => {
+        edit: async profile => {
             const current = rosterProfiles().find(p => p.username === profile.username);
             const client = current?.slot ? controller.rosterClient(current.slot.id) : null;
             if (!current?.slot || !client) throw new Error('Load this profile and wait for its client before editing.');
-            if (['running', 'paused', 'stopping'].includes(current.slot.scriptState)) throw new Error('Stop the script before editing its parameters.');
             controller.focus(current.slot.id);
             renderRail();
-            client.editSettings();
+            await rosterActions.edit(current);
         }
     });
     document.body.appendChild(roster.el);

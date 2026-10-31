@@ -613,7 +613,7 @@ Two-player cooperative flax picking and spinning — Runner picks flax and deliv
 
 ### FlaxSpinner
 
-Seers flax spinner — withdraw flax, climb to the spinning wheel, Spin-X into bow string, bank, repeat
+Seers spinner: withdraw flax for bow strings or wool for balls of wool, spin upstairs, bank the output, and repeat
 
 - Tags: `seers`, `crafting`, `banking`, `afk`
 
