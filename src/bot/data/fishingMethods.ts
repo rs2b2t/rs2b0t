@@ -83,6 +83,14 @@ export const FISHING_METHODS: FishingMethod[] = [
 
 export const FISHING_METHOD_OPTIONS = FISHING_METHODS.map(m => m.name);
 
+/** Knife + carrier log that the 3-tick fly method keeps alongside the rod and feathers. */
+export const THREE_TICK_FLY_GEAR: FishingGearPiece[] = [tool('Knife'), tool('Logs')];
+
+/** The rod/feather kit plus the knife and carrier log while 3-tick fly is on. */
+export function withThreeTickFlyGear(method: Pick<FishingMethod, 'gear'>): FishingGearPiece[] {
+    return [...method.gear, ...THREE_TICK_FLY_GEAR];
+}
+
 export const ALL_FISHING_GEAR_NAMES: string[] = [
     ...new Set(FISHING_METHODS.flatMap(m => m.gear.map(g => g.name)))
 ];
