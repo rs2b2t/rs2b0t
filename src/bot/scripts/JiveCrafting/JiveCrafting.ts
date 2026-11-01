@@ -14,6 +14,7 @@ import { fmtDuration } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import { GOLD_BAR, JEWELLERY, PACK, PRODUCT_OPTIONS, craftable, decide, jewelByName, makeOp, withdrawPlan, type Jewel, type PackState, type Step } from './logic.js';
+import { AMULETS, BALL_OF_WOOL, StringAmulets, type Amulet } from './stringing.js';
 
 /** Al Kharid: the bank stand SmelterBot uses and the tile east of the furnace. */
 const BANK_STAND = new Tile(3269, 3167, 0);
@@ -31,7 +32,9 @@ const BATCH: Record<string, number> = { 'Make 10': 10, 'Make 5': 5, Make: 1 };
 const CONTROL_ROWS = 2;
 
 export const SETTINGS: SettingsSchema = {
-    product: { type: 'string', default: 'Sapphire ring', options: PRODUCT_OPTIONS, label: 'Product', help: 'which gold jewel to make this session' }
+    mode: { type: 'string', default: 'Craft jewellery', options: ['Craft jewellery', 'String amulets'], label: 'Mode' },
+    product: { type: 'string', default: 'Sapphire ring', options: PRODUCT_OPTIONS, label: 'Product', help: 'which gold jewel to make this session', showIf: { key: 'mode', anyOf: ['Craft jewellery'] } },
+    amulet: { type: 'string', default: 'Gold amulet', options: AMULETS.map(amulet => amulet.label), label: 'Amulet to string', help: 'Uses banked unstrung amulets and balls of wool at the nearest bank.', showIf: { key: 'mode', anyOf: ['String amulets'] } }
 };
 
 export default class JiveCrafting extends TaskBot {
@@ -45,9 +48,24 @@ export default class JiveCrafting extends TaskBot {
     private banked = 0;
 
     jewel: Jewel = JEWELLERY[1]!;
+    private amulet: Amulet | null = null;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+
+        this.startedAt = Date.now();
+        this.xp.begin();
+        if (this.settings.str('mode', 'Craft jewellery') === 'String amulets') {
+            const pick = this.settings.str('amulet', 'Gold amulet');
+            this.amulet = AMULETS.find(amulet => amulet.label.toLowerCase() === pick.trim().toLowerCase()) ?? null;
+            if (!this.amulet) {
+                ScriptRunner.stop(`[crafting] unknown amulet '${pick}'`);
+                return;
+            }
+            this.log(`[crafting] stringing ${this.amulet.label} with balls of wool at the nearest bank`);
+            this.add(new ContinueDialog(), new StringAmulets(this, this.amulet));
+            return;
+        }
 
         const pick = this.settings.str('product', 'Sapphire ring');
         const jewel = jewelByName(pick);
@@ -56,8 +74,6 @@ export default class JiveCrafting extends TaskBot {
             return;
         }
         this.jewel = jewel;
-        this.startedAt = Date.now();
-        this.xp.begin();
 
         const level = Skills.level('crafting');
         if (level < jewel.level) {
@@ -69,7 +85,7 @@ export default class JiveCrafting extends TaskBot {
     }
 
     override recoveryAnchor(): Tile | null {
-        return BANK_STAND;
+        return this.amulet ? null : BANK_STAND;
     }
 
     setStatus(s: string): void {
@@ -108,8 +124,8 @@ export default class JiveCrafting extends TaskBot {
 
         if (page === 'Options') {
             p.statGrid([
-                [{ text: `Product: ${this.jewel.label}` }, { text: `Needs: Crafting ${this.jewel.level}` }],
-                [{ text: `Bank: ${BANK_STAND.x},${BANK_STAND.z}` }, { text: `Furnace: ${FURNACE_STAND.x},${FURNACE_STAND.z}` }]
+                [{ text: `Product: ${this.amulet?.label ?? this.jewel.label}` }, { text: this.amulet ? 'Mode: String amulets' : `Needs: Crafting ${this.jewel.level}` }],
+                [{ text: this.amulet ? 'Bank: nearest' : `Bank: ${BANK_STAND.x},${BANK_STAND.z}` }, { text: this.amulet ? 'Supply: Ball of wool' : `Furnace: ${FURNACE_STAND.x},${FURNACE_STAND.z}` }]
             ]);
         } else if (section === 'Overview') {
             p.statGrid([
@@ -118,6 +134,11 @@ export default class JiveCrafting extends TaskBot {
             ]);
             p.bar('Pack', Inventory.used() / PACK);
             paintLevels(p, this.xp.progress(), mins, CONTROL_ROWS);
+        } else if (this.amulet) {
+            p.statGrid([
+                [{ text: `Unstrung: ${Inventory.countById(this.amulet.unstrung)}` }, { text: `Balls of wool: ${Inventory.countById(BALL_OF_WOOL)}` }],
+                [{ text: `Strung: ${Inventory.countById(this.amulet.strung)}` }, { text: 'Mode: String amulets' }]
+            ]);
         } else {
             const pack = this.pack();
             p.statGrid([

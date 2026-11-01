@@ -254,7 +254,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'JiveCrafting',
-    description: 'Makes one gold jewel picked from the dropdown at the Al Kharid furnace: banks for the mould, the gold bars and the gems, uses a bar on the furnace, clicks the biggest Make button that fits the load and walks back with it. Stops honestly when the bank runs out of any of the three.',
+    description: 'Crafts gold jewellery at the Al Kharid furnace, or strings unstrung amulets with balls of wool at the nearest bank. Banks finished items and stops when supplies run out.',
     category: 'Crafting',
     tags: ['crafting', 'jewellery', 'al kharid', 'banking', 'afk'],
     settingsSchema: JIVECRAFTING_SETTINGS,
