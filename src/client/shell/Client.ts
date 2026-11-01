@@ -8109,6 +8109,7 @@ export class Client extends GameShell {
                 }
             } else if (seqId === -1 || player.primaryAnim === -1 || SeqType.list[seqId].priority >= SeqType.list[player.primaryAnim].priority) {
                 player.primaryAnim = seqId;
+                if (seqId !== -1) player.primaryAnimSerial++;
                 player.primaryAnimFrame = 0;
                 player.primaryAnimCycle = 0;
                 player.primaryAnimDelay = delay;
