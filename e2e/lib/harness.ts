@@ -162,21 +162,30 @@ export function parseArgs(argv: string[], defaults?: { base?: string; minutes?: 
  *  Why: bot.html scales the 765×503 game stage to fill the page, so forcing `{ width: 1500, height: 1000 }` blows the client up next to the smaller harnesses, omit `setViewportSize`/`viewport` or pass `HARNESS_VIEWPORT`. */
 export const HARNESS_VIEWPORT = { width: 1280, height: 720 } as const;
 
-export async function launchBrowser(opts?: { swiftshader?: boolean }): Promise<Browser> {
+export async function launchBrowser(opts?: { swiftshader?: boolean; executablePath?: string }): Promise<Browser> {
     // HEADED=1 opens a visible window (slowed down) so a human can watch/diagnose.
     const headed = !!process.env.HEADED;
     const slowMo = headed ? Number(process.env.SLOWMO ?? 200) : 0;
+    const executablePath = opts?.executablePath;
     if (opts?.swiftshader) {
         // software WebGL so the scene renders headless (no window, no GPU)
         const mac = process.platform === 'darwin';
         return chromium.launch({
-            ...(mac ? { executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' } : { channel: 'chrome' }),
+            ...(executablePath
+                ? { executablePath }
+                : mac
+                    ? { executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' }
+                    : { channel: 'chrome' }),
             headless: !headed,
             slowMo,
             args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox']
         });
     }
-    return chromium.launch({ channel: 'chrome', headless: !headed, slowMo });
+    return chromium.launch({
+        ...(executablePath ? { executablePath } : { channel: 'chrome' }),
+        headless: !headed,
+        slowMo
+    });
 }
 
 /** Cold Playwright profile often spends minutes downloading jag/ondemand assets. */
