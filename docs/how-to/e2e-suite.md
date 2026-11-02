@@ -144,4 +144,5 @@ choose the JSON and screenshot directory. The default is
 ## See also
 
 - [The live-harness ABI](write-a-harness.md)
+- [FireGiant last food](firegiant-last-food.md)
 - [Test suites](../reference/test-suites.md)
