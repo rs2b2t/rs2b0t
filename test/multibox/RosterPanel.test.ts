@@ -20,13 +20,19 @@ function fixture(worldRouting = true, edit: (profile: RosterProfile) => void = (
     writeProfileScript('bob', 'Fisher');
     const client: RosterClient = {
         scripts: () => ['Miner', 'Fisher'], selectedScript: () => 'Miner', readSettings: () => readScriptSettings('alice', 'Miner'),
-        assignScript: () => {}, copySettings: () => {}, startScript: () => {}, stopScript: () => {}, travelTo: async () => {}, editSettings: () => {}
+        assignScript: script => writeProfileScript('alice', script), copySettings: (script, values) => replaceScriptSettings('alice', script, values),
+        configureScript: async (script, values, start) => {
+            profiles[0].slot!.scriptState = 'stopped';
+            if (values) replaceScriptSettings('alice', script, values);
+            if (!values || start) writeProfileScript('alice', script);
+            if (start) profiles[0].slot!.scriptState = 'running';
+        }, startScript: () => {}, stopScript: () => {}, travelTo: async () => {}, editSettings: async () => {}
     };
     const actions = new RosterActions({ profiles: () => profiles, client: p => p.slot ? client : null, setWorld: async () => true });
     const panel = new RosterPanel(actions, { tabs: () => ['Main', 'Miners'], activeTab: () => 'Miners', worldRouting, edit });
     document.body.append(panel.el);
     panel.open();
-    return { panel, actions, profiles };
+    return { panel, actions, profiles, client };
 }
 
 function get<T extends HTMLElement>(selector: string): T {
@@ -100,7 +106,13 @@ test('busy actions disable mutation controls and retain each result on refresh',
     const { panel, actions, profiles } = fixture();
     let finish!: () => void;
     const waiting = new Promise<void>(resolve => { finish = resolve; });
-    const client: RosterClient = { scripts: () => ['Miner'], selectedScript: () => 'Miner', readSettings: () => ({}), assignScript: () => {}, copySettings: () => {}, startScript: () => {}, stopScript: () => {}, travelTo: () => waiting, editSettings: () => {} };
+    const client: RosterClient = { scripts: () => ['Miner'], selectedScript: () => 'Miner', readSettings: () => ({}), assignScript: script => writeProfileScript('alice', script), copySettings: (script, values) => replaceScriptSettings('alice', script, values),
+        configureScript: async (script, values, start) => {
+            profiles[0].slot!.scriptState = 'stopped';
+            if (values) replaceScriptSettings('alice', script, values);
+            if (!values || start) writeProfileScript('alice', script);
+            if (start) profiles[0].slot!.scriptState = 'running';
+        }, startScript: () => {}, stopScript: () => {}, travelTo: () => waiting, editSettings: async () => {} };
     const running = new RosterActions({ profiles: () => profiles, client: () => client, setWorld: async () => true });
     panel.close(); panel.el.remove();
     const busyPanel = new RosterPanel(running, { tabs: () => ['Main', 'Miners'], activeTab: () => 'Miners', worldRouting: true, edit: () => {} });
@@ -150,16 +162,14 @@ test('local engine omits world action and unavailable scripts explain how to pop
     expect(get<HTMLButtonElement>('#mbx-roster-apply').disabled).toBe(true);
 });
 
-test('edit rejects unloaded and active profiles and reports callback failures visibly', async () => {
+test('edit rejects unloaded profiles and allows active profiles through the editor stop flow', async () => {
     let edited = '';
-    const { profiles, panel } = fixture(true, profile => { edited = profile.username; throw new Error('Editor unavailable'); });
+    const { panel } = fixture(true, profile => { edited = profile.username; throw new Error('Editor unavailable'); });
     get('[data-profile="bob"] [data-edit]').click();
     expect(panel.el.hidden).toBe(false);
     expect(get('[data-profile="bob"]').textContent).toContain('Load');
     get('[data-profile="alice"] [data-edit]').click();
-    expect(edited).toBe('');
-    profiles[0].slot!.scriptState = 'stopped'; panel.refresh();
-    get('[data-profile="alice"] [data-edit]').click(); await settle();
+    await settle();
     expect(edited).toBe('alice');
     expect(panel.el.hidden).toBe(false);
     expect(get('#mbx-roster-message').textContent).toContain('Editor unavailable');
@@ -243,4 +253,36 @@ test('editor failures from another realm preserve the failure message', async ()
     get('[data-profile="alice"] [data-edit]').click(); await settle();
     expect(panel.el.hidden).toBe(false);
     expect(get('#mbx-roster-message').textContent).toContain('Frame editor unavailable');
+});
+
+
+test('assign and start stays in the assignment pane and selection alone does not start', async () => {
+    const { profiles } = fixture();
+    profiles[0].slot!.scriptState = 'stopped';
+    select('alice');
+    change('#mbx-roster-script', 'Fisher');
+    expect(profiles[0].slot!.scriptState).toBe('stopped');
+    expect(get<HTMLButtonElement>('#mbx-roster-apply-start').hidden).toBe(false);
+    get('#mbx-roster-apply-start').click();
+    await settle();
+    expect(localStorage.getItem('rs2b0t:alice:selectedScript')).toBe('Fisher');
+    expect(profiles[0].slot!.scriptState).toBe('running');
+    expect(get('[data-action="assign"]').getAttribute('aria-pressed')).toBe('true');
+});
+
+test('copy and start uses the selected source and script from the copy pane', async () => {
+    const { panel, profiles } = fixture();
+    profiles.push({ username: 'source', tab: 'Miners', world: 1 });
+    replaceScriptSettings('source', 'Fisher', { spot: 'Catherby' });
+    panel.refresh();
+    select('alice');
+    get('[data-action="copy"]').click();
+    change('#mbx-roster-script', 'Fisher');
+    change('#mbx-roster-source', 'source');
+    get('#mbx-roster-apply-start').click();
+    await settle();
+    expect(readScriptSettings('alice', 'Fisher')).toEqual({ spot: 'Catherby' });
+    expect(localStorage.getItem('rs2b0t:alice:selectedScript')).toBe('Fisher');
+    expect(profiles[0].slot!.scriptState).toBe('running');
+    expect(get('[data-action="copy"]').getAttribute('aria-pressed')).toBe('true');
 });

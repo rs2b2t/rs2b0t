@@ -54,7 +54,7 @@ describe('MultiBoxController', () => {
         const bridge: RosterClient = {
             scripts: () => [], selectedScript: () => '', readSettings: () => ({}),
             assignScript() {}, copySettings() {}, startScript() {}, stopScript() {},
-            travelTo: async () => {}, editSettings() {}
+            configureScript: async () => {}, travelTo: async () => {}, async editSettings() {}
         };
         expect(c.rosterClient(999)).toBeNull();
         expect(c.rosterClient(slot.id)).toBeNull();

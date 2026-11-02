@@ -133,6 +133,43 @@ test('a mage retry rounds newly available runes to the same positive complete ca
     expect(refreshed.needs).toContainEqual({ item: 'Fire rune', count: 128, carry: 128, minimum: 4 });
 });
 
+for (const [magic, spell] of [[17, 'Wind Bolt'], [23, 'Water Bolt'], [29, 'Earth Bolt'], [35, 'Fire Bolt']] as const) test(`a queued Strike activity upgrades to ${spell} after banking Paladin runes`, () => {
+    const s = snapshot({ coins: 200, 'staff of air': 1, 'mind rune': 200, 'fire rune': 800 }, { magic: 13, thieving: 70 });
+    const plan = method(s, 'magic');
+    expect(plan.settings.spell).toBe('Fire Strike');
+    plan.output = { item: 'Cow hide', count: 26 };
+    s.levels.magic = magic;
+    Object.assign(s.stock, { 'chaos rune': 200, 'water rune': 600, 'earth rune': 600 });
+    const refreshed = refreshConsumables(s, plan);
+    expect(refreshed.settings.spell).toBe(spell);
+    expect(refreshed.settings.runesWithdraw).toBe(150);
+    expect(refreshed.needs).toContainEqual({ item: 'Chaos rune', count: 200, carry: 150, minimum: 1 });
+    expect(refreshed.needs.some(need => need.item === 'Mind rune')).toBe(false);
+    expect(refreshed.needs.filter(need => !need.minimum)).toEqual(plan.needs.filter(need => !need.minimum));
+    expect(refreshed.id).toBe(plan.id);
+    expect(refreshed.travel).toEqual(plan.travel);
+    expect(refreshed.output).toEqual(plan.output);
+    expect(plan.settings.spell).toBe('Fire Strike');
+});
+
+test('a Strike retry uses owned chaos runes even when another Paladin trip is unaffordable', () => {
+    const s = snapshot({ coins: 0, 'staff of air': 1, 'mind rune': 40 }, { magic: 35, thieving: 70 });
+    const plan = method(s, 'magic');
+    s.stock['chaos rune'] = 8;
+    s.unavailableItems = ['chaos rune'];
+    const refreshed = refreshConsumables(s, plan);
+    expect(refreshed.settings.spell).toBe('Wind Bolt');
+    expect(refreshed.settings.runesWithdraw).toBe(8);
+    expect(resolveActivity(s, refreshed, emptyMemory(), () => 0)).toMatchObject({ kind: 'activity', plan: { script: 'AutoFighter' } });
+});
+
+test('banked chaos runes do not upgrade a mage below the Bolt level requirement', () => {
+    const s = snapshot({ coins: 0, 'staff of air': 1, 'mind rune': 40 }, { magic: 16 });
+    const plan = method(s, 'magic');
+    s.stock['chaos rune'] = 200;
+    expect(refreshConsumables(s, plan).settings.spell).toBe('Wind Strike');
+});
+
 test('an exhausted seven-feather retry restores its 200-feather target and remains blocked when unavailable', () => {
     const plan = method(snapshot({ 'fly fishing rod': 1, feather: 7, coins: 0 }, { fishing: 20 }), 'fishing');
     const s = snapshot({ 'fly fishing rod': 1, coins: 500000 }, { fishing: 20 });

@@ -281,7 +281,7 @@ test('supply shopping walks avoid White Wolf Mountain when returning east', asyn
     try {
         expect(await bot['supplies'].walk(destination)).toBe(true);
         expect(walk.mock.calls[0][0]).toEqual(destination);
-        expect(walk.mock.calls[0][1]).toMatchObject({ avoidZones: ['white-wolf-mountain'] });
+        expect(walk.mock.calls[0][1]).toMatchObject({ avoidZones: expect.arrayContaining(['white-wolf-mountain']) });
     } finally { walk.mockRestore(); }
 });
 
@@ -319,7 +319,7 @@ test.each([0, 200])('parent travel avoids White Wolf Mountain with fare %i and r
         }
         await bot['selectAndStart']();
         expect(walk.mock.calls[0][0]).toEqual(travel);
-        expect(walk.mock.calls[0][1]).toMatchObject({ avoidZones: ['white-wolf-mountain'] });
+        expect(walk.mock.calls[0][1]).toMatchObject({ avoidZones: expect.arrayContaining(['white-wolf-mountain']) });
         expect(start).toHaveBeenCalledTimes(1);
         expect(String(bot['phase'])).toBe('train');
     } finally { bot.onStop(); for (const patch of patches) patch.mockRestore(); }

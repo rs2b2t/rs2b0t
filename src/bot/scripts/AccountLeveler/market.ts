@@ -8,6 +8,7 @@ import { Players } from '../../api/players/Players.js';
 import { namesMatch } from '../../api/trade/PartnerTrade.js';
 import { Trade, type TradeItem } from '../../api/trade/Trade.js';
 import { Traversal } from '../../api/walking/Traversal.js';
+import { levelerTravelZones } from './travel.js';
 import Tile from '../../geometry/Tile.js';
 
 const MAKER = 'seers market';
@@ -76,7 +77,7 @@ export class SeersAxeBuyer {
         if (before > 0 || budget < 1) return false;
         this.attempted = true;
         request.log?.(`Trying ${MAKER} for one ${request.item}, up to ${budget} coins`);
-        if (!(await Traversal.walkResilient(STAND, { radius: 3, attempts: 1, timeoutMs: 60_000, log: request.log })) || !safe()) return false;
+        if (!(await Traversal.walkResilient(STAND, { radius: 3, attempts: 1, timeoutMs: 60_000, avoidZones: levelerTravelZones(), log: request.log })) || !safe()) return false;
         const here = Game.tile();
         if (here === null || STAND.distanceTo(here) > 5 || !Players.query().name(MAKER).within(5).first()) return false;
         const price = await quote(request.item, budget);

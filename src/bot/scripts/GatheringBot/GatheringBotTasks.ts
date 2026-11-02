@@ -972,6 +972,8 @@ export class BankCatch implements Task {
     }
 
     async execute(): Promise<void> {
+        // Stop the 3-tick batch before walking: a fletch started off-spot completes and eats the carrier log.
+        this.bot.setFourTickTarget(null);
         // Prefer cook-result count when banking after cook-then-bank (products() is raw-only).
         const had = Math.max(
             this.bot.products().length,
@@ -1902,6 +1904,10 @@ export class RestockFishingGear implements Task {
         if (!method) {
             return;
         }
+        this.bot.setFourTickTarget(null);
+        // 3-tick fly treats the knife + carrier log as fishing gear; the bank path and
+        // deposit-except-gear keep them alongside the rod and feathers.
+        const gear = { gear: this.bot.fishingGearPieces() };
         const missing = this.bot.missingGearNames();
         const power = this.bot.isPowerMode();
         this.bot.setStatus(`restock: ${missing.join(' + ') || this.bot.gearLabel()}`);
@@ -1911,12 +1917,40 @@ export class RestockFishingGear implements Task {
                 : `restock: missing ${missing.join(', ') || this.bot.gearLabel()}`
         );
         const log = (m: string) => this.bot.log(`  ${m}`);
+        const kitFallback = async (): Promise<boolean> => {
+            if (!this.bot.threeTickFlyMode() || this.bot.hasGear()) {
+                return false;
+            }
+            if (Bank.isOpen()) {
+                await this.bot.closeScriptBank(log, { allowForgetful: false });
+            }
+            this.bot.setStatus('kit: finding a knife, axe and carrier log');
+            if (!(await this.bot.acquireThreeTickKit(log))) {
+                return false;
+            }
+            this.bot.setStatus('restock: returning to camp');
+            await this.bot.walkHomeIfNeeded(log);
+            return true;
+        };
+
+        // 3-tick: chop the carrier log before the bank trip when a tree and axe are at hand.
+        if (this.bot.threeTickFlyMode() && !this.bot.hasCarrierLog() && this.bot.hasAxe()) {
+            this.bot.setStatus('kit: chopping a carrier log');
+            if (await this.bot.chopThreeTickLog(log)) {
+                this.bot.log('restock: carrier log chopped before banking');
+                if (this.bot.hasGear()) {
+                    this.bot.setStatus('restock: returning to camp');
+                    await this.bot.walkHomeIfNeeded(log);
+                    return;
+                }
+            }
+        }
 
         // Why: when coins already cover the shop cart, the bank is skipped and the walk goes straight to Gerrant or Harry.
         // Why: held GP must not force Edgeville from Draynor to glance at an empty booth, though prefer-nearby Banking still helps when the bank is needed.
         if (this.bot.toolAcquireEnabled() && this.bot.acquireReady() && missing.length > 0) {
             const preCart = fishingGearShopCart(
-                method,
+                gear,
                 this.bot.acquireWorldWithBank(),
                 this.bot.fishingAcquireOpts()
             );
@@ -1957,17 +1991,18 @@ export class RestockFishingGear implements Task {
         await Execution.delayTicks(1);
 
         const plan = fishingRestockPlan(
-            method,
+            gear,
             name => Inventory.count(name),
             name => Bank.count(name)
         );
         if (plan.length === 0) {
             const still = this.bot.missingGearNames();
             if (still.length > 0) {
+                if (await kitFallback()) return;
                 if (this.bot.toolAcquireEnabled() && this.bot.acquireReady()) {
                     // Same-vendor cart (rod + feathers at Gerrant), one bank fund + one shop.
                     const cart = fishingGearShopCart(
-                        method,
+                        gear,
                         this.bot.acquireWorldWithBank(),
                         this.bot.fishingAcquireOpts()
                     );
@@ -2040,9 +2075,10 @@ export class RestockFishingGear implements Task {
 
         if (!this.bot.hasGear()) {
             const still = this.bot.missingGearNames();
+            if (await kitFallback()) return;
             if (this.bot.toolAcquireEnabled() && this.bot.acquireReady()) {
                 const cart = fishingGearShopCart(
-                    method,
+                    gear,
                     this.bot.acquireWorldWithBank(),
                     this.bot.fishingAcquireOpts()
                 );
@@ -2678,6 +2714,11 @@ export class Gather implements Task {
         }
         this.bot.noteGatherRoll();
 
+        if (profile.threeTickFlyCycle) {
+            // The event-driven TickCycle controller sends the batch on the fresh roll edge.
+            return true;
+        }
+
         if (profile.useKnifeDelay) {
             if (!this.bot.hasKnifeDelayKit() && !ChatDialog.isMakeMenu()) {
                 this.bot.log('tick: knife delay needs Knife + 1 fletchable log');
@@ -2874,12 +2915,15 @@ export class Gather implements Task {
                 return;
             }
             this.activeFishIndex = index;
+            this.bot.setFourTickTarget(index);
             if (Inventory.used() > before) {
                 if (await this.afterRollTickManip(() => this.reclickFish(index, startTile))) {
                     return;
                 }
             }
         }
+        // Bank trips clear the controller target; re-arm it even when the spot is already active.
+        this.bot.setFourTickTarget(index);
 
         for (let guard = 0; guard < 200; guard++) {
             if (this.fishingBroken(index, startTile)) {

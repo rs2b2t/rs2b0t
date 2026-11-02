@@ -51,6 +51,39 @@ export interface SpecialCrossing {
 }
 
 export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
+    ...[0, 1].map(level => ({
+        x: 3021,
+        z: 3510,
+        level,
+        locName: 'Ladder',
+        action: level === 0 ? 'Climb-up' : 'Climb-down',
+        exactApproach: true,
+        toTile: { x: 3022, z: 3510, level: 1 - level },
+        arrivalRadius: 0,
+        label: 'Black Knight fortress grill ladder'
+    })),
+    {
+        x: 3020,
+        z: 3515,
+        level: 0,
+        locName: 'Door',
+        action: 'Open',
+        exactApproach: true,
+        dialogue: { choose: ["I don't care. I'm going in anyway."] },
+        label: 'Black Knight fortress banquet hall'
+    },
+    {
+        x: 2941,
+        z: 3248,
+        level: 0,
+        locName: 'Door',
+        action: 'Open',
+        useItem: { id: 1542, name: 'Maze key' },
+        exactApproach: true,
+        toTile: { x: 2941, z: 3248, level: 0 },
+        arrivalRadius: 0,
+        label: "Melzar's Maze front-door exit"
+    },
     { x: 3268, z: 3227, level: 0, locName: 'Gate', action: 'Open', requires: { item: 'Coins', count: 10 }, questWaivesItems: 'Prince Ali Rescue', dialogue: { choose: ['Yes, ok.'] }, label: 'Al Kharid toll gate' },
     { x: 3268, z: 3228, level: 0, locName: 'Gate', action: 'Open', requires: { item: 'Coins', count: 10 }, questWaivesItems: 'Prince Ali Rescue', dialogue: { choose: ['Yes, ok.'] }, label: 'Al Kharid toll gate' },
 

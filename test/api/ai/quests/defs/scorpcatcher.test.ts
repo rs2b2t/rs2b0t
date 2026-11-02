@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { BARCRAWL_GP } from '#/bot/api/ai/quests/barcrawl/BarcrawlLogic.js';
+import { BARCRAWL_CARD, BARCRAWL_GP } from '#/bot/api/ai/quests/barcrawl/BarcrawlLogic.js';
 import {
     ANTIPOISON_DOSES, ANTIPOISON_GP, CAGE_ID, SC_STAGE
 } from '#/bot/api/ai/quests/defs/scorpcatcher/areas.js';
@@ -91,6 +91,23 @@ describe('Scorpion Catcher decide', () => {
     test('an empty cage after the first hint catches the outpost scorpion first', () => {
         const step = decide(snap({ invIds: [CAGE_ID.EMPTY] }));
         expect(step.kind).toBe('custom');
+        expect(step.kind === 'custom' && step.name).toContain('Barbarian Outpost');
+    });
+
+    test('withdraws a banked barcrawl card before asking the outpost guard', () => {
+        const snapshot = snap({ invIds: [CAGE_ID.EMPTY] });
+        snapshot.bank = new Map([[BARCRAWL_CARD.toLowerCase(), 1]]);
+        expect(decide(snapshot)).toEqual({ kind: 'withdraw', items: [{ name: BARCRAWL_CARD, qty: 1 }] });
+    });
+
+    test('checks the bank before asking for a replacement barcrawl card', () => {
+        expect(decide(snap({ invIds: [CAGE_ID.EMPTY], bankKnown: false })).kind).toBe('scanBank');
+    });
+
+    test('continues the outpost leg with a barcrawl card in the pack', () => {
+        const snapshot = snap({ invIds: [CAGE_ID.EMPTY], bankKnown: false });
+        snapshot.inv = new Map([[BARCRAWL_CARD.toLowerCase(), 1]]);
+        const step = decide(snapshot);
         expect(step.kind === 'custom' && step.name).toContain('Barbarian Outpost');
     });
 

@@ -3,7 +3,7 @@ import { DirectNavigator } from '../../../../../event/webwalk/DirectNavigator.js
 import { Reachability } from '../../../../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../../../../geometry/Tile.js';
 import { Execution } from '../../../../execution/Execution.js';
-import { Game } from '../../../../game/Game.js';
+import { reader } from '../../../../../adapter/ClientAdapter.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Modals } from '../../../../ui/widgets/Modals.js';
 import { Npcs, type Npc } from '../../../../npcs/Npcs.js';
@@ -15,6 +15,7 @@ import { HERD_DIRS, herdCost, herdDirections, herdPlan, type HerdDir, type HerdG
 
 /** Pushes one leg may spend before it hands the budget back to the engine. */
 const PROD_BUDGET = 260;
+const PROD_ANIM = 799;
 
 /** How often the leg reports where the sheep has got to. */
 const PROGRESS_EVERY = 25;
@@ -51,13 +52,13 @@ function copies(n: SheepIndex): Npc[] {
     return Npcs.query().name(sheepName(n)).results();
 }
 
-// Why: 3 copies of every sheep share one quest bit and name and the herded one stays within a tile or two of where it was last seen, so lock on its last tile; client slots churn on scene rebuilds.
-
-/** The copy still standing where the herd left it. */
-function nearLast(n: SheepIndex, last: { x: number; z: number }): Npc | null {
+function nearLast(n: SheepIndex, last: { x: number; z: number }, index: number): Npc | null {
+    const nearby = copies(n);
+    const tracked = nearby.find(npc => npc.index === index);
+    if (tracked) return tracked;
     let best: { npc: Npc; d: number } | null = null;
-    for (const npc of copies(n)) {
-        const t = npc.tile();
+    for (const npc of nearby) {
+        const t = npc.networkTile();
         const d = Math.max(Math.abs(t.x - last.x), Math.abs(t.z - last.z));
         if (d <= LOCK_RADIUS && (best === null || d < best.d)) {
             best = { npc, d };
@@ -67,7 +68,7 @@ function nearLast(n: SheepIndex, last: { x: number; z: number }): Npc | null {
 }
 
 function routeCost(npc: Npc): number | undefined {
-    const t = npc.tile();
+    const t = npc.networkTile();
     return herdCost(herdPlan(SCENE_GRID, t, GATE_ZONE), t.x, t.z);
 }
 
@@ -89,7 +90,7 @@ function pickSheep(n: SheepIndex): Npc | null {
 }
 
 export function sheepInPen(n: SheepIndex): Npc | null {
-    return copies(n).find(npc => inBox(PEN, npc.tile())) ?? null;
+    return copies(n).find(npc => inBox(PEN, npc.networkTile())) ?? null;
 }
 
 // Why: an npc only enters the client's list within about 15 tiles, so "not in the scene" says where you're standing.
@@ -153,15 +154,16 @@ function behindSheep(me: { x: number; z: number; level: number } | null, sheep: 
 async function standOpposite(sheep: Tile, dir: HerdDir, log: (m: string) => void): Promise<boolean> {
     const stand = new Tile(sheep.x - dir.dx, sheep.z - dir.dz, 0);
     const on = (): boolean => {
-        const t = Game.tile();
+        const t = reader.serverTile();
         return t !== null && t.level === 0 && t.x === stand.x && t.z === stand.z;
     };
     if (on()) {
         return true;
     }
-    const here = Game.tile();
+    const here = reader.serverTile();
     if (here && here.level === 0 && Math.max(Math.abs(here.x - stand.x), Math.abs(here.z - stand.z)) <= FOLLOW_RADIUS) {
-        await DirectNavigator.walkTo(stand, 0, 8000);
+        DirectNavigator.walk(stand);
+        await Execution.delayUntil(on, 8000);
     } else {
         await Traversal.walkResilient(stand, { radius: 0, attempts: 1, timeoutMs: 20_000, log });
     }
@@ -176,7 +178,7 @@ async function standOpposite(sheep: Tile, dir: HerdDir, log: (m: string) => void
 
 /** Every tile a prod can be issued from, for a sheep already standing in the gate zone. */
 function anyStand(tile: Tile): HerdDir[] {
-    const me = Game.tile();
+    const me = reader.serverTile();
     return HERD_DIRS
         .filter(dir => SCENE_GRID.walkable(tile.x - dir.dx, tile.z - dir.dz)
             && SCENE_GRID.canStep(tile.x - dir.dx, tile.z - dir.dz, dir.dx, dir.dz))
@@ -193,20 +195,27 @@ function standCost(tile: Tile, dir: HerdDir, me: { x: number; z: number } | null
 type Push = 'wanted' | 'elsewhere' | 'refused';
 
 async function pushOnce(n: SheepIndex, npc: Npc, dir: HerdDir, log: (m: string) => void): Promise<Push> {
-    const before = npc.tile();
+    const before = npc.networkTile();
+    if (reader.selfAnim() === PROD_ANIM) {
+        if (!(await Execution.delayUntil(() => reader.selfAnim() !== PROD_ANIM, 2000))) return 'refused';
+        const current = nearLast(n, before, npc.index)?.networkTile();
+        if (!current || current.x !== before.x || current.z !== before.z) return 'elsewhere';
+    }
     if (!(await npc.interact('Prod'))) {
         log(`sheepherder: no Prod op on ${sheepName(n)}`);
         return 'refused';
     }
+    const prodded = await Execution.delayUntil(() => reader.selfAnim() === PROD_ANIM || Modals.isOpen() || ChatDialog.isOpen(), 6000);
+    if (await clearRefusal() || !prodded) return 'refused';
     const moved = await Execution.delayUntil(() => {
-        const now = nearLast(n, before);
-        return now === null || now.tile().x !== before.x || now.tile().z !== before.z;
+        const now = nearLast(n, before, npc.index);
+        return now === null || now.networkTile().x !== before.x || now.networkTile().z !== before.z;
     }, 6000);
     await clearRefusal();
     if (!moved) {
         return 'refused';
     }
-    const after = nearLast(n, before)?.tile();
+    const after = nearLast(n, before, npc.index)?.networkTile();
     const wanted = after !== undefined && after.x === before.x + dir.dx && after.z === before.z + dir.dz;
     return wanted ? 'wanted' : 'elsewhere';
 }
@@ -220,27 +229,30 @@ export async function herdToPen(n: SheepIndex, log: (m: string) => void): Promis
     if (!first) {
         return false;
     }
-    if (!(await Traversal.walkResilient(first.tile(), { radius: APPROACH_RADIUS, attempts: 3, timeoutMs: 180_000, log }))) {
+    if (!(await Traversal.walkResilient(first.networkTile(), { radius: APPROACH_RADIUS, attempts: 3, timeoutMs: 180_000, log }))) {
         return false;
     }
-    let last = (pickSheep(n) ?? first).tile();
+    const selected = pickSheep(n) ?? first;
+    let last = selected.networkTile();
+    let index = selected.index;
     let stuck = 0;
     let pinned = 0;
     let strayed = 0;
     for (let push = 0; push < PROD_BUDGET; push++) {
-        const sheep = nearLast(n, last) ?? pickSheep(n);
+        const sheep = nearLast(n, last, index) ?? pickSheep(n);
         if (!sheep) {
             log(`sheepherder: lost ${sheepName(n)} mid-herd`);
             return false;
         }
-        const tile = sheep.tile();
+        const tile = sheep.networkTile();
+        index = sheep.index;
         last = tile;
         if (inBox(PEN, tile)) {
             log(`sheepherder: ${sheepName(n)} is in the enclosure after ${push} push(es)`);
             return true;
         }
         if (push > 0 && push % PROGRESS_EVERY === 0) {
-            const me = Game.tile();
+            const me = reader.serverTile();
             log(`sheepherder: ${sheepName(n)} at (${tile.x},${tile.z}) after ${push} push(es), herder at (${me?.x},${me?.z})`);
         }
         const dirs = inBox(GATE_ZONE, tile) ? anyStand(tile) : herdDirections(SCENE_GRID, tile, GATE_ZONE);
@@ -259,17 +271,23 @@ export async function herdToPen(n: SheepIndex, log: (m: string) => void): Promis
             return false;
         }
         // Why: a refused push falls through to the next-best direction.
-        const dir = dirs[Math.min(stuck, dirs.length - 1)];
-        const ready = strayed < STRAY_LIMIT && behindSheep(Game.tile(), tile, dir);
+        let dir = dirs[Math.min(stuck, dirs.length - 1)];
+        const ready = strayed < STRAY_LIMIT && behindSheep(reader.serverTile(), tile, dir);
         if (!ready && !(await standOpposite(tile, dir, log))) {
             stuck++;
             continue;
         }
-        const now = nearLast(n, tile);
-        if (!now || now.tile().x !== tile.x || now.tile().z !== tile.z) {
-            // Why: the sheep wandered while the walk landed, so the stand behind it is the wrong tile now.
-            await Execution.delayTicks(1);
-            continue;
+        const now = nearLast(n, tile, index);
+        if (!now) continue;
+        const current = now.networkTile();
+        if (current.x !== tile.x || current.z !== tile.z) {
+            const me = reader.serverTile();
+            if (!me || me.level !== 0) continue;
+            const catchDir = { dx: current.x - me.x, dz: current.z - me.z };
+            if (Math.abs(catchDir.dx) + Math.abs(catchDir.dz) !== 1) continue;
+            const legal = inBox(GATE_ZONE, current) ? anyStand(current) : herdDirections(SCENE_GRID, current, GATE_ZONE);
+            if (!legal.some(d => d.dx === catchDir.dx && d.dz === catchDir.dz)) continue;
+            dir = catchDir;
         }
         const outcome = await pushOnce(n, now, dir, log);
         // Why: an off-axis landing is usually the sheep's own wander step, so the count is a streak: 6 in a row means the server is picking its own approach side, and 1 good push clears it.

@@ -52,6 +52,15 @@ function label(step: QuestStep): string {
 }
 
 describe('Temple of Ikov decide', () => {
+    test('a resumed gate unlock removes worn armour before attempting the lava bridge', () => {
+        const step = decide(snap(IKOV_STAGE.PULLED_LEVER, {
+            bank: KIT,
+            inv: [[IKOV_OBJ.PENDANT_LUCIEN, 1]],
+            worn: ['dragonhide body', 'boots of lightness']
+        }));
+        expect(label(step)).toBe('custom:remove equipment for the lava bridge');
+    });
+
     test('an unloaded journal waits rather than restarting the quest', () => {
         const s = snap(IKOV_STAGE.NOT_STARTED);
         s.journal = 'unknown';

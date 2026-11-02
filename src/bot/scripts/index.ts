@@ -255,7 +255,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'JiveCrafting',
-    description: 'Makes one gold jewel picked from the dropdown at the Al Kharid furnace: banks for the mould, the gold bars and the gems, uses a bar on the furnace, clicks the biggest Make button that fits the load and walks back with it. Stops honestly when the bank runs out of any of the three.',
+    description: 'Crafts gold jewellery at the Al Kharid furnace, or strings unstrung amulets with balls of wool at the nearest bank. Banks finished items and stops when supplies run out.',
     category: 'Crafting',
     tags: ['crafting', 'jewellery', 'al kharid', 'banking', 'afk'],
     settingsSchema: JIVECRAFTING_SETTINGS,
@@ -457,6 +457,13 @@ ScriptRegistry.register({
             label: 'Tick manip',
             group: 'Tick manip',
             help: TICK_MANIP_UNSHIPPED_HELP
+        },
+        threeTickFly: {
+            type: 'boolean',
+            default: false,
+            label: '3-tick fly fishing (knife + shortbow)',
+            group: 'Tick manip',
+            help: 'Roll-anchored fly fishing: knife the log on the roll, Make-1 shortbow + Lure on the next tick, then roll again 3 ticks after the last roll. Needs a Knife and one Logs; power/drop mode is allowed.'
         },
         guildFeatherMinutes: {
             type: 'number',
@@ -695,7 +702,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'FlaxSpinner',
-    description: 'Seers flax spinner — withdraw flax, climb to the spinning wheel, Spin-X into bow string, bank, repeat',
+    description: 'Seers spinner: withdraw flax for bow strings or wool for balls of wool, spin upstairs, bank the output, and repeat',
     category: 'Crafting',
     tags: ['seers', 'crafting', 'banking', 'afk'],
     settingsSchema: FLAXSPINNER_SETTINGS,

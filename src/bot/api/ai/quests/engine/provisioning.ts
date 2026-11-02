@@ -12,12 +12,13 @@ interface ProvisionPlan {
 export function planProvisioning(
     items: QuestItem[],
     inv: Map<string, number>,
-    bank: Map<string, number>
+    bank: Map<string, number>,
+    worn: ReadonlyMap<string, number> = new Map()
 ): ProvisionPlan {
     const plan: ProvisionPlan = { withdraw: [], gather: [], blocked: [], satisfied: true };
     for (const item of items) {
         const key = item.name.toLowerCase();
-        const have = inv.get(key) ?? 0;
+        const have = (inv.get(key) ?? 0) + (worn.get(key) ?? 0);
         if (have >= item.qty) {
             continue;
         }

@@ -12,8 +12,8 @@ export interface RosterProfile {
 }
 
 export type RosterCommand =
-    | { kind: 'assign'; script: string }
-    | { kind: 'copy'; script: string; source: string }
+    | { kind: 'assign'; script: string; start?: boolean }
+    | { kind: 'copy'; script: string; source: string; start?: boolean }
     | { kind: 'travel'; destination: string }
     | { kind: 'world'; world: WorldNumber }
     | { kind: 'start' | 'stop' };
@@ -97,7 +97,21 @@ export class RosterActions {
         }
     }
 
-    private travel(profile: RosterProfile, client: RosterClient, destination: string): Promise<void> {
+    async edit(profile: RosterProfile): Promise<void> {
+        if (this.running) throw new Error('A roster action is already running.');
+        const current = this.profiles().find(p => p.username === profile.username);
+        const client = current?.slot ? this.hooks.client(current) : null;
+        if (!current?.slot?.ready || !client) throw new Error('Load this profile and wait for its client before editing.');
+        if (current.slot.switchingWorld !== null) throw new Error('Wait for the world switch before editing.');
+        this.running = true;
+        try {
+            await this.withClient(current, client, () => client.editSettings());
+        } finally {
+            this.running = false;
+        }
+    }
+
+    private withClient(profile: RosterProfile, client: RosterClient, operation: () => Promise<void>): Promise<void> {
         return new Promise((resolve, reject) => {
             let settled = false;
             const finish = (success: boolean, error?: unknown): void => {
@@ -120,16 +134,16 @@ export class RosterActions {
             const check = (): boolean => {
                 let valid = false;
                 try { valid = current(); } catch { valid = false; }
-                if (!valid) cancel('Client was removed or replaced during travel.');
+                if (!valid) cancel('Client was removed or replaced during the action.');
                 return valid;
             };
             const deadline = Date.now() + 11_000;
             const watcher = setInterval(() => {
-                if (Date.now() >= deadline) cancel('Timed out waiting for travel.');
+                if (Date.now() >= deadline) cancel('Timed out waiting for the script action.');
                 else check();
             }, 100);
             try {
-                client.travelTo(destination).then(() => { if (!settled && check()) finish(true); }, error => finish(false, error));
+                operation().then(() => { if (!settled && check()) finish(true); }, error => finish(false, error));
             } catch (error) {
                 finish(false, error);
             }
@@ -150,20 +164,20 @@ export class RosterActions {
         const client = profile.slot ? this.hooks.client(profile) : null;
         if (profile.slot && (!profile.slot.ready || !client)) return skip('Client is loading. Try again when ready.');
         if (command.kind === 'assign' || command.kind === 'copy') {
-            if (profile.slot && active(profile.slot.scriptState)) return skip('Stop the script before changing its configuration.');
-            if (command.kind === 'assign') {
-                if (client) client.assignScript(command.script);
-                else writeProfileScript(username, command.script);
-                return done(`Selected ${command.script}.`);
+            if (client) {
+                await this.withClient(profile, client, () => client.configureScript(command.script, values ? { ...values } : null, !!command.start));
+            } else {
+                if (values) replaceScriptSettings(username, command.script, { ...values });
+                if (command.kind === 'assign' || command.start) writeProfileScript(username, command.script);
             }
-            if (client) client.copySettings(command.script, { ...values });
-            else replaceScriptSettings(username, command.script, { ...values });
-            return done(`Copied ${command.script} settings.`);
+            const message = command.kind === 'assign' ? `Selected ${command.script}.` : `Copied ${command.script} settings.`;
+            return done(command.start ? `${message} ${client ? 'Script started.' : 'Load this profile to start.'}` : message);
         }
+
         if (!client) return skip('Load this profile first.');
         if (command.kind === 'travel') {
             if (!profile.slot?.ingame) return skip('Log in before travelling.');
-            await this.travel(profile, client, command.destination);
+            await this.withClient(profile, client, () => client.travelTo(command.destination));
             return done(`WalkTo started: ${command.destination}.`);
         }
         if (command.kind === 'start') {

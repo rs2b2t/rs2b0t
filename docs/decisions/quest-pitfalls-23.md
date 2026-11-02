@@ -37,10 +37,11 @@ Sixteen, and the first nine are about moving an NPC the bot does not control.
   as it wandered on and off the clear network, and 250 pushes moved one sheep eleven tiles
   east and back. Both maps are read through one function that charges a flat 1000 for
   being off the clear network, which is monotone in both directions.
-- **The lock on which sheep is being herded is its last tile, not its client slot.** Three
-  copies of every sheep share one display name and one quest bit, and the slot churns when
-  the scene rebuilds, which sent a leg that had a sheep three tiles from the gate walking
-  fifteen tiles back to a fresh copy at the spawn.
+- **Track a sheep by its server NPC index while it remains visible.** Three copies share
+  one display name and one quest bit. Matching only the previous tile can switch to an
+  overlapping copy; use proximity only after the tracked index disappears. Plan from
+  server coordinates and wait for the cattleprod animation before accepting movement,
+  since natural wandering can precede a pending prod.
 - **A world-walk that has to finish on a baked door tile spends its budget on the door.**
   The stand for the last push north sits on the enclosure gate, and `walkResilient` spent
   its full sixty seconds there without moving. The follow is always inside the loaded
@@ -78,6 +79,16 @@ Sixteen, and the first nine are about moving an NPC the bot does not control.
   `getbit_range(%sheepherdervar, 0, 12)` reads 7020, all four sheep incinerated, so the
   journal's per-sheep lines are the state the module has to track, and `%sheepherderquest`
   only separates "needs a suit" from "disposing".
+
+## Black Knight's Fortress: supplies, journal stages and ladder landings
+
+- Iron chainbody and Bronze med helm are acquirable quest supplies. Wayne sells the chainbody for 210 coins and Peksa sells the helm for 24 coins; bank and equipped items count before shopping.
+- Ordinary cabbage is item 1965. Draynor Manor cabbage is 1967 despite sharing its display name. Walk inside the Falador farm fence before picking a plant.
+- The journal distinguishes investigation, overheard potion instructions and confirmed sabotage. Proximity to the grill and absence of cabbage cannot establish quest progress.
+- Listening requires all nine dialogue pages. Allow page-turn gaps instead of ending the dialogue loop on a briefly closed chat modal.
+- Sabotage consumes the cabbage eight server ticks before updating the quest stage. Wait for the successful-sabotage dialogue before reading the journal or leaving.
+- The grill ladder at (3021,3510) preserves the player's position across floors. Use the exact eastern stand (3022,3510) on both floors; the northern landing is outside the grill pocket.
+- The banquet ladder at (3022,3518) requires the southern stand (3022,3517) on both floors. The banquet door at (3020,3515) requires "I don't care. I'm going in anyway."
 
 ## See also
 

@@ -87,9 +87,10 @@ export async function runFight(fight: ArenaFight, log: (m: string) => void): Pro
     let reported = -1;
     let swings = 0;
     let missing = 0;
+    const started = Game.tick();
 
     try {
-        for (let i = 0; i < fight.guard; i++) {
+        while (Game.tick() - started < fight.guard) {
             if (EventSignal.pending()) {
                 log(`${fight.what}: yielding to a random event`);
                 return 'stuck';
@@ -126,6 +127,7 @@ export async function runFight(fight: ArenaFight, log: (m: string) => void): Pro
                 continue;
             }
             missing = 0;
+            if (!fight.cover && pocketOf(npc.networkTile()) !== 'arena') return 'unengaged';
             if (now - reported >= 40) {
                 reported = now;
                 log(`${fight.what}: hp=${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}`

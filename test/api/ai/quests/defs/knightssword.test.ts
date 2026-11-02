@@ -210,3 +210,76 @@ test('Smithing 1 does not block starting the quest or delivering acquired materi
         invIds: [[KS_ID.IRON_BAR, 2], [KS_ID.BLURITE_ORE, 1]]
     }), 10, 1))).toBe('Thurgo');
 });
+
+test('banks unrelated food before withdrawing materials into a crowded pack', () => {
+    const crowded = snap({ stage: KS_STAGE.LOOKING_BLURITE, bankIds: [[KS_ID.IRON_BAR, 3]] });
+    crowded.freeSlots = 0;
+    crowded.inv = new Map([['lobster', 8], ['cake', 15], ['bread', 3], ['coins', 1000], ['iron bar', 1]]);
+    crowded.invIds = new Map([[995, 1000], [379, 8], [1891, 15], [2309, 3], [KS_ID.IRON_BAR, 1]]);
+    const step = decideAt(crowded, 99, 64);
+    expect(step.kind).toBe('deposit');
+    if (step.kind !== 'deposit') throw new Error('expected deposit');
+    expect(step.keep).toContain('Lobster');
+    expect(step.keep).toContain('iron bar');
+    expect(step.keep).not.toContain('cake');
+    expect(step.keep).not.toContain('bread');
+});
+
+
+test('keeps quest items when clearing a crowded pack', () => {
+    const crowded = snap({ stage: KS_STAGE.SPOKEN_RELDO });
+    crowded.freeSlots = 0;
+    crowded.inv = new Map([['cake', 20], ['burnt pie', 1], ['portrait', 1], ['bucket of water', 1]]);
+    const step = decideAt(crowded, 99, 64);
+    expect(step.kind).toBe('deposit');
+    if (step.kind !== 'deposit') throw new Error('expected deposit');
+    for (const name of ['burnt pie', 'portrait', 'bucket of water']) {
+        expect(step.keep.some(item => name.includes(item.toLowerCase()))).toBe(true);
+    }
+});
+
+test('does not leave the blurite cave to clear unrelated items', () => {
+    const crowded = snap({
+        stage: KS_STAGE.LOOKING_BLURITE,
+        invIds: [[KS_ID.IRON_BAR, 2], [BRONZE_PICKAXE, 1]],
+        tile: { x: 3049, z: 9566, level: 0 }
+    });
+    crowded.freeSlots = 1;
+    crowded.inv.set('cake', 10);
+    expect(decideAt(crowded, 99, 64)).toMatchObject({ kind: 'custom', name: 'mine blurite' });
+});
+
+
+test('withdraws a pickaxe before mining blurite when the iron bars were banked', () => {
+    const step = decide({
+        stage: KS_STAGE.LOOKING_BLURITE,
+        invIds: [[KS_ID.IRON_BAR, 2]],
+        bankIds: [[1275, 2]]
+    });
+    expect(step).toMatchObject({
+        kind: 'withdraw', items: [{ name: 'Rune pickaxe', id: 1275, qty: 1 }]
+    });
+});
+
+
+test('makes room when configured food fills every inventory slot', () => {
+    for (const coins of [0, 1]) {
+        const full = snap({ stage: KS_STAGE.LOOKING_BLURITE });
+        full.freeSlots = 0;
+        full.inv = new Map([['lobster', 28 - coins], ...(coins ? [['coins', 1000] as [string, number]] : [])]);
+        full.invIds = new Map([[379, 28 - coins], ...(coins ? [[995, 1000] as [number, number]] : [])]);
+        const step = decideAt(full, 99, 64);
+        expect(step.kind).toBe('deposit');
+        if (step.kind !== 'deposit') throw new Error('expected deposit');
+        expect(step.keep).not.toContain('Lobster');
+    }
+});
+
+test('restocks a capped food pack after depositing excess food', () => {
+    const empty = snap({ stage: KS_STAGE.LOOKING_BLURITE, food: 0 });
+    empty.bank = new Map([['lobster', 28]]);
+    empty.bankIds = new Map([[379, 28]]);
+    expect(decideAt(empty, 99, 64)).toMatchObject({
+        kind: 'withdraw', items: [{ name: 'Lobster', qty: 8 }]
+    });
+});

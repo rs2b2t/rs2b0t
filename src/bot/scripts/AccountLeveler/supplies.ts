@@ -7,11 +7,15 @@ import { Inventory } from '../../api/inventory/Inventory.js';
 import { Shop } from '../../api/shop/Shop.js';
 import { unitPrice } from '../../api/shop/StockModel.js';
 import { Traversal } from '../../api/walking/Traversal.js';
+import { Quests } from '../../api/ui/questlog/Quests.js';
+import { Skills } from '../../api/skills/Skills.js';
 import Tile from '../../geometry/Tile.js';
+import { levelerTravelZones } from './travel.js';
 import { purchaseBudget, supplyOffer, supplyOffers } from './offers.js';
 import { SHOPPING_RESERVE, shoppingStops } from './shopping.js';
 import { requirementKey, type ActivityPlan, type Requirement } from './types.js';
 import { fillSupplyVials, VIAL_FOUNTAIN } from './vials.js';
+import { cutTravelDiamond, enterDragonShop, gameZanarisPort, inDragonMarket, inZanaris, leaveZanaris, openZanarisBank } from './zanaris.js';
 
 export class SupplyUnavailableError extends Error {
     readonly items: string[];
@@ -59,12 +63,24 @@ export interface SupplyPort {
     fillVials?(count: number): Promise<boolean>;
     equip(name: string): Promise<boolean>;
     log(message: string): void;
+    dragonShop?: {
+        ready(): boolean;
+        enter(): Promise<boolean>;
+        leave(): Promise<boolean>;
+        cutDiamond?(): Promise<boolean>;
+    };
 }
 
 export function gameSupplyPort(log: (message: string) => void): SupplyPort {
     return {
         bank: async () => {
-            if (!(await Banking.open({ log })) || !(await Bank.waitReady())) return false;
+            if (inDragonMarket(reader.worldTile()) && !(await leaveZanaris(gameZanarisPort(log)))) return false;
+            if (inZanaris(reader.worldTile())) {
+                if (!(await openZanarisBank(log))) return false;
+                await Bank.setNoteMode(false);
+                return true;
+            }
+            if (!(await Banking.open({ log, avoidZones: levelerTravelZones() })) || !(await Bank.waitReady())) return false;
             await Bank.setNoteMode(false);
             return true;
         },
@@ -79,7 +95,8 @@ export function gameSupplyPort(log: (message: string) => void): SupplyPort {
         unequip: name => Equipment.unequip(name),
         withdraw: (name, count) => name.startsWith('#') ? Bank.withdrawXById(Number(name.slice(1)), count) : Bank.withdrawX(name, count),
         closeBank: () => Bank.close(),
-        walk: tile => Traversal.walkResilient(new Tile(tile.x, tile.z, tile.level), { radius: 3, timeoutMs: 120000, log }),
+        walk: async tile => (inZanaris(tile) || await leaveZanaris(gameZanarisPort(log)))
+            && await Traversal.walkResilient(new Tile(tile.x, tile.z, tile.level), { radius: 3, timeoutMs: 120000, avoidZones: levelerTravelZones(), log }),
         shop: keeper => Shop.open(keeper),
         shopStock: name => name.startsWith('#')
             ? reader.shopInv(3900).find(i => i.id === Number(name.slice(1)))?.count ?? 0
@@ -96,7 +113,13 @@ export function gameSupplyPort(log: (message: string) => void): SupplyPort {
             if (!item || !op || !(await item.interact(op))) return false;
             return Execution.delayUntil(() => Equipment.items().some(item => item.id === id), 3000);
         },
-        log
+        log,
+        dragonShop: {
+            ready: () => Skills.level('attack') >= 60 && Quests.status('Lost City') === 'complete',
+            enter: () => enterDragonShop(gameZanarisPort(log)),
+            leave: () => leaveZanaris(gameZanarisPort(log)),
+            cutDiamond: cutTravelDiamond
+        }
     };
 }
 
@@ -185,6 +208,8 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
     }
     for (const stop of shoppingStops(plan.needs, port.stock())) {
         const id = `shop:${stop.keeper}`;
+        const dragonShop = stop.keeper === 'Jakut' ? port.dragonShop : undefined;
+        if (stop.keeper === 'Jakut' && !dragonShop?.ready()) throw new SupplyUnavailableError('Dragon weapons require Attack 60 and completed Lost City', stop.needs.map(need => need.item));
         const missing = (need: Requirement) => Math.max(0, need.count - (port.stock()[requirementKey(need).toLowerCase()] ?? 0));
         const allowance = new Map<string, number>();
         const remaining = (need: Requirement) => Math.min(missing(need), allowance.get(requirementKey(need)) ?? Infinity);
@@ -215,12 +240,22 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
                 break;
             }
             report(id, `Withdrawing ${coins} Coins for ${stop.keeper}: ${batch.map(entry => `${entry.count} ${entry.need.item}`).join(', ')}`);
+            const cutDiamond = dragonShop && !(port.stock().diamond > 0);
+            if (dragonShop) {
+                for (const item of ['Dramen staff', ...(cutDiamond ? ['Uncut diamond', 'Chisel'] : ['Diamond'])]) {
+                    if (!(await port.withdraw(item, 1))) throw new SupplyUnavailableError(`Need ${item} to reach Jakut`, stop.needs.map(need => need.item));
+                }
+            }
             if (travelFood && !(await port.withdraw(travelFood, 3))) throw new Error('Could not withdraw food for shopping');
             if (!(await port.withdraw('Coins', coins)) || port.held('Coins') < coins) throw new Error('Coin withdrawal did not land');
             if (!(await port.closeBank())) throw new Error('Bank did not close before shopping');
             report(id, `Travelling to ${stop.keeper} for ${batch.map(entry => `${entry.count} ${entry.need.item}`).join(', ')}`, stop.tile);
+            let returned = true;
             try {
-                if (!(await port.walk(stop.tile))) throw new SupplyUnavailableError(`Cannot reach ${stop.keeper}`, stop.needs.map(need => need.item));
+                if (dragonShop && (!(await port.equip('Dramen staff')) || cutDiamond && !(await dragonShop.cutDiamond?.()))) {
+                    throw new SupplyUnavailableError('Could not prepare Dramen staff and Diamond for Jakut', stop.needs.map(need => need.item));
+                }
+                if (!(await (dragonShop ? dragonShop.enter() : port.walk(stop.tile)))) throw new SupplyUnavailableError(`Cannot reach ${stop.keeper}`, stop.needs.map(need => need.item));
                 const reserve = Math.max(0, SHOPPING_RESERVE - Math.max(0, coins - port.held('Coins')));
                 let availableBudget = Math.min(budget, port.held('Coins') - reserve);
                 report(id, `Opening ${stop.keeper}'s shop`, stop.tile);
@@ -266,14 +301,25 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
             } catch (error) {
                 const fallback = error instanceof SupplyUnavailableError && error.items.every(item => plan.needs.some(need => need.item.toLowerCase() === item && hasAlternatives(need)));
                 if (!options.bestEffort && !fallback && error instanceof SupplyStockError) {
-                    await bank(port);
-                    await port.deposit();
+                    if (!dragonShop) {
+                        await bank(port);
+                        await port.deposit();
+                    }
                     throw error;
                 }
                 if ((!options.bestEffort && !fallback) || !(error instanceof SupplyUnavailableError)) throw error;
                 report(id, `${error.message}; trying remaining suppliers`);
                 for (const need of stop.needs) allowance.set(requirementKey(need), 0);
+            } finally {
+                if (dragonShop) {
+                    returned = await dragonShop.leave();
+                    if (returned) {
+                        await bank(port);
+                        await port.deposit();
+                    }
+                }
             }
+            if (!returned) throw new SupplyUnavailableError('Could not return from Zanaris after shopping', stop.needs.map(need => need.item));
             if (toFill > 0 && port.fillVials) {
                 report(id, `Filling ${toFill} vials at Falador fountain`, VIAL_FOUNTAIN);
                 const before = port.held('Vial of water');
@@ -285,8 +331,10 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
                 }
             }
             report(id, `Banking purchases from ${stop.keeper}`);
-            await bank(port);
-            await port.deposit();
+            if (!dragonShop) {
+                await bank(port);
+                await port.deposit();
+            }
         }
         const shortages = stop.needs.filter(need => missing(need) > 0);
         if (shortages.length) report(id, `Deferred: ${shortages.map(need => `${missing(need)} ${need.item}`).join(', ')}`);

@@ -35,7 +35,7 @@ describe('specialRequiresAt — guild skill gates (content-backed)', () => {
         const mining60 = [{ name: 'mining', level: 60 }];
         for (const [x, z] of [
             [3018, 3340],
-            [3019, 3339],
+            [3018, 3338],
             [3019, 3341],
             [3020, 3340]
         ] as const) {

@@ -1,6 +1,7 @@
 import { SHOP_DB } from '../../data/shopdb.js';
 import type { ShopItemDef, ShopRecord } from '../../api/shop/types.js';
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
+import { unitPrice } from '../../api/shop/StockModel.js';
 
 export interface SupplyOffer {
     fillVials?: boolean;
@@ -11,6 +12,7 @@ export interface SupplyOffer {
 }
 
 const vendors: [string, string, number, number][] = [
+    ['dragonswordshop', 'Jakut', 3252, 9572],
     ['scimitarshop', 'Zeke', 3288, 3190],
     ['axeshop', 'Bob', 3231, 3203],
     ['pickaxeshop', 'Nurmof', 2997, 9844],
@@ -77,5 +79,6 @@ function shopOffers(name: string, sources = vendors): SupplyOffer[] {
 }
 
 export function purchaseBudget(offer: SupplyOffer, count: number): number {
+    if (offer.keeper === 'Jakut') return Math.ceil(Math.max(1, count) * unitPrice(offer.item, offer.shop, 1));
     return Math.ceil(Math.max(1, count) * offer.item.cost * (offer.shop.sell + 5000) / 1000);
 }

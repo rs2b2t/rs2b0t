@@ -19,6 +19,7 @@ import {
 } from './areas.js';
 import { combineCrest, fightChronozon } from './chronozon.js';
 import { readFamilyCrestProgress } from './journal.js';
+import { CALEB_KEEP, sourceCalebFish } from './fish.js';
 import {
     craftPerfectJewellery,
     enterGoldMine,
@@ -261,9 +262,6 @@ function endgameLoadout(snap: QuestSnapshot): QuestStep | null {
     return wieldWeapon(snap, LEG_BANK.chronozon);
 }
 
-/** Keep-lists for the deposits this quest makes; fragments are kept by id. */
-const ALWAYS_KEEP = ['coins', ...FC_FOODS.map(f => f.toLowerCase())];
-
 // Why: coins and the ring of dueling are what this deposit banks; law stays since the lair is wilderness level 3, under the level-20 spell cutoff, so the walk home past the black demons and giant skeletons becomes a Varrock teleport.
 const WILDERNESS_KEEP = [
     ...FC_FOODS.map(f => f.toLowerCase()),
@@ -272,10 +270,6 @@ const WILDERNESS_KEEP = [
     'antipoison',
     'scimitar'
 ];
-
-function tidyFor(snap: QuestSnapshot, need: number, keep: string[], bank: Tile): QuestStep | null {
-    return (snap.freeSlots ?? 28) >= need ? null : deposit([...ALWAYS_KEEP, ...keep], bank);
-}
 
 // Why: `%crestquest` isn't transmitted, so the journal is the only state read.
 
@@ -336,9 +330,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
         if (stage === FC_STAGE.SPOKEN_CALEB) {
             const short = missingFish(snap);
             if (short.length > 0) {
-                const tidy = tidyFor(snap, short.length + 2, CALEB_FISH.map(f => f.name.toLowerCase()), LEG_BANK.caleb);
-                if (tidy) {
-                    return tidy;
+                if ((snap.freeSlots ?? 28) < short.length + 2) {
+                    return deposit(CALEB_KEEP, LEG_BANK.caleb);
                 }
                 for (const fish of short) {
                     const step = fromBank(snap, fish, 1, LEG_BANK.caleb);
@@ -349,10 +342,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
                 if (!snap.bankKnown) {
                     return { kind: 'scanBank', bank: LEG_BANK.caleb };
                 }
-                return {
-                    kind: 'wait',
-                    reason: `Caleb needs cooked ${short.map(f => f.name).join(', ')} — none in the bank`
-                };
+                return sourceCalebFish(snap, short);
             }
         }
         return { kind: 'talk', stop: CALEB_FISH_STOP };
@@ -418,6 +408,12 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
         // Why: moulds, rubies, furnace and Avan are all in Al Kharid, so moulds and rubies are sourced before the smelt to keep it one trip.
         // Why: coins first, since a `buy` step withdraws its own `estGp` and buying the ring mould leaves the pack under it for the next purchase.
+        if ((snap.freeSlots ?? 28) < 5) {
+            return deposit([
+                'coins', "'perfect' gold ore", "'perfect' gold bar", "'perfect' ring", "'perfect' necklace",
+                'ring mould', 'necklace mould', 'ruby', 'chisel', 'law rune', 'air rune', 'fire rune', 'earth rune', 'water rune'
+            ], LEG_BANK.gold);
+        }
         const legCoins = coinTopUp(snap, 50_000, LEG_BANK.gold);
         if (legCoins) {
             return legCoins;
@@ -441,6 +437,14 @@ export function decide(snap: QuestSnapshot): QuestStep {
             const banked = fromBank(snap, { id: FC_ID.RUBY, name: FC_ITEM.RUBY }, outstanding, LEG_BANK.gold);
             if (banked) {
                 return banked;
+            }
+            const uncut = { id: FC_ID.UNCUT_RUBY, name: 'Uncut ruby' };
+            const rough = fromBank(snap, uncut, rubyShort, LEG_BANK.gold);
+            if (rough) return rough;
+            if (held(snap, uncut.id) > 0) {
+                const chisel = source(snap, { id: FC_ID.CHISEL, name: 'Chisel' }, 1, LEG_BANK.gold, SHOP.DOMMIK, MOULD_GP);
+                if (chisel) return chisel;
+                return { kind: 'useOn', item: 'Chisel', targetKind: 'item', target: uncut.name, anchor: LEG_BANK.gold, product: FC_ITEM.RUBY };
             }
             if (snap.noProgress >= 2) {
                 return {

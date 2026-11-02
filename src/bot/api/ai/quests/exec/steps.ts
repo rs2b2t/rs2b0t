@@ -217,11 +217,19 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
                 const n = name.toLowerCase();
                 return step.keep.some(k => step.exactKeep ? n === k.toLowerCase() : n.includes(k.toLowerCase()));
             };
-            await Bank.depositAllMatching((name, id) => !kept(name, id));
+            let ok = await Bank.backpackReady(undefined, log);
+            if (ok) {
+                await Bank.depositAllMatching((name, id) => !kept(name, id), log);
+                ok = await Bank.backpackReady(undefined, log)
+                    && Inventory.items().every(item => kept(item.name ?? '', item.id));
+            }
+            if (!ok) {
+                log('deposit: backpack contents did not confirm the deposit');
+            }
             if (!step.leaveOpen) {
                 await Modals.close();
             }
-            return true;
+            return ok;
         }
         case 'buy': {
             const before = Inventory.count(step.item);

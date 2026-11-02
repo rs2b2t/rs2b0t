@@ -9,6 +9,8 @@ export default class ParamsModal {
     private titleEl: HTMLElement;
     private bodyEl: HTMLElement;
     private scriptName = '';
+    private startButton: HTMLButtonElement;
+    private onStart: (() => void) | null = null;
     private schema: SettingsSchema = {};
     private openTitle: string | null = null;
     private openIntro: string | null = null;
@@ -17,6 +19,8 @@ export default class ParamsModal {
     /** When false, skip credentials strip even if scriptName is Global (Nav settings). */
     private showGlobalExtra = true;
     private collapsed = new Map<string, Set<string>>();
+    private refreshers: Array<() => void> = [];
+    private refreshTimer: ReturnType<typeof setInterval> | null = null;
     /** Set once by BotPanel; opens the order book window over this modal. */
     onEditPriceBook: ((bookName: string) => void) | null = null;
 
@@ -42,6 +46,13 @@ export default class ParamsModal {
 
         this.bodyEl = el('div', 'rs2b0t-params-body');
         modal.appendChild(this.bodyEl);
+        this.startButton = el('button', 'rs2b0t-button');
+        this.startButton.type = 'button';
+        this.startButton.dataset.action = 'start-script';
+        this.startButton.textContent = 'Start script';
+        this.startButton.hidden = true;
+        this.startButton.addEventListener('click', () => { if (this.isOpen() && !this.isActive()) this.onStart?.(); });
+        modal.appendChild(this.startButton);
 
         this.backdrop.appendChild(modal);
         document.body.appendChild(this.backdrop);
@@ -67,6 +78,7 @@ export default class ParamsModal {
             title?: string;
             zIndex?: number;
             onClose?: () => void;
+            onStart?: () => void;
             intro?: string;
             /** Default true when scriptName is Global. Set false for Nav settings. */
             showGlobalExtra?: boolean;
@@ -81,6 +93,8 @@ export default class ParamsModal {
                 def.options = PriceBooks.names();
             }
         }
+        this.onStart = opts?.onStart ?? null;
+        this.startButton.hidden = !this.onStart;
         this.scriptName = scriptName;
         this.schema = schema;
         this.openTitle = opts?.title ?? null;
@@ -93,6 +107,7 @@ export default class ParamsModal {
     }
 
     close(): void {
+        this.stopRefreshing();
         if (!this.isOpen()) {
             return;
         }
@@ -110,6 +125,7 @@ export default class ParamsModal {
     }
 
     private render(): void {
+        this.stopRefreshing();
         this.titleEl.textContent = this.openTitle ?? `${this.scriptName} · parameters`;
         this.bodyEl.replaceChildren();
         if (this.openIntro) {
@@ -185,6 +201,15 @@ export default class ParamsModal {
                 host.appendChild(this.renderRow(key, disabled, deps, valueOf));
             }
         }
+        if (this.refreshers.length > 0) {
+            this.refreshTimer = setInterval(() => this.refreshers.forEach(refresh => refresh()), 1000);
+        }
+    }
+
+    private stopRefreshing(): void {
+        if (this.refreshTimer !== null) clearInterval(this.refreshTimer);
+        this.refreshTimer = null;
+        this.refreshers = [];
     }
 
     private renderRow(key: string, disabled: boolean, deps: Set<string>, valueOf: (key: string) => string): HTMLElement {
@@ -208,7 +233,7 @@ export default class ParamsModal {
             if (deps.has(key)) {
                 this.render();
             }
-        }, { disabled }, valueOf);
+        }, { disabled, registerRefresh: refresh => this.refreshers.push(refresh) }, valueOf);
         control.classList.add('rs2b0t-param-control');
 
         // Why: an order book is a table of rows, so the dropdown picks one and the button opens the editor.

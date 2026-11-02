@@ -1,4 +1,5 @@
 import type { WorldTile } from '../../../../../adapter/ClientAdapter.js';
+import { Quests } from '../../../../ui/questlog/Quests.js';
 import { QUESTS } from '../../data/quests.js';
 import { flagValue, hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { FOOD_FLOAT } from '../../food.js';
@@ -193,12 +194,20 @@ function stageMiddle(snap: QuestSnapshot, area: ShiloArea): QuestStep {
         return inTheOpenOrIn(area, 'berviriusTomb', step("search the dolmen in Bervirius' tomb", searchBerviriusDolmen));
     }
 
-    if (inCaves) {
-        return step('climb out of Ah Za Rhoon', leaveAhZaRhoon);
-    }
-
     if (!hasFlag(snap.progress, 'found-door')) {
         return inTheOpen(area, step('search the carved doors for their lock', searchCarvedDoors));
+    }
+
+    if (held(snap, SV_ITEM.BONE_SHARD.id) === 0 && held(snap, SV_ITEM.BONE_KEY.id) === 0) {
+        const banked = recoverFromBank(snap, SV_ITEM.BONE_KEY) ?? recoverFromBank(snap, SV_ITEM.BONE_SHARD);
+        if (banked) return inTheOpen(area, banked);
+        return held(snap, SV_ITEM.ZADIMUS_CORPSE.id) > 0
+            ? inTheOpen(area, step("bury Zadimus on Tai Bwo Wannai's sacred ground", buryZadimus))
+            : step('take the corpse from the ancient gallows', takeZadimusCorpse);
+    }
+
+    if (inCaves) {
+        return step('climb out of Ah Za Rhoon', leaveAhZaRhoon);
     }
 
     const craft = craftChain(snap, area, true);
@@ -389,6 +398,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
 export const shilo: QuestModule = {
     record: QUESTS.find(record => record.id === 'zombiequeen')!,
     onStart: resetCombatGear,
+    exit: leaveBerviriusTomb,
+    recover: tile => tile.level === 0 && Quests.status('Shilo Village') === 'complete' ? escapePocket(shiloArea(tile)) : null,
+    resumeAt: tile => tile.level === 0 && ['ahZaRhoonNorth', 'ahZaRhoonSouth', 'berviriusTomb', 'rashEntry', 'rashLedge', 'rashInner'].includes(shiloArea(tile)),
     bank: SV_TILE.ARDOUGNE_BANK,
     ownsInventory: true,
     readProgress: readShiloProgress,

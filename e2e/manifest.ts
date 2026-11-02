@@ -281,6 +281,15 @@ export const CASES: readonly Case[] = [
         note: 'Fresh local accounts; custom Crossbow/Bolts and Rune knife must equip, merge carried refills and gain ranged XP against Fire giants. Isolated deployment; --no-deploy requires CLIENT_PAGE.'
     },
     {
+        id: 'fisher-three-tick-live',
+        harness: 'fisher-three-tick-live.ts',
+        covers: { scripts: ['GatheringBot'] },
+        status: 'unvetted',
+        args: [],
+        budgetMin: 8,
+        note: 'real Fisher with threeTickFly at a teleported fly-fishing spot; records fishing xp/hr after the first roll, asserts the delay log is never consumed, and keeps power/drop mode on'
+    },
+    {
         id: 'fisher-shilo-shopping-live',
         harness: 'fisher-shilo-shopping-live.ts',
         covers: { scripts: ['GatheringBot'] },
