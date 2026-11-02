@@ -1,9 +1,12 @@
 import { DRAGON_STAGE } from '../../api/ai/quests/defs/dragonslayer/journal.js';
+import { STRIKE_CASTS, strikeSpell } from '../../api/ai/quests/strike.js';
+import { runesPerCast } from '../../api/combat/CombatStyleLogic.js';
 import { dragonFoodLevels, dragonPlanks, dragonPrayer, dragonReady, dragonSupplyLevels, nextDragonQuest } from './dragons.js';
 import { canStealChaos } from './runes.js';
 import Tile from '../../geometry/Tile.js';
 import { combatPlan, foodFor } from './combat.js';
 import { gatheringTool, meleeEquipment } from './equipment.js';
+import { zanarisExitNeeds } from './dragonWeapons.js';
 import { locateMethod, membersReady } from './locations.js';
 import { FISH, FLETCHING, WOODS, POTIONS, canSourceWood, canCatch, consumableBatch, nextMilestone, smithProduct } from './catalog.js';
 import { stockOf, type ActivityPlan, type LevelerSnapshot, type Requirement, type SessionMemory } from './types.js';
@@ -21,8 +24,16 @@ export function questPlan(s: LevelerSnapshot, objective: string, id: string, nam
     const food = dragon || combat ? 'Lobster' : foodFor(s);
     const repaired = (s.dragonStage ?? 0) >= DRAGON_STAGE.REPAIRED_SHIP;
     const coins = !dragon ? 2000 : repaired ? 200 : s.dragonStage ? Math.max(200, Math.min(15000, stockOf(s, 'Coins'))) : 15000;
-    const kit = id === 'druid' || dragon || combat ? meleeEquipment({ ...s, stock: { ...s.stock, coins: Math.max(0, stockOf(s, 'Coins') - coins) } }) : [];
-    return { ...activity(objective, `quest-${id}`, 'AIOQuester', { quests: [id], food, loadout: '', gatherWildernessPlanks: s.wilderness }, [{ item: food, count: 24, carry: 12 }, banked('Coins', coins), ...kit, ...(!s.wilderness && dragon && !repaired ? [{ item: 'Plank', count: dragonPlanks(s), carry: dragonPlanks(s) }] : [])]), quest: name, food };
+    const kit = id !== 'zanaris' && (id === 'druid' || dragon || combat) ? meleeEquipment({ ...s, stock: { ...s.stock, coins: Math.max(0, stockOf(s, 'Coins') - coins) } }) : [];
+    const needs = [{ item: food, count: 24, carry: 12 }, banked('Coins', coins), ...kit, ...(id === 'zanaris' ? zanarisExitNeeds(s) ?? [] : []), ...(!s.wilderness && dragon && !repaired ? [{ item: 'Plank', count: dragonPlanks(s), carry: dragonPlanks(s) }] : [])];
+    if (id === 'zanaris') {
+        for (const rune of runesPerCast(strikeSpell(s.levels.magic) ?? 'Wind Strike', []) ?? []) {
+            const existing = needs.find(need => need.item === rune.rune);
+            if (existing) existing.count += rune.count * STRIKE_CASTS;
+            else needs.push({ item: rune.rune, count: rune.count * STRIKE_CASTS });
+        }
+    }
+    return { ...activity(objective, `quest-${id}`, 'AIOQuester', { quests: [id], food, loadout: '', gatherWildernessPlanks: s.wilderness }, needs), quest: name, food };
 }
 
 function prerequisiteCombat(s: LevelerSnapshot, objective: string, memory: SessionMemory, random: () => number, levels: Record<string, number>): ActivityPlan | null {

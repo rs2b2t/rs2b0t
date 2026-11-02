@@ -8,7 +8,7 @@ import { EventSignal } from '#/bot/api/execution/EventSignal.js';
 import { Autocast } from '#/bot/api/magic/Autocast.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
 import { Game } from '#/bot/api/game/Game.js';
-import { Inventory } from '#/bot/api/inventory/Inventory.js';
+import { Inventory, InvItem } from '#/bot/api/inventory/Inventory.js';
 import { Npc } from '#/bot/api/model/Npc.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
@@ -40,6 +40,7 @@ beforeEach(() => {
         stubProps(Game, { autoRetaliateOn: () => false, setAutoRetaliate: () => true,
             castOnNpc: async spell => { casts.push(spell); runes--; return true; } }),
         stubProps(Inventory, { count: () => runes }),
+        stubProps(Equipment, { items: () => [] }),
         stubProps(Skills, { effective: () => 1 }),
         stubProps(Sustain, { run: async () => {} }),
         stubProps(Execution, { delayTicks: async () => { delay(); } }),
@@ -70,9 +71,52 @@ describe('guarded quest Strikes', () => {
         expect(route.map(tile => [tile.x, tile.z])).toEqual([[2598, 3167], [2598, 3169], [2594, 3169], [2594, 3167]]);
         expect(casts).toEqual(['Wind Strike']);
     });
+    for (const inCombat of [false, true]) test(`arena lure confirms a cast before moving when its target faces us (combat=${inCombat})`, async () => {
+        here = ARENA_COVER;
+        npc = new Npc({ ...makeNpc(new Tile(2595, 3160, 0), 2).snap, faceEntity: 32769, inCombat });
+        let queued = false;
+        const observations: number[] = [];
+        restore.push(
+            stubProps(reader, { selfSlot: () => 1 }),
+            stubProps(Game, { castOnNpc: async spell => { casts.push(spell); queued = true; return true; } }),
+            stubProps(Traversal, { walkResilient: async tile => {
+                observations.push(runes);
+                here = new Tile(tile.x, tile.z, tile.level);
+                return true;
+            } })
+        );
+        delay = () => { if (queued) { runes--; queued = false; } };
+        expect(npc.targetsMe()).toBe(true);
+        expect(await takeStrikeCover(ARENA_COVER, () => {}, () => npc)).toBe(true);
+        expect(casts).toEqual(['Wind Strike']);
+        expect(observations).toEqual([150, 149, 149, 149]);
+    });
+    test('an arena lure never casts through a blocked ray even when the target faces us', async () => {
+        here = ARENA_COVER;
+        npc = new Npc({ ...makeNpc(new Tile(2595, 3160, 0), 2).snap, faceEntity: 32769 });
+        restore.push(
+            stubProps(reader, { selfSlot: () => 1 }),
+            stubProps(Reachability, { lineOfSight: () => false }),
+            stubProps(Traversal, { walkResilient: async tile => { here = new Tile(tile.x, tile.z, tile.level); return true; } })
+        );
+        expect(await takeStrikeCover(ARENA_COVER, () => {}, () => npc)).toBe(true);
+        expect(casts).toEqual([]);
+    });
     test('casts without requiring the player to take damage', async () => {
         expect(await castStrike(DEMON_COVER, npc, () => {})).toBe(true);
         expect(casts).toEqual(['Wind Strike']);
+    });
+    test('prepares and casts Fire Strike using the worn staff instead of fire runes', async () => {
+        restore.push(
+            stubProps(Skills, { effective: () => 13 }),
+            stubProps(Inventory, { count: name => /^(mind|air) rune$/i.test(name) ? runes : 0 }),
+            stubProps(Equipment, { items: () => [new InvItem({ id: 1387, name: 'Staff of fire', count: 1, slot: 3, comId: 1688, ops: [] })] }),
+            stubProps(Autocast, { armed: () => false }),
+            stubProps(Execution, { delayUntilTicks: async condition => condition() })
+        );
+        expect(await readyStrikes(() => {})).toBe(true);
+        expect(await castStrike(DEMON_COVER, npc, () => {})).toBe(true);
+        expect(casts).toEqual(['Fire Strike']);
     });
     test('empty runes never fall back to melee', async () => {
         runes = 0;

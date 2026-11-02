@@ -6,7 +6,7 @@ interface Options {
     tabs(): string[];
     activeTab(): string;
     worldRouting: boolean;
-    edit(profile: RosterProfile): void;
+    edit(profile: RosterProfile): void | Promise<void>;
 }
 
 type Kind = RosterCommand['kind'];
@@ -64,6 +64,7 @@ export class RosterPanel {
     private targetCount = node('p', 'mbx-roster-muted');
     private message = node('span');
     private apply = button('', () => { void this.run(); }, 'mbx-roster-apply');
+    private applyStart = button('', () => { void this.run(true); }, 'mbx-roster-apply-start');
     private all = node('input');
     private fields = new Map<Kind | 'script' | 'source', HTMLElement>();
     private rows = new Map<string, HTMLTableRowElement>();
@@ -143,7 +144,7 @@ export class RosterPanel {
         this.message.id = 'mbx-roster-message';
         this.message.setAttribute('role', 'status');
         this.message.setAttribute('aria-live', 'polite');
-        pane.append(this.scriptHint, this.preview, this.note, this.targetCount, this.apply);
+        pane.append(this.scriptHint, this.preview, this.note, this.targetCount, this.apply, this.applyStart);
         content.append(roster, pane);
         const status = node('div', 'mbx-roster-status');
         status.append(node('span', '', 'Copies stay independent. Edit any profile afterward.'), this.message);
@@ -219,8 +220,10 @@ export class RosterPanel {
         }
         this.scriptHint.hidden = this.script.options.length > 0 || (this.kind !== 'assign' && this.kind !== 'copy');
         this.scriptHint.textContent = 'Load a bot to discover available scripts.';
-        this.note.hidden = this.kind !== 'copy';
-        this.note.textContent = 'A one-time copy. Changing a bot later only changes that bot. Copying settings does not select the script.';
+        this.note.hidden = this.kind !== 'copy' && this.kind !== 'assign';
+        this.note.textContent = this.kind === 'copy' ? 'Running scripts stop before copying. Copy & Start also selects this script. Copies stay independent.' : 'Running scripts stop before assignment. Choose Assign & Start to run the new script immediately.';
+        this.applyStart.hidden = this.kind !== 'assign' && this.kind !== 'copy';
+        this.applyStart.textContent = `${this.kind === 'copy' ? 'Copy' : 'Assign'} & Start ${this.selected.size} profiles →`;
         this.apply.textContent = `${this.kind === 'copy' ? 'Copy to' : LABELS[this.kind].replace(/[▷□] /, '')} ${this.selected.size} profiles →`;
         const busy = this.pending || this.actions.busy;
         const active = document.activeElement;
@@ -228,6 +231,7 @@ export class RosterPanel {
             if (control.id !== 'mbx-roster-close' && control.id !== 'mbx-roster-done') control.disabled = busy;
         }
         this.apply.disabled = busy || !this.selected.size || ((this.kind === 'copy' || this.kind === 'assign') && !this.script.value) || (this.kind === 'copy' && !this.source.value);
+        this.applyStart.disabled = this.apply.disabled;
         if (active instanceof HTMLElement && this.dialog.contains(active) && active.hasAttribute('disabled')) this.el.querySelector<HTMLButtonElement>('#mbx-roster-close')!.focus();
         for (const action of Array.from(this.el.querySelectorAll<HTMLButtonElement>('[data-action]'))) action.setAttribute('aria-pressed', String(action.dataset.action === this.kind));
     }
@@ -292,9 +296,9 @@ export class RosterPanel {
         if (result) cells[4].append(node('small', `mbx-roster-result is-${result.state}`, result.message));
     }
 
-    private async run(): Promise<void> {
+    private async run(start = false): Promise<void> {
         if (this.apply.disabled) return;
-        const command: RosterCommand = this.kind === 'assign' ? { kind: 'assign', script: this.script.value } : this.kind === 'copy' ? { kind: 'copy', script: this.script.value, source: this.source.value } : this.kind === 'travel' ? { kind: 'travel', destination: this.destination.value } : this.kind === 'world' ? { kind: 'world', world: Number(this.world.value) as WorldNumber } : { kind: this.kind };
+        const command: RosterCommand = this.kind === 'assign' ? { kind: 'assign', script: this.script.value, start } : this.kind === 'copy' ? { kind: 'copy', script: this.script.value, source: this.source.value, start } : this.kind === 'travel' ? { kind: 'travel', destination: this.destination.value } : this.kind === 'world' ? { kind: 'world', world: Number(this.world.value) as WorldNumber } : { kind: this.kind };
         this.pending = true;
         this.message.textContent = 'Applying changes…';
         this.refresh();
@@ -308,11 +312,13 @@ export class RosterPanel {
     private async edit(username: string): Promise<void> {
         const profile = this.actions.profiles().find(profile => profile.username === username);
         if (!profile || this.pending || this.actions.busy) return;
-        const error = !profile.slot ? 'Load this profile before editing.' : !profile.slot.ready ? 'Client is loading. Try again when ready.' : profile.slot.switchingWorld !== null ? 'Wait for the world switch before editing.' : ['running', 'paused', 'stopping'].includes(profile.slot.scriptState) ? 'Stop the script before editing.' : '';
+        const error = !profile.slot ? 'Load this profile before editing.' : !profile.slot.ready ? 'Client is loading. Try again when ready.' : profile.slot.switchingWorld !== null ? 'Wait for the world switch before editing.' : '';
         if (error) { this.results.set(username, { username, state: 'skipped', message: error }); this.refresh(); return; }
+        this.pending = true;
         this.close();
         try { await this.options.edit(profile); }
         catch (err) { this.open(this.opener); this.message.textContent = this.error(err); }
+        finally { this.pending = false; this.refresh(); }
     }
 
     private keydown(event: KeyboardEvent): void {

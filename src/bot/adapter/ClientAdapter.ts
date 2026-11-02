@@ -495,6 +495,11 @@ export const reader = {
         return raw?.localPlayer?.primaryAnim ?? -1;
     },
 
+    selfAnimState(): { seq: number; cycle: number; serial: number } | null {
+        const player = raw?.localPlayer;
+        return player ? { seq: player.primaryAnim, cycle: player.primaryAnimCycle, serial: player.primaryAnimSerial } : null;
+    },
+
     selfChat(): string | null {
         return raw?.localPlayer?.chatMessage ?? null;
     },
@@ -1866,7 +1871,7 @@ export const actions = {
         }
 
         return actions.menuAction(MiniMenuAction.CLOSE_BUTTON, 0, 0, comId);
-    }
+    },
 };
 
 export const WELCOME_SCREEN = 5993;

@@ -231,7 +231,7 @@ async function keyHunt(log: (m: string) => void): Promise<boolean> {
         const level = Game.tile()?.level ?? 0;
         const bones = Inventory.count('Bones');
 
-        if (!(bones > 0 && Inventory.isFull())) {
+        if (bones < BONES_NEEDED && !(bones > 0 && Inventory.isFull())) {
             if (level === 1) {
                 await Reach.locOp({
                     name: 'Staircase', op: 'Climb-down', near: WIZ_L1_STAND,
@@ -340,6 +340,17 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
     if (worn(snap, 'Silverlight')) { return { kind: 'custom', name: 'fight Delrith', run: fightDelrith }; }
     if (has(snap, 'Silverlight')) { return { kind: 'equip', item: 'Silverlight' }; }
+
+    if ((snap.invIds?.get(ROVIN_KEY_ID) ?? 0) > 0 && (snap.invIds?.get(TRAIBORN_KEY_ID) ?? 0) === 0) {
+        const missing = BONES_NEEDED - (snap.invIds?.get(BONES_ID) ?? snap.inv.get('bones') ?? 0);
+        const room = snap.freeSlots ?? 28;
+        if (missing > 0 && room > 0) {
+            if (!snap.bankKnown) { return { kind: 'scanBank' }; }
+            const banked = snap.bankIds?.get(BONES_ID) ?? snap.bank?.get('bones') ?? 0;
+            const qty = Math.min(missing, banked, room);
+            if (qty > 0) { return { kind: 'withdraw', items: [{ name: 'Bones', id: BONES_ID, qty }] }; }
+        }
+    }
 
     return { kind: 'custom', name: 'key hunt', run: keyHunt };
 }

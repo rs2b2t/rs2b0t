@@ -281,6 +281,15 @@ export const CASES: readonly Case[] = [
         note: 'Fresh local accounts; custom Crossbow/Bolts and Rune knife must equip, merge carried refills and gain ranged XP against Fire giants. Isolated deployment; --no-deploy requires CLIENT_PAGE.'
     },
     {
+        id: 'fisher-three-tick-live',
+        harness: 'fisher-three-tick-live.ts',
+        covers: { scripts: ['GatheringBot'] },
+        status: 'unvetted',
+        args: [],
+        budgetMin: 8,
+        note: 'real Fisher with threeTickFly at a teleported fly-fishing spot; records fishing xp/hr after the first roll, asserts the delay log is never consumed, and keeps power/drop mode on'
+    },
+    {
         id: 'fisher-shilo-shopping-live',
         harness: 'fisher-shilo-shopping-live.ts',
         covers: { scripts: ['GatheringBot'] },
@@ -1333,6 +1342,16 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'mulecrafter-bankless-test',
+        harness: 'mulecrafter-test.ts',
+        covers: { scripts: ['MuleCrafter'] },
+        env: { TRADES_PER_BANK: '0', BANK_FILL: '0' },
+        status: 'vetted',
+        provenAt: 'a52af7e2',
+        budgetMin: 3,
+        note: 'crafter + one mule with bankFill=false and tradesPerBank=0; the documented bankless setup must still trade, enter the altar on empty, and craft'
+    },
+    {
         id: 'multibox-profile-transfer-test',
         harness: 'multibox-profile-transfer-test.ts',
         covers: { subsystems: ['multibox'] },
@@ -1869,5 +1888,32 @@ export const CASES: readonly Case[] = [
         provenAt: '43a7a587',
         budgetMin: 6,
         note: 'cake and chocolate cake both banked; the startup trip must bring back only the one the setting names'
+    },
+    {
+        id: 'muledepot-dump-live',
+        harness: 'muledepot-dump-test.ts',
+        covers: { scripts: ['MuleDepot'] },
+        status: 'vetted',
+        provenAt: '77b72e2b',
+        budgetMin: 4,
+        note: 'two mules and a supermule at Seers over a two-item list; the list is seeded as two different unidentified herbs, which the engine both call Herb, so the run passes only when one pass drains both bank rows under that name. Asserts the supermule received every transfer, banked each delivery, no bot-side trade failure, and each mule stops on the empty bank rather than stalling'
+    },
+    {
+        id: 'muledepot-supply-live',
+        harness: 'muledepot-supply-test.ts',
+        covers: { scripts: ['MuleDepot'] },
+        status: 'vetted',
+        provenAt: '77b72e2b',
+        budgetMin: 4,
+        note: 'one supplier and two clients at Seers with a five-line loadout at four slots a trade, so the plan is two batches and the pass needs all four trades. Asserts each client receives both batches and banks them, and the supplier stops itself naming the accounts it served'
+    },
+    {
+        id: 'muledepot-short-supply-live',
+        harness: 'muledepot-short-supply-test.ts',
+        covers: { scripts: ['MuleDepot'] },
+        status: 'vetted',
+        provenAt: '4e7fe196',
+        budgetMin: 4,
+        note: 'one supplier and one client at Seers; the loadout asks for Air and Mind but only Air is seeded. Asserts the supplier still delivers Air and reports Mind as short, rather than claiming a complete supply'
     }
 ];

@@ -35,7 +35,7 @@ Prince Ali Rescue added four more, and each is a class of bug rather than a one-
   impossible, a missing key is unambiguously a loss to be re-issued, and every clay leg
   can go quiet. Reading a stage for what it *proves* replaces the varp you cannot see.
 
-Dragon Slayer added four, all of which came from reading the engine rather than a guide:
+Dragon Slayer added these rules:
 
 - **A locked door baked as an ordinary edge is worse than no edge at all.** Every one of
   Melzar's seven coloured doors advertises `op1=Open` and answers "This door is securely
@@ -57,6 +57,9 @@ Dragon Slayer added four, all of which came from reading the engine rather than 
   same way. Worse, they are aggressive: `Game.inCombat()` reads *our* health bar, so a
   decoy landing one hit parks a "wait until out of combat" guard indefinitely. Target by
   npc id, and wait only on being locked onto the right one.
+
+- **Every approach to a skill-gated shortcut needs its requirement.** The Mining Guild ladder has an approach at (3018,3338); gating (3019,3339) leaves that real edge unrestricted. Its underground door at (3046,9756) also requires Mining 60 in both directions. The Dragon Slayer ore seams are public, but an unrestricted guild shortcut routes a Mining 40 character into the gate repeatedly.
+- **Finish nail production before withdrawing banked planks.** The smithing step deposits planks to make room for ore. Including planks in the same bank-first stock pass as nails immediately withdraws them again and prevents mining from starting.
 
 Two habits about verification, both of which cost live runs here:
 

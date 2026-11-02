@@ -1,4 +1,4 @@
-import { prepareStrikes, STRIKE_RUNES } from '../../strike.js';
+import { prepareStrikeStaff, prepareStrikes, STRIKE_RUNES, STRIKE_STAVES } from '../../strike.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { talkStrict, type NpcStop } from '../../exec/primitives.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
@@ -48,6 +48,7 @@ const ENTER_ARENA = custom('enter the arena', enterArenaByDoor2);
 const KNOCK_FOR_GUARD = custom('knock for the arena guard', enterArenaByGuard);
 const UNLOCK_JEREMY = custom('unlock Jeremy\'s cell', unlockJeremy);
 const FLEE = custom('run from General Khazard', fleeArena);
+const SUPPLY_KEEP = ['khazard helmet', 'khazard armour', 'khazard cell keys', 'khali brew', ...STRIKE_STAVES];
 
 const DRUNK_GUARD = custom('talk to the drunk guard', log =>
     talkById(FA_NPC.DRUNK_GUARD, ['Do you still fancy a drink?', 'Yes'], log, FA_TILE.DRUNK_GUARD));
@@ -136,7 +137,9 @@ function outsideStep(snap: QuestSnapshot, stage: number): QuestStep {
         return { kind: 'talk', stop: LADY_SERVIL };
     }
     if (stage < FA_STAGE.DEFEATED_BOUNCER) {
-        const runes = prepareStrikes(snap, ['khazard helmet', 'khazard armour', 'khazard cell keys', 'khali brew']);
+        const staff = prepareStrikeStaff(snap, SUPPLY_KEEP);
+        if (staff) return staff;
+        const runes = prepareStrikes(snap, SUPPLY_KEEP);
         if (runes) return runes;
     }
     if (stage >= FA_STAGE.SENT_JAIL) {
@@ -232,12 +235,13 @@ const FOOD = 8;
 
 export const fightarena: QuestModule = {
     record: QUESTS.find(r => r.id === 'arena')!,
+    resumeAt: tile => ['arena', 'prisonCell'].includes(pocketOf(tile)),
     pray: { protect: 'melee', potions: 2 },
     bank: FA_TILE.YANILLE_BANK,
     food: FOOD,
     grind: ['Khazard Ogre', 'Khazard Scorpion', 'Bouncer'],
-    tools: ['khazard helmet', 'khazard armour', 'khazard cell keys', 'khali brew', 'coins', ...STRIKE_RUNES, ...KIT_KEEP],
-    foodReady: snap => (snap.stage ?? 0) >= FA_STAGE.DEFEATED_BOUNCER || prepareStrikes(snap) === null,
+    tools: [...SUPPLY_KEEP, 'coins', ...STRIKE_RUNES, ...KIT_KEEP],
+    foodReady: snap => (snap.stage ?? 0) >= FA_STAGE.DEFEATED_BOUNCER || (prepareStrikeStaff(snap, SUPPLY_KEEP) === null && prepareStrikes(snap) === null),
     readStage: readFightArenaStage,
     sustain: { foods: ['Lobster', 'Swordfish', 'Shark', 'Tuna'], eatBelowHp: 0.6 },
     warnReadiness: () => 'Fight Arena ends on Bouncer — level 137, 116 hitpoints, 120 attack and defence',

@@ -1,6 +1,7 @@
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { Skills } from '../../../../skills/Skills.js';
-import { EW_ITEM, PICKAXES, SEERS_BANK, type EwItem } from './areas.js';
+import { EW_ITEM, COAL_ROCKS, PICKAXES, PICKAXE_SPAWN, SEERS_BANK, type EwItem } from './areas.js';
+import { PICKAXES as MINING_PICKS } from '../../../../acquisition/Tools.js';
 import { MELEE_WEAPONS, bestBanked, bestHeld, packWeapon, wieldedWeapon } from '../../weapons.js';
 
 export const COAL_NEED = 4;
@@ -234,10 +235,38 @@ function bankCountByName(snap: QuestSnapshot, name: string): number {
     return snap.bank?.get(name.toLowerCase()) ?? 0;
 }
 
+function gatherCoal(snap: QuestSnapshot): QuestStep | null {
+    const short = COAL_NEED - held(snap, EW_ITEM.COAL.id);
+    const inBank = banked(snap, EW_ITEM.COAL.id);
+    if (short <= inBank) return null;
+
+    const mining = snap.mining ?? 1;
+    const picks = PICKAXES.filter(p => MINING_PICKS.some(tool => tool.name === p.name && mining >= tool.level));
+    const pick = picks.find(p => held(snap, p.id) > 0 || snap.wornIds?.has(p.id));
+    if ((snap.freeSlots ?? 28) < short + (pick ? 0 : 1)) {
+        const keep = [EW_ITEM.BATTERED_BOOK, EW_ITEM.BATTERED_KEY, EW_ITEM.ELEMENTAL_ORE,
+            EW_ITEM.ELEMENTAL_METAL, EW_ITEM.ELEMENTAL_SHIELD, EW_ITEM.COAL, ...(pick ? [pick] : [])];
+        return { kind: 'deposit', keep: keep.map(item => item.name), keepIds: keep.map(item => item.id), bank: SEERS_BANK, exactKeep: true };
+    }
+    if (inBank > 0) return withdraw([{ ...EW_ITEM.COAL, qty: Math.min(short, inBank) }]);
+    if (mining < 30) return { kind: 'wait', reason: `need Mining 30 to mine Coal, or ${short} Coal in the bank` };
+    if (!pick) {
+        const bankPick = picks.find(p => banked(snap, p.id) > 0);
+        return bankPick
+            ? withdraw([{ ...bankPick, qty: 1 }])
+            : { kind: 'grabGround', item: 'Bronze pickaxe', anchor: PICKAXE_SPAWN, waitIfMissing: true };
+    }
+    return { kind: 'mineRock', rock: 'Coal', item: EW_ITEM.COAL.name, qty: short, anchor: COAL_ROCKS };
+}
+
 /** Tools and materials needed before committing to the spiral stairs. Bank first: scan, deposit junk, withdraw the missing kit (food and weapon included). */
 export function surfaceLoadout(snap: QuestSnapshot, needBellowsFix: boolean, needSmelt: boolean): QuestStep | null {
     if (!snap.bankKnown) {
         return scanBank();
+    }
+    if (needSmelt) {
+        const coal = gatherCoal(snap);
+        if (coal) return coal;
     }
 
     // Drop junk before packing so a full pack of misc loot cannot block withdraws.
@@ -360,9 +389,6 @@ export function surfaceLoadout(snap: QuestSnapshot, needBellowsFix: boolean, nee
     }
     if (held(snap, EW_ITEM.HAMMER.id) === 0 && banked(snap, EW_ITEM.HAMMER.id) === 0) {
         return { kind: 'wait', reason: 'need a Hammer in the bank to smith the Elemental shield' };
-    }
-    if (needSmelt && held(snap, EW_ITEM.COAL.id) < COAL_NEED && banked(snap, EW_ITEM.COAL.id) === 0) {
-        return { kind: 'wait', reason: `need ${COAL_NEED - held(snap, EW_ITEM.COAL.id)} Coal in the bank to smelt Elemental ore` };
     }
     if (needBellowsFix && held(snap, EW_ITEM.THREAD.id) < THREAD_NEED && banked(snap, EW_ITEM.THREAD.id) === 0) {
         return { kind: 'wait', reason: 'need Thread in the bank to fix the bellows' };

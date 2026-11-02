@@ -4,10 +4,11 @@ export interface RosterClient {
     readSettings(script: string): Record<string, string>;
     assignScript(script: string): void;
     copySettings(script: string, values: Record<string, string>): void;
+    configureScript(script: string, values: Record<string, string> | null, start: boolean): Promise<void>;
     startScript(): void;
     stopScript(): void;
     travelTo(destination: string): Promise<void>;
-    editSettings(): void;
+    editSettings(): Promise<void>;
 }
 
 export function isRosterScript(name: string): boolean {

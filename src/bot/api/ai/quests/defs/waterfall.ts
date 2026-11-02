@@ -1,5 +1,6 @@
 import { normalizeJournal } from '../journalText.js';
 import { actions, reader } from '../../../../adapter/ClientAdapter.js';
+import { EventSignal } from '../../../execution/EventSignal.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
 import { ChatDialog } from '../../../ui/dialogue/ChatDialog.js';
@@ -17,8 +18,8 @@ import { QUESTS } from '../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { talkThrough, walkWithHops, type LadderHop, type NpcStop } from '../exec/primitives.js';
 import { executeStep } from '../exec/steps.js';
-import { ITEM_DB } from '../../../../data/itemdb.js';
-import { QuestFood } from '../food.js';
+import { stealCakes } from '../../../thieving/CakeStall.js';
+import { FLEE_TILE, STAND } from '../../../thieving/cakeStallData.js';
 
 export const WATERFALL_STAGE = {
     NOT_STARTED: 0,
@@ -54,6 +55,13 @@ const ITEM = {
 } as const satisfies Record<string, WaterfallItem>;
 
 const RUNES = [ITEM.AIR_RUNE, ITEM.EARTH_RUNE, ITEM.WATER_RUNE] as const;
+const FOODS: readonly WaterfallItem[] = [
+    { id: 1891, name: 'Cake' },
+    { id: 1893, name: '2/3 cake' },
+    { id: 1895, name: 'Slice of cake' },
+    { id: 2309, name: 'Bread' },
+    { id: 1901, name: 'Chocolate slice' }
+];
 const FOOD_TARGET = 8;
 
 // Why: refilling on any shortfall walked back to Ardougne for 1 fish mid-route.
@@ -91,6 +99,7 @@ const LOC = {
 const ARDOUGNE_BANK = new Tile(2616, 3332, 0);
 const AEMAD_SHOP = { npc: 'Aemad', anchor: new Tile(2614, 3293, 0) };
 const BETTY_SHOP = { npc: 'Betty', anchor: new Tile(3012, 3259, 0) };
+const ARDOUGNE_MAN = new Tile(2614, 3318, 0);
 const VARROCK_MAN = new Tile(3240, 3405, 0);
 const AL_KHARID_MAN = new Tile(3279, 3188, 0);
 const KEBAB_SELLER = new Tile(3272, 3182, 0);
@@ -393,12 +402,13 @@ async function eatFundingKebab(): Promise<boolean> {
 
 async function restoreFundingHealth(kebabsAvailable: boolean, log: (message: string) => void): Promise<boolean> {
     while (Skills.effective('hitpoints') < SAFE_PICKPOCKET_HP) {
+        if (EventSignal.pending()) return false;
         if (kebabsAvailable && liveCoins() > 0) {
             if (!(await buyFundingKebab(log)) || !(await eatFundingKebab())) return false;
             continue;
         }
         log(`waiting for ${SAFE_PICKPOCKET_HP} Hitpoints before another Man pickpocket`);
-        await Execution.delayUntil(() => Skills.effective('hitpoints') >= SAFE_PICKPOCKET_HP, 0);
+        await Execution.delayUntil(() => Skills.effective('hitpoints') >= SAFE_PICKPOCKET_HP || EventSignal.pending(), 0);
     }
     return true;
 }
@@ -407,12 +417,14 @@ async function farmWaterfallCoins(
     anchor: Tile,
     target: number,
     kebabsAvailable: boolean,
-    log: (message: string) => void
+    log: (message: string) => void,
+    thievingTarget = 1
 ): Promise<boolean> {
     if (!(await reachFundingMan(anchor, log))) return false;
     let reportedHundreds = Math.floor(liveCoins() / 100);
     let lastEvidenceAt = performance.now();
-    while (liveCoins() < target) {
+    while (liveCoins() < target || Skills.level('thieving') < thievingTarget) {
+        if (EventSignal.pending()) return false;
         const coinsBefore = liveCoins();
         const xpBefore = Skills.xp('thieving');
         const hpBefore = Skills.effective('hitpoints');
@@ -493,45 +505,61 @@ function sourceRope(snap: QuestSnapshot, bank: Tile = ARDOUGNE_BANK): QuestStep 
     return coins ?? { kind: 'buy', item: ITEM.ROPE.name, qty: 1, shop: AEMAD_SHOP, estGp: 20 };
 }
 
-// Why: food is whatever the player chose, drawn from the bank; the old shop runs for 15 Bread and 10 Tea carried a level-3 account with an empty bank.
-
-/** The configured food as an id and name, or null when it names nothing the item db knows. */
-function foodItem(): WaterfallItem | null {
-    const name = QuestFood.name?.trim();
-    if (!name) {
-        return null;
-    }
-    const record = ITEM_DB.find(item => item.name.toLowerCase() === name.toLowerCase());
-    return record ? { id: record.id, name: record.name } : null;
+function foodCount(snap: QuestSnapshot): number {
+    return FOODS.reduce((total, food) => total + heldCount(snap, food), 0);
 }
 
-/** Keep ids plus whatever the player eats, so a normalize pass never banks the food. */
+function needsFood(snap: QuestSnapshot): boolean {
+    const tile = snap.tile;
+    const resupplying = tile?.level === 0
+        && Math.max(Math.abs(tile.x - ARDOUGNE_BANK.x), Math.abs(tile.z - ARDOUGNE_BANK.z)) <= 64;
+    return foodCount(snap) < (resupplying ? FOOD_TARGET : FOOD_LOW + 1);
+}
+
 function withFood(ids: readonly number[]): readonly number[] {
-    const food = foodItem();
-    return food ? [...ids, food.id] : ids;
+    return [...ids, ...FOODS.map(food => food.id)];
+}
+
+async function stealWaterfallCakes(log: (message: string) => void): Promise<boolean> {
+    if (waterfallArea(Game.tile()) !== 'mainland' || EventSignal.pending()) return false;
+    await Sustain.run();
+    if (!Game.inCombat() && Skills.level('thieving') < 5) {
+        log('pickpocketing the Ardougne Man to level 5 Thieving for cakes');
+        if (!(await farmWaterfallCoins(ARDOUGNE_MAN, 0, false, log, 5))) return false;
+    }
+    if (!Game.inCombat()
+        && !(await Traversal.walkResilient(STAND, { radius: 0, attempts: 3, timeoutMs: 120_000, log }))) return false;
+    const result = Game.inCombat() ? 'combat' : await stealCakes({
+        fillTo: FOOD_TARGET,
+        abort: () => EventSignal.pending() || waterfallArea(Game.tile()) !== 'mainland',
+        setStatus: log,
+        log
+    });
+    if (result === 'combat') {
+        if (!(await Traversal.walkResilient(FLEE_TILE, { radius: 2, attempts: 3, timeoutMs: 30_000, log }))) return false;
+        await Execution.delayUntil(() => !Game.inCombat(), 15_000);
+        await Sustain.run();
+        return !Game.inCombat();
+    }
+    return result === 'stocked' && FOODS.reduce((total, food) => total + liveCount(food), 0) > FOOD_LOW;
 }
 
 export function sourceFood(snap: QuestSnapshot, bank: Tile = ARDOUGNE_BANK): QuestStep | null {
-    const food = foodItem();
-    if (!food) {
-        return { kind: 'wait', reason: 'no food selected for the Waterfall dungeon' };
-    }
-    const held = heldCount(snap, food);
-    if (held > FOOD_LOW) {
-        return null;
-    }
-    const missing = FOOD_TARGET - held;
-    if (!snap.bankKnown) {
-        return scanBank(bank);
-    }
-    const inBank = banked(snap, food);
-    if (inBank <= 0) {
-        return { kind: 'wait', reason: `no ${food.name} in the bank for the Waterfall dungeon` };
-    }
+    const held = foodCount(snap);
+    if (!needsFood(snap)) return null;
+    if (!snap.bankKnown) return scanBank(bank);
+    let missing = FOOD_TARGET - held;
     if (snap.freeSlots !== undefined && snap.freeSlots < missing) {
-        return { kind: 'wait', reason: `need ${missing} free slots for ${food.name}` };
+        return { kind: 'wait', reason: `need ${missing} free slots for Waterfall cakes` };
     }
-    return withdrawExact(food, Math.min(missing, inBank), bank);
+    const items: WithdrawItem[] = [];
+    for (const food of FOODS) {
+        const qty = Math.min(missing, banked(snap, food));
+        if (qty > 0) items.push({ ...food, qty });
+        missing -= qty;
+    }
+    return items.length > 0 ? withdraw(items, bank)
+        : { kind: 'custom', name: 'steal Waterfall cakes', run: stealWaterfallCakes };
 }
 
 function nearBetty(snap: QuestSnapshot): boolean {
@@ -574,7 +602,7 @@ function inventoryHasOutsideIds(snap: QuestSnapshot, keepIds: readonly number[])
         return [...snap.invIds.keys()].some(id => !keepIds.includes(id));
     }
     const keepNames = new Set(
-        Object.values(ITEM)
+        [...Object.values(ITEM), ...FOODS]
             .filter(item => keepIds.includes(item.id))
             .map(item => item.name.toLowerCase())
     );
@@ -596,11 +624,11 @@ const MAX_LOADOUT_COUNT = new Map<number, number>([
 ]);
 
 function maxLoadoutCount(id: number): number | undefined {
-    const food = foodItem();
-    return food && id === food.id ? FOOD_TARGET : MAX_LOADOUT_COUNT.get(id);
+    return FOODS.some(food => food.id === id) ? FOOD_TARGET : MAX_LOADOUT_COUNT.get(id);
 }
 
 function inventoryHasExcessKeptIds(snap: QuestSnapshot, keepIds: readonly number[]): boolean {
+    if (foodCount(snap) > FOOD_TARGET) return true;
     if (!snap.invIds) return false;
     return [...snap.invIds.entries()].some(([id, count]) => {
         const maximum = maxLoadoutCount(id);
@@ -852,16 +880,43 @@ async function exitWaterfallDungeon(log: (message: string) => void): Promise<boo
     return barrelEscape(log);
 }
 
-async function healToFull(log: (message: string) => void, context: string): Promise<boolean> {
-    while (Skills.effective('hitpoints') < Skills.level('hitpoints')) {
-        const before = Skills.effective('hitpoints');
-        await Sustain.run();
-        if (Skills.effective('hitpoints') <= before) {
-            log(`${context}: cannot reach full health without usable food`);
-            return false;
-        }
+function liveFoodBites(): number {
+    return Inventory.items().reduce((total, item) => {
+        if (item.noted || !FOODS.some(food => food.id === item.id)) return total;
+        return total + item.count * (item.id === 1891 ? 3 : item.id === 1893 ? 2 : 1);
+    }, 0);
+}
+
+async function healToHp(log: (message: string) => void, context: string, target: number, limit: number): Promise<boolean> {
+    let consumed = 0;
+    let stalled = 0;
+    for (let attempt = 0; attempt < limit + 3 && consumed < limit && stalled < 3; attempt++) {
+        if (EventSignal.pending()) return false;
+        if (Skills.effective('hitpoints') >= target) return true;
+        const food = Inventory.items().find(item => !item.noted && FOODS.some(food => food.id === item.id));
+        if (!food) break;
+        const hp = Skills.effective('hitpoints');
+        const before = liveFoodBites();
+        await food.interact('Eat');
+        await Execution.delayTicks(3);
+        const bites = Math.max(0, before - liveFoodBites());
+        consumed += bites;
+        stalled = bites > 0 || Skills.effective('hitpoints') > hp ? 0 : stalled + 1;
+        if (bites > 0) log(`${context}: ate ${bites} bite(s), ${Skills.effective('hitpoints')}/${target} HP`);
     }
-    return true;
+    const hp = Skills.effective('hitpoints');
+    if (hp >= target) return true;
+    log(`${context}: healing stopped at ${hp}/${target} HP after ${consumed} bites (${liveFoodBites()} bites left)`);
+    return false;
+}
+
+export function healToFull(log: (message: string) => void, context: string): Promise<boolean> {
+    return healToHp(log, context, Skills.level('hitpoints'), 24);
+}
+
+export function healAtCrate(log: (message: string) => void): Promise<boolean> {
+    const maxHp = Skills.level('hitpoints');
+    return healToHp(log, 'Baxtorian crate', Math.min(maxHp, Math.max(20, Math.ceil(maxHp * 0.8))), 6);
 }
 
 async function prepareDungeonSprint(log: (message: string) => void): Promise<boolean> {
@@ -983,7 +1038,7 @@ async function findBaxtorianKey(log: (message: string) => void): Promise<boolean
     if (!(await Traversal.walkResilient(BAXTORIAN_CRATE_STAND, { radius: 0, attempts: 3, timeoutMs: 90_000, log }))) {
         return false;
     }
-    if (!(await healToFull(log, 'Baxtorian crate'))) {
+    if (!(await healAtCrate(log))) {
         await exitWaterfallDungeon(log);
         return false;
     }
@@ -1081,8 +1136,7 @@ function prepareDungeon(snap: QuestSnapshot, finalTrip: boolean): QuestStep | nu
     const relicRecovery = recoverRelics(snap);
     if (relicRecovery) return relicRecovery;
     // Why: refilling food first narrows the pack to travel supplies, so a restart with leftover relics or runes can't fill it before the food and Rope are in.
-    const food0 = foodItem();
-    const replenishingFood = food0 !== null && heldCount(snap, food0) <= FOOD_LOW;
+    const replenishingFood = needsFood(snap);
     const travelNormalize = normalizeLoadout(
         snap,
         withFood(replenishingFood ? START_KEEP : (finalTrip ? FINAL_KEEP : DUNGEON_KEEP)),
@@ -1303,7 +1357,6 @@ export const waterfall: QuestModule = {
     tools: ['glarial', 'a key', 'rope', 'book on baxtorian', 'air rune', 'earth rune', 'water rune', 'coins'],
     ownsInventory: true,
     readStage: readWaterfallStage,
-    // Why: `resolveSustainPolicy` appends the configured food, so naming none here eats whatever was chosen.
-    sustain: { foods: [], eatBelowHp: 1 },
+    sustain: { foods: ['Cake', 'Bread', 'Chocolate slice'], eatBelowHp: 1 },
     decide
 };

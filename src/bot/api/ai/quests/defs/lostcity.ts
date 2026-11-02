@@ -121,7 +121,7 @@ export function lostCityArea(tile: QuestSnapshot['tile']): LostCityArea {
     if (tile.x >= 2790 && tile.x <= 2900 && tile.z >= 9650 && tile.z <= 9850) {
         return 'dungeon';
     }
-    if (tile.x >= 2790 && tile.x <= 2880 && tile.z >= 3290 && tile.z <= 3440) {
+    if (tile.x >= 2790 && tile.x <= 2880 && tile.z >= 3290 && tile.z <= 3391) {
         return tile.level > 0 ? 'entranaShip' : 'entrana';
     }
     return 'mainland';
@@ -247,7 +247,7 @@ function sourceCombatFood(snap: QuestSnapshot): QuestStep | null {
     if (inBank < missing) {
         return {
             kind: 'wait',
-            reason: `need ${missing} more ${food} in the bank (${LOST_CITY_FOOD_TARGET} combat food total)`
+            reason: `need ${missing - inBank} more ${food} in the bank (${LOST_CITY_FOOD_TARGET} combat food total)`
         };
     }
     const space = makeAcquisitionSpace(snap, missing);
@@ -463,7 +463,8 @@ async function sailToEntrana(log: (m: string) => void): Promise<boolean> {
     }
     return Execution.delayUntil(() => {
         const tile = Game.tile();
-        return tile !== null && tile.x >= 2790 && tile.x <= 2880 && tile.z >= 3290 && tile.z <= 3440;
+        const area = lostCityArea(tile);
+        return area === 'entrana' || area === 'entranaShip';
     }, 30_000);
 }
 

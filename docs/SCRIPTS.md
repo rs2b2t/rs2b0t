@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 75. Categories: 21.
+- Scripts: 76. Categories: 21.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -30,7 +30,7 @@
 - [Smithing](#smithing) — 3
 - [Thieving](#thieving) — 3
 - [Treasure Trails](#treasure-trails) — 1
-- [Utility](#utility) — 2
+- [Utility](#utility) — 3
 - [Woodcutting](#woodcutting) — 2
 
 ## Agility
@@ -613,7 +613,7 @@ Two-player cooperative flax picking and spinning — Runner picks flax and deliv
 
 ### FlaxSpinner
 
-Seers flax spinner — withdraw flax, climb to the spinning wheel, Spin-X into bow string, bank, repeat
+Seers spinner: withdraw flax for bow strings or wool for balls of wool, spin upstairs, bank the output, and repeat
 
 - Tags: `seers`, `crafting`, `banking`, `afk`
 
@@ -644,13 +644,15 @@ Banks at the nearest bank, withdraws uncut gems and a chisel, cuts every gem you
 
 ### JiveCrafting
 
-Makes one gold jewel picked from the dropdown at the Al Kharid furnace: banks for the mould, the gold bars and the gems, uses a bar on the furnace, clicks the biggest Make button that fits the load and walks back with it. Stops honestly when the bank runs out of any of the three.
+Crafts gold jewellery at the Al Kharid furnace, or strings unstrung amulets with balls of wool at the nearest bank. Banks finished items and stops when supplies run out.
 
 - Tags: `crafting`, `jewellery`, `al kharid`, `banking`, `afk`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
+| `mode` | string | `"Craft jewellery"` | Mode — one of: Craft jewellery, String amulets |
 | `product` | string | `"Sapphire ring"` | Product — one of: Gold ring, Sapphire ring, Emerald ring, Ruby ring, Diamond ring, Dragonstone ring, Gold necklace, Sapphire necklace, Emerald necklace, Ruby necklace, Diamond necklace, Dragonstone necklace, Gold amulet, Sapphire amulet, Emerald amulet, Ruby amulet, Diamond amulet, Dragonstone amulet |
+| `amulet` | string | `"Gold amulet"` | Amulet to string — one of: Gold amulet, Sapphire amulet, Emerald amulet, Ruby amulet, Diamond amulet, Dragonstone amulet |
 
 ### LeatherCrafter
 
@@ -704,6 +706,7 @@ Fishes a chosen method at the spot that offers it; banks the catch, optionally c
 | `baitQty` | number (1–) | `1000` | Bait / feathers qty |
 | `leashRadius` | number (2–64) | `18` | Leash radius (tiles) |
 | `tickManip` | string | `"Off"` | Tick manip — one of: Off |
+| `threeTickFly` | boolean | `false` | 3-tick fly fishing (knife + shortbow) |
 | `guildFeatherMinutes` | number (0–120) | `0` | Feather supply trip every (minutes) |
 | `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Use Closest, Use Start Position, Use Custom Position, None, Draynor Village, Catherby, Fishing Guild, Barbarian Village, Seers (fly fishing), Karamja (Musa Point), Taverley Dungeon (lava eels), Gnome Stronghold (fishing), Shilo Village |
 | `customLocation` | tile | `{"x":3200,"z":3200,"level":0}` | Custom position (x,z) |
@@ -1073,7 +1076,7 @@ All-in-one quest completer — queues the implemented quests (empty selection = 
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `quests` | string[] | `[]` | Quest queue (empty = all) — one of: Big Chompy Bird Hunting, Biohazard, Black Knight's Fortress, Clock Tower, Cook's Assistant, Death Plateau, Demon Slayer, Digsite Quest, Doric's Quest, Dragon Slayer, Druidic Ritual, Dwarf Cannon, Eadgar's Ruse, Elemental Workshop, Ernest the Chicken, Family Crest, Fight Arena, Fishing Contest, Gertrude's Cat, Goblin Diplomacy, Hazeel Cult, Hero's Quest, Holy Grail, Horror from the Deep, Imp Catcher, Jungle Potion, Legends Quest, Lost City, Merlin's Crystal, Monk's Friend, Murder Mystery, Nature Spirit, Observatory Quest, Pirate's Treasure, Plague City, Priest in Peril, Prince Ali Rescue, Regicide, Romeo & Juliet, Rune Mysteries Quest, Scorpion Catcher, Sea Slug Quest, Shades of Mortton, Sheep Herder, Sheep Shearer, Shield of Arrav, Shilo Village, Tai Bwo Wannai Trio, Temple of Ikov, The Fremennik Trials, The Grand Tree, The Knight's Sword, The Restless Ghost, The Tourist Trap, Tree Gnome Village, Tribal Totem, Troll Stronghold, Underground Pass, Vampire Slayer, Watch Tower, Waterfall Quest, Witch's House, Witch's Potion |
+| `quests` | string[] | `[]` | Quest queue — one of: Big Chompy Bird Hunting, Biohazard, Black Knight's Fortress, Clock Tower, Cook's Assistant, Death Plateau, Demon Slayer, Digsite Quest, Doric's Quest, Dragon Slayer, Druidic Ritual, Dwarf Cannon, Eadgar's Ruse, Elemental Workshop, Ernest the Chicken, Family Crest, Fight Arena, Fishing Contest, Gertrude's Cat, Goblin Diplomacy, Hazeel Cult, Hero's Quest, Holy Grail, Horror from the Deep, Imp Catcher, Jungle Potion, Legends Quest, Lost City, Merlin's Crystal, Monk's Friend, Murder Mystery, Nature Spirit, Observatory Quest, Pirate's Treasure, Plague City, Priest in Peril, Prince Ali Rescue, Regicide, Romeo & Juliet, Rune Mysteries Quest, Scorpion Catcher, Sea Slug Quest, Shades of Mortton, Sheep Herder, Sheep Shearer, Shield of Arrav, Shilo Village, Tai Bwo Wannai Trio, Temple of Ikov, The Fremennik Trials, The Grand Tree, The Knight's Sword, The Restless Ghost, The Tourist Trap, Tree Gnome Village, Tribal Totem, Troll Stronghold, Underground Pass, Vampire Slayer, Watch Tower, Waterfall Quest, Witch's House, Witch's Potion |
 | `gatherWildernessPlanks` | boolean | `true` | Gather Wilderness planks |
 | `loadout` | string | `""` | Loadout — one of:  |
 | `food` | string | `"Lobster"` | Food — one of: Shark, Lobster, Swordfish, Tuna, Salmon, Trout, Pike, Bass, Herring, Sardine, Anchovies, Shrimps, Cooked meat, Cooked chicken, Bread, Stew, Cake, Chocolate cake, Plain pizza, Meat pizza, Anchovy pizza, Pineapple pizza, Redberry pie, Meat pie, Apple pie |
@@ -1121,7 +1124,7 @@ Master/runner crafting for Nature, Air and Cosmic runes. Nature runners unnote a
 
 ### MuleCrafter
 
-Crafter + mule runecrafting loop — both run bank→ruins→bank each cycle. Crafter has the talisman, crafts at the altar, trades runes for essence at the ruins. Mule ferries essence to the ruins and runes back to the bank. Dry mule signals at the bank and the crafter shares 1/N essence. Multi-mule round-robin with comma-separated partner names.
+Crafter + mule runecrafting loop — meet at the altar temple or overworld ruins, and trade with any configured mule that is available. Crafter has the talisman; bankFill=false prevents all crafter bank visits and overrides Bank after trades but still trades with configured mules, while bankFill=true enables scheduled bank trips. Mule ferries essence and runes between the meeting point and bank.
 
 - Tags: `runecrafting`, `trade`, `crafter`, `mule`, `falador`, `edgeville`
 
@@ -1129,8 +1132,10 @@ Crafter + mule runecrafting loop — both run bank→ruins→bank each cycle. Cr
 |---|---|---|---|
 | `rune` | string | `"Air rune"` | Rune — one of: Air rune, Mind rune, Water rune, Earth rune, Fire rune, Body rune, Cosmic rune, Chaos rune, Nature rune, Law rune, Death rune |
 | `mode` | string | `"Crafter"` | Mode — one of: Crafter, Mule |
-| `partner` | string | `""` | Partner name(s) (Optional for Crafter) |
-| `bankFill` | boolean | `true` | Fill essence at bank |
+| `meetingPoint` | string | `"Altar (inside)"` | Meet at — one of: Altar (inside), Ruins (outside) |
+| `partner` | string | `""` | Partner name(s) |
+| `tradesPerBank` | number (0–) | `0` | Bank after trades |
+| `bankFill` | boolean | `false` | Allow crafter bank visits |
 
 ### RuneCrafter
 
@@ -1277,6 +1282,24 @@ Walks to a bank and rewrites the slot order into categories, coins first and jun
 Opens ordinary loot caskets at the bank. Withdraws a full inventory, opens up to five caskets at a time, deposits all inventory items and repeats until the bank is out of caskets. Start at a bank. Clue and quest caskets are left banked.
 
 - Tags: `caskets`, `banking`, `loot`, `members`
+
+### MuleDepot
+
+Shared-bank depot for a group of accounts, in two modes. Dump: every mule withdraws a shared item list and trades the lot to one supermule, which banks each delivery and keeps going. Supply: one supplier hands a fixed loadout to each account once, delivering over as many trades as the loadout needs, then stops; if the bank cannot supply a line, the rest is still delivered and the shortfall is named when it stops. Four roles off two settings — Dump/Mule, Dump/Supermule, Supply/Supplier, Supply/Client — and a designation from the wrong mode is refused at startup. Default bank Seers; both sides use the same one.
+
+- Tags: `trade`, `mule`, `banking`, `logistics`, `multi-account`, `depot`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `mode` | string | `"Dump"` | Mode — one of: Dump, Supply |
+| `designation` | string | `"Mule"` | Designation — one of: Mule, Supermule, Supplier, Client |
+| `bank` | string | `"Seers"` | Bank — one of: Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Legends Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
+| `accounts` | string | `""` | Accounts |
+| `items` | string[] | `["Air rune","water rune","earth rune","fire rune","cosmic rune","law rune","mind rune","body rune","nature rune","chaos rune","death rune","soul rune","blood rune","Bronze arrow","iron arrow","steel arrow","mithril arrow","adamant arrow","rune arrow","rune dart","rune knife","Feather","cowhide","dragonhide","dragon bones","big bones","Snape grass","unicorn horn","limpwurt root","herb","Nature talisman","half of a key","uncut sapphire","uncut emerald","uncut ruby","uncut diamond","chaos talisman","rune javelin","dragon spear","rune spear","shield left half","rune longsword","adamant platebody","rune dagger","adamant full helm","rune sq shield","rune battleaxe","runite bar","runite ore","rune kiteshield","rune scimitar","rune sword","rune full helm","dragon platelegs","dragon plateskirt","dragon chainbody","adamant platelegs","Air talisman","earth talisman","water talisman","fire talisman","mind talisman","body talisman","cosmic talisman","Ashes","eye of newt","vial","vial of water","rune essence","coal","iron ore","gold ore","mithril ore","adamantite ore","runite ore","yew logs","magic logs","hard leather","leather","seaweed"]` | Item list (Dump) |
+| `itemsMode` | string | `"csv"` | Item list entry mode — one of: List (chips), CSV (paste) |
+| `loadout` | string[] | `["10000 Air rune","10000 Mind rune"]` | Loadout (Supply) |
+| `loadoutMode` | string | `"csv"` | Loadout entry mode — one of: List (chips), CSV (paste) |
+| `tradeSlots` | number (1–28) | `28` | Slots per batch |
 
 ## Woodcutting
 

@@ -72,6 +72,7 @@ import CoalTrucks from './CoalTrucks/CoalTrucks.js';
 import RuneCrafter, { SETTINGS as RUNECRAFTER_SETTINGS } from './RuneCrafter/RuneCrafter.js';
 import JiveRC, { SETTINGS as JIVERC_SETTINGS } from './JiveRC/JiveRC.js';
 import MuleCrafter, { SETTINGS as MULECRAFTER_SETTINGS } from './MuleCrafter/MuleCrafter.js';
+import MuleDepot, { SETTINGS as MULEDEPOT_SETTINGS } from './MuleDepot/MuleDepot.js';
 import RoguesPurse from './RoguesPurse/RoguesPurse.js';
 import HerbloreSecondaries, { HERBLORE_SECONDARIES_SETTINGS } from './HerbloreSecondaries/HerbloreSecondaries.js';
 import HerbCleaner, { HERB_CLEANER_SETTINGS } from './HerbCleaner/HerbCleaner.js';
@@ -254,7 +255,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'JiveCrafting',
-    description: 'Makes one gold jewel picked from the dropdown at the Al Kharid furnace: banks for the mould, the gold bars and the gems, uses a bar on the furnace, clicks the biggest Make button that fits the load and walks back with it. Stops honestly when the bank runs out of any of the three.',
+    description: 'Crafts gold jewellery at the Al Kharid furnace, or strings unstrung amulets with balls of wool at the nearest bank. Banks finished items and stops when supplies run out.',
     category: 'Crafting',
     tags: ['crafting', 'jewellery', 'al kharid', 'banking', 'afk'],
     settingsSchema: JIVECRAFTING_SETTINGS,
@@ -456,6 +457,13 @@ ScriptRegistry.register({
             label: 'Tick manip',
             group: 'Tick manip',
             help: TICK_MANIP_UNSHIPPED_HELP
+        },
+        threeTickFly: {
+            type: 'boolean',
+            default: false,
+            label: '3-tick fly fishing (knife + shortbow)',
+            group: 'Tick manip',
+            help: 'Roll-anchored fly fishing: knife the log on the roll, Make-1 shortbow + Lure on the next tick, then roll again 3 ticks after the last roll. Needs a Knife and one Logs; power/drop mode is allowed.'
         },
         guildFeatherMinutes: {
             type: 'number',
@@ -694,7 +702,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'FlaxSpinner',
-    description: 'Seers flax spinner — withdraw flax, climb to the spinning wheel, Spin-X into bow string, bank, repeat',
+    description: 'Seers spinner: withdraw flax for bow strings or wool for balls of wool, spin upstairs, bank the output, and repeat',
     category: 'Crafting',
     tags: ['seers', 'crafting', 'banking', 'afk'],
     settingsSchema: FLAXSPINNER_SETTINGS,
@@ -759,11 +767,20 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'MuleCrafter',
-    description: 'Crafter + mule runecrafting loop — both run bank→ruins→bank each cycle. Crafter has the talisman, crafts at the altar, trades runes for essence at the ruins. Mule ferries essence to the ruins and runes back to the bank. Dry mule signals at the bank and the crafter shares 1/N essence. Multi-mule round-robin with comma-separated partner names.',
+    description: 'Crafter + mule runecrafting loop — meet at the altar temple or overworld ruins, and trade with any configured mule that is available. Crafter has the talisman; bankFill=false prevents all crafter bank visits and overrides Bank after trades but still trades with configured mules, while bankFill=true enables scheduled bank trips. Mule ferries essence and runes between the meeting point and bank.',
     category: 'Runecrafting',
     tags: ['runecrafting', 'trade', 'crafter', 'mule', 'falador', 'edgeville'],
     settingsSchema: MULECRAFTER_SETTINGS,
     create: () => new MuleCrafter()
+});
+
+ScriptRegistry.register({
+    name: 'MuleDepot',
+    description: 'Shared-bank depot for a group of accounts, in two modes. Dump: every mule withdraws a shared item list and trades the lot to one supermule, which banks each delivery and keeps going. Supply: one supplier hands a fixed loadout to each account once, delivering over as many trades as the loadout needs, then stops; if the bank cannot supply a line, the rest is still delivered and the shortfall is named when it stops. Four roles off two settings — Dump/Mule, Dump/Supermule, Supply/Supplier, Supply/Client — and a designation from the wrong mode is refused at startup. Default bank Seers; both sides use the same one.',
+    category: 'Utility',
+    tags: ['trade', 'mule', 'banking', 'logistics', 'multi-account', 'depot'],
+    settingsSchema: MULEDEPOT_SETTINGS,
+    create: () => new MuleDepot()
 });
 
 ScriptRegistry.register({

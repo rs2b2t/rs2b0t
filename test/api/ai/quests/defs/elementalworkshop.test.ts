@@ -50,6 +50,7 @@ function snap(options: {
     tile?: WorldTile | null;
     freeSlots?: number;
     attack?: number;
+    mining?: number;
     worn?: string[];
     wornIds?: number[];
 } = {}): QuestSnapshot {
@@ -70,6 +71,7 @@ function snap(options: {
         tile: options.tile === undefined ? SEERS : options.tile,
         // Why: the quest arms itself from the bank, so a fixture with no Attack level can wield nothing.
         attack: options.attack ?? 60,
+        mining: options.mining ?? 30,
         freeSlots: options.freeSlots ?? 20
     };
 }
@@ -418,5 +420,118 @@ describe('Elemental Workshop supplies helpers', () => {
             freeSlots: 2
         }), true, true);
         expect(step?.kind).toBe('deposit');
+    });
+});
+
+
+describe('Elemental Workshop coal gathering', () => {
+    function gathering(options: Parameters<typeof snap>[0] = {}): QuestSnapshot {
+        return snap({
+            stage: EW_STAGE.ENTERED,
+            flags: [EW_FLAG.WATER, EW_FLAG.BELLOWS, EW_FLAG.FURNACE],
+            invIds: [[EW_ITEM.BATTERED_BOOK.id, 1], [EW_ITEM.HAMMER.id, 1], [BRONZE_PICK, 1], [STEEL_SCIM, 1]],
+            inv: ['Battered book', 'Hammer', 'Bronze pickaxe', 'Steel scimitar', 'Lobster', 'Lobster', 'Lobster'],
+            ...options
+        });
+    }
+
+    test('scans an unknown bank before mining coal', () => {
+        expect(decide(gathering({ bankKnown: false })).kind).toBe('scanBank');
+    });
+
+    test('mines missing coal when the known bank is empty', () => {
+        const step = decide(gathering());
+        expect(step.kind).toBe('mineRock');
+        if (step.kind === 'mineRock') {
+            expect(step.rock).toBe('Coal');
+            expect(step.item).toBe('Coal');
+            expect(step.qty).toBe(4);
+        }
+    });
+
+    test('withdraws partial banked coal before mining the remainder', () => {
+        const s = gathering({ bankIds: [[EW_ITEM.COAL.id, 2]] });
+        const step = decide(s);
+        expect(step.kind).toBe('withdraw');
+        if (step.kind === 'withdraw') expect(step.items).toContainEqual({ name: 'Coal', id: 453, qty: 2 });
+        s.bankIds = new Map();
+        s.invIds = new Map([...s.invIds!, [EW_ITEM.COAL.id, 2]]);
+        const mining = decide(s);
+        expect(mining.kind).toBe('mineRock');
+        if (mining.kind === 'mineRock') expect(mining.qty).toBe(2);
+    });
+
+    test('redecides after each coal and enters the workshop at four', () => {
+        const s = gathering();
+        for (const count of [1, 2, 3]) {
+            s.invIds = new Map([...s.invIds!, [EW_ITEM.COAL.id, count]]);
+            const step = decide(s);
+            expect(step.kind).toBe('mineRock');
+            if (step.kind === 'mineRock') expect(step.qty).toBe(4 - count);
+        }
+        s.invIds = new Map([...s.invIds!, [EW_ITEM.COAL.id, 4]]);
+        expect(customName(decide(s))).toBe('enter the Elemental Workshop');
+    });
+
+    test('reserves space for all missing coal even when the full pack only holds kept items', () => {
+        const s = gathering({ freeSlots: 0, inv: ['Lobster', 'Battered book', 'Bronze pickaxe', 'Coal'] });
+        s.invIds = new Map([...s.invIds!, [EW_ITEM.COAL.id, 2]]);
+        const step = decide(s);
+        expect(step.kind).toBe('deposit');
+        if (step.kind === 'deposit') {
+            expect(step.keep.map(name => name.toLowerCase())).not.toContain('lobster');
+            expect(step.keepIds).toContain(EW_ITEM.COAL.id);
+            expect(step.keepIds).toContain(EW_ITEM.BATTERED_BOOK.id);
+            expect(step.keepIds).toContain(BRONZE_PICK);
+        }
+    });
+
+    test('reserves the coal deficit before withdrawing partial bank stock', () => {
+        expect(decide(gathering({ freeSlots: 1, bankIds: [[EW_ITEM.COAL.id, 2]] })).kind).toBe('deposit');
+    });
+
+    test('withdraws a usable bank pickaxe before mining', () => {
+        const s = gathering({ wornIds: [1275], bankIds: [[BRONZE_PICK, 1]] });
+        s.invIds = new Map([[EW_ITEM.BATTERED_BOOK.id, 1], [EW_ITEM.HAMMER.id, 1], [STEEL_SCIM, 1]]);
+        const step = decide(s);
+        expect(step.kind).toBe('withdraw');
+        if (step.kind === 'withdraw') expect(step.items).toContainEqual({ name: 'Bronze pickaxe', id: BRONZE_PICK, qty: 1 });
+    });
+
+    test('sources a bronze pickaxe if no usable one is owned', () => {
+        const s = gathering({ invIds: [[EW_ITEM.BATTERED_BOOK.id, 1]], wornIds: [1275] });
+        const step = decide(s);
+        expect(step.kind).toBe('grabGround');
+        if (step.kind === 'grabGround') expect(step.item).toBe('Bronze pickaxe');
+    });
+
+    test('uses an equipped usable pickaxe without fetching another', () => {
+        const s = gathering({ invIds: [[EW_ITEM.BATTERED_BOOK.id, 1]], wornIds: [1269] });
+        expect(decide(s).kind).toBe('mineRock');
+    });
+
+    test('waits visibly below Mining 30 when coal cannot be banked', () => {
+        const step = decide(gathering({ mining: 29 }));
+        expect(step.kind).toBe('wait');
+        if (step.kind === 'wait') expect(step.reason).toMatch(/Mining 30/);
+    });
+
+    test('uses banked coal at the quest minimum Mining level', () => {
+        const step = decide(gathering({ mining: 20, bankIds: [[EW_ITEM.COAL.id, 4]] }));
+        expect(step.kind).toBe('withdraw');
+        if (step.kind === 'withdraw') expect(step.items).toContainEqual({ name: 'Coal', id: 453, qty: 4 });
+    });
+
+    test('leaves the workshop to gather coal while preserving elemental ore', () => {
+        expect(customName(decide(gathering({ tile: WORKSHOP, invIds: [[EW_ITEM.ELEMENTAL_ORE.id, 1]] })))).toBe('leave workshop for Coal');
+        const step = decide(gathering({ freeSlots: 0, invIds: [[EW_ITEM.ELEMENTAL_ORE.id, 1], [BRONZE_PICK, 1]] }));
+        expect(step.kind).toBe('deposit');
+        if (step.kind === 'deposit') expect(step.keepIds).toContain(EW_ITEM.ELEMENTAL_ORE.id);
+    });
+
+    test('returns with an existing elemental bar without gathering coal', () => {
+        const s = gathering({ mining: 20 });
+        s.invIds = new Map([...s.invIds!, [EW_ITEM.ELEMENTAL_METAL.id, 1]]);
+        expect(customName(decide(s))).toBe('re-enter the workshop to smith the shield');
     });
 });

@@ -1,7 +1,9 @@
+import { Quests } from '#/bot/api/ui/questlog/Quests.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
 import { Banking } from '#/bot/api/bank/Banking.js';
 import { executeStep } from '#/bot/api/ai/quests/exec/steps.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
+import { Inventory, InvItem } from '#/bot/api/inventory/Inventory.js';
 import { combatGear, resetCombatGear } from '#/bot/api/ai/quests/defs/shilo/gear.js';
 import { stubProps } from '../../../../lib/stubSingletons.js';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
@@ -431,8 +433,28 @@ describe('shilo decide — Ah Za Rhoon and the crafts', () => {
         expect(name(step)).toContain("Bervirius' tomb");
     });
 
+    test('recovers a lost bone shard after searching the Bervirius dolmen', () => {
+        const flags = ['pommel-taken', 'found-door'];
+        for (const tile of [at(2898, 9401), at(2888, 9283)]) {
+            expect(name(middle(flags, [], tile))).toContain('gallows');
+        }
+        expect(name(middle(flags, [[SV_ITEM.ZADIMUS_CORPSE.id, 1]]))).toContain('bury Zadimus');
+        expect(name(middle(flags, [[SV_ITEM.ZADIMUS_CORPSE.id, 1]], at(2888, 9283))))
+            .toContain('climb out of Ah Za Rhoon');
+    });
+
+    test('leaves the caves before retrieving a banked bone key', () => {
+        const step = decide(snapshot({
+            progress: progress(SV_STAGE.ENTERED_AH_ZA_RHOON, ['pommel-taken', 'found-door']),
+            bankIds: new Map([[SV_ITEM.BONE_KEY.id, 1]]),
+            invIds: PROVISIONED,
+            tile: at(2898, 9401)
+        }));
+        expect(name(step)).toContain('climb out of Ah Za Rhoon');
+    });
+
     test('inside the caves it climbs out before any of the mainland crafts', () => {
-        const step = middle(['read-tattered', 'read-crumpled', 'pommel-taken'], [], at(2898, 9401));
+        const step = middle(['read-tattered', 'read-crumpled', 'pommel-taken'], [[SV_ITEM.BONE_SHARD.id, 1]], at(2898, 9401));
         expect(name(step)).toContain('climb out of Ah Za Rhoon');
     });
 
@@ -908,8 +930,12 @@ test('Shilo deposits a rejected warhammer while preserving the quest hammer', as
     const restores = [
         stubProps(Equipment, { contains: () => false, equip: async () => false }),
         stubProps(Banking, { open: async () => true }),
-        stubProps(Bank, { depositAllMatching: async predicate => {
-            for (const item of s.inv.keys()) if (predicate(item, 0)) deposited.push(item);
+        stubProps(Inventory, { items: () => Array.from(s.inv, ([name, count], slot) => new InvItem({name, count, slot, id: slot, comId: 3214, ops: []})) }),
+        stubProps(Bank, { backpackReady: async () => true, depositAllMatching: async predicate => {
+            for (const item of s.inv.keys()) if (predicate(item, 0)) {
+                deposited.push(item);
+                s.inv.delete(item);
+            }
         } })
     ];
     try {
@@ -923,5 +949,40 @@ test('Shilo deposits a rejected warhammer while preserving the quest hammer', as
         expect(deposited).toEqual(['rune warhammer']);
     } finally {
         for (const restore of restores.reverse()) restore();
+    }
+});
+
+test('Shilo resumes inside its caves before another quest tries to bank', () => {
+    for (const [x, z] of [[2898, 9401], [2888, 9283], [2760, 9389], [2929, 9525], [2929, 9515], [2892, 9487]]) {
+        expect(shilo.resumeAt?.({ x, z, level: 0 })).toBe(true);
+        expect(shilo.resumeAt?.({ x, z, level: 1 })).toBe(false);
+    }
+    for (const [x, z] of [[2852, 2954], [2800, 3086], [3200, 3200], [2520, 9995]]) {
+        expect(shilo.resumeAt?.({ x, z, level: 0 })).toBe(false);
+    }
+});
+
+
+test('completed Shilo escapes every cave before the next quest starts', () => {
+    const restore = stubProps(Quests, { status: () => 'complete' });
+    try {
+        for (const [x, z] of [[2898, 9401], [2888, 9283], [2760, 9389], [2929, 9525], [2929, 9515], [2892, 9487]]) {
+            expect(shilo.recover?.(at(x, z))?.kind).toBe('custom');
+            expect(shilo.recover?.(at(x, z, 1))).toBeNull();
+        }
+        expect(shilo.recover?.(at(2760, 9389))).toMatchObject({ name: "climb out of Bervirius' tomb" });
+        expect(shilo.recover?.(MAINLAND)).toBeNull();
+        expect(shilo.recover?.(KARAMJA)).toBeNull();
+    } finally {
+        restore();
+    }
+});
+
+test('Shilo recovery leaves active cave progress to the quest', () => {
+    const restore = stubProps(Quests, { status: () => 'inProgress' });
+    try {
+        expect(shilo.recover?.(at(2760, 9389))).toBeNull();
+    } finally {
+        restore();
     }
 });

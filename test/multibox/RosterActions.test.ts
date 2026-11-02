@@ -25,28 +25,38 @@ function client(username: string): RosterClient {
         readSettings: script => readScriptSettings(username, script),
         assignScript: script => writeProfileScript(username, script),
         copySettings: (script, values) => replaceScriptSettings(username, script, values),
-        startScript() {}, stopScript() {}, async travelTo() {}, editSettings() {}
+        async configureScript(script, values, start) {
+            if (values) this.copySettings(script, values);
+            if (!values || start) this.assignScript(script);
+            if (start) this.startScript();
+        },
+        startScript() {}, stopScript() {}, async travelTo() {}, async editSettings() {}
     };
 }
 
-test('copy targets only selected profiles, excludes source, and skips active clients', async () => {
+test('copy targets only selected profiles, excludes source, and configures active clients', async () => {
     const profiles = [profile('source', 'running'), profile('idle', 'idle'), profile('busy', 'paused'), profile('offline'), profile('other')];
     replaceScriptSettings('source', 'Miner', { rock: 'coal', runners: 'alice,bob' });
-    const actions = new RosterActions({ profiles: () => profiles, client: p => p.slot ? client(p.username) : null, setWorld: async () => true });
+    const clients = new Map(profiles.map(p => [p.username, client(p.username)]));
+    const actions = new RosterActions({ profiles: () => profiles, client: p => p.slot ? clients.get(p.username)! : null, setWorld: async () => true });
     const result = await actions.run(['source', 'idle', 'busy', 'offline'], { kind: 'copy', script: 'Miner', source: 'source' });
-    expect(result.map(r => r.state)).toEqual(['skipped', 'done', 'skipped', 'done']);
+    expect(result.map(r => r.state)).toEqual(['skipped', 'done', 'done', 'done']);
     expect(readScriptSettings('offline', 'Miner')).toEqual({ rock: 'coal', runners: 'alice,bob' });
     expect(readScriptSettings('idle', 'Miner')).toEqual({ rock: 'coal', runners: 'alice,bob' });
-    expect(readScriptSettings('busy', 'Miner')).toEqual({});
+    expect(readScriptSettings('busy', 'Miner')).toEqual({ rock: 'coal', runners: 'alice,bob' });
     expect(readScriptSettings('other', 'Miner')).toEqual({});
 });
 
 test('snapshots source once and continues after a client failure', async () => {
     const profiles = [profile('source'), profile('broken', 'idle'), profile('good', 'idle'), profile('offline')];
     replaceScriptSettings('source', 'Miner', { rock: 'iron' });
+    const clients = new Map<string, RosterClient>();
     const actions = new RosterActions({ profiles: () => profiles, client: p => {
         if (!p.slot) return null;
+        const existing = clients.get(p.username);
+        if (existing) return existing;
         const c = client(p.username);
+        clients.set(p.username, c);
         if (p.username === 'broken') c.copySettings = () => { replaceScriptSettings('source', 'Miner', { rock: 'coal' }); throw runInNewContext('new Error("Client disconnected")'); };
         return c;
     }, setWorld: async () => true });
@@ -265,5 +275,64 @@ for (const rejection of [undefined, null, '']) test(`travel rejection ${String(r
     original.travelTo = () => Promise.reject(rejection);
     const actions = new RosterActions({ profiles: () => profiles, client: () => original, setWorld: async () => true });
     expect((await actions.run(['alice'], { kind: 'travel', destination: 'Varrock' }))[0].state).toBe('failed');
+    expect(actions.busy).toBe(false);
+});
+
+
+test('copy and start selects the copied script and only starts loaded targets', async () => {
+    const profiles = [profile('source'), profile('alice', 'running'), profile('offline')];
+    replaceScriptSettings('source', 'WalkTo', { destination: 'Varrock', customTile: '0,0,0' });
+    writeProfileScript('alice', 'Miner');
+    const loaded = client('alice');
+    const starts: string[] = [];
+    loaded.startScript = () => { starts.push(readProfileScript('alice')); };
+    const actions = new RosterActions({ profiles: () => profiles, client: p => p.slot ? loaded : null, setWorld: async () => true });
+    const results = await actions.run(['alice', 'offline'], { kind: 'copy', script: 'WalkTo', source: 'source', start: true });
+    expect(results.map(result => result.state)).toEqual(['done', 'done']);
+    expect(starts).toEqual(['WalkTo']);
+    expect(readProfileScript('offline')).toBe('WalkTo');
+    expect(readScriptSettings('alice', 'WalkTo')).toEqual({ destination: 'Varrock', customTile: '0,0,0' });
+    expect(readScriptSettings('offline', 'WalkTo')).toEqual({ destination: 'Varrock', customTile: '0,0,0' });
+    expect(results[1].message).toMatch(/load.*start/i);
+});
+
+test('a removed client cancels pending configuration without starting its replacement', async () => {
+    jest.useFakeTimers();
+    const profiles = [profile('alice', 'running')];
+    const old = client('alice');
+    let cancelled = false;
+    let finish!: () => void;
+    old.configureScript = () => new Promise<void>(resolve => { finish = resolve; });
+    old.stopScript = () => { cancelled = true; };
+    let current = old;
+    const actions = new RosterActions({ profiles: () => profiles, client: () => current, setWorld: async () => true });
+    try {
+        const changing = actions.run(['alice'], { kind: 'assign', script: 'WalkTo', start: true });
+        current = client('alice');
+        testClock.advanceTimersByTime(100);
+        await flushPromises();
+        expect((await changing)[0].state).toBe('failed');
+        expect(cancelled).toBe(true);
+        finish();
+        await flushPromises();
+        expect(actions.busy).toBe(false);
+    } finally {
+        jest.useRealTimers();
+    }
+});
+
+
+test('removing a profile cancels its pending editor and releases the roster', async () => {
+    let profiles = [profile('alice', 'running')];
+    const original = client('alice');
+    original.editSettings = () => new Promise(() => {});
+    let stopped = false;
+    original.stopScript = () => { stopped = true; };
+    const actions = new RosterActions({ profiles: () => profiles, client: () => original, setWorld: async () => true });
+    const editing = actions.edit(profiles[0]);
+    expect(actions.busy).toBe(true);
+    profiles = [];
+    await expect(editing).rejects.toThrow(/removed/i);
+    expect(stopped).toBe(true);
     expect(actions.busy).toBe(false);
 });

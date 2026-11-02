@@ -207,3 +207,14 @@ describe('buyPurseTopUp', () => {
         expect(buyPurseTopUp(200, 20).draw).toBe(COIN_FLOAT - 200);
     });
 });
+
+test('equipped quest items satisfy provisioning without replacing or withdrawing them', () => {
+    const plan = planProvisioning([it('Excalibur', 1, 'acquirable')], new Map(), new Map([['excalibur', 1]]), new Map([['excalibur', 1]]));
+    expect(plan).toEqual({ withdraw: [], gather: [], blocked: [], satisfied: true });
+});
+
+test('equipped ammunition contributes its full stack to provisioning', () => {
+    const plan = planProvisioning([it('Ice arrows', 30, 'acquirable')], new Map([['ice arrows', 5]]), new Map([['ice arrows', 20]]), new Map([['ice arrows', 20]]));
+    expect(plan.withdraw).toEqual([{ name: 'Ice arrows', qty: 5 }]);
+    expect(plan.gather).toEqual([]);
+});

@@ -60,3 +60,31 @@ test('reloading a running older desktop keeps shared settings working until rest
     changed(null, 'rs2b0t:set:Miner:ore', 'Iron', 'Tin');
     expect(changes).toEqual([['rs2b0t:set:Miner:ore', 'Iron', 'Tin']]);
 });
+
+
+test('enumerating shared keys uses the current snapshot without synchronous IPC', () => {
+    let storage!: DesktopStorage;
+    let changed!: (_: unknown, snapshot: { version: number; data: Record<string, string> }) => void;
+    const key = 'rs2b0t:alice:set:WalkTo:destination';
+    const calls: string[] = [];
+    runInNewContext(readFileSync(new URL('../../desktop/preload.cjs', import.meta.url), 'utf8'), {
+        queueMicrotask,
+        require: () => ({
+            contextBridge: { exposeInMainWorld: (_: string, api: DesktopStorage) => { storage = api; } },
+            ipcRenderer: {
+                on: (_: string, listener: typeof changed) => { changed = listener; },
+                sendSync: (_: string, method: string) => {
+                    calls.push(method);
+                    return method === 'snapshot' ? { snapshot: { version: 0, data: { [key]: 'Varrock' } } } : { value: [key] };
+                }
+            }
+        })
+    });
+    expect(storage.keys()).toEqual([key]);
+    expect(storage.keys()).toEqual([key]);
+    expect(calls).toEqual(['snapshot']);
+    changed(null, { version: 1, data: {} });
+    expect(storage.keys()).toEqual([]);
+    changed(null, { version: 0, data: { [key]: 'Varrock' } });
+    expect(storage.keys()).toEqual([]);
+});

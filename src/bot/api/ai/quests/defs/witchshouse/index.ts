@@ -1,7 +1,7 @@
-import { prepareStrikes, STRIKE_RUNES } from '../../strike.js';
+import { prepareStrikes, STRIKE_CASTS, STRIKE_RUNES } from '../../strike.js';
 import { QUESTS } from '../../data/quests.js';
-import { heldId, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
-import { FALADOR_WEST_BANK, BOY, EXPERIMENT_NAMES, SHOP_GP, THESSALIA, WH_NAME, WH_OBJ, WYDIN, inGarden, inShed } from './areas.js';
+import { bankedId, heldId, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
+import { FALADOR_WEST_BANK, BOY, EXPERIMENT_NAMES, FIRE_STAVES, SHOP_GP, THESSALIA, WH_NAME, WH_OBJ, WYDIN, ZAFF, inGarden, inShed } from './areas.js';
 import { fountainKey, killExperiment, takeBall, leaveGarden } from './garden.js';
 import { diaryWanted, dropStaleMagnet, fetchDiary, fetchMagnet, readDiary, takeDoorKey, unlockBackDoor } from './house.js';
 import { WH_STAGE, readWitchsHouseProgress } from './journal.js';
@@ -12,12 +12,34 @@ export { DiaryState, resetDiaryState } from './house.js';
 
 /** The 4 forms carry 144 hitpoints between them, more than the 8-piece default covers. */
 const WH_FOOD = 12;
+const STAFF_GP = 2000;
+const KEEP = ['door key', 'key', 'magnet', 'cheese', 'ball', 'diary', 'leather gloves', 'coins', ...STRIKE_RUNES, ...FIRE_STAVES.map(staff => staff.name.toLowerCase())];
 
 const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep => ({
     kind: 'custom',
     name,
     run
 });
+
+function fireStaff(snap: QuestSnapshot): QuestStep | null {
+    if ((snap.magic ?? 1) < 13 || FIRE_STAVES.some(staff => snap.wornIds?.has(staff.id) || snap.worn.has(staff.name.toLowerCase()))) return null;
+    const usable = FIRE_STAVES.filter(staff => staff.level <= (snap.magic ?? 1) && staff.level <= (snap.attack ?? 1));
+    const held = usable.find(staff => heldId(snap, staff.id) > 0);
+    if (held) return { kind: 'equip', item: held.name };
+    if (inGarden(snap.tile) || inShed(snap.tile)) return null;
+    const banked = usable.find(staff => bankedId(snap, staff.id) > 0);
+    if (banked) return { kind: 'withdraw', items: [{ name: banked.name, id: banked.id, qty: 1 }], bank: FALADOR_WEST_BANK };
+    const fireRunes = (snap.inv.get('fire rune') ?? 0) + (snap.bankKnown ? snap.bank?.get('fire rune') ?? 0 : 0);
+    if (fireRunes >= 3 * STRIKE_CASTS) return null;
+    if (!snap.bankKnown) return { kind: 'scanBank', bank: FALADOR_WEST_BANK };
+    const short = STAFF_GP - (snap.inv.get('coins') ?? 0);
+    if (short > 0) {
+        return snap.bankCoins >= short
+            ? { kind: 'withdraw', items: [{ name: 'Coins', qty: short }], bank: FALADOR_WEST_BANK }
+            : null;
+    }
+    return { kind: 'buy', item: 'Staff of fire', qty: 1, shop: ZAFF, estGp: STAFF_GP };
+}
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
@@ -31,8 +53,11 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'wait', reason: "Witch's House journal stage unavailable" };
     }
 
+    const staff = stage < WH_STAGE.DEFEATED ? fireStaff(snap) : null;
+    if (staff) return staff;
+
     if (stage < WH_STAGE.DEFEATED && !inGarden(snap.tile) && !inShed(snap.tile)) {
-        const runes = prepareStrikes(snap, ['door key', 'key', 'magnet', 'cheese', 'ball', 'diary', 'leather gloves']);
+        const runes = prepareStrikes(snap, KEEP, [...snap.worn]);
         if (runes) return runes;
     }
 
@@ -72,8 +97,13 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return custom('lure the mouse and fit the magnet', unlockBackDoor);
     }
 
-    if (heldId(snap, WH_OBJ.SHED_KEY) > 0) {
+    if (heldId(snap, WH_OBJ.SHED_KEY) > 0 || inShed(snap.tile)) {
         return custom('unlock the shed and kill the experiment', killExperiment);
+    }
+    if (!snap.bankKnown || bankedId(snap, WH_OBJ.SHED_KEY) > 0) {
+        if (inGarden(snap.tile)) return custom('leave the garden safely to recover the shed key', leaveGarden);
+        if (!snap.bankKnown) return { kind: 'scanBank', bank: FALADOR_WEST_BANK };
+        return { kind: 'withdraw', items: [{ name: 'Key', id: WH_OBJ.SHED_KEY, qty: 1 }], bank: FALADOR_WEST_BANK };
     }
     // Why: the diary is read before the first garden trip and never while carrying a shed key, since the walk back through the garden is where that key is lost.
     if (diaryWanted()) {
@@ -99,9 +129,9 @@ export const witchshouse: QuestModule = {
     bank: FALADOR_WEST_BANK,
     pray: { protect: 'melee', potions: 2 },
     food: WH_FOOD,
-    foodReady: snap => (snap.progress?.stage ?? snap.stage ?? 0) >= WH_STAGE.DEFEATED || prepareStrikes(snap) === null,
+    foodReady: snap => (snap.progress?.stage ?? snap.stage ?? 0) >= WH_STAGE.DEFEATED || (fireStaff(snap) === null && prepareStrikes(snap, [], [...snap.worn]) === null),
     grind: [...EXPERIMENT_NAMES],
-    tools: ['door key', 'key', 'magnet', 'cheese', 'ball', 'diary', 'leather gloves', 'coins', ...STRIKE_RUNES],
+    tools: KEEP,
     readProgress: readWitchsHouseProgress,
     sustain: { foods: ['Lobster', 'Swordfish', 'Trout'], eatBelowHp: 0.6 },
     // Why: neither spawns anywhere and the record calls both acquirable, so with an empty bank the engine had no route to either and blocked the quest.

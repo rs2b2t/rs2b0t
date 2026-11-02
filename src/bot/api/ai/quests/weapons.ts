@@ -41,12 +41,12 @@ const QUEST_GATE: Readonly<Record<string, string>> = {
     'Dragon mace': "Hero's Quest"
 };
 
-function build(): MeleeWeapon[] {
+function build(includeTwoHanded = false): MeleeWeapon[] {
     const out: MeleeWeapon[] = [];
     for (const { tier, attack } of TIERS) {
-        for (const type of TYPES) {
+        for (const type of includeTwoHanded ? [...TYPES, '2h sword'] : TYPES) {
             const name = `${tier} ${type}`;
-            const record = ITEM_DB.find(r => r.name === name && r.slot === 'righthand' && !r.twoHanded);
+            const record = ITEM_DB.find(r => r.name === name && r.slot === 'righthand' && (includeTwoHanded || !r.twoHanded));
             if (record) {
                 out.push({ id: record.id, name, tier, attack, quest: QUEST_GATE[name] });
             }
@@ -57,6 +57,7 @@ function build(): MeleeWeapon[] {
 
 /** Every one-handed melee weapon the item db knows, best tier first. */
 export const MELEE_WEAPONS: readonly MeleeWeapon[] = build();
+const ALL_MELEE_WEAPONS: readonly MeleeWeapon[] = build(true);
 
 // Why: `tier40.rs2` gates a rune pickaxe on Attack 40, so a pickaxe rides the same tiers as a scimitar; it's kept out of `MELEE_WEAPONS` so nothing goes to a fight holding one.
 
@@ -72,8 +73,8 @@ export function bankedPickaxe(banked: ReadonlyMap<number, number> | undefined, a
 }
 
 /** Weapons this account may wield right now, best first. */
-export function wieldable(attack: number, questDone: (quest: string) => boolean): MeleeWeapon[] {
-    return MELEE_WEAPONS.filter(w => attack >= w.attack && (w.quest === undefined || questDone(w.quest)));
+export function wieldable(attack: number, questDone: (quest: string) => boolean, includeTwoHanded = false): MeleeWeapon[] {
+    return (includeTwoHanded ? ALL_MELEE_WEAPONS : MELEE_WEAPONS).filter(w => attack >= w.attack && (w.quest === undefined || questDone(w.quest)));
 }
 
 /** The best wieldable weapon the pack or the worn set already has. */

@@ -49,6 +49,10 @@ function custom(name: string, run: (log: (m: string) => void) => Promise<boolean
 
 /** Merlin's Crystal doesn't consume Excalibur, so the bank almost always has it. */
 export function excaliburPlan(snap: QuestSnapshot): QuestStep {
+    if (held(snap, ITEM.EXCALIBUR) > 0 || worn(snap, ITEM.EXCALIBUR)) {
+        return { kind: 'equip', item: ITEM.EXCALIBUR };
+    }
+    if (!snap.bankKnown) return { kind: 'scanBank' };
     if (banked(snap, ITEM.EXCALIBUR) > 0) {
         return { kind: 'withdraw', items: [{ name: ITEM.EXCALIBUR, qty: 1 }] };
     }
@@ -223,6 +227,7 @@ export const holygrail: QuestModule = {
     record: QUESTS.find(r => r.id === 'grail')!,
     // Why: the quest crosses Camelot, Entrana, Seers', Draynor, Karamja and the Goblin Village, so no one bank is near enough to pin.
     bank: 'nearest',
+    resumeAt: tile => tile.level >= 0 && tile.level <= 2 && inFisherRealm(tile),
     food: FOOD_FLOAT,
     grind: ['Black Knight Titan'],
     tools: [

@@ -59,7 +59,7 @@ export default class BotPanel {
 
     private lastRender = 0;
     private worldSwitchPending = false;
-    private travelPending = false;
+    private scriptChangePending = false;
     private scriptControlVersion = 0;
 
     constructor(root: HTMLElement, host: BotHostImpl, renderer?: RendererControl, private runner: PanelRunner = ScriptRunner) {
@@ -220,7 +220,7 @@ export default class BotPanel {
     }
 
     startSelectedScript(): void {
-        if (this.worldSwitchPending || this.travelPending || isActiveState(this.runner.state)) {
+        if (this.worldSwitchPending || this.scriptChangePending || isActiveState(this.runner.state)) {
             return;
         }
         this.handleStart();
@@ -252,6 +252,15 @@ export default class BotPanel {
 
     copyScriptSettings(name: string, values: Record<string, string>): void {
         this.assertScriptIdle();
+        const { name: script, keys } = this.validateSettings(name, values);
+        name = script;
+        this.paramsModal.close();
+        for (const key of keys) SettingsStore.clear(name, key);
+        for (const [key, value] of Object.entries(values)) SettingsStore.save(name, key, value);
+        this.renderSettings();
+    }
+
+    private validateSettings(name: string, values: Record<string, string>): { name: string; keys: Set<string> } {
         const meta = this.requireScript(name);
         name = meta.name;
         const schema = meta.settingsSchema ?? {};
@@ -260,18 +269,35 @@ export default class BotPanel {
         }
         const keys = new Set(Object.keys(schema));
         const prefixes = (name === 'JiveRC' ? ['NatureCrafter', name] : [name]).map(script => boxKey(`set:${script}:`));
-        for (const storage of [sessionStorage, localStorage]) {
-            for (let i = 0; i < storage.length; i++) {
+        const savedKeys = desktopStorage ? desktopStorage.keys() : [];
+        for (const storage of desktopStorage ? [sessionStorage] : [sessionStorage, localStorage]) {
+            const length = storage.length;
+            for (let i = 0; i < length; i++) {
                 const key = storage.key(i);
-                const prefix = key && prefixes.find(prefix => key.startsWith(prefix));
-                if (key && prefix) keys.add(key.slice(prefix.length));
+                if (key) savedKeys.push(key);
             }
         }
+        for (const key of savedKeys) {
+            const prefix = prefixes.find(prefix => key.startsWith(prefix));
+            if (prefix) keys.add(key.slice(prefix.length));
+        }
         this.assertNoUrlOverrides(name, keys);
-        this.paramsModal.close();
-        for (const key of keys) SettingsStore.clear(name, key);
-        for (const [key, value] of Object.entries(values)) SettingsStore.save(name, key, value);
-        this.renderSettings();
+        return { name, keys };
+    }
+
+    async configureScript(name: string, values: Record<string, string> | null, start: boolean): Promise<void> {
+        this.requireScript(name);
+        if (values) this.validateSettings(name, values);
+        await this.changeScript(() => {
+            if (values) this.copyScriptSettings(name, values);
+            if (!values || start) this.assignScript(name);
+            if (start) this.startRosterScript();
+        });
+    }
+
+    editRosterSettings(): Promise<void> {
+        this.requireScript(this.selectedScript);
+        return this.changeScript(() => this.editScriptSettings());
     }
 
     startRosterScript(): void {
@@ -283,31 +309,17 @@ export default class BotPanel {
     editScriptSettings(): void {
         this.assertScriptIdle();
         const meta = this.requireScript(this.selectedScript);
-        this.paramsModal.open(meta.name, meta.settingsSchema ?? {});
+        this.paramsModal.open(meta.name, meta.settingsSchema ?? {}, { onStart: () => this.startRosterScript() });
     }
 
     async travelTo(destination: string): Promise<void> {
-        if (this.worldSwitchPending || this.travelPending) throw new Error('Script controls are busy');
+        if (this.worldSwitchPending || this.scriptChangePending) throw new Error('Script controls are busy');
         if (!reader.ingame()) throw new Error('Log in before travelling');
         const target = resolveDestination(destination);
         if (!target) throw new Error(`Unknown destination: ${destination}`);
         this.requireScript('WalkTo');
         this.assertNoUrlOverrides('WalkTo', ['destination', 'customTile']);
-        const version = this.scriptControlVersion;
-        this.travelPending = true;
-        this.paramsModal.close();
-        this.renderScriptControls();
-        this.renderSettings();
-        try {
-            this.runner.stop('MultiBox travel');
-            const deadline = Date.now() + 10_000;
-            while (this.runner.state === 'stopping') {
-                if (version !== this.scriptControlVersion || this.worldSwitchPending) throw new Error('Travel cancelled');
-                if (Date.now() >= deadline) throw new Error('Timed out waiting for the script to stop');
-                await new Promise(resolve => setTimeout(resolve, 25));
-            }
-            if (version !== this.scriptControlVersion) throw new Error('Travel cancelled');
-            this.assertScriptIdle(true);
+        await this.changeScript(() => {
             if (!reader.ingame()) throw new Error('Log in before travelling');
             this.requireScript('WalkTo');
             this.assertNoUrlOverrides('WalkTo', ['destination', 'customTile']);
@@ -315,15 +327,37 @@ export default class BotPanel {
             SettingsStore.save('WalkTo', 'customTile', '0,0,0');
             this.applyScriptSelection('WalkTo');
             this.handleStart(true);
+        });
+    }
+
+    private async changeScript(apply: () => void): Promise<void> {
+        if (this.worldSwitchPending || this.scriptChangePending) throw new Error('Script controls are busy');
+        const version = this.scriptControlVersion;
+        this.scriptChangePending = true;
+        this.paramsModal.close();
+        this.renderScriptControls();
+        this.renderSettings();
+        try {
+            if (isActiveState(this.runner.state)) this.runner.stop('MultiBox configuration change');
+            const deadline = Date.now() + 10_000;
+            while (this.runner.state === 'stopping') {
+                if (version !== this.scriptControlVersion || this.worldSwitchPending) throw new Error('Script change cancelled');
+                if (Date.now() >= deadline) throw new Error('Timed out waiting for the script to stop');
+                await new Promise(resolve => setTimeout(resolve, 25));
+            }
+            if (version !== this.scriptControlVersion) throw new Error('Script change cancelled');
+            this.assertScriptIdle(true);
+            this.scriptChangePending = false;
+            apply();
         } finally {
-            this.travelPending = false;
+            this.scriptChangePending = false;
             this.renderScriptControls();
             this.renderSettings();
         }
     }
 
-    private assertScriptIdle(travelling = false): void {
-        if (this.worldSwitchPending || (!travelling && this.travelPending) || isActiveState(this.runner.state)) {
+    private assertScriptIdle(changing = false): void {
+        if (this.worldSwitchPending || (!changing && this.scriptChangePending) || isActiveState(this.runner.state)) {
             throw new Error('Stop the script before changing its controls');
         }
     }
@@ -350,7 +384,7 @@ export default class BotPanel {
     }
 
     private selectScript(name: string): void {
-        if (this.worldSwitchPending || this.travelPending || isActiveState(this.runner.state)) return;
+        if (this.worldSwitchPending || this.scriptChangePending || isActiveState(this.runner.state)) return;
         this.applyScriptSelection(name);
     }
 
@@ -389,7 +423,7 @@ export default class BotPanel {
             return;
         }
 
-        const active = this.worldSwitchPending || this.travelPending || isActiveState(this.runner.state);
+        const active = this.worldSwitchPending || this.scriptChangePending || isActiveState(this.runner.state);
 
         const summary = el('div', 'rs2b0t-param-summary');
         const valueOf = (key: string): string => (schema[key] ? SettingsStore.displayString(meta.name, key, schema[key]) : '');
@@ -416,7 +450,7 @@ export default class BotPanel {
             ? 'Stop the script to edit its parameters. Global settings stay editable while it runs.'
             : 'Open script parameters';
         edit.addEventListener('click', () => {
-            if (!this.worldSwitchPending && !this.travelPending && !isActiveState(this.runner.state)) this.editScriptSettings();
+            if (!this.worldSwitchPending && !this.scriptChangePending && !isActiveState(this.runner.state)) this.editScriptSettings();
         });
         this.settingsBox.appendChild(edit);
     }
@@ -524,11 +558,11 @@ export default class BotPanel {
         const state = this.runner.state;
         const active = state === 'running' || state === 'paused' || state === 'stopping';
 
-        this.startBtn.disabled = this.worldSwitchPending || this.travelPending || active;
+        this.startBtn.disabled = this.worldSwitchPending || this.scriptChangePending || active;
         this.pauseBtn.disabled = this.worldSwitchPending || !(state === 'running' || state === 'paused');
         this.pauseBtn.textContent = state === 'paused' ? 'Resume' : 'Pause';
         this.stopBtn.disabled = !active || state === 'stopping';
-        this.browseBtn.disabled = this.worldSwitchPending || this.travelPending || active;
+        this.browseBtn.disabled = this.worldSwitchPending || this.scriptChangePending || active;
 
         const ctx = this.runner.ctx;
         if (!ctx) {
