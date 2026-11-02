@@ -2,6 +2,7 @@ import { botFrameUrl, type WorldNumber } from '../../client/config/worlds.js';
 import { supportsWorldRouting } from '../../client/config/target.js';
 import type { Account, RenderMode, SlotHandle, SlotOps, SlotStatus } from './types.js';
 import type { LoginCoordination } from '../runtime/LoginCoordination.js';
+import type { RosterClient } from './RosterTypes.js';
 import { paintThumbnail } from './ThumbnailPainter.js';
 
 const LOGICAL_W = 1100;
@@ -41,6 +42,7 @@ function railWidth(): number {
 }
 
 interface Lcb {
+    roster?: RosterClient | null;
     readonly world: WorldNumber | null;
     prepareWorldSwitch(): boolean;
     cancelWorldSwitch(): void;
@@ -97,7 +99,7 @@ class DomSlotHandle implements SlotHandle {
         const select = document.createElement('select');
         select.className = 'mbx-world-select';
         select.setAttribute('aria-label', `World for ${account.username}`);
-        for (const world of [1, 2]) {
+        for (const world of [1, 2, 3]) {
             const option = document.createElement('option');
             option.value = String(world);
             option.textContent = `World ${world}`;
@@ -185,7 +187,6 @@ class DomSlotHandle implements SlotHandle {
     prepareWorldSwitch(): boolean {
         if (!this.worldRouting) return false;
         if (!this.win?.rs2b0t) {
-            this.whenReady(l => l.prepareWorldSwitch());
             return false;
         }
         return this.win.rs2b0t.prepareWorldSwitch();
@@ -198,6 +199,10 @@ class DomSlotHandle implements SlotHandle {
             l.setRenderMode(mode);
         });
         this.applyLayout();
+    }
+
+    roster(): RosterClient | null {
+        return this.destroyed ? null : this.win?.rs2b0t?.roster ?? null;
     }
 
     startScript(): void {
@@ -230,7 +235,7 @@ class DomSlotHandle implements SlotHandle {
             return { ready: false, ingame: false, world: null, player: null, loopCycle: 0, drawn: 0, scriptState: 'idle', scriptName: null };
         }
         const ingame = l.reader.ingame();
-        const world = ingame && (l.world === 1 || l.world === 2) ? l.world : null;
+        const world = ingame && (l.world === 1 || l.world === 2 || l.world === 3) ? l.world : null;
         return { ready: true, ingame, world, player: l.reader.localPlayerName(), loopCycle: l.client.constructor.loopCycle, drawn: l.renderGate.drawn, scriptState: l.runner.state, scriptName: l.runner.meta?.name ?? null };
     }
 

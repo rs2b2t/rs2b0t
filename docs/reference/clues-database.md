@@ -47,6 +47,12 @@ params, so the generator passes them in by hand: `map001` (the Gertrude crate at
 3309,3503, from `quest_fluffs.rs2`) and `riddle022` (the bookcase at 2702,3409,1,
 from `bookcases.rs2`).
 
+`data/digAnchors.ts` selects exact dig tiles where the solver needs a specific
+position within the server's accepted dig area. Hard `sextant012` (2745) uses
+`(3054,3696,0)`, one tile west of its generated coordinate. The solver stands on
+that tile before spawning the wizard and returns there for the post-fight dig.
+Other clues retain their usual arrival radius.
+
 ## Step kinds
 
 | Type | Count | What the solver does |

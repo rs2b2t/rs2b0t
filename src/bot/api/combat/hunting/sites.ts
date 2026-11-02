@@ -357,6 +357,14 @@ export function needsShield(site: DragonSite, style: string): boolean {
 
 export const SITE_OPTIONS: string[] = Object.keys(DRAGON_SITES);
 
+export const ENCLAVE_TARGET_OPTIONS: string[] = ['both', 'dragons', 'demons'];
+
+export function enclaveTargets(site: DragonSite, mode: string = 'both'): DragonSite {
+    if (site.key !== GUTANOTH_BLUE.key) return site;
+    if (mode === 'demons') return { ...site, target: 'Greater demon', bones: 'Ashes', alsoHunt: undefined };
+    return { ...site, target: 'Blue dragon', bones: 'Dragon bones', alsoHunt: mode === 'dragons' ? undefined : ['Greater demon'] };
+}
+
 // Why: the target comes first in the list, so a caller that wants one thing to hunt takes the head and a caller that wants everything takes the lot.
 /** Every npc name this site kills: its target, then anything it fills downtime with. */
 export function huntNames(site: DragonSite): string[] {

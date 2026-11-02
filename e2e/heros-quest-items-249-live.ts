@@ -1,9 +1,4 @@
-/** Live Hero's Quest solo-item harness (#249): one account, the armband already earned, driving the
- *  two chains a bot does alone, the lava eel and the Entranan firebird feather, and the hand-in.
- *  Why: the armband is the only half of this quest that needs two accounts, so proving the rest costs
- *  one browser and no rendezvous.
- *  Why: the ice gloves are seeded. Every ladder into the Ice Queen's lair stands on a White Wolf
- *  Mountain plateau the map flags seal, and she is the only source, see quest-pitfalls-35. */
+// Why: seeded armband and ice gloves isolate the eel, firebird and hand-in legs.
 
 //   HEADED=1 bun e2e/heros-quest-items-249-live.ts --tick 300 --minutes 60
 //   HEADED=1 bun e2e/heros-quest-items-249-live.ts --skip-eel --minutes 30

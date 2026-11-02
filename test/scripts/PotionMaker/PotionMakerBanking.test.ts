@@ -4,6 +4,7 @@ import { Bank } from '#/bot/api/bank/Bank.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
+import { Quests } from '#/bot/api/ui/questlog/Quests.js';
 import { ScriptRunner } from '#/bot/runtime/ScriptRunner.js';
 import { SettingsBag } from '#/bot/runtime/Settings.js';
 import PotionMaker from '#/bot/scripts/PotionMaker/PotionMaker.js';
@@ -60,6 +61,23 @@ test('failed close after restocking is retried with a loaded pack', async () => 
     expect(state.open).toBe(false);
     expect(pack.get(GUAM)).toBe(14);
     expect(state.withdrawals).toEqual([VIAL, GUAM]);
+});
+
+test('finishing potions reopens the guild banker to deposit the batch', async () => {
+    const { bot, state, pack } = await fixture();
+    spyOn(Game, 'tile').mockReturnValue({ x: 2732, z: 3378, level: 2 });
+    spyOn(Quests, 'status').mockReturnValue('complete');
+    const npc = spyOn(Bank, 'openNpcAccess').mockImplementation(async () => { state.open = true; return true; });
+    const booth = spyOn(Bank, 'openNearestAccess').mockResolvedValue(false);
+    pack.set(UNFINISHED, 14);
+    pack.set(EYE, 14);
+
+    await bot.loop();
+
+    expect(npc).toHaveBeenCalledTimes(2);
+    expect(booth).not.toHaveBeenCalled();
+    expect(pack.size).toBe(0);
+    expect(state.open).toBe(true);
 });
 
 test('failed close after a secondary failure does not strand the unfinished batch', async () => {

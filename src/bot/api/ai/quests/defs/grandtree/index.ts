@@ -1,10 +1,8 @@
 // docs/QUESTS.md
-import { Equipment } from '../../../../equipment/Equipment.js';
-import { gearOf } from '../../../../loadout/loadoutPlan.js';
+import { prepareStrikes, STRIKE_RUNES } from '../../strike.js';
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { FOOD_FLOAT, QuestFood } from '../../food.js';
-import { QuestLoadout } from '../../gear.js';
 import {
     CHARLIE,
     GLOUGH,
@@ -41,9 +39,6 @@ import {
 /** Lobsters to have in the pack before dropping in on the demon. */
 const DEMON_FOOD = 8;
 
-/** Gear the bank doesn't hold, so it isn't asked for again mid-fight. */
-const unavailable = new Set<string>();
-
 function custom(name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep {
     return { kind: 'custom', name, run };
 }
@@ -58,7 +53,7 @@ function foodName(): string | null {
 
 function keepList(): string[] {
     const food = foodName()?.toLowerCase();
-    return [...GT_ITEMS, 'coins', ...(food ? [food] : [])];
+    return [...GT_ITEMS, ...STRIKE_RUNES, 'coins', ...(food ? [food] : [])];
 }
 
 // Why: The King requires two free slots at the start and four at stage 110.
@@ -71,50 +66,14 @@ function roomFor(snap: QuestSnapshot, slots: number): QuestStep | null {
     return { kind: 'deposit', keep: keepList() };
 }
 
-function wearAll(names: readonly string[]): QuestStep {
-    return custom(`wear ${names.join(', ')}`, async log => {
-        for (const name of names) {
-            if (Equipment.contains(name) || (await Equipment.equip(name))) {
-                continue;
-            }
-            log(`cannot wear ${name} — shedding it and fighting without`);
-            unavailable.add(name.toLowerCase());
-        }
-        return true;
-    });
-}
-
-// Why: the demon has 157 hitpoints and 152 defence, so the pack sets how long the fight runs; preparation stops at the door or a decide() mid-fight walks the bot out to re-bank.
-
-/** Kit and food, resolved only while the trapdoor is still shut. */
 function demonKit(snap: QuestSnapshot): QuestStep | null {
-    const want = gearOf(QuestLoadout.current)
-        .filter(name => !snap.worn.has(name.toLowerCase()) && !unavailable.has(name.toLowerCase()));
     const food = foodName();
-    const shortFood = food !== null && (snap.inv.get(food.toLowerCase()) ?? 0) < DEMON_FOOD;
-    if (want.length === 0 && !shortFood) {
-        return null;
-    }
-    const missing = want.filter(name => (snap.inv.get(name.toLowerCase()) ?? 0) === 0);
-    if (missing.length === 0 && !shortFood) {
-        return wearAll(want);
-    }
-    if (snap.bankKnown !== true) {
-        return { kind: 'scanBank' };
-    }
-    const draw = missing
-        .filter(name => (snap.bank?.get(name.toLowerCase()) ?? 0) > 0)
-        .map(name => ({ name, qty: 1 }));
-    if (shortFood && food !== null && (snap.bank?.get(food.toLowerCase()) ?? 0) > 0) {
-        draw.push({ name: food, qty: DEMON_FOOD - (snap.inv.get(food.toLowerCase()) ?? 0) });
-    }
-    if (draw.length > 0) {
-        return { kind: 'withdraw', items: draw };
-    }
-    for (const name of missing) {
-        unavailable.add(name.toLowerCase());
-    }
-    return want.length > missing.length ? wearAll(want.filter(n => !unavailable.has(n.toLowerCase()))) : null;
+    if (!food) return null;
+    const missing = DEMON_FOOD - (snap.inv.get(food.toLowerCase()) ?? 0);
+    if (missing <= 0) return null;
+    if (!snap.bankKnown) return { kind: 'scanBank' };
+    const qty = Math.min(missing, snap.bank?.get(food.toLowerCase()) ?? 0);
+    return qty > 0 ? { kind: 'withdraw', items: [{ name: food, qty }] } : null;
 }
 
 // Why: the King re-issues twigs whenever none is held, and one already on its pillar counts as neither held nor lost, so only ask with an empty pack at stage 120.
@@ -143,7 +102,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     // Why: the twig legs live on Glough's pillar floor, a 7-tile pocket with no baked way off it, so the kit is bought on the ground before the first climb.
     // Why: a bank step decided in the pocket has no route and burns its budget proving so, so anyone up there still owing gear climbs back down for it.
     if ((stage === GT_STAGE.GIVEN_TWIGS || stage === GT_STAGE.UNLOCKED_TRAPDOOR) && !inCaves(snap.tile)) {
-        const kit = demonKit(snap);
+        const kit = prepareStrikes(snap, keepList()) ?? demonKit(snap);
         if (kit) {
             return (snap.tile?.level ?? 0) > 0
                 ? custom("climb down out of Glough's tree for the kit", descendGloughTree)
@@ -216,13 +175,10 @@ export const grandtree: QuestModule = {
     hops: GT_HOPS,
     food: FOOD_FLOAT,
     coinFloat: 2000,
-    tools: [...GT_ITEMS],
+    tools: [...GT_ITEMS, 'coins', ...STRIKE_RUNES],
     readStage: readGrandTreeStage,
     sustain: { foods: ['Lobster'], eatBelowHp: 0.6 },
     exit: leaveCaves,
-    warnReadiness: () =>
-        'The Grand Tree ends on a level-172 Black Demon (157 hitpoints, 152 defence). Proven at 70 across the board'
-        + ' with a rune melee kit and Protect from Melee; below Prayer 43 it lands hits for the whole fight.',
     observe: (snap, step) => [
         `stage=${snap.stage ?? '?'} step=${step.kind} caves=${inCaves(snap.tile)}`
         + ` stronghold=${inStronghold(snap.tile)} karamja=${inKaramja(snap.tile)}`,

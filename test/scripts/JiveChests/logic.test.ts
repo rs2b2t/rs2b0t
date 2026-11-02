@@ -35,9 +35,12 @@ describe('keysToWithdraw', () => {
 });
 
 describe('decide', () => {
-    test('drops the junk before anything else, so the pack never fills with it', () => {
-        expect(decide(at({ junk: 1 }))).toEqual({ kind: 'drop' });
-        expect(decide(at({ junk: 1, keys: 0, atChest: false }))).toEqual({ kind: 'drop' });
+    test('keeps food unless a full pack blocks valuable ground loot', () => {
+        expect(decide(at({ junk: 1 }))).toEqual({ kind: 'open' });
+        expect(decide(at({ junk: 1, keys: 0, atChest: false }))).toEqual({ kind: 'bank' });
+        expect(decide(at({ junk: 1, free: 0 }))).toEqual({ kind: 'bank' });
+        expect(decide(at({ junk: 1, free: 0, groundLoot: true }))).toEqual({ kind: 'drop' });
+        expect(decide(at({ junk: 1, free: 0, groundLoot: true, canLoot: true }))).toEqual({ kind: 'loot' });
     });
 
     test('opens the chest while a key is held and we are standing at it', () => {

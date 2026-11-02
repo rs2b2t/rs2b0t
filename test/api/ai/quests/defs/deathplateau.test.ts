@@ -328,6 +328,18 @@ describe('decide', () => {
         expect(customName(step)).toMatch(/read the iou/i);
     });
 
+    test('a resumed IOU stage scans an unread bank before asking Harold for another', () => {
+        expect(decide(snap({ progress: progress(DP_STAGE.GIVEN_IOU), bankKnown: false })).kind).toBe('scanBank');
+    });
+
+    for (const item of [DEATH_ITEM.IOU, DEATH_ITEM.COMBINATION]) {
+        test(`withdraws a banked ${item.name} before trying to reclaim it`, () => {
+            const s = snap({ progress: progress(DP_STAGE.GIVEN_IOU) });
+            s.bankIds = new Map([[item.id, 1]]);
+            expect(decide(s)).toMatchObject({ kind: 'withdraw', items: [{ ...item, qty: 1 }] });
+        });
+    }
+
     test('holding combination without balls → pick balls', () => {
         const step = decide(snap({
             progress: progress(DP_STAGE.FOUND_COMBO),

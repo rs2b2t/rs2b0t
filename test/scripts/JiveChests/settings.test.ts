@@ -4,9 +4,11 @@ import { SETTINGS } from '#/bot/scripts/JiveChests/JiveChests.js';
 import '#/bot/scripts/index.js';
 
 describe('JiveChests settings', () => {
-    test('the way home is the only choice, teleporting by default', () => {
-        expect(Object.keys(SETTINGS)).toEqual(['teleportHome']);
+    test('keeps chest trips as the default and offers bank-only key combining', () => {
+        expect(Object.keys(SETTINGS)).toEqual(['combineKeys', 'teleportHome']);
+        expect(SETTINGS.combineKeys!.default).toBe(false);
         expect(SETTINGS.teleportHome!.default).toBe(true);
+        expect(SETTINGS.teleportHome!.showIf).toEqual({ key: 'combineKeys', anyOf: ['false'] });
     });
 
     test('no key count or tile is offered, since the trip size and the chest are fixed', () => {

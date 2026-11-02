@@ -35,6 +35,8 @@ export const PICKAXES: readonly EwItem[] = [
 ];
 
 export const SEERS_BANK = new Tile(2725, 3491, 0);
+export const COAL_ROCKS = new Tile(2581, 3480, 0);
+export const PICKAXE_SPAWN = new Tile(2963, 3216, 0);
 
 // House south-west of Seers bank: bookcase on the east wall.
 export const BOOKCASE = new Tile(2716, 3481, 0);

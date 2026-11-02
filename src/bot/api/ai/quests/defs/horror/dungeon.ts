@@ -26,6 +26,45 @@ export function inCavern(tile: { x: number; z: number; level: number } | null): 
     return tile !== null && tile.level === 0 && tile.x >= 2496 && tile.x <= 2559 && tile.z >= 4608 && tile.z <= 4671;
 }
 
+export function inPostquestCavern(tile: { x: number; z: number; level: number } | null): boolean {
+    return tile !== null && tile.level === 1 && tile.x >= 2496 && tile.x <= 2559 && tile.z >= 9984 && tile.z <= 10047;
+}
+
+export function inLighthouse(tile: { x: number; z: number; level: number } | null): boolean {
+    if (!tile || tile.level < 0 || tile.level > 2 || tile.z < 3636 || tile.z > 3644) return false;
+    if (tile.z === 3636) return tile.x === 2509;
+    const inset = tile.z === 3637 || tile.z === 3644 ? 2 : tile.z === 3638 || tile.z === 3643 ? 1 : 0;
+    return tile.x >= 2505 + inset && tile.x <= 2512 - inset;
+}
+
+async function leaveLighthouse(log: (m: string) => void): Promise<boolean> {
+    await settleScene();
+    for (let i = 0; i < 2; i++) {
+        const here = Game.tile();
+        if (!here) return false;
+        if (here.level === 0) break;
+        const stairs = Locs.query().name(HD_LOC.STAIRS).action('Climb-down').within(12)
+            .where(loc => loc.tile().level === here.level).nearest();
+        if (!stairs || !(await stairs.interact('Climb-down'))) return false;
+        if (!(await Execution.delayUntil(() => {
+            const tile = Game.tile();
+            return tile !== null && tile.level < here.level;
+        }, 8000))) return false;
+        await settleScene();
+    }
+    const doorway = HD_TILE.REAL_LIGHTHOUSE_L0.translate(0, -1);
+    if (!(await Traversal.walkResilient(doorway, { radius: 0, attempts: 3, timeoutMs: 30_000, log }))) return false;
+    await settleScene();
+    const door = Locs.query().name(HD_LOC.DOORWAY).action('Walk-through').where(loc => loc.tile().equals(doorway)).nearest();
+    if (!door || !(await door.interact('Walk-through'))) return false;
+    if (!(await Execution.delayUntil(() => {
+        const tile = Game.tile();
+        return tile !== null && HD_TILE.LIGHTHOUSE_DOOR.equals(tile);
+    }, 8000))) return false;
+    await settleScene();
+    return Traversal.walkResilient(HD_TILE.CAUSEWAY_SOUTH, { radius: 1, attempts: 3, timeoutMs: 180_000, log });
+}
+
 /** Two "Iron ladder" locs share the basement; only the tile tells them apart. */
 function ladderAt(where: Tile) {
     return Locs.query().name(HD_LOC.LADDER).where(l => l.tile().distanceTo(where) <= 1).nearest();
@@ -150,8 +189,8 @@ export async function exitAfterQuest(log: (m: string) => void): Promise<boolean>
     if (!here) {
         return false;
     }
-    if (here.z < 9984) {
-        return true;
+    if (!inPostquestCavern(here)) {
+        return inLighthouse(here) ? leaveLighthouse(log) : true;
     }
     Game.setAutoRetaliate(false);
     try {
@@ -165,8 +204,12 @@ export async function exitAfterQuest(log: (m: string) => void): Promise<boolean>
             log('no iron ladder out of the post-quest cavern');
             return false;
         }
-        return Execution.delayUntil(() => (Game.tile()?.z ?? 0) < 9984, 10_000);
+        if (!(await Execution.delayUntil(() => {
+            const tile = Game.tile();
+            return tile !== null && tile.level === 0 && tile.z < 9984;
+        }, 10_000))) return false;
     } finally {
         Game.setAutoRetaliate(true);
     }
+    return leaveLighthouse(log);
 }

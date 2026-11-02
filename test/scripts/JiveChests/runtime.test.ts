@@ -23,6 +23,8 @@ const AIR = 556;
 const WATER = 555;
 const BODY = 559;
 const SHIELD = 1183;
+const SWORDFISH = 372;
+const SPINACH = 1969;
 const BANK = new Tile(2946, 3369, 0);
 const names = new Map([
     [KEY, 'Crystal key'], [STONE, 'Uncut dragonstone'], [BAR, 'Runite bar'], [RUBY, 'Ruby'], [1601, 'Diamond'],
@@ -30,7 +32,8 @@ const names = new Map([
     [LAW, 'Law rune'], [AIR, 'Air rune'], [WATER, 'Water rune'], [557, 'Earth rune'], [554, 'Fire rune'],
     [BODY, 'Body rune'], [558, 'Mind rune'], [562, 'Chaos rune'], [560, 'Death rune'], [564, 'Cosmic rune'],
     [561, 'Nature rune'], [SHIELD, 'Adamant sq shield'], [995, 'Coins'], [372, 'Raw swordfish'],
-    [440, 'Iron ore'], [441, 'Iron ore'], [946, 'Knife']
+    [440, 'Iron ore'], [441, 'Iron ore'], [946, 'Knife'], [SPINACH, 'Spinach roll'],
+    [1381, 'Staff of air'], [1397, 'Air battlestaff'], [1405, 'Mystic air staff'], [1383, 'Staff of water']
 ]);
 const stacks = new Set([LAW, AIR, WATER, 557, 554, BODY, 558, 562, 560, 564, 561, 995, 441]);
 
@@ -50,7 +53,8 @@ function fixture(pack: InvItemSnapshot[] = [], floor: GroundItemSnapshot[] = [],
     const state = {
         pack, floor, tile: CHEST_STAND, bank: new Map<number, number>(), open: false, stopped: false,
         rewards: [] as InvItemSnapshot[][], taken: [] as number[], closeFailures: 0, takeFailures: 0,
-        depositFailures: 0, withdrawFailures: 0
+        depositFailures: 0, withdrawFailures: 0, navTeleports: false,
+        equipment: [] as InvItemSnapshot[], casts: [] as Tile[]
     };
     const reindex = () => state.pack.forEach((i, slot) => { i.slot = slot; });
     const add = (id: number, count: number): number => {
@@ -64,6 +68,7 @@ function fixture(pack: InvItemSnapshot[] = [], floor: GroundItemSnapshot[] = [],
     };
     reindex();
     spyOn(reader, 'inventory').mockImplementation(() => state.pack);
+    spyOn(reader, 'equipment').mockImplementation(() => state.equipment);
     spyOn(reader, 'inventorySize').mockReturnValue(28);
     spyOn(reader, 'bankSideItems').mockImplementation(() => state.pack);
     spyOn(reader, 'bankComId').mockImplementation(() => state.open ? 5292 : -1);
@@ -80,7 +85,11 @@ function fixture(pack: InvItemSnapshot[] = [], floor: GroundItemSnapshot[] = [],
     spyOn(ChatDialog, 'canContinue').mockReturnValue(false);
     spyOn(Execution, 'delayUntil').mockImplementation(async predicate => Boolean(await predicate()));
     spyOn(Execution, 'delayTicks').mockResolvedValue(undefined);
-    spyOn(Traversal, 'walkResilient').mockImplementation(async tile => { state.tile = Tile.from(tile); return true; });
+    spyOn(Traversal, 'walkResilient').mockImplementation(async (tile, opts) => {
+        if (state.navTeleports && opts.policy?.useTeleports !== false && opts.useTeleportCatalog !== false) await Game.teleport('falador');
+        state.tile = Tile.from(tile);
+        return true;
+    });
     spyOn(Bank, 'isOpen').mockImplementation(() => state.open);
     spyOn(Bank, 'loaded').mockReturnValue(true);
     spyOn(Bank, 'openBooth').mockImplementation(async () => { state.open = true; return true; });
@@ -140,12 +149,15 @@ function fixture(pack: InvItemSnapshot[] = [], floor: GroundItemSnapshot[] = [],
     spyOn(Game, 'teleport').mockImplementation(async id => {
         if (id !== 'falador') return false;
         for (const [rune, count] of [[AIR, 3], [WATER, 1], [LAW, 1]]) {
+            if (rune === AIR && state.equipment.some(i => [1381, 1397, 1405].includes(i.id))) continue;
+            if (rune === WATER && state.equipment.some(i => i.id === 1383)) continue;
             const held = state.pack.find(i => i.id === rune);
             if (!held || held.count < count!) return false;
             held.count -= count!;
         }
         state.pack = state.pack.filter(i => i.count > 0);
         reindex();
+        state.casts.push(state.tile);
         state.tile = new Tile(2965, 3378, 0);
         return true;
     });
@@ -159,14 +171,55 @@ function fixture(pack: InvItemSnapshot[] = [], floor: GroundItemSnapshot[] = [],
 afterEach(() => mock.restore());
 
 describe('JiveChests reward recovery', () => {
-    test('uses another key after the first reward is runes and the body runes are dropped', async () => {
+    test.each([SWORDFISH, SPINACH])('keeps food %i when no ground loot needs its slot', async food => {
+        const { bot, state } = fixture([item(KEY), item(food)]);
+        await bot.onStart();
+        await bot.loop();
+        expect(bot.opened).toBe(1);
+        expect(Inventory.countById(food)).toBe(1);
+        expect(state.floor).toEqual([]);
+    });
+
+    test('banks a full food pack without dropping food when nothing valuable is on the ground', async () => {
+        const { bot, state } = fixture([item(KEY), ...copies(SWORDFISH, 27)]);
+        await bot.onStart();
+        await bot.loop();
+        expect(state.bank.get(SWORDFISH)).toBe(27);
+        expect(Input.heldOp).not.toHaveBeenCalled();
+    });
+
+    test('drops only one food to recover a valuable item and keeps the remaining food', async () => {
+        const { bot, state } = fixture([item(KEY), ...copies(SWORDFISH, 5), ...copies(RUBY, 22)], [ground(BAR)]);
+        await bot.onStart();
+        await bot.loop();
+        await bot.loop();
+        expect(Inventory.countById(SWORDFISH)).toBe(4);
+        expect(Inventory.countById(BAR)).toBe(1);
+        expect(Input.heldOp).toHaveBeenCalledTimes(1);
+        await bot.loop();
+        expect(state.bank.get(SWORDFISH)).toBe(4);
+        expect(state.bank.get(BAR)).toBe(1);
+        expect(Input.heldOp).toHaveBeenCalledTimes(1);
+    });
+
+    test('picks up a rune stack without dropping food from a full pack', async () => {
+        const { bot, state } = fixture([item(KEY), item(LAW), ...copies(SWORDFISH, 26)], [ground(LAW, 10)]);
+        await bot.onStart();
+        await bot.loop();
+        expect(state.taken).toEqual([LAW]);
+        expect(Inventory.countById(SWORDFISH)).toBe(26);
+        expect(Input.heldOp).not.toHaveBeenCalled();
+    });
+
+    test('keeps the rune reward and uses another key without dropping anything', async () => {
         const { bot, state } = fixture(copies(KEY, 7));
         state.rewards.push([item(STONE), ...[AIR, WATER, 557, 554, BODY, 558, 562, 560, 564, 561, LAW].map(id => item(id, 10))]);
         await bot.onStart();
         await bot.loop();
         await bot.loop();
-        await bot.loop();
         expect(bot.opened).toBe(2);
+        expect(Inventory.countById(BODY)).toBe(10);
+        expect(Input.heldOp).not.toHaveBeenCalled();
         expect(Inventory.count('Crystal key')).toBe(5);
         expect(state.tile).toEqual(CHEST_STAND);
     });
@@ -281,6 +334,75 @@ describe('JiveChests reward recovery', () => {
 });
 
 describe('JiveChests banking', () => {
+    test('walks out from the bank, uses its teleport at the chest, then walks to the booth', async () => {
+        const { bot, state } = fixture([], [], true);
+        state.tile = BANK;
+        state.navTeleports = true;
+        state.bank = new Map([[KEY, 20], [LAW, 100], [AIR, 300], [WATER, 100]]);
+        await bot.onStart();
+        await bot.loop();
+        await bot.loop();
+        expect(state.tile).toEqual(CHEST_STAND);
+        expect(state.casts).toEqual([]);
+        expect(Inventory.countById(LAW)).toBe(10);
+        for (let i = 0; i < 7; i++) await bot.loop();
+        await bot.loop();
+        expect(state.casts).toEqual([CHEST_STAND]);
+        expect(Inventory.countById(LAW)).toBe(9);
+        await bot.loop();
+        expect(state.tile).toEqual(BANK);
+        expect(state.casts).toEqual([CHEST_STAND]);
+        expect(Inventory.countById(LAW)).toBe(10);
+    });
+
+    test('never casts home from an unrelated starting bank or the Falador landing', async () => {
+        const { bot, state } = fixture([item(LAW, 10), item(AIR, 30), item(WATER, 10)], [], true);
+        state.tile = new Tile(3185, 3440, 0);
+        state.navTeleports = true;
+        state.bank.set(KEY, 10);
+        await bot.onStart();
+        await bot.loop();
+        expect(state.casts).toEqual([]);
+        expect(state.tile).toEqual(BANK);
+    });
+
+    test('takes the available teleport stock even when the bank has fewer than ten casts', async () => {
+        const { bot, state } = fixture([], [], true);
+        state.tile = BANK;
+        state.bank = new Map([[KEY, 10], [LAW, 3], [AIR, 9], [WATER, 3]]);
+        await bot.onStart();
+        await bot.loop();
+        expect(Inventory.countById(LAW)).toBe(3);
+        expect(Inventory.countById(AIR)).toBe(9);
+        expect(Inventory.countById(WATER)).toBe(3);
+    });
+
+    test.each([1381, 1397, 1405])('uses equipped air staff %i for restocking and casting without air runes', async staff => {
+        const { bot, state } = fixture([], [], true);
+        state.equipment = [item(staff)];
+        state.tile = BANK;
+        state.bank = new Map([[KEY, 10], [LAW, 100], [AIR, 300], [WATER, 100]]);
+        await bot.onStart();
+        await bot.loop();
+        expect(Inventory.countById(AIR)).toBe(0);
+        expect(state.bank.get(AIR)).toBe(300);
+        expect(Inventory.countById(LAW)).toBe(10);
+        await bot.loop();
+        for (let i = 0; i < 7; i++) await bot.loop();
+        await bot.loop();
+        expect(state.casts).toEqual([CHEST_STAND]);
+        expect(Inventory.countById(LAW)).toBe(9);
+        expect(Inventory.countById(WATER)).toBe(9);
+    });
+
+    test('still needs air runes when an air staff is only in the backpack', async () => {
+        const { bot, state } = fixture([item(1381), item(LAW), item(WATER)], [], true);
+        await bot.onStart();
+        await bot.loop();
+        expect(state.casts).toEqual([]);
+        expect(state.tile).toEqual(BANK);
+    });
+
     test('preserves teleport runes while depositing rewards and restocks a missing rune', async () => {
         const { bot, state } = fixture([item(LAW, 10), item(AIR, 2), item(RUBY)], [], true);
         state.tile = BANK;
@@ -288,8 +410,8 @@ describe('JiveChests banking', () => {
         await bot.onStart();
         await bot.loop();
         expect(Inventory.countById(LAW)).toBe(10);
-        expect(Inventory.countById(AIR)).toBe(3);
-        expect(Inventory.countById(WATER)).toBe(1);
+        expect(Inventory.countById(AIR)).toBe(30);
+        expect(Inventory.countById(WATER)).toBe(10);
         expect(Inventory.countById(KEY)).toBe(7);
         expect(state.bank.get(RUBY)).toBe(1);
     });

@@ -7,6 +7,7 @@ import type Tile from '../../geometry/Tile.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { DeathRecovery } from '../../api/tasks/DeathRecovery.js';
 import { Bank } from '../../api/bank/Bank.js';
+import { openBankAccess } from '../../api/bank/Banking.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Paint } from '../../paint/Paint.js';
@@ -272,7 +273,7 @@ export default class RoguesPurse extends LoopingBot {
         }
         this.log(`banking at ${bank.name} ${bank.tile}`);
         await Traversal.walkResilient(bank.tile, { radius: 4, attempts: 4, timeoutMs: 300_000, log });
-        if (!(await Bank.openNearestAccess(bank.access ?? BOOTH, log))) {
+        if (!(await openBankAccess(bank, BOOTH, log))) {
             this.log(`could not open the ${bank.name} bank — retrying`);
             return false;
         }

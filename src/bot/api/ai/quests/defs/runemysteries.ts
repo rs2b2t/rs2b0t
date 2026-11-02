@@ -1,3 +1,7 @@
+import { actions, reader } from '../../../../adapter/ClientAdapter.js';
+import { Execution } from '../../../execution/Execution.js';
+import { Quests } from '../../../ui/questlog/Quests.js';
+import { normalizeJournal } from '../journalText.js';
 import Tile from '../../../../geometry/Tile.js';
 import type { NpcStop, LadderHop } from '../exec/primitives.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
@@ -26,15 +30,20 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'notStarted') {
         return TALK(DUKE);
     }
-    // Why: Sedridor takes one talisman and leaves any extras; the package is the delivery to Aubury.
-    if (snap.inv.has('notes')) {
-        return TALK(SEDRIDOR);
+    const stage = snap.progress?.stage ?? snap.stage;
+    if (stage === 2) return TALK(SEDRIDOR);
+    if (stage === 4) return TALK(AUBURY);
+    for (const [name, stop] of [['Notes', SEDRIDOR], ['Research package', AUBURY], ['Air talisman', SEDRIDOR]] as const) {
+        const key = name.toLowerCase();
+        if ((snap.inv.get(key) ?? 0) > 0) {
+            return TALK(stop);
+        }
+        if ((snap.bank?.get(key) ?? 0) > 0) {
+            return { kind: 'withdraw', items: [{ name, qty: 1 }] };
+        }
     }
-    if (snap.inv.has('research package')) {
-        return TALK(AUBURY);
-    }
-    if (snap.inv.has('air talisman')) {
-        return TALK(SEDRIDOR);
+    if (!snap.bankKnown) {
+        return { kind: 'scanBank' };
     }
     return TALK(RECOVER_PROBES[snap.noProgress % RECOVER_PROBES.length]);
 }
@@ -44,5 +53,34 @@ export const runemysteries: QuestModule = {
     bank: new Tile(3093, 3243, 0),
     tools: ['air talisman', 'research package', 'notes'],
     hops: WIZARD_HOPS,
+    readStage,
     decide
 };
+
+export function parseRuneMysteriesJournal(lines: readonly string[] | string): number | undefined {
+    const text = normalizeJournal(lines);
+    const stage = [
+        'i can start this quest by speaking to',
+        'i need to find the head wizard',
+        'i should talk to the head wizard again',
+        'i should take this research package',
+        'i should speak to aubury again',
+        'i should take the notes to sedridor',
+        'quest complete!'
+    ].findIndex(needle => text.includes(needle));
+    return stage < 0 ? undefined : stage;
+}
+
+async function readStage(): Promise<number | undefined> {
+    const quest = runemysteries.record.name;
+    const status = Quests.status(quest);
+    if (status === 'complete') return 6;
+    if (status === 'notStarted') return 0;
+    if (status !== 'inProgress') return undefined;
+    const stage = parseRuneMysteriesJournal(await Quests.journal(quest));
+    if (reader.modals().main !== -1) {
+        actions.closeModal();
+        await Execution.delayTicks(1);
+    }
+    return stage;
+}

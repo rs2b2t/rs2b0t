@@ -17,6 +17,8 @@ function superPotion(skill: string, short: string, label: string): BoostPotion {
 
 export const SUPER_ATTACK: BoostPotion = superPotion('attack', 'Att', 'Super attack');
 export const SUPER_STRENGTH: BoostPotion = superPotion('strength', 'Str', 'Super strength');
+export const SUPER_DEFENCE: BoostPotion = superPotion('defence', 'Def', 'Super defence');
+export const SUPER_SET: readonly BoostPotion[] = [SUPER_ATTACK, SUPER_STRENGTH, SUPER_DEFENCE];
 
 // Why: a ranged run boosts its own skill, and a melee one never sips this, so it stays out of BOOST_POTIONS and a caller that wants it asks for it by name.
 export const RANGING_POTION: BoostPotion = superPotion('ranged', 'Rng', 'Ranging potion');
@@ -65,8 +67,8 @@ export function rangingPlan(carry: readonly CarryEntry[]): PotionPlan {
 }
 
 /** The potions to carry, taking the dose form and count from the loadout and falling back to one three-dose flask of each. */
-export function plannedPotions(carry: readonly CarryEntry[]): PotionPlan[] {
-    return BOOST_POTIONS.map(potion => planFor(potion, carry));
+export function plannedPotions(carry: readonly CarryEntry[], potions: readonly BoostPotion[] = BOOST_POTIONS): PotionPlan[] {
+    return potions.map(potion => planFor(potion, carry));
 }
 
 export interface SipState {

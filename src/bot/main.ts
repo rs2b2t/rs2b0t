@@ -25,6 +25,7 @@ import { SettingsStore } from './runtime/Settings.js';
 import { StallGuard } from './runtime/StallGuard.js';
 import { RandomEventGuardian } from './runtime/RandomEventGuardian.js';
 import BotPanel from './panel/BotPanel.js';
+import { createRosterClient } from './panel/RosterClient.js';
 import Overlay from './panel/Overlay.js';
 import { installPaintInput } from './panel/PaintInput.js';
 import { paintState } from './paint/paintLogic.js';
@@ -46,12 +47,18 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
     const members = params.get('members') !== '0';
 
     const client = new BotClient(nodeid, lowmem, members);
+    let reconnectAfterSwitch = false;
     const prepareWorldSwitch = (): boolean => {
+        reconnectAfterSwitch ||= client.ingame;
+        if (client.ingame) {
+            const credentials = actions.loginCredentials();
+            AutoRelogin.setCredentials(credentials.username, credentials.password);
+        }
         panel?.setWorldSwitchPending(true);
         AutoRelogin.shutdown();
         ScriptRunner.stop('World switch');
-        const ready = client.prepareWorldSwitch();
-        return ready && !['running', 'paused', 'stopping'].includes(ScriptRunner.state);
+        if (['running', 'paused', 'stopping'].includes(ScriptRunner.state)) return false;
+        return client.prepareWorldSwitch();
     };
 
     const cancelWorldSwitch = (): void => {
@@ -59,6 +66,7 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
         client.cancelWorldSwitch();
         AutoRelogin.cancelWorldSwitch();
         panel?.setWorldSwitchPending(false);
+        reconnectAfterSwitch = false;
     };
 
     const panelRoot = document.getElementById('bot-panel');
@@ -77,7 +85,11 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
         if (window.top === window.self && supportsWorldRouting()) {
             panelRoot.querySelector('.rs2b0t-title')?.after(worldSelector({
                 mode: 'single', location: new URL(window.location.href), prepare: prepareWorldSwitch, cancel: cancelWorldSwitch,
-                navigate: url => window.location.assign(url)
+                navigate: url => {
+                    const destination = new URL(url);
+                    if (reconnectAfterSwitch) destination.searchParams.set('autologin', '1');
+                    window.location.assign(destination.href);
+                }
             }));
         }
     }
@@ -121,6 +133,7 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
 
     (globalThis as Record<string, unknown>).rs2b0t = {
         prepareWorldSwitch, cancelWorldSwitch, world,
+        roster: panel ? createRosterClient(panel) : null,
         client, host: BotHost, runner: ScriptRunner, registry: ScriptRegistry,
         reader, actions, navigator: Navigator, runManager: RunManager,
         input: Input, scheduler: Scheduler,

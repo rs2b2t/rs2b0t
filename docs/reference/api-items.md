@@ -69,7 +69,7 @@ Bank.withdraw(name: string, op?: string): boolean | Promise<boolean>
 Bank.withdrawById(id: number, op?: string): boolean | Promise<boolean>
 Bank.withdrawX(name: string, count: number): Promise<boolean>   // Withdraw-X + dialog
 Bank.withdrawXById(id: number, count: number): Promise<boolean>
-Bank.withdrawLoad(name: string): Promise<boolean>               // All, else X for free slots
+Bank.withdrawLoad(name: string | number): Promise<boolean>      // name or ID; All, else X for free slots
 Bank.deposit(name: string, op?: string): boolean | Promise<boolean>
 Bank.depositInventory(): Promise<void>
 Bank.depositAllMatching(match: (name, id) => boolean, log?): Promise<void>

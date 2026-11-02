@@ -1,3 +1,5 @@
+import { QuestFood } from '../../food.js';
+import { dragonBankPending, huntDragonBones, inDragonLair, leaveDragonLair, refreshDragonBank } from './bones.js';
 import { QUESTS } from '../../data/quests.js';
 import { flagValue, hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { CRYSTALS, RELIC_PARTS, WT_ITEM, WT_TILE, watchtowerArea, type WatchtowerArea } from './areas.js';
@@ -117,7 +119,13 @@ function stageTribes(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
         if (held(snap, WT_ITEM.DRAGON_BONES.id) > 0 || !hasFlag(progress, 'spoken-toban')) {
             return at(area, 'tobanCamp', { kind: 'custom', name: 'talk to Toban', run: talkToToban });
         }
-        const bones = bankOnly(snap, WT_ITEM.DRAGON_BONES);
+        let bones = bankOnly(snap, WT_ITEM.DRAGON_BONES);
+        if (bones?.kind === 'wait') {
+            const food = [QuestFood.name || 'Lobster', 'Lobster', 'Swordfish', 'Tuna']
+                .find(name => (snap.inv.get(name.toLowerCase()) ?? 0) + (snap.bank?.get(name.toLowerCase()) ?? 0) >= 12)
+                ?? (QuestFood.name || 'Lobster');
+            bones = { kind: 'custom', name: 'kill a blue dragon for Dragon bones', run: log => huntDragonBones(food, log) };
+        }
         return bones
             ? at(area, 'yanille', bones)
             : at(area, 'tobanCamp', { kind: 'custom', name: 'talk to Toban', run: talkToToban });
@@ -369,6 +377,8 @@ function recoverCrystals(snap: QuestSnapshot): QuestStep | null {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
+    if (inDragonLair(snap.tile)) return { kind: 'custom', name: 'leave the dragon lair', run: leaveDragonLair };
+    if (dragonBankPending()) return { kind: 'custom', name: 'refresh the bank after the dragon hunt', run: refreshDragonBank };
     if (snap.journal === 'complete' || (snap.stage ?? -1) >= WATCHTOWER_STAGE.COMPLETE) {
         if (held(snap, WT_ITEM.WATCHTOWER_SPELL.id) > 0) {
             return { kind: 'custom', name: 'read the Watchtower spell scroll', run: readSpellScroll };
@@ -459,6 +469,7 @@ export const watchtower: QuestModule = {
     record: QUESTS.find(record => record.id === 'itwatchtower')!,
     bank: WT_TILE.YANILLE_BANK,
     ownsInventory: true,
+    resumeAt: tile => inDragonLair(tile),
     readProgress: readWatchtowerProgress,
     sustain: { foods: ['Lobster', 'Swordfish', 'Tuna'], eatBelowHp: 0.6 },
     decide

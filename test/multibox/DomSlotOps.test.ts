@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { DomSlotOps, orderedSlotElements } from '#/bot/multibox/DomSlotOps.js';
 import type { SlotHandle } from '#/bot/multibox/types.js';
+import type { RosterClient } from '#/bot/multibox/RosterTypes.js';
 
 let handles: SlotHandle[] = [];
 
@@ -18,6 +19,29 @@ afterEach(() => {
 });
 
 describe('DomSlotOps', () => {
+    test('roster exposes only the live ready bridge without queueing access', async () => {
+        const ops = new DomSlotOps(document.getElementById('rail')!, document.getElementById('add')!, true);
+        const handle = ops.spawn({ username: 'alice', password: '', world: 1 });
+        handles.push(handle);
+        expect(handle.roster?.()).toBeNull();
+        const bridge: RosterClient = {
+            scripts: () => ['WalkTo'], selectedScript: () => 'WalkTo', readSettings: () => ({}),
+            assignScript() {}, copySettings() {}, startScript() {}, stopScript() {},
+            configureScript: async () => {}, travelTo: async () => {}, async editSettings() {}
+        };
+        Object.assign(document.querySelector('iframe')!.contentWindow!, { rs2b0t: { roster: bridge } });
+        await new Promise(resolve => setTimeout(resolve, 75));
+        expect(handle.roster?.()).toBe(bridge);
+        handle.reloadWorld(2);
+        expect(handle.roster?.()).toBeNull();
+        const next: RosterClient = { ...bridge, scripts: () => ['Fisher'] };
+        Object.assign(document.querySelector('iframe')!.contentWindow!, { rs2b0t: { roster: next } });
+        await new Promise(resolve => setTimeout(resolve, 75));
+        expect(handle.roster?.()).toBe(next);
+        handle.destroy();
+        expect(handle.roster?.()).toBeNull();
+    });
+
     test('script status follows runner metadata through switches and reloads', async () => {
         const ops = new DomSlotOps(document.getElementById('rail')!, document.getElementById('add')!, true);
         const handle = ops.spawn({ username: 'alice', password: '', world: 1 });
@@ -38,7 +62,7 @@ describe('DomSlotOps', () => {
         runner.meta = { name: 'AutoFighter' };
         runner.state = 'running';
         expect(handle.status()).toMatchObject({ scriptState: 'running', scriptName: 'AutoFighter' });
-        handle.reloadWorld(2);
+        handle.reloadWorld(3);
         expect(handle.status()).toMatchObject({ ready: false, scriptName: null });
     });
 
@@ -51,7 +75,7 @@ describe('DomSlotOps', () => {
         expect(url.searchParams.get('world')).toBe('2');
         expect(url.searchParams.get('box')).toBe('Alice One');
         expect(url.href).not.toContain('secret');
-        expect(Array.from(document.querySelector<HTMLSelectElement>('.mbx-world-select')!.options).map(option => option.value)).toEqual(['1', '2']);
+        expect(Array.from(document.querySelector<HTMLSelectElement>('.mbx-world-select')!.options).map(option => option.value)).toEqual(['1', '2', '3']);
         expect(document.querySelector('.mbx-world-switch')).not.toBeNull();
         expect(document.querySelector('.mbx-world-cancel')).not.toBeNull();
         expect(handles[0].status().world).toBeNull();
@@ -107,12 +131,12 @@ describe('DomSlotOps', () => {
         handles.push(ops.spawn({ username: 'alice', password: '', world: 2 }));
         let ingame = true;
         Object.assign(document.querySelector('iframe')!.contentWindow!, { rs2b0t: {
-            world: 1, reader: { ingame: () => ingame, localPlayerName: () => 'Alice' },
+            world: 3, reader: { ingame: () => ingame, localPlayerName: () => 'Alice' },
             client: { constructor: { loopCycle: 0 } }, renderGate: { drawn: 0 }, runner: { state: 'idle' }
         } });
         await new Promise(resolve => setTimeout(resolve, 75));
-        expect(handles[0].status().world).toBe(1);
-        Reflect.set(Reflect.get(document.querySelector('iframe')!.contentWindow!, 'rs2b0t'), 'world', 3);
+        expect(handles[0].status().world).toBe(3);
+        Reflect.set(Reflect.get(document.querySelector('iframe')!.contentWindow!, 'rs2b0t'), 'world', 4);
         expect(handles[0].status().world).toBeNull();
         ingame = false;
         expect(handles[0].status().world).toBeNull();
@@ -179,7 +203,7 @@ test('World 2 wall frames inherit World 2 identity and stay same-origin', () => 
 });
 
 
-test('a slot still booting receives both switch preparation and cancellation in order', async () => {
+test('cancelling a booting slot does not leave queued logout requests', async () => {
     const ops = new DomSlotOps(document.getElementById('rail')!, document.getElementById('add')!, true);
     const handle = ops.spawn({ username: 'alice', password: '' });
     handles.push(handle);
@@ -192,7 +216,7 @@ test('a slot still booting receives both switch preparation and cancellation in 
         cancelWorldSwitch: () => calls.push('cancel')
     } });
     await new Promise(resolve => setTimeout(resolve, 75));
-    expect(calls).toEqual(['prepare', 'cancel']);
+    expect(calls).toEqual(['cancel']);
 });
 
 

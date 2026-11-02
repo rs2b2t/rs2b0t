@@ -215,6 +215,26 @@ describe('Dragon Slayer decide()', () => {
         expect(step.kind).toBe('withdraw');
     });
 
+    test('banked planks stay in the bank until nail production is finished', () => {
+        const given = snapshot({
+            carried: [DS_ID.MAP, DS_ID.HAMMER],
+            banked: [[DS_ID.PLANK, 3]],
+            progress: { stage: DRAGON_STAGE.BOUGHT_SHIP, flags: new Set<string>() }
+        });
+        const step = decide(given);
+        expect(step.kind).toBe('custom');
+        expect(step.kind === 'custom' && step.name).toContain('smith 12 nails');
+    });
+
+    test('finished nails allow banked planks to be withdrawn for the hull', () => {
+        const step = decide(snapshot({
+            carried: [DS_ID.MAP, DS_ID.HAMMER, NAILS],
+            banked: [[DS_ID.PLANK, 3]],
+            progress: { stage: DRAGON_STAGE.BOUGHT_SHIP, flags: new Set<string>() }
+        }));
+        expect(step).toMatchObject({ kind: 'withdraw', items: [{ id: DS_ID.PLANK, qty: 3 }] });
+    });
+
     test('map pieces left in the bank are withdrawn, not re-earned', () => {
         const step = decide(snapshot({
             carried: [DS_ID.MAZE_KEY, DS_ID.SHIELD],
@@ -399,4 +419,28 @@ describe('Dragon Slayer sources its own shopping at the point of use', () => {
         const step = decide(snapshot({ carried: [DS_ID.MAP, NAILS], tile: { x: 3047, z: 3208, level: 1 }, ...boat }));
         expect((step as { name: string }).name).toBe('go ashore');
     });
+});
+
+test.each([DRAGON_STAGE.BOUGHT_SHIP, DRAGON_STAGE.REPAIRED_SHIP])(
+    'recovers the banked Crandor map before hiring Ned at stage %i', stage => {
+        const step = decide(snapshot({
+            progress: { stage, flags: new Set(['ship-repaired']) },
+            banked: [DS_ID.MAP]
+        }));
+        expect(step).toMatchObject({ kind: 'withdraw', items: [{ name: 'Crandor map', qty: 1, id: 1538 }] });
+    }
+);
+
+test('scans an unknown bank before returning to Ned without a map', () => {
+    expect(decide(snapshot({
+        progress: { stage: DRAGON_STAGE.REPAIRED_SHIP, flags: new Set(['ship-repaired']) },
+        bankKnown: false
+    }))).toMatchObject({ kind: 'scanBank' });
+});
+
+test('leaves the repaired ship before recovering a banked map', () => {
+    expect(decide(snapshot({
+        progress: { stage: DRAGON_STAGE.REPAIRED_SHIP, flags: new Set(['ship-repaired']) },
+        tile: { x: 3047, z: 3208, level: 1 }, banked: [DS_ID.MAP]
+    }))).toMatchObject({ kind: 'custom', name: 'go ashore' });
 });

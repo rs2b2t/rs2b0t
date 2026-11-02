@@ -41,7 +41,7 @@ function idCounts(ids: number[]): Map<number, number> {
 function snap(options: Options = {}): QuestSnapshot {
     return {
         journal: options.journal ?? 'inProgress',
-        inv: counts(options.inv ?? []),
+        inv: new Map([...counts(options.inv ?? []), ['mind rune', 150], ['air rune', 150]]),
         invIds: idCounts(options.invIds ?? []),
         worn: new Set((options.worn ?? []).map(n => n.toLowerCase())),
         noProgress: 0,

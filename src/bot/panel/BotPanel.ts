@@ -6,7 +6,8 @@ import type { BotHostImpl } from '../runtime/BotHost.js';
 import { AutoRelogin } from '../runtime/AutoRelogin.js';
 import { boxId, boxKey, wallLinkHref } from '../runtime/box.js';
 import { Credentials } from '../runtime/Credentials.js';
-import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
+import { ScriptRegistry, type ScriptMeta } from '../runtime/ScriptRegistry.js';
+import { resolveDestination } from '../api/map/WalkDestinations.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { GLOBAL_SETTINGS_CORE, NAV_SETTINGS, SettingsStore } from '../runtime/Settings.js';
 import ScriptLibrary from './ScriptLibrary.js';
@@ -15,6 +16,7 @@ import { PriceBookPanel } from './PriceBookPanel.js';
 import { LoadoutPanel } from './LoadoutPanel.js';
 import { isVisible, summarize } from './paramControls.js';
 import { el } from './dom.js';
+import { desktopStorage } from '../runtime/desktopStorage.js';
 
 // Why: boxId() reads the live URL, so freezing this at module load pins the key to whatever box was current when BotPanel was first imported.
 const selectedScriptKey = (): string => boxKey('selectedScript');
@@ -24,6 +26,8 @@ interface RendererControl {
     enabled(): boolean;
     setEnabled(enabled: boolean): void;
 }
+
+export type PanelRunner = Pick<typeof ScriptRunner, 'state' | 'ctx' | 'meta' | 'start' | 'stop' | 'pause' | 'resume' | 'onChange'>;
 
 export default class BotPanel {
     private host: BotHostImpl;
@@ -55,8 +59,10 @@ export default class BotPanel {
 
     private lastRender = 0;
     private worldSwitchPending = false;
+    private scriptChangePending = false;
+    private scriptControlVersion = 0;
 
-    constructor(root: HTMLElement, host: BotHostImpl, renderer?: RendererControl) {
+    constructor(root: HTMLElement, host: BotHostImpl, renderer?: RendererControl, private runner: PanelRunner = ScriptRunner) {
         this.host = host;
 
         root.replaceChildren();
@@ -88,9 +94,9 @@ export default class BotPanel {
         script.appendChild(sectionTitle('script'));
 
         this.library = new ScriptLibrary(name => this.selectScript(name));
-        const remembered = (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(selectedScriptKey()) : null)
-            ?? (typeof localStorage !== 'undefined' ? localStorage.getItem(selectedScriptKey()) : null);
-        this.selectedScript = remembered && ScriptRegistry.get(remembered) ? remembered : (ScriptRegistry.list()[0]?.name ?? '');
+        const durable = typeof localStorage !== 'undefined' ? localStorage.getItem(selectedScriptKey()) : null;
+        const remembered = desktopStorage ? durable : (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(selectedScriptKey()) : null) ?? durable;
+        this.selectedScript = (remembered ? ScriptRegistry.get(remembered)?.name : undefined) ?? ScriptRegistry.list()[0]?.name ?? '';
 
         const pick = el('div', 'rs2b0t-buttons');
         this.scriptName = el('span', 'rs2b0t-current-script');
@@ -159,7 +165,7 @@ export default class BotPanel {
         root.appendChild(settings);
 
         this.paramsModal = new ParamsModal(
-            () => isActiveState(ScriptRunner.state),
+            () => isActiveState(this.runner.state),
             () => this.renderSettings()
         );
         this.paramsModal.onEditPriceBook = name => this.priceBookPanel.open(name);
@@ -192,7 +198,7 @@ export default class BotPanel {
             root.appendChild(this.buildRendererControls(renderer));
         }
 
-        ScriptRunner.onChange(() => {
+        this.runner.onChange(() => {
             this.renderScriptControls();
             this.renderLog();
             this.renderSettings();
@@ -214,7 +220,7 @@ export default class BotPanel {
     }
 
     startSelectedScript(): void {
-        if (this.worldSwitchPending || isActiveState(ScriptRunner.state)) {
+        if (this.worldSwitchPending || this.scriptChangePending || isActiveState(this.runner.state)) {
             return;
         }
         this.handleStart();
@@ -222,11 +228,150 @@ export default class BotPanel {
 
     setWorldSwitchPending(pending: boolean): void {
         this.worldSwitchPending = pending;
+        if (pending) {
+            this.scriptControlVersion++;
+            this.paramsModal.close();
+        }
         this.renderScriptControls();
+        this.renderSettings();
     }
 
     stopScript(): void {
-        ScriptRunner.stop('Stop button (bot panel)');
+        this.scriptControlVersion++;
+        this.runner.stop('Stop button (bot panel)');
+    }
+
+    selectedScriptName(): string {
+        return this.selectedScript;
+    }
+
+    assignScript(name: string): void {
+        this.assertScriptIdle();
+        this.selectScript(this.requireScript(name).name);
+    }
+
+    copyScriptSettings(name: string, values: Record<string, string>): void {
+        this.assertScriptIdle();
+        const { name: script, keys } = this.validateSettings(name, values);
+        name = script;
+        this.paramsModal.close();
+        for (const key of keys) SettingsStore.clear(name, key);
+        for (const [key, value] of Object.entries(values)) SettingsStore.save(name, key, value);
+        this.renderSettings();
+    }
+
+    private validateSettings(name: string, values: Record<string, string>): { name: string; keys: Set<string> } {
+        const meta = this.requireScript(name);
+        name = meta.name;
+        const schema = meta.settingsSchema ?? {};
+        for (const [key, value] of Object.entries(values)) {
+            if (!Object.hasOwn(schema, key) || typeof value !== 'string') throw new Error(`Invalid setting: ${name}.${key}`);
+        }
+        const keys = new Set(Object.keys(schema));
+        const prefixes = (name === 'JiveRC' ? ['NatureCrafter', name] : [name]).map(script => boxKey(`set:${script}:`));
+        const savedKeys = desktopStorage ? desktopStorage.keys() : [];
+        for (const storage of desktopStorage ? [sessionStorage] : [sessionStorage, localStorage]) {
+            const length = storage.length;
+            for (let i = 0; i < length; i++) {
+                const key = storage.key(i);
+                if (key) savedKeys.push(key);
+            }
+        }
+        for (const key of savedKeys) {
+            const prefix = prefixes.find(prefix => key.startsWith(prefix));
+            if (prefix) keys.add(key.slice(prefix.length));
+        }
+        this.assertNoUrlOverrides(name, keys);
+        return { name, keys };
+    }
+
+    async configureScript(name: string, values: Record<string, string> | null, start: boolean): Promise<void> {
+        this.requireScript(name);
+        if (values) this.validateSettings(name, values);
+        await this.changeScript(() => {
+            if (values) this.copyScriptSettings(name, values);
+            if (!values || start) this.assignScript(name);
+            if (start) this.startRosterScript();
+        });
+    }
+
+    editRosterSettings(): Promise<void> {
+        this.requireScript(this.selectedScript);
+        return this.changeScript(() => this.editScriptSettings());
+    }
+
+    startRosterScript(): void {
+        this.assertScriptIdle();
+        this.requireScript(this.selectedScript);
+        this.handleStart(true);
+    }
+
+    editScriptSettings(): void {
+        this.assertScriptIdle();
+        const meta = this.requireScript(this.selectedScript);
+        this.paramsModal.open(meta.name, meta.settingsSchema ?? {}, { onStart: () => this.startRosterScript() });
+    }
+
+    async travelTo(destination: string): Promise<void> {
+        if (this.worldSwitchPending || this.scriptChangePending) throw new Error('Script controls are busy');
+        if (!reader.ingame()) throw new Error('Log in before travelling');
+        const target = resolveDestination(destination);
+        if (!target) throw new Error(`Unknown destination: ${destination}`);
+        this.requireScript('WalkTo');
+        this.assertNoUrlOverrides('WalkTo', ['destination', 'customTile']);
+        await this.changeScript(() => {
+            if (!reader.ingame()) throw new Error('Log in before travelling');
+            this.requireScript('WalkTo');
+            this.assertNoUrlOverrides('WalkTo', ['destination', 'customTile']);
+            SettingsStore.save('WalkTo', 'destination', target.name);
+            SettingsStore.save('WalkTo', 'customTile', '0,0,0');
+            this.applyScriptSelection('WalkTo');
+            this.handleStart(true);
+        });
+    }
+
+    private async changeScript(apply: () => void): Promise<void> {
+        if (this.worldSwitchPending || this.scriptChangePending) throw new Error('Script controls are busy');
+        const version = this.scriptControlVersion;
+        this.scriptChangePending = true;
+        this.paramsModal.close();
+        this.renderScriptControls();
+        this.renderSettings();
+        try {
+            if (isActiveState(this.runner.state)) this.runner.stop('MultiBox configuration change');
+            const deadline = Date.now() + 10_000;
+            while (this.runner.state === 'stopping') {
+                if (version !== this.scriptControlVersion || this.worldSwitchPending) throw new Error('Script change cancelled');
+                if (Date.now() >= deadline) throw new Error('Timed out waiting for the script to stop');
+                await new Promise(resolve => setTimeout(resolve, 25));
+            }
+            if (version !== this.scriptControlVersion) throw new Error('Script change cancelled');
+            this.assertScriptIdle(true);
+            this.scriptChangePending = false;
+            apply();
+        } finally {
+            this.scriptChangePending = false;
+            this.renderScriptControls();
+            this.renderSettings();
+        }
+    }
+
+    private assertScriptIdle(changing = false): void {
+        if (this.worldSwitchPending || (!changing && this.scriptChangePending) || isActiveState(this.runner.state)) {
+            throw new Error('Stop the script before changing its controls');
+        }
+    }
+
+    private requireScript(name: string): ScriptMeta {
+        const meta = name === 'Global' ? undefined : ScriptRegistry.get(name);
+        if (!meta) throw new Error(`Unknown script: ${name}`);
+        return meta;
+    }
+
+    private assertNoUrlOverrides(name: string, keys: Iterable<string>): void {
+        for (const key of keys) {
+            if (SettingsStore.isUrlOverride(name, key)) throw new Error(`URL override prevents changing ${name}.${key}`);
+        }
     }
 
     setRendererEnabled(enabled: boolean): void {
@@ -239,6 +384,11 @@ export default class BotPanel {
     }
 
     private selectScript(name: string): void {
+        if (this.worldSwitchPending || this.scriptChangePending || isActiveState(this.runner.state)) return;
+        this.applyScriptSelection(name);
+    }
+
+    private applyScriptSelection(name: string): void {
         if (!ScriptRegistry.get(name)) {
             return;
         }
@@ -273,7 +423,7 @@ export default class BotPanel {
             return;
         }
 
-        const active = isActiveState(ScriptRunner.state);
+        const active = this.worldSwitchPending || this.scriptChangePending || isActiveState(this.runner.state);
 
         const summary = el('div', 'rs2b0t-param-summary');
         const valueOf = (key: string): string => (schema[key] ? SettingsStore.displayString(meta.name, key, schema[key]) : '');
@@ -299,7 +449,9 @@ export default class BotPanel {
         edit.title = active
             ? 'Stop the script to edit its parameters. Global settings stay editable while it runs.'
             : 'Open script parameters';
-        edit.addEventListener('click', () => this.paramsModal.open(meta.name, schema));
+        edit.addEventListener('click', () => {
+            if (!this.worldSwitchPending && !this.scriptChangePending && !isActiveState(this.runner.state)) this.editScriptSettings();
+        });
         this.settingsBox.appendChild(edit);
     }
 
@@ -373,48 +525,50 @@ export default class BotPanel {
         return sec;
     }
 
-    private handleStart(): void {
+    private handleStart(rethrow = false): void {
         const meta = ScriptRegistry.get(this.selectedScript);
         if (!meta) {
             return;
         }
 
+        this.paramsModal.close();
         try {
-            ScriptRunner.start(meta);
+            this.runner.start(meta);
         } catch (err) {
+            if (rethrow) throw err;
             console.error('[rs2b0t] start failed', err);
             return;
         }
 
         this.unsubLog?.();
-        this.unsubLog = ScriptRunner.ctx?.onLog(() => this.renderLog()) ?? null;
+        this.unsubLog = this.runner.ctx?.onLog(() => this.renderLog()) ?? null;
         this.renderLog();
     }
 
     private handlePause(): void {
         if (this.worldSwitchPending) return;
-        if (ScriptRunner.state === 'paused') {
-            ScriptRunner.resume();
+        if (this.runner.state === 'paused') {
+            this.runner.resume();
         } else {
-            ScriptRunner.pause();
+            this.runner.pause();
         }
     }
 
     private renderScriptControls(): void {
-        const state = ScriptRunner.state;
+        const state = this.runner.state;
         const active = state === 'running' || state === 'paused' || state === 'stopping';
 
-        this.startBtn.disabled = this.worldSwitchPending || active;
+        this.startBtn.disabled = this.worldSwitchPending || this.scriptChangePending || active;
         this.pauseBtn.disabled = this.worldSwitchPending || !(state === 'running' || state === 'paused');
         this.pauseBtn.textContent = state === 'paused' ? 'Resume' : 'Pause';
         this.stopBtn.disabled = !active || state === 'stopping';
-        this.browseBtn.disabled = active;
+        this.browseBtn.disabled = this.worldSwitchPending || this.scriptChangePending || active;
 
-        const ctx = ScriptRunner.ctx;
+        const ctx = this.runner.ctx;
         if (!ctx) {
             this.scriptStatus.textContent = 'idle';
         } else {
-            const name = ScriptRunner.meta?.name ?? '?';
+            const name = this.runner.meta?.name ?? '?';
             const extra = state === 'crashed' && ctx.crashError ? ` — ${ctx.crashError.message}` : ` — ${ctx.loopCount} loops`;
             const text = `${name}: ${state}${extra}`;
             this.scriptStatus.textContent = ctx.activeEvent ? `⚡ ${ctx.activeEvent}` : text;
@@ -423,7 +577,7 @@ export default class BotPanel {
     }
 
     private renderLog(): void {
-        const ctx = ScriptRunner.ctx;
+        const ctx = this.runner.ctx;
         if (!ctx) {
             this.logBox.replaceChildren();
             return;

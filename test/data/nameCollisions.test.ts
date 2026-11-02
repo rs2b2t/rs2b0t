@@ -8,6 +8,15 @@ import { worthStocking } from '#/bot/api/market/catalog.js';
 import type { ObjRecord } from '#/bot/adapter/ClientAdapter.js';
 
 const UNTRADEABLE = new Set(UNTRADEABLE_IDS);
+const BOOK_PAGES = [
+    { base: 3827, code: 's', deity: 'Saradomin' },
+    { base: 3831, code: 'z', deity: 'Zamorak' },
+    { base: 3835, code: 'g', deity: 'Guthix' }
+].flatMap(({ base, code, deity }) => Array.from({ length: 4 }, (_, i) => ({
+    id: base + i,
+    name: `Torn page ${i + 1}(${code})`,
+    label: `${deity} torn page ${i + 1}`
+})));
 
 /** The groups a shop could put on a shelf, which is what the aliases have to cover. */
 const SHOP_VISIBLE = NAME_COLLISIONS.map(g => ({
@@ -46,12 +55,18 @@ describe('the generated collision list', () => {
 });
 
 describe('the hand-written aliases', () => {
-    // Why: an entry pointing at an id the content no longer repeats is dead weight that never fires again.
-    test('every id it names is one the content really does repeat', () => {
-        const collided = new Set(NAME_COLLISIONS.flatMap(g => g.objs.map(o => o.id)));
+    test('every alias names a collision or a holy-book page with a coded name', () => {
+        const aliased = new Set([...NAME_COLLISIONS.flatMap(g => g.objs.map(o => o.id)), ...BOOK_PAGES.map(o => o.id)]);
         for (const id of Object.keys(ITEM_ALIASES)) {
-            expect({ id, collides: collided.has(Number(id)) }).toEqual({ id, collides: true });
+            expect({ id, known: aliased.has(Number(id)) }).toEqual({ id, known: true });
         }
+    });
+
+    test.each(BOOK_PAGES)('$label remains searchable with the coded content name', ({ id, name, label }) => {
+        const cat = buildCatalog(BOOK_PAGES.map(page => rec(page.id, page.name)));
+        expect(displayName(cat, id)).toBe(label);
+        expect(resolveByName(cat, label).map(obj => obj.id)).toEqual([id]);
+        expect(resolveByName(cat, name).map(obj => obj.id)).toEqual([id]);
     });
 
     // Why: two objs answering to one label is the bug this table exists to remove.

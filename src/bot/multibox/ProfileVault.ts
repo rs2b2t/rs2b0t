@@ -81,9 +81,8 @@ function profilesFrom(v: unknown[]): Profile[] {
         }
         const entry: Profile = { username: p.username, password: p.password };
         if (p.world !== undefined) {
-            const world = p.world === 3 ? 2 : p.world;
-            assertWorld(world);
-            entry.world = world;
+            assertWorld(p.world);
+            entry.world = p.world;
         }
         // Main is the absent-field canonical form, never stored explicitly
         if (typeof p.tab === 'string' && p.tab !== MAIN_TAB) {
@@ -108,8 +107,8 @@ function parseLegacy(raw: string | null): Profile[] | null {
 }
 
 function assertWorld(world: unknown): asserts world is WorldNumber {
-    if (world !== 1 && world !== 2) {
-        throw new Error('profile world must be 1 or 2');
+    if (world !== 1 && world !== 2 && world !== 3) {
+        throw new Error('profile world must be 1, 2 or 3');
     }
 }
 

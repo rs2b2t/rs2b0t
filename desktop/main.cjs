@@ -11,6 +11,10 @@ app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 
+const features = new Set(app.commandLine.getSwitchValue('enable-features').split(',').filter(Boolean));
+features.add('V8CppGCEnableLargerCage');
+app.commandLine.appendSwitch('enable-features', [...features].join(','));
+
 function serverUrl() {
     const arg = process.argv.find(a => a.startsWith('--server='));
     const base = (arg ? arg.slice('--server='.length) : process.env.LCB_SERVER) || 'http://localhost:8081';

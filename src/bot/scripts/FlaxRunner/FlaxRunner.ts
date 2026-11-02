@@ -905,18 +905,24 @@ class BankStrings implements Task {
             `spinner banking pack (${used} slot(s) used, ${strings} string(s), `
             + `${flaxCount()} flax) so the next trade can take a full flax load`
         );
-        await Traversal.walkResilient(BANK_ENTRANCE, {
+        if (!(await Traversal.walkResilient(BANK_ENTRANCE, {
             radius: 3,
             attempts: 4,
             timeoutMs: 120_000,
             log: m => this.bot.log(`  ${m}`),
-        });
-        await Bank.openBooth(
+        }))) {
+            this.bot.log('could not reach the bank entrance — will retry');
+            return;
+        }
+        if (!(await Bank.openBooth(
             { x: BANK_STAND.x, z: BANK_STAND.z, level: BANK_STAND.level },
             BOOTH_NAME,
             BOOTH.op,
             m => this.bot.log(`  ${m}`),
-        );
+        ))) {
+            this.bot.log('could not open the bank — will retry');
+            return;
+        }
         // Deposit everything, strings, leftover fibre, and random-event trash.
         await Bank.depositInventory();
         await Bank.close();

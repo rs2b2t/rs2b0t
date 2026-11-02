@@ -2,9 +2,12 @@ import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { reader, type NpcSnapshot } from '#/bot/adapter/ClientAdapter.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
+import { Execution } from '#/bot/api/execution/Execution.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { Inventory } from '#/bot/api/inventory/Inventory.js';
 import { Shop } from '#/bot/api/shop/Shop.js';
+import { ChatDialog } from '#/bot/api/ui/dialogue/ChatDialog.js';
+import { Input } from '#/bot/input/Input.js';
 import { RandomEvents } from '#/bot/runtime/randomevents/RandomEvents.js';
 
 const TILE = { x: 3200, z: 3200, level: 0 };
@@ -21,7 +24,7 @@ function npc(over: Partial<NpcSnapshot> = {}): NpcSnapshot {
     };
 }
 
-function detect(npcs: NpcSnapshot[]): ReturnType<typeof RandomEvents.detect> {
+function setup(npcs: NpcSnapshot[]): typeof RandomEvents {
     const events: typeof RandomEvents = Reflect.construct(RandomEvents.constructor, []);
     spyOn(reader, 'worldTile').mockReturnValue(TILE);
     spyOn(reader, 'npcs').mockReturnValue(npcs);
@@ -36,7 +39,11 @@ function detect(npcs: NpcSnapshot[]): ReturnType<typeof RandomEvents.detect> {
     spyOn(Bank, 'isOpen').mockReturnValue(false);
     spyOn(Shop, 'isOpen').mockReturnValue(false);
     spyOn(Game, 'animating').mockReturnValue(false);
-    return events.detect();
+    return events;
+}
+
+function detect(npcs: NpcSnapshot[]): ReturnType<typeof RandomEvents.detect> {
+    return setup(npcs).detect();
 }
 
 describe('a talking random that belongs to another player', () => {
@@ -52,11 +59,19 @@ describe('a talking random that belongs to another player', () => {
         expect(detect([npc({ faceEntity: -1 })])).toEqual({ kind: 'dialog', name: 'genie' });
     });
 
-    test('one foreign random beside us does not suppress our own further out', () => {
-        expect(detect([
+    test('talks to our random even when another player\'s is closer', async () => {
+        const events = setup([
             npc({ index: 4, distance: 1, faceEntity: 32768 + SELF_SLOT + 4 }),
             npc({ index: 5, distance: 5, faceEntity: 32768 + SELF_SLOT })
-        ])).toEqual({ kind: 'dialog', name: 'genie' });
+        ]);
+        const interact = spyOn(Input, 'interactNpc').mockReturnValue(true);
+        spyOn(Execution, 'delayUntil').mockImplementation(async condition => condition());
+        spyOn(ChatDialog, 'isOpen').mockReturnValue(false);
+
+        expect(events.detect()).toEqual({ kind: 'dialog', name: 'genie' });
+        expect(await events.handle(() => {})).toBe(true);
+        expect(interact).toHaveBeenCalledTimes(1);
+        expect(interact).toHaveBeenCalledWith(5, 1);
     });
 
     test('a strange plant keeps its own ownership rule, since it never faces its owner', () => {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import { actions, reader } from '#/bot/adapter/ClientAdapter.js';
 import { ScriptRunner } from '#/bot/runtime/ScriptRunner.js';
 import { BotHost } from '#/bot/runtime/BotHost.js';
@@ -217,5 +217,37 @@ test('shutdown stops script and checkbox reconnects until explicitly cancelled',
         reader.ingame = original.ingame;
         actions.login = original.login;
         BotHost.addFrameListener = original.addFrameListener;
+    }
+});
+
+test('intentional logout stops the script and reconnect loop until explicitly enabled', () => {
+    const relogin = new AutoReloginImpl();
+    const original = { ingame: reader.ingame, login: actions.login, loginMessage: reader.loginMessage, addFrameListener: BotHost.addFrameListener };
+    const stop = spyOn(ScriptRunner, 'stop');
+    let frame = (): void => {};
+    let attempts = 0;
+    try {
+        BotHost.addFrameListener = listener => { frame = listener; return () => {}; };
+        reader.ingame = () => false;
+        reader.loginMessage = () => '';
+        actions.login = () => { attempts++; return true; };
+        relogin.setCredentials('logout-test', 'test');
+        relogin.enable(true);
+        relogin.logoutRequested();
+        frame();
+        expect(stop).toHaveBeenCalledWith('Logout');
+        expect(attempts).toBe(0);
+        expect(relogin.isAutoLogin()).toBe(false);
+        expect(relogin.loginQueueStatus()).toBeNull();
+        relogin.setAutoLogin(true);
+        frame();
+        expect(attempts).toBe(1);
+    } finally {
+        relogin.setCredentials('', '');
+        reader.ingame = original.ingame;
+        reader.loginMessage = original.loginMessage;
+        actions.login = original.login;
+        BotHost.addFrameListener = original.addFrameListener;
+        stop.mockRestore();
     }
 });

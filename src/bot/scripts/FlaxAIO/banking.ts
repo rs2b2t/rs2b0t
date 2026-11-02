@@ -1,6 +1,5 @@
 import { Bank, withdrawOp } from '../../api/bank/Bank.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { Task } from '../../api/bot/Bot.js';
 import { nearestStand, travelTo } from './walking.js';
 import type FlaxAIO from './flaxaio.js';
@@ -28,7 +27,7 @@ export async function bankRun(bot: FlaxAIO): Promise<boolean> {
         const flaxBank = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(bot.flaxName().toLowerCase()));
         if (!flaxBank || flaxBank.name === null || Bank.count(flaxBank.name) === 0) {
             bot.setStatus(`out of ${bot.flaxName()} — stopped`);
-            ScriptRunner.stop(`out of '${bot.flaxName()}' in the bank`);
+            bot.requestFinish(`out of '${bot.flaxName()}' in the bank`);
             return false;
         }
         const flaxName = flaxBank.name;

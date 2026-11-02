@@ -1,3 +1,4 @@
+import { prepareStrikeStaff, prepareStrikes, STRIKE_RUNES, STRIKE_STAVES } from '../../strike.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { talkStrict, type NpcStop } from '../../exec/primitives.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
@@ -6,7 +7,6 @@ import { FA_NPC, FA_OBJ, FA_TILE, pocketOf, type FaPocket } from './areas.js';
 import { FA_FIGHT } from './fights.js';
 import { FA_STAGE, readFightArenaStage } from './journal.js';
 import {
-    combatSwap,
     enterArenaByDoor2,
     enterArenaByGuard,
     enterBuilding,
@@ -18,9 +18,7 @@ import {
     talkById,
     unlockJeremy,
     unwearable,
-    wearCombat,
-    wearKhazard,
-    wearKit
+    wearKhazard
 } from './legs.js';
 
 const LADY_SERVIL: NpcStop = {
@@ -44,13 +42,13 @@ const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean
 
 const CHEST = custom('search the guards\' chest', searchChest);
 const WEAR_DISGUISE = custom('wear the Khazard disguise', wearKhazard);
-const WEAR_COMBAT = custom('wear the combat kit', wearCombat);
 const ENTER_BUILDING = custom('enter the arena building', enterBuilding);
 const LEAVE_BUILDING = custom('leave the arena building', leaveBuilding);
 const ENTER_ARENA = custom('enter the arena', enterArenaByDoor2);
 const KNOCK_FOR_GUARD = custom('knock for the arena guard', enterArenaByGuard);
 const UNLOCK_JEREMY = custom('unlock Jeremy\'s cell', unlockJeremy);
 const FLEE = custom('run from General Khazard', fleeArena);
+const SUPPLY_KEEP = ['khazard helmet', 'khazard armour', 'khazard cell keys', 'khali brew', ...STRIKE_STAVES];
 
 const DRUNK_GUARD = custom('talk to the drunk guard', log =>
     talkById(FA_NPC.DRUNK_GUARD, ['Do you still fancy a drink?', 'Yes'], log, FA_TILE.DRUNK_GUARD));
@@ -77,11 +75,6 @@ const FIGHT_SCORPION = custom(`fight ${FA_FIGHT.scorpion.what}`, log =>
     fightWithRelease(FA_FIGHT.scorpion, FA_NPC.JUSTIN, log));
 const FIGHT_BOUNCER = custom(`fight ${FA_FIGHT.bouncer.what}`, log =>
     fightWithRelease(FA_FIGHT.bouncer, FA_NPC.JUSTIN, log));
-
-/** True once the pack holds a head or body other than the disguise. */
-function combatKitCarried(snap: QuestSnapshot): boolean {
-    return combatSwap([...(snap.invIds?.keys() ?? [])]).length > 0;
-}
 
 // Why: the queue keeps its gear banked between quests, so a bot that walks in wearing nothing punches a level-137 dog for 116 hitpoints.
 // Why: Bouncer's damagetype is stab and its defences are flat, so a scimitar is as good as anything and faster than a two-hander.
@@ -139,34 +132,15 @@ export function kitWanted(snap: QuestSnapshot): string[] {
     return out;
 }
 
-// Why: `snap.bank` is empty until something opens a booth, so "is the scimitar banked?" answers no on the first decide tick.
-
-/** Arm the account from the bank, or null when it is already dressed for the arena. */
-function kitStep(snap: QuestSnapshot): QuestStep | null {
-    const wanted = kitWanted(snap);
-    if (wanted.length === 0) {
-        return snap.bankKnown ? null : { kind: 'scanBank', bank: FA_TILE.YANILLE_BANK };
-    }
-    const carried = wanted.filter(name => (snap.inv.get(name.toLowerCase()) ?? 0) > 0);
-    if (carried.length > 0) {
-        return custom(`wear ${carried.join(', ')}`, log => wearKit(carried, log));
-    }
-    if (!snap.bankKnown) {
-        return { kind: 'scanBank', bank: FA_TILE.YANILLE_BANK };
-    }
-    return { kind: 'withdraw', items: wanted.map(name => ({ name, qty: 1 })), bank: FA_TILE.YANILLE_BANK };
-}
-
 function outsideStep(snap: QuestSnapshot, stage: number): QuestStep {
     if (stage <= FA_STAGE.NOT_STARTED || stage >= FA_STAGE.FREED_SERVILS) {
         return { kind: 'talk', stop: LADY_SERVIL };
     }
-    // Why: the disguise fills the head and body slots without being a kit item, so a kit check under it wants a second body on every pass.
-    if (!disguised(snap)) {
-        const kit = kitStep(snap);
-        if (kit) {
-            return kit;
-        }
+    if (stage < FA_STAGE.DEFEATED_BOUNCER) {
+        const staff = prepareStrikeStaff(snap, SUPPLY_KEEP);
+        if (staff) return staff;
+        const runes = prepareStrikes(snap, SUPPLY_KEEP);
+        if (runes) return runes;
     }
     if (stage >= FA_STAGE.SENT_JAIL) {
         return KNOCK_FOR_GUARD;
@@ -196,9 +170,6 @@ function buildingStep(snap: QuestSnapshot, stage: number): QuestStep {
         if (!held(snap, FA_OBJ.KEYS)) {
             return disguised(snap) ? DRUNK_GUARD : WEAR_DISGUISE;
         }
-        if (disguised(snap) && combatKitCarried(snap)) {
-            return WEAR_COMBAT;
-        }
         return UNLOCK_JEREMY;
     }
     if ((stage === FA_STAGE.SPOKEN_DRUNKGUARD && !held(snap, FA_OBJ.BREW)) || !hasBoth(snap)) {
@@ -210,12 +181,9 @@ function buildingStep(snap: QuestSnapshot, stage: number): QuestStep {
     return DRUNK_GUARD;
 }
 
-function arenaStep(snap: QuestSnapshot, stage: number): QuestStep {
+function arenaStep(_snap: QuestSnapshot, stage: number): QuestStep {
     if (stage >= FA_STAGE.FREED_SERVILS) {
         return FLEE;
-    }
-    if (disguised(snap) && combatKitCarried(snap)) {
-        return WEAR_COMBAT;
     }
     if (stage === FA_STAGE.DEFEATED_BOUNCER) {
         return ASK_SERVILS;
@@ -263,17 +231,17 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 // Why: the fights are back to back with no bank between the jail and the escape, so the pack carries every meal the quest gets.
-const FOOD = 24;
+const FOOD = 8;
 
 export const fightarena: QuestModule = {
     record: QUESTS.find(r => r.id === 'arena')!,
+    resumeAt: tile => ['arena', 'prisonCell'].includes(pocketOf(tile)),
     pray: { protect: 'melee', potions: 2 },
     bank: FA_TILE.YANILLE_BANK,
     food: FOOD,
     grind: ['Khazard Ogre', 'Khazard Scorpion', 'Bouncer'],
-    tools: ['khazard helmet', 'khazard armour', 'khazard cell keys', 'khali brew', 'coins', ...KIT_KEEP],
-    // Why: decide() withdraws and wears the kit, so the food float waits for it; 24 lobsters into an empty pack leave no room for 5 pieces of rune.
-    foodReady: snap => disguised(snap) || kitWanted(snap).length === 0,
+    tools: [...SUPPLY_KEEP, 'coins', ...STRIKE_RUNES, ...KIT_KEEP],
+    foodReady: snap => (snap.stage ?? 0) >= FA_STAGE.DEFEATED_BOUNCER || (prepareStrikeStaff(snap, SUPPLY_KEEP) === null && prepareStrikes(snap) === null),
     readStage: readFightArenaStage,
     sustain: { foods: ['Lobster', 'Swordfish', 'Shark', 'Tuna'], eatBelowHp: 0.6 },
     warnReadiness: () => 'Fight Arena ends on Bouncer — level 137, 116 hitpoints, 120 attack and defence',

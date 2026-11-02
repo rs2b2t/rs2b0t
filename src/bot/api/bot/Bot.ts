@@ -50,6 +50,18 @@ export abstract class AbstractBot {
 
     private logSink: ((msg: string) => void) | null = null;
     private subscriptions: (() => void)[] = [];
+    private finishSink: ((reason: string) => void) | null = null;
+
+    get delegated(): boolean { return this.finishSink !== null; }
+
+    requestFinish(reason: string): void {
+        if (this.finishSink) this.finishSink(reason);
+        else bus.emit('script.finish', { reason });
+    }
+
+    bindFinish(sink: (reason: string) => void): void {
+        this.finishSink = sink;
+    }
 
     onStart?(): void | Promise<void>;
     onStop?(): void;
@@ -108,6 +120,7 @@ export abstract class LoopingBot extends AbstractBot {
  * @see docs/reference/api-bots.md#taskbot
  */
 export interface Task {
+    readonly label?: string;
     validate(): boolean | Promise<boolean>;
     execute(): void | Promise<void>;
 }
@@ -117,6 +130,7 @@ export interface Task {
  * @see docs/reference/api-bots.md#taskbot
  */
 export abstract class TaskBot extends LoopingBot {
+    activeTaskName: string | null = null;
     private readonly tasks: Task[] = [];
     private lastSceneWaitLogAt = 0;
 
@@ -136,10 +150,13 @@ export abstract class TaskBot extends LoopingBot {
         }
         for (const task of this.tasks) {
             if (await task.validate()) {
+                this.activeTaskName = task.label ?? null;
                 await task.execute();
+                this.activeTaskName = null;
                 return;
             }
         }
+        this.activeTaskName = null;
     }
 }
 

@@ -29,6 +29,8 @@ function captureListeners(target: EventTarget): () => void {
     };
 }
 
+let fixtureId = 0;
+
 async function withWall(mode: 'local' | 'proxy', check: (wall: Wall) => Promise<void>): Promise<void> {
     const previousMode = process.env.RS2B0T_TARGET;
     process.env.RS2B0T_TARGET = mode;
@@ -55,12 +57,12 @@ async function withWall(mode: 'local' | 'proxy', check: (wall: Wall) => Promise<
         await vault.upsert({ username: 'alice', password: 'a', world: 1 });
         await vault.upsert({ username: 'bob', password: 'b', world: 2 });
         document.body.innerHTML = '<div id="mbx-app"><div id="mbx-rail"><div id="mbx-tabs"></div><div id="mbx-add"></div></div></div>';
-        for (const id of ['build', 'start-all', 'stop-all', 'renderers-off', 'renderers-on', 'resource-bots', 'resource-cpu', 'resource-memory', 'resource-traffic', 'resource-cpu-row', 'resource-memory-row', 'settings', 'drawer']) {
+        for (const id of ['build', 'start-all', 'stop-all', 'renderers-off', 'renderers-on', 'resource-bots', 'resource-cpu', 'resource-memory', 'resource-traffic', 'resource-cpu-row', 'resource-memory-row', 'settings', 'manage', 'drawer']) {
             const el = document.createElement('button');
             el.id = `mbx-${id}`;
             document.body.appendChild(el);
         }
-        const entry = `../../src/bot/multibox/main.ts?fixture=${mode}`;
+        const entry = `../../src/bot/multibox/main.ts?fixture=${mode}-${fixtureId++}`;
         await import(entry);
         if (!Reflect.get(globalThis, 'multibox')) document.dispatchEvent(new Event('DOMContentLoaded'));
         wall = Reflect.get(globalThis, 'multibox') as Wall;
@@ -89,6 +91,23 @@ async function withWall(mode: 'local' | 'proxy', check: (wall: Wall) => Promise<
     }
 }
 
+test('roster closes when shared profiles are reset or relocked', async () => {
+    await withWall('proxy', async () => {
+        document.getElementById('mbx-manage')!.click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const roster = document.getElementById('mbx-roster')!;
+        expect(roster.hidden).toBe(false);
+        const refresh = spyOn(vault, 'refresh').mockImplementation(async () => { vault.reset(); });
+        try {
+            window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
+            await new Promise(resolve => setTimeout(resolve, 0));
+            expect(roster.hidden).toBe(true);
+        } finally {
+            refresh.mockRestore();
+        }
+    });
+});
+
 test('wall wiring preserves pending slots and retries persistence after a successful frame switch', async () => {
     await withWall('proxy', async wall => {
         let save: ReturnType<typeof spyOn<typeof vault, 'setWorld'>> | undefined;
@@ -112,11 +131,13 @@ test('wall wiring preserves pending slots and retries persistence after a succes
             Reflect.set(bobFrame.contentWindow!, 'rs2b0t', runtime(2));
             await new Promise(resolve => setTimeout(resolve, 75));
 
-            expect(await wall.setWorld(alice.id, 2)).toBe(false);
+            const pending = wall.setWorld(alice.id, 2);
+            await new Promise(resolve => setTimeout(resolve, 10));
             expect(wall.slots()[0]).toMatchObject({ world: 1, targetWorld: 1, switchingWorld: 2 });
             expect(document.querySelector('iframe')).toBe(aliceFrame);
             expect(vault.list()[0].world).toBe(1);
             document.querySelector<HTMLButtonElement>('.mbx-world-cancel')!.click();
+            expect(await pending).toBe(false);
             expect(cancelled).toBe(1);
             expect(wall.slots()[0].switchingWorld).toBeNull();
 
@@ -137,14 +158,14 @@ test('wall wiring preserves pending slots and retries persistence after a succes
 
             Reflect.set(replacement.contentWindow!, 'rs2b0t', runtime(2));
             await new Promise(resolve => setTimeout(resolve, 75));
-            expect(await wall.setWorld(alice.id, 1)).toBe(true);
-            const world1Frame = document.querySelector('iframe')!;
-            expect(new URL(world1Frame.src).searchParams.get('world')).toBe('1');
-            expect(new URL(world1Frame.src).searchParams.get('nodeid')).toBe('10');
-            expect(wall.slots()[0]).toMatchObject({ world: null, targetWorld: 1, switchingWorld: null });
-            expect(document.querySelector<HTMLSelectElement>('.mbx-world-select')!.value).toBe('1');
+            expect(await wall.setWorld(alice.id, 3)).toBe(true);
+            const world3Frame = document.querySelector('iframe')!;
+            expect(new URL(world3Frame.src).searchParams.get('world')).toBe('3');
+            expect(new URL(world3Frame.src).searchParams.get('nodeid')).toBe('12');
+            expect(wall.slots()[0]).toMatchObject({ world: null, targetWorld: 3, switchingWorld: null });
+            expect(document.querySelector<HTMLSelectElement>('.mbx-world-select')!.value).toBe('3');
             expect(document.querySelectorAll('iframe')[1]).toBe(bobFrame);
-            expect(vault.list().map(profile => profile.world)).toEqual([1, 2]);
+            expect(vault.list().map(profile => profile.world)).toEqual([3, 2]);
         } finally {
             save?.mockRestore();
         }

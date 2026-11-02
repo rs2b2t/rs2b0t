@@ -62,6 +62,12 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (next === undefined) {
         return { kind: 'talk', stop: THORMAC };
     }
+    if (next === 'b' && (snap.inv.get(BARCRAWL_CARD.toLowerCase()) ?? 0) === 0) {
+        if (!snap.bankKnown) return { kind: 'scanBank' };
+        if ((snap.bank?.get(BARCRAWL_CARD.toLowerCase()) ?? 0) > 0) {
+            return { kind: 'withdraw', items: [{ name: BARCRAWL_CARD, qty: 1 }] };
+        }
+    }
     return { kind: 'custom', name: `catch the ${SCORPION_LABEL[next]} scorpion`, run: CATCH_LEG[next] };
 }
 

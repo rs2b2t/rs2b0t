@@ -23,7 +23,7 @@ const DEFAULT_WHEEL_TILE = new Tile(2711, 3471, 1);
 const BOOTH = { op: 'Use-quickly' };
 
 export const SETTINGS: SettingsSchema = {
-    product: { type: 'string', default: 'Flax', options: ['Flax', 'Wool'], label: 'Fibre to spin', help: 'matched against the "What would you like to spin?" menu' },
+    product: { type: 'string', default: 'Flax', options: ['Flax', 'Wool'], label: 'Fibre to spin', help: 'Flax makes bow strings; Wool makes balls of wool. Withdraws raw fibre from the bank.' },
     bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)' },
     ladderTile: { type: 'tile', default: DEFAULT_LADDER_TILE, label: 'Ladder stand tile (x,z) — inside the house', help: 'walkable tile INSIDE the wheel house beside the ladder (not the ladder tile itself — see route note); the house door is opened on the way' },
     wheelTile: { type: 'tile', default: DEFAULT_WHEEL_TILE, label: 'Spinning wheel tile (x,z,level)', help: 'upstairs — search centre for the wheel' },
@@ -128,8 +128,7 @@ export default class FlaxSpinner extends TaskBot {
     onFloor(level: number): boolean { return Game.tile()?.level === level; }
 
     fibreCount(): number {
-        const pat = this.product.toLowerCase();
-        return Inventory.items().filter(i => i.name?.toLowerCase().includes(pat)).reduce((n, i) => n + Math.max(1, i.count), 0);
+        return Inventory.count(this.product);
     }
 }
 
@@ -147,17 +146,17 @@ class BankTrip implements Task {
         await Execution.delayTicks(1);
         this.bot.countTrip();
 
-        const flaxBank = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(this.bot.productName().toLowerCase()));
-        if (!flaxBank || flaxBank.name === null || Bank.count(flaxBank.name) === 0) {
+        const fibre = Bank.items().find(i => i.name?.toLowerCase() === this.bot.productName().toLowerCase() && i.count > 0);
+        if (!fibre || fibre.name === null) {
             this.bot.setStatus(`out of ${this.bot.productName()} — stopped`);
             ScriptRunner.stop(`out of '${this.bot.productName()}' in the bank`);
             return;
         }
-        const flaxName = flaxBank.name;
-        const allOp = withdrawOp(flaxBank.ops, 'all') ?? withdrawOp(flaxBank.ops, 'any') ?? 'Withdraw-All';
-        this.bot.setStatus(`withdrawing ${flaxName}`);
-        await Bank.withdraw(flaxName, allOp);
-        await Execution.delayUntil(() => this.bot.fibreCount() > 0 || Bank.count(flaxName) === 0, 4000);
+        const fibreName = fibre.name;
+        const allOp = withdrawOp(fibre.ops, 'all') ?? withdrawOp(fibre.ops, 'any') ?? 'Withdraw-All';
+        this.bot.setStatus(`withdrawing ${fibreName}`);
+        await Bank.withdraw(fibreName, allOp);
+        await Execution.delayUntil(() => this.bot.fibreCount() > 0 || Bank.count(fibreName) === 0, 4000);
     }
 }
 

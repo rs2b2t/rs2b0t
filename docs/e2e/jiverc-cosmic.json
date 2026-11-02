@@ -1,0 +1,59 @@
+{
+  "result": "PASS",
+  "at": "2026-09-17T02:03:18.353Z",
+  "server": "http://localhost:8890",
+  "run": "cos4vj30z",
+  "build": {
+    "sourceCommit": "d8a5ef9f1619bdd0ccfba9dce49f85b54da30e22",
+    "uncommittedChanges": true,
+    "sha256": {
+      "out/botclient.js": "ce342a89976f70cc4a79400dffb0866732cece061fa30a86d9a10a36610934b6",
+      "out/collision.lcnav.gz": "04ef48054324935f7eca00efa76f9744b77d00a5824d43b7544f067ab4d7715a",
+      "src/bot/scripts/JiveRC/JiveRC.ts": "dfcbd7b0821171926496061f21cd957c12250bb742e5a4eb23e797d9c5f31999",
+      "src/bot/scripts/JiveRC/logic.ts": "7a8e665178f77ffd0648b7dda19ea5087a35552ef3e4d8a84e2a1a151ca55dc2",
+      "src/bot/runtime/Settings.ts": "fe7a47a8b81373ade84dd96da3435a91ee8dd6079b6b919eec088f5267eba254",
+      "src/bot/scripts/index.ts": "61c49ef8572149cf57d670fbb8a85ccf1c6a330bd58f5dd6d73f5d990e6bf92f",
+      "e2e/jiverc-cosmic-live.ts": "6556615892fb152f32879727a6ab0385f65121d14887e3ff008160e65d61a822"
+    }
+  },
+  "scenarios": [
+    {
+      "mode": "outside",
+      "result": "PASS",
+      "seconds": 183,
+      "crafts": 2,
+      "essenceCrafted": 50,
+      "xpGained": 400,
+      "runesCrafted": 100,
+      "runesBanked": 0,
+      "runnerRestocked": true,
+      "masterEntered": true,
+      "masterExited": true,
+      "runnerEntered": false,
+      "runnerExited": false,
+      "masterRetained": {
+        "cosmicTalisman": 1,
+        "dramenStaff": 1
+      }
+    },
+    {
+      "mode": "inside",
+      "result": "PASS",
+      "seconds": 296,
+      "crafts": 2,
+      "essenceCrafted": 50,
+      "xpGained": 400,
+      "runesCrafted": 100,
+      "runesBanked": 50,
+      "runnerRestocked": true,
+      "masterEntered": true,
+      "masterExited": true,
+      "runnerEntered": true,
+      "runnerExited": true,
+      "masterRetained": {
+        "cosmicTalisman": 1,
+        "dramenStaff": 1
+      }
+    }
+  ]
+}

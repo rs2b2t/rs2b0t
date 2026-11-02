@@ -47,6 +47,13 @@ export class AutoReloginImpl {
         this.clearReconnect();
     }
 
+    logoutRequested(): void {
+        ScriptRunner.stop('Logout');
+        this.setAutoLogin(false);
+        this.wasIngame = false;
+        this.clearReconnect();
+    }
+
     shutdown(): void {
         this.shuttingDown = true;
         this.setAutoLogin(false);

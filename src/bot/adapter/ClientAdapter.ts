@@ -4,6 +4,7 @@ import Skill from '#/client/shell/Skill.js';
 import { ButtonType, ComponentType } from '#/client/config/IfType.js';
 import IfType from '#/client/config/IfType.js';
 import LocType from '#/client/config/LocType.js';
+import { resolveMultiloc } from '#/client/config/resolveMultiloc.js';
 import ObjType from '#/client/config/ObjType.js';
 import CollisionMap from '#/client/dash3d/CollisionMap.js';
 import Model from '#/client/dash3d/Model.js';
@@ -283,6 +284,7 @@ export interface InvItemSnapshot {
     id: number;
     name: string | null;
     count: number;
+    noted?: boolean;
     ops: (string | null)[];
     comId: number;
 }
@@ -491,6 +493,11 @@ export const reader = {
 
     selfAnim(): number {
         return raw?.localPlayer?.primaryAnim ?? -1;
+    },
+
+    selfAnimState(): { seq: number; cycle: number; serial: number } | null {
+        const player = raw?.localPlayer;
+        return player ? { seq: player.primaryAnim, cycle: player.primaryAnimCycle, serial: player.primaryAnimSerial } : null;
     },
 
     selfChat(): string | null {
@@ -970,7 +977,10 @@ export const reader = {
                     }
 
                     const id = (typecode >> 14) & 0x7fff;
-                    const loc = LocType.list(id);
+                    const loc = resolveMultiloc(LocType.list(id), raw.var);
+                    if (!loc) {
+                        continue;
+                    }
                     const x = raw.mapBuildBaseX + lx;
                     const z = raw.mapBuildBaseZ + lz;
 
@@ -1861,7 +1871,7 @@ export const actions = {
         }
 
         return actions.menuAction(MiniMenuAction.CLOSE_BUTTON, 0, 0, comId);
-    }
+    },
 };
 
 export const WELCOME_SCREEN = 5993;
@@ -2118,6 +2128,7 @@ function readInvComponent(comId: number, opsOf: (type: ObjType) => (string | nul
             id,
             name: type.name,
             count: com.linkObjNumber[slot],
+            noted: type.certtemplate !== -1,
             ops: opsOf(type),
             comId
         });

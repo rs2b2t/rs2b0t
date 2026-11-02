@@ -1,3 +1,4 @@
+import type { RosterClient } from './RosterTypes.js';
 import type { RenderMode } from '../runtime/RenderGate.js';
 import type { LoginCoordination } from '../runtime/LoginCoordination.js';
 import type { WorldNumber } from '../../client/config/worlds.js';
@@ -33,9 +34,11 @@ export interface SlotSnapshot extends SlotStatus {
     tab: string;
     targetWorld: WorldNumber;
     switchingWorld: WorldNumber | null;
+    worldSwitchError?: string;
 }
 
 export interface SlotHandle {
+    roster?(): RosterClient | null;
     reloadWorld(world: WorldNumber): void;
     prepareWorldSwitch(): boolean;
     cancelWorldSwitch(): void;

@@ -15,6 +15,7 @@ import { Reachability } from './geometry/Reachability.js';
 import { Input } from '../../input/Input.js';
 import { Navigator, type PathResult } from './Navigator.js';
 import { DirectNavigator } from './DirectNavigator.js';
+import { ICE_QUEEN_ROCKSLIDE_ID } from './iceQueenRockslide.js';
 import type { TransportInfo, Waypoint } from './PathFinder.js';
 import {
     chebyshev,
@@ -48,7 +49,7 @@ import { SettingsStore } from '../../runtime/Settings.js';
 import {
     barrierBannable,
     crossMultiTileDoor,
-    DOOR_SESSION_STRIKES,
+    DOOR_COOLDOWN_STRIKES,
     isOpenableBarrier,
     isOpenBarrierLeaf,
     noteFailedDoor,
@@ -193,6 +194,8 @@ class WalkExecutorImpl {
     /** Session blacklist for quest-locked doors. */
     private sessionBlacklistDoors = new Set<string>();
 
+    private doorRetryAt = new Map<string, number>();
+
     /** Post-quest unlock talks already spent this run (see data/postQuestTalks.ts). */
     private sessionPostQuestTalks = new Set<string>();
 
@@ -285,10 +288,14 @@ class WalkExecutorImpl {
                 const path = await this.requestPath(me, dest, maxExpansions);
                 if (!path.ok) {
                     const short = await this.explainUnreachablePath(me, dest, path.reason, maxExpansions);
+                    if (short.length > 0 && !this.bankLegDone && await this.maybeBankForRoute(me, dest, path, maxExpansions, log)) {
+                        continue;
+                    }
                     const why = short.length > 0
                         ? `${path.reason} without ${short.map(m => `${m.count}x ${m.name}`).join(', ')}`
                         : path.reason;
                     log(`no path to (${dest.x},${dest.z},${dest.level}): ${why}`);
+                    log(`path search from (${me.x},${me.z},${me.level}): expanded ${path.expanded}, excluded doors=${JSON.stringify(this.avoidDoors)}, excluded zones=${JSON.stringify(this.walkAvoidZones)}`);
                     this.lastOutcome = classifyReason(path.reason);
                     return false;
                 }
@@ -300,6 +307,10 @@ class WalkExecutorImpl {
                         this.bankLegDone = true;
                         continue;
                     }
+                }
+
+                if (!this.checkRouteItems(path.waypoints, log)) {
+                    return false;
                 }
 
                 const hops = path.hops ?? [];
@@ -493,14 +504,10 @@ class WalkExecutorImpl {
     private async maybeBankForRoute(
         from: WorldTile,
         dest: WorldTile,
-        directPath: PathResult & { ok: true },
+        directPath: PathResult,
         maxExpansions: number | undefined,
         log: (msg: string) => void
     ): Promise<boolean> {
-        if (pathHasTeleport(directPath.waypoints)) {
-            return false;
-        }
-
         const knownBank = this.readBankItemCounts();
         // Why: WalkTo passes no bank snapshot, so a Varrock to Ardougne walk never withdrew the second 30gp fare unless a caller had opened the bank (#709).
         const bankItems = knownBank && Object.keys(knownBank).length > 0 ? knownBank : gateItemCandidates();
@@ -512,21 +519,11 @@ class WalkExecutorImpl {
             return false;
         }
 
+        const directMissing = directPath.ok ? missingItemsForPath(directPath.waypoints, state) : [];
+        if (directPath.ok && directMissing.length === 0 && pathHasTeleport(directPath.waypoints)) {
+            return false;
+        }
         const virtual = virtualizeWithItems(state, bankItems);
-        const pathVirtual = await this.requestPath(from, dest, maxExpansions, virtual);
-        if (!pathVirtual.ok) {
-            return false;
-        }
-
-        const missing = missingItemsForPath(pathVirtual.waypoints, state);
-        if (missing.length === 0) {
-            return false;
-        }
-
-        if (!pathHasTeleport(pathVirtual.waypoints) && missing.every(m => !/rune|coins/i.test(m.name))) {
-            // Why: empty on purpose; toll coins and other specials already reach `missing` via bankPlan.
-        }
-
         const bank = nearestBank(from);
         if (!bank) {
             return false;
@@ -534,7 +531,7 @@ class WalkExecutorImpl {
         const stand: WorldTile = { x: bank.tile.x, z: bank.tile.z, level: bank.tile.level };
 
         const toBank = await this.requestPath(from, stand, maxExpansions);
-        if (!toBank.ok) {
+        if (!toBank.ok || missingItemsForPath(toBank.waypoints, state).length > 0) {
             return false;
         }
         const bankToDest = await this.requestPath(stand, dest, maxExpansions, virtual);
@@ -543,11 +540,11 @@ class WalkExecutorImpl {
         }
 
         const plan = planBankLeg({
-            directCost: directPath.cost,
+            directCost: !directPath.ok || directMissing.length > 0 ? Infinity : directPath.cost,
             directHasTeleport: false,
             toBankCost: toBank.cost,
             bankToDestCost: bankToDest.cost,
-            missing
+            missing: missingItemsForPath(bankToDest.waypoints, state)
         });
         if (plan.action !== 'bank') {
             return false;
@@ -555,7 +552,7 @@ class WalkExecutorImpl {
 
         log(
             `bank plan: withdraw ${plan.missing.map(m => `${m.count}×${m.name}`).join(', ')} `
-                + `(est cost ${plan.estimatedCost} < direct ${directPath.cost})`
+                + `(est cost ${plan.estimatedCost}, direct ${!directPath.ok ? 'unreachable' : directMissing.length > 0 ? 'underfunded' : directPath.cost})`
         );
 
         this.bankLegDone = true; // prevent recursion while walking to bank
@@ -570,8 +567,8 @@ class WalkExecutorImpl {
             return false;
         }
 
-        // Why: `MissingItem.count` is already the shortage (required minus held at plan time), so withdraw it as is (#336).
-        for (const item of plan.missing) {
+        const missing = missingItemsForPath(bankToDest.waypoints, snapshotWorldStateData());
+        for (const item of missing) {
             const take = item.count;
             if (take <= 0) {
                 continue;
@@ -614,6 +611,9 @@ class WalkExecutorImpl {
                     log(`bank plan: no path to bank: ${path.reason}`);
                     return false;
                 }
+                if (!this.checkRouteItems(path.waypoints, log)) {
+                    return false;
+                }
                 const tiles = expandWaypoints(path.waypoints);
                 this.publishPath(tiles, 0, -1);
                 const result = await this.followPath(tiles, stand, radius, deadline, m => log(`  ${m}`), settleBudget);
@@ -628,6 +628,17 @@ class WalkExecutorImpl {
         } finally {
             this.bankLegDone = saved;
         }
+    }
+
+    private checkRouteItems(waypoints: Waypoint[], log: (msg: string) => void): boolean {
+        const missing = missingItemsForPath(waypoints, snapshotWorldStateData());
+        if (missing.length === 0) {
+            return true;
+        }
+        this.lastMissingGateItems = missing;
+        this.lastOutcome = 'unreachable';
+        log(`route needs ${missing.map(m => `${m.count}×${m.name}`).join(', ')} before departure`);
+        return false;
     }
 
     private readBankItemCounts(): Record<string, number> | null {
@@ -765,19 +776,34 @@ class WalkExecutorImpl {
         }
     }
 
+    resetSession(): void {
+        this.avoidDoors = [];
+        this.doorStrikes.clear();
+        this.doorRetryAt.clear();
+        this.sessionBlacklistDoors.clear();
+        this.sessionPostQuestTalks.clear();
+        this.sessionSuppressedTeleports.clear();
+    }
+
     private resetAvoids(): void {
-        // Strikes deliberately survive the walk, see DOOR_SESSION_STRIKES.
+        for (const [key, retryAt] of this.doorRetryAt) {
+            if (Date.now() >= retryAt) {
+                this.doorRetryAt.delete(key);
+                this.doorStrikes.delete(key);
+                this.sessionBlacklistDoors.delete(key);
+            }
+        }
+        // Strikes deliberately survive the walk, see DOOR_COOLDOWN_STRIKES.
         this.avoidDoors = [];
         this.refreshSpecialCrossingAvoids();
     }
 
     /** Blacklist a door for this walk session after quest-lock dialogue. */
     blacklistDoor(x: number, z: number): void {
+        this.doorRetryAt.delete(`${x}|${z}`);
         this.sessionBlacklistDoors.add(`${x}|${z}`);
         this.avoidDoors.push({ x, z });
     }
-
-    // Why: past {@link DOOR_SESSION_STRIKES} the placement counts as shut for the run, or the next repath plans straight back through it.
 
     /** Record that a crossing was attempted and the player is still on the near side. */
     private noteDoorRefusal(hop: PathStep, log: (msg: string) => void): void {
@@ -785,14 +811,15 @@ class WalkExecutorImpl {
         const t = hop.transport;
         if (
             t
-            && strikes >= DOOR_SESSION_STRIKES
+            && strikes >= DOOR_COOLDOWN_STRIKES
             && barrierBannable(t.kind, t.locName)
             && !this.sessionBlacklistDoors.has(`${t.locX}|${t.locZ}`)
         ) {
             log(
-                `'${t.locName}' at (${t.locX},${t.locZ}) refused ${strikes} crossings — routing around it for the rest of the run`
+                `'${t.locName}' at (${t.locX},${t.locZ}) refused ${strikes} crossings; retrying after 60s`
             );
             this.blacklistDoor(t.locX, t.locZ);
+            this.doorRetryAt.set(`${t.locX}|${t.locZ}`, Date.now() + 60_000);
         }
     }
 
@@ -1260,6 +1287,8 @@ class WalkExecutorImpl {
                 return false;
             }
 
+            if (transport.locId === ICE_QUEEN_ROCKSLIDE_ID
+                && !(await DirectNavigator.walkTo(approach, 0, APPROACH_STEP_MS))) return false;
             const before = reader.worldTile();
             const mark = GameMessages.mark();
             if (!loc.interact(transport.action)) {

@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { worldSelector } from '#/bot/panel/WorldSelector.js';
 
-test('world switch waits for clean logout and keeps the whole wall in wall mode', () => {
+test('world switch waits for clean logout and keeps the whole wall in wall mode', async () => {
     let ready = false;
     let preparations = 0;
     const navigations: string[] = [];
@@ -14,24 +14,25 @@ test('world switch waits for clean logout and keeps the whole wall in wall mode'
     });
     expect(root.textContent).toContain('World 1');
     const select = root.querySelector('select')!;
-    expect(Array.from(select.options).map(option => option.value)).toEqual(['1', '2']);
-    select.value = '2';
+    expect(Array.from(select.options).map(option => option.value)).toEqual(['1', '2', '3']);
+    select.value = '3';
     root.querySelector('button')!.click();
     expect(navigations).toEqual([]);
     expect(preparations).toBe(1);
-    expect(root.textContent).toContain('Log out');
+    expect(root.textContent).toContain('Switching');
     ready = true;
-    root.querySelector('button')!.click();
-    expect(navigations).toEqual(['https://w2.rs2b2t.com/rs2b0t/wall?lowmem=0']);
+    await new Promise(resolve => setTimeout(resolve, 150));
+    expect(navigations).toEqual(['https://w1.rs2b2t.com/rs2b0t/wall?lowmem=0&world=3']);
 });
 
-test('a single client selector stays in single mode and never navigates to an unlisted world', () => {
+test('a single client selector stays in single mode and never navigates to an unlisted world', async () => {
     const navigations: string[] = [];
     const root = worldSelector({ mode: 'single', location: new URL('https://w2.rs2b2t.com/rs2b0t/'), prepare: () => true, cancel: () => {}, navigate: url => navigations.push(url) });
     const select = root.querySelector('select')!;
     select.value = '1';
     root.querySelector('button')!.click();
-    expect(navigations).toEqual(['https://w1.rs2b2t.com/rs2b0t/']);
+    await Promise.resolve();
+    expect(navigations).toEqual(['https://w2.rs2b2t.com/rs2b0t/?world=1']);
     select.value = '999';
     root.querySelector('button')!.click();
     expect(navigations).toHaveLength(1);
