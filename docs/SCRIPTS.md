@@ -613,7 +613,7 @@ Two-player cooperative flax picking and spinning — Runner picks flax and deliv
 
 ### FlaxSpinner
 
-Seers flax spinner — withdraw flax, climb to the spinning wheel, Spin-X into bow string, bank, repeat
+Seers spinner: withdraw flax for bow strings or wool for balls of wool, spin upstairs, bank the output, and repeat
 
 - Tags: `seers`, `crafting`, `banking`, `afk`
 
@@ -644,13 +644,15 @@ Banks at the nearest bank, withdraws uncut gems and a chisel, cuts every gem you
 
 ### JiveCrafting
 
-Makes one gold jewel picked from the dropdown at the Al Kharid furnace: banks for the mould, the gold bars and the gems, uses a bar on the furnace, clicks the biggest Make button that fits the load and walks back with it. Stops honestly when the bank runs out of any of the three.
+Crafts gold jewellery at the Al Kharid furnace, or strings unstrung amulets with balls of wool at the nearest bank. Banks finished items and stops when supplies run out.
 
 - Tags: `crafting`, `jewellery`, `al kharid`, `banking`, `afk`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
+| `mode` | string | `"Craft jewellery"` | Mode — one of: Craft jewellery, String amulets |
 | `product` | string | `"Sapphire ring"` | Product — one of: Gold ring, Sapphire ring, Emerald ring, Ruby ring, Diamond ring, Dragonstone ring, Gold necklace, Sapphire necklace, Emerald necklace, Ruby necklace, Diamond necklace, Dragonstone necklace, Gold amulet, Sapphire amulet, Emerald amulet, Ruby amulet, Diamond amulet, Dragonstone amulet |
+| `amulet` | string | `"Gold amulet"` | Amulet to string — one of: Gold amulet, Sapphire amulet, Emerald amulet, Ruby amulet, Diamond amulet, Dragonstone amulet |
 
 ### LeatherCrafter
 

@@ -67,6 +67,8 @@ try {
         await wall.importProfiles(profiles);
         for (const store of [localStorage, sessionStorage]) {
             store.setItem('rs2b0t:miner_source:set:Miner:rock', 'iron');
+            store.setItem('rs2b0t:miner_source:set:WalkTo:destination', 'Varrock');
+            store.setItem('rs2b0t:miner_source:set:WalkTo:customTile', '3210,3424,0');
             store.setItem('rs2b0t:miner_target:set:Miner:rock', 'coal');
             store.setItem('rs2b0t:miner_target:set:Miner:stale', 'true');
             store.setItem('rs2b0t:miner_target:set:Global:runAuto', 'false');
@@ -85,8 +87,8 @@ try {
     const modal = page.locator('#mbx-roster');
     const action = (name: string) => modal.locator(`[data-action="${name}"]`);
     const select = (name: string) => modal.getByRole('checkbox', { name: `Select ${name}`, exact: true });
-    const apply = async () => {
-        await page.click('#mbx-roster-apply');
+    const apply = async (start = false) => {
+        await page.click(start ? '#mbx-roster-apply-start' : '#mbx-roster-apply');
         await page.waitForFunction(() => document.getElementById('mbx-roster-message')?.textContent?.startsWith('Action finished.'));
     };
     await modal.getByRole('button', { name: /^Miners/ }).click();
@@ -95,7 +97,8 @@ try {
     await page.selectOption('#mbx-roster-script', 'JiveRC');
     await apply();
     await page.waitForFunction(() => localStorage.getItem('rs2b0t:miner_saved:selectedScript') === 'JiveRC');
-    console.log('assignment persisted');
+    await page.waitForFunction(() => (Reflect.get(globalThis, 'multibox') as Wall).slots().find(s => s.username === 'miner_busy')?.scriptState === 'stopped');
+    console.log('assignment persisted after stopping active clients');
     await action('copy').click();
     await page.selectOption('#mbx-roster-script', 'Miner');
     await page.selectOption('#mbx-roster-source', 'miner_source');
@@ -108,7 +111,7 @@ try {
         selected: localStorage.getItem('rs2b0t:miner_target:selectedScript'),
         busy: localStorage.getItem('rs2b0t:miner_busy:set:Miner:rock')
     }));
-    if (JSON.stringify(stored) !== JSON.stringify({ target: 'iron', stale: null, global: 'false', selected: 'JiveRC', busy: null })) throw new Error(`Bad copy: ${JSON.stringify(stored)}`);
+    if (JSON.stringify(stored) !== JSON.stringify({ target: 'iron', stale: null, global: 'false', selected: 'JiveRC', busy: 'iron' })) throw new Error(`Bad copy: ${JSON.stringify(stored)}`);
     if (!(await modal.locator('tr[data-username="miner_fail"]').textContent())?.includes('Fixture copy failure')) throw new Error('Missing partial-failure result');
     await page.screenshot({ path: join(out, 'roster-modal.png') });
 
@@ -116,17 +119,31 @@ try {
     await select('miner_target').check();
     await action('assign').click();
     await page.selectOption('#mbx-roster-script', 'Miner');
-    await apply();
+    await apply(true);
+    await page.waitForFunction(() => (Reflect.get(globalThis, 'multibox') as Wall).slots().some(s => s.username === 'miner_target' && s.scriptState === 'running' && s.scriptName === 'Miner'));
+    if (await action('assign').getAttribute('aria-pressed') !== 'true') throw new Error('Assignment changed action pane');
     await modal.locator('tr[data-username="miner_target"]').getByRole('button', { name: /Edit/ }).click();
     await modal.waitFor({ state: 'hidden' });
     const target = page.frames().find(f => new URL(f.url()).searchParams.get('box') === 'miner_target')!;
+    await page.waitForFunction(() => (Reflect.get(globalThis, 'multibox') as Wall).slots().find(s => s.username === 'miner_target')?.scriptState === 'stopped');
     await target.fill('#fixture-parameter', 'copper');
     await target.getByRole('button', { name: 'Save fixture parameter' }).click();
+    await target.getByRole('button', { name: 'Start script', exact: true }).click();
+    await page.waitForFunction(() => (Reflect.get(globalThis, 'multibox') as Wall).slots().find(s => s.username === 'miner_target')?.scriptState === 'running');
     const copy = await page.evaluate(() => ['miner_source', 'miner_target', 'miner_saved'].map(name => localStorage.getItem(`rs2b0t:${name}:set:Miner:rock`)));
     if (JSON.stringify(copy) !== JSON.stringify(['iron', 'copper', 'iron'])) throw new Error('Individual edit changed other profiles');
     for (const frame of frames) if (!await frame.evaluate(el => el.isConnected)) throw new Error('Modal operation replaced an iframe');
 
     await page.click('#mbx-manage');
+    await action('copy').click();
+    await page.selectOption('#mbx-roster-script', 'WalkTo');
+    await page.selectOption('#mbx-roster-source', 'miner_source');
+    await apply(true);
+    await page.waitForFunction(() => (Reflect.get(globalThis, 'multibox') as Wall).slots().some(s => s.username === 'miner_target' && s.scriptState === 'running' && s.scriptName === 'WalkTo'));
+    const walk = await page.evaluate(() => ['destination', 'customTile'].map(key => localStorage.getItem(`rs2b0t:miner_target:set:WalkTo:${key}`)));
+    if (JSON.stringify(walk) !== JSON.stringify(['Varrock', '3210,3424,0'])) throw new Error('WalkTo copy and start lost its destination');
+    if (await action('copy').getAttribute('aria-pressed') !== 'true') throw new Error('Copy changed action pane');
+    await page.screenshot({ path: join(out, 'roster-copy-start.png') });
     await action('travel').click();
     await page.selectOption('#mbx-roster-destination', "Seers' Village");
     await target.evaluate(() => { Reflect.get(globalThis, 'rosterFixture').holdTravel = true; });
@@ -203,7 +220,7 @@ try {
     await modal.waitFor({ state: 'visible' });
     if (await action('world').isVisible()) throw new Error('Local engine offers world switching');
     if (errors.length) throw new Error(errors.join('\n'));
-    console.log('PASS: roster assignment, copy isolation, partial failures, individual edit, travel, world switching, modal dismissal, focus, tab scope, responsive layout, iframe identity, and removal during travel');
+    console.log('PASS: roster assignment and start, active-script replacement, WalkTo copy and start, copy isolation, partial failures, individual edit and start, travel, world switching, modal dismissal, focus, tab scope, responsive layout, iframe identity, and removal during travel');
 } finally {
     await browser.close();
     server.stop(true);

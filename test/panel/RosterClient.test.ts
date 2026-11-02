@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import BotPanel, { type PanelRunner } from '#/bot/panel/BotPanel.js';
+import { RosterActions, type RosterProfile } from '#/bot/multibox/RosterActions.js';
 import { createRosterClient } from '#/bot/panel/RosterClient.js';
 import { BotHost } from '#/bot/runtime/BotHost.js';
 import { ScriptRegistry, type ScriptMeta } from '#/bot/runtime/ScriptRegistry.js';
@@ -109,7 +110,7 @@ for (const state of ['running', 'paused', 'stopping']) test(`${state} blocks ass
     expect(() => client.assignScript('RosterOther')).toThrow();
     expect(() => client.copySettings('RosterDemo', { leash: '12' })).toThrow();
     expect(() => client.startScript()).toThrow();
-    expect(() => client.editSettings()).toThrow();
+    expect(() => panel.editScriptSettings()).toThrow();
     expect(() => panel.assignScript('RosterOther')).toThrow();
     expect(SettingsStore.saved('RosterDemo', 'leash')).toBeUndefined();
     expect(client.selectedScript()).toBe('RosterDemo');
@@ -121,7 +122,7 @@ test('world switching blocks all script writes, edits, starts and travel', async
     expect(() => client.assignScript('RosterOther')).toThrow();
     expect(() => client.copySettings('RosterDemo', { mode: 'None' })).toThrow();
     expect(() => client.startScript()).toThrow();
-    expect(() => client.editSettings()).toThrow();
+    expect(() => panel.editScriptSettings()).toThrow();
     await expect(client.travelTo('Varrock')).rejects.toThrow();
     expect(runner.stops).toBe(0);
     expect(SettingsStore.saved('WalkTo', 'destination')).toBeUndefined();
@@ -202,9 +203,9 @@ test('a world switch during stop cancels pending travel', async () => {
     expect(runner.starts).toEqual([]);
 });
 
-test('edit opens the existing parameter modal for the selected script', () => {
+test('edit opens the existing parameter modal for the selected script', async () => {
     client.assignScript('RosterOther');
-    client.editSettings();
+    await client.editSettings();
     expect(document.querySelector('.rs2b0t-params-body')?.closest('.rs2b0t-modal-backdrop')?.getAttribute('style')).toContain('display: flex');
     const range = document.querySelector<HTMLInputElement>('.rs2b0t-param-range')!;
     range.value = '14';
@@ -261,8 +262,8 @@ test('cancelling a world switch does not revive an earlier travel request', asyn
     expect(runner.starts).toEqual([]);
 });
 
-test('starting closes the parameter modal before its controls can write active script settings', () => {
-    client.editSettings();
+test('starting closes the parameter modal before its controls can write active script settings', async () => {
+    await client.editSettings();
     const backdrop = document.querySelector('.rs2b0t-params-body')!.closest<HTMLElement>('.rs2b0t-modal-backdrop')!;
     expect(backdrop.style.display).toBe('flex');
     client.startScript();
@@ -309,4 +310,92 @@ test.each(['JiveRC', 'NatureCrafter'])('live %s default copies clear legacy sett
     expect(SettingsStore.saved('NatureCrafter', 'leash')).toBeUndefined();
     expect(SettingsStore.saved('RosterOther', 'leash')).toBe('19');
     expect(SettingsStore.saved('Global', 'lampSkill')).toBe('mining');
+});
+
+for (const state of ['running', 'paused', 'stopping']) test(`configuration waits for ${state} to finish before copying and starting`, async () => {
+    runner.setState(state);
+    const changing = client.configureScript('RosterOther', { leash: '12' }, true);
+    expect(runner.state).toBe('stopping');
+    expect(client.selectedScript()).toBe('RosterDemo');
+    expect(SettingsStore.saved('RosterOther', 'leash')).toBeUndefined();
+    expect(runner.starts).toEqual([]);
+    runner.setState('stopped');
+    await changing;
+    expect(client.selectedScript()).toBe('RosterOther');
+    expect(SettingsStore.saved('RosterOther', 'leash')).toBe('12');
+    expect(runner.starts).toEqual(['RosterOther']);
+});
+
+test('configuration validates before stopping and an explicit stop cancels its restart', async () => {
+    runner.setState('running');
+    await expect(client.configureScript('missing', null, true)).rejects.toThrow();
+    await expect(client.configureScript('RosterOther', { missing: '12' }, true)).rejects.toThrow();
+    expect(runner.stops).toBe(0);
+    const changing = client.configureScript('RosterOther', { leash: '12' }, true);
+    client.stopScript();
+    runner.setState('stopped');
+    await expect(changing).rejects.toThrow(/cancelled/i);
+    expect(SettingsStore.saved('RosterOther', 'leash')).toBeUndefined();
+    expect(runner.starts).toEqual([]);
+});
+
+test('copy without start stops the runner but preserves the selected script', async () => {
+    runner.setState('running');
+    const changing = client.configureScript('RosterOther', { leash: '12' }, false);
+    runner.setState('stopped');
+    await changing;
+    expect(client.selectedScript()).toBe('RosterDemo');
+    expect(SettingsStore.saved('RosterOther', 'leash')).toBe('12');
+    expect(runner.starts).toEqual([]);
+});
+
+test('editing stops first and starts with the edited values from the parameter modal', async () => {
+    runner.setState('running');
+    const editing = client.editSettings();
+    expect(document.querySelector('.rs2b0t-params-body')?.closest<HTMLElement>('.rs2b0t-modal-backdrop')?.style.display).not.toBe('flex');
+    runner.setState('stopped');
+    await editing;
+    const range = document.querySelector<HTMLInputElement>('.rs2b0t-param-range')!;
+    range.value = '14';
+    range.dispatchEvent(new Event('input'));
+    const start = document.querySelector<HTMLButtonElement>('[data-action="start-script"]')!;
+    expect(start).not.toBeNull();
+    start.click();
+    start.click();
+    expect(SettingsStore.saved('RosterDemo', 'leash')).toBe('14');
+    expect(runner.starts).toEqual(['RosterDemo']);
+    expect(document.querySelector('.rs2b0t-params-body')?.closest<HTMLElement>('.rs2b0t-modal-backdrop')?.style.display).toBe('none');
+});
+
+
+test('removing a client while stopping cancels its eventual settings write and restart', async () => {
+    let profiles: RosterProfile[] = [{ username: 'alice', tab: 'Main', world: 1, slot: {
+        id: 1, username: 'alice', tab: 'Main', focused: true, mode: 'focused', targetWorld: 1, switchingWorld: null,
+        ready: true, ingame: true, world: 1, player: 'alice', loopCycle: 0, drawn: 0, scriptState: 'running', scriptName: 'RosterDemo'
+    } }];
+    const actions = new RosterActions({ profiles: () => profiles, client: () => client, setWorld: async () => true });
+    runner.setState('running');
+    const changing = actions.run(['alice'], { kind: 'assign', script: 'RosterOther', start: true });
+    profiles = [];
+    const result = await changing;
+    expect(result[0].state).toBe('failed');
+    runner.setState('stopped');
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(client.selectedScript()).toBe('RosterDemo');
+    expect(runner.starts).toEqual([]);
+});
+
+test('configuration times out without writing or starting and later changes still work', async () => {
+    runner.setState('stopping');
+    const now = spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValue(10_001);
+    try {
+        await expect(client.configureScript('RosterOther', { leash: '12' }, true)).rejects.toThrow(/timed out/i);
+    } finally {
+        now.mockRestore();
+    }
+    runner.setState('stopped');
+    expect(SettingsStore.saved('RosterOther', 'leash')).toBeUndefined();
+    expect(runner.starts).toEqual([]);
+    await client.configureScript('RosterOther', null, false);
+    expect(client.selectedScript()).toBe('RosterOther');
 });

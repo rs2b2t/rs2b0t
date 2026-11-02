@@ -30,11 +30,17 @@ document.body.append(canvas);
 const roster: RosterClient = {
     scripts: () => ['Miner', 'JiveRC', 'WalkTo'],
     selectedScript: () => readProfileScript(username),
-    readSettings: script => ({ rock: 'iron', ...readScriptSettings(username, script) }),
+    readSettings: script => ({ ...(script === 'Miner' ? { rock: 'iron' } : {}), ...readScriptSettings(username, script) }),
     assignScript: script => writeProfileScript(username, script),
     copySettings(script, values) {
         if (username.endsWith('_fail')) throw new Error('Fixture copy failure');
         replaceScriptSettings(username, script, values);
+    },
+    async configureScript(script, values, start) {
+        await stopForChange();
+        if (values) this.copySettings(script, values);
+        if (!values || start) this.assignScript(script);
+        if (start) this.startScript();
     },
     startScript() { runner.meta = { name: readProfileScript(username) }; runner.state = 'running'; },
     stopScript() { runner.state = 'stopped'; },
@@ -45,17 +51,29 @@ const roster: RosterClient = {
         replaceScriptSettings(username, 'WalkTo', { destination, customTile: '0,0,0' });
         this.startScript();
     },
-    editSettings() {
+    async editSettings() {
+        await stopForChange();
         const input = document.createElement('input');
         input.id = 'fixture-parameter';
         input.value = readScriptSettings(username, 'Miner').rock ?? 'iron';
         const save = document.createElement('button');
         save.textContent = 'Save fixture parameter';
         save.onclick = () => replaceScriptSettings(username, 'Miner', { rock: input.value });
-        document.body.prepend(input, save);
+        const start = document.createElement('button');
+        start.textContent = 'Start script';
+        start.onclick = () => { roster.startScript(); input.remove(); save.remove(); start.remove(); };
+        document.body.prepend(input, save, start);
         input.focus();
     }
 };
+async function stopForChange(): Promise<void> {
+    if (['running', 'paused', 'stopping'].includes(runner.state)) {
+        runner.state = 'stopping';
+        await new Promise(resolve => setTimeout(resolve, 40));
+        runner.state = 'stopped';
+    }
+}
+
 Reflect.set(globalThis, 'rs2b0t', {
     world, roster, runner,
     reader: { ingame: () => ingame, localPlayerName: () => ingame ? username : null },

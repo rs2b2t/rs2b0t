@@ -27,7 +27,7 @@ describe('DomSlotOps', () => {
         const bridge: RosterClient = {
             scripts: () => ['WalkTo'], selectedScript: () => 'WalkTo', readSettings: () => ({}),
             assignScript() {}, copySettings() {}, startScript() {}, stopScript() {},
-            travelTo: async () => {}, editSettings() {}
+            configureScript: async () => {}, travelTo: async () => {}, async editSettings() {}
         };
         Object.assign(document.querySelector('iframe')!.contentWindow!, { rs2b0t: { roster: bridge } });
         await new Promise(resolve => setTimeout(resolve, 75));
