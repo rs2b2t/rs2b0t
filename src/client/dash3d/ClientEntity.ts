@@ -34,6 +34,7 @@ export default abstract class ClientEntity extends ModelSource {
     secondaryAnimFrame: number = 0;
     secondaryAnimCycle: number = 0;
     primaryAnim: number = -1;
+    primaryAnimSerial: number = 0;
     primaryAnimFrame: number = 0;
     primaryAnimCycle: number = 0;
     primaryAnimDelay: number = 0;

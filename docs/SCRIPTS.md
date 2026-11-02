@@ -706,6 +706,7 @@ Fishes a chosen method at the spot that offers it; banks the catch, optionally c
 | `baitQty` | number (1–) | `1000` | Bait / feathers qty |
 | `leashRadius` | number (2–64) | `18` | Leash radius (tiles) |
 | `tickManip` | string | `"Off"` | Tick manip — one of: Off |
+| `threeTickFly` | boolean | `false` | 3-tick fly fishing (knife + shortbow) |
 | `guildFeatherMinutes` | number (0–120) | `0` | Feather supply trip every (minutes) |
 | `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Use Closest, Use Start Position, Use Custom Position, None, Draynor Village, Catherby, Fishing Guild, Barbarian Village, Seers (fly fishing), Karamja (Musa Point), Taverley Dungeon (lava eels), Gnome Stronghold (fishing), Shilo Village |
 | `customLocation` | tile | `{"x":3200,"z":3200,"level":0}` | Custom position (x,z) |
