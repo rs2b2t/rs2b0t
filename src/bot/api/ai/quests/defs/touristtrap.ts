@@ -264,7 +264,8 @@ const DESERT_OUTFIT = [ITEM.DESERT_SHIRT, ITEM.DESERT_ROBE, ITEM.DESERT_BOOTS] a
 const SLAVE_OUTFIT = [ITEM.SLAVE_SHIRT, ITEM.SLAVE_ROBE, ITEM.SLAVE_BOOTS] as const;
 const SLAVE_OUTFIT_DROP_IDS = [1844, 1845, 1846] as const;
 const WATERSKINS = ['Waterskin(4)', 'Waterskin(3)', 'Waterskin(2)', 'Waterskin(1)', 'Waterskin(0)'] as const;
-const FOOD_ENTRY_TARGET = 16;
+// Why: 16 food left one free slot at RETRIEVED_PLANS, so the feather step banked the bar just withdrawn; 12 leaves the three supply slots.
+const FOOD_ENTRY_TARGET = 12;
 const FOOD_ENTRY_FLOOR = 12;
 const FOOD_RESTOCK_FLOOR = 4;
 const WATER_ENTRY_DOSES = 16;

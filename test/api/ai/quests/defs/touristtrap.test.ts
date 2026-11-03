@@ -73,7 +73,7 @@ function snap(options: SnapshotOptions = {}): QuestSnapshot {
     if ((inv.get('kebab') ?? 0) === 0 && kebabs > 0) {
         inv.set('kebab', kebabs);
     }
-    const food = options.food ?? 16;
+    const food = options.food ?? 12;
     if ((inv.get('trout') ?? 0) === 0 && food > 0) {
         inv.set('trout', food);
     }
@@ -998,7 +998,7 @@ describe('Tourist Trap survival accounting', () => {
             kebabs: 0,
             freeSlots: 20
         }));
-        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Trout', qty: 16 }]);
+        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Trout', qty: 12 }]);
     });
 
     test('tops up a partial configured loadout while already on the mainland', () => {
@@ -1010,21 +1010,21 @@ describe('Tourist Trap survival accounting', () => {
             kebabs: 0,
             freeSlots: 20
         }));
-        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Trout', qty: 8 }]);
+        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Trout', qty: 4 }]);
     });
 
     test('fails explicitly when the configured food target is unavailable', () => {
         const step = decide(snap({
             stage: TOURIST_TRAP_STAGE.STARTED,
             tile: MAINLAND,
-            bank: [['Trout', 15], ['Kebab', 50]],
+            bank: [['Trout', 11], ['Kebab', 50]],
             food: 0,
             kebabs: 0,
             freeSlots: 20
         }));
         expect(step).toEqual({
             kind: 'wait',
-            reason: "configured Tourist Trap food 'Trout' unavailable: need 16, carried 0, banked 15"
+            reason: "configured Tourist Trap food 'Trout' unavailable: need 12, carried 0, banked 11"
         });
     });
 
@@ -1041,14 +1041,14 @@ describe('Tourist Trap survival accounting', () => {
         expect(customName(step)).toBe('provoke the Mercenary Captain');
     });
 
-    test('quest-ration mode tops up to sixteen on the mainland but accepts eight in the desert', () => {
+    test('quest-ration mode tops up to twelve on the mainland but accepts eight in the desert', () => {
         QuestFood.name = null;
         expect(customName(decide(snap({
             stage: TOURIST_TRAP_STAGE.RESCUE,
             tile: MAINLAND,
             kebabs: 8,
             food: 0
-        })))).toBe('buy 8 Kebabs');
+        })))).toBe('buy 4 Kebabs');
 
         expect(customName(decide(snap({
             stage: TOURIST_TRAP_STAGE.KILLED_CAPTAIN,
