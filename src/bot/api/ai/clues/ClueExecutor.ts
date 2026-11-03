@@ -44,6 +44,8 @@ import { crossesTirannwn, walkAcrossTirannwn } from '#/bot/api/ai/clues/tirannwn
 import { KHARAZI_CLUES, crossesKharazi, jungleKitMissing, walkAcrossKharazi } from '#/bot/api/ai/clues/kharaziTravel.js';
 import { Reach } from '#/bot/api/walking/Reach.js';
 import { WalkExecutor } from '#/bot/event/webwalk/WalkExecutor.js';
+import { wildernessLevelAt } from '#/bot/event/webwalk/wilderness.js';
+import type { ClueHazard, CluePolicy, TrailResult, TrailReward } from './trailResult.js';
 
 const COORD_ITEMS = ['Sextant', 'Watch', 'Chart'];
 
@@ -111,6 +113,8 @@ export function tilesTo(target: NavPoint | null): number | null {
 }
 
 let teleportsEnabled = true;
+let policy: CluePolicy = { allowWilderness: true, verifyRewards: false };
+let activeGuardian: string | null = null;
 
 /**
  * Options for a cross-map clue leg, so the teleport policy lives in one place.
@@ -122,6 +126,10 @@ export function trailWalkOpts(log: (m: string) => void, radius = ARRIVE_RADIUS):
         attempts: WALK_ATTEMPTS,
         timeoutMs: WALK_TIMEOUT_MS,
         log,
+        ...(!policy.allowWilderness ? { avoidZones: [
+            { minX: 2944, maxX: 3391, minZ: 3520, maxZ: 6399 },
+            { minX: 2944, maxX: 3391, minZ: 9920, maxZ: 12799, level: 0 }
+        ] } : {}),
         ...(teleportsEnabled
             ? { useTeleportCatalog: true, policy: { useTeleports: true, distanceBeforeTeleport: TELEPORT_MIN_SPAN } }
             : { useTeleportCatalog: false, policy: { useTeleports: false } })
@@ -167,7 +175,7 @@ let recovery: { clueId: number; used: boolean } | null = null;
 let postKillClue: number | null = null;
 let guardianHalt: 'dead' | 'guardian-lost' | null = null;
 let guardianEncounter: { readonly clueId: number; readonly encounter: GuardianEncounter } | null = null;
-export type ClueOutcome = 'done' | 'abandon' | 'yield' | 'reset-needed' | GuardianStop;
+export type ClueOutcome = 'done' | 'abandon' | 'yield' | 'reset-needed' | 'reward-unverified' | GuardianStop;
 
 function heldIds(): number[] {
     return Inventory.items().map(i => i.id);
@@ -258,6 +266,7 @@ async function answerChallengeIfOpen(step: ClueStep, log: (m: string) => void): 
         log(`challenge count dialog open but no answer for clue ${step.id} — leaving it (step will abandon)`);
         return false;
     }
+    beginRewardObservation();
     actions.answerCountDialog(n);
     log(`challenge answered: ${n}`);
     if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), CHALLENGE_REPLY_MS))) {
@@ -394,6 +403,7 @@ async function dispatch(step: ClueStep, log: (m: string) => void, ranged?: Guard
             }
             const pick = pickSearchLoc(step.coord);
             if (pick) {
+                beginRewardObservation();
                 await pick.loc.interact(pick.op);
             } else {
                 log(`no searchable loc at (${step.coord.x},${step.coord.z},${step.coord.level})`);
@@ -414,6 +424,7 @@ async function dispatch(step: ClueStep, log: (m: string) => void, ranged?: Guard
                 if (died()) return;
                 const spade = Inventory.first(SPADE_NAME);
                 if (spade) {
+                    beginRewardObservation();
                     await spade.interact('Dig');
                 }
             };
@@ -429,12 +440,13 @@ async function dispatch(step: ClueStep, log: (m: string) => void, ranged?: Guard
                 return;
             }
             const guardian = step.guardian;
+            activeGuardian = guardian ?? null;
             if (guardianEncounter?.clueId !== step.id) {
-                const protection = new GuardianProtection(guardian, ranged);
+                const protection = new GuardianProtection(guardian, ranged, policy.guardianProtectionByHost);
                 const prepared = !guardian || await protection.prepare();
                 if (died()) return 'dead';
                 if (EventSignal.pending()) return 'yield';
-                if (!prepared) return 'supplies-needed';
+                if (!prepared) { activeGuardian = null; return 'supplies-needed'; }
                 if (guardian) guardianEncounter = { clueId: step.id, encounter: new GuardianEncounter(guardian, protection) };
                 await dig();
             }
@@ -446,6 +458,7 @@ async function dispatch(step: ClueStep, log: (m: string) => void, ranged?: Guard
                 const outcome = await guardianEncounter.encounter.fight(log);
                 if (outcome !== 'killed') return outcome;
                 guardianEncounter = null;
+                activeGuardian = null;
                 postKillClue = step.id;
                 if (await standOnIt()) {
                     if (died()) return 'dead';
@@ -468,11 +481,13 @@ async function dispatch(step: ClueStep, log: (m: string) => void, ranged?: Guard
                 // Fall through: the solved box is handed back by re-talking.
             }
             if (ChatDialog.isOpen() || ChatDialog.canContinue()) {
+                beginRewardObservation();
                 await talkThrough(step.npc, [], log);
                 return;
             }
             const st = await Reach.npcDialog({ name: step.npc, near: anchor, log });
             if (st === 'done') {
+                beginRewardObservation();
                 await talkThrough(step.npc, [], log);
             }
             return;
@@ -481,6 +496,7 @@ async function dispatch(step: ClueStep, log: (m: string) => void, ranged?: Guard
             const casket = Inventory.items().find(i => i.id === step.casketId);
             if (!casket) return;
             const mark = GameMessages.mark();
+            beginRewardObservation();
             await casket.interact('Open');
             if (!(await Execution.delayUntil(() => Inventory.items().every(i => i.id !== step.casketId), REWARD_WAIT_MS))) return;
             // Why: a hard trail is four to six caskets and the server keeps the count, so the only sign the trail ended is that no scroll came back.
@@ -571,6 +587,29 @@ async function solveStep(step: ClueStep, log: (m: string) => void, onAttempt: (n
 }
 
 let rewardCollection: { tile: NavPoint; discarded: Set<number> } | null = null;
+let rewardObservation: { before: Map<number, number>; generation: number; expected: TrailReward[]; tile: NavPoint | null } | null = null;
+
+function beginRewardObservation(): void {
+    observeRewards();
+    if (rewardObservation?.expected.length) return;
+    rewardObservation = { before: heldCounts(), generation: reader.clueRewardSnapshot().generation, expected: [], tile: reader.worldTile() };
+}
+
+function observeRewards(): void {
+    if (!rewardObservation) return;
+    const snapshot = reader.clueRewardSnapshot();
+    if (snapshot.generation <= rewardObservation.generation || snapshot.items.length === 0) return;
+    const totals = new Map<number, number>();
+    for (const item of snapshot.items) totals.set(item.id, (totals.get(item.id) ?? 0) + item.count);
+    rewardObservation.expected = [...totals].map(([id, count]) => ({ id, count }));
+    rewardObservation.tile = reader.worldTile();
+}
+
+function rewardDeficit(id: number): number {
+    if (!rewardObservation) return 0;
+    const expected = rewardObservation.expected.find(item => item.id === id)?.count ?? 0;
+    return Math.max(0, expected + (rewardObservation.before.get(id) ?? 0) - (heldCounts().get(id) ?? 0));
+}
 
 async function dismissRewardModal(): Promise<boolean> {
     await Execution.delayUntil(() => reader.modals().main !== -1, REWARD_WAIT_MS);
@@ -582,8 +621,16 @@ async function dismissRewardModal(): Promise<boolean> {
 }
 
 async function collectReward(log: (m: string) => void): Promise<boolean> {
+    observeRewards();
+    if (policy.verifyRewards && rewardObservation?.expected.length === 0) {
+        await Execution.delayUntil(() => { observeRewards(); return (rewardObservation?.expected.length ?? 0) > 0; }, REWARD_WAIT_MS);
+    }
+    if (policy.verifyRewards && (!rewardObservation || rewardObservation.expected.length === 0)) {
+        ClueExecutor.failure = { kind: 'transient-failure', reason: 'Reward inventory was not observed; reconcile rewards before resuming', clueId: ClueExecutor.current?.clueId ?? null };
+        return false;
+    }
     if (!rewardCollection) {
-        const tile = reader.worldTile();
+        const tile = rewardObservation?.tile ?? reader.worldTile();
         if (!tile) return false;
         rewardCollection = { tile, discarded: new Set() };
     }
@@ -592,18 +639,25 @@ async function collectReward(log: (m: string) => void): Promise<boolean> {
     await Execution.delayTicks(2);
     const onTile = (g: GroundItem): boolean => {
         const t = g.tile();
-        return t.x === here.x && t.z === here.z && t.level === here.level && !discarded.has(g.id);
+        return t.x === here.x && t.z === here.z && t.level === here.level && !discarded.has(g.id)
+            && (!policy.verifyRewards || rewardDeficit(g.id) > 0);
     };
     for (let guard = 0; guard < 28; guard++) {
         const drop = GroundItems.query().where(onTile).nearest();
         if (!drop) {
+            if (policy.verifyRewards && rewardObservation?.expected.some(item => rewardDeficit(item.id) > 0)) {
+                ClueExecutor.failure = { kind: 'transient-failure', reason: 'Reward delivery is incomplete; reconcile rewards before resuming', clueId: ClueExecutor.current?.clueId ?? null };
+                return false;
+            }
+            ClueExecutor.rewards = rewardObservation?.expected.length ? rewardObservation.expected.slice() : [];
             rewardCollection = null;
             return true;
         }
         const name = drop.name ?? '';
         const stacks = Inventory.items().some(i => i.id === drop.id) && reader.objCatalog().some(i => i.id === drop.id && i.stackable);
         if (Inventory.isFull() && !stacks) {
-            const food = Inventory.items().find(i => FOOD_OPTIONS.some(name => isEdibleFood(i, name)));
+            const food = Inventory.items().find(i => FOOD_OPTIONS.some(name => isEdibleFood(i, name))
+                && (!policy.verifyRewards || !rewardObservation?.expected.some(reward => reward.id === i.id)));
             if (!food) {
                 log(`WARNING: '${name}' is left on the ground, the pack is full with no food to drop`);
                 return false;
@@ -623,10 +677,25 @@ async function collectReward(log: (m: string) => void): Promise<boolean> {
 
 export const ClueExecutor = {
     current: null as ClueProgress | null,
+    failure: null as TrailResult | null,
+    rewards: [] as TrailReward[],
+
+    hazard(): ClueHazard {
+        return { phase: rewardCollection ? 'reward' : activeGuardian ? 'guardian' : 'travel', guardian: activeGuardian };
+    },
+
+    setPolicy(next: CluePolicy): void {
+        policy = next;
+    },
 
     resetSession(): void {
         resetClueDuelSearch();
         sessionActive = false;
+        policy = { allowWilderness: true, verifyRewards: false };
+        activeGuardian = null;
+        rewardObservation = null;
+        ClueExecutor.failure = null;
+        ClueExecutor.rewards = [];
         rewardCollection = null;
         sessionLegs = 0;
         acquireTries = 0;
@@ -641,12 +710,14 @@ export const ClueExecutor = {
     },
 
     retryGuardian(): void {
+        activeGuardian = null;
         guardianHalt = null;
         guardianEncounter = null;
         postKillClue = null;
     },
 
     noteDeath(): void {
+        activeGuardian = null;
         guardianHalt = 'dead';
         guardianEncounter = null;
         postKillClue = null;
@@ -658,9 +729,10 @@ export const ClueExecutor = {
             trace.note(m);
             log(m);
         };
-        const end = (outcome: 'done' | 'abandon', reason?: string): 'done' | 'abandon' => {
+        const end = (outcome: 'done' | 'abandon', reason?: string, kind: TrailResult['kind'] = 'transient-failure'): 'done' | 'abandon' => {
             resetClueDuelSearch();
             if (outcome === 'abandon') {
+                ClueExecutor.failure = { kind, reason: reason ?? 'Clue did not progress', clueId: ClueExecutor.current?.clueId ?? null };
                 dumpFailure(reason ?? 'unknown', log);
             }
             sessionActive = false;
@@ -668,6 +740,7 @@ export const ClueExecutor = {
             sessionLegs = 0;
             acquireTries = 0;
             postKillClue = null;
+            activeGuardian = null;
             recovery = null;
             ClueExecutor.current = null;
             return outcome;
@@ -686,7 +759,15 @@ export const ClueExecutor = {
             if (fightArenaAt(Game.tile()) && Inventory.countById(DUEL_CLUE_ID) === 0 && !(await leaveClueDuel(tlog))) return 'yield';
             const step = identifyStep(heldIds(), CLUE_DB, CASKET_IDS);
             if (step === null) {
-                if (sessionActive && !(await collectReward(tlog))) return 'yield';
+                if (policy.verifyRewards && !sessionActive) {
+                    ClueExecutor.failure = { kind: 'transient-failure', reason: 'No active trail has a new reward receipt', clueId: null };
+                    return 'reward-unverified';
+                }
+                if (sessionActive && !(await collectReward(tlog))) return policy.verifyRewards ? 'reward-unverified' : 'yield';
+                if (policy.verifyRewards && ClueExecutor.rewards.length === 0) {
+                    ClueExecutor.failure = { kind: 'transient-failure', reason: 'No verified reward receipt exists', clueId: null };
+                    return 'reward-unverified';
+                }
                 tlog('trail complete');
                 return end('done');
             }
@@ -703,6 +784,11 @@ export const ClueExecutor = {
                 acquireTries = 0;
             }
             const target = stepTarget(step);
+            const keyTarget = step.type === 'search' && step.keyFrom ? KILL_ANCHORS[step.id] : undefined;
+            if (!policy.allowWilderness && [target, keyTarget].some(tile => tile && wildernessLevelAt(tile) > 0)) {
+                ClueExecutor.current = { clueId, name, step: describeStep(step), leg: sessionLegs + 1, attempt: 0, startedAt: Date.now(), target, startDist: tilesTo(target) ?? 0 };
+                return end('abandon', 'Wilderness clue steps are disabled', 'unsupported');
+            }
             const sameLeg = ClueExecutor.current?.clueId === clueId;
             if (!sameLeg) acquireTries = 0;
             ClueExecutor.current = {
@@ -723,7 +809,7 @@ export const ClueExecutor = {
                 return end('abandon', reason);
             }
 
-            if (step.type === 'dig' && step.guardian && guardianEncounter?.clueId !== step.id && postKillClue !== step.id && hardClueKit(hardKitSnapshot(false, ranged), GUARDIAN_MIN_SHARKS, step.guardian === 'Saradomin Wizard') !== 'ready') {
+            if (step.type === 'dig' && step.guardian && guardianEncounter?.clueId !== step.id && postKillClue !== step.id && hardClueKit(hardKitSnapshot(false, ranged), GUARDIAN_MIN_SHARKS, !policy.guardianProtectionByHost && step.guardian === 'Saradomin Wizard') !== 'ready') {
                 return 'supplies-needed';
             }
             if (step.type !== 'open-casket' && step.coord?.level === 0
@@ -745,7 +831,9 @@ export const ClueExecutor = {
                     continue;
                 }
                 tlog(`abandoning ${describeStep(step)}: ${blocked}`);
-                return end('abandon', blocked);
+                const kind = step.type !== 'open-casket' && clueGate(step.id, quest => Quests.status(quest)) ? 'access-blocked'
+                    : step.type === 'talk' && (!step.npc || !TALK_ANCHORS[step.id]) ? 'unsupported' : 'resupply';
+                return end('abandon', blocked, kind);
             }
 
             tlog(`leg ${sessionLegs + 1} — solving ${describeStep(step)} [${clueId}]`);
@@ -757,7 +845,11 @@ export const ClueExecutor = {
                     trace.note(`attempt ${n}/${STEP_ATTEMPTS}`);
                 }
             };
+            if (policy.beforeStep && !(await policy.beforeStep(step))) return 'supplies-needed';
+            if (step.type === 'open-casket' && policy.prepareRewards && !(await policy.prepareRewards())) return 'supplies-needed';
+            rewardObservation = { before: heldCounts(), generation: reader.clueRewardSnapshot().generation, expected: [], tile: reader.worldTile() };
             const result = await solveStep(step, tlog, onAttempt, ranged);
+            observeRewards();
             if (typeof result === 'string' && result !== 'guardian-lost') {
                 if (result === 'dead') {
                     guardianHalt = result;

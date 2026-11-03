@@ -5,14 +5,14 @@
 
 # Bundled scripts
 
-- Scripts: 75. Categories: 21.
+- Scripts: 76. Categories: 21.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
 ## Contents
 
 - [Agility](#agility) — 4
-- [Combat](#combat) — 16
+- [Combat](#combat) — 17
 - [Cooking](#cooking) — 2
 - [Crafting](#crafting) — 8
 - [Firemaking](#firemaking) — 1
@@ -472,6 +472,44 @@ Four-player Kalphite Queen trips with a shared dragon mace and magic shortbow lo
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `team` | string | `""` | Four account names |
+
+### JiveTT
+
+Hard-clue controller with owned melee equipment, verified W1 supply purchases, safe hunting and reward banking. Sites require local validation.
+
+- Tags: `clues`, `hard`, `melee`, `banking`, `market`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `clueTier` | string | `"hard"` | Clue difficulty — one of: easy, medium, hard |
+| `allowedSites` | string[] | `["taverley-blue"]` | Allowed sites — one of: Taverley hellhounds, Witchaven hellhounds, Taverley greater demons, Brimhaven greater demons, Taverley blue dragons, Heroes' Guild, Gu'Tanoth/Ogre Enclave, Brimhaven red dragons, Brimhaven bronze dragons, Brimhaven iron and steel dragons, Taverley black dragons |
+| `allowedWorlds` | string[] | `["1","2","3"]` | Allowed worlds — one of: 1, 2, 3 |
+| `shard` | string | `""` | Fleet shard seed |
+| `offensivePrayers` | boolean | `true` | Offensive prayers |
+| `boostThreshold` | number (1–15) | `5` | Refresh boosts below |
+| `sharks` | number (8–23) | `12` | Trip sharks |
+| `prayerDoses` | number (4–40) | `12` | Trip prayer doses |
+| `superDoses` | number (1–8) | `3` | Trip doses per super potion |
+| `stockSharks` | number (8–10000) | `100` | Bank shark target |
+| `stockPrayerDoses` | number (4–10000) | `120` | Bank prayer dose target |
+| `stockSuperSets` | number (1–1000) | `10` | Bank super sets target |
+| `stockAntifireDoses` | number (1–1000) | `12` | Bank antifire doses |
+| `stockAntipoisonDoses` | number (1–1000) | `12` | Bank superantipoison doses |
+| `marketEnabled` | boolean | `true` | Buy consumables at Seers W1 |
+| `priceBook` | string | `""` | Price book |
+| `priceCeilings` | string | `"{}"` | Per-item price ceilings |
+| `maxRestockSpend` | number (0–10000000) | `100000` | Maximum restock spend |
+| `coinReserve` | number (1000–1000000) | `2000` | Travel coin reserve |
+| `marketBatch` | number (1–1000) | `20` | Maximum purchase batch |
+| `retrySeconds` | number (30–3600) | `60` | Market retry interval |
+| `keepItems` | string[] | `["145","161","165","205","207","209","211","213","215","217","442","449","554","555","556","560","561","562","563","565","566","811","817","830","868","892","985","987","995","1073","1123","1147","1149","1161","1163","1183","1185","1199","1201","1213","1247","1249","1303","1317","1319","1357","1359","1371","1373","1432","1452","1462","1615","1617","1619","1621","1623","1747","1749","1751","2357","2361","2363","2366","2485","4087"]` | Keep hunting loot — one of: Super attack(3), Super strength(1), Super defence(2), Unidentified guam, Unidentified marentill, Unidentified tarromin, Unidentified harralander, Unidentified ranarr, Unidentified irit, Unidentified avantoe, Unidentified kwuarm, Unidentified cadantine, Unidentified dwarf weed, Tuna, Bass, Swordfish, Silver ore, Adamantite ore, Bones, Dragon bones, Fire rune, Water rune, Air rune, Death rune, Nature rune, Chaos rune, Law rune, Blood rune, Soul rune, Ashes, Rune dart, Adamant dart(p), Rune dart(p), Mithril javelin, Adamant javelin, Rune javelin, Rune knife, Steel arrow, Rune arrow, Half of a key (985), Half of a key (987), Coins, Steel platelegs, Adamant platelegs, Adamant platebody, Rune med helm, Dragon med helm, Adamant full helm, Rune full helm, Adamant sq shield, Rune sq shield, Mithril kiteshield, Adamant kiteshield, Rune kiteshield, Rune dagger, Mithril spear, Rune spear, Dragon spear, Rune longsword, Steel 2h sword, Mithril 2h sword, Adamant 2h sword, Rune 2h sword, Steel axe, Mithril axe, Adamant axe, Rune axe, Steel battleaxe, Mithril battleaxe, Adamant battleaxe, Rune battleaxe, Rune mace, Chaos talisman, Nature talisman, Dragonstone, Uncut diamond, Uncut ruby, Uncut emerald, Uncut sapphire, Thread, Black dragonhide, Red dragonhide, Blue dragonhide, Chocolate cake, Curry, Bronze bar, Iron bar, Steel bar, Gold bar, Adamantite bar, Runite bar, Shield left half, Unidentified lantadyme, Bolts, Dragon platelegs |
+| `dragonBones` | string | `"bury"` | Dragon bones — one of: bury, leave |
+| `dragonHides` | string | `"bank"` | Dragon hides — one of: bank, leave |
+| `ordinaryBones` | string | `"leave"` | Ordinary bones — one of: bury, leave |
+| `blockedClue` | string | `"discard"` | Blocked acquired hard clues — one of: discard, park |
+| `eatHp` | number (65–99) | `65` | Eat below HP |
+| `retreatHp` | number (45–90) | `45` | Retreat below HP |
+| `stopAfterDeath` | boolean | `true` | Stop after death |
 
 ### MossGiant
 

@@ -38,6 +38,7 @@ export interface SlotSnapshot extends SlotStatus {
 }
 
 export interface SlotHandle {
+    setScriptWorldSwitch?(handler: (world: WorldNumber, signal: AbortSignal) => Promise<boolean>): void;
     roster?(): RosterClient | null;
     reloadWorld(world: WorldNumber): void;
     prepareWorldSwitch(): boolean;

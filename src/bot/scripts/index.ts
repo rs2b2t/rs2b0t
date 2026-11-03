@@ -1,4 +1,5 @@
 import AccountLeveler, { SETTINGS as ACCOUNT_LEVELER_SETTINGS } from './AccountLeveler/AccountLeveler.js';
+import JiveTT, { SETTINGS as JIVETT_SETTINGS } from './JiveTT/JiveTT.js';
 import { AGILITY_SETTINGS } from './AgilityBot/AgilityBot.js';
 import { FISHING_LOCATION_OPTIONS } from '../data/fishingLocations.js';
 import { FISHING_METHOD_OPTIONS } from '../data/fishingMethods.js';
@@ -223,6 +224,15 @@ ScriptRegistry.register({
     tags: ['taverley', 'heroes guild', 'dragons', 'safespot', 'members', 'banking', 'clues'],
     settingsSchema: JIVEDRAGONS_SETTINGS,
     create: () => new JiveDragons()
+});
+
+ScriptRegistry.register({
+    name: 'JiveTT',
+    description: 'Hard-clue controller with owned melee equipment, verified W1 supply purchases, safe hunting and reward banking. Sites require local validation.',
+    category: 'Combat',
+    tags: ['clues', 'hard', 'melee', 'banking', 'market'],
+    settingsSchema: JIVETT_SETTINGS,
+    create: () => new JiveTT()
 });
 
 ScriptRegistry.register({

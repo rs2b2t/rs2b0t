@@ -42,6 +42,7 @@ function railWidth(): number {
 }
 
 interface Lcb {
+    setScriptWorldSwitch?(handler: (world: WorldNumber, signal: AbortSignal) => Promise<boolean>): void;
     roster?: RosterClient | null;
     readonly world: WorldNumber | null;
     prepareWorldSwitch(): boolean;
@@ -71,6 +72,7 @@ class DomSlotHandle implements SlotHandle {
     private win: LcbWindow | null = null;
     private pending: Array<(l: Lcb) => void> = [];
     private destroyed = false;
+    private scriptWorldSwitch: ((world: WorldNumber, signal: AbortSignal) => Promise<boolean>) | null = null;
     private mode: RenderMode = 'background';
     private onResize = (): void => this.applyLayout();
 
@@ -165,6 +167,11 @@ class DomSlotHandle implements SlotHandle {
         this.iframe = frame;
         this.account = { ...this.account, world };
         this.poll();
+    }
+
+    setScriptWorldSwitch(handler: (world: WorldNumber, signal: AbortSignal) => Promise<boolean>): void {
+        this.scriptWorldSwitch = handler;
+        this.whenReady(l => l.setScriptWorldSwitch?.(handler));
     }
 
     private createFrame(world?: WorldNumber, switching = false): HTMLIFrameElement {
@@ -264,6 +271,7 @@ class DomSlotHandle implements SlotHandle {
         const w = this.iframe.contentWindow as LcbWindow | null;
         if (w?.rs2b0t) {
             this.win = w;
+            if (this.scriptWorldSwitch) w.rs2b0t.setScriptWorldSwitch?.(this.scriptWorldSwitch);
             const flush = this.pending;
             this.pending = [];
             for (const fn of flush) fn(w.rs2b0t);

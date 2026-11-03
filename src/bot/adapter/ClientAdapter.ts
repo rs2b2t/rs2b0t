@@ -1441,6 +1441,15 @@ export const reader = {
         return raw?.mainModalId === 3443;
     },
 
+    clueRewardSnapshot(): { generation: number; items: InvItemSnapshot[] } {
+        const state = invState(6963);
+        return {
+            generation: state.fullGeneration,
+            items: raw?.mainModalId === 6960 && state.fullGeneration > 0
+                ? readInvComponent(6963, () => []) : []
+        };
+    },
+
     tradeMyOffer(): InvItemSnapshot[] {
         return readInvComponent(3415, () => IfType.list[3415]?.iop ?? []); // trademain:inv
     },

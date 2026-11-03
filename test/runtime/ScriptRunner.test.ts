@@ -258,3 +258,36 @@ test('stop() without a reason still stops the run', () => {
     expect(stopReasonOf('  ')).toContain('no reason given');
     expect(stopReasonOf('out of food')).toBe('out of food');
 });
+
+test('world-resume settings override one run without rewriting saved settings', async () => {
+    const { SettingsStore } = await import('#/bot/runtime/Settings.js');
+    const meta: ScriptMeta = { name: 'Resume settings probe', description: '', create: () => new StartProbeBot(), settingsSchema: { sharks: { type: 'number', default: 10 } } };
+    SettingsStore.save(meta.name, 'sharks', '12');
+    try {
+        ScriptRunner.start(meta, { sharks: 15 });
+        await settle();
+        expect(ScriptRunner.bot?.settings.num('sharks')).toBe(15);
+        expect(SettingsStore.resolve(meta.name, meta.settingsSchema!).sharks).toBe(12);
+    } finally { SettingsStore.clear(meta.name, 'sharks'); }
+});
+
+test('Stop reaches cancellation hooks even after script teardown', async () => {
+    ScriptRunner.stop('before test');
+    await settle();
+    const requests: string[] = [];
+    const unsubscribe = ScriptRunner.onStopRequest(reason => requests.push(reason));
+    try {
+        ScriptRunner.stop('user stop during logout');
+        expect(requests).toEqual(['user stop during logout']);
+    } finally { unsubscribe(); }
+});
+
+test('a cancellation hook failure cannot block Stop', async () => {
+    ScriptRunner.start({ name: 'Stop hook probe', description: '', create: () => new StartProbeBot() });
+    await settle();
+    const unsubscribe = ScriptRunner.onStopRequest(() => { throw new Error('storage unavailable'); });
+    try {
+        expect(() => ScriptRunner.stop('user stop')).not.toThrow();
+        expect(ScriptRunner.state).toBe('stopped');
+    } finally { unsubscribe(); }
+});

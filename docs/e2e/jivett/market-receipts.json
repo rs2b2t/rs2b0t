@@ -1,0 +1,157 @@
+{
+  "result": "passed",
+  "scope": "Local live market adapter with MarketMaker fixture, not full JiveTT controller or cross-world roundtrip",
+  "base": "http://localhost:8891",
+  "target": "local",
+  "merchant": "Seers Market",
+  "bundleSha256": "1c56945a67e742e5eb6ca281d9dd066074a0cc6671d43c9349f1754a6be79d54",
+  "receiptRun": {
+    "done": true,
+    "result": {
+      "account": "Jtmbzuthbo",
+      "world": 1,
+      "results": [
+        {
+          "item": "Shark",
+          "result": {
+            "kind": "bought",
+            "quantity": 2,
+            "spent": 2002,
+            "receipts": [
+              {
+                "id": 385,
+                "count": 2
+              }
+            ]
+          },
+          "coins": 97998,
+          "inventory": [
+            {
+              "id": 995,
+              "count": 97998
+            },
+            {
+              "id": 386,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "item": "Prayer potion(3)",
+          "result": {
+            "kind": "bought",
+            "quantity": 2,
+            "spent": 2002,
+            "receipts": [
+              {
+                "id": 139,
+                "count": 2
+              }
+            ]
+          },
+          "coins": 95996,
+          "inventory": [
+            {
+              "id": 995,
+              "count": 95996
+            },
+            {
+              "id": 386,
+              "count": 2
+            },
+            {
+              "id": 140,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "item": "Super set",
+          "result": {
+            "kind": "bought",
+            "quantity": 2,
+            "spent": 6006,
+            "receipts": [
+              {
+                "id": 157,
+                "count": 2
+              },
+              {
+                "id": 145,
+                "count": 2
+              },
+              {
+                "id": 163,
+                "count": 2
+              }
+            ]
+          },
+          "coins": 89990,
+          "inventory": [
+            {
+              "id": 995,
+              "count": 89990
+            },
+            {
+              "id": 386,
+              "count": 2
+            },
+            {
+              "id": 140,
+              "count": 2
+            },
+            {
+              "id": 158,
+              "count": 2
+            },
+            {
+              "id": 146,
+              "count": 2
+            },
+            {
+              "id": 164,
+              "count": 2
+            }
+          ]
+        }
+      ]
+    },
+    "runner": "stopped"
+  },
+  "priceCeilingRejection": {
+    "done": true,
+    "result": {
+      "account": "Jtmbzufawj",
+      "world": 1,
+      "results": [
+        {
+          "item": "Shark",
+          "result": {
+            "kind": "price-rejected",
+            "reason": "Quote exceeds limits for Shark"
+          },
+          "coins": 100000,
+          "inventory": [
+            {
+              "id": 995,
+              "count": 100000
+            }
+          ]
+        }
+      ]
+    },
+    "runner": "stopped"
+  },
+  "unitCoverage": [
+    "changed confirmation refused",
+    "incomplete Super set refused",
+    "uncertain final acceptance retains intent",
+    "raw unnoted capacity checked before both accepts",
+    "busy merchant request retried only before offer"
+  ],
+  "limitations": [
+    "Single local server; World2-to-World1-to-World2 roundtrip not live-validated",
+    "Merchant price/stock fixture uses local test accounts",
+    "No production purchases or deployment"
+  ]
+}

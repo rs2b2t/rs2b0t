@@ -1,8 +1,12 @@
 import './panel/desktopStorage.js';
 import { TARGET, supportsWorldRouting } from '../client/config/target.js';
-import { resolveNodeId, hostedWorld } from '../client/config/worlds.js';
+import { resolveNodeId, hostedWorld, WORLDS, worldSwitchUrl, type WorldNumber } from '../client/config/worlds.js';
+import { ScriptWorldResume, SCRIPT_WORLD_SWITCH_REASON } from './runtime/ScriptWorldResume.js';
+import { waitForWorldSwitch } from './runtime/WorldSwitch.js';
+import { boxKey } from './runtime/box.js';
 import { worldSelector } from './panel/WorldSelector.js';
 import { CLIENT_VERSION, ClientProt } from '../client/io/ClientProt.js';
+import { Game } from './api/game/Game.js';
 import { actions, reader } from './adapter/ClientAdapter.js';
 import BotClient from './runtime/BotClient.js';
 import { BotHost } from './runtime/BotHost.js';
@@ -47,6 +51,8 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
     const members = params.get('members') !== '0';
 
     const client = new BotClient(nodeid, lowmem, members);
+    let scriptWorldSwitch: ((world: WorldNumber, signal: AbortSignal) => Promise<boolean>) | null = null;
+    let scriptWorldSwitchAttempt: AbortController | null = null;
     let reconnectAfterSwitch = false;
     const prepareWorldSwitch = (): boolean => {
         reconnectAfterSwitch ||= client.ingame;
@@ -56,7 +62,7 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
         }
         panel?.setWorldSwitchPending(true);
         AutoRelogin.shutdown();
-        ScriptRunner.stop('World switch');
+        ScriptRunner.stop(scriptWorldSwitchAttempt && !scriptWorldSwitchAttempt.signal.aborted ? SCRIPT_WORLD_SWITCH_REASON : 'World switch');
         if (['running', 'paused', 'stopping'].includes(ScriptRunner.state)) return false;
         return client.prepareWorldSwitch();
     };
@@ -68,6 +74,32 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
         panel?.setWorldSwitchPending(false);
         reconnectAfterSwitch = false;
     };
+
+    ScriptWorldResume.install({
+        storage: sessionStorage, key: boxKey('jivett-world-resume'), worlds: WORLDS.map(value => value.number),
+        current: () => ({ account: reader.localPlayerName(), world, safe: Game.sceneReady() && !Game.inCombat(), script: ScriptRunner.meta?.name ?? null, state: ScriptRunner.state }),
+        defer: work => { window.setTimeout(work, 0); },
+        switchWorld: async destination => {
+            const selected = WORLDS.find(value => value.number === destination);
+            if (!selected || !supportsWorldRouting()) return false;
+            const attempt = new AbortController();
+            scriptWorldSwitchAttempt = attempt;
+            if (scriptWorldSwitch) return scriptWorldSwitch(selected.number, attempt.signal);
+            if (window.top !== window.self) return false;
+            if (!await waitForWorldSwitch(prepareWorldSwitch, attempt.signal) || attempt.signal.aborted) return false;
+            const url = worldSwitchUrl(destination, 'single', new URL(window.location.href));
+            url.searchParams.set('autologin', '1');
+            window.location.assign(url.href);
+            return true;
+        },
+        cancelSwitch: () => { scriptWorldSwitchAttempt?.abort(); scriptWorldSwitchAttempt = null; cancelWorldSwitch(); },
+        resume: settings => {
+            const meta = ScriptRegistry.list().find(value => value.name === 'JiveTT');
+            if (meta) ScriptRunner.start(meta, settings);
+        }
+    });
+    ScriptRunner.onStopRequest(reason => { if (reason !== SCRIPT_WORLD_SWITCH_REASON) ScriptWorldResume.cancel(); });
+    BotHost.addFrameListener(() => { ScriptWorldResume.resume(); });
 
     const panelRoot = document.getElementById('bot-panel');
     let panel: BotPanel | null = null;
@@ -133,6 +165,7 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
 
     (globalThis as Record<string, unknown>).rs2b0t = {
         prepareWorldSwitch, cancelWorldSwitch, world,
+        setScriptWorldSwitch: (handler: (world: WorldNumber, signal: AbortSignal) => Promise<boolean>) => { scriptWorldSwitch = handler; },
         roster: panel ? createRosterClient(panel) : null,
         client, host: BotHost, runner: ScriptRunner, registry: ScriptRegistry,
         reader, actions, navigator: Navigator, runManager: RunManager,

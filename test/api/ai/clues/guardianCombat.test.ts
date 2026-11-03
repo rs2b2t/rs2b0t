@@ -65,6 +65,7 @@ beforeEach(() => {
         return true;
     });
     spyOn(Prayer, 'set').mockResolvedValue(true);
+    spyOn(Prayer, 'active').mockReturnValue(true);
     spyOn(Special, 'energy').mockImplementation(() => energy);
     spyOn(Special, 'armed').mockImplementation(() => armed);
     spyOn(Special, 'arm').mockImplementation(async () => { events.push(`special:${tick}`); armed = true; return true; });
@@ -654,4 +655,47 @@ test.each(['function', 'encounter'])('default %s guardian entry does not drink a
     expect(result).toBe('killed');
     expect(events.filter(e => e.startsWith('drink:'))).toEqual([]);
     expect(pack.some(i => i.id === 185)).toBe(true);
+});
+
+test('failed protection activation blocks guardian attacks', async () => {
+    advance = () => { if (npcs[0]?.health === 0) npcs = []; };
+    const protection = new GuardianProtection();
+    await protection.prepare();
+    spyOn(Prayer, 'set').mockResolvedValue(false);
+    expect(await fightGuardian('Saradomin Wizard', () => {}, protection)).toBe('supplies-needed');
+    expect(events.some(e => e.startsWith('attack:'))).toBe(false);
+});
+
+test('an idle wizard without observed ownership is never attacked', async () => {
+    advance = () => { if (npcs[0]?.health === 0) npcs = []; };
+    const protection = new GuardianProtection();
+    await protection.prepare();
+    npcs = npcs.map(n => ({ ...n, faceEntity: -1, inCombat: false }));
+    expect(await fightGuardian('Saradomin Wizard', () => {}, protection)).toBe('guardian-lost');
+    expect(events.some(e => e.startsWith('attack:'))).toBe(false);
+});
+
+test('preparation refuses to spawn a guardian without confirmed protection', async () => {
+    spyOn(Prayer, 'set').mockResolvedValue(false);
+    expect(await new GuardianProtection().prepare()).toBe(false);
+});
+
+test('host-owned guardian protection consumes the final antidote once and owns prayer upkeep', async () => {
+    let immune = false;
+    let doses = 0;
+    Sustain.set(async () => {
+        if (immune) return;
+        const potion = pack.find(i => i.id === 185);
+        expect(potion).toBeDefined();
+        pack = pack.filter(i => i !== potion);
+        immune = true;
+        doses++;
+    });
+    const protection = new GuardianProtection('Saradomin Wizard', undefined, true);
+    expect(await protection.prepare()).toBe(true);
+    expect(await protection.maintain()).toBe('ready');
+    expect(await protection.maintain()).toBe('ready');
+    expect(doses).toBe(1);
+    expect(pack.some(i => i.id === 185)).toBe(false);
+    expect(events.some(e => e.startsWith('drink:'))).toBe(false);
 });

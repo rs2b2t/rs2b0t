@@ -110,6 +110,7 @@ class ScriptRunnerImpl {
     meta: ScriptMeta | null = null;
 
     private changeListeners = new Set<() => void>();
+    private stopRequestListeners = new Set<(reason: string) => void>();
     /** onStart has returned and established any baselines consumed by onPaint. */
     private startupComplete = false;
     /** Wall-clock start of the current loop hold (logout / scene load / no tile). */
@@ -154,7 +155,7 @@ class ScriptRunnerImpl {
         return this.bot;
     }
 
-    start(meta: ScriptMeta): void {
+    start(meta: ScriptMeta, overrides: Record<string, unknown> = {}): void {
         if (this.ctx && (this.ctx.state === 'running' || this.ctx.state === 'paused' || this.ctx.state === 'stopping')) {
             throw new Error(`'${this.meta?.name}' is still ${this.ctx.state}`);
         }
@@ -168,7 +169,7 @@ class ScriptRunnerImpl {
         const bot = meta.create();
         bot.bindLog(msg => ctx.addLog('info', msg));
         if (meta.settingsSchema) {
-            bot.settings = new SettingsBag(SettingsStore.resolve(meta.name, meta.settingsSchema));
+            bot.settings = new SettingsBag({ ...SettingsStore.resolve(meta.name, meta.settingsSchema), ...overrides });
         }
 
         this.ctx = ctx;
@@ -276,6 +277,10 @@ class ScriptRunnerImpl {
      * Why: it is echoed on both the stopping and stopped lines and carried into the next run's log by {@link start}.
      */
     stop(reason: string): void {
+        for (const listener of this.stopRequestListeners) {
+            try { listener(reason); }
+            catch (error) { this.ctx?.addLog('warn', `Stop cleanup failed: ${String(error)}`); }
+        }
         const ctx = this.ctx;
         if (!ctx || ctx.state === 'stopped' || ctx.state === 'crashed') {
             return;
@@ -299,6 +304,11 @@ class ScriptRunnerImpl {
     onChange(cb: () => void): () => void {
         this.changeListeners.add(cb);
         return () => this.changeListeners.delete(cb);
+    }
+
+    onStopRequest(cb: (reason: string) => void): () => void {
+        this.stopRequestListeners.add(cb);
+        return () => this.stopRequestListeners.delete(cb);
     }
 
     private launchIteration(ctx: ScriptContext): void {
