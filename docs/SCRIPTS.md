@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 76. Categories: 21.
+- Scripts: 77. Categories: 21.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -31,7 +31,7 @@
 - [Thieving](#thieving) — 3
 - [Treasure Trails](#treasure-trails) — 1
 - [Utility](#utility) — 3
-- [Woodcutting](#woodcutting) — 2
+- [Woodcutting](#woodcutting) — 3
 
 ## Agility
 
@@ -1311,6 +1311,22 @@ Locates every Magic tree in Tree Gnome Stronghold (west 2372,3425 / south-bank 2
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `fletchLogs` | boolean | `true` | Fletch logs into bows |
+
+### TickWoodcutter
+
+Standalone 3-tick knife/log woodcutter. Frame-cadence raw batch, one carrier log, drop or bank, named camps and custom position, axe/knife/log provisioning and optional Bob buy/repair.
+
+- Tags: `woodcutting`, `tick-manip`, `drop`, `banking`, `provisioning`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `treeName` | string | `"Willow"` | Tree name — one of: Tree, Oak, Willow, Maple tree, Yew, Magic tree |
+| `location` | string | `"Seers Willows"` | Location / full inventory — one of: Auto, Use Closest, Use Start Position, Use Custom Position, None, Draynor (trees), Draynor Oaks, Draynor Willows, Seers (trees), Seers Oaks, Seers Willows, Seers Maples, Seers Yews (cemetery), Edgeville Yews, Sorcerer's Tower, Gnome Stronghold, S Falador Oaks, Lumbridge Farmer Willows, Lumbridge Castle Willows |
+| `radius` | number (2–64) | `24` | Radius (tiles) |
+| `customLocation` | tile | `{"x":3200,"z":3200,"level":0}` | Custom position (x,z) |
+| `bank` | boolean | `false` | Bank haul |
+| `toolAcquire` | string | `"Off"` | Acquire tools — one of: Off, Buy / repair |
+| `diagnostics` | boolean | `true` | Timing diagnostics |
 
 ### Woodcutter
 

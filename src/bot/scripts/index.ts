@@ -28,6 +28,8 @@ import ClueSolver, { SETTINGS as CLUESOLVER_SETTINGS } from './ClueSolver/ClueSo
 import CookBot, { SETTINGS as COOKBOT_SETTINGS } from './CookBot/CookBot.js';
 import GatheringBot, { FEATHER_BUYOUT_GP, FEATHER_RESTOCK_MINUTES, GATHERING_SETTINGS } from './GatheringBot/GatheringBot.js';
 import Woodcutter, { WOODCUTTER_SETTINGS } from './GatheringBot/Woodcutter.js';
+import TickWoodcutter from './TickWoodcutter/TickWoodcutter.js';
+import { TICK_WOODCUTTER_SETTINGS } from './TickWoodcutter/settings.js';
 import { FORGETFUL_BANK_SETTING, TOOL_ACQUIRE_SETTING } from '../api/acquisition/ToolAcquire.js';
 import AIOQuester, { AIO_SETTINGS } from './AIOQuester/AIOQuester.js';
 import MossGiant, { SETTINGS as MOSSGIANT_SETTINGS } from './MossGiant/MossGiant.js';
@@ -351,6 +353,16 @@ ScriptRegistry.register({
     tags: ['gathering', 'banking', 'drop', 'firemaking'],
     settingsSchema: WOODCUTTER_SETTINGS,
     create: () => new Woodcutter()
+});
+
+ScriptRegistry.register({
+    name: 'TickWoodcutter',
+    description:
+        'Standalone 3-tick knife/log woodcutter. Frame-cadence raw batch, one carrier log, drop or bank, named camps and custom position, axe/knife/log provisioning and optional Bob buy/repair.',
+    category: 'Woodcutting',
+    tags: ['woodcutting', 'tick-manip', 'drop', 'banking', 'provisioning'],
+    settingsSchema: TICK_WOODCUTTER_SETTINGS,
+    create: () => new TickWoodcutter()
 });
 
 ScriptRegistry.register({
