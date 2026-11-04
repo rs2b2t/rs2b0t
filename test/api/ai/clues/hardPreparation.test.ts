@@ -769,7 +769,7 @@ test('JiveDragons restocks a hard clue to twelve Sharks after supplies run low',
     expect(loads).toEqual([12, 12]);
 });
 
-test('clue prayer restoration walks to the reachable Lumbridge altar', async () => {
+test('clue prayer restoration walks to the reachable altar and blocks until restored', async () => {
     spyOn(Game, 'tile').mockReturnValue(new Tile(3222, 3218, 0));
     spyOn(Prayer, 'max').mockReturnValue(60);
     spyOn(Prayer, 'full').mockReturnValue(false);
@@ -778,7 +778,7 @@ test('clue prayer restoration walks to the reachable Lumbridge altar', async () 
         : { ok: false, reason: 'unreachable', expanded: 0 });
     await new SolveClue({ ...host, restorePrayer: () => true }).execute();
     expect(Traversal.walkResilient).toHaveBeenCalledWith(new Tile(3243, 3205, 0), expect.anything());
-    expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
+    expect(ClueExecutor.solveHeldClue).not.toHaveBeenCalled();
 });
 
 test('an unrelated hard clue leaves Shantay passes in the bank', async () => {

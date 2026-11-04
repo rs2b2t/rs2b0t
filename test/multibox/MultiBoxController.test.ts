@@ -8,6 +8,10 @@ import type { RosterClient } from '#/bot/multibox/RosterTypes.js';
 
 class FakeHandle implements SlotHandle {
     calls: string[] = [];
+    player: string | null = null;
+    scriptName: string | null = null;
+    scriptSwitch: ((world: WorldNumber, signal: AbortSignal) => Promise<boolean>) | null = null;
+    setScriptWorldSwitch(handler: (world: WorldNumber, signal: AbortSignal) => Promise<boolean>): void { this.scriptSwitch = handler; }
     mode: RenderMode = 'background';
     destroyed = false;
     switchReady = true;
@@ -30,7 +34,7 @@ class FakeHandle implements SlotHandle {
         this.loginCoordination = coordination;
         this.calls.push('loginCoordination');
     }
-    status(): SlotStatus { return { ready: this.ready, ingame: this.ingame, world: this.world, player: null, loopCycle: 0, drawn: 0, scriptState: 'idle', scriptName: null }; }
+    status(): SlotStatus { return { ready: this.ready, ingame: this.ingame, world: this.world, player: this.player, loopCycle: 0, drawn: 0, scriptState: 'idle', scriptName: this.scriptName }; }
     destroy(): void { this.destroyed = true; this.calls.push('destroy'); }
 }
 class FakeOps implements SlotOps {
@@ -731,4 +735,38 @@ test('cancelling a wall switch preserves its slots and allows manual additions a
     expect(controller.add()).not.toBeNull();
     controller.startAll();
     expect(ops.handles.every(h => h.calls.includes('start'))).toBe(true);
+});
+
+
+test('JiveTT checkpoint switches only the requesting account', async () => {
+    const ops = new FakeOps();
+    const controller = new MultiBoxController(ops);
+    controller.add({ username: 'alice', password: '', world: 2 });
+    controller.add({ username: 'bob', password: '', world: 3 });
+    const [alice, bob] = ops.handles;
+    alice.player = 'alice';
+    alice.scriptName = 'JiveTT';
+    alice.ingame = true;
+    const bobCalls = [...bob.calls];
+    expect(await alice.scriptSwitch!(1, new AbortController().signal)).toBe(true);
+    expect(alice.calls).toContain('world:1');
+    expect(bob.calls).toEqual(bobCalls);
+});
+
+test('JiveTT checkpoint refuses a mismatched profile and aborts pending logout', async () => {
+    const ops = new FakeOps();
+    const controller = new MultiBoxController(ops);
+    controller.add({ username: 'alice', password: '', world: 2 });
+    const alice = ops.handles[0];
+    alice.player = 'bob';
+    alice.scriptName = 'JiveTT';
+    expect(await alice.scriptSwitch!(1, new AbortController().signal)).toBe(false);
+    alice.player = 'alice';
+    alice.switchReady = false;
+    const abort = new AbortController();
+    const pending = alice.scriptSwitch!(1, abort.signal);
+    abort.abort();
+    expect(await pending).toBe(false);
+    expect(alice.calls).not.toContain('world:1');
+    expect(alice.calls).toContain('cancelSwitch');
 });

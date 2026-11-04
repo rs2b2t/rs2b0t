@@ -7,7 +7,7 @@ import type {
 import { LoginCoordinator } from './LoginCoordinator.js';
 import JString from '../../client/datastruct/JString.js';
 import { waitForWorldSwitch } from '../runtime/WorldSwitch.js';
-import type { WorldNumber } from '../../client/config/worlds.js';
+import { WORLDS, type WorldNumber } from '../../client/config/worlds.js';
 
 export const MAIN_TAB = 'Main';
 
@@ -84,6 +84,14 @@ export class MultiBoxController {
             switchingWorld: null
         };
         this.slots.push(slot);
+        handle.setScriptWorldSwitch?.(async (world, signal) => {
+            const status = handle.status();
+            if (signal.aborted || status.scriptName !== 'JiveTT' || normalizeUsername(status.player ?? '') !== normalizeUsername(slot.account.username)) return false;
+            const cancel = () => this.cancelSlotWorldSwitch(slot.id);
+            signal.addEventListener('abort', cancel, { once: true });
+            try { return await this.switchWorld(slot.id, world); }
+            finally { signal.removeEventListener('abort', cancel); }
+        });
         if (account) {
             handle.setCredentials(acct.username, acct.password);
         }
@@ -282,7 +290,7 @@ export class MultiBoxController {
 
     async switchWorld(id: number, world: WorldNumber): Promise<boolean> {
         const slot = this.slots.find(s => s.id === id);
-        if (this.switchingWorld || !slot || this.worldSwitches.has(id) || (world !== 1 && world !== 2 && world !== 3) || world === slot.account.world) return false;
+        if (this.switchingWorld || !slot || this.worldSwitches.has(id) || !WORLDS.some(candidate => candidate.number === world) || world === slot.account.world) return false;
         const pending = new AbortController();
         this.worldSwitches.set(id, pending);
         let reconnect = slot.handle.status().ingame;

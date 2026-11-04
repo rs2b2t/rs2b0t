@@ -43,6 +43,10 @@ import { snapshotWorldState } from '#/bot/event/webwalk/worldStateLive.js';
 import { hardClueKit, GUARDIAN_WEAPON_IDS, SHARK_ID, type GuardianRangedLoadout } from './hardClueKit.js';
 import { hardKitSnapshot, hardKitFingerprint, stockHardWeapon, stockHardSupplies } from './hardCluePreparation.js';
 import { sustainUntil } from './Guardian.js';
+import { CLUE_PRAYER_POTIONS, maintainGuardianPrayer } from './guardianKit.js';
+import type { ClueHazard, TrailResult } from './trailResult.js';
+import type { ClueStep } from './types.js';
+export type { ClueHazard, TrailResult } from './trailResult.js';
 
 const CLUE_COINS = 1_000;
 const ALTAR_OP = 'Pray-at';
@@ -94,6 +98,14 @@ export interface SolveClueHost {
     restorePrayer?(): boolean;
     /** Route trail legs through the teleport catalog and stock the runes. */
     useTeleports?(): boolean;
+    sustain?(hazard: ClueHazard): Promise<void>;
+    allowWilderness?(): boolean;
+    verifyRewards?: boolean;
+    guardianProtectionByHost?: boolean;
+    prepareRewards?(): Promise<boolean>;
+    prayerDoseTarget?: number;
+    escapeReserve?: readonly { id: number; count: number }[];
+    beforeStep?(step: ClueStep): Promise<boolean>;
 }
 
 // Why: The nearest bank from the elf camp routes across unsupported Isafdar terrain, so leave Tirannwn first.
@@ -110,6 +122,8 @@ export function walkToBank(tile: NavPoint, log: (m: string) => void): Promise<bo
 }
 
 export class SolveClue implements Task {
+    result: TrailResult | null = null;
+    private stopped = false;
     private hardTrail = false;
     private blockedKit: string | null = null;
     private blockedBankKit: string | null = null;
@@ -135,7 +149,9 @@ export class SolveClue implements Task {
     }
 
     private preparationFingerprint(includeBank = false): string {
-        const kit = hardKitFingerprint(includeBank, this.host.rangedLoadout?.());
+        const supplies = [...Inventory.items(), ...(includeBank && Bank.ready() ? Bank.items() : [])];
+        const prayer = CLUE_PRAYER_POTIONS.map(potion => supplies.filter(item => item.id === potion.id).reduce((n, item) => n + item.count, 0));
+        const kit = `${hardKitFingerprint(includeBank, this.host.rangedLoadout?.())}:${prayer.join(',')}`;
         if (!KHARAZI_CLUES.has(heldClueScrollId() ?? -1)) return kit;
         const items = [...Inventory.items(), ...Equipment.items(), ...(includeBank && Bank.ready() ? Bank.items() : [])];
         const tools = jungleKeepNames().map(name => items.filter(i => i.name === name).reduce((n, i) => n + i.count, 0));
@@ -153,6 +169,8 @@ export class SolveClue implements Task {
     }
 
     retry(): void {
+        if (this.stopped) return;
+        this.result = null;
         ClueExecutor.retryGuardian();
         this.blockedKit = null;
         this.blockedBankKit = null;
@@ -177,6 +195,19 @@ export class SolveClue implements Task {
 
     constructor(private readonly host: SolveClueHost) {
         ClueExecutor.resetSession();
+        ClueExecutor.setPolicy({
+            allowWilderness: host.allowWilderness?.() ?? true,
+            verifyRewards: host.verifyRewards ?? false,
+            guardianProtectionByHost: host.guardianProtectionByHost ?? false,
+            prepareRewards: host.prepareRewards ? () => host.prepareRewards!() : undefined,
+            beforeStep: host.beforeStep ? step => host.beforeStep!(step) : undefined
+        });
+    }
+
+    stop(): void {
+        this.stopped = true;
+        this.result = { kind: 'stopped', reason: 'Clue solving stopped by user', clueId: heldClueLikeId() };
+        ClueExecutor.resetSession();
     }
 
     ownsEquipment(): boolean {
@@ -188,6 +219,7 @@ export class SolveClue implements Task {
     }
 
     noteDeath(): void {
+        this.result = { kind: 'death', reason: 'Player died during clue solving', clueId: heldClueLikeId() };
         this.recoveryPending = false;
         this.collectingRewards = false;
         this.bankedThisSolve = false;
@@ -200,6 +232,7 @@ export class SolveClue implements Task {
     }
 
     validate(): boolean {
+        if (this.stopped) return false;
         if (this.collectingRewards) return true;
         if (this.completionPending) return true;
         if (this.retreatPending) return true;
@@ -246,22 +279,29 @@ export class SolveClue implements Task {
     }
 
     private async upkeep(): Promise<void> {
-        await this.eatIfHurt();
+        if (this.host.sustain) await this.host.sustain(ClueExecutor.hazard());
+        else {
+            await this.eatIfHurt();
+            if (this.hardTrail && Prayer.points() <= Math.max(8, Math.ceil(Prayer.max() * 0.2))) await maintainGuardianPrayer(false);
+        }
         const rotten = Inventory.items().find(item => item.id === ROTTEN_FOOD_ID);
         if (rotten) await rotten.interact('Drop');
     }
 
     async execute(): Promise<void> {
+        if (this.stopped) return;
+        this.result = null;
         if (!this.collectingRewards && (!this.recoveryPending || this.restoring) && (this.completionPending || this.retreatPending || (this.strippedGear.length > 0 && (this.restoring || heldClueLikeId() === null)))) {
             const upkeep = Sustain.hook;
-            Sustain.set(() => this.upkeep());
+            const installed = (): Promise<void> => this.upkeep();
+            Sustain.set(installed);
             try {
                 if (this.retreatPending && !(await this.retreatFromGuardian())) return;
                 await this.restoreStrippedGear();
                 if (this.blockedKit !== null) this.blockHardKit();
                 if (this.completionPending && !this.restoring) this.finishTrail();
             } finally {
-                Sustain.set(upkeep);
+                if (Sustain.hook === installed) Sustain.set(this.stopped ? null : upkeep);
             }
             return;
         }
@@ -276,17 +316,20 @@ export class SolveClue implements Task {
         if (held !== null) this.hardTrail = hard;
         const prepare = !this.bankedThisSolve && !this.initialBankVisited && heldClueScrollId() !== null ? this.host.prepareInitialBank : undefined;
         if (prepare && !(await prepare.call(this.host))) {
+            this.result = { kind: 'transient-failure', reason: 'Could not reach the initial clue bank', clueId: heldClueLikeId() };
             this.status = 'bank preparation blocked';
             this.host.setStatus('clue: could not reach the initial bank');
             return;
         }
         if (prepare) this.initialBankVisited = true;
         const hostUpkeep = Sustain.hook;
-        Sustain.set(() => this.upkeep());
+        const installed = (): Promise<void> => this.upkeep();
+        Sustain.set(installed);
         try {
             await this.runTrail(prepare !== undefined);
         } finally {
-            Sustain.set(hostUpkeep);
+            if (Sustain.hook === installed) Sustain.set(this.stopped ? null : hostUpkeep);
+            if (this.result === null && this.blockedKit !== null) this.result = { kind: 'resupply', reason: 'Hard clue kit is incomplete', clueId: heldClueLikeId() };
         }
     }
 
@@ -346,12 +389,14 @@ export class SolveClue implements Task {
         let outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`),
             () => this.entranaStripped && heldClueScrollId() !== null && !heldClueNeedsEntranaStrip(), this.host.rangedLoadout?.());
         if (outcome === 'supplies-needed') {
+            this.result = { kind: 'resupply', reason: 'Clue step needs supplies', clueId: heldClueLikeId() };
             this.bankedThisSolve = false;
             this.retreatPending = Game.inCombat();
             const restockedClue = heldClueScrollId();
             if (await this.bankFirst()) {
                 this.retreatPending = false;
                 this.bankedThisSolve = true;
+                this.result = null;
                 outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`),
                     () => this.entranaStripped && heldClueScrollId() !== null && !heldClueNeedsEntranaStrip(), this.host.rangedLoadout?.());
             } else if (this.blockedKit === null) {
@@ -359,6 +404,7 @@ export class SolveClue implements Task {
                 return;
             }
             if (outcome === 'supplies-needed') {
+                this.result = { kind: 'resupply', reason: 'Clue step needs supplies', clueId: heldClueLikeId() };
                 this.retreatPending ||= Game.inCombat();
                 if (this.retreatPending && !(await this.retreatFromGuardian())) return;
                 if (heldClueScrollId() !== restockedClue) {
@@ -374,6 +420,7 @@ export class SolveClue implements Task {
             }
         }
         if (outcome === 'reset-needed') {
+            this.result = { kind: 'transient-failure', reason: 'Clue step needs one safe reset', clueId: heldClueLikeId() };
             this.recoveryPending = true;
             this.bankedThisSolve = false;
             this.initialBankVisited = true;
@@ -382,8 +429,15 @@ export class SolveClue implements Task {
             this.host.setStatus('clue: resetting at nearest bank');
             return;
         }
+        if (outcome === 'reward-unverified') {
+            this.result = ClueExecutor.failure ?? { kind: 'transient-failure', reason: 'Reward collection is unverified', clueId: heldClueLikeId() };
+            this.collectingRewards = true;
+            this.status = 'reward collection unverified';
+            return;
+        }
         this.collectingRewards = outcome === 'yield' && heldClueLikeId() === null && ClueExecutor.current !== null;
         if (outcome === 'dead' || outcome === 'guardian-lost') {
+            this.result = { kind: outcome === 'dead' ? 'death' : 'transient-failure', reason: outcome === 'dead' ? 'Player died during guardian fight' : 'Guardian ownership or death could not be confirmed', clueId: heldClueLikeId() };
             if (outcome === 'dead') this.noteDeath();
             else this.deathBlocked = true;
             this.bankedThisSolve = false;
@@ -406,6 +460,7 @@ export class SolveClue implements Task {
             this.host.log(`[clue] ${outcome}: restoring starting weapon '${this.trailWeapon}' (equipped: '${current}')`);
         }
         if (outcome === 'abandon') {
+            this.result = ClueExecutor.failure ?? { kind: 'transient-failure', reason: 'Clue solving was abandoned', clueId: heldClueLikeId() };
             this.abandonedClueId = heldClueLikeId();
             this.bankedThisSolve = false;
             this.initialBankVisited = false;
@@ -428,6 +483,9 @@ export class SolveClue implements Task {
     }
 
     private finishTrail(): void {
+        this.result = this.host.verifyRewards && ClueExecutor.rewards.length === 0
+            ? { kind: 'transient-failure', reason: 'No verified reward receipt exists', clueId: null }
+            : { kind: 'completed', reason: 'Clue rewards collected', clueId: null, rewards: ClueExecutor.rewards.slice() };
         this.completionPending = false;
         this.hardTrail = false;
         this.status = 'idle';
@@ -604,6 +662,7 @@ export class SolveClue implements Task {
             this.host.setStatus('clue: initial bank is not ready');
             return false;
         }
+        if (this.host.prayerDoseTarget !== undefined || this.host.escapeReserve) await Bank.setNoteMode(false);
         if (this.hardTrail && hardClueKit(hardKitSnapshot(true, this.host.rangedLoadout?.()), this.host.hardFoodTarget) !== 'ready') {
             this.status = `hard kit: ${hardClueKit(hardKitSnapshot(true, this.host.rangedLoadout?.()), this.host.hardFoodTarget)}`;
             this.blockHardKit();
@@ -725,10 +784,19 @@ export class SolveClue implements Task {
 
         // Runes before food: both loops stop on a full pack and food is the bulky one.
         await this.stockTeleports(kit);
+        if (this.host.escapeReserve?.some(item => Inventory.countById(item.id) < item.count)) {
+            this.result = { kind: 'resupply', reason: 'Clue escape reserve is incomplete', clueId: scrollId };
+            return false;
+        }
 
         const food = this.host.foodName();
         const puzzleSlots = puzzleId !== undefined && Inventory.countById(puzzleId) === 0 ? 1 : 0;
         if (this.hardTrail) {
+            if (!(await this.stockPrayer())) {
+                this.blockHardKit();
+                this.result = { kind: 'resupply', reason: 'Cannot pack the required prayer doses', clueId: scrollId };
+                return false;
+            }
             const bankable = [...this.strippedGear, ...(puzzleId !== undefined ? ['Sextant', 'Watch', 'Chart'] : [])];
             if (!(await stockHardSupplies((fetchingCoordTools ? COORD_TOOL_SLOTS : 0) + puzzleSlots, bankable, this.host.hardFoodTarget))) {
                 this.blockHardKit();
@@ -768,9 +836,23 @@ export class SolveClue implements Task {
             if (!entranaStrip && hardClueKit(hardKitSnapshot(false, this.host.rangedLoadout?.()), this.host.hardFoodTarget) !== 'ready') return false;
         }
 
-        await this.topUpPrayer(scrollId);
-
+        if (!(await this.topUpPrayer(scrollId))) {
+            this.result = { kind: 'resupply', reason: 'Prayer restoration was not confirmed', clueId: scrollId };
+            return false;
+        }
         return true;
+    }
+
+    private async stockPrayer(): Promise<boolean> {
+        const target = Math.max(0, this.host.prayerDoseTarget ?? 0);
+        const held = (): number => Inventory.items().reduce((sum, item) => sum + item.count * (CLUE_PRAYER_POTIONS.find(p => p.id === item.id)?.doses ?? 0), 0);
+        for (let tries = 0; held() < target && tries < 28; tries++) {
+            const potion = CLUE_PRAYER_POTIONS.find(p => Bank.countById(p.id) > 0);
+            if (!potion || Inventory.isFull()) return false;
+            const before = held();
+            if (!(await Bank.withdrawById(potion.id, 'Withdraw-1')) || !(await Execution.delayUntil(() => held() > before, 2500))) return false;
+        }
+        return held() >= target;
     }
 
     /** What the trail can teleport with, for the pack log. */
@@ -791,6 +873,17 @@ export class SolveClue implements Task {
      * Why: a missing rune isn't fatal, the router walks instead.
      */
     private async stockTeleports(kit: TeleportKit): Promise<void> {
+        if (this.host.escapeReserve) {
+            for (const item of this.host.escapeReserve) {
+                const wanted = item.count * 2;
+                for (let tries = 0; Inventory.countById(item.id) < wanted && tries < wanted; tries++) {
+                    const before = Inventory.countById(item.id);
+                    if (!(await Bank.withdrawById(item.id, 'Withdraw-1'))
+                        || !(await Execution.delayUntil(() => Inventory.countById(item.id) > before, 2500))) break;
+                }
+            }
+            return;
+        }
         if (!(this.host.useTeleports?.() ?? true)) {
             return;
         }
@@ -809,20 +902,16 @@ export class SolveClue implements Task {
         }
     }
 
-    /**
-     * Top up prayer at an altar before a hard trail starts, since any of its legs can be a guarded dig.
-     * Why: low prayer never blocks a trail; the fight runs without a protection prayer.
-     */
-    private async topUpPrayer(scrollId: number | null): Promise<void> {
+    private async topUpPrayer(scrollId: number | null): Promise<boolean> {
         const hardTrail = scrollId !== null && (CLUE_DB[scrollId]?.obj.includes('_hard_') ?? false);
-        if (!hardTrail || !(this.host.restorePrayer?.() ?? true) || Prayer.max() === 0 || Prayer.full()) {
-            return;
-        }
+        if (!hardTrail || !(this.host.restorePrayer?.() ?? true)) return true;
+        if (Prayer.max() < 37) return false;
+        if (Prayer.full()) return true;
         const here = Game.tile();
         const altar = here ? await nearestAltar(here) : null;
         if (!altar) {
             this.host.log('[clue] prayer is low but no known altar to restore at');
-            return;
+            return false;
         }
 
         this.status = 'restoring prayer';
@@ -835,17 +924,17 @@ export class SolveClue implements Task {
             timeoutMs: ALTAR_WALK_MS
         });
         if (!walked) {
-            this.host.log('[clue] could not reach the altar — starting the trail with the prayer we have');
-            return;
+            this.host.log('[clue] could not reach the altar; trail remains blocked');
+            return false;
         }
 
         const loc = Locs.query().name(altar.loc).action(ALTAR_OP).nearest();
         if (!loc) {
-            this.host.log(`[clue] no '${altar.loc}' to pray at here — starting the trail with the prayer we have`);
-            return;
+            this.host.log(`[clue] no '${altar.loc}' to pray at here; trail remains blocked`);
+            return false;
         }
-        await loc.interact(ALTAR_OP);
-        await Execution.delayUntil(() => Prayer.full(), ALTAR_RESTORE_MS);
+        if (!(await loc.interact(ALTAR_OP)) || !(await Execution.delayUntil(() => Prayer.full(), ALTAR_RESTORE_MS))) return false;
         this.host.log(`[clue] prayer now ${Prayer.points()}/${Prayer.max()}`);
+        return Prayer.full();
     }
 }

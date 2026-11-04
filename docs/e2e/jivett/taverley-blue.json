@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "site": "taverley-blue",
+  "revision": "289",
+  "outcome": "passed",
+  "account": "jttmvzugyz2",
+  "base": "http://localhost:8891",
+  "serverTickMs": 300,
+  "baselineRevision": "d4640686a8f32518dd3535699c903719b97de2a9",
+  "contentHash": "d7e19682d2a7fc98f6481ae85933f48b97f7de2ab46639547266ea13ce19e0de",
+  "mapHash": "297e8d14d502fee965ed0d7e522ff2f3f7892d18ff48587c003d76d961ae11f9",
+  "bundleHash": "1c89329b9ca7a9dc2a377d47ad98d5d4adf042ae4a305a47d3ac30f1e4d20a7a",
+  "rawArtifact": "out/jivett-acceptance-evidence/jivett-hunt-probe-mvzugyz3/result.json",
+  "rawArtifactHash": "b736a82a060a1445b723d2abc972746b7c5e98683dbab451aad1d41fd0657ebf",
+  "screenshotArtifact": "out/jivett-acceptance-evidence/jivett-hunt-probe-mvzugyz3/final.png",
+  "screenshotHash": "0a49703579d9ac1bf62c14b4c5bc983f69091299e6e725ca54124917497647f8",
+  "screenshotVisuallyChecked": true,
+  "durationMs": 291150,
+  "sampleCount": 250,
+  "milestones": {
+    "enteredHunt": {
+      "sampleIndex": 127,
+      "atMs": 1793659525769,
+      "utc": "2026-11-02T22:45:25.769000+00:00",
+      "tile": {
+        "x": 2911,
+        "z": 9809,
+        "level": 0
+      }
+    },
+    "protectedCombat": {
+      "sampleIndex": 138,
+      "atMs": 1793659536815,
+      "utc": "2026-11-02T22:45:36.815000+00:00",
+      "tile": {
+        "x": 2911,
+        "z": 9804,
+        "level": 0
+      }
+    },
+    "serverConfirmedAntifire": {
+      "sampleIndex": 140,
+      "atMs": 1793659538824,
+      "utc": "2026-11-02T22:45:38.824000+00:00",
+      "tile": {
+        "x": 2910,
+        "z": 9803,
+        "level": 0
+      }
+    },
+    "firstKill": {
+      "sampleIndex": 168,
+      "atMs": 1793659566936,
+      "utc": "2026-11-02T22:46:06.936000+00:00",
+      "tile": {
+        "x": 2910,
+        "z": 9803,
+        "level": 0
+      }
+    },
+    "hideCollected": {
+      "sampleIndex": 180,
+      "atMs": 1793659578981,
+      "utc": "2026-11-02T22:46:18.981000+00:00",
+      "tile": {
+        "x": 2906,
+        "z": 9802,
+        "level": 0
+      }
+    },
+    "boneBuried": {
+      "sampleIndex": 181,
+      "atMs": 1793659579984,
+      "utc": "2026-11-02T22:46:19.984000+00:00",
+      "tile": {
+        "x": 2906,
+        "z": 9802,
+        "level": 0
+      }
+    },
+    "threeKills": {
+      "sampleIndex": 231,
+      "atMs": 1793659630185,
+      "utc": "2026-11-02T22:47:10.185000+00:00",
+      "tile": {
+        "x": 2907,
+        "z": 9807,
+        "level": 0
+      }
+    },
+    "safeExitRequested": {
+      "sampleIndex": 236,
+      "atMs": 1793659635205,
+      "utc": "2026-11-02T22:47:15.205000+00:00",
+      "tile": {
+        "x": 2909,
+        "z": 9801,
+        "level": 0
+      }
+    },
+    "surfaceExit": {
+      "sampleIndex": 237,
+      "atMs": 1793659636208,
+      "utc": "2026-11-02T22:47:16.208000+00:00",
+      "tile": {
+        "x": 2967,
+        "z": 3380,
+        "level": 0
+      }
+    },
+    "hideBanked": {
+      "sampleIndex": 246,
+      "atMs": 1793659645241,
+      "utc": "2026-11-02T22:47:25.241000+00:00",
+      "tile": {
+        "x": 2945,
+        "z": 3368,
+        "level": 0
+      }
+    },
+    "stopped": {
+      "sampleIndex": 247,
+      "atMs": 1793659645649,
+      "utc": "2026-11-02T22:47:25.649000+00:00",
+      "tile": {
+        "x": 2945,
+        "z": 3368,
+        "level": 0
+      }
+    }
+  },
+  "observations": {
+    "kills": 3,
+    "prayerXpBefore": 13034431,
+    "prayerXpAfter": 13034503,
+    "prayerXpGained": 72,
+    "bankedLoot": [
+      {
+        "id": 1751,
+        "count": 1
+      }
+    ],
+    "deaths": 0,
+    "minimumHuntingHp": 99,
+    "huntingSamples": 110,
+    "combatSamples": 88,
+    "allSampledCombatProtected": true,
+    "pageErrors": [],
+    "safeExitReason": "prayer dose consumption was not confirmed"
+  },
+  "limitations": [
+    "One trip, not a clue-solving cycle or soak.",
+    "One-second samples do not establish protection on every server tick.",
+    "Probe used an isolated localhost validation marker before release evidence existed.",
+    "A subsequent change resets the hunt idle timer after arrival."
+  ]
+}

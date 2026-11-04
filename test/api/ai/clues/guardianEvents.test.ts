@@ -68,6 +68,7 @@ beforeEach(() => {
         return true;
     });
     spyOn(Prayer, 'set').mockResolvedValue(true);
+    spyOn(Prayer, 'active').mockReturnValue(true);
     spyOn(Special, 'ready').mockReturnValue(false);
     spyOn(Npc.prototype, 'interact').mockImplementation(function (this: Npc) {
         attacks.push(this.index);

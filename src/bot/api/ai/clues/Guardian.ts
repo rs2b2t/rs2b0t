@@ -49,7 +49,7 @@ export async function sustainUntil(cond: () => boolean, ms: number, deps: Sustai
 function findGuardian(name: string): Npc | null {
     const candidates = Npcs.query().name(name).action('Attack')
         .where(n => (n.distance() <= SPAWN_RADIUS || (n.targetsMe() && n.distance() <= OWNED_RADIUS)) && !n.targetsAnotherPlayer()).results();
-    return candidates.find(n => n.targetsMe()) ?? candidates[0] ?? null;
+    return candidates.find(n => n.targetsMe()) ?? null;
 }
 
 function rangedStand(target: Npc, from: WorldTile): Tile | undefined {
@@ -94,7 +94,8 @@ export class GuardianEncounter {
         if (EventSignal.pending()) return 'yield';
         const first = this.first;
         if (!first) return 'guardian-lost';
-        const prayed = await Prayer.set(PROTECT_FROM_MAGIC, true);
+        const prayed = await protection.prayerReady();
+        if (!prayed) return 'supplies-needed';
         this.owned ||= first.targetsMe();
         let attackedAt = -Infinity;
         try {
