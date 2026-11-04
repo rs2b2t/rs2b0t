@@ -1,4 +1,10 @@
-export type MeleeCombatStyle = 'attack' | 'strength' | 'controlled' | 'defence';
+import { Skills } from '../skills/Skills.js';
+
+/**
+ * A melee training style. `minimum` is a choice rather than a real style: it resolves to the lowest of
+ * attack, strength and defence each time it is asked, so a fighter moves on as levels change.
+ */
+export type MeleeCombatStyle = 'attack' | 'strength' | 'controlled' | 'defence' | 'minimum';
 
 const COMBAT_STYLE: Record<string, MeleeCombatStyle> = {
     attack: 'attack',
@@ -9,7 +15,8 @@ const COMBAT_STYLE: Record<string, MeleeCombatStyle> = {
     shared: 'controlled',
     defence: 'defence',
     defense: 'defence',
-    defensive: 'defence'
+    defensive: 'defence',
+    minimum: 'minimum'
 };
 
 /**
@@ -17,7 +24,7 @@ const COMBAT_STYLE: Record<string, MeleeCombatStyle> = {
  * Why: re-applied on every login, because the combat-mode varp isn't persisted.
  * @see docs/reference/api-game.md
  */
-export const COMBAT_STYLE_OPTIONS: MeleeCombatStyle[] = ['attack', 'strength', 'controlled', 'defence'];
+export const COMBAT_STYLE_OPTIONS: MeleeCombatStyle[] = ['attack', 'strength', 'controlled', 'defence', 'minimum'];
 
 export interface CombatStyleResolution {
     requested: MeleeCombatStyle;
@@ -79,8 +86,43 @@ export function resolveSplitCombatSettings(
 // Why: an unavailable requested style falls to the last defensive option, which covers the controlled-on-3-mode case and stays deterministic for spears and polearms.
 // Why: an incomplete interface with neither an exact match nor a defensive option fails closed.
 
+export interface MeleeLevels {
+    attack: number;
+    strength: number;
+    defence: number;
+}
+
+/**
+ * The style `minimum` trains: the lowest of the three, so it moves on as each levels up.
+ * A tie goes attack, then strength, then defence.
+ */
+export function minimumMeleeStyle(attack: number, strength: number, defence: number): MeleeCombatStyle {
+    let style: MeleeCombatStyle = 'attack';
+    let lowest = attack;
+    if (strength < lowest) {
+        style = 'strength';
+        lowest = strength;
+    }
+    if (defence < lowest) {
+        style = 'defence';
+    }
+    return style;
+}
+
+function currentMeleeLevels(): MeleeLevels {
+    return {
+        attack: Skills.level('attack'),
+        strength: Skills.level('strength'),
+        defence: Skills.level('defence')
+    };
+}
+
 /** Resolve a requested training style against the labelled buttons in the current weapon's combat interface. */
-export function resolveCombatStyle(style: MeleeCombatStyle, offeredModes: readonly CombatModeLabel[]): CombatStyleResolution | null {
+export function resolveCombatStyle(
+    style: MeleeCombatStyle,
+    offeredModes: readonly CombatModeLabel[],
+    levels: MeleeLevels = currentMeleeLevels()
+): CombatStyleResolution | null {
     const seenModes = new Set<number>();
     const modes = offeredModes.flatMap(option => {
         const effective = parseInterfaceCombatStyle(option.label);
@@ -94,7 +136,9 @@ export function resolveCombatStyle(style: MeleeCombatStyle, offeredModes: readon
         return null;
     }
 
-    const selected = modes.find(option => option.style === style) ?? modes.findLast(option => option.style === 'defence');
+    // Why: minimum has no button of its own, so resolve it against the current levels before matching.
+    const wanted = style === 'minimum' ? minimumMeleeStyle(levels.attack, levels.strength, levels.defence) : style;
+    const selected = modes.find(option => option.style === wanted) ?? modes.findLast(option => option.style === 'defence');
     if (!selected) {
         return null;
     }
@@ -160,6 +204,14 @@ export function describeCombatStyle(resolution: CombatStyleResolution): string {
         case 'defence':
             description = 'defence (training Defence)';
             break;
+        case 'minimum':
+            description = 'minimum';
+            break;
+    }
+
+    // Why: minimum resolves to a real style on purpose, so it is not an unavailable-style fallback.
+    if (resolution.requested === 'minimum') {
+        return `minimum → ${description}`;
     }
 
     if (resolution.requested !== resolution.effective) {
