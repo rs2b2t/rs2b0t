@@ -1830,6 +1830,20 @@ export const actions = {
         return c.orbitCameraYaw;
     },
 
+    /** Why: one write per batch keeps drops and the click in the same server tick. */
+    flushOut(): boolean {
+        if (!raw || !raw.stream) {
+            return false;
+        }
+        const out = raw.out;
+        if (!out.pos) {
+            return false;
+        }
+        (raw.stream as { write(data: Uint8Array, len: number): void }).write(out.data as Uint8Array, out.pos);
+        out.pos = 0;
+        return true;
+    },
+
     /** Toggle Auto Retaliate on the combat tab (same panel as run). */
     setRetaliate(on: boolean): boolean {
         const controls = reader.retaliateControls();
