@@ -33,6 +33,10 @@ import {
     type SustainSelection
 } from './AIOQuesterLogic.js';
 import { QUEUE_COLOUR, blockedLines, focusRow, queueEntry, queueSummary, questClockRestarts } from './AIOQuesterPaint.js';
+import { QuestPreparation } from './preparationRuntime.js';
+import { planQuestSelection } from './questSelection.js';
+import { questFoodRequest } from '../../api/ai/quests/engine/preparationPolicy.js';
+import type { QuestPreparationRequest, QuestPreparationResult } from '../../api/ai/quests/engine/preparationTypes.js';
 
 const DEATH_RE = /oh dear.*you are dead/i;
 
@@ -70,7 +74,7 @@ export const AIO_SETTINGS: SettingsSchema = {
             }));
         },
         label: 'Quest queue',
-        help: '+ Do queues a quest; - Skip leaves it out. Green ✓ Complete comes from your quest tab. The queue runs prerequisites first and skips completed quests.'
+        help: '+ Do queues a quest; - Skip leaves it out. The queue adds prerequisites and quests for missing quest points, respects explicit skips, and trains missing requirements.'
     },
     gatherWildernessPlanks: { type: 'boolean', default: true, label: 'Gather Wilderness planks', help: 'Dragon Slayer gathers missing planks in the Wilderness; disable to require banked planks' },
     loadout: LOADOUT_SETTING,
@@ -79,7 +83,7 @@ export const AIO_SETTINGS: SettingsSchema = {
         default: FALLBACK_FOOD,
         options: FOOD_OPTIONS,
         label: 'Food',
-        help: 'what the engine withdraws for any quest declaring a food count, and what the bot eats; this wins over any food the chosen loadout carries'
+        help: 'Preferred food; quests with fixed kits use their required food. Missing food is gathered and cooked, including training the required skills.'
     },
     arravGang: {
         type: 'string',
@@ -140,6 +144,8 @@ export default class AIOQuester extends TaskBot {
     private parkedCount = 0;
 
     private skipRequested = false;
+    private restartRequested = false;
+    private preparation: QuestPreparation | null = null;
 
     private died = false;
     private deaths = 0;
@@ -158,12 +164,16 @@ export default class AIOQuester extends TaskBot {
         this.questSince = this.startedAt;
 
         const all = QUEST_DEFS.map(d => d.record.id);
-        this.picked = new Set(selectedOptions(this.settings.list('quests', []), all));
+        const choices = this.settings.list('quests', []);
+        const excluded = new Set(choices.filter(value => value.trim().startsWith('-')).map(value => value.trim().slice(1).toLowerCase()));
+        this.picked = planQuestSelection(new Set(selectedOptions(choices, all)), excluded, QUEST_DEFS.map(module => module.record),
+            new Set(QUEST_DEFS.filter(module => Quests.status(module.record.name) === 'complete').map(module => module.record.id)), Quests.points());
 
         this.on('chat.message', e => {
             if (DEATH_RE.test(e.text)) {
                 this.died = true;
                 this.deaths++;
+                this.preparation?.interrupt('player died');
             }
         });
 
@@ -178,6 +188,14 @@ export default class AIOQuester extends TaskBot {
         applyHeroSettings({ partner: this.settings.str('heroPartner', '') });
         applyLegendsSettings({ reward: this.settings.str('legendsReward', 'Prayer') });
         // Why: the server runs one op per tick and drops the rest, so a pass spends its tick on food or on prayer, never both, and food wins, as the fight it is losing is measured in hitpoints.
+        this.restoreQuestHooks();
+
+        const queueNames = QUEST_DEFS.filter(d => this.picked.has(d.record.id)).map(d => d.record.name);
+        this.log(`AIOQuester, queue: ${queueNames.join(', ') || '(none)'}`);
+        this.add(new ContinueDialog(), new EatFood(this), new QuestEngine(this));
+    }
+
+    private restoreQuestHooks(): void {
         Sustain.set(async () => {
             if (this.shouldEat()) {
                 await this.eatOnce();
@@ -186,24 +204,21 @@ export default class AIOQuester extends TaskBot {
             await prayerUpkeep();
         });
         // A death must release the active quest operation before the engine can recover it.
-        EventSignal.setInterrupt(() => this.skipRequested || this.died);
-
-        const queueNames = QUEST_DEFS.filter(d => this.picked.has(d.record.id)).map(d => d.record.name);
-        this.log(`AIOQuester, queue: ${queueNames.join(', ') || '(none)'}`);
-        this.add(new ContinueDialog(), new EatFood(this), new QuestEngine(this));
+        EventSignal.setInterrupt(() => this.skipRequested || this.restartRequested || this.died);
     }
 
     override async onStop(): Promise<void> {
+        this.stopPreparation();
         DragonSupplies.wildernessPlanks = true;
         EventSignal.setInterrupt(null);
         Sustain.set(null);
         setQuestPrayer(null, null);
     }
 
-    // Why: the setting is the answer for quests, a loadout built for a training script carries whatever
-    // that script eats, and letting it override sent the queue out on food the player never chose.
     foodItem(): string | null {
-        return this.settings.str('food', FALLBACK_FOOD);
+        const configured = this.settings.str('food', FALLBACK_FOOD);
+        const module = this.runningId ? defById(this.runningId) : undefined;
+        return module ? questFoodRequest(module, configured)?.item ?? configured : configured;
     }
 
     verbose(): boolean {
@@ -221,7 +236,7 @@ export default class AIOQuester extends TaskBot {
     }
 
     shouldEat(): boolean {
-        return this.selectFood() !== null;
+        return !this.preparation && this.selectFood() !== null;
     }
 
     async eatOnce(): Promise<void> {
@@ -246,6 +261,7 @@ export default class AIOQuester extends TaskBot {
     }
 
     override grindTargets(): string[] {
+        if (this.preparation?.child) return this.preparation.child.grindTargets();
         return this.runningId ? defById(this.runningId)?.grind ?? [] : [];
     }
 
@@ -272,6 +288,7 @@ export default class AIOQuester extends TaskBot {
         }
         this.rows = rows;
         this.runningId = runningId;
+        QuestFood.name = this.foodItem();
         this.stepDesc = stepDesc;
         this.noProgress = noProgress;
         this.parkedCount = parked;
@@ -284,6 +301,7 @@ export default class AIOQuester extends TaskBot {
             return;
         }
         this.skipRequested = true;
+        this.preparation?.interrupt('skip requested');
         const name = this.rows.find(r => r.id === this.runningId)?.name ?? this.runningId ?? 'current quest';
         this.log(`Skip quest, abandoning ${name} after the current step yields`);
     }
@@ -304,6 +322,35 @@ export default class AIOQuester extends TaskBot {
         this.died = false;
         return d;
     }
+
+    automaticRecovery(): boolean { return true; }
+    restartPending(): boolean { return this.restartRequested; }
+    consumeRestart(): boolean {
+        const restart = this.restartRequested;
+        this.restartRequested = false;
+        return restart;
+    }
+
+    requestRestart(): void {
+        if (this.restartRequested) return;
+        this.restartRequested = true;
+        this.preparation?.interrupt('restart requested');
+        this.log('Restart requested; retreating and rebuilding the current quest loadout');
+    }
+
+    async prepare(request: QuestPreparationRequest): Promise<QuestPreparationResult> {
+        this.preparation ??= new QuestPreparation(message => this.log(message), { restoreHooks: () => this.restoreQuestHooks() });
+        return this.preparation.tick(request);
+    }
+
+    preparationStatus(): string { return this.preparation?.status ?? 'preparing quest requirements'; }
+    stopPreparation(): void {
+        this.preparation?.stop();
+        this.preparation = null;
+        this.restoreQuestHooks();
+    }
+    override onPause(): void { this.preparation?.pause(); }
+    override onResume(): void { this.preparation?.resume(); }
 
     finish(reason: string): void {
         this.requestFinish(reason);
@@ -345,6 +392,7 @@ export default class AIOQuester extends TaskBot {
             ]);
             p.text('Step', DIM);
             p.wrap(this.stepDesc);
+            for (const task of this.preparation?.queue.slice(1, 4) ?? []) p.wrap(`Next: ${task}`);
             p.gap(2);
             p.cells([
                 { text: `No-progress: ${this.noProgress}`, weight: 1 },
@@ -382,6 +430,7 @@ export default class AIOQuester extends TaskBot {
         p.gap();
         const clicked = p.buttons([
             { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'restart', label: 'Restart quest' },
             { id: 'skip', label: 'Skip quest' },
             { id: 'stop', label: 'Stop' }
         ]);
@@ -393,6 +442,8 @@ export default class AIOQuester extends TaskBot {
             }
         } else if (clicked === 'skip') {
             this.requestSkip();
+        } else if (clicked === 'restart') {
+            this.requestRestart();
         } else if (clicked === 'stop') {
             ScriptRunner.stop('Stop button (quest overlay)');
         }

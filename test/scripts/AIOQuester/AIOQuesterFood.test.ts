@@ -3,6 +3,23 @@ import { Execution } from '#/bot/api/execution/Execution.js';
 import { Inventory, type InvItem } from '#/bot/api/inventory/Inventory.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
 import AIOQuester from '#/bot/scripts/AIOQuester/AIOQuester.js';
+import { QuestFood } from '#/bot/api/ai/quests/food.js';
+
+test('quest food overrides reach the module and the sustain policy together', () => {
+    const original = QuestFood.name;
+    try {
+        const bot = new AIOQuester();
+        bot.noteState([], 'regicide', 'preparing', 0, 0);
+        expect(bot.foodItem()).toBe('Shark');
+        expect(QuestFood.name).toBe('Shark');
+        expect(bot.sustainPolicy().foods).toContain('shark');
+        bot.noteState([], 'upass', 'preparing', 0, 0);
+        expect(bot.foodItem()).toBe('Lobster');
+        expect(QuestFood.name).toBe('Lobster');
+    } finally {
+        QuestFood.name = original;
+    }
+});
 
 function food(
     name: string,

@@ -112,6 +112,10 @@ page: [Quest provisioning](quest-provisioning.md).
 
 ## The queue and the watchdog
 
+AIOQuester adds requirement training, supply gathering and bounded restart recovery
+to the queue. See [preparation and recovery](../decisions/quest-preparation-recovery.md)
+for its lifecycle and [the per-quest audit](quest-preparation-audit.md) for coverage.
+
 [`QuestEngine`](../../src/bot/api/ai/quests/engine/QuestEngine.ts) runs quests in order,
 tracking `parked`, `parkCounts`, and `parkedReasons`. A quest that stops making
 progress is **parked with a reason** and the queue moves on, rather than looping on a

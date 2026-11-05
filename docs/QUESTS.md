@@ -11,6 +11,8 @@ provisioning, the queue, the watchdog and execution.
 |---|---|
 | [Module shape](reference/quest-module-shape.md) | what a quest def looks like |
 | [Quest engine](reference/quest-engine.md) | quest state, provisioning, the queue and watchdog |
+| [Preparation and recovery](decisions/quest-preparation-recovery.md) | training, supply gathering, restart and abort behavior |
+| [Quest preparation audit](reference/quest-preparation-audit.md) | requirements and recovery caveats for all 63 quests |
 | [Exec primitives](reference/quest-primitives.md) | the shared step executors |
 | [Eligibility](reference/quest-eligibility.md) | requirement gating, official reqs vs bot-proven floors |
 | [Why quest state is not read from varps](decisions/quest-state-not-varps.md) | what the client cannot see, and what to read instead |
