@@ -14,7 +14,8 @@ export interface SettingDef {
     max?: number;
     /** Step for number / range controls (e.g. 0.05 for opacity). Default 1 for integers. */
     step?: number;
-    help?: string;
+    /** Help text, or a callback when it depends on other settings (e.g. the selected location). */
+    help?: string | ((valueOf: (key: string) => string) => string);
     options?: string[];
     /** Optional display labels keyed by the persisted option value. */
     optionLabels?: Record<string, string>;
