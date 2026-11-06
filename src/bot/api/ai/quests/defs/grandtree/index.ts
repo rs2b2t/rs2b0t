@@ -170,6 +170,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const grandtree: QuestModule = {
+    autoRetaliate: snap => !inCaves(snap.tile),
     record: QUESTS.find(r => r.id === 'grandtree')!,
     bank: 'nearest',
     hops: GT_HOPS,

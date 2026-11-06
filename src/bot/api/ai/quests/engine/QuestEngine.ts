@@ -19,6 +19,7 @@ import { evaluate } from '../EligibilityEvaluator.js';
 import { QUESTS } from '../data/quests.js';
 import { QUEST_DEFS, defById } from '../defs/index.js';
 import { executeStep } from '../exec/steps.js';
+import { prepareQuestRetaliation } from './retaliation.js';
 import type { BankInventorySnapshot, PlayerState, QuestEligibility, QuestRecord } from '../types.js';
 import { COIN_FLOAT, coinFloatPlan, depositPlan, floatDrawPlan, planProvisioning, shouldFreshenPack } from './provisioning.js';
 
@@ -564,7 +565,7 @@ export class QuestEngine implements Task {
             ? { ...step, leaveOpen: true }
             : step;
         const startedAt = Date.now();
-        const ok = await executeStep(bankAwareStep, module.hops ?? [], m => {
+        const ok = await prepareQuestRetaliation(module, snap) && await executeStep(bankAwareStep, module.hops ?? [], m => {
             // Verbose keeps the repeats: a sub-log that fires once per rock is the record of a mining leg.
             if (verbose) {
                 this.host.log(`  ${m}`);

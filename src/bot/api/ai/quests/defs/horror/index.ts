@@ -184,6 +184,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const horror: QuestModule = {
+    autoRetaliate: false,
     record: QUESTS.find(r => r.id === 'horror')!,
     pray: { protect: 'melee', potions: 2 },
     // 4 kingdoms and a 10-bar barcrawl: pinning one booth costs a kingdom-crossing per leg.
