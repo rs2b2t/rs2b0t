@@ -145,3 +145,4 @@ choose the JSON and screenshot directory. The default is
 
 - [The live-harness ABI](write-a-harness.md)
 - [Test suites](../reference/test-suites.md)
+- [Brimhaven landing plank harness](brimhaven-landing-plank.md)
