@@ -2394,6 +2394,10 @@ export function decide(snap: QuestSnapshot): QuestStep {
             const camp = ensureCampSurface(snap);
             return camp ?? custom('return to the mining camp to resume Ana\'s rescue', enterCamp);
         }
+        if ((area === 'mainland' || area === 'shantayNorth') && !held(snap, ITEM.ANA_BARREL)) {
+            const loadout = ensureDesertExteriorLoadout(snap);
+            if (loadout) return loadout;
+        }
         const south = routeSouth(snap);
         return south ?? { kind: 'wait', reason: 'locating the visible Ana rescue checkpoint' };
     }

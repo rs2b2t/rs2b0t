@@ -632,6 +632,49 @@ describe('Tourist Trap held, banked, and missing critical-item recovery', () => 
 });
 
 describe('Tourist Trap disguise and rescue restart matrix', () => {
+    test('stage 19 rebuilds the desert outfit before crossing south to resume the rescue', () => {
+        QuestFood.name = 'Cake';
+        const inventory: CountEntry[] = [
+            ['Cake', 8], ['Metal key', 1], ['Bronze pickaxe', 1], ['Shantay pass', 1],
+            ...SLAVE_OUTFIT.map(name => [name, 1] as const)
+        ];
+        const snapshot = snap({
+            stage: 19, tile: tile(3308, 3120), inv: inventory,
+            bank: DESERT_OUTFIT.map(name => [name, 1] as const),
+            food: 0, kebabs: 0, coins: 760, freeSlots: 12
+        });
+        for (const name of DESERT_OUTFIT) {
+            expect(decide(snapshot)).toMatchObject({ kind: 'withdraw', items: [{ name, qty: 1 }] });
+            snapshot.inv.set(name.toLowerCase(), 1);
+            snapshot.freeSlots!--;
+        }
+        expect(customName(decide(snapshot))).toBe('cross the Shantay Pass');
+        snapshot.tile = tile(3304, 3115);
+        snapshot.inv.delete('shantay pass');
+        expect(customName(decide(snapshot))).toBe('wear the camp-safe desert loadout');
+        snapshot.worn = new Set(DESERT_WORN.map(name => name.toLowerCase()));
+        expect(customName(decide(snapshot))).toBe('unlock the desert mining camp');
+    });
+
+    test('stage 19 replaces a missing pickaxe before spending another Shantay pass', () => {
+        const snapshot = snap({
+            stage: 19, tile: MAINLAND, worn: DESERT_OUTFIT,
+            inv: [['Metal key', 1], ['Shantay pass', 1], ...SLAVE_OUTFIT.map(name => [name, 1] as const)],
+            bank: [['Bronze pickaxe', 1]]
+        });
+        expect(decide(snapshot)).toMatchObject({ kind: 'withdraw', items: [{ name: 'Bronze pickaxe', qty: 1 }] });
+    });
+
+    test('stage 19 carrying Ana crosses south without rebuilding a mining outfit', () => {
+        const snapshot = snap({
+            stage: 19, tile: MAINLAND, inv: [['Ana in a barrel', 1], ['Shantay pass', 1]],
+            food: 0, kebabs: 0, coins: 0
+        });
+        expect(customName(decide(snapshot))).toBe('cross the Shantay Pass');
+        snapshot.tile = IRENA;
+        expect(customName(decide(snapshot))).toBe('return Ana to Irena');
+    });
+
     test('all eight slave-outfit worn subsets either finish dressing or enter the mine', () => {
         for (let mask = 0; mask < 8; mask++) {
             const wornPieces = SLAVE_OUTFIT.filter((_, index) => (mask & (1 << index)) !== 0);
