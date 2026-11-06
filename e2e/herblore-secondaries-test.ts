@@ -87,6 +87,19 @@ const CASES: Case[] = [
         timeoutMs: 240_000
     },
     {
+        key: 'scales',
+        setting: 'Blue dragon scale',
+        tele: '0,45,52,62,41',
+        bankSeed: [
+            { debugName: 'lobster', displayName: 'Lobster', qty: 50 },
+            { debugName: 'antidragonbreathshield', displayName: 'Dragonfire shield', qty: 1 },
+            { debugName: 'dusty_key', displayName: 'Dusty key', qty: 1 }
+        ],
+        seed: [],
+        product: 'Blue dragon scale',
+        timeoutMs: 600_000
+    },
+    {
         key: 'unicorn',
         setting: 'Unicorn horn dust',
         // Draynor bank, the nearest bank from here; pestle and horns are withdrawn, never given

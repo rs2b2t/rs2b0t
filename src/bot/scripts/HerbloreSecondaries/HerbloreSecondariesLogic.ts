@@ -14,6 +14,7 @@ export const SHOP_COIN_CAP = 5000;
 export const SHIELD_NAME = 'Dragonfire shield'; // content display name for antidragonbreathshield
 
 type SecondaryId =
+    | 'blue_dragon_scale'
     | 'red_spiders_eggs'
     | 'snape_grass'
     | 'eye_of_newt'
@@ -44,6 +45,7 @@ export interface SecondaryDef {
     takeFood: boolean;
     /** Needs anti-dragon shield equipped or carried. */
     needShield: boolean;
+    keyName?: string;
     /** Ground / shop source name when different from product (e.g. Swamp toad → Toad's legs). */
     sourceName?: string;
     shopNpc?: string;
@@ -134,6 +136,18 @@ export const SECONDARIES: readonly SecondaryDef[] = [
         takeFood: false,
         needShield: false,
         sourceName: 'Swamp toad'
+    },
+    {
+        id: 'blue_dragon_scale',
+        name: 'Blue dragon scale',
+        mode: 'loot',
+        anchor: { x: 2906, z: 9804, level: 0 },
+        searchRadius: 9,
+        bank: { x: 2946, z: 3369, level: 0 },
+        bankName: 'Falador West',
+        takeFood: true,
+        needShield: true,
+        keyName: 'Dusty key'
     },
     {
         id: 'unicorn_horn_dust',
@@ -227,6 +241,9 @@ export function keepOnDeposit(def: SecondaryDef, food: string): string[] {
     if (def.needShield) {
         keep.push(SHIELD_NAME);
     }
+    if (def.keyName) {
+        keep.push(def.keyName);
+    }
     if (def.toolName) {
         keep.push(def.toolName);
     }
@@ -243,6 +260,7 @@ export function needsRestock(opts: {
     foodWant: number;
     coins: number;
     hasShield: boolean;
+    hasKey?: boolean;
     hasTool: boolean;
     packFull: boolean;
     grindLeft: number;
@@ -259,6 +277,9 @@ export function needsRestock(opts: {
         return true;
     }
     if (opts.def.needShield && !opts.hasShield) {
+        return true;
+    }
+    if (opts.def.keyName && !opts.hasKey) {
         return true;
     }
     if (opts.def.mode === 'buy' || opts.def.mode === 'buy_grind') {
