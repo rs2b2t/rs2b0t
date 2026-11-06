@@ -22,7 +22,7 @@ describe('quest preparation policy', () => {
     test('leaves food acquisition to modules that gather their own travel food', () => {
         const sustain = { foods: ['Cake'], eatBelowHp: 1 };
         expect(questPreparationRequest(moduleFor('waterfall', { sustain }), 'Lobster', 'notStarted')?.food).toBeUndefined();
-        expect(questPreparationRequest(moduleFor('desertrescue', { sustain }), 'Lobster', 'notStarted')?.food).toBeUndefined();
+        expect(questPreparationRequest(moduleFor('desertrescue', { sustain }), null, 'notStarted')?.food).toBeUndefined();
     });
 
     test('prepares ordinary required goods while leaving unique quest keys to their stages', () => {
@@ -110,4 +110,12 @@ describe('quest preparation policy', () => {
         const rod = questPreparationRequest(moduleFor('hero'), null, 'notStarted', stock([['oily fishing rod', 1]]));
         expect(rod?.skills?.some(req => req.skill === 'herblore')).toBe(false);
     });
+});
+
+test('Tourist Trap prepares eight configured rations before entering the desert', () => {
+    expect(questPreparationRequest(moduleFor('desertrescue'), 'Cake', 'notStarted')?.food).toEqual({ item: 'Cake', count: 8 });
+});
+
+test('Tourist Trap resumes through its own safe supply routes instead of generic preparation banking', () => {
+    expect(questPreparationRequest(moduleFor('desertrescue'), 'Cake', 'inProgress')).toBeNull();
 });

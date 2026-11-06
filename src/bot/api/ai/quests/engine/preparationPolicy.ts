@@ -1,4 +1,5 @@
 import { FOOD_FLOAT } from '../food.js';
+import { TOURIST_TRAP_FOOD_TARGET } from '../defs/touristtrapSupplies.js';
 import { ITEM_DB } from '../../../../data/itemdb.js';
 import { UNTRADEABLE_IDS } from '../../../../data/untradeable.js';
 import type { QuestPreparationRequest } from './preparationTypes.js';
@@ -53,7 +54,8 @@ function ordinaryItem(name: string): boolean {
 
 export function questFoodRequest(module: QuestModule, configured: string | null): QuestPreparationRequest['food'] {
     const id = module.record.id;
-    if (id === 'waterfall' || id === 'desertrescue') return undefined;
+    if (id === 'waterfall') return undefined;
+    if (id === 'desertrescue') return configured?.trim() ? { item: configured.trim(), count: TOURIST_TRAP_FOOD_TARGET } : undefined;
     const count = FOOD_COUNTS[id] ?? module.food ?? (module.sustain ? FOOD_FLOAT : 0);
     if (count <= 0) return undefined;
     const choices = FOOD_CHOICES[id];
@@ -75,6 +77,7 @@ export function questPreparationRequest(
 ): QuestPreparationRequest | null {
     if (status === 'unknown' || status === 'complete') return null;
     const id = module.record.id;
+    if (id === 'desertrescue' && status === 'inProgress') return null;
     const levels = new Map<string, number>();
     const skill = (name: string, level: number): void => { levels.set(name, Math.max(levels.get(name) ?? 0, level)); };
     const count = (name: string): number => stock.get(name.toLowerCase()) ?? 0;

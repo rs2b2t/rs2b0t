@@ -21,6 +21,7 @@ import { QUESTS } from '../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { earnQuestCoinsStep } from '../exec/fundCoins.js';
 import { QuestFood } from '../food.js';
+import { TOURIST_TRAP_FOOD_TARGET as FOOD_ENTRY_TARGET } from './touristtrapSupplies.js';
 
 // Why: the journal collapses the hidden transport stages 19..26 and reward choices 27..29, so the world and inventory probes below resolve those ranges.
 
@@ -243,7 +244,6 @@ const ITEM = {
     SLAVE_SHIRT: "Slaves' shirt",
     SLAVE_ROBE: 'Slave robe',
     SLAVE_BOOTS: 'Slave boots',
-    WATERSKIN: 'Waterskin(4)',
     BAR: 'Bronze bar',
     FEATHER: 'Feather',
     HAMMER: 'Hammer',
@@ -263,13 +263,8 @@ const ITEM = {
 const DESERT_OUTFIT = [ITEM.DESERT_SHIRT, ITEM.DESERT_ROBE, ITEM.DESERT_BOOTS] as const;
 const SLAVE_OUTFIT = [ITEM.SLAVE_SHIRT, ITEM.SLAVE_ROBE, ITEM.SLAVE_BOOTS] as const;
 const SLAVE_OUTFIT_DROP_IDS = [1844, 1845, 1846] as const;
-const WATERSKINS = ['Waterskin(4)', 'Waterskin(3)', 'Waterskin(2)', 'Waterskin(1)', 'Waterskin(0)'] as const;
-const FOOD_ENTRY_TARGET = 16;
-const FOOD_ENTRY_FLOOR = 12;
+const FOOD_ENTRY_FLOOR = 6;
 const FOOD_RESTOCK_FLOOR = 4;
-const WATER_ENTRY_DOSES = 16;
-const WATER_ENTRY_FLOOR = 12;
-const WATER_RESTOCK_FLOOR = 8;
 const RESCUE_COIN_FLOOR = 100;
 const RESCUE_COIN_TARGET = 200;
 
@@ -497,17 +492,6 @@ const worn = (snap: QuestSnapshot, name: string): boolean => snap.worn.has(lower
 const ownedNow = (snap: QuestSnapshot, name: string): number => heldCount(snap, name) + (worn(snap, name) ? 1 : 0);
 const banked = (snap: QuestSnapshot, name: string): number => snap.bank?.get(lower(name)) ?? 0;
 
-function waterskinContainers(snap: QuestSnapshot): number {
-    return WATERSKINS.reduce((sum, name) => sum + heldCount(snap, name), 0);
-}
-
-export function waterskinDoses(snap: QuestSnapshot): number {
-    return WATERSKINS.slice(0, 4).reduce(
-        (sum, name, index) => sum + heldCount(snap, name) * (4 - index),
-        0
-    );
-}
-
 function configuredFoodName(): string | null {
     const name = QuestFood.name?.trim();
     return name ? name : null;
@@ -551,12 +535,12 @@ function preparationKeep(): string[] {
         ...configuredFoodForms(),
         ...DESERT_OUTFIT,
         ...SLAVE_OUTFIT,
-        ...WATERSKINS,
         ITEM.BAR,
         ITEM.FEATHER,
         ITEM.HAMMER,
         ITEM.PASS,
         ITEM.DISCLAIMER,
+        ITEM.CELL_KEY,
         ITEM.METAL_KEY,
         ITEM.BEDABIN_KEY,
         ITEM.PLANS,
@@ -576,7 +560,6 @@ function rescueKeep(): string[] {
         ...configuredFoodForms(),
         ...DESERT_OUTFIT,
         ...SLAVE_OUTFIT,
-        ...WATERSKINS,
         ITEM.PASS,
         ITEM.DISCLAIMER,
         ITEM.METAL_KEY,
@@ -589,6 +572,18 @@ function rescueKeep(): string[] {
 function hasPreparationSpillover(snap: QuestSnapshot): boolean {
     const keep = preparationKeep();
     return [...snap.inv.keys()].some(name => !keep.includes(name));
+}
+
+function reduceFoodLoadout(snap: QuestSnapshot): QuestStep | null {
+    if (held(snap, ITEM.ANA_BARREL) || (snap.stage ?? 0) >= TOURIST_TRAP_STAGE.REWARD) return null;
+    const food = configuredFoodName() ? configuredFoodCount(snap) : heldCount(snap, ITEM.KEBAB);
+    if (food <= FOOD_ENTRY_TARGET) return null;
+    const area = touristTrapArea(snap.tile);
+    if (area !== 'mainland' && area !== 'shantayNorth' && (snap.freeSlots ?? 2) >= 2) return null;
+    const route = safeRecoveryRoute(area) ?? routeNorth(snap);
+    if (route) return route;
+    const rations = [lower(ITEM.KEBAB), ...configuredFoodForms()];
+    return { kind: 'deposit', keep: preparationKeep().filter(name => !rations.includes(name)), exactKeep: true };
 }
 
 function makePreparationSpace(snap: QuestSnapshot, slots: number): QuestStep | null {
@@ -619,7 +614,6 @@ const SHANTAY_TARGETS: readonly PrepTarget[] = [
     { name: ITEM.DESERT_SHIRT, qty: 1, shop: SHANTAY_SHOP, estGp: 45 },
     { name: ITEM.DESERT_ROBE, qty: 1, shop: SHANTAY_SHOP, estGp: 45 },
     { name: ITEM.DESERT_BOOTS, qty: 1, shop: SHANTAY_SHOP, estGp: 25 },
-    { name: ITEM.WATERSKIN, qty: 4, shop: SHANTAY_SHOP, estGp: 35 },
     { name: ITEM.PASS, qty: 1, shop: SHANTAY_SHOP, estGp: 6 },
     { name: ITEM.BAR, qty: 3, shop: SHANTAY_SHOP, estGp: 8 },
     { name: ITEM.FEATHER, qty: 10, shop: SHANTAY_SHOP, estGp: 2 },
@@ -731,11 +725,6 @@ function preparationAcquisitionStep(snap: QuestSnapshot): QuestStep | null {
     for (const target of INITIAL_SHANTAY_TARGETS) {
         // Crossing south consumes the pass; buying another from the desert would route you back north and the quest would never start.
         if (target.name === ITEM.PASS && alreadySouth) {
-            continue;
-        }
-        if (target.name === ITEM.WATERSKIN) {
-            const water = sourceWaterDoses(snap, WATER_ENTRY_DOSES, WATER_ENTRY_DOSES, makePreparationSpace);
-            if (water) return water;
             continue;
         }
         const bankItem = withdrawBankedShortage(snap, target.name, target.qty);
@@ -1378,7 +1367,6 @@ function criticalSlotKeep(): string[] {
         ITEM.PICKAXE,
         ITEM.KEBAB,
         ...configuredFoodForms(),
-        ...WATERSKINS,
         ...DESERT_OUTFIT,
         ...SLAVE_OUTFIT,
         ITEM.METAL_KEY,
@@ -1831,46 +1819,6 @@ function routeNorth(snap: QuestSnapshot): QuestStep | null {
     return custom('cross the Shantay Pass north for supplies', crossShantayPassNorth);
 }
 
-function sourceWaterDoses(
-    snap: QuestSnapshot,
-    minimum: number,
-    target: number,
-    makeSpace: (snap: QuestSnapshot, slots: number) => QuestStep | null
-): QuestStep | null {
-    const doses = waterskinDoses(snap);
-    if (doses >= minimum) return null;
-    const route = safeRecoveryRoute(touristTrapArea(snap.tile));
-    if (route) return route;
-    const north = routeNorth(snap);
-    if (north) return north;
-    if (!snap.bankKnown) return scanBank();
-
-    const partialNames = WATERSKINS.slice(1).map(lower);
-    if ([...snap.inv.keys()].some(name => partialNames.includes(name))) {
-        const keep = rescueKeep().filter(name => !partialNames.includes(name));
-        return { kind: 'deposit', keep, exactKeep: true };
-    }
-
-    const missingContainers = Math.ceil((target - doses) / 4);
-    const bankedFull = banked(snap, ITEM.WATERSKIN);
-    if (bankedFull > 0) {
-        const qty = Math.min(missingContainers, bankedFull);
-        return makeSpace(snap, qty) ?? bankStep([{ name: ITEM.WATERSKIN, qty }]);
-    }
-    const purchaseCost = 35 * missingContainers;
-    const coins = sourceCoins(snap, purchaseCost, 'replace Tourist Trap waterskins');
-    if (coins) return coins;
-    const space = makeSpace(snap, missingContainers);
-    if (space) return space;
-    return {
-        kind: 'buy',
-        item: ITEM.WATERSKIN,
-        qty: missingContainers,
-        shop: SHANTAY_SHOP,
-        estGp: purchaseCost
-    };
-}
-
 function sourceConfiguredSurvivalFood(snap: QuestSnapshot): QuestStep | null {
     const area = touristTrapArea(snap.tile);
     const minimum = area === 'mainland' || area === 'shantayNorth'
@@ -1923,18 +1871,12 @@ function survivalStep(snap: QuestSnapshot): QuestStep | null {
             : null;
         if (ration) return ration;
     }
-    const area = touristTrapArea(snap.tile);
-    const minimum = area === 'mainland' || area === 'shantayNorth'
-        ? WATER_ENTRY_FLOOR
-        : WATER_RESTOCK_FLOOR;
-    return sourceWaterDoses(snap, minimum, WATER_ENTRY_DOSES, makeRescueSpace);
+    return null;
 }
 
 function routeSouth(snap: QuestSnapshot): QuestStep | null {
     const area = touristTrapArea(snap.tile);
     if (area !== 'mainland' && area !== 'shantayNorth') return null;
-    const skins = sourceWaterDoses(snap, WATER_ENTRY_FLOOR, WATER_ENTRY_DOSES, makeRescueSpace);
-    if (skins) return skins;
     if (!held(snap, ITEM.PASS)) {
         if (!snap.bankKnown) return scanBank();
         if (banked(snap, ITEM.PASS) > 0) return bankStep([{ name: ITEM.PASS, qty: 1 }]);
@@ -2199,14 +2141,12 @@ function stepLabel(step: QuestStep): string {
 export function observeTouristTrap(snap: QuestSnapshot, step: QuestStep): readonly string[] {
     const area = touristTrapArea(snap.tile);
     const tile = snap.tile ? `(${snap.tile.x},${snap.tile.z}${snap.tile.level ? `,L${snap.tile.level}` : ''})` : '(no tile)';
-    const water = waterskinDoses(snap);
-    const containers = waterskinContainers(snap);
     const food = configuredFoodName();
     const desertWorn = DESERT_OUTFIT.filter(n => worn(snap, n)).length;
     const slaveOwned = SLAVE_OUTFIT.filter(n => ownedNow(snap, n) > 0).length;
     const lines = [
         `tt: stage=${snap.stage ?? '?'} journal=${snap.journal} area=${area} tile=${tile} free=${snap.freeSlots ?? '?'} bankKnown=${snap.bankKnown === true}`,
-        `tt: water=${water} doses across ${containers} skins food=${food ?? '(disabled)'}:${configuredFoodCount(snap)} `
+        `tt: food=${food ?? '(disabled)'}:${configuredFoodCount(snap)} `
             + `pass=${heldCount(snap, ITEM.PASS)} coins=${heldCount(snap, ITEM.COINS)} `
             + `pick=${ownedNow(snap, ITEM.PICKAXE)} metalKey=${heldCount(snap, ITEM.METAL_KEY)} `
             + `bedabinKey=${heldCount(snap, ITEM.BEDABIN_KEY)} pineapple=${heldCount(snap, ITEM.PINEAPPLE)} `
@@ -2216,9 +2156,6 @@ export function observeTouristTrap(snap: QuestSnapshot, step: QuestStep): readon
             + `dartTip=${heldCount(snap, ITEM.DART_TIP)} dart=${heldCount(snap, ITEM.DART)}`,
         `tt: decide→ ${stepLabel(step)}`
     ];
-    if ((area === 'desert' || area === 'irena' || area === 'bedabin') && water < WATER_RESTOCK_FLOOR) {
-        lines.push(`tt: WARN only ${water} waterskin doses in the desert — below ${WATER_RESTOCK_FLOOR}-dose safety floor`);
-    }
     if (step.kind === 'wait' && step.reason === 'death') {
         lines.push('tt: death dump — next loop re-provisions (ownsInventory) then re-decides from journal');
     }
@@ -2244,6 +2181,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
         // The supply route can't leave this component without the disguise it wants to replace, so recover the outfit here first.
         return custom('return to the punishment mine to recover the slave disguise', returnToPunishmentMineForOutfit);
     }
+    const foodSpace = reduceFoodLoadout(snap);
+    if (foodSpace) return foodSpace;
     if (stage >= TOURIST_TRAP_STAGE.STARTED
         && stage <= TOURIST_TRAP_STAGE.REWARD
         && (stage < TOURIST_TRAP_STAGE.REWARD
