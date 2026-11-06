@@ -8,7 +8,6 @@ import {
     strictTouristTrapChoice,
     TOURIST_TRAP_STAGE,
     touristTrapArea,
-    waterskinDoses,
     type SurfaceRescueOperations
 } from '#/bot/api/ai/quests/defs/touristtrap.js';
 import type { WorldTile } from '#/bot/adapter/ClientAdapter.js';
@@ -47,11 +46,10 @@ interface SnapshotOptions {
     bankKnown?: boolean;
     tile?: WorldTile | null;
     freeSlots?: number;
-    /** Charged waterskins. Default 4 so desert decide fixtures model survival; set 0 for thirst paths. */
     skins?: number;
     /** Combat food. Default 8 kebabs so captain-fight fixtures model survival; set 0 for restock paths. */
     kebabs?: number;
-    /** Configured Trout. Default 16 so non-survival fixtures exercise their intended decision. */
+    /** Configured Trout. Default 8 so non-survival fixtures exercise their intended decision. */
     food?: number;
     /** Rescue float. Default 200 so non-funding fixtures exercise their intended decision. */
     coins?: number;
@@ -65,7 +63,7 @@ function snap(options: SnapshotOptions = {}): QuestSnapshot {
     const inv = countMap(options.inv);
     const hasChargedSkin = ['waterskin(4)', 'waterskin(3)', 'waterskin(2)', 'waterskin(1)']
         .some(name => (inv.get(name) ?? 0) > 0);
-    const skins = options.skins ?? 4;
+    const skins = options.skins ?? 0;
     if (!hasChargedSkin && skins > 0) {
         inv.set('waterskin(4)', skins);
     }
@@ -73,7 +71,7 @@ function snap(options: SnapshotOptions = {}): QuestSnapshot {
     if ((inv.get('kebab') ?? 0) === 0 && kebabs > 0) {
         inv.set('kebab', kebabs);
     }
-    const food = options.food ?? 16;
+    const food = options.food ?? 8;
     if ((inv.get('trout') ?? 0) === 0 && food > 0) {
         inv.set('trout', food);
     }
@@ -272,7 +270,6 @@ describe('Tourist Trap visible-stage decision matrix', () => {
         ['Desert shirt', 1],
         ['Desert robe', 1],
         ['Desert boots', 1],
-        ['Waterskin(4)', 4],
         ['Bronze bar', 3],
         ['Feather', 50],
         ['Hammer', 1],
@@ -635,6 +632,49 @@ describe('Tourist Trap held, banked, and missing critical-item recovery', () => 
 });
 
 describe('Tourist Trap disguise and rescue restart matrix', () => {
+    test('stage 19 rebuilds the desert outfit before crossing south to resume the rescue', () => {
+        QuestFood.name = 'Cake';
+        const inventory: CountEntry[] = [
+            ['Cake', 8], ['Metal key', 1], ['Bronze pickaxe', 1], ['Shantay pass', 1],
+            ...SLAVE_OUTFIT.map(name => [name, 1] as const)
+        ];
+        const snapshot = snap({
+            stage: 19, tile: tile(3308, 3120), inv: inventory,
+            bank: DESERT_OUTFIT.map(name => [name, 1] as const),
+            food: 0, kebabs: 0, coins: 760, freeSlots: 12
+        });
+        for (const name of DESERT_OUTFIT) {
+            expect(decide(snapshot)).toMatchObject({ kind: 'withdraw', items: [{ name, qty: 1 }] });
+            snapshot.inv.set(name.toLowerCase(), 1);
+            snapshot.freeSlots!--;
+        }
+        expect(customName(decide(snapshot))).toBe('cross the Shantay Pass');
+        snapshot.tile = tile(3304, 3115);
+        snapshot.inv.delete('shantay pass');
+        expect(customName(decide(snapshot))).toBe('wear the camp-safe desert loadout');
+        snapshot.worn = new Set(DESERT_WORN.map(name => name.toLowerCase()));
+        expect(customName(decide(snapshot))).toBe('unlock the desert mining camp');
+    });
+
+    test('stage 19 replaces a missing pickaxe before spending another Shantay pass', () => {
+        const snapshot = snap({
+            stage: 19, tile: MAINLAND, worn: DESERT_OUTFIT,
+            inv: [['Metal key', 1], ['Shantay pass', 1], ...SLAVE_OUTFIT.map(name => [name, 1] as const)],
+            bank: [['Bronze pickaxe', 1]]
+        });
+        expect(decide(snapshot)).toMatchObject({ kind: 'withdraw', items: [{ name: 'Bronze pickaxe', qty: 1 }] });
+    });
+
+    test('stage 19 carrying Ana crosses south without rebuilding a mining outfit', () => {
+        const snapshot = snap({
+            stage: 19, tile: MAINLAND, inv: [['Ana in a barrel', 1], ['Shantay pass', 1]],
+            food: 0, kebabs: 0, coins: 0
+        });
+        expect(customName(decide(snapshot))).toBe('cross the Shantay Pass');
+        snapshot.tile = IRENA;
+        expect(customName(decide(snapshot))).toBe('return Ana to Irena');
+    });
+
     test('all eight slave-outfit worn subsets either finish dressing or enter the mine', () => {
         for (let mask = 0; mask < 8; mask++) {
             const wornPieces = SLAVE_OUTFIT.filter((_, index) => (mask & (1 << index)) !== 0);
@@ -910,7 +950,7 @@ describe('Tourist Trap surface rescue orchestration', () => {
 });
 
 describe('Tourist Trap observe (logging pilot)', () => {
-    test('dumps stage, area, skins, and decide step', () => {
+    test('dumps stage, area, food, and decide step', () => {
         const s = snap({
             stage: TOURIST_TRAP_STAGE.STARTED,
             tile: CAPTAIN,
@@ -925,12 +965,12 @@ describe('Tourist Trap observe (logging pilot)', () => {
         const lines = observeTouristTrap(s, step);
         expect(lines.some(l => l.includes('stage=1'))).toBe(true);
         expect(lines.some(l => l.includes('area=desert') || l.includes('area='))).toBe(true);
-        expect(lines.some(l => l.includes('water=8 doses across 2 skins'))).toBe(true);
+        expect(lines.some(l => l.includes('food=Trout:8'))).toBe(true);
         expect(lines.some(l => l.startsWith('tt: decide→'))).toBe(true);
         expect(lines.some(l => l.includes('WARN') && l.includes('waterskin'))).toBe(false);
     });
 
-    test('warns when in desert with zero charged waterskins', () => {
+    test('does not warn about missing waterskins', () => {
         const s = snap({
             stage: TOURIST_TRAP_STAGE.STARTED,
             tile: CAPTAIN,
@@ -939,33 +979,28 @@ describe('Tourist Trap observe (logging pilot)', () => {
             skins: 0
         });
         const lines = observeTouristTrap(s, { kind: 'wait', reason: 'death' });
-        expect(lines.some(l => l.includes('WARN') && l.includes('0 waterskin doses'))).toBe(true);
+        expect(lines.some(l => l.includes('WARN') && l.includes('waterskin'))).toBe(false);
         expect(lines.some(l => l.includes('death dump'))).toBe(true);
     });
 
-    test('refuses to re-enter the desert without charged waterskins after death recovery', () => {
-        const s = snap({
+    test('re-enters the desert without waterskins after death recovery', () => {
+        const step = decide(snap({
             stage: TOURIST_TRAP_STAGE.LEARNED_DARTS,
             tile: MAINLAND,
-            inv: [['Coins', 200]],
+            inv: [['Coins', 200], ['Shantay pass', 1]],
             skins: 0
-        });
-        const step = decide(s);
-        expect(step.kind).toBe('buy');
-        if (step.kind === 'buy') {
-            expect(step.item).toBe('Waterskin(4)');
-            expect(step.qty).toBe(4);
-        }
+        }));
+        expect(customName(step)).toBe('cross the Shantay Pass');
     });
 
-    test('already south with zero skins routes north for restock before pineapple recovery', () => {
+    test('already south with no waterskins continues pineapple recovery', () => {
         const s = snap({
             stage: TOURIST_TRAP_STAGE.LEARNED_DARTS,
             tile: IRENA,
             inv: [['Coins', 50]],
             skins: 0
         });
-        expect(customName(decide(s))).toBe('cross the Shantay Pass north for supplies');
+        expect(customName(decide(s))).toBe('replace the Tenti pineapple at Al Shabim');
     });
 
     test('configured food permits captain recovery without kebabs', () => {
@@ -981,14 +1016,6 @@ describe('Tourist Trap observe (logging pilot)', () => {
 });
 
 describe('Tourist Trap survival accounting', () => {
-    test('counts doses rather than charged containers', () => {
-        expect(waterskinDoses(snap({ inv: [['Waterskin(1)', 4]], skins: 0 }))).toBe(4);
-        expect(waterskinDoses(snap({
-            inv: [['Waterskin(4)', 1], ['Waterskin(3)', 1], ['Waterskin(2)', 1], ['Waterskin(1)', 1]],
-            skins: 0
-        }))).toBe(10);
-    });
-
     test('withdraws only the configured food', () => {
         const step = decide(snap({
             stage: TOURIST_TRAP_STAGE.STARTED,
@@ -998,7 +1025,78 @@ describe('Tourist Trap survival accounting', () => {
             kebabs: 0,
             freeSlots: 20
         }));
-        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Trout', qty: 16 }]);
+        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Trout', qty: 8 }]);
+    });
+
+    test('leaves space for quest pickups after provisioning a forge loadout', () => {
+        const inventory: CountEntry[] = [
+            ...DESERT_OUTFIT.map(name => [name, 1] as const),
+            ...SLAVE_OUTFIT.map(name => [name, 1] as const),
+            ['Bronze pickaxe', 1], ['Coins', 1000], ['Shantay pass', 1],
+            ['Waterskin(4)', 4], ['Metal key', 1], ['Bedobin key', 1],
+            ['Technical plans', 1], ['Bronze bar', 1], ['Hammer', 1], ['Feather', 10]
+        ];
+        const freeSlots = 28 - inventory.reduce((slots, [name, count]) =>
+            slots + (['Coins', 'Feather', 'Shantay pass'].includes(name) ? 1 : count), 0);
+        const step = decide(snap({
+            stage: TOURIST_TRAP_STAGE.SHOWN_PLANS, tile: MAINLAND,
+            inv: inventory, bank: [['Trout', 100]], food: 0, kebabs: 0, freeSlots
+        }));
+        expect(step.kind).toBe('withdraw');
+        if (step.kind !== 'withdraw') return;
+        expect(step.items).toEqual([{ name: 'Trout', qty: 8 }]);
+        expect(freeSlots - step.items.reduce((slots, item) => slots + item.qty, 0)).toBeGreaterThanOrEqual(1);
+    });
+
+    for (const food of ['Trout', 'Cake', null]) {
+        test(`banks an oversized ${food ?? 'Kebab'} loadout and preserves quest items`, () => {
+            QuestFood.name = food;
+            const rations: CountEntry[] = food === 'Cake'
+                ? [['Cake', 8], ['2/3 cake', 4], ['Slice of cake', 4]]
+                : [[food ?? 'Kebab', 16]];
+            const inventory: CountEntry[] = [
+                ...rations, ['Metal key', 1], ['Cell door key', 1], ['Bedobin key', 1], ['Technical plans', 1],
+                ['Bronze bar', 1], ['Hammer', 1], ['Feather', 10]
+            ];
+            const step = decide(snap({
+                stage: TOURIST_TRAP_STAGE.SHOWN_PLANS, tile: MAINLAND,
+                inv: inventory, food: 0, kebabs: 0, freeSlots: 0
+            }));
+            expect(step.kind).toBe('deposit');
+            if (step.kind !== 'deposit') return;
+            expect(step.exactKeep).toBe(true);
+            for (const [name] of rations) expect(step.keep).not.toContain(name.toLowerCase());
+            for (const [name] of inventory.slice(rations.length)) expect(step.keep).toContain(name.toLowerCase());
+            const remaining = inventory.filter(([name]) => step.keep.includes(name.toLowerCase()));
+            const restock = decide(snap({
+                stage: TOURIST_TRAP_STAGE.SHOWN_PLANS, tile: MAINLAND,
+                inv: remaining, bank: rations, food: 0, kebabs: 0, freeSlots: 16
+            }));
+            expect(restock.kind === 'withdraw' && restock.items).toEqual([{ name: food ?? 'Kebab', qty: 8 }]);
+        });
+    }
+
+    test('leaves the mine before banking excess food from a full pack', () => {
+        const step = decide(snap({
+            stage: TOURIST_TRAP_STAGE.GIVEN_PINEAPPLE, tile: MINE_DEEP,
+            inv: [['Metal key', 1]], worn: SLAVE_WORN, food: 16, kebabs: 0, freeSlots: 0
+        }));
+        expect(customName(step)).toBe('ride back to the lower mine for item recovery');
+    });
+
+    test('claims the reward without a food-banking detour', () => {
+        const step = decide(snap({
+            stage: TOURIST_TRAP_STAGE.REWARD, tile: IRENA, food: 16, kebabs: 0, freeSlots: 0
+        }));
+        expect(customName(step)).toBe('claim both Tourist Trap skill rewards');
+    });
+
+    test('does not interrupt the rescue while carrying Ana to bank excess food', () => {
+        const step = decide(snap({
+            stage: TOURIST_TRAP_STAGE.RESCUE, tile: CAMP_SURFACE,
+            inv: [['Ana in a barrel', 1]], worn: SLAVE_WORN, food: 16, kebabs: 0, freeSlots: 0
+        }));
+        expect(customName(step)).toBe('resolve the surface winch/cart checkpoint');
     });
 
     test('tops up a partial configured loadout while already on the mainland', () => {
@@ -1006,25 +1104,25 @@ describe('Tourist Trap survival accounting', () => {
             stage: TOURIST_TRAP_STAGE.RESCUE,
             tile: MAINLAND,
             bank: [['Trout', 8]],
-            food: 8,
+            food: 3,
             kebabs: 0,
             freeSlots: 20
         }));
-        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Trout', qty: 8 }]);
+        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Trout', qty: 5 }]);
     });
 
     test('fails explicitly when the configured food target is unavailable', () => {
         const step = decide(snap({
             stage: TOURIST_TRAP_STAGE.STARTED,
             tile: MAINLAND,
-            bank: [['Trout', 15], ['Kebab', 50]],
+            bank: [['Trout', 7], ['Kebab', 50]],
             food: 0,
             kebabs: 0,
             freeSlots: 20
         }));
         expect(step).toEqual({
             kind: 'wait',
-            reason: "configured Tourist Trap food 'Trout' unavailable: need 16, carried 0, banked 15"
+            reason: "configured Tourist Trap food 'Trout' unavailable: need 8, carried 0, banked 7"
         });
     });
 
@@ -1041,14 +1139,14 @@ describe('Tourist Trap survival accounting', () => {
         expect(customName(step)).toBe('provoke the Mercenary Captain');
     });
 
-    test('quest-ration mode tops up to sixteen on the mainland but accepts eight in the desert', () => {
+    test('quest-ration mode tops up to eight on the mainland and accepts eight in the desert', () => {
         QuestFood.name = null;
         expect(customName(decide(snap({
             stage: TOURIST_TRAP_STAGE.RESCUE,
             tile: MAINLAND,
-            kebabs: 8,
+            kebabs: 3,
             food: 0
-        })))).toBe('buy 8 Kebabs');
+        })))).toBe('buy 5 Kebabs');
 
         expect(customName(decide(snap({
             stage: TOURIST_TRAP_STAGE.KILLED_CAPTAIN,
@@ -1060,7 +1158,7 @@ describe('Tourist Trap survival accounting', () => {
         })))).toBe('provoke and defeat the respawned Mercenary Captain');
     });
 
-    test('entry hysteresis does not detour for one consumed food or water dose', () => {
+    test('entry hysteresis does not detour for one consumed food', () => {
         QuestFood.name = null;
         const step = decide(snap({
             stage: TOURIST_TRAP_STAGE.RESCUE,
@@ -1072,7 +1170,7 @@ describe('Tourist Trap survival accounting', () => {
                 ['Metal key', 1]
             ],
             worn: DESERT_WORN,
-            kebabs: 15,
+            kebabs: 7,
             food: 0,
             skins: 0,
             coins: 200,
@@ -1095,7 +1193,7 @@ describe('Tourist Trap survival accounting', () => {
             tile: tile(3308, 3120),
             inv: rescuePack,
             worn: DESERT_WORN,
-            kebabs: 16,
+            kebabs: 8,
             food: 0,
             skins: 0,
             coins: 195,
@@ -1112,7 +1210,7 @@ describe('Tourist Trap survival accounting', () => {
             inv: SLAVE_OUTFIT.map(name => [name, 1] as const),
             worn: DESERT_WORN,
             bank: [['Coins', 500]],
-            kebabs: 16,
+            kebabs: 8,
             food: 0,
             coins: 99,
             freeSlots: 8
@@ -1132,7 +1230,7 @@ describe('Tourist Trap survival accounting', () => {
             stage: TOURIST_TRAP_STAGE.ENTERED_CAMP,
             tile: MAINLAND,
             inv: sharedInventory,
-            kebabs: 16,
+            kebabs: 8,
             food: 0,
             coins: 160,
             freeSlots: 1
@@ -1143,7 +1241,7 @@ describe('Tourist Trap survival accounting', () => {
             stage: TOURIST_TRAP_STAGE.ENTERED_CAMP,
             tile: MAINLAND,
             inv: [...sharedInventory, ['Desert boots', 1]],
-            kebabs: 16,
+            kebabs: 8,
             food: 0,
             coins: 135,
             freeSlots: 0
@@ -1151,30 +1249,36 @@ describe('Tourist Trap survival accounting', () => {
         expect(customName(makeSpace)).toBe('wear the first desert outfit to free recovery slots');
     });
 
-    test('normalizes partial skins before adding full containers', () => {
+    for (const skins of [[], [['Waterskin(1)', 4]], [['Waterskin(4)', 1]]] as const) {
+        test(`does not restock water before returning to the mine with ${JSON.stringify(skins)}`, () => {
+            const step = decide(snap({
+                stage: TOURIST_TRAP_STAGE.LEARNED_DARTS,
+                tile: MAINLAND,
+                inv: [...skins, ['Tenti pineapple', 1], ['Shantay pass', 1], ['Metal key', 1],
+                    ...SLAVE_OUTFIT.map(name => [name, 1] as const)],
+                worn: DESERT_WORN,
+                bank: [['Waterskin(4)', 50]],
+                skins: 0
+            }));
+            expect(customName(step)).toBe('cross the Shantay Pass');
+        });
+    }
+
+    test('banks existing waterskins instead of reserving loadout space for them', () => {
         const step = decide(snap({
-            stage: TOURIST_TRAP_STAGE.LEARNED_DARTS,
+            stage: TOURIST_TRAP_STAGE.NOT_STARTED,
             tile: MAINLAND,
-            inv: [['Waterskin(1)', 4], ['Tenti pineapple', 1]],
-            bank: [['Waterskin(4)', 4]],
-            skins: 0
+            inv: [['Waterskin(4)', 4], ['Waterskin(0)', 1], ['Metal key', 1]],
+            worn: DESERT_WORN,
+            coins: 1000,
+            kebabs: 0
         }));
         expect(step.kind).toBe('deposit');
-        if (step.kind === 'deposit') {
-            expect(step.keep).not.toContain('waterskin(1)');
-            expect(step.keep).toContain('waterskin(4)');
-        }
-    });
-
-    test('withdraws only the full skins needed to reach the entry-dose target', () => {
-        const step = decide(snap({
-            stage: TOURIST_TRAP_STAGE.LEARNED_DARTS,
-            tile: MAINLAND,
-            inv: [['Waterskin(4)', 1], ['Tenti pineapple', 1]],
-            bank: [['Waterskin(4)', 3]],
-            skins: 0
-        }));
-        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Waterskin(4)', qty: 3 }]);
+        if (step.kind !== 'deposit') return;
+        expect(step.keep).not.toContain('waterskin(4)');
+        expect(step.keep).not.toContain('waterskin(0)');
+        expect(step.keep).toContain('metal key');
+        expect(step.keep).toContain('trout');
     });
 
     test('recovers a missing slave garment locally before trying to restock', () => {

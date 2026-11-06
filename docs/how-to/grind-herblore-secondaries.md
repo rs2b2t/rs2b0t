@@ -4,6 +4,13 @@ Select **Chocolate dust** or **Unicorn horn dust** in HerbloreSecondaries.
 Keep a pestle and mortar available. Chocolate dust uses coins to buy bars at
 Wydin's shop; unicorn horn dust withdraws horns from the bank and deposits the dust.
 
+Select **Blue dragon scale** to collect raw scales in Taverley Dungeon and bank
+them at Falador West. Have a Dusty key, Dragonfire shield, and food available in
+your inventory or bank. The collector equips the shield, uses the key to enter
+the lair, and opens the gate from inside when returning to bank. It keeps the key
+between trips and stops at the bank if the key or shield is unavailable.
+Scale trips cap food at 25 to leave room for the key, shield, and a pickup.
+
 Grinding sends five item actions per game tick. The last batch uses the remaining
 ingredients when fewer than five remain. Pending events, dialogs, an open bank,
 or a missing tool stop the next batch.

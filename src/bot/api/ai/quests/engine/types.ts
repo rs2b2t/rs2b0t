@@ -105,6 +105,7 @@ export interface QuestSustain {
 
 export interface QuestModule {
     record: QuestRecord;
+    autoRetaliate?: boolean | ((snap: QuestSnapshot) => boolean);
     onStart?: () => void;
     hops?: LadderHop[];
     // Why: most quests sit in one town, so naming its bank beats working it out.

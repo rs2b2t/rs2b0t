@@ -466,6 +466,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const watchtower: QuestModule = {
+    autoRetaliate: snap => !inDragonLair(snap.tile),
     record: QUESTS.find(record => record.id === 'itwatchtower')!,
     bank: WT_TILE.YANILLE_BANK,
     ownsInventory: true,

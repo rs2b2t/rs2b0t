@@ -234,6 +234,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 const FOOD = 8;
 
 export const fightarena: QuestModule = {
+    autoRetaliate: false,
     record: QUESTS.find(r => r.id === 'arena')!,
     resumeAt: tile => ['arena', 'prisonCell'].includes(pocketOf(tile)),
     pray: { protect: 'melee', potions: 2 },

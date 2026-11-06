@@ -125,6 +125,7 @@ function where(snap: QuestSnapshot): string {
 }
 
 export const witchshouse: QuestModule = {
+    autoRetaliate: false,
     record: QUESTS.find(r => r.id === 'ball')!,
     bank: FALADOR_WEST_BANK,
     pray: { protect: 'melee', potions: 2 },

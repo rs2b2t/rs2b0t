@@ -19,6 +19,7 @@ import { evaluate } from '../EligibilityEvaluator.js';
 import { QUESTS } from '../data/quests.js';
 import { QUEST_DEFS, defById } from '../defs/index.js';
 import { executeStep } from '../exec/steps.js';
+import { prepareQuestRetaliation } from './retaliation.js';
 import type { BankInventorySnapshot, PlayerState, QuestEligibility, QuestRecord } from '../types.js';
 import { COIN_FLOAT, coinFloatPlan, depositPlan, floatDrawPlan, planProvisioning, shouldFreshenPack } from './provisioning.js';
 
@@ -30,6 +31,9 @@ import { NO_PROGRESS_PARK, NO_PROGRESS_WARN, ProgressWatchdog, progressSignature
 import { PRAYER_POTION, prayerUpkeep } from '../prayer.js';
 import { FAIL_WARN, StepTracker, formatDuration, formatTile, invDelta } from './trace.js';
 import { GameMessages } from '../../../chatbox/gameMessages.js';
+import { QuestBankReset } from './recovery.js';
+import { questPreparationRequest } from './preparationPolicy.js';
+import type { QuestPreparationRequest, QuestPreparationResult } from './preparationTypes.js';
 /** What the engine needs from whatever script is driving it. */
 export interface QuestHost {
     log(msg: string): void;
@@ -42,6 +46,12 @@ export interface QuestHost {
     noteState(rows: QueueRow[], runningId: string | null, stepDesc: string, noProgress: number, parked: number): void;
     /** Why: the engine only reports it's out of work; stopping the run is the script's call. */
     finish(reason: string): void;
+    automaticRecovery?(): boolean;
+    restartPending?(): boolean;
+    consumeRestart?(): boolean;
+    prepare?(request: QuestPreparationRequest): Promise<QuestPreparationResult>;
+    preparationStatus?(): string;
+    stopPreparation?(): void;
 }
 
 const PARK_GIVE_UP = 3;
@@ -118,6 +128,8 @@ export class QuestEngine implements Task {
     private noProgressCount = 0;
     private combatIdleSince: number | null = null;
     private combatXp = 0;
+    private progressKey = '';
+    private progressAt = 0;
 
     private readonly parked = new Set<string>();
     private readonly parkCounts = new Map<string, number>();
@@ -152,6 +164,14 @@ export class QuestEngine implements Task {
     private readonly tracker = new StepTracker();
     private tick = 0;
     private failStreak = 0;
+    private readonly prepared = new Set<string>();
+    private readonly deathCounts = new Map<string, number>();
+    private readonly restartCounts = new Map<string, number>();
+    private recovery: { id: string; mode: 'refresh' | 'bank'; reset: QuestBankReset; tries: number; skip?: boolean; abort?: string } | null = null;
+    private preparation: {
+        id: string; request: QuestPreparationRequest; reset: QuestBankReset;
+        phase: 'bank' | 'work' | 'restore'; tries: number; error?: string; skip?: boolean; retry?: boolean;
+    } | null = null;
 
     constructor(private readonly host: QuestHost) {}
 
@@ -162,6 +182,19 @@ export class QuestEngine implements Task {
     async execute(): Promise<void> {
         // Death participates in EventSignal, so consume it before checking that signal.
         if (await this.recoverDeathIfPending()) {
+            return;
+        }
+        if (this.preparation) {
+            await this.runPreparation();
+            return;
+        }
+        if (this.recovery) {
+            await this.runRecovery();
+            return;
+        }
+        if (this.host.consumeRestart?.() && this.runningId) {
+            this.beginRecovery(this.runningId, 'restart requested', true);
+            await this.runRecovery();
             return;
         }
         // Apply Skip before the random-event yield so a mid-walk interrupt lands on the next quest instead of spinning on EventSignal.pending().
@@ -208,6 +241,11 @@ export class QuestEngine implements Task {
 
         const skip = this.host.consumeSkip();
         if (skip && this.runningId !== null) {
+            if (this.host.automaticRecovery?.()) {
+                this.recovery = { id: this.runningId, mode: 'bank', reset: new QuestBankReset(this.host.foodItem()), tries: 0, skip: true };
+                await this.runRecovery();
+                return;
+            }
             this.applyUserSkip(this.runningId, elig);
         }
 
@@ -227,6 +265,15 @@ export class QuestEngine implements Task {
                 this.runningId = id;
             } else {
                 this.runningId = nextQuest(this.order, selectable, elig, this.parked);
+                if (!this.runningId && this.host.prepare) {
+                    this.runningId = this.order.find(id => {
+                        const record = defById(id)?.record;
+                        return selectable.has(id) && record && elig.get(id)?.status !== 'DONE'
+                            && Quests.status(record.name) !== 'unknown'
+                            && player.questPoints >= (record.requirements.minQuestPoints ?? 0)
+                            && (record.requirements.quests ?? []).every(q => player.completedQuests.has(q));
+                    }) ?? null;
+                }
             }
         }
         const rows = this.applyBlocked(queueRows(this.order, picked, elig, this.parked, this.runningId));
@@ -249,6 +296,7 @@ export class QuestEngine implements Task {
             return;
         }
         if (!this.readinessWarned.has(id)) {
+            this.host.noteState(rows, id, 'checking quest requirements', this.noProgressCount, this.parked.size);
             this.readinessWarned.add(id);
             module.onStart?.();
             const note = module.warnReadiness?.();
@@ -259,12 +307,42 @@ export class QuestEngine implements Task {
         const progress = await module.readProgress?.();
         const stage = progress ? progress.stage : await module.readStage?.();
         const snap = this.buildSnapshot(module, stage, progress);
+        if (snap.journal === 'unknown') {
+            this.host.noteState(rows, id, 'waiting for quest journal', 0, this.parked.size);
+            return;
+        }
+        if (this.host.prepare && !this.prepared.has(id) && snap.journal !== 'complete') {
+            const stock = new Map(this.lastBankCounts);
+            const stockIds = new Map(this.lastBankIdCounts);
+            for (const item of [...Inventory.items(), ...Equipment.items()]) {
+                if (item.name) stock.set(item.name.toLowerCase(), (stock.get(item.name.toLowerCase()) ?? 0) + item.count);
+                stockIds.set(item.id, (stockIds.get(item.id) ?? 0) + item.count);
+            }
+            const request = questPreparationRequest(module, this.host.foodItem(), snap.journal, stock, stockIds);
+            if (request && this.needsPreparation(request, stock)) {
+                this.preparation = { id, request, reset: new QuestBankReset(this.host.foodItem()), phase: 'bank', tries: 0 };
+                await this.runPreparation();
+                return;
+            }
+            this.prepared.add(id);
+        }
         const inQuestArea = snap.tile !== null && snap.tile !== undefined && module.resumeAt?.(snap.tile) === true;
         const combatActive = this.combatAdvancing(snap);
+        if (this.host.automaticRecovery?.()) {
+            const key = `${id}|${progressSignature({ ...snap, tile: undefined })}`;
+            if (key !== this.progressKey || combatActive) {
+                this.progressKey = key;
+                this.progressAt = Date.now();
+            } else if (Date.now() - this.progressAt >= 300_000) {
+                this.beginRecovery(id, 'five minutes without quest, inventory or combat progress');
+                return;
+            }
+        }
 
         if (this.pendingFailedSignature !== null) {
             if (!combatActive && progressSignature(snap) === this.pendingFailedSignature) {
                 this.host.log(`no progress after ${this.noProgressCount} steps on ${module.record.name}`);
+                if (this.beginRecovery(id, 'no progress after failed step')) return;
                 this.parkOrGiveUp(id, module.record.name);
                 this.resetWatchdog();
                 this.runningId = null;
@@ -350,7 +428,7 @@ export class QuestEngine implements Task {
             }
         }
         if (!inQuestArea && !this.provisioned.has(id)) {
-            const plan = planProvisioning(module.record.items, snap.inv, this.lastBankCounts, equipmentCounts());
+            const plan = planProvisioning(snap.journal === 'inProgress' && this.host.prepare ? [] : module.record.items, snap.inv, this.lastBankCounts, equipmentCounts());
             // Why: restoring the float after every purchase made a 10gp gate emit withdraw Coins every tick while egg/milk/flour were outstanding.
             const coinPlan = coinFloatPlan(
                 snap.inv.get('coins') ?? 0,
@@ -469,6 +547,7 @@ export class QuestEngine implements Task {
             this.waitCount = key === this.waitKey ? this.waitCount + 1 : 1;
             this.waitKey = key;
             if (this.waitCount >= WAIT_PARK) {
+                if (this.beginRecovery(id, `waiting: ${step.reason}`)) return;
                 this.host.log(`${module.record.name} waiting on '${step.reason}' with no way to resolve it — parking`);
                 this.parkOrGiveUp(id, module.record.name, [`waiting: ${step.reason}`]);
                 this.resetWatchdog();
@@ -486,7 +565,7 @@ export class QuestEngine implements Task {
             ? { ...step, leaveOpen: true }
             : step;
         const startedAt = Date.now();
-        const ok = await executeStep(bankAwareStep, module.hops ?? [], m => {
+        const ok = await prepareQuestRetaliation(module, snap) && await executeStep(bankAwareStep, module.hops ?? [], m => {
             // Verbose keeps the repeats: a sub-log that fires once per rock is the record of a mining leg.
             if (verbose) {
                 this.host.log(`  ${m}`);
@@ -547,6 +626,7 @@ export class QuestEngine implements Task {
                 this.pendingFailedSignature = signature;
             } else if (count >= NO_PROGRESS_PARK) {
                 this.host.log(`no progress after ${count} steps on ${module.record.name}`);
+                if (this.beginRecovery(id, `no progress on ${stepDesc}`)) return;
                 this.parkOrGiveUp(id, module.record.name);
                 this.resetWatchdog();
                 this.runningId = null;
@@ -555,6 +635,161 @@ export class QuestEngine implements Task {
 
         this.refreshBankCounts();
         await Execution.delayTicks(1);
+    }
+
+    private needsPreparation(request: QuestPreparationRequest, stock: ReadonlyMap<string, number>): boolean {
+        return (request.skills ?? []).some(req => Skills.level(req.skill) < req.level)
+            || (request.items ?? []).some(req => (stock.get(req.item.toLowerCase()) ?? 0) < req.count)
+            || !!request.food && (stock.get(request.food.item.toLowerCase()) ?? 0) < request.food.count;
+    }
+
+    private currentRows(): QueueRow[] {
+        const player = this.readPlayerState();
+        const items = this.readItemSnapshot();
+        const elig = new Map(this.records.map(record => [record.id, evaluate(record, player, items, Quests.status(record.name))]));
+        return this.applyBlocked(queueRows(this.order, this.host.pickedIds(), elig, this.parked, this.runningId));
+    }
+
+    private preparationNote(id: string, message: string): void {
+        this.host.noteState(this.currentRows(), id, message, this.noProgressCount, this.parked.size);
+    }
+
+    private async runPreparation(): Promise<void> {
+        const task = this.preparation;
+        if (!task) return;
+        const module = defById(task.id)!;
+        const log = (message: string): void => this.host.log(`${module.record.name}: ${message}`);
+        if (this.host.consumeSkip()) {
+            this.host.stopPreparation?.();
+            task.skip = true;
+            if (task.phase !== 'bank') task.phase = 'restore';
+        } else if (this.host.consumeRestart?.()) {
+            this.host.stopPreparation?.();
+            task.retry = true;
+            if (task.phase !== 'bank') task.phase = 'restore';
+        }
+        if (EventSignal.pending()) return;
+        try {
+            if (task.phase === 'bank') {
+                this.preparationNote(task.id, 'banking before quest preparation');
+                if (!(await task.reset.prepare(module, this.buildSnapshot(module), log))) {
+                    if (++task.tries >= FRESH_GIVE_UP) {
+                        this.host.finish(`cannot safely prepare ${module.record.name}: ${task.reset.reason || 'could not reach the bank'}`);
+                    }
+                    return;
+                }
+                task.tries = 0;
+                this.refreshBankCounts(true);
+                task.request = questPreparationRequest(module, this.host.foodItem(), Quests.status(module.record.name), this.lastBankCounts, this.lastBankIdCounts) ?? task.request;
+                task.request = { ...task.request, items: [...task.request.items ?? [], ...task.reset.supplies] };
+                task.phase = task.skip || task.retry ? 'restore' : 'work';
+            }
+            if (task.phase === 'work') {
+                const result = await this.host.prepare!(task.request);
+                this.preparationNote(task.id, this.host.preparationStatus?.() ?? 'preparing quest requirements');
+                if (result === 'working') return;
+                this.host.stopPreparation?.();
+                task.phase = 'restore';
+            }
+            this.preparationNote(task.id, 'restoring quest inventory and equipment');
+            if (task.reset.pending && !(await task.reset.restore(log))) {
+                if (++task.tries >= FRESH_GIVE_UP) this.host.finish(`cannot restore ${module.record.name}: ${task.reset.reason}`);
+                return;
+            }
+            this.preparation = null;
+            this.bankKnown = false;
+            this.lastBankCounts.clear();
+            this.lastBankIdCounts.clear();
+            this.resetWatchdog();
+            this.provisioned.delete(task.id);
+            this.foodDrawn.delete(task.id);
+            this.potionsDrawn.delete(task.id);
+            this.coinsDrawn.delete(task.id);
+            this.deposited.add(task.id);
+            this.freshened.add(task.id);
+            module.onStart?.();
+            if (task.skip) this.applyUserSkip(task.id, new Map());
+            else if (task.error) {
+                this.block(task.id, [task.error]);
+                this.runningId = null;
+            } else {
+                if (task.retry) this.prepared.delete(task.id);
+                else this.prepared.add(task.id);
+                log('requirements ready; resuming quest');
+            }
+        } catch (error) {
+            if (error instanceof Error && error.name === 'ScriptAborted') throw error;
+            this.host.stopPreparation?.();
+            task.error = error instanceof Error ? error.message : String(error);
+            if (task.reset.pending) task.phase = 'restore';
+            if (++task.tries >= FRESH_GIVE_UP) this.host.finish(`cannot safely finish preparation for ${module.record.name}: ${task.error}`);
+        }
+    }
+
+    private beginRecovery(id: string, reason: string, forceBank = false): boolean {
+        if (!this.host.automaticRecovery?.()) return false;
+        const count = (this.restartCounts.get(id) ?? 0) + 1;
+        this.restartCounts.set(id, count);
+        this.resetWatchdog();
+        this.waitKey = '';
+        this.waitCount = 0;
+        if (count > 2) {
+            this.recovery = { id, mode: 'bank', reset: new QuestBankReset(this.host.foodItem()), tries: 0,
+                abort: `${reason}; refresh and bank restart exhausted; aborted for this session` };
+        } else {
+            this.recovery = { id, mode: forceBank || count === 2 ? 'bank' : 'refresh', reset: new QuestBankReset(this.host.foodItem()), tries: 0 };
+            this.host.log(`${defById(id)?.record.name}: ${reason}; ${this.recovery.mode} recovery (${count}/2)`);
+        }
+        return true;
+    }
+
+    private async runRecovery(): Promise<void> {
+        const task = this.recovery;
+        if (!task) return;
+        const module = defById(task.id)!;
+        if (this.host.consumeSkip()) { task.skip = true; task.mode = 'bank'; }
+        if (this.host.consumeRestart?.()) task.mode = 'bank';
+        if (EventSignal.pending()) return;
+        try {
+            this.preparationNote(task.id, task.mode === 'refresh' ? 'refreshing quest state' : 'restarting from a clean bank loadout');
+            if (task.mode === 'refresh') {
+                await Modals.closeIfOpen();
+                module.onStart?.();
+                if (!Game.inCombat()) {
+                    await Quests.journal(module.record.name);
+                    await Modals.closeIfOpen();
+                }
+            } else {
+                if (!(await task.reset.tick(module, this.buildSnapshot(module), message => this.host.log(message)))) {
+                    if (++task.tries >= FRESH_GIVE_UP) {
+                        this.host.finish(`cannot safely restart ${module.record.name}: ${task.reset.reason}`);
+                    }
+                    return;
+                }
+                this.bankKnown = false;
+                this.lastBankCounts.clear();
+                this.lastBankIdCounts.clear();
+                this.prepared.delete(task.id);
+                this.provisioned.delete(task.id);
+                this.deposited.add(task.id);
+                this.freshened.add(task.id);
+                this.foodDrawn.delete(task.id);
+                this.potionsDrawn.delete(task.id);
+                this.coinsDrawn.delete(task.id);
+                module.onStart?.();
+            }
+            this.recovery = null;
+            this.resetWatchdog();
+            this.lastStepLogged = '';
+            if (task.skip) this.applyUserSkip(task.id, new Map());
+            else if (task.abort) {
+                this.block(task.id, [task.abort]);
+                this.runningId = null;
+            }
+        } catch (error) {
+            if (error instanceof Error && error.name === 'ScriptAborted') throw error;
+            if (++task.tries >= FRESH_GIVE_UP) this.host.finish(`cannot safely restart ${module.record.name}: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     private async recoverDeathIfPending(): Promise<boolean> {
@@ -573,6 +808,27 @@ export class QuestEngine implements Task {
 
         const deadId = this.runningId;
         const deadModule = defById(deadId);
+        if (this.host.automaticRecovery?.()) {
+            const deaths = (this.deathCounts.get(deadId) ?? 0) + 1;
+            this.deathCounts.set(deadId, deaths);
+            this.host.stopPreparation?.();
+            if (this.recovery?.reset.pending) {
+                this.host.finish(`died while restoring ${deadModule?.record.name ?? deadId}; loadout snapshot retained, check the bank before restarting`);
+                return true;
+            }
+            this.recovery = null;
+            if (this.preparation) {
+                this.preparation.phase = 'restore';
+                this.preparation.retry = true;
+                if (deaths >= 3) this.preparation.error = '3 deaths during quest preparation';
+            } else if (deaths >= 3) {
+                this.block(deadId, ['3 deaths during this quest; aborting for this session']);
+                this.runningId = null;
+                return true;
+            }
+            this.prepared.delete(deadId);
+            deadModule?.onStart?.();
+        }
         this.host.log(`died during ${deadModule?.record.name ?? deadId} — re-provisioning and resuming`);
         const chat = GameMessages.recent(10);
         if (chat.length > 0) {
@@ -740,6 +996,8 @@ export class QuestEngine implements Task {
         this.tracker.reset();
         this.failStreak = 0;
         this.combatIdleSince = null;
+        this.progressKey = '';
+        this.progressAt = 0;
     }
 
     private combatAdvancing(snap: QuestSnapshot): boolean {

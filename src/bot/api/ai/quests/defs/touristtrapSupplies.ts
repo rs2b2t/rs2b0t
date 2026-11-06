@@ -1,0 +1,1 @@
+export const TOURIST_TRAP_FOOD_TARGET = 8;

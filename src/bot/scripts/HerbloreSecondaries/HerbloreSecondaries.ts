@@ -38,6 +38,8 @@ import {
 } from './HerbloreSecondariesLogic.js';
 import { scriptFood } from '../../api/loadout/loadoutPlan.js';
 import { LOADOUT_SETTING } from '../../api/loadout/loadoutSetting.js';
+import { TAVERLEY_BLUE } from '../../api/combat/hunting/sites.js';
+import { crossTeleportDoor } from '../../api/ai/quests/exec/prompts.js';
 
 export const HERBLORE_SECONDARIES_SETTINGS: SettingsSchema = {
     secondary: {
@@ -95,7 +97,7 @@ export default class HerbloreSecondaries extends TaskBot {
         }
         this._site = site;
         this.foodName = scriptFood(this.settings, FOOD_DEFAULT);
-        this.foodWant = this.settings.num('foodWithdraw', FOOD_DEFAULT_COUNT);
+        this.foodWant = Math.min(this.settings.num('foodWithdraw', FOOD_DEFAULT_COUNT), def.keyName ? 25 : 27);
         this.startedAt = Date.now();
 
         this.log(
@@ -205,6 +207,22 @@ export default class HerbloreSecondaries extends TaskBot {
     }
 
     async walkTo(dest: { x: number; z: number; level: number }, what: string): Promise<boolean> {
+        if (this.def.id === 'blue_dragon_scale') {
+            const entering = TAVERLEY_BLUE.inArea(dest);
+            if (TAVERLEY_BLUE.inArea(Game.tile()) !== entering) {
+                const gate = TAVERLEY_BLUE.gate!;
+                this.setStatus(entering ? 'entering the blue dragon lair' : 'leaving the blue dragon lair');
+                if (!(await crossTeleportDoor({
+                    id: gate.locId,
+                    name: 'Gate',
+                    stand: entering ? gate.outside : gate.inside,
+                    standRadius: entering ? 0 : 1,
+                    useItem: entering ? TAVERLEY_BLUE.keyItem!.id : undefined,
+                    isFar: () => Game.tile() !== null && TAVERLEY_BLUE.inArea(Game.tile()) === entering,
+                    log: m => this.log(`  ${m}`)
+                }))) return false;
+            }
+        }
         if (this.near(dest, 3)) {
             return true;
         }
@@ -281,6 +299,7 @@ class BankTrip implements Task {
             foodWant,
             coins: this.bot.coinCount(),
             hasShield: this.bot.hasShield(),
+            hasKey: !def.keyName || Inventory.contains(def.keyName),
             hasTool: this.bot.hasTool(),
             packFull: Inventory.isFull() && this.bot.productCount() + this.bot.sourceCount() > 0,
             grindLeft: this.bot.grindLeft()
@@ -299,15 +318,30 @@ class BankTrip implements Task {
         }
 
         const keep = new Set(keepOnDeposit(def, food).map(n => n.toLowerCase()));
+        if (def.keyName && this.bot.foodInPack() > foodWant) {
+            for (const form of foodForms(food)) keep.delete(form);
+        }
         await Bank.depositAllMatching(name => !keep.has(name.toLowerCase()));
 
         if (def.needShield && !this.bot.hasShield()) {
             if (Bank.count(SHIELD_NAME) < 1) {
                 await Bank.close();
-                ScriptRunner.stop(`no ${SHIELD_NAME} banked for white berries`);
+                ScriptRunner.stop(`no ${SHIELD_NAME} banked for ${def.name}`);
                 return;
             }
             await Bank.withdrawX(SHIELD_NAME, 1);
+        }
+
+        if (def.keyName && !Inventory.contains(def.keyName)) {
+            if (Bank.count(def.keyName) < 1) {
+                await Bank.close();
+                ScriptRunner.stop(`no ${def.keyName} banked for ${def.name}`);
+                return;
+            }
+            if (!(await Bank.withdrawX(def.keyName, 1)) || !Inventory.contains(def.keyName)) {
+                await Bank.close();
+                return;
+            }
         }
 
         if (def.takeFood && foodWant > 0) {

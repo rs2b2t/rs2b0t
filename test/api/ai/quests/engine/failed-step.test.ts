@@ -23,6 +23,48 @@ import { Reachability } from '#/bot/event/webwalk/geometry/Reachability.js';
 const restores: (() => void)[] = [];
 afterEach(() => { for (const restore of restores.splice(0).reverse()) restore(); });
 
+test('automatic recovery refreshes a stalled quest before parking it', async () => {
+    const { engine, state, host } = fixture();
+    host.automaticRecovery = () => true;
+    state.picked = new Set(['runemysteries']);
+    const journal = spyOn(Quests, 'journal').mockResolvedValue(['Quest in progress']);
+    restores.push(() => journal.mockRestore());
+    await execute(engine, 10);
+    expect(engine['runningId']).toBe('runemysteries');
+    expect(engine['parked'].has('runemysteries')).toBe(false);
+    expect(journal).toHaveBeenCalledWith('Rune Mysteries Quest');
+    expect(state.attempts).toBe(9);
+});
+
+test('automatic recovery stops retrying a quest after three deaths', async () => {
+    const { engine, state, host } = fixture();
+    host.automaticRecovery = () => true;
+    state.picked = new Set(['runemysteries']);
+    await engine.execute();
+    for (let i = 0; i < 3; i++) {
+        state.death = true;
+        await engine.execute();
+    }
+    expect(engine['blocked'].get('runemysteries')?.join(' ')).toContain('3 deaths');
+    expect(engine['runningId']).toBeNull();
+});
+
+test('automatic recovery catches travel loops without journal or inventory progress', async () => {
+    const { engine, state, host } = fixture();
+    host.automaticRecovery = () => true;
+    state.picked = new Set(['runemysteries']);
+    state.ok = true;
+    const tile = spyOn(Game, 'tile').mockImplementation(() => ({ x: state.now % 2 ? 3093 : 3094, z: 3243, level: 0 }));
+    const journal = spyOn(Quests, 'journal').mockResolvedValue([]);
+    restores.push(() => tile.mockRestore(), () => journal.mockRestore());
+    for (let i = 0; i < 8; i++) {
+        state.now += 60_001;
+        await engine.execute();
+    }
+    expect(journal).toHaveBeenCalled();
+    expect(engine['parked'].has('runemysteries')).toBe(false);
+});
+
 function fixture() {
     const originalStage = runemysteries.readStage;
     restores.push(() => { runemysteries.readStage = originalStage; });

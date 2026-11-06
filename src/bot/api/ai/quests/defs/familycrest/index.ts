@@ -501,6 +501,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const familycrest: QuestModule = {
+    autoRetaliate: snap => !inChronozonLair(snap.tile),
     record: QUESTS.find(r => r.id === 'crest')!,
     bank: 'nearest',
     ownsInventory: true,

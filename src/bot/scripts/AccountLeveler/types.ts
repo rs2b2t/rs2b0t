@@ -9,6 +9,7 @@ export interface LevelerSnapshot {
     dragonStage?: number;
     target: number;
     wilderness: boolean;
+    allowQuests?: boolean;
     now: number;
     unavailableItems?: readonly string[];
 }

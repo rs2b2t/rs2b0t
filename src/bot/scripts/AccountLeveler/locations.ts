@@ -32,7 +32,7 @@ function sites(plan: ActivityPlan): Site[] {
         }
         case 'Fisher':
             if (String(plan.settings.fishMethod).startsWith('Fly fishing')) return [gather('Seers (fly fishing)', FISHING_LOCATIONS, true), gather('Barbarian Village', FISHING_LOCATIONS)];
-            if (String(plan.settings.fishMethod).startsWith('Lobster cage')) return [gather('Catherby', FISHING_LOCATIONS, true)];
+            if (String(plan.settings.fishMethod).startsWith('Lobster cage') || plan.settings.fishMethod === 'Harpoon — sharks') return [gather('Catherby', FISHING_LOCATIONS, true)];
             return [gather('Draynor Village', FISHING_LOCATIONS)];
         case 'Miner':
             return [...(Array.isArray(plan.settings.rocks) && plan.settings.rocks.includes('Iron') ? [gather('Fight Arena Mine', MINING_LOCATIONS, true)] : []),
