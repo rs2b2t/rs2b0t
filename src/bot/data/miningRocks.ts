@@ -27,6 +27,19 @@ export const QUEST_ROCK_TYPES: Record<string, number[]> = {
 
 export const ROCK_OPTIONS = Object.keys(ROCK_TYPES);
 
+/** Ore ladder by mining level, best last. */
+export const ROCK_TIER_ORDER: readonly string[] = Object.keys(ROCK_TYPES);
+
+// Why: rock picking prefers the best tier in camp even when a lower tier is closer.
+const ROCK_TIER_BY_ID: ReadonlyMap<number, number> = new Map(
+    ROCK_TIER_ORDER.flatMap((name, tier) => ROCK_TYPES[name].map(id => [id, tier] as const))
+);
+
+/** Tier index for a rock loc id; higher is better, -1 for ids outside ROCK_TYPES. */
+export function rockTierById(id: number): number {
+    return ROCK_TIER_BY_ID.get(id) ?? -1;
+}
+
 export const GAS_ROCK_IDS: Set<number> = new Set([
     2119, 2120, // copper
     2121, 2122, // iron

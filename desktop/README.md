@@ -11,12 +11,36 @@ and a power-save blocker disable the throttling a backgrounded browser tab impos
 hidden tab drops the game loop to ~1 fps and starves the bot, then replays at 2–5× on
 refocus. Measured here: ~51 fps while hidden.
 
+The shell enables Chromium's `V8CppGCEnableLargerCage` feature before startup.
+Electron 33's Oilpan heap otherwise reserves 4 GB across the wall's renderer;
+this feature raises that address-space reservation to 16 GB. It does not
+preallocate 16 GB of physical RAM. See the
+[Chromium implementation](https://chromium.googlesource.com/chromium/src/+/refs/tags/130.0.6723.191/gin/cppgc.cc).
+This addresses `Oilpan: Large allocation. Ran out of reservation` with many bot
+frames sharing a renderer. It does not remove system RAM limits or fix a leak.
+Restart Electron to apply it; reloading the page keeps the existing reservation.
+
 ## Run
+
+For live bots, run `bun run b0t` from the repository root. One Electron wall can
+run profiles on World 1, World 2 and World 3 together. Choose a world per profile in
+**Add bot**, then use **load all profiles**. Each rail tile shows its script name
+and state; the status panel shows its connected world. A tile's **Switch** stops
+that bot's script, logs out, and switches automatically. A logged-in account signs
+back in on the destination world with its saved script settings. Start the script
+again when ready.
+
+Run `bun run b0t` again in another terminal to open another instance from the same
+checkout. Each launch gets a private build and a free port. All instances share
+saved accounts and settings, so you can test edits while existing bots keep running.
+See [Live wall](../docs/how-to/run-the-live-wall.md) for profile and port overrides.
+
+For a local development engine:
 
 1. Start the engine and deploy the client (`tools/deploy-local.sh`).
 2. `cd desktop`
-3. `bun install` (once — pulls Electron)
-4. `bun run start` — opens against `http://localhost:8081`
+3. `bun install` (once, pulls Electron)
+4. `bun run start` opens against `http://localhost:8081`
 
 Point at another server with `bun run start -- --server=https://your-host`, or
 `LCB_SERVER=… bun run start`.
@@ -35,7 +59,7 @@ bun run package        # electron-builder --dir -> desktop/dist/
 | Rendering | Chromium, so behaviour matches the browser client |
 | Panel, scripts, settings, saved credentials, auto-login, cursor trail | identical to the browser client |
 | Multi-account | profiles run in the multibox wall within one window |
-| Frame-gap hardening | the Scheduler shifts pending `Execution` deadlines across large frame gaps, so waits never falsely expire — independent of this shell |
+| Frame-gap hardening | the Scheduler shifts pending `Execution` deadlines across large frame gaps, so waits never falsely expire, independent of this shell |
 
 ## See also
 

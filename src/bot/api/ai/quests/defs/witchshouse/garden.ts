@@ -1,3 +1,8 @@
+import Tile from '../../../../../geometry/Tile.js';
+import { DirectNavigator } from '../../../../../event/webwalk/DirectNavigator.js';
+import { Inventory } from '../../../../inventory/Inventory.js';
+import { atCover, castStrike, EXPERIMENT_COVER, EXPERIMENT_TRAP, readyStrikes, takeStrikeCover } from '../../strikeCombat.js';
+import { strikeSpell } from '../../strike.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
 import { EventSignal } from '../../../../execution/EventSignal.js';
 import { Execution } from '../../../../execution/Execution.js';
@@ -14,7 +19,7 @@ import { held } from './house.js';
 import { FOUNTAIN_STAND, GARDEN_ENTRY, GARDEN_SHED, walkGarden } from './patrol.js';
 
 /** 4 forms and 144 hitpoints between them, at the tick rate a live server runs. */
-const FIGHT_MS = 300_000;
+const FIGHT_MS = 900_000;
 /** Ticks a transition may take before the chain counts as broken. */
 const SPAWN_TICKS = 25;
 
@@ -22,7 +27,7 @@ const KILLED = /kill the shapeshifter once and for all/i;
 const NOTHING_IN_FOUNTAIN = /nothing in the fountain/i;
 
 export function experiment(): Npc | null {
-    return Npcs.query().where(n => EXPERIMENT_IDS.includes(n.id)).action('Attack').within(14).nearest();
+    return Npcs.query().where(n => EXPERIMENT_IDS.includes(n.id) && !n.targetsAnotherPlayer()).action('Attack').within(14).nearest();
 }
 
 /** Check the fountain's secret compartment for the shed key. */
@@ -97,65 +102,80 @@ async function summonExperiment(log: (m: string) => void): Promise<boolean> {
     return came;
 }
 
-// Why: `Sustain` is call-driven, so this loop is what keeps food and Protect from Melee going.
-// Why: the hook drops the prayer between forms, where nothing is hitting and every point burnt is one the wolf does not get.
+const BEAR_COVER = new Tile(2936, 3459, 0);
+const CORNER_APPROACH = new Tile(2937, 3465, 0);
 
-/** Fight the shapeshifter through all 4 of its forms. */
+async function trapExperiment(log: (m: string) => void): Promise<Tile | null> {
+    const target = experiment();
+    if (!target) return null;
+    if (target.size > 1) return await takeStrikeCover(BEAR_COVER, log) ? BEAR_COVER : null;
+    if (EXPERIMENT_TRAP.equals(target.networkTile())) {
+        return await takeStrikeCover(EXPERIMENT_COVER, log) ? EXPERIMENT_COVER : null;
+    }
+    if (!(await takeStrikeCover(EXPERIMENT_TRAP, log))) return null;
+    const spell = strikeSpell(Skills.effective('magic'), rune => Inventory.count(rune));
+    if (!spell) return null;
+    if (!target.targetsMe()) {
+        const before = Inventory.count('Mind rune');
+        try {
+            if (!(await Game.castOnNpc(spell, target))) return null;
+            if (!(await Execution.delayUntilTicks(() => Inventory.count('Mind rune') < before, 8))) return null;
+        } finally {
+            await DirectNavigator.walk(EXPERIMENT_TRAP);
+        }
+    }
+    for (let tick = 0; tick < 80; tick++) {
+        if (EventSignal.pending()) return null;
+        await Sustain.run();
+        const current = experiment();
+        if (!current || current.id !== target.id) return null;
+        if (EXPERIMENT_TRAP.equals(current.networkTile()) && !atCover(EXPERIMENT_TRAP)) {
+            return await takeStrikeCover(EXPERIMENT_COVER, log) ? EXPERIMENT_COVER : null;
+        }
+        const under = CORNER_APPROACH.equals(current.networkTile());
+        await DirectNavigator.walk(under ? CORNER_APPROACH : EXPERIMENT_TRAP);
+        await Execution.delayTicks(1);
+    }
+    log('experiment did not enter the northeast trap');
+    return null;
+}
+
 export async function fightExperiment(log: (m: string) => void): Promise<boolean> {
     const mark = GameMessages.mark();
     const won = (): boolean => GameMessages.sawSince(mark, KILLED);
-    Game.setAutoRetaliate(true);
+    if (!(await readyStrikes(log))) return false;
     const deadline = performance.now() + FIGHT_MS;
-    let attacking = -1;
-    let idle = 0;
-    let swings = 0;
-    let forms = 0;
     let shape = -1;
-    let reported = -1;
+    let cover: Tile | null = null;
+    let idle = 0;
     while (performance.now() < deadline) {
-        if (won()) {
-            log(`the shapeshifter is dead after ${forms} transformations and ${swings} attacks`);
-            return true;
-        }
-        if (EventSignal.pending()) {
-            log('yielding the fight to a random event');
-            return false;
-        }
+        if (won()) return true;
+        if (EventSignal.pending()) return false;
         await Sustain.run();
         const target = experiment();
         if (!target) {
-            if (++idle > SPAWN_TICKS) {
-                log(`no shapeshifter for ${SPAWN_TICKS} ticks and no kill message, so the chain broke`);
-                return false;
-            }
+            if (++idle > SPAWN_TICKS) return won();
             await Execution.delayTicks(1);
             continue;
         }
-        // Why: `ai_queue3` deletes one form and adds the next in the same tick, so a gap never appears and the npc id is the only thing that changes.
-        if (shape !== -1 && target.id !== shape) {
-            forms++;
-        }
-        shape = target.id;
         idle = 0;
-        const tick = Game.tick();
-        if (tick - reported >= 40) {
-            reported = tick;
-            log(`shapeshifter ${target.id}: hp=${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} attacks=${swings}`);
+        if (target.id !== shape || !cover || !atCover(cover)) {
+            shape = target.id;
+            const here = Game.tile();
+            cover = target.id === EXPERIMENT_IDS[0] || target.id === EXPERIMENT_IDS[1]
+                ? (here ? new Tile(here.x, here.z, here.level) : null)
+                : await trapExperiment(log);
+            if (!cover) return won();
+            continue;
         }
-        if (target.index !== attacking || !Game.inCombat()) {
-            if (await target.interact('Attack')) {
-                attacking = target.index;
-                swings++;
-            }
-        }
-        await Execution.delayTicks(1);
+        if (!(await castStrike(cover, target, log))) return won();
     }
-    log(`the shapeshifter outlived ${FIGHT_MS / 1000}s of combat`);
-    return false;
+    return won();
 }
 
 /** Unlock the shed and take the fight through to the kill message. */
 export async function killExperiment(log: (m: string) => void): Promise<boolean> {
+    if (!(await readyStrikes(log))) return false;
     if (!(await enterShed(log))) {
         return false;
     }

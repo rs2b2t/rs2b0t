@@ -1,6 +1,7 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 
-import { matchesTransportLoc } from '#/bot/event/webwalk/exec/transportLoc.js';
+import { findTransportLoc, matchesTransportLoc, transportLocValid } from '#/bot/event/webwalk/exec/transportLoc.js';
+import { reader } from '#/bot/adapter/ClientAdapter.js';
 import type { TransportInfo } from '#/bot/event/webwalk/PathFinder.js';
 
 const gate: TransportInfo = {
@@ -14,6 +15,28 @@ const gate: TransportInfo = {
 const loc = (id: number, x: number, z: number): { id: number; tile(): { x: number; z: number } } => ({
     id,
     tile: () => ({ x, z })
+});
+
+afterEach(() => mock.restore());
+
+const iceLadder: TransportInfo = {
+    locName: 'Ladder', action: 'Climb-Down', locId: 1759, locX: 2848, locZ: 3513,
+    toTile: { x: 2848, z: 9914 }
+};
+
+test('Ice Queen ladders require the recorded placement even when their IDs match', () => {
+    expect(matchesTransportLoc(iceLadder, loc(1759, 2848, 3513))).toBe(true);
+    expect(matchesTransportLoc(iceLadder, loc(1759, 2845, 3516))).toBe(false);
+});
+
+test.each([true, false])('Ice Queen ladder lookup cannot substitute a closer ladder, intended ladder present=%s', present => {
+    const neighbor = { id: 1759, name: 'Ladder', typecode: 10, ops: ['Climb-Down'], tile: { x: 2845, z: 3516, level: 0 }, distance: 1 };
+    const intended = { ...neighbor, tile: { x: 2848, z: 3513, level: 0 }, distance: 4 };
+    spyOn(reader, 'locs').mockReturnValue(present ? [neighbor, intended] : [neighbor]);
+    const found = findTransportLoc(iceLadder);
+    if (present) expect(found?.tile()).toMatchObject(intended.tile);
+    else expect(found).toBeNull();
+    expect(transportLocValid(iceLadder)).toBe(present);
 });
 
 describe('matchesTransportLoc', () => {

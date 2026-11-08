@@ -10,6 +10,8 @@ import { QUESTS } from '../data/quests.js';
 import type { QuestModule, QuestProgress, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { talkStrict } from '../exec/primitives.js';
 import { heldId, promptLoc, settleScene } from '../exec/prompts.js';
+import { QuestFood } from '../food.js';
+import { COIN_FLOAT, floatWithdraw } from '../engine/provisioning.js';
 
 export const JUNGLE_POTION_QUEST = 'Jungle Potion';
 
@@ -271,6 +273,33 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (stage === undefined) {
         return { kind: 'wait', reason: 'Jungle Potion journal stage unavailable' };
     }
+    const tile = snap.tile;
+    const onIsland = tile && tile.x >= 2700 && tile.x <= 3010 && tile.z >= 2870 && tile.z <= 3260
+        && (tile.x < 2850 || tile.z <= 3180) && (tile.x < 2970 || tile.z <= 3070);
+    if (tile && !onIsland && !inCaves(tile)) {
+        if (!snap.bankKnown) {
+            return { kind: 'scanBank', bank: ARDOUGNE_BANK };
+        }
+        const bank = snap.bank ?? new Map();
+        const coins = floatWithdraw(snap.inv, bank, 'Coins', COIN_FLOAT);
+        const food = QuestFood.name ? floatWithdraw(snap.inv, bank, QuestFood.name, 8) : null;
+        const items = [coins, food].filter((item): item is { name: string; qty: number } => item !== null);
+        if (items.length > 0) {
+            const slots = (food?.qty ?? 0) + (coins && !snap.inv.get('coins') ? 1 : 0);
+            if ((snap.freeSlots ?? 28) < slots) {
+                return {
+                    kind: 'deposit', bank: ARDOUGNE_BANK,
+                    keep: ['coins', ...(QuestFood.name ? [QuestFood.name.toLowerCase()] : [])],
+                    keepIds: JUNGLE_HERBS.flatMap(herb => [herb.id, herb.unidId]),
+                    exactKeep: true
+                };
+            }
+            return { kind: 'withdraw', items, bank: ARDOUGNE_BANK };
+        }
+        if ((snap.inv.get('coins') ?? 0) < 60) {
+            return { kind: 'wait', reason: 'need 60 Coins for the outbound and return boat fares' };
+        }
+    }
     if (stage === JP_STAGE.NOT_STARTED) {
         return { kind: 'custom', name: 'ask Trufitus for the herb-gathering job', run: startQuest };
     }
@@ -292,7 +321,6 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const junglepotion: QuestModule = {
     record: QUESTS.find(record => record.id === 'junglepotion')!,
-    // Why: Karamja has no bank and nothing here needs one; Ardougne West is the nearest to the crossing for the engine's bookkeeping.
     bank: ARDOUGNE_BANK,
     ownsInventory: true,
     readProgress: readJungleProgress,

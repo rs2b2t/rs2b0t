@@ -1,0 +1,120 @@
+{
+  "result": "PASS",
+  "generatedAt": "2026-09-22T16:54:14.891Z",
+  "build": {
+    "commit": "8edeb1e4b098c586182585dfbed86bcdcb7c61c1",
+    "short": "8edeb1e",
+    "dirty": false,
+    "builtAt": "2026-09-22T16:50:46.786Z",
+    "label": "8edeb1e"
+  },
+  "results": [
+    {
+      "name": "iron-power",
+      "script": "Miner",
+      "trace": "iron-power.json",
+      "screenshot": "iron-power.png",
+      "xpGained": 980,
+      "drops": [
+        {
+          "oreDropped": 27,
+          "elapsedMs": 3230,
+          "elapsedTicks": 6,
+          "dispatchMs": 0.1,
+          "inventoryAfter": [
+            {
+              "name": "Rune pickaxe",
+              "count": 1
+            }
+          ]
+        },
+        {
+          "oreDropped": 27,
+          "elapsedMs": 3627.8,
+          "elapsedTicks": 6,
+          "dispatchMs": 0.1,
+          "inventoryAfter": [
+            {
+              "name": "Rune pickaxe",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "clay-power",
+      "script": "Miner",
+      "trace": "clay-power.json",
+      "screenshot": "clay-power.png",
+      "xpGained": 5,
+      "drops": [
+        {
+          "oreDropped": 27,
+          "elapsedMs": 3293,
+          "elapsedTicks": 6,
+          "dispatchMs": 0.2,
+          "inventoryAfter": [
+            {
+              "name": "Rune pickaxe",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "coal-supplies",
+      "script": "Miner",
+      "trace": "coal-supplies.json",
+      "screenshot": "coal-supplies.png",
+      "xpGained": 50,
+      "drops": [
+        {
+          "oreDropped": 22,
+          "elapsedMs": 2824.9,
+          "elapsedTicks": 5,
+          "dispatchMs": 0.2,
+          "inventoryAfter": [
+            {
+              "name": "Rune pickaxe",
+              "count": 1
+            },
+            {
+              "name": "Lobster",
+              "count": 1
+            },
+            {
+              "name": "Lobster",
+              "count": 1
+            },
+            {
+              "name": "Coins",
+              "count": 100
+            },
+            {
+              "name": "Gold ore",
+              "count": 1
+            },
+            {
+              "name": "Uncut sapphire",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "command": "bun e2e/gathering-power-drop-test.ts",
+  "implementationCommit": "8edeb1e4b098c586182585dfbed86bcdcb7c61c1",
+  "engineCommit": "2135d3a2a44646981ccbcafb684c65c6a507be89",
+  "serverUserActionsPerTick": 5,
+  "baseline": {
+    "sourceCommit": "3c5f581767ce4538adc66c0514cde021d7dc8838",
+    "elapsedMs": 16418.100000023842,
+    "elapsedTicks": 28
+  },
+  "observedSpeedup": 5.083,
+  "gatheringUnitTestsPassed": 346,
+  "environment": "Local engine, Chromium, fresh fixture accounts with 99 Mining/Hitpoints/Defence."
+}

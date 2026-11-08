@@ -1,6 +1,8 @@
+import { desktopStorage } from './desktopStorage.js';
 import Tile from '../geometry/Tile.js';
 import { WORLDMAP_KEY_NAMES } from '../../client/mapview/worldmapKeyNames.js';
 import { boxKey } from './box.js';
+import { signedOptions } from './optionSelection.js';
 
 type SettingType = 'boolean' | 'number' | 'string' | 'string[]' | 'tile';
 
@@ -16,6 +18,8 @@ export interface SettingDef {
     options?: string[];
     /** Optional display labels keyed by the persisted option value. */
     optionLabels?: Record<string, string>;
+    selectionMode?: 'includeExclude';
+    optionStatuses?: () => Record<string, 'complete' | 'incomplete' | 'unknown'>;
     group?: string;
     showIf?: { key: string; anyOf: string[] };
     /** Render a freeform string as an HTML colour picker + hex field. */
@@ -95,6 +99,9 @@ function parseValue(def: SettingDef, raw: string): unknown {
             if (!def.options || def.options.length === 0) {
                 return values;
             }
+            if (def.selectionMode === 'includeExclude' && values.some(value => /^[+-]/.test(value))) {
+                return signedOptions(values, def.options);
+            }
             return values.flatMap(value => {
                 const wanted = value.toLowerCase();
                 const option = def.options!.find(candidate => candidate.toLowerCase() === wanted);
@@ -164,7 +171,7 @@ export const GLOBAL_SETTINGS_CORE: SettingsSchema = {
         type: 'string',
         default: '',
         label: 'Clue duel partner',
-        help: 'Named account running Duel Arena in Clue helper mode for the obstacle-arena coordinate clue.'
+        help: 'Optional named account running Duel Arena in Clue helper mode. Leave empty to find nearby lobby players for an unstaked obstacle duel.'
     },
     useZanarisBank: {
         type: 'boolean',
@@ -188,7 +195,9 @@ export const GLOBAL_SETTINGS_CORE: SettingsSchema = {
         type: 'boolean',
         default: true,
         label: 'Auto re-enable run',
-        help: 'flip the run orb back on once energy regenerates (the engine forces it off at 0)'
+        help:
+            'flip the run orb back on once energy regenerates (the engine forces it off at 0). '
+            + 'Scripts may RunManager.override({ runAuto, energyMin }); cleared when the script stops.'
     },
     runEnergyMin: {
         type: 'number',
@@ -196,7 +205,9 @@ export const GLOBAL_SETTINGS_CORE: SettingsSchema = {
         min: 0,
         max: 100,
         label: 'Re-enable run at energy %',
-        help: 'higher = longer walk-regen phases with faster bursts; 0 = re-enable immediately'
+        help:
+            'higher = longer walk-regen phases with faster bursts; 0 = re-enable immediately. '
+            + 'Scripts may RunManager.override({ energyMin }) to raise the floor for one run.'
     }
 };
 
@@ -562,6 +573,9 @@ class SettingsStoreImpl {
     }
 
     saved(name: string, key: string): string | undefined {
+        if (desktopStorage) {
+            return localStorage.getItem(storageKey(name, key)) ?? (name === 'JiveRC' ? this.saved('NatureCrafter', key) : undefined);
+        }
         if (hasSession) {
             const v = sessionStorage.getItem(storageKey(name, key));
             if (v !== null) {
@@ -574,7 +588,7 @@ class SettingsStoreImpl {
                 return v;
             }
         }
-        return undefined;
+        return name === 'JiveRC' ? this.saved('NatureCrafter', key) : undefined;
     }
 
     save(name: string, key: string, rawString: string): void {
@@ -612,6 +626,9 @@ class SettingsStoreImpl {
         }
         if (hasLocal) {
             localStorage.removeItem(storageKey(name, key));
+        }
+        if (name === 'JiveRC') {
+            this.clear('NatureCrafter', key);
         }
     }
 

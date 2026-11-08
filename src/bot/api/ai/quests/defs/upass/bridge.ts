@@ -221,8 +221,8 @@ export async function makeFireArrow(log: (m: string) => void): Promise<boolean> 
 }
 
 /** Bow in hand, lit arrow in the quiver, the rope shot reads both off `worn`. */
-export async function armFireArrow(log: (m: string) => void): Promise<boolean> {
-    const bow = Inventory.items().find(item => BOW_IDS.has(item.id));
+export async function armFireArrow(log: (m: string) => void, bows: ReadonlySet<number> = BOW_IDS): Promise<boolean> {
+    const bow = Inventory.items().find(item => bows.has(item.id));
     if (bow && !(await bow.interact('Wield'))) {
         log(`could not wield the ${bow.name ?? 'bow'}`);
         return false;

@@ -34,13 +34,15 @@ export function locRefFromTransport(transport: TransportInfo, level = 0): LocRef
     // Slashable webs sit one tile apart with the same locId (Yanille 2569/2570,3118), so slack 3 would double-slash the neighbour.
     const webSlash =
         /^slash$/i.test(transport.action ?? '') && /web/i.test(transport.locName ?? '');
+    const ladderClimb = transport.locId !== undefined
+        && /^climb/i.test(transport.action) && /ladder/i.test(transport.locName);
     return {
         placement: { level, x: transport.locX, z: transport.locZ },
         locId: transport.locId,
         openLocId: transport.openLocId,
         name: transport.locName,
         action: transport.action,
-        slack: webSlash ? 0 : 3
+        slack: webSlash || ladderClimb ? 0 : 3
     };
 }
 

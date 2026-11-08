@@ -9,6 +9,9 @@ Game.ingame(): boolean
 Game.tile(): WorldTile | null   // local player tile, null before login/scene load
 Game.energy(): number           // run energy
 Game.runEnabled(): boolean
+// Auto re-enable is Global `runAuto` / `runEnergyMin`. A script may
+// `RunManager.override({ runAuto?, energyMin? })` for the session; last call
+// replaces the snapshot. Script start/stop clears it back to Global.
 Game.weight(): number
 Game.inCombat(): boolean        // health bar showing
 Game.animating(): boolean

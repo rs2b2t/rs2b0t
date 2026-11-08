@@ -1,6 +1,8 @@
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { Skills } from '../skills/Skills.js';
 import Tile from '../../geometry/Tile.js';
+import { EventSignal } from '../execution/EventSignal.js';
+import { Navigator } from '../../event/webwalk/Navigator.js';
 
 interface AltarLocation {
     name: string;
@@ -17,7 +19,7 @@ interface AltarLocation {
 const ALTARS: AltarLocation[] = [
     { name: 'Varrock church', tile: new Tile(3253, 3486, 0), loc: 'Altar' },
     { name: 'Edgeville Monastery', tile: new Tile(3051, 3498, 1), loc: 'Altar', requires: { skill: { name: 'prayer', level: 31 } } },
-    { name: 'Al Kharid church', tile: new Tile(3243, 3205, 0), loc: 'Altar' },
+    { name: 'Lumbridge church', tile: new Tile(3243, 3205, 0), loc: 'Altar' },
     { name: 'Port Sarim church', tile: new Tile(2991, 3177, 0), loc: 'Altar' },
     { name: 'Ardougne church', tile: new Tile(2617, 3309, 0), loc: 'Altar' },
     { name: 'West Ardougne church', tile: new Tile(2529, 3286, 0), loc: 'Altar' },
@@ -28,30 +30,24 @@ const ALTARS: AltarLocation[] = [
     { name: 'Canifis temple', tile: new Tile(3416, 3488, 0), loc: 'Altar' }
 ];
 
-// A staircase costs more than its tile count, so an upstairs altar only wins when it's clearly closer.
-const LEVEL_CHANGE_PENALTY = 30;
-
-function usable(altar: AltarLocation): boolean {
-    const need = altar.requires?.skill;
-    return !need || Skills.level(need.name) >= need.level;
-}
-
-function altarDistance(from: WorldTile | Tile, altar: AltarLocation): number {
-    const flat = Math.max(Math.abs(altar.tile.x - from.x), Math.abs(altar.tile.z - from.z));
-    return flat + (altar.tile.level === from.level ? 0 : LEVEL_CHANGE_PENALTY);
-}
-
-/** The nearest altar this account can use. */
-export function nearestAltar(from: WorldTile | Tile): AltarLocation | null {
-    let best: { altar: AltarLocation; dist: number } | null = null;
-    for (const altar of ALTARS) {
-        if (!usable(altar)) {
-            continue;
-        }
-        const dist = altarDistance(from, altar);
-        if (best === null || dist < best.dist) {
-            best = { altar, dist };
+export async function nearestAltar(from: WorldTile | Tile): Promise<AltarLocation | null> {
+    const altars = ALTARS.filter(altar => {
+        const need = altar.requires?.skill;
+        return !need || Skills.level(need.name) >= need.level;
+    });
+    let best: AltarLocation | null = null;
+    let bestCost = Infinity;
+    for (const altar of altars.sort((a, b) => a.tile.distanceTo(from) - b.tile.distanceTo(from))) {
+        if (EventSignal.pending()) return null;
+        const path = await Navigator.findPath(from, altar.tile, {
+            useTeleportCatalog: false,
+            maxExpansions: 500_000,
+            timeoutMs: 5_000
+        }).catch(() => null);
+        if (path?.ok && path.cost < bestCost) {
+            best = altar;
+            bestCost = path.cost;
         }
     }
-    return best?.altar ?? null;
+    return best;
 }

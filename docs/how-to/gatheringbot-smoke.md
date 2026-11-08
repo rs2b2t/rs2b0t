@@ -2,6 +2,10 @@
 
 # GatheringBot behaviour smoke
 
+Miner, Fisher and Woodcutter batch their haul drops when `Bank=false`.
+Run `bun e2e/gathering-power-drop-test.ts` for the mining/drop checks on a local engine.
+The [recorded drop proof](../e2e/gathering-power-drop/README.md) includes timings and inventory traces.
+
 After camps look right, run the live script harness (needs a **fresh deploy** so
 `out/botclient.js` matches `GatheringBot` / location tables):
 

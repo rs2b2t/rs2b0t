@@ -1,0 +1,67 @@
+{
+  "passed": true,
+  "build": {
+    "commit": "dc9ded2f381c756a06a21483ed733b85b9bf4b5b",
+    "short": "dc9ded2",
+    "dirty": false,
+    "builtAt": "2026-09-22T16:30:44.356Z",
+    "label": "dc9ded2"
+  },
+  "verifiedAt": "2026-09-22T16:30:49.660Z",
+  "ports": [
+    8083,
+    8084
+  ],
+  "builds": [
+    "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T//rs2b0t.pcvlFQ",
+    "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T//rs2b0t.ZPxpZj"
+  ],
+  "electronPids": [
+    91946,
+    91979
+  ],
+  "sharedSavedData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t-desktop-e2e-Q96BVZ/shared/Shared Storage/storage.json",
+  "browserCaches": [
+    {
+      "userData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t.pcvlFQ/electron/rs2b0t-session-18WE8z",
+      "sessionData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t.pcvlFQ/electron/rs2b0t-session-18WE8z"
+    },
+    {
+      "userData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t.ZPxpZj/electron/rs2b0t-session-wyJYnf",
+      "sessionData": "/var/folders/5c/93fx_qr91rb0n6zg7_chhvgc0000gn/T/rs2b0t.ZPxpZj/electron/rs2b0t-session-wyJYnf"
+    }
+  ],
+  "settingsPerformance": {
+    "build": {
+      "commit": "dc9ded2f381c756a06a21483ed733b85b9bf4b5b",
+      "short": "dc9ded2",
+      "dirty": false,
+      "builtAt": "2026-09-22T16:30:44.356Z",
+      "label": "dc9ded2"
+    },
+    "verifiedAt": "2026-09-22T16:30:47.573Z",
+    "frames": 60,
+    "bagsPerFrame": 5,
+    "settingsPerBag": 22,
+    "medianWorkMs": 0.19999998807907104,
+    "p95WorkMs": 0.25,
+    "elapsedMs": 487.84500002861023,
+    "storageCalls": {}
+  },
+  "checks": [
+    "separate ports and build directories",
+    "shared bundle unchanged",
+    "legacy accounts and settings migrate automatically",
+    "one shared account/settings store",
+    "concurrent account additions survive in both windows",
+    "bot iframe reads shared settings without exposing Node",
+    "path overlay settings workload performs zero synchronous IPC reads",
+    "settings cache observes a reverted write even when file notifications coalesce",
+    "setting removal propagates between instances",
+    "settings shared across ports",
+    "saved settings persist after restart",
+    "closing second instance leaves first serving its original bundle",
+    "reload reads the shared saved settings",
+    "private builds and browser caches removed on shutdown"
+  ]
+}

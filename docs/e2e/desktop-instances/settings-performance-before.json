@@ -1,0 +1,19 @@
+{
+  "build": {
+    "commit": "c0e98f43a809b3d524db9690d802c55f56a58864",
+    "short": "c0e98f4",
+    "dirty": true,
+    "builtAt": "2026-09-22T16:22:48.100Z",
+    "label": "c0e98f4-dirty"
+  },
+  "verifiedAt": "2026-09-22T16:22:52.521Z",
+  "frames": 60,
+  "bagsPerFrame": 5,
+  "settingsPerBag": 22,
+  "medianWorkMs": 8.560000002384186,
+  "p95WorkMs": 9.754999995231628,
+  "elapsedMs": 822.8799999952316,
+  "storageCalls": {
+    "getItem": 6622
+  }
+}

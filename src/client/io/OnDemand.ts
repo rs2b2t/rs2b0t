@@ -1,3 +1,4 @@
+import { TARGET } from '#/client/config/target.js';
 import { gunzipSync } from 'fflate';
 
 import type { Client } from '#/client/shell/Client.js';
@@ -331,8 +332,8 @@ export default class OnDemand extends OnDemandProvider {
             type: 'init',
             versions: this.versions,
             crcs: this.crcs,
-            host: window.location.host,
-            secured: window.location.protocol === 'https:',
+            host: TARGET.wsHost,
+            secured: TARGET.tls,
             ingame: this.app.ingame,
             dbEnabled: !!this.app.db
         });

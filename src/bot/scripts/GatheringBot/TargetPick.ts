@@ -34,6 +34,36 @@ export function pickNearestPreferLocal<T>(
     return best;
 }
 
+/**
+ * Pick the best priority bucket first, then the nearest within it.
+ * Why: a best-tier target wins across tunnels and pads; distance only breaks ties inside a bucket.
+ */
+export function pickBucketNearest<T>(
+    candidates: readonly T[],
+    bucket: (c: T) => number,
+    distToPlayer: (c: T) => number,
+    preferRadius = LOCAL_MINE_PREFER_RADIUS
+): T | null {
+    if (candidates.length === 0) {
+        return null;
+    }
+    let bestBucket = -Infinity;
+    for (const c of candidates) {
+        const b = bucket(c);
+        if (b > bestBucket) {
+            bestBucket = b;
+        }
+    }
+    if (bestBucket === -Infinity) {
+        return null;
+    }
+    return pickNearestPreferLocal(
+        candidates.filter(c => bucket(c) === bestBucket),
+        distToPlayer,
+        preferRadius
+    );
+}
+
 // Why: a successful deplete must not cool the tile, empty rocks and stumps already drop out of the type filters.
 // Why: iron respawns in about 6 ticks, faster than a typical 8-tick skip.
 

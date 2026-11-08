@@ -9,7 +9,7 @@
 import type { Page } from 'playwright-core';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { launchBrowser, parseArgs } from './lib/harness.js';
+import { deployIsolatedClient, launchBrowser, parseArgs } from './lib/harness.js';
 import { createHarnessProof } from './lib/harnessProof.js';
 import {
     cheatQuiet,
@@ -122,6 +122,7 @@ async function bankSnapshot(page: Page): Promise<{ unNoted: number; notes: numbe
 
 const browser = await launchBrowser({ swiftshader: true });
 const page = await browser.newPage();
+const client = deployIsolatedClient(`dfs${Date.now().toString(36).slice(-6)}`);
 try {
     await proof.ensureDirs();
     const watchDir = join(process.cwd(), 'screenshots', 'watch');
@@ -130,7 +131,7 @@ try {
     console.log(`watch frames -> ${winWatch} (open the folder in Windows Explorer)`);
     const user = `dfs${Date.now().toString(36).slice(-5)}`;
     console.log(`dragonfire-shield-live base=${base} user=${user}`);
-    await mainlandAccount(page, base, user);
+    await mainlandAccount(page, base, user, client.page);
     await maxmeAndClearDialogs(page);
 
     await cheatQuiet(page, 'setvar dragon_shield 1');
@@ -249,5 +250,6 @@ try {
     await proof.writeFailure(page).catch(() => undefined);
     process.exit(1);
 } finally {
+    client.cleanup();
     await browser.close().catch(() => undefined);
 }

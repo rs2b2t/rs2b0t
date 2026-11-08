@@ -49,7 +49,7 @@ export interface IsolatedClient {
  * Deploy this run's own client next to the engine's, and return the page that loads it.
  * @see docs/decisions/quest-pitfalls-3.md
  */
-export function deployIsolatedClient(tag: string, engineDir = process.env.ENGINE_DIR ?? `${homedir()}/code/rs2b2t-engine`): IsolatedClient {
+export function deployIsolatedClient(tag: string, engineDir = process.env.ENGINE_DIR ?? `${homedir()}/code/rs2b2t-engine`, buildDir = 'out'): IsolatedClient {
     const publicDir = `${engineDir}/public`;
     const shared = `${publicDir}/bot.html`;
     if (!existsSync(shared)) {
@@ -65,7 +65,7 @@ export function deployIsolatedClient(tag: string, engineDir = process.env.ENGINE
     const build = Bun.spawnSync(['bun', 'run', 'build:bot'], {
         stdout: 'pipe',
         stderr: 'pipe',
-        env: { ...process.env, LOCAL_RSAE: key.rsae, LOCAL_RSAN: key.rsan }
+        env: { ...process.env, LOCAL_RSAE: key.rsae, LOCAL_RSAN: key.rsan, B0T_OUT_DIR: buildDir }
     });
     if (build.exitCode !== 0) {
         fail(`deploy: build:bot failed\n${build.stderr.toString()}`);
@@ -81,6 +81,7 @@ export function deployIsolatedClient(tag: string, engineDir = process.env.ENGINE
     rmSync(dir, { recursive: true, force: true });
     mkdirSync(dir, { recursive: true });
     cpSync('out', dir, { recursive: true });
+    if (buildDir !== 'out') cpSync(buildDir, dir, { recursive: true });
 
     const rewritten = readFileSync(shared, 'utf8').replaceAll('./bot/botclient.js', `./bot/${tag}/botclient.js`);
     if (!rewritten.includes(`./bot/${tag}/botclient.js`)) {

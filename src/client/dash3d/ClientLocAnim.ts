@@ -1,12 +1,14 @@
 import { Client } from '#/client/shell/Client.js';
 
 import LocType from '#/client/config/LocType.js';
+import { resolveMultiloc } from '#/client/config/resolveMultiloc.js';
 import SeqType from '#/client/config/SeqType.js';
 
 import type Model from '#/client/dash3d/Model.js';
 import ModelSource from '#/client/dash3d/ModelSource.js';
 
 export default class ClientLocAnim extends ModelSource {
+    static app: Client;
     readonly index: number;
     readonly shape: number;
     readonly angle: number;
@@ -30,11 +32,11 @@ export default class ClientLocAnim extends ModelSource {
         this.heightNE = heightNE;
         this.heightNW = heightNW;
 
-        this.anim = SeqType.list[seq];
+        this.anim = seq === -1 ? null : SeqType.list[seq];
         this.animFrame = 0;
         this.animCycle = Client.loopCycle;
 
-        if (randomFrame && this.anim.loops !== -1) {
+        if (randomFrame && this.anim && this.anim.loops !== -1) {
             this.animFrame = (Math.random() * this.anim.numFrames) | 0;
             this.animCycle -= (Math.random() * this.anim.getDelay(this.animFrame)) | 0;
         }
@@ -71,7 +73,10 @@ export default class ClientLocAnim extends ModelSource {
             frame = this.anim.frames[this.animFrame];
         }
 
-        const loc = LocType.list(this.index);
+        const loc = resolveMultiloc(LocType.list(this.index), ClientLocAnim.app?.var ?? []);
+        if (!loc) {
+            return null;
+        }
         return loc.getModel(this.shape, this.angle, this.heightSW, this.heightSE, this.heightNE, this.heightNW, frame);
     }
 }

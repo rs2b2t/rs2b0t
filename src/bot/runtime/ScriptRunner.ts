@@ -1,4 +1,5 @@
 import { reader } from '../adapter/ClientAdapter.js';
+import { bus } from '../api/events/EventBus.js';
 import { resolveLoopCadence, type AbstractBot, type LoopCadence } from '../api/bot/Bot.js';
 import { Execution } from '../api/execution/Execution.js';
 import { RandomEvents } from './randomevents/RandomEvents.js';
@@ -10,8 +11,10 @@ import { RecoveryHints } from './RecoveryHints.js';
 import { Scheduler } from './Scheduler.js';
 import { ScriptAborted, ScriptContext } from './ScriptContext.js';
 import type { ScriptMeta } from './ScriptRegistry.js';
+import { RunManager } from './RunManager.js';
 import { SettingsBag, SettingsStore } from './Settings.js';
 import { Supervisor } from './Supervisor.js';
+import { WalkExecutor } from '../event/webwalk/WalkExecutor.js';
 
 /** Schedule the next `loop()` according to the bot's cadence (see #427). */
 function scheduleNextLoop(ctx: ScriptContext, cadence: LoopCadence): void {
@@ -114,6 +117,7 @@ class ScriptRunnerImpl {
     private holdReason: LoopHoldReason | null = null;
 
     constructor() {
+        bus.on('script.finish', ({ reason }) => this.stop(reason));
         Scheduler.launchLoop = ctx => this.launchIteration(ctx);
     }
 
@@ -154,6 +158,10 @@ class ScriptRunnerImpl {
         if (this.ctx && (this.ctx.state === 'running' || this.ctx.state === 'paused' || this.ctx.state === 'stopping')) {
             throw new Error(`'${this.meta?.name}' is still ${this.ctx.state}`);
         }
+
+        // Why: a leftover RunManager.override from the previous bot (or a harness) must not apply to this start.
+        RunManager.override(null);
+        WalkExecutor.resetSession();
 
         const previous = this.ctx ? { name: this.meta?.name ?? '?', epitaph: endEpitaph(this.ctx) } : null;
         const ctx = new ScriptContext();
@@ -390,6 +398,7 @@ class ScriptRunnerImpl {
         RandomEvents.setIgnoredRandoms([]);
 
         Sustain.set(null);
+        RunManager.override(null);
 
         paintState.reset();
 

@@ -130,3 +130,8 @@ export function fightArenaAt(tile: WorldTile | null): Rect | null {
         tile.x >= area.minX && tile.x <= area.maxX && tile.z >= area.minZ && tile.z <= area.maxZ
     ) ?? null;
 }
+
+export function inDuelChallengeArea(tile: WorldTile | null): boolean {
+    return tile !== null && tile.level === 0 && tile.x >= 3328 && tile.x <= 3393
+        && tile.z >= 3203 && tile.z <= 3325 && fightArenaAt(tile) === null;
+}

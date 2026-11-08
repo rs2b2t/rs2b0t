@@ -3,7 +3,7 @@ import { Skills } from '../../../../skills/Skills.js';
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { formatTile } from '../../engine/trace.js';
-import { drawGear, meleeCarried, wearGear } from '../upass/supplies.js';
+import { BOW_IDS, drawGear, meleeCarried, wearGear } from '../upass/supplies.js';
 import {
     RG_ITEM,
     RG_MIXES,
@@ -45,7 +45,7 @@ import {
 } from './isafdar.js';
 import { RG_FLAG, RG_STAGE, readRegicideProgress } from './journal.js';
 import { enterTirannwn, leaveTirannwn } from './pass.js';
-import { COAL_TARGET, KEEP_IDS, KIT, RETURN_KIT, STILL_FOOD, kitShortfall, sourceCoal, sourceKit, type Supply } from './supplies.js';
+import { COAL_TARGET, KEEP_IDS, KIT, RETURN_KIT, STILL_FOOD, bowCarried, kitShortfall, sourceCoal, sourceKit, type Supply } from './supplies.js';
 
 const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
     ({ kind: 'custom', name, run });
@@ -66,8 +66,7 @@ function outfit(snap: QuestSnapshot, area: RegicideArea): QuestStep | null {
     if (junk && (snap.freeSlots ?? SLOTS_NEEDED) < SLOTS_NEEDED) {
         return { kind: 'deposit', keep: [RG_ITEM.SHARK.name], keepIds: KEEP_IDS, bank: RG_TILE.ARDOUGNE_BANK };
     }
-    // Why: the armour goes on before the kit comes out. The kit is 24 of the pack's 28 slots and `wearGear` draws the set 5 pieces at a time, so sourcing first leaves 3 free slots and the withdraw never fits. Worn armour costs no slot.
-    return wearGear(snap) ?? sourceKit(snap);
+    return wearGear(snap, 'weapon') ?? sourceKit(snap);
 }
 
 // Why: past the Arandar palisade there's one shop and no bank, and the way back in is the Underground Pass walked end to end, so a pack short of the kit stops on the mainland and says what's missing.
@@ -86,8 +85,8 @@ const FIRE_ARROW_SLOTS = 3;
 // Why: the walk back is planned. `sourceKit` only adds, so a pack that finished the still crosses carrying leftover coal and food with no room for the fire arrow. The leftovers have to be banked on the way past, which a kit list can't say and a plan can.
 const returnRun = (): PackPlan => ({
     what: 'the walk back through the pass',
-    allow: [],
-    caps: RETURN_KIT.map(supply => ({ item: supply.item, qty: supply.qty })),
+    allow: [...BOW_IDS],
+    caps: RETURN_KIT.filter(supply => supply.item.id !== RG_ITEM.SHORTBOW.id).map(supply => ({ item: supply.item, qty: supply.qty })),
     freeNeeded: FIRE_ARROW_SLOTS
 });
 
@@ -97,7 +96,7 @@ function crossIn(snap: QuestSnapshot): QuestStep {
     const kit = carryingBomb ? RETURN_KIT : KIT;
     // Why: shaped only on the mainland: from inside the pass a bank step aims the walk at Ardougne, the wrong side of every crossing already made.
     if (regicideArea(snap.tile) === 'mainland') {
-        const shaped = carryingBomb ? managePack(snap, returnRun()) : sourceKit(snap, kit);
+        const shaped = (carryingBomb ? managePack(snap, returnRun()) : null) ?? sourceKit(snap, kit);
         if (shaped) {
             return shaped;
         }
@@ -247,8 +246,7 @@ function bombLeg(snap: QuestSnapshot, area: RegicideArea): QuestStep {
 }
 
 function stageStep(snap: QuestSnapshot, area: RegicideArea, stage: number): QuestStep {
-    // Why: armour in the pack is 5 slots the bomb needs and a soldier fought in what the walk left on, so anything wearable goes on wherever it's found. The forest has no bank to shed it into either.
-    const gear = drawGear(snap);
+    const gear = drawGear(snap, 'weapon');
     if (gear) {
         return gear;
     }
@@ -339,7 +337,7 @@ export const regicide: QuestModule = {
                 + ` step=${step.kind === 'custom' ? step.name : step.kind} free=${snap.freeSlots ?? '?'} hp=${Math.round(Skills.hpFraction() * 100)}%`,
             `regicide: ${[kit('summons', RG_ITEM.SUMMONS), kit('letter', RG_ITEM.MESSAGE), kit('pendant', RG_ITEM.PENDANT),
                 kit('spade', RG_ITEM.SPADE), kit('rope', RG_ITEM.ROPE), kit('arrows', RG_ITEM.BRONZE_ARROW),
-                kit('bow', RG_ITEM.SHORTBOW), kit('tinderbox', RG_ITEM.TINDERBOX), kit('coal', RG_ITEM.COAL),
+                `bow=${Number(bowCarried(snap))}`, kit('tinderbox', RG_ITEM.TINDERBOX), kit('coal', RG_ITEM.COAL),
                 kit('rabbit', RG_ITEM.COOKED_RABBIT), kit('food', RG_ITEM.SHARK)].join(' ')}`
                 + ` | bomb: ${[kit('empty', RG_ITEM.BARREL), kit('tar', RG_ITEM.BARREL_TAR), kit('naphtha', RG_ITEM.BARREL_NAPHTHA),
                     kit('lidded', RG_ITEM.BARREL_LID), kit('fused', RG_ITEM.BARREL_FUSED), kit('cloth', RG_ITEM.CLOTH),

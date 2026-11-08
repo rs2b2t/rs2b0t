@@ -298,3 +298,25 @@ describe('the module record', () => {
         expect(holygrail.grind).toContain('Black Knight Titan');
     });
 });
+
+describe('Excalibur recovery ownership', () => {
+    for (const location of ['inv', 'worn'] as const) {
+        test(`keeps Excalibur in ${location} instead of asking the Lady for another`, () => {
+            expect(excaliburPlan(snap({ [location]: ['Excalibur'], bank: ['Excalibur'] })))
+                .toEqual({ kind: 'equip', item: 'Excalibur' });
+        });
+    }
+
+    test('checks an unread bank before buying a replacement even with enough cash', () => {
+        expect(excaliburPlan(snap({ inv: new Array(500).fill('Coins'), bank: [], bankKnown: false })))
+            .toEqual({ kind: 'scanBank' });
+    });
+});
+
+test('Holy Grail resumes inside either realm before mainland banking', () => {
+    for (const tile of [GRAIL_TILE.REALM_ARRIVAL, GRAIL_TILE.BELL_SPAWN, GRAIL_TILE.CASTLE_LANDING, GRAIL_TILE.FISHER_KING, GRAIL_TILE.RENEWED_ARRIVAL, GRAIL_TILE.GRAIL_STAND]) {
+        expect(holygrail.resumeAt?.(tile)).toBe(true);
+    }
+    expect(holygrail.resumeAt?.(GRAIL_TILE.SIX_HEADS)).toBe(false);
+    expect(holygrail.resumeAt?.({ x: 2762, z: 4694, level: 3 })).toBe(false);
+});

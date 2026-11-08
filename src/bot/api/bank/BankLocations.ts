@@ -80,6 +80,7 @@ export const BANK_LOCATIONS: BankLocation[] = [
     },
     { name: 'Zanaris', tile: new Tile(3153, 9576, 0), requires: { quest: 'Lost City', setting: USE_ZANARIS_BANK }, npcAccess: { name: 'Banker', op: 'Bank' } },
     { name: 'Fishing Guild', tile: new Tile(2586, 3420, 0), requires: { skill: { name: 'fishing', level: 68 } } },
+    { name: 'Legends Guild', tile: new Tile(2732, 3378, 2), requires: { quest: 'Legends Quest' }, npcAccess: { name: 'Banker', op: 'Bank' } },
     // Why: the live object is "Shantay chest" (id 2693) with Open; "Bank chest" with Use doesn't exist here, and neither does a Bank booth.
     {
         name: 'Shantay Pass',
@@ -122,9 +123,7 @@ export function approachOf(bank: BankLocation): Tile {
 
 /** Every bank this account can use, nearest first by straight line. */
 export function nearestBanks(from: WorldTile): BankLocation[] {
-    return BANK_LOCATIONS
-        .filter(bank => meetsRequirement(bank))
-        .sort((a, b) => bankDistance(from, approachOf(a)) - bankDistance(from, approachOf(b)));
+    return BANK_LOCATIONS.filter(bank => meetsRequirement(bank)).sort((a, b) => bankDistance(from, approachOf(a)) - bankDistance(from, approachOf(b)));
 }
 
 export function nearestUsableBank(from: WorldTile, usable: (bank: BankLocation) => boolean): BankLocation | null {
@@ -146,6 +145,11 @@ export function nearestUsableBank(from: WorldTile, usable: (bank: BankLocation) 
 /** Whether this account's quests and stats unlock the bank at all. */
 export function bankUnlocked(bank: BankLocation): boolean {
     return meetsRequirement(bank);
+}
+
+export function lockedBankAt(tile: WorldTile): BankLocation | null {
+    return BANK_LOCATIONS.find(bank => bank.tile.level === tile.level
+        && bank.tile.distanceTo(tile) <= 14 && !bankUnlocked(bank)) ?? null;
 }
 
 function meetsRequirement(bank: BankLocation): boolean {
@@ -214,7 +218,11 @@ export interface BankPathStamp {
 
 /** The bits of the {@link Navigator} {@link findPath} that the walk-cost wrapper needs. */
 export type NavigatorLike = {
-    findPath(from: BankPathStamp, to: BankPathStamp, opts?: unknown): Promise<{
+    findPath(
+        from: BankPathStamp,
+        to: BankPathStamp,
+        opts?: unknown
+    ): Promise<{
         ok: boolean;
         cost?: number;
         reason?: string;
@@ -224,13 +232,17 @@ export type NavigatorLike = {
 /** Wrap a {@link PathFinder} so {@link nearestWalkableBank} can reuse it. */
 export function bankCostForFinder(
     finder: {
-        findPath(from: BankPathStamp, to: BankPathStamp, opts?: unknown): {
+        findPath(
+            from: BankPathStamp,
+            to: BankPathStamp,
+            opts?: unknown
+        ): {
             ok: boolean;
             cost?: number;
             reason?: string;
         };
     },
-    findPathOpts?: object,
+    findPathOpts?: object
 ): BankPathCost {
     return (from, to) => {
         const out = finder.findPath(from, to, { useTeleportCatalog: false, ...findPathOpts });
@@ -249,13 +261,22 @@ export function bankCostForNavigator(navigator: NavigatorLike, findPathOpts?: ob
     };
 }
 
+/** Standing within this Chebyshev distance of the air-nearest bank, pay no walk-cost search. */
+const NEAR_BANK_RADIUS = 4;
+
 /**
  * Live pick of the cheapest reachable bank through the Navigator worker.
- * Why: nearestBank is air-ranked and a dungeon level offset floats every overworld bank near the same distance, so the winner collapses to "closest by x" (Edgeville from the Dwarven Mine); real per-candidate route cost fixes that, with the air-nearest bank as the no-route fallback.
+ * Why: nearestBank is air-ranked and a dungeon level offset floats every overworld bank near the same distance, so the winner collapses to "closest by x" (Edgeville from the Dwarven Mine); real per-candidate route cost fixes that, with the air-nearest bank as the no-route fallback. That batch ranks banks you are far from; standing at a booth the air-nearest bank is the one already in reach, so pay no walk-cost search there.
  */
 export async function nearestBankReachable(here: WorldTile, navigator: NavigatorLike): Promise<BankLocation | null> {
+    // Why: the air-nearest pick is gated (quests/skills/settings) and level-penalised by Tile.distanceTo,
+    // so a booth in reach short-circuits while a gated bank or a lower-plane one still navigates.
+    const near = nearestBank(here);
+    if (near && near.tile.distanceTo(here) <= NEAR_BANK_RADIUS) {
+        return near;
+    }
     // Why: a 5s/500k budget per candidate both caps a worker batch and matches the offline pack budget the fail-closed scenarios were measured with.
     const cost = bankCostForNavigator(navigator, { maxExpansions: 500_000, timeoutMs: 5_000 });
     const picked = await nearestWalkableBankAsync(here, cost).catch(() => null);
-    return picked ?? nearestBank(here);
+    return picked ?? near;
 }

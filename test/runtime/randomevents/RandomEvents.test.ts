@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { PLANT_REACH, pickEventNear, GearLossTracker, handleLocation, isEntHijack, isHostileEventNpc, pickSacrificial, RandomEvents } from '#/bot/runtime/randomevents/RandomEvents.js';
+import { PLANT_REACH, eventNpcTargetsAnotherPlayer, pickEventNear, GearLossTracker, handleLocation, isEntHijack, isHostileEventNpc, pickSacrificial, RandomEvents } from '#/bot/runtime/randomevents/RandomEvents.js';
 
 describe('handleLocation', () => {
     test('worn handle wins (the wielded-pick case the old scan missed)', () => {
@@ -129,6 +129,31 @@ describe('isHostileEventNpc', () => {
 
     test.each([1, 407, 409, 412, 437, 444, 452, 453])('non-hostile NPC %i never triggers evasion', id => {
         expect(isHostileEventNpc(hostile(id), true)).toBe(false);
+    });
+});
+
+describe('eventNpcTargetsAnotherPlayer', () => {
+    test('a random following another player is theirs', () => {
+        expect(eventNpcTargetsAnotherPlayer({ faceEntity: 32777 }, 3)).toBe(true);
+        expect(eventNpcTargetsAnotherPlayer({ faceEntity: 32768 }, 3)).toBe(true);
+    });
+
+    test('a random following us is ours', () => {
+        expect(eventNpcTargetsAnotherPlayer({ faceEntity: 32771 }, 3)).toBe(false);
+        expect(eventNpcTargetsAnotherPlayer({ faceEntity: 32768 }, 0)).toBe(false);
+    });
+
+    test('no facing at all is ours, so a spawn tick without the mask is still answered', () => {
+        expect(eventNpcTargetsAnotherPlayer({ faceEntity: -1 }, 3)).toBe(false);
+    });
+
+    test('an npc face target is not a player, so it never disowns the event', () => {
+        expect(eventNpcTargetsAnotherPlayer({ faceEntity: 9 }, 3)).toBe(false);
+        expect(eventNpcTargetsAnotherPlayer({ faceEntity: 32767 }, 3)).toBe(false);
+    });
+
+    test('an unknown slot of our own keeps the event rather than abandoning it', () => {
+        expect(eventNpcTargetsAnotherPlayer({ faceEntity: 32777 }, -1)).toBe(false);
     });
 });
 

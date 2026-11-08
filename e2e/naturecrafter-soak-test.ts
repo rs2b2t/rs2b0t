@@ -19,6 +19,7 @@ interface RuneRoute {
     bankTele: string;
     essencePer: number;
     coins: number; // 0 = the short route never spends any
+    templeMapX: number;
     zones: { name: string; x: [number, number]; z: [number, number] }[];
 }
 
@@ -27,7 +28,7 @@ const ROUTES: Record<string, RuneRoute> = {
         talisman: 'air_talisman', runeName: 'air rune', xpPerEssence: 5,
         altarTele: '::tele 0,46,51,39,24', // air ruins (2983,3288)
         bankTele: '::tele 0,47,52,5,27', // Falador East (3013,3355)
-        essencePer: 2500, coins: 0,
+        essencePer: 2500, coins: 0, templeMapX: 44,
         zones: [
             { name: 'altar', x: [2965, 3005], z: [3270, 3305] },
             { name: 'fally', x: [2995, 3030], z: [3335, 3370] }
@@ -37,12 +38,23 @@ const ROUTES: Record<string, RuneRoute> = {
         talisman: 'nature_talisman', runeName: 'nature rune', xpPerEssence: 9,
         altarTele: '::tele 0,44,47,49,14', // nature ruins (2865,3022)
         bankTele: '::tele 0,41,51,31,19', // Ardougne East (2655,3283)
-        essencePer: 600, coins: 100_000,
+        essencePer: 600, coins: 100_000, templeMapX: 37,
         zones: [
             { name: 'ardy', x: [2600, 2690], z: [3260, 3345] },
             { name: 'store', x: [2755, 2780], z: [3110, 3135] },
             { name: 'altar', x: [2855, 2875], z: [3012, 3032] },
             { name: 'karamja', x: [2700, 2850], z: [3140, 3260] }
+        ]
+    },
+    'Cosmic runes': {
+        talisman: 'cosmic_talisman', runeName: 'cosmic rune', xpPerEssence: 8,
+        altarTele: '::tele 0,49,148,37,29',
+        bankTele: '::tele 0,49,149,16,39',
+        essencePer: 2500, coins: 0, templeMapX: 33,
+        zones: [
+            { name: 'altar', x: [3160, 3190], z: [9490, 9520] },
+            { name: 'bank', x: [3136, 3170], z: [9560, 9595] },
+            { name: 'zanaris', x: [3136, 3263], z: [9472, 9599] }
         ]
     }
 };
@@ -62,7 +74,7 @@ type Abi = {
 
 function zone(p: { x: number; z: number; level: number } | null): string {
     if (!p) { return '??'; }
-    if (p.z > 4000) { return 'temple'; }
+    if (p.level === 0 && (p.x >> 6) === route.templeMapX && (p.z >> 6) === 75) { return 'temple'; }
     const hit = route.zones.find(zn => p.x >= zn.x[0] && p.x <= zn.x[1] && p.z >= zn.z[0] && p.z <= zn.z[1]);
     return hit ? hit.name : `${p.x},${p.z}`;
 }
@@ -118,10 +130,10 @@ try {
     await cheatQuiet(pageM, '~clearinv');
     await cheatQuiet(pageM, `~item ${route.talisman} 1`);
     await pageM.evaluate(([names, rune, every]) => {
-        sessionStorage.setItem('rs2b0t:set:NatureCrafter:rune', rune);
-        sessionStorage.setItem('rs2b0t:set:NatureCrafter:mode', 'Master');
-        sessionStorage.setItem('rs2b0t:set:NatureCrafter:partner', names);
-        sessionStorage.setItem('rs2b0t:set:NatureCrafter:bankEvery', every);
+        sessionStorage.setItem('rs2b0t:set:JiveRC:rune', rune);
+        sessionStorage.setItem('rs2b0t:set:JiveRC:mode', 'Master');
+        sessionStorage.setItem('rs2b0t:set:JiveRC:partner', names);
+        sessionStorage.setItem('rs2b0t:set:JiveRC:bankEvery', every);
     }, [R_USERS.join(','), RUNE, MASTER_BANK_EVERY]);
     console.log(`  master '${M_USER}' ready at the altar (banking everything every ${MASTER_BANK_EVERY}min)`);
 
@@ -136,15 +148,15 @@ try {
         ], { x: 3185, z: 3440, level: 0 });
         await teleTo(rPages[i], R_USERS[i], route.bankTele);
         await rPages[i].evaluate(([m, rune]) => {
-            sessionStorage.setItem('rs2b0t:set:NatureCrafter:rune', rune);
-            sessionStorage.setItem('rs2b0t:set:NatureCrafter:mode', 'Runner');
-            sessionStorage.setItem('rs2b0t:set:NatureCrafter:partner', m);
+            sessionStorage.setItem('rs2b0t:set:JiveRC:rune', rune);
+            sessionStorage.setItem('rs2b0t:set:JiveRC:mode', 'Runner');
+            sessionStorage.setItem('rs2b0t:set:JiveRC:partner', m);
         }, [M_USER, RUNE]);
         console.log(`  runner '${R_USERS[i]}' ready (${route.essencePer} essence banked${route.coins ? ` + ${route.coins} gp` : ', no coins — the short route needs none'})`);
     }
 
-    await startScript(pageM, 'NatureCrafter');
-    for (const p of rPages) { await startScript(p, 'NatureCrafter'); }
+    await startScript(pageM, 'JiveRC');
+    for (const p of rPages) { await startScript(p, 'JiveRC'); }
     console.log(`\nall started — soaking for ${budgetMin}min. dashboard every ~30s:\n`);
 
     const xp0 = (await sample(pageM)).rcXp;

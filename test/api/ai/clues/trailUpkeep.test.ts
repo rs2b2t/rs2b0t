@@ -16,6 +16,9 @@ const HELD_CLUE = Number(Object.keys(CLUE_DB)[0]);
 
 let hp: number;
 let eaten: number;
+let dropped: number;
+let rejectDrop: boolean;
+let operations: string[];
 let inv: { id: number; name: string }[];
 let logs: string[];
 /** Damage the guardian lands in the same tick the food heals. */
@@ -44,8 +47,15 @@ const stubInventory = {
         inv.map(i => ({
             ...i,
             count: 1,
-            actions: () => ['Eat'],
-            interact: async (): Promise<boolean> => {
+            actions: () => i.id === 2959 ? ['Drop'] : ['Eat'],
+            interact: async (action: string): Promise<boolean> => {
+                operations.push(action);
+                if (action === 'Drop') {
+                    if (rejectDrop || i.id !== 2959) return false;
+                    dropped++;
+                    inv = inv.filter(x => x !== i);
+                    return true;
+                }
                 eaten++;
                 inv = inv.filter(x => x !== i);
                 hp = Math.max(0, Math.min(MAX_HP, hp + 12) - incoming);
@@ -75,6 +85,9 @@ beforeEach(() => {
     Object.assign(RealInventory.Inventory, stubInventory);
     hp = MAX_HP;
     eaten = 0;
+    dropped = 0;
+    rejectDrop = false;
+    operations = [];
     inv = [1, 2, 3].map(id => ({ id, name: LOBSTER }));
     logs = [];
     confirmations = [];
@@ -215,4 +228,52 @@ describe('trail upkeep', () => {
         }
         expect(eaten).toBe(0);
     });
+});
+
+
+test('trail upkeep drops newly rotten food at full health and leaves supplies alone', async () => {
+    const restoreSolve = stubProps(ClueExecutor, {
+        solveHeldClue: async (): Promise<'yield'> => {
+            inv.push({ id: 952, name: 'Spade' });
+            for (let i = 0; i < 2; i++) {
+                inv.push({ id: 2959, name: 'Rotten food' });
+                await Sustain.run();
+                expect(inv.some(item => item.id === 2959)).toBe(false);
+            }
+            return 'yield';
+        }
+    });
+    try {
+        await new SolveClue(host()).execute();
+    } finally {
+        restoreSolve();
+    }
+    expect(dropped).toBe(2);
+    expect(eaten).toBe(0);
+    expect(inv.map(item => item.id)).toEqual([1, 2, 3, 952]);
+});
+
+test('a rejected rotten-food drop retries on later upkeep after healing', async () => {
+    const restoreSolve = stubProps(ClueExecutor, {
+        solveHeldClue: async (): Promise<'yield'> => {
+            hp = 30;
+            inv.push({ id: 2959, name: 'Rotten food' });
+            rejectDrop = true;
+            await Sustain.run();
+            expect(operations[0]).toBe('Eat');
+            expect(hp).toBe(42);
+            expect(inv.some(item => item.id === 2959)).toBe(true);
+            rejectDrop = false;
+            await Sustain.run();
+            expect(inv.some(item => item.id === 2959)).toBe(false);
+            return 'yield';
+        }
+    });
+    try {
+        await new SolveClue(host()).execute();
+    } finally {
+        restoreSolve();
+    }
+    expect(dropped).toBe(1);
+    expect(operations.filter(op => op === 'Drop')).toHaveLength(2);
 });

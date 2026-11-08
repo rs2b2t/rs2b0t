@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { HARD_LEATHER_BURST, issueHardLeatherBurst } from '../../../src/bot/scripts/LeatherCrafter/LeatherCrafterLogic.js';
 
 describe('issueHardLeatherBurst', () => {
-    test('uses ten distinct slots in order', async () => {
+    test('queues every slot without awaiting each send', async () => {
         const used: number[] = [];
         const sent = await issueHardLeatherBurst(
             Array.from({ length: 26 }, (_, slot) => slot),
@@ -13,24 +13,13 @@ describe('issueHardLeatherBurst', () => {
             }
         );
 
-        expect(sent).toBe(HARD_LEATHER_BURST);
-        expect(used).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        expect(sent).toBe(26);
+        expect(used).toEqual(Array.from({ length: 26 }, (_, slot) => slot));
     });
 
-    test('uses every slot when fewer than ten remain', async () => {
+    test('stops when an input action is rejected synchronously', async () => {
         const used: number[] = [];
-        const sent = await issueHardLeatherBurst([4, 8, 12], slot => {
-            used.push(slot);
-            return true;
-        });
-
-        expect(sent).toBe(3);
-        expect(used).toEqual([4, 8, 12]);
-    });
-
-    test('stops when an input action is rejected', async () => {
-        const used: number[] = [];
-        const sent = await issueHardLeatherBurst([1, 2, 3, 4], async slot => {
+        const sent = await issueHardLeatherBurst([1, 2, 3, 4], slot => {
             used.push(slot);
             return slot < 3;
         });
@@ -52,5 +41,9 @@ describe('issueHardLeatherBurst', () => {
 
         expect(sent).toBe(2);
         expect(used).toEqual([1, 2]);
+    });
+
+    test('the packet-burst cap covers a full inventory', () => {
+        expect(HARD_LEATHER_BURST).toBeGreaterThanOrEqual(26);
     });
 });

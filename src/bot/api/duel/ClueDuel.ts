@@ -5,7 +5,7 @@ import { Players } from '../players/Players.js';
 import { Locs } from '../locs/Locs.js';
 import { ChatDialog } from '../ui/dialogue/ChatDialog.js';
 import { Traversal } from '../walking/Traversal.js';
-import { Duel, fightArenaAt } from './Duel.js';
+import { Duel, fightArenaAt, inDuelChallengeArea } from './Duel.js';
 
 export const CLUE_DUEL_LOBBY = { x: 3368, z: 3274, level: 0 };
 export const CLUE_DUEL_OPTIONS = 1024;
@@ -32,7 +32,7 @@ export class ClueDuelHandshake {
         if (!Duel.active()) {
             this.openedAt = 0;
             if (Date.now() - this.challengedAt < 5000) return true;
-            const other = Players.query().where(player => clueDuelName(player.name) === clueDuelName(this.partner) && !player.inCombat && fightArenaAt(player.tile()) === null).nearest();
+            const other = Players.query().where(player => clueDuelName(player.name) === clueDuelName(this.partner) && !player.inCombat && inDuelChallengeArea(player.tile())).nearest();
             if (!other) return true;
             this.challengedAt = Date.now();
             await Duel.challenge(other);
@@ -62,6 +62,38 @@ export class ClueDuelHandshake {
         }
         if (!Duel.waitingForOther()) Duel.accept();
         return true;
+    }
+}
+
+export class ClueDuelSearch {
+    private handshake: ClueDuelHandshake | null = null;
+    private selectedAt = 0;
+    constructor(private readonly log: (message: string) => void, private readonly tried = new Map<string, number>()) {}
+
+    async tick(): Promise<void> {
+        const now = Date.now();
+        if (this.handshake && now - this.selectedAt >= 30_000) {
+            if (Duel.active()) await Duel.cancel();
+            this.handshake = null;
+        }
+        if (!this.handshake) {
+            const local = clueDuelName(reader.localPlayerName());
+            const candidates = Players.query().where(p => !!clueDuelName(p.name) && clueDuelName(p.name) !== local
+                && !p.inCombat && inDuelChallengeArea(p.tile())
+                && now - (this.tried.get(clueDuelName(p.name)) ?? -Infinity) >= 60_000).results();
+            const player = Duel.active()
+                ? candidates.find(p => clueDuelName(p.name) === clueDuelName(Duel.partner()))
+                : candidates.sort((a, b) => (this.tried.get(clueDuelName(a.name)) ?? 0) - (this.tried.get(clueDuelName(b.name)) ?? 0) || a.distance() - b.distance())[0];
+            if (!player) {
+                if (Duel.active()) await Duel.cancel();
+                return;
+            }
+            this.selectedAt = now;
+            this.tried.set(clueDuelName(player.name), now);
+            this.handshake = new ClueDuelHandshake(player.name!, true, this.log);
+            this.log(`trying an unstaked obstacle duel with ${player.name}`);
+        }
+        if (!(await this.handshake.tick())) this.handshake = null;
     }
 }
 

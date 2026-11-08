@@ -5,7 +5,7 @@ import { askToHelp, bloomWithScroll, feedStones, journalLeg, mirrorLeg, solvePuz
 import { bloomWithSickle, fillPouch, killGhast } from './ghasts.js';
 import { blessSickle, enterGrotto, exitAfterQuest, leaveGrotto, rechargePrayer, talkInGrotto } from './grotto.js';
 import { NS_FLAG, readDruidProgress } from './journal.js';
-import { amulet, heldId, NS_TOOLS, sickleStep } from './supplies.js';
+import { amulet, bankedId, heldId, NS_TOOLS, sickleStep } from './supplies.js';
 
 const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
     ({ kind: 'custom', name, run });
@@ -54,6 +54,18 @@ function ghastLoop(snap: QuestSnapshot): QuestStep {
     }
     if (heldId(snap, NS_ID.POUCH) > 0) {
         return custom('kill a ghast', killGhast);
+    }
+    if (heldId(snap, NS_ID.POUCH_EMPTY) === 0) {
+        if (!snap.bankKnown) {
+            return { kind: 'scanBank' };
+        }
+        for (const id of [NS_ID.POUCH, NS_ID.POUCH_EMPTY]) {
+            const count = bankedId(snap, id);
+            if (count > 0) {
+                return { kind: 'withdraw', items: [{ name: 'Druid pouch', id, qty: id === NS_ID.POUCH ? Math.min(3, count) : 1 }] };
+            }
+        }
+        return { kind: 'wait', reason: 'no Druid pouch held or banked' };
     }
     if (harvestHeld(snap) >= 3) {
         return custom('fill the druid pouch', fillPouch);

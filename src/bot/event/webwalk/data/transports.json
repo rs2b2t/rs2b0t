@@ -1,5 +1,42 @@
 [
   {
+    "from": { "x": 2940, "z": 3248, "level": 0 },
+    "to": { "x": 2941, "z": 3248, "level": 0 },
+    "locName": "Door",
+    "action": "Open",
+    "kind": "shortcut",
+    "locId": 2595,
+    "locX": 2941,
+    "locZ": 3248,
+    "debugName": "melzardoor",
+    "options": ["Open"],
+    "requires": { "items": [{ "name": "Maze key", "count": 1, "consumed": false }] }
+  },
+  {
+    "from": { "x": 2709, "z": 3496, "level": 0 },
+    "to": { "x": 2709, "z": 3495, "level": 0 },
+    "locName": "Odd looking wall",
+    "action": "Push",
+    "kind": "shortcut",
+    "locId": 3391,
+    "locX": 2709,
+    "locZ": 3495,
+    "debugName": "elemental_workshop_oddwall_l",
+    "options": ["Push"]
+  },
+  {
+    "from": { "x": 2716, "z": 9888, "level": 0 },
+    "to": { "x": 2709, "z": 3497, "level": 0 },
+    "locName": "Staircase",
+    "action": "Climb-up",
+    "kind": "dungeon",
+    "locId": 3416,
+    "locX": 2714,
+    "locZ": 9887,
+    "debugName": "elemental_workshop_spiralstairs",
+    "options": ["Climb-up"]
+  },
+  {
     "from": {
       "x": 2559,
       "z": 3300,

@@ -15,6 +15,7 @@ import {
     logsShort,
     makeAshes,
     permSerumVialId,
+    recoverSerum,
     serumsShort,
     SM_TOOLS
 } from './supplies.js';
@@ -202,6 +203,10 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
 
+    const recovery = recoverSerum(snap, stage);
+    if (recovery) {
+        return recovery;
+    }
     const supplies = kit(snap, stage);
     if (supplies) {
         return supplies;

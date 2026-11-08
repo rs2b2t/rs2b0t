@@ -101,3 +101,13 @@ test('both sources failing leaves the baked key alone', async () => {
     serveByUrl({});
     expect(await refreshLoginKey()).toBe(false);
 });
+
+test('each frame refreshes only its selected world key and client bundle', async () => {
+    const paths: string[] = [];
+    stubFetch(async path => {
+        paths.push(path);
+        return path.endsWith('/client/client.js') ? new Response(`const modulus=${MODULUS_A}`) : new Response('missing', { status: 404 });
+    });
+    expect(await refreshLoginKey({ wsHost: 'localhost:8081/__rs2b0t/world/2', tls: false, world: 2, httpPrefix: '/__rs2b0t/world/2' })).toBe(true);
+    expect(paths).toEqual(['/__rs2b0t/world/2/loginkey', '/__rs2b0t/world/2/client/client.js']);
+});

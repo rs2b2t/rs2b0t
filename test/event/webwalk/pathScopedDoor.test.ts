@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
     barrierBannable,
     DOOR_AVOID_STRIKES,
-    DOOR_SESSION_STRIKES,
+    DOOR_COOLDOWN_STRIKES,
     noteFailedDoor,
     pickNearbyDoorTile
 } from '#/bot/event/webwalk/exec/doorCrossing.js';
@@ -79,18 +79,18 @@ describe('failed door strikes escalate past one walk', () => {
         transport: { locX: 3405, locZ: 3895, locName: 'Gate', action: 'Open', kind: 'door' }
     } as never as Parameters<typeof noteFailedDoor>[0];
 
-    test('second strike avoids it for this walk, third bans it for the run', () => {
+    test('second strike avoids it for this walk, third triggers the cooldown', () => {
         const strikes = new Map<string, number>();
         const avoid: { x: number; z: number }[] = [];
         expect(noteFailedDoor(hop, strikes, avoid)).toBe(1);
         expect(avoid).toEqual([]);
         expect(noteFailedDoor(hop, strikes, avoid)).toBe(DOOR_AVOID_STRIKES);
         expect(avoid).toEqual([{ x: 3405, z: 3895 }]);
-        expect(noteFailedDoor(hop, strikes, avoid)).toBe(DOOR_SESSION_STRIKES);
+        expect(noteFailedDoor(hop, strikes, avoid)).toBe(DOOR_COOLDOWN_STRIKES);
     });
 
-    test('the session threshold is past the per-walk one, or it never fires', () => {
-        expect(DOOR_SESSION_STRIKES).toBeGreaterThan(DOOR_AVOID_STRIKES);
+    test('the cooldown threshold is past the per-walk one, or it never fires', () => {
+        expect(DOOR_COOLDOWN_STRIKES).toBeGreaterThan(DOOR_AVOID_STRIKES);
     });
 });
 

@@ -3,6 +3,14 @@ const ERROR_RE = /\berror\b|\bFAIL\b|\bfailed\b|✗|Cannot\b|not found/i;
 const NOISE_RE = /^\s*at\s|^Bun v\d|^\s*log:\s|coreBundle\.js/;
 const CAP = 240;
 
+const DRIFT_STALE_RE = /\bSTALE\b|does not match/i;
+const DRIFT_CLEAN_RE = /\bok:|is up to date\b/i;
+
+export function driftVerdict(text: string): 'pass' | 'fail' {
+    if (DRIFT_STALE_RE.test(text)) return 'fail';
+    return DRIFT_CLEAN_RE.test(text) ? 'pass' : 'fail';
+}
+
 /** Why: crash logs end with stack frames; prefer the last error lines and fall back to the tail. */
 export function errorTail(lines: string[]): string {
     const clean = lines.map(l => l.trim()).filter(Boolean);

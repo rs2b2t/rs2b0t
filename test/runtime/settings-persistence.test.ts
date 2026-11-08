@@ -11,6 +11,22 @@ beforeEach(clearAll);
 afterEach(clearAll);
 
 describe('durable settings persistence (client relaunch)', () => {
+    test('JiveRC preserves saved NatureCrafter settings through the rename', () => {
+        SettingsStore.save('NatureCrafter', 'partner', 'runner one,runner two');
+        expect(SettingsStore.saved('JiveRC', 'partner')).toBe('runner one,runner two');
+        SettingsStore.save('JiveRC', 'partner', 'runner three');
+        sessionStorage.clear();
+        expect(SettingsStore.saved('JiveRC', 'partner')).toBe('runner three');
+        SettingsStore.clear('JiveRC', 'partner');
+        expect(SettingsStore.saved('JiveRC', 'partner')).toBeUndefined();
+    });
+
+    test('explicit JiveRC settings override legacy NatureCrafter settings', () => {
+        SettingsStore.save('NatureCrafter', 'partner', 'legacy');
+        sessionStorage.setItem(K('JiveRC', 'partner'), 'current');
+        expect(SettingsStore.saved('JiveRC', 'partner')).toBe('current');
+    });
+
     test('save writes through to localStorage so a fresh instance inherits it', () => {
         SettingsStore.save('MossGiant', 'combatStyle', 'range');
         expect(localStorage.getItem(K('MossGiant', 'combatStyle'))).toBe('range');

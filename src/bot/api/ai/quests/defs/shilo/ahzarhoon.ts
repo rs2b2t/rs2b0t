@@ -1,10 +1,11 @@
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
+import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Game } from '../../../../game/Game.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { SV_ITEM, SV_LOC, SV_TILE } from './areas.js';
-import { driveChoice, driveUntil, heldId, here, locNear, promptLoc, settleScene, useOnLoc } from './scene.js';
+import { driveUntil, heldId, here, locNear, promptLoc, settleScene, useOnLoc } from './scene.js';
 
 const YES_CRAWL = ["Yes, I'll give it a go!"];
 const YES_SEARCH = ["Yes, I'm quite sure."];
@@ -205,19 +206,16 @@ export function readScroll(itemId: number): (log: (m: string) => void) => Promis
             log(`no scroll ${itemId} in the pack to read`);
             return false;
         }
-        if (!(await scroll.interact('Read'))) {
-            return false;
+        await Execution.delayTicks(1);
+        let opened = false;
+        for (let attempt = 0; attempt < 3 && !opened; attempt++) {
+            if (!(await scroll.interact('Read'))) return false;
+            opened = await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue() || reader.modals().main !== -1, 2500);
         }
-        await Execution.delayTicks(2);
-        if (!(await driveChoice(YES_READ, log))) {
-            return false;
-        }
-        // Why: the scroll body is a main modal built with if_settext, so driveChoice can't see it, and every journal read comes back empty while it's up.
-        await Execution.delayUntil(() => reader.modals().main !== -1, 6000);
-        if (reader.modals().main !== -1) {
-            actions.closeModal();
-            await Execution.delayTicks(1);
-        }
+        if (!opened) return false;
+        if (!(await driveUntil(() => reader.modals().main !== -1, YES_READ, log, 10_000))) return false;
+        actions.closeModal();
+        await Execution.delayTicks(1);
         return true;
     };
 }

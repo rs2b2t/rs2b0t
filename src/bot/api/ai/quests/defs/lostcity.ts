@@ -15,8 +15,8 @@ import { QUESTS } from '../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { talkThrough, type NpcStop } from '../exec/primitives.js';
 import { FOOD_FLOAT, QuestFood } from '../food.js';
-import { SPELL_DB } from '../../../../data/spelldb.js';
-import { defeatTreeSpirit, highestLostCityStrike } from './lostcityCombat.js';
+import { prepareStrikes, STRIKE_CASTS } from '../strike.js';
+import { defeatTreeSpirit } from './lostcityCombat.js';
 
 export const LOST_CITY_STAGE = {
     NOT_STARTED: 0,
@@ -66,7 +66,7 @@ const BRANCH = 'Dramen branch';
 const STAFF = 'Dramen staff';
 export const LOST_CITY_FOOD_TARGET = FOOD_FLOAT;
 export const LOST_CITY_STAFF_TARGET = 5;
-export const LOST_CITY_CAST_TARGET = 200;
+export const LOST_CITY_CAST_TARGET = STRIKE_CASTS;
 const STRIKE_RUNES = ['air rune', 'mind rune', 'water rune', 'earth rune', 'fire rune'];
 const AXES = ['Rune axe', 'Adamant axe', 'Mithril axe', 'Black axe', 'Steel axe', 'Iron axe', 'Bronze axe'];
 const DUNGEON_AXES = ['Iron axe', 'Bronze axe'];
@@ -121,7 +121,7 @@ export function lostCityArea(tile: QuestSnapshot['tile']): LostCityArea {
     if (tile.x >= 2790 && tile.x <= 2900 && tile.z >= 9650 && tile.z <= 9850) {
         return 'dungeon';
     }
-    if (tile.x >= 2790 && tile.x <= 2880 && tile.z >= 3290 && tile.z <= 3440) {
+    if (tile.x >= 2790 && tile.x <= 2880 && tile.z >= 3290 && tile.z <= 3391) {
         return tile.level > 0 ? 'entranaShip' : 'entrana';
     }
     return 'mainland';
@@ -247,7 +247,7 @@ function sourceCombatFood(snap: QuestSnapshot): QuestStep | null {
     if (inBank < missing) {
         return {
             kind: 'wait',
-            reason: `need ${missing} more ${food} in the bank (${LOST_CITY_FOOD_TARGET} combat food total)`
+            reason: `need ${missing - inBank} more ${food} in the bank (${LOST_CITY_FOOD_TARGET} combat food total)`
         };
     }
     const space = makeAcquisitionSpace(snap, missing);
@@ -463,7 +463,8 @@ async function sailToEntrana(log: (m: string) => void): Promise<boolean> {
     }
     return Execution.delayUntil(() => {
         const tile = Game.tile();
-        return tile !== null && tile.x >= 2790 && tile.x <= 2880 && tile.z >= 3290 && tile.z <= 3440;
+        const area = lostCityArea(tile);
+        return area === 'entrana' || area === 'entranaShip';
     }, 30_000);
 }
 
@@ -472,26 +473,7 @@ function mainlandTools(snap: QuestSnapshot): QuestStep | null {
 }
 
 function sourceStrikeRunes(snap: QuestSnapshot): QuestStep | null {
-    const magic = snap.magic ?? 1;
-    const best = highestLostCityStrike(magic, () => Infinity);
-    if (!best) return { kind: 'wait', reason: 'need Magic 1 for Lost City Strike spells' };
-    const carried = (rune: string): number => heldCount(snap, rune) / LOST_CITY_CAST_TARGET;
-    if (highestLostCityStrike(magic, carried) === best) return null;
-    if (!snap.bankKnown) return scanBank();
-    const available = (rune: string): number => heldCount(snap, rune) + banked(snap, rune);
-    const spell = highestLostCityStrike(magic, rune => available(rune) / LOST_CITY_CAST_TARGET);
-    if (!spell) {
-        const missing = SPELL_DB['Wind Strike'].runes
-            .map(({ rune, count }) => ({ rune, count: count * LOST_CITY_CAST_TARGET - available(rune) }))
-            .filter(item => item.count > 0)
-            .map(item => `${item.count} ${item.rune}`).join(', ');
-        return { kind: 'wait', reason: `need runes for ${LOST_CITY_CAST_TARGET} Strike casts: ${missing}` };
-    }
-    const items = SPELL_DB[spell].runes
-        .map(({ rune, count }) => ({ name: rune, qty: count * LOST_CITY_CAST_TARGET - heldCount(snap, rune) }))
-        .filter(item => item.qty > 0);
-    if (items.length === 0) return null;
-    return makeAcquisitionSpace(snap, items.filter(item => !held(snap, item.name)).length) ?? withdraw(items);
+    return prepareStrikes(snap, entranaKeep());
 }
 
 function travelToDungeon(snap: QuestSnapshot): QuestStep {

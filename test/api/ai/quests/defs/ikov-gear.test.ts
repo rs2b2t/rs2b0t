@@ -113,3 +113,17 @@ describe('Temple of Ikov melee weapon', () => {
         expect(meleeWeaponStep(snap({ bankKnown: false, bank: [['rune scimitar', 1]] }))).toBeNull();
     });
 });
+
+describe('Temple of Ikov weapon stability', () => {
+    for (const location of ['inv', 'bank'] as const) {
+        test(`keeps the worn rune scimitar when the adamant sword is in ${location}`, () => {
+            expect(meleeWeaponStep(snap({ worn: ['rune scimitar'], [location]: [['adamant sword', 1]] }))).toBeNull();
+        });
+    }
+
+    test('upgrades once and then proceeds instead of swapping back', () => {
+        const upgrade = meleeWeaponStep(snap({ worn: ['adamant sword'], inv: [['rune scimitar', 1]] }));
+        expect(upgrade?.kind === 'custom' && upgrade.name).toBe('wield Rune scimitar');
+        expect(meleeWeaponStep(snap({ worn: ['rune scimitar'], inv: [['adamant sword', 1]] }))).toBeNull();
+    });
+});

@@ -6,6 +6,7 @@ import type { CookSurfaceLoc } from '#/bot/data/cookSurfaceTypes.js';
 export const COOKING_SURFACE_LOCS: readonly CookSurfaceLoc[] = [
     {"x":2445,"z":3188,"level":0,"name":"Range","debugname":"range","kind":"oven"},
     {"x":2459,"z":3173,"level":0,"name":"Range","debugname":"range","kind":"oven"},
+    {"x":2498,"z":3859,"level":0,"name":"Fireplace","debugname":"grandfireplace_oldbrick","kind":"fire"},
     {"x":2513,"z":3427,"level":0,"name":"Fireplace","debugname":"fireplace","kind":"fire"},
     {"x":2523,"z":3499,"level":0,"name":"Fireplace","debugname":"grandfireplace","kind":"fire"},
     {"x":2526,"z":3319,"level":0,"name":"Fireplace","debugname":"fireplace","kind":"fire"},

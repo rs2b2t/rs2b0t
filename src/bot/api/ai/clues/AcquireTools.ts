@@ -149,12 +149,14 @@ export async function ensureGateItems(
             continue;
         }
         log(`route is short ${want.count}x '${want.name}' — buying from ${shop.npc} at (${shop.stand.x},${shop.stand.z})`);
-        await Traversal.walkResilient(shop.stand, {
+        const reached = await Traversal.walkResilient(shop.stand, {
             radius: HOP_ARRIVE_RADIUS,
             attempts: WALK_ATTEMPTS,
             timeoutMs: WALK_TIMEOUT_MS,
             log: m => log(`  ${m}`)
         });
+        if (EventSignal.pending()) return bought;
+        if (!reached) continue;
         if (!(await Shop.open(shop.npc))) {
             log(`${shop.npc}'s shop did not open — leaving '${want.name}' unacquired`);
             continue;

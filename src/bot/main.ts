@@ -1,3 +1,7 @@
+import './panel/desktopStorage.js';
+import { TARGET, supportsWorldRouting } from '../client/config/target.js';
+import { resolveNodeId, hostedWorld } from '../client/config/worlds.js';
+import { worldSelector } from './panel/WorldSelector.js';
 import { CLIENT_VERSION, ClientProt } from '../client/io/ClientProt.js';
 import { actions, reader } from './adapter/ClientAdapter.js';
 import BotClient from './runtime/BotClient.js';
@@ -21,6 +25,7 @@ import { SettingsStore } from './runtime/Settings.js';
 import { StallGuard } from './runtime/StallGuard.js';
 import { RandomEventGuardian } from './runtime/RandomEventGuardian.js';
 import BotPanel from './panel/BotPanel.js';
+import { createRosterClient } from './panel/RosterClient.js';
 import Overlay from './panel/Overlay.js';
 import { installPaintInput } from './panel/PaintInput.js';
 import { paintState } from './paint/paintLogic.js';
@@ -34,11 +39,35 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
     setNavPackHost(window.top ?? window);
 
     const params = new URLSearchParams(window.location.search);
-    const nodeid = parseInt(params.get('nodeid') ?? '10', 10);
+    const world = TARGET.world ?? hostedWorld(TARGET.wsHost)?.number ?? null;
+    const identity = new URLSearchParams(params);
+    if (!supportsWorldRouting()) identity.delete('world');
+    const nodeid = resolveNodeId(TARGET.wsHost, identity);
     const lowmem = params.get('lowmem') !== '0';
     const members = params.get('members') !== '0';
 
     const client = new BotClient(nodeid, lowmem, members);
+    let reconnectAfterSwitch = false;
+    const prepareWorldSwitch = (): boolean => {
+        reconnectAfterSwitch ||= client.ingame;
+        if (client.ingame) {
+            const credentials = actions.loginCredentials();
+            AutoRelogin.setCredentials(credentials.username, credentials.password);
+        }
+        panel?.setWorldSwitchPending(true);
+        AutoRelogin.shutdown();
+        ScriptRunner.stop('World switch');
+        if (['running', 'paused', 'stopping'].includes(ScriptRunner.state)) return false;
+        return client.prepareWorldSwitch();
+    };
+
+    const cancelWorldSwitch = (): void => {
+        ScriptRunner.stop('World switch cancelled');
+        client.cancelWorldSwitch();
+        AutoRelogin.cancelWorldSwitch();
+        panel?.setWorldSwitchPending(false);
+        reconnectAfterSwitch = false;
+    };
 
     const panelRoot = document.getElementById('bot-panel');
     let panel: BotPanel | null = null;
@@ -50,6 +79,19 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
                 document.body.classList.toggle('rs2b0t-renderer-off', !enabled);
             }
         });
+    }
+
+    if (panelRoot) {
+        if (window.top === window.self && supportsWorldRouting()) {
+            panelRoot.querySelector('.rs2b0t-title')?.after(worldSelector({
+                mode: 'single', location: new URL(window.location.href), prepare: prepareWorldSwitch, cancel: cancelWorldSwitch,
+                navigate: url => {
+                    const destination = new URL(url);
+                    if (reconnectAfterSwitch) destination.searchParams.set('autologin', '1');
+                    window.location.assign(destination.href);
+                }
+            }));
+        }
     }
 
     const overlayCanvas = document.getElementById('overlay');
@@ -90,8 +132,10 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
     console.log(`[rs2b0t] build ${formatBuildInfo()}`);
 
     (globalThis as Record<string, unknown>).rs2b0t = {
+        prepareWorldSwitch, cancelWorldSwitch, world,
+        roster: panel ? createRosterClient(panel) : null,
         client, host: BotHost, runner: ScriptRunner, registry: ScriptRegistry,
-        reader, actions, navigator: Navigator,
+        reader, actions, navigator: Navigator, runManager: RunManager,
         input: Input, scheduler: Scheduler,
         renderGate: RenderGate,
         build: BUILD_INFO,

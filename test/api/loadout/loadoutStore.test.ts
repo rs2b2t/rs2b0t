@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { Loadouts } from '#/bot/api/loadout/loadoutStore.js';
 import type { Loadout } from '#/bot/api/loadout/loadouts.js';
 
@@ -11,6 +11,8 @@ const melee: Loadout = {
 beforeEach(() => {
     Loadouts.save([]);
 });
+
+afterEach(() => Loadouts.save([]));
 
 describe('Loadouts', () => {
     test('starts empty', () => {

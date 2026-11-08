@@ -5,7 +5,9 @@ import {
     shouldWalkHomeToGatherAnchor,
     tileWithinLeash
 } from '../../api/tasks/Anchor.js';
-import { reader } from '../../adapter/ClientAdapter.js';
+import { actions, reader } from '../../adapter/ClientAdapter.js';
+import { Input } from '../../input/Input.js';
+import { BotHost } from '../../runtime/BotHost.js';
 import { TaskBot } from '../../api/bot/Bot.js';
 import { ShiloSupplyTrip } from './ShiloSupplyTrip.js';
 import { Execution } from '../../api/execution/Execution.js';
@@ -28,6 +30,7 @@ import {
 } from '../../api/combat/food.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import { Locs } from '../../api/locs/Locs.js';
+import { GroundItems } from '../../api/grounditems/GroundItems.js';
 import { Npcs } from '../../api/npcs/Npcs.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
@@ -71,6 +74,7 @@ import {
     type FirePlot
 } from '../../api/firemaking/Firemaking.js';
 import {
+    AXES,
     axeReq,
     bestHeldToolNames,
     bestPickaxe,
@@ -97,6 +101,8 @@ import {
     missingFishingGear,
     resolveFishMethod,
     spotMatchesMethod,
+    withThreeTickFlyGear,
+    type FishingGearPiece,
     type FishingMethod
 } from '../../data/fishingMethods.js';
 import {
@@ -129,6 +135,7 @@ import {
     isShortbowName,
     miningRateForPickaxe,
     profileForSetting,
+    threeTickFlyProfile,
     type TickManipProfile
 } from './TickManipLogic.js';
 import {
@@ -244,6 +251,10 @@ import {
 /** Default half-size of the Auto (start) burn box around the script start tile. */
 const LOCAL_BURN_HALF = 8;
 
+/** Seers knife spawn and the axe spawn the 3-tick kit falls back to when the bank is empty. */
+const THREE_TICK_KNIFE_SPAWN = new Tile(2704, 3475, 0);
+const THREE_TICK_AXE_SPAWN = new Tile(2678, 3731, 0);
+
 /** The family this script's paint signs itself with, the way the Jive scripts carry theirs. */
 const GATHER_BYLINE = 'Gathering scripts';
 /** The gap and the button row that follow every section. */
@@ -354,7 +365,7 @@ export const GATHERING_SETTINGS: SettingsSchema = {
         default: true,
         label: 'Bank haul',
         group: 'Banking',
-        help: 'true = bank when full (uses the bank behind Bank location below). false = power mode: drop haul when full, only bank for missing tools. Legacy None location also power-mines.'
+        help: 'true = bank when full (uses Bank location below). false = power mode: drop the haul in a batch, keeping tools and food; bank for missing supplies. Legacy None location also power-mines.'
     },
     bankLocation: {
         type: 'string',
@@ -526,6 +537,21 @@ export default class GatheringBot extends TaskBot {
      * Forced Off under power mode (Location None).
      */
     private tickManip: TickManipProfile = profileForSetting('mine', 'Off');
+    private threeTickFly = false;
+    private fourTickTarget: number | null = null;
+    private fourTickState: 'native' | 'sent' | 'armed' = 'native';
+    private fourTickSent = -1;
+    private fourTickRollDue = -1;
+    private fourTickLastSeq = -1;
+    private fourTickLastCycle = -1;
+    private fourTickLastSerial = -1;
+    private stopFourTick: (() => void) | null = null;
+    private threeTickBatchTicks: number[] = [];
+    private threeTickLandingTicks: number[] = [];
+    private threeTickLandingSeq: number[] = [];
+    private threeTickRollGaps: number[] = [];
+    private threeTickFallbacks = 0;
+    private threeTickLastRoll = -1;
     /** Last inventory-used mark used to detect a resource roll for tick manip. */
     private lastRollTick = -1;
     /** Farmer willows 6-tick cycle anchor (Game.tick at cycle start). */
@@ -595,7 +621,7 @@ export default class GatheringBot extends TaskBot {
                 this.minerFood !== null && this.minerFoodCount() < this.minerFood.target;
             if (this.minerFood) {
                 this.log(
-                    `food: ${this.minerFood.name} x${this.minerFood.target}; eat when its full heal fits or the pack needs an ore slot`
+                    `food: ${this.minerFood.name} x${this.minerFood.target}; eat to heal; bank mode also eats for ore slots`
                 );
             }
             // Empty multi-select falls back to every ROCK_OPTIONS entry; log so a
@@ -694,7 +720,7 @@ export default class GatheringBot extends TaskBot {
                 const message = `${camp} supports ${supported.join(', ')}; ` + `selected ${unsupported.join(', ')}`;
                 this.setStatus(`${message} — stopped`);
                 this.log(message);
-                ScriptRunner.stop(message);
+                this.requestFinish(message);
                 return;
             }
         }
@@ -727,7 +753,7 @@ export default class GatheringBot extends TaskBot {
                 const message = `${desertCamp.name} does not support Mule mode '${this.muleMode}'`;
                 this.setStatus(`${message} — stopped`);
                 this.log(message);
-                ScriptRunner.stop(message);
+                this.requestFinish(message);
                 return;
             }
             if (this.muleMode !== 'off' && this.powerMode) {
@@ -774,8 +800,11 @@ export default class GatheringBot extends TaskBot {
                 skill && 'tickManip' in this.settings.raw()
                     ? this.settings.str('tickManip', 'Off')
                     : 'Off';
-            this.tickManip = skill ? profileForSetting(skill, rawLabel) : profileForSetting('mine', 'Off');
-            if (this.tickManip.method !== 'off' && this.powerMode) {
+            this.threeTickFly = this.fishing && this.settings.bool('threeTickFly', false);
+            this.tickManip = this.threeTickFly
+                ? threeTickFlyProfile()
+                : skill ? profileForSetting(skill, rawLabel) : profileForSetting('mine', 'Off');
+            if (this.tickManip.method !== 'off' && this.powerMode && !this.threeTickFly) {
                 this.log(`tick manip: '${this.tickManip.label}' disabled under Bank=false (power)`);
                 this.tickManip = profileForSetting(skill ?? 'mine', 'Off');
             } else if (this.tickManip.method !== 'off') {
@@ -789,6 +818,12 @@ export default class GatheringBot extends TaskBot {
                         (this.tickManip.cookEatInterleave ? ' [cook/eat interleave]' : '')
                 );
             }
+        }
+
+        if (this.threeTickFly) {
+            this.fourTickState = 'native';
+            this.stopFourTick = BotHost.addTickListener(() => this.onFourTickTick());
+            this.log('3-tick fly controller: waiting for a fresh roll');
         }
 
         if (this.cookMode !== 'off' && this.powerMode) {
@@ -883,7 +918,7 @@ export default class GatheringBot extends TaskBot {
             const message = `${desertCamp.name} does not support Tool acquire Buy/repair`;
             this.setStatus(`${message} — stopped`);
             this.log(message);
-            ScriptRunner.stop(message);
+            this.requestFinish(message);
             return;
         }
         if (this.toolAcquire === 'on') {
@@ -905,14 +940,14 @@ export default class GatheringBot extends TaskBot {
                 const message = `${camp} requires Food to withdraw greater than 0`;
                 this.setStatus(`${message} — stopped`);
                 this.log(message);
-                ScriptRunner.stop(message);
+                this.requestFinish(message);
                 return;
             }
             if (desertCampFoodReserveDepleted(this.minerFood.target)) {
                 const message = `${camp} requires Food to withdraw of at least 2`;
                 this.setStatus(`${message} — stopped`);
                 this.log(message);
-                ScriptRunner.stop(message);
+                this.requestFinish(message);
                 return;
             }
             const destination = desertCampDestinationFor(camp);
@@ -920,7 +955,7 @@ export default class GatheringBot extends TaskBot {
                 {
                     log: message => this.log(message),
                     setStatus: message => this.setStatus(message),
-                    stop: reason => ScriptRunner.stop(reason),
+                    stop: reason => this.requestFinish(reason),
                     foodCount: () => this.minerFoodCount()
                 },
                 destination
@@ -1034,7 +1069,7 @@ export default class GatheringBot extends TaskBot {
         if (this.powerMode) {
             this.log(
                 this.minerFood
-                    ? 'location: Bank=false (power) — eat food for ore slots; nearest-bank restock when empty'
+                    ? 'location: Bank=false (power): batch-drop ore, keep food for healing; restock when empty'
                     : 'location: Bank=false (power) — drop haul; bank only to fetch missing tools (nearest bank)'
             );
         }
@@ -1132,7 +1167,6 @@ export default class GatheringBot extends TaskBot {
                 ? [new SupplierWithdrawRaw(this), new MuleGoMeet(this), new MuleRequestOrWait(this)]
                 : []),
             ...(this.isMuleGatherer() ? [new MuleGoMeet(this), new MuleRequestOrWait(this)] : []),
-            // Opt-in Miner food owns the full→eat→restock loop even under power mode.
             ...(minerFoodLoop ? [bankCatch] : []),
             ...(this.powerMode || tannerPower
                 ? [new DropProduct(this)]
@@ -1199,8 +1233,15 @@ export default class GatheringBot extends TaskBot {
             }
         }
         if (this.fishMethod) {
-            for (const n of gearKeepNames(this.fishMethod)) {
+            for (const n of gearKeepNames({ gear: this.fishingGearPieces() })) {
                 names.add(n);
+            }
+        }
+        // Why: the 3-tick carrier log needs an axe only when the bank has no log;
+        // keep it once acquired so a restock deposit cannot strand the kit.
+        if (this.threeTickFly) {
+            for (const axe of AXES) {
+                names.add(axe.name);
             }
         }
         // Knife + one delay log for knife-delay / farmer 6t (#160).
@@ -1759,7 +1800,7 @@ export default class GatheringBot extends TaskBot {
         return this.anchor;
     }
 
-    private paintKind(): string {
+    protected paintKind(): string {
         if (this.fishing) {
             return 'Fisher';
         }
@@ -1884,14 +1925,14 @@ export default class GatheringBot extends TaskBot {
         if (this.burnMode === 'chop-then-burn') {
             return `burning ${this.burnLogs} when full`;
         }
+        if (this.powerMode) {
+            return `Bank=false: batch dropping ${this.productLabel()} when full`;
+        }
         if (this.minerFood) {
             if (this.desertCampRoute) {
                 return `banking when full; retaining ${this.minerFood.name} for Desert Camp travel`;
             }
             return `eating ${this.minerFood.name} for ore slots, then banking to restock`;
-        }
-        if (this.powerMode) {
-            return `Bank=false: dropping ${this.productLabel()} when full`;
         }
         if (this.tickManip.cookEatInterleave) {
             return 'tannerfishing: cook/eat on pier; drop haul when full (may die)';
@@ -1915,11 +1956,11 @@ export default class GatheringBot extends TaskBot {
         if (this.burnMode === 'chop-then-burn') {
             return `Full: burn ${this.burnLogs}`;
         }
-        if (this.minerFood) {
-            return `Full: eat ${this.minerFood.name} → bank`;
-        }
         if (this.powerMode) {
             return `Full: Bank=false drop ${this.productLabel()}`;
+        }
+        if (this.minerFood) {
+            return `Full: eat ${this.minerFood.name} → bank`;
         }
         if (this.tickManip.cookEatInterleave) {
             return 'Full: tanner cook/eat · drop';
@@ -1970,6 +2011,11 @@ export default class GatheringBot extends TaskBot {
             xp: Skills.xp(skill),
             gained: this.xpGained(skill)
         }));
+    }
+
+    override onStop(): void {
+        this.stopFourTick?.();
+        this.stopFourTick = null;
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
@@ -2094,6 +2140,9 @@ export default class GatheringBot extends TaskBot {
 
     isProduct(name: string | null | undefined): boolean {
         const n = (name ?? '').toLowerCase();
+        if (this.mining()) {
+            return this.productKeywords.some(ore => n === (ore === 'clay' || ore === 'coal' ? ore : `${ore} ore`));
+        }
         return this.productKeywords.some(k => n.includes(k));
     }
     matchesRock(id: number): boolean {
@@ -2168,8 +2217,108 @@ export default class GatheringBot extends TaskBot {
     }
 
     /** Active tick-manip profile (#160). Off when unused / power mode. */
+    setFourTickTarget(index: number | null): void {
+        this.fourTickTarget = index;
+    }
+
+    threeTickDebug(): { batches: number[]; landings: number[]; landingSeq: number[]; rollGaps: number[]; fallbacks: number } {
+        return {
+            batches: [...this.threeTickBatchTicks],
+            landings: [...this.threeTickLandingTicks],
+            landingSeq: [...this.threeTickLandingSeq],
+            rollGaps: [...this.threeTickRollGaps],
+            fallbacks: this.threeTickFallbacks
+        };
+    }
+
+    /** Event-driven 3-tick controller: fresh roll animation -> batch, landing -> armed, roll -> next batch. */
+    private onFourTickTick(): void {
+        if (!this.fishing || this.tickManip.method !== 'three-tick-fly' || this.fourTickTarget === null) return;
+        // Bank trips, provisioning and travel own the screen: never fletch the carrier log off-spot.
+        if (Bank.isOpen() || !this.hasGear() || this.awayFromGatherSpot(6)) {
+            this.fourTickState = 'native';
+            return;
+        }
+        const state = this.animState();
+        if (!state) return;
+        const tick = Game.tick();
+        const fresh = state.serial !== this.fourTickLastSerial;
+        this.fourTickLastSeq = state.seq;
+        this.fourTickLastCycle = state.cycle;
+        this.fourTickLastSerial = state.serial;
+
+        if (this.fourTickState === 'native') {
+            if (fresh && state.seq === 623) this.sendFourTickBatch(tick);
+            return;
+        }
+        if (this.fourTickState === 'sent') {
+            if (tick === this.fourTickSent + 1) {
+                if (fresh && (state.seq === 1248 || state.seq === 623)) {
+                    this.fourTickState = 'armed';
+                    this.fourTickRollDue = tick + 2;
+                    this.threeTickLandingTicks.push(tick);
+                    this.threeTickLandingSeq.push(state.seq);
+                }
+                return;
+            }
+            if (tick >= this.fourTickSent + 2) this.fourTickFallback();
+            return;
+        }
+        if (this.fourTickState === 'armed') {
+            // No actions between batches: a drop after Lure cancels the roll.
+            if (tick >= this.fourTickRollDue) this.sendFourTickBatch(tick);
+        }
+    }
+
+    private animState(): { seq: number; cycle: number; serial: number } | null {
+        return reader.selfAnimState();
+    }
+
+    private sendFourTickBatch(tick: number): void {
+        const target = this.fourTickTarget;
+        const knife = Inventory.first('Knife');
+        const log = this.delayLogItem();
+        if (target === null || !knife || !log) return;
+        // 3-tick fly always drops the catch in the batch: banking every ~21 fish
+        // costs the cycle and collapses xp/hr. The Fisher still handles feathers/gear.
+        for (const fish of this.products().slice(0, 2)) void fish.interact('Drop');
+        // A stale menu must not stop the cycle: reuse Make-1 and the Lure instead of returning.
+        if (!ChatDialog.isMakeMenu()) {
+            Input.useItemOnItem(knife.id, knife.slot, knife.snap.comId, log.id, log.slot, log.snap.comId);
+        }
+        actions.ifButton(8889);
+        Input.interactNpc(target, 1);
+        this.fourTickState = 'sent';
+        this.fourTickSent = tick;
+        this.threeTickBatchTicks.push(tick);
+        if (this.threeTickLastRoll >= 0) this.threeTickRollGaps.push(tick - this.threeTickLastRoll);
+        this.threeTickLastRoll = tick;
+        this.setStatus(`3-tick fly: batch @${tick}`);
+    }
+
+    private fourTickFallback(): void {
+        const target = this.fourTickTarget;
+        if (target !== null) Input.interactNpc(target, 1);
+        this.threeTickFallbacks++;
+        this.fourTickState = 'native';
+        this.setStatus('3-tick fly: fallback click');
+    }
+
     tickManipProfile(): TickManipProfile {
         return this.tickManip;
+    }
+
+    /** 3-tick fly keeps the knife + carrier log as fishing gear, not as one-off tools. */
+    threeTickFlyMode(): boolean {
+        return this.threeTickFly;
+    }
+
+    /** Fishing kit pieces that must survive a bank deposit and be restocked. */
+    fishingGearPieces(): FishingGearPiece[] {
+        if (!this.fishMethod) {
+            return [];
+        }
+        return this.threeTickFly ? withThreeTickFlyGear(this.fishMethod) : this.fishMethod.gear;
     }
 
     /** Gather while in combat (retaliate methods). */
@@ -2268,6 +2417,94 @@ export default class GatheringBot extends TaskBot {
         return (
             Inventory.items().find(i => isFletchableLogName(i.name)) ?? null
         );
+    }
+
+    /**
+     * Bank-first failed: take the knife/axe from the Seers spawns and chop one carrier log.
+     * Mirrors the bank restock so the 3-tick kit never needs a separate provisioner.
+     */
+    async acquireThreeTickKit(log: (m: string) => void = m => this.log(`  ${m}`)): Promise<boolean> {
+        if (!this.threeTickFly) {
+            return false;
+        }
+        if (!this.heldHas(TICK_MANIP_KNIFE)) {
+            if (!(await this.takeThreeTickGround([TICK_MANIP_KNIFE], THREE_TICK_KNIFE_SPAWN, 'knife', log))) {
+                return false;
+            }
+        }
+        if (this.delayLogItem() === null) {
+            if (!AXES.some(axe => this.heldHas(axe.name))) {
+                if (!(await this.takeThreeTickGround(AXES.map(axe => axe.name), THREE_TICK_AXE_SPAWN, 'axe', log))) {
+                    return false;
+                }
+            }
+            if (!(await this.chopThreeTickLog(log))) {
+                return false;
+            }
+        }
+        return this.heldHas(TICK_MANIP_KNIFE) && this.delayLogItem() !== null;
+    }
+
+    private async takeThreeTickGround(
+        names: readonly string[],
+        spawn: Tile,
+        label: string,
+        log: (m: string) => void
+    ): Promise<boolean> {
+        const here = GroundItems.query().name(...names).within(12).nearest();
+        if (here) {
+            log(`kit: taking the ${label} from the ground`);
+            await here.interact('Take');
+            if (await Execution.delayUntilTicks(() => names.some(n => this.heldHas(n)), 6)) {
+                return true;
+            }
+        }
+        log(`kit: walking to the ${label} spawn`);
+        if (!(await Traversal.walkResilient(spawn, { radius: 2, attempts: 3, timeoutMs: 180_000, log }))) {
+            return false;
+        }
+        const drop = GroundItems.query().name(...names).within(8).nearest();
+        if (!drop) {
+            log(`kit: no ${label} at the spawn point`);
+            return false;
+        }
+        await drop.interact('Take');
+        return Execution.delayUntilTicks(() => names.some(n => this.heldHas(n)), 6);
+    }
+
+    hasCarrierLog(): boolean {
+        return this.delayLogItem() !== null;
+    }
+
+    hasAxe(): boolean {
+        return AXES.some(axe => this.heldHas(axe.name));
+    }
+
+    async chopThreeTickLog(log: (m: string) => void): Promise<boolean> {
+        // The axe spawn is far from camp; return to the gather anchor and chop any
+        // normal or dead tree there instead of chasing scene trees across obstacles.
+        if (this.awayFromGatherSpot(12)) {
+            log('kit: returning to camp for a tree');
+            await this.walkHomeIfNeeded(log);
+        }
+        const trees = Locs.query()
+            .name('Tree', 'Dead tree')
+            .action('Chop down')
+            .results()
+            .sort((a, b) => a.distance() - b.distance())
+            .slice(0, 6);
+        for (const tree of trees) {
+            const tile = tree.tile();
+            log(`kit: chopping a carrier log at ${tile.x},${tile.z}`);
+            if (!(await Traversal.walkTo(tile, { radius: 2, timeoutMs: 90_000, log }))) {
+                continue;
+            }
+            await tree.interact('Chop down');
+            if (await Execution.delayUntilTicks(() => this.delayLogItem() !== null, 20)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // Why: the server only sets %action_delay after a Make confirm (process_fletch_logs).
@@ -2463,6 +2700,14 @@ export default class GatheringBot extends TaskBot {
         return this.minerFood !== null;
     }
 
+    protected keepMinerFood(): boolean {
+        return this.powerMode || this.desertCampRoute !== null;
+    }
+
+    fullHaulNeedsBank(): boolean {
+        return !this.powerMode && Inventory.isFull() && this.hasDepositable();
+    }
+
     minerFoodCount(): number {
         return this.minerFood ? countFood(Inventory.items(), this.minerFood.name) : 0;
     }
@@ -2471,7 +2716,7 @@ export default class GatheringBot extends TaskBot {
         return minerFoodRestockNeeded({
             configured: this.minerFood !== null,
             foodCount: this.minerFoodCount(),
-            startupPending: this.minerFoodStartupPending
+            startupPending: this.minerFoodStartupPending || (this.powerMode && Inventory.isFull() && this.products().length === 0)
         });
     }
 
@@ -2486,7 +2731,7 @@ export default class GatheringBot extends TaskBot {
             heal: foodHealAmount(config.name),
             foodCount: this.minerFoodCount(),
             inventoryFull: Inventory.isFull(),
-            retainForTravel: this.desertCampRoute !== null,
+            retainForTravel: this.keepMinerFood(),
             hazardMaxHit: this.desertCampRoute ? 9 : undefined
         });
     }
@@ -2495,7 +2740,7 @@ export default class GatheringBot extends TaskBot {
         if (!foodName || Bank.isOpen()) {
             return false;
         }
-        if (this.desertCampRoute && Inventory.isFull() && this.hasDepositable()) {
+        if (this.desertCampRoute && this.fullHaulNeedsBank()) {
             this.desertCampBankTrip = true;
         }
         const food = Inventory.items().find(i => isFoodItem(i.name, foodName));
@@ -2510,7 +2755,7 @@ export default class GatheringBot extends TaskBot {
             id: food.id,
             name: food.name
         };
-        const reason = Inventory.isFull() && !this.desertCampRoute ? 'ore room' : 'full heal';
+        const reason = Inventory.isFull() && !this.keepMinerFood() ? 'ore room' : 'full heal';
         this.setStatus(`food: eating ${food.name} (${reason})`);
         this.log(
             `food: eat ${food.name} (${reason}; hp ${before.hp}/${Skills.level('hitpoints')}, pack ${before.used}/28)`
@@ -2548,7 +2793,7 @@ export default class GatheringBot extends TaskBot {
         const fail = (reason: string): false => {
             this.setStatus(`${reason} - stopped`);
             log(reason);
-            ScriptRunner.stop(reason);
+            this.requestFinish(reason);
             return false;
         };
         const reopen = async (): Promise<boolean> => {
@@ -2609,19 +2854,20 @@ export default class GatheringBot extends TaskBot {
         const held = this.minerFoodCount();
         const bankForms = this.desertCampRoute ? foodForms(config.name) : [config.name];
         const banked = bankForms.reduce((sum, form) => sum + Bank.count(form), 0);
+        const reserved = Math.max(reservedSlots, this.powerMode ? 1 : 0);
         const plan = planMinerFoodWithdrawal({
             target: config.target,
             held,
             banked,
             freeSlots: Inventory.free(),
-            reservedSlots
+            reservedSlots: reserved
         });
         if (!plan.ok) {
             const detail =
                 plan.reason === 'bank-stock'
                     ? `bank + pack are short by ${plan.missing}`
-                    : reservedSlots > 0
-                        ? `pack needs ${plan.missing} more free slot(s) after reserving ${reservedSlots} for route supplies`
+                    : reserved > 0
+                        ? `pack needs ${plan.missing} more free slot(s) after reserving ${reserved} for supplies and gathering`
                         : `pack needs ${plan.missing} more free slot(s)`;
             const message = `food: cannot prepare ${config.target} ${config.name} (${detail})`;
             this.setStatus(`${message} — stopped`);
@@ -2629,7 +2875,7 @@ export default class GatheringBot extends TaskBot {
             if (Bank.isOpen()) {
                 await this.closeScriptBank(log, { allowForgetful: false });
             }
-            ScriptRunner.stop(message);
+            this.requestFinish(message);
             return false;
         }
 
@@ -2658,7 +2904,7 @@ export default class GatheringBot extends TaskBot {
                 if (Bank.isOpen()) {
                     await this.closeScriptBank(log, { allowForgetful: false });
                 }
-                ScriptRunner.stop(message);
+                this.requestFinish(message);
                 return false;
             }
             await Execution.delayUntilTicks(() => this.minerFoodCount() >= config.target, 7);
@@ -2672,7 +2918,7 @@ export default class GatheringBot extends TaskBot {
             if (Bank.isOpen()) {
                 await this.closeScriptBank(log, { allowForgetful: false });
             }
-            ScriptRunner.stop(message);
+            this.requestFinish(message);
             return false;
         }
         this.minerFoodStartupPending = false;
@@ -2753,7 +2999,7 @@ export default class GatheringBot extends TaskBot {
     }
 
     private desertCampDirection(): DesertCampRouteDirection {
-        const needsBank = (Inventory.isFull() && this.hasDepositable())
+        const needsBank = this.fullHaulNeedsBank()
             || this.minerFoodRestockNeeded()
             || (this.desertCampRoute !== null && desertCampFoodReserveDepleted(this.minerFoodCount()))
             || this.desertCampStartupBankPending
@@ -2788,7 +3034,7 @@ export default class GatheringBot extends TaskBot {
     }
 
     desertCampBankCatchNeeded(): boolean {
-        return shouldRunDesertCampBankCatch(this.desertCampBankTrip, this.desertCampStartupBankPending, this.minerFoodRestockNeeded(), Inventory.isFull() && this.hasDepositable());
+        return shouldRunDesertCampBankCatch(this.desertCampBankTrip, this.desertCampStartupBankPending, this.minerFoodRestockNeeded(), this.fullHaulNeedsBank());
     }
 
     completeDesertCampBankTrip(): void {
@@ -2823,7 +3069,7 @@ export default class GatheringBot extends TaskBot {
     stopStrictBankFailure(reason: string): void {
         this.setStatus(`${reason} — stopped`);
         this.log(reason);
-        ScriptRunner.stop(reason);
+        this.requestFinish(reason);
     }
 
     // Why: the Draynor bank is inside ReturnToAnchor slack, so "away from spot" alone could pull a cold-start bot off its resources for a tool upgrade.
@@ -3160,7 +3406,7 @@ export default class GatheringBot extends TaskBot {
     stopMissingGear(reason: string, missing: string[]): void {
         const need = missing.join(' + ') || this.gearLabel();
         this.setStatus(`restock: stop — ${need}`);
-        ScriptRunner.stop(`restock: ${reason} — need ${need}`);
+        this.requestFinish(`restock: ${reason} — need ${need}`);
     }
 
     heldItemNames(): string[] {
@@ -3194,7 +3440,7 @@ export default class GatheringBot extends TaskBot {
 
     hasGear(): boolean {
         if (this.fishMethod) {
-            return hasFishingGear(this.fishMethod, name => Inventory.count(name));
+            return hasFishingGear({ gear: this.fishingGearPieces() }, name => Inventory.count(name));
         }
         if (this.toolReqs.length > 0) {
             return hasAllTools(this.toolReqs, this.skillLevel, this.heldCount);
@@ -3206,7 +3452,7 @@ export default class GatheringBot extends TaskBot {
     }
     gearLabel(): string {
         if (this.fishMethod) {
-            return formatGearLabel(this.fishMethod);
+            return formatGearLabel({ gear: this.fishingGearPieces() });
         }
         if (this.toolReqs.length > 0) {
             return toolKitLabel(this.toolReqs, this.skillLevel, this.heldCount);
@@ -3215,7 +3461,7 @@ export default class GatheringBot extends TaskBot {
     }
     missingGearNames(): string[] {
         if (this.fishMethod) {
-            return missingFishingGear(this.fishMethod, name => Inventory.count(name)).map(g => g.name);
+            return missingFishingGear({ gear: this.fishingGearPieces() }, name => Inventory.count(name)).map(g => g.name);
         }
         if (this.toolReqs.length > 0) {
             return missingToolLabels(this.toolReqs, this.skillLevel, this.heldCount);
@@ -3424,6 +3670,26 @@ export default class GatheringBot extends TaskBot {
     }
     productLabel(): string {
         return this.productKeywords.join('/');
+    }
+
+    async dropProducts(): Promise<void> {
+        this.setStatus('dropping');
+        const droppable = () => {
+            const keep = this.tickManipProfile().useKnifeDelay
+                ? Inventory.items().find(item => isFletchableLogName(item.name))?.slot
+                : undefined;
+            return this.products().filter(item => item.slot !== keep);
+        };
+        for (let attempt = 0; attempt < 3; attempt++) {
+            const items = droppable();
+            if (items.length === 0) return;
+            await Promise.all(items.map(item => item.interact('Drop')));
+            if (await Execution.delayUntil(() => droppable().length === 0, 6000)) {
+                this.log('drop: haul cleared');
+                return;
+            }
+        }
+        throw new Error('Gathering bot could not clear the haul after three drop batches');
     }
 
     products() {
@@ -3653,7 +3919,7 @@ export default class GatheringBot extends TaskBot {
         this.inCookBatch = false;
         if (outcome === 'stop') {
             this.setStatus('cook: batch complete — stopped');
-            ScriptRunner.stop(`cook: batch drained (bank raw ${this.bankRawInBank}/${this.bankRawTarget})`);
+            this.requestFinish(`cook: batch drained (bank raw ${this.bankRawInBank}/${this.bankRawTarget})`);
             return;
         }
         this.log(

@@ -1,12 +1,36 @@
 // Why: 3 callers walk a clue somewhere and only one is the trail itself; the talk step reaches its NPC through Reach and the bank stop picks its own booth, so each needs the seam graph or the baked pack calls Isafdar unreachable.
 // @see docs/reference/clues-gates.md#proving-a-gate
 
+import { leaveJungle } from '#/bot/api/ai/quests/defs/legends/jungle.js';
+import { LQ_TILE } from '#/bot/api/ai/quests/defs/legends/areas.js';
+import { inKharazi, walkAcrossKharazi } from './kharaziTravel.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { Quests } from '#/bot/api/ui/questlog/Quests.js';
-import { pocketAt, travelTirannwn } from '#/bot/api/ai/quests/defs/regicide/pockets.js';
+import { pocketAt, travelTirannwn, type TirannwnTravelOptions } from '#/bot/api/ai/quests/defs/regicide/pockets.js';
 import { RG_STAGE } from '#/bot/api/ai/quests/defs/regicide/journal.js';
 import Tile from '#/bot/geometry/Tile.js';
 import type { NavPoint } from '#/bot/event/webwalk/PathFinder.js';
+import { Navigator } from '#/bot/event/webwalk/Navigator.js';
+import { executeTeleportHop } from '#/bot/event/webwalk/teleportExecute.js';
+import { EventSignal } from '#/bot/api/execution/EventSignal.js';
+import { Traversal } from '#/bot/api/walking/Traversal.js';
+
+async function teleportOut(dest: NavPoint, log: (m: string) => void, options: TirannwnTravelOptions): Promise<void> {
+    const from = Game.tile();
+    if (!from || !pocketAt(from) || pocketAt(dest) || EventSignal.pending()) return;
+    if (options.useTeleportCatalog === false || options.policy?.useTeleports === false) return;
+    if (!(options.useTeleportCatalog || options.policy?.useTeleports || Traversal.teleportsEnabled())) return;
+    const path = await Navigator.findPath(from, dest, {
+        useTeleportCatalog: true,
+        policy: { ...options.policy, useTeleports: true },
+        timeoutMs: 5000
+    }).catch(() => null);
+    if (EventSignal.pending()) return;
+    const hop = path?.ok ? path.waypoints[1]?.transport : undefined;
+    if (hop?.kind !== 'teleport') return;
+    log(`leaving Isafdar using ${hop.locName}`);
+    if (!(await executeTeleportHop(hop, log))) log('Isafdar teleport failed; trying the exit crossings');
+}
 
 // Why: the seam graph gates the dense forests on stage 8 and the palisade southbound on 13, so a journal short of complete must not be handed a stage that opens them.
 export function tirannwnStage(): number {
@@ -18,7 +42,13 @@ export function crossesTirannwn(dest: NavPoint | null): boolean {
     return (dest !== null && pocketAt(dest) !== undefined) || pocketAt(Game.tile()) !== undefined;
 }
 
-/** Walk to `dest` over REGICIDE_SEAMS, which is the only way in or out of Isafdar. */
-export function walkAcrossTirannwn(dest: NavPoint, radius: number, log: (m: string) => void): Promise<boolean> {
-    return travelTirannwn(new Tile(dest.x, dest.z, dest.level), radius, tirannwnStage(), log);
+/** Travel to `dest` using teleports out or the Isafdar crossings. */
+export async function walkAcrossTirannwn(dest: NavPoint, radius: number, log: (m: string) => void, options: TirannwnTravelOptions): Promise<boolean> {
+    if (inKharazi(Game.tile()) && !(await leaveJungle(log))) return false;
+    const jungle = inKharazi(dest);
+    const target = jungle ? LQ_TILE.JUNGLE_MOUTH : new Tile(dest.x, dest.z, dest.level);
+    await teleportOut(target, log, options);
+    if (EventSignal.pending()) return false;
+    if (!(await travelTirannwn(target, jungle ? 0 : radius, tirannwnStage(), log, options))) return false;
+    return !jungle || walkAcrossKharazi(dest, radius, log, options);
 }

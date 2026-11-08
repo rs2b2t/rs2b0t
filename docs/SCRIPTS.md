@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 72. Categories: 20.
+- Scripts: 77. Categories: 21.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -18,10 +18,11 @@
 - [Firemaking](#firemaking) — 1
 - [Fishing](#fishing) — 1
 - [Fletching](#fletching) — 2
+- [General](#general) — 1
 - [Herblore](#herblore) — 5
 - [Magic](#magic) — 3
 - [Mining](#mining) — 3
-- [Money making](#money-making) — 7
+- [Money making](#money-making) — 9
 - [Navigation](#navigation) — 2
 - [Prayer](#prayer) — 1
 - [Quest](#quest) — 4
@@ -29,7 +30,7 @@
 - [Smithing](#smithing) — 3
 - [Thieving](#thieving) — 3
 - [Treasure Trails](#treasure-trails) — 1
-- [Utility](#utility) — 1
+- [Utility](#utility) — 3
 - [Woodcutting](#woodcutting) — 2
 
 ## Agility
@@ -56,6 +57,7 @@ Edgeville dungeon monkey bars — restock via dungeon ladder or after death. NOT
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `loadout` | string | `""` | Loadout — one of:  |
+| `food` | string | `"Lobster"` | Food |
 | `foodAmount` | number (5–28) | `20` | Food to withdraw |
 | `minFood` | number (0–28) | `1` | Bank below food count |
 | `restockMode` | string | `"After death only"` | Restock mode — one of: Dungeon ladder (out of food), After death only |
@@ -82,10 +84,9 @@ Runs the Wilderness Agility Course, eats while running, and on death banks (food
 |---|---|---|---|
 | `loadout` | string | `""` | Loadout — one of:  |
 | `food` | string | `""` | Food (overrides loadout) — one of: Shark, Lobster, Swordfish, Tuna, Salmon, Trout, Pike, Bass, Herring, Sardine, Anchovies, Shrimps, Cooked meat, Cooked chicken, Bread, Stew, Cake, Chocolate cake, Plain pizza, Meat pizza, Anchovy pizza, Pineapple pizza, Redberry pie, Meat pie, Apple pie |
-| `foodWithdraw` | number (1–28) | `20` | Food to withdraw |
+| `foodWithdraw` | number (1–28) | `28` | Food to withdraw |
 | `minFood` | number (0–28) | `1` | Bank below food count |
 | `acquireFoodAtStart` | boolean | `true` | Acquire food at start |
-| `obstacleTimeoutTicks` | number (5–60) | `24` | Obstacle timeout (ticks) |
 
 ## Combat
 
@@ -139,13 +140,14 @@ Start-or-coordinate fighter — kills any named NPC in its leash, loots selected
 | `food` | string | `""` | Food to eat |
 | `foodWithdraw` | number (0–27) | `10` | Food to carry |
 | `panicHp` | number (0–100) | `25` | Panic below HP% (no food) |
-| `loot` | string[] | `["clue scroll","uncut sapphire","uncut emerald","uncut ruby","uncut diamond","half of a key","chaos talisman","nature talisman"]` | Loot item names (contains) |
+| `loot` | string[] | `["clue scroll","uncut sapphire","uncut emerald","uncut ruby","uncut diamond","half of a key","chaos talisman","nature talisman"]` | Loot item names (exact) |
 | `lootMode` | string | `"list"` | Loot entry mode — one of: List (chips), CSV (text + copy/paste) |
 | `avoidHerbs` | string[] | `[]` | Herbs to avoid — one of: Guam leaf, Marrentill, Tarromin, Harralander, Ranarr weed, Toadflax, Irit leaf, Avantoe, Kwuarm, Snapdragon, Cadantine, Lantadyme, Dwarf weed, Torstol, Snake weed, Ardrigal, Sito foil, Volencia moss, Rogues purse |
 | `buryBones` | boolean | `false` | Bury regular bones |
+| `buryBigBones` | boolean | `false` | Bury big bones |
 | `solveClues` | boolean | `true` | Solve clue drops |
 | `banking` | string | `"Auto"` | Banking — one of: Auto, None |
-| `bankLocation` | string | `"Nearest"` | Bank location — one of: Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
+| `bankLocation` | string | `"Nearest"` | Bank location — one of: Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Legends Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
 | `bankAtLootSlots` | number (1–27) | `12` | Bank at loot slots |
 | `bankEveryMinutes` | number (0–120) | `0` | Bank every N minutes |
 | `bankCommonJunk` | boolean | `true` | Bank common junk too |
@@ -313,6 +315,7 @@ Wilderness green dragons N of Edgeville: melee/mage w/ anti-dragon shield, banks
 | `shield` | string | `"Dragonfire shield"` | Anti-dragon shield — one of: Dragonfire shield |
 | `usePotions` | boolean | `true` | Drink super attack / strength |
 | `loadout` | string | `""` | Loadout — one of:  |
+| `food` | string | `""` | Food |
 | `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
 | `panicHp` | number (1–98) | `30` | Escape below HP% |
 | `foodReserve` | number (0–27) | `4` | Food kept back from slot-freeing |
@@ -384,6 +387,7 @@ Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought throu
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
+| `enclaveTargets` | string | `"both"` | Gu'Tanoth targets — one of: both, dragons, demons |
 | `combatStyle` | string | `"range"` | Combat style — one of: melee, mage, range |
 | `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
 | `weapon` | string | `"Best available"` | Weapon — one of: Best available, Bronze scimitar, Iron scimitar, Steel scimitar, Black scimitar, Mithril scimitar, Adamant scimitar, Rune scimitar, Bronze sword, Iron sword, Steel sword, Black sword, Mithril sword, Adamant sword, Rune sword, Bronze longsword, Iron longsword, Steel longsword, Black longsword, Mithril longsword, Adamant longsword, Rune longsword, Dragon longsword, Bronze dagger, Iron dagger, Steel dagger, Black dagger, Mithril dagger, Adamant dagger, Rune dagger, Dragon dagger, Dragon dagger(p), Dragon battleaxe, Dragon mace |
@@ -396,9 +400,10 @@ Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought throu
 | `ammo` | string | `"Iron arrow"` | Ammo — one of: Bronze arrow, Iron arrow, Steel arrow, Mithril arrow, Adamant arrow, Rune arrow, Dragon arrow |
 | `ammoWithdraw` | number (1–5000) | `500` | Ammo per bank trip |
 | `useSpecial` | boolean | `true` | Use special attacks |
-| `usePotions` | boolean | `true` | Drink super attack / strength |
+| `usePotions` | boolean | `true` | Drink super sets |
 | `prayMelee` | boolean | `true` | Pray Protect from Melee on the metal dragons |
 | `loadout` | string | `""` | Loadout — one of:  |
+| `food` | string | `""` | Food |
 | `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
 | `panicHp` | number (1–98) | `30` | Panic-to-bank below HP% |
 | `retreatHp` | number (0–99) | `50` | Retreat to a safespot below HP% |
@@ -408,7 +413,7 @@ Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought throu
 | `lootBlack` | string[] | `["Adamant dart(p)","Adamant javelin","Adamant platebody","Adamantite bar","Air rune","Blood rune","Chaos talisman","Death rune","Dragon bones","Dragon med helm","Dragon spear","Dragonhide","Dragonstone","Fire rune","Half of a key","Law rune","Mithril 2h sword","Mithril axe","Mithril battleaxe","Mithril kiteshield","Nature rune","Nature talisman","Rune 2h sword","Rune arrow","Rune battleaxe","Rune javelin","Rune kiteshield","Rune knife","Rune longsword","Rune spear","Rune sq shield","Runite bar","Shield left half","Silver ore","Steel arrow","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire"]` | Loot to pick up (drop table) — one of: Adamant dart(p), Adamant javelin, Adamant platebody, Adamantite bar, Air rune, Blood rune, Chaos talisman, Chocolate cake, Coins, Death rune, Dragon bones, Dragon med helm, Dragon spear, Dragonhide, Dragonstone, Fire rune, Half of a key, Law rune, Mithril 2h sword, Mithril axe, Mithril battleaxe, Mithril kiteshield, Nature rune, Nature talisman, Rune 2h sword, Rune arrow, Rune battleaxe, Rune javelin, Rune kiteshield, Rune knife, Rune longsword, Rune spear, Rune sq shield, Runite bar, Shield left half, Silver ore, Steel arrow, Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire |
 | `lootEnclave` | string[] | `["Adamant full helm","Adamant platelegs","Adamantite ore","Chaos rune","Chaos talisman","Death rune","Dragon bones","Dragon spear","Dragonhide","Fire rune","Gold bar","Half of a key","Herb","Law rune","Mithril axe","Mithril kiteshield","Mithril spear","Nature rune","Nature talisman","Rune dagger","Rune full helm","Rune javelin","Rune spear","Shield left half","Steel 2h sword","Steel axe","Steel battleaxe","Steel platelegs","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire","Water rune"]` | Loot to pick up (drop table) — one of: Adamant full helm, Adamant platelegs, Adamantite ore, Ashes, Bass, Chaos rune, Chaos talisman, Coins, Death rune, Dragon bones, Dragon spear, Dragonhide, Fire rune, Gold bar, Half of a key, Herb, Law rune, Mithril axe, Mithril kiteshield, Mithril spear, Nature rune, Nature talisman, Rune dagger, Rune full helm, Rune javelin, Rune spear, Shield left half, Steel 2h sword, Steel axe, Steel battleaxe, Steel platelegs, Thread, Tuna, Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire, Water rune |
 | `lootIron` | string[] | `["Adamant 2h sword","Adamant axe","Adamant battleaxe","Adamant javelin","Adamant sq shield","Adamantite bar","Blood rune","Chaos talisman","Coins","Death rune","Dragon bones","Dragon med helm","Dragon platelegs","Dragon spear","Dragonstone","Half of a key","Iron bar","Law rune","Nature rune","Nature talisman","Rune 2h sword","Rune arrow","Rune battleaxe","Rune dart(p)","Rune javelin","Rune kiteshield","Rune knife","Rune med helm","Rune spear","Rune sq shield","Runite bar","Shield left half","Silver ore","Soul rune","Steel arrow","Super strength(1)","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire"]` | Loot to pick up (drop table) — one of: Adamant 2h sword, Adamant axe, Adamant battleaxe, Adamant javelin, Adamant sq shield, Adamantite bar, Blood rune, Bolts, Chaos talisman, Coins, Curry, Death rune, Dragon bones, Dragon med helm, Dragon platelegs, Dragon spear, Dragonstone, Half of a key, Iron bar, Law rune, Nature rune, Nature talisman, Rune 2h sword, Rune arrow, Rune battleaxe, Rune dart(p), Rune javelin, Rune kiteshield, Rune knife, Rune med helm, Rune spear, Rune sq shield, Runite bar, Shield left half, Silver ore, Soul rune, Steel arrow, Super strength(1), Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire |
-| `lootSteel` | string[] | `["Adamant kiteshield","Blood rune","Coins","Dragon bones","Dragon platelegs","Rune axe","Rune dart(p)","Rune full helm","Rune javelin","Rune knife","Rune mace","Runite bar","Soul rune","Steel bar","Super attack(3)","Super defence(2)"]` | Loot to pick up (drop table) — one of: Adamant kiteshield, Blood rune, Bolts, Coins, Curry, Dragon bones, Dragon platelegs, Rune axe, Rune dart(p), Rune full helm, Rune javelin, Rune knife, Rune mace, Runite bar, Soul rune, Steel bar, Super attack(3), Super defence(2) |
+| `lootSteel` | string[] | `["Adamant javelin","Adamant kiteshield","Blood rune","Chaos talisman","Coins","Death rune","Dragon bones","Dragon med helm","Dragon platelegs","Dragon spear","Dragonstone","Half of a key","Law rune","Nature rune","Nature talisman","Rune 2h sword","Rune arrow","Rune axe","Rune battleaxe","Rune dart(p)","Rune full helm","Rune javelin","Rune kiteshield","Rune knife","Rune mace","Rune spear","Rune sq shield","Runite bar","Shield left half","Silver ore","Soul rune","Steel arrow","Steel bar","Super attack(3)","Super defence(2)","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire"]` | Loot to pick up (drop table) — one of: Adamant javelin, Adamant kiteshield, Blood rune, Bolts, Chaos talisman, Coins, Curry, Death rune, Dragon bones, Dragon med helm, Dragon platelegs, Dragon spear, Dragonstone, Half of a key, Law rune, Nature rune, Nature talisman, Rune 2h sword, Rune arrow, Rune axe, Rune battleaxe, Rune dart(p), Rune full helm, Rune javelin, Rune kiteshield, Rune knife, Rune mace, Rune spear, Rune sq shield, Runite bar, Shield left half, Silver ore, Soul rune, Steel arrow, Steel bar, Super attack(3), Super defence(2), Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire |
 | `bankCommonJunk` | boolean | `true` | Also grab shared gems/junk |
 | `buryBones` | boolean | `false` | Bury dragon bones |
 | `rangingPotion` | boolean | `false` | Drink a ranging potion |
@@ -418,6 +423,7 @@ Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought throu
 | `axe` | string | `"Rune axe"` | Axe for the vines — one of: Rune axe, Adamant axe, Mithril axe, Steel axe, Iron axe, Bronze axe |
 | `solveClues` | boolean | `true` | Solve clue drops |
 | `site` | string | `"taverley-blue"` | Dragon site — one of: taverley-blue, taverley-black, heroes-blue, gutanoth-blue, brimhaven-iron, brimhaven-steel |
+| `rotateSpawns` | boolean | `false` | Alternate blue dragon spawns |
 | `stand` | number (1–6) | `1` | Stand |
 | `safespot1` | tile | `{"x":2901,"z":9809,"level":0}` | Safespot 1 |
 | `safespot2` | tile | `{"x":2904,"z":9808,"level":0}` | Safespot 2 |
@@ -546,7 +552,7 @@ Bank cook loop — withdraw raw fish, cook it one at a time on the range nearest
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `fish` | string | `"Raw salmon"` | Raw fish to cook (contains) |
-| `location` | string | `"Catherby"` | Where to cook — one of: Auto, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena, Custom |
+| `location` | string | `"Catherby"` | Where to cook — one of: Auto, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Legends Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena, Custom |
 | `surface` | string | `"Range"` | Cook on — one of: Range, Fire |
 | `logType` | string | `"Logs"` | Logs to burn (Fire only) — one of: Logs, Oak logs, Willow logs, Maple logs, Yew logs, Magic logs |
 | `firePlotRadius` | number (2–16) | `8` | Fire ground search radius (Fire only) |
@@ -606,7 +612,7 @@ Two-player cooperative flax picking and spinning — Runner picks flax and deliv
 
 ### FlaxSpinner
 
-Seers flax spinner — withdraw flax, climb to the spinning wheel, Spin-X into bow string, bank, repeat
+Seers spinner: withdraw flax for bow strings or wool for balls of wool, spin upstairs, bank the output, and repeat
 
 - Tags: `seers`, `crafting`, `banking`, `afk`
 
@@ -637,13 +643,15 @@ Banks at the nearest bank, withdraws uncut gems and a chisel, cuts every gem you
 
 ### JiveCrafting
 
-Makes one gold jewel picked from the dropdown at the Al Kharid furnace: banks for the mould, the gold bars and the gems, uses a bar on the furnace, clicks the biggest Make button that fits the load and walks back with it. Stops honestly when the bank runs out of any of the three.
+Crafts gold jewellery at the Al Kharid furnace, or strings unstrung amulets with balls of wool at the nearest bank. Banks finished items and stops when supplies run out.
 
 - Tags: `crafting`, `jewellery`, `al kharid`, `banking`, `afk`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
+| `mode` | string | `"Craft jewellery"` | Mode — one of: Craft jewellery, String amulets |
 | `product` | string | `"Sapphire ring"` | Product — one of: Gold ring, Sapphire ring, Emerald ring, Ruby ring, Diamond ring, Dragonstone ring, Gold necklace, Sapphire necklace, Emerald necklace, Ruby necklace, Diamond necklace, Dragonstone necklace, Gold amulet, Sapphire amulet, Emerald amulet, Ruby amulet, Diamond amulet, Dragonstone amulet |
+| `amulet` | string | `"Gold amulet"` | Amulet to string — one of: Gold amulet, Sapphire amulet, Emerald amulet, Ruby amulet, Diamond amulet, Dragonstone amulet |
 
 ### LeatherCrafter
 
@@ -697,11 +705,12 @@ Fishes a chosen method at the spot that offers it; banks the catch, optionally c
 | `baitQty` | number (1–) | `1000` | Bait / feathers qty |
 | `leashRadius` | number (2–64) | `18` | Leash radius (tiles) |
 | `tickManip` | string | `"Off"` | Tick manip — one of: Off |
+| `threeTickFly` | boolean | `false` | 3-tick fly fishing (knife + shortbow) |
 | `guildFeatherMinutes` | number (0–120) | `0` | Feather supply trip every (minutes) |
 | `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Use Closest, Use Start Position, Use Custom Position, None, Draynor Village, Catherby, Fishing Guild, Barbarian Village, Seers (fly fishing), Karamja (Musa Point), Taverley Dungeon (lava eels), Gnome Stronghold (fishing), Shilo Village |
 | `customLocation` | tile | `{"x":3200,"z":3200,"level":0}` | Custom position (x,z) |
 | `bank` | boolean | `true` | Bank haul |
-| `bankLocation` | string | `"Auto"` | Bank location — one of: Auto, Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
+| `bankLocation` | string | `"Auto"` | Bank location — one of: Auto, Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Legends Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
 | `cookMode` | string | `"Off"` | Cook mode — one of: Off, Cook then bank, Bank raw then cook |
 | `cookFish` | string | `"All raw"` | Fish to cook — one of: All raw, Tuna, Swordfish, Lobster, Shark, Salmon, Trout, Shrimps, Anchovies, Custom |
 | `cookFishCustom` | string | `""` | Custom cook filter |
@@ -743,6 +752,21 @@ Spam-attaches feathers to stackable dart tips at the five-action-per-tick server
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `tier` | string | `"Bronze"` | Dart tier — one of: Bronze, Iron, Steel, Mithril, Adamant, Rune |
+
+## General
+
+### AccountLeveler
+
+Trains melee first, then remaining combat skills, then other enabled members skills to 60. Stocks essence in batches of 1,000 and uses Edgeville monkey bars from Agility 15. Buys supplies, runs required quests, and recovers from death. Wilderness training is optional and enabled by default.
+
+- Tags: `training`, `combat`, `skilling`, `quests`, `banking`, `death-recovery`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `targetLevel` | number (2–60) | `60` | Target level |
+| `marketAxes` | boolean | `true` | Try Seers market axes |
+| `marketAxeBudget` | number (0–1000000) | `50000` | Market axe price limit |
+| `wilderness` | boolean | `true` | Allow Wilderness training |
 
 ## Herblore
 
@@ -860,7 +884,7 @@ Rune essence loop — Aubury teleport, one-click mine to a full pack, portal bac
 
 ### Miner
 
-Mines the selected rock types, then banks the ore at the nearest bank or drops it (power-mining). Optional trip food is eaten when its full heal fits or to turn food slots into more ore slots. Needs a pickaxe (best available is restocked from the bank when Full inventory is Auto). Optional Buy/repair acquires picks from Nurmof (and repairs broken picks).
+Mines the selected rock types, then banks the ore or drops the whole haul in a batch when Bank=false. Power mode keeps food for healing and restocks when it runs out. Needs a pickaxe (best available is restocked from the bank when Full inventory is Auto). Optional Buy/repair acquires picks from Nurmof (and repairs broken picks).
 
 - Tags: `gathering`, `banking`, `drop`
 
@@ -871,7 +895,7 @@ Mines the selected rock types, then banks the ore at the nearest bank or drops i
 | `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Use Closest, Use Start Position, Use Custom Position, None, Al Kharid Mine (29 Combat recommended), Barbarian Village, Coal Trucks (55 Combat recommended), Crafting Guild, Desert Mining Camp (91 Combat recommended), Desert Mining Camp Surface (91 Combat recommended), Dwarven Mine (65 Combat recommended), Edgeville Dungeon Mine (85 Combat recommended), Fight Arena Mine, Grand Tree Mine, Heroes Guild, Lava Maze Runite Mine (69 Combat recommended), Legends Guild Iron (east), Legends Guild Iron (west), Mining Guild, North Brimhaven Mine, Rimmington Mine, Shilo Village, South-east Ardougne Mine, Southeast Varrock Mine, Southwest Varrock Mine, West Lumbridge Swamp Mine, Wilderness Hobgoblin Mine (57 Combat recommended), Wilderness Skeleton Mine (45 Combat recommended) |
 | `customLocation` | tile | `{"x":3200,"z":3200,"level":0}` | Custom position (x,z) |
 | `bank` | boolean | `true` | Bank haul |
-| `bankLocation` | string | `"Auto"` | Bank location — one of: Auto, Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
+| `bankLocation` | string | `"Auto"` | Bank location — one of: Auto, Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Legends Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
 | `food` | string | `"Lobster"` | Food — one of: Shark, Lobster, Swordfish, Tuna, Salmon, Trout, Pike, Bass, Herring, Sardine, Anchovies, Shrimps, Cooked meat, Cooked chicken, Bread, Stew, Cake, Chocolate cake, Plain pizza, Meat pizza, Anchovy pizza, Pineapple pizza, Redberry pie, Meat pie, Apple pie |
 | `foodWithdraw` | number (0–27) | `0` | Food to withdraw |
 | `tickManip` | string | `"Off"` | Tick manip — one of: Off |
@@ -898,14 +922,25 @@ Falador West to Tenzing climbing-boot buyer. Withdraws exact gp so the last pair
 | `useTeleport` | boolean | `true` | Falador teleport back to bank |
 | `runeStock` | number (1–1000) | `50` | Falador teles of runes to carry |
 
+### JiveBalls
+
+Shears sheep and banks raw wool, keeping shears. Select Lumbridge, Varrock south, Falador west, the Monastery or Ardougne north, or randomly choose a flock once per run, weighted by flock size. Retrieves shears from the bank or a free spawn. Waits for wool to regrow and repeats bank trips to the selected flock.
+
+- Tags: `sheep`, `wool`, `shearing`, `banking`, `gathering`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `location` | string | `"random"` | Sheep location — one of: Random (weighted by flock size), Lumbridge (16 sheep, Draynor bank), Varrock south (5 sheep, Varrock East bank), Falador west (3 sheep, Falador West bank), Monastery (3 sheep, Edgeville bank), Ardougne north (10 sheep, north bank) |
+
 ### JiveChests
 
-Opens the Taverley crystal chest with seven keys per trip from Falador West. Drops raw swordfish, body runes, spinach rolls and adamant square shields. Collects overflow in priority order: dragonstones, key halves, runite bars, diamonds, rubies, rune legs or skirts, then other rewards. Banks when full and returns for remaining loot before opening again. Keeps and restocks Falador teleport runes. Stops after the keys are exhausted and remaining loot is collected and banked.
+Opens the Taverley crystal chest with seven keys per trip from Falador West. Keeps food and low-priority rewards unless a full pack blocks valuable ground loot. Collects overflow in priority order: dragonstones, key halves, runite bars, diamonds, rubies, rune legs or skirts, then other rewards. Banks when full and returns for remaining loot before opening again. Walks to the chest and optionally teleports home from it, stocking up to ten Falador casts and accounting for equipped elemental staffs. Stops after the keys are exhausted and remaining loot is collected and banked. Optional bank-only mode withdraws 14 of each key half, combines up to five pairs at a time and deposits the crystal keys, repeating until either half runs out.
 
 - Tags: `chest`, `taverley`, `banking`, `looting`, `afk`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
+| `combineKeys` | boolean | `false` | Combine crystal keys at the bank |
 | `teleportHome` | boolean | `true` | Teleport back to Falador |
 
 ### JiveMarketDumper
@@ -917,7 +952,7 @@ Dumps a bank to a running MarketMaker: withdraws every tradeable item as notes, 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `maker` | string | `""` | Maker name |
-| `bank` | string | `"Nearest"` | Bank — one of: Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
+| `bank` | string | `"Nearest"` | Bank — one of: Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Legends Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
 
 ### MarketMaker
 
@@ -975,6 +1010,23 @@ World shop-run supply loop — cycles shop clusters buying Herblore supplies, fe
 | `stopFloorGp` | number (0–) | `5000` | Stop below bank gp |
 | `mageArena` | boolean | `true` | Mage Arena leg |
 
+### WanderLooter
+
+Wanders the overworld looting exact-name drops without fighting. Eats configured food, flees to the nearest bank when low on health without food, banks excess loot and food, and avoids tiles where it took damage.
+
+- Tags: `loot`, `wandering`, `banking`, `food`, `event`, `pumpkin`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `loot` | string[] | `["Pumpkin"]` | Loot item names (exact) |
+| `lootMode` | string | `"list"` | Loot entry mode — one of: List (chips), CSV (text + copy/paste) |
+| `food` | string | `""` | Food to eat |
+| `foodWithdraw` | number (0–27) | `0` | Food to carry |
+| `panicHp` | number (0–100) | `25` | Flee below HP% (no food) |
+| `bankAtLootSlots` | number (1–28) | `28` | Bank at loot slots |
+| `wanderDistance` | number (5–60) | `30` | Wander distance (tiles) |
+| `bankAfterMinutes` | number (1–240) | `10` | Bank after no loot (minutes) |
+
 ## Navigation
 
 ### DoorOpener
@@ -1023,7 +1075,8 @@ All-in-one quest completer — queues the implemented quests (empty selection = 
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `quests` | string[] | `[]` | Quest queue (empty = all) — one of: Big Chompy Bird Hunting, Biohazard, Black Knight's Fortress, Clock Tower, Cook's Assistant, Death Plateau, Demon Slayer, Digsite Quest, Doric's Quest, Dragon Slayer, Druidic Ritual, Dwarf Cannon, Eadgar's Ruse, Elemental Workshop, Ernest the Chicken, Family Crest, Fight Arena, Fishing Contest, Gertrude's Cat, Goblin Diplomacy, Hazeel Cult, Hero's Quest, Holy Grail, Horror from the Deep, Imp Catcher, Jungle Potion, Legends Quest, Lost City, Merlin's Crystal, Monk's Friend, Murder Mystery, Nature Spirit, Observatory Quest, Pirate's Treasure, Plague City, Priest in Peril, Prince Ali Rescue, Regicide, Romeo & Juliet, Rune Mysteries Quest, Scorpion Catcher, Sea Slug Quest, Shades of Mortton, Sheep Herder, Sheep Shearer, Shield of Arrav, Shilo Village, Tai Bwo Wannai Trio, Temple of Ikov, The Fremennik Trials, The Grand Tree, The Knight's Sword, The Restless Ghost, The Tourist Trap, Tree Gnome Village, Tribal Totem, Troll Stronghold, Underground Pass, Vampire Slayer, Watch Tower, Waterfall Quest, Witch's House, Witch's Potion |
+| `quests` | string[] | `[]` | Quest queue — one of: Big Chompy Bird Hunting, Biohazard, Black Knight's Fortress, Clock Tower, Cook's Assistant, Death Plateau, Demon Slayer, Digsite Quest, Doric's Quest, Dragon Slayer, Druidic Ritual, Dwarf Cannon, Eadgar's Ruse, Elemental Workshop, Ernest the Chicken, Family Crest, Fight Arena, Fishing Contest, Gertrude's Cat, Goblin Diplomacy, Hazeel Cult, Hero's Quest, Holy Grail, Horror from the Deep, Imp Catcher, Jungle Potion, Legends Quest, Lost City, Merlin's Crystal, Monk's Friend, Murder Mystery, Nature Spirit, Observatory Quest, Pirate's Treasure, Plague City, Priest in Peril, Prince Ali Rescue, Regicide, Romeo & Juliet, Rune Mysteries Quest, Scorpion Catcher, Sea Slug Quest, Shades of Mortton, Sheep Herder, Sheep Shearer, Shield of Arrav, Shilo Village, Tai Bwo Wannai Trio, Temple of Ikov, The Fremennik Trials, The Grand Tree, The Knight's Sword, The Restless Ghost, The Tourist Trap, Tree Gnome Village, Tribal Totem, Troll Stronghold, Underground Pass, Vampire Slayer, Watch Tower, Waterfall Quest, Witch's House, Witch's Potion |
+| `gatherWildernessPlanks` | boolean | `true` | Gather Wilderness planks |
 | `loadout` | string | `""` | Loadout — one of:  |
 | `food` | string | `"Lobster"` | Food — one of: Shark, Lobster, Swordfish, Tuna, Salmon, Trout, Pike, Bass, Herring, Sardine, Anchovies, Shrimps, Cooked meat, Cooked chicken, Bread, Stew, Cake, Chocolate cake, Plain pizza, Meat pizza, Anchovy pizza, Pineapple pizza, Redberry pie, Meat pie, Apple pie |
 | `arravGang` | string | `"random"` | Shield of Arrav gang — one of: random, phoenix, blackarm |
@@ -1063,9 +1116,25 @@ Farms free anti-dragonbreath shields from Duke Horacio in Lumbridge Castle (requ
 
 ## Runecrafting
 
+### JiveRC
+
+Master/runner crafting for Nature, Air and Cosmic runes. Nature runners unnote at Jiminua, Air runners bank at Falador East, and Cosmic runners bank in Zanaris. Start Cosmic accounts in Zanaris or the cosmic altar.
+
+- Tags: `runecrafting`, `nature`, `air`, `cosmic`, `trade`, `master`, `runner`, `jive`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `rune` | string | `"Nature runes"` | Rune — one of: Nature runes, Air runes, Cosmic runes |
+| `mode` | string | `"Master"` | Mode — one of: Master, Runner |
+| `partner` | string | `""` | Partner name(s) |
+| `bankEvery` | number (0–) | `60` | Bank everything every N minutes (0 = never) |
+| `withdrawEss` | number (0–) | `0` | Essence per restock (0 = default) |
+| `withdrawCoins` | number (0–) | `10000` | Coins target at restock |
+| `stayInAltar` | boolean | `false` | Stay in the altar |
+
 ### MuleCrafter
 
-Crafter + mule runecrafting loop — both run bank→ruins→bank each cycle. Crafter has the talisman, crafts at the altar, trades runes for essence at the ruins. Mule ferries essence to the ruins and runes back to the bank. Dry mule signals at the bank and the crafter shares 1/N essence. Multi-mule round-robin with comma-separated partner names.
+Crafter + mule runecrafting loop — meet at the altar temple or overworld ruins, and trade with any configured mule that is available. Crafter has the talisman; bankFill=false prevents all crafter bank visits and overrides Bank after trades but still trades with configured mules, while bankFill=true enables scheduled bank trips. Mule ferries essence and runes between the meeting point and bank.
 
 - Tags: `runecrafting`, `trade`, `crafter`, `mule`, `falador`, `edgeville`
 
@@ -1073,24 +1142,10 @@ Crafter + mule runecrafting loop — both run bank→ruins→bank each cycle. Cr
 |---|---|---|---|
 | `rune` | string | `"Air rune"` | Rune — one of: Air rune, Mind rune, Water rune, Earth rune, Fire rune, Body rune, Cosmic rune, Chaos rune, Nature rune, Law rune, Death rune |
 | `mode` | string | `"Crafter"` | Mode — one of: Crafter, Mule |
-| `partner` | string | `""` | Partner name(s) (Optional for Crafter) |
-| `bankFill` | boolean | `true` | Fill essence at bank |
-
-### NatureCrafter
-
-Master Nature Crafter — a master stands at the nature altar (Karamja), takes essence from configured runners via trade, and crafts natures; runners bank essence at Ardougne, un-note it at the general store, and ship it to the master. Mode + partner name(s) via settings
-
-- Tags: `runecrafting`, `nature`, `trade`, `master`, `runner`, `karamja`
-
-| Setting | Type | Default | Notes |
-|---|---|---|---|
-| `rune` | string | `"Nature runes"` | Rune — one of: Nature runes, Air runes |
-| `mode` | string | `"Master"` | Mode — one of: Master, Runner |
+| `meetingPoint` | string | `"Altar (inside)"` | Meet at — one of: Altar (inside), Ruins (outside) |
 | `partner` | string | `""` | Partner name(s) |
-| `bankEvery` | number (0–) | `60` | Bank everything every N minutes (0 = never) |
-| `withdrawEss` | number (0–) | `0` | Essence per restock (0 = default) |
-| `withdrawCoins` | number (0–) | `10000` | Coins target at restock |
-| `stayInAltar` | boolean | `false` | Stay in the altar |
+| `tradesPerBank` | number (0–) | `0` | Bank after trades |
+| `bankFill` | boolean | `false` | Allow crafter bank visits |
 
 ### RuneCrafter
 
@@ -1193,6 +1248,7 @@ Pickpockets an NPC (Man by default), eats after failed steals, and optionally ba
 | `target` | string | `"Man"` | Pickpocket target — one of: Man, Woman, Farmer, Warrior woman, Al-Kharid warrior, Rogue, Guard, Knight of Ardougne, Watchman, Paladin, Hero |
 | `action` | string | `"Pickpocket"` | Action |
 | `loadout` | string | `""` | Loadout — one of:  |
+| `food` | string | `""` | Food |
 | `banking` | string | `"None"` | Food banking — one of: None, Auto |
 | `foodWithdraw` | number (1–27) | `22` | Food to carry |
 | `bankAtFood` | number (0–26) | `0` | Bank at food remaining |
@@ -1231,6 +1287,30 @@ Walks to a bank and rewrites the slot order into categories, coins first and jun
 | `reportQuestJunk` | boolean | `true` | Report obsolete quest items |
 | `dropQuestJunk` | boolean | `false` | Drop what the report found |
 
+### JiveCaskets
+
+Opens ordinary loot caskets at the bank. Withdraws a full inventory, opens up to five caskets at a time, deposits all inventory items and repeats until the bank is out of caskets. Start at a bank. Clue and quest caskets are left banked.
+
+- Tags: `caskets`, `banking`, `loot`, `members`
+
+### MuleDepot
+
+Shared-bank depot for a group of accounts, in two modes. Dump: every mule withdraws a shared item list and trades the lot to one supermule, which banks each delivery and keeps going. Supply: one supplier hands a fixed loadout to each account once, delivering over as many trades as the loadout needs, then stops; if the bank cannot supply a line, the rest is still delivered and the shortfall is named when it stops. Four roles off two settings — Dump/Mule, Dump/Supermule, Supply/Supplier, Supply/Client — and a designation from the wrong mode is refused at startup. Default bank Seers; both sides use the same one.
+
+- Tags: `trade`, `mule`, `banking`, `logistics`, `multi-account`, `depot`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `mode` | string | `"Dump"` | Mode — one of: Dump, Supply |
+| `designation` | string | `"Mule"` | Designation — one of: Mule, Supermule, Supplier, Client |
+| `bank` | string | `"Seers"` | Bank — one of: Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Legends Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
+| `accounts` | string | `""` | Accounts |
+| `items` | string[] | `["Air rune","water rune","earth rune","fire rune","cosmic rune","law rune","mind rune","body rune","nature rune","chaos rune","death rune","soul rune","blood rune","Bronze arrow","iron arrow","steel arrow","mithril arrow","adamant arrow","rune arrow","rune dart","rune knife","Feather","cowhide","dragonhide","dragon bones","big bones","Snape grass","unicorn horn","limpwurt root","herb","Nature talisman","half of a key","uncut sapphire","uncut emerald","uncut ruby","uncut diamond","chaos talisman","rune javelin","dragon spear","rune spear","shield left half","rune longsword","adamant platebody","rune dagger","adamant full helm","rune sq shield","rune battleaxe","runite bar","runite ore","rune kiteshield","rune scimitar","rune sword","rune full helm","dragon platelegs","dragon plateskirt","dragon chainbody","adamant platelegs","Air talisman","earth talisman","water talisman","fire talisman","mind talisman","body talisman","cosmic talisman","Ashes","eye of newt","vial","vial of water","rune essence","coal","iron ore","gold ore","mithril ore","adamantite ore","runite ore","yew logs","magic logs","hard leather","leather","seaweed"]` | Item list (Dump) |
+| `itemsMode` | string | `"csv"` | Item list entry mode — one of: List (chips), CSV (paste) |
+| `loadout` | string[] | `["10000 Air rune","10000 Mind rune"]` | Loadout (Supply) |
+| `loadoutMode` | string | `"csv"` | Loadout entry mode — one of: List (chips), CSV (paste) |
+| `tradeSlots` | number (1–28) | `28` | Slots per batch |
+
 ## Woodcutting
 
 ### GnomeMagicChopper
@@ -1256,7 +1336,7 @@ Chops the chosen tree type, then banks logs, drops them, or burns a full load (c
 | `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Use Closest, Use Start Position, Use Custom Position, None, Draynor (trees), Draynor Oaks, Draynor Willows, Seers (trees), Seers Oaks, Seers Willows, Seers Maples, Seers Yews (cemetery), Edgeville Yews, Sorcerer's Tower, Gnome Stronghold, S Falador Oaks, Lumbridge Farmer Willows, Lumbridge Castle Willows |
 | `customLocation` | tile | `{"x":3200,"z":3200,"level":0}` | Custom position (x,z) |
 | `bank` | boolean | `true` | Bank haul |
-| `bankLocation` | string | `"Auto"` | Bank location — one of: Auto, Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
+| `bankLocation` | string | `"Auto"` | Bank location — one of: Auto, Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Legends Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
 | `tickManip` | string | `"Off"` | Tick manip — one of: Off |
 | `burnMode` | string | `"Off"` | Burn mode — one of: Off, Chop then burn |
 | `fireSpot` | string | `"Auto"` | Fire spot — one of: Auto, Varrock East, Varrock West, Draynor, Seers |

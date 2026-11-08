@@ -71,6 +71,7 @@ export const SETTINGS: SettingsSchema = {
     usePotions: { type: 'boolean', default: true, label: 'Drink super attack / strength', group: 'Combat', showIf: SHOW_MELEE, help: 'sips a dose mid-fight once the boost decays to within a tenth of the base level; the loadout\'s carry list sets the dose form and how many flasks per trip, otherwise one Super attack(3) and one Super strength(3)' },
 
     loadout: { ...LOADOUT_SETTING, group: 'Food & healing' },
+    food: { type: 'string', default: '', label: 'Food', group: 'Food & healing', help: 'blank uses the selected loadout or the site default' },
     foodWithdraw: { type: 'number', default: 20, min: 1, max: 27, label: 'Food to withdraw per bank run', group: 'Food & healing' },
 
     panicHp: { type: 'number', default: 30, min: 1, max: 98, label: 'Escape below HP%', group: 'Food & healing', help: 'when out of food and this low, escape to the bank' },
@@ -935,7 +936,7 @@ export default class GreenDragon extends TaskBot {
         SHIELD = this.settings.str('shield', 'Dragonfire shield');
         USE_SPECIAL = this.settings.bool('useSpecial', true);
         this.xpAtStart = new Map(GRIND_SKILLS.map(sk => [sk, Skills.xp(sk)]));
-        FOOD_NAME = scriptFood(this.settings, 'Lobster');
+        FOOD_NAME = this.settings.str('food', '').trim() || scriptFood(this.settings, 'Lobster');
 
         PANIC_HP = this.settings.num('panicHp', 30) / 100;
         RUNES_WITHDRAW = this.settings.num('runesWithdraw', 150);

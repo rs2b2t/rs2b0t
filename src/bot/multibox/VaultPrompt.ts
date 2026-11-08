@@ -92,7 +92,15 @@ export class VaultPrompt {
                 err.textContent = 'passphrases do not match';
                 return;
             }
-            void this.vault.setup(pass.value).then(() => this.finish(true));
+            go.disabled = true;
+            void this.vault
+                .setup(pass.value)
+                .then(() => this.finish(true))
+                .catch(error => {
+                    this.render();
+                    const message = this.box.querySelector('.mbx-vault-error');
+                    if (message) message.textContent = error instanceof Error ? error.message : String(error);
+                });
         });
         this.box.append(title, form, err);
         pass.focus();

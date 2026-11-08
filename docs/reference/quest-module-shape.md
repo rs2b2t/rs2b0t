@@ -25,6 +25,8 @@ export interface QuestModule {
     gather?: Record<string, (snap, need) => QuestStep>;
     tools?: string[];
     ownsInventory?: boolean;                  // module manages every loadout itself
+    recover?: (tile: WorldTile) => QuestStep | null;
+    resumeAt?: (tile: WorldTile) => boolean;
     readStage?: () => number | undefined | Promise<number | undefined>;
     sustain?: QuestSustain;                   // quest-specific food and eat threshold
     warnReadiness?: () => string | null;      // soft: untested combat / power level
@@ -39,6 +41,13 @@ export interface QuestModule {
 
 Because `decide()` is a pure function of the snapshot, a quest is restartable from
 any point. Kill the bot mid-quest, start it again, and it re-derives where it is.
+
+`recover()` handles location-specific exits before queue selection, including
+completed or unselected quests. `resumeAt()` identifies a quest's sealed areas:
+the engine resumes that in-progress quest before the ordinary queue order and
+leaves inventory preparation to its steps while inside. Generic preparation
+resumes outside. If the area owner is blocked, skipped, or unselected, the engine
+stops with that reason instead of attempting another quest's bank trip.
 
 ## See also
 

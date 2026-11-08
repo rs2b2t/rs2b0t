@@ -440,7 +440,7 @@ class FletchDialog implements Task {
         const products = ChatDialog.makeProducts();
         const match = matchProduct(products, this.bot.productName());
         if (!match) {
-            ScriptRunner.stop(`BankFletcher: '${this.bot.productName()}' isn't offered for '${this.bot.materialName()}' (menu: [${products.join(', ')}]) — refusing to make the wrong item`);
+            this.bot.requestFinish(`BankFletcher: '${this.bot.productName()}' isn't offered for '${this.bot.materialName()}' (menu: [${products.join(', ')}]) — refusing to make the wrong item`);
             return;
         }
         const start = this.bot.logCount();
@@ -581,7 +581,7 @@ class BankTrip implements Task {
                         return;
                     }
                     if (shouldStopEmpty(this.bot.emptyReadCount(input))) {
-                        ScriptRunner.stop(`BankFletcher: bank is out of '${input}'`);
+                        this.bot.requestFinish(`BankFletcher: bank is out of '${input}'`);
                     } else {
                         this.bot.log(`bank snapshot missed '${input}' (${this.bot.emptyReadCount(input)}/${EMPTY_READ_LIMIT}) — will retry`);
                     }
@@ -604,7 +604,7 @@ class BankTrip implements Task {
                     return;
                 }
                 if (shouldStopEmpty(this.bot.emptyReadCount(logKey))) {
-                    ScriptRunner.stop(`BankFletcher: bank is out of '${logKey}' — fletching complete`);
+                    this.bot.requestFinish(`BankFletcher: bank is out of '${logKey}' — fletching complete`);
                 } else {
                     this.bot.log(
                         `bank snapshot missed '${logKey}' `
@@ -629,7 +629,7 @@ class BankTrip implements Task {
                     }
                     this.bot.setStatus('error: no Knife');
                     this.bot.log('No Knife in bank or inventory.');
-                    ScriptRunner.stop('BankFletcher: no Knife in bank or inventory');
+                    this.bot.requestFinish('BankFletcher: no Knife in bank or inventory');
                     return;
                 }
                 const knifeName = knifeBank.name;
@@ -677,7 +677,7 @@ class BankTrip implements Task {
                 this.bot.log(`no '${BOW_STRING}' in the bank list yet (${action}) — will retry`);
                 return;
             } else if (shouldStopEmpty(this.bot.emptyReadCount(BOW_STRING))) {
-                ScriptRunner.stop(`BankFletcher: bank is out of '${BOW_STRING}'`);
+                this.bot.requestFinish(`BankFletcher: bank is out of '${BOW_STRING}'`);
                 return;
             } else {
                 this.bot.log(`bank snapshot missed '${BOW_STRING}' (${this.bot.emptyReadCount(BOW_STRING)}/${EMPTY_READ_LIMIT}) — will retry`);
@@ -715,7 +715,7 @@ class BankTrip implements Task {
             return;
         }
         if (shouldStopEmpty(this.bot.emptyReadCount(unstrungKey))) {
-            ScriptRunner.stop(`BankFletcher: bank is out of unstrung ${plan.displayName}`);
+            this.bot.requestFinish(`BankFletcher: bank is out of unstrung ${plan.displayName}`);
         } else {
             this.bot.log(
                 `bank snapshot missed unstrung ${plan.displayName} `
@@ -751,7 +751,7 @@ class BankTrip implements Task {
                         return;
                     }
                     this.bot.log('No Knife in bank or inventory.');
-                    ScriptRunner.stop('BankFletcher: no Knife in bank or inventory');
+                    this.bot.requestFinish('BankFletcher: no Knife in bank or inventory');
                     return;
                 }
                 const knifeOps = knifeBank.ops.filter((o): o is string => o !== null);
@@ -807,7 +807,7 @@ class BankTrip implements Task {
                 this.bot.log(`no '${BOW_STRING}' in the bank list yet (${action}) — will retry`);
                 return;
             } else if (shouldStopEmpty(this.bot.emptyReadCount(BOW_STRING))) {
-                ScriptRunner.stop(`BankFletcher: bank is out of '${BOW_STRING}'`);
+                this.bot.requestFinish(`BankFletcher: bank is out of '${BOW_STRING}'`);
                 return;
             } else {
                 this.bot.log(`bank snapshot missed '${BOW_STRING}' (${this.bot.emptyReadCount(BOW_STRING)}/${EMPTY_READ_LIMIT}) — will retry`);
@@ -845,7 +845,7 @@ class BankTrip implements Task {
             return;
         }
         if (shouldStopEmpty(this.bot.emptyReadCount(unstrungKey))) {
-            ScriptRunner.stop(`BankFletcher: bank is out of unstrung ${plan.displayName} — cut+string complete`);
+            this.bot.requestFinish(`BankFletcher: bank is out of unstrung ${plan.displayName} — cut+string complete`);
         } else {
             this.bot.log(
                 `bank snapshot missed unstrung ${plan.displayName} `

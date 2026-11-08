@@ -1,15 +1,21 @@
+import '../panel/desktopStorage.js';
+import { resolveWorldNumber, type WorldNumber } from '../../client/config/worlds.js';
+import { supportsWorldRouting } from '../../client/config/target.js';
 import { BUILD_INFO, formatBuildInfo } from '../runtime/buildInfo.js';
 import { installWorkerClockHub } from '../runtime/WorkerClock.js';
 import { installDiagnostics } from './installDiagnostics.js';
 import { TrafficCollector } from '../adapter/TrafficAdapter.js';
 import { DomSlotOps, orderedSlotElements } from './DomSlotOps.js';
-import { MultiBoxController } from './MultiBoxController.js';
+import { MultiBoxController, normalizeUsername } from './MultiBoxController.js';
 import { ProfileChooser } from './ProfileChooser.js';
 import { vault, type Profile } from './ProfileVault.js';
 import { renderRailTile, slotIsRunning } from './RailTile.js';
 import { ResourcePanel } from './ResourcePanel.js';
 import { SettingsPanel } from './SettingsPanel.js';
+import { RosterActions, type RosterProfile } from './RosterActions.js';
+import { RosterPanel } from './RosterPanel.js';
 import { TabBar } from './TabBar.js';
+import { BotTabMenu } from './BotTabMenu.js';
 import { VaultPrompt } from './VaultPrompt.js';
 import { applyBoxStorage, collectBoxStorage, type ProfileSnapshot } from './ProfileTransfer.js';
 import type { Account } from './types.js';
@@ -29,8 +35,12 @@ function boot(): void {
     const rail = document.getElementById('mbx-rail')!;
     const addTile = document.getElementById('mbx-add')!;
 
-    const ops = new DomSlotOps(rail, addTile);
-    const controller = new MultiBoxController(ops);
+    const worldRouting = supportsWorldRouting();
+    const ops = new DomSlotOps(rail, addTile, worldRouting);
+    const defaultWorld = worldRouting ? resolveWorldNumber(window.location.host, new URLSearchParams(window.location.search)) : 1;
+    const controller = new MultiBoxController(ops, undefined, defaultWorld);
+    let roster: RosterPanel | null = null;
+    const worldWrites = new Set<string>();
     const startAll = document.getElementById('mbx-start-all') as HTMLButtonElement;
     const stopAll = document.getElementById('mbx-stop-all') as HTMLButtonElement;
     const renderersOff = document.getElementById('mbx-renderers-off') as HTMLButtonElement;
@@ -101,6 +111,15 @@ function boot(): void {
         onMove: (name, toIndex) => void mutateTabs(() => controller.moveTab(name, toIndex)),
         onDropBot: (id, tab) => void mutateTabs(() => controller.setSlotTab(id, tab))
     });
+    const botTabMenu = new BotTabMenu((id, tab) => void mutateTabs(() => controller.setSlotTab(id, tab)));
+    rail.addEventListener('contextmenu', ev => {
+        const tile = (ev.target as HTMLElement).closest<HTMLElement>('.mbx-slot');
+        if (!tile) return;
+        const slot = controller.snapshot()[railTiles().indexOf(tile)];
+        if (!slot) return;
+        ev.preventDefault();
+        botTabMenu.open(slot, controller.tabs(), ev.clientX, ev.clientY, rail);
+    });
 
     function moveSlot(id: number, toIndex: number): boolean {
         if (!controller.move(id, toIndex)) {
@@ -126,6 +145,18 @@ function boot(): void {
         const idx = railTiles().indexOf(tile as HTMLElement);
         const snap = controller.snapshot()[idx];
         if (!snap) return;
+        const target = ev.target as HTMLElement;
+        if (target.closest('.mbx-world-select')) return;
+        if (target.closest('.mbx-world-switch')) {
+            const selected = (tile.querySelector('.mbx-world-select') as HTMLSelectElement).value;
+            void changeSlotWorld(snap.id, Number(selected) as WorldNumber);
+            return;
+        }
+        if (target.closest('.mbx-world-cancel')) {
+            controller.cancelSlotWorldSwitch(snap.id);
+            renderRail();
+            return;
+        }
         if ((ev.target as HTMLElement).closest('.mbx-close')) {
             controller.remove(snap.id);
         } else {
@@ -164,7 +195,7 @@ function boot(): void {
             return;
         }
         const tile = target.closest('.mbx-slot');
-        if (!tile || target.closest('.mbx-close')) {
+        if (!tile || target.closest('button, select, input')) {
             ev.preventDefault();
             return;
         }
@@ -247,11 +278,24 @@ function boot(): void {
         renderRail();
         // a fresh profile joins the active tab; record that membership
         persistTabState();
-    });
+    }, { defaultWorld, worldRouting, onWorldChange: worldRouting ? changeProfileWorld : undefined });
     document.body.appendChild(chooser.el);
 
     const prompt = new VaultPrompt(vault);
     document.body.appendChild(prompt.el);
+    window.addEventListener('storage', event => {
+        if (event.key === 'rs2b0t:multibox:profiles') {
+            void vault.refresh().then(() => {
+                if (vault.status() !== 'unlocked') {
+                    chooser.close();
+                    roster?.close();
+                    return;
+                }
+                if (!chooser.el.hidden && vault.status() === 'unlocked') chooser.open();
+                roster?.refresh();
+            }).catch(error => console.error('[rs2b0t] failed to refresh saved accounts', error));
+        }
+    });
 
     let tabsHydrated = false;
     function hydrateTabState(): void {
@@ -272,6 +316,41 @@ function boot(): void {
         return ok;
     }
 
+    async function changeProfileWorld(profile: Profile, world: WorldNumber): Promise<boolean> {
+        if (!worldRouting) return false;
+        const identity = normalizeUsername(profile.username);
+        if (worldWrites.has(identity)) return false;
+        worldWrites.add(identity);
+        try {
+            const slot = controller.snapshot().find(candidate => normalizeUsername(candidate.username) === identity);
+            if (slot && (slot.targetWorld !== world || slot.switchingWorld !== null)) {
+                if (!await controller.switchWorld(slot.id, world)) {
+                    return false;
+                }
+            }
+            await vault.setWorld(profile.username, world);
+            return true;
+        } finally {
+            worldWrites.delete(identity);
+            renderRail();
+        }
+    }
+
+    async function changeSlotWorld(id: number, world: WorldNumber): Promise<boolean> {
+        if (!worldRouting || (world !== 1 && world !== 2 && world !== 3)) return false;
+        const slot = controller.snapshot().find(candidate => candidate.id === id);
+        if (!slot || !(await ensureUnlocked())) return false;
+        const profile = vault.list().find(candidate => normalizeUsername(candidate.username) === normalizeUsername(slot.username));
+        try {
+            if (profile) return await changeProfileWorld(profile, world);
+            const changed = await controller.switchWorld(id, world);
+            renderRail();
+            return changed;
+        } catch {
+            return false;
+        }
+    }
+
     function applyImportedTabs(data: ProfileSnapshot): void {
         const live = controller.snapshot();
         if (live.length === 0) {
@@ -289,7 +368,7 @@ function boot(): void {
         const live = new Set(controller.snapshot().map(slot => slot.username));
         for (const p of vault.list()) {
             if (!live.has(p.username)) {
-                controller.add({ username: p.username, password: p.password, tab: p.tab });
+                controller.add(p);
             }
         }
         persistTabState();
@@ -314,6 +393,49 @@ function boot(): void {
     });
     document.body.appendChild(settings.el);
     document.getElementById('mbx-settings')!.addEventListener('click', () => settings.open());
+
+    function rosterProfiles(): RosterProfile[] {
+        const profiles = new Map<string, RosterProfile>();
+        for (const profile of vault.status() === 'unlocked' ? vault.list() : []) {
+            profiles.set(normalizeUsername(profile.username), {
+                username: profile.username, tab: profile.tab ?? 'Main', world: profile.world ?? defaultWorld
+            });
+        }
+        for (const slot of controller.snapshot()) {
+            profiles.set(normalizeUsername(slot.username), {
+                username: slot.username, tab: slot.tab, world: slot.targetWorld, slot
+            });
+        }
+        return [...profiles.values()];
+    }
+
+    const rosterActions = new RosterActions({
+        profiles: rosterProfiles,
+        client: profile => profile.slot ? controller.rosterClient(profile.slot.id) : null,
+        setWorld: async (profile, world) => {
+            const saved = vault.list().find(p => normalizeUsername(p.username) === normalizeUsername(profile.username));
+            if (saved) return changeProfileWorld(saved, world);
+            return profile.slot ? changeSlotWorld(profile.slot.id, world) : false;
+        }
+    });
+    roster = new RosterPanel(rosterActions, {
+        tabs: () => controller.tabs(),
+        activeTab: () => controller.activeTab(),
+        worldRouting,
+        edit: async profile => {
+            const current = rosterProfiles().find(p => p.username === profile.username);
+            const client = current?.slot ? controller.rosterClient(current.slot.id) : null;
+            if (!current?.slot || !client) throw new Error('Load this profile and wait for its client before editing.');
+            controller.focus(current.slot.id);
+            renderRail();
+            await rosterActions.edit(current);
+        }
+    });
+    document.body.appendChild(roster.el);
+    const manage = document.getElementById('mbx-manage');
+    manage?.addEventListener('click', () => {
+        void ensureUnlocked().then(ok => { if (ok) roster?.open(manage); });
+    });
 
     addTile.addEventListener('click', () => {
         void ensureUnlocked().then(ok => {
@@ -369,6 +491,7 @@ function boot(): void {
             renderRailTile(tiles[i], s);
             tiles[i].classList.toggle('mbx-tab-hidden', s.tab !== activeTab);
         });
+        roster?.refresh();
     }
 
     window.setInterval(renderRail, 1000);
@@ -376,6 +499,8 @@ function boot(): void {
     window.addEventListener(
         'pagehide',
         () => {
+            botTabMenu.close();
+            roster?.close();
             resources.stop();
             traffic.close();
         },
@@ -402,6 +527,11 @@ function boot(): void {
         },
         move: (id: number, toIndex: number) => moveSlot(id, toIndex),
         slots: () => controller.snapshot(),
+        setWorld: (id: number, world: WorldNumber) => changeSlotWorld(id, world),
+        cancelWorldSwitch: (id: number) => {
+            controller.cancelSlotWorldSwitch(id);
+            renderRail();
+        },
         tabs: () => controller.tabs(),
         activeTab: () => controller.activeTab(),
         addTab: (name: string) => mutateTabs(() => controller.addTab(name)),
@@ -418,7 +548,7 @@ function boot(): void {
             let n = 0;
             for (const p of Array.isArray(arr) ? arr : []) {
                 if (p && typeof p.username === 'string' && p.username.length > 0 && typeof p.password === 'string') {
-                    await vault.upsert({ username: p.username, password: p.password });
+                    await vault.upsert(p);
                     n++;
                 }
             }

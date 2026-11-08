@@ -33,6 +33,16 @@ This includes angry strange plants; pickable plants are still handled normally.
 See [live verification](../how-to/verify-hostile-randoms.md) for the damage and
 escape harness.
 
+## Talking random events
+
+A Genie, Drunken dwarf or Mysterious old man spawns in `playerfollow` mode on the
+player it was sent to, so its `faceEntity` carries that player's slot and a `Talk-to`
+from anyone else answers "Sorry, but I'm trying to talk to another player". The
+handler skips one whose facing names a different player, and keeps any whose facing
+is absent or points at us, so a spawn tick that has not published the mask yet is
+still answered. A strange plant is not covered: it spawns in `none` mode and faces
+nobody, so it stays on the spawn-distance and "It's not here for you" rules.
+
 ---
 
 ## Settings

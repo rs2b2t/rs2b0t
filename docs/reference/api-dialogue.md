@@ -59,7 +59,7 @@ Trade.decline(): Promise<void>
 
 ### Partner trade policy (`api/trade/PartnerTrade`)
 
-Pure helpers shared by GatheringBot mule modes, FlaxRunner, and NatureCrafter:
+Pure helpers shared by GatheringBot mule modes, FlaxRunner, and JiveRC:
 
 ```ts
 parsePartnerList(raw: string): string[]

@@ -1,7 +1,7 @@
+import AccountLeveler, { SETTINGS as ACCOUNT_LEVELER_SETTINGS } from './AccountLeveler/AccountLeveler.js';
 import { AGILITY_SETTINGS } from './AgilityBot/AgilityBot.js';
 import { FISHING_LOCATION_OPTIONS } from '../data/fishingLocations.js';
 import { FISHING_METHOD_OPTIONS } from '../data/fishingMethods.js';
-import { MINING_LOCATION_OPTION_LABELS, MINING_LOCATION_OPTIONS } from '../data/miningLocations.js';
 import {
     AFTER_COOK_OPTIONS,
     BURNT_POLICY_OPTIONS,
@@ -10,12 +10,10 @@ import {
 } from './GatheringBot/FishCookLogic.js';
 import {
     FISH_TICK_MANIP_OPTIONS,
-    MINE_TICK_MANIP_OPTIONS,
     TICK_MANIP_UNSHIPPED_HELP,
     tickManipUiOptions
 } from './GatheringBot/TickManipLogic.js';
-import { ROCK_OPTIONS } from '../data/miningRocks.js';
-import { MINER_FOOD_SETTINGS } from './GatheringBot/MinerLogic.js';
+import { MINER_SETTINGS } from './GatheringBot/MinerSettings.js';
 import EdgevilleMonkeyBars, { EDGEVILLE_MONKEYBARS_SETTINGS } from './EdgevilleMonkeyBars/EdgevilleMonkeyBars.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import AgilityBot from './AgilityBot/AgilityBot.js';
@@ -72,11 +70,14 @@ import GemCutter, { GEM_CUTTER_SETTINGS } from './GemCutter/GemCutter.js';
 import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner/EssMiner.js';
 import CoalTrucks from './CoalTrucks/CoalTrucks.js';
 import RuneCrafter, { SETTINGS as RUNECRAFTER_SETTINGS } from './RuneCrafter/RuneCrafter.js';
-import NatureCrafter, { SETTINGS as NATURECRAFTER_SETTINGS } from './NatureCrafter/NatureCrafter.js';
+import JiveRC, { SETTINGS as JIVERC_SETTINGS } from './JiveRC/JiveRC.js';
 import MuleCrafter, { SETTINGS as MULECRAFTER_SETTINGS } from './MuleCrafter/MuleCrafter.js';
+import MuleDepot, { SETTINGS as MULEDEPOT_SETTINGS } from './MuleDepot/MuleDepot.js';
 import RoguesPurse from './RoguesPurse/RoguesPurse.js';
 import HerbloreSecondaries, { HERBLORE_SECONDARIES_SETTINGS } from './HerbloreSecondaries/HerbloreSecondaries.js';
 import HerbCleaner, { HERB_CLEANER_SETTINGS } from './HerbCleaner/HerbCleaner.js';
+import JiveCaskets from './JiveCaskets/JiveCaskets.js';
+import JiveBalls, { SETTINGS as JIVEBALLS_SETTINGS } from './JiveBalls/JiveBalls.js';
 import PotionMaker, { POTION_MAKER_SETTINGS } from './PotionMaker/PotionMaker.js';
 import MarketMaker, { MARKET_MAKER_SETTINGS } from './MarketMaker/MarketMaker.js';
 import ClimbingBoots, { CLIMBING_BOOTS_SETTINGS } from './ClimbingBoots/ClimbingBoots.js';
@@ -89,6 +90,7 @@ import ArravSupplier, { ARRAV_SUPPLIER_SETTINGS } from './ArravSupplier/ArravSup
 import Barcrawl from './Barcrawl/Barcrawl.js';
 import DuelArena, { DUEL_ARENA_SETTINGS } from './DuelArena/DuelArena.js';
 import DragonfireShield, { SETTINGS as DRAGONFIRESHIELD_SETTINGS } from './DragonfireShield/DragonfireShield.js';
+import WanderLooter, { SETTINGS as WANDER_LOOTER_SETTINGS } from './WanderLooter/WanderLooter.js';
 
 // First register = panel default when no script is remembered (BotPanel → list()[0]).
 ScriptRegistry.register({
@@ -263,7 +265,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'JiveCrafting',
-    description: 'Makes one gold jewel picked from the dropdown at the Al Kharid furnace: banks for the mould, the gold bars and the gems, uses a bar on the furnace, clicks the biggest Make button that fits the load and walks back with it. Stops honestly when the bank runs out of any of the three.',
+    description: 'Crafts gold jewellery at the Al Kharid furnace, or strings unstrung amulets with balls of wool at the nearest bank. Banks finished items and stops when supplies run out.',
     category: 'Crafting',
     tags: ['crafting', 'jewellery', 'al kharid', 'banking', 'afk'],
     settingsSchema: JIVECRAFTING_SETTINGS,
@@ -290,11 +292,20 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'JiveChests',
-    description: 'Opens the Taverley crystal chest with seven keys per trip from Falador West. Drops raw swordfish, body runes, spinach rolls and adamant square shields. Collects overflow in priority order: dragonstones, key halves, runite bars, diamonds, rubies, rune legs or skirts, then other rewards. Banks when full and returns for remaining loot before opening again. Keeps and restocks Falador teleport runes. Stops after the keys are exhausted and remaining loot is collected and banked.',
+    description: 'Opens the Taverley crystal chest with seven keys per trip from Falador West. Keeps food and low-priority rewards unless a full pack blocks valuable ground loot. Collects overflow in priority order: dragonstones, key halves, runite bars, diamonds, rubies, rune legs or skirts, then other rewards. Banks when full and returns for remaining loot before opening again. Walks to the chest and optionally teleports home from it, stocking up to ten Falador casts and accounting for equipped elemental staffs. Stops after the keys are exhausted and remaining loot is collected and banked. Optional bank-only mode withdraws 14 of each key half, combines up to five pairs at a time and deposits the crystal keys, repeating until either half runs out.',
     category: 'Money making',
     tags: ['chest', 'taverley', 'banking', 'looting', 'afk'],
     settingsSchema: JIVECHESTS_SETTINGS,
     create: () => new JiveChests()
+});
+
+ScriptRegistry.register({
+    name: 'JiveBalls',
+    description: 'Shears sheep and banks raw wool, keeping shears. Select Lumbridge, Varrock south, Falador west, the Monastery or Ardougne north, or randomly choose a flock once per run, weighted by flock size. Retrieves shears from the bank or a free spawn. Waits for wool to regrow and repeats bank trips to the selected flock.',
+    category: 'Money making',
+    tags: ['sheep', 'wool', 'shearing', 'banking', 'gathering'],
+    settingsSchema: JIVEBALLS_SETTINGS,
+    create: () => new JiveBalls()
 });
 
 ScriptRegistry.register({
@@ -365,51 +376,10 @@ ScriptRegistry.register({
 ScriptRegistry.register({
     name: 'Miner',
     description:
-        'Mines the selected rock types, then banks the ore at the nearest bank or drops it (power-mining). Optional trip food is eaten when its full heal fits or to turn food slots into more ore slots. Needs a pickaxe (best available is restocked from the bank when Full inventory is Auto). Optional Buy/repair acquires picks from Nurmof (and repairs broken picks).',
+        'Mines the selected rock types, then banks the ore or drops the whole haul in a batch when Bank=false. Power mode keeps food for healing and restocks when it runs out. Needs a pickaxe (best available is restocked from the bank when Full inventory is Auto). Optional Buy/repair acquires picks from Nurmof (and repairs broken picks).',
     category: 'Mining',
     tags: ['gathering', 'banking', 'drop'],
-    settingsSchema: {
-        rocks: {
-            type: 'string[]',
-            default: ['Iron'],
-            options: ROCK_OPTIONS,
-            label: 'Rock types',
-            help:
-                'Which rocks to mine — every rock is named "Rocks" in-game, so pick the ore types here (multi-select). Empty = mine any rock.'
-        },
-        leashRadius: GATHERING_SETTINGS.leashRadius,
-        location: {
-            type: 'string',
-            default: 'Auto',
-            options: MINING_LOCATION_OPTIONS,
-            optionLabels: MINING_LOCATION_OPTION_LABELS,
-            label: 'Location / full inventory',
-            help:
-                'Mine camp + full-pack behaviour. Auto = snap to a camp in your map square, otherwise stay at your start tile. Use Closest = nearest camp by distance. Use Start Position = freeform around your start tile + nearest bank. Use Custom Position = freeform around the custom tile. Named camps pin spot + bank. Camps with aggressive NPCs show a recommended combat level (2× highest aggro + 1). Power-mine via Bank=false (drop ore; configured food still restocks from the nearest bank). Legacy None also power-mines.'
-        },
-        customLocation: GATHERING_SETTINGS.customLocation,
-        bank: GATHERING_SETTINGS.bank,
-        bankLocation: GATHERING_SETTINGS.bankLocation,
-        ...MINER_FOOD_SETTINGS,
-        tickManip: {
-            type: 'string',
-            default: 'Off',
-            options: tickManipUiOptions(MINE_TICK_MANIP_OPTIONS),
-            label: 'Tick manip',
-            group: 'Tick manip',
-            help: TICK_MANIP_UNSHIPPED_HELP
-        },
-        muleMode: GATHERING_SETTINGS.muleMode,
-        mulePartner: GATHERING_SETTINGS.mulePartner,
-        toolAcquire: TOOL_ACQUIRE_SETTING,
-        forgetfulBank: FORGETFUL_BANK_SETTING,
-        // Required for harness / live control of start purge (default true).
-        purgePackOnStart: GATHERING_SETTINGS.purgePackOnStart,
-        packJunk: GATHERING_SETTINGS.packJunk,
-        withdrawCoins: GATHERING_SETTINGS.withdrawCoins,
-        bankTeleport: GATHERING_SETTINGS.bankTeleport,
-        teleCasts: GATHERING_SETTINGS.teleCasts
-    },
+    settingsSchema: MINER_SETTINGS,
     create: () => new GatheringBot()
 });
 
@@ -440,12 +410,12 @@ ScriptRegistry.register({
 });
 
 ScriptRegistry.register({
-    name: 'NatureCrafter',
-    description: 'Master Nature Crafter — a master stands at the nature altar (Karamja), takes essence from configured runners via trade, and crafts natures; runners bank essence at Ardougne, un-note it at the general store, and ship it to the master. Mode + partner name(s) via settings',
+    name: 'JiveRC',
+    description: 'Master/runner crafting for Nature, Air and Cosmic runes. Nature runners unnote at Jiminua, Air runners bank at Falador East, and Cosmic runners bank in Zanaris. Start Cosmic accounts in Zanaris or the cosmic altar.',
     category: 'Runecrafting',
-    tags: ['runecrafting', 'nature', 'trade', 'master', 'runner', 'karamja'],
-    settingsSchema: NATURECRAFTER_SETTINGS,
-    create: () => new NatureCrafter()
+    tags: ['runecrafting', 'nature', 'air', 'cosmic', 'trade', 'master', 'runner', 'jive'],
+    settingsSchema: JIVERC_SETTINGS,
+    create: () => new JiveRC()
 });
 
 ScriptRegistry.register({
@@ -497,6 +467,13 @@ ScriptRegistry.register({
             label: 'Tick manip',
             group: 'Tick manip',
             help: TICK_MANIP_UNSHIPPED_HELP
+        },
+        threeTickFly: {
+            type: 'boolean',
+            default: false,
+            label: '3-tick fly fishing (knife + shortbow)',
+            group: 'Tick manip',
+            help: 'Roll-anchored fly fishing: knife the log on the roll, Make-1 shortbow + Lure on the next tick, then roll again 3 ticks after the last roll. Needs a Knife and one Logs; power/drop mode is allowed.'
         },
         guildFeatherMinutes: {
             type: 'number',
@@ -617,6 +594,14 @@ ScriptRegistry.register({
 });
 
 ScriptRegistry.register({
+    name: 'JiveCaskets',
+    description: 'Opens ordinary loot caskets at the bank. Withdraws a full inventory, opens up to five caskets at a time, deposits all inventory items and repeats until the bank is out of caskets. Start at a bank. Clue and quest caskets are left banked.',
+    category: 'Utility',
+    tags: ['caskets', 'banking', 'loot', 'members'],
+    create: () => new JiveCaskets()
+});
+
+ScriptRegistry.register({
     name: 'DartFletcher',
     description: 'Spam-attaches feathers to stackable dart tips at the five-action-per-tick server ceiling; runs anywhere until either input stack is empty',
     category: 'Fletching',
@@ -727,7 +712,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'FlaxSpinner',
-    description: 'Seers flax spinner — withdraw flax, climb to the spinning wheel, Spin-X into bow string, bank, repeat',
+    description: 'Seers spinner: withdraw flax for bow strings or wool for balls of wool, spin upstairs, bank the output, and repeat',
     category: 'Crafting',
     tags: ['seers', 'crafting', 'banking', 'afk'],
     settingsSchema: FLAXSPINNER_SETTINGS,
@@ -792,11 +777,20 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'MuleCrafter',
-    description: 'Crafter + mule runecrafting loop — both run bank→ruins→bank each cycle. Crafter has the talisman, crafts at the altar, trades runes for essence at the ruins. Mule ferries essence to the ruins and runes back to the bank. Dry mule signals at the bank and the crafter shares 1/N essence. Multi-mule round-robin with comma-separated partner names.',
+    description: 'Crafter + mule runecrafting loop — meet at the altar temple or overworld ruins, and trade with any configured mule that is available. Crafter has the talisman; bankFill=false prevents all crafter bank visits and overrides Bank after trades but still trades with configured mules, while bankFill=true enables scheduled bank trips. Mule ferries essence and runes between the meeting point and bank.',
     category: 'Runecrafting',
     tags: ['runecrafting', 'trade', 'crafter', 'mule', 'falador', 'edgeville'],
     settingsSchema: MULECRAFTER_SETTINGS,
     create: () => new MuleCrafter()
+});
+
+ScriptRegistry.register({
+    name: 'MuleDepot',
+    description: 'Shared-bank depot for a group of accounts, in two modes. Dump: every mule withdraws a shared item list and trades the lot to one supermule, which banks each delivery and keeps going. Supply: one supplier hands a fixed loadout to each account once, delivering over as many trades as the loadout needs, then stops; if the bank cannot supply a line, the rest is still delivered and the shortfall is named when it stops. Four roles off two settings — Dump/Mule, Dump/Supermule, Supply/Supplier, Supply/Client — and a designation from the wrong mode is refused at startup. Default bank Seers; both sides use the same one.',
+    category: 'Utility',
+    tags: ['trade', 'mule', 'banking', 'logistics', 'multi-account', 'depot'],
+    settingsSchema: MULEDEPOT_SETTINGS,
+    create: () => new MuleDepot()
 });
 
 ScriptRegistry.register({
@@ -915,4 +909,22 @@ ScriptRegistry.register({
     tags: ['crafting', 'fletching', 'flax', 'bow-strings', 'trade', 'two-player', 'afk'],
     settingsSchema: FLAXRUNNER_SETTINGS,
     create: () => new FlaxRunner()
+});
+
+ScriptRegistry.register({
+    name: 'AccountLeveler',
+    description: 'Trains melee first, then remaining combat skills, then other enabled members skills to 60. Stocks essence in batches of 1,000 and uses Edgeville monkey bars from Agility 15. Buys supplies, runs required quests, and recovers from death. Wilderness training is optional and enabled by default.',
+    category: 'General',
+    tags: ['training', 'combat', 'skilling', 'quests', 'banking', 'death-recovery'],
+    settingsSchema: ACCOUNT_LEVELER_SETTINGS,
+    create: () => new AccountLeveler()
+});
+
+ScriptRegistry.register({
+    name: 'WanderLooter',
+    description: 'Wanders the overworld looting exact-name drops without fighting. Eats configured food, flees to the nearest bank when low on health without food, banks excess loot and food, and avoids tiles where it took damage.',
+    category: 'Money making',
+    tags: ['loot', 'wandering', 'banking', 'food', 'event', 'pumpkin'],
+    settingsSchema: WANDER_LOOTER_SETTINGS,
+    create: () => new WanderLooter()
 });

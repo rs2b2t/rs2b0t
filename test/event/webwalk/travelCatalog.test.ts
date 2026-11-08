@@ -21,6 +21,7 @@ import {
     desertMiningCampEdges,
     curatedTravelEdges
 } from '#/bot/event/webwalk/travelCatalog.js';
+import { iceQueenRockslideEdges } from '#/bot/event/webwalk/iceQueenRockslide.js';
 import { essenceExitEdges } from '#/bot/event/webwalk/essenceExit.js';
 import { specialCrossingForTransport } from '#/bot/event/webwalk/data/specialCrossings.js';
 // namesHaveEntranaRestrictedGear / hasEntranaRestrictedGear live in exec/specialCrossing
@@ -115,6 +116,7 @@ describe('ferries / cart', () => {
             + agilityShortcutEdges().length
             + elkoyMazeEdges().length
             + desertMiningCampEdges().length
+            + iceQueenRockslideEdges().length
         );
         const names = new Set(all.map(e => e.debugName));
         expect(names.has('ferry_port_sarim_to_entrana')).toBe(true);

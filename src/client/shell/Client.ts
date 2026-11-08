@@ -13,6 +13,7 @@ import TitleFlames from '#/client/shell/TitleFlames.js';
 import FloType from '#/client/config/FloType.js';
 import SeqType, { PostanimMove, PreanimMove, RestartMode } from '#/client/config/SeqType.js';
 import LocType from '#/client/config/LocType.js';
+import { resolveMultiloc } from '#/client/config/resolveMultiloc.js';
 import ObjType from '#/client/config/ObjType.js';
 import NpcType from '#/client/config/NpcType.js';
 import IdkType from '#/client/config/IdkType.js';
@@ -21,7 +22,7 @@ import VarpType from '#/client/config/VarpType.js';
 import VarBitType from '#/client/config/VarBitType.js';
 import IfType from '#/client/config/IfType.js';
 import { ComponentType, ButtonType } from '#/client/config/IfType.js';
-import { TARGET } from '#/client/config/target.js';
+import { gameHttpUrl, TARGET } from '#/client/config/target.js';
 import { loginExponent, loginModulus, refreshLoginKey } from '#/client/config/loginKey.js';
 
 import ClientEntity from '#/client/dash3d/ClientEntity.js';
@@ -305,6 +306,9 @@ export class Client extends GameShell {
     private loginUser: string = '';
     private loginPass: string = '';
     private loginAttempt: LoginAttempt | null = null;
+    private worldSwitchPending = false;
+    private worldLogoutAt = -Infinity;
+    private logoutRequested = false;
 
     private imageRunes: Pix8[] = [];
     private titleFlames: TitleFlames | null = null;
@@ -500,7 +504,7 @@ export class Client extends GameShell {
     private runenergy: number = 0;
     private runweight: number = 0;
     private staffmodlevel: number = 0;
-    private var: number[] = [];
+    var: number[] = [];
     private varServ: number[] = [];
 
     private chatInterface: IfType = new IfType();
@@ -726,7 +730,7 @@ export class Client extends GameShell {
             await this.drawProgress('Connecting to web server', 10);
 
             try {
-                const checksums: Packet = new Packet(await downloadUrl('/crc'));
+                const checksums: Packet = new Packet(await downloadUrl(gameHttpUrl('/crc')));
                 for (let i: number = 0; i < 9; i++) {
                     this.jagChecksum[i] = checksums.g4();
                 }
@@ -795,7 +799,7 @@ export class Client extends GameShell {
             await this.drawProgress(`Requesting ${displayName}`, progress);
 
             try {
-                data = await downloadUrl(`/${filename}${crc}`);
+                data = await downloadUrl(gameHttpUrl(`/${filename}${crc}`));
 
                 const checksum = Packet.getcrc(data, 0, data.length);
                 if (crc === checksum) {
@@ -1177,6 +1181,7 @@ export class Client extends GameShell {
             SpotType.init(config);
             VarpType.init(config);
             VarBitType.init(config);
+            ClientLocAnim.app = this;
 
             if (!Client.lowMem) {
                 await this.drawProgress('Unpacking sounds', 90);
@@ -1730,6 +1735,31 @@ export class Client extends GameShell {
         });
     }
 
+    public cancelWorldSwitch(): void {
+        this.worldSwitchPending = false;
+        this.worldLogoutAt = -Infinity;
+    }
+
+    public prepareWorldSwitch(): boolean {
+        this.worldSwitchPending = true;
+        if (this.ingame && performance.now() - this.worldLogoutAt >= 1000) {
+            this.worldLogoutAt = performance.now();
+            this.requestLogout();
+        }
+        return !this.ingame && this.loginAttempt === null;
+    }
+
+    protected onLogoutRequested(): void {}
+
+    public requestLogout(): void {
+        if (!this.ingame) return;
+        this.logoutRequested = true;
+        this.onLogoutRequested();
+        this.logoutTimer = 250;
+        this.out.p1Enc(ClientProt.IF_BUTTON);
+        this.out.p2(2458);
+    }
+
     public startLogin(username: string, password: string): boolean {
         return this.beginLogin(username, password, false).accepted;
     }
@@ -1738,9 +1768,11 @@ export class Client extends GameShell {
         if (this.loginAttempt) {
             return { accepted: false, done: this.loginAttempt.done };
         }
-        if (this.ingame) {
+        if (this.ingame || this.worldSwitchPending) {
             return { accepted: false, done: Promise.resolve() };
         }
+
+        this.logoutRequested = false;
 
         // Stat arrays intentionally survive logout for the title/UI. Give every
         // accepted login its own generation so consumers can distinguish that
@@ -2046,8 +2078,13 @@ export class Client extends GameShell {
                 this.loginMes1 = 'Your account is already logged in.';
                 this.loginMes2 = 'Try again in 60 secs...';
             } else if (response === 6) {
-                if (await refreshLoginKey()) {
-                    await this.login(username, password, reconnect);
+                this.closeLoginStream(attempt);
+                const refreshed = await refreshLoginKey();
+                if (!this.isLoginAttemptActive(attempt) || this.worldSwitchPending) {
+                    return;
+                }
+                if (refreshed) {
+                    await this.performLogin(username, password, reconnect, attempt);
                 } else {
                     this.loginMes1 = 'RuneScape has been updated!';
                     this.loginMes2 = 'Please reload this page.';
@@ -2185,6 +2222,11 @@ export class Client extends GameShell {
     }
 
     private async gameLoop(): Promise<void> {
+        if (this.logoutRequested && this.stream?.closed) {
+            await this.logout();
+            return;
+        }
+
         if (this.players === null) {
             return;
         }
@@ -2637,7 +2679,7 @@ export class Client extends GameShell {
     }
 
     private async lostCon() {
-        if (this.logoutTimer > 0) {
+        if (this.logoutRequested || this.logoutTimer > 0) {
             await this.logout();
             return;
         }
@@ -8067,6 +8109,7 @@ export class Client extends GameShell {
                 }
             } else if (seqId === -1 || player.primaryAnim === -1 || SeqType.list[seqId].priority >= SeqType.list[player.primaryAnim].priority) {
                 player.primaryAnim = seqId;
+                if (seqId !== -1) player.primaryAnimSerial++;
                 player.primaryAnimFrame = 0;
                 player.primaryAnimCycle = 0;
                 player.primaryAnimDelay = delay;
@@ -8999,16 +9042,10 @@ export class Client extends GameShell {
 
         if (action === MiniMenuAction.OP_LOC6) {
             const locId: number = (a >> 14) & 0x7fff;
-            const loc: LocType = LocType.list(locId);
-
-            let examine: string;
-            if (!loc.desc) {
-                examine = "It's a " + loc.name + '.';
-            } else {
-                examine = loc.desc;
+            const loc = resolveMultiloc(LocType.list(locId), this.var);
+            if (loc) {
+                this.addChat(0, loc.desc || "It's a " + loc.name + '.', '');
             }
-
-            this.addChat(0, examine, '');
         }
 
         if (action === MiniMenuAction.TGT_LOC) {
@@ -9346,16 +9383,15 @@ export class Client extends GameShell {
         }
 
         if (action === MiniMenuAction.IF_BUTTON) {
-            const com: IfType = IfType.list[c];
-            let notify: boolean = true;
-
-            if (com.clientCode > 0) {
-                notify = this.clientButton(com);
-            }
-
-            if (notify) {
-                this.out.p1Enc(ClientProt.IF_BUTTON);
-                this.out.p2(c);
+            if (c === 2458) {
+                this.requestLogout();
+            } else {
+                const com: IfType = IfType.list[c];
+                const notify = com.clientCode <= 0 || this.clientButton(com);
+                if (notify) {
+                    this.out.p1Enc(ClientProt.IF_BUTTON);
+                    this.out.p2(c);
+                }
             }
         }
 
@@ -9500,7 +9536,10 @@ export class Client extends GameShell {
             lastTypecode = typecode;
 
             if (entityType === 2 && this.world && this.world.typeCode2(this.minusedlevel, x, z, typecode) >= 0) {
-                const loc: LocType = LocType.list(typeId);
+                const loc = resolveMultiloc(LocType.list(typeId), this.var);
+                if (!loc) {
+                    continue;
+                }
 
                 if (this.useMode === 1) {
                     this.menuOption[this.menuNumEntries] = 'Use ' + this.objSelectedName + ' with @cya@' + loc.name;
@@ -11159,6 +11198,8 @@ export class Client extends GameShell {
         }
 
         if (clientCode === ClientCode.CC_LOGOUT) {
+            this.logoutRequested = true;
+            this.onLogoutRequested();
             this.logoutTimer = 250;
             return true;
         } else if (clientCode === ClientCode.CC_ADD_IGNORE) {

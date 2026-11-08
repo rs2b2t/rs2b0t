@@ -37,6 +37,9 @@
         "verify:kq": "bun e2e/jivekq-live.ts",
         "verify:thievingbot": "bun e2e/thievingbot-test.ts",
         "verify:coaltrucks": "bun e2e/coaltrucks-test.ts",
+        "verify:muledepot-dump": "bun e2e/muledepot-dump-test.ts",
+        "verify:muledepot-supply": "bun e2e/muledepot-supply-test.ts",
+        "verify:muledepot-short-supply": "bun e2e/muledepot-short-supply-test.ts",
         "gen:basemap": "bun tools/map/build-basemap.ts",
         "verify:map-picker": "bun e2e/map-picker-basemap-live.ts",
         "verify:map-picker-e2e": "bun e2e/map-picker-walkto-e2e-live.ts",
@@ -55,6 +58,7 @@
         "jiti": "^2.6.1",
         "playwright-core": "^1.60.0",
         "prettier": "^3.7.1",
+        "proper-lockfile": "^4.1.2",
         "terser": "^5.46.0",
         "typescript-eslint": "^8.53.0"
     },

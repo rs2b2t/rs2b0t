@@ -16,12 +16,15 @@
     "build": {
         "appId": "rs.lostcity.rs2b0t",
         "productName": "rs2b0t",
-        "files": ["main.cjs"],
+        "files": ["*.cjs"],
         "directories": {
             "output": "dist"
         },
         "mac": {
             "identity": null
         }
+    },
+    "dependencies": {
+        "proper-lockfile": "^4.1.2"
     }
 }

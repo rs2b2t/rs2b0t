@@ -220,3 +220,29 @@ describe('Miner target choice', () => {
         expect(state.clicks).toEqual([near.tile, far.tile, far.tile]);
     });
 });
+
+describe('Miner tier preference', () => {
+    test('picks the best-tier rock before the nearest lower tier', async () => {
+        const { bot, state, near, far, random, task } = fixture();
+        bot['rockIds'] = resolveRockIds(['Coal', 'Iron']);
+        near.id = 2092; // iron, closer
+        random.mockReturnValue(0.5);
+
+        await task.execute();
+
+        expect(state.clicks).toEqual([far.tile]);
+    });
+
+    test('picks the nearest rock within the best tier', async () => {
+        const { bot, state, near, far, random, task } = fixture();
+        bot['rockIds'] = resolveRockIds(['Coal', 'Iron']);
+        near.id = 2092; // iron, closest
+        const nearCoal = rock(3019, 3590, 2096);
+        state.locs = [far, nearCoal, near];
+        random.mockReturnValue(0.5);
+
+        await task.execute();
+
+        expect(state.clicks).toEqual([nearCoal.tile]);
+    });
+});

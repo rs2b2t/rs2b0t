@@ -8,7 +8,7 @@ export const MINER_FOOD_SETTINGS = {
         options: FOOD_OPTIONS,
         label: 'Food',
         group: 'Food & healing',
-        help: 'Eaten at the bank or mine when its full heal fits, or at the mine when a full pack needs one more ore slot.'
+        help: 'Eaten at the bank or mine when its full heal fits. Bank mode also eats for ore slots; power mode keeps food for healing.'
     },
     foodWithdraw: {
         type: 'number',

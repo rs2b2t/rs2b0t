@@ -1,4 +1,6 @@
 import { Game } from '../../../../game/Game.js';
+import { Equipment } from '../../../../equipment/Equipment.js';
+import { Skills } from '../../../../skills/Skills.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Locs } from '../../../../locs/Locs.js';
 import type { Loc } from '../../../../model/Loc.js';
@@ -20,6 +22,7 @@ import { OUT_OF_CAGES, outstandingCrossing, takeNextCrossing } from '../upass/ra
 import { travelTo } from '../upass/pass.js';
 import { RG_LOC, RG_TILE, regicideArea } from './areas.js';
 import { climbOutOfPit, travelTirannwn } from './pockets.js';
+import { usableBows } from './supplies.js';
 
 // Why: Permanent `%ibanmulti` bits retain the quest gates, leaving only physical crossings for the pocket mover.
 // Why: the way out at the far end is Iban's temple door: `open_iban_door` grows a branch at `%regicide_quest >= ^regicide_spoken_lathas` that teleports you `loc + (-129, +64)`, into the Well of Voyage room.
@@ -37,6 +40,17 @@ export function onShelf(tile: { x: number; z: number } | null): boolean {
 // Why: The chasm splits disconnected tile sets only within z=9710..9726; an x-only test misclassifies the grid approach.
 const BRIDGE_EAST_Z = 9710;
 const BRIDGE_EAST_X = 2446;
+let bridgeGear: string[] = [];
+
+async function restoreBridgeGear(log: (m: string) => void): Promise<boolean> {
+    for (const name of bridgeGear) {
+        if (!Equipment.contains(name) && !(await Equipment.equip(name))) {
+            log(`could not restore ${name} after the bridge shot`);
+        }
+    }
+    bridgeGear = bridgeGear.filter(name => !Equipment.contains(name) && Inventory.first(name) !== null);
+    return bridgeGear.length === 0;
+}
 
 export function eastOfChasm(tile: { x: number; z: number } | null): boolean {
     return tile !== null && tile.z >= BRIDGE_EAST_Z && tile.x >= BRIDGE_EAST_X;
@@ -58,10 +72,15 @@ async function crossBridge(log: (m: string) => void): Promise<boolean> {
         log('Koftik would not hand over a damp cloth at the bridge');
         return false;
     }
-    if (!(await makeFireArrow(log)) || !(await armFireArrow(log))) {
-        return false;
+    if (!(await makeFireArrow(log))) return false;
+    bridgeGear = Equipment.items().filter(item => item.slot === 3 || item.slot === 5).map(item => item.name).filter((name): name is string => name !== null);
+    let crossed = false;
+    try {
+        if (await armFireArrow(log, usableBows(Skills.level('ranged')))) crossed = await shootGuiderope(log);
+    } finally {
+        if (!(await restoreBridgeGear(log))) crossed = false;
     }
-    return shootGuiderope(log);
+    return crossed;
 }
 
 function locById(id: number, op: string | null, within = 12): Loc | null {
@@ -173,6 +192,7 @@ async function climbUnicornTunnel(log: (m: string) => void): Promise<boolean> {
  * Why: every leg is keyed on where you already are, because the pass teleports on failure (a pitfall, the well, Iban's door) and a remembered step would resume in the wrong pocket after any of them.
  */
 export async function enterTirannwn(log: (m: string) => void): Promise<boolean> {
+    if (bridgeGear.length > 0) return restoreBridgeGear(log);
     const here = Game.tile();
     const area = regicideArea(here);
     if (area === 'tirannwn') {

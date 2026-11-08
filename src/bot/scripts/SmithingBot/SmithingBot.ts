@@ -136,7 +136,7 @@ class SmithPanel implements Task {
             const products = ChatDialog.mainMakeProducts().filter(Boolean);
             if (products.length === 0) { await Execution.delayTicks(1); return; }
             this.bot.setStatus(`'${this.bot.productName()}' not available — stopped`);
-            ScriptRunner.stop(`'${this.bot.productName()}' isn't on the ${this.bot.barItemName()} anvil panel — available: [${products.join(', ')}] — pick a listed item`);
+            this.bot.requestFinish(`'${this.bot.productName()}' isn't on the ${this.bot.barItemName()} anvil panel — available: [${products.join(', ')}] — pick a listed item`);
             return;
         }
         await Execution.delayUntil(() => Game.animating() || this.bot.barCount() < start || ChatDialog.isMainMakePanel() || ChatDialog.canContinue(), 3000);

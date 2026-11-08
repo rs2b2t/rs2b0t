@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- API singletons are monkey-patched
    to exercise exact-ID bank operations without a live client. */
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import { actions, reader, type InvItemSnapshot } from '#/bot/adapter/ClientAdapter.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
@@ -12,6 +12,7 @@ const originals = {
     bankComId: reader.bankComId,
     bankItems: reader.bankItems,
     bankSideItems: reader.bankSideItems,
+    bankSideSnapshotReady: reader.bankSideSnapshotReady,
     countDialogOpen: reader.countDialogOpen,
     inventory: reader.inventory,
     inventorySize: reader.inventorySize,
@@ -21,11 +22,16 @@ const originals = {
     invButton: Input.invButton
 };
 
+beforeEach(() => {
+    reader.bankSideSnapshotReady = () => true;
+});
+
 afterEach(() => {
     (actions as any).answerCountDialog = originals.answerCountDialog;
     (reader as any).bankComId = originals.bankComId;
     (reader as any).bankItems = originals.bankItems;
     (reader as any).bankSideItems = originals.bankSideItems;
+    reader.bankSideSnapshotReady = originals.bankSideSnapshotReady;
     (reader as any).countDialogOpen = originals.countDialogOpen;
     (reader as any).inventory = originals.inventory;
     (reader as any).inventorySize = originals.inventorySize;
