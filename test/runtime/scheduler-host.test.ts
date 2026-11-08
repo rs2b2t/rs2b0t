@@ -27,6 +27,9 @@ describe('Scheduler host scope', () => {
 
         // Clearing the hold immediately restores ordinary stalled-loop reporting.
         ctx.watchdogHold = null;
+        // Why: another suite's frame listener can refresh progress or clear the active context between frames; re-arm both so this case is deterministic.
+        ctx.lastProgressAt = performance.now() - 10_001;
+        Scheduler.active = ctx;
         BotHost.onFrame();
 
         expect(ctx.watchdogWarned).toBe(true);
