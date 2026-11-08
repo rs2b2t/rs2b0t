@@ -403,6 +403,26 @@ describe('Underground Pass decide()', () => {
         expect(nameOf(noAshes)).not.toContain('climb down');
     });
 
+    // Why: a death past the bridge respawns on the surface, so the module has to walk back into the cave before its stage leg can route.
+    test('a post-bridge death on the mainland re-enters the pass', () => {
+        for (const stage of [UP_STAGE.PASSED_BRIDGE, UP_STAGE.ENTERED_SECOND_AREA, UP_STAGE.ENTERED_MAIN_AREA, UP_STAGE.CONFRONTED_IBAN]) {
+            const step = decide(snapshot({ stage, carried: KIT, tile: ARDOUGNE }));
+            expect(kindOf(step)).toBe('custom');
+            expect(nameOf(step)).toBe('return to the underground pass');
+        }
+    });
+
+    test('a post-bridge death in West Ardougne only has to enter the cave', () => {
+        const step = decide(snapshot({ stage: UP_STAGE.ENTERED_MAIN_AREA, carried: KIT, tile: WEST_ARDOUGNE }));
+        expect(nameOf(step)).toBe('return to the underground pass');
+    });
+
+    // Why: a finished Iban report is a surface walk, not another pass entry.
+    test('a defeated-Iban player on the mainland reports to Lathas instead of re-entering', () => {
+        const step = decide(snapshot({ stage: UP_STAGE.DEFEATED_IBAN, carried: KIT, tile: ARDOUGNE }));
+        expect(nameOf(step)).toContain('report to King Lathas');
+    });
+
     // Why: every value the journal can report is now routed, so this guards the shape of the fallback,
     // a stage the module does not know has to name itself and stop, not retry the last step it did know.
     test('a stage the module does not know waits with the stage named', () => {

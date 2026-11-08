@@ -1524,7 +1524,7 @@ export const CASES: readonly Case[] = [
         status: 'unvetted',
         budgetMin: 110,
         documentedIn: 'docs/reference/quest-harness-recipes-16.md',
-        note: 'every leg 0 to 10 proven live from its own seeded stage; end to end stalls in the second cavern'
+        note: 'every leg 0 to 10 proven live from its own seeded stage; --respawn starts on the Lumbridge respawn with an empty pack and --respawn-bank skips the surface walk, both proving the post-death route back over the fired bridge, through the grid, orbs and well; the second-cavern walk to the temple door still stalls, so those modes pass on reaching the second cavern'
     },
     {
         id: 'regicide-257-live',

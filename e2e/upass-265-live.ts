@@ -5,6 +5,8 @@
 
 //   HEADED=1 bun e2e/upass-265-live.ts --stage 0 --until 2 --minutes 30 --tick 200
 //   HEADED=1 bun e2e/upass-265-live.ts --stage 2 --until 3 --minutes 25 --tick 200
+//   HEADED=1 bun e2e/upass-265-live.ts --stage 3 --respawn --minutes 20
+//   HEADED=1 bun e2e/upass-265-live.ts --stage 3 --respawn-bank --minutes 10
 import type { Page } from 'playwright-core';
 
 import { deployIsolatedClient, launchBrowser } from './lib/harness.js';
@@ -31,6 +33,10 @@ interface Args {
     stats: number;
     tele: boolean;
     deploy: boolean;
+    /** Start on the Lumbridge respawn with an empty pack instead of the stage's own inside-the-pass tile. */
+    respawn: boolean;
+    /** Same empty-pack re-entry test, but start at the Ardougne bank so the surface walk is not part of the run. */
+    respawnAtBank: boolean;
 }
 
 function parse(argv: string[]): Args {
@@ -44,12 +50,16 @@ function parse(argv: string[]): Args {
         food: 'Lobster',
         stats: 70,
         tele: true,
-        deploy: true
+        deploy: true,
+        respawn: false,
+        respawnAtBank: false
     };
     for (let i = 0; i < argv.length; i++) {
         const flag = argv[i];
         if (flag === '--no-deploy') { out.deploy = false; continue; }
         if (flag === '--no-tele') { out.tele = false; continue; }
+        if (flag === '--respawn') { out.respawn = true; continue; }
+        if (flag === '--respawn-bank') { out.respawnAtBank = true; continue; }
         const value = argv[++i];
         if (value === undefined) { break; }
         if (flag === '--base') { out.base = value; }
@@ -73,6 +83,32 @@ function fail(msg: string): never {
 
 const QUEST = 'Underground Pass';
 const ARDOUGNE_BANK = { x: 2655, z: 3283, level: 0 };
+/** The default death respawn; the re-entry leg has to walk from here to the bank, wall and cave. */
+const LUMBRIDGE_RESPAWN = { x: 3222, z: 3218, level: 0 };
+
+/** Whether the player has reached the area the seeded stage expects after a respawn. */
+function inStageArea(stage: number, pos: { x: number; z: number; level: number } | null): boolean {
+    if (pos === null) {
+        return false;
+    }
+    const inDwarves = pos.level === 0 && pos.x >= 2304 && pos.x <= 2367 && pos.z >= 9792 && pos.z <= 9919;
+    switch (stage) {
+        case 2:
+            return pos.z >= 9664 && pos.z <= 9727;
+        case 3:
+        case 4:
+            return pos.z >= 9600 && pos.z <= 9663;
+        case 5:
+            return (pos.level === 1 && pos.x >= 2112 && pos.x <= 2175 && pos.z >= 4544 && pos.z <= 4735) || inDwarves;
+        case 6:
+            return inDwarves;
+        case 7:
+        case 8:
+            return pos.level === 1 && pos.x >= 2112 && pos.x <= 2175 && pos.z >= 4544 && pos.z <= 4671;
+        default:
+            return pos.z > 9000 || (pos.level === 1 && pos.x >= 1984 && pos.x <= 2175);
+    }
+}
 const BIOHAZARD_COMPLETE = 16;
 /** Plague City, its sewer is the only way through the Ardougne wall, and it gates Biohazard anyway. */
 const PLAGUE_CITY_COMPLETE = 29;
@@ -282,7 +318,8 @@ try {
     await relog(page, args.user);
     await clearChatDialogs(page, 'post-relog dialog(s)');
 
-    const start = STAGE_TELE[args.stage] ?? ARDOUGNE_BANK;
+    const respawnMode = args.respawn || args.respawnAtBank;
+    const start = args.respawn ? LUMBRIDGE_RESPAWN : args.respawnAtBank ? ARDOUGNE_BANK : STAGE_TELE[args.stage] ?? ARDOUGNE_BANK;
     if (args.tele) {
         if (!(await teleTo(page, start, 10, 25_000))) {
             await clearChatDialogs(page, 'pre-tele dialog(s)');
@@ -315,8 +352,10 @@ try {
     // Ardougne and already past the bank, so a stage-1 start cannot draw the kit and `readyToDescend`
     // parks the queue on an empty pack, which reads as a broken leg rather than a fixture that never
     // handed it anything. Only stage 0 begins where a bank is reachable.
-    if (args.stage >= 1) {
+    if (args.stage >= 1 && !respawnMode) {
         await seedPack(page, args.stage);
+    } else if (respawnMode) {
+        console.log('respawn mode: pack left empty; the quest must re-provision from the Ardougne bank before re-entering');
     }
 
     await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', 'upass'));
@@ -328,6 +367,7 @@ try {
     let lastLogTime = 0;
     let reached = args.stage;
     let queueChecked = false;
+    let sawReentry = false;
     while (Date.now() < deadline) {
         const last = await snapshot(page);
         // Why: reject a shared bundle replaced by another session during boot.
@@ -344,13 +384,22 @@ try {
                 lastLogTime = line.time;
                 console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${line.level}: ${line.msg}`);
             }
+            if (line.msg.includes('return to the underground pass')) {
+                sawReentry = true;
+            }
         }
         const stage = (await getServerVarQuiet(page, 'upass')) ?? reached;
         if (stage > reached) {
             reached = stage;
             console.log(`  >> %upass reached ${reached}`);
         }
-        if (reached >= args.until || last.status === 'complete') {
+        if (respawnMode) {
+            const pos = last.pos;
+            if (inStageArea(args.stage, pos) && sawReentry) {
+                console.log(`PASS (respawn re-entry at ${pos?.x},${pos?.z},${pos?.level}, %upass ${reached}, ${Math.round((Date.now() - t0) / 1000)}s)`);
+                process.exit(0);
+            }
+        } else if (reached >= args.until || last.status === 'complete') {
             console.log(`PASS (%upass ${reached}, journal ${last.status}, ${Math.round((Date.now() - t0) / 1000)}s)`);
             process.exit(0);
         }

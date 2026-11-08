@@ -16,12 +16,13 @@ import {
     shootGuiderope,
     startQuest
 } from './bridge.js';
-import { sweepOrbs } from './area1.js';
+import { sweepOrbs, enterWell } from './area1.js';
 import { crossGrid } from './grid.js';
 import {
     badgesHeld,
     crossTheTemple,
     crushUnicorn,
+    enterMainCavern,
     takeRailing
 } from './area2.js';
 import {
@@ -50,6 +51,7 @@ import {
     throwDoll
 } from './doll.js';
 import { outstandingCrossing, takeNextCrossing } from './railings.js';
+import { releaseJournal } from './stall.js';
 import { bowWorn, drawGear, kitShortfall, meleeCarried, sourceKit, wearGear } from './supplies.js';
 
 const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
@@ -62,6 +64,53 @@ function flag(snap: QuestSnapshot, name: string): boolean {
 /** Everything the pass needs, drawn and worn while a bank is still reachable. */
 function outfit(snap: QuestSnapshot, area: UpassArea): QuestStep | null {
     return area === 'mainland' ? sourceKit(snap) ?? wearGear(snap) : null;
+}
+
+/** Why: a death past the bridge drops the player back on the surface; re-enter the cave before the stage leg runs. */
+async function reenterPass(area: UpassArea, log: (m: string) => void): Promise<boolean> {
+    if (area === 'mainland' && !(await crossToWest(log))) {
+        return false;
+    }
+    return enterCave(log);
+}
+
+/** Why: the rope bridge is a scripted one-way crossing, so a landing-side resume has to make and fire another arrow to get back west. */
+async function shootBridgeAgain(log: (m: string) => void): Promise<boolean> {
+    if (!(await getDampCloth(log))) {
+        return false;
+    }
+    if (!(await makeFireArrow(log))) {
+        return false;
+    }
+    if (!(await armFireArrow(log))) {
+        return false;
+    }
+    return shootGuiderope(log);
+}
+
+async function transitToStage(stage: number, area: UpassArea, tile: QuestSnapshot['tile'], log: (m: string) => void): Promise<boolean> {
+    if (stage > UP_STAGE.PASSED_BRIDGE && area === 'area1') {
+        // Why: the cave lands east of the fired rope bridge and the pass pocket graph has no edge back across it, so a resumed run shoots the rope again. From the west side the shot is impossible and pointless.
+        if (tile != null && tile.x > UP_TILE.BRIDGE_WEST.x + 3 && !(await shootBridgeAgain(log))) {
+            log('re-entry: could not fire the guide rope to cross back west');
+            return false;
+        }
+        if (!(await crossGrid(log))) {
+            return false;
+        }
+        // Why: the well only opens once all four orbs are dark, and a resumed run can find the seeded stage with them still lit, so fall back to the sweep.
+        if (!(await enterWell(log)) && !(await sweepOrbs(log))) {
+            return false;
+        }
+    }
+    if (stage > UP_STAGE.KILLED_UNICORN) {
+        // Why: the grid crossing leaves the quest journal up to keep the traps shut, and an open modal blocks every later op-click, so the temple door would never answer.
+        await releaseJournal();
+        if (!(await enterMainCavern(log)) && !(await crossTheTemple(log))) {
+            return false;
+        }
+    }
+    return true;
 }
 
 // Why: Koftik and the cave mouth are inside West Ardougne, which the navigator has no edge into; the wall is only crossed through the Plague City sewer with the kit already packed.
@@ -233,11 +282,24 @@ function stageStep(snap: QuestSnapshot, area: UpassArea, stage: number): QuestSt
     if (insideWitchHouse(snap.tile)) {
         return custom("let yourself out of Kardia's house", leaveWitchHouse);
     }
+    // Why: a death past the bridge leaves the player on the surface; provision at the bank, then re-enter the cave.
+    if ((area === 'mainland' || area === 'westardougne') && stage > UP_STAGE.SPOKEN_KOFTIK && stage < UP_STAGE.DEFEATED_IBAN) {
+        return outfit(snap, area) ?? custom('return to the underground pass', log => reenterPass(area, log));
+    }
     // Why: Keep the bow equipped through the rope shot and reserve inventory space for the orb sweep; equip melee gear only after the robe-only door.
     const bare = flag(snap, UP_FLAG.DOLL_COMPLETE) && stage < UP_STAGE.DEFEATED_IBAN;
     const gear = stage >= UP_STAGE.PASSED_BRIDGE && !bare ? drawGear(snap) : null;
     if (gear) {
         return gear;
+    }
+    // Why: once inside, a resumed run can still be in area1/area2 while its stage needs the well or main cavern.
+    const wrongArea = (stage > UP_STAGE.PASSED_BRIDGE && area === 'area1')
+        || (stage > UP_STAGE.KILLED_UNICORN && area === 'area2');
+    if (wrongArea && stage < UP_STAGE.DEFEATED_IBAN) {
+        return custom(
+            stage > UP_STAGE.KILLED_UNICORN ? 'continue to the main cavern' : 'continue to the second cavern',
+            log => transitToStage(stage, area, snap.tile, log)
+        );
     }
     switch (stage) {
         case UP_STAGE.NOT_STARTED:
