@@ -205,10 +205,3 @@ export function atRidgeApproach(here: WorldTile, approach: WorldTile = RIDGE_APP
     return nearTile(here, approach, radius) && southOfRidge(here);
 }
 
-/**
- * Human-like pause after clearing an obstacle. One game tick is 600ms; we need
- * the character to settle before the next click or the first attempt is wasted.
- */
-export function reactionMs(rng: () => number = Math.random): number {
-    return rng() < 0.1 ? 1200 + rng() * 1800 : 600 + rng() * 900;
-}

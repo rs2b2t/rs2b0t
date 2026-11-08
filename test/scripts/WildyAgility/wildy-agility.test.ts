@@ -19,7 +19,6 @@ import {
     inRegion,
     nearCourseEntry,
     onCourse,
-    reactionMs,
     southOfRidge
 } from '#/bot/scripts/WildyAgility/WildyAgilityLogic.js';
 
@@ -295,15 +294,4 @@ test('classifyObstacle priority matches RunLap branch order', () => {
             settled: true
         })
     ).toBe('pit_fall_msg');
-});
-
-test('reactionMs stays within the humanized settle window', () => {
-    const short = reactionMs(() => 0.5);
-    expect(short).toBeGreaterThanOrEqual(600);
-    expect(short).toBeLessThanOrEqual(1500);
-
-    let call = 0;
-    const long = reactionMs(() => (call++ === 0 ? 0.05 : 0.5));
-    expect(long).toBeGreaterThanOrEqual(1200);
-    expect(long).toBeLessThanOrEqual(3000);
 });
