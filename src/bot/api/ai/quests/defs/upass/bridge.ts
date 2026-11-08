@@ -1,18 +1,20 @@
 import { Execution } from '../../../../execution/Execution.js';
 import { CANT_REACH, GameMessages } from '../../../../chatbox/gameMessages.js';
+import { Equipment } from '../../../../equipment/Equipment.js';
 import { Game } from '../../../../game/Game.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Locs } from '../../../../locs/Locs.js';
 import type { Loc } from '../../../../model/Loc.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
 import { Reach } from '../../../../walking/Reach.js';
+import { Skills } from '../../../../skills/Skills.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import Tile from '../../../../../geometry/Tile.js';
 import { Modals } from '../../../../ui/widgets/Modals.js';
 import { talkStrict } from '../../exec/primitives.js';
 import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import { UP_ITEM, UP_LOC, UP_NPC, UP_TILE, upassArea } from './areas.js';
-import { BOW_IDS } from './supplies.js';
+import { BOW_IDS, bowLevel } from './supplies.js';
 import { travelTo } from './pass.js';
 
 const KOFTIK = 'Koftik';
@@ -222,10 +224,18 @@ export async function makeFireArrow(log: (m: string) => void): Promise<boolean> 
 
 /** Bow in hand, lit arrow in the quiver, the rope shot reads both off `worn`. */
 export async function armFireArrow(log: (m: string) => void, bows: ReadonlySet<number> = BOW_IDS): Promise<boolean> {
-    const bow = Inventory.items().find(item => bows.has(item.id));
-    if (bow && !(await bow.interact('Wield'))) {
-        log(`could not wield the ${bow.name ?? 'bow'}`);
-        return false;
+    const ranged = Skills.level('ranged');
+    const usable = (id: number): boolean => bows.has(id) && bowLevel(id) <= ranged;
+    if (!Equipment.items().some(item => usable(item.id))) {
+        const bow = Inventory.items().find(item => usable(item.id));
+        if (!bow) {
+            log(`no wieldable bow in the pack at Ranged ${ranged} - need a lower-tier bow`);
+            return false;
+        }
+        if (!(await bow.interact('Wield'))) {
+            log(`could not wield the ${bow.name ?? 'bow'}`);
+            return false;
+        }
     }
     if (heldId(UP_ITEM.LIT_ARROW.id) > 0) {
         const lit = Inventory.items().find(item => item.id === UP_ITEM.LIT_ARROW.id);

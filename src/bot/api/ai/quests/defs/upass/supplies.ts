@@ -14,16 +14,42 @@ export const FOOD_TARGET = FOOD_FLOAT;
 
 // Why: upass_bridge.rs2 gates the rope shot on oc_category = weapon_bow, which is 13 items. A crossbow is weapon_crossbow, fires bolts and must not qualify.
 
+/** Ranged level needed to wield each weapon_bow obj; the quest only guarantees 25. */
+const BOW_RANGED: Readonly<Record<string, number>> = {
+    shortbow: 1,
+    longbow: 1,
+    oak_shortbow: 5,
+    oak_longbow: 5,
+    willow_shortbow: 20,
+    willow_longbow: 20,
+    maple_shortbow: 30,
+    maple_longbow: 30,
+    ogre_bow: 30,
+    yew_shortbow: 40,
+    yew_longbow: 40,
+    magic_shortbow: 50,
+    magic_longbow: 50
+};
+
 /** Every obj in the weapon_bow category, by id. */
 export const BOW_IDS: ReadonlySet<number> = new Set(
-    ITEM_DB.filter(i => /^(?:[a-z]+_)?(?:short|long)bow$|^ogre_bow$/.test(i.obj)).map(i => i.id)
+    ITEM_DB.filter(i => i.obj in BOW_RANGED).map(i => i.id)
 );
+
+const BOW_LEVEL: ReadonlyMap<number, number> = new Map(
+    ITEM_DB.filter(i => i.obj in BOW_RANGED).map(i => [i.id, BOW_RANGED[i.obj] ?? Number.POSITIVE_INFINITY])
+);
+
+/** Ranged level a bow needs; an unknown bow is treated as unusable. */
+export function bowLevel(id: number): number {
+    return BOW_LEVEL.get(id) ?? Number.POSITIVE_INFINITY;
+}
 
 const NAME_BY_ID: ReadonlyMap<number, string> = new Map(ITEM_DB.map(i => [i.id, i.name]));
 
-const firstBow = (ids: Iterable<[number, number]> | undefined): number | null => {
+const firstBow = (ids: Iterable<[number, number]> | undefined, maxRanged = Number.POSITIVE_INFINITY): number | null => {
     for (const [id, n] of ids ?? []) {
-        if (n > 0 && BOW_IDS.has(id)) {
+        if (n > 0 && BOW_IDS.has(id) && bowLevel(id) <= maxRanged) {
             return id;
         }
     }
@@ -40,9 +66,9 @@ export function bowWorn(snap: QuestSnapshot): boolean {
     return false;
 }
 
-/** True once a bow is worn or carried, which is what the cave mouth waits for. */
+/** True once a wieldable bow is worn or carried, which is what the cave mouth waits for. */
 export function bowCarried(snap: QuestSnapshot): boolean {
-    return bowWorn(snap) || firstBow(snap.invIds) !== null;
+    return bowWorn(snap) || firstBow(snap.invIds, snap.ranged ?? Number.POSITIVE_INFINITY) !== null;
 }
 
 // Why: Aemad's counter is 40 tiles from the booth this quest banks at, and Lowe is the only bow counter with a walked stand. Nothing else in the kit has a shop worth the trip.
@@ -130,7 +156,7 @@ function buyAt(
     return { kind: 'buy', item: item.name, qty: missing, shop, estGp: gp, bank: UP_TILE.ARDOUGNE_BANK };
 }
 
-/** Withdraw whichever bow the bank holds, else buy one. Null once a bow is worn or carried. */
+/** Withdraw the first wieldable bow the bank holds, else buy one. Null once a usable bow is worn or carried. */
 function sourceBow(snap: QuestSnapshot): QuestStep | null {
     if (bowCarried(snap)) {
         return null;
@@ -138,7 +164,7 @@ function sourceBow(snap: QuestSnapshot): QuestStep | null {
     if (!snap.bankKnown) {
         return scanBank();
     }
-    const stocked = firstBow(snap.bankIds);
+    const stocked = firstBow(snap.bankIds, snap.ranged ?? Number.POSITIVE_INFINITY);
     if (stocked !== null) {
         return withdraw([{ name: NAME_BY_ID.get(stocked) ?? BOW_TO_BUY.name, id: stocked, qty: 1 }]);
     }

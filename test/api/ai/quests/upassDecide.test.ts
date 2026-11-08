@@ -11,7 +11,7 @@ const counts = (stacks: Stack[]): Map<number, number> =>
     new Map(stacks.map(s => (Array.isArray(s) ? s : [s, 1])));
 
 /** Item IDs used by the bow-family cases. */
-const ITEM_ID = { OAK_SHORTBOW: 843, CROSSBOW: 837 } as const;
+const ITEM_ID = { OAK_SHORTBOW: 843, WILLOW_SHORTBOW: 849, MAGIC_SHORTBOW: 861, CROSSBOW: 837 } as const;
 
 const ARDOUGNE = { x: 2655, z: 3283, level: 0 };
 const WEST_ARDOUGNE = { x: 2500, z: 3300, level: 0 };
@@ -152,6 +152,60 @@ describe('Underground Pass decide()', () => {
             carried: [...noPlainBow, ITEM_ID.OAK_SHORTBOW]
         }));
         expect(kindOf(step)).not.toBe('wait');
+    });
+
+    // Why: the bank can hold a level-50 bow while the quest only guarantees Ranged 25, so provisioning must skip it.
+    test('a bank bow above the account Ranged level is skipped for Lowe', () => {
+        const noBow = KIT.filter(s => s !== UP_ITEM.SHORTBOW.id);
+        const step = decide(snapshot({
+            stage: UP_STAGE.NOT_STARTED,
+            tile: ARDOUGNE,
+            ranged: 25,
+            carried: [...noBow, [UP_ITEM.COINS.id, 5000]],
+            banked: [ITEM_ID.MAGIC_SHORTBOW]
+        }));
+        expect(kindOf(step)).toBe('buy');
+        expect((step as { item: string }).item).toBe(UP_ITEM.SHORTBOW.name);
+        expect((step as { shop: { npc: string } }).shop.npc).toBe('Lowe');
+    });
+
+    test('a wieldable bank bow is withdrawn', () => {
+        const noBow = KIT.filter(s => s !== UP_ITEM.SHORTBOW.id);
+        const step = decide(snapshot({
+            stage: UP_STAGE.NOT_STARTED,
+            tile: ARDOUGNE,
+            ranged: 25,
+            carried: noBow,
+            banked: [ITEM_ID.WILLOW_SHORTBOW]
+        }));
+        expect(kindOf(step)).toBe('withdraw');
+        expect((step as { items: { id?: number }[] }).items[0]?.id).toBe(ITEM_ID.WILLOW_SHORTBOW);
+    });
+
+    test('a high-tier bank bow is withdrawn once the account can wield it', () => {
+        const noBow = KIT.filter(s => s !== UP_ITEM.SHORTBOW.id);
+        const step = decide(snapshot({
+            stage: UP_STAGE.NOT_STARTED,
+            tile: ARDOUGNE,
+            ranged: 50,
+            carried: noBow,
+            banked: [ITEM_ID.MAGIC_SHORTBOW]
+        }));
+        expect(kindOf(step)).toBe('withdraw');
+        expect((step as { items: { id?: number }[] }).items[0]?.id).toBe(ITEM_ID.MAGIC_SHORTBOW);
+    });
+
+    test('a carried bow the account cannot wield still counts as missing', () => {
+        const noBow = KIT.filter(s => s !== UP_ITEM.SHORTBOW.id);
+        const step = decide(snapshot({
+            stage: UP_STAGE.SPOKEN_KOFTIK,
+            tile: WEST_ARDOUGNE,
+            ranged: 25,
+            carried: [...noBow, ITEM_ID.MAGIC_SHORTBOW],
+            banked: []
+        }));
+        expect(kindOf(step)).toBe('wait');
+        expect(reasonOf(step)).toContain('a bow');
     });
 
     // Why: crossbows use `weapon_crossbow`, not the required `weapon_bow` category.
