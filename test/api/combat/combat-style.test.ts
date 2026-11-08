@@ -4,6 +4,7 @@ import {
     COMBAT_STYLE_OPTIONS,
     CombatStyleController,
     describeCombatStyle,
+    minimumMeleeStyle,
     parseCombatStyle,
     parseInterfaceCombatStyle,
     resolveCombatStyle,
@@ -52,6 +53,7 @@ test('parseCombatStyle normalizes semantic styles and aliases', () => {
     expect(parseCombatStyle('defence')).toBe('defence');
     expect(parseCombatStyle('defense')).toBe('defence');
     expect(parseCombatStyle('defensive')).toBe('defence');
+    expect(parseCombatStyle('minimum')).toBe('minimum');
 });
 
 test('parseCombatStyle is case/space-insensitive and defaults to strength', () => {
@@ -67,6 +69,7 @@ test('tryParseCombatStyle rejects non-melee combat kinds without defaulting', ()
     expect(tryParseCombatStyle('melee')).toBeNull();
     expect(tryParseCombatStyle('mage')).toBeNull();
     expect(tryParseCombatStyle('range')).toBeNull();
+    expect(tryParseCombatStyle('minimum')).toBe('minimum');
     expect(tryParseCombatStyle('')).toBeNull();
 });
 
@@ -101,10 +104,24 @@ test('resolveSplitCombatSettings migrates pre-split combatStyle saves (#461)', (
         meleeStyle: 'controlled',
         legacyMigrated: null
     });
+    expect(resolveSplitCombatSettings('melee', 'minimum')).toEqual({
+        kind: 'melee',
+        meleeStyle: 'minimum',
+        legacyMigrated: null
+    });
 });
 
-test('the melee dropdown offers all four semantic training styles', () => {
-    expect(COMBAT_STYLE_OPTIONS).toEqual(['attack', 'strength', 'controlled', 'defence']);
+test('the melee dropdown offers the four training styles and minimum', () => {
+    expect(COMBAT_STYLE_OPTIONS).toEqual(['attack', 'strength', 'controlled', 'defence', 'minimum']);
+});
+
+test('minimumMeleeStyle trains the lowest of the three, ties going attack then strength', () => {
+    expect(minimumMeleeStyle(31, 32, 33)).toBe('attack');
+    expect(minimumMeleeStyle(33, 31, 32)).toBe('strength');
+    expect(minimumMeleeStyle(33, 32, 31)).toBe('defence');
+    expect(minimumMeleeStyle(31, 31, 33)).toBe('attack');
+    expect(minimumMeleeStyle(33, 31, 31)).toBe('strength');
+    expect(minimumMeleeStyle(31, 32, 31)).toBe('attack');
 });
 
 describe('resolveCombatStyle', () => {
@@ -113,6 +130,21 @@ describe('resolveCombatStyle', () => {
         expect(resolveCombatStyle('strength', ORDINARY_SWORD)).toEqual({ requested: 'strength', effective: 'strength', mode: 1 });
         expect(resolveCombatStyle('controlled', ORDINARY_SWORD)).toEqual({ requested: 'controlled', effective: 'controlled', mode: 2 });
         expect(resolveCombatStyle('defence', ORDINARY_SWORD)).toEqual({ requested: 'defence', effective: 'defence', mode: 3 });
+    });
+
+    test('minimum picks the lowest stat against the same weapon labels', () => {
+        expect(resolveCombatStyle('minimum', ORDINARY_SWORD, { attack: 31, strength: 32, defence: 33 }))
+            .toEqual({ requested: 'minimum', effective: 'attack', mode: 0 });
+        expect(resolveCombatStyle('minimum', ORDINARY_SWORD, { attack: 33, strength: 31, defence: 32 }))
+            .toEqual({ requested: 'minimum', effective: 'strength', mode: 1 });
+        expect(resolveCombatStyle('minimum', ORDINARY_SWORD, { attack: 33, strength: 32, defence: 31 }))
+            .toEqual({ requested: 'minimum', effective: 'defence', mode: 3 });
+    });
+
+    test('a minimum resolution describes the style it moved to, not an unavailable one', () => {
+        const resolution = resolveCombatStyle('minimum', ORDINARY_SWORD, { attack: 33, strength: 31, defence: 32 });
+        expect(resolution).not.toBeNull();
+        expect(describeCombatStyle(resolution!)).toBe('minimum → strength (training Strength)');
     });
 
     test('ordinary three-mode layout sends unavailable controlled to its last defensive option', () => {
