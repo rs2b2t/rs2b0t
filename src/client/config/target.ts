@@ -7,9 +7,7 @@ export interface Target {
     httpPrefix?: string;
 }
 
-const LIVE_HOST =
-    (process.env.RS2B2T_WS ?? '').replace(/^wss?:\/\//i, '').replace(/[/]+$/, '') ||
-    'w1.rs2b2t.com';
+const LIVE_HOST = 'w1.rs2b2t.com';
 
 export function supportsWorldRouting(name = process.env.RS2B0T_TARGET ?? 'local'): boolean {
     return name === 'live' || name === 'proxy' || name === 'prod';

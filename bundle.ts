@@ -10,8 +10,6 @@ const define = {
     'process.env.SECURE_ORIGIN': JSON.stringify(process.env.SECURE_ORIGIN ?? 'false'),
     // Why: config/target.ts reads this unconditionally; leaving it undefined puts a ReferenceError in the browser bundle.
     'process.env.RS2B0T_TARGET': JSON.stringify(process.env.RS2B0T_TARGET ?? 'local'),
-    // Why: config/target.ts bakes the live world host from RS2B2T_WS when TARGET=live; empty falls back to w1.
-    'process.env.RS2B2T_WS': JSON.stringify(process.env.RS2B2T_WS ?? ''),
     // original key, used 2003-2010
     'process.env.LOGIN_RSAE': JSON.stringify(process.env.LOGIN_RSAE ?? '58778699976184461502525193738213253649000149147835990136706041084440742975821'),
     'process.env.LOGIN_RSAN': JSON.stringify(process.env.LOGIN_RSAN ?? '7162900525229798032761816791230527296329313291232324290237849263501208207972894053929065636522363163621000728841182238772712427862772219676577293600221789'),

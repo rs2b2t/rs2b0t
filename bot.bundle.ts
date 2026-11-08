@@ -47,7 +47,6 @@ const identity = resolveBuildIdentity();
 const define = {
     'process.env.SECURE_ORIGIN': JSON.stringify(process.env.SECURE_ORIGIN ?? 'false'),
     'process.env.RS2B0T_TARGET': JSON.stringify(TARGET_NAME),
-    'process.env.RS2B2T_WS': JSON.stringify(process.env.RS2B2T_WS ?? ''),
     'process.env.LOGIN_RSAE': JSON.stringify(rsa.rsae),
     'process.env.LOGIN_RSAN': JSON.stringify(rsa.rsan),
     // Config decoders enable strict mode only for '1'.
