@@ -79,7 +79,7 @@ export default class DragonfireShield extends TaskBot {
     carryNotes = true;
     gateFee = 0;
     initialSetupDone = false;
-    /** False until a bank trip actually found shields to bank; stops the "notes missing" re-bank when starting from an empty bank. */
+    /** False until a bank trip found shields to bank; stops the "notes missing" re-bank when starting from an empty bank. */
     hasBankedShields = false;
 
     override async onStart(): Promise<void> {
@@ -278,8 +278,7 @@ class FarmShields implements Task {
         if (p.tripActive) {
             return true;
         }
-        // Why: the floor pile is the depot — farm keeps adding to it across windows. Only the pack
-        // has to be clear (un-noted blocks the Duke, junk is bankable); ground may be anything.
+        // Why: the floor pile is the depot, so the farm keeps adding to it across windows; only the pack has to be clear.
         if (p.unNoted > 0 || p.junk > 0) {
             return false;
         }
@@ -359,8 +358,7 @@ class LootShields implements Task {
         if (!p.atStand || p.tripActive || p.ground === 0) {
             return false;
         }
-        // Why: once the pack is full there is no room to pick up anything — loot must let the
-        // bank take over instead of re-validating its own "full load" forever.
+        // Why: once the pack is full there is no room to pick up anything, so loot must let the bank take over.
         if (p.full) {
             return false;
         }
@@ -492,7 +490,7 @@ class BankTrip implements Task {
                 const took = Math.min(short, bankCoins);
                 if (took > 0) {
                     const ok = await Bank.withdrawXById(COINS_ID, took);
-                    bot.log(`BankTrip: gate fee ${bot.gateFee} — withdrew ${took} coins (pack ${Inventory.countById(COINS_ID)}) ok=${ok}`);
+                    bot.log(`BankTrip: gate fee ${bot.gateFee} - withdrew ${took} coins (pack ${Inventory.countById(COINS_ID)}) ok=${ok}`);
                 } else {
                     bot.log(`BankTrip: gate fee ${bot.gateFee} but NO coins in the bank`);
                 }

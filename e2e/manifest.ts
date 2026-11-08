@@ -620,6 +620,15 @@ export const CASES: readonly Case[] = [
         budgetMin: 25
     },
     {
+        id: 'dragonfire-shield-live',
+        harness: 'dragonfire-shield-live.ts',
+        covers: { scripts: ['DragonfireShield'] },
+        status: 'vetted',
+        provenAt: 'd1c3a9fa',
+        budgetMin: 8,
+        note: 'farms the Duke with the dragon_shield var, drops/loots/banks three or more shields, carries the noted stack and crosses the Al Kharid toll gate both ways'
+    },
+    {
         id: 'dragon-slayer-resume-live',
         harness: 'dragon-slayer-resume-live.ts',
         covers: { scripts: ['AIOQuester'] },

@@ -211,10 +211,10 @@ try {
 
     const bank = await bankSnapshot(page);
     const logText = collected.join('\n');
-    const feeOk = /gate fee \d+ — withdrew \d+ coins/.test(logText);
+    const feeOk = /gate fee \d+ - withdrew \d+ coins/.test(logText);
     const withheldCoins = /withdrew \d+ coins/.test(logText);
     const gateCrosses = [...logText.matchAll(/Al Kharid toll gate: crossed at/g)].length;
-    // Quest-done runs: the toll is free, so the farm must cross the gate both ways with zero coins — a
+    // Quest-done runs: the toll is free, so the farm must cross the gate both ways with zero coins; a
     // long detour around Al Kharid would still farm, so the gate-cross count is the route proxy.
     const ok = PRINCE_ALI_DONE
         ? tripsSeen >= 1 && bestFarmed >= MIN_FARMED && !withheldCoins && gateCrosses >= 2

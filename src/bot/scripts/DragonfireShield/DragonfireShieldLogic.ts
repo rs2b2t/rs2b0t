@@ -34,7 +34,7 @@ export interface PackState {
     ground: number;
     tripActive: boolean;
     wantNotes: boolean;
-    /** A bank trip has actually found shields to withdraw; without it an empty bank would loop "notes missing" forever. */
+    /** A bank trip has found shields to withdraw; without it an empty bank would loop "notes missing" forever. */
     hasBankedShields: boolean;
 }
 
