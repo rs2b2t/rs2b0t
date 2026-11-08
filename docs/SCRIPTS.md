@@ -1191,6 +1191,8 @@ Smelts bars with the Superheat Item spell instead of a furnace — withdraws ore
 |---|---|---|---|
 | `bar` | string | `"Bronze"` | Bar to smelt — one of: Bronze, Iron, Silver, Steel, Gold, Mithril, Adamant, Rune, Blurite |
 | `natures` | number (28–1000) | `50` | Nature runes to keep in the pack |
+| `goldsmithGauntlets` | boolean | `true` | Goldsmith gauntlets |
+| `fastBank` | boolean | `true` | Instant bank leg |
 
 ## Thieving
 
