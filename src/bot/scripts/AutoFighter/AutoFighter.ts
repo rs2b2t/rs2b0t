@@ -48,6 +48,10 @@ import {
     DEFAULT_CUSTOM_SPOT,
     DEFAULT_LOOT,
     isBurialBone,
+    isReserveRune,
+    RESERVE_RUNES,
+    reserveExcess,
+    reserveShortfall,
     resolveKillingSpot,
     shouldBuryRegularBones,
     autoRetaliateShouldEnable,
@@ -134,7 +138,16 @@ export const SETTINGS: SettingsSchema = {
         showIf: { key: 'banking', anyOf: ['Auto'] },
         group: 'Banking & loot'
     },
-    bankCommonJunk: { type: 'boolean', default: true, label: 'Bank common junk too' }
+    bankCommonJunk: { type: 'boolean', default: true, label: 'Bank common junk too' },
+    keepRunes: {
+        type: 'number',
+        default: 0,
+        min: 0,
+        max: 10_000,
+        label: 'Keep runes (each)',
+        group: 'Banking & loot',
+        help: 'law, air, fire, water and earth: deposit only the excess and top up any shortfall to this many each; 0 = off'
+    }
 };
 
 let TARGET = 'Guard';
@@ -165,6 +178,7 @@ let RUNES_WITHDRAW = 150;
 let AMMO = 'Bronze arrow';
 let AMMO_WITHDRAW = 500;
 let AMMO_RESTOCK_BELOW = 0.25;
+let KEEP_RUNES = 0;
 let TRACKED_GEAR: string[] = [];
 let AVOID_HERB_IDS = new Set<number>();
 
@@ -357,6 +371,7 @@ export default class AutoFighter extends TaskBot {
         AMMO = this.settings.str('ammo', 'Bronze arrow');
         AMMO_WITHDRAW = this.settings.num('ammoWithdraw', 500);
         AMMO_RESTOCK_BELOW = this.settings.num('ammoRestockBelow', 25) / 100;
+        KEEP_RUNES = Math.max(0, Math.floor(this.settings.num('keepRunes', 0)));
         TRACKED_GEAR = Equipment.items().map(i => i.name ?? '').filter(n => n.length > 0);
 
         this.solveClue = new SolveClue({
@@ -750,7 +765,9 @@ class BankRun implements Task {
         if (!(await openBank(bank, m => this.bot.log(`  ${m}`)))) {
             return;
         }
-        await Bank.depositAllMatching((name, id) => !shouldKeepBankItem(name, id, FOOD, BANK_COMMON, STYLE === 'range' ? [AMMO] : [], TRACKED_GEAR, BURY_BONES, BURY_BIG_BONES), m => this.bot.log(`  ${m}`));
+        // Why: the reserve is a teleport safety net, so deposit only the excess before the bulk deposit takes everything else.
+        await this.depositRuneExcess();
+        await Bank.depositAllMatching((name, id) => !isReserveRune(name) && !shouldKeepBankItem(name, id, FOOD, BANK_COMMON, STYLE === 'range' ? [AMMO] : [], TRACKED_GEAR, BURY_BONES, BURY_BIG_BONES), m => this.bot.log(`  ${m}`));
         for (let guard = 0; guard < FOOD_WITHDRAW && foodCount() < FOOD_WITHDRAW && !Inventory.isFull(); guard++) {
             const before = foodCount();
             if (!(await Bank.withdraw(FOOD, 'Withdraw-1'))) {
@@ -765,6 +782,7 @@ class BankRun implements Task {
             this.bot.log(`no '${FOOD}' in the bank — fighting on without food (foodless safety disarmed)`);
         }
         await this.restockStyleSupplies();
+        await this.restockRuneReserve();
         this.bot.bankAfterSolve = false;
         this.bot.countTrip();
         this.bot.setStatus('heading back to the spot');
@@ -815,6 +833,43 @@ class BankRun implements Task {
         } else {
             this.bot.noteSupplyEmpty(false);
             this.bot.log(`ammo ready: ${after} total (${wieldedAmmo()} quiver, ${Inventory.count(AMMO)} inventory)`);
+        }
+    }
+
+    /** Deposit only what is above the rune reserve, so the pack never drops below it. */
+    private async depositRuneExcess(): Promise<void> {
+        if (KEEP_RUNES <= 0) {
+            return;
+        }
+        for (const rune of RESERVE_RUNES) {
+            const excess = reserveExcess(Inventory.count(rune), KEEP_RUNES);
+            if (excess <= 0) {
+                continue;
+            }
+            if (await Bank.depositX(rune, excess)) {
+                this.bot.log(`rune reserve: deposited ${excess} ${rune} (kept ${Inventory.count(rune)})`);
+            } else {
+                this.bot.log(`rune reserve: could not deposit the excess ${rune} — keeping all of them`);
+            }
+        }
+    }
+
+    /** Withdraw any reserve rune the pack is short of after the trip's supplies are loaded. */
+    private async restockRuneReserve(): Promise<void> {
+        if (KEEP_RUNES <= 0) {
+            return;
+        }
+        for (const rune of RESERVE_RUNES) {
+            const held = Inventory.count(rune);
+            if (reserveShortfall(held, KEEP_RUNES) <= 0) {
+                continue;
+            }
+            const got = await withdrawTo(rune, KEEP_RUNES);
+            if (got > 0) {
+                this.bot.log(`rune reserve: withdrew ${got} ${rune} (${Inventory.count(rune)}/${KEEP_RUNES})`);
+            } else {
+                this.bot.log(`rune reserve: bank has no ${rune} to top up (${held}/${KEEP_RUNES})`);
+            }
         }
     }
 }
