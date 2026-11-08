@@ -1,5 +1,3 @@
-// PRIVATE TEST — DO NOT PUSH, DO NOT OPEN A PR, DO NOT MERGE UPSTREAM.
-// Pairs with the private DragonfireShield script on branch feat/dragonfire-shield.
 /** Live proof for the DragonfireShield farm: once `%dragon_shield = 1` (what Oziach sets when he tells
  *  you where the shield is, so the quest is not required), Duke Horacio hands out a free un-noted
  *  Dragonfire shield every conversation. The script shuttles Al Kharid bank ↔ Lumbridge castle,
@@ -154,8 +152,7 @@ try {
     await relog(page, user);
     await maxmeAndClearDialogs(page);
 
-    // A completed Prince Ali means no coins are ever held; ZERO_BANK clears the shields to prove a
-// from-scratch start. Otherwise the bank is seeded with 20 shields + 100 coins.
+    // A completed Prince Ali means no coins are ever held; ZERO_BANK clears the shields to prove a from-scratch start.
     const seedList = PRINCE_ALI_DONE
         ? [{ debugName: 'antidragonbreathshield', displayName: 'Dragonfire shield', qty: 20 }]
         : ZERO_BANK
@@ -174,8 +171,6 @@ try {
     let lastT = 0;
     let bestFarmed = 0;
     let tripsSeen = 0;
-    let frameN = 0;
-    let lastShot = 0;
     const deadline = Date.now() + WATCH_MS;
     while (Date.now() < deadline) {
         const snap = await page.evaluate(() => {

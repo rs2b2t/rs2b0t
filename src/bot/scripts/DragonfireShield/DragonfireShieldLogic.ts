@@ -1,8 +1,6 @@
 import Tile from '../../geometry/Tile.js';
 
-// Why: the farm is one server var short of an uncompleted Dark Slayer quest: `%dragon_shield = 1`
-// (set when Oziach tells you where the shield is) makes Duke Horacio hand out a free un-noted
-// anti-dragonbreath shield every conversation while the player holds none in pack or worn.
+// Why: `%dragon_shield = 1` (set when Oziach names the shield) makes Duke Horacio hand out a free shield each conversation.
 export const SHIELD_ID = 1540;
 export const SHIELD = 'Dragonfire shield';
 export const DUKE = 'Duke Horacio';
@@ -14,9 +12,7 @@ export const BOOTH = 'Bank booth';
 export const BOOTH_OP = 'Use-quickly';
 export const MAX_TALK_GUARD = 100;
 
-// Why: the Al Kharid gate guard tariffs 20 gp per crossing until Prince Ali Rescue is complete;
-// the walk planner pays the toll itself when the pack holds coins, so the script only needs to
-// top the pack up to GATE_FEE each bank trip while the quest is undone.
+// Why: the Al Kharid gate charges 20 gp per crossing until Prince Ali Rescue is complete; the walk planner pays it.
 export const COINS_ID = 995;
 export const PRINCE_ALI_QUEST = 'Prince Ali Rescue';
 export const GATE_FEE = 20;

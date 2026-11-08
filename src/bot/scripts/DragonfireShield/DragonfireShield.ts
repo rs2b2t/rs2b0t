@@ -1,6 +1,3 @@
-// PRIVATE SCRIPT — DO NOT PUSH, DO NOT OPEN A PR, DO NOT MERGE UPSTREAM.
-// Kept on the local branch feat/dragonfire-shield only; it abuses a cheat var
-// (%dragon_shield) and must never be shared upstream.
 import { reader } from '../../adapter/ClientAdapter.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
@@ -256,9 +253,7 @@ export default class DragonfireShield extends TaskBot {
             free: Inventory.free(),
             unNoted,
             notes,
-            // Why: the carried coin stack is the gate toll, not junk — counting it as junk would
-            // make the decision loop bank the toll back the moment it's withdrawn. The coins are
-            // spent crossing the Al Kharid gate (walk planner handles the payment).
+            // Why: the carried coin stack is the gate toll, so it must not count as junk the bank loop clears.
             junk: Math.max(0, used - unNoted - Math.min(used, notes > 0 ? 1 : 0) - Math.min(used, coins > 0 ? 1 : 0)),
             ground: this.atStand() && !this.tripActive ? this.groundShields().length : 0,
             tripActive: this.tripActive,
@@ -310,9 +305,7 @@ class FarmShields implements Task {
                 bot.log(`FarmShields: breaking cycle (event=${EventSignal.pending()} atStand=${bot.atStand()} dialog=${ChatDialog.isOpen()})`);
                 break;
             }
-            // Why: once the ground pile can already fill the pack, farming more only wastes time —
-            // end the trip and let the loot phase bank it. groundShields() counts one stack per
-            // pick-up, so pile >= free slots means a pick-up run would fill the inventory.
+            // Why: a ground pile that can already fill the pack makes more farming pointless, so end the trip and loot.
             if (bot.groundShields().length >= Inventory.free()) {
                 bot.log(`FarmShields: ground pile can fill the pack (${bot.groundShields().length} >= ${Inventory.free()} free) — ending trip early`);
                 bot.tripActive = false;
@@ -404,9 +397,7 @@ class LootShields implements Task {
             taken++;
         }
         bot.log(`LootShields: picked ${taken} stack(s), free=${Inventory.free()}`);
-        // Why: the pack buys back only what fills it. A coin stack and any junk each cost a slot, so
-        // a load is "full" at 28 minus those. Below that the looted shields go straight back onto the
-        // pile and the farm runs another window instead of wasting a bank trip on a partial load.
+        // Why: a coin stack and any junk each cost a slot, so a full load is 28 minus those.
         const capacity = 28 - (Inventory.countById(COINS_ID) > 0 ? 1 : 0) - bot.junkHeld();
         const used = Inventory.used();
         if (used >= capacity || Inventory.isFull()) {
@@ -428,9 +419,7 @@ class BankTrip implements Task {
         if (p.full) {
             return true;
         }
-        // Why: on a fresh start the boot sequence is bank-first — go to Al Kharid, deposit, pull the
-        // whole noted shield stack and 20 gate coins out, THEN farm. Without this, a start away from
-        // the bank tries to farm first and hits the toll gate with no coins on the first bank trip.
+        // Why: a fresh start is bank-first, so the toll coins and noted shields are loaded before the first farm trip.
         if (!this.bot.initialSetupDone) {
             return true;
         }
