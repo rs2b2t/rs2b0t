@@ -413,12 +413,19 @@ export async function throwDoll(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     const mark = GameMessages.mark();
+    await Sustain.run();
     if (!(await doll.useOn(altar))) {
         log('the doll would not go on the well');
         return false;
     }
-    if (await driveUntil(() => heldId(UP_ITEM.DOLL.id) === 0, [], log, 30_000)) {
-        return true;
+    // Why: Iban keeps attacking through the throw, and at 1 Prayer the 30-second driveUntil would stand there and die with a full pack; eat while polling.
+    const deadline = performance.now() + 30_000;
+    while (performance.now() < deadline) {
+        await Sustain.run();
+        if (heldId(UP_ITEM.DOLL.id) === 0) {
+            return true;
+        }
+        await Execution.delayTicks(2);
     }
     const said = GameMessages.since(mark).map(m => m.text).filter(t => !t.startsWith('get ')).slice(-3).join(' / ');
     log(`the well kept the doll — said: ${said || 'nothing'}`);
