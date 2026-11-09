@@ -12,6 +12,8 @@ export const ARROW_TARGET = 50;
 // Why: the grid crossing and the orb corridor alone cost 8 lobsters, and the traps below are timer damage you walk into. Koftik, the paladins and Nilhoof give a dozen food between them, but as separate stacks that each take a slot, so the float covers the trapped stretches.
 // Why: food is not stackable, so each lobster is a slot. 14 is the tested ceiling: the orb sweep (6 kit + railing + 4 orbs) and Kardia's chest (doll, book, 2 potions) both still fit, while 16 leaves the pack one slot short at the chest.
 export const FOOD_TARGET = 16;
+// Why: a bank that has run down after several deaths still leaves a viable run; stopping for the last 8 lobsters strands a pack that can finish the demons.
+export const FOOD_FLOOR = 8;
 
 // Why: upass_bridge.rs2 gates the rope shot on oc_category = weapon_bow, which is 13 items. A crossbow is weapon_crossbow, fires bolts and must not qualify.
 
@@ -232,7 +234,7 @@ export function sourceKit(snap: QuestSnapshot): QuestStep | null {
 
 /** What the kit is still short of, for the stop message. */
 export function kitShortfall(snap: QuestSnapshot): string[] {
-    const short = KIT.filter(({ item, qty }) => carried(snap, item) < qty)
+    const short = KIT.filter(({ item, qty }) => carried(snap, item) < (item.id === UP_ITEM.LOBSTER.id ? FOOD_FLOOR : qty))
         .map(({ item, qty, reason }) => `${qty}x ${item.name} (${reason}), have ${carried(snap, item)}`);
     if (!bowCarried(snap)) {
         short.push('a bow (firing the bridge stay rope), have none');
