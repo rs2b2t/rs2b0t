@@ -30,6 +30,8 @@ interface Args {
     minutes: number;
     tickMs: number;
     food: string;
+    /** Lobsters in the seeded pack for an inside-the-pass start; lower values exercise the Kamen restock. */
+    foodQty: number;
     stats: number;
     /** Override Prayer after the rest of the stats are set, to prove the run does not need Protect from Melee. */
     prayer: number | null;
@@ -50,6 +52,7 @@ function parse(argv: string[]): Args {
         minutes: 45,
         tickMs: 300,
         food: 'Lobster',
+        foodQty: 16,
         stats: 70,
         prayer: null,
         tele: true,
@@ -72,6 +75,7 @@ function parse(argv: string[]): Args {
         else if (flag === '--minutes') { out.minutes = Number(value); }
         else if (flag === '--tick') { out.tickMs = Number(value); }
         else if (flag === '--food') { out.food = value; }
+        else if (flag === '--food-qty') { out.foodQty = Number(value); }
         else if (flag === '--stats') { out.stats = Number(value); }
         else if (flag === '--prayer') { out.prayer = Number(value); }
     }
@@ -201,7 +205,7 @@ const PACK_SEED: { debugName: string; qty: number }[] = [
     { debugName: 'spade', qty: 1 },
     { debugName: 'bucket_empty', qty: 1 },
     { debugName: 'rope', qty: 3 },
-    { debugName: 'lobster', qty: 16 },
+    { debugName: 'lobster', qty: args.foodQty },
     { debugName: 'rune_scimitar', qty: 1 },
     { debugName: 'rune_chainbody', qty: 1 },
     { debugName: 'rune_platelegs', qty: 1 }
