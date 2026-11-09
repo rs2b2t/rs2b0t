@@ -36,6 +36,11 @@ export class Npc implements Interactable, Locatable {
         return this.snap.inCombat;
     }
 
+    /** Current sequence id; the pass uses it to spot which spider is mid-attack. */
+    get anim(): number {
+        return this.snap.anim;
+    }
+
     get health(): number {
         return this.snap.health;
     }

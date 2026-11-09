@@ -23,6 +23,8 @@ export const canRestock = (): boolean => restocks < FOOD_RESTOCKS;
 export const noteRestock = (): void => { restocks += 1; };
 
 const FOOD_WORDS = ['lobster', 'meat pie', 'meat pizza', 'bread', 'stew'];
+/** `giantspider_attack` from seq.pack; blessed spiders and Kalrag share it, and it marks the add that just hit us even when its facing has not caught up. */
+const SPIDER_ATTACK_ANIM = 143;
 function foodHeldNow(): number {
     return Inventory.items().reduce((sum, item) =>
         sum + (item.name !== null && FOOD_WORDS.includes(item.name.toLowerCase()) ? item.count : 0), 0);
@@ -140,11 +142,13 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
             break;
         }
         const now = performance.now();
-        // Why: the server refuses an Attack on the main target while a different single-way NPC hit us in the last 8 ticks ("I'm already under attack"), so a blessed spider on our back has to die first; clicking Kalrag through it just stalls the fight.
+        // Why: the server refuses an Attack on the main target while a different single-way NPC hit us in the last 8 ticks ("I'm already under attack"), so a blessed spider on our back has to die first. Its attack animation is the reliable tell; facing can lag a tick behind the hit.
         const blocker = Npcs.query()
-            .where(npc => npc.index !== live.index && npc.health > 0 && npc.targetsMe())
+            .where(npc => npc.index !== live.index && npc.health > 0
+                && (npc.targetsMe() || (npc.anim === SPIDER_ATTACK_ANIM && npc.distance() <= 2)))
             .within(8)
             .nearest();
+        const anchor = live.tile();
         const focus = blocker ?? live;
         if (focus.index !== focusIndex) {
             focusIndex = focus.index;
@@ -152,18 +156,25 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
             focusHealth = focus.health;
             lastOffense = now;
         }
-        const at = Game.tile();
-        const far = at !== null && Math.max(Math.abs(focus.tile().x - at.x), Math.abs(focus.tile().z - at.z)) > 10;
-        if (far && !(await walkTo(focus.tile(), 2, log))) {
-            log(`${focusName} out of reach at (${focus.tile().x},${focus.tile().z})`);
-            return false;
+        // Why: the add is melee and walks to us, so chasing one more than 4 tiles from Kalrag only drags the fight out of her room; kill it where it stands and keep Kalrag in reach the rest of the time.
+        const focusTile = focus.tile();
+        const nearAnchor = Math.max(Math.abs(focusTile.x - anchor.x), Math.abs(focusTile.z - anchor.z)) <= 4;
+        const beforeWalk = Game.tile();
+        const far = beforeWalk !== null && Math.max(Math.abs(focusTile.x - beforeWalk.x), Math.abs(focusTile.z - beforeWalk.z)) > 2;
+        if (far && (focus.index === live.index || nearAnchor)) {
+            if (!(await walkTo(focusTile, 2, log))) {
+                log(`${focusName} out of reach at (${focusTile.x},${focusTile.z})`);
+                return false;
+            }
         }
         if (focus.health < focusHealth) {
             lastOffense = now;
         }
         focusHealth = focus.health;
-        // Why: once the fight is running the character swings by itself, and re-clicking the same NPC earns "I'm already under attack" without adding a hit; click only when the focus changes or combat lapses.
-        if (!(focusIndex === lastAttacked && Game.inCombat())) {
+        // Why: once the fight is running the character swings by itself, and re-clicking the same NPC earns "I'm already under attack" without adding a hit; click only when the focus changes or combat lapses. A distant add is left alone until it closes.
+        const at = Game.tile();
+        const inReach = at !== null && Math.max(Math.abs(focusTile.x - at.x), Math.abs(focusTile.z - at.z)) <= 2;
+        if ((inReach || focus.index === live.index) && !(focusIndex === lastAttacked && Game.inCombat())) {
             if (await focus.interact('Attack')) {
                 lastAttacked = focusIndex;
                 refused = 0;
