@@ -425,6 +425,17 @@ describe('Underground Pass decide()', () => {
         expect(nameOf(step)).toContain('report to King Lathas');
     });
 
+    // Why: a stage-5 resume below the well has to replay the proven cage/ledge/railing chain and the unicorn tunnel; the old temple-door walker stood in the corridor and found every seam in another cell.
+    test('a stage-5 resume in the second cavern routes through the temple shelf', () => {
+        const step = decide(snapshot({
+            stage: UP_STAGE.ENTERED_MAIN_AREA,
+            carried: KIT,
+            tile: { x: 2423, z: 9660, level: 0 }
+        }));
+        expect(kindOf(step)).toBe('custom');
+        expect(nameOf(step)).toBe('continue to the main cavern');
+    });
+
     // Why: the scimitar is the one piece the keep-3 rule can lose after a death, so the respawn buys the Zeke fallback instead of walking back in unarmed.
     test('an unarmed respawn with coins buys a scimitar from Zeke', () => {
         const step = decide(snapshot({

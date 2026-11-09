@@ -170,6 +170,8 @@ export const UP_TILE = {
     // Why: the boulder's own tile is a 14-tile nook walled off from the cavern floor, so this is the nearest stand a walk can reach and the use is sent from here.
     BOULDER: new Tile(2398, 9596, 0),
     UNICORN_CAGE: new Tile(2375, 9604, 0),
+    // Why: the pass-through tunnel beside the cage is the only way from the loose railings up to the temple shelf.
+    UNICORN_TUNNEL: new Tile(2375, 9611, 0),
     MUDPILE: new Tile(2423, 9661, 0),
     MUD_DIG: new Tile(2393, 9650, 0),
 

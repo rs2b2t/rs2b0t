@@ -5,7 +5,6 @@ import Tile from '../../../../../geometry/Tile.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { ITEM_DB } from '../../../../../data/itemdb.js';
 import { UP_ITEM, UP_TILE, banked, carried, held, type UpassItem } from './areas.js';
-import { UP_STAGE } from './journal.js';
 
 
 /** The fire arrow is built from bronze arrows; a stack covers every missed shot. */
@@ -214,16 +213,9 @@ function wearWeapon(name: string): QuestStep {
 }
 
 /** The spade only opens the mud tunnel out of the slave cages; a death after that stage never needs another. */
-function needsSpade(snap: QuestSnapshot): boolean {
-    return (snap.stage ?? 0) < UP_STAGE.ENTERED_SECOND_AREA;
-}
-
 /** The next missing piece of kit, or null once the pack is ready to go underground. */
 export function sourceKit(snap: QuestSnapshot): QuestStep | null {
     for (const { item, qty, shop, unitGp } of KIT) {
-        if (item.id === UP_ITEM.SPADE.id && !needsSpade(snap)) {
-            continue;
-        }
         const step = fromBank(snap, item, qty);
         if (step) {
             return step;
@@ -240,8 +232,7 @@ export function sourceKit(snap: QuestSnapshot): QuestStep | null {
 
 /** What the kit is still short of, for the stop message. */
 export function kitShortfall(snap: QuestSnapshot): string[] {
-    const short = KIT.filter(({ item, qty }) => (item.id !== UP_ITEM.SPADE.id || needsSpade(snap))
-        && carried(snap, item) < qty)
+    const short = KIT.filter(({ item, qty }) => carried(snap, item) < qty)
         .map(({ item, qty, reason }) => `${qty}x ${item.name} (${reason}), have ${carried(snap, item)}`);
     if (!bowCarried(snap)) {
         short.push('a bow (firing the bridge stay rope), have none');

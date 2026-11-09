@@ -26,6 +26,8 @@ export interface Crossing {
     op: string;
     /** Where the crossing lands you, and the guard that says it has already happened. */
     lands: Tile;
+    /** Other landings the same script can produce; the pipe shifts with the quest stage. */
+    altLands?: readonly Tile[];
     /** The item to use on the loc, where the crossing is a use. */
     item?: { id: number; name: string };
 }
@@ -67,7 +69,9 @@ export const TO_RAILINGS: readonly Crossing[] = [
         what: 'the pipe into the loose railings',
         via: [new Tile(2420, 9617, 0)],
         stand: new Tile(2419, 9605, 0), at: new Tile(2417, 9605, 0),
-        loc: UP_LOC.PIPE_AREA2, op: 'Squeeze-through', lands: new Tile(2412, 9605, 0)
+        loc: UP_LOC.PIPE_AREA2, op: 'Squeeze-through', lands: new Tile(2412, 9605, 0),
+        // Why: `%upass >= killed_unicorn` makes the pipe's telejump 26 tiles instead of 1, so the same op lands near 2399.
+        altLands: [new Tile(2414, 9605, 0), new Tile(2399, 9605, 0)]
     }
 ];
 
@@ -76,7 +80,8 @@ export const TO_RAILINGS: readonly Crossing[] = [
 export function outstandingCrossing(chain: readonly Crossing[] = TO_RAILINGS): Crossing | null {
     const flood = { adjacentOk: false, maxSteps: 2_000 } as const;
     return chain.find(step =>
-        !Reachability.canReach(step.lands, flood) && Reachability.canReach(step.stand, flood)) ?? null;
+        !Reachability.canReach(step.lands, flood) && !(step.altLands ?? []).some(t => Reachability.canReach(t, flood))
+        && Reachability.canReach(step.stand, flood)) ?? null;
 }
 
 /** Take one crossing, the one you're in position for. */
@@ -98,6 +103,18 @@ const QUIET_MS = 1_800;
 async function canWalkTo(to: Tile): Promise<boolean> {
     const me = Game.tile();
     return me !== null && (await Navigator.findPath(me, to, { policy: { useTeleports: false } })).ok;
+}
+
+async function landed(step: Crossing): Promise<boolean> {
+    if (await canWalkTo(step.lands)) {
+        return true;
+    }
+    for (const alt of step.altLands ?? []) {
+        if (await canWalkTo(alt)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 async function take(step: Crossing, log: (m: string) => void): Promise<boolean> {
@@ -137,10 +154,23 @@ async function take(step: Crossing, log: (m: string) => void): Promise<boolean> 
     }, said === 'crossing' ? CROSS_MS : QUIET_MS);
     await settleScene();
     const now = Game.tile();
-    const done = await canWalkTo(step.lands);
+    const done = await landed(step);
     log(`pass: ${step.what} → (${now?.x},${now?.z})${done ? '' : ' — but it did not land'}`
         + (said === null ? '' : ` [${said}]`));
     return done;
+}
+
+/** Take every crossing in `chain` that has not already landed; true once the whole chain is behind us. */
+export async function crossChain(chain: readonly Crossing[], log: (m: string) => void): Promise<boolean> {
+    for (const step of chain) {
+        if (await landed(step)) {
+            continue;
+        }
+        if (!(await take(step, log))) {
+            return false;
+        }
+    }
+    return true;
 }
 
 /**
@@ -151,7 +181,7 @@ export async function reachLooseRailings(log: (m: string) => void): Promise<bool
     // Why: a run that doesn't apply from here says so once. The outstanding step is the first whose landing can't be walked to, and if its stand can't be either you're off the chain, past its far end from the unicorn area.
     const outstanding: Crossing[] = [];
     for (const step of TO_RAILINGS) {
-        if (!(await canWalkTo(step.lands))) {
+        if (!(await landed(step))) {
             outstanding.push(step);
         }
     }
@@ -165,7 +195,7 @@ export async function reachLooseRailings(log: (m: string) => void): Promise<bool
     for (let round = 0; round < 3; round++) {
         let outstanding = 0;
         for (const step of TO_RAILINGS) {
-            if (await canWalkTo(step.lands)) {
+            if (await landed(step)) {
                 continue;
             }
             outstanding++;

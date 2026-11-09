@@ -14,7 +14,8 @@ import {
     makeFireArrow,
     meetKoftik,
     shootGuiderope,
-    startQuest
+    startQuest,
+    walkTo
 } from './bridge.js';
 import { sweepOrbs, enterWell } from './area1.js';
 import { crossGrid } from './grid.js';
@@ -50,7 +51,7 @@ import {
     searchCages,
     throwDoll
 } from './doll.js';
-import { outstandingCrossing, takeNextCrossing } from './railings.js';
+import { crossChain, outstandingCrossing, takeNextCrossing, TO_RAILINGS } from './railings.js';
 import { releaseJournal } from './stall.js';
 import { bowWorn, drawGear, kitShortfall, meleeCarried, sourceKit, sourceWeapon, wearGear } from './supplies.js';
 
@@ -88,6 +89,18 @@ async function shootBridgeAgain(log: (m: string) => void): Promise<boolean> {
     return shootGuiderope(log);
 }
 
+/** Why: the proven cage/dig/ledge/railing chain gets out of the well corridor; the pipe and unicorn tunnel then drop into the temple shelf. The pipe's landing changes with the stage, so the generic seam handles it rather than the fixed landing table. */
+async function reachTempleShelf(log: (m: string) => void): Promise<boolean> {
+    if (!(await crossChain(TO_RAILINGS, log))) {
+        return false;
+    }
+    // Why: the temple door is north while the pipe goes west; the greedy seam search will not take a step away from the door, so name the tunnel waypoint first.
+    if (!(await walkTo(UP_TILE.UNICORN_TUNNEL, 2, log))) {
+        return false;
+    }
+    return walkTo(UP_TILE.TEMPLE_DOOR, 3, log);
+}
+
 async function transitToStage(stage: number, area: UpassArea, tile: QuestSnapshot['tile'], log: (m: string) => void): Promise<boolean> {
     if (stage > UP_STAGE.PASSED_BRIDGE && area === 'area1' && !pastGridTile(tile)) {
         // Why: the cave lands east of the fired rope bridge and the pass pocket graph has no edge back across it, so a resumed run shoots the rope again. From the west side the shot is impossible and pointless.
@@ -102,6 +115,9 @@ async function transitToStage(stage: number, area: UpassArea, tile: QuestSnapsho
         if (!(await enterWell(log)) && !(await sweepOrbs(log))) {
             return false;
         }
+    }
+    if (stage > UP_STAGE.KILLED_UNICORN && area === 'area2' && !(await reachTempleShelf(log))) {
+        return false;
     }
     const atTempleShelf = area === 'area1' && pastGridTile(tile);
     if (stage > UP_STAGE.KILLED_UNICORN && (area === 'area2' || atTempleShelf)) {
@@ -298,13 +314,6 @@ function stageStep(snap: QuestSnapshot, area: UpassArea, stage: number): QuestSt
     const gear = stage >= UP_STAGE.PASSED_BRIDGE && !bare ? drawGear(snap) : null;
     if (gear) {
         return gear;
-    }
-    // Why: a resumed run in the second cavern still has to cross the cages, ledges and bridges before the temple door; each crossing is its own step so the attempt counter resets.
-    if (area === 'area2' && stage >= UP_STAGE.KILLED_UNICORN) {
-        const next = outstandingCrossing();
-        if (next !== null) {
-            return custom(`cross ${next.what}`, takeNextCrossing);
-        }
     }
     // Why: once inside, a resumed run can still be in area1/area2 while its stage needs the well or main cavern.
     // Why: the second cavern's temple shelf shares area1's z band, so "past the grid" is the real test; a player already west of it is at the stage's own obstacle, not on the landing side.
