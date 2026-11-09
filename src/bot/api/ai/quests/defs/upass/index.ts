@@ -94,8 +94,8 @@ async function reachTempleShelf(log: (m: string) => void): Promise<boolean> {
     if (!(await crossChain(TO_RAILINGS, log))) {
         return false;
     }
-    // Why: the temple door is north while the pipe goes west; the greedy seam search will not take a step away from the door, so name the tunnel waypoint first.
-    if (!(await walkTo(UP_TILE.UNICORN_TUNNEL, 2, log))) {
+    // Why: the pipe lands on the loose-railing side; the cage is the stand that reaches the unicorn side of the 3-way tunnel, which is the end that drops into the temple shelf.
+    if (!(await walkTo(UP_TILE.UNICORN_CAGE, 3, log))) {
         return false;
     }
     return walkTo(UP_TILE.TEMPLE_DOOR, 3, log);
