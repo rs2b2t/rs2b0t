@@ -395,7 +395,7 @@ describe('Underground Pass decide()', () => {
     // Why: taking the blood leaves the character on Kalrag's own tile, one pocket with the dwarf camp but a different area name. A live run read that as "on the platforms" and spent seven attempts walking at a level-1 cage from level 0. Every step below has to accept both names.
     test("Kalrag's side of the cave is below, not on the platforms", () => {
         const KALRAG = { x: 2356, z: 9911, level: 0 };
-        const doll = [UP_ITEM.DOLL.id, UP_ITEM.GAUNTLETS.id];
+        const doll: Stack[] = [UP_ITEM.DOLL.id, UP_ITEM.GAUNTLETS.id, [UP_ITEM.LOBSTER.id, 16]];
         const withBlood = decide(snapshot({
             stage: UP_STAGE.FOUND_DOLL, carried: doll, tile: KALRAG,
             flags: [UP_FLAG.ASHES_ON_DOLL, UP_FLAG.BLOOD_ON_DOLL]
@@ -436,6 +436,26 @@ describe('Underground Pass decide()', () => {
     test('a stage-6 run on Kalrag\'s side climbs out before the cat', () => {
         const step = decide(snapshot({ stage: UP_STAGE.SPOKEN_NILHOOF, carried: KIT, tile: KALRAG }));
         expect(nameOf(step)).toBe('climb back up out of the dwarves cave');
+    });
+
+    // Why: Kalrag plus the demons can eat 16 lobsters; when the pack is down to the last few, Kamen's meal is the only food that side of the well.
+    test('a low food pack in the dwarf camp fetches a Kamen meal first', () => {
+        const lowFood: Stack[] = [
+            ...KIT.filter(stack => (Array.isArray(stack) ? stack[0] : stack) !== UP_ITEM.LOBSTER.id),
+            [UP_ITEM.LOBSTER.id, 3]
+        ];
+        const step = decide(snapshot({ stage: UP_STAGE.FOUND_DOLL, carried: lowFood, tile: KALRAG }));
+        expect(nameOf(step)).toBe('get a meal from Kamen');
+    });
+
+    test('a stocked pack still goes straight for Kalrag', () => {
+        const step = decide(snapshot({
+            stage: UP_STAGE.FOUND_DOLL,
+            flags: [UP_FLAG.ASHES_ON_DOLL],
+            carried: [...KIT, UP_ITEM.DOLL.id],
+            tile: KALRAG
+        }));
+        expect(nameOf(step)).toBe('kill Kalrag with the doll in hand');
     });
 
     // Why: a step that has failed twice is not going to discover a new route by being retried; a cheap wait lets the engine park instead of walking the same pocket for another ten minutes.

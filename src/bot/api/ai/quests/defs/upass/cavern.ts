@@ -70,6 +70,26 @@ export const askNilhoof = (log: (m: string) => void): Promise<boolean> =>
 export const askKlank = (log: (m: string) => void): Promise<boolean> =>
     talkTo(UP_NPC.KLANK, 'Klank', UP_TILE.KLANK, ['What happened to them?', 'Take care Klank'], log);
 
+const MEAL_WORDS = ['meat pie', 'stew', 'bread'];
+function mealCount(): number {
+    return Inventory.items().reduce((sum, item) =>
+        sum + (item.name !== null && MEAL_WORDS.includes(item.name.toLowerCase()) ? item.count : 0), 0);
+}
+
+/** Kamen's brew makes him hand over a free meal; the only food inside the pass once the bank is behind you. */
+export async function buyKamenMeal(log: (m: string) => void): Promise<boolean> {
+    const before = mealCount();
+    if (!(await talkTo(UP_NPC.KAMEN, 'Kamen', UP_TILE.KAMEN, ['Okay then.'], log))) {
+        return false;
+    }
+    // Why: the dialogue can end on the brew line even when the inventory was full, so the meal count is the only proof the food arrived.
+    if (mealCount() <= before) {
+        log('Kamen did not hand over a meal');
+        return false;
+    }
+    return true;
+}
+
 /** The soulless bite for 10 unless the gauntlets are on. */
 export async function wearGauntlets(log: (m: string) => void): Promise<boolean> {
     if (heldId(UP_ITEM.GAUNTLETS.id) === 0) {

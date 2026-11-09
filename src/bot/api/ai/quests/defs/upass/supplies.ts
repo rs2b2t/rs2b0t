@@ -12,6 +12,9 @@ export const ARROW_TARGET = 50;
 // Why: the grid crossing and the orb corridor alone cost 8 lobsters, and the traps below are timer damage you walk into. Koftik, the paladins and Nilhoof give a dozen food between them, but as separate stacks that each take a slot, so the float covers the trapped stretches.
 // Why: food is not stackable, so each lobster is a slot. 14 is the tested ceiling: the orb sweep (6 kit + railing + 4 orbs) and Kardia's chest (doll, book, 2 potions) both still fit, while 16 leaves the pack one slot short at the chest.
 export const FOOD_TARGET = 16;
+// Why: Kamen's free meal is the only food inside the pass, so a fight that runs the pack down to a few items breaks off and walks there instead of tanking to a death; 3 meals is the cap the restock step is allowed.
+export const FOOD_RETREAT = 3;
+export const FOOD_RESTOCKS = 3;
 // Why: a bank that has run down after several deaths still leaves a viable run; stopping for the last 8 lobsters strands a pack that can finish the demons.
 export const FOOD_FLOOR = 8;
 
@@ -272,6 +275,13 @@ const unwearable = new Set<string>();
 
 const bankedNamed = (snap: QuestSnapshot, name: string): number => snap.bank?.get(name.toLowerCase()) ?? 0;
 const heldNamed = (snap: QuestSnapshot, name: string): number => snap.inv.get(name.toLowerCase()) ?? 0;
+
+const FOOD_NAMES = ['meat pie', 'meat pizza', 'bread', 'stew'] as const;
+/** Everything edible the sustain list knows about, so "low" doesn't mean "low on lobsters" while the pack still has pies. */
+export function foodInPack(snap: QuestSnapshot): number {
+    const lobster = snap.invIds?.get(UP_ITEM.LOBSTER.id) ?? heldNamed(snap, 'lobster');
+    return FOOD_NAMES.reduce((sum, name) => sum + heldNamed(snap, name), lobster);
+}
 
 function wearingSlot(snap: QuestSnapshot, kinds: readonly string[]): boolean {
     for (const name of snap.worn) {

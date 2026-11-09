@@ -14,7 +14,19 @@ import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 import { UP_AMULETS, UP_ITEM, UP_LOC, UP_NPC, UP_TILE, countHeld, insideIbanTemple, type UpassItem } from './areas.js';
 import { locById, walkTo } from './bridge.js';
-import { BOW_IDS } from './supplies.js';
+import { BOW_IDS, FOOD_RESTOCKS, FOOD_RETREAT } from './supplies.js';
+
+let restocks = 0;
+/** Meals already fetched from Kamen this run; the restock step stops after 3. */
+export const restocksUsed = (): number => restocks;
+export const canRestock = (): boolean => restocks < FOOD_RESTOCKS;
+export const noteRestock = (): void => { restocks += 1; };
+
+const FOOD_WORDS = ['lobster', 'meat pie', 'meat pizza', 'bread', 'stew'];
+function foodHeldNow(): number {
+    return Inventory.items().reduce((sum, item) =>
+        sum + (item.name !== null && FOOD_WORDS.includes(item.name.toLowerCase()) ? item.count : 0), 0);
+}
 
 /** Rub an element into the doll. */
 async function rubIntoDoll(element: UpassItem, log: (m: string) => void): Promise<boolean> {
@@ -94,7 +106,7 @@ export async function burnTomb(log: (m: string) => void): Promise<boolean> {
 }
 
 // Why: a dead NPC leaves the scene, so "the target is gone" is the one completion signal that doesn't depend on a drop or a stale journal line.
-async function killNpc(npcId: number, near: Tile, name: string, log: (m: string) => void): Promise<boolean> {
+async function killNpc(npcId: number, near: Tile, name: string, log: (m: string) => void, canFetchFood = false): Promise<boolean> {
     if (!(await walkTo(near, 2, log))) {
         return false;
     }
@@ -105,45 +117,62 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
         log(`no ${name} near (${near.x},${near.z}) — already dead this spawn`);
         return true;
     }
-    const combatXp = (): number => ['attack', 'strength', 'defence', 'hitpoints']
-        .reduce((sum, skill) => sum + Skills.xp(skill), 0);
     const deadline = performance.now() + 180_000;
     const began = performance.now();
-    let dealt = false;
+    let focusIndex = -1;
+    let focusName = name;
+    let focusHealth = 0;
     let lastOffense = began;
-    let lastXp = combatXp();
-    let lastHealth = target.health;
+    let lastAttacked = -1;
+    let refused = 0;
     let dead = false;
     while (performance.now() < deadline) {
         // Why: a quest step owns the tick, so the module's sustain never runs between hits unless this loop spends a tick on it; Kalrag killed a 1-Prayer account that way.
         await Sustain.run();
+        // Why: Kamen is one walk from Kalrag, so a fight that runs the pack down to the last few items can leave and come back fed instead of standing in melee until the lobster count hits zero and the next hit kills.
+        if (canFetchFood && foodHeldNow() <= FOOD_RETREAT) {
+            log(`down to ${foodHeldNow()} food — breaking off to restock`);
+            return false;
+        }
         const live = find();
         if (!live || (live.health === 0 && live.snap.totalHealth > 0)) {
             dead = true;
             break;
         }
         const now = performance.now();
-        const nextXp = combatXp();
-        if (nextXp > lastXp || live.health < lastHealth) {
-            dealt = true;
+        // Why: the server refuses an Attack on the main target while a different single-way NPC hit us in the last 8 ticks ("I'm already under attack"), so a blessed spider on our back has to die first; clicking Kalrag through it just stalls the fight.
+        const blocker = Npcs.query()
+            .where(npc => npc.index !== live.index && npc.health > 0 && npc.targetsMe())
+            .within(8)
+            .nearest();
+        const focus = blocker ?? live;
+        if (focus.index !== focusIndex) {
+            focusIndex = focus.index;
+            focusName = focus.name ?? name;
+            focusHealth = focus.health;
             lastOffense = now;
         }
-        lastXp = nextXp;
-        lastHealth = live.health;
-        // Why: Kalrag and the demons move between hits, so a click every few seconds leaves the account standing idle while the target walks off. Re-send Attack every tick; Sustain.run() already spent the tick on food when it was needed, and a dropped "already under attack" click costs nothing.
         const at = Game.tile();
-        const far = at !== null && Math.max(Math.abs(live.tile().x - at.x), Math.abs(live.tile().z - at.z)) > 10;
-        if (far && !(await walkTo(live.tile(), 2, log))) {
-            log(`${name} out of reach at (${live.tile().x},${live.tile().z})`);
+        const far = at !== null && Math.max(Math.abs(focus.tile().x - at.x), Math.abs(focus.tile().z - at.z)) > 10;
+        if (far && !(await walkTo(focus.tile(), 2, log))) {
+            log(`${focusName} out of reach at (${focus.tile().x},${focus.tile().z})`);
             return false;
         }
-        await live.interact('Attack');
-        if (!dealt && now - began >= 30_000) {
-            log(`could not engage ${name} after 30s of Attack clicks`);
-            return false;
+        if (focus.health < focusHealth) {
+            lastOffense = now;
         }
-        if (dealt && now - lastOffense >= 20_000) {
-            log(`no damage on ${name} for 20s at ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp`);
+        focusHealth = focus.health;
+        // Why: once the fight is running the character swings by itself, and re-clicking the same NPC earns "I'm already under attack" without adding a hit; click only when the focus changes or combat lapses.
+        if (!(focusIndex === lastAttacked && Game.inCombat())) {
+            if (await focus.interact('Attack')) {
+                lastAttacked = focusIndex;
+                refused = 0;
+            } else if (refused++ === 0) {
+                log(`${focusName} refused an Attack click — waiting out the combat block`);
+            }
+        }
+        if (now - lastOffense >= 20_000) {
+            log(`no damage on ${focusName} for 20s at ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp`);
             return false;
         }
         await Execution.delayTicks(1);
@@ -167,7 +196,7 @@ export async function killKalrag(log: (m: string) => void): Promise<boolean> {
         log('no doll of Iban in the pack — killing Kalrag now would waste the blood');
         return false;
     }
-    return killNpc(UP_NPC.KALRAG, UP_TILE.KALRAG, 'Kalrag', log);
+    return killNpc(UP_NPC.KALRAG, UP_TILE.KALRAG, 'Kalrag', log, canRestock());
 }
 
 const DEMONS: readonly { npc: number; amulet: UpassItem; tile: Tile; name: string }[] = [

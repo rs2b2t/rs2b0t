@@ -30,6 +30,7 @@ import {
     ascendFromDwarves,
     askKlank,
     askNilhoof,
+    buyKamenMeal,
     catchCat,
     descendToDwarves,
     distractWitch,
@@ -40,9 +41,11 @@ import {
 import {
     amuletsHeld,
     burnTomb,
+    canRestock,
     fillBrew,
     killDemon,
     killKalrag,
+    noteRestock,
     openIbanDoor,
     openSealedChest,
     rubAshes,
@@ -53,7 +56,7 @@ import {
 } from './doll.js';
 import { crossChain, outstandingCrossing, takeNextCrossing, TO_RAILINGS } from './railings.js';
 import { releaseJournal } from './stall.js';
-import { bowWorn, drawGear, kitShortfall, meleeCarried, sourceKit, sourceWeapon, wearGear } from './supplies.js';
+import { bowWorn, drawGear, FOOD_RETREAT, foodInPack, kitShortfall, meleeCarried, sourceKit, sourceWeapon, wearGear } from './supplies.js';
 
 let lastStep = '';
 const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep => {
@@ -231,6 +234,15 @@ function witchLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
     return custom("open Kardia's chest and take the doll", lootWitchChest);
 }
 
+// Why: Kamen hands out a meal in the dwarves camp, and that camp is the same pocket as Kalrag, so a fight that burns the food down to the last few items can walk back fed instead of dying below the well, where no bank can be reached.
+async function restockLeg(log: (m: string) => void): Promise<boolean> {
+    if (!(await buyKamenMeal(log))) {
+        return false;
+    }
+    noteRestock();
+    return true;
+}
+
 // Why: the 4 elements are ordered by where they are: ashes and blood hang off the 2 wall tunnels, shadow and conscience off the level-1 platforms, so each tunnel is used once.
 function dollLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
     if (held(snap, UP_ITEM.ASHES) > 0) {
@@ -388,6 +400,12 @@ export function decide(snap: QuestSnapshot): QuestStep {
             kind: 'wait',
             reason: `"${lastStep || 'the last step'}" has failed ${snap.noProgress} times with no progress; stopping instead of retrying the same route`
         };
+    }
+    // Why: the last few lobsters are not enough for Kalrag plus a demon, and there is no bank below the well; the dwarves camp has Kamen, so top up there before the next swing rather than starting a fight that ends in a death.
+    if (snap.stage >= UP_STAGE.FOUND_DOLL && snap.stage < UP_STAGE.DEFEATED_IBAN
+        && (area === 'dwarves' || area === 'kalrag')
+        && foodInPack(snap) <= FOOD_RETREAT && canRestock()) {
+        return custom('get a meal from Kamen', restockLeg);
     }
     return stageStep(snap, area, snap.stage);
 }
