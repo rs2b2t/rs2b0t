@@ -174,11 +174,23 @@ function bridgeLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
     return custom('fire the lit arrow at the bridge stay rope', shootGuiderope);
 }
 
+// Why: a death on the landing side of the rope bridge respawns on the surface and re-enters the cave with the bridge gone, so the grid walk cannot find a route west. Retry once with a freshly fired bridge before giving the step up.
+async function crossGridOrRebridge(log: (m: string) => void): Promise<boolean> {
+    if (await crossGrid(log)) {
+        return true;
+    }
+    log('no route to the grid — firing the guide rope again');
+    if (!(await shootBridgeAgain(log))) {
+        return false;
+    }
+    return crossGrid(log);
+}
+
 // Why: all 4 orbs are gathered before any is burned, because the furnace sits between the grid and the well and a per-orb round trip crosses the spear-trap corridor 4 times.
 function orbLeg(snap: QuestSnapshot): QuestStep {
     if (!pastGridTile(snap.tile)) {
         // Why: the crossing walks itself to the grid lip first, and the rope swing onto that shelf is in travelTo's vocabulary, so the caller doesn't pick seams.
-        return custom('cross the spiked grid with the journal held open', crossGrid);
+        return custom('cross the spiked grid with the journal held open', crossGridOrRebridge);
     }
     // Why: one step for the sweep. A burned orb has left the pack and reads as never collected, and no site hands over a second, so a per-site decide cycle picks the same site forever. The step keeps its own tally.
     return custom('take and burn the four orbs, then climb the well', sweepOrbs);
