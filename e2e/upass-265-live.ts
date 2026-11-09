@@ -124,6 +124,8 @@ const PLAGUE_CITY_COMPLETE = 29;
 const UPASS_STARTED_BIT = 1 << 11;
 /** Bit 9. The cat is at Kardia's door and she is busy with it, which is what unlocks her door. */
 const UPASS_DROPPED_CAT_BIT = 1 << 9;
+/** Bits 14-16 and 18. The three paladin badges and the unicorn horn, the four things the blood well eats. */
+const UPASS_WELL_FED_BITS = (1 << 14) | (1 << 15) | (1 << 16) | (1 << 18);
 
 // Why: `%ibanmulti` carries sub-progress the stage number cannot, and a seeded stage that skips a bit is
 // not the state the quest would ever be in. Reaching stage 7 means the cat was delivered, without that bit
@@ -133,8 +135,11 @@ function ibanmultiFor(stage: number): number {
     // Why: a death past the well leaves the four orbs burned and the well open. Seeding only the stage bit made the
     // resume redo the orb sweep, which the real game never asks for and the traps can kill a 50-HP account over.
     const orbsBurned = stage >= 3 ? (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8) : 0;
+    // Why: entering the main cavern is only possible after the horn and all 3 badges went into the well, so a resume
+    // at stage 5+ must carry those bits or the unicorn door reads locked and there is no second horn to feed it.
+    const wellFed = stage >= 5 ? UPASS_WELL_FED_BITS : 0;
     const cat = stage >= 7 ? UPASS_DROPPED_CAT_BIT : 0;
-    return UPASS_STARTED_BIT | orbsBurned | cat;
+    return UPASS_STARTED_BIT | orbsBurned | wellFed | cat;
 }
 
 /**
