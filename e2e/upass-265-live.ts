@@ -9,7 +9,7 @@
 //   HEADED=1 bun e2e/upass-265-live.ts --stage 3 --respawn-bank --minutes 10
 import type { Page } from 'playwright-core';
 
-import { deployIsolatedClient, launchBrowser } from './lib/harness.js';
+import { deployIsolatedClient, launchBrowser, setSettings } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -31,6 +31,8 @@ interface Args {
     tickMs: number;
     food: string;
     stats: number;
+    /** Override Prayer after the rest of the stats are set, to prove the run does not need Protect from Melee. */
+    prayer: number | null;
     tele: boolean;
     deploy: boolean;
     /** Start on the Lumbridge respawn with an empty pack instead of the stage's own inside-the-pass tile. */
@@ -49,6 +51,7 @@ function parse(argv: string[]): Args {
         tickMs: 300,
         food: 'Lobster',
         stats: 70,
+        prayer: null,
         tele: true,
         deploy: true,
         respawn: false,
@@ -70,6 +73,7 @@ function parse(argv: string[]): Args {
         else if (flag === '--tick') { out.tickMs = Number(value); }
         else if (flag === '--food') { out.food = value; }
         else if (flag === '--stats') { out.stats = Number(value); }
+        else if (flag === '--prayer') { out.prayer = Number(value); }
     }
     return out;
 }
@@ -122,7 +126,11 @@ const UPASS_DROPPED_CAT_BIT = 1 << 9;
 // her door answers "Get away... Far away from here!" and takes a quarter of the character's hitpoints
 // instead of opening, and the doll is on the wrong side of it.
 function ibanmultiFor(stage: number): number {
-    return stage >= 7 ? UPASS_STARTED_BIT | UPASS_DROPPED_CAT_BIT : UPASS_STARTED_BIT;
+    // Why: a death past the well leaves the four orbs burned and the well open. Seeding only the stage bit made the
+    // resume redo the orb sweep, which the real game never asks for and the traps can kill a 50-HP account over.
+    const orbsBurned = stage >= 3 ? (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8) : 0;
+    const cat = stage >= 7 ? UPASS_DROPPED_CAT_BIT : 0;
+    return UPASS_STARTED_BIT | orbsBurned | cat;
 }
 
 /**
@@ -140,9 +148,9 @@ const BANK_SEED: BankSeedItem[] = [
     { debugName: 'spade', displayName: 'Spade', qty: 1 },
     { debugName: 'bucket_empty', displayName: 'Bucket', qty: 1 },
     { debugName: 'rope', displayName: 'Rope', qty: 3 },
-    // Why: the pass is fought through against three paladins at level 62, three demons and Kalrag, and the module
-    // wears the best tier the bank holds. Rune is what a 70-defence account would take, in chain and med helm
-    // rather than plate and full helm, because those two want Dragon Slayer and this account has not done it.
+    // Why: the pass is fought through against three paladins at level 62, three demons and Kalrag. The loadout
+    // is exactly the three pieces death keeps when they are the priciest worn items; the helm and kite stay in
+    // the bank so a run that ignores the loadout shows up as a keep-3 failure.
     { debugName: 'rune_scimitar', displayName: 'Rune scimitar', qty: 1 },
     { debugName: 'rune_chainbody', displayName: 'Rune chainbody', qty: 1 },
     { debugName: 'rune_platelegs', displayName: 'Rune platelegs', qty: 1 },
@@ -179,6 +187,13 @@ const STAGE_TELE: Record<number, { x: number; z: number; level: number }> = {
 
 // Why: the pass is one-way and has no bank in it, so a leg seeded past the cave mouth cannot go back for
 // the kit the module would otherwise withdraw, an inside-the-pass stage is handed its pack directly.
+// Why: exactly three worn items, because death keeps the 3 priciest and the rune kiteshield (54.4k) outvalues the rune scimitar (25.6k).
+const UPASS_LOADOUT = JSON.stringify([{
+    name: 'Upass keep 3',
+    worn: { righthand: 'Rune scimitar', torso: 'Rune chainbody', legs: 'Rune platelegs' },
+    carry: []
+}]);
+
 const PACK_SEED: { debugName: string; qty: number }[] = [
     { debugName: 'shortbow', qty: 1 },
     { debugName: 'bronze_arrow', qty: 50 },
@@ -186,12 +201,10 @@ const PACK_SEED: { debugName: string; qty: number }[] = [
     { debugName: 'spade', qty: 1 },
     { debugName: 'bucket_empty', qty: 1 },
     { debugName: 'rope', qty: 3 },
-    { debugName: 'lobster', qty: 14 },
+    { debugName: 'lobster', qty: 16 },
     { debugName: 'rune_scimitar', qty: 1 },
     { debugName: 'rune_chainbody', qty: 1 },
-    { debugName: 'rune_platelegs', qty: 1 },
-    { debugName: 'rune_med_helm', qty: 1 },
-    { debugName: 'rune_kiteshield', qty: 1 }
+    { debugName: 'rune_platelegs', qty: 1 }
 ];
 
 // Why: some things in the pass are handed over by a script that only runs once, so a leg seeded past it
@@ -288,7 +301,13 @@ try {
     console.log(`tick rate: ${args.tickMs}ms`);
 
     await setStats(page, args.stats);
-    console.log(`stats: ${args.stats} across the board`);
+    if (args.prayer !== null) {
+        await cheatQuiet(page, `setstat prayer ${args.prayer}`);
+        await clearChatDialogs(page, 'prayer level-up dialog(s)');
+        console.log(`stats: ${args.stats} across the board, prayer ${args.prayer}`);
+    } else {
+        console.log(`stats: ${args.stats} across the board`);
+    }
 
     console.log(`seeding ${BANK_SEED.length} item type(s) into the Ardougne East bank`);
     await seedItemsToBank(page, BANK_SEED, ARDOUGNE_BANK);
@@ -358,6 +377,8 @@ try {
         console.log('respawn mode: pack left empty; the quest must re-provision from the Ardougne bank before re-entering');
     }
 
+    await setSettings(page, 'Loadouts', { sets: UPASS_LOADOUT });
+    await setSettings(page, 'AIOQuester', { loadout: 'Upass keep 3' });
     await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', 'upass'));
     await page.evaluate(f => sessionStorage.setItem('rs2b0t:set:AIOQuester:food', f), args.food);
     await startScript(page, 'AIOQuester');

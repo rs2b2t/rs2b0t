@@ -1,7 +1,12 @@
+import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
+import type { GroundItem } from '../../../../model/GroundItem.js';
+import type { Npc } from '../../../../model/Npc.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
+import { Skills } from '../../../../skills/Skills.js';
+import { Sustain } from '../../../../sustain/Sustain.js';
 import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 import { UP_BADGES, UP_ITEM, UP_LOC, UP_NPC, UP_TILE, countHeld, type UpassItem } from './areas.js';
@@ -124,35 +129,89 @@ export async function killPaladin(log: (m: string) => void, killed = new Set<num
     }
     await settleScene();
     // Why: which crest is owed can't be read once the well has eaten them, so the target is picked by who hasn't been killed yet.
-    const target = Npcs.query()
-        .where(npc => PALADINS.some(p => p.npc === npc.id) && !killed.has(npc.id))
+    const findTarget = (): Npc | null => Npcs.query()
+        .where(npc => PALADINS.some(p => p.npc === npc.id) && !killed.has(npc.id)
+            && !(npc.health === 0 && npc.snap.totalHealth > 0))
         .action('Attack')
-        .within(14)
+        .within(20)
         .nearest();
+    const target = findTarget();
     if (!target) {
         log('no paladin left on the shelf that this crossing has not already killed');
         return false;
     }
-    killed.add(target.id);
     const owed = PALADINS.find(p => p.npc === target.id) ?? PALADINS[0]!;
-    if (!(await target.interact('Attack'))) {
-        log(`could not attack paladin ${owed.npc}`);
+    const findLive = (): Npc | null => Npcs.query().where(npc => npc.id === owed.npc).within(20).nearest();
+    // Why: the crest is the only proof the death script ran, and it lands on the paladin's tile, so it is also the earliest read of a kill.
+    const findDrop = (): GroundItem | null => GroundItems.query().where(item => item.id === owed.badge.id).within(12).nearest();
+    log(`attacking paladin ${owed.npc} at (${target.tile().x},${target.tile().z})`);
+    const combatXp = (): number => ['attack', 'strength', 'defence', 'hitpoints']
+        .reduce((sum, skill) => sum + Skills.xp(skill), 0);
+    const deadline = performance.now() + 180_000;
+    let lastOffense = performance.now();
+    let lastXp = combatXp();
+    let lastHealth = target.health;
+    let lastAttack = 0;
+    let dead = false;
+    while (performance.now() < deadline) {
+        // Why: a one-shot step blocks the scheduler, so the quest's own sustain never runs unless this loop calls it; at 1 Prayer that is the food between hits.
+        await Sustain.run();
+        if (findDrop() !== null) {
+            dead = true;
+            break;
+        }
+        const live = findLive();
+        if (!live || (live.health === 0 && live.snap.totalHealth > 0)) {
+            dead = true;
+            break;
+        }
+        const at = Game.tile();
+        const adjacent = at !== null && Math.max(Math.abs(live.tile().x - at.x), Math.abs(live.tile().z - at.z)) <= 1;
+        // Why: a paladin can stand 3 tiles away behind a wall and answer the Attack op with nothing, so the fight keeps closing to melee instead of trusting one click to walk there.
+        if (!adjacent && !(await walkTo(live.tile(), 1, log))) {
+            log(`paladin ${owed.npc} out of reach at (${live.tile().x},${live.tile().z})`);
+            return false;
+        }
+        const now = performance.now();
+        const nextXp = combatXp();
+        if (nextXp > lastXp || live.health < lastHealth) {
+            lastOffense = now;
+        }
+        lastXp = nextXp;
+        lastHealth = live.health;
+        // Why: a fight that lands nothing for 20s is a geometry problem, not a slow kill, and waiting the full 3 minutes just lets the crest time out on the floor.
+        if (now - lastOffense >= 20_000) {
+            log(`no damage on paladin ${owed.npc} for 20s at ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp`);
+            return false;
+        }
+        if (now - lastAttack >= 5_000) {
+            if (!(await live.interact('Attack'))) {
+                log(`could not attack paladin ${owed.npc}`);
+                return false;
+            }
+            lastAttack = now;
+        }
+        await Execution.delayTicks(1);
+    }
+    if (!dead) {
+        log(`paladin ${owed.npc} outlasted the fight at ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp`);
         return false;
     }
-    // Why: `ai_queue3` drops the crest on the paladin's tile, so waiting for it in the pack waits forever; the kill and the pickup are separate.
-    if (!(await driveUntil(() => Npcs.query().where(npc => npc.id === owed.npc).within(14).nearest() === null, [], log, 180_000))) {
-        log(`paladin ${owed.npc} outlasted the fight`);
-        return false;
-    }
-    const drop = GroundItems.query().where(item => item.id === owed.badge.id).within(10).nearest();
-    if (!drop) {
+    // Why: the death script drops the crest a tick after the hp bar empties, so a single query loses the drop and burns the paladin for this crossing.
+    if (!(await driveUntil(() => findDrop() !== null, [], log, 8_000))) {
         log(`paladin ${owed.npc} died but left no coat of arms in reach`);
         return false;
     }
-    if (!(await drop.interact('Take'))) {
+    const drop = findDrop();
+    if (!drop || !(await walkTo(drop.tile(), 1, log)) || !(await drop.interact('Take'))) {
         return false;
     }
-    return driveUntil(() => heldId(owed.badge.id) > 0, [], log, 10_000);
+    // Why: only a crest in the pack proves the kill counted; marking it earlier makes a lost drop look like a paladin this crossing may no longer touch.
+    if (!(await driveUntil(() => heldId(owed.badge.id) > 0, [], log, 10_000))) {
+        return false;
+    }
+    killed.add(target.id);
+    return true;
 }
 
 /** The blood well opens the temple doors once it has all 3 crests and the horn. */

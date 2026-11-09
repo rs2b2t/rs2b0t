@@ -3,6 +3,8 @@ import { describe, expect, test } from 'bun:test';
 import { UP_ITEM } from '#/bot/api/ai/quests/defs/upass/areas.js';
 import { decide } from '#/bot/api/ai/quests/defs/upass/index.js';
 import { UP_FLAG, UP_STAGE } from '#/bot/api/ai/quests/defs/upass/journal.js';
+import { drawGear } from '#/bot/api/ai/quests/defs/upass/supplies.js';
+import { QuestLoadout } from '#/bot/api/ai/quests/gear.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 // `decide()` is pure over a snapshot, so these tests need no client.
@@ -25,7 +27,7 @@ const KIT: Stack[] = [
     UP_ITEM.TINDERBOX.id,
     UP_ITEM.SPADE.id,
     UP_ITEM.BUCKET.id,
-    [UP_ITEM.LOBSTER.id, 14]
+    [UP_ITEM.LOBSTER.id, 16]
 ];
 
 // Why: melee gear matches by name and defaults to worn in these snapshots.
@@ -421,6 +423,54 @@ describe('Underground Pass decide()', () => {
     test('a defeated-Iban player on the mainland reports to Lathas instead of re-entering', () => {
         const step = decide(snapshot({ stage: UP_STAGE.DEFEATED_IBAN, carried: KIT, tile: ARDOUGNE }));
         expect(nameOf(step)).toContain('report to King Lathas');
+    });
+
+    // Why: the scimitar is the one piece the keep-3 rule can lose after a death, so the respawn buys the Zeke fallback instead of walking back in unarmed.
+    test('an unarmed respawn with coins buys a scimitar from Zeke', () => {
+        const step = decide(snapshot({
+            stage: UP_STAGE.ENTERED_MAIN_AREA,
+            carried: [...KIT, [UP_ITEM.COINS.id, 2_000]],
+            wornNames: [],
+            tile: ARDOUGNE
+        }));
+        expect(kindOf(step)).toBe('buy');
+        expect((step as { item?: string }).item).toBe('Mithril scimitar');
+        expect((step as { shop?: { npc: string } }).shop?.npc).toBe('Zeke');
+    });
+
+    // Why: no coins and no bank weapon is a stop, not a punch-through; the old branch fell through to the cave mouth.
+    test('an unarmed respawn with nothing to buy waits instead of re-entering', () => {
+        const step = decide(snapshot({
+            stage: UP_STAGE.ENTERED_MAIN_AREA,
+            carried: KIT,
+            wornNames: [],
+            tile: ARDOUGNE
+        }));
+        expect(kindOf(step)).toBe('wait');
+        expect(reasonOf(step)).toContain('a melee weapon');
+    });
+
+    // Why: a declared three-piece loadout must not wear the spare kite or helm, or the scimitar becomes the 4th priciest item and is dropped on death.
+    test('a three-piece loadout ignores the spare kite and helm in the pack', () => {
+        QuestLoadout.current = {
+            name: 'keep 3',
+            worn: { righthand: 'Rune scimitar', torso: 'Rune chainbody', legs: 'Rune platelegs' },
+            carry: []
+        };
+        try {
+            const scimitar = drawGear(snapshot({
+                carriedNames: ['rune scimitar', 'rune kiteshield', 'rune med helm'],
+                wornNames: []
+            }));
+            expect(nameOf(scimitar)).toBe('wear rune scimitar');
+            const spareOnly = drawGear(snapshot({
+                carriedNames: ['rune kiteshield', 'rune med helm'],
+                wornNames: []
+            }));
+            expect(spareOnly).toBeNull();
+        } finally {
+            QuestLoadout.current = null;
+        }
     });
 
     // Why: every value the journal can report is now routed, so this guards the shape of the fallback,

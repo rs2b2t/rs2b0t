@@ -629,6 +629,11 @@ async function useSeamToward(dest: Tile, log: (m: string) => void): Promise<bool
             log(`pass: the ${seam.label} did not cross toward (${dest.x},${dest.z}) — now at (${now.x},${now.z})`);
             continue;
         }
+        // Why: a fall off a collapsed bridge can land thousands of tiles away on the wrong level; hopping on from there strands the route, so let decide() name the recovery leg.
+        if (now.level !== dest.level) {
+            log(`pass: the ${seam.label} dropped us at (${now.x},${now.z},L${now.level}) — abandoning the route`);
+            return false;
+        }
         log(`pass: ${seam.label} → (${now.x},${now.z})`);
         return true;
     }
@@ -765,6 +770,11 @@ async function crossByRoute(
     const now = here() ?? after;
     if (chebyshev(now, before) < 2) {
         log(`pass: the routed bridge at (${bridge.tile().x},${bridge.tile().z}) did not carry anyone`);
+        return false;
+    }
+    // Why: a failed collapsed-bridge roll teleports to the dwarves cave, which is a fall and not a crossing; continuing from there hides the fact that decide() needs to climb back out.
+    if (now.level !== dest.level) {
+        log(`pass: the bridge at (${bridge.tile().x},${bridge.tile().z}) dropped us at (${now.x},${now.z},L${now.level}) — abandoning the route`);
         return false;
     }
     log(`pass: routed across (${bridge.tile().x},${bridge.tile().z}) → (${now.x},${now.z})`);

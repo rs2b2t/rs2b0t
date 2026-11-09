@@ -52,7 +52,7 @@ import {
 } from './doll.js';
 import { outstandingCrossing, takeNextCrossing } from './railings.js';
 import { releaseJournal } from './stall.js';
-import { bowWorn, drawGear, kitShortfall, meleeCarried, sourceKit, wearGear } from './supplies.js';
+import { bowWorn, drawGear, kitShortfall, meleeCarried, sourceKit, sourceWeapon, wearGear } from './supplies.js';
 
 const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
     ({ kind: 'custom', name, run });
@@ -89,7 +89,7 @@ async function shootBridgeAgain(log: (m: string) => void): Promise<boolean> {
 }
 
 async function transitToStage(stage: number, area: UpassArea, tile: QuestSnapshot['tile'], log: (m: string) => void): Promise<boolean> {
-    if (stage > UP_STAGE.PASSED_BRIDGE && area === 'area1') {
+    if (stage > UP_STAGE.PASSED_BRIDGE && area === 'area1' && !pastGridTile(tile)) {
         // Why: the cave lands east of the fired rope bridge and the pass pocket graph has no edge back across it, so a resumed run shoots the rope again. From the west side the shot is impossible and pointless.
         if (tile != null && tile.x > UP_TILE.BRIDGE_WEST.x + 3 && !(await shootBridgeAgain(log))) {
             log('re-entry: could not fire the guide rope to cross back west');
@@ -103,7 +103,8 @@ async function transitToStage(stage: number, area: UpassArea, tile: QuestSnapsho
             return false;
         }
     }
-    if (stage > UP_STAGE.KILLED_UNICORN) {
+    const atTempleShelf = area === 'area1' && pastGridTile(tile);
+    if (stage > UP_STAGE.KILLED_UNICORN && (area === 'area2' || atTempleShelf)) {
         // Why: the grid crossing leaves the quest journal up to keep the traps shut, and an open modal blocks every later op-click, so the temple door would never answer.
         await releaseJournal();
         if (!(await enterMainCavern(log)) && !(await crossTheTemple(log))) {
@@ -248,6 +249,10 @@ function dollLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
             : custom('search the soulless cages for the dove', searchCages);
     }
     if (!flag(snap, UP_FLAG.SHADOW_ON_DOLL)) {
+        // Why: the collapsed bridges over the demon platforms can drop you into the dwarves cave, and the amulet route only exists from level 1.
+        if (area === 'dwarves' || area === 'kalrag') {
+            return custom('climb back up out of the dwarves cave', ascendFromDwarves);
+        }
         return amuletsHeld(snap) < 3
             ? custom('kill a demon for its amulet', killDemon)
             : custom('open the sealed chest for the shadow', openSealedChest);
@@ -284,7 +289,9 @@ function stageStep(snap: QuestSnapshot, area: UpassArea, stage: number): QuestSt
     }
     // Why: a death past the bridge leaves the player on the surface; provision at the bank, then re-enter the cave.
     if ((area === 'mainland' || area === 'westardougne') && stage > UP_STAGE.SPOKEN_KOFTIK && stage < UP_STAGE.DEFEATED_IBAN) {
-        return outfit(snap, area) ?? custom('return to the underground pass', log => reenterPass(area, log));
+        // Why: an unarmed re-entry just dies again; the cave mouth is the last bank, so the queue waits here until the weapon and kit are actually in hand.
+        return sourceWeapon(snap) ?? outfit(snap, area) ?? readyToDescend(snap)
+            ?? custom('return to the underground pass', log => reenterPass(area, log));
     }
     // Why: Keep the bow equipped through the rope shot and reserve inventory space for the orb sweep; equip melee gear only after the robe-only door.
     const bare = flag(snap, UP_FLAG.DOLL_COMPLETE) && stage < UP_STAGE.DEFEATED_IBAN;
@@ -293,13 +300,18 @@ function stageStep(snap: QuestSnapshot, area: UpassArea, stage: number): QuestSt
         return gear;
     }
     // Why: once inside, a resumed run can still be in area1/area2 while its stage needs the well or main cavern.
-    const wrongArea = (stage > UP_STAGE.PASSED_BRIDGE && area === 'area1')
-        || (stage > UP_STAGE.KILLED_UNICORN && area === 'area2');
+    // Why: the second cavern's temple shelf shares area1's z band, so "past the grid" is the real test; a player already west of it is at the stage's own obstacle, not on the landing side.
+    const wrongArea = (stage > UP_STAGE.PASSED_BRIDGE && area === 'area1' && !pastGridTile(snap.tile))
+        || (stage > UP_STAGE.KILLED_UNICORN && (area === 'area2' || (area === 'area1' && pastGridTile(snap.tile))));
     if (wrongArea && stage < UP_STAGE.DEFEATED_IBAN) {
         return custom(
             stage > UP_STAGE.KILLED_UNICORN ? 'continue to the main cavern' : 'continue to the second cavern',
             log => transitToStage(stage, area, snap.tile, log)
         );
+    }
+    // Why: death keeps the three rune pieces and drops the 10gp doll, and Nilhoof hands a replacement at the doll and Iban stages.
+    if (stage >= UP_STAGE.FOUND_DOLL && stage < UP_STAGE.DEFEATED_IBAN && held(snap, UP_ITEM.DOLL) === 0) {
+        return custom('ask Nilhoof for the lost doll', askNilhoof);
     }
     switch (stage) {
         case UP_STAGE.NOT_STARTED:

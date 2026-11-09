@@ -5,6 +5,8 @@ import { Game } from '../../../../game/Game.js';
 import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
+import { Skills } from '../../../../skills/Skills.js';
+import { Sustain } from '../../../../sustain/Sustain.js';
 import { Reachability } from '../../../../../event/webwalk/geometry/Reachability.js';
 import type { Npc } from '../../../../model/Npc.js';
 import Tile from '../../../../../geometry/Tile.js';
@@ -103,11 +105,58 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
         log(`no ${name} near (${near.x},${near.z}) — already dead this spawn`);
         return true;
     }
-    if (!(await target.interact('Attack'))) {
-        log(`could not attack ${name}`);
-        return false;
+    const combatXp = (): number => ['attack', 'strength', 'defence', 'hitpoints']
+        .reduce((sum, skill) => sum + Skills.xp(skill), 0);
+    const deadline = performance.now() + 180_000;
+    const began = performance.now();
+    let dealt = false;
+    let lastOffense = began;
+    let lastXp = combatXp();
+    let lastHealth = target.health;
+    let lastAttack = 0;
+    let dead = false;
+    while (performance.now() < deadline) {
+        // Why: a quest step owns the tick, so the module's sustain never runs between hits unless this loop spends a tick on it; Kalrag killed a 1-Prayer account that way.
+        await Sustain.run();
+        const live = find();
+        if (!live || (live.health === 0 && live.snap.totalHealth > 0)) {
+            dead = true;
+            break;
+        }
+        const now = performance.now();
+        const nextXp = combatXp();
+        if (nextXp > lastXp || live.health < lastHealth) {
+            dealt = true;
+            lastOffense = now;
+        }
+        lastXp = nextXp;
+        lastHealth = live.health;
+        // Why: a single Attack click before the combat bar is up gets dropped, so the click is re-sent every tick until XP or the hp bar says the fight started.
+        if (!dealt || now - lastAttack >= 5_000) {
+            const at = Game.tile();
+            const far = at !== null && Math.max(Math.abs(live.tile().x - at.x), Math.abs(live.tile().z - at.z)) > 10;
+            if (far && !(await walkTo(live.tile(), 5, log))) {
+                log(`${name} out of reach at (${live.tile().x},${live.tile().z})`);
+                return false;
+            }
+            if (!(await live.interact('Attack'))) {
+                log(`could not attack ${name}`);
+                return false;
+            }
+            lastAttack = now;
+        }
+        if (!dealt && now - began >= 30_000) {
+            log(`could not engage ${name} after 30s of Attack clicks`);
+            return false;
+        }
+        if (dealt && now - lastOffense >= 20_000) {
+            log(`no damage on ${name} for 20s at ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp`);
+            return false;
+        }
+        await Execution.delayTicks(1);
     }
-    if (!(await driveUntil(() => find() === null, [], log, 180_000))) {
+    if (!dead) {
+        log(`${name} outlasted the fight at ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp`);
         return false;
     }
     // Why: these all wander, so one absent poll can be "walked out of the query", and a false kill sends the leg looking for a drop that was never made. It has to still be gone a moment later.
@@ -147,12 +196,14 @@ export async function killDemon(log: (m: string) => void): Promise<boolean> {
     if (!(await killNpc(owed.npc, owed.tile, owed.name, log))) {
         return false;
     }
-    const drop = GroundItems.query().where(item => item.id === owed.amulet.id).within(10).nearest();
-    if (!drop) {
+    // Why: the amulet is added by the death script a tick after the hp bar empties, so a single query after the fight loses it to the lootdrop timer.
+    const findDrop = () => GroundItems.query().where(item => item.id === owed.amulet.id).within(12).nearest();
+    if (!(await driveUntil(() => findDrop() !== null, [], log, 8_000))) {
         log(`${owed.name} died but left no amulet in reach`);
         return false;
     }
-    if (!(await drop.interact('Take'))) {
+    const drop = findDrop();
+    if (!drop || !(await walkTo(drop.tile(), 1, log)) || !(await drop.interact('Take'))) {
         return false;
     }
     return driveUntil(() => heldId(owed.amulet.id) > 0, [], log, 10_000);
