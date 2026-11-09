@@ -331,7 +331,10 @@ function stageStep(snap: QuestSnapshot, area: UpassArea, stage: number): QuestSt
     }
     // Why: death keeps the three rune pieces and drops the 10gp doll, and Nilhoof hands a replacement at the doll and Iban stages.
     if (stage >= UP_STAGE.FOUND_DOLL && stage < UP_STAGE.DEFEATED_IBAN && held(snap, UP_ITEM.DOLL) === 0) {
-        return custom('ask Nilhoof for the lost doll', askNilhoof);
+        // Why: Nilhoof is in the level-0 dwarf camp; on the platforms the direct walk cannot find the wall tunnel, so use the proven descent first.
+        return area === 'dwarves' || area === 'kalrag'
+            ? custom('ask Nilhoof for the lost doll', askNilhoof)
+            : custom('climb down the wall tunnel to the dwarves', descendToDwarves);
     }
     switch (stage) {
         case UP_STAGE.NOT_STARTED:

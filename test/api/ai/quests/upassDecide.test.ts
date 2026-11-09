@@ -426,6 +426,12 @@ describe('Underground Pass decide()', () => {
         expect(nameOf(step)).toContain('report to King Lathas');
     });
 
+    // Why: a lost doll on the platforms cannot walk straight to Nilhoof; the wall tunnel is the only way down to the level-0 camp.
+    test('a lost doll on the platforms descends before asking Nilhoof', () => {
+        const step = decide(snapshot({ stage: UP_STAGE.FOUND_DOLL, carried: KIT, tile: { x: 2173, z: 4725, level: 1 } }));
+        expect(nameOf(step)).toBe('climb down the wall tunnel to the dwarves');
+    });
+
     // Why: Kalrag's side is the same level-0 pocket as Klank's camp, and the cat is on the platforms above; naming only the camp walked at the cat from inside the cave.
     test('a stage-6 run on Kalrag\'s side climbs out before the cat', () => {
         const step = decide(snapshot({ stage: UP_STAGE.SPOKEN_NILHOOF, carried: KIT, tile: KALRAG }));
