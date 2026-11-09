@@ -55,8 +55,11 @@ import { crossChain, outstandingCrossing, takeNextCrossing, TO_RAILINGS } from '
 import { releaseJournal } from './stall.js';
 import { bowWorn, drawGear, kitShortfall, meleeCarried, sourceKit, sourceWeapon, wearGear } from './supplies.js';
 
-const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
-    ({ kind: 'custom', name, run });
+let lastStep = '';
+const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep => {
+    lastStep = name;
+    return { kind: 'custom', name, run };
+};
 
 function flag(snap: QuestSnapshot, name: string): boolean {
     return snap.progress?.flags.has(name) ?? false;
@@ -208,7 +211,8 @@ function dwarfLeg(area: UpassArea): QuestStep {
 }
 
 function witchLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
-    if (area === 'dwarves') {
+    // Why: a run that climbed down to Klank and then walked to Kalrag's side is still in the level-0 pocket; the cat is on the platforms above.
+    if (area === 'dwarves' || area === 'kalrag') {
         return held(snap, UP_ITEM.TINDERBOX) === 0
             ? custom('take a tinderbox from Klank', askKlank)
             : custom('climb back up out of the dwarves cave', ascendFromDwarves);
@@ -374,6 +378,13 @@ export function decide(snap: QuestSnapshot): QuestStep {
     }
     if (snap.stage === undefined) {
         return { kind: 'wait', reason: 'Underground Pass journal stage unavailable' };
+    }
+    // Why: at two failed attempts the expensive route is not going to change; returning a cheap wait lets the engine park in seconds instead of spending another ten minutes on the same walk.
+    if (snap.noProgress >= 2) {
+        return {
+            kind: 'wait',
+            reason: `"${lastStep || 'the last step'}" has failed ${snap.noProgress} times with no progress; stopping instead of retrying the same route`
+        };
     }
     return stageStep(snap, area, snap.stage);
 }

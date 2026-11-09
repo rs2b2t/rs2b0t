@@ -18,6 +18,7 @@ const ITEM_ID = { OAK_SHORTBOW: 843, WILLOW_SHORTBOW: 849, MAGIC_SHORTBOW: 861, 
 const ARDOUGNE = { x: 2655, z: 3283, level: 0 };
 const WEST_ARDOUGNE = { x: 2500, z: 3300, level: 0 };
 const AREA1 = { x: 2450, z: 9716, level: 0 };
+const KALRAG = { x: 2356, z: 9911, level: 0 };
 
 /** Minimum kit for entering the pass. */
 const KIT: Stack[] = [
@@ -423,6 +424,20 @@ describe('Underground Pass decide()', () => {
     test('a defeated-Iban player on the mainland reports to Lathas instead of re-entering', () => {
         const step = decide(snapshot({ stage: UP_STAGE.DEFEATED_IBAN, carried: KIT, tile: ARDOUGNE }));
         expect(nameOf(step)).toContain('report to King Lathas');
+    });
+
+    // Why: Kalrag's side is the same level-0 pocket as Klank's camp, and the cat is on the platforms above; naming only the camp walked at the cat from inside the cave.
+    test('a stage-6 run on Kalrag\'s side climbs out before the cat', () => {
+        const step = decide(snapshot({ stage: UP_STAGE.SPOKEN_NILHOOF, carried: KIT, tile: KALRAG }));
+        expect(nameOf(step)).toBe('climb back up out of the dwarves cave');
+    });
+
+    // Why: a step that has failed twice is not going to discover a new route by being retried; a cheap wait lets the engine park instead of walking the same pocket for another ten minutes.
+    test('two no-progress attempts stop the expensive route', () => {
+        decide(snapshot({ stage: UP_STAGE.SPOKEN_NILHOOF, carried: KIT, tile: KALRAG }));
+        const step = decide(snapshot({ stage: UP_STAGE.SPOKEN_NILHOOF, carried: KIT, tile: KALRAG, noProgress: 2 }));
+        expect(kindOf(step)).toBe('wait');
+        expect(reasonOf(step)).toContain('failed 2 times');
     });
 
     // Why: a stage-5 resume below the well has to replay the proven cage/ledge/railing chain and the unicorn tunnel; the old temple-door walker stood in the corridor and found every seam in another cell.

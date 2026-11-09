@@ -90,6 +90,8 @@ const QUIET_MS = 1_800;
 // Why: Cover approach, arrival delay, roll, and the 60-cycle movement/loc merge; successful crossings resolve much sooner.
 const CROSS_SETTLE_MS = 5_000;
 const MAX_HOPS = 24;
+// Why: a leg that spends more than two minutes crossing and re-sweeping is not making progress; fail it so the module-level breaker can park instead of walking the same pocket for the rest of the run.
+const TRAVEL_BUDGET_MS = 120_000;
 /** How much closer to the target an obstacle must sit before it is worth crossing. */
 const MIN_GAIN = 3;
 // Why: the seam out of a pocket can sit right across it, the rope swing is 20 tiles from where the bridge lands, so the search covers the pocket. The gain threshold and the spent set hold off drift.
@@ -844,8 +846,13 @@ export async function travelTo(dest: Tile, radius: number, log: (m: string) => v
     // Why: once the navigator says there's no route, asking again costs a full walk timeout per obstacle; only a crossing changes the answer.
     let navWorthTrying = true;
     const start = here();
+    const deadline = performance.now() + TRAVEL_BUDGET_MS;
     log(`pass: leg to (${dest.x},${dest.z},${dest.level}) r${radius} from (${start?.x},${start?.z}) — ${spent.size} seam(s) already spent this leg`);
     for (let hop = 0; hop < MAX_HOPS; hop++) {
+        if (performance.now() > deadline) {
+            log(`pass: travel budget spent at (${here()?.x},${here()?.z}) heading for (${dest.x},${dest.z})`);
+            return false;
+        }
         const at = here();
         if (at && at.level === dest.level && dest.distanceTo(at) <= radius) {
             spentByDest.delete(destKey);
