@@ -1,4 +1,5 @@
 import { Equipment } from '../../../../equipment/Equipment.js';
+import { Execution } from '../../../../execution/Execution.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
 import { Game } from '../../../../game/Game.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
@@ -82,8 +83,8 @@ export async function buyKamenMeal(log: (m: string) => void): Promise<boolean> {
     if (!(await talkTo(UP_NPC.KAMEN, 'Kamen', UP_TILE.KAMEN, ['Okay then.'], log))) {
         return false;
     }
-    // Why: the dialogue can end on the brew line even when the inventory was full, so the meal count is the only proof the food arrived.
-    if (mealCount() <= before) {
+    // Why: the dialogue closes before the client's inventory snapshot catches up, so the first read after the last line still shows the old pack and a synchronous check fails a meal that did arrive.
+    if (!(await Execution.delayUntil(() => mealCount() > before, 3_000))) {
         log('Kamen did not hand over a meal');
         return false;
     }
