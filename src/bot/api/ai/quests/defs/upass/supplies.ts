@@ -235,7 +235,7 @@ export function sourceKit(snap: QuestSnapshot): QuestStep | null {
 /** What the kit is still short of, for the stop message. */
 export function kitShortfall(snap: QuestSnapshot): string[] {
     const short = KIT.filter(({ item, qty }) => carried(snap, item) < (item.id === UP_ITEM.LOBSTER.id ? FOOD_FLOOR : qty))
-        .map(({ item, qty, reason }) => `${qty}x ${item.name} (${reason}), have ${carried(snap, item)}`);
+        .map(({ item, qty, reason }) => `${item.id === UP_ITEM.LOBSTER.id ? FOOD_FLOOR : qty}x ${item.name} (${reason}), have ${carried(snap, item)}`);
     if (!bowCarried(snap)) {
         short.push('a bow (firing the bridge stay rope), have none');
     }

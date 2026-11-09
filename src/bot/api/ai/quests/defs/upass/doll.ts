@@ -113,7 +113,6 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
     let lastOffense = began;
     let lastXp = combatXp();
     let lastHealth = target.health;
-    let lastAttack = 0;
     let dead = false;
     while (performance.now() < deadline) {
         // Why: a quest step owns the tick, so the module's sustain never runs between hits unless this loop spends a tick on it; Kalrag killed a 1-Prayer account that way.
@@ -131,20 +130,14 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
         }
         lastXp = nextXp;
         lastHealth = live.health;
-        // Why: a single Attack click before the combat bar is up gets dropped, so the click is re-sent every tick until XP or the hp bar says the fight started.
-        if (!dealt || now - lastAttack >= 5_000) {
-            const at = Game.tile();
-            const far = at !== null && Math.max(Math.abs(live.tile().x - at.x), Math.abs(live.tile().z - at.z)) > 10;
-            if (far && !(await walkTo(live.tile(), 2, log))) {
-                log(`${name} out of reach at (${live.tile().x},${live.tile().z})`);
-                return false;
-            }
-            if (!(await live.interact('Attack'))) {
-                log(`could not attack ${name}`);
-                return false;
-            }
-            lastAttack = now;
+        // Why: Kalrag and the demons move between hits, so a click every few seconds leaves the account standing idle while the target walks off. Re-send Attack every tick — Sustain.run() already spent the tick on food when it was needed, and a dropped "already under attack" click costs nothing.
+        const at = Game.tile();
+        const far = at !== null && Math.max(Math.abs(live.tile().x - at.x), Math.abs(live.tile().z - at.z)) > 10;
+        if (far && !(await walkTo(live.tile(), 2, log))) {
+            log(`${name} out of reach at (${live.tile().x},${live.tile().z})`);
+            return false;
         }
+        await live.interact('Attack');
         if (!dealt && now - began >= 30_000) {
             log(`could not engage ${name} after 30s of Attack clicks`);
             return false;

@@ -446,6 +446,14 @@ describe('Underground Pass decide()', () => {
         expect(reasonOf(step)).toContain('failed 2 times');
     });
 
+    // Why: the wall crossing and the bank steps fail for transient reasons (a queued door, a slow withdraw) and recover on the next pass; parking there stranded a run that was one withdrawal from ready.
+    test('a quick step keeps retrying after two no-progress attempts', () => {
+        decide(snapshot({ stage: UP_STAGE.NOT_STARTED, carried: KIT, tile: ARDOUGNE }));
+        const step = decide(snapshot({ stage: UP_STAGE.NOT_STARTED, carried: KIT, tile: ARDOUGNE, noProgress: 2 }));
+        expect(kindOf(step)).toBe('custom');
+        expect(reasonOf(step)).not.toContain('failed 2 times');
+    });
+
     // Why: a stage-5 resume below the well has to replay the proven cage/ledge/railing chain and the unicorn tunnel; the old temple-door walker stood in the corridor and found every seam in another cell.
     test('a stage-5 resume in the second cavern routes through the temple shelf', () => {
         const step = decide(snapshot({
