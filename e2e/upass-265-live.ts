@@ -142,12 +142,12 @@ function ibanmultiFor(stage: number): number {
 const BANK_SEED: BankSeedItem[] = [
     { debugName: 'coins', displayName: 'Coins', qty: 2_000_000 },
     { debugName: 'lobster', displayName: 'Lobster', qty: 40 },
-    { debugName: 'shortbow', displayName: 'Shortbow', qty: 1 },
-    { debugName: 'bronze_arrow', displayName: 'Bronze arrow', qty: 50 },
-    { debugName: 'tinderbox', displayName: 'Tinderbox', qty: 1 },
-    { debugName: 'spade', displayName: 'Spade', qty: 1 },
-    { debugName: 'bucket_empty', displayName: 'Bucket', qty: 1 },
-    { debugName: 'rope', displayName: 'Rope', qty: 3 },
+    { debugName: 'shortbow', displayName: 'Shortbow', qty: 3 },
+    { debugName: 'bronze_arrow', displayName: 'Bronze arrow', qty: 200 },
+    { debugName: 'tinderbox', displayName: 'Tinderbox', qty: 3 },
+    { debugName: 'spade', displayName: 'Spade', qty: 3 },
+    { debugName: 'bucket_empty', displayName: 'Bucket', qty: 3 },
+    { debugName: 'rope', displayName: 'Rope', qty: 9 },
     // Why: the pass is fought through against three paladins at level 62, three demons and Kalrag. The loadout
     // is exactly the three pieces death keeps when they are the priciest worn items; the helm and kite stay in
     // the bank so a run that ignores the loadout shows up as a keep-3 failure.

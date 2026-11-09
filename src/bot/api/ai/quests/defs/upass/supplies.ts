@@ -127,7 +127,7 @@ export const KIT: readonly {
 }[] = [
     // Why: `upass_rock_ropeswing` deletes the rope before it rolls agility, so a failed swing costs one and drops you in the swamp.
     { item: UP_ITEM.ROPE, qty: 3, reason: 'the rock swing east, which eats one per attempt', shop: AEMAD, unitGp: ROPE_GP },
-    { item: UP_ITEM.BRONZE_ARROW, qty: ARROW_TARGET, reason: 'the fire arrow', shop: LOWE, unitGp: 2 },
+    { item: UP_ITEM.BRONZE_ARROW, qty: ARROW_TARGET, reason: 'the fire arrow', shop: AEMAD, unitGp: 2 },
     { item: UP_ITEM.TINDERBOX, qty: 1, reason: 'lighting the cloth arrow and burning the tomb', shop: AEMAD, unitGp: 5 },
     // Why: from inside the slave cages the only reachable thing is the mud, `upass_mud` takes a spade and nothing else, and every route south to the unicorn is behind it.
     { item: UP_ITEM.SPADE, qty: 1, reason: 'the filled-in tunnel out of the slave cages' },

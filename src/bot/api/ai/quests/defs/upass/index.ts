@@ -299,6 +299,13 @@ function stageStep(snap: QuestSnapshot, area: UpassArea, stage: number): QuestSt
     if (gear) {
         return gear;
     }
+    // Why: a resumed run in the second cavern still has to cross the cages, ledges and bridges before the temple door; each crossing is its own step so the attempt counter resets.
+    if (area === 'area2' && stage >= UP_STAGE.KILLED_UNICORN) {
+        const next = outstandingCrossing();
+        if (next !== null) {
+            return custom(`cross ${next.what}`, takeNextCrossing);
+        }
+    }
     // Why: once inside, a resumed run can still be in area1/area2 while its stage needs the well or main cavern.
     // Why: the second cavern's temple shelf shares area1's z band, so "past the grid" is the real test; a player already west of it is at the stage's own obstacle, not on the landing side.
     const wrongArea = (stage > UP_STAGE.PASSED_BRIDGE && area === 'area1' && !pastGridTile(snap.tile))
@@ -369,6 +376,7 @@ export const upass: QuestModule = {
     ownsInventory: true,
     readProgress: readUpassProgress,
     // Why: the corridor traps are timer damage on chokepoint tiles, and avoiding those tiles deletes 4 of the 6 routes through the orb corridor because the traps sit in the only walkable squares, so the eat threshold is high.
-    sustain: { foods: [UP_ITEM.LOBSTER.name], eatBelowHp: 0.8 },
+    // Why: Nilhoof hands out meat pie, meat pizza and bread, and eating those before the last lobster is what carries a 1-Prayer run through the third demon; 0.8 ate the lobsters too early.
+    sustain: { foods: [UP_ITEM.LOBSTER.name, 'Meat pie', 'Meat pizza', 'Bread', 'Stew'], eatBelowHp: 0.7 },
     decide
 };

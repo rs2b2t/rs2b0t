@@ -95,7 +95,7 @@ export async function burnTomb(log: (m: string) => void): Promise<boolean> {
 
 // Why: a dead NPC leaves the scene, so "the target is gone" is the one completion signal that doesn't depend on a drop or a stale journal line.
 async function killNpc(npcId: number, near: Tile, name: string, log: (m: string) => void): Promise<boolean> {
-    if (!(await walkTo(near, 5, log))) {
+    if (!(await walkTo(near, 2, log))) {
         return false;
     }
     await settleScene();
@@ -135,7 +135,7 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
         if (!dealt || now - lastAttack >= 5_000) {
             const at = Game.tile();
             const far = at !== null && Math.max(Math.abs(live.tile().x - at.x), Math.abs(live.tile().z - at.z)) > 10;
-            if (far && !(await walkTo(live.tile(), 5, log))) {
+            if (far && !(await walkTo(live.tile(), 2, log))) {
                 log(`${name} out of reach at (${live.tile().x},${live.tile().z})`);
                 return false;
             }
