@@ -289,7 +289,7 @@ function stageStep(snap: QuestSnapshot, area: UpassArea, stage: number): QuestSt
     }
     // Why: a death past the bridge leaves the player on the surface; provision at the bank, then re-enter the cave.
     if ((area === 'mainland' || area === 'westardougne') && stage > UP_STAGE.SPOKEN_KOFTIK && stage < UP_STAGE.DEFEATED_IBAN) {
-        // Why: an unarmed re-entry just dies again; the cave mouth is the last bank, so the queue waits here until the weapon and kit are actually in hand.
+        // Why: an unarmed re-entry just dies again; the cave mouth is the last bank, so the queue waits here until the weapon and kit are in hand.
         return sourceWeapon(snap) ?? outfit(snap, area) ?? readyToDescend(snap)
             ?? custom('return to the underground pass', log => reenterPass(area, log));
     }
