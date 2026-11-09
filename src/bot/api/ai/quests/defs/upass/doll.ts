@@ -130,7 +130,7 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
         }
         lastXp = nextXp;
         lastHealth = live.health;
-        // Why: Kalrag and the demons move between hits, so a click every few seconds leaves the account standing idle while the target walks off. Re-send Attack every tick — Sustain.run() already spent the tick on food when it was needed, and a dropped "already under attack" click costs nothing.
+        // Why: Kalrag and the demons move between hits, so a click every few seconds leaves the account standing idle while the target walks off. Re-send Attack every tick; Sustain.run() already spent the tick on food when it was needed, and a dropped "already under attack" click costs nothing.
         const at = Game.tile();
         const far = at !== null && Math.max(Math.abs(live.tile().x - at.x), Math.abs(live.tile().z - at.z)) > 10;
         if (far && !(await walkTo(live.tile(), 2, log))) {

@@ -382,7 +382,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.stage === undefined) {
         return { kind: 'wait', reason: 'Underground Pass journal stage unavailable' };
     }
-    // Why: at two failed attempts an expensive route walk is not going to change, so returning a cheap wait lets the engine park in seconds instead of spending another ten minutes on the same walk. Quick bank/shop/combat steps recover on the next pass, so they are exempt — parking there just stranded a pack that was two withdrawals from ready.
+    // Why: at two failed attempts an expensive route walk is not going to change, so returning a cheap wait lets the engine park in seconds instead of spending another ten minutes on the same walk. Quick bank/shop/combat steps recover on the next pass, so they are exempt; parking there just stranded a pack that was two withdrawals from ready.
     if (snap.noProgress >= 2 && /main cavern|wall tunnel|dwarves cave|temple shelf|temple doors/i.test(lastStep)) {
         return {
             kind: 'wait',
