@@ -356,6 +356,17 @@ describe('Underground Pass decide()', () => {
         expect(nameOf(step)).toContain('pit of the damned');
     });
 
+    // Why: a collapsing platform bridge can drop a finished doll into the dwarves cave, where the temple doors are unreachable; the climb out has to come before the door walk.
+    test('a finished doll dropped in the dwarves cave climbs out first', () => {
+        const step = decide(snapshot({
+            stage: UP_STAGE.FOUND_DOLL,
+            tile: KALRAG,
+            carried: [...KIT, UP_ITEM.DOLL.id],
+            flags: [UP_FLAG.DOLL_COMPLETE]
+        }));
+        expect(nameOf(step)).toBe('climb back up out of the dwarves cave');
+    });
+
     // Why: the temple throws the player into the second cavern, which has no walkable way back up, Koftik's
     // dialogue is the transport. Each step of the walk out is keyed on where the last one landed.
     test('the walk out is keyed on where the last step landed', () => {

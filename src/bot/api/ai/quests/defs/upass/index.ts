@@ -368,9 +368,14 @@ function stageStep(snap: QuestSnapshot, area: UpassArea, stage: number): QuestSt
         case UP_STAGE.FOUND_DOLL:
         case UP_STAGE.CONFRONTED_IBAN:
             if (flag(snap, UP_FLAG.DOLL_COMPLETE)) {
-                return insideIbanTemple(snap.tile)
-                    ? custom('throw the doll into the pit of the damned', throwDoll)
-                    : custom("open Iban's temple doors", openIbanDoor);
+                if (insideIbanTemple(snap.tile)) {
+                    return custom('throw the doll into the pit of the damned', throwDoll);
+                }
+                // Why: the collapsing platform bridges can drop a finished doll into the dwarves cave, and the temple doors are only reachable from the level-1 platforms; walking at them from level 0 reports an unreachable goal on every attempt.
+                if (area === 'dwarves' || area === 'kalrag') {
+                    return custom('climb back up out of the dwarves cave', ascendFromDwarves);
+                }
+                return custom("open Iban's temple doors", openIbanDoor);
             }
             return dollLeg(snap, area);
         case UP_STAGE.DEFEATED_IBAN:
