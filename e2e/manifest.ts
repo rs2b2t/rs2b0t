@@ -1706,6 +1706,15 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'superheater-bank-live',
+        harness: 'superheater-bank-live.ts',
+        covers: { scripts: ['Superheater'] },
+        status: 'vetted',
+        provenAt: '06321445',
+        budgetMin: 5,
+        note: 'Gold + Goldsmith gauntlets at Varrock West: reports bars/hr, bank trips, instant legs, gauntlet state and the nature count. Requires ENGINE_DIR for an isolated client deployment.'
+    },
+    {
         id: 'smithingbot-bank-loop-live',
         harness: 'smithingbot-bank-loop-live.ts',
         covers: { scripts: ['SmithingBot'] },

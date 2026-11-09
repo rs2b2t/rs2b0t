@@ -1,6 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import { STAFF_RUNES } from '#/bot/data/spelldb.js';
-import { FIRE_STAFF, FIRE_STAVES, pickFireStaff } from '#/bot/scripts/Superheater/SuperheaterLogic.js';
+import {
+    FIRE_STAFF,
+    FIRE_STAVES,
+    opIndex,
+    pickFireStaff,
+    wantsGoldsmithGauntlets,
+    withdrawSet,
+    recipeForBar
+} from '#/bot/scripts/Superheater/SuperheaterLogic.js';
 
 const fireProviders = Object.entries(STAFF_RUNES)
     .filter(([, runes]) => runes.some(r => r.toLowerCase() === 'fire rune'))
@@ -44,5 +52,33 @@ describe('pickFireStaff', () => {
     test('accepts mystic and lava fire staves', () => {
         expect(pickFireStaff(name => name === 'Mystic fire staff')).toBe('Mystic fire staff');
         expect(pickFireStaff(name => name === 'Lava battlestaff')).toBe('Lava battlestaff');
+    });
+});
+
+describe('wantsGoldsmithGauntlets', () => {
+    test('only gold, and only while the toggle is on', () => {
+        expect(wantsGoldsmithGauntlets('Gold', true)).toBe(true);
+        expect(wantsGoldsmithGauntlets('gold', true)).toBe(true);
+        expect(wantsGoldsmithGauntlets(' Gold ', true)).toBe(true);
+        expect(wantsGoldsmithGauntlets('Gold', false)).toBe(false);
+        expect(wantsGoldsmithGauntlets('Steel', true)).toBe(false);
+        expect(wantsGoldsmithGauntlets('Iron', true)).toBe(false);
+    });
+});
+
+describe('gold withdraw plan', () => {
+    test('one gold ore per bar, 27 slots per trip', () => {
+        const gold = recipeForBar('Gold');
+        expect(gold).toBeDefined();
+        expect(withdrawSet(gold!)).toEqual({ 'Gold ore': 27 });
+    });
+});
+
+describe('opIndex', () => {
+    test('is 1-based, skips nulls and reports -1 on no match', () => {
+        expect(opIndex([null, 'Withdraw-All'], /withdraw[\s-]*all/i)).toBe(2);
+        expect(opIndex(['Deposit-All', 'Deposit-X'], /deposit[\s-]*all/i)).toBe(1);
+        expect(opIndex(['Withdraw-1', null], /withdraw[\s-]*all/i)).toBe(-1);
+        expect(opIndex([], /anything/)).toBe(-1);
     });
 });
