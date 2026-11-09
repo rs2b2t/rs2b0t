@@ -104,6 +104,8 @@ export async function crossTheTemple(log: (m: string) => void): Promise<boolean>
     // Why: a paladin respawns and "whichever is alive" always picks the nearest, so the same one would die every time and its crest feed a bit already set. Each is killed once per crossing, by id.
     const killed = new Set<number>();
     for (let round = 0; round < 4; round++) {
+        // Why: the walk from the paladins to the well and the doors is still inside their respawn pocket, so eat between rounds rather than only inside the fight loop.
+        await Sustain.run();
         if ((Game.tile()?.level ?? 0) === 1) {
             return true;
         }

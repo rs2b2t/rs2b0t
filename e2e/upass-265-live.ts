@@ -214,6 +214,7 @@ const PACK_SEED: { debugName: string; qty: number }[] = [
 // "unicorn killed and the horn already spent", and a stage-four start goes back for a railing it used.
 const STAGE_PACK: Record<number, string[]> = {
     4: ['cave_unicorn_horn'],
+    5: ['cave_unicorn_horn'],
     7: ['ibandoll'],
     8: ['ibandoll'],
     9: ['ibanstaff']
