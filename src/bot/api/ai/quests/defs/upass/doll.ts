@@ -417,7 +417,7 @@ const SPENT: readonly UpassItem[] = [
     UP_ITEM.ROPE, UP_ITEM.SPADE, UP_ITEM.BUCKET, UP_ITEM.SHORTBOW, UP_ITEM.BRONZE_ARROW, UP_ITEM.HISTORY
 ];
 
-/** The meals, worst first; lobsters are kept because they heal the most. */
+/** The meals, worst first; lobsters are kept for their healing. */
 const SHED_FOOD = ['bread', 'stew', 'meat pie', 'meat pizza'];
 
 async function dropOne(matcher: (id: number, name: string | null) => boolean, dropped: string[]): Promise<boolean> {
