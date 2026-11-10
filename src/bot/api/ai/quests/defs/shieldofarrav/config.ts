@@ -4,7 +4,7 @@ export type ArravGang = 'phoenix' | 'blackarm';
 export type ArravGangSetting = ArravGang | 'random';
 
 /** Host-set at script start, read at decide time. Built at import, when settings still hold their defaults. */
-export const ArravConfig: { gang: ArravGangSetting; partner: string; certTarget: number } = {
+export const ArravConfig: { gang: ArravGangSetting; partner: string; partnerStage?: number; partnerHasKey?: boolean; certTarget: number } = {
     gang: 'random',
     partner: '',
     certTarget: 2

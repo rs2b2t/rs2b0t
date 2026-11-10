@@ -1,3 +1,5 @@
+import { retainWatchtowerLoadout } from '../defs/watchtower/loadout.js';
+import { retainLoadout } from '../defs/tbwt/loadout.js';
 import { ITEM_DB } from '../../../../data/itemdb.js';
 import { UNTRADEABLE_IDS } from '../../../../data/untradeable.js';
 import { BIO_ITEM } from '../defs/biohazard/areas.js';
@@ -44,6 +46,8 @@ export function resumePreparation(
     food: string | null
 ): { keepIds: number[]; caps: { id: number; qty: number }[] } | null {
     if (snap.journal !== 'inProgress' || (snap.freeSlots ?? 28) > 4) return null;
+    if (module.record.id === 'tbwt' && ['lubufu', 'tiadeche', 'tamayu', 'tinsay'].every(flag => [...snap.progress?.flags ?? []].some(value => value.startsWith(`${flag}:`)))) return retainLoadout(snap, inventory, food);
+    if (module.record.id === 'itwatchtower' && snap.stage !== undefined) return retainWatchtowerLoadout(snap, inventory, food);
     if (module.record.id === 'legends'
         && [LQ_ID.GOLD_BOWL_WATER, LQ_ID.GOLD_BOWL_PURE, LQ_ID.GOLD_BOWL_BLESSED_WATER, LQ_ID.GOLD_BOWL_BLESSED_PURE]
             .some(id => (snap.invIds?.get(id) ?? 0) > 0 || inventory.some(item => item.id === id && item.count > 0))) return null;

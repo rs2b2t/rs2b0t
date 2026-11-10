@@ -223,3 +223,23 @@ test('a deposit that sends nothing reopens and retries held ingredients after a 
     expect(state.withdrawals).toEqual([VIAL, GUAM]);
     expect(state.stops).toEqual([]);
 });
+
+test('banked unfinished potions are withdrawn before gathering another herb batch', async () => {
+    const { bot, state, stock, pack } = await fixture();
+    stock.delete(GUAM); stock.delete(VIAL);
+    stock.set(UNFINISHED, 2);
+    await bot.loop();
+    expect(state.withdrawals).toEqual([UNFINISHED]);
+    expect(pack.get(UNFINISHED)).toBe(2);
+    expect(state.stops).toEqual([]);
+    expect(state.open).toBe(false);
+});
+
+test('a quest output target limits brewing to the remaining bottles', async () => {
+    const { bot, stock, pack } = await fixture();
+    bot.settings = new SettingsBag({ outputId: 121, outputCount: 2 });
+    stock.set(121, 1);
+    await bot.loop();
+    expect(pack.get(GUAM)).toBe(1);
+    expect(pack.get(VIAL)).toBe(1);
+});

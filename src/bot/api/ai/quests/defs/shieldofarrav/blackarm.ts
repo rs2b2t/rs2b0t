@@ -200,11 +200,11 @@ export function blackarmStep(snap: QuestSnapshot): QuestStep {
                 return { kind: 'withdraw', items: [{ name: 'Key', qty: 1, id: SOA_ID.STORE_KEY }] };
             }
             // Why: the store door yields only to phoenixkey2, which only Straven issues, so a keyless bot has to be given one.
-            return { kind: 'wait', reason: 'needs a Phoenix weapon-store key from a partner' };
+            return { kind: 'wait', cooperative: true, reason: 'needs a Phoenix weapon-store key from a partner' };
 
         case SOA_STAGE.BLACKARM_JOINED:
             if (heldId(snap, SOA_ID.SHIELD_BLACKARM) > 0) {
-                return { kind: 'wait', reason: 'black arm half held — the other half is not this leg' };
+                return { kind: 'wait', cooperative: true, reason: 'black arm half held — the other half is not this leg' };
             }
             // Why: `[oploc2,blackarmcupboardopen]` counts the bank, so a banked half leaves the cupboard bare for good.
             if (bankedId(snap, SOA_ID.SHIELD_BLACKARM) > 0) {

@@ -38,6 +38,14 @@ describe('decideHeroHandoff', () => {
         }))).toBe('give-key');
     });
 
+    test('a counterpart that killed Grip is offered its candlestick instead of a spare key', () => {
+        expect(decideHeroHandoff(input({ stage: HERO_STAGE.BLACKARM_LOOTED, hasKey: true, candlesticks: 2, partnerStage: HERO_STAGE.PHOENIX_KILLED_GRIP }))).toBe('give-candlestick');
+    });
+
+    test('a rival carrying the spare key does not get another offer', () => {
+        expect(decideHeroHandoff(input({ stage: HERO_STAGE.BLACKARM_PAPERS_GIVEN, hasKey: true, partnerHasKey: true }))).toBeNull();
+    });
+
     test('it does not give a key it has not been handed', () => {
         expect(decideHeroHandoff(input({ stage: HERO_STAGE.BLACKARM_PAPERS_GIVEN }))).toBeNull();
     });

@@ -40,6 +40,11 @@ export interface QuestSnapshot {
 }
 ```
 
+### Auto-retaliate
+
+See [module retaliation policies](quest-module-shape.md#auto-retaliate) for defaults,
+combat exceptions and setting confirmation.
+
 ### What the client can see
 
 The era protocol does **not** stream mid-quest stage numbers or bitfields to
@@ -111,6 +116,10 @@ Assembling a pack, emptying it between quests and drawing the coin and food floa
 page: [Quest provisioning](quest-provisioning.md).
 
 ## The queue and the watchdog
+
+AIOQuester adds requirement training, supply gathering and bounded restart recovery
+to the queue. See [preparation and recovery](../decisions/quest-preparation-recovery.md)
+for its lifecycle and [the per-quest audit](quest-preparation-audit.md) for coverage.
 
 [`QuestEngine`](../../src/bot/api/ai/quests/engine/QuestEngine.ts) runs quests in order,
 tracking `parked`, `parkCounts`, and `parkedReasons`. A quest that stops making

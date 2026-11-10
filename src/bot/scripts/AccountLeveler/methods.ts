@@ -44,7 +44,7 @@ function prerequisiteCombat(s: LevelerSnapshot, objective: string, memory: Sessi
 }
 
 function selectMethod(s: LevelerSnapshot, objective: string, memory: SessionMemory, random: () => number): ActivityPlan | null {
-    if (['attack', 'strength', 'defence', 'prayer'].includes(objective) && s.levels[objective] < s.target) {
+    if (s.allowQuests !== false && ['attack', 'strength', 'defence', 'prayer'].includes(objective) && s.levels[objective] < s.target) {
         const quest = nextDragonQuest(s, memory);
         if (quest || objective === 'prayer' && dragonReady(s) && stockOf(s, 'Dragonfire shield') > 0) {
             const levels = { ...dragonFoodLevels(s),
@@ -107,6 +107,7 @@ function selectMethod(s: LevelerSnapshot, objective: string, memory: SessionMemo
         }
         case 'herblore':
             if (!s.quests['Druidic Ritual']) {
+                if (s.allowQuests === false) return null;
                 const levels = { attack: 20, strength: 20, defence: 20, hitpoints: 25 };
                 if (Object.entries(levels).some(([skill, level]) => s.levels[skill] < level)) return prerequisiteCombat(s, objective, memory, random, levels);
                 return questPlan(s, objective, 'druid', 'Druidic Ritual');
@@ -116,6 +117,7 @@ function selectMethod(s: LevelerSnapshot, objective: string, memory: SessionMemo
                 return activity(objective, `make-${recipe.herb.toLowerCase().replaceAll(' ', '-')}-potions`, 'PotionMaker', { herb: recipe.herb, secondary: recipe.secondary }, [banked(recipe.herb, 14), banked('Vial of water', 14), banked(recipe.secondary, 14)]);
             }
         case 'runecraft':
+            if (!s.quests['Rune Mysteries Quest'] && s.allowQuests === false) return null;
             if (!s.quests['Rune Mysteries Quest']) return questPlan(s, objective, 'runemysteries', 'Rune Mysteries Quest');
             return activity(objective, 'craft-air-runes', 'RuneCrafter', { rune: 'Air runes', mode: 'Solo' }, [tool('Air talisman'), banked('Rune essence', 27)]);
         default:
@@ -182,10 +184,10 @@ export function producer(s: LevelerSnapshot, objective: string, need: Requiremen
             }, [{ item: food, count: 24, carry: 12 }]), food };
             break;
         }
-        case 'shrimps': case 'trout': case 'salmon': case 'lobster':
+        case 'shrimps': case 'trout': case 'salmon': case 'lobster': case 'shark':
             plan = s.levels.cooking >= FISH.find(f => f.food.toLowerCase() === need.item.toLowerCase())!.cooking ? cookPlan(s, objective, need.item) : null;
             break;
-        case 'raw shrimps': case 'raw trout': case 'raw salmon': case 'raw lobster': {
+        case 'raw shrimps': case 'raw trout': case 'raw salmon': case 'raw lobster': case 'raw shark': {
             const fish = FISH.find(f => `raw ${f.food.toLowerCase()}` === need.item.toLowerCase())!;
             plan = s.levels.fishing >= fish.level ? fishPlan(s, objective, need.item) : null;
             break;

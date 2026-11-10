@@ -23,6 +23,48 @@ import { Reachability } from '#/bot/event/webwalk/geometry/Reachability.js';
 const restores: (() => void)[] = [];
 afterEach(() => { for (const restore of restores.splice(0).reverse()) restore(); });
 
+test('automatic recovery refreshes a stalled quest before parking it', async () => {
+    const { engine, state, host } = fixture();
+    host.automaticRecovery = () => true;
+    state.picked = new Set(['runemysteries']);
+    const journal = spyOn(Quests, 'journal').mockResolvedValue(['Quest in progress']);
+    restores.push(() => journal.mockRestore());
+    await execute(engine, 10);
+    expect(engine['runningId']).toBe('runemysteries');
+    expect(engine['parked'].has('runemysteries')).toBe(false);
+    expect(journal).toHaveBeenCalledWith('Rune Mysteries Quest');
+    expect(state.attempts).toBe(9);
+});
+
+test('automatic recovery stops retrying a quest after three deaths', async () => {
+    const { engine, state, host } = fixture();
+    host.automaticRecovery = () => true;
+    state.picked = new Set(['runemysteries']);
+    await engine.execute();
+    for (let i = 0; i < 3; i++) {
+        state.death = true;
+        await engine.execute();
+    }
+    expect(engine['blocked'].get('runemysteries')?.join(' ')).toContain('3 deaths');
+    expect(engine['runningId']).toBeNull();
+});
+
+test('automatic recovery catches travel loops without journal or inventory progress', async () => {
+    const { engine, state, host } = fixture();
+    host.automaticRecovery = () => true;
+    state.picked = new Set(['runemysteries']);
+    state.ok = true;
+    const tile = spyOn(Game, 'tile').mockImplementation(() => ({ x: state.now % 2 ? 3093 : 3094, z: 3243, level: 0 }));
+    const journal = spyOn(Quests, 'journal').mockResolvedValue([]);
+    restores.push(() => tile.mockRestore(), () => journal.mockRestore());
+    for (let i = 0; i < 8; i++) {
+        state.now += 60_001;
+        await engine.execute();
+    }
+    expect(journal).toHaveBeenCalled();
+    expect(engine['parked'].has('runemysteries')).toBe(false);
+});
+
 function fixture() {
     const originalStage = runemysteries.readStage;
     restores.push(() => { runemysteries.readStage = originalStage; });
@@ -533,4 +575,67 @@ test('normal queue order is preserved outside quest-owned areas', async () => {
     await engine.execute();
     expect(state.running).toBe('runemysteries');
     expect(state.attempts).toBe(1);
+});
+
+for (const kind of ['wait', 'custom'] as const) {
+    test(`live partner ${kind} retains the quest without exhausting recovery`, async () => {
+        const { engine, state, host } = fixture();
+        host.automaticRecovery = () => true;
+        host.waitingForPartner = () => true;
+        state.picked = new Set(['runemysteries']);
+        const decide = spyOn(runemysteries, 'decide').mockReturnValue(kind === 'wait'
+            ? { kind, reason: 'waiting for partner', cooperative: true }
+            : { kind, name: 'take-key with partner', cooperative: true, run: async () => false });
+        restores.push(() => decide.mockRestore());
+        for (let i = 0; i < 25; i++) {
+            state.now += 15_000;
+            await engine.execute();
+        }
+        expect(engine['recovery']).toBeNull();
+        expect(engine['runningId']).toBe('runemysteries');
+        expect(engine['restartCounts'].size).toBe(0);
+        host.waitingForPartner = () => false;
+        await execute(engine, 16);
+        expect(engine['restartCounts'].get('runemysteries')).toBeGreaterThan(0);
+    });
+}
+
+test('a live partner does not hide an unrelated stuck quest step', async () => {
+    const { engine, state, host } = fixture();
+    host.waitingForPartner = () => true;
+    state.picked = new Set(['runemysteries']);
+    await execute(engine, 8);
+    expect(engine['parked'].has('runemysteries')).toBe(true);
+});
+
+test('cooperative heartbeats cannot indefinitely hide a stalled partnership', async () => {
+    const { engine, state, host } = fixture();
+    host.automaticRecovery = () => true;
+    host.waitingForPartner = () => true;
+    host.partnerProgressKey = () => 'stage:9';
+    state.picked = new Set(['runemysteries']);
+    const decide = spyOn(runemysteries, 'decide').mockReturnValue({ kind: 'custom', name: 'take-key', cooperative: true, run: async () => false });
+    restores.push(() => decide.mockRestore());
+    await engine.execute();
+    state.now += 600_001;
+    await engine.execute();
+    expect(engine['restartCounts'].get('runemysteries')).toBe(1);
+});
+
+test('a partner advancing its stage renews the cooperative progress timeout', async () => {
+    const { engine, state, host } = fixture();
+    host.automaticRecovery = () => true;
+    host.waitingForPartner = () => true;
+    let stage = 8;
+    host.partnerProgressKey = () => String(stage);
+    state.picked = new Set(['runemysteries']);
+    const decide = spyOn(runemysteries, 'decide').mockReturnValue({ kind: 'wait', reason: 'partner', cooperative: true });
+    restores.push(() => decide.mockRestore());
+    await engine.execute();
+    state.now += 500_000;
+    stage++;
+    await engine.execute();
+    state.now += 500_000;
+    await engine.execute();
+    expect(engine['restartCounts'].size).toBe(0);
 });

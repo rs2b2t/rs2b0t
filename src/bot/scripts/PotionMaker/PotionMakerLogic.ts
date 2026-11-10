@@ -47,6 +47,7 @@ export interface SecondaryDef {
 }
 
 export const SECONDARIES: readonly SecondaryDef[] = [
+    { key: 'toads legs', name: "Toad's legs", id: 2152 },
     { key: 'eye of newt', name: 'Eye of newt', id: 221 },
     { key: 'red spiders eggs', name: "Red spiders' eggs", id: 223 },
     { key: 'limpwurt root', name: 'Limpwurt root', id: 225 },

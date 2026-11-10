@@ -28,7 +28,7 @@ function fixture(pack = essencePack()) {
     const state = {
         pack, bank: false, accept: true, status: 'inProgress' as QuestStatus, attempts: 0,
         tile: new Tile(2598, 3169, 0), banks: [] as unknown[], food: null as string | null,
-        next: null as QuestStep | null, deposits: [] as number[]
+        next: null as QuestStep | null, deposits: [] as number[], retaliate: true
     };
     const host: QuestHost = {
         log: () => {}, verbose: () => false, foodItem: () => state.food, pickedIds: () => new Set(['arena']),
@@ -37,6 +37,8 @@ function fixture(pack = essencePack()) {
     };
     spyOn(Game, 'tile').mockImplementation(() => state.tile);
     spyOn(Game, 'inCombat').mockReturnValue(false);
+    spyOn(Game, 'autoRetaliateOn').mockImplementation(() => state.retaliate);
+    spyOn(Game, 'setAutoRetaliate').mockImplementation(on => { state.retaliate = on; return true; });
     spyOn(EventSignal, 'pending').mockReturnValue(false);
     spyOn(reader, 'bankComId').mockImplementation(() => state.bank ? 5382 : -1);
     spyOn(reader, 'bankSideSnapshotReady').mockReturnValue(true);
@@ -78,4 +80,5 @@ test('a resumed Fight Arena keeps a sealed arena pack and reaches the fight with
     expect(state.banks).toHaveLength(0);
     expect(state.pack).toHaveLength(28);
     expect(state.attempts).toBe(1);
+    expect(state.retaliate).toBe(false);
 });

@@ -1,7 +1,8 @@
 import Tile from '../../../../../geometry/Tile.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
-import { RELIC_PARTS, WT_ITEM, WT_TILE, type WatchtowerItem } from './areas.js';
-import { QuestFood } from '../../food.js';
+import { WT_ITEM, WT_TILE, type WatchtowerItem } from './areas.js';
+import { clearSpace, fitSupplies, foodCount, foodNames, phaseItems } from './loadout.js';
+import { watchtowerArea } from './areas.js';
 
 // Why: every shop here was read out of the engine's own configs.
 // Why: nobody in this game is called 'Shop keeper'; the shop belongs to a named NPC through param=owned_shop, and Shop.open() matches on the display name.
@@ -27,22 +28,6 @@ export function banked(snap: QuestSnapshot, id: number): number {
 export function owned(snap: QuestSnapshot, id: number): number {
     return held(snap, id) + banked(snap, id);
 }
-
-/** The kit the bank can supply, one of each. */
-const KIT_ITEMS: readonly WatchtowerItem[] = [
-    ...RELIC_PARTS,
-    WT_ITEM.ROPE,
-    WT_ITEM.LIT_CANDLE,
-    WT_ITEM.VIAL_WATER,
-    WT_ITEM.GUAM_LEAF,
-    WT_ITEM.PESTLE,
-    WT_ITEM.PICKAXE,
-    WT_ITEM.BAT_BONES,
-    WT_ITEM.DRAGON_BONES,
-    WT_ITEM.DEATH_RUNE,
-    WT_ITEM.GOLD_BAR,
-    WT_ITEM.SKAVID_MAP
-];
 
 /** Tolls and shop money the quest runs on. */
 const KIT_COINS = 2000;
@@ -103,7 +88,7 @@ export function sourceCoins(snap: QuestSnapshot, want: number): QuestStep | null
     if (available <= 0) {
         return { kind: 'wait', reason: `need ${want} gp for Gu'Tanoth tolls and shops` };
     }
-    return withdrawFrom([{ name: WT_ITEM.COINS.name, id: WT_ITEM.COINS.id, qty: Math.min(want, available) }]);
+    return withdrawFrom([{ name: WT_ITEM.COINS.name, id: WT_ITEM.COINS.id, qty: Math.min(want - held(snap, WT_ITEM.COINS.id), available) }]);
 }
 
 export function sourceRope(snap: QuestSnapshot): QuestStep | null {
@@ -111,7 +96,7 @@ export function sourceRope(snap: QuestSnapshot): QuestStep | null {
 }
 
 export function sourceDeathRune(snap: QuestSnapshot): QuestStep | null {
-    return source(snap, WT_ITEM.DEATH_RUNE, 1, MAGIC_GUILD, DEATH_RUNE_PRICE);
+    return source(snap, WT_ITEM.DEATH_RUNE, 1, { npc: 'Betty', anchor: new Tile(3012, 3259, 0) }, DEATH_RUNE_PRICE);
 }
 
 export function sourceVial(snap: QuestSnapshot): QuestStep | null {
@@ -141,24 +126,7 @@ export function sourceLightSource(snap: QuestSnapshot): QuestStep | null {
     return { kind: 'grabGround', item: WT_ITEM.LIT_CANDLE.name, anchor: WT_TILE.CANDLE, waitIfMissing: true };
 }
 
-// Why: Check the selected food first, then fallbacks, so other banked food can still provision the enclave trip.
-const FALLBACK_FOODS = ['Tuna', 'Swordfish', 'Lobster'] as const;
-
-/** The configured food, then the fish the module falls back on. */
-function questFoods(): string[] {
-    const chosen = QuestFood.name?.trim();
-    const out = chosen ? [chosen] : [];
-    for (const food of FALLBACK_FOODS) {
-        if (!out.some(held => held.toLowerCase() === food.toLowerCase())) {
-            out.push(food);
-        }
-    }
-    return out;
-}
-
-export function carriedFood(snap: QuestSnapshot): number {
-    return questFoods().reduce((total, food) => total + (snap.inv.get(food.toLowerCase()) ?? 0), 0);
-}
+export const carriedFood = foodCount;
 
 // Why: the shamans are 99 in every combat stat and respawn about every 100 ticks, so an enclave trip without food is a death.
 // Why: ownsInventory means the engine's own food provisioning never runs for this quest.
@@ -172,10 +140,11 @@ export function sourceFood(snap: QuestSnapshot, want: number): QuestStep | null 
     if (!snap.bankKnown) {
         return scanBank();
     }
-    for (const food of questFoods()) {
+    if ((snap.freeSlots ?? 28) <= 2) return clearSpace(snap, 3);
+    for (const food of foodNames()) {
         const inBank = snap.bank?.get(food.toLowerCase()) ?? 0;
         if (inBank > 0) {
-            return { kind: 'withdraw', items: [{ name: food, qty: Math.min(want - carried, inBank) }], bank: WT_TILE.YANILLE_BANK };
+            return { kind: 'withdraw', items: [{ name: food, qty: Math.min(want - carried, inBank, Math.max(0, (snap.freeSlots ?? 28) - 2)) }], bank: WT_TILE.YANILLE_BANK };
         }
     }
     return { kind: 'wait', reason: 'no food in the bank for the shaman enclave' };
@@ -187,11 +156,11 @@ export function sourceFood(snap: QuestSnapshot, want: number): QuestStep | null 
 /** Everything the kit still needs that the bank can supply, in one withdrawal. */
 export function questKit(snap: QuestSnapshot, foodWant: number): QuestStep | null {
     // Why: an unread bank is left to the first stage that needs a scan, so a quest wanting nothing more from the bank never takes a trip to prove it.
-    if (!snap.bankKnown) {
+    if (!snap.bankKnown || watchtowerArea(snap.tile) !== 'yanille') {
         return null;
     }
     const items: { name: string; id?: number; qty: number }[] = [];
-    for (const item of KIT_ITEMS) {
+    for (const item of phaseItems(snap)) {
         const missing = 1 - held(snap, item.id);
         if (missing > 0 && banked(snap, item.id) > 0) {
             items.push({ name: item.name, id: item.id, qty: missing });
@@ -207,9 +176,11 @@ export function questKit(snap: QuestSnapshot, foodWant: number): QuestStep | nul
     if (coinsShort > 0 && bankedCoins > 0) {
         items.push({ name: WT_ITEM.COINS.name, id: WT_ITEM.COINS.id, qty: Math.min(coinsShort, bankedCoins) });
     }
-    const foodShort = foodWant - carriedFood(snap);
+    const supplySlots = items.reduce((n, item) => n + (item.id === WT_ITEM.COINS.id ? (held(snap, item.id) ? 0 : 1) : item.qty), 0);
+    if (supplySlots + 2 > (snap.freeSlots ?? 28)) return clearSpace(snap, supplySlots + 2);
+    const foodShort = Math.min(foodWant - carriedFood(snap), (snap.freeSlots ?? 28) - supplySlots - 2);
     if (foodShort > 0) {
-        for (const food of questFoods()) {
+        for (const food of foodNames()) {
             const inBank = snap.bank?.get(food.toLowerCase()) ?? 0;
             if (inBank > 0) {
                 items.push({ name: food, qty: Math.min(foodShort, inBank) });
@@ -217,5 +188,5 @@ export function questKit(snap: QuestSnapshot, foodWant: number): QuestStep | nul
             }
         }
     }
-    return items.length > 0 ? withdrawFrom(items) : null;
+    return items.length > 0 ? fitSupplies(snap, withdrawFrom(items)) : null;
 }

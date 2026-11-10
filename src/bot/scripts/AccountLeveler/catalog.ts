@@ -47,7 +47,8 @@ export const FISH = [
     { level: 1, cooking: 1, food: 'Shrimps', method: 'Small net — shrimp/anchovy', location: 'Draynor Village', tool: 'Small fishing net' },
     { level: 20, cooking: 15, food: 'Trout', method: 'Fly fishing — trout/salmon', location: 'Barbarian Village', tool: 'Fly fishing rod' },
     { level: 30, cooking: 25, food: 'Salmon', method: 'Fly fishing — trout/salmon', location: 'Barbarian Village', tool: 'Fly fishing rod' },
-    { level: 40, cooking: 40, food: 'Lobster', method: 'Lobster cage — lobster', location: 'Catherby', tool: 'Lobster pot' }
+    { level: 40, cooking: 40, food: 'Lobster', method: 'Lobster cage — lobster', location: 'Catherby', tool: 'Lobster pot' },
+    { level: 76, cooking: 80, food: 'Shark', method: 'Harpoon — sharks', location: 'Catherby', tool: 'Harpoon' }
 ] as const;
 
 export const MILESTONES: Record<string, readonly number[]> = {

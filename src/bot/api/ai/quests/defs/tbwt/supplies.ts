@@ -1,4 +1,6 @@
 import { Equipment } from '../../../../equipment/Equipment.js';
+import { foodForms } from '../../../../combat/food.js';
+import { ITEM_DB } from '../../../../../data/itemdb.js';
 import { armourChoice, armourWorn } from '../../armour.js';
 import { QuestFood } from '../../food.js';
 import { flagValue, hasFlag, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
@@ -6,7 +8,6 @@ import {
     AGILITY_DOSES,
     ARROW_TARGET,
     COIN_TARGET,
-    FOOD_TARGET,
     onKaramja,
     TB_ARMOUR_SLOTS,
     TB_ARROWS,
@@ -16,14 +17,14 @@ import {
     TB_NAME,
     TB_NPC,
     TB_POTIONS,
-    TB_POTION_IDS,
     TB_SPEARS,
-    TB_SPEAR_IDS,
     TB_TAMAYU,
     TB_TILE,
     TB_TINSAY
 } from './areas.js';
 import { TB_FLAG } from './journal.js';
+import { foodNames, loadout, retainLoadout } from './loadout.js';
+export { foodNames } from './loadout.js';
 
 export const heldId = (snap: QuestSnapshot, id: number): number => snap.invIds?.get(id) ?? 0;
 export const bankedId = (snap: QuestSnapshot, id: number): number => snap.bankIds?.get(id) ?? 0;
@@ -36,15 +37,8 @@ export const tinsayStage = (snap: QuestSnapshot): number => flagValue(snap.progr
 export const tamayuStage = (snap: QuestSnapshot): number => flagValue(snap.progress, TB_FLAG.TAMAYU) ?? TB_TAMAYU.UNKNOWN;
 export const tiadecheStage = (snap: QuestSnapshot): number => flagValue(snap.progress, TB_FLAG.TIADECHE) ?? 0;
 
-/** Food this quest will carry, the script's chosen food first. */
-export function foodNames(): string[] {
-    const chosen = QuestFood.name?.trim();
-    const names = [chosen, 'Lobster', 'Swordfish', 'Tuna', 'Trout', 'Salmon'].filter((n): n is string => Boolean(n));
-    return [...new Map(names.map(n => [n.toLowerCase(), n])).values()];
-}
-
 export function foodHeld(snap: QuestSnapshot): number {
-    return foodNames().reduce((total, name) => total + held(snap, name), 0);
+    return [...new Set(foodNames().flatMap(foodForms))].reduce((total, name) => total + held(snap, name), 0);
 }
 
 interface Supply {
@@ -61,36 +55,10 @@ const PESTLE: Supply = { name: TB_NAME.PESTLE, id: TB_ID.PESTLE, qty: 1, fromJim
 const TINDERBOX: Supply = { name: TB_NAME.TINDERBOX, id: TB_ID.TINDERBOX, qty: 1, fromJiminua: true };
 const SEAWEED: Supply = { name: TB_NAME.SEAWEED, id: TB_ID.SEAWEED, qty: 1 };
 
-// Why: a supply drops off the list once its leg is behind us, so the quest never crosses back to Ardougne for a knife it already used.
-
-/** Everything the legs still ahead of the bot consume. */
 export function outstandingSupplies(snap: QuestSnapshot): Supply[] {
-    const lubufu = lubufuStage(snap);
-    const tinsay = tinsayStage(snap);
-    const tamayu = tamayuStage(snap);
-    const out: Supply[] = [];
-    // Karambwanji bait Lubufu, load the vessel for Tiadeche, and grind into Tinsay's marinade.
-    if (lubufu < TB_LUBUFU.COMPLETE || tinsay < TB_TINSAY.COMPLETE) {
-        out.push(NET);
-    }
-    if (tinsay < TB_TINSAY.GIVEN_RUM) {
-        out.push(KNIFE);
-    }
-    if (tamayu < TB_TAMAYU.COMPLETE || tinsay < TB_TINSAY.COMPLETE) {
-        out.push(PESTLE);
-    }
-    if (tinsay < TB_TINSAY.COMPLETE) {
-        out.push(TINDERBOX);
-    }
-    // The sandwich consumes it, and the stage only advances when Tinsay eats, so a made sandwich retires the need.
-    if (tinsay < TB_TINSAY.GIVEN_SANDWICH && heldId(snap, TB_ID.SANDWICH) === 0) {
-        out.push(SEAWEED);
-    }
-    return out;
+    const tools = new Set(loadout(snap).tools);
+    return [NET, KNIFE, PESTLE, TINDERBOX, SEAWEED].filter(supply => tools.has(supply.id));
 }
-
-/** Kept by id, so all 3 "Karambwan vessel"s and all 3 "Karamjan rum"s survive a deposit. */
-export const TB_KEEP_IDS: readonly number[] = [...Object.values(TB_ID), ...TB_SPEAR_IDS, ...TB_POTION_IDS];
 
 // Why: a pack holding paste and no shaft still needs a spear.
 
@@ -171,15 +139,6 @@ export function arrowChoice(snap: QuestSnapshot): string | null {
 
 const scanBank: QuestStep = { kind: 'scanBank', bank: TB_TILE.ARDOUGNE_BANK };
 
-function keepNames(snap: QuestSnapshot): string[] {
-    const kit = [bowChoice(snap), arrowChoice(snap)].filter((n): n is string => Boolean(n));
-    const armour = TB_ARMOUR_SLOTS.flatMap(slot => {
-        const piece = armourChoice(snap, slot);
-        return piece ? [piece.name] : [];
-    });
-    return [...kit, ...armour, ...foodNames()].map(n => n.toLowerCase());
-}
-
 function wearAll(names: readonly string[]): QuestStep {
     return {
         kind: 'custom',
@@ -205,8 +164,24 @@ const buyAtJiminua = (item: string, qty: number): QuestStep => ({
     estGp: 150
 });
 
-/** Below this the pack cannot hold a fishing trip, so a bank visit deposits first. */
-const DEPOSIT_BELOW_FREE = 6;
+function clearSpace(snap: QuestSnapshot, removeFood = false): QuestStep | null {
+    if (heldId(snap, TB_ID.RUM) > 0) return { kind: 'wait', reason: 'make and deliver the Karamjan rum before leaving the island to bank' };
+    const names = new Map<number, string>([
+        ...ITEM_DB.map(item => [item.id, item.name] as [number, string]),
+        ...[NET, KNIFE, PESTLE, TINDERBOX, SEAWEED].map(item => [item.id, item.name] as [number, string])
+    ]);
+    const inventory = [...snap.invIds ?? []].map(([id, count]) => ({ id, count, name: names.get(id) ?? null }));
+    for (const [name, count] of snap.inv) {
+        const id = ITEM_DB.find(item => item.name.toLowerCase() === name)?.id;
+        if (id !== undefined && !inventory.some(item => item.id === id)) inventory.push({ id, count, name });
+    }
+    const retained = retainLoadout(snap, inventory, QuestFood.name);
+    const foods = new Set(foodNames().flatMap(foodForms));
+    const keepIds = retained.keepIds.filter(id => !removeFood || !foods.has(names.get(id)?.toLowerCase() ?? ''));
+    const caps = retained.caps.filter(cap => keepIds.includes(cap.id));
+    const expendable = inventory.some(item => !keepIds.includes(item.id)) || caps.length > 0;
+    return expendable ? { kind: 'deposit', keep: [], keepIds, caps, bank: TB_TILE.ARDOUGNE_BANK, exactKeep: true } : null;
+}
 
 // Why: this runs on every decide() tick, so each branch is idempotent and falls silent as soon as the pack is right.
 
@@ -215,6 +190,8 @@ const DEPOSIT_BELOW_FREE = 6;
  * @see docs/reference/quest-module-shape.md
  */
 export function prepare(snap: QuestSnapshot): QuestStep | null {
+    const plan = loadout(snap);
+    if (plan.deliverCatch || plan.compact) return null;
     const missing = outstandingSupplies(snap).filter(s => heldId(snap, s.id) < s.qty);
     const bow = bowChoice(snap);
     const arrows = arrowChoice(snap);
@@ -224,21 +201,24 @@ export function prepare(snap: QuestSnapshot): QuestStep | null {
     const gearMissing = [...kit.filter(name => !worn(snap, name)),
         ...armour.flatMap(({ piece }) => piece && !armourWorn(snap, piece) ? [piece.name] : [])];
     // Why: only an outstanding purchase justifies a crossing for coin; the ferry's own 30gp fare is covered by the float this withdraws.
-    const buying = tinsayStage(snap) < TB_TINSAY.GIVEN_RUM || missing.some(s => s.fromJiminua);
-    const coinsLow = buying && held(snap, TB_NAME.COINS) < 100;
+    const buying = plan.phase === 'rum' || missing.some(s => s.fromJiminua);
+    const coinsLow = held(snap, TB_NAME.COINS) < (buying ? 100 : 60);
     const starving = foodHeld(snap) === 0;
-    const wantSpear = spearWanted(snap);
-    const wantDoses = dosesWanted(snap);
+    const wantSpear = plan.spear && spearWanted(snap);
+    const wantDoses = plan.potions && dosesWanted(snap);
+
+    const carried = gearMissing.filter(name => held(snap, name) > 0);
+    if (carried.length > 0) return wearAll(carried);
+    const food = foodHeld(snap);
+    if (food > plan.food || (snap.freeSlots ?? 28) < plan.minFree) {
+        const space = clearSpace(snap) ?? clearSpace(snap, true);
+        if (space) return space;
+        return { kind: 'wait', reason: `${plan.phase} needs ${plan.minFree} free inventory slots` };
+    }
 
     if (missing.length === 0 && gearMissing.length === 0 && armourMissing.length === 0 && kit.length === 2 && !coinsLow && !starving
         && !wantSpear && !wantDoses) {
         return null;
-    }
-
-    // Wearing what is already in the pack never needs a bank.
-    const carried = gearMissing.filter(name => held(snap, name) > 0);
-    if (carried.length > 0) {
-        return wearAll(carried);
     }
 
     if (!snap.bankKnown) {
@@ -252,10 +232,6 @@ export function prepare(snap: QuestSnapshot): QuestStep | null {
         if (shopped) {
             return buyAtJiminua(shopped.name, shopped.qty);
         }
-    }
-
-    if ((snap.freeSlots ?? 28) < DEPOSIT_BELOW_FREE) {
-        return { kind: 'deposit', keep: keepNames(snap), keepIds: TB_KEEP_IDS, bank: TB_TILE.ARDOUGNE_BANK, exactKeep: true };
     }
 
     const fromBank: { name: string; qty: number; id?: number }[] = [];
@@ -299,10 +275,21 @@ export function prepare(snap: QuestSnapshot): QuestStep | null {
     if (coinsLow && banked(snap, TB_NAME.COINS) > 0) {
         fromBank.push({ name: TB_NAME.COINS, qty: COIN_TARGET });
     }
-    if (foodHeld(snap) < FOOD_TARGET) {
-        const stocked = foodNames().find(name => banked(snap, name) > 0);
-        if (stocked) {
-            fromBank.push({ name: stocked, qty: FOOD_TARGET - foodHeld(snap) });
+    const suppliesSlots = fromBank.reduce((total, item) => {
+        const stackable = item.name === TB_NAME.COINS || TB_ARROWS.includes(item.name);
+        return total + (stackable ? (held(snap, item.name) > 0 ? 0 : 1) : item.qty);
+    }, 0);
+    if (suppliesSlots + plan.minFree > (snap.freeSlots ?? 28)) {
+        return clearSpace(snap) ?? clearSpace(snap, true) ?? { kind: 'wait', reason: `${plan.phase} needs room for supplies and ${plan.minFree} free slots` };
+    }
+    const foodCapacity = Math.max(0, (snap.freeSlots ?? 28) - suppliesSlots - plan.minFree);
+    if (food < plan.food) {
+        const stocked = foodNames().flatMap(name => [name, ...foodForms(name).filter(form => form !== name.toLowerCase())])
+            .find(name => banked(snap, name) > 0);
+        if (stocked && foodCapacity > 0) {
+            fromBank.push({ name: stocked, qty: Math.min(plan.food - food, foodCapacity, banked(snap, stocked)) });
+        } else if (stocked && starving && fromBank.length === 0) {
+            return clearSpace(snap) ?? { kind: 'wait', reason: 'no room for combat food and Karambwan catches' };
         } else if (starving) {
             unavailable.push('any combat food');
         }

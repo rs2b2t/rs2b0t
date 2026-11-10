@@ -782,13 +782,13 @@ Banks at the nearest bank, withdraws unidentified herbs, cleans (identifies) eve
 
 ### HerbloreSecondaries
 
-Collects one herblore secondary — red spiders' eggs, snape grass, eye of newt, chocolate dust (buy+grind), white berries (dragonfire shield), toad's legs, or unicorn horn dust (grinds banked horns at the nearest bank) — with food on dangerous routes and a 5k coin cap for shops
+Collects red spiders' eggs, snape grass, eye of newt, chocolate dust, white berries, toad's legs, blue dragon scales, or unicorn horn dust. Blue dragon scales use the Taverley Dungeon, a Dusty key, and a dragonfire shield. Carries food on dangerous routes and caps shop coins at 5k.
 
 - Tags: `herblore`, `secondaries`, `banking`, `shopping`, `loot`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `secondary` | string | `"Red spiders' eggs"` | Secondary — one of: Red spiders' eggs, Snape grass, Eye of newt, Chocolate dust, White berries, Toad's legs, Unicorn horn dust |
+| `secondary` | string | `"Red spiders' eggs"` | Secondary — one of: Red spiders' eggs, Snape grass, Eye of newt, Chocolate dust, White berries, Toad's legs, Blue dragon scale, Unicorn horn dust |
 | `loadout` | string | `""` | Loadout — one of:  |
 | `foodWithdraw` | number (0–27) | `10` | Food to withdraw |
 
@@ -802,7 +802,7 @@ Banks at the nearest bank, withdraws vials of water and a chosen herb, spam-make
 |---|---|---|---|
 | `herb` | string | `"Custom"` | Herb — one of: Guam leaf, Marrentill, Tarromin, Harralander, Ranarr weed, Toadflax, Irit leaf, Avantoe, Kwuarm, Snapdragon, Cadantine, Lantadyme, Dwarf weed, Torstol, Custom |
 | `herbCustom` | string | `"Guam leaf"` | Custom herb |
-| `secondary` | string | `"Custom"` | Secondary — one of: Eye of newt, Red spiders' eggs, Limpwurt root, Snape grass, Unicorn horn dust, White berries, Dragon scale dust, Wine of zamorak, Jangerberries, Custom |
+| `secondary` | string | `"Custom"` | Secondary — one of: Toad's legs, Eye of newt, Red spiders' eggs, Limpwurt root, Snape grass, Unicorn horn dust, White berries, Dragon scale dust, Wine of zamorak, Jangerberries, Custom |
 | `secondaryCustom` | string | `"Eye of newt"` | Custom secondary |
 
 ### RoguesPurse

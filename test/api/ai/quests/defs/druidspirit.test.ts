@@ -212,6 +212,17 @@ describe('nature spirit decide', () => {
         })).toMatchObject({ kind: 'withdraw', items: [{ name: 'Druid pouch', id: NS_ID.POUCH, qty: 3 }] });
     });
 
+    test.each([CAMP, GROTTO])('a missing pouch is replaced from the grotto spawn at %o', tile => {
+        expect(named(step({ stage: NS_STAGE.ADDED_POUCH, tile, invIds: [[NS_ID.SICKLE_BLESSED, 1]] })))
+            .toBe('replace the druid pouch');
+    });
+
+    test('an unread bank is checked before fetching a replacement pouch', () => {
+        const state = snap({ stage: NS_STAGE.ADDED_POUCH, invIds: [[NS_ID.SICKLE_BLESSED, 1]] });
+        state.bankKnown = false;
+        expect(decide(state)).toEqual({ kind: 'scanBank' });
+    });
+
     test('three harvests fill the pouch on an empty bar — filling costs no prayer', () => {
         expect(named(step({
             stage: NS_STAGE.PICKED_SICKLE,

@@ -287,7 +287,7 @@ export function blackarmArmbandStep(snap: QuestSnapshot, stage: number): QuestSt
             if (heldId(snap, HERO_ID.MISC_KEY) === 0 && shouldFetchKey()) {
                 return { kind: 'custom', name: 'ask Grip for a job, which hands over his spare key', run: askGripForKey };
             }
-            return { kind: 'custom', name: 'lure Grip to the arrow slit for the rival', run: lureGripAndTakeKeyring };
+            return { kind: 'custom', cooperative: true, name: 'lure Grip to the arrow slit for the rival', run: lureGripAndTakeKeyring };
 
         case HERO_STAGE.BLACKARM_LOOTED:
             if (heldId(snap, HERO_ID.CANDLESTICK) === 0) {

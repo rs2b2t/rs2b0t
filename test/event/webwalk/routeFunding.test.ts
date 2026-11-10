@@ -84,6 +84,20 @@ describe.skipIf(!packExists)('route funding with the real navigation pack', () =
         expect(here).toEqual(trufitus);
     });
 
+    test('a timeout after funding the route does not retain the missing fare diagnostic', async () => {
+        coins = 0;
+        spyOn(Object.getPrototypeOf(WalkExecutor), 'followPath').mockImplementation(async () => {
+            here = { x: 2850, z: 3170, level: 0 };
+            coins -= 30;
+            return 'failed';
+        });
+        expect(await WalkExecutor.walkTo(ardougne, { useTeleportCatalog: false, avoidZones: ['white-wolf-mountain'] })).toBe(false);
+        expect(withdrawn).toBe(60);
+        expect(coins).toBe(30);
+        expect(WalkExecutor.lastOutcome).toBe('failed');
+        expect(WalkExecutor.lastMissingGateItems).toEqual([]);
+    });
+
     test('keeps the missing fare diagnostic when the first withdrawal fails', async () => {
         here = { x: 2615, z: 3332, level: 0 };
         coins = 0;

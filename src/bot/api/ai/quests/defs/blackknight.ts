@@ -98,6 +98,7 @@ async function pickCabbage(log: (m: string) => void): Promise<boolean> {
 }
 
 export const blackknight: QuestModule = {
+    autoRetaliate: false,
     record: QUESTS.find(r => r.id === 'blackknight')!,
     bank: new Tile(2946, 3369, 0),
     readStage,

@@ -32,6 +32,10 @@ describe('arrav handoffs', () => {
         expect(decideHandoff(input({ hasKey: true }))).toBe('give-key');
     });
 
+    test('a joined counterpart is not offered an obsolete store key', () => {
+        expect(decideHandoff(input({ hasKey: true, hasOwnHalf: true, partnerStage: SOA_STAGE.BLACKARM_JOINED }))).toBe('take-half');
+    });
+
     test('a phoenix bot below the join has no key to give', () => {
         expect(decideHandoff(input({ stage: SOA_STAGE.KILL_JONNY, hasKey: true }))).toBeNull();
     });

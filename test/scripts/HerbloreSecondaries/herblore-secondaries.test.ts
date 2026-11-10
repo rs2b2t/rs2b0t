@@ -18,8 +18,22 @@ describe('HerbloreSecondaries catalog', () => {
     test('covers every secondary the issue names', () => {
         const ids = SECONDARIES.map(s => s.id).sort();
         expect(ids as string[]).toEqual(
-            ['chocolate_dust', 'eye_of_newt', 'red_spiders_eggs', 'snape_grass', 'toads_legs', 'unicorn_horn_dust', 'white_berries']
+            ['blue_dragon_scale', 'chocolate_dust', 'eye_of_newt', 'red_spiders_eggs', 'snape_grass', 'toads_legs', 'unicorn_horn_dust', 'white_berries']
         );
+    });
+
+    test('blue dragon scales collect raw scales and keep their return-trip supplies', () => {
+        const scales = secondaryByName('Blue dragon scale');
+        expect(scales).not.toBeNull();
+        if (!scales) return;
+        expect(scales.mode).toBe('loot');
+        expect(scales.needShield).toBe(true);
+        expect(scales.takeFood).toBe(true);
+        const keep = keepOnDeposit(scales, 'Lobster');
+        expect(keep).toContain('Dusty key');
+        expect(keep).toContain('Dragonfire shield');
+        expect(keep).toContain('Lobster');
+        expect(keep).not.toContain('Blue dragon scale');
     });
 
     test('white berries requires the dragonfire shield', () => {

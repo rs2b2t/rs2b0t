@@ -81,11 +81,11 @@ export type QuestStep =
     | { kind: 'equip'; item: string }
     | { kind: 'scanBank'; bank?: Tile }
     | { kind: 'withdraw'; items: { name: string; qty: number; id?: number }[]; bank?: Tile; leaveOpen?: boolean }
-    | { kind: 'deposit'; keep: string[]; keepIds?: readonly number[]; bank?: Tile; leaveOpen?: boolean; exactKeep?: boolean }
+    | { kind: 'deposit'; keep: string[]; caps?: readonly { id: number; qty: number }[]; keepIds?: readonly number[]; bank?: Tile; leaveOpen?: boolean; exactKeep?: boolean }
     | { kind: 'mineRock'; rock: string; item: string; qty: number; anchor: Tile }
     | { kind: 'buy'; item: string; qty: number; shop: { npc: string; anchor: Tile }; estGp: number; bank?: Tile }
-    | { kind: 'custom'; name: string; run: (log: (m: string) => void) => Promise<boolean> }
-    | { kind: 'wait'; reason: string }
+    | { kind: 'custom'; name: string; cooperative?: boolean; run: (log: (m: string) => void) => Promise<boolean> }
+    | { kind: 'wait'; reason: string; cooperative?: boolean }
     | { kind: 'done' };
 
 export type ProtectionKind = 'melee' | 'magic' | 'missiles';
@@ -105,6 +105,7 @@ export interface QuestSustain {
 
 export interface QuestModule {
     record: QuestRecord;
+    autoRetaliate?: boolean | ((snap: QuestSnapshot) => boolean);
     onStart?: () => void;
     hops?: LadderHop[];
     // Why: most quests sit in one town, so naming its bank beats working it out.

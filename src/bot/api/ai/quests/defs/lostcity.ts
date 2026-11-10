@@ -664,6 +664,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const lostcity: QuestModule = {
+    autoRetaliate: snap => lostCityArea(snap.tile) !== 'dungeon' || !hasAxe(snap),
     record: QUESTS.find(r => r.id === 'zanaris')!,
     bank: DRAYNOR_BANK,
     grind: ['Zombie', 'Tree spirit'],

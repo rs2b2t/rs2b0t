@@ -102,6 +102,7 @@ export function decideAt(snap: QuestSnapshot, miningLevel: number, smithingLevel
 export const decide = (snap: QuestSnapshot): QuestStep => decideAt(snap, Skills.level('mining'), Skills.level('smithing'));
 
 export const knightssword: QuestModule = {
+    autoRetaliate: false,
     record: QUESTS.find(r => r.id === 'squire')!,
     // Why: bank contents are global across the 4 towns, so pinning one booth costs a kingdom-crossing on every leg that touches it.
     bank: 'nearest',

@@ -223,6 +223,16 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
                 ok = await Bank.backpackReady(undefined, log)
                     && Inventory.items().every(item => kept(item.name ?? '', item.id));
             }
+            for (const cap of step.caps ?? []) {
+                while (ok && Inventory.countById(cap.id) > cap.qty) {
+                    const before = Inventory.countById(cap.id);
+                    const item = Inventory.items().find(item => item.id === cap.id);
+                    const op = item?.actions().find(op => /^deposit[\s-]+1$/i.test(op));
+                    ok = Boolean(item && op && await item.interact(op)
+                        && await Execution.delayUntil(() => Inventory.countById(cap.id) < before, 3000)
+                        && await Bank.backpackReady(undefined, log));
+                }
+            }
             if (!ok) {
                 log('deposit: backpack contents did not confirm the deposit');
             }

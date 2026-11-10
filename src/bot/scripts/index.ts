@@ -621,7 +621,7 @@ ScriptRegistry.register({
 ScriptRegistry.register({
     name: 'HerbloreSecondaries',
     description:
-        "Collects one herblore secondary — red spiders' eggs, snape grass, eye of newt, chocolate dust (buy+grind), white berries (dragonfire shield), toad's legs, or unicorn horn dust (grinds banked horns at the nearest bank) — with food on dangerous routes and a 5k coin cap for shops",
+        "Collects red spiders' eggs, snape grass, eye of newt, chocolate dust, white berries, toad's legs, blue dragon scales, or unicorn horn dust. Blue dragon scales use the Taverley Dungeon, a Dusty key, and a dragonfire shield. Carries food on dangerous routes and caps shop coins at 5k.",
     category: 'Herblore',
     tags: ['herblore', 'secondaries', 'banking', 'shopping', 'loot'],
     settingsSchema: HERBLORE_SECONDARIES_SETTINGS,
