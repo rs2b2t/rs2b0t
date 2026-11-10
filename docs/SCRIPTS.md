@@ -779,6 +779,7 @@ Banks at the nearest bank, withdraws unidentified herbs, cleans (identifies) eve
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `herbs` | string[] | `[]` | Herbs to clean — one of: Guam leaf, Marrentill, Tarromin, Harralander, Ranarr weed, Toadflax, Irit leaf, Avantoe, Kwuarm, Snapdragon, Cadantine, Lantadyme, Dwarf weed, Torstol, Snake weed, Ardrigal, Sito foil, Volencia moss, Rogues purse |
+| `fastBank` | boolean | `true` | Instant bank leg |
 
 ### HerbloreSecondaries
 

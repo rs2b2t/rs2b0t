@@ -1061,6 +1061,14 @@ export const CASES: readonly Case[] = [
         note: 'two herbs selected and only one banked; the run waits for the absent one to be marked and the script to stop'
     },
     {
+        id: 'herbcleaner-bank-live',
+        harness: 'herbcleaner-bank-live.ts',
+        covers: { scripts: ['HerbCleaner'] },
+        status: 'unvetted',
+        budgetMin: 5,
+        note: 'Varrock West stocked with guam and marrentill: reports cleaned herbs/min, bank trips and instant-leg hits. Requires ENGINE_DIR for an isolated client deployment.'
+    },
+    {
         id: 'hazeel-cult-248-live',
         harness: 'hazeel-cult-248-live.ts',
         covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },

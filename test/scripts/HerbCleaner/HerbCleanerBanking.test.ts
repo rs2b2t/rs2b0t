@@ -1,5 +1,6 @@
 import { afterEach, expect, mock, spyOn, test } from 'bun:test';
-import { reader, type InvItemSnapshot } from '#/bot/adapter/ClientAdapter.js';
+import { actions, reader, type InvItemSnapshot } from '#/bot/adapter/ClientAdapter.js';
+import { Input } from '#/bot/input/Input.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
 import { Game } from '#/bot/api/game/Game.js';
@@ -140,5 +141,38 @@ test('empty stock does not stop the script before a failed close is retried', as
     await bot.loop();
     expect(state.open).toBe(true);
     await bot.loop();
+    expect(state.open).toBe(false);
+});
+
+test('instant bank deposits the pack and withdraws a full load in one send-order pass', async () => {
+    const { bot, state } = await fixture();
+    state.pack = items(249, 5);
+    const sends: string[] = [];
+    const bankRows = (id: number, count: number): InvItemSnapshot[] =>
+        Array.from({ length: count }, (_, slot) => ({ id, name: 'Herb', count: 1, slot, comId: 5382, ops: ['Withdraw-All'] }));
+    spyOn(reader, 'bankSideItems').mockImplementation(() =>
+        state.pack.map((item, slot) => ({ ...item, slot, comId: 5064, ops: ['Deposit-All'] })));
+    spyOn(Bank, 'items').mockImplementation(() => [...bankRows(199, 100), ...bankRows(201, 100)]);
+    spyOn(Input, 'invButton').mockImplementation((id, _slot, comId) => {
+        sends.push(comId === 5064 ? `deposit:${id}` : `withdraw:${id}`);
+        if (comId === 5064) {
+            const take = state.pack.filter(item => item.id === id).length;
+            state.pack = state.pack.filter(item => item.id !== id);
+            state.stock.set(id, (state.stock.get(id) ?? 0) + take);
+        } else {
+            const take = Math.min(28 - state.pack.length, state.stock.get(id) ?? 0);
+            state.stock.set(id, (state.stock.get(id) ?? 0) - take);
+            state.pack.push(...items(id, take));
+        }
+        return true;
+    });
+    spyOn(actions, 'closeModal').mockImplementation(() => { state.open = false; return true; });
+    const slow = spyOn(Bank, 'withdrawLoad');
+
+    await bot.loop();
+
+    expect(sends).toEqual(['deposit:249', 'withdraw:199', 'withdraw:201']);
+    expect(slow).not.toHaveBeenCalled();
+    expect(state.pack.map(item => item.id)).toEqual(Array(28).fill(199));
     expect(state.open).toBe(false);
 });

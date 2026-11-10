@@ -33,3 +33,14 @@ export function eligibleHerbs(herbloreLevel: number, selected: readonly string[]
 
 /** Chat refusal from the engine when Herblore is below the herb's level, or the world is non-members. */
 export const CANNOT_IDENTIFY = /you cannot identify this herb|need to be on a members['’]? world/i;
+
+/** 1-based button op index matching `pattern`, or -1. */
+export function opIndex(ops: readonly (string | null)[], pattern: RegExp): number {
+    for (let i = 0; i < ops.length; i++) {
+        const op = ops[i];
+        if (op !== null && pattern.test(op)) {
+            return i + 1;
+        }
+    }
+    return -1;
+}
