@@ -131,12 +131,14 @@ async function useUnicornTunnel(log: (m: string) => void): Promise<boolean> {
 
 /** Why: the proven cage/dig/ledge/railing chain gets out of the well corridor; the pipe and unicorn tunnel then drop into the temple shelf. The pipe's landing changes with the stage, so the generic seam handles it rather than the fixed landing table. */
 async function reachTempleShelf(log: (m: string) => void): Promise<boolean> {
-    if (!(await crossChain(TO_RAILINGS, log))) {
-        return false;
-    }
-    // Why: the pipe lands on the loose-railing side; the cage is the stand that reaches the unicorn side of the 3-way tunnel, which is the end that drops into the temple shelf.
+    // Why: after the post-kill pipe the landing is already past the one-way chain, in the unicorn room; restarting at the cage is the loop where its stand is unreachable. If the cage walks from here, the chain is behind us.
     if (!(await walkTo(UP_TILE.UNICORN_CAGE, 3, log))) {
-        return false;
+        if (!(await crossChain(TO_RAILINGS, log))) {
+            return false;
+        }
+        if (!(await walkTo(UP_TILE.UNICORN_CAGE, 3, log))) {
+            return false;
+        }
     }
     if (!(await useUnicornTunnel(log))) {
         return false;
