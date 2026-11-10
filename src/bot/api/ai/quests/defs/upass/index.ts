@@ -28,7 +28,8 @@ import {
     crossTheTemple,
     crushUnicorn,
     enterMainCavern,
-    takeRailing
+    takeRailing,
+    takeUnicornHorn
 } from './area2.js';
 import {
     ascendFromDwarves,
@@ -235,12 +236,31 @@ function orbLeg(snap: QuestSnapshot): QuestStep {
     return custom('take and burn the four orbs, then climb the well', sweepOrbs);
 }
 
+// Why: at stage 4 the unicorn is dead but a respawn has lost the railing; the boulder is already down, so cross the same one-way corridor if needed and take the horn, with no lever to fetch.
+async function reachRuinedCage(log: (m: string) => void): Promise<boolean> {
+    if (!(await walkTo(UP_TILE.UNICORN_CAGE, 3, log))) {
+        const next = outstandingCrossing();
+        if (next !== null) {
+            return takeNextCrossing(log);
+        }
+    }
+    return takeUnicornHorn(log);
+}
+
 // Why: stages 3 and 4 are one leg because the journal can't tell them apart, both print "I must work my way deeper into these caverns" and differ only in which line is struck through. The horn is what the snapshot can see, so it ends the step.
 function unicornLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
     if (held(snap, UP_ITEM.UNICORN_HORN) > 0 || badgesHeld(snap) > 0 || area !== 'area2') {
+        // Why: at stage 4 the horn is in hand inside the crushed-cage room; the way to the paladins is the unicorn tunnel, and the journal cannot report where its angle-dependent landing goes.
+        if (area === 'area2' && (held(snap, UP_ITEM.UNICORN_HORN) > 0 || badgesHeld(snap) > 0)) {
+            return custom('take the unicorn tunnel down', useUnicornTunnel);
+        }
         return paladinLeg();
     }
     if (held(snap, UP_ITEM.RAILING) === 0) {
+        // Why: after the unicorn is dead a respawn has lost the railing, but the boulder is already down; crossing the cage corridor and taking the horn needs no lever. Re-fetching a railing behind the one-way pipe is the loop.
+        if (snap.stage === UP_STAGE.KILLED_UNICORN) {
+            return custom('reach the ruined unicorn cage', reachRuinedCage);
+        }
         // Why: 6 crossings stand between the well's corridor and that cage, and the engine recognises "the same step" by description alone, so one step for all of them never resets the attempt counter and the watchdog parks it. Each crossing is its own step.
         const next = outstandingCrossing();
         if (next !== null) {

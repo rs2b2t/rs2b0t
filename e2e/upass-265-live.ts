@@ -43,6 +43,8 @@ interface Args {
     respawnAtBank: boolean;
     /** Teleport straight to Kalrag with the doll and the ashes flag, and pass on the blood bit. */
     kalrag: boolean;
+    /** Pass when the unicorn tunnel lands in the first cavern, proving the post-kill room exit. */
+    unicorn: boolean;
 }
 
 function parse(argv: string[]): Args {
@@ -61,7 +63,8 @@ function parse(argv: string[]): Args {
         deploy: true,
         respawn: false,
         respawnAtBank: false,
-        kalrag: false
+        kalrag: false,
+        unicorn: false
     };
     for (let i = 0; i < argv.length; i++) {
         const flag = argv[i];
@@ -70,6 +73,7 @@ function parse(argv: string[]): Args {
         if (flag === '--respawn') { out.respawn = true; continue; }
         if (flag === '--respawn-bank') { out.respawnAtBank = true; continue; }
         if (flag === '--kalrag') { out.kalrag = true; continue; }
+        if (flag === '--unicorn') { out.unicorn = true; continue; }
         const value = argv[++i];
         if (value === undefined) { break; }
         if (flag === '--base') { out.base = value; }
@@ -412,6 +416,7 @@ try {
     let reached = args.stage;
     let queueChecked = false;
     let sawReentry = false;
+    let sawTunnel = false;
     while (Date.now() < deadline) {
         const last = await snapshot(page);
         // Why: reject a shared bundle replaced by another session during boot.
@@ -431,6 +436,9 @@ try {
             if (line.msg.includes('return to the underground pass')) {
                 sawReentry = true;
             }
+            if (line.msg.includes('the unicorn tunnel dropped us at')) {
+                sawTunnel = true;
+            }
         }
         if (args.kalrag) {
             const flags = (await getServerVarQuiet(page, 'ibanmulti')) ?? 0;
@@ -444,7 +452,11 @@ try {
             reached = stage;
             console.log(`  >> %upass reached ${reached}`);
         }
-        if (respawnMode) {
+        if (args.unicorn && sawTunnel) {
+            console.log(`PASS (unicorn tunnel exit, ${Math.round((Date.now() - t0) / 1000)}s)`);
+            process.exit(0);
+        }
+        if (respawnMode && !args.unicorn) {
             const pos = last.pos;
             if (inStageArea(args.stage, pos) && sawReentry) {
                 console.log(`PASS (respawn re-entry at ${pos?.x},${pos?.z},${pos?.level}, %upass ${reached}, ${Math.round((Date.now() - t0) / 1000)}s)`);

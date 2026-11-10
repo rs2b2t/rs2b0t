@@ -85,14 +85,17 @@ describe('Underground Pass decide()', () => {
         expect(reasonOf(step)).toContain('melee weapon');
     });
 
-    // Why: the journal cannot distinguish these stages; the horn marks the leg complete.
+    // Why: the journal cannot distinguish these stages; the horn marks the leg complete, and until the tunnel is taken it is still in area2.
     test('the unicorn leg is keyed on the horn, not on the stage', () => {
         const inArea2 = { x: 2396, z: 9600, level: 0 };
+        const shelf = { x: 2371, z: 9666, level: 0 };
         for (const stage of [UP_STAGE.ENTERED_SECOND_AREA, UP_STAGE.KILLED_UNICORN]) {
             const before = decide(snapshot({ stage, tile: inArea2, carried: [UP_ITEM.RAILING.id] }));
             expect(nameOf(before)).toContain('crush the unicorn');
             const after = decide(snapshot({ stage, tile: inArea2, carried: [UP_ITEM.UNICORN_HORN.id] }));
-            expect(nameOf(after)).toContain('crests');
+            expect(nameOf(after)).toContain('unicorn tunnel');
+            const across = decide(snapshot({ stage, tile: shelf, carried: [UP_ITEM.UNICORN_HORN.id] }));
+            expect(nameOf(across)).toContain('crests');
         }
     });
 
