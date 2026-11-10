@@ -175,7 +175,7 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
             .within(8)
             .results();
         // Why: the player can only swing at one NPC, so two or more melee spiders is a damage race a 1-Prayer account loses. Once the bar is down to 60%, run clear instead of trading; Kalrag's hunt range can follow, the spiders' usually cannot.
-        const onUs = nearby.filter(npc => npc.targetsMe() || npc.anim === SPIDER_ATTACK_ANIM);
+        const onUs = nearby.filter(npc => npc.targetsMe() || npc.snap.anim === SPIDER_ATTACK_ANIM);
         if (onUs.length >= 2 && fleeTo && Skills.effective('hitpoints') < Skills.level('hitpoints') * 0.6) {
             log(`${onUs.length} spiders on us — running clear`);
             await breakOff(live.tile(), log, fleeTo);
@@ -185,7 +185,7 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
             dealt = false;
             continue;
         }
-        const blocker = nearby.find(npc => npc.anim === SPIDER_ATTACK_ANIM)
+        const blocker = nearby.find(npc => npc.snap.anim === SPIDER_ATTACK_ANIM)
             ?? nearby.find(npc => npc.targetsMe())
             ?? null;
         const anchor = live.tile();
