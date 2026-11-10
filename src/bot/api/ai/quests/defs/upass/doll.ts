@@ -273,10 +273,14 @@ export async function killDemon(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     // Why: the amulet is added by the death script a tick after the hp bar empties, so a single query after the fight loses it to the lootdrop timer.
-    const findDrop = () => GroundItems.query().where(item => item.id === owed.amulet.id).within(12).nearest();
+    const findDrop = () => GroundItems.query().where(item => item.id === owed.amulet.id).within(20).nearest();
     if (!(await driveUntil(() => findDrop() !== null, [], log, 8_000))) {
-        log(`${owed.name} died but left no amulet in reach`);
-        return false;
+        // Why: a collapsed bridge can finish the kill out of the loaded scene; returning to the demon's stand is what brings the drop back into query range.
+        await walkTo(owed.tile, 3, log);
+        if (!(await driveUntil(() => findDrop() !== null, [], log, 8_000))) {
+            log(`${owed.name} died but left no amulet in reach`);
+            return false;
+        }
     }
     const drop = findDrop();
     if (!drop || !(await walkTo(drop.tile(), 1, log)) || !(await drop.interact('Take'))) {
