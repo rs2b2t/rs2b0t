@@ -617,13 +617,10 @@ function needsBankTrip(plan: FletchPlan) {
     if (plan.bank && bowCount() > 0) {
         return true;
     }
-    if (!plan.fletch && logCount() > 0 && Inventory.isFull()) {
-        return true;
-    }
     if (plan.fletch && logCount() === 0 && bowCount() > 0) {
         return true;
     }
-    return !plan.fletch && logCount() > 0 && Inventory.isFull();
+    return Inventory.isFull() && Inventory.items().some(item => !isKeepTool(item.name));
 }
 
 export default class GnomeMagicChopper extends LoopingBot {

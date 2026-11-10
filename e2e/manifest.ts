@@ -12,6 +12,15 @@ export const CASES: readonly Case[] = [
         note: 'Starts north of the bank and checks the northern staircase ascent during gear bootstrap. Requires ENGINE_DIR for an isolated client deployment.'
     },
     {
+        id: 'gnome-magic-full-pack-fruit-live',
+        harness: 'gnome-fruit-bank-live.ts',
+        covers: { scripts: ['GnomeMagicChopper'] },
+        status: 'unvetted',
+        manual: true,
+        budgetMin: 12,
+        note: 'Seeds a full 28-slot pack with Strange fruit after the first log bank trip; the script must bank the fruit and resume chopping. Requires a local revision-289 engine and per-account cheats.'
+    },
+    {
         id: 'desktop-storage-ipc',
         harness: 'desktop-storage-ipc-test.ts',
         covers: { subsystems: ['multibox'] },
