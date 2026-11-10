@@ -459,6 +459,20 @@ describe('Underground Pass decide()', () => {
         expect(nameOf(step)).toBe('get a meal from Kamen');
     });
 
+    // Why: the demon platforms sit one wall tunnel above Kamen; a low pack there must walk down rather than start another demon with nothing left.
+    test('a low food pack on the demon platforms fetches a Kamen meal first', () => {
+        const lowFood: Stack[] = [
+            ...KIT.filter(stack => (Array.isArray(stack) ? stack[0] : stack) !== UP_ITEM.LOBSTER.id),
+            [UP_ITEM.LOBSTER.id, 5]
+        ];
+        const step = decide(snapshot({
+            stage: UP_STAGE.FOUND_DOLL,
+            carried: lowFood,
+            tile: { x: 2134, z: 4565, level: 1 }
+        }));
+        expect(nameOf(step)).toBe('get a meal from Kamen');
+    });
+
     test('a stocked pack still goes straight for Kalrag', () => {
         const step = decide(snapshot({
             stage: UP_STAGE.FOUND_DOLL,

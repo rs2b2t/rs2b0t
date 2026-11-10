@@ -246,13 +246,19 @@ function witchLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
     return custom("open Kardia's chest and take the doll", lootWitchChest);
 }
 
-// Why: Kamen hands out a meal in the dwarves camp, and that camp is the same pocket as Kalrag, so a fight that burns the food down to the last few items can walk back fed instead of dying below the well, where no bank can be reached.
-async function restockLeg(log: (m: string) => void): Promise<boolean> {
-    if (!(await buyKamenMeal(log))) {
-        return false;
-    }
-    noteRestock();
-    return true;
+// Why: Kamen hands out a meal in the dwarves camp, and that camp is reachable from the level-1 platforms through the wall tunnel, so a fight that burns the food down to six items can walk back fed instead of dying below the well.
+function restockStep(area: UpassArea): QuestStep {
+    return custom('get a meal from Kamen', async log => {
+        if (area !== 'dwarves' && area !== 'kalrag' && !(await descendToDwarves(log))) {
+            log('no route down to Kamen from here');
+            return false;
+        }
+        if (!(await buyKamenMeal(log))) {
+            return false;
+        }
+        noteRestock();
+        return true;
+    });
 }
 
 // Why: the 4 elements are ordered by where they are: ashes and blood hang off the 2 wall tunnels, shadow and conscience off the level-1 platforms, so each tunnel is used once.
@@ -418,11 +424,15 @@ export function decide(snap: QuestSnapshot): QuestStep {
             reason: `"${lastStep || 'the last step'}" has failed ${snap.noProgress} times with no progress; stopping instead of retrying the same route`
         };
     }
-    // Why: the last few lobsters are not enough for Kalrag plus a demon, and there is no bank below the well; the dwarves camp has Kamen, so top up there before the next swing rather than starting a fight that ends in a death.
+    // Why: the last few lobsters are not enough for Kalrag plus a demon, and there is no bank below the well; the dwarves camp has Kamen, so top up there before the next swing rather than starting a fight that ends in a death. A finished doll and Kardia's locked house are one-room jobs that must finish where they stand.
+    const nearKamen = area === 'dwarves' || area === 'kalrag' || area === 'main' || area === 'witch' || area === 'temple';
+    const dollReady = (snap.stage === UP_STAGE.FOUND_DOLL || snap.stage === UP_STAGE.CONFRONTED_IBAN)
+        && flag(snap, UP_FLAG.DOLL_COMPLETE);
     if (snap.stage >= UP_STAGE.FOUND_DOLL && snap.stage < UP_STAGE.DEFEATED_IBAN
-        && (area === 'dwarves' || area === 'kalrag')
+        && nearKamen && !dollReady
+        && !insideWitchHouse(snap.tile) && !insideIbanTemple(snap.tile)
         && foodInPack(snap) <= FOOD_RETREAT && canRestock()) {
-        return custom('get a meal from Kamen', restockLeg);
+        return restockStep(area);
     }
     return stageStep(snap, area, snap.stage);
 }

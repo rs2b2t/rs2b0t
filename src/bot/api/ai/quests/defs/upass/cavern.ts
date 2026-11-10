@@ -8,14 +8,14 @@ import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Modals } from '../../../../ui/widgets/Modals.js';
 import { Reach } from '../../../../walking/Reach.js';
 import Tile from '../../../../../geometry/Tile.js';
-import { talkStrict } from '../../exec/primitives.js';
+import { talkChoosingBy, talkStrict, type LineRule } from '../../exec/primitives.js';
 import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import { DirectNavigator } from '../../../../../event/webwalk/DirectNavigator.js';
 import { UP_ITEM, UP_LOC, UP_NPC, UP_TILE, insideWitchHouse } from './areas.js';
 import { driveThroughBoxes, locById, walkTo } from './bridge.js';
 import { chestForm } from './chest.js';
 
-async function talkTo(npcId: number, name: string, near: Tile, prefer: string[], log: (m: string) => void): Promise<boolean> {
+async function talkTo(npcId: number, name: string, near: Tile, prefer: string[], log: (m: string) => void, rules?: readonly LineRule[]): Promise<boolean> {
     if (!(await walkTo(near, 2, log))) {
         return false;
     }
@@ -29,7 +29,9 @@ async function talkTo(npcId: number, name: string, near: Tile, prefer: string[],
         log(`no dialogue with ${name}`);
         return false;
     }
-    return talkStrict(npc.name ?? name, prefer, log);
+    return rules
+        ? talkChoosingBy(npc.name ?? name, rules, prefer, log)
+        : talkStrict(npc.name ?? name, prefer, log);
 }
 
 /** Down the wall tunnel into the dwarves' cave. */
@@ -77,11 +79,27 @@ function mealCount(): number {
         sum + (item.name !== null && MEAL_WORDS.includes(item.name.toLowerCase()) ? item.count : 0), 0);
 }
 
-/** Kamen's brew makes him hand over a free meal; the only food inside the pass once the bank is behind you. */
+const KAMEN_MEAL_GP = 75;
+const KAMEN_RULES: readonly LineRule[] = [
+    // Why: the first page offers the brew; turning it down is what opens the paid meal, which costs no HP and no Agility.
+    { whenLine: 'want some', choose: 'No thanks.' },
+    { whenLine: 'few coins', choose: 'Okay then.' }
+];
+
+/** Kamen sells meat pie, stew and bread for 75gp; the only repeatable food inside the pass. */
 export async function buyKamenMeal(log: (m: string) => void): Promise<boolean> {
     const before = mealCount();
-    if (!(await talkTo(UP_NPC.KAMEN, 'Kamen', UP_TILE.KAMEN, ['Okay then.'], log))) {
+    const paid = heldId(UP_ITEM.COINS.id) >= KAMEN_MEAL_GP;
+    let talked = await talkTo(UP_NPC.KAMEN, 'Kamen', UP_TILE.KAMEN, paid ? [] : ['Okay then.'], log, paid ? KAMEN_RULES : undefined);
+    if (!talked && paid) {
+        // Why: a rule miss must still leave the fight with food; the brew is worse but free.
+        talked = await talkTo(UP_NPC.KAMEN, 'Kamen', UP_TILE.KAMEN, ['Okay then.'], log);
+    }
+    if (!talked) {
         return false;
+    }
+    if (!paid) {
+        log('not enough coins for Kamen; took the free brew instead');
     }
     // Why: the dialogue closes before the client's inventory snapshot catches up, so the first read after the last line still shows the old pack and a synchronous check fails a meal that did arrive.
     if (!(await Execution.delayUntil(() => mealCount() > before, 3_000))) {

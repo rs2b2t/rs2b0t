@@ -226,7 +226,7 @@ export async function killDemon(log: (m: string) => void): Promise<boolean> {
     if (!owed) {
         return true;
     }
-    if (!(await killNpc(owed.npc, owed.tile, owed.name, log))) {
+    if (!(await killNpc(owed.npc, owed.tile, owed.name, log, canRestock()))) {
         return false;
     }
     // Why: the amulet is added by the death script a tick after the hp bar empties, so a single query after the fight loses it to the lootdrop timer.

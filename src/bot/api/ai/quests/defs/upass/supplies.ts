@@ -12,9 +12,11 @@ export const ARROW_TARGET = 50;
 // Why: the grid crossing and the orb corridor alone cost 8 lobsters, and the traps below are timer damage you walk into. Koftik, the paladins and Nilhoof give a dozen food between them, but as separate stacks that each take a slot, so the float covers the trapped stretches.
 // Why: food is not stackable, so each lobster is a slot. 14 is the tested ceiling: the orb sweep (6 kit + railing + 4 orbs) and Kardia's chest (doll, book, 2 potions) both still fit, while 16 leaves the pack one slot short at the chest.
 export const FOOD_TARGET = 16;
-// Why: Kamen's free meal is the only food inside the pass, so a fight that runs the pack down to a few items breaks off and walks there instead of tanking to a death; 3 meals is the cap the restock step is allowed.
-export const FOOD_RETREAT = 3;
-export const FOOD_RESTOCKS = 3;
+// Why: Kamen's meal is the only food inside the pass, so a fight that runs the pack down to six items breaks off and walks there instead of tanking to a death; the coin float pays for eight meals.
+export const FOOD_RETREAT = 6;
+export const FOOD_RESTOCKS = 8;
+/** Coins to carry for Kamen's paid meal: 75gp for meat pie, stew and bread, eight meals. */
+export const COIN_FLOAT = 600;
 // Why: a bank that has run down after several deaths still leaves a viable run; stopping for the last 8 lobsters strands a pack that can finish the demons.
 export const FOOD_FLOOR = 8;
 
@@ -220,6 +222,11 @@ function wearWeapon(name: string): QuestStep {
 /** The spade only opens the mud tunnel out of the slave cages; a death after that stage never needs another. */
 /** The next missing piece of kit, or null once the pack is ready to go underground. */
 export function sourceKit(snap: QuestSnapshot): QuestStep | null {
+    // Why: Kamen's paid meal is unlimited and costs no HP, but only if the pack carries the purse; the withdrawal is optional so an account with no coins still enters on the free brew.
+    const coins = fromBank(snap, UP_ITEM.COINS, COIN_FLOAT);
+    if (coins) {
+        return coins;
+    }
     for (const { item, qty, shop, unitGp } of KIT) {
         const step = fromBank(snap, item, qty);
         if (step) {

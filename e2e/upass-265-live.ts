@@ -210,6 +210,7 @@ const PACK_SEED: { debugName: string; qty: number }[] = [
     { debugName: 'spade', qty: 1 },
     { debugName: 'bucket_empty', qty: 1 },
     { debugName: 'rope', qty: 3 },
+    { debugName: 'coins', qty: 600 },
     { debugName: 'lobster', qty: args.foodQty },
     { debugName: 'rune_scimitar', qty: 1 },
     { debugName: 'rune_chainbody', qty: 1 },
