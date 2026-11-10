@@ -14,6 +14,7 @@ import { Modals } from '../../../../ui/widgets/Modals.js';
 import { talkStrict } from '../../exec/primitives.js';
 import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import { UP_ITEM, UP_LOC, UP_NPC, UP_TILE, upassArea } from './areas.js';
+import { dropJunk } from './junk.js';
 import { BOW_IDS, bowLevel } from './supplies.js';
 import { travelTo } from './pass.js';
 
@@ -185,7 +186,11 @@ export async function reportToLathas(log: (m: string) => void): Promise<boolean>
 }
 
 /** Koftik by the bridge hands over the damp cloth. */
-export function getDampCloth(log: (m: string) => void): Promise<boolean> {
+export async function getDampCloth(log: (m: string) => void): Promise<boolean> {
+    // Why: Koftik hands the cloth over with inv_add, which needs a slot; a full pack loses it.
+    if (Inventory.free() < 2) {
+        await dropJunk(log);
+    }
     return talkAt(UP_NPC.KOFTIK_BRIDGE, UP_TILE.KOFTIK_BRIDGE, ['Not to worry'], log);
 }
 
@@ -193,6 +198,10 @@ export function getDampCloth(log: (m: string) => void): Promise<boolean> {
 export async function makeFireArrow(log: (m: string) => void): Promise<boolean> {
     if (heldId(UP_ITEM.LIT_ARROW.id) > 0) {
         return true;
+    }
+    // Why: the wrap is an item transform and a full pack leaves no slot for the intermediate, so clear the eat-scraps first.
+    if (Inventory.free() < 2) {
+        await dropJunk(log);
     }
     if (heldId(UP_ITEM.UNLIT_ARROW.id) === 0) {
         const cloth = Inventory.items().find(item => item.id === UP_ITEM.DAMP_CLOTH.id);

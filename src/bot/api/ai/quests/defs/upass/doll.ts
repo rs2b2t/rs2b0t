@@ -14,6 +14,7 @@ import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 import { UP_AMULETS, UP_ITEM, UP_LOC, UP_NPC, UP_TILE, countHeld, insideIbanTemple, type UpassItem } from './areas.js';
 import { locById, walkTo } from './bridge.js';
+import { dropJunk } from './junk.js';
 import { BOW_IDS, FOOD_RETREAT } from './supplies.js';
 
 let restocks = 0;
@@ -26,19 +27,6 @@ const FOOD_WORDS = ['lobster', 'meat pie', 'meat pizza', 'bread', 'stew'];
 const SPIDER_ATTACK_ANIM = 143;
 /** North of Kalrag's cave, far enough for the spiders to drop aggro but a short walk back. */
 const KALRAG_ESCAPE = new Tile(2340, 9840, 0);
-/** Pie dishes and empty bowls are eat-scraps that fill the pack; drop them before they crowd out food. */
-const JUNK_NAMES = ['pie dish', 'bowl'];
-export async function dropJunk(log: (m: string) => void): Promise<void> {
-    for (const item of Inventory.items()) {
-        if (item.name === null || !JUNK_NAMES.includes(item.name.toLowerCase())) {
-            continue;
-        }
-        await item.interact('Drop');
-        await Execution.delayTicks(1);
-    }
-    log(`dropped eat-scraps, ${Inventory.free()} free`);
-}
-
 /** Total edible items in the pack right now. */
 export function foodHeldNow(): number {
     return Inventory.items().reduce((sum, item) =>

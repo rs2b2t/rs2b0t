@@ -12,7 +12,7 @@ import { talkChoosingBy, talkStrict, type LineRule } from '../../exec/primitives
 import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import { DirectNavigator } from '../../../../../event/webwalk/DirectNavigator.js';
 import { UP_ITEM, UP_LOC, UP_NPC, UP_TILE, insideWitchHouse } from './areas.js';
-import { dropJunk } from './doll.js';
+import { dropJunk } from './junk.js';
 import { driveThroughBoxes, locById, walkTo } from './bridge.js';
 import { chestForm } from './chest.js';
 
