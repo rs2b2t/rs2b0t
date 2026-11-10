@@ -151,6 +151,7 @@ Start-or-coordinate fighter — kills any named NPC in its leash, loots selected
 | `bankAtLootSlots` | number (1–27) | `12` | Bank at loot slots |
 | `bankEveryMinutes` | number (0–120) | `0` | Bank every N minutes |
 | `bankCommonJunk` | boolean | `true` | Bank common junk too |
+| `keepRunes` | number (0–10000) | `0` | Keep runes (each) |
 
 ### BrimhavenMossGiants
 

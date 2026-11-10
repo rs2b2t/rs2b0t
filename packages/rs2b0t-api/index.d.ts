@@ -448,6 +448,8 @@ export const Bank: {
     /** Fill the pack: Withdraw-All when present, otherwise Withdraw-X for free slots. */
     withdrawLoad(name: string | number): Promise<boolean>;
     deposit(name: string, op?: string): boolean | Promise<boolean>;
+    /** Deposit-X + count dialog for an exact quantity, leaving the rest in the pack. */
+    depositX(name: string, count: number): Promise<boolean>;
     /** Deposit every backpack slot (Deposit-All each). */
     depositInventory(): Promise<void>;
     /**

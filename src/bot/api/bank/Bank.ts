@@ -318,6 +318,43 @@ export const Bank = {
         return clickInvButton(reader.bankSideItems(), name, op);
     },
 
+    /** Deposit exactly `count` of one item so the pack keeps the rest. */
+    async depositX(name: string, count: number): Promise<boolean> {
+        if (count <= 0) {
+            return true;
+        }
+        if (!(await bankBackpackReady())) {
+            return false;
+        }
+        const wanted = name.toLowerCase();
+        const sideCount = (): number => reader.bankSideItems()
+            .filter(i => i.name?.toLowerCase() === wanted)
+            .reduce((sum, i) => sum + i.count, 0);
+        const item = reader.bankSideItems().find(i => i.name?.toLowerCase() === wanted);
+        if (!item) {
+            return false;
+        }
+        const before = sideCount();
+        if (before <= 0) {
+            return false;
+        }
+        const take = Math.min(count, before);
+        const xOp = item.ops.find((o): o is string => o !== null && /deposit[\s-]*x/i.test(o));
+        if (!xOp) {
+            return false;
+        }
+        if (!(await clickInvButton(reader.bankSideItems(), name, xOp))) {
+            return false;
+        }
+        if (!(await Execution.delayUntil(() => reader.countDialogOpen(), 3000))) {
+            return false;
+        }
+        if (!actions.answerCountDialog(take)) {
+            return false;
+        }
+        return Execution.delayUntil(() => sideCount() <= before - take || !Bank.isOpen(), 4000);
+    },
+
     async depositInventory(): Promise<void> {
         await Bank.depositAllMatching(() => true);
     },

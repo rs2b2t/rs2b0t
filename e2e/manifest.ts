@@ -435,6 +435,14 @@ export const CASES: readonly Case[] = [
         note: 'empty pack plus banked trout forces the out-of-food trip; the run fails if the booth stays open or combat never resumes'
     },
     {
+        id: 'autofighter-rune-reserve-live',
+        harness: 'autofighter-rune-reserve-live.ts',
+        covers: { scripts: ['AutoFighter'] },
+        status: 'unvetted',
+        budgetMin: 5,
+        note: 'starts with 10 law and 2 air runes, keeps 5 of each of the five reserve runes across the first bank trip, and checks the food restock at the same time'
+    },
+    {
         id: 'autofighter-special-live',
         harness: 'autofighter-special-live.ts',
         covers: { scripts: ['AutoFighter'] },

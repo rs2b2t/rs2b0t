@@ -10,6 +10,24 @@ export const BANK_LOCATION_OPTIONS = ['Nearest', ...BANK_LOCATIONS.map(b => b.na
 export const DEFAULT_CUSTOM_SPOT = new Tile(3273, 3427, 0);
 export const BURIAL_BONE_NAME = 'Bones';
 
+/** The five runes AutoFighter can hold back across a bank trip. */
+export const RESERVE_RUNES = ['Law rune', 'Air rune', 'Fire rune', 'Water rune', 'Earth rune'] as const;
+
+export function isReserveRune(name: string | null): boolean {
+    const normalized = name?.trim().toLowerCase();
+    return normalized !== undefined && RESERVE_RUNES.some(rune => rune.toLowerCase() === normalized);
+}
+
+/** How many of a held rune stack to deposit so the pack keeps `keep`. */
+export function reserveExcess(held: number, keep: number): number {
+    return Math.max(0, held - Math.max(0, keep));
+}
+
+/** How many of a rune to withdraw so the pack reaches `keep`. */
+export function reserveShortfall(held: number, keep: number): number {
+    return Math.max(0, Math.max(0, keep) - held);
+}
+
 interface BoneBurialState {
     enabled: boolean;
     inCombat: boolean;
