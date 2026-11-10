@@ -94,7 +94,8 @@ export async function buyKamenMeal(log: (m: string) => void): Promise<boolean> {
         await dropJunk(log);
     }
     const before = mealCount();
-    const paid = heldId(UP_ITEM.COINS.id) >= KAMEN_MEAL_GP;
+    const coinsBefore = heldId(UP_ITEM.COINS.id);
+    const paid = coinsBefore >= KAMEN_MEAL_GP;
     let talked = await talkTo(UP_NPC.KAMEN, 'Kamen', UP_TILE.KAMEN, paid ? [] : ['Okay then.'], log, paid ? KAMEN_RULES : undefined);
     if (!talked && paid) {
         // Why: a rule miss must still leave the fight with food; the brew is worse but free.
@@ -106,8 +107,9 @@ export async function buyKamenMeal(log: (m: string) => void): Promise<boolean> {
     if (!paid) {
         log('not enough coins for Kamen; took the free brew instead');
     }
-    // Why: the dialogue closes before the client's inventory snapshot catches up, so the first read after the last line still shows the old pack and a synchronous check fails a meal that did arrive.
-    if (!(await Execution.delayUntil(() => mealCount() > before, 3_000))) {
+    // Why: the dialogue closes before the client's inventory snapshot catches up, so the first read after the last line still shows the old pack and a synchronous check fails a meal that did arrive. Spent coins are a second, independent proof.
+    const arrived = (): boolean => mealCount() > before || (paid && heldId(UP_ITEM.COINS.id) <= coinsBefore - KAMEN_MEAL_GP);
+    if (!(await Execution.delayUntil(arrived, 3_000))) {
         log('Kamen did not hand over a meal');
         return false;
     }
