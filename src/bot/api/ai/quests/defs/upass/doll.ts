@@ -149,6 +149,7 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
     let lastAttacked = -1;
     let refused = 0;
     let dealt = false;
+    let stalls = 0;
     let dead = false;
     while (performance.now() < deadline) {
         // Why: a quest step owns the tick, so the module's sustain never runs between hits unless this loop spends a tick on it; Kalrag killed a 1-Prayer account that way.
@@ -211,12 +212,13 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
         if (focus.health < focusHealth) {
             lastOffense = now;
             dealt = true;
+            stalls = 0;
         }
         focusHealth = focus.health;
-        // Why: once the fight is running the character swings by itself, and re-clicking the same NPC earns "I'm already under attack" without adding a hit; click only when the focus changes or combat lapses. A distant add is left alone until it closes.
+        // Why: only one NPC can be attacked, and the server drops a click sent while another NPC landed the last hit. Re-send the Attack every 2.5s until damage shows, rather than trusting a click the server may have refused.
         const at = Game.tile();
         const inReach = at !== null && Math.max(Math.abs(focusTile.x - at.x), Math.abs(focusTile.z - at.z)) <= 2;
-        if ((inReach || focus.index === live.index) && !(focusIndex === lastAttacked && Game.inCombat())) {
+        if ((inReach || focus.index === live.index) && (focusIndex !== lastAttacked || now - lastOffense >= 2_500)) {
             if (await focus.interact('Attack')) {
                 lastAttacked = focusIndex;
                 refused = 0;
@@ -224,11 +226,20 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
                 log(`${focusName} refused an Attack click — waiting out the combat block`);
             }
         }
-        const patience = dealt ? 8_000 : 30_000;
+        const patience = dealt ? 12_000 : 20_000;
         if (now - lastOffense >= patience) {
+            stalls++;
             log(`no damage on ${focusName} for ${patience / 1000}s at ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp`);
-            await breakOff(anchor, log, fleeTo);
-            return false;
+            // Why: the combat block rotates with whoever hit last, so a stall is often the wrong target; try the other NPC before giving up the room.
+            if (stalls >= 3) {
+                await breakOff(anchor, log, fleeTo);
+                return false;
+            }
+            focusIndex = -1;
+            lastAttacked = -1;
+            dealt = false;
+            lastOffense = now;
+            continue;
         }
         await Execution.delayTicks(1);
     }
