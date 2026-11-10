@@ -39,7 +39,7 @@ async function breakOff(near: Tile, log: (m: string) => void): Promise<void> {
     }
     const dx = Math.sign(at.x - near.x) || 1;
     const dz = Math.sign(at.z - near.z);
-    const away = new Tile(at.x + dx * 8, at.z + dz * 8, at.level);
+    const away = new Tile(at.x + dx * 12, at.z + dz * 12, at.level);
     log(`backing off toward (${away.x},${away.z})`);
     await walkTo(away, 3, log);
 }
@@ -162,6 +162,16 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
             .where(npc => npc.index !== live.index && npc.health > 0)
             .within(8)
             .results();
+        // Why: the player can only swing at one NPC, so two or more melee spiders is a damage race a 1-Prayer account loses. Run clear instead of trading; Kalrag's hunt range can follow, the spiders' usually cannot.
+        const onUs = nearby.filter(npc => npc.targetsMe() || npc.anim === SPIDER_ATTACK_ANIM);
+        if (onUs.length >= 2) {
+            log(`${onUs.length} spiders on us — running clear`);
+            await breakOff(live.tile(), log);
+            await Execution.delayTicks(10);
+            lastOffense = performance.now();
+            lastAttacked = -1;
+            continue;
+        }
         const blocker = nearby.find(npc => npc.anim === SPIDER_ATTACK_ANIM)
             ?? nearby.find(npc => npc.targetsMe())
             ?? null;
