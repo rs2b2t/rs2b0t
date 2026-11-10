@@ -25,6 +25,8 @@ export const noteRestock = (): void => { restocks += 1; };
 const FOOD_WORDS = ['lobster', 'meat pie', 'meat pizza', 'bread', 'stew'];
 /** `giantspider_attack` from seq.pack; blessed spiders and Kalrag share it, and it marks the add that just hit us even when its facing has not caught up. */
 const SPIDER_ATTACK_ANIM = 143;
+/** North of Kalrag's cave, far enough for the spiders to drop aggro but a short walk back. */
+const KALRAG_ESCAPE = new Tile(2340, 9840, 0);
 /** Total edible items in the pack right now. */
 export function foodHeldNow(): number {
     return Inventory.items().reduce((sum, item) =>
@@ -32,7 +34,12 @@ export function foodHeldNow(): number {
 }
 
 /** Run out of melee so a losing fight resets instead of standing there until the last lobster is gone. */
-async function breakOff(near: Tile, log: (m: string) => void): Promise<void> {
+async function breakOff(near: Tile, log: (m: string) => void, fleeTo?: Tile): Promise<void> {
+    if (fleeTo) {
+        log(`backing off to (${fleeTo.x},${fleeTo.z})`);
+        await walkTo(fleeTo, 3, log);
+        return;
+    }
     const at = Game.tile();
     if (!at) {
         return;
@@ -122,7 +129,7 @@ export async function burnTomb(log: (m: string) => void): Promise<boolean> {
 }
 
 // Why: a dead NPC leaves the scene, so "the target is gone" is the one completion signal that doesn't depend on a drop or a stale journal line.
-async function killNpc(npcId: number, near: Tile, name: string, log: (m: string) => void, canFetchFood = false): Promise<boolean> {
+async function killNpc(npcId: number, near: Tile, name: string, log: (m: string) => void, canFetchFood = false, fleeTo?: Tile): Promise<boolean> {
     if (!(await walkTo(near, 2, log))) {
         return false;
     }
@@ -141,6 +148,7 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
     let lastOffense = began;
     let lastAttacked = -1;
     let refused = 0;
+    let dealt = false;
     let dead = false;
     while (performance.now() < deadline) {
         // Why: a quest step owns the tick, so the module's sustain never runs between hits unless this loop spends a tick on it; Kalrag killed a 1-Prayer account that way.
@@ -148,7 +156,7 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
         // Why: Kamen is one walk from Kalrag, so a fight that runs the pack down to the last few items can leave and come back fed instead of standing in melee until the lobster count hits zero and the next hit kills.
         if (canFetchFood && foodHeldNow() <= FOOD_RETREAT) {
             log(`down to ${foodHeldNow()} food — breaking off to restock`);
-            await breakOff(near, log);
+            await breakOff(near, log, fleeTo);
             return false;
         }
         const live = find();
@@ -162,14 +170,15 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
             .where(npc => npc.index !== live.index && npc.health > 0)
             .within(8)
             .results();
-        // Why: the player can only swing at one NPC, so two or more melee spiders is a damage race a 1-Prayer account loses. Run clear instead of trading; Kalrag's hunt range can follow, the spiders' usually cannot.
+        // Why: the player can only swing at one NPC, so two or more melee spiders is a damage race a 1-Prayer account loses. Once the bar is down to 60%, run clear instead of trading; Kalrag's hunt range can follow, the spiders' usually cannot.
         const onUs = nearby.filter(npc => npc.targetsMe() || npc.anim === SPIDER_ATTACK_ANIM);
-        if (onUs.length >= 2) {
+        if (onUs.length >= 2 && fleeTo && Skills.effective('hitpoints') < Skills.level('hitpoints') * 0.6) {
             log(`${onUs.length} spiders on us — running clear`);
-            await breakOff(live.tile(), log);
+            await breakOff(live.tile(), log, fleeTo);
             await Execution.delayTicks(10);
             lastOffense = performance.now();
             lastAttacked = -1;
+            dealt = false;
             continue;
         }
         const blocker = nearby.find(npc => npc.anim === SPIDER_ATTACK_ANIM)
@@ -182,6 +191,7 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
             focusName = focus.name ?? name;
             focusHealth = focus.health;
             lastOffense = now;
+            dealt = false;
         }
         // Why: the add is melee and walks to us, so chasing one more than 4 tiles from Kalrag only drags the fight out of her room; kill it where it stands and keep Kalrag in reach the rest of the time.
         const focusTile = focus.tile();
@@ -196,6 +206,7 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
         }
         if (focus.health < focusHealth) {
             lastOffense = now;
+            dealt = true;
         }
         focusHealth = focus.health;
         // Why: once the fight is running the character swings by itself, and re-clicking the same NPC earns "I'm already under attack" without adding a hit; click only when the focus changes or combat lapses. A distant add is left alone until it closes.
@@ -209,9 +220,10 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
                 log(`${focusName} refused an Attack click — waiting out the combat block`);
             }
         }
-        if (now - lastOffense >= 8_000) {
-            log(`no damage on ${focusName} for 8s at ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp`);
-            await breakOff(anchor, log);
+        const patience = dealt ? 8_000 : 30_000;
+        if (now - lastOffense >= patience) {
+            log(`no damage on ${focusName} for ${patience / 1000}s at ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp`);
+            await breakOff(anchor, log, fleeTo);
             return false;
         }
         await Execution.delayTicks(1);
@@ -235,7 +247,7 @@ export async function killKalrag(log: (m: string) => void): Promise<boolean> {
         log('no doll of Iban in the pack — killing Kalrag now would waste the blood');
         return false;
     }
-    return killNpc(UP_NPC.KALRAG, UP_TILE.KALRAG, 'Kalrag', log, canRestock());
+    return killNpc(UP_NPC.KALRAG, UP_TILE.KALRAG, 'Kalrag', log, canRestock(), KALRAG_ESCAPE);
 }
 
 const DEMONS: readonly { npc: number; amulet: UpassItem; tile: Tile; name: string }[] = [
