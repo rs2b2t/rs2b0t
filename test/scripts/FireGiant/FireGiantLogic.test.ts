@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { AP_RANGE, attackRangeFor, lootWaitMs, BARREL_EXIT, EXIT_OPTIONS, eastFirst, takenByAnother, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, ESCAPE_TELES, legFor, LEDGE, packForcesBank, POST_ROCK, RAFT_STAND, ROCK_TILE, roomOf, ROPE_THROW_STAND, sameRoom, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiant/FireGiantLogic.js';
+import { AP_RANGE, attackRangeFor, attackerFirst, lootWaitMs, mustResupply, BARREL_EXIT, EXIT_OPTIONS, eastFirst, pickOrder, takenByAnother, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, ESCAPE_TELES, legFor, LEDGE, packForcesBank, POST_ROCK, RAFT_STAND, ROCK_TILE, roomOf, ROPE_THROW_STAND, sameRoom, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiant/FireGiantLogic.js';
 
 const at = (x: number, z: number, level = 0) => ({ x, z, level });
 
@@ -209,6 +209,89 @@ describe('takenByAnother', () => {
     test('our own target is never taken, however its faceEntity flickers', () => {
         expect(e({ isOurs: true, inCombat: true, targetsAnother: true })).toBe(false);
         expect(e({ isOurs: true, inCombat: true, targetsMe: false })).toBe(false);
+    });
+});
+
+// The engine bars an attack on any other npc while one has hit us in the last 8
+// ticks, so distance order alone re-clicks a bystander the engine then refuses.
+describe('attackerFirst', () => {
+    const order = (gs: { targetsMe: boolean; distance: number }[]) =>
+        [...gs].sort((a, b) => attackerFirst(a, b) || a.distance - b.distance).map(g => g.distance);
+
+    test('the giant hitting us is picked before a nearer bystander', () => {
+        expect(order([
+            { targetsMe: false, distance: 1 },
+            { targetsMe: true, distance: 3 }
+        ])).toEqual([3, 1]);
+    });
+    test('falls back to the next ordering when no giant is on us', () => {
+        expect(order([
+            { targetsMe: false, distance: 4 },
+            { targetsMe: false, distance: 2 }
+        ])).toEqual([2, 4]);
+    });
+    test('two giants on us keep the next ordering between them', () => {
+        expect(order([
+            { targetsMe: true, distance: 5 },
+            { targetsMe: true, distance: 2 },
+            { targetsMe: false, distance: 1 }
+        ])).toEqual([2, 5, 1]);
+    });
+});
+
+// Adoption and the stall re-pick take the same fight, so they share one order:
+// the giant on us first, then east-first at a safespot and nearest in the open.
+describe('pickOrder', () => {
+    const first = (gs: { targetsMe: boolean; x: number; distance: number }[], atSafespot: boolean) =>
+        [...gs].sort((a, b) => pickOrder(a, b, atSafespot))[0];
+    const pairOnUs = [
+        { targetsMe: true, x: 2562, distance: 1 },
+        { targetsMe: true, x: 2568, distance: 8 }
+    ];
+
+    test('at a safespot the eastern giant on us wins over the nearer western one', () => {
+        expect(first(pairOnUs, true).x).toBe(2568);
+    });
+    test('in the open the nearest giant on us wins', () => {
+        expect(first(pairOnUs, false).x).toBe(2562);
+    });
+    test('the giant on us outranks a nearer and more eastern bystander in both stands', () => {
+        const gs = [
+            { targetsMe: false, x: 2568, distance: 1 },
+            { targetsMe: true, x: 2562, distance: 8 }
+        ];
+        expect(first(gs, true).x).toBe(2562);
+        expect(first(gs, false).x).toBe(2562);
+    });
+    test('adoption among the giants on us picks the head of the full re-pick order', () => {
+        const gs = [...pairOnUs, { targetsMe: false, x: 2565, distance: 1 }];
+        for (const atSafespot of [true, false]) {
+            const adopted = first(gs.filter(g => g.targetsMe), atSafespot);
+            expect(adopted).toEqual(first(gs, atSafespot));
+        }
+    });
+});
+
+// The Fight cycle owns the bot for up to two minutes, so the bank triggers must
+// be visible inside the cycle, or the bot fights on foodless to the panic line.
+describe('mustResupply', () => {
+    const s = (o: Partial<Parameters<typeof mustResupply>[0]>) =>
+        mustResupply({ hasFood: true, bankKnownEmpty: false, needSupplies: false, supplyKnownEmpty: false, ...o });
+
+    test('an empty food pack must resupply at once', () => {
+        expect(s({ hasFood: false })).toBe(true);
+    });
+    test('a bank known to hold no food is no reason to yield', () => {
+        expect(s({ hasFood: false, bankKnownEmpty: true })).toBe(false);
+    });
+    test('style supplies out must resupply', () => {
+        expect(s({ needSupplies: true })).toBe(true);
+    });
+    test('a bank known to hold no supplies is no reason to yield', () => {
+        expect(s({ needSupplies: true, supplyKnownEmpty: true })).toBe(false);
+    });
+    test('stocked for both, no resupply', () => {
+        expect(s({})).toBe(false);
     });
 });
 
