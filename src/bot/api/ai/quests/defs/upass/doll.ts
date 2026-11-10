@@ -201,10 +201,10 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
         const focusTile = focus.tile();
         const nearAnchor = Math.max(Math.abs(focusTile.x - anchor.x), Math.abs(focusTile.z - anchor.z)) <= 4;
         const beforeWalk = Game.tile();
-        const far = beforeWalk !== null && Math.max(Math.abs(focusTile.x - beforeWalk.x), Math.abs(focusTile.z - beforeWalk.z)) > 1;
+        const far = beforeWalk !== null && Math.max(Math.abs(focusTile.x - beforeWalk.x), Math.abs(focusTile.z - beforeWalk.z)) > 2;
         if (far && (focus.index === live.index || nearAnchor)) {
-            // Why: standing adjacent is what makes the target the aggressor, so the next spider to hit us is the one we can attack back.
-            if (!(await walkTo(focusTile, 1, log))) {
+            // Why: Kalrag and the demons are 3x3, so radius 2 from the centre tile is one tile from the body. Radius 1 sits inside the footprint and the walker retries forever without ever attacking.
+            if (!(await walkTo(focusTile, 2, log))) {
                 log(`${focusName} out of reach at (${focusTile.x},${focusTile.z})`);
                 return false;
             }
