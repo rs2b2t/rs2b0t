@@ -41,6 +41,8 @@ interface Args {
     respawn: boolean;
     /** Same empty-pack re-entry test, but start at the Ardougne bank so the surface walk is not part of the run. */
     respawnAtBank: boolean;
+    /** Teleport straight to Kalrag with the doll and the ashes flag, and pass on the blood bit. */
+    kalrag: boolean;
 }
 
 function parse(argv: string[]): Args {
@@ -58,7 +60,8 @@ function parse(argv: string[]): Args {
         tele: true,
         deploy: true,
         respawn: false,
-        respawnAtBank: false
+        respawnAtBank: false,
+        kalrag: false
     };
     for (let i = 0; i < argv.length; i++) {
         const flag = argv[i];
@@ -66,6 +69,7 @@ function parse(argv: string[]): Args {
         if (flag === '--no-tele') { out.tele = false; continue; }
         if (flag === '--respawn') { out.respawn = true; continue; }
         if (flag === '--respawn-bank') { out.respawnAtBank = true; continue; }
+        if (flag === '--kalrag') { out.kalrag = true; continue; }
         const value = argv[++i];
         if (value === undefined) { break; }
         if (flag === '--base') { out.base = value; }
@@ -83,6 +87,10 @@ function parse(argv: string[]): Args {
 }
 
 const args = parse(process.argv.slice(2));
+if (args.kalrag) {
+    args.stage = 7;
+    args.until = 8;
+}
 
 function fail(msg: string): never {
     console.error(`FAIL: ${msg}`);
@@ -338,7 +346,7 @@ try {
         await cheatQuiet(page, `setvar upass ${args.stage}`);
         // Why: the started bit is what the journal and the cave mouth read, and a seeded stage without it
         // leaves Koftik refusing entry to a quest the journal says is under way.
-        await cheatQuiet(page, `setvar ibanmulti ${ibanmultiFor(args.stage)}`);
+        await cheatQuiet(page, `setvar ibanmulti ${ibanmultiFor(args.stage) | (args.kalrag ? 1 << 3 : 0)}`);
         const read = await getServerVarQuiet(page, 'upass');
         if (read !== args.stage) {
             fail(`setvar upass ${args.stage} did not take (read back ${read})`);
@@ -349,7 +357,8 @@ try {
     await clearChatDialogs(page, 'post-relog dialog(s)');
 
     const respawnMode = args.respawn || args.respawnAtBank;
-    const start = args.respawn ? LUMBRIDGE_RESPAWN : args.respawnAtBank ? ARDOUGNE_BANK : STAGE_TELE[args.stage] ?? ARDOUGNE_BANK;
+    const KALRAG_CAVE = { x: 2356, z: 9911, level: 0 };
+    const start = args.respawn ? LUMBRIDGE_RESPAWN : args.respawnAtBank ? ARDOUGNE_BANK : args.kalrag ? KALRAG_CAVE : STAGE_TELE[args.stage] ?? ARDOUGNE_BANK;
     if (args.tele) {
         if (!(await teleTo(page, start, 10, 25_000))) {
             await clearChatDialogs(page, 'pre-tele dialog(s)');
@@ -418,6 +427,13 @@ try {
             }
             if (line.msg.includes('return to the underground pass')) {
                 sawReentry = true;
+            }
+        }
+        if (args.kalrag) {
+            const flags = (await getServerVarQuiet(page, 'ibanmulti')) ?? 0;
+            if ((flags & (1 << 1)) !== 0) {
+                console.log(`PASS (Kalrag blood on doll, ${Math.round((Date.now() - t0) / 1000)}s)`);
+                process.exit(0);
             }
         }
         const stage = (await getServerVarQuiet(page, 'upass')) ?? reached;
