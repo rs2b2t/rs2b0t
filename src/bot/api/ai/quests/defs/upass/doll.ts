@@ -27,6 +27,19 @@ const FOOD_WORDS = ['lobster', 'meat pie', 'meat pizza', 'bread', 'stew'];
 const SPIDER_ATTACK_ANIM = 143;
 /** North of Kalrag's cave, far enough for the spiders to drop aggro but a short walk back. */
 const KALRAG_ESCAPE = new Tile(2340, 9840, 0);
+/** Pie dishes and empty bowls are eat-scraps that fill the pack; drop them before they crowd out food. */
+const JUNK_NAMES = ['pie dish', 'bowl'];
+export async function dropJunk(log: (m: string) => void): Promise<void> {
+    for (const item of Inventory.items()) {
+        if (item.name === null || !JUNK_NAMES.includes(item.name.toLowerCase())) {
+            continue;
+        }
+        await item.interact('Drop');
+        await Execution.delayTicks(1);
+    }
+    log(`dropped eat-scraps, ${Inventory.free()} free`);
+}
+
 /** Total edible items in the pack right now. */
 export function foodHeldNow(): number {
     return Inventory.items().reduce((sum, item) =>
@@ -153,6 +166,9 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
     while (performance.now() < deadline) {
         // Why: a quest step owns the tick, so the module's sustain never runs between hits unless this loop spends a tick on it; Kalrag killed a 1-Prayer account that way.
         await Sustain.run();
+        if (Inventory.free() < 2) {
+            await dropJunk(log);
+        }
         // Why: Kamen is one walk from Kalrag, so a fight that runs the pack down to the last few items can leave and come back fed instead of standing in melee until the lobster count hits zero and the next hit kills.
         if (canFetchFood && foodHeldNow() <= FOOD_RETREAT) {
             log(`down to ${foodHeldNow()} food — breaking off to restock`);

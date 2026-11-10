@@ -12,6 +12,7 @@ import { talkChoosingBy, talkStrict, type LineRule } from '../../exec/primitives
 import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import { DirectNavigator } from '../../../../../event/webwalk/DirectNavigator.js';
 import { UP_ITEM, UP_LOC, UP_NPC, UP_TILE, insideWitchHouse } from './areas.js';
+import { dropJunk } from './doll.js';
 import { driveThroughBoxes, locById, walkTo } from './bridge.js';
 import { chestForm } from './chest.js';
 
@@ -88,6 +89,10 @@ const KAMEN_RULES: readonly LineRule[] = [
 
 /** Kamen sells meat pie, stew and bread for 75gp; the only repeatable food inside the pass. */
 export async function buyKamenMeal(log: (m: string) => void): Promise<boolean> {
+    // Why: the paid branch has no space check in the script, so a full pack drops the food it just paid for.
+    if (Inventory.free() < 3) {
+        await dropJunk(log);
+    }
     const before = mealCount();
     const paid = heldId(UP_ITEM.COINS.id) >= KAMEN_MEAL_GP;
     let talked = await talkTo(UP_NPC.KAMEN, 'Kamen', UP_TILE.KAMEN, paid ? [] : ['Okay then.'], log, paid ? KAMEN_RULES : undefined);
