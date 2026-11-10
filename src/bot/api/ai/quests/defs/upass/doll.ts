@@ -25,9 +25,23 @@ export const noteRestock = (): void => { restocks += 1; };
 const FOOD_WORDS = ['lobster', 'meat pie', 'meat pizza', 'bread', 'stew'];
 /** `giantspider_attack` from seq.pack; blessed spiders and Kalrag share it, and it marks the add that just hit us even when its facing has not caught up. */
 const SPIDER_ATTACK_ANIM = 143;
-function foodHeldNow(): number {
+/** Total edible items in the pack right now. */
+export function foodHeldNow(): number {
     return Inventory.items().reduce((sum, item) =>
         sum + (item.name !== null && FOOD_WORDS.includes(item.name.toLowerCase()) ? item.count : 0), 0);
+}
+
+/** Run out of melee so a losing fight resets instead of standing there until the last lobster is gone. */
+async function breakOff(near: Tile, log: (m: string) => void): Promise<void> {
+    const at = Game.tile();
+    if (!at) {
+        return;
+    }
+    const dx = Math.sign(at.x - near.x) || 1;
+    const dz = Math.sign(at.z - near.z);
+    const away = new Tile(at.x + dx * 8, at.z + dz * 8, at.level);
+    log(`backing off toward (${away.x},${away.z})`);
+    await walkTo(away, 3, log);
 }
 
 /** Rub an element into the doll. */
@@ -134,6 +148,7 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
         // Why: Kamen is one walk from Kalrag, so a fight that runs the pack down to the last few items can leave and come back fed instead of standing in melee until the lobster count hits zero and the next hit kills.
         if (canFetchFood && foodHeldNow() <= FOOD_RETREAT) {
             log(`down to ${foodHeldNow()} food — breaking off to restock`);
+            await breakOff(near, log);
             return false;
         }
         const live = find();
@@ -142,12 +157,14 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
             break;
         }
         const now = performance.now();
-        // Why: the server refuses an Attack on the main target while a different single-way NPC hit us in the last 8 ticks ("I'm already under attack"), so a blessed spider on our back has to die first. Its attack animation is the reliable tell; facing can lag a tick behind the hit.
-        const blocker = Npcs.query()
-            .where(npc => npc.index !== live.index && npc.health > 0
-                && (npc.targetsMe() || (npc.anim === SPIDER_ATTACK_ANIM && npc.distance() <= 2)))
+        // Why: the server refuses an Attack on the main target while a different single-way NPC hit us in the last 8 ticks ("I'm already under attack"), so a blessed spider on our back has to die first. The one mid-attack is the safest pick: facing can lag a tick, and with several spiders on us the nearest one may not be the aggressor.
+        const nearby = Npcs.query()
+            .where(npc => npc.index !== live.index && npc.health > 0)
             .within(8)
-            .nearest();
+            .results();
+        const blocker = nearby.find(npc => npc.anim === SPIDER_ATTACK_ANIM)
+            ?? nearby.find(npc => npc.targetsMe())
+            ?? null;
         const anchor = live.tile();
         const focus = blocker ?? live;
         if (focus.index !== focusIndex) {
@@ -182,8 +199,9 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
                 log(`${focusName} refused an Attack click — waiting out the combat block`);
             }
         }
-        if (now - lastOffense >= 20_000) {
-            log(`no damage on ${focusName} for 20s at ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp`);
+        if (now - lastOffense >= 8_000) {
+            log(`no damage on ${focusName} for 8s at ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp`);
+            await breakOff(anchor, log);
             return false;
         }
         await Execution.delayTicks(1);

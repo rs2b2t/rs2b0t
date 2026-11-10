@@ -43,6 +43,7 @@ import {
     burnTomb,
     canRestock,
     fillBrew,
+    foodHeldNow,
     killDemon,
     killKalrag,
     noteRestock,
@@ -56,7 +57,7 @@ import {
 } from './doll.js';
 import { crossChain, outstandingCrossing, takeNextCrossing, TO_RAILINGS } from './railings.js';
 import { releaseJournal } from './stall.js';
-import { bowWorn, drawGear, FOOD_RETREAT, foodInPack, kitShortfall, meleeCarried, sourceKit, sourceWeapon, wearGear } from './supplies.js';
+import { bowWorn, drawGear, FOOD_RETREAT, foodInPack, kitShortfall, meleeCarried, RESTOCK_TARGET, sourceKit, sourceWeapon, wearGear } from './supplies.js';
 
 let lastStep = '';
 const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep => {
@@ -246,18 +247,20 @@ function witchLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
     return custom("open Kardia's chest and take the doll", lootWitchChest);
 }
 
-// Why: Kamen hands out a meal in the dwarves camp, and that camp is reachable from the level-1 platforms through the wall tunnel, so a fight that burns the food down to six items can walk back fed instead of dying below the well.
+// Why: Kamen hands out a meal in the dwarves camp, and that camp is reachable from the level-1 platforms through the wall tunnel, so a fight that burns the food down to five items can walk back fed instead of dying below the well. One trip buys several meals, because one meal per attempt loses more time walking than it buys in swings.
 function restockStep(area: UpassArea): QuestStep {
     return custom('get a meal from Kamen', async log => {
         if (area !== 'dwarves' && area !== 'kalrag' && !(await descendToDwarves(log))) {
             log('no route down to Kamen from here');
             return false;
         }
-        if (!(await buyKamenMeal(log))) {
-            return false;
+        while (canRestock() && foodHeldNow() < RESTOCK_TARGET) {
+            if (!(await buyKamenMeal(log))) {
+                return false;
+            }
+            noteRestock();
         }
-        noteRestock();
-        return true;
+        return foodHeldNow() > FOOD_RETREAT;
     });
 }
 

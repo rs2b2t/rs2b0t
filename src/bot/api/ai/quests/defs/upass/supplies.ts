@@ -12,9 +12,11 @@ export const ARROW_TARGET = 50;
 // Why: the grid crossing and the orb corridor alone cost 8 lobsters, and the traps below are timer damage you walk into. Koftik, the paladins and Nilhoof give a dozen food between them, but as separate stacks that each take a slot, so the float covers the trapped stretches.
 // Why: food is not stackable, so each lobster is a slot. 14 is the tested ceiling: the orb sweep (6 kit + railing + 4 orbs) and Kardia's chest (doll, book, 2 potions) both still fit, while 16 leaves the pack one slot short at the chest.
 export const FOOD_TARGET = 16;
-// Why: Kamen's meal is the only food inside the pass, so a fight that runs the pack down to six items breaks off and walks there instead of tanking to a death; the coin float pays for eight meals.
-export const FOOD_RETREAT = 6;
+// Why: Kamen's meal is the only food inside the pass, so a fight that runs the pack down to five items breaks off and walks there instead of tanking to a death; the coin float pays for eight meals, and the trip fills back to 14 so one restock buys several attempts.
+export const FOOD_RETREAT = 5;
 export const FOOD_RESTOCKS = 8;
+/** Kamen meals are 3 items each; fill back to this before returning to the fight so one trip is not one attempt. */
+export const RESTOCK_TARGET = 14;
 /** Coins to carry for Kamen's paid meal: 75gp for meat pie, stew and bread, eight meals. */
 export const COIN_FLOAT = 600;
 // Why: a bank that has run down after several deaths still leaves a viable run; stopping for the last 8 lobsters strands a pack that can finish the demons.
