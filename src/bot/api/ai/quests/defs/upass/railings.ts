@@ -166,6 +166,11 @@ export async function crossChain(chain: readonly Crossing[], log: (m: string) =>
         if (await landed(step)) {
             continue;
         }
+        // Why: the crossings are one-way, so after the far side is reached every earlier stand is unreachable from here. Restarting at the first outstanding step is what looped the cage after a pipe landing the alt list did not match.
+        const last = chain[chain.length - 1];
+        if (!(await canWalkTo(step.stand)) && last !== undefined && await canWalkTo(last.lands)) {
+            return true;
+        }
         if (!(await take(step, log))) {
             return false;
         }

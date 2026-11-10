@@ -1,6 +1,9 @@
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
-import { UP_ITEM, UP_TILE, carried, held, insideIbanTemple, insideWitchHouse, pastGridTile, upassArea, worn, type UpassArea } from './areas.js';
+import { Execution } from '../../../../execution/Execution.js';
+import { Game } from '../../../../game/Game.js';
+import Tile from '../../../../../geometry/Tile.js';
+import { UP_ITEM, UP_LOC, UP_TILE, carried, held, insideIbanTemple, insideWitchHouse, pastGridTile, upassArea, worn, type UpassArea } from './areas.js';
 import { UP_FLAG, UP_STAGE, readUpassProgress } from './journal.js';
 import {
     armFireArrow,
@@ -10,6 +13,7 @@ import {
     crossToEast,
     leavePass,
     leaveWithKoftik,
+    locById,
     reportToLathas,
     makeFireArrow,
     meetKoftik,
@@ -95,6 +99,36 @@ async function shootBridgeAgain(log: (m: string) => void): Promise<boolean> {
     return shootGuiderope(log);
 }
 
+/**
+ * Take the unicorn tunnel through to the first cavern.
+ * Why: the door's landing depends on its loc_angle, which the mud-dig `loc_change` flips and the journal cannot report; the only proof is the area after the click, so try both halves from both sides and read where the teleport landed.
+ */
+async function useUnicornTunnel(log: (m: string) => void): Promise<boolean> {
+    if (upassArea(Game.tile()) === 'area1') {
+        return true;
+    }
+    const stands = [new Tile(2375, 9613, 0), new Tile(2375, 9609, 0)];
+    for (const stand of stands) {
+        if (!(await walkTo(stand, 1, log))) {
+            continue;
+        }
+        for (const id of [UP_LOC.UNICORN_DOOR_L, UP_LOC.UNICORN_DOOR_R]) {
+            const door = locById(id, null, 8);
+            const op = door?.actions()[0];
+            if (!door || !op || !(await door.interact(op))) {
+                continue;
+            }
+            await Execution.delayTicks(3);
+            if (upassArea(Game.tile()) === 'area1') {
+                log(`the unicorn tunnel dropped us at (${Game.tile()?.x},${Game.tile()?.z})`);
+                return true;
+            }
+        }
+    }
+    log('the unicorn tunnel did not lead out of the crushed-cage room');
+    return false;
+}
+
 /** Why: the proven cage/dig/ledge/railing chain gets out of the well corridor; the pipe and unicorn tunnel then drop into the temple shelf. The pipe's landing changes with the stage, so the generic seam handles it rather than the fixed landing table. */
 async function reachTempleShelf(log: (m: string) => void): Promise<boolean> {
     if (!(await crossChain(TO_RAILINGS, log))) {
@@ -102,6 +136,9 @@ async function reachTempleShelf(log: (m: string) => void): Promise<boolean> {
     }
     // Why: the pipe lands on the loose-railing side; the cage is the stand that reaches the unicorn side of the 3-way tunnel, which is the end that drops into the temple shelf.
     if (!(await walkTo(UP_TILE.UNICORN_CAGE, 3, log))) {
+        return false;
+    }
+    if (!(await useUnicornTunnel(log))) {
         return false;
     }
     return walkTo(UP_TILE.TEMPLE_DOOR, 3, log);

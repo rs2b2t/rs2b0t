@@ -297,6 +297,11 @@ export async function shootGuiderope(log: (m: string) => void): Promise<boolean>
             log(`(${stand.x},${stand.z}) cannot reach the rope — trying the next stand`);
             continue;
         }
+        // Why: the arrow can land while the character does not step onto the bridge in the same window; the impale line is the script's own proof the rope is up.
+        if (/impale/i.test(said)) {
+            log(`the arrow impaled the rope from (${stand.x},${stand.z})`);
+            return true;
+        }
         log(`the shot did not carry from (${stand.x},${stand.z}) — server said: ${said}`);
         return false;
     }
