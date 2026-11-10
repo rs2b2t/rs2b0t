@@ -157,16 +157,16 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
         if (Inventory.free() < 2) {
             await dropJunk(log);
         }
-        // Why: Kamen is one walk from Kalrag, so a fight that runs the pack down to the last few items can leave and come back fed instead of standing in melee until the lobster count hits zero and the next hit kills.
-        if (canFetchFood && foodHeldNow() <= FOOD_RETREAT) {
-            log(`down to ${foodHeldNow()} food — breaking off to restock`);
-            await breakOff(near, log, fleeTo);
-            return false;
-        }
         const live = find();
         if (!live || (live.health === 0 && live.snap.totalHealth > 0)) {
             dead = true;
             break;
+        }
+        // Why: the kill is checked first; aborting on food while the target is already dead is how an amulet was left on the floor. Only a living target sends the fight back to Kamen.
+        if (canFetchFood && foodHeldNow() <= FOOD_RETREAT) {
+            log(`down to ${foodHeldNow()} food — breaking off to restock`);
+            await breakOff(near, log, fleeTo);
+            return false;
         }
         const now = performance.now();
         // Why: the server refuses an Attack on the main target while a different single-way NPC hit us in the last 8 ticks ("I'm already under attack"), so a blessed spider on our back has to die first. The one mid-attack is the safest pick: facing can lag a tick, and with several spiders on us the nearest one may not be the aggressor.
@@ -281,7 +281,10 @@ export async function killDemon(log: (m: string) => void): Promise<boolean> {
     if (!owed) {
         return true;
     }
-    if (!(await killNpc(owed.npc, owed.tile, owed.name, log, true))) {
+    const killed = await killNpc(owed.npc, owed.tile, owed.name, log, true);
+    // Why: the killing tick can end the loop on a food break-off; if the demon is gone the fight was won, so the drop still has to be collected before any restock trip.
+    const gone = Npcs.query().where(npc => npc.id === owed.npc).within(20).nearest() === null;
+    if (!killed && !gone) {
         return false;
     }
     // Why: the amulet is added by the death script a tick after the hp bar empties, so a single query after the fight loses it to the lootdrop timer.
