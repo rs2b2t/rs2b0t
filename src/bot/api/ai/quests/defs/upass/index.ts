@@ -2,8 +2,9 @@ import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
+import { Npcs } from '../../../../npcs/Npcs.js';
 import Tile from '../../../../../geometry/Tile.js';
-import { UP_ITEM, UP_LOC, UP_TILE, carried, held, insideIbanTemple, insideWitchHouse, pastGridTile, upassArea, worn, type UpassArea } from './areas.js';
+import { UP_ITEM, UP_LOC, UP_NPC, UP_TILE, carried, held, insideIbanTemple, insideWitchHouse, pastGridTile, upassArea, worn, type UpassArea } from './areas.js';
 import { UP_FLAG, UP_STAGE, readUpassProgress } from './journal.js';
 import {
     armFireArrow,
@@ -236,7 +237,7 @@ function orbLeg(snap: QuestSnapshot): QuestStep {
     return custom('take and burn the four orbs, then climb the well', sweepOrbs);
 }
 
-// Why: at stage 4 the unicorn is dead but a respawn has lost the railing; the boulder is already down, so cross the same one-way corridor if needed and take the horn, with no lever to fetch.
+// Why: a respawn after the crush has lost the railing and the journal reads stage 3 again (stages 3 and 4 share the page), so only the live boulder and cage say the lever is already spent.
 async function reachRuinedCage(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(UP_TILE.UNICORN_CAGE, 3, log))) {
         const next = outstandingCrossing();
@@ -245,6 +246,27 @@ async function reachRuinedCage(log: (m: string) => void): Promise<boolean> {
         }
     }
     return takeUnicornHorn(log);
+}
+
+/** Past the crush take the horn; before it, cross the corridor and fetch the railing the boulder still needs. */
+async function unicornRoomOrRailing(log: (m: string) => void): Promise<boolean> {
+    // Why: from the room, walkTo(cage) can pick the pass-through tunnel as a seam and leave toward the first cavern without the horn. The room is a tiny tile box; take the horn from there directly.
+    const at = Game.tile();
+    if (at !== null && at.x <= 2400 && at.z >= 9600 && at.z <= 9625) {
+        return takeUnicornHorn(log);
+    }
+    const boulder = Npcs.query().where(npc => npc.id === UP_NPC.BOULDER).within(32).nearest();
+    const cage = locById(UP_LOC.UNICORN_CAGE, null, 32);
+    if (!boulder && cage !== null) {
+        return reachRuinedCage(log);
+    }
+    if (!(await walkTo(UP_TILE.UNICORN_CAGE, 3, log))) {
+        const next = outstandingCrossing();
+        if (next !== null) {
+            return takeNextCrossing(log);
+        }
+    }
+    return takeRailing(log);
 }
 
 // Why: stages 3 and 4 are one leg because the journal can't tell them apart, both print "I must work my way deeper into these caverns" and differ only in which line is struck through. The horn is what the snapshot can see, so it ends the step.
@@ -257,16 +279,8 @@ function unicornLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
         return paladinLeg();
     }
     if (held(snap, UP_ITEM.RAILING) === 0) {
-        // Why: after the unicorn is dead a respawn has lost the railing, but the boulder is already down; crossing the cage corridor and taking the horn needs no lever. Re-fetching a railing behind the one-way pipe is the loop.
-        if (snap.stage === UP_STAGE.KILLED_UNICORN) {
-            return custom('reach the ruined unicorn cage', reachRuinedCage);
-        }
-        // Why: 6 crossings stand between the well's corridor and that cage, and the engine recognises "the same step" by description alone, so one step for all of them never resets the attempt counter and the watchdog parks it. Each crossing is its own step.
-        const next = outstandingCrossing();
-        if (next !== null) {
-            return custom(`cross ${next.what}`, takeNextCrossing);
-        }
-        return custom('search the cage bars for a loose railing', takeRailing);
+        // Why: the journal cannot tell a pre-crush stage 3 from a post-crush death, so the live boulder/cage state decides: a ruined cage needs no lever, and re-fetching one behind the one-way pipe is the loop.
+        return custom('reach the ruined unicorn cage', unicornRoomOrRailing);
     }
     return custom('crush the unicorn and take its horn', crushUnicorn);
 }
