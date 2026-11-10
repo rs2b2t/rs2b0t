@@ -155,11 +155,17 @@ async function transitToStage(stage: number, area: UpassArea, tile: QuestSnapsho
             log('re-entry: could not fire the guide rope to cross back west');
             return false;
         }
+        log(`re-entry: crossing the grid from (${Game.tile()?.x},${Game.tile()?.z})`);
         if (!(await crossGrid(log))) {
+            log(`re-entry: grid crossing failed at (${Game.tile()?.x},${Game.tile()?.z})`);
             return false;
         }
+        log(`re-entry: grid crossed at (${Game.tile()?.x},${Game.tile()?.z})`);
         // Why: the well only opens once all four orbs are dark, and a resumed run can find the seeded stage with them still lit, so fall back to the sweep.
-        if (!(await enterWell(log)) && !(await sweepOrbs(log))) {
+        const well = await enterWell(log);
+        log(`re-entry: well ${well ? 'descended' : 'did not open'}`);
+        if (!well && !(await sweepOrbs(log))) {
+            log('re-entry: orb sweep failed');
             return false;
         }
     }
