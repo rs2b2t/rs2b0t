@@ -409,10 +409,24 @@ async function robeFromDisciple(log: (m: string) => void): Promise<boolean> {
     return false;
 }
 
-// Why: the rope, spade, bucket, bow, arrows and the book from Kardia's chest are all used up by now. The pack reaches the temple with 4 or 5 free slots and the strip needs 6, so the spent kit goes on the floor.
+// Why: the rope, spade, bucket, bow, arrows and the book from Kardia's chest are all used up by now. The pack reaches the temple with 4 or 5 free slots and the strip needs 6, so the spent kit goes on the floor; the cooked food is dropped next when the pack is still too full for the robe pieces.
 const SPENT: readonly UpassItem[] = [
     UP_ITEM.ROPE, UP_ITEM.SPADE, UP_ITEM.BUCKET, UP_ITEM.SHORTBOW, UP_ITEM.BRONZE_ARROW, UP_ITEM.HISTORY
 ];
+
+/** The meals, worst first; lobsters are kept because they heal the most. */
+const SHED_FOOD = ['bread', 'stew', 'meat pie', 'meat pizza'];
+
+async function dropOne(matcher: (id: number, name: string | null) => boolean, dropped: string[]): Promise<boolean> {
+    const item = Inventory.items().find(i => matcher(i.id, i.name));
+    const op = item?.actions().find(o => /drop/i.test(o));
+    if (!item || !op || !(await item.interact(op))) {
+        return false;
+    }
+    await Execution.delayTicks(1);
+    dropped.push(item.name ?? String(item.id));
+    return true;
+}
 
 async function shedSpentKit(need: number, log: (m: string) => void): Promise<void> {
     const dropped: string[] = [];
@@ -420,11 +434,11 @@ async function shedSpentKit(need: number, log: (m: string) => void): Promise<voi
         if (Inventory.free() >= need) {
             break;
         }
-        const item = Inventory.items().find(i => i.id === spent.id || (spent.id === UP_ITEM.SHORTBOW.id && BOW_IDS.has(i.id)));
-        const op = item?.actions().find(o => /drop/i.test(o));
-        if (item && op && await item.interact(op)) {
-            await Execution.delayTicks(1);
-            dropped.push(spent.name);
+        await dropOne((id) => id === spent.id || (spent.id === UP_ITEM.SHORTBOW.id && BOW_IDS.has(id)), dropped);
+    }
+    for (const name of SHED_FOOD) {
+        while (Inventory.free() < need && await dropOne((_id, itemName) => itemName !== null && itemName.toLowerCase() === name, dropped)) {
+            // keep dropping this kind until the slots are there
         }
     }
     if (dropped.length > 0) {
@@ -463,8 +477,12 @@ export async function openIbanDoor(log: (m: string) => void): Promise<boolean> {
             const on = Equipment.items();
             return on.length === 2 && on.every(i => i.id === UP_ITEM.ZAM_TOP.id || i.id === UP_ITEM.ZAM_BOTTOM.id);
         };
-        if (!robed() && !(await robeFromDisciple(log) && await wearOnlyRobes(log))) {
-            return false;
+        if (!robed()) {
+            // Why: the robe pieces are ground items and need two free slots before the kill, not after; a pack full of meals otherwise spins at "no pair of robes".
+            await shedSpentKit(2, log);
+            if (!(await robeFromDisciple(log) && await wearOnlyRobes(log))) {
+                return false;
+            }
         }
         if (!(await walkTo(UP_TILE.IBAN_DOOR, 3, log))) {
             return false;
