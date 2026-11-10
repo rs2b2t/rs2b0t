@@ -67,8 +67,17 @@ export async function ascendFromDwarves(log: (m: string) => void): Promise<boole
 }
 
 /** Nilhoof points at the witch and moves the stage on. */
-export const askNilhoof = (log: (m: string) => void): Promise<boolean> =>
-    talkTo(UP_NPC.NILHOOF, 'Nilhoof', UP_TILE.NILHOOF, [], log);
+export async function askNilhoof(log: (m: string) => void): Promise<boolean> {
+    // Why: he hands over three food items with inv_add, which needs the slots; a full pack loses them.
+    if (Inventory.free() < 3) {
+        await dropJunk(log);
+    }
+    if (Inventory.free() < 3) {
+        log(`pack is full — no room for Nilhoof's food (${Inventory.free()} free)`);
+        return false;
+    }
+    return talkTo(UP_NPC.NILHOOF, 'Nilhoof', UP_TILE.NILHOOF, [], log);
+}
 
 /** Klank hands over a tinderbox, and the gauntlets once the doll is found. */
 export const askKlank = (log: (m: string) => void): Promise<boolean> =>
@@ -89,9 +98,13 @@ const KAMEN_RULES: readonly LineRule[] = [
 
 /** Kamen sells meat pie, stew and bread for 75gp; the only repeatable food inside the pass. */
 export async function buyKamenMeal(log: (m: string) => void): Promise<boolean> {
-    // Why: the paid branch has no space check in the script, so a full pack drops the food it just paid for.
+    // Why: the meal is three items and both Kamen branches have no space check, so a full pack quietly loses the food it just paid for. Clear the scraps and refuse the buy when there is still no room.
     if (Inventory.free() < 3) {
         await dropJunk(log);
+    }
+    if (Inventory.free() < 3) {
+        log(`pack is full — no room for Kamen's meal (${Inventory.free()} free)`);
+        return false;
     }
     const before = mealCount();
     const coinsBefore = heldId(UP_ITEM.COINS.id);

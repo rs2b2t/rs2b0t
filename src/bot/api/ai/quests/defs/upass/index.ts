@@ -255,7 +255,8 @@ function restockStep(area: UpassArea): QuestStep {
         }
         while (foodHeldNow() < RESTOCK_TARGET) {
             if (!(await buyKamenMeal(log))) {
-                return false;
+                // Why: a full pack or an empty purse cannot be fixed here, so resume with what is left instead of retrying the same dialogue forever.
+                return foodHeldNow() > 0;
             }
             noteRestock();
         }
