@@ -109,7 +109,7 @@ export async function buyKamenMeal(log: (m: string) => void): Promise<boolean> {
     }
     // Why: the dialogue closes before the client's inventory snapshot catches up, so the first read after the last line still shows the old pack and a synchronous check fails a meal that did arrive. Spent coins are a second, independent proof.
     const arrived = (): boolean => mealCount() > before || (paid && heldId(UP_ITEM.COINS.id) <= coinsBefore - KAMEN_MEAL_GP);
-    if (!(await Execution.delayUntil(arrived, 3_000))) {
+    if (!(await Execution.delayUntil(arrived, 5_000))) {
         log('Kamen did not hand over a meal');
         return false;
     }

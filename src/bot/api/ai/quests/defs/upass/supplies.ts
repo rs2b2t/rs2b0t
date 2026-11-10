@@ -17,8 +17,8 @@ export const FOOD_RETREAT = 5;
 export const FOOD_RESTOCKS = 8;
 /** Kamen meals are 3 items each; fill back to this before returning to the fight so one trip is not one attempt. */
 export const RESTOCK_TARGET = 14;
-/** Coins to carry for Kamen's paid meal: 75gp for meat pie, stew and bread, eight meals. */
-export const COIN_FLOAT = 600;
+/** Coins to carry for Kamen's paid meal: 75gp for meat pie, stew and bread. One stack, so a deep float costs no slot and stops the purse running dry mid-run. */
+export const COIN_FLOAT = 3000;
 // Why: a bank that has run down after several deaths still leaves a viable run; stopping for the last 8 lobsters strands a pack that can finish the demons.
 export const FOOD_FLOOR = 8;
 
