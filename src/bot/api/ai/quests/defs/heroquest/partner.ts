@@ -15,6 +15,8 @@ export interface HeroHandoffInput {
     /** Candlesticks in the pack. The chest hands the Black Arm bot 2. */
     candlesticks: number;
     partnerConfigured: boolean;
+    partnerStage?: number;
+    partnerHasKey?: boolean;
     /** False while this side still owes itself a purchase or a withdrawal before it can use the trade. */
     ready: boolean;
 }
@@ -46,7 +48,8 @@ export function decideHeroHandoff(input: HeroHandoffInput): HeroHandoff | null {
     }
     if (input.gang === 'blackarm') {
         // Why: Grip re-issues the spare whenever `~obj_gettotal` reads 0, so giving it away costs nothing.
-        if (input.stage >= HERO_STAGE.BLACKARM_PAPERS_GIVEN && input.stage < HERO_STAGE.BLACKARM_ARMBAND && input.hasKey) {
+        if (input.stage >= HERO_STAGE.BLACKARM_PAPERS_GIVEN && input.stage < HERO_STAGE.BLACKARM_ARMBAND && input.hasKey && input.partnerHasKey !== true
+            && (input.partnerStage === undefined || input.partnerStage < HERO_STAGE.PHOENIX_KILLED_GRIP)) {
             return 'give-key';
         }
         // Why: The chest gives two candlesticks and refuses while one is held or banked; one is reserved for the partner.
@@ -101,6 +104,7 @@ export async function runHeroHandoff(handoff: HeroHandoff, log: (m: string) => v
 export function heroHandoffStep(handoff: HeroHandoff): QuestStep {
     return {
         kind: 'custom',
+        cooperative: true,
         name: `${handoff} with ${HeroConfig.partner}`,
         run: log => runHeroHandoff(handoff, log)
     };

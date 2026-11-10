@@ -12,7 +12,8 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import Tile from '../../../../../geometry/Tile.js';
 import { settleScene, useOnLoc } from '../../exec/prompts.js';
 import { TB_ID, TB_LOC, TB_NAME, TB_NPC, TB_TILE } from './areas.js';
-import { foodNames } from './supplies.js';
+import { foodFormsForQuest } from './loadout.js';
+import { Skills } from '../../../../skills/Skills.js';
 import { type Log, walkTo } from './talk.js';
 
 const heldId = (id: number): number => Inventory.items().filter(i => i.id === id).reduce((n, i) => n + i.count, 0);
@@ -35,7 +36,7 @@ export async function combine(useId: number, targetId: number, productId: number
 }
 
 const heldAny = (ids: readonly number[]): number => ids.reduce((n, id) => n + heldId(id), 0);
-const foodHeld = (): number => foodNames().reduce((n, name) => n + Inventory.count(name), 0);
+const foodHeld = (): number => foodFormsForQuest().reduce((n, name) => n + Inventory.count(name), 0);
 
 /** Take the nearest drop matching any of `ids`; false when there is nothing to take yet. */
 export async function takeGround(ids: readonly number[], name: string, log: Log): Promise<boolean> {
@@ -56,8 +57,13 @@ export async function takeGround(ids: readonly number[], name: string, log: Log)
 /** Net Karambwanji until the pack holds `want` of them, or has no room left. */
 export function fishKarambwanji(want: number): (log: Log) => Promise<boolean> {
     return async log => {
+        if (want <= 0) return false;
         if (heldId(TB_ID.RAW_KARAMBWANJI) >= want) {
             return true;
+        }
+        if (Inventory.free() < 1) {
+            log('Karambwanji catch needs a free inventory slot');
+            return false;
         }
         if (!(await walkTo(TB_TILE.KARAMBWANJI_SHOAL, 5, log))) {
             return false;
@@ -86,7 +92,7 @@ export function fishKarambwanji(want: number): (log: Log) => Promise<boolean> {
             }
             await Execution.delayUntil(() => heldId(TB_ID.RAW_KARAMBWANJI) > before, 20_000);
         }
-        return heldId(TB_ID.RAW_KARAMBWANJI) > 0;
+        return heldId(TB_ID.RAW_KARAMBWANJI) >= want;
     };
 }
 
@@ -98,6 +104,14 @@ export function fishKarambwan(want = 2): (log: Log) => Promise<boolean> {
         if (heldId(TB_ID.RAW_KARAMBWAN) >= want) {
             return true;
         }
+        if (Skills.level('fishing') < 65) {
+            log('replacement Karambwan requires 65 Fishing');
+            return false;
+        }
+        if (Inventory.free() < 1) {
+            log('Karambwan catch needs a free inventory slot');
+            return false;
+        }
         if (!(await walkTo(TB_TILE.KARAMBWAN_SHOAL, 5, log))) {
             return false;
         }
@@ -106,6 +120,10 @@ export function fishKarambwan(want = 2): (log: Log) => Promise<boolean> {
             await Sustain.run();
             if (heldId(TB_ID.VESSEL_LOADED) === 0 && !(await loadVessel(log))) {
                 break;
+            }
+            if (Inventory.free() < 1) {
+                log('Karambwan catch needs a free inventory slot');
+                return false;
             }
             const spot = Npcs.query().name(TB_NPC.FISHING_SPOT).action('Fish').within(8).nearest();
             if (!spot) {

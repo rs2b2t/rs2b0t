@@ -1,3 +1,6 @@
+import { EventSignal } from '../../../../execution/EventSignal.js';
+import { GameMessages } from '../../../../chatbox/gameMessages.js';
+import { edibleNames } from './loadout.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
@@ -22,6 +25,8 @@ function locNear(id: number, op: string, within = 10): Loc | null {
 
 /** Every entry burns one nightshade; the guard is distracted only for the run past. */
 export async function enterEnclave(log: (m: string) => void): Promise<boolean> {
+    if (EventSignal.pending()) return false;
+    Game.setAutoRetaliate(false);
     if (watchtowerArea(Game.tile()) === 'enclave') {
         return true;
     }
@@ -68,46 +73,56 @@ export async function leaveEnclave(log: (m: string) => void): Promise<boolean> {
     return true;
 }
 
+async function safeToContinue(log: (m: string) => void): Promise<boolean> {
+    if (EventSignal.pending()) return false;
+    if (Skills.effective('hitpoints') < Skills.level('hitpoints') * 0.6) await Sustain.run();
+    if (EventSignal.pending()) return false;
+    const foods = new Set(edibleNames());
+    const food = Inventory.items().filter(item => foods.has(item.name?.toLowerCase() ?? '')).reduce((n, item) => n + item.count, 0);
+    if (food >= 2 && Inventory.free() >= 2 && Skills.effective('hitpoints') >= Skills.level('hitpoints') * 0.6) return true;
+    log('enclave reserve exhausted; retreating for food or inventory space');
+    await leaveEnclave(log);
+    return false;
+}
+
 export async function dissolveShamans(log: (m: string) => void): Promise<boolean> {
-    if (!(await enterEnclave(log))) {
-        return false;
-    }
+    if (EventSignal.pending() || !(await safeToContinue(log)) || !(await enterEnclave(log))) return false;
     for (const spot of WT_TILE.SHAMANS) {
-        if (heldId(WT_ITEM.MAGIC_OGRE_POTION.id) === 0) {
-            // Why: the potion is spent on the sixth shaman or lost, and either way staying put lets decide() choose.
-            // Why: the rock is mined from in here, and a brewing trip leaves through the ordinary escape.
-            log('the magic ogre potion is spent');
-            return true;
-        }
-        if (Skills.effective('hitpoints') * 2 < Skills.level('hitpoints')) {
-            await Sustain.run();
-        }
+        if (!(await safeToContinue(log)) || heldId(WT_ITEM.MAGIC_OGRE_POTION.id) === 0) return false;
         if (!(await Traversal.walkResilient(spot, { radius: 2, attempts: 2, timeoutMs: 90_000, log }))) {
+            if (EventSignal.pending()) return false;
             continue;
         }
-        // Never talk to or attack a shaman: opnpc1 is a flat 20 damage and attacking draws 30. Only the potion works.
+        if (!(await safeToContinue(log))) return false;
         const shaman = Npcs.query().name(WT_NPC.SHAMAN).where(npc => npc.distance() <= 4).nearest();
         const potion = Inventory.items().find(item => item.id === WT_ITEM.MAGIC_OGRE_POTION.id);
-        if (!shaman || !potion) {
-            continue;
+        if (!shaman || !potion) continue;
+        const mark = GameMessages.mark();
+        if (!(await potion.useOn(shaman))) return false;
+        if (!(await Execution.delayUntil(() => GameMessages.sawSince(mark, /the ogre dissolves into spirit form/i), 8000))) return false;
+        if (EventSignal.pending()) return false;
+        if (await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 8000)) {
+            await driveDialog([], log);
         }
-        if (await potion.useOn(shaman)) {
-            await Execution.delayTicks(3);
-        }
+        if (EventSignal.pending()) return false;
+        Execution.noteProgress();
+        return true;
     }
-    return true;
+    log('no reachable ogre shaman dissolved');
+    return false;
 }
 
 export async function mineDalgroth(log: (m: string) => void): Promise<boolean> {
     if (heldId(WT_ITEM.CRYSTAL4.id) > 0) {
         return true;
     }
-    if (!(await enterEnclave(log))) {
+    if (!(await safeToContinue(log)) || !(await enterEnclave(log))) {
         return false;
     }
     if (!(await Traversal.walkResilient(WT_TILE.ROCK_OF_DALGROTH, { radius: 2, attempts: 3, timeoutMs: 180_000, log }))) {
         return false;
     }
+    if (!(await safeToContinue(log))) return false;
     const rock = locNear(WT_LOC.ROCK_OF_DALGROTH, 'Mine');
     if (!rock || !(await rock.interact('Mine'))) {
         log('no Rock of Dalgroth in range, or no pickaxe carried');
@@ -120,12 +135,13 @@ export async function searchShamanRobe(log: (m: string) => void): Promise<boolea
     if (heldId(WT_ITEM.CRYSTAL3.id) > 0) {
         return true;
     }
-    if (!(await enterEnclave(log))) {
+    if (!(await safeToContinue(log)) || !(await enterEnclave(log))) {
         return false;
     }
     if (!(await Traversal.walkResilient(WT_TILE.SHAMAN_ROBE, { radius: 2, attempts: 3, timeoutMs: 180_000, log }))) {
         return false;
     }
+    if (!(await safeToContinue(log))) return false;
     if (heldId(WT_ITEM.SHAMAN_ROBE.id) === 0) {
         const robe = GroundItems.query().name(WT_ITEM.SHAMAN_ROBE.name).within(4).nearest();
         if (!robe || !(await robe.interact('Take'))) {

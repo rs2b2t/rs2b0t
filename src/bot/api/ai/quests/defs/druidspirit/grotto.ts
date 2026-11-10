@@ -2,6 +2,7 @@ import { Execution } from '../../../../execution/Execution.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { Game } from '../../../../game/Game.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
+import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
@@ -42,6 +43,22 @@ export async function enterGrotto(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     return Execution.delayUntil(inside, 15_000);
+}
+
+export async function replacePouch(log: (m: string) => void): Promise<boolean> {
+    if (heldId(NS_ID.POUCH_EMPTY) > 0 || heldId(NS_ID.POUCH) > 0) return true;
+    if (!(await enterGrotto(log))) return false;
+    if (!(await Traversal.walkResilient(NS_TILE.POUCH, { radius: 1, attempts: 3, timeoutMs: 30_000, log }))) return false;
+    await settleScene();
+    const pouch = () => GroundItems.query().where(item => item.id === NS_ID.POUCH_EMPTY).within(4).nearest();
+    if (!pouch()) await Execution.delayUntil(() => pouch() !== null, 15_000);
+    const spawn = pouch();
+    if (!spawn) {
+        log('waiting for the empty druid pouch to respawn inside the grotto');
+        return false;
+    }
+    if (!(await spawn.interact('Take'))) return false;
+    return Execution.delayUntil(() => heldId(NS_ID.POUCH_EMPTY) > 0, 6000);
 }
 
 export async function leaveGrotto(log: (m: string) => void): Promise<boolean> {

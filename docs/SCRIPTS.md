@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 76. Categories: 21.
+- Scripts: 77. Categories: 21.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -25,7 +25,7 @@
 - [Money making](#money-making) — 9
 - [Navigation](#navigation) — 2
 - [Prayer](#prayer) — 1
-- [Quest](#quest) — 3
+- [Quest](#quest) — 4
 - [Runecrafting](#runecrafting) — 3
 - [Smithing](#smithing) — 3
 - [Thieving](#thieving) — 3
@@ -782,13 +782,13 @@ Banks at the nearest bank, withdraws unidentified herbs, cleans (identifies) eve
 
 ### HerbloreSecondaries
 
-Collects one herblore secondary — red spiders' eggs, snape grass, eye of newt, chocolate dust (buy+grind), white berries (dragonfire shield), toad's legs, or unicorn horn dust (grinds banked horns at the nearest bank) — with food on dangerous routes and a 5k coin cap for shops
+Collects red spiders' eggs, snape grass, eye of newt, chocolate dust, white berries, toad's legs, blue dragon scales, or unicorn horn dust. Blue dragon scales use the Taverley Dungeon, a Dusty key, and a dragonfire shield. Carries food on dangerous routes and caps shop coins at 5k.
 
 - Tags: `herblore`, `secondaries`, `banking`, `shopping`, `loot`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `secondary` | string | `"Red spiders' eggs"` | Secondary — one of: Red spiders' eggs, Snape grass, Eye of newt, Chocolate dust, White berries, Toad's legs, Unicorn horn dust |
+| `secondary` | string | `"Red spiders' eggs"` | Secondary — one of: Red spiders' eggs, Snape grass, Eye of newt, Chocolate dust, White berries, Toad's legs, Blue dragon scale, Unicorn horn dust |
 | `loadout` | string | `""` | Loadout — one of:  |
 | `foodWithdraw` | number (0–27) | `10` | Food to withdraw |
 
@@ -802,7 +802,7 @@ Banks at the nearest bank, withdraws vials of water and a chosen herb, spam-make
 |---|---|---|---|
 | `herb` | string | `"Custom"` | Herb — one of: Guam leaf, Marrentill, Tarromin, Harralander, Ranarr weed, Toadflax, Irit leaf, Avantoe, Kwuarm, Snapdragon, Cadantine, Lantadyme, Dwarf weed, Torstol, Custom |
 | `herbCustom` | string | `"Guam leaf"` | Custom herb |
-| `secondary` | string | `"Custom"` | Secondary — one of: Eye of newt, Red spiders' eggs, Limpwurt root, Snape grass, Unicorn horn dust, White berries, Dragon scale dust, Wine of zamorak, Jangerberries, Custom |
+| `secondary` | string | `"Custom"` | Secondary — one of: Toad's legs, Eye of newt, Red spiders' eggs, Limpwurt root, Snape grass, Unicorn horn dust, White berries, Dragon scale dust, Wine of zamorak, Jangerberries, Custom |
 | `secondaryCustom` | string | `"Eye of newt"` | Custom secondary |
 
 ### RoguesPurse
@@ -1103,6 +1103,17 @@ Alfred Grimhand's Barcrawl — banks for the drinks, gets the card from the outp
 
 - Tags: `miniquest`, `barcrawl`, `barbarian outpost`, `gate`
 
+### DragonfireShield
+
+Farms free anti-dragonbreath shields from Duke Horacio in Lumbridge Castle (requires the %dragon_shield var, unlocked by Oziach in the Dark Slayer quest) — drop-mode: un-noted shields are dropped at the Duke, looted and banked; noted shields are carried to seed the pile and freely drop-safe to the floor
+
+- Tags: `dark slayer`, `dragonfire shield`, `antidragonbreath shield`, `duke horacio`, `certificates`, `faucet`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `tripSecs` | number (20–600) | `50` | Farm seconds per trip |
+| `carryNotes` | boolean | `true` | Carry noted shields |
+
 ## Runecrafting
 
 ### JiveRC
@@ -1191,6 +1202,8 @@ Smelts bars with the Superheat Item spell instead of a furnace — withdraws ore
 |---|---|---|---|
 | `bar` | string | `"Bronze"` | Bar to smelt — one of: Bronze, Iron, Silver, Steel, Gold, Mithril, Adamant, Rune, Blurite |
 | `natures` | number (28–1000) | `50` | Nature runes to keep in the pack |
+| `goldsmithGauntlets` | boolean | `true` | Goldsmith gauntlets |
+| `fastBank` | boolean | `true` | Instant bank leg |
 
 ## Thieving
 

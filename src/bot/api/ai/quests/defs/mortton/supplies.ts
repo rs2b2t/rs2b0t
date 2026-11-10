@@ -78,6 +78,29 @@ export const permSerumVialId = (): number | null => firstHeld(PERM_SERUM_BY_DOSE
 
 const scanBank: QuestStep = { kind: 'scanBank' };
 
+export function recoverPyreSupplies(snap: QuestSnapshot, needLogs: boolean, needOil: boolean, needRemains: boolean): QuestStep | null {
+    if (!needLogs && !needOil && !needRemains) return null;
+    if (!snap.bankKnown) return scanBank;
+    const items: { name: string; id: number; qty: number }[] = [];
+    if (needLogs && bankedId(snap, SM_ID.PYRE_LOGS) > 0) {
+        items.push({ name: SM_NAME.PYRE_LOGS, id: SM_ID.PYRE_LOGS, qty: 1 });
+    } else if (needOil) {
+        const oil = [SM_ID.SACRED_OIL4, SM_ID.SACRED_OIL3, SM_ID.SACRED_OIL2, SM_ID.OLIVE_OIL4, SM_ID.OLIVE_OIL3, SM_ID.OLIVE_OIL2]
+            .find(id => bankedId(snap, id) > 0);
+        if (oil !== undefined) items.push({ name: oil <= SM_ID.OLIVE_OIL2 ? 'Olive oil' : 'Sacred oil', id: oil, qty: 1 });
+    }
+    if (needRemains && bankedId(snap, SM_ID.REMAINS) > 0) {
+        items.push({ name: SM_NAME.REMAINS, id: SM_ID.REMAINS, qty: 1 });
+    }
+    if (items.length === 0) return null;
+    if ((snap.freeSlots ?? items.length) < items.length) {
+        const keep = [...SM_TOOLS, ...(QuestFood.name ? [QuestFood.name.toLowerCase()] : [])];
+        const expendable = [...snap.inv].some(([name, count]) => count > 0 && !keep.some(k => name.toLowerCase().includes(k)));
+        return expendable ? { kind: 'deposit', keep } : { kind: 'wait', reason: 'no pack room for pyre recovery' };
+    }
+    return { kind: 'withdraw', items };
+}
+
 // Why: a dose is spent per villager conversation the quest still owes, and each conversation is gated on a stage, so what is left to brew falls out of where the quest is.
 
 /** Doses of serum the rest of the quest still spends from this stage on. */
@@ -146,7 +169,7 @@ export function ashesShort(snap: QuestSnapshot, stage: number): number {
 
 /** Logs the pack still needs: one per outstanding burn, plus the one the pyre consumes. */
 export function logsShort(snap: QuestSnapshot, stage: number): number {
-    const spent = stage >= SM_STAGE.LOGS_ON_PYRE || heldId(snap, SM_ID.PYRE_LOGS) > 0;
+    const spent = stage >= SM_STAGE.LOGS_ON_PYRE || (stage >= SM_STAGE.CREATED_PYRE_LOGS && heldId(snap, SM_ID.PYRE_LOGS) > 0);
     return Math.max(0, ashesShort(snap, stage) + (spent ? 0 : 1) - heldId(snap, SM_ID.LOGS));
 }
 

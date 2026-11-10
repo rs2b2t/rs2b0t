@@ -5,7 +5,7 @@ import { KIT_KEEP, kitWanted } from '../fightarena/index.js';
 import { wearKit } from '../fightarena/legs.js';
 import { SM_ID, SM_NPC, SM_STAGE, SM_TILE } from './areas.js';
 import { readMorttonProgress, SM_FLAG } from './journal.js';
-import { DOSES_PER_PYRE_LOG, lightPyre, layRemains, makePyreLogs, stackPyre } from './pyre.js';
+import { bodiedPyre, cremateShade, DOSES_PER_PYRE_LOG, loadedPyre, makePyreLogs } from './pyre.js';
 import { huntShade, REMAINS_WANTED } from './shades.js';
 import {
     ashesShort,
@@ -16,6 +16,7 @@ import {
     makeAshes,
     permSerumVialId,
     recoverSerum,
+    recoverPyreSupplies,
     serumsShort,
     SM_TOOLS
 } from './supplies.js';
@@ -73,8 +74,8 @@ function sacredDoses(snap: QuestSnapshot): number {
 }
 
 /** Sacred oil, or the pyre logs it became, or the olive oil it comes from. */
-function haveOil(snap: QuestSnapshot): boolean {
-    return held(snap, SM_ID.PYRE_LOGS) > 0
+function haveOil(snap: QuestSnapshot, madeLogs = true): boolean {
+    return (madeLogs && held(snap, SM_ID.PYRE_LOGS) > 0)
         || sacredDoses(snap) >= DOSES_PER_PYRE_LOG
         || held(snap, SM_ID.OLIVE_OIL4) + held(snap, SM_ID.OLIVE_OIL3) + held(snap, SM_ID.OLIVE_OIL2) > 0;
 }
@@ -147,9 +148,9 @@ function gearLeg(snap: QuestSnapshot): QuestStep | null {
 // Why: both counters live behind Razmire's cured face, so anything missing is bought before the leg that needs it; the olive oil waits until the rebuild has spent the 11 slots of plank, brick and paste.
 
 /** The next shopping trip at Razmire's counters, or null when the pack is stocked. */
-function shopLeg(snap: QuestSnapshot, want: { building: boolean; oil: boolean }): QuestStep | null {
+function shopLeg(snap: QuestSnapshot, want: { building: boolean; oil: boolean; madeLogs?: boolean }): QuestStep | null {
     const wantHammer = want.building && held(snap, SM_ID.HAMMER) === 0;
-    const wantOil = want.oil && !haveOil(snap);
+    const wantOil = want.oil && !haveOil(snap, want.madeLogs);
     if (wantHammer || wantOil) {
         return custom("buy from Razmire's general store", shopAtRazmire(generalOrder({ hammer: wantHammer, oil: wantOil })));
     }
@@ -203,11 +204,27 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
 
-    const recovery = recoverSerum(snap, stage);
+    const cremating = stage >= SM_STAGE.CREATED_SACRED_OIL && stage < SM_STAGE.LIT_PYRE;
+    const madeLogs = stage >= SM_STAGE.CREATED_PYRE_LOGS;
+    const remainsPlaced = cremating && bodiedPyre() !== null;
+    const logsPlaced = remainsPlaced || (cremating && loadedPyre() !== null);
+    if (logsPlaced && held(snap, SM_ID.TINDERBOX) > 0 && (remainsPlaced || held(snap, SM_ID.REMAINS) > 0)) {
+        return custom('cremate the shade', cremateShade);
+    }
+    const supplyStage = cremating && !logsPlaced ? (madeLogs ? SM_STAGE.CREATED_PYRE_LOGS : SM_STAGE.CREATED_SACRED_OIL) : stage;
+    if (cremating) {
+        const recovery = recoverPyreSupplies(snap,
+            madeLogs && !logsPlaced && held(snap, SM_ID.PYRE_LOGS) === 0,
+            !logsPlaced && !haveOil(snap, madeLogs),
+            !remainsPlaced && held(snap, SM_ID.REMAINS) === 0);
+        if (recovery) return recovery;
+    }
+
+    const recovery = recoverSerum(snap, supplyStage);
     if (recovery) {
         return recovery;
     }
-    const supplies = kit(snap, stage);
+    const supplies = kit(snap, supplyStage);
     if (supplies) {
         return supplies;
     }
@@ -216,10 +233,10 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return gear;
     }
     // Why: the ashes and the pyre log both come from the Varrock spawns, so the burn happens once, before the swamp crossing.
-    if (ashesShort(snap, stage) > 0 || logsShort(snap, stage) > 0) {
+    if (ashesShort(snap, supplyStage) > 0 || logsShort(snap, supplyStage) > 0) {
         return custom('burn logs for ashes', makeAshes({
-            ashes: held(snap, SM_ID.ASHES) + ashesShort(snap, stage),
-            logs: held(snap, SM_ID.PYRE_LOGS) > 0 ? 0 : 1
+            ashes: held(snap, SM_ID.ASHES) + ashesShort(snap, supplyStage),
+            logs: madeLogs && held(snap, SM_ID.PYRE_LOGS) > 0 ? 0 : 1
         }));
     }
 
@@ -279,21 +296,18 @@ export function decide(snap: QuestSnapshot): QuestStep {
             const shop = shopLeg(snap, { building: needsTemple(snap), oil: true });
             return shop ?? custom('light the altar and sanctify the oil', altarLeg);
         }
-        case SM_STAGE.CREATED_SACRED_OIL: {
-            const shop = shopLeg(snap, { building: needsTemple(snap), oil: true });
+        case SM_STAGE.CREATED_SACRED_OIL:
+        case SM_STAGE.CREATED_PYRE_LOGS:
+        case SM_STAGE.LOGS_ON_PYRE: {
+            if (!remainsPlaced && held(snap, SM_ID.REMAINS) === 0) return custom('hunt a Loar Shade', huntShade);
+            if (logsPlaced || (madeLogs && held(snap, SM_ID.PYRE_LOGS) > 0)) return custom('cremate the shade', cremateShade);
+            if (sacredDoses(snap) >= DOSES_PER_PYRE_LOG) return custom('soak the logs in sacred oil', makePyreLogs);
+            const shop = shopLeg(snap, { building: needsTemple(snap), oil: true, madeLogs });
             if (shop) {
                 return shop;
             }
-            // Why: the stage only says oil was sanctified once, so a lost vial goes back to the flame.
-            if (held(snap, SM_ID.PYRE_LOGS) === 0 && sacredDoses(snap) < DOSES_PER_PYRE_LOG) {
-                return custom('sanctify more oil in the flame', altarLeg);
-            }
-            return custom('soak the logs in sacred oil', makePyreLogs);
+            return custom('sanctify more oil in the flame', altarLeg);
         }
-        case SM_STAGE.CREATED_PYRE_LOGS:
-            return custom('stack the pyre logs', stackPyre);
-        case SM_STAGE.LOGS_ON_PYRE:
-            return custom('cremate the shade', async log => (await layRemains(log)) && lightPyre(log));
         case SM_STAGE.LIT_PYRE:
             return ulsquire([]);
         default:

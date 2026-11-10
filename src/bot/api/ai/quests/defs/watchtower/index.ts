@@ -1,3 +1,5 @@
+import { Game } from '../../../../game/Game.js';
+import { clearSpace, fitSupplies, foodCount, WATCHTOWER_FOODS } from './loadout.js';
 import { QuestFood } from '../../food.js';
 import { dragonBankPending, huntDragonBones, inDragonLair, leaveDragonLair, refreshDragonBank } from './bones.js';
 import { QUESTS } from '../../data/quests.js';
@@ -5,11 +7,12 @@ import { flagValue, hasFlag, type QuestModule, type QuestSnapshot, type QuestSte
 import { CRYSTALS, RELIC_PARTS, WT_ITEM, WT_TILE, watchtowerArea, type WatchtowerArea } from './areas.js';
 import {
     CHASM_TOLL,
+    goldGateNeedsPayment,
     answerRiddle,
     askRiddle,
     crossBattlement,
     jumpBack,
-    leaveLowerCity,
+    leaveCity,
     showRelicToGuard,
     stealRockCake
 } from './gutanoth.js';
@@ -79,12 +82,14 @@ function escapePocket(area: WatchtowerArea, wanted: WatchtowerArea): QuestStep |
         case 'cityGuard':
             return { kind: 'custom', name: 'jump back out of the city-guard pocket', run: jumpBack };
         case 'skavidCaves':
-            return { kind: 'custom', name: 'leave the skavid cave', run: leaveCave };
+            return { kind: 'custom', name: 'leave the skavid cave', run: async log => {
+                if (!(await leaveCave(log))) return false;
+                return watchtowerArea(Game.tile()) !== 'lowerCity' || leaveCity(log);
+            } };
         case 'enclave':
             return { kind: 'custom', name: 'leave the shaman enclave', run: leaveEnclave };
         case 'lowerCity':
-            // The battlement is a two-way climb once the market gift is paid.
-            return { kind: 'custom', name: 'climb back over the battlement', run: leaveLowerCity };
+            return { kind: 'custom', name: 'leave the ogre city', run: leaveCity };
         default:
             return null;
     }
@@ -216,10 +221,11 @@ function stageRiddle(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
 function needCaveKit(snap: QuestSnapshot, area: WatchtowerArea): QuestStep | null {
     if (held(snap, WT_ITEM.SKAVID_MAP.id) === 0) {
         const inBank = bankOnly(snap, WT_ITEM.SKAVID_MAP);
-        if (inBank && inBank.kind === 'withdraw') {
+        if (inBank && inBank.kind !== 'wait') {
             return at(area, 'yanille', inBank);
         }
-        return { kind: 'custom', name: 'ask the city guard for another skavid map', run: askRiddle };
+        const purse = held(snap, WT_ITEM.COINS.id) < CHASM_TOLL * 2 ? sourceCoins(snap, CITY_PURSE) : null;
+        return purse ? at(area, 'yanille', purse) : at(area, 'cityGuard', { kind: 'custom', name: 'ask the city guard for another skavid map', run: askRiddle });
     }
     const light = sourceLightSource(snap);
     return light ? at(area, 'yanille', light) : null;
@@ -237,11 +243,12 @@ function stageCaves(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
     if (cave <= 4) {
         return { kind: 'custom', name: `answer the skavid in cave ${cave}`, run: log => learnWord(cave, log) };
     }
-    // Cave 6 is behind the gold-bar gate, so the bar has to be in the pack first.
-    const bar = bankOnly(snap, WT_ITEM.GOLD_BAR);
-    return bar
-        ? at(area, 'yanille', bar)
-        : { kind: 'custom', name: 'answer the mad skavid for a crystal', run: answerMadSkavid };
+    const payment = goldGateNeedsPayment();
+    if (area !== 'skavidCaves' && payment !== false && (area !== 'lowerCity' || payment === true)) {
+        const bar = bankOnly(snap, WT_ITEM.GOLD_BAR);
+        if (bar && (bar.kind !== 'wait' || payment === true)) return at(area, 'yanille', bar);
+    }
+    return at(area, 'skavidCaves', { kind: 'custom', name: 'answer the mad skavid for a crystal', run: answerMadSkavid });
 }
 
 function stageEnclaveEntry(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
@@ -259,6 +266,10 @@ function stageEnclaveEntry(snap: QuestSnapshot, area: WatchtowerArea): QuestStep
 }
 
 function stagePotion(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
+    for (const potion of [WT_ITEM.MAGIC_OGRE_POTION, WT_ITEM.OGRE_POTION, WT_ITEM.GUAM_JANGER_VIAL, WT_ITEM.GUAM_VIAL]) {
+        if (held(snap, potion.id) > 0) break;
+        if (banked(snap, potion.id) > 0) return at(area, 'yanille', withdrawFrom([{ ...potion, qty: 1 }]));
+    }
     if (held(snap, WT_ITEM.OGRE_POTION.id) > 0) {
         return at(area, 'towerFloor', { kind: 'custom', name: 'have the wizard infuse the ogre potion', run: infusePotion });
     }
@@ -278,10 +289,12 @@ function stagePotion(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
         }
     }
     if (held(snap, WT_ITEM.GUAM_JANGER_VIAL.id) === 0 && held(snap, WT_ITEM.JANGERBERRIES.id) === 0) {
+        if (banked(snap, WT_ITEM.JANGERBERRIES.id) > 0) return withdrawFrom([{ ...WT_ITEM.JANGERBERRIES, qty: 1 }]);
         return needRope(snap, area)
             ?? { kind: 'custom', name: 'pick jangerberries on Grew island', run: pickJangerberries };
     }
     if (held(snap, WT_ITEM.GROUND_BAT_BONES.id) === 0) {
+        if (banked(snap, WT_ITEM.GROUND_BAT_BONES.id) > 0) return withdrawFrom([{ ...WT_ITEM.GROUND_BAT_BONES, qty: 1 }]);
         const bones = bankOnly(snap, WT_ITEM.BAT_BONES);
         if (bones) {
             return bones;
@@ -344,7 +357,7 @@ function stageShamans(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
     if (area === 'enclave') {
         return { kind: 'custom', name: 'leave the shaman enclave', run: leaveEnclave };
     }
-    const recovery = recoverCrystals(snap);
+    const recovery = recoverCrystals(snap, area);
     if (recovery) {
         return recovery;
     }
@@ -353,12 +366,12 @@ function stageShamans(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
 
 const CRYSTAL_RECOVERY: Readonly<Record<number, { name: string; run: (log: (m: string) => void) => Promise<boolean> }>> = {
     [WT_ITEM.CRYSTAL1.id]: { name: 'ask Grew for another crystal', run: talkToGrew },
-    [WT_ITEM.CRYSTAL2.id]: { name: 'ask the mad skavid for another crystal', run: answerMadSkavid },
+    [WT_ITEM.CRYSTAL2.id]: { name: 'ask the mad skavid for another crystal', run: log => answerMadSkavid(log, true) },
     [WT_ITEM.CRYSTAL3.id]: { name: 'search a shaman robe for the third crystal', run: searchShamanRobe },
     [WT_ITEM.CRYSTAL4.id]: { name: 'mine the Rock of Dalgroth again', run: mineDalgroth }
 };
 
-function recoverCrystals(snap: QuestSnapshot): QuestStep | null {
+function recoverCrystals(snap: QuestSnapshot, area: WatchtowerArea): QuestStep | null {
     // Nothing to recover once all four are carried; don't walk to the bank only to learn what's in it.
     const lost = CRYSTALS.find(crystal => held(snap, crystal.id) === 0);
     if (!lost) {
@@ -367,16 +380,26 @@ function recoverCrystals(snap: QuestSnapshot): QuestStep | null {
     // Every re-issue check reads the bank as well as the pack, so a banked crystal blocks its own replacement. Withdraw before asking for another.
     const inBank = CRYSTALS.filter(crystal => held(snap, crystal.id) === 0 && banked(snap, crystal.id) > 0);
     if (inBank.length > 0) {
-        return withdrawFrom(inBank.map(crystal => ({ name: crystal.name, id: crystal.id, qty: 1 })));
+        return at(area, 'yanille', withdrawFrom(inBank.map(crystal => ({ name: crystal.name, id: crystal.id, qty: 1 }))));
     }
     if (!snap.bankKnown) {
-        return scanBank();
+        return at(area, 'yanille', scanBank());
     }
     const recovery = CRYSTAL_RECOVERY[lost.id];
-    return { kind: 'custom', name: recovery.name, run: recovery.run };
+    const step: QuestStep = { kind: 'custom', name: recovery.name, run: recovery.run };
+    if (lost.id === WT_ITEM.CRYSTAL1.id) {
+        const rope = needRope(snap, area);
+        return rope ? at(area, 'yanille', rope) : at(area, 'grewIsland', step);
+    }
+    if (lost.id === WT_ITEM.CRYSTAL2.id) {
+        const kit = needCaveKit(snap, area);
+        if (kit) return kit;
+        return at(area, 'skavidCaves', step);
+    }
+    return step;
 }
 
-export function decide(snap: QuestSnapshot): QuestStep {
+function decideNext(snap: QuestSnapshot): QuestStep {
     if (inDragonLair(snap.tile)) return { kind: 'custom', name: 'leave the dragon lair', run: leaveDragonLair };
     if (dragonBankPending()) return { kind: 'custom', name: 'refresh the bank after the dragon hunt', run: refreshDragonBank };
     if (snap.journal === 'complete' || (snap.stage ?? -1) >= WATCHTOWER_STAGE.COMPLETE) {
@@ -406,8 +429,10 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'custom', name: 'climb down from the activated Watchtower', run: leaveWizardFloor };
     }
 
-    // Why: one bank trip for everything the bank can supply; what the bank lacks still falls to the shop, the ground candle and the guard's riddle.
-    // Why: bounded to the collecting stages, as past the potion the kit is spent and a trip proves nothing.
+    if ((snap.freeSlots ?? 28) < 2 || foodCount(snap) > 8) {
+        return at(area, 'yanille', clearSpace(snap));
+    }
+
     if (snap.stage > WATCHTOWER_STAGE.NOT_STARTED && snap.stage <= WATCHTOWER_STAGE.MADE_POTION) {
         const kit = questKit(snap, ENCLAVE_FOOD);
         if (kit) {
@@ -465,13 +490,18 @@ export function decide(snap: QuestSnapshot): QuestStep {
     }
 }
 
+export function decide(snap: QuestSnapshot): QuestStep {
+    return fitSupplies(snap, decideNext(snap));
+}
+
 export const watchtower: QuestModule = {
-    autoRetaliate: snap => !inDragonLair(snap.tile),
+    autoRetaliate: snap => !inDragonLair(snap.tile) && watchtowerArea(snap.tile) !== 'enclave',
     record: QUESTS.find(record => record.id === 'itwatchtower')!,
     bank: WT_TILE.YANILLE_BANK,
     ownsInventory: true,
-    resumeAt: tile => inDragonLair(tile),
+    resumeAt: tile => inDragonLair(tile) || escapePocket(watchtowerArea(tile), 'yanille') !== null,
+    recover: tile => inDragonLair(tile) ? { kind: 'custom', name: 'leave the dragon lair', run: leaveDragonLair } : escapePocket(watchtowerArea(tile), 'yanille'),
     readProgress: readWatchtowerProgress,
-    sustain: { foods: ['Lobster', 'Swordfish', 'Tuna'], eatBelowHp: 0.6 },
+    sustain: { foods: WATCHTOWER_FOODS, eatBelowHp: 0.6 },
     decide
 };

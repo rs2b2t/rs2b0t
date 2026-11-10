@@ -119,3 +119,23 @@ test('Tourist Trap prepares eight configured rations before entering the desert'
 test('Tourist Trap resumes through its own safe supply routes instead of generic preparation banking', () => {
     expect(questPreparationRequest(moduleFor('desertrescue'), 'Cake', 'inProgress')).toBeNull();
 });
+
+test('Tai Bwo Wannai Trio prepares enough three-dose bottles for Tamayu, including on resume', () => {
+    for (const status of ['notStarted', 'inProgress'] as const) {
+        const request = questPreparationRequest(moduleFor('tbwt'), null, status);
+        expect(request?.items).toContainEqual({ item: 'Agility potion(3)', count: 2 });
+        expect(request?.items?.some(item => item.item === 'Agility potion(4)')).toBe(false);
+    }
+    const partial = questPreparationRequest(moduleFor('tbwt'), null, 'inProgress', stock([['agility potion(2)', 1]]));
+    expect(partial?.items).toEqual([{ item: 'Agility potion(3)', count: 1 }]);
+    const three = questPreparationRequest(moduleFor('tbwt'), null, 'inProgress', stock([['agility potion(3)', 1]]));
+    expect(three?.items).toEqual([{ item: 'Agility potion(3)', count: 2 }]);
+    const mixed = questPreparationRequest(moduleFor('tbwt'), null, 'inProgress', stock([['agility potion(3)', 1], ['agility potion(1)', 1]]));
+    expect(mixed?.items).toBeUndefined();
+});
+
+test('Tai Bwo Wannai Trio does not replace potions already delivered to Tamayu', () => {
+    for (const progress of [{ stage: 3, flags: new Set(['agility']) }, { stage: 4, flags: new Set<string>() }]) {
+        expect(questPreparationRequest(moduleFor('tbwt'), null, 'inProgress', new Map(), undefined, progress)?.items).toBeUndefined();
+    }
+});

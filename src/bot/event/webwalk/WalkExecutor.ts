@@ -632,10 +632,10 @@ class WalkExecutorImpl {
 
     private checkRouteItems(waypoints: Waypoint[], log: (msg: string) => void): boolean {
         const missing = missingItemsForPath(waypoints, snapshotWorldStateData());
+        this.lastMissingGateItems = missing;
         if (missing.length === 0) {
             return true;
         }
-        this.lastMissingGateItems = missing;
         this.lastOutcome = 'unreachable';
         log(`route needs ${missing.map(m => `${m.count}×${m.name}`).join(', ')} before departure`);
         return false;

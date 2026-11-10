@@ -52,6 +52,9 @@ export interface QuestHost {
     prepare?(request: QuestPreparationRequest): Promise<QuestPreparationResult>;
     preparationStatus?(): string;
     stopPreparation?(): void;
+    exitPreparation?(): Promise<void>;
+    waitingForPartner?(id: string): boolean;
+    partnerProgressKey?(id: string): string;
 }
 
 const PARK_GIVE_UP = 3;
@@ -130,6 +133,8 @@ export class QuestEngine implements Task {
     private combatXp = 0;
     private progressKey = '';
     private progressAt = 0;
+    private partnerProgress = '';
+    private partnerProgressAt = 0;
 
     private readonly parked = new Set<string>();
     private readonly parkCounts = new Map<string, number>();
@@ -169,11 +174,15 @@ export class QuestEngine implements Task {
     private readonly restartCounts = new Map<string, number>();
     private recovery: { id: string; mode: 'refresh' | 'bank'; reset: QuestBankReset; tries: number; skip?: boolean; abort?: string } | null = null;
     private preparation: {
-        id: string; request: QuestPreparationRequest; reset: QuestBankReset;
+        id: string; request: QuestPreparationRequest; reset: QuestBankReset; progress?: QuestProgress;
         phase: 'bank' | 'work' | 'restore'; tries: number; error?: string; skip?: boolean; retry?: boolean;
     } | null = null;
 
+    private readonly coordination = new Map<string, { stage?: number }>();
+
     constructor(private readonly host: QuestHost) {}
+
+    coordinationProgress(): ReadonlyMap<string, { stage?: number }> { return this.coordination; }
 
     validate(): boolean {
         return !ChatDialog.canContinue() && Game.tile() !== null;
@@ -306,6 +315,7 @@ export class QuestEngine implements Task {
         }
         const progress = await module.readProgress?.();
         const stage = progress ? progress.stage : await module.readStage?.();
+        this.coordination.set(id, { stage });
         const snap = this.buildSnapshot(module, stage, progress);
         if (snap.journal === 'unknown') {
             this.host.noteState(rows, id, 'waiting for quest journal', 0, this.parked.size);
@@ -318,9 +328,9 @@ export class QuestEngine implements Task {
                 if (item.name) stock.set(item.name.toLowerCase(), (stock.get(item.name.toLowerCase()) ?? 0) + item.count);
                 stockIds.set(item.id, (stockIds.get(item.id) ?? 0) + item.count);
             }
-            const request = questPreparationRequest(module, this.host.foodItem(), snap.journal, stock, stockIds);
+            const request = questPreparationRequest(module, this.host.foodItem(), snap.journal, stock, stockIds, snap.progress);
             if (request && this.needsPreparation(request, stock)) {
-                this.preparation = { id, request, reset: new QuestBankReset(this.host.foodItem()), phase: 'bank', tries: 0 };
+                this.preparation = { id, request, progress: snap.progress, reset: new QuestBankReset(this.host.foodItem()), phase: 'bank', tries: 0 };
                 await this.runPreparation();
                 return;
             }
@@ -328,16 +338,6 @@ export class QuestEngine implements Task {
         }
         const inQuestArea = snap.tile !== null && snap.tile !== undefined && module.resumeAt?.(snap.tile) === true;
         const combatActive = this.combatAdvancing(snap);
-        if (this.host.automaticRecovery?.()) {
-            const key = `${id}|${progressSignature({ ...snap, tile: undefined })}`;
-            if (key !== this.progressKey || combatActive) {
-                this.progressKey = key;
-                this.progressAt = Date.now();
-            } else if (Date.now() - this.progressAt >= 300_000) {
-                this.beginRecovery(id, 'five minutes without quest, inventory or combat progress');
-                return;
-            }
-        }
 
         if (this.pendingFailedSignature !== null) {
             if (!combatActive && progressSignature(snap) === this.pendingFailedSignature) {
@@ -516,6 +516,33 @@ export class QuestEngine implements Task {
 
         if (!inQuestArea && await this.prepareResume(module, id, snap, rows, step)) return;
 
+        const partnerWaiting = (step.kind === 'wait' || step.kind === 'custom') && step.cooperative === true
+            && this.host.waitingForPartner?.(id) === true;
+        if (partnerWaiting) {
+            const progress = `${id}|${progressSignature({ ...snap, tile: undefined })}|${this.host.partnerProgressKey?.(id) ?? ''}`;
+            if (progress !== this.partnerProgress) {
+                this.partnerProgress = progress;
+                this.partnerProgressAt = Date.now();
+            } else if (Date.now() - this.partnerProgressAt >= 600_000) {
+                if (this.beginRecovery(id, 'ten minutes without partnership progress')) return;
+            }
+            this.watchdog.reset();
+            this.failedWatchdog.reset();
+            this.noProgressCount = 0;
+        } else {
+            this.partnerProgress = '';
+        }
+        if (this.host.automaticRecovery?.()) {
+            const key = `${id}|${progressSignature({ ...snap, tile: undefined })}`;
+            if (key !== this.progressKey || combatActive || partnerWaiting) {
+                this.progressKey = key;
+                this.progressAt = Date.now();
+            } else if (Date.now() - this.progressAt >= 300_000) {
+                this.beginRecovery(id, 'five minutes without quest, inventory or combat progress');
+                return;
+            }
+        }
+
         const stepDesc = describeStep(step);
         this.host.noteState(rows, id, stepDesc, this.noProgressCount, this.parked.size);
 
@@ -542,7 +569,7 @@ export class QuestEngine implements Task {
             }
         }
 
-        if (step.kind === 'wait') {
+        if (step.kind === 'wait' && !partnerWaiting) {
             const key = `${id}|${step.reason}`;
             this.waitCount = key === this.waitKey ? this.waitCount + 1 : 1;
             this.waitKey = key;
@@ -607,7 +634,7 @@ export class QuestEngine implements Task {
             await Modals.close();
         }
 
-        if (advancesWorld(step)) {
+        if (advancesWorld(step) && !partnerWaiting) {
             const after = this.buildSnapshot(module, stage, progress);
             const signature = progressSignature(after);
             const combatActive = this.combatAdvancing(after);
@@ -680,7 +707,7 @@ export class QuestEngine implements Task {
                 }
                 task.tries = 0;
                 this.refreshBankCounts(true);
-                task.request = questPreparationRequest(module, this.host.foodItem(), Quests.status(module.record.name), this.lastBankCounts, this.lastBankIdCounts) ?? task.request;
+                task.request = questPreparationRequest(module, this.host.foodItem(), Quests.status(module.record.name), this.lastBankCounts, this.lastBankIdCounts, task.progress) ?? task.request;
                 task.request = { ...task.request, items: [...task.request.items ?? [], ...task.reset.supplies] };
                 task.phase = task.skip || task.retry ? 'restore' : 'work';
             }
@@ -691,6 +718,8 @@ export class QuestEngine implements Task {
                 this.host.stopPreparation?.();
                 task.phase = 'restore';
             }
+            this.preparationNote(task.id, 'leaving quest preparation activity');
+            await this.host.exitPreparation?.();
             this.preparationNote(task.id, 'restoring quest inventory and equipment');
             if (task.reset.pending && !(await task.reset.restore(log))) {
                 if (++task.tries >= FRESH_GIVE_UP) this.host.finish(`cannot restore ${module.record.name}: ${task.reset.reason}`);
@@ -998,6 +1027,8 @@ export class QuestEngine implements Task {
         this.combatIdleSince = null;
         this.progressKey = '';
         this.progressAt = 0;
+        this.partnerProgress = '';
+        this.partnerProgressAt = 0;
     }
 
     private combatAdvancing(snap: QuestSnapshot): boolean {

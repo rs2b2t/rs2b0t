@@ -48,6 +48,22 @@ export function pickFireStaff(has: (name: string) => boolean): string | undefine
     return FIRE_STAVES.find(name => has(name));
 }
 
+/** Gold is the only bar whose Smithing XP the Goldsmith gauntlet multiplies. */
+export function wantsGoldsmithGauntlets(bar: string, enabled: boolean): boolean {
+    return enabled && bar.trim().toLowerCase() === 'gold';
+}
+
+/** 1-based menu op index of the first label matching `pattern`, or -1 when none does. */
+export function opIndex(ops: readonly (string | null)[], pattern: RegExp): number {
+    for (let i = 0; i < ops.length; i++) {
+        const op = ops[i];
+        if (op !== null && pattern.test(op)) {
+            return i + 1;
+        }
+    }
+    return -1;
+}
+
 /** Superheat Item unlocks at 43 Magic. */
 export const MAGIC_REQUIRED = 43;
 

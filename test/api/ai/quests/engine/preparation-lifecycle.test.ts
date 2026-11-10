@@ -163,3 +163,37 @@ for (const mode of ['preparation', 'recovery'] as const) {
         expect(state.active).toBe('runemysteries');
     });
 }
+
+for (const reason of ['skip', 'restart', 'failure'] as const) {
+    test(`${reason} during preparation leaves the activity area before restoring the quest pack`, async () => {
+        const { engine, state, host } = fixture();
+        pendingPreparation(engine);
+        const task = engine['preparation']!;
+        task.phase = 'work';
+        Object.defineProperty(task.reset, 'pending', { get: () => true });
+        const order: string[] = [];
+        host.stopPreparation = () => { order.push('stop'); };
+        host.exitPreparation = async () => { order.push('exit'); };
+        spyOn(task.reset, 'restore').mockImplementation(async () => { order.push('restore'); return true; });
+        if (reason === 'failure') host.prepare = async () => { throw new Error('Arena activity failed'); };
+        else state[reason] = true;
+        await engine.execute();
+        if (reason === 'failure') await engine.execute();
+        expect(order).toEqual(['stop', 'exit', 'restore']);
+        expect(state.finished).toBe('');
+    });
+}
+
+test('a failed activity exit retains the quest pack snapshot and stops after bounded retries', async () => {
+    const { engine, state, host } = fixture();
+    pendingPreparation(engine);
+    const task = engine['preparation']!;
+    task.phase = 'restore';
+    Object.defineProperty(task.reset, 'pending', { get: () => true });
+    const restore = spyOn(task.reset, 'restore').mockResolvedValue(true);
+    host.exitPreparation = async () => { throw new Error('Arena exit failed'); };
+    for (let tick = 0; tick < 3; tick++) await engine.execute();
+    expect(restore).not.toHaveBeenCalled();
+    expect(engine['preparation']).toBe(task);
+    expect(state.finished).toContain('Arena exit failed');
+});

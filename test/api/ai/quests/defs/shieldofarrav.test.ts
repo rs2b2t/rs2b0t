@@ -39,6 +39,8 @@ function withGang(gang: 'phoenix' | 'blackarm'): void {
 afterEach(() => {
     ArravConfig.gang = 'random';
     ArravConfig.partner = '';
+    ArravConfig.partnerStage = undefined;
+    ArravConfig.partnerHasKey = undefined;
     ArravConfig.certTarget = 2;
     resetGangCache();
 });
@@ -96,7 +98,43 @@ describe('shield of arrav decide', () => {
             progress: { stage: SOA_STAGE.PHOENIX_JOINED, flags: new Set() },
             invIds: new Map([[SOA_ID.STORE_KEY, 1]])
         });
-        expect(decide(s)).toMatchObject({ kind: 'custom' });
+        expect(decide(s)).toMatchObject({ kind: 'custom', cooperative: true });
+    });
+
+    test('a waiting Black Arm partner gets the banked key before Phoenix waits for its half', () => {
+        withGang('phoenix');
+        ArravConfig.partner = 'Fally Market';
+        ArravConfig.partnerStage = SOA_STAGE.KATRINE_TASK;
+        const step = decide(snap({ stage: SOA_STAGE.PHOENIX_JOINED,
+            invIds: new Map([[SOA_ID.SHIELD_PHOENIX, 1]]), bankIds: new Map([[SOA_ID.STORE_KEY, 1]]) }));
+        expect(step).toMatchObject({ kind: 'withdraw', items: [{ id: SOA_ID.STORE_KEY, qty: 1 }] });
+    });
+
+    test('a missing key is reissued before Phoenix waits for the blocked partner half', () => {
+        withGang('phoenix');
+        ArravConfig.partner = 'Fally Market';
+        ArravConfig.partnerStage = SOA_STAGE.KATRINE_TASK;
+        const step = decide(snap({ stage: SOA_STAGE.PHOENIX_JOINED, invIds: new Map([[SOA_ID.SHIELD_PHOENIX, 1]]) }));
+        expect(step).toMatchObject({ kind: 'custom', name: 'recover the Phoenix weapon-store key' });
+    });
+
+    test.each([false, true])('a partner carrying its key avoids another key trip or offer when Phoenix holds a spare: %s', hasSpare => {
+        withGang('phoenix');
+        ArravConfig.partner = 'Fally Market';
+        ArravConfig.partnerStage = SOA_STAGE.KATRINE_TASK;
+        ArravConfig.partnerHasKey = true;
+        const ids: [number, number][] = [[SOA_ID.SHIELD_PHOENIX, 1]];
+        if (hasSpare) ids.push([SOA_ID.STORE_KEY, 1]);
+        expect(decide(snap({ stage: SOA_STAGE.PHOENIX_JOINED, invIds: new Map(ids) })))
+            .toMatchObject({ kind: 'custom', name: 'take-half with Fally Market' });
+    });
+
+    test('a partner past the weapon-store task does not trigger spare-key recovery', () => {
+        withGang('phoenix');
+        ArravConfig.partner = 'Fally Market';
+        ArravConfig.partnerStage = SOA_STAGE.BLACKARM_JOINED;
+        const step = decide(snap({ stage: SOA_STAGE.PHOENIX_JOINED, invIds: new Map([[SOA_ID.SHIELD_PHOENIX, 1]]) }));
+        expect(step).toMatchObject({ kind: 'custom', name: 'take-half with Fally Market' });
     });
 
     test('the phoenix setting runs the phoenix leg', () => {

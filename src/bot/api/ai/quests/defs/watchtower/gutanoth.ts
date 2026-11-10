@@ -1,3 +1,4 @@
+import { GameMessages } from '../../../../chatbox/gameMessages.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
@@ -287,22 +288,48 @@ async function offerGoldBar(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => (Game.tile()?.z ?? 9999) <= 3027 && (Game.tile()?.x ?? 0) >= 2540, 10_000);
 }
 
-export async function crossEastGate(log: (m: string) => void): Promise<boolean> {
+const gatePayments = new Map<string, boolean>();
+export function goldGateNeedsPayment(): boolean | undefined {
+    const name = Game.myName();
+    return name ? gatePayments.get(name) : undefined;
+}
+function rememberGatePayment(needed: boolean): void {
+    const name = Game.myName();
+    if (name) gatePayments.set(name, needed);
+}
+
+export async function crossEastGate(log: (m: string) => void, paid = false): Promise<boolean> {
     if (await pastEastGate()) {
+        rememberGatePayment(false);
         return true;
     }
-    if (heldId(WT_ITEM.GOLD_BAR.id) === 0) {
-        log('no Gold bar for the east gate guard');
+    if (paid || goldGateNeedsPayment() === false || heldId(WT_ITEM.GOLD_BAR.id) === 0) {
+        if (!(await Traversal.walkResilient(WT_TILE.EAST_GATE_STAND, { radius: 1, attempts: 3, timeoutMs: 180_000, log }))) return false;
+        const gate = locNear(WT_LOC.GATE_EAST, 'Open', 6);
+        const mark = GameMessages.mark();
+        if (!gate || !(await gate.interact('Open'))) return false;
+        const crossed = (): boolean => (Game.tile()?.z ?? 9999) <= 3027 && (Game.tile()?.x ?? 0) >= 2540;
+        await Execution.delayUntil(() => crossed() || ChatDialog.isOpen() || ChatDialog.canContinue(), 8000);
+        if (ChatDialog.isOpen() || ChatDialog.canContinue()) await driveDialog([], log);
+        if (await Execution.delayUntil(crossed, 4000)) {
+            await settleScene();
+            if (await pastEastGate()) {
+                rememberGatePayment(false);
+                return true;
+            }
+        }
+        if (GameMessages.sawSince(mark, /guard pushes you outside the city/i)) rememberGatePayment(true);
+        log('east gate did not open; a gold bar is needed if the guard refused passage');
         return false;
     }
     if (await offerGoldBar(log)) {
+        rememberGatePayment(false);
         await settleScene();
         return true;
     }
-    log('east gate guard threw us down the hill — returning to pay again');
-    if (!(await offerGoldBar(log))) {
-        return false;
-    }
+    log('east gate guard threw us down the hill; returning to pay again');
+    if (!(await offerGoldBar(log))) return false;
+    rememberGatePayment(false);
     await settleScene();
     return true;
 }
@@ -325,4 +352,8 @@ export async function leaveEastGate(log: (m: string) => void): Promise<boolean> 
     }
     await settleScene();
     return true;
+}
+
+export async function leaveCity(log: (m: string) => void): Promise<boolean> {
+    return (await pastEastGate()) ? leaveEastGate(log) : leaveLowerCity(log);
 }

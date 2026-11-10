@@ -1,6 +1,11 @@
+import { resolveNodeId } from '../../../client/config/worlds.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
+import { Trade } from '../../api/trade/Trade.js';
+import { SOA_ID } from '../../api/ai/quests/defs/shieldofarrav/areas.js';
+import { HERO_ID } from '../../api/ai/quests/defs/heroquest/areas.js';
+import { ArravConfig, resolveGang, type ArravGang } from '../../api/ai/quests/defs/shieldofarrav/config.js';
 import { Game } from '../../api/game/Game.js';
 import { Inventory, type InvItem } from '../../api/inventory/Inventory.js';
 import { Paint, type PaintLine } from '../../paint/Paint.js';
@@ -34,6 +39,9 @@ import {
 } from './AIOQuesterLogic.js';
 import { QUEUE_COLOUR, blockedLines, focusRow, queueEntry, queueSummary, questClockRestarts } from './AIOQuesterPaint.js';
 import { QuestPreparation } from './preparationRuntime.js';
+import { exitQuestArena } from './agilitySupplyActivities.js';
+import { QuestPartnerships, establishedQuestGang } from './QuestPartnerships.js';
+import { PARTNER_QUESTS, type PartnershipSnapshot } from './partnerships.js';
 import { planQuestSelection } from './questSelection.js';
 import { questFoodRequest } from '../../api/ai/quests/engine/preparationPolicy.js';
 import type { QuestPreparationRequest, QuestPreparationResult } from '../../api/ai/quests/engine/preparationTypes.js';
@@ -98,7 +106,7 @@ export const AIO_SETTINGS: SettingsSchema = {
         default: '',
         label: 'Shield of Arrav partner',
         group: 'Shield of Arrav',
-        help: 'character name of the bot running the other gang; the quest cannot be finished alone unless a certificate is already banked'
+        help: 'Leave blank to pair automatically with a running opposite-gang bot in this world, or enter a character name.'
     },
     arravCerts: {
         type: 'number',
@@ -114,7 +122,7 @@ export const AIO_SETTINGS: SettingsSchema = {
         default: '',
         label: "Hero's Quest partner",
         group: "Hero's Quest",
-        help: 'character name of the bot running the other gang; the master thief armband cannot be earned alone, and the gang itself comes from the Shield of Arrav setting'
+        help: 'Leave blank to pair automatically with a running opposite-gang bot in this world, or enter a character name. Uses the gang established in Shield of Arrav.'
     },
     legendsReward: {
         type: 'string',
@@ -146,6 +154,9 @@ export default class AIOQuester extends TaskBot {
     private skipRequested = false;
     private restartRequested = false;
     private preparation: QuestPreparation | null = null;
+    private engine: QuestEngine | null = null;
+    private partnerships: QuestPartnerships | null = null;
+    private establishedGang: ArravGang | null = null;
 
     private died = false;
     private deaths = 0;
@@ -174,6 +185,7 @@ export default class AIOQuester extends TaskBot {
                 this.died = true;
                 this.deaths++;
                 this.preparation?.interrupt('player died');
+                this.partnerships?.refresh();
             }
         });
 
@@ -192,7 +204,15 @@ export default class AIOQuester extends TaskBot {
 
         const queueNames = QUEST_DEFS.filter(d => this.picked.has(d.record.id)).map(d => d.record.name);
         this.log(`AIOQuester, queue: ${queueNames.join(', ') || '(none)'}`);
-        this.add(new ContinueDialog(), new EatFood(this), new QuestEngine(this));
+        this.engine = new QuestEngine(this);
+        this.partnerships = new QuestPartnerships({
+            arravPartner: this.settings.str('arravPartner', ''),
+            heroPartner: this.settings.str('heroPartner', ''),
+            read: () => this.partnershipSnapshot(),
+            log: message => this.log(message)
+        });
+        this.partnerships.start();
+        this.add(new ContinueDialog(), new EatFood(this), this.engine);
     }
 
     private restoreQuestHooks(): void {
@@ -208,6 +228,9 @@ export default class AIOQuester extends TaskBot {
     }
 
     override async onStop(): Promise<void> {
+        this.partnerships?.stop();
+        this.partnerships = null;
+        this.engine = null;
         this.stopPreparation();
         DragonSupplies.wildernessPlanks = true;
         EventSignal.setInterrupt(null);
@@ -265,6 +288,37 @@ export default class AIOQuester extends TaskBot {
         return this.runningId ? defById(this.runningId)?.grind ?? [] : [];
     }
 
+    partnershipSnapshot(): PartnershipSnapshot {
+        const name = Game.myName() ?? '';
+        const progress = this.engine?.coordinationProgress();
+        const observed = establishedQuestGang('hero', progress?.get('hero')?.stage)
+            ?? establishedQuestGang('blackarmgang', progress?.get('blackarmgang')?.stage);
+        if (observed) {
+            this.establishedGang = observed;
+            ArravConfig.gang = observed;
+        }
+        return {
+            name,
+            world: typeof location !== 'undefined' && location.host ? String(resolveNodeId(location.host, new URLSearchParams(location.search))) : '',
+            gang: this.establishedGang ?? (name ? resolveGang(ArravConfig.gang, name) : null),
+            activeQuest: this.runningId,
+            available: !!name && Game.ingame() && Skills.effective('hitpoints') > 0 && !this.died && !this.skipRequested && !this.restartRequested,
+            tradeActive: Trade.active(),
+            quests: Object.fromEntries(PARTNER_QUESTS.map(id => [id, {
+                stage: progress?.get(id)?.stage,
+                hasKey: Inventory.countById(id === 'blackarmgang' ? SOA_ID.STORE_KEY : HERO_ID.MISC_KEY) > 0,
+                eligible: progress?.get(id)?.stage !== undefined && this.picked.has(id) && this.runningId === id
+                    && (!this.preparation || !!this.partnerships?.partner(id))
+            }]))
+        };
+    }
+
+    waitingForPartner(id: string): boolean { return this.partnerships?.waitingForPartner(id) ?? false; }
+    partnerProgressKey(id: string): string {
+        const peer = this.partnerships?.peer(id);
+        return peer && (id === 'blackarmgang' || id === 'hero') ? `${peer.session}:${peer.quests[id]?.stage ?? ''}:${peer.quests[id]?.hasKey ?? ''}` : '';
+    }
+
     pickedIds(): Set<string> {
         return this.picked;
     }
@@ -294,6 +348,7 @@ export default class AIOQuester extends TaskBot {
         this.parkedCount = parked;
         const running = rows.find(r => r.id === runningId);
         this.status = running ? `running ${running.name}` : stepDesc;
+        this.partnerships?.refresh();
     }
 
     requestSkip(): void {
@@ -344,13 +399,14 @@ export default class AIOQuester extends TaskBot {
     }
 
     preparationStatus(): string { return this.preparation?.status ?? 'preparing quest requirements'; }
+    async exitPreparation(): Promise<void> { await exitQuestArena(message => this.log(message)); }
     stopPreparation(): void {
         this.preparation?.stop();
         this.preparation = null;
         this.restoreQuestHooks();
     }
-    override onPause(): void { this.preparation?.pause(); }
-    override onResume(): void { this.preparation?.resume(); }
+    override onPause(): void { this.preparation?.pause(); this.partnerships?.pause(); }
+    override onResume(): void { this.preparation?.resume(); this.partnerships?.resume(); }
 
     finish(reason: string): void {
         this.requestFinish(reason);

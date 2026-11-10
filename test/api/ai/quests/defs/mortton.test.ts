@@ -239,9 +239,9 @@ describe('sourcing', () => {
     test('pyre logs in the pack retire the spare log', () => {
         const bare = snap({ invIds: [[SM_ID.PYRE_LOGS, 1]], stage: SM_STAGE.CREATED_PYRE_LOGS });
         bare.invIds = new Map([
-            [SM_ID.COINS, 30_000], [SM_ID.TINDERBOX, 1], [SM_ID.PYRE_LOGS, 1], [SM_ID.SERUM3, 1]
+            [SM_ID.COINS, 30_000], [SM_ID.TINDERBOX, 1], [SM_ID.PYRE_LOGS, 1], [SM_ID.SERUM3, 1], [SM_ID.REMAINS, 1]
         ]);
-        expect(named(decide(bare))).toBe('stack the pyre logs');
+        expect(named(decide(bare))).toBe('cremate the shade');
     });
 });
 
@@ -335,6 +335,68 @@ describe('the cremation', () => {
     /** A standing temple and the sanctity it left behind, which the flame legs no longer have to earn. */
     const sanctified = [`${SM_FLAG.SANCTITY}:40`, `${SM_FLAG.REPAIRED}:100`];
 
+    test('stage 65 makes its own logs even when traded pyre logs are already carried', () => {
+        expect(named(step({ stage: SM_STAGE.CREATED_SACRED_OIL,
+            invIds: [...late, [SM_ID.PYRE_LOGS, 1], [SM_ID.SACRED_OIL3, 1]], flags: sanctified
+        }))).toBe('soak the logs in sacred oil');
+    });
+
+    test('stage 65 sources oil instead of withdrawing pyre logs it cannot use yet', () => {
+        expect(step({ stage: SM_STAGE.CREATED_SACRED_OIL, invIds: late,
+            bankIds: [[SM_ID.PYRE_LOGS, 1], [SM_ID.SACRED_OIL3, 1]]
+        })).toMatchObject({ kind: 'withdraw', items: [{ id: SM_ID.SACRED_OIL3, qty: 1 }] });
+    });
+
+    test('stage 65 gathers ordinary logs despite carrying traded pyre logs', () => {
+        expect(named(step({ stage: SM_STAGE.CREATED_SACRED_OIL,
+            invIds: [...late, [SM_ID.LOGS, 0], [SM_ID.PYRE_LOGS, 1], [SM_ID.SACRED_OIL3, 1]], flags: sanctified
+        }))).toBe('burn logs for ashes');
+    });
+
+    test('stage 75 recovers banked pyre logs after the old pyre expires', () => {
+        expect(step({
+            stage: SM_STAGE.LOGS_ON_PYRE, invIds: late,
+            bankIds: [[SM_ID.PYRE_LOGS, 1]]
+        })).toMatchObject({ kind: 'withdraw', items: [{ id: SM_ID.PYRE_LOGS, qty: 1 }] });
+    });
+
+    test('stage 75 remakes expired pyre logs from carried sacred oil', () => {
+        expect(named(step({ stage: SM_STAGE.LOGS_ON_PYRE,
+            invIds: [...late, [SM_ID.SACRED_OIL3, 1]], flags: sanctified
+        }))).toBe('soak the logs in sacred oil');
+    });
+
+    test('stage 75 recovers banked sacred oil before rebuilding the temple', () => {
+        expect(step({ stage: SM_STAGE.LOGS_ON_PYRE, invIds: late,
+            bankIds: [[SM_ID.SACRED_OIL2, 1]]
+        })).toMatchObject({ kind: 'withdraw', items: [{ id: SM_ID.SACRED_OIL2, qty: 1 }] });
+    });
+
+    test('stage 75 buys replacement oil when the bank and pack are empty', () => {
+        expect(named(step({ stage: SM_STAGE.LOGS_ON_PYRE, invIds: late })))
+            .toBe("buy from Razmire's general store");
+    });
+
+    test('stage 75 hunts replacement remains before stacking new logs', () => {
+        expect(named(step({ stage: SM_STAGE.LOGS_ON_PYRE,
+            invIds: [[SM_ID.SERUM3, 1], [SM_ID.PYRE_LOGS, 1]]
+        }))).toBe('hunt a Loar Shade');
+    });
+
+    test('stage 75 withdraws banked remains before hunting more', () => {
+        expect(step({ stage: SM_STAGE.LOGS_ON_PYRE,
+            invIds: [[SM_ID.SERUM3, 1], [SM_ID.PYRE_LOGS, 1]], bankIds: [[SM_ID.REMAINS, 2]]
+        })).toMatchObject({ kind: 'withdraw', items: [{ id: SM_ID.REMAINS, qty: 1 }] });
+    });
+
+    test('pyre recovery does not repeat deposits when every carried item would be kept', () => {
+        const snapshot = snap({ stage: SM_STAGE.LOGS_ON_PYRE, invIds: late,
+            bankIds: [[SM_ID.PYRE_LOGS, 1]] });
+        snapshot.freeSlots = 0;
+        snapshot.inv = new Map([['loar remains', 28]]);
+        expect(decide(snapshot)).toMatchObject({ kind: 'wait', reason: 'no pack room for pyre recovery' });
+    });
+
     test('sacred oil goes onto the logs', () => {
         const s = step({ stage: SM_STAGE.CREATED_SACRED_OIL, invIds: [...late, [SM_ID.SACRED_OIL3, 1]], flags: sanctified });
         expect(named(s)).toBe('soak the logs in sacred oil');
@@ -347,11 +409,11 @@ describe('the cremation', () => {
 
     test('pyre logs are stacked', () => {
         const s = step({ stage: SM_STAGE.CREATED_PYRE_LOGS, invIds: [...late, [SM_ID.PYRE_LOGS, 1]] });
-        expect(named(s)).toBe('stack the pyre logs');
+        expect(named(s)).toBe('cremate the shade');
     });
 
     test('a stacked pyre takes the remains and the flame', () => {
-        const s = step({ stage: SM_STAGE.LOGS_ON_PYRE, invIds: late });
+        const s = step({ stage: SM_STAGE.LOGS_ON_PYRE, invIds: [...late, [SM_ID.PYRE_LOGS, 1]] });
         expect(named(s)).toBe('cremate the shade');
     });
 

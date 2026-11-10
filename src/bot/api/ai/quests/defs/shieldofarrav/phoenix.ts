@@ -12,7 +12,7 @@ import { bankedId, heldId, type QuestSnapshot, type QuestStep } from '../../engi
 import { promptLoc } from '../../exec/prompts.js';
 import { BARAEK, RELDO, SOA_ID, SOA_LOC, SOA_TILE, STRAVEN_HANDIN, STRAVEN_JOIN } from './areas.js';
 import { ArravConfig } from './config.js';
-import { enterPhoenixInner, leaveHideout, openContainer, talkInHideout, walkAndTalk } from './hideout.js';
+import { enterHideout, enterPhoenixInner, leaveHideout, openContainer, talkInHideout, talkUntil, walkAndTalk } from './hideout.js';
 import { SOA_STAGE } from './journal.js';
 import { liveItem, modalSaid } from './state.js';
 
@@ -120,6 +120,12 @@ export async function handInReport(log: (m: string) => void): Promise<boolean> {
     return Inventory.countById(SOA_ID.REPORT) === 0;
 }
 
+export async function recoverStoreKey(log: (m: string) => void): Promise<boolean> {
+    const held = (): boolean => Inventory.countById(SOA_ID.STORE_KEY) > 0;
+    if (!held() && (!(await enterHideout(log)) || !(await talkUntil(STRAVEN_HANDIN, [], held, log)))) return false;
+    return leaveHideout(log);
+}
+
 export async function takePhoenixHalf(log: (m: string) => void): Promise<boolean> {
     if (Inventory.countById(SOA_ID.SHIELD_PHOENIX) > 0) {
         await leaveHideout(log);
@@ -220,7 +226,7 @@ export function phoenixStep(snap: QuestSnapshot): QuestStep {
                 return { kind: 'withdraw', items: recover };
             }
             if (heldId(snap, SOA_ID.SHIELD_PHOENIX) > 0) {
-                return { kind: 'wait', reason: 'phoenix half held — the other half is not this leg' };
+                return { kind: 'wait', cooperative: true, reason: 'phoenix half held — the other half is not this leg' };
             }
             return { kind: 'custom', name: 'search the Phoenix hideout chest', run: takePhoenixHalf };
         }

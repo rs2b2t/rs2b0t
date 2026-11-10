@@ -4,7 +4,7 @@ import { ArravConfig, resolveGang, type ArravGang } from '../shieldofarrav/confi
 export type HeroGang = ArravGang;
 
 /** Host-set at script start, read at decide time. */
-export const HeroConfig: { partner: string } = { partner: '' };
+export const HeroConfig: { partner: string; partnerStage?: number; partnerHasKey?: boolean } = { partner: '' };
 
 let cached: HeroGang | null = null;
 let cachedFor = '';

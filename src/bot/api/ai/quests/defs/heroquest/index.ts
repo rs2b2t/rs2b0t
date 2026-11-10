@@ -104,6 +104,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
         hasKey: heldId(snap, HERO_ID.MISC_KEY) > 0,
         candlesticks: heldId(snap, HERO_ID.CANDLESTICK),
         partnerConfigured: partnerConfigured(),
+        partnerStage: HeroConfig.partnerStage,
+        partnerHasKey: HeroConfig.partnerHasKey,
         ready: gang !== 'phoenix' || snipeKitStep(snap) === null
     });
     if (handoff) {
@@ -119,6 +121,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         }
         return {
             kind: 'wait',
+            cooperative: true,
             reason: partnerConfigured()
                 ? `waiting on ${HeroConfig.partner} at stage ${stage}`
                 : 'Heroes Quest needs a rival-gang partner — set heroPartner'

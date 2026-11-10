@@ -186,6 +186,7 @@ describe("hero's quest gang branches", () => {
             invIds: new Map([...kitted('blackarm'), [HERO_ID.MISC_KEY, 1]])
         }));
         expect((step as { name: string }).name).toContain('give-key');
+        expect(step).toMatchObject({ cooperative: true });
     });
 
     // Why: the key is only useful with a bow worn, and fetching one afterwards starts in Brimhaven.

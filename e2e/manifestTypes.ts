@@ -4,7 +4,7 @@ export const SCRIPT_NAMES = [
     'AgilityBot', 'AIOQuester', 'AIOTeleport', 'ArdyCakes', 'ArdyFighter',
     'ArdyThiever', 'ArravSupplier', 'AutoFighter', 'BankFletcher', 'BankSorter', 'Barcrawl', 'BoneBurier',
     'BrimhavenAgility', 'BrimhavenMossGiants', 'ChaosDruidKiller', 'ChickenKiller', 'ClimbingBoots', 'ClueSolver',
-    'CoalTrucks', 'CookBot', 'DartFletcher', 'DoorOpener', 'DuelArena', 'EdgevilleMonkeyBars',
+    'CoalTrucks', 'CookBot', 'DartFletcher', 'DoorOpener', 'DragonfireShield', 'DuelArena', 'EdgevilleMonkeyBars',
     'EssMiner', 'FireGiant', 'Firemaker', 'FlaxAIO', 'FlaxPicker', 'FlaxRunner',
     'FlaxSpinner', 'FlourCollector', 'GatheringBot', 'GemCutter', 'GnomeMagicChopper', 'GreenDragon', 'HerbCleaner',
     'HerbloreSecondaries', 'HillGiant', 'JiveBalls', 'JiveCaskets', 'JiveChests', 'JiveCrafting', 'JiveDemons', 'JiveDragons', 'JiveEnchanter', 'JiveKBD', 'JiveKQ', 'JiveMarketDumper', 'LeatherCrafter', 'MarketMaker', 'MossGiant',

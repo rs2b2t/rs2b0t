@@ -1,9 +1,10 @@
 import { FOOD_FLOAT } from '../food.js';
-import { TOURIST_TRAP_FOOD_TARGET } from '../defs/touristtrapSupplies.js';
 import { ITEM_DB } from '../../../../data/itemdb.js';
 import { UNTRADEABLE_IDS } from '../../../../data/untradeable.js';
 import type { QuestPreparationRequest } from './preparationTypes.js';
-import type { QuestModule, QuestSnapshot } from './types.js';
+import type { QuestModule, QuestProgress, QuestSnapshot } from './types.js';
+import { FOOD_TARGET as TB_FOOD_TARGET, TB_MAIN } from '../defs/tbwt/areas.js';
+import { TOURIST_TRAP_FOOD_TARGET } from '../defs/touristtrapSupplies.js';
 
 type Supply = { item: string; count: number };
 const supplies = (...items: (string | [string, number])[]): Supply[] => items.map(item =>
@@ -14,7 +15,7 @@ const SUPPLIES: Readonly<Record<string, readonly Supply[]>> = {
     priestperil: supplies('Bronze pickaxe'),
     death: supplies(['Bread', 10], ['Trout', 10], 'Iron bar'),
     itwatchtower: supplies('Guam leaf', 'Bat bones', 'Gold bar'),
-    tbwt: supplies('Small fishing net', 'Seaweed', 'Agility potion(4)'),
+    tbwt: supplies('Small fishing net', 'Seaweed'),
     upass: supplies(['Bronze arrow', 50], 'Tinderbox', 'Spade', 'Bucket'),
     regicide: supplies('Spade'),
     legends: supplies('Rune axe', 'Lockpick', 'Unpowered orb', ['Cosmic rune', 3], ['Prayer potion(4)', 3])
@@ -22,7 +23,7 @@ const SUPPLIES: Readonly<Record<string, readonly Supply[]>> = {
 const FOOD_COUNTS: Readonly<Record<string, number>> = {
     squire: 8, haunted: 8, hunt: 8, blackarmgang: 8, gobdip: 8, demon: 8,
     blackknight: 8, druid: 8, zanaris: 8, itwatchtower: 8, junglepotion: 8,
-    tbwt: 8, zombiequeen: 8, elemental_workshop: 8, troll: 8, eadgar: 8,
+    tbwt: TB_FOOD_TARGET, zombiequeen: 8, elemental_workshop: 8, troll: 8, eadgar: 8,
     biohazard: 8, crest: 10, horror: 8, chompybird: 6, upass: 8,
     regicide: 8, viking: 8, hero: 8, legends: 9
 };
@@ -73,7 +74,8 @@ export function questPreparationRequest(
     foodName: string | null,
     status: QuestSnapshot['journal'],
     stock: ReadonlyMap<string, number> = new Map(),
-    stockIds?: ReadonlyMap<number, number>
+    stockIds?: ReadonlyMap<number, number>,
+    progress?: QuestProgress
 ): QuestPreparationRequest | null {
     if (status === 'unknown' || status === 'complete') return null;
     const id = module.record.id;
@@ -90,6 +92,7 @@ export function questPreparationRequest(
         const required = module.record.items.filter(item => item.kind === 'mustHave' && ordinaryItem(item.name))
             .map(item => ({ item: item.name, count: item.qty }));
         for (const supply of [...SUPPLIES[id] ?? [], ...required]) {
+            if (id === 'tbwt' && supply.item.startsWith('Agility potion')) continue;
             if (supply.item === 'Bronze pickaxe' && [...stock].some(([name, qty]) => qty > 0 && name.endsWith('pickaxe'))) continue;
             if (supply.item.endsWith('potion(4)')) {
                 const base = supply.item.slice(0, -3);
@@ -143,6 +146,10 @@ export function questPreparationRequest(
                 if (!has('Oily fishing rod', 'Blamish oil')) skill('herblore', 25);
             }
         }
+    }
+    if (id === 'tbwt' && !progress?.flags.has('agility') && (progress?.stage ?? 0) < TB_MAIN.ALL_BROTHERS) {
+        const doses = [1, 2, 3, 4].reduce((total, dose) => total + count(`Agility potion(${dose})`) * dose, 0);
+        if (doses < 4) items.push({ item: 'Agility potion(3)', count: count('Agility potion(3)') + Math.ceil((4 - doses) / 3) });
     }
     const food = questFoodRequest(module, foodName);
     const skills = [...levels].map(([name, level]) => ({ skill: name, level }));

@@ -620,6 +620,15 @@ export const CASES: readonly Case[] = [
         budgetMin: 25
     },
     {
+        id: 'dragonfire-shield-live',
+        harness: 'dragonfire-shield-live.ts',
+        covers: { scripts: ['DragonfireShield'] },
+        status: 'vetted',
+        provenAt: 'd1c3a9fa',
+        budgetMin: 8,
+        note: 'farms the Duke with the dragon_shield var, drops/loots/banks three or more shields, carries the noted stack and crosses the Al Kharid toll gate both ways'
+    },
+    {
         id: 'dragon-slayer-resume-live',
         harness: 'dragon-slayer-resume-live.ts',
         covers: { scripts: ['AIOQuester'] },
@@ -1695,6 +1704,15 @@ export const CASES: readonly Case[] = [
         harness: 'smelter-swarm-422-live.ts',
         covers: { scripts: ['SmelterBot'] },
         status: 'unvetted'
+    },
+    {
+        id: 'superheater-bank-live',
+        harness: 'superheater-bank-live.ts',
+        covers: { scripts: ['Superheater'] },
+        status: 'vetted',
+        provenAt: '06321445',
+        budgetMin: 5,
+        note: 'Gold + Goldsmith gauntlets at Varrock West: reports bars/hr, bank trips, instant legs, gauntlet state and the nature count. Requires ENGINE_DIR for an isolated client deployment.'
     },
     {
         id: 'smithingbot-bank-loop-live',

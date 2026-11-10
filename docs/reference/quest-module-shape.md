@@ -53,3 +53,17 @@ stops with that reason instead of attempting another quest's bank trip.
 
 - [Quest engine](quest-engine.md)
 - [Add a quest](../how-to/add-a-quest.md)
+
+## Auto-retaliate
+
+Before executing a quest step, the engine enables auto-retaliate unless the
+module's `autoRetaliate` policy overrides it. The policy can be a boolean or a
+function of the current snapshot. Safespot fights, stealth routes, mining under
+attack, and escape routes declare their exceptions. Lost City enables retaliation
+for zombie axe collection and disables it for the Tree Spirit; Watchtower restores
+retaliation after its dragon-bone hunt so Gorad's dialogue-triggered fight works.
+
+The engine waits up to five game ticks for a changed setting to be confirmed.
+A rejected or unconfirmed change fails the step before its action runs. Custom
+steps retain control of retaliation while they execute, including during sustain;
+the policy is reapplied at the next step boundary.

@@ -68,6 +68,12 @@ export default class PotionMaker extends TaskBot {
     secondaryDef(): SecondaryDef | null {
         return this.secondary;
     }
+
+    batchSize(): number {
+        const id = this.settings.num('outputId', 0);
+        const target = this.settings.num('outputCount', 0);
+        return id > 0 && target > 0 ? Math.max(0, Math.min(BATCH, target - Bank.countById(id) - Inventory.countById(id))) : BATCH;
+    }
     private batches = 0;
     private status = 'starting';
     private startedAt = Date.now();
@@ -223,6 +229,17 @@ class RestockIngredients implements Task {
         if (!Bank.ready()) {
             return;
         }
+        const batch = this.bot.batchSize();
+        if (batch === 0) { this.bot.requestFinish('Potion target reached'); return; }
+        if (this.bot.secondaryDef() && Bank.countById(herb.unfId) > 0) {
+            if (!(await Bank.withdrawXById(herb.unfId, batch))) {
+                if (++this.failedWithdraws >= 3) this.bot.requestFinish('could not withdraw unfinished potions');
+                return;
+            }
+            this.failedWithdraws = 0;
+            await Bank.close();
+            return;
+        }
         const vialCount = Bank.countById(VIAL_OF_WATER_ID);
         const herbCount = Bank.countById(herb.id);
         if (vialCount === 0 || herbCount === 0) {
@@ -231,7 +248,7 @@ class RestockIngredients implements Task {
             this.bot.requestFinish(`no ${missing} in the bank`);
             return;
         }
-        if (!(await Bank.withdrawXById(VIAL_OF_WATER_ID, BATCH))) {
+        if (!(await Bank.withdrawXById(VIAL_OF_WATER_ID, batch))) {
             this.bot.log(`ingredient withdrawal failed (${++this.failedWithdraws}/3)`);
             if (this.failedWithdraws >= 3) {
                 this.bot.log('withdrawing vials of water failed three times — stopping');
@@ -239,7 +256,7 @@ class RestockIngredients implements Task {
             }
             return;
         }
-        if (!(await Bank.withdrawXById(herb.id, BATCH))) {
+        if (!(await Bank.withdrawXById(herb.id, batch))) {
             this.bot.log(`ingredient withdrawal failed (${++this.failedWithdraws}/3)`);
             if (this.failedWithdraws >= 3) {
                 this.bot.log(`withdrawing ${herb.name} failed three times — stopping`);

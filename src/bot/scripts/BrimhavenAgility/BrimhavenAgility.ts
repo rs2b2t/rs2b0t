@@ -131,7 +131,7 @@ export default class BrimhavenAgility extends TaskBot {
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
-        this.foodName = scriptFood(this.settings, 'Lobster');
+        this.foodName = this.settings.str('food', '') || scriptFood(this.settings, 'Lobster');
         this.foodPerTrip = this.settings.num('foodWithdraw', DEFAULT_FOOD_PER_TRIP);
         this.bankAtTickets = this.settings.num('bankAtTickets', DEFAULT_BANK_TICKETS);
         this.stealRestock = this.settings.bool('stealRestock', false);
@@ -362,6 +362,8 @@ export default class BrimhavenAgility extends TaskBot {
         return t !== null && inArena(t.x, t.z);
     }
 
+    async leaveArena(): Promise<void> { await leaveArena(this); }
+
     // Why: Swarm despawns only after you leave the tile; 5x5 platforms cannot do that, so evade loops forever (#597).
     override ignoredRandoms(): string[] {
         return this.inArenaNow() ? ['swarm'] : [];
@@ -445,7 +447,7 @@ class SellFoodForBoat implements Task {
                 const msg = `Karamja store did not buy ${item.name} — still ${this.bot.coinCount()} coins, need ${BOAT_FARE} for the Ardougne ship`;
                 await Shop.close();
                 this.bot.setStatus(`stopped — ${msg}`);
-                ScriptRunner.stop(msg);
+                this.bot.requestFinish(msg);
                 return;
             }
             this.bot.log(`sold ${item.name} (${this.bot.coinCount()} coins)`);
@@ -454,7 +456,7 @@ class SellFoodForBoat implements Task {
         if (strandedWithoutBoatFare(this.bot.coinCount(), this.bot.edibleInPack(), true)) {
             const msg = `sold food but only have ${this.bot.coinCount()} coins — need ${BOAT_FARE} for the Ardougne ship`;
             this.bot.setStatus(`stopped — ${msg}`);
-            ScriptRunner.stop(msg);
+            this.bot.requestFinish(msg);
         }
     }
 }
@@ -495,7 +497,7 @@ class StealCoins implements Task {
         if (thieving < GUARD_THIEVING_MIN) {
             const msg = `stealing coins from guards needs Thieving ${GUARD_THIEVING_MIN} (have ${thieving})`;
             this.bot.log(msg);
-            ScriptRunner.stop(msg);
+            this.bot.requestFinish(msg);
             return;
         }
         if (shouldEat(this.bot.hp(), this.bot.edibleInPack())) {
@@ -638,7 +640,7 @@ class BankTrip implements Task {
                 this.bot.log(`bank shortfall (${shortfall}) — steal restock will cover food/coins`);
             } else {
                 this.bot.setStatus(`stopped — ${shortfall}`);
-                ScriptRunner.stop(shortfall);
+                this.bot.requestFinish(shortfall);
                 return;
             }
         }

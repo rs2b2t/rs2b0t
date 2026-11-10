@@ -182,12 +182,12 @@ export function phoenixArmbandStep(snap: QuestSnapshot, stage: number): QuestSte
             if (kit) {
                 return kit;
             }
-            return { kind: 'custom', name: 'shoot Grip through the arrow slit', run: snipeGrip };
+            return { kind: 'custom', cooperative: true, name: 'shoot Grip through the arrow slit', run: snipeGrip };
         }
 
         case HERO_STAGE.PHOENIX_KILLED_GRIP:
             if (heldId(snap, HERO_ID.CANDLESTICK) === 0) {
-                return { kind: 'wait', reason: 'waiting on the rival to hand over a candlestick' };
+                return { kind: 'wait', cooperative: true, reason: 'waiting on the rival to hand over a candlestick' };
             }
             return { kind: 'custom', name: 'give Straven the candlestick', run: handInCandlestick };
 

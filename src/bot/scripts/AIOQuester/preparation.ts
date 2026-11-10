@@ -1,4 +1,5 @@
 import type { QuestPreparationRequest } from '../../api/ai/quests/engine/preparationTypes.js';
+import { questSupplyProducer } from './supplyProducers.js';
 import { FISH, WOODS } from '../AccountLeveler/catalog.js';
 import { membersReady } from '../AccountLeveler/locations.js';
 import { methodFor, producer } from '../AccountLeveler/methods.js';
@@ -36,7 +37,8 @@ export function planPreparation(snapshot: LevelerSnapshot, request: QuestPrepara
             const levels: Record<string, number> = fish ? {
                 ...(raw || stockOf(s, `Raw ${fish.food.toLowerCase()}`) === 0 ? { fishing: fish.level } : {}),
                 ...(!raw ? { cooking: fish.cooking } : {})
-            } : wood ? { woodcutting: wood.level } : need.item === 'Iron ore' ? { mining: 30 } : need.item === 'Iron bar' ? { smithing: 15 } : {};
+            } : wood ? { woodcutting: wood.level } : need.item === 'Iron ore' ? { mining: 30 } : need.item === 'Iron bar' ? { smithing: 15 } : need.item.toLowerCase() === 'cake' ? { thieving: 5 }
+                : need.item.toLowerCase() === 'agility potion(3)' ? { herblore: 34 } : {};
             const deficit = Object.entries(levels).find(([skill, level]) => s.levels[skill] < level);
             const dependency = deficit ? train(deficit[0], deficit[1], [...chain, plan.id]) : (() => {
                 if (raw && fish && ['Lobster', 'Shark'].includes(fish.food) && !membersReady(s)) {
@@ -46,7 +48,7 @@ export function planPreparation(snapshot: LevelerSnapshot, request: QuestPrepara
                     return resolve({ id: 'fishing-travel-food', label: 'Food for coastal fishing travel', objective: plan.objective,
                         script: '', settings: {}, needs: [{ item: 'Shrimps', count: 12, carry: 0 }] }, [...chain, plan.id]);
                 }
-                const producerPlan = producer(s, plan.objective, need, memory, random);
+                const producerPlan = questSupplyProducer(s, need, memory, random) ?? producer(s, plan.objective, need, memory, random);
                 if (producerPlan?.script === 'CookBot' && fish && !raw) {
                     const rawItem = `Raw ${fish.food.toLowerCase()}`;
                     const banked = stockOf(s, rawItem);

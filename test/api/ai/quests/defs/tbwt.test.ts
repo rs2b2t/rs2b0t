@@ -1,4 +1,5 @@
-import { describe, expect, test } from 'bun:test';
+import { Skills } from '#/bot/api/skills/Skills.js';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 
 import {
     TB_ARMOUR,
@@ -16,6 +17,8 @@ import { decide, tbwt } from '#/bot/api/ai/quests/defs/tbwt/index.js';
 import { TB_FLAG } from '#/bot/api/ai/quests/defs/tbwt/journal.js';
 import { QUEST_DEFS } from '#/bot/api/ai/quests/defs/index.js';
 import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+
+afterEach(() => spyOn(Skills, 'level').mockRestore());
 
 const VILLAGE = { x: 2780, z: 3087, level: 0 };
 
@@ -255,6 +258,7 @@ describe('tai bwo wannai trio decide', () => {
 
         // Why: the shoal is 160 tiles from the bait, and three Karambwan in ten burn on the fire.
         test('spare bait is carried to the shoal so a burn is re-cooked from the same trip', () => {
+            spyOn(Skills, 'level').mockReturnValue(70);
             const base = { ...past, tamayu: TB_TAMAYU.WATCHED_CUTSCENE, agility: true };
             expect(named(step(base))).toBe('net bait for the Karambwan shoal');
             expect(named(step({ ...base, invIds: [[TB_ID.RAW_KARAMBWANJI, 4]] })))

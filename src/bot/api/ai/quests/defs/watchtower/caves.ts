@@ -165,9 +165,11 @@ export async function takeNightshade(log: (m: string) => void): Promise<boolean>
     return leaveCave(log);
 }
 
-export async function answerMadSkavid(log: (m: string) => void): Promise<boolean> {
-    // Cave 6 sits on the far side of the gold-bar gate, and the trip is one leg so the crossing state never has to survive a decide() round trip.
-    if (watchtowerArea(Game.tile()) !== 'skavidCaves' && !(await crossEastGate(log))) {
+export async function answerMadSkavid(log: (m: string) => void, gatePaid = false): Promise<boolean> {
+    const cave = WT_CAVES.find(entry => entry.index === 6)!;
+    const here = Game.tile();
+    if (here && watchtowerArea(here) === 'skavidCaves' && cave.landing.distanceTo(here) > 5 && !(await leaveCave(log))) return false;
+    if (watchtowerArea(Game.tile()) !== 'skavidCaves' && !(await crossEastGate(log, gatePaid))) {
         return false;
     }
     if (!(await reachSkavid(6, log))) {

@@ -1,13 +1,13 @@
 import { Game } from '../../../../game/Game.js';
 import { QUESTS } from '../../data/quests.js';
-import { heldId, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
+import { bankedId, heldId, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { SOA_HOPS, SOA_ID } from './areas.js';
 import { blackarmStep } from './blackarm.js';
 import { certStep, certsBanked, certsHeld, curatorStep } from './certs.js';
 import { ArravConfig, resolveGang, type ArravGang } from './config.js';
 import { readShieldOfArravProgress, SOA_STAGE } from './journal.js';
 import { ArravHandoffState, decideHandoff, handoffStep } from './partner.js';
-import { phoenixStep } from './phoenix.js';
+import { phoenixStep, recoverStoreKey } from './phoenix.js';
 import { otherHalf, ownHalf } from './state.js';
 
 let cachedGang: ArravGang | null = null;
@@ -53,6 +53,15 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return curator;
     }
 
+    if (mine === 'phoenix' && stage === SOA_STAGE.PHOENIX_JOINED
+        && ArravConfig.partner.trim() && ArravConfig.partnerStage === SOA_STAGE.KATRINE_TASK && ArravConfig.partnerHasKey !== true
+        && heldId(snap, SOA_ID.STORE_KEY) === 0) {
+        if (bankedId(snap, SOA_ID.STORE_KEY) > 0) {
+            return { kind: 'withdraw', items: [{ name: 'Key', qty: 1, id: SOA_ID.STORE_KEY }] };
+        }
+        return { kind: 'custom', name: 'recover the Phoenix weapon-store key', run: recoverStoreKey };
+    }
+
     const handoff = decideHandoff({
         gang: mine,
         stage,
@@ -63,6 +72,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
         certsHeld: certsHeld(snap),
         certTarget: ArravConfig.certTarget,
         partnerConfigured: ArravConfig.partner.trim().length > 0,
+        partnerStage: ArravConfig.partnerStage,
+        partnerHasKey: ArravConfig.partnerHasKey,
         halvesGiven: ArravHandoffState.halvesGiven,
         gaveCert: ArravHandoffState.gaveCert
     });
@@ -79,7 +90,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (ArravConfig.partner.trim().length === 0
         && certsHeld(snap) + certsBanked(snap) === 0
         && heldId(snap, ownHalf(mine)) > 0) {
-        return { kind: 'wait', reason: 'own half held, no partner and no banked certificate: the other gang\'s half is out of reach alone' };
+        return { kind: 'wait', cooperative: true, reason: 'own half held, no partner and no banked certificate: the other gang\'s half is out of reach alone' };
     }
 
     return mine === 'phoenix' ? phoenixStep(snap) : blackarmStep(snap);

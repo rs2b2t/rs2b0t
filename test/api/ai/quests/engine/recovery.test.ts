@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { tbwt } from '#/bot/api/ai/quests/defs/tbwt/index.js';
 import { QuestBankReset, type QuestBankResetPort, type RecoveryItem } from '#/bot/api/ai/quests/engine/recovery.js';
 import type { QuestModule, QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
@@ -81,6 +82,18 @@ describe('QuestBankReset', () => {
         expect(world.pack).toEqual([item(779, 'Crest part'), item(780, 'Crest part'), item(605, 'Bone key')]);
         expect(world.worn).toEqual([item(1333, 'Rune scimitar'), item(882, 'Bronze arrow', 100)]);
         expect(reset.pending).toBe(false);
+    });
+
+    test('Trio reset restores the current recipe and six mixed food portions', async () => {
+        const world = new World();
+        world.pack = [item(946, 'Knife'), item(303, 'Small fishing net'), item(3166, 'Monkey corpse'),
+            item(401, 'Seaweed'), item(1891, 'Cake', 4), item(1893, '2/3 cake', 4)];
+        const snap = { ...snapshot(), progress: { stage: 3, flags: new Set(['lubufu:31', 'tiadeche:4', 'tamayu:4', 'tinsay:4']) } };
+        const reset = new QuestBankReset('Cake', world);
+        expect(await reset.tick(tbwt, snap, log)).toBe(true);
+        expect(world.pack).toEqual([item(3166, 'Monkey corpse'), item(401, 'Seaweed'), item(1891, 'Cake', 4), item(1893, '2/3 cake', 2)]);
+        expect(world.worn).toEqual([item(1333, 'Rune scimitar'), item(882, 'Bronze arrow', 100)]);
+        expect(world.bank.find(item => item.id === 946)?.count).toBe(1);
     });
 
     test('reports original exact-ID supplies across backpack and worn stacks for replenishment', async () => {

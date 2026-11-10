@@ -3,7 +3,7 @@ import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.j
 import { BLOOM_MAX_COST, DREZEL, inGrotto, NS_HOPS, NS_ID, NS_STAGE } from './areas.js';
 import { askToHelp, bloomWithScroll, feedStones, journalLeg, mirrorLeg, solvePuzzle, talkFilliman } from './camp.js';
 import { bloomWithSickle, fillPouch, killGhast } from './ghasts.js';
-import { blessSickle, enterGrotto, exitAfterQuest, leaveGrotto, rechargePrayer, talkInGrotto } from './grotto.js';
+import { blessSickle, enterGrotto, exitAfterQuest, leaveGrotto, rechargePrayer, replacePouch, talkInGrotto } from './grotto.js';
 import { NS_FLAG, readDruidProgress } from './journal.js';
 import { amulet, bankedId, heldId, NS_TOOLS, sickleStep } from './supplies.js';
 
@@ -65,7 +65,7 @@ function ghastLoop(snap: QuestSnapshot): QuestStep {
                 return { kind: 'withdraw', items: [{ name: 'Druid pouch', id, qty: id === NS_ID.POUCH ? Math.min(3, count) : 1 }] };
             }
         }
-        return { kind: 'wait', reason: 'no Druid pouch held or banked' };
+        return custom('replace the druid pouch', replacePouch);
     }
     if (harvestHeld(snap) >= 3) {
         return custom('fill the druid pouch', fillPouch);
@@ -131,8 +131,10 @@ export function decide(snap: QuestSnapshot): QuestStep {
         case NS_STAGE.PICKED_SICKLE:
         case NS_STAGE.ADDED_POUCH:
         case NS_STAGE.KILLED_GHAST1:
-        case NS_STAGE.KILLED_GHAST2:
-            return outside(snap, ghastLoop(snap));
+        case NS_STAGE.KILLED_GHAST2: {
+            const step = ghastLoop(snap);
+            return step.kind === 'custom' && step.run === replacePouch ? step : outside(snap, step);
+        }
         case NS_STAGE.KILLED_GHAST3:
             return custom('claim the reward', log => talkInGrotto(THANKS, log));
         default:

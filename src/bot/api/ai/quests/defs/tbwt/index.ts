@@ -1,7 +1,9 @@
+import { TB_FOODS } from './loadout.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { QUESTS } from '../../data/quests.js';
 import { hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import {
+    FOOD_TARGET,
     inCutscene,
     KARAMBWAN_BAIT,
     KARAMBWANJI_WANTED,
@@ -138,6 +140,10 @@ function karambwanSpear(snap: QuestSnapshot): QuestStep | null {
     if (heldId(snap, TB_ID.RAW_KARAMBWAN) > 0) {
         return custom('cook the Karambwan on the jungle fire', cookOnFire(TB_ID.RAW_KARAMBWAN, TB_ID.POORLY_COOKED_KARAMBWAN, 'raw Karambwan'));
     }
+    for (const [id, name] of [[TB_ID.KARAMBWAN_POISON_PASTE, 'Karambwan paste'], [TB_ID.POORLY_COOKED_KARAMBWAN, 'Cooked karambwan'], [TB_ID.RAW_KARAMBWAN, 'Raw karambwan']] as const) {
+        if ((snap.bankIds?.get(id) ?? 0) > 0) return { kind: 'withdraw', items: [{ id, name, qty: 1 }], bank: TB_TILE.ARDOUGNE_BANK };
+    }
+    if (Skills.level('fishing') < 65) return wait('replacement Karambwan needs 65 Fishing or a banked raw Karambwan; the one-time gift is missing');
     // Why: 2 spare Karambwanji ride along, so a burn is re-cooked from this trip.
     if (heldId(snap, TB_ID.RAW_KARAMBWANJI) < KARAMBWAN_BAIT) {
         return custom('net bait for the Karambwan shoal', fishKarambwanji(KARAMBWAN_BAIT));
@@ -315,6 +321,8 @@ export const tbwt: QuestModule = {
     // Why: Karamja has no bank until Shilo Village is complete, and Ardougne West is the nearest booth to the Brimhaven ferry.
     bank: TB_TILE.ARDOUGNE_BANK,
     ownsInventory: true,
+    food: FOOD_TARGET,
+    sustain: { foods: TB_FOODS, eatBelowHp: 0.5 },
     readProgress: readTbwtProgress,
     warnReadiness: () => readiness(skill => Skills.level(skill)),
     observe,

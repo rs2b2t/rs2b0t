@@ -444,7 +444,7 @@ describe('watchtower decide — into the city guard pocket', () => {
             invIds: new Map(),
             bankIds: new Map([[WT_ITEM.COINS.id, 100000]])
         }));
-        expect(step.kind === 'custom' && step.name).toMatch(/battlement/i);
+        expect(step.kind === 'custom' && step.name).toMatch(/leave the ogre city/i);
     });
 
     test('short of the toll on the mainland, it withdraws it', () => {
@@ -683,8 +683,8 @@ describe('watchtower decide — a cave trip needs the map and a light', () => {
     test('stage 10 fetching nightshade without the map re-asks the city guard', () => {
         const step = decide(snapshot({
             progress: P(WATCHTOWER_STAGE.MADE_POTION, 'shamans-left:6'),
-            inv: new Map([['tuna', 10]]),
-            invIds: new Map([[WT_ITEM.MAGIC_OGRE_POTION.id, 1], [WT_ITEM.LIT_CANDLE.id, 1]])
+            inv: new Map([['tuna', 8]]),
+            invIds: new Map([[WT_ITEM.MAGIC_OGRE_POTION.id, 1], [WT_ITEM.LIT_CANDLE.id, 1], [WT_ITEM.COINS.id, 2000]])
         }));
         expect(step.kind === 'custom' && step.name).toMatch(/skavid map/i);
     });
@@ -692,7 +692,7 @@ describe('watchtower decide — a cave trip needs the map and a light', () => {
     test('with the map banked it is withdrawn rather than re-asked', () => {
         const step = decide(snapshot({
             progress: P(WATCHTOWER_STAGE.MADE_POTION, 'shamans-left:6'),
-            inv: new Map([['tuna', 10]]),
+            inv: new Map([['tuna', 8]]),
             invIds: new Map([[WT_ITEM.MAGIC_OGRE_POTION.id, 1], [WT_ITEM.LIT_CANDLE.id, 1]]),
             bankIds: new Map([[WT_ITEM.SKAVID_MAP.id, 1]])
         }));
@@ -702,7 +702,7 @@ describe('watchtower decide — a cave trip needs the map and a light', () => {
     test('with map and light in hand it goes for the nightshade', () => {
         const step = decide(snapshot({
             progress: P(WATCHTOWER_STAGE.MADE_POTION, 'shamans-left:6'),
-            inv: new Map([['tuna', 10]]),
+            inv: new Map([['tuna', 8]]),
             invIds: new Map([
                 [WT_ITEM.MAGIC_OGRE_POTION.id, 1],
                 [WT_ITEM.SKAVID_MAP.id, 1],
@@ -742,7 +742,7 @@ describe('watchtower decide — holding all four crystals', () => {
     test('goes straight to the wizard without a bank trip', () => {
         const step = decide(snapshot({
             progress: P(WATCHTOWER_STAGE.MADE_POTION, 'shamans-left:0'),
-            inv: new Map([['tuna', 10]]),
+            inv: new Map([['tuna', 8]]),
             invIds: allFour,
             bankKnown: false
         }));
@@ -754,7 +754,7 @@ describe('watchtower decide — holding all four crystals', () => {
         partial.delete(WT_ITEM.CRYSTAL2.id);
         const step = decide(snapshot({
             progress: P(WATCHTOWER_STAGE.MADE_POTION, 'shamans-left:0'),
-            inv: new Map([['tuna', 10]]),
+            inv: new Map([['tuna', 8]]),
             invIds: partial,
             bankKnown: false
         }));
@@ -808,7 +808,7 @@ describe('watchtower decide — the mirror tower means done', () => {
 describe('watchtower decide — the Rock of Dalgroth needs a pickaxe', () => {
     const mining = (over: Partial<QuestSnapshot> = {}) => decide(snapshot({
         progress: P(WATCHTOWER_STAGE.MADE_POTION, 'shamans-left:0'),
-        inv: new Map([['tuna', 10]]),
+        inv: new Map([['tuna', 8]]),
         invIds: new Map([[WT_ITEM.NIGHTSHADE.id, 1], [WT_ITEM.SKAVID_MAP.id, 1], [WT_ITEM.LIT_CANDLE.id, 1]]),
         ...over
     }));
@@ -832,7 +832,7 @@ describe('watchtower decide — the Rock of Dalgroth needs a pickaxe', () => {
     test('the pickaxe is carried in with the shaman trip, not fetched after', () => {
         const step = decide(snapshot({
             progress: P(WATCHTOWER_STAGE.MADE_POTION, 'shamans-left:6'),
-            inv: new Map([['tuna', 10]]),
+            inv: new Map([['tuna', 8]]),
             invIds: new Map([[WT_ITEM.MAGIC_OGRE_POTION.id, 1], [WT_ITEM.NIGHTSHADE.id, 1]])
         }));
         expect(step.kind).toBe('buy');
@@ -884,7 +884,7 @@ describe('the enclave food is whatever the player chose to eat', () => {
     });
 });
 
-describe('the kit comes out of the bank in one trip', () => {
+describe('the current phase kit comes out of the bank in one trip', () => {
     const FULL_BANK = new Map<string, number>([['lobster', 100]]);
     const bankIds = (): Map<number, number> => new Map([
         [WT_ITEM.COINS.id, 50_000],
@@ -902,21 +902,19 @@ describe('the kit comes out of the bank in one trip', () => {
     ]);
 
     const started = (o: Partial<QuestSnapshot> = {}): QuestSnapshot => snapshot({
-        progress: P(WATCHTOWER_STAGE.STARTED),
+        progress: P(WATCHTOWER_STAGE.GIVEN_FINGERNAILS, 'helped-og', 'helped-toban'),
         bankKnown: true,
         bank: FULL_BANK,
         bankIds: bankIds(),
         ...o
     });
 
-    test('one withdraw carries the whole banked kit, not one item per trip', () => {
+    test('the Grew trip carries a rope without future cave and potion supplies', () => {
         const step = decide(started());
         expect(step.kind).toBe('withdraw');
         const names = step.kind === 'withdraw' ? step.items.map(i => i.name) : [];
-        for (const want of ['Coins', 'Rope', 'Vial of water', 'Pestle and mortar', 'Bronze pickaxe',
-            'Death rune', 'Guam leaf', 'Bat bones', 'Dragon bones', 'Gold bar', 'Skavid map', 'Lit candle']) {
-            expect(names).toContain(want);
-        }
+        expect(names).toContain('Rope');
+        for (const future of ['Vial of water', 'Pestle and mortar', 'Death rune', 'Guam leaf', 'Gold bar']) expect(names).not.toContain(future);
     });
 
     test('the configured food rides along in the same trip', () => {

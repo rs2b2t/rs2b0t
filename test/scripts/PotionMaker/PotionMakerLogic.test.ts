@@ -91,3 +91,6 @@ describe('constants', () => {
         expect(CUSTOM).toBe('Custom');
     });
 });
+test('agility potions accept the toad legs secondary', () => {
+    expect(secondaryByName("Toad's legs")?.id).toBe(2152);
+});

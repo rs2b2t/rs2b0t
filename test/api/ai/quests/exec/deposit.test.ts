@@ -1,3 +1,4 @@
+import { decide as watchtowerStep } from '#/bot/api/ai/quests/defs/watchtower/index.js';
 import { afterEach, expect, mock, spyOn, test } from 'bun:test';
 import { reader, type InvItemSnapshot } from '#/bot/adapter/ClientAdapter.js';
 import { executeStep } from '#/bot/api/ai/quests/exec/steps.js';
@@ -103,4 +104,45 @@ test('stop interrupts deposit without closing the bank or reporting success', as
     spyOn(Execution, 'delayUntil').mockRejectedValue(stopped);
     await expect(deposit()).rejects.toBe(stopped);
     expect(state.closed).toBe(0);
+});
+
+test('deposit caps retain six food while removing retired tools', async () => {
+    const state = fixture([...Array.from({ length: 8 }, (_, slot) => item(379, 'Lobster', slot)), item(946, 'Knife', 8)]);
+    spyOn(Input, 'invButton').mockImplementation((id, slot, _comId, op) => {
+        state.pack = state.pack.filter(entry => op === 1 ? entry.slot !== slot : entry.id !== id);
+        return true;
+    });
+    expect(await deposit({ keepIds: [379], caps: [{ id: 379, qty: 6 }] })).toBe(true);
+    expect(state.pack.map(entry => entry.id)).toEqual([379, 379, 379, 379, 379, 379]);
+});
+
+test('a refused food cap fails instead of reporting a prepared pack', async () => {
+    const state = fixture(Array.from({ length: 8 }, (_, slot) => item(379, 'Lobster', slot)));
+    state.accept = false;
+    expect(await deposit({ keepIds: [379], caps: [{ id: 379, qty: 6 }] })).toBe(false);
+    expect(state.pack).toHaveLength(8);
+});
+
+
+test('Watchtower cleanup executes its phase caps and preserves the active potion', async () => {
+    const state = fixture([
+        item(2395, 'Magic ogre potion'), item(249, 'Guam leaf', 1),
+        ...Array.from({ length: 26 }, (_, i) => item(1891, 'Cake', i + 2))
+    ]);
+    spyOn(Input, 'invButton').mockImplementation((id, slot, _comId, op) => {
+        state.pack = state.pack.filter(entry => op === 1 ? entry.slot !== slot : entry.id !== id);
+        return true;
+    });
+    const step = watchtowerStep({
+        journal: 'inProgress', stage: 10, progress: { stage: 10, flags: new Set(['shamans-left:6']) },
+        inv: new Map([['magic ogre potion', 1], ['guam leaf', 1], ['cake', 26]]),
+        invIds: new Map([[2395, 1], [249, 1], [1891, 26]]), worn: new Set(),
+        bankKnown: true, bank: new Map(), bankIds: new Map(), bankCoins: 0, noProgress: 0, freeSlots: 0,
+        tile: { x: 2612, z: 3092, level: 0 }
+    });
+    expect(step.kind).toBe('deposit');
+    expect(await executeStep(step, [], () => {})).toBe(true);
+    expect(state.pack.filter(item => item.id === 1891)).toHaveLength(8);
+    expect(state.pack.some(item => item.id === 249)).toBe(false);
+    expect(state.pack.some(item => item.id === 2395)).toBe(true);
 });

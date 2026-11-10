@@ -101,6 +101,7 @@ export const NS_TILE = {
     GROTTO_TREE: new Tile(3439, 3338, 0),
     GROTTO_DOOR: new Tile(3440, 3337, 0),
     GROTTO_INSIDE: new Tile(3442, 9734, 0),
+    POUCH: new Tile(3443, 9741, 0),
     /** The Saradomin altar on Paterdomus's ground floor, the temple this quest already walks through. */
     TEMPLE_ALTAR: new Tile(3416, 3488, 0),
     GHAST_HUNT: new Tile(3424, 3337, 0),

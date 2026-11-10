@@ -22,6 +22,9 @@ import { LevelerStock } from '../AccountLeveler/stock.js';
 import { gameSupplyPort, provision } from '../AccountLeveler/supplies.js';
 import { requirementKey, stockOf, type ActivityPlan, type LevelerSnapshot } from '../AccountLeveler/types.js';
 import { planPreparation } from './preparation.js';
+import { cakeSupplyActivity } from './cakeSupplyActivity.js';
+import { groundSupplyActivity } from './groundSupplyActivity.js';
+import { exitQuestArena, inQuestArena, ticketSupplyActivity, toadflaxSupplyActivity } from './agilitySupplyActivities.js';
 
 export class PreparationError extends Error {}
 
@@ -220,6 +223,7 @@ function gameEnvironment(log: (message: string) => void, wilderness: boolean): P
         snapshot,
         bank: async () => {
             unsubscribe ??= BotHost.addFrameListener(observe);
+            await exitQuestArena(log);
             if (!(await supplies.bank())) throw new Error('Cannot open bank for quest preparation');
             observe();
         },
@@ -230,7 +234,7 @@ function gameEnvironment(log: (message: string) => void, wilderness: boolean): P
         invalidate: () => stock.invalidate(),
         progress: plan => JSON.stringify([Object.fromEntries(Object.keys(plan.prerequisiteLevels ?? { [plan.objective]: 0 }).map(skill => [skill, Skills.xp(skill)])),
             plan.output ? stockOf(snapshot(), plan.output.item) : null]),
-        canStop: () => !Game.inCombat(),
+        canStop: () => !Game.inCombat() && !inQuestArena(),
         eat: async food => {
             if (!food || Skills.hpFraction() > 0.65 || Bank.isOpen()) return;
             const item = Inventory.items().find(item => !item.noted && item.name?.toLowerCase() === food.toLowerCase() && item.actions().includes('Eat'));
@@ -238,6 +242,17 @@ function gameEnvironment(log: (message: string) => void, wilderness: boolean): P
         },
         now: Date.now,
         dispose: () => { unsubscribe?.(); unsubscribe = undefined; },
-        meta: name => ScriptRegistry.get(name)
+        meta: name => {
+            if (name === 'QuestGroundSupply') return groundSupplyActivity;
+            if (name === 'QuestToadflax') return toadflaxSupplyActivity;
+            if (name === 'QuestArenaTickets') return ticketSupplyActivity(() => stockOf(snapshot(), 'Agility arena ticket'));
+            if (name !== 'QuestCakeSupply') return ScriptRegistry.get(name);
+            return cakeSupplyActivity(() => stockOf(snapshot(), 'Cake'), async () => {
+                if (!(await supplies.bank())) throw new Error('Cannot bank stolen cakes');
+                await supplies.deposit();
+                observe();
+                if (!(await supplies.closeBank())) throw new Error('Cannot close bank after storing cakes');
+            });
+        }
     };
 }

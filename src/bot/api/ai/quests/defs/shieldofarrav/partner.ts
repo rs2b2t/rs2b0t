@@ -21,6 +21,8 @@ export interface HandoffInput {
     certsHeld: number;
     certTarget: number;
     partnerConfigured: boolean;
+    partnerStage?: number;
+    partnerHasKey?: boolean;
     /** Shield halves this session has handed over. Each one buys the pair 2 certificates. */
     halvesGiven: number;
     /** Whether this session has already handed a certificate over. */
@@ -41,7 +43,8 @@ export function decideHandoff(input: HandoffInput): ArravHandoff | null {
 
     if (input.gang === 'phoenix') {
         // Why: Straven re-issues the key whenever obj_gettotal reads zero, so giving it away costs nothing.
-        if (input.stage >= SOA_STAGE.PHOENIX_JOINED && input.stage < SOA_STAGE.COMPLETE && input.hasKey) {
+        if (input.stage >= SOA_STAGE.PHOENIX_JOINED && input.stage < SOA_STAGE.COMPLETE && input.hasKey && input.partnerHasKey !== true
+            && (input.partnerStage === undefined || input.partnerStage < SOA_STAGE.BLACKARM_JOINED)) {
             return 'give-key';
         }
         if (input.hasOwnHalf && input.hasOtherHalf) {
@@ -111,6 +114,7 @@ export async function runHandoff(handoff: ArravHandoff, gang: ArravGang, log: (m
 export function handoffStep(handoff: ArravHandoff, gang: ArravGang): QuestStep {
     return {
         kind: 'custom',
+        cooperative: true,
         name: `${handoff} with ${ArravConfig.partner}`,
         run: log => runHandoff(handoff, gang, log)
     };

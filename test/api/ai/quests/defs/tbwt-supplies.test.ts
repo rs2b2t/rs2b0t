@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { Skills } from '#/bot/api/skills/Skills.js';
+import { QuestFood } from '#/bot/api/ai/quests/food.js';
 
 import {
     TB_ARMOUR,
@@ -10,7 +11,8 @@ import {
     TB_POTIONS,
     TB_SPEARS,
     TB_TAMAYU,
-    TB_TINSAY
+    TB_TINSAY,
+    TB_TIADECHE
 } from '#/bot/api/ai/quests/defs/tbwt/areas.js';
 import { TB_FLAG } from '#/bot/api/ai/quests/defs/tbwt/journal.js';
 import {
@@ -21,8 +23,7 @@ import {
     potionsInBank,
     prepare,
     spearInBank,
-    spearWanted,
-    TB_KEEP_IDS
+    spearWanted
 } from '#/bot/api/ai/quests/defs/tbwt/supplies.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
@@ -40,6 +41,7 @@ const KIT = ['Maple shortbow', 'Adamant arrow', ...TB_ARMOUR];
 
 interface Options {
     lubufu?: number;
+    tiadeche?: number;
     tamayu?: number;
     tinsay?: number;
     agility?: boolean;
@@ -57,6 +59,7 @@ interface Options {
 function snap(options: Options = {}): QuestSnapshot {
     const flags = new Set<string>([
         `${TB_FLAG.LUBUFU}:${options.lubufu ?? TB_LUBUFU.UNKNOWN}`,
+        `${TB_FLAG.TIADECHE}:${options.tiadeche ?? TB_TIADECHE.UNKNOWN}`,
         `${TB_FLAG.TAMAYU}:${options.tamayu ?? TB_TAMAYU.UNKNOWN}`,
         `${TB_FLAG.TINSAY}:${options.tinsay ?? TB_TINSAY.UNKNOWN}`
     ]);
@@ -96,7 +99,7 @@ const DRESSED: Options = {
 describe('tbwt flexible armour', () => {
     afterEach(() => spyOn(Skills, 'level').mockRestore());
     const ready: Options = { ...DRESSED, lubufu: TB_LUBUFU.COMPLETE,
-        tamayu: TB_TAMAYU.COMPLETE, tinsay: TB_TINSAY.COMPLETE };
+        tamayu: TB_TAMAYU.COMPLETE, tinsay: TB_TINSAY.COMPLETE, tiadeche: TB_TIADECHE.REQUEST_MANUAL };
     const lower = ['Adamant chainbody', 'Adamant platelegs', 'Adamant full helm'];
     const leather = ['Leather body', 'Leather chaps', 'Leather cowl'];
 
@@ -149,21 +152,15 @@ describe('tbwt flexible armour', () => {
 });
 
 describe('tbwt supplies', () => {
-    test('a fresh quest wants the whole kit', () => {
-        expect(names()).toEqual([
-            TB_NAME.NET,
-            TB_NAME.KNIFE,
-            TB_NAME.PESTLE,
-            TB_NAME.TINDERBOX,
-            TB_NAME.SEAWEED
-        ]);
+    test('a fresh quest only requires the fishing net', () => {
+        expect(names()).toEqual([TB_NAME.NET]);
     });
 
     // Why: each of these is consumed by one leg, and a supply left on the list after its leg drags the bot back across the ferry for it.
     test('a supply drops off the list the moment its leg is behind us', () => {
         expect(names({ tinsay: TB_TINSAY.GIVEN_RUM })).not.toContain(TB_NAME.KNIFE);
         expect(names({ tinsay: TB_TINSAY.GIVEN_SANDWICH })).not.toContain(TB_NAME.SEAWEED);
-        expect(names({ tamayu: TB_TAMAYU.COMPLETE, tinsay: TB_TINSAY.COMPLETE, lubufu: TB_LUBUFU.COMPLETE }))
+        expect(names({ tamayu: TB_TAMAYU.COMPLETE, tinsay: TB_TINSAY.COMPLETE, lubufu: TB_LUBUFU.COMPLETE, tiadeche: TB_TIADECHE.REQUEST_MANUAL }))
             .toEqual([]);
     });
 
@@ -238,7 +235,7 @@ describe('tbwt agility doses', () => {
     // Why: no shop on the island sells one and no leg of this quest brews one.
     test('a bank with no agility potion parks with a reason', () => {
         const step = prepare(snap({
-            ...DRESSED,
+            ...DRESSED,lubufu: TB_LUBUFU.COMPLETE, tiadeche: TB_TIADECHE.REQUEST_MANUAL,
             invIds: [
                 [TB_ID.NET, 1], [TB_ID.KNIFE, 1], [TB_ID.PESTLE, 1], [TB_ID.TINDERBOX, 1],
                 [TB_ID.SEAWEED, 1], [IRON.id, 1]
@@ -292,6 +289,96 @@ describe('tbwt prepare', () => {
         [TB_ID.SEAWEED, 2], [IRON.id, 1], [DOSE4.id, 1]
     ];
 
+    test('banks excess food while retaining quest items and the ranged kit', () => {
+        const step = prepare(snap({ ...DRESSED, invIds: stockedIds,
+            inv: [['coins', 500], ['lobster', 16]], freeSlots: 0 }));
+        expect(step?.kind).toBe('deposit');
+        if (step?.kind !== 'deposit') return;
+        expect(step.keep).not.toContain('lobster');
+        expect(step.keepIds).toContain(TB_ID.NET);
+        expect(step.keepIds).not.toContain(TB_ID.KNIFE);
+        expect(step.caps).toContainEqual({ id: 379, qty: 6 });
+    });
+
+    test('reserves catch space after withdrawing quest supplies and food together', () => {
+        const step = prepare(snap({ ...DRESSED, inv: [['coins', 500]],
+            invIds: stockedIds.filter(([id]) => id !== TB_ID.NET),
+            bank: stocked, bankIds: stockedIds, freeSlots: 8 }));
+        expect(step?.kind).toBe('withdraw');
+        if (step?.kind !== 'withdraw') return;
+        expect(step.items).toContainEqual({ name: TB_NAME.NET, id: TB_ID.NET, qty: 1 });
+        expect(step.items).toContainEqual({ name: 'Lobster', qty: 6 });
+        expect(8 - step.items.reduce((sum, item) => sum + item.qty, 0)).toBe(1);
+    });
+
+    test('removes food from a full resumed pack before accepting Tiadeche\'s catch', () => {
+        const step = prepare(snap({ ...DRESSED, invIds: stockedIds,
+            lubufu: TB_LUBUFU.COMPLETE, freeSlots: 0 }));
+        expect(step?.kind).toBe('deposit');
+        if (step?.kind === 'deposit') expect(step.keep).not.toContain('lobster');
+    });
+
+    test('a trimmed full pack refills only the food that fits and resumes the quest', () => {
+        const initial = prepare(snap({ ...DRESSED, invIds: stockedIds,
+            lubufu: TB_LUBUFU.COMPLETE, freeSlots: 0 }));
+        expect(initial?.kind).toBe('deposit');
+        const refill = prepare(snap({ ...DRESSED, invIds: stockedIds,
+            inv: [['coins', 500]], bank: [['Lobster', 6]],
+            lubufu: TB_LUBUFU.COMPLETE, freeSlots: 6 }));
+        expect(refill).toMatchObject({ kind: 'withdraw', items: [{ name: 'Lobster', qty: 5 }] });
+        expect(prepare(snap({ ...DRESSED, invIds: stockedIds,
+            inv: [['coins', 500], ['lobster', 2]], bank: [['Lobster', 4]],
+            lubufu: TB_LUBUFU.COMPLETE, freeSlots: 4 }))).toBeNull();
+    });
+
+    test('makes room before the first Karambwanji catch from a full pack', () => {
+        const step = prepare(snap({ ...DRESSED, invIds: stockedIds,
+            lubufu: TB_LUBUFU.FETCH_KARAMBWANJI, freeSlots: 0 }));
+        expect(step?.kind).toBe('deposit');
+        if (step?.kind === 'deposit') expect(step.keep).not.toContain('lobster');
+    });
+
+    test('lets Lubufu take a full catch before trimming excess food', () => {
+        expect(prepare(snap({ ...DRESSED,
+            inv: [['coins', 500], ['lobster', 8]],
+            invIds: [...stockedIds, [TB_ID.RAW_KARAMBWANJI, 10]],
+            lubufu: TB_LUBUFU.FETCH_KARAMBWANJI, freeSlots: 0
+        }))).toBeNull();
+    });
+
+    test('a tight pack can still take food when the next catch fits', () => {
+        const step = prepare(snap({ ...DRESSED,
+            inv: [['coins', 500]], invIds: [[TB_ID.NET, 1]],
+            bank: [['Lobster', 100]], freeSlots: 2
+        }));
+        expect(step).toMatchObject({ kind: 'withdraw', items: [{ name: 'Lobster', qty: 1 }] });
+    });
+
+    test('counts partially eaten cakes when trimming the food loadout', () => {
+        const previous = QuestFood.name;
+        QuestFood.name = 'Cake';
+        try {
+            const step = prepare(snap({ ...DRESSED, invIds: stockedIds,
+                inv: [['coins', 500], ['cake', 4], ['2/3 cake', 3], ['slice of cake', 2]] }));
+            expect(step?.kind).toBe('deposit');
+            if (step?.kind === 'deposit') {
+                for (const name of ['cake', '2/3 cake', 'slice of cake']) expect(step.keep).not.toContain(name);
+            }
+        } finally { QuestFood.name = previous; }
+    });
+
+    test('can refill with the partial cakes it just banked', () => {
+        const previous = QuestFood.name;
+        QuestFood.name = 'Cake';
+        try {
+            const step = prepare(snap({ ...DRESSED, invIds: stockedIds,
+                inv: [['coins', 500]], bank: [['2/3 cake', 4], ['Slice of cake', 2]], freeSlots: 8 }));
+            expect(step).toMatchObject({ kind: 'withdraw', items: [{ name: '2/3 cake', qty: 4 }] });
+            expect(prepare(snap({ ...DRESSED, invIds: stockedIds,
+                inv: [['coins', 500], ['2/3 cake', 4]], freeSlots: 4 }))).toBeNull();
+        } finally { QuestFood.name = previous; }
+    });
+
     test('an unread bank is scanned before anything is judged missing', () => {
         expect(prepare(snap({ bankKnown: false, worn: KIT }))?.kind).toBe('scanBank');
     });
@@ -302,7 +389,7 @@ describe('tbwt prepare', () => {
     });
 
     test('the spear and the potion ride out on the same withdrawal', () => {
-        const step = prepare(snap({ ...DRESSED, bank: stocked, bankIds: stockedIds }));
+        const step = prepare(snap({ ...DRESSED,lubufu: TB_LUBUFU.COMPLETE, tiadeche: TB_TIADECHE.REQUEST_MANUAL, bank: stocked, bankIds: stockedIds }));
         expect(step?.kind).toBe('withdraw');
         const drawn = step?.kind === 'withdraw' ? step.items.map(i => i.name) : [];
         expect(drawn).toContain(IRON.name);
@@ -319,7 +406,7 @@ describe('tbwt prepare', () => {
     // Why: Jiminua's counter is inside the quest area and the bank is a 30gp ferry away.
     test('a knife the bank does not stock is bought in the village', () => {
         const step = prepare(snap({
-            ...DRESSED,
+            ...DRESSED,lubufu: TB_LUBUFU.COMPLETE, tiadeche: TB_TIADECHE.REQUEST_MANUAL, tamayu: TB_TAMAYU.COMPLETE,
             bank: stocked,
             bankIds: stockedIds.filter(([id]) => id !== TB_ID.KNIFE),
             invIds: stockedIds.filter(([id]) => id !== TB_ID.KNIFE)
@@ -342,23 +429,4 @@ describe('tbwt prepare', () => {
         expect(prepare(snap({ ...DRESSED, invIds: stockedIds }))).toBeNull();
     });
 
-    // Why: the three "Karambwan vessel"s and three "Karamjan rum"s are only separable by id.
-    test('every quest object is kept by id through a deposit', () => {
-        expect(TB_KEEP_IDS).toContain(TB_ID.VESSEL);
-        expect(TB_KEEP_IDS).toContain(TB_ID.VESSEL_LOADED);
-        expect(TB_KEEP_IDS).toContain(TB_ID.RUM);
-        expect(TB_KEEP_IDS).toContain(TB_ID.RUM_SLICED);
-        expect(TB_KEEP_IDS).toContain(TB_ID.KARAMBWAN_POISON_PASTE);
-    });
-
-    // Why: a deposit that misses a tier drops the spear this leg was built around.
-    test('every spear tier and every dose survives a deposit', () => {
-        for (const spear of TB_SPEARS) {
-            expect(TB_KEEP_IDS).toContain(spear.id);
-            expect(TB_KEEP_IDS).toContain(spear.kpId);
-        }
-        for (const potion of TB_POTIONS) {
-            expect(TB_KEEP_IDS).toContain(potion.id);
-        }
-    });
 });

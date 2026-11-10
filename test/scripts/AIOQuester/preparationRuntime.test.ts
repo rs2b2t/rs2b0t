@@ -154,3 +154,41 @@ test('stopping in-flight child startup restores parent hooks after the child act
     expect(f.runtime.child).toBeNull();
     expect(Sustain.hook).toBe(f.parentHook);
 });
+
+test('quest potion preparation leaves the arena before banking and consumes the gathered ingredients', async () => {
+    let inside = false;
+    const scripts: string[] = [];
+    const f = fixture((plan, s) => {
+        if (scripts.at(-1) !== plan.script) scripts.push(plan.script);
+        switch (plan.script) {
+            case 'QuestArenaTickets':
+                if ((s.stock['agility arena ticket'] ?? 0) >= 6) inside = false;
+                else { inside = true; s.stock['agility arena ticket'] = (s.stock['agility arena ticket'] ?? 0) + 1; }
+                break;
+            case 'QuestToadflax':
+                s.stock['agility arena ticket'] -= 3;
+                s.stock.toadflax = (s.stock.toadflax ?? 0) + 1;
+                break;
+            case 'HerbloreSecondaries': s.stock["toad's legs"] = 2; break;
+            case 'PotionMaker':
+                s.stock.toadflax--;
+                s.stock["toad's legs"]--;
+                s.stock['vial of water']--;
+                s.stock['agility potion(3)'] = (s.stock['agility potion(3)'] ?? 0) + 1;
+                break;
+        }
+    });
+    f.s.stock['vial of water'] = 2;
+    f.environment.canStop = () => !inside;
+    const bank = f.environment.bank;
+    f.environment.bank = async () => { expect(inside).toBe(false); await bank(); };
+    const request = { items: [{ item: 'Agility potion(3)', count: 2 }] };
+    let result = await f.runtime.tick(request);
+    for (let tick = 0; tick < 40 && result !== 'ready'; tick++) result = await f.runtime.tick(request);
+    expect(result).toBe('ready');
+    expect(scripts).toEqual(['QuestArenaTickets', 'QuestToadflax', 'HerbloreSecondaries', 'PotionMaker']);
+    expect(f.s.stock['agility potion(3)']).toBe(2);
+    expect(f.s.stock['agility arena ticket']).toBe(0);
+    expect(f.s.stock.toadflax).toBe(0);
+    expect(f.s.stock["toad's legs"]).toBe(0);
+});
