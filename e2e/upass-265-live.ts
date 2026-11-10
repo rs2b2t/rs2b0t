@@ -366,8 +366,11 @@ try {
                 fail(`tele to ${start.x},${start.z} did not arrive`);
             }
         }
-        await relog(page, args.user);
-        await clearChatDialogs(page, 'post-tele dialog(s)');
+        // Why: Kalrag is aggressive on arrival, and a clean logout in combat hangs the harness; the pre-tele relog already settled the account.
+        if (!args.kalrag) {
+            await relog(page, args.user);
+            await clearChatDialogs(page, 'post-tele dialog(s)');
+        }
         console.log(`start tile → ${start.x},${start.z},${start.level}`);
     }
 
