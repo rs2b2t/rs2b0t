@@ -14,12 +14,11 @@ import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 import { UP_AMULETS, UP_ITEM, UP_LOC, UP_NPC, UP_TILE, countHeld, insideIbanTemple, type UpassItem } from './areas.js';
 import { locById, walkTo } from './bridge.js';
-import { BOW_IDS, FOOD_RESTOCKS, FOOD_RETREAT } from './supplies.js';
+import { BOW_IDS, FOOD_RETREAT } from './supplies.js';
 
 let restocks = 0;
-/** Meals already fetched from Kamen this run; the restock step stops after 3. */
+/** Meals fetched from Kamen this run, for the log. The budget is the purse, which the bank refills after every death. */
 export const restocksUsed = (): number => restocks;
-export const canRestock = (): boolean => restocks < FOOD_RESTOCKS;
 export const noteRestock = (): void => { restocks += 1; };
 
 const FOOD_WORDS = ['lobster', 'meat pie', 'meat pizza', 'bread', 'stew'];
@@ -263,7 +262,7 @@ export async function killKalrag(log: (m: string) => void): Promise<boolean> {
         log('no doll of Iban in the pack — killing Kalrag now would waste the blood');
         return false;
     }
-    return killNpc(UP_NPC.KALRAG, UP_TILE.KALRAG, 'Kalrag', log, canRestock(), KALRAG_ESCAPE);
+    return killNpc(UP_NPC.KALRAG, UP_TILE.KALRAG, 'Kalrag', log, true, KALRAG_ESCAPE);
 }
 
 const DEMONS: readonly { npc: number; amulet: UpassItem; tile: Tile; name: string }[] = [
@@ -282,7 +281,7 @@ export async function killDemon(log: (m: string) => void): Promise<boolean> {
     if (!owed) {
         return true;
     }
-    if (!(await killNpc(owed.npc, owed.tile, owed.name, log, canRestock()))) {
+    if (!(await killNpc(owed.npc, owed.tile, owed.name, log, true))) {
         return false;
     }
     // Why: the amulet is added by the death script a tick after the hp bar empties, so a single query after the fight loses it to the lootdrop timer.

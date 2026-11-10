@@ -41,7 +41,6 @@ import {
 import {
     amuletsHeld,
     burnTomb,
-    canRestock,
     fillBrew,
     foodHeldNow,
     killDemon,
@@ -254,7 +253,7 @@ function restockStep(area: UpassArea): QuestStep {
             log('no route down to Kamen from here');
             return false;
         }
-        while (canRestock() && foodHeldNow() < RESTOCK_TARGET) {
+        while (foodHeldNow() < RESTOCK_TARGET) {
             if (!(await buyKamenMeal(log))) {
                 return false;
             }
@@ -434,7 +433,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.stage >= UP_STAGE.FOUND_DOLL && snap.stage < UP_STAGE.DEFEATED_IBAN
         && nearKamen && !dollReady
         && !insideWitchHouse(snap.tile) && !insideIbanTemple(snap.tile)
-        && foodInPack(snap) <= FOOD_RETREAT && canRestock()) {
+        && foodInPack(snap) <= FOOD_RETREAT) {
         return restockStep(area);
     }
     return stageStep(snap, area, snap.stage);
