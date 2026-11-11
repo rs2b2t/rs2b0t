@@ -145,9 +145,12 @@ Start-or-coordinate fighter — kills any named NPC in its leash, loots selected
 | `avoidHerbs` | string[] | `[]` | Herbs to avoid — one of: Guam leaf, Marrentill, Tarromin, Harralander, Ranarr weed, Toadflax, Irit leaf, Avantoe, Kwuarm, Snapdragon, Cadantine, Lantadyme, Dwarf weed, Torstol, Snake weed, Ardrigal, Sito foil, Volencia moss, Rogues purse |
 | `buryBones` | boolean | `false` | Bury regular bones |
 | `buryBigBones` | boolean | `false` | Bury big bones |
+| `buryBabyDragonBones` | boolean | `false` | Bury baby dragon bones |
 | `solveClues` | boolean | `true` | Solve clue drops |
 | `banking` | string | `"Auto"` | Banking — one of: Auto, None |
 | `bankLocation` | string | `"Nearest"` | Bank location — one of: Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Legends Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
+| `travelCoins` | number (0–200000) | `0` | Travel coins per trip |
+| `travelItems` | string[] | `[]` | Travel items |
 | `bankAtLootSlots` | number (1–27) | `12` | Bank at loot slots |
 | `bankEveryMinutes` | number (0–120) | `0` | Bank every N minutes |
 | `bankCommonJunk` | boolean | `true` | Bank common junk too |
@@ -979,6 +982,7 @@ Plays the Ranging Guild archery competition for tickets and trades every 2000 fo
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
+| `coinsReserve` | number (0–1000000) | `0` | Coins to keep |
 | `coinsPerTrip` | number (200–1000000) | `10000` | Coins per bank trip |
 
 ### ShopBuyout
