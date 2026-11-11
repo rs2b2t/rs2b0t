@@ -22,6 +22,8 @@ const expected: Record<string, { npcIds: number[]; maxThreat: number }> = {
     'khazard-west-troopers': { npcIds: [475, 476], maxThreat: 28 },
     'crandor-moss-giants': { npcIds: [112], maxThreat: 42 },
     'canifis-south-ghouls': { npcIds: [1218], maxThreat: 42 },
+    'edgeville-dungeon-deadly-red-spiders': { npcIds: [63], maxThreat: 45 },
+    'edgeville-dungeon-earth-warriors': { npcIds: [124], maxThreat: 51 },
     'gu-tanoth-ogres': { npcIds: [114, 115], maxThreat: 53 },
     'taverley-baby-blue-dragons': { npcIds: [52], maxThreat: 48 },
     'karamja-lesser-demons': { npcIds: [82], maxThreat: 82 },
@@ -33,6 +35,7 @@ const expected: Record<string, { npcIds: number[]; maxThreat: number }> = {
     'brimhaven-dungeon-fire-giants': { npcIds: [110], maxThreat: 86 }
 };
 const variants: Record<number, [number, number]> = {
+    63: [34, 35], 124: [51, 54],
     8: [16, 17], 9: [21, 22], 32: [20, 22], 52: [48, 50], 82: [82, 79], 110: [86, 111], 112: [42, 60],
     114: [53, 60], 115: [53, 60], 183: [23, 20], 475: [19, 22], 476: [19, 22], 862: [83, 80],
     1106: [69, 90], 1107: [69, 90], 1108: [69, 90], 1109: [69, 90], 1110: [69, 90], 1111: [69, 90], 1112: [69, 90],
@@ -68,13 +71,23 @@ function campState(camp: CombatCamp): WorldStateData {
 function route(camp: CombatCamp, start: NavPoint, destination: NavPoint) {
     return finder!.findPath(start, destination, {
         state: campState(camp),
-        avoidZones: resolveDangerZones(levelerTravelZones(destination), { includeAutomatic: true, combatLevel: camp.minCombat ?? 3, start, destination }),
+        avoidZones: resolveDangerZones(levelerTravelZones(destination, camp.wilderness), { includeAutomatic: true, combatLevel: camp.minCombat ?? 3, start, destination }),
         useTeleportCatalog: false
     });
 }
 
 test('every advanced camp has an independent source audit', () => {
     expect(new Set(ADVANCED_CAMPS.map(camp => camp.id))).toEqual(new Set(Object.keys(expected)));
+});
+
+test.skipIf(!hasNav)('earth warrior access uses the monkeybars and cannot bypass Agility 15', () => {
+    const camp = ADVANCED_CAMPS.find(camp => camp.id === 'edgeville-dungeon-earth-warriors')!;
+    const start = { x: 3120, z: 9964, level: 0 };
+    const destination = { x: camp.x, z: camp.z, level: 0 };
+    expect(route({ ...camp, skills: { agility: 14 } }, start, destination).ok).toBe(false);
+    const path = route(camp, start, destination);
+    expect(path.ok).toBe(true);
+    if (path.ok) expect(path.hops.some(hop => hop.locName === 'Monkeybars')).toBe(true);
 });
 
 test.skipIf(!hasContentSource).each([...ADVANCED_CAMPS])('source verifies ordinary target variants at $id', camp => {

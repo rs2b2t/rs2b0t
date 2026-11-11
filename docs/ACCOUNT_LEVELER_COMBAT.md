@@ -23,7 +23,7 @@ Ranged combat is restricted to the first three groups below, even at high combat
 | Below 15 | Chickens, rats, giant rats, goblins, spiders, men/women, cows and other eligible starter camps; melee death walking without mandatory food. |
 | 15–24 | Monks, barbarians/barbarian women, dwarves and Al-Kharid warriors. Prepare food first. |
 | 25–34 | City guards, bears, zombies, skeletons, warrior women, chaos druids, unicorns, scorpions, Khazard troopers and soldiers. |
-| 35–59 | Hobgoblins, giants and druids; moss giants, ghouls, Burthorpe guards, Gu'Tanoth ogres and Taverley baby blue dragons also require stronger individual stats and access requirements. |
+| 35–59 | Hobgoblins, giants and druids; moss giants, ghouls, Burthorpe guards, Gu'Tanoth ogres, Edgeville dungeon earth warriors and deadly red spiders, and Taverley baby blue dragons also require stronger individual stats and access requirements. |
 | 60–79 | Lesser demons; Troll Stronghold trolls, Gu'Tanoth city guards and Brimhaven dungeon giants unlock at their higher camp minimums. These camps require lobster supplies. |
 | 80+ | Lighthouse dagannoths, when Horror from the Deep is complete and the stat and food requirements are met. Otherwise use the strongest eligible lower group. |
 
@@ -43,7 +43,7 @@ These preference groups do not bypass Attack/Strength, Defence or HP requirement
 
 ### Expanded ordinary NPC camps
 
-There are 95 combat camps. Fresh accounts have 20 eligible sites across eight regions and eight target types: Chicken, Goblin, Man, Rat, Giant rat, Spider, Giant spider and Woman. Region rotation and random site selection use each account's recent history; accounts do not follow a shared fixed route.
+There are 97 combat camps. Fresh accounts have 20 eligible sites across eight regions and eight target types: Chicken, Goblin, Man, Rat, Giant rat, Spider, Giant spider and Woman. Region rotation and random site selection use each account's recent history; accounts do not follow a shared fixed route.
 
 The following 28 sites were added from the local server content. Coordinates are the fighter's anchor, with a 12-tile target leash. Thresholds are player HP / offence / Defence, not the NPC's combat level.
 
@@ -112,7 +112,7 @@ Both Wilderness sites require Wilderness training enabled. [Training camp audits
 
 ### Additional regions and dungeon camps
 
-The 19 camps in [advancedCamps.ts](../src/bot/scripts/AccountLeveler/advancedCamps.ts) declare quest completions, route skills, supplies, food, floor and target radius where needed. Completed quests unlock camps even when automatic questing is disabled. Missing route skills or unavailable supplies exclude the camp before tier selection. Required lobster supplies must be banked or producible with the account's current Fishing/Cooking levels.
+The 21 camps in [advancedCamps.ts](../src/bot/scripts/AccountLeveler/advancedCamps.ts) declare quest completions, route skills, supplies, food, floor and target radius where needed. Completed quests unlock camps even when automatic questing is disabled. Missing route skills or unavailable supplies exclude the camp before tier selection. Required lobster supplies must be banked or producible with the account's current Fishing/Cooking levels.
 
 | Camp | Combat minimum; HP / offence / Defence | Access and preparation |
 | --- | --- | --- |
@@ -124,6 +124,8 @@ The 19 camps in [advancedCamps.ts](../src/bot/scripts/AccountLeveler/advancedCam
 | West Khazard battlefield troopers | 25; 30 / 25 / 25 | 200 travel coins; eight-tile target radius excludes the commander |
 | Crandor moss giants | 50; 40 / 35 / 35 | Dragon Slayer; 200 travel coins |
 | Ghouls southwest of Canifis | 40; 35 / 30 / 30 | Priest in Peril; five-tile target radius excludes Ghasts |
+| Edgeville dungeon deadly red spiders | 40; 35 / 30 / 30 | Wilderness enabled; anchor (3123,9951); five-tile target radius |
+| Edgeville dungeon earth warriors | 50; 40 / 35 / 35 | Wilderness enabled; Agility 15 for monkeybars; northern anchor (3121,9991); seven-tile target radius |
 | Gu'Tanoth ogres | 50; 40 / 35 / 35 | Watch Tower; Agility 25; 200 coins includes the chasm toll; two-tile target radius excludes chieftains |
 | Southern Taverley baby blue dragons | 55; 50 / 40 / 40 | Owned Dusty key and equipped Dragonfire shield; lobsters; four-tile target radius; melee and magic only |
 | Karamja volcano lesser demons | 60; 50 / 45 / 45 | Lobsters; 200 travel coins; no Dragon Slayer requirement |
@@ -135,6 +137,8 @@ The 19 camps in [advancedCamps.ts](../src/bot/scripts/AccountLeveler/advancedCam
 | Lighthouse dagannoths | 80; 65 / 60 / 60 | Horror from the Deep; lobsters; both level-74 and level-92 variants share the camp |
 
 Lesser demons are excluded from Prayer objectives because they drop ashes. Brimhaven dungeon thresholds account for nearby level-63 wild dogs. Travel reserves are excluded from equipment shopping budgets; AutoFighter keeps travel tools and replenishes coins/items at bank visits before returning. A failed refill finishes the child activity at the bank so AccountLeveler can replan or resupply.
+
+Both new Edgeville dungeon camps support melee and magic, require Wilderness opt-in, and are excluded from Prayer because neither target drops bones. Earth warriors also supply herbs and runes through secondary looting. Deadly red spiders have no monster drops; their camp's thresholds account for nearby level-45 skeletons.
 
 Baby blue dragons use the southern three-spawn cluster at (2897,9765). The camp excludes adult dragons, but the bank route crosses their room, so the shield is required for transit. Ranged is excluded because the leveler's bows displace the shield. No quest completion is required when the key and shield are already owned. AutoFighter loots and buries Babydragon bones, including when Prayer is the objective.
 

@@ -11,6 +11,34 @@ const snapshot = (level = 80): LevelerSnapshot => ({
 });
 const isolate = (id: string) => ({ ...emptyMemory(), cooldowns: Object.fromEntries(COMBAT_CAMPS.filter(c => c.id !== id).map(c => [c.id, 2000])) });
 
+test.each(['edgeville-dungeon-earth-warriors', 'edgeville-dungeon-deadly-red-spiders'])('%s requires Wilderness opt-in and excludes ranged and Prayer', id => {
+    const s = snapshot();
+    const memory = isolate(id);
+    expect(combatPlan(s, 'attack', memory, () => 0)).toBeNull();
+    s.wilderness = true;
+    for (const skill of ['attack', 'strength', 'defence', 'magic']) {
+        const plan = combatPlan(s, skill, memory, () => 0);
+        expect(plan?.id).toBe(id);
+        expect(plan?.wilderness).toBe(true);
+        expect(plan?.travel?.z).toBeGreaterThan(9920);
+    }
+    expect(combatPlan(s, 'ranged', memory, () => 0)).toBeNull();
+    expect(combatPlan(s, 'prayer', memory, () => 0)).toBeNull();
+});
+
+test('earth warriors require Agility 15 and can supply herbs while spiders need no Agility', () => {
+    const s = snapshot();
+    s.wilderness = true;
+    s.levels.agility = 14;
+    const earth = isolate('edgeville-dungeon-earth-warriors');
+    expect(combatPlan(s, 'attack', earth, () => 0)).toBeNull();
+    s.levels.agility = 15;
+    expect(combatPlan(s, 'attack', earth, () => 0)?.id).toBe('edgeville-dungeon-earth-warriors');
+    expect(combatPlan(s, 'herblore', earth, () => 0, '#199')?.id).toBe('edgeville-dungeon-earth-warriors');
+    s.levels.agility = 1;
+    expect(combatPlan(s, 'attack', isolate('edgeville-dungeon-deadly-red-spiders'), () => 0)?.id).toBe('edgeville-dungeon-deadly-red-spiders');
+});
+
 test.each([
     ['crandor-lesser-demons', 'Dragon Slayer'],
     ['crandor-moss-giants', 'Dragon Slayer'],
