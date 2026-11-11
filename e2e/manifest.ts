@@ -1330,6 +1330,30 @@ export const CASES: readonly Case[] = [
         note: 'a full ore pack at the Fight Arena Mine has to reach the Yanille booth, and the run fails if the walk drifts to East Ardougne'
     },
     {
+        id: 'power-miner-live',
+        harness: 'power-miner/power-miner-live.ts',
+        covers: { scripts: ['PowerMiner'] },
+        status: 'unvetted',
+        budgetMin: 8,
+        note: 'Standalone iron power miner at Legends Guild east with maxed combat and 99 Mining: animation-edge 3-tick clicks, 2-ore drop batches (2 drops + click) and per-rock route order; at least 30k XP/hr on the local ~18-tick respawn (55k measured at the live-equivalent 6-tick respawn), auto-retaliate off, no full-pack stalls'
+    },
+    {
+        id: 'power-miner-5rock-live',
+        harness: 'power-miner/power-miner-live.ts',
+        covers: { scripts: ['PowerMiner'] },
+        status: 'unvetted',
+        manual: true,
+        env: {
+            LOCATION: 'Legends Guild Iron (east)',
+            ROCKS: '1,2,5,3,4,Exclude',
+            DROP_MODE: 'Every 2 ores',
+            SECONDS: '180',
+            POWER_MINER_MIN_XP_HR: '55000'
+        },
+        budgetMin: 10,
+        note: 'Five-rock Legends east route (the two far rocks in the middle of the cycle) with 2-ore drop batches must sustain at least 55k XP/hr after the first-click warmup. Requires the fast-respawn fixture (rock_respawnrate 6); the default 20-tick respawn caps this route near 49k.'
+    },
+    {
         id: 'miner-skeleton-mine-live',
         harness: 'miner-skeleton-mine-live.ts',
         covers: { scripts: ['GatheringBot'] },

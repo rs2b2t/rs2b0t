@@ -14,6 +14,8 @@ import {
     tickManipUiOptions
 } from './GatheringBot/TickManipLogic.js';
 import { MINER_SETTINGS } from './GatheringBot/MinerSettings.js';
+import PowerMiner from './PowerMiner/PowerMiner.js';
+import { POWER_MINER_SETTINGS } from './PowerMiner/settings.js';
 import EdgevilleMonkeyBars, { EDGEVILLE_MONKEYBARS_SETTINGS } from './EdgevilleMonkeyBars/EdgevilleMonkeyBars.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import AgilityBot from './AgilityBot/AgilityBot.js';
@@ -381,6 +383,16 @@ ScriptRegistry.register({
     tags: ['gathering', 'banking', 'drop'],
     settingsSchema: MINER_SETTINGS,
     create: () => new GatheringBot()
+});
+
+ScriptRegistry.register({
+    name: 'PowerMiner',
+    description:
+        'Standalone iron power miner. One observation snapshot per tick, drop-first/click-last per-tick batch so mining is never interrupted, verified Legends Guild, Rellekka, Wilderness Hobgoblin, Fight Arena and Varrock camps, plus a custom position. Needs a pickaxe; drops all ore.',
+    category: 'Mining',
+    tags: ['mining', 'iron', 'power-mining', 'drop', 'tick-timing'],
+    settingsSchema: POWER_MINER_SETTINGS,
+    create: () => new PowerMiner()
 });
 
 ScriptRegistry.register({

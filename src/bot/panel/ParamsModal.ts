@@ -221,9 +221,12 @@ export default class ParamsModal {
         row.appendChild(label);
 
         if (def.help) {
-            const help = el('div', 'rs2b0t-param-help');
-            help.textContent = def.help;
-            row.appendChild(help);
+            const text = typeof def.help === 'function' ? def.help(valueOf) : def.help;
+            if (text) {
+                const help = el('div', 'rs2b0t-param-help');
+                help.textContent = text;
+                row.appendChild(help);
+            }
         }
 
         const current = SettingsStore.displayString(this.scriptName, key, def);

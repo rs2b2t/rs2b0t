@@ -21,7 +21,7 @@
 - [General](#general) — 1
 - [Herblore](#herblore) — 5
 - [Magic](#magic) — 3
-- [Mining](#mining) — 3
+- [Mining](#mining) — 4
 - [Money making](#money-making) — 9
 - [Navigation](#navigation) — 2
 - [Prayer](#prayer) — 1
@@ -911,6 +911,34 @@ Mines the selected rock types, then banks the ore or drops the whole haul in a b
 | `withdrawCoins` | number (0–) | `0` | Coins to withdraw at bank |
 | `bankTeleport` | string | `"Off"` | Teleport runes — one of: Off, Varrock teleport, Lumbridge teleport, Falador teleport, Camelot teleport, Ardougne teleport, Watchtower teleport, Trollheim teleport |
 | `teleCasts` | number (1–) | `1` | Teleport casts to stock |
+
+### PowerMiner
+
+Standalone iron power miner. One observation snapshot per tick, drop-first/click-last per-tick batch so mining is never interrupted, verified Legends Guild, Rellekka, Wilderness Hobgoblin, Fight Arena and Varrock camps, plus a custom position. Needs a pickaxe; drops all ore.
+
+- Tags: `mining`, `iron`, `power-mining`, `drop`, `tick-timing`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `location` | string | `"Legends Guild Iron (east)"` | Location — one of: Legends Guild Iron (east), Legends Guild Iron (west), Rellekka Mine, Wilderness Hobgoblin Mine, Fight Arena Mine, Southeast Varrock Mine, Use Custom Position |
+| `customLocation` | tile | `{"x":2714,"z":3331,"level":0}` | Custom position (x,z) |
+| `rock1At` | tile | `{"x":0,"z":0,"level":0}` | Rock 1 position (x,z) |
+| `rock2At` | tile | `{"x":0,"z":0,"level":0}` | Rock 2 position (x,z) |
+| `rock3At` | tile | `{"x":0,"z":0,"level":0}` | Rock 3 position (x,z) |
+| `rock4At` | tile | `{"x":0,"z":0,"level":0}` | Rock 4 position (x,z) |
+| `rock5At` | tile | `{"x":0,"z":0,"level":0}` | Rock 5 position (x,z) |
+| `rock6At` | tile | `{"x":0,"z":0,"level":0}` | Rock 6 position (x,z) |
+| `rock1` | string | `"1"` | Rock 1 order — one of: Exclude, 1, 2, 3, 4, 5, 6, 7, 8, 9 |
+| `rock2` | string | `"2"` | Rock 2 order — one of: Exclude, 1, 2, 3, 4, 5, 6, 7, 8, 9 |
+| `rock3` | string | `"3"` | Rock 3 order — one of: Exclude, 1, 2, 3, 4, 5, 6, 7, 8, 9 |
+| `rock4` | string | `"4"` | Rock 4 order — one of: Exclude, 1, 2, 3, 4, 5, 6, 7, 8, 9 |
+| `rock5` | string | `"5"` | Rock 5 order — one of: Exclude, 1, 2, 3, 4, 5, 6, 7, 8, 9 |
+| `rock6` | string | `"6"` | Rock 6 order — one of: Exclude, 1, 2, 3, 4, 5, 6, 7, 8, 9 |
+| `rock7` | string | `"7"` | Rock 7 order — one of: Exclude, 1, 2, 3, 4, 5, 6, 7, 8, 9 |
+| `rock8` | string | `"8"` | Rock 8 order — one of: Exclude, 1, 2, 3, 4, 5, 6, 7, 8, 9 |
+| `rock9` | string | `"9"` | Rock 9 order — one of: Exclude, 1, 2, 3, 4, 5, 6, 7, 8, 9 |
+| `dropMode` | string | `"Every 2 ores"` | Drop batch — one of: Every ore, Every 2 ores, Every 3 ores, Every 4 ores |
+| `diagnostics` | boolean | `true` | Timing diagnostics |
 
 ## Money making
 
