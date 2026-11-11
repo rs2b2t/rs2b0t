@@ -5,7 +5,8 @@ import { canCatch, consumableBatch, FISH } from './catalog.js';
 import { magicEquipment } from './magic.js';
 import { combatLevel, TARGET_TIERS, trainingTier } from './combatProgression.js';
 import { TRAINING_CAMPS } from './trainingCamps.js';
-import type { ActivityPlan, LevelerSnapshot, Requirement, SessionMemory } from './types.js';
+import { ADVANCED_CAMPS } from './advancedCamps.js';
+import { requirementKey, stockOf, type ActivityPlan, type LevelerSnapshot, type Requirement, type SessionMemory } from './types.js';
 
 export interface CombatCamp {
     id: string;
@@ -13,6 +14,8 @@ export interface CombatCamp {
     target: string;
     x: number;
     z: number;
+    level?: number;
+    leashRadius?: number;
     hp: number;
     offence: number;
     defence: number;
@@ -21,6 +24,12 @@ export interface CombatCamp {
     wilderness?: boolean;
     herbs?: boolean;
     talisman?: boolean;
+    quests?: readonly string[];
+    skills?: Readonly<Record<string, number>>;
+    supplies?: readonly Requirement[];
+    coins?: number;
+    food?: string;
+    prayer?: boolean;
 }
 
 export const COMBAT_CAMPS: readonly CombatCamp[] = [
@@ -82,7 +91,8 @@ export const COMBAT_CAMPS: readonly CombatCamp[] = [
     { id: 'al-kharid-scorpions', region: 'al-kharid', target: 'Scorpion', x: 3299, z: 3303, hp: 25, offence: 20, defence: 20 },
     { id: 'khazard-gnomes', region: 'khazard', target: 'Gnome', x: 2532, z: 3219, hp: 30, offence: 25, defence: 25 },
     { id: 'wilderness-skeletons', region: 'wilderness', target: 'Skeleton', x: 3106, z: 3548, hp: 30, offence: 20, defence: 20, wilderness: true },
-    ...TRAINING_CAMPS
+    ...TRAINING_CAMPS,
+    ...ADVANCED_CAMPS
 ];
 
 export function scimitarFor(attack: number): string {
@@ -95,6 +105,25 @@ export function foodFor(s: LevelerSnapshot): string {
     return s.levels.cooking >= 15 && ((s.stock['raw trout'] ?? 0) >= 28 || canCatch(s, FISH[1])) ? 'Trout' : 'Shrimps';
 }
 
+function supplyCost(s: LevelerSnapshot, camp: CombatCamp): number {
+    let cost = 0;
+    for (const need of camp.supplies ?? []) {
+        const missing = need.count - stockOf(s, requirementKey(need));
+        if (missing <= 0) continue;
+        if (s.unavailableItems?.includes(need.item.toLowerCase())) return Infinity;
+        const offer = supplyOffer(need.item);
+        if (!offer) return Infinity;
+        cost += purchaseBudget(offer, missing);
+    }
+    return cost;
+}
+
+function canSupplyFood(s: LevelerSnapshot, food?: string): boolean {
+    if (!food || stockOf(s, food) >= 24) return true;
+    const fish = FISH.find(fish => fish.food === food);
+    return !!fish && s.levels.cooking >= fish.cooking && (stockOf(s, `Raw ${food}`) >= 28 || canCatch(s, fish));
+}
+
 export function combatPlan(s: LevelerSnapshot, objective: string, memory: SessionMemory, random: () => number, resource?: string): ActivityPlan | null {
     const style = objective === 'magic' ? 'mage' : objective === 'ranged' ? 'range' : 'melee';
     const offence = style === 'mage' ? s.levels.magic : style === 'range' ? s.levels.ranged : Math.min(s.levels.attack, s.levels.strength);
@@ -102,8 +131,11 @@ export function combatPlan(s: LevelerSnapshot, objective: string, memory: Sessio
     const deathWalk = style === 'melee' && level < 15;
     let camps = COMBAT_CAMPS.filter(c => s.levels.hitpoints >= c.hp && offence >= c.offence && s.levels.defence >= c.defence
         && level >= (c.minCombat ?? 0)
+        && (c.quests ?? []).every(quest => s.quests[quest])
+        && Object.entries(c.skills ?? {}).every(([skill, required]) => (s.levels[skill] ?? 1) >= required)
+        && stockOf(s, 'Coins') >= (c.coins ?? (c.x < 2840 ? 200 : 0)) + supplyCost(s, c)
+        && canSupplyFood(s, c.food) && (objective !== 'prayer' || c.prayer !== false)
         && (!deathWalk || c.offence <= 15 && c.defence <= 15 && c.x >= 2840 && c.z < 3520 && !c.wilderness)
-        && (c.x >= 2840 || (s.stock.coins ?? 0) >= 200)
         && (!c.wilderness || s.wilderness) && (memory.cooldowns[c.id] ?? 0) <= s.now
         && (resource !== '#199' || c.herbs) && (resource !== 'Air talisman' || c.talisman)
         && (resource !== 'Cow hide' || c.target === 'Cow'));
@@ -124,17 +156,20 @@ export function combatPlan(s: LevelerSnapshot, objective: string, memory: Sessio
     const region = freshRegions[Math.min(freshRegions.length - 1, Math.floor(Math.max(0, random()) * freshRegions.length))];
     camps = camps.filter(camp => camp.region === region);
     const camp = camps[Math.min(camps.length - 1, Math.floor(Math.max(0, random()) * camps.length))];
-    const food = deathWalk ? undefined : foodFor(s);
+    const food = deathWalk ? undefined : camp.food ?? foodFor(s);
     const needs: Requirement[] = food ? [{ item: food, count: 24, carry: 12, equip: false }] : [];
-    if ((s.stock.coins ?? 0) >= 200) needs.push({ item: 'Coins', count: 200, carry: 200 });
-    const magic = style === 'mage' ? magicEquipment(s) : null;
-    const ammo = consumableBatch(s, [{ item: 'Bronze arrow', count: 1 }], 300)[0];
+    const coins = Math.max(camp.coins ?? 0, stockOf(s, 'Coins') >= 200 ? 200 : 0);
+    if (coins) needs.push({ item: 'Coins', count: coins, carry: coins });
+    needs.push(...(camp.supplies ?? []).map(need => ({ ...need })));
+    const gearSnapshot = { ...s, stock: { ...s.stock, coins: Math.max(0, stockOf(s, 'Coins') - Math.max(0, coins - 200) - supplyCost(s, camp)) } };
+    const magic = style === 'mage' ? magicEquipment(gearSnapshot) : null;
+    const ammo = consumableBatch(gearSnapshot, [{ item: 'Bronze arrow', count: 1 }], 300)[0];
     if (style === 'melee') {
-        needs.push(...meleeEquipment(s));
+        needs.push(...meleeEquipment(gearSnapshot));
     } else if (style === 'range') {
         const missingAmmo = Math.max(0, ammo.count - (s.stock['bronze arrow'] ?? 0));
         const ammoBudget = missingAmmo ? purchaseBudget(supplyOffer('Bronze arrow')!, missingAmmo) : 0;
-        needs.push(rangedBow({ ...s, stock: { ...s.stock, coins: (s.stock.coins ?? 0) - ammoBudget } }));
+        needs.push(rangedBow({ ...gearSnapshot, stock: { ...gearSnapshot.stock, coins: gearSnapshot.stock.coins - ammoBudget } }));
         needs.push({ ...ammo, equip: true });
     } else {
         needs.push(...magic!.needs);
@@ -144,10 +179,11 @@ export function combatPlan(s: LevelerSnapshot, objective: string, memory: Sessio
     return {
         id: camp.id, label: `${camp.target} at ${camp.id.replaceAll('-', ' ')}${deathWalk ? ' (death walk)' : ''}`, objective,
         script: 'AutoFighter', needs, combat: true, deathWalk, wilderness: camp.wilderness, food,
-        travel: new Tile(camp.x, camp.z, 0),
+        travel: new Tile(camp.x, camp.z, camp.level ?? 0),
         output: resource ? { item: resource, count: resource === '#199' ? 14 : 1 } : undefined,
         settings: {
-            target: camp.target, spot: 'Custom coordinates', coordinates: new Tile(camp.x, camp.z, 0), leashRadius: 12,
+            target: camp.target, spot: 'Custom coordinates', coordinates: new Tile(camp.x, camp.z, camp.level ?? 0), leashRadius: camp.leashRadius ?? 12,
+            travelCoins: coins, travelItems: (camp.supplies ?? []).filter(need => !need.equip).map(need => need.item),
             combatStyle: style, meleeStyle, rangeStyle: 'rapid', spell: magic?.spell ?? 'Wind Strike', runesWithdraw: magic?.casts ?? 150,
             ammo: 'Bronze arrow', ammoWithdraw: ammo.carry, useSpecial: false, solveClues: false,
             banking: 'Auto', food: food ?? 'Shrimps', foodWithdraw: deathWalk ? 0 : 12, panicHp: deathWalk ? 0 : 15, buryBones: true, buryBigBones: true,

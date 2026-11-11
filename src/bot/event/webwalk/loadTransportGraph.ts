@@ -5,6 +5,7 @@ import stairsJson from './data/stairEdges.json';
 import type { DoorEdgeData, PathFinder, TransportEdgeData } from './PathFinder.js';
 import { curatedTravelEdges } from './travelCatalog.js';
 import { DESERT_MINING_CAMP_REPLACED_DOOR_IDS } from './desertMiningCampDoors.js';
+import { dungeonTravelEdges, withDungeonTools } from './dungeonTravel.js';
 
 /** Door rows replaced by directed transports whose handlers move the player. */
 export function allDoorRows(): DoorEdgeData[] {
@@ -12,7 +13,7 @@ export function allDoorRows(): DoorEdgeData[] {
 }
 
 export function allTransportRows(): TransportEdgeData[] {
-    return [...(transportsJson as TransportEdgeData[]), ...curatedTravelEdges()];
+    return [...withDungeonTools(transportsJson as TransportEdgeData[]), ...curatedTravelEdges(), ...dungeonTravelEdges()];
 }
 
 export function loadDefaultNavEdges(finder: PathFinder): void {

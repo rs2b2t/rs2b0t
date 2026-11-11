@@ -6,7 +6,7 @@ export function combatLevel(levels: Record<string, number>): number {
 
 export function trainingTier(levels: Record<string, number>): number {
     const level = combatLevel(levels);
-    return level >= 35 ? 3 : level >= 25 ? 2 : level >= 15 ? 1 : 0;
+    return level >= 80 ? 5 : level >= 60 ? 4 : level >= 35 ? 3 : level >= 25 ? 2 : level >= 15 ? 1 : 0;
 }
 
 export const TARGET_TIERS: Readonly<Record<string, number>> = {

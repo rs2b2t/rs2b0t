@@ -6,7 +6,7 @@ import { methodFor, producer } from '#/bot/scripts/AccountLeveler/methods.js';
 import { supplyOffer } from '#/bot/scripts/AccountLeveler/offers.js';
 import { COMBAT_CAMPS, combatPlan } from '#/bot/scripts/AccountLeveler/combat.js';
 import { LevelerSession } from '#/bot/scripts/AccountLeveler/session.js';
-import type { ActivityPlan, LevelerSnapshot } from '#/bot/scripts/AccountLeveler/types.js';
+import { requirementKey, stockOf, type ActivityPlan, type LevelerSnapshot } from '#/bot/scripts/AccountLeveler/types.js';
 
 const snapshot = (level=1): LevelerSnapshot => ({ levels:Object.fromEntries(enabledSkills.map(s=>[s,s==='hitpoints'?Math.max(10,level):level])),stock:{coins:100000},bankReady:true,quests:{},target:40,wilderness:true,now:1000 });
 
@@ -21,7 +21,7 @@ function validate(plan:ActivityPlan, s:LevelerSnapshot) {
         }
     }
     for(const need of plan.needs) {
-        if(need.item==='Coins')continue;
+        if(need.item==='Coins' || stockOf(s, requirementKey(need)) >= need.count)continue;
         expect(supplyOffer(need.item) || producer(s,plan.objective,need,emptyMemory(),()=>0),need.item).toBeTruthy();
     }
 }
@@ -46,7 +46,9 @@ test('every training adapter uses an installed script and supported settings', (
 });
 
 test('every eligible combat camp has a valid adapter for all three combat styles', () => {
-    const s=snapshot(39);
+    const s=snapshot(80);
+    s.quests=Object.fromEntries(COMBAT_CAMPS.flatMap(camp => camp.quests ?? []).map(quest => [quest, true]));
+    s.stock['climbing boots']=1;
     for (const camp of COMBAT_CAMPS) {
         const memory=emptyMemory();
         memory.cooldowns=Object.fromEntries(COMBAT_CAMPS.filter(c=>c.id!==camp.id).map(c=>[c.id,s.now+60000]));

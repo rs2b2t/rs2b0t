@@ -36,6 +36,7 @@ import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import { Npcs, type Npc } from '../../api/npcs/Npcs.js';
 import { matchesEntityName } from '../../api/query/Query.js';
 import { SettingsStore, type SettingsSchema } from '../../runtime/Settings.js';
+import { restockTravelSupplies, type TravelSupply } from './travelSupplies.js';
 import Tile from '../../geometry/Tile.js';
 import { countMatching, matchesAny, shouldBank, shouldEat, shouldPanic } from '../../api/inventory/packRules.js';
 import {
@@ -123,6 +124,8 @@ export const SETTINGS: SettingsSchema = {
     solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues' },
     banking: { type: 'string', default: 'Auto', options: BANKING_OPTIONS, label: 'Banking', help: 'Auto = bank loot at the nearest bank and return; None = no loot-only bank trips' },
     bankLocation: { type: 'string', default: 'Nearest', options: BANK_LOCATION_OPTIONS, label: 'Bank location', group: 'Banking & loot', help: 'Nearest = closest reachable unlocked bank; a named bank forces that stand (locked banks fall back to nearest). Used for loot, food, supplies, and panic retreats.' },
+    travelCoins: { type: 'number', default: 0, min: 0, max: 200000, label: 'Travel coins per trip', group: 'Banking & loot', help: 'Restore this many coins at each bank visit for fares and entrance fees.' },
+    travelItems: { type: 'string[]', default: [], label: 'Travel items', group: 'Banking & loot', help: 'Keep one of each item and replace it from the bank before returning to camp.' },
     bankAtLootSlots: { type: 'number', default: 12, min: 1, max: 27, label: 'Bank at loot slots', showIf: { key: 'banking', anyOf: ['Auto'] } },
     bankEveryMinutes: {
         type: 'number',
@@ -292,6 +295,7 @@ export default class AutoFighter extends TaskBot {
     bankAfterSolve = false;
     bankFoodEmpty = false;
     private supplyEmpty = false;
+    travelSupplies: TravelSupply[] = [];
     private status = 'starting';
     private startedAt = Date.now();
     private lastBankAt = Date.now();
@@ -358,6 +362,9 @@ export default class AutoFighter extends TaskBot {
         AMMO_WITHDRAW = this.settings.num('ammoWithdraw', 500);
         AMMO_RESTOCK_BELOW = this.settings.num('ammoRestockBelow', 25) / 100;
         TRACKED_GEAR = Equipment.items().map(i => i.name ?? '').filter(n => n.length > 0);
+        const coins = Math.max(0, Math.floor(this.settings.num('travelCoins')));
+        this.travelSupplies = [...(coins ? [{ item: 'Coins', count: coins }] : []),
+            ...this.settings.list('travelItems').filter(item => item.trim().length > 0 && item.toLowerCase() !== 'coins').map(item => ({ item, count: 1 }))];
 
         this.solveClue = new SolveClue({
             log: m => this.log(m),
@@ -483,6 +490,16 @@ export default class AutoFighter extends TaskBot {
         return shouldBankAfterMinutes(AUTO_BANK, BANK_EVERY_MINUTES, this.minutesSinceBank(), lootCount());
     }
     noteSupplyEmpty(v: boolean): void { this.supplyEmpty = v; }
+    async restockTravel(): Promise<boolean> {
+        const missing = await restockTravelSupplies(this.travelSupplies, {
+            count: item => Inventory.count(item),
+            withdraw: async (item, target) => { await withdrawTo(item, target); }
+        });
+        if (!missing) return true;
+        await Bank.close();
+        this.requestFinish(`Missing travel supply: ${missing}`);
+        return false;
+    }
     supplyKnownEmpty(): boolean { return this.supplyEmpty; }
     private combatXpTotal(): number {
         return COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
@@ -647,6 +664,7 @@ class PanicRetreat implements Task {
         }
         await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 4, timeoutMs: 180_000, log: m => this.bot.log(`  ${m}`) });
         if (await openBank(bank, m => this.bot.log(`  ${m}`))) {
+            if (!(await this.bot.restockTravel())) return;
             for (let i = 0; i < FOOD_WITHDRAW && !Inventory.isFull(); i++) {
                 const before = foodCount();
                 if (!(await Bank.withdraw(FOOD, 'Withdraw-1'))) {
@@ -750,7 +768,9 @@ class BankRun implements Task {
         if (!(await openBank(bank, m => this.bot.log(`  ${m}`)))) {
             return;
         }
-        await Bank.depositAllMatching((name, id) => !shouldKeepBankItem(name, id, FOOD, BANK_COMMON, STYLE === 'range' ? [AMMO] : [], TRACKED_GEAR, BURY_BONES, BURY_BIG_BONES), m => this.bot.log(`  ${m}`));
+        const keep = [...TRACKED_GEAR, ...this.bot.travelSupplies.map(need => need.item)];
+        await Bank.depositAllMatching((name, id) => !shouldKeepBankItem(name, id, FOOD, BANK_COMMON, STYLE === 'range' ? [AMMO] : [], keep, BURY_BONES, BURY_BIG_BONES), m => this.bot.log(`  ${m}`));
+        if (!(await this.bot.restockTravel())) return;
         for (let guard = 0; guard < FOOD_WITHDRAW && foodCount() < FOOD_WITHDRAW && !Inventory.isFull(); guard++) {
             const before = foodCount();
             if (!(await Bank.withdraw(FOOD, 'Withdraw-1'))) {
