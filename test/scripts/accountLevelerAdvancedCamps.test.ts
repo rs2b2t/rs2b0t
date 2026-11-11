@@ -23,6 +23,7 @@ const expected: Record<string, { npcIds: number[]; maxThreat: number }> = {
     'crandor-moss-giants': { npcIds: [112], maxThreat: 42 },
     'canifis-south-ghouls': { npcIds: [1218], maxThreat: 42 },
     'gu-tanoth-ogres': { npcIds: [114, 115], maxThreat: 53 },
+    'taverley-baby-blue-dragons': { npcIds: [52], maxThreat: 48 },
     'karamja-lesser-demons': { npcIds: [82], maxThreat: 82 },
     'crandor-lesser-demons': { npcIds: [82], maxThreat: 82 },
     'troll-stronghold-trolls': { npcIds: [1106, 1107, 1108, 1109, 1110, 1111, 1112], maxThreat: 69 },
@@ -32,7 +33,7 @@ const expected: Record<string, { npcIds: number[]; maxThreat: number }> = {
     'brimhaven-dungeon-fire-giants': { npcIds: [110], maxThreat: 86 }
 };
 const variants: Record<number, [number, number]> = {
-    8: [16, 17], 9: [21, 22], 32: [20, 22], 82: [82, 79], 110: [86, 111], 112: [42, 60],
+    8: [16, 17], 9: [21, 22], 32: [20, 22], 52: [48, 50], 82: [82, 79], 110: [86, 111], 112: [42, 60],
     114: [53, 60], 115: [53, 60], 183: [23, 20], 475: [19, 22], 476: [19, 22], 862: [83, 80],
     1106: [69, 90], 1107: [69, 90], 1108: [69, 90], 1109: [69, 90], 1110: [69, 90], 1111: [69, 90], 1112: [69, 90],
     1218: [42, 50], 1338: [74, 70], 1339: [74, 70], 1340: [74, 70], 1341: [92, 120], 1342: [92, 120], 1343: [92, 120]

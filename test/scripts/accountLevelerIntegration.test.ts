@@ -45,15 +45,21 @@ test('every training adapter uses an installed script and supported settings', (
     }
 });
 
-test('every eligible combat camp has a valid adapter for all three combat styles', () => {
+test('every eligible combat camp has a valid adapter for its supported combat styles', () => {
     const s=snapshot(80);
     s.quests=Object.fromEntries(COMBAT_CAMPS.flatMap(camp => camp.quests ?? []).map(quest => [quest, true]));
     s.stock['climbing boots']=1;
+    s.stock['dusty key']=1;
+    s.stock['dragonfire shield']=1;
     for (const camp of COMBAT_CAMPS) {
         const memory=emptyMemory();
         memory.cooldowns=Object.fromEntries(COMBAT_CAMPS.filter(c=>c.id!==camp.id).map(c=>[c.id,s.now+60000]));
         for (const objective of ['attack','ranged','magic']) {
             const plan=combatPlan(s,objective,memory,()=>0);
+            if (camp.styles && !camp.styles.includes(objective === 'attack' ? 'melee' : objective === 'ranged' ? 'range' : 'mage')) {
+                expect(plan,camp.id).toBeNull();
+                continue;
+            }
             expect(plan?.id,camp.id).toBe(camp.id);
             if(plan)validate(plan,s);
         }

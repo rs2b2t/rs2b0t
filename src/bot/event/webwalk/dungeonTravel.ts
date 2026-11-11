@@ -5,6 +5,16 @@ const AXES = ['Bronze axe', 'Iron axe', 'Steel axe', 'Black axe', 'Mithril axe',
 export function dungeonTravelEdges(): TransportEdgeData[] {
     return [
         {
+            from: { x: 2924, z: 9803, level: 0 }, to: { x: 2923, z: 9803, level: 0 },
+            locName: 'Gate', action: 'Open', kind: 'dungeon', locId: 2623, locX: 2924, locZ: 9803,
+            debugName: 'deepdungeondoor', requires: { members: true, items: [{ name: 'Dusty key', count: 1 }] }
+        },
+        {
+            from: { x: 2923, z: 9803, level: 0 }, to: { x: 2924, z: 9803, level: 0 },
+            locName: 'Gate', action: 'Open', kind: 'dungeon', locId: 2623, locX: 2924, locZ: 9803,
+            debugName: 'deepdungeondoor'
+        },
+        {
             from: { x: 2747, z: 3152, level: 0 }, to: { x: 2713, z: 9564, level: 0 },
             locName: 'Dungeon entrance', action: 'Enter', kind: 'dungeon', locId: 5083, locX: 2743, locZ: 3153,
             debugName: 'dungeon_tree_closed', requires: { members: true, items: [{ name: 'Coins', count: 875, consumed: true }] }

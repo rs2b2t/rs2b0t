@@ -138,3 +138,23 @@ test('an unavailable dungeon tool excludes the camp until the tool is owned', ()
     s.stock['bronze axe'] = 1;
     expect(combatPlan(s, 'attack', memory, () => 0)?.id).toBe('brimhaven-dungeon-moss-giants');
 });
+
+test('baby blue dragons require the key and an equipped shield for the adult dragon transit', () => {
+    const s = snapshot(50);
+    const memory = isolate('taverley-baby-blue-dragons');
+    expect(combatPlan(s, 'attack', memory, () => 0)).toBeNull();
+    s.stock['dusty key'] = 1;
+    expect(combatPlan(s, 'attack', memory, () => 0)).toBeNull();
+    s.stock['dragonfire shield'] = 1;
+    for (const objective of ['attack', 'magic', 'prayer']) {
+        const plan = combatPlan(s, objective, memory, () => 0);
+        expect(plan?.id).toBe('taverley-baby-blue-dragons');
+        expect(plan?.needs).toContainEqual({ item: 'Dusty key', count: 1, carry: 1 });
+        expect(plan?.needs).toContainEqual({ item: 'Dragonfire shield', count: 1, carry: 1, equip: true });
+        expect(plan?.food).toBe('Lobster');
+        expect(plan?.settings).toMatchObject({ target: 'Baby blue dragon', leashRadius: 4, travelItems: ['Dusty key'], buryBabyDragonBones: true });
+    }
+    expect(combatPlan(s, 'ranged', memory, () => 0)).toBeNull();
+    s.levels.hitpoints = 49;
+    expect(combatPlan(s, 'attack', memory, () => 0)).toBeNull();
+});

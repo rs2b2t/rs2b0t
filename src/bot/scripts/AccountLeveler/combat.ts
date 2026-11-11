@@ -30,6 +30,7 @@ export interface CombatCamp {
     coins?: number;
     food?: string;
     prayer?: boolean;
+    styles?: readonly ('melee' | 'range' | 'mage')[];
 }
 
 export const COMBAT_CAMPS: readonly CombatCamp[] = [
@@ -131,6 +132,7 @@ export function combatPlan(s: LevelerSnapshot, objective: string, memory: Sessio
     const deathWalk = style === 'melee' && level < 15;
     let camps = COMBAT_CAMPS.filter(c => s.levels.hitpoints >= c.hp && offence >= c.offence && s.levels.defence >= c.defence
         && level >= (c.minCombat ?? 0)
+        && (!c.styles || c.styles.includes(style))
         && (c.quests ?? []).every(quest => s.quests[quest])
         && Object.entries(c.skills ?? {}).every(([skill, required]) => (s.levels[skill] ?? 1) >= required)
         && stockOf(s, 'Coins') >= (c.coins ?? (c.x < 2840 ? 200 : 0)) + supplyCost(s, c)
@@ -187,6 +189,7 @@ export function combatPlan(s: LevelerSnapshot, objective: string, memory: Sessio
             combatStyle: style, meleeStyle, rangeStyle: 'rapid', spell: magic?.spell ?? 'Wind Strike', runesWithdraw: magic?.casts ?? 150,
             ammo: 'Bronze arrow', ammoWithdraw: ammo.carry, useSpecial: false, solveClues: false,
             banking: 'Auto', food: food ?? 'Shrimps', foodWithdraw: deathWalk ? 0 : 12, panicHp: deathWalk ? 0 : 15, buryBones: true, buryBigBones: true,
+            buryBabyDragonBones: camp.target === 'Baby blue dragon',
             loot: ['Bones', 'Herb', 'Air talisman', ...(resource === 'Cow hide' ? ['Cow hide'] : [])], avoidHerbs: [], loadout: '', bankEveryMinutes: 8
         }
     };

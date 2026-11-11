@@ -15,7 +15,7 @@ Melee offence uses the lower of Attack and Strength; ranged and magic use their 
 | Below 15 | Chickens, rats, giant rats, goblins, spiders, men/women, cows and other eligible starter camps; melee death walking without mandatory food. |
 | 15–24 | Monks, barbarians/barbarian women, dwarves and Al-Kharid warriors. Prepare food first. |
 | 25–34 | City guards, bears, zombies, skeletons, warrior women, chaos druids, unicorns, scorpions, Khazard troopers and soldiers. |
-| 35–59 | Hobgoblins, giants and druids; moss giants, ghouls, Burthorpe guards and Gu'Tanoth ogres also require stronger individual stats and access requirements. |
+| 35–59 | Hobgoblins, giants and druids; moss giants, ghouls, Burthorpe guards, Gu'Tanoth ogres and Taverley baby blue dragons also require stronger individual stats and access requirements. |
 | 60–79 | Lesser demons; Troll Stronghold trolls, Gu'Tanoth city guards and Brimhaven dungeon giants unlock at their higher camp minimums. These camps require lobster supplies. |
 | 80+ | Lighthouse dagannoths, when Horror from the Deep is complete and the stat and food requirements are met. Otherwise use the strongest eligible lower group. |
 
@@ -35,7 +35,7 @@ These preference groups do not bypass Attack/Strength, Defence or HP requirement
 
 ### Expanded ordinary NPC camps
 
-There are 94 combat camps. Fresh accounts have 20 eligible sites across eight regions and eight target types: Chicken, Goblin, Man, Rat, Giant rat, Spider, Giant spider and Woman. Region rotation and random site selection use each account's recent history; accounts do not follow a shared fixed route.
+There are 95 combat camps. Fresh accounts have 20 eligible sites across eight regions and eight target types: Chicken, Goblin, Man, Rat, Giant rat, Spider, Giant spider and Woman. Region rotation and random site selection use each account's recent history; accounts do not follow a shared fixed route.
 
 The following 28 sites were added from the local server content. Coordinates are the fighter's anchor, with a 12-tile target leash. Thresholds are player HP / offence / Defence, not the NPC's combat level.
 
@@ -104,7 +104,7 @@ Both Wilderness sites require Wilderness training enabled. [Training camp audits
 
 ### Additional regions and dungeon camps
 
-The 18 camps in [advancedCamps.ts](../src/bot/scripts/AccountLeveler/advancedCamps.ts) declare quest completions, route skills, supplies, food, floor and target radius where needed. Completed quests unlock camps even when automatic questing is disabled. Missing route skills or unavailable supplies exclude the camp before tier selection. Required lobster supplies must be banked or producible with the account's current Fishing/Cooking levels.
+The 19 camps in [advancedCamps.ts](../src/bot/scripts/AccountLeveler/advancedCamps.ts) declare quest completions, route skills, supplies, food, floor and target radius where needed. Completed quests unlock camps even when automatic questing is disabled. Missing route skills or unavailable supplies exclude the camp before tier selection. Required lobster supplies must be banked or producible with the account's current Fishing/Cooking levels.
 
 | Camp | Combat minimum; HP / offence / Defence | Access and preparation |
 | --- | --- | --- |
@@ -117,6 +117,7 @@ The 18 camps in [advancedCamps.ts](../src/bot/scripts/AccountLeveler/advancedCam
 | Crandor moss giants | 50; 40 / 35 / 35 | Dragon Slayer; 200 travel coins |
 | Ghouls southwest of Canifis | 40; 35 / 30 / 30 | Priest in Peril; five-tile target radius excludes Ghasts |
 | Gu'Tanoth ogres | 50; 40 / 35 / 35 | Watch Tower; Agility 25; 200 coins includes the chasm toll; two-tile target radius excludes chieftains |
+| Southern Taverley baby blue dragons | 55; 50 / 40 / 40 | Owned Dusty key and equipped Dragonfire shield; lobsters; four-tile target radius; melee and magic only |
 | Karamja volcano lesser demons | 60; 50 / 45 / 45 | Lobsters; 200 travel coins; no Dragon Slayer requirement |
 | Crandor lesser demons | 60; 50 / 45 / 45 | Dragon Slayer; lobsters; 200 travel coins |
 | Troll Stronghold outdoor trolls | 65; 55 / 50 / 50 | Troll Stronghold; Agility 15; owned Climbing boots, equipped; lobsters |
@@ -127,7 +128,9 @@ The 18 camps in [advancedCamps.ts](../src/bot/scripts/AccountLeveler/advancedCam
 
 Lesser demons are excluded from Prayer objectives because they drop ashes. Brimhaven dungeon thresholds account for nearby level-63 wild dogs. Travel reserves are excluded from equipment shopping budgets; AutoFighter keeps travel tools and replenishes coins/items at bank visits before returning. A failed refill finishes the child activity at the bank so AccountLeveler can replan or resupply.
 
-Navigation pays Saniboch and settles his dialogue before entering Brimhaven dungeon, checks the directional vine requirements, and uses the completed-quest Lighthouse doorway and ladder destinations. Camp audits check source NPC variants and handlers, hunter envelopes including the extra four-tile loot radius, and routes from three banks to the anchor, back to the banks, and to target spawns. These checks do not establish live XP rates or food consumption.
+Baby blue dragons use the southern three-spawn cluster at (2897,9765). The camp excludes adult dragons, but the bank route crosses their room, so the shield is required for transit. Ranged is excluded because the leveler's bows displace the shield. No quest completion is required when the key and shield are already owned. AutoFighter loots and buries Babydragon bones, including when Prayer is the objective.
+
+Navigation pays Saniboch and settles his dialogue before entering Brimhaven dungeon, checks the directional vine requirements, uses the completed-quest Lighthouse doorway and ladder destinations, and unlocks Taverley's deep dungeon gate with the Dusty key. Camp audits check source NPC variants and handlers, hunter envelopes including the extra four-tile loot radius, and routes from three banks to the anchor, back to the banks, and to target spawns. These checks do not establish live XP rates or food consumption.
 
 Kalphite workers remain deferred: the entrance lands within a poisonous soldier's roaming/hunting envelope, and the leveler does not handle antipoison. Navigation now supports attaching the entrance rope and climbing down, but this does not enable a training camp. Soldiers and guardians are also excluded. The northern Canifis ghoul cluster is excluded because a nearby leech drains skills. Death Plateau trolls are excluded because throwers and stronger named trolls overlap the area. Upper-floor Brimhaven fire giants and other dungeon monsters remain outside the catalog pending route and threat audits.
 

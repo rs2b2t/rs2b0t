@@ -121,6 +121,7 @@ export const SETTINGS: SettingsSchema = {
     avoidHerbs: { type: 'string[]', default: [], options: HERB_OPTIONS, label: 'Herbs to avoid', group: 'Banking & loot', help: 'pick herbs to never pick up; matched by item id for grimy and cleaned forms, since every grimy herb reads as "Herb"' },
     buryBones: { type: 'boolean', default: false, label: 'Bury regular bones', group: 'Banking & loot', help: 'pick up and bury regular Bones for Prayer XP (always looted when on)' },
     buryBigBones: { type: 'boolean', default: false, label: 'Bury big bones', group: 'Banking & loot', help: 'pick up and bury Big bones for Prayer XP, independently of regular bones (always looted when on)' },
+    buryBabyDragonBones: { type: 'boolean', default: false, label: 'Bury baby dragon bones', group: 'Banking & loot', help: 'pick up and bury Babydragon bones for Prayer XP (always looted when on)' },
     solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues' },
     banking: { type: 'string', default: 'Auto', options: BANKING_OPTIONS, label: 'Banking', help: 'Auto = bank loot at the nearest bank and return; None = no loot-only bank trips' },
     bankLocation: { type: 'string', default: 'Nearest', options: BANK_LOCATION_OPTIONS, label: 'Bank location', group: 'Banking & loot', help: 'Nearest = closest reachable unlocked bank; a named bank forces that stand (locked banks fall back to nearest). Used for loot, food, supplies, and panic retreats.' },
@@ -153,6 +154,7 @@ let PANIC_AT = 0.25;
 let LOOT = DEFAULT_LOOT;
 let BURY_BONES = false;
 let BURY_BIG_BONES = false;
+let BURY_BABY_DRAGON_BONES = false;
 let SOLVE_CLUES = true;
 let BANK_AT = 12;
 let BANK_EVERY_MINUTES = 0;
@@ -210,10 +212,10 @@ function needEat(): boolean {
     return shouldEat(Skills.effective('hitpoints'), Skills.level('hitpoints'), foodHealAmount(FOOD), foodCount());
 }
 function isLoot(name: string | null): boolean {
-    return wantsAutoFighterLoot(name, LOOT, BURY_BONES, BURY_BIG_BONES);
+    return wantsAutoFighterLoot(name, LOOT, BURY_BONES, BURY_BIG_BONES, BURY_BABY_DRAGON_BONES);
 }
 function burialBones() {
-    return Inventory.items().filter(item => !item.noted && isBurialBone(item.name, BURY_BONES, BURY_BIG_BONES)
+    return Inventory.items().filter(item => !item.noted && isBurialBone(item.name, BURY_BONES, BURY_BIG_BONES, BURY_BABY_DRAGON_BONES)
         && item.actions().some(action => action.toLowerCase() === 'bury'));
 }
 function lootCount(): number {
@@ -270,14 +272,14 @@ function fullyOutOfSupplies(): boolean {
     return supplyMetric() === 0;
 }
 
-export function shouldKeepBankItem(name: string, id: number, food: string, bankCommon: boolean, ammo: string[] = [], gear: string[] = [], buryBones = false, buryBigBones = false): boolean {
+export function shouldKeepBankItem(name: string, id: number, food: string, bankCommon: boolean, ammo: string[] = [], gear: string[] = [], buryBones = false, buryBigBones = false, buryBabyDragonBones = false): boolean {
     const n = name.toLowerCase();
     const genericCasket = id === RANDOM_EVENT_CASKET_ID;
     const ammoMatch = ammo.some(a => a.toLowerCase() === n);
     const gearMatch = gear.some(g => g.toLowerCase() === n);
     return matchesAny(name, [food]) || n === 'coins' || KIT.includes(n) || n.includes('clue')
         || (n.includes('casket') && !genericCasket) || (genericCasket && !bankCommon)
-        || ammoMatch || gearMatch || isBurialBone(name, buryBones && id === 526, buryBigBones && id === 532);
+        || ammoMatch || gearMatch || isBurialBone(name, buryBones && id === 526, buryBigBones && id === 532, buryBabyDragonBones && id === 534);
 }
 
 export default class AutoFighter extends TaskBot {
@@ -323,6 +325,7 @@ export default class AutoFighter extends TaskBot {
         );
         BURY_BONES = this.settings.bool('buryBones', false);
         BURY_BIG_BONES = this.settings.bool('buryBigBones', false);
+        BURY_BABY_DRAGON_BONES = this.settings.bool('buryBabyDragonBones', false);
         SOLVE_CLUES = this.settings.bool('solveClues', true);
         BANK_AT = this.settings.num('bankAtLootSlots', 12);
         BANK_EVERY_MINUTES = this.settings.num('bankEveryMinutes', 0);
@@ -404,7 +407,7 @@ export default class AutoFighter extends TaskBot {
         this.xpAtStart = COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
         this.combatXpLast = this.combatXpTotal();
         this.combatXpGainAt = Date.now();
-        this.log(`AutoFighter starting — '${targetNames().join(', ')}' at ${spotMode} ${ANCHOR} r${LEASH}, style ${STYLE}${STYLE === 'mage' ? ` (${SPELL}, ${RUNES_WITHDRAW} casts)` : STYLE === 'range' ? ` (${RANGE_MODE === 0 ? 'accurate' : RANGE_MODE === 1 ? 'rapid' : 'longrange'}, ${AMMO}x${AMMO_WITHDRAW})` : ` (${MELEE_STYLE})`}, banking ${AUTO_BANK ? 'auto' : 'none'}${BANK_EVERY_MINUTES > 0 ? ` every ${BANK_EVERY_MINUTES}m` : ''} at ${BANK_LOCATION}, food '${FOOD}'x${FOOD_WITHDRAW}, loot [${LOOT.join(', ')}]${BURY_BONES ? `, burying ${BURIAL_BONE_NAME}` : ''}${BURY_BIG_BONES ? ', burying Big bones' : ''}`);
+        this.log(`AutoFighter starting — '${targetNames().join(', ')}' at ${spotMode} ${ANCHOR} r${LEASH}, style ${STYLE}${STYLE === 'mage' ? ` (${SPELL}, ${RUNES_WITHDRAW} casts)` : STYLE === 'range' ? ` (${RANGE_MODE === 0 ? 'accurate' : RANGE_MODE === 1 ? 'rapid' : 'longrange'}, ${AMMO}x${AMMO_WITHDRAW})` : ` (${MELEE_STYLE})`}, banking ${AUTO_BANK ? 'auto' : 'none'}${BANK_EVERY_MINUTES > 0 ? ` every ${BANK_EVERY_MINUTES}m` : ''} at ${BANK_LOCATION}, food '${FOOD}'x${FOOD_WITHDRAW}, loot [${LOOT.join(', ')}]${BURY_BONES ? `, burying ${BURIAL_BONE_NAME}` : ''}${BURY_BIG_BONES ? ', burying Big bones' : ''}${BURY_BABY_DRAGON_BONES ? ', burying Babydragon bones' : ''}`);
 
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
@@ -691,7 +694,7 @@ class BuryBones implements Task {
         return (
             !EventSignal.pending() &&
             shouldBuryRegularBones({
-                enabled: BURY_BONES || BURY_BIG_BONES,
+                enabled: BURY_BONES || BURY_BIG_BONES || BURY_BABY_DRAGON_BONES,
                 inCombat: Game.inCombat(),
                 bankOpen: Bank.isOpen(),
                 boneCount: burialBones().length,
@@ -769,7 +772,7 @@ class BankRun implements Task {
             return;
         }
         const keep = [...TRACKED_GEAR, ...this.bot.travelSupplies.map(need => need.item)];
-        await Bank.depositAllMatching((name, id) => !shouldKeepBankItem(name, id, FOOD, BANK_COMMON, STYLE === 'range' ? [AMMO] : [], keep, BURY_BONES, BURY_BIG_BONES), m => this.bot.log(`  ${m}`));
+        await Bank.depositAllMatching((name, id) => !shouldKeepBankItem(name, id, FOOD, BANK_COMMON, STYLE === 'range' ? [AMMO] : [], keep, BURY_BONES, BURY_BIG_BONES, BURY_BABY_DRAGON_BONES), m => this.bot.log(`  ${m}`));
         if (!(await this.bot.restockTravel())) return;
         for (let guard = 0; guard < FOOD_WITHDRAW && foodCount() < FOOD_WITHDRAW && !Inventory.isFull(); guard++) {
             const before = foodCount();

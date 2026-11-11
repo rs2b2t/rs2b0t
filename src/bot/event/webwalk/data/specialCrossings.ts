@@ -51,6 +51,17 @@ export interface SpecialCrossing {
 }
 
 export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
+    {
+        x: 2924, z: 9803, level: 0, locName: 'Gate', action: 'Open',
+        useItem: { id: 1590, name: 'Dusty key' }, exactApproach: true,
+        toTile: { x: 2923, z: 9803, level: 0 }, arrivalRadius: 0,
+        label: 'Taverley Dungeon dusty-key entrance'
+    },
+    {
+        x: 2923, z: 9803, level: 0, locName: 'Gate', action: 'Open', exactApproach: true,
+        toTile: { x: 2924, z: 9803, level: 0 }, arrivalRadius: 0,
+        label: 'Taverley Dungeon dusty-key exit'
+    },
     ...[0, 1].map(level => ({
         x: 3021,
         z: 3510,
