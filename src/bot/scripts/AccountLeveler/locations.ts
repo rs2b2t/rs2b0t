@@ -14,9 +14,13 @@ function travelFood(s: LevelerSnapshot): string | undefined {
     return ['Lobster', 'Salmon', 'Trout', 'Shrimps'].find(food => stockOf(s, food) >= 12);
 }
 
-export function membersReady(s: LevelerSnapshot): boolean {
+function membersTravelReady(s: LevelerSnapshot): boolean {
     return ['attack', 'strength', 'defence'].every(skill => s.levels[skill] >= 20)
-        && s.levels.hitpoints >= 25 && stockOf(s, 'Coins') >= 200 && travelFood(s) !== undefined;
+        && s.levels.hitpoints >= 25 && stockOf(s, 'Coins') >= 200;
+}
+
+export function membersReady(s: LevelerSnapshot): boolean {
+    return membersTravelReady(s) && travelFood(s) !== undefined;
 }
 
 function gather(name: string, locations: readonly GatheringLocation[], members = false): Site {
@@ -80,7 +84,9 @@ export function locateMethod(s: LevelerSnapshot, input: ActivityPlan, memory: Se
         ...input, travel: input.script === 'GnomeCourse' ? new Tile(2474, 3436, 0) : new Tile(2725, 3493, 0),
         needs: [...input.needs, { item: 'Coins', count: 200, carry: 200 }]
     };
-    const ready = input.settings.target === 'Paladin' ? canStealChaos(s) : membersReady(s);
+    const prepareFood = input.script === 'Fisher'
+        && ['Lobster cage — lobster', 'Harpoon — sharks'].includes(String(input.settings.fishMethod)) && membersTravelReady(s);
+    const ready = input.settings.target === 'Paladin' ? canStealChaos(s) : membersReady(s) || prepareFood;
     const plan = input.script === 'Thiever' && input.settings.target !== 'Paladin' && s.levels.thieving >= 25 && ready
         ? { ...input, id: 'pickpocket-warrior-women', label: 'pickpocket warrior women', settings: { ...input.settings, target: 'Warrior woman' } } : input;
     const options = sites(plan);
@@ -97,5 +103,5 @@ export function locateMethod(s: LevelerSnapshot, input: ActivityPlan, memory: Se
     const chosen = choices[Math.min(choices.length - 1, Math.floor(Math.max(0, random()) * choices.length))];
     const located = { ...plan, id: chosen.id, label: `${plan.label} at ${chosen.site.name}`, travel: chosen.site.travel,
         settings: { ...plan.settings, ...chosen.site.settings } };
-    return stockOf(s, 'Coins') >= 200 ? transit(located, plan.food ?? travelFood(s)) : located;
+    return stockOf(s, 'Coins') >= 200 ? transit(located, plan.food ?? travelFood(s) ?? (prepareFood ? 'Shrimps' : undefined)) : located;
 }
