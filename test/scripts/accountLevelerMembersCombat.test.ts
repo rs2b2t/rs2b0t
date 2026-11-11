@@ -173,6 +173,10 @@ test.each(['#199', 'Air talisman', 'Cow hide'])('region rotation keeps %s produc
 test.each(['attack', 'ranged', 'magic'])('members %s camps keep the same exact equipment and ammunition manifest', objective => {
     const baseline = combatPlan(snapshot(), objective, isolate('lumbridge-chickens'), () => 0)!;
     for (const [id] of members) {
+        if (objective === 'ranged' && id === 'taverley-surface-druids') {
+            expect(combatPlan(snapshot(), objective, isolate(id), () => 0)).toBeNull();
+            continue;
+        }
         const plan = combatPlan(snapshot(), objective, isolate(id), () => 0);
         expect(plan?.needs.filter(need => need.item !== 'Coins'), id).toEqual(baseline.needs.filter(need => need.item !== 'Coins'));
         expect(plan?.settings.combatStyle).toBe(baseline.settings.combatStyle);

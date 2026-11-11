@@ -20,8 +20,8 @@ test.each([1, 8, 299, 300, 1000])('ranged starts with %i banked arrows instead o
     expect(resolveActivity(s, plan, emptyMemory(), () => 0).kind).toBe('activity');
 });
 
-test('empty ranged supplies request a useful refill with a one-arrow minimum', () => {
-    const plan = method(snapshot({ coins: 100000, '#843': 1 }), 'ranged');
+test('empty ranged supplies below guild level request a useful refill with a one-arrow minimum', () => {
+    const plan = method(snapshot({ coins: 100000, '#843': 1 }, { ranged: 39 }), 'ranged');
     expect(plan.needs.find(need => need.item === 'Bronze arrow')).toMatchObject({ count: 300, carry: 300, minimum: 1 });
 });
 

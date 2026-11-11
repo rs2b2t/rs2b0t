@@ -130,9 +130,11 @@ export function combatPlan(s: LevelerSnapshot, objective: string, memory: Sessio
     const offence = style === 'mage' ? s.levels.magic : style === 'range' ? s.levels.ranged : Math.min(s.levels.attack, s.levels.strength);
     const level = combatLevel(s.levels);
     const deathWalk = style === 'melee' && level < 15;
+    const tier = (camp: CombatCamp) => camp.trainingTier ?? TARGET_TIERS[camp.target] ?? 0;
     let camps = COMBAT_CAMPS.filter(c => s.levels.hitpoints >= c.hp && offence >= c.offence && s.levels.defence >= c.defence
         && level >= (c.minCombat ?? 0)
         && (!c.styles || c.styles.includes(style))
+        && (style !== 'range' || tier(c) <= 2)
         && (c.quests ?? []).every(quest => s.quests[quest])
         && Object.entries(c.skills ?? {}).every(([skill, required]) => (s.levels[skill] ?? 1) >= required)
         && stockOf(s, 'Coins') >= (c.coins ?? (c.x < 2840 ? 200 : 0)) + supplyCost(s, c)
@@ -142,7 +144,6 @@ export function combatPlan(s: LevelerSnapshot, objective: string, memory: Sessio
         && (resource !== '#199' || c.herbs) && (resource !== 'Air talisman' || c.talisman)
         && (resource !== 'Cow hide' || c.target === 'Cow'));
     if (level >= 15 && !resource && camps.length) {
-        const tier = (camp: CombatCamp) => camp.trainingTier ?? TARGET_TIERS[camp.target] ?? 0;
         camps = camps.filter(camp => tier(camp) <= trainingTier(s.levels));
         const best = Math.max(...camps.map(tier));
         camps = camps.filter(camp => tier(camp) === best);

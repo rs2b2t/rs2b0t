@@ -6,7 +6,7 @@ import { Bank } from '#/bot/api/bank/Bank.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
 import { Game } from '#/bot/api/game/Game.js';
-import { Inventory } from '#/bot/api/inventory/Inventory.js';
+import { Inventory, InvItem } from '#/bot/api/inventory/Inventory.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
 import { BotHost } from '#/bot/runtime/BotHost.js';
@@ -403,7 +403,7 @@ test('bank preparation errors do not count as failed fishing attempts', async ()
 
 test('saved gathering cooldowns are removed while the original failure survives diagnostic history rotation', () => {
     const bot = new AccountLeveler();
-    let saved = JSON.stringify({ cooldowns: { 'fish-shrimps': Date.now() + 900000, 'lumbridge-goblins': Date.now() + 900000 }, diagnostics: {} });
+    let saved = JSON.stringify({ cooldowns: { 'fish-shrimps': Date.now() + 900000, 'lumbridge-goblins': Date.now() + 900000, 'ranging-guild': Date.now() + 900000 }, diagnostics: {} });
     const storage = bot['storage'];
     bot['storage'] = () => ({ getItem: () => saved, setItem: (_key, value) => { saved = value; } });
     const name = spyOn(Game, 'myName').mockReturnValue('leveler-test');
@@ -412,6 +412,7 @@ test('saved gathering cooldowns are removed while the original failure survives 
         bot['load']();
         expect(bot['session'].memory.cooldowns['fish-shrimps']).toBeUndefined();
         expect(bot['session'].memory.cooldowns['lumbridge-goblins']).toBeGreaterThan(Date.now());
+        expect(bot['session'].memory.cooldowns['ranging-guild']).toBeGreaterThan(Date.now());
         bot['fail']('Could not open a loaded bank');
         for (let n = 0; n < 30; n++) bot['actions'].note(`walk ${n}`);
         bot['save']();
@@ -421,6 +422,31 @@ test('saved gathering cooldowns are removed while the original failure survives 
         bot['load'](); bot['save']();
         expect(JSON.parse(saved).diagnostics.failure.reason).toBe('Could not open a loaded bank');
     } finally { bot.onStop(); bot['storage'] = storage; for (const patch of [name, tile]) patch.mockRestore(); }
+});
+
+test('failed guild rounds count toward cooldown even after some entry coins were spent', async () => {
+    const bot = new AccountLeveler();
+    const plan = { id: 'ranging-guild', objective: 'ranged', label: 'Ranging Guild', script: 'RangingGuild', needs: [{ item: 'Coins', count: 1000, carry: 1000 }], settings: {} };
+    const patches = [
+        spyOn(Game, 'sceneReady').mockReturnValue(true), spyOn(Game, 'inCombat').mockReturnValue(false),
+        spyOn(Game, 'myName').mockReturnValue(null), spyOn(Game, 'tile').mockReturnValue({ x: 2670, z: 3418, level: 0 }),
+        spyOn(Skills, 'level').mockReturnValue(40), spyOn(Skills, 'xp').mockReturnValue(0),
+        spyOn(Bank, 'ready').mockReturnValue(false), spyOn(Bank, 'items').mockReturnValue([]),
+        spyOn(Inventory, 'items').mockReturnValue([new InvItem({ id: 995, name: 'Coins', count: 600, slot: 0, comId: 1, ops: [] })]),
+        spyOn(Equipment, 'items').mockReturnValue([])
+    ];
+    try {
+        bot['target'] = 60;
+        for (let attempt = 0; attempt < 2; attempt++) {
+            bot['phase'] = 'train';
+            bot['waitingUntil'] = 0;
+            bot['session'].start(plan, Date.now(), () => 0);
+            bot['activity'].outcome = { kind: 'failed', reason: 'RangingGuild: gave up after 3 recoveries' };
+            await bot.loop();
+        }
+        expect(bot['session'].memory.cooldowns['ranging-guild']).toBeGreaterThan(Date.now());
+        expect(bot['retry']).toBeNull();
+    } finally { bot.onStop(); for (const patch of patches) patch.mockRestore(); }
 });
 
 test('empty shop stock retries without blacklisting the item or the activity', async () => {

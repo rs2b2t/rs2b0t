@@ -23,6 +23,7 @@ import { Supervisor } from '../../runtime/Supervisor.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import {
     ARCHERY_TICKET,
+    ARROW_RESTOCK_FEE,
     BOWS,
     BRONZE_ARROW,
     BRONZE_ARROW_NAME,
@@ -62,6 +63,14 @@ import {
 } from './RangingGuildLogic.js';
 
 export const RANGING_GUILD_SETTINGS: SettingsSchema = {
+    coinsReserve: {
+        type: 'number',
+        default: 0,
+        min: 0,
+        max: 1_000_000,
+        label: 'Coins to keep',
+        help: 'Keep this many coins across the backpack and bank'
+    },
     coinsPerTrip: {
         type: 'number',
         default: 10_000,
@@ -101,6 +110,7 @@ export default class RangingGuild extends LoopingBot {
     private recoveries = 0;
     private pendingRecovery: string | null = null;
     private bankFails = 0;
+    private bankedCoins = 0;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -160,12 +170,16 @@ export default class RangingGuild extends LoopingBot {
         return this.settings.num('coinsPerTrip', 10_000);
     }
 
+    private coinsReserve(): number {
+        return Math.max(0, this.settings.num('coinsReserve', 0));
+    }
+
     private view(): WorldView {
         const worn = Equipment.items();
         return {
             targetCount: reader.varp(VARP_TARGET_COUNT),
             tickets: Inventory.countById(ARCHERY_TICKET),
-            coins: Inventory.countById(COINS),
+            coins: Math.max(0, Inventory.countById(COINS) - Math.max(0, this.coinsReserve() - this.bankedCoins)),
             bowWorn: worn.some(i => isBow(i.name)),
             bowHeld: Inventory.items().some(i => isBow(i.name)),
             bronzeWorn: worn.filter(i => i.id === BRONZE_ARROW).reduce((n, i) => n + i.count, 0),
@@ -184,6 +198,10 @@ export default class RangingGuild extends LoopingBot {
     }
 
     private async enter(): Promise<void> {
+        if (this.view().coins < ENTRY_FEE) {
+            await this.bank();
+            return;
+        }
         this.status = 'paying the judge';
         if (!(await this.openJudge())) {
             return;
@@ -198,6 +216,10 @@ export default class RangingGuild extends LoopingBot {
     }
 
     private async restockArrows(): Promise<void> {
+        if (this.view().coins < ARROW_RESTOCK_FEE) {
+            await this.bank();
+            return;
+        }
         this.status = 'buying arrows from the judge';
         if (!(await this.openJudge())) {
             return;
@@ -395,7 +417,7 @@ export default class RangingGuild extends LoopingBot {
         this.status = 'banking at Seers';
         if (!(await Banking.open({ stand: SEERS_BANK, log: m => this.log(`  ${m}`) }))) {
             if (++this.bankFails >= MAX_BANK_FAILS) {
-                this.stop('could not open the Seers bank');
+                this.stop('could not open the Seers bank', true);
                 return;
             }
             this.log('could not open the bank, will retry');
@@ -410,7 +432,7 @@ export default class RangingGuild extends LoopingBot {
             if (!view.bowWorn && !view.bowHeld) {
                 const bow = bestBow(Skills.level('ranged'), name => Bank.count(name) > 0);
                 if (!bow) {
-                    this.stop('no bow held, worn or banked');
+                    this.stop('no bow held, worn or banked', true);
                     return;
                 }
                 if (!(await Bank.withdraw(bow))) {
@@ -421,8 +443,10 @@ export default class RangingGuild extends LoopingBot {
             }
             const want = this.coinsPerTrip() - Inventory.countById(COINS);
             const banked = Bank.countById(COINS);
-            if (want > 0 && banked > 0) {
-                const taken = Math.min(want, banked);
+            this.bankedCoins = banked;
+            const available = Math.max(0, banked - this.coinsReserve());
+            if (want > 0 && available > 0) {
+                const taken = Math.min(want, available);
                 const stack = Bank.items().find(i => i.id === COINS);
                 const all = stack ? withdrawOp(stack.ops, 'all') : null;
                 const ok = taken >= banked && all ? await Bank.withdrawById(COINS, all) : await Bank.withdrawXById(COINS, taken);
@@ -431,9 +455,14 @@ export default class RangingGuild extends LoopingBot {
                     return;
                 }
                 await Execution.delayTicks(1);
+                this.bankedCoins = Bank.countById(COINS);
                 this.log(`withdrew ${taken} coins (${banked - taken} left in the bank)`);
             }
-            if (Inventory.countById(COINS) < ENTRY_FEE && Inventory.countById(ARCHERY_TICKET) < TICKETS_PER_RUNE_ARROWS) {
+            const ready = this.view();
+            const fee = ready.targetCount >= 1 && ready.targetCount <= SHOTS_PER_ROUND
+                ? ready.bronzeHeld + ready.bronzeWorn > 0 ? 0 : ARROW_RESTOCK_FEE
+                : ENTRY_FEE;
+            if (ready.coins < fee && ready.tickets < TICKETS_PER_RUNE_ARROWS) {
                 this.stop(`out of coins, ${Inventory.countById(ARCHERY_TICKET)} tickets held, ${this.arrowsBought} rune arrows bought`);
             }
         } finally {
@@ -458,7 +487,7 @@ export default class RangingGuild extends LoopingBot {
     private async recover(msg: string): Promise<void> {
         this.recoveries++;
         if (this.recoveries > MAX_RECOVERIES) {
-            this.stop(`gave up after ${MAX_RECOVERIES} recoveries: ${msg}`);
+            this.stop(`gave up after ${MAX_RECOVERIES} recoveries: ${msg}`, true);
             return;
         }
         this.status = `recovering (${this.recoveries}/${MAX_RECOVERIES})`;
@@ -469,9 +498,14 @@ export default class RangingGuild extends LoopingBot {
         this.failures = 0;
     }
 
-    private stop(reason: string): void {
+    private stop(reason: string, failed = false): void {
         this.status = `stopped: ${reason}`;
-        ScriptRunner.stop(`RangingGuild: ${reason}`);
+        if (this.delegated) {
+            if (failed) throw new Error(`RangingGuild: ${reason}`);
+            this.requestFinish(`RangingGuild: ${reason}`);
+        } else {
+            ScriptRunner.stop(`RangingGuild: ${reason}`);
+        }
     }
 
     private at(dest: Tile, radius: number): boolean {

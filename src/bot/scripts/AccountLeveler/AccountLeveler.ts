@@ -559,7 +559,7 @@ export default class AccountLeveler extends LoopingBot {
                 const values = saved[field];
                 if (values && typeof values === 'object') memory[field] = Object.fromEntries(Object.entries(values).filter(([, v]) => Number.isFinite(v)));
             }
-            memory.cooldowns = Object.fromEntries(Object.entries(memory.cooldowns).filter(([id]) => id.startsWith('quest-') || DRAGON_CAMPS.includes(id) || COMBAT_CAMPS.some(camp => camp.id === id)));
+            memory.cooldowns = Object.fromEntries(Object.entries(memory.cooldowns).filter(([id]) => id.startsWith('quest-') || id === 'ranging-guild' || DRAGON_CAMPS.includes(id) || COMBAT_CAMPS.some(camp => camp.id === id)));
             const failure = saved.diagnostics?.failure;
             if (failure && Number.isFinite(failure.at) && [failure.activity, failure.phase, failure.reason, failure.detail].every(value => typeof value === 'string')) this.lastFailure = failure;
             memory.deaths = typeof saved.deaths === 'number' && Number.isFinite(saved.deaths) ? Math.max(0, saved.deaths) : 0;

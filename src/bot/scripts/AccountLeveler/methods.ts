@@ -5,6 +5,7 @@ import { dragonFoodLevels, dragonPlanks, dragonPrayer, dragonReady, dragonSupply
 import { canStealChaos } from './runes.js';
 import Tile from '../../geometry/Tile.js';
 import { combatPlan, foodFor } from './combat.js';
+import { rangingGuildPlan } from './rangingGuild.js';
 import { gatheringTool, meleeEquipment } from './equipment.js';
 import { zanarisExitNeeds } from './dragonWeapons.js';
 import { locateMethod, membersReady } from './locations.js';
@@ -63,7 +64,9 @@ function selectMethod(s: LevelerSnapshot, objective: string, memory: SessionMemo
         }
     }
     switch (objective) {
-        case 'attack': case 'strength': case 'defence': case 'hitpoints': case 'ranged': case 'magic': case 'prayer':
+        case 'ranged':
+            return rangingGuildPlan(s, memory) ?? combatPlan(s, objective, memory, random);
+        case 'attack': case 'strength': case 'defence': case 'hitpoints': case 'magic': case 'prayer':
             return combatPlan(s, objective, memory, random);
         case 'fishing':
             return fishPlan(s, objective);

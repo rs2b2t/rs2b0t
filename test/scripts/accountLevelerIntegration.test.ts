@@ -5,6 +5,7 @@ import { emptyMemory, enabledSkills, planNext } from '#/bot/scripts/AccountLevel
 import { methodFor, producer } from '#/bot/scripts/AccountLeveler/methods.js';
 import { supplyOffer } from '#/bot/scripts/AccountLeveler/offers.js';
 import { COMBAT_CAMPS, combatPlan } from '#/bot/scripts/AccountLeveler/combat.js';
+import { TARGET_TIERS } from '#/bot/scripts/AccountLeveler/combatProgression.js';
 import { LevelerSession } from '#/bot/scripts/AccountLeveler/session.js';
 import { requirementKey, stockOf, type ActivityPlan, type LevelerSnapshot } from '#/bot/scripts/AccountLeveler/types.js';
 
@@ -56,7 +57,8 @@ test('every eligible combat camp has a valid adapter for its supported combat st
         memory.cooldowns=Object.fromEntries(COMBAT_CAMPS.filter(c=>c.id!==camp.id).map(c=>[c.id,s.now+60000]));
         for (const objective of ['attack','ranged','magic']) {
             const plan=combatPlan(s,objective,memory,()=>0);
-            if (camp.styles && !camp.styles.includes(objective === 'attack' ? 'melee' : objective === 'ranged' ? 'range' : 'mage')) {
+            if ((objective === 'ranged' && (camp.trainingTier ?? TARGET_TIERS[camp.target] ?? 0) > 2)
+                || (camp.styles && !camp.styles.includes(objective === 'attack' ? 'melee' : objective === 'ranged' ? 'range' : 'mage'))) {
                 expect(plan,camp.id).toBeNull();
                 continue;
             }

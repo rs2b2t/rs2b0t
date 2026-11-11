@@ -10,6 +10,10 @@ AutoFighter keeps an incoming attacker first, then prefers targets with an acces
 
 Melee offence uses the lower of Attack and Strength; ranged and magic use their own levels. All listed HP/offence/Defence requirements must be met. Normal combat prefers the strongest available training group unlocked by the player's actual combat level, then rotates eligible regions and samples camps randomly. It avoids the last three camps when alternatives exist and respects failure cooldowns and the Wilderness setting. Resource tasks select suitable drops independently of training groups, so high-level accounts can still gather cowhides or air talismans.
 
+At Ranged 40, the leveler prefers the Ranging Guild archery competition for every Ranged session. It equips a usable bow and carries up to 10,000 coins, budgeting the bow separately and keeping a 200-coin reserve. The minimum trip budget is 700 coins after bow purchases, covering entry, spare arrows, travel and the reserve. The judge supplies the round's arrows, so startup shopping stops buying combat arrows at 40. Guild failures receive a cooldown; insufficient funds or a cooling guild fall back to lower combat camps. The child finishes without stopping the leveler when it cannot continue.
+
+Ranged combat is restricted to the first three groups below, even at high combat levels. The combat-35-and-up groups are excluded until camps have verified safespots and an adapter that holds its firing position and handles looting safely. AutoFighter currently approaches blocked targets and walks to loot, so a possible safespot at a location does not qualify it. Armour, food, quest completion, resource requests and cooldowns cannot override this restriction. Melee and magic retain the full progression.
+
 | Player combat level | Preferred targets, subject to individual stat requirements |
 | --- | --- |
 | Below 15 | Chickens, rats, giant rats, goblins, spiders, men/women, cows and other eligible starter camps; melee death walking without mandatory food. |
