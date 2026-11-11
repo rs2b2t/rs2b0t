@@ -23,5 +23,8 @@ describe('shop presets', () => {
         expect(names.some(n => n.includes('arrow'))).toBe(true);
         expect(names).toContain('feather');
         expect(names).toContain('vial of water');
+        // Zaff's member shop is script-opened, so this also proves the generator override landed.
+        expect(names).toContain('battlestaff');
+        expect(names).toContain('rune platelegs');
     });
 });
