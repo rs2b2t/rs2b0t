@@ -6,6 +6,7 @@ import { magicEquipment } from './magic.js';
 import { combatLevel, TARGET_TIERS, trainingTier } from './combatProgression.js';
 import { TRAINING_CAMPS } from './trainingCamps.js';
 import { ADVANCED_CAMPS } from './advancedCamps.js';
+import { SECONDARY_LOOT } from './loot.js';
 import { requirementKey, stockOf, type ActivityPlan, type LevelerSnapshot, type Requirement, type SessionMemory } from './types.js';
 
 export interface CombatCamp {
@@ -188,10 +189,10 @@ export function combatPlan(s: LevelerSnapshot, objective: string, memory: Sessio
             target: camp.target, spot: 'Custom coordinates', coordinates: new Tile(camp.x, camp.z, camp.level ?? 0), leashRadius: camp.leashRadius ?? 12,
             travelCoins: coins, travelItems: (camp.supplies ?? []).filter(need => !need.equip).map(need => need.item),
             combatStyle: style, meleeStyle, rangeStyle: 'rapid', spell: magic?.spell ?? 'Wind Strike', runesWithdraw: magic?.casts ?? 150,
-            ammo: 'Bronze arrow', ammoWithdraw: ammo.carry, useSpecial: false, solveClues: false,
+            ammo: 'Bronze arrow', ammoWithdraw: ammo.carry, useSpecial: style !== 'mage', solveClues: false,
             banking: 'Auto', food: food ?? 'Shrimps', foodWithdraw: deathWalk ? 0 : 12, panicHp: deathWalk ? 0 : 15, buryBones: true, buryBigBones: true,
             buryBabyDragonBones: camp.target === 'Baby blue dragon',
-            loot: ['Bones', 'Herb', 'Air talisman', ...(resource === 'Cow hide' ? ['Cow hide'] : [])], avoidHerbs: [], loadout: '', bankEveryMinutes: 8
+            loot: ['Bones', 'Air talisman', ...SECONDARY_LOOT, ...(resource === 'Cow hide' ? ['Cow hide'] : [])], avoidHerbs: [], loadout: '', bankEveryMinutes: 8
         }
     };
 }

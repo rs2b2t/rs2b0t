@@ -231,11 +231,20 @@ function specWeapon(): string {
     const weapon = Special.wielded();
     return specialAvailable(USE_SPECIAL, STYLE, Special.cost(weapon)) ? weapon : '';
 }
+function specialNeedsAmmo(): boolean {
+    return Special.wielded().toLowerCase() === 'magic shortbow' && (Equipment.items().find(item => item.slot === 13)?.count ?? 0) < 2;
+}
 function specialDue(): boolean {
+    if (specialNeedsAmmo()) return Special.armed();
     return shouldArmSpecial(USE_SPECIAL, STYLE, Special.cost(Special.wielded()), Special.energy(), Special.armed());
 }
 // Why: arming is one-shot, the next attack spends it and the engine clears the flag, so it is re-armed per special.
 async function armSpecial(bot: AutoFighter): Promise<boolean> {
+    if (specialNeedsAmmo()) {
+        if (!Special.armed() || !(await Special.disarm())) return false;
+        bot.resumeAttack = true;
+        return true;
+    }
     const weapon = Special.wielded();
     if (!specialDue() || !(await Special.arm())) {
         return false;
@@ -1106,6 +1115,7 @@ class Fight implements Task {
             }
             // Why: inline, not left to the sibling task, this loop owns the bot until the target dies.
             await armSpecial(this.bot);
+            if (this.bot.resumeAttack) return;
             await Execution.delayTicks(2);
         }
     }

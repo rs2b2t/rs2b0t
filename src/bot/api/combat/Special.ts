@@ -88,6 +88,13 @@ export const Special = {
         return root === -1 ? -1 : (SPECBAR_BY_ROOT.get(root) ?? -1);
     },
 
+    async disarm(): Promise<boolean> {
+        if (!Special.armed()) return true;
+        const bar = Special.barComponent();
+        if (bar === -1 || !actions.ifButton(bar)) return false;
+        return Execution.delayUntilTicks(() => !Special.armed(), ARM_CONFIRM_TICKS);
+    },
+
     /** Arm the next attack. Idempotent: an already-armed special is left alone. */
     async arm(): Promise<boolean> {
         if (Special.armed()) {

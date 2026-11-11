@@ -103,7 +103,7 @@ test('banking preserves Big bones selected for burial and deposits other loot', 
 });
 
 test('delegated banking keeps travel tools and replenishes the fare before returning', async () => {
-    const held: Record<string, number> = { Coins: 25, 'Bronze axe': 1, 'Uncut ruby': 1 };
+    const held: Record<string, number> = { Coins: 25, 'Bronze axe': 1, 'Uncut ruby': 1, 'Limpwurt root': 2, Herb: 3, 'Nature rune': 10 };
     restores.push(
         stubProps(Inventory, { count: name => held[name] ?? 0, items: () => Object.entries(held).filter(([, count]) => count > 0).map(([name, count], slot) => new InvItem({ name, count, id: slot + 1, slot, comId: 1, ops: [] })) }),
         stubProps(Bank, {
@@ -119,7 +119,7 @@ test('delegated banking keeps travel tools and replenishes the fare before retur
     await bot.onStart();
     bot.bankAfterSolve = true;
     await bot.registered.find(task => task.constructor.name === 'BankRun')!.execute();
-    expect(held).toEqual({ Coins: 1200, 'Bronze axe': 1, 'Uncut ruby': 0 });
+    expect(held).toEqual({ Coins: 1200, 'Bronze axe': 1, 'Uncut ruby': 0, 'Limpwurt root': 0, Herb: 0, 'Nature rune': 0 });
     expect(walked).toEqual([GUILD_BANK, BASEMENT]);
 });
 

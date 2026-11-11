@@ -362,6 +362,7 @@ export const Special: {
     barComponent(): number;
     /** Arm the current weapon's special attack for the next attack. */
     arm(): Promise<boolean>;
+    disarm(): Promise<boolean>;
 };
 
 /**

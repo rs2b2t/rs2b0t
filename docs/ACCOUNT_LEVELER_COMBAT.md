@@ -2,6 +2,10 @@
 
 Training methods, equipment and recovery policy are in [the methods guide](ACCOUNT_LEVELER_METHODS.md).
 
+Combat sessions also collect limpwurt roots, herbs, runes and the potion ingredients used by the leveler. These drops go into the bank during normal restocking without replacing the training objective. Dragon Prayer sessions collect the same secondary supplies where the dragon's drop table contains them.
+
+Melee and ranged combat enable special attacks for supported equipped weapons, including dragon longswords, dragon daggers and the magic shortbow. The combat scripts check available energy before arming each special. AutoFighter requires two quivered arrows for the magic shortbow special and clears an armed special if fewer remain. The Ranging Guild competition uses its own shooting routine.
+
 Combat activities delegate looting to AutoFighter. Ground loot must offer Take and occupy a walkable tile. Failed pickups are skipped for 60 seconds by item ID and tile so combat can continue; the log records the item ID, position and result. Pickup confirmation checks that the selected item ID increased in the backpack. Walkable loot still uses the existing door recovery.
 
 AutoFighter keeps an incoming attacker first, then prefers targets with an accessible path or a clear ranged/magic firing line. Blocked targets get one normal navigation attempt through doors, with a 20-second timeout. It rechecks reachability, camp bounds and target ownership afterward; a closest-tile stop outside a wall is insufficient. Blocked approaches and failed attacks skip that NPC for 30 seconds, unless it attacks us. Interruptions yield without imposing a cooldown.

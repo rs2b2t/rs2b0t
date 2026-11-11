@@ -10,6 +10,8 @@ Lost City takes priority once Crafting reaches 31 and Woodcutting reaches 36. Th
 
 At Attack 60 with Lost City complete, the bank audit buys any missing Dragon longsword and Dragon dagger from Jakut. It checks bank, inventory and equipment before buying, reserves money for other supplies, and requires a Dramen staff and the marketplace's Diamond tax. Owned dragon weapons take priority over scimitars. Failed optional purchases retry after 15 minutes.
 
+Combat sessions use supported weapon specials when enough energy is available, including dragon weapons and the magic shortbow. They also bank secondary drops such as limpwurt roots, herbs and runes for later skills; this also applies to dragon Prayer sessions.
+
 Routine supply and bank trips avoid the Wilderness. Explicitly enabled Wilderness training remains available, and accounts already inside can still leave for a bank.
 
 ## Dragon Slayer and dragon bones
