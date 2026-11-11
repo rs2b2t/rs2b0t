@@ -101,3 +101,37 @@ test('banking preserves Big bones selected for burial and deposits other loot', 
     await bank.execute();
     expect(inventory.map(item => item.name)).toEqual(['Big bones']);
 });
+
+test('delegated banking keeps travel tools and replenishes the fare before returning', async () => {
+    const held: Record<string, number> = { Coins: 25, 'Bronze axe': 1, 'Uncut ruby': 1, 'Limpwurt root': 2, Herb: 3, 'Nature rune': 10 };
+    restores.push(
+        stubProps(Inventory, { count: name => held[name] ?? 0, items: () => Object.entries(held).filter(([, count]) => count > 0).map(([name, count], slot) => new InvItem({ name, count, id: slot + 1, slot, comId: 1, ops: [] })) }),
+        stubProps(Bank, {
+            depositAllMatching: async match => { for (const name of Object.keys(held)) if (match(name, 1)) held[name] = 0; },
+            withdrawX: async (name, count) => { held[name] = (held[name] ?? 0) + count; return true; }
+        })
+    );
+    bot.disposeSubscriptions();
+    bot = new Fighter();
+    bot.bindLog(() => {});
+    bot.bindFinish(reason => { throw new Error(reason); });
+    bot.settings = new SettingsBag({ foodWithdraw: 0, solveClues: false, travelCoins: 1200, travelItems: ['Bronze axe'] });
+    await bot.onStart();
+    bot.bankAfterSolve = true;
+    await bot.registered.find(task => task.constructor.name === 'BankRun')!.execute();
+    expect(held).toEqual({ Coins: 1200, 'Bronze axe': 1, 'Uncut ruby': 0, 'Limpwurt root': 0, Herb: 0, 'Nature rune': 0 });
+    expect(walked).toEqual([GUILD_BANK, BASEMENT]);
+});
+
+test('delegated banking finishes at the bank when it cannot restore travel supplies', async () => {
+    restores.push(stubProps(Inventory, { count: () => 0 }), stubProps(Bank, { withdraw: async () => false, withdrawX: async () => false }));
+    bot.disposeSubscriptions();
+    bot = new Fighter();
+    bot.bindLog(() => {});
+    bot.bindFinish(reason => { throw new Error(reason); });
+    bot.settings = new SettingsBag({ foodWithdraw: 0, solveClues: false, travelCoins: 1200 });
+    await bot.onStart();
+    bot.bankAfterSolve = true;
+    await expect(bot.registered.find(task => task.constructor.name === 'BankRun')!.execute()).rejects.toThrow('Missing travel supply: Coins');
+    expect(walked).toEqual([GUILD_BANK]);
+});

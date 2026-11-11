@@ -55,7 +55,7 @@ export function auditSupplies(s: LevelerSnapshot): SupplyAudit {
     if (netFishing) add('Small fishing net');
     if (flyFishing) add('Fly fishing rod');
     if (any('crafting') && s.levels.crafting < 10) add('Needle');
-    if (any('ranged')) add('Bronze arrow', 1000);
+    if (any('ranged') && s.levels.ranged < 40) add('Bronze arrow', 1000);
     if (flyFishing) add('Feather', 1000);
     if (any('crafting') && s.levels.crafting < 10) add('Thread', 100);
     if (any('herblore') && s.quests['Druidic Ritual']) {

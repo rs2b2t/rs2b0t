@@ -57,6 +57,7 @@ import {
     tryNearbyDoor
 } from './exec/doorCrossing.js';
 import { handleSpecialCrossing } from './exec/specialCrossing.js';
+import { handleDungeonEntry } from './exec/dungeonEntry.js';
 import {
     awaitTransportLoc,
     findTransportLoc,
@@ -1239,6 +1240,12 @@ class WalkExecutorImpl {
                 log(`suppress teleport ${transport.teleportId} for this walk`);
             }
             return ok;
+        }
+
+        const dungeon = await handleDungeonEntry(transport, approach, step, log);
+        if (dungeon !== null) {
+            if (dungeon) RouteState.noteTransport(approach, step);
+            return dungeon;
         }
 
         const special = specialCrossingForTransport(transport, approach, step);

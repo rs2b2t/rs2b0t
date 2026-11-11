@@ -135,3 +135,27 @@ test('banking deposits noted regular and Big bones even when burial is enabled',
     expect(shouldKeepBankItem('Bones', 526, 'Trout', true, [], [], true, true)).toBe(true);
     expect(shouldKeepBankItem('Big bones', 532, 'Trout', true, [], [], true, true)).toBe(true);
 });
+
+test('baby dragon burial loots and keeps only unnoted Babydragon bones independently', async () => {
+    inventory = [bone(534, 'Babydragon bones', 0), bone(535, 'Babydragon bones', 1, true), bone(536, 'Dragon bones', 2)];
+    await start();
+    expect(task().validate()).toBe(false);
+    bot.disposeSubscriptions();
+    await start({ buryBabyDragonBones: true });
+    expect(task().validate()).toBe(true);
+    await task().execute();
+    expect(inventory.map(item => item.id)).toEqual([535, 536]);
+    expect(task().validate()).toBe(false);
+    expect(logs).toContain('buried Babydragon bones');
+    expect(wantsAutoFighterLoot('Babydragon bones', [], false, false, true)).toBe(true);
+    expect(wantsAutoFighterLoot('Babydragon bones', [], true, true)).toBe(false);
+    expect(wantsAutoFighterLoot('Dragon bones', [], false, false, true)).toBe(false);
+    expect(shouldKeepBankItem('Babydragon bones', 534, 'Trout', true, [], [], false, false, true)).toBe(true);
+    expect(shouldKeepBankItem('Babydragon bones', 535, 'Trout', true, [], [], false, false, true)).toBe(false);
+});
+
+test('baby dragon burial enables live drop selection', async () => {
+    restores.push(stubProps(reader, { groundItems: () => [{ id: 534, name: 'Babydragon bones', count: 1, ops: ['Take'], tile: new Tile(3201, 3200), distance: 1 }] }));
+    await start({ buryBabyDragonBones: true });
+    expect(bot.registered.find(t => t.constructor.name === 'LootDrops')!.validate()).toBe(true);
+});

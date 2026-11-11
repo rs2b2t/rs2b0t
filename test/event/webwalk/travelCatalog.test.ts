@@ -23,6 +23,7 @@ import {
 } from '#/bot/event/webwalk/travelCatalog.js';
 import { iceQueenRockslideEdges } from '#/bot/event/webwalk/iceQueenRockslide.js';
 import { essenceExitEdges } from '#/bot/event/webwalk/essenceExit.js';
+import { lighthouseTravelEdges } from '#/bot/event/webwalk/lighthouseTravel.js';
 import { specialCrossingForTransport } from '#/bot/event/webwalk/data/specialCrossings.js';
 // namesHaveEntranaRestrictedGear / hasEntranaRestrictedGear live in exec/specialCrossing
 // (client-heavy). Keep pure catalog tests free of that import graph.
@@ -117,6 +118,7 @@ describe('ferries / cart', () => {
             + elkoyMazeEdges().length
             + desertMiningCampEdges().length
             + iceQueenRockslideEdges().length
+            + lighthouseTravelEdges().length
         );
         const names = new Set(all.map(e => e.debugName));
         expect(names.has('ferry_port_sarim_to_entrana')).toBe(true);

@@ -1,8 +1,10 @@
 import { DRAGON_STAGE } from '../../api/ai/quests/defs/dragonslayer/journal.js';
 import { QUESTS } from '../../api/ai/quests/data/quests.js';
+import { DROP_DB } from '../../data/dropdb.js';
 import type { QuestRecord } from '../../api/ai/quests/types.js';
 import Tile from '../../geometry/Tile.js';
 import { meleeEquipment } from './equipment.js';
+import { SECONDARY_LOOT } from './loot.js';
 import { stockOf, type ActivityPlan, type LevelerSnapshot, type SessionMemory } from './types.js';
 
 const QUEST_ORDER = ['runemysteries', 'cook', 'doric', 'sheep', 'priest', 'haunted', 'hetty', 'romeojuliet', 'prince', 'hunt', 'gobdip', 'blackknight', 'vampire', 'squire', 'arthur'];
@@ -54,8 +56,8 @@ export function dragonPrayer(s: LevelerSnapshot, memory: SessionMemory, random: 
         combat: true, wilderness: green, food: 'Lobster', travel: green ? new Tile(3094, 3493, 0) : new Tile(2946, 3368, 0),
         needs: [...gear, { item: 'Dragonfire shield', count: 1, carry: 1, equip: true }, { item: 'Lobster', count: 40, carry: 20 }, { item: 'Coins', count: 200, carry: 200 }],
         settings: { combatStyle: 'melee', meleeStyle: 'strength', weapon, loadout: '', food: 'Lobster', foodWithdraw: 20,
-            usePotions: false, useSpecial: false, buryBones: true, solveClues: false, bankCommonJunk: false,
-            loot: ['Dragon bones', 'Dragonhide'],
+            usePotions: false, useSpecial: true, buryBones: true, solveClues: false, bankCommonJunk: false,
+            loot: ['Dragon bones', 'Dragonhide', ...DROP_DB[green ? 'Green dragon' : 'Blue dragon'].filter(item => SECONDARY_LOOT.includes(item))],
             ...(green ? { escape: 'Flee to bank' } : { site: 'taverley-blue', leaveVia: 'walk' }) }
     };
 }

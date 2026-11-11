@@ -11,6 +11,7 @@ import { SettingsBag } from '#/bot/runtime/Settings.js';
 import { Sustain } from '#/bot/api/sustain/Sustain.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
 import { CollisionFlag } from '#/client/dash3d/CollisionFlag.js';
+import { SECONDARY_LOOT } from '#/bot/scripts/AccountLeveler/loot.js';
 
 const bone = (x = 3111): GroundItemSnapshot => ({ id: 532, name: 'Big bones', count: 1, ops: ['Take'], tile: { x, z: 9832, level: 0 }, distance: x - 3110 });
 const held = (id: number, count = 1): InvItemSnapshot => ({ id, name: id === 995 ? 'Coins' : 'Big bones', count, slot: 0, comId: 3214, ops: [] });
@@ -18,7 +19,7 @@ const held = (id: number, count = 1): InvItemSnapshot => ({ id, name: id === 995
 let active: AutoFighter | undefined;
 afterEach(() => { active?.disposeSubscriptions(); mock.restore(); });
 
-async function scenario(leashRadius = 12) {
+async function scenario(leashRadius = 12, lootNames = ['Bones', 'Coins']) {
     const world = { ground: [bone()], pack: [] as InvItemSnapshot[], now: 1000, blocked: false };
     spyOn(Game, 'ingame').mockReturnValue(true);
     spyOn(Game, 'tile').mockReturnValue({ x: 3110, z: 9832, level: 0 });
@@ -43,7 +44,7 @@ async function scenario(leashRadius = 12) {
     const bot = new AutoFighter();
     active = bot;
     bot.bindFinish(() => {});
-    bot.settings = new SettingsBag({ target: 'Giant', loot: ['Bones', 'Coins'], buryBones: true, buryBigBones: true, solveClues: false, foodWithdraw: 0, panicHp: 0, leashRadius });
+    bot.settings = new SettingsBag({ target: 'Giant', loot: lootNames, buryBones: true, buryBigBones: true, solveClues: false, foodWithdraw: 0, panicHp: 0, leashRadius });
     bot.bindLog(() => {});
     await bot.onStart();
     const loot = bot['tasks'].find(task => task.constructor.name === 'LootDrops');
@@ -127,6 +128,17 @@ test('counts a pickup into an existing stack without a new inventory slot', asyn
     take.mockImplementation(() => { world.pack[0].count += 10; world.ground = []; return true; });
     await loot.execute();
     expect(counted).toHaveBeenCalledTimes(1);
+});
+
+test.each([{ id: 225, name: 'Limpwurt root' }, { id: 199, name: 'Herb' }, { id: 561, name: 'Nature rune' }])('collects secondary drop %j between fights', async ({ id, name }) => {
+    const { world, loot, take, counted } = await scenario(12, SECONDARY_LOOT);
+    world.ground = [{ ...bone(), id, name }];
+    take.mockImplementation(() => { world.pack.push({ ...held(id), name }); world.ground = []; return true; });
+    expect(loot.validate()).toBe(true);
+    await loot.execute();
+    expect(world.pack.map(item => item.name)).toEqual([name]);
+    expect(counted).toHaveBeenCalledTimes(1);
+    expect(loot.validate()).toBe(false);
 });
 
 
