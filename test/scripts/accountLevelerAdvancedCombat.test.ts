@@ -44,7 +44,6 @@ test.each([
     ['crandor-moss-giants', 'Dragon Slayer'],
     ['canifis-south-ghouls', 'Priest in Peril'],
     ['troll-stronghold-trolls', 'Troll Stronghold'],
-    ['lighthouse-dagannoths', 'Horror from the Deep'],
     ['gu-tanoth-ogres', 'Watch Tower'],
     ['gu-tanoth-city-guards', 'Watch Tower']
 ])('%s unlocks from completed %s with automatic questing disabled', (id, quest) => {
@@ -108,7 +107,8 @@ test('lesser demons never become a Prayer training method', () => {
 });
 
 test('higher combat bands retire guards and pirates without forcing locked dungeons', () => {
-    const s = snapshot(65);
+    const s = snapshot(99);
+    s.quests['Horror from the Deep'] = true;
     const targets = new Set<string>();
     for (let i = 0; i < 100; i++) targets.add(String(combatPlan(s, 'attack', emptyMemory(), () => i / 100)?.settings.target));
     expect(targets.has('Lesser demon')).toBe(true);

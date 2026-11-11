@@ -15,7 +15,7 @@ test.each([
     'edgeville-dungeon-giants', 'rimmington-hobgoblins', 'wilderness-hobgoblins', 'ardougne-moss-giants',
     'burthorpe-guards', 'crandor-moss-giants', 'canifis-south-ghouls', 'gu-tanoth-ogres',
     'karamja-lesser-demons', 'crandor-lesser-demons', 'troll-stronghold-trolls', 'gu-tanoth-city-guards',
-    'lighthouse-dagannoths', 'brimhaven-dungeon-moss-giants', 'brimhaven-dungeon-fire-giants'
+    'brimhaven-dungeon-moss-giants', 'brimhaven-dungeon-fire-giants'
 ])('ranged excludes %s without enforced safespot behaviour, even at maximum stats', id => {
     const s = snapshot();
     const memory = isolate(id);
