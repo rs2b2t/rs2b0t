@@ -1,5 +1,6 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
+import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Game } from '../../api/game/Game.js';
 import { Inventory, type InvItem } from '../../api/inventory/Inventory.js';
 import { Bank } from '../../api/bank/Bank.js';
@@ -9,7 +10,12 @@ import { Paint } from '../../paint/Paint.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { nearestBank } from '../../api/bank/BankLocations.js';
+import { nearestBankReachable } from '../../api/bank/BankLocations.js';
+import { Navigator } from '../../event/webwalk/Navigator.js';
+import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
+import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
+import { actions, reader } from '../../adapter/ClientAdapter.js';
+import { Input } from '../../input/Input.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import {
     CANNOT_IDENTIFY,
@@ -17,10 +23,16 @@ import {
     IDENTIFY_OP,
     eligibleHerbs,
     herbByUnidId,
+    opIndex,
     type HerbDef
 } from './HerbCleanerLogic.js';
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
+
+/** Why: long loops must yield to the random-event guardian or its interaction gets raced; ContinueDialog handles ordinary dialogs. */
+function mustYield(): boolean {
+    return EventSignal.pending() || ChatDialog.isOpen() || ChatDialog.canContinue();
+}
 
 export const HERB_CLEANER_SETTINGS: SettingsSchema = {
     herbs: {
@@ -29,6 +41,12 @@ export const HERB_CLEANER_SETTINGS: SettingsSchema = {
         options: HERB_OPTIONS,
         label: 'Herbs to clean',
         help: 'check specific herbs to restrict the run; leave all unchecked to clean every herb your Herblore level allows — the bot deposits everything from your pack into the bank each cycle, including non-herbs, so start with nothing valuable carried'
+    },
+    fastBank: {
+        type: 'boolean',
+        default: true,
+        label: 'Instant bank leg',
+        help: 'deposit the pack, withdraw a full load of grimy herbs and close in one bank pass; a miss falls back to the confirmed route for that trip'
     }
 };
 
@@ -45,6 +63,7 @@ export default class HerbCleaner extends TaskBot {
     private startedAt = Date.now();
     private xpAtStart = 0;
     private refused = false;
+    private fastBank = true;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(
@@ -61,6 +80,7 @@ export default class HerbCleaner extends TaskBot {
 
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('herblore');
+        this.fastBank = this.settings.bool('fastBank', true);
 
         this.on('chat.message', e => {
             if (CANNOT_IDENTIFY.test(e.text)) {
@@ -70,6 +90,7 @@ export default class HerbCleaner extends TaskBot {
 
         this.log(`HerbCleaner — clean ${this.eligible.map(h => h.name).join(', ')} (Herblore ${Skills.level('herblore')})`);
         this.add(
+            new ContinueDialog(),
             new Clean(this),
             new BankTrip(this)
         );
@@ -148,6 +169,73 @@ export default class HerbCleaner extends TaskBot {
         return Inventory.items().filter(i => herbByUnidId(i.id) !== null && this.eligible.some(h => h.unidId === i.id)).length;
     }
 
+    /** Why: bank requests are handled in send order, so deposit-all, the Withdraw-Alls and close can all go without a wait. */
+    async fastBankTrip(): Promise<boolean> {
+        if (!this.fastBank) {
+            return false;
+        }
+        const side = reader.bankSideItems();
+        if (side.length === 0) {
+            return false;
+        }
+        // Why: unidentified herbs are separate count-1 rows, and one Deposit-All takes every copy of that id, so send one click per item id rather than per row.
+        const deposits = new Map<number, { id: number; slot: number; comId: number; op: number }>();
+        for (const item of side) {
+            const op = opIndex(item.ops, /deposit[\s-]*all/i);
+            if (op === -1) {
+                return false;
+            }
+            if (!deposits.has(item.id)) {
+                deposits.set(item.id, { id: item.id, slot: item.slot, comId: item.comId, op });
+            }
+        }
+        // Why: an absent herb is only proof once the bank list has settled; deciding off a loading list would mark a stocked herb empty.
+        const bank = Bank.items();
+        const draws: { id: number; slot: number; comId: number; op: number; herb: HerbDef }[] = [];
+        for (const herb of this.targets()) {
+            const item = bank.find(i => i.id === herb.unidId && i.count > 0);
+            if (!item) {
+                if (Bank.ready()) {
+                    this.markEmpty(herb);
+                }
+                continue;
+            }
+            const op = opIndex(item.ops, /withdraw[\s-]*all/i);
+            if (op === -1) {
+                return false;
+            }
+            draws.push({ id: item.id, slot: item.slot, comId: item.comId, op, herb });
+        }
+        if (draws.length === 0) {
+            return false;
+        }
+
+        const beforeUsed = Inventory.used();
+        for (const deposit of deposits.values()) {
+            Input.invButton(deposit.id, deposit.slot, deposit.comId, deposit.op);
+        }
+        for (const draw of draws) {
+            Input.invButton(draw.id, draw.slot, draw.comId, draw.op);
+        }
+        actions.closeModal();
+
+        if (!(await Execution.delayUntil(() => this.countEligibleUnids() > 0, 1500))) {
+            this.log('instant bank missed: the withdrawal did not land — using the confirmed route');
+            return false;
+        }
+        if (Bank.isOpen()) {
+            await Execution.delayUntil(() => !Bank.isOpen(), 1000);
+            if (Bank.isOpen()) {
+                await Bank.close();
+            }
+        }
+
+        const withdrew = this.countEligibleUnids();
+        const herbs = [...new Set(draws.map(d => d.herb.name))].join(', ');
+        this.log(`instant bank: banked ${beforeUsed - (Inventory.used() - withdrew)} items, took ${withdrew} grimy (${herbs})`);
+        return true;
+    }
+
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#6bbf4a' });
         p.title(`HerbCleaner — ${this.status}`);
@@ -181,6 +269,9 @@ class Clean implements Task {
     }
 
     async execute(): Promise<void> {
+        if (mustYield()) {
+            return;
+        }
         // Why: interact() fires the driver op with no wait, so every eligible unid is clicked in one pass without a per-item delay.
         // Why: the identifying is gated by a single settle on the clean-id count and herblore xp.
         const beforeClean = this.bot.cleanCount();
@@ -221,7 +312,7 @@ class BankTrip implements Task {
     constructor(private bot: HerbCleaner) {}
 
     validate(): boolean {
-        return Bank.isOpen() || this.bot.countEligibleUnids() === 0;
+        return !mustYield() && (Bank.isOpen() || this.bot.countEligibleUnids() === 0);
     }
 
     async execute(): Promise<void> {
@@ -229,9 +320,13 @@ class BankTrip implements Task {
             await Bank.close();
             return;
         }
+        if (mustYield()) {
+            this.bot.log('pausing for a random event');
+            return;
+        }
 
         const here = Game.tile();
-        const bank = here ? nearestBank(here) : null;
+        const bank = here ? await nearestBankReachable(here, Navigator) : null;
         if (!bank) {
             this.bot.log('no reachable bank');
             return;
@@ -263,6 +358,22 @@ class BankTrip implements Task {
             return;
         }
 
+        // Why: on a trip that emptied the pack there is nothing to coordinate, so the whole leg goes out in one send-order pass before any wait.
+        if (await this.bot.fastBankTrip()) {
+            this.bot.countTrip();
+            this.bot.log(`banked @ ${bank.name} (instant)`);
+            return;
+        }
+        if (mustYield()) {
+            this.bot.log('pausing for a random event');
+            return;
+        }
+        // Why: a missed instant pass may have closed the bank, so the confirmed route needs it open again.
+        if (!Bank.isOpen() && !(await openBankAccess(bank, access, log))) {
+            this.bot.log('could not reopen the bank — retrying');
+            return;
+        }
+
         const beforeDeposit = Inventory.used();
         await Bank.depositAllMatching(() => true);
         const deposited = beforeDeposit - Inventory.used();
@@ -276,7 +387,7 @@ class BankTrip implements Task {
             if (Inventory.isFull()) {
                 break;
             }
-            if (Bank.snapshotReady() && !Bank.items().some(i => i.id === herb.unidId && i.count > 0)) {
+            if (Bank.ready() && !Bank.items().some(i => i.id === herb.unidId && i.count > 0)) {
                 this.bot.markEmpty(herb);
                 continue;
             }
