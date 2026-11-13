@@ -63,11 +63,6 @@ export function heldById(id: number): boolean {
     return Inventory.countById(id) > 0;
 }
 
-const KEY_IDS: readonly number[] = [
-    DS_ID.MAZE_KEY, DS_ID.RED_KEY, DS_ID.ORANGE_KEY, DS_ID.YELLOW_KEY,
-    DS_ID.BLUE_KEY, DS_ID.MAGENTA_KEY, DS_ID.GREEN_KEY
-];
-
 // Why: the east bound stops at 2940 since the front door on 2941 is the doorstep outside; including it makes the bot walk straight back in after leaving.
 
 /** True while standing anywhere inside the maze, on any of its four floors. */
@@ -358,10 +353,5 @@ export class MazeRun {
                 }
                 return lootChest(DS_ID.MAP_MELZAR, log);
         }
-    }
-
-    /** Keys are worthless outside the maze and squat pack slots. */
-    static keyIds(): readonly number[] {
-        return KEY_IDS;
     }
 }
