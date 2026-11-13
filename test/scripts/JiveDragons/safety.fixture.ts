@@ -1,4 +1,4 @@
-import { mock, spyOn } from 'bun:test';
+import { spyOn } from 'bun:test';
 import { reader, type InvItemSnapshot, type NpcSnapshot } from '#/bot/adapter/ClientAdapter.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
@@ -19,6 +19,7 @@ import JiveDragons from '#/bot/scripts/JiveDragons/JiveDragons.js';
 import { BRIMHAVEN_IRON } from '#/bot/scripts/JiveDragons/sites.js';
 import JiveKBD from '#/bot/scripts/JiveKBD/JiveKBD.js';
 import { KBD_LAIR } from '#/bot/scripts/JiveKBD/sites.js';
+import { restoreScenario } from './scheduler.fixture.js';
 
 export const SHIELD = 'Dragonfire shield';
 export const shield = (): InvItemSnapshot => ({ id: 1540, name: SHIELD, slot: 5, count: 1, comId: 3214, ops: ['Wield'] });
@@ -107,7 +108,7 @@ export async function safetyScenario(kind: 'dragons' | 'kbd' | 'demons', setting
     return { bot, state, site, task, interact };
 }
 
-export function restoreSafety(): void {
-    Sustain.set(null);
-    mock.restore();
+export async function restoreSafety(): Promise<void> {
+    // Why: mock restoration alone does not reset module-level clue state.
+    await restoreScenario();
 }
