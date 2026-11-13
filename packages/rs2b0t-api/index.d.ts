@@ -382,6 +382,21 @@ export const Skills: {
 };
 
 /**
+ * Prayer points and protection prayers.
+ * @see docs/reference/api-skills.md#prayer
+ */
+export const Prayer: {
+    points(): number;
+    max(): number;
+    full(): boolean;
+    known(name: string): boolean;
+    available(name: string): boolean;
+    active(name: string): boolean;
+    set(name: string, on: boolean): Promise<boolean>;
+    clear(): Promise<void>;
+};
+
+/**
  * One row of the open bank.
  * @see docs/reference/api-items.md#bank
  */
@@ -824,6 +839,39 @@ export const DirectNavigator: {
     walkTo(dest: WorldTile, radius?: number, timeoutMs?: number): Promise<boolean>;
 };
 
+/**
+ * Additional bounds for client-side reachability probes.
+ * @see docs/reference/nav-walker.md#arrival
+ */
+export interface ReachOptions {
+    maxSteps?: number;
+    adjacentOk?: boolean;
+}
+
+/**
+ * Same-scene reachability predicates used by the walker.
+ * @see docs/reference/nav-walker.md#arrival
+ */
+export interface ArrivalProbe {
+    canReach(tile: WorldTile): boolean;
+    walkable(tile: WorldTile): boolean;
+    canReachAdjacent(tile: WorldTile): boolean;
+    probeable(tile: WorldTile): boolean;
+}
+
+/**
+ * Client-side reachability probes against the loaded scene.
+ * @see docs/reference/nav-walker.md#arrival
+ */
+export const Reachability: {
+    canReach(dest: WorldTile, opts?: ReachOptions): boolean;
+    canStep(from: WorldTile, to: WorldTile): boolean;
+    lineOfSight(from: WorldTile, to: WorldTile, size?: number): boolean;
+    walkable(dest: WorldTile): boolean;
+    probeable(dest: WorldTile): boolean;
+    arrivalProbe(): ArrivalProbe;
+};
+
 // events
 
 /**
@@ -1022,6 +1070,21 @@ export interface SettingDef {
 /** Parameter schema: shown as a form in the panel, overridable via
  *  ?ScriptName.key=value. Read at runtime with this.settings. */
 export type SettingsSchema = Record<string, SettingDef>;
+
+/**
+ * Stored script settings with URL overrides and resolved Global settings.
+ * @see docs/reference/api-events.md#settings
+ */
+export const SettingsStore: {
+    saved(name: string, key: string): string | undefined;
+    save(name: string, key: string, rawString: string): void;
+    onChange(listener: (name: string, key: string, value: string) => void): () => void;
+    displayString(name: string, key: string, def: SettingDef): string;
+    resolve(name: string, schema: SettingsSchema): Record<string, unknown>;
+    globalBag(): SettingsBag;
+    isUrlOverride(name: string, key: string): boolean;
+    clear(name: string, key: string): void;
+};
 
 /**
  * Script name, description, category, tags and parameter schema.

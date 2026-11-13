@@ -23,3 +23,14 @@ was built for.
 | [Quests](reference/api-quests.md) | the quest surface |
 | [Events and settings](reference/api-events.md) | the event bus, script settings |
 | World catalogs [1](reference/api-catalogs.md), [2](reference/api-catalogs-2.md) | banks, spells, drops, shops, clues |
+
+## Published roots
+
+| Root            | Members                                                                                        |
+| --------------- | ---------------------------------------------------------------------------------------------- |
+| `Prayer`        | `points`, `max`, `full`, `known`, `available`, `active`, `set`, `clear`                        |
+| `Reachability`  | `canReach`, `canStep`, `lineOfSight`, `walkable`, `probeable`, `arrivalProbe`                  |
+| `SettingsStore` | `saved`, `save`, `onChange`, `displayString`, `resolve`, `globalBag`, `isUrlOverride`, `clear` |
+
+`Reachability` uses the package's `WorldTile`, `ReachOptions`, and `ArrivalProbe`
+types.
