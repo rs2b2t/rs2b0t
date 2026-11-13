@@ -208,6 +208,9 @@ function retreatNeeded(host: CombatHost, site: DragonSite): boolean {
     });
 }
 
+// Why: `HoldSafespot` and `WalkToSpot` sit above `Fight` and read its chase state, but nothing outside this file does, and a class-private member cannot be read across sibling task instances.
+const CHASE_TARGET = Symbol('Fight.hasChaseTarget');
+
 export class Fight implements Task {
     private engaged: number | null = null;
     private readonly killedSpawns = new Map<number, number>();
@@ -247,7 +250,7 @@ export class Fight implements Task {
         return this.lootTarget !== null;
     }
 
-    hasChaseTarget(): boolean {
+    [CHASE_TARGET](): boolean {
         return chasesTarget(this.site, this.host.style()) && this.field(FIELD_RADIUS)
             .some(n => (this.skip.get(n.index) ?? 0) < performance.now() && !(n.health === 0 && n.snap.totalHealth > 0));
     }
@@ -778,7 +781,7 @@ export class HoldSafespot implements Task {
         const chasing = !holdsAnchor(this.site, this.host.style()) && this.host.targetIdx !== null;
         return this.site.inArea(Game.tile())
             && !chasing
-            && !this.host.fight?.hasChaseTarget()
+            && !this.host.fight?.[CHASE_TARGET]()
             && !atTile(this.spot())
             && holdDue({ onSafespot: onAnySafespot(this.site), hasFood: this.host.hasFood() })
             && this.host.hpFraction() >= this.host.panicHp();
@@ -816,7 +819,7 @@ export class WalkToSpot implements Task {
         return here !== null
             && this.site.inArea(here)
             && !chasing
-            && !this.host.fight?.hasChaseTarget()
+            && !this.host.fight?.[CHASE_TARGET]()
             && this.host.hpFraction() >= this.host.panicHp()
             && this.anchor().distanceTo(here) > APPROACH_RADIUS;
     }
