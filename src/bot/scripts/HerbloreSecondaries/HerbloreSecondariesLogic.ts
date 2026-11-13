@@ -3,7 +3,7 @@
  * Anchors come from rev-274 map OBJ spawns + shop NPC stands.
  */
 
-import { foodHealAmount as healOf, shouldEatToUseFood } from '../../api/combat/food.js';
+import { shouldEatToUseFood } from '../../api/combat/food.js';
 
 export { foodHealAmount } from '../../api/combat/food.js';
 
@@ -208,21 +208,6 @@ export function shouldEat(opts: {
     // pack full while still collecting, free a slot
     return opts.foodCount > 0 && opts.collecting && opts.freeSlots === 0;
 }
-
-/** @deprecated use foodHealAmount from combat/food, kept for older imports */
-export const FOOD_HEAL: Record<string, number> = {
-    lobster: healOf('Lobster'),
-    swordfish: healOf('Swordfish'),
-    tuna: healOf('Tuna'),
-    salmon: healOf('Salmon'),
-    trout: healOf('Trout'),
-    pike: healOf('Pike'),
-    bass: healOf('Bass'),
-    'cooked meat': healOf('Cooked meat'),
-    bread: healOf('Bread'),
-    shrimp: healOf('Shrimps'),
-    shrimps: healOf('Shrimps')
-};
 
 // Why: everything not kept is deposited, including random-event loot such as coins, runes and arrows that would otherwise ride along.
 // Why: the product and source, toad legs, swamp toads, eggs and the rest, are deliberately omitted, since they are the loot being deposited.

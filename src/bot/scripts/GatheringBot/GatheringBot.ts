@@ -3891,10 +3891,6 @@ export default class GatheringBot extends TaskBot {
     endCookingLoad(): void {
         this.cookingLoad = false;
     }
-    /** @deprecated cooked/burnt now tracked via inventory.changed (raw→product). */
-    recordCook(_n: number): void {
-        // no-op, kept so cook tasks still compile; counts come from inventory gains
-    }
 
     burntTotal(): number {
         return this.burnt;
