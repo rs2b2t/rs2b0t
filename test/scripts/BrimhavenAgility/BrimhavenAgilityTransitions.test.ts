@@ -14,9 +14,11 @@ import { ARENA_VARP, PILLARS } from '#/bot/scripts/BrimhavenAgility/BrimhavenAgi
 
 const restore: (() => void)[] = [];
 let platform: number;
+let offsetX: number;
 let tagged: boolean;
 let target: number;
 let agility: number;
+let animating: boolean;
 let run: boolean;
 let originalTick: number;
 let walks: { x: number; z: number; tick: number }[];
@@ -29,22 +31,24 @@ async function frame(): Promise<void> {
 
 beforeEach(() => {
     platform = 13;
+    offsetX = 0;
     tagged = true;
     target = 13;
     agility = 70;
+    animating = false;
     run = false;
     walks = [];
     tags = 0;
     originalTick = BotHost.tickCount;
     BotHost.tickCount = 100;
-    const tile = () => new Tile(PILLARS[platform].x, PILLARS[platform].z, 3);
+    const tile = () => new Tile(PILLARS[platform].x + offsetX, PILLARS[platform].z, 3);
     const mocks = [
         spyOn(reader, 'attached').mockReturnValue(false),
         spyOn(reader, 'ingame').mockReturnValue(false),
         spyOn(Game, 'ingame').mockReturnValue(true),
         spyOn(Game, 'sceneReady').mockReturnValue(true),
         spyOn(Game, 'tile').mockImplementation(tile),
-        spyOn(Game, 'animating').mockReturnValue(false),
+        spyOn(Game, 'animating').mockImplementation(() => animating),
         spyOn(Game, 'runEnabled').mockImplementation(() => run),
         spyOn(actions, 'setRun').mockImplementation(value => { run = value; return true; }),
         spyOn(reader, 'varp').mockImplementation(id => id === ARENA_VARP ? 2 + Number(tagged) : 0),
@@ -145,4 +149,45 @@ test('keeps normal retry pacing when an obstacle is unavailable', async () => {
     await frame();
     expect(ScriptRunner.ctx!.loopCount).toBe(completed);
     expect(walks).toHaveLength(0);
+});
+
+test('retries a failed crossing on the first settled tick after its animation', async () => {
+    await start();
+    animating = true;
+    for (const tick of [101, 102]) {
+        BotHost.tickCount = tick;
+        await frame();
+    }
+    expect(walks).toHaveLength(1);
+    animating = false;
+    BotHost.tickCount = 103;
+    await frame();
+    await frame();
+    expect(walks).toHaveLength(2);
+    expect(walks[1].tick).toBe(103);
+    for (let i = 0; i < 5; i++) await frame();
+    expect(walks).toHaveLength(2);
+});
+
+test('does not treat a one-frame animation flash as a completed failure', async () => {
+    await start();
+    animating = true;
+    BotHost.tickCount = 101;
+    await frame();
+    animating = false;
+    BotHost.tickCount = 102;
+    await frame();
+    await frame();
+    expect(walks).toHaveLength(1);
+});
+
+test('does not reclick an idle trap trigger within the dispatch tick', async () => {
+    offsetX = 5;
+    await start();
+    for (let i = 0; i < 5; i++) await frame();
+    expect(walks).toHaveLength(1);
+    BotHost.tickCount = 101;
+    for (let i = 0; i < 5; i++) await frame();
+    expect(walks).toHaveLength(2);
+    expect(walks[1].tick).toBe(101);
 });
