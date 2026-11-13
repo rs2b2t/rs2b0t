@@ -74,12 +74,21 @@ async function launchDesktop(port: number, profile: string) {
     assert.notEqual(paths.userData, profile);
     assert.equal(paths.userData, paths.sessionData);
     const deadline = Date.now() + 15000;
-    let page = app.windows().find(page => page.url().endsWith('/multibox.html') && !page.isClosed());
+    // Why: Playwright can attach after the window has already loaded and then report an empty url() for it, so match on the page's own location.
+    const findMultibox = async () => {
+        for (const candidate of app.windows()) {
+            if (candidate.isClosed()) continue;
+            if ((await candidate.evaluate(() => location.pathname).catch(() => '')) === '/multibox.html') return candidate;
+        }
+    };
+    let page = await findMultibox();
     while (!page && Date.now() < deadline) {
         await new Promise(resolve => setTimeout(resolve, 50));
-        page = app.windows().find(page => page.url().endsWith('/multibox.html') && !page.isClosed());
+        page = await findMultibox();
     }
     assert.ok(page, 'Electron did not open the multibox window');
+    // Why: a reload makes Playwright record the url a later assertion reads.
+    if (!page.url()) await page.reload();
     await page.waitForFunction(() => document.getElementById('mbx-build')?.textContent !== '…');
     return { app, page, paths, pid: app.process().pid };
 }
