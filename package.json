@@ -52,6 +52,7 @@
         "@eslint/js": "^9.39.2",
         "@happy-dom/global-registrator": "^20.10.6",
         "@types/bun": "1.2.23",
+        "@types/node": "^24.19.2",
         "@vvago/vale": "3.17.1",
         "eslint": "^9.39.2",
         "globals": "^17.0.0",

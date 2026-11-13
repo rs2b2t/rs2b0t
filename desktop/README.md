@@ -11,14 +11,10 @@ and a power-save blocker disable the throttling a backgrounded browser tab impos
 hidden tab drops the game loop to ~1 fps and starves the bot, then replays at 2–5× on
 refocus. Measured here: ~51 fps while hidden.
 
-The shell enables Chromium's `V8CppGCEnableLargerCage` feature before startup.
-Electron 33's Oilpan heap otherwise reserves 4 GB across the wall's renderer;
-this feature raises that address-space reservation to 16 GB. It does not
-preallocate 16 GB of physical RAM. See the
-[Chromium implementation](https://chromium.googlesource.com/chromium/src/+/refs/tags/130.0.6723.191/gin/cppgc.cc).
-This addresses `Oilpan: Large allocation. Ran out of reservation` with many bot
-frames sharing a renderer. It does not remove system RAM limits or fix a leak.
-Restart Electron to apply it; reloading the page keeps the existing reservation.
+The desktop shell no longer sets `V8CppGCEnableLargerCage`. Earlier versions used
+this switch to raise the Oilpan address-space reservation for many bot frames in
+one renderer. That reservation is address space, not physical RAM. It does not
+remove system RAM limits or fix a leak.
 
 ## Run
 
@@ -39,7 +35,7 @@ For a local development engine:
 
 1. Start the engine and deploy the client (`tools/deploy-local.sh`).
 2. `cd desktop`
-3. `bun install` (once, pulls Electron)
+3. `bun install` (once)
 4. `bun run start` opens against `http://localhost:8081`
 
 Point at another server with `bun run start -- --server=https://your-host`, or
@@ -48,8 +44,13 @@ Point at another server with `bun run start -- --server=https://your-host`, or
 ## Package a distributable
 
 ```sh
-bun run package        # electron-builder --dir -> desktop/dist/
+bun run package        # electron-builder --dir --publish never -> desktop/dist/
 ```
+
+## Requirements
+
+Electron 45 requires macOS 13 or later. Its README lists 64-bit Windows and Linux
+builds. The desktop package uses electron-builder 26 and Node 24 type definitions.
 
 ## Facts
 
