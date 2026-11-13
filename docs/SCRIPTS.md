@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 77. Categories: 21.
+- Scripts: 78. Categories: 22.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -21,6 +21,7 @@
 - [General](#general) — 1
 - [Herblore](#herblore) — 5
 - [Magic](#magic) — 3
+- [Minigames](#minigames) — 1
 - [Mining](#mining) — 3
 - [Money making](#money-making) — 9
 - [Navigation](#navigation) — 2
@@ -37,7 +38,7 @@
 
 ### BrimhavenAgility
 
-Brimhaven Agility Arena — banks food+coins at Ardougne south, ships to Brimhaven, pays Cap'n Izzy, tags ticket pillars on the level-optimal path, and grinds centre spikes between tags. Optional steal restock (Thieving 20) takes cakes from the Baker's stall and coins from guards.
+Brimhaven Agility Arena — banks food+coins at Ardougne south, ships to Brimhaven, pays Cap'n Izzy, tags ticket pillars on the level-optimal path, and trains on the nearest usable spikes or pressure pads between tags. Uses Ardougne teleport when food runs out, stocking return runes from the bank when unlocked. Optional steal restock (Thieving 20) takes cakes from the Baker's stall and coins from guards.
 
 - Tags: `brimhaven`, `arena`, `tickets`, `banking`, `food`
 
@@ -865,6 +866,22 @@ Stands at the nearest bank and enchants one jewel picked from the dropdown: wiel
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `jewel` | string | `"Sapphire ring"` | Jewel — one of: Sapphire ring, Sapphire necklace, Sapphire amulet, Emerald ring, Emerald amulet, Ruby ring, Ruby amulet, Diamond ring, Diamond amulet, Dragonstone ring, Dragonstone amulet |
+
+## Minigames
+
+### ShadesOfMortton
+
+Fiyr shades, magic pyres and silver chests with automatic key progression, temple repair and renewable supplies
+
+- Tags: `shades`, `mortton`, `firemaking`, `prayer`, `self-supplying`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `strategy` | string | `"Local"` | Supply strategy — one of: Local, Banked |
+| `protection` | string | `"Auto"` | Protection — one of: Auto, Food only |
+| `loot` | string | `"Sell"` | Chest equipment — one of: Sell, High alch |
+| `pyres` | number (1–200) | `40` | Pyres per expedition |
+| `targetRemains` | number (1–20) | `14` | Target hunting batch |
 
 ## Mining
 

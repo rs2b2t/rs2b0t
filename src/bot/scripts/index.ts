@@ -1,3 +1,5 @@
+import ShadesOfMortton from './ShadesOfMortton/ShadesOfMortton.js';
+import { SHADES_SETTINGS } from './ShadesOfMortton/settings.js';
 import AccountLeveler, { SETTINGS as ACCOUNT_LEVELER_SETTINGS } from './AccountLeveler/AccountLeveler.js';
 import { AGILITY_SETTINGS } from './AgilityBot/AgilityBot.js';
 import { FISHING_LOCATION_OPTIONS } from '../data/fishingLocations.js';
@@ -768,7 +770,7 @@ ScriptRegistry.register({
 ScriptRegistry.register({
     name: 'BrimhavenAgility',
     description:
-        'Brimhaven Agility Arena — banks food+coins at Ardougne south, ships to Brimhaven, pays Cap\'n Izzy, tags ticket pillars on the level-optimal path, and grinds centre spikes between tags. Optional steal restock (Thieving 20) takes cakes from the Baker\'s stall and coins from guards.',
+        'Brimhaven Agility Arena — banks food+coins at Ardougne south, ships to Brimhaven, pays Cap\'n Izzy, tags ticket pillars on the level-optimal path, and trains on the nearest usable spikes or pressure pads between tags. Uses Ardougne teleport when food runs out, stocking return runes from the bank when unlocked. Optional steal restock (Thieving 20) takes cakes from the Baker\'s stall and coins from guards.',
     category: 'Agility',
     tags: ['brimhaven', 'arena', 'tickets', 'banking', 'food'],
     settingsSchema: BRIMHAVEN_AGILITY_SETTINGS,
@@ -927,4 +929,13 @@ ScriptRegistry.register({
     tags: ['loot', 'wandering', 'banking', 'food', 'event', 'pumpkin'],
     settingsSchema: WANDER_LOOTER_SETTINGS,
     create: () => new WanderLooter()
+});
+
+ScriptRegistry.register({
+    name: 'ShadesOfMortton',
+    description: 'Fiyr shades, magic pyres and silver chests with automatic key progression, temple repair and renewable supplies',
+    category: 'Minigames',
+    tags: ['shades', 'mortton', 'firemaking', 'prayer', 'self-supplying'],
+    settingsSchema: SHADES_SETTINGS,
+    create: () => new ShadesOfMortton()
 });
