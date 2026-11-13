@@ -9,7 +9,7 @@ export const SCRIPT_NAMES = [
     'FlaxSpinner', 'FlourCollector', 'GatheringBot', 'GemCutter', 'GnomeMagicChopper', 'GreenDragon', 'HerbCleaner',
     'HerbloreSecondaries', 'HillGiant', 'JiveBalls', 'JiveCaskets', 'JiveChests', 'JiveCrafting', 'JiveDemons', 'JiveDragons', 'JiveEnchanter', 'JiveKBD', 'JiveKQ', 'JiveMarketDumper', 'LeatherCrafter', 'MarketMaker', 'MossGiant',
     'MuleCrafter', 'MuleDepot', 'JiveRC', 'PotionMaker', 'RangingGuild', 'RockCrab', 'RoguesPurse',
-    'RuneCrafter', 'ShopBuyout', 'ShopRunner', 'SmelterBot', 'SmithingBot', 'Superheater',
+    'RuneCrafter', 'ShadesOfMortton', 'ShopBuyout', 'ShopRunner', 'SmelterBot', 'SmithingBot', 'Superheater',
     'TannerBot', 'ThievingBot', 'VialFiller', 'WalkToBot', 'WanderLooter', 'WildyAgility', 'Alcher'
 ] as const;
 

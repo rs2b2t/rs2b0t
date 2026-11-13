@@ -641,6 +641,22 @@ export function nextHop(from: number, goal: number, agility: number, avoid = -1)
     return first;
 }
 
+export function trainingHop(from: number, agility: number): number | null {
+    let best: { hop: number; distance: number; tiles: number } | null = null;
+    for (const edge of usableEdges(agility)) {
+        if (edge.kind !== 'spikes' && edge.kind !== 'pressure') continue;
+        for (const [near, far] of [[edge.a, edge.b], [edge.b, edge.a]]) {
+            const path = pathPlatforms(from, near, agility);
+            if (path === null) continue;
+            const tiles = platformGeoDist(from, near);
+            if (!best || path.length < best.distance || (path.length === best.distance && tiles < best.tiles)) {
+                best = { hop: path[0] ?? far, distance: path.length, tiles };
+            }
+        }
+    }
+    return best?.hop ?? null;
+}
+
 /** Source-side trap trigger: 5 tiles toward dest. A dest-island click paths around the loc into the pit. */
 export function walkTrapStand(from: number, to: number): { x: number; z: number } | null {
     const a = PILLARS[from];

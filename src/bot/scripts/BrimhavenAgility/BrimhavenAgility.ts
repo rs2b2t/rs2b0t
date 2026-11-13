@@ -25,7 +25,6 @@ import {
     KARAMJA_GENERAL,
     ARENA_VARP,
     BOAT_FARE,
-    CENTRE_PLATFORM,
     DEFAULT_BANK_TICKETS,
     DEFAULT_FOOD_PER_TRIP,
     EAT_AT_HP,
@@ -50,6 +49,7 @@ import {
     hintMissed,
     TICKET_CAP_PER_HOUR,
     nextHop,
+    trainingHop,
     obstacleOutcome,
     onArenaPlatform,
     onBrimhavenSurface,
@@ -60,7 +60,6 @@ import {
     shouldBank,
     shouldEat,
     ticketInventoryGain,
-    onTicketHub,
     walkTrapStand,
     wantRunForGoal,
     type ArenaEdge
@@ -100,7 +99,6 @@ export const BRIMHAVEN_AGILITY_SETTINGS: SettingsSchema = {
 };
 
 export default class BrimhavenAgility extends TaskBot {
-    // One server tick between loops so the next hop can start the tick we go idle.
     override loopDelay = 600;
     override loopCadence = { kind: 'server-tick' as const, ticks: 1 };
 
@@ -174,6 +172,13 @@ export default class BrimhavenAgility extends TaskBot {
             new CrossObstacle(this),
             new SpikeWait(this)
         );
+    }
+
+    override async loop(): Promise<number | void> {
+        const from = this.platform();
+        await super.loop();
+        const to = this.platform();
+        if (from >= 0 && to >= 0 && from !== to) return 0;
     }
 
     setStatus(s: string): void {
@@ -899,22 +904,18 @@ class CrossObstacle implements Task {
         if (chasing) {
             return here !== target && nextHop(here, target, this.bot.agility()) !== null;
         }
-        // After a tag, walk back to the centre hub. Sitting on a tagged corner
-        // is what turns the next arrow into a 50s cross-map miss.
-        if (onTicketHub(here)) {
-            return false;
-        }
-        return nextHop(here, CENTRE_PLATFORM, this.bot.agility()) !== null;
+        return trainingHop(here, this.bot.agility()) !== null;
     }
     async execute(): Promise<void> {
         this.bot.noteHint();
         const here = this.bot.platform();
         const target = this.bot.targetPillar();
         const chasing = !this.bot.tagged() && target >= 0;
-        const goal = chasing ? target : CENTRE_PLATFORM;
-        const hop = nextHop(here, goal, this.bot.agility(), this.bot.avoidHop);
+        const hop = chasing
+            ? nextHop(here, target, this.bot.agility(), this.bot.avoidHop)
+            : trainingHop(here, this.bot.agility());
         if (hop === null) {
-            this.bot.log(`no path from platform ${here} to ${goal} at agility ${this.bot.agility()}`);
+            this.bot.log(`no path from platform ${here} at agility ${this.bot.agility()}`);
             return;
         }
         const edge = edgeBetween(here, hop, this.bot.agility());
@@ -928,8 +929,8 @@ class CrossObstacle implements Task {
             this.bot.avoidHop = -1;
         }
         this.bot.noteHop();
-        this.bot.log(`crossing ${edge.kind} ${here}→${hop} (goal ${goal}${chasing ? '' : ', back to centre'})`);
-        this.bot.setStatus(chasing ? `crossing ${edge.kind} ${here}→${hop}` : `back to centre ${here}→${hop}`);
+        this.bot.log(`crossing ${edge.kind} ${here}→${hop} (${chasing ? `goal ${target}` : 'training between pillars'})`);
+        this.bot.setStatus(`${chasing ? 'crossing' : 'training'} ${edge.kind} ${here}→${hop}`);
         await ensureRun(wantRunForGoal(chasing));
         await crossEdge(this.bot, edge, here, hop);
     }
