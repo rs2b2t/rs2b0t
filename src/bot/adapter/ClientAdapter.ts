@@ -500,6 +500,25 @@ export const reader = {
         return player ? { seq: player.primaryAnim, cycle: player.primaryAnimCycle, serial: player.primaryAnimSerial } : null;
     },
 
+    /** Reference resourceReady: can a 2x2 loc at (x,z) be reached from the player's tile. */
+    locReachable(x: number, z: number, size = 2): boolean {
+        const me = raw?.localPlayer ? reader.worldTile() : null;
+        if (!me) {
+            return true;
+        }
+        const from = reader.toLocal(me.x, me.z);
+        const to = reader.toLocal(x, z);
+        const client = raw as unknown as {
+            collision?: Record<number, { testLoc?(fx: number, fz: number, tx: number, tz: number, sx: number, sz: number, rot: number): boolean }>;
+            minusedlevel?: number;
+        } | null;
+        const collision = client?.collision?.[client?.minusedlevel ?? 0];
+        if (!from || !to || typeof collision?.testLoc !== 'function') {
+            return true;
+        }
+        return collision.testLoc(from.lx, from.lz, to.lx, to.lz, size, size, 0);
+    },
+
     selfChat(): string | null {
         return raw?.localPlayer?.chatMessage ?? null;
     },
@@ -1871,6 +1890,56 @@ export const actions = {
         }
 
         return actions.menuAction(MiniMenuAction.CLOSE_BUTTON, 0, 0, comId);
+    },
+
+    /** Write the client's current packet buffer as one socket write. */
+    flushOut(): boolean {
+        if (!raw || !raw.stream) {
+            return false;
+        }
+        const out = raw.out;
+        if (!out.pos) {
+            return false;
+        }
+        (raw.stream as { write(data: Uint8Array, len: number): void }).write(out.data as Uint8Array, out.pos);
+        out.pos = 0;
+        return true;
+    },
+
+    /**
+     * One raw 3-tick woodcut batch, flushed as a single write:
+     * OPHELDU, IF_BUTTON makeOne, CLOSE_MODAL, OPLOC.
+     */
+    woodcutBatchRaw(
+        knife: { id: number; slot: number; comId: number },
+        carrier: { id: number; slot: number; comId: number },
+        loc: { id: number; x: number; z: number; ops: readonly (string | null)[] },
+        op: string,
+        makeOne = 8889
+    ): boolean {
+        if (!raw) {
+            return false;
+        }
+        const index = loc.ops.findIndex(entry => entry?.toLowerCase() === op.toLowerCase());
+        if (index < 0 || index >= 5) {
+            return false;
+        }
+        const out = raw.out;
+        out.p1Enc(200);
+        out.p2(carrier.id);
+        out.p2(carrier.slot);
+        out.p2(carrier.comId);
+        out.p2(knife.id);
+        out.p2(knife.slot);
+        out.p2(knife.comId);
+        out.p1Enc(86);
+        out.p2(makeOne);
+        out.p1Enc(93);
+        out.p1Enc([10, 45, 196, 53, 126][index]!);
+        out.p2(loc.x);
+        out.p2(loc.z);
+        out.p2(loc.id);
+        return this.flushOut();
     },
 };
 

@@ -399,6 +399,27 @@ export function combatBreaksGather(inCombat: boolean, allowCombat: boolean): boo
     return inCombat && !allowCombat;
 }
 
+/**
+ * Fletching level needed to knife a log into its first product.
+ * Normal logs offer shafts at 1; oak and above only offer bows.
+ */
+export function fletchingLevelForLog(name: string | null | undefined): number {
+    switch ((name ?? '').trim().toLowerCase()) {
+        case 'oak logs':
+            return 20;
+        case 'willow logs':
+            return 35;
+        case 'maple logs':
+            return 50;
+        case 'yew logs':
+            return 65;
+        case 'magic logs':
+            return 80;
+        default:
+            return 1;
+    }
+}
+
 /** True when name is a fletchable log on this content pack. */
 export function isFletchableLogName(name: string | null | undefined): boolean {
     const n = (name ?? '').trim().toLowerCase();
