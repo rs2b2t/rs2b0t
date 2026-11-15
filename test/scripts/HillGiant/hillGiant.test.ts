@@ -192,7 +192,7 @@ describe('HillGiant settings', () => {
         expect(HILL_GIANT_SETTINGS.meleeStyle).toMatchObject({
             type: 'string',
             default: 'strength',
-            options: ['attack', 'strength', 'controlled', 'defence']
+            options: ['attack', 'strength', 'controlled', 'defence', 'minimum']
         });
     });
 });

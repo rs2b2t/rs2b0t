@@ -17,7 +17,7 @@ Game.inCombat(): boolean        // health bar showing
 Game.animating(): boolean
 Game.tick(): number             // server ticks since client boot
 Game.combatMode(): number       // current raw com_mode varp
-Game.combatStyleMode(style: 'attack' | 'strength' | 'controlled' | 'defence'): number | null
+Game.combatStyleMode(style: 'attack' | 'strength' | 'controlled' | 'defence' | 'minimum'): number | null
 Game.hasCombatStyle(style): boolean
 Game.setCombatStyle(style): boolean
 Game.setCombatMode(mode: number): boolean // exact numeric mode (for ranged styles)
@@ -38,6 +38,8 @@ Game.autoRetaliateOn(): boolean
 Game.setAutoRetaliate(on: boolean): boolean
 Game.attackedByPlayer(): boolean // the local player's target is another player
 ```
+
+`minimum` is a melee choice, not a real style: `combatStyleResolution`, `combatStyleMode`, `hasCombatStyle` and `setCombatStyle` resolve it to whichever of attack, strength and defence is lowest when called, so it moves on as levels change. A tie goes attack, then strength, then defence.
 
 Send nothing before `Game.sceneReady()` is true: menu and walk packets injected
 while the scene is still building soft-fail or retry (#445).
