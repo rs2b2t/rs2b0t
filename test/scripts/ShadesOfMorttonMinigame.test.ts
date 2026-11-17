@@ -8,10 +8,15 @@ describe('shade access keys', () => {
         expect(spendableKeys(counts)).toEqual([{ id: 3450, count: 3 }, { id: 3460, count: 2 }]);
         expect(counts.get(3469)).toBe(1);
     });
-    test('spends duplicates but keeps one deterministic highest tier key', () => {
-        expect(spendableKeys(new Map([[3468, 2], [3465, 1]])))
-            .toEqual([{ id: 3465, count: 1 }, { id: 3468, count: 1 }]);
-        expect(reserveKey(new Map([[3468, 2], [3465, 1]]))).toBe(3468);
+    test('reserves a cheap silver key and spends duplicate and purple silver keys', () => {
+        const counts = new Map([[3469, 1], [3466, 2], [3468, 2]]);
+        expect(reserveKey(counts)).toBe(3466);
+        expect(spendableKeys(counts)).toEqual([{ id: 3466, count: 1 }, { id: 3468, count: 2 }, { id: 3469, count: 1 }]);
+    });
+    test('keeps silver access even when a cheaper lower-metal key is available', () => {
+        const counts = new Map([[3450, 1], [3460, 1], [3468, 1]]);
+        expect(reserveKey(counts)).toBe(3468);
+        expect(spendableKeys(counts)).toEqual([{ id: 3450, count: 1 }, { id: 3460, count: 1 }]);
     });
     test('ignores absent keys and unrelated inventory', () => {
         expect(reserveKey(new Map([[3469, 0], [995, 1000]]))).toBeNull();

@@ -17,6 +17,7 @@ import { Modals } from '../../api/ui/widgets/Modals.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import Tile from '../../geometry/Tile.js';
 import { combinePair, FOOD, FOOD_LOAD, OIL, type Stock } from './policy.js';
+import { CHEST_LOOT, lootBaseline } from './loot-policy.js';
 
 export const held = (id: number): number => Inventory.countById(id);
 export const counts = (): Map<number, number> => new Map(Inventory.items().map(item => [item.id, held(item.id)]));
@@ -123,22 +124,27 @@ export class Supplies {
 
     async logs(sell = false): Promise<boolean> {
         if (!(await this.bank())) return false;
-        const axe = AXES.find(axe => Equipment.contains(axe.name) || Bank.count(axe.name) > 0);
-        if (!axe) throw new Error('Bank a working axe before running ShadesOfMortton');
-        if (!Equipment.contains(axe.name) && !(await Bank.withdrawX(axe.name, 1))) return false;
-        await Bank.close();
-        const trees = new Tile(2702, 3398, 0);
-        if (!(await this.walk(trees, 4))) return false;
-        let idle = 0;
-        for (let ticks = 0; ticks < 5000 && held(MAGIC_LOGS) < 24; ticks++) {
-            if (EventSignal.pending()) return false;
-            if (ChatDialog.canContinue()) await ChatDialog.continue();
-            if (!Game.animating() && ++idle >= 5) {
-                const tree = Locs.query().name('Magic tree', 'Magic trees').action('Chop down').within(20).nearest();
-                if (tree) await tree.interact('Chop down');
-                idle = 0;
+        if (sell && Bank.countById(MAGIC_LOGS) > 0) {
+            if (!(await this.take(MAGIC_LOGS, Math.min(24, Bank.countById(MAGIC_LOGS))))) return false;
+            await Bank.close();
+        } else {
+            const axe = AXES.find(axe => Equipment.contains(axe.name) || Bank.count(axe.name) > 0);
+            if (!axe) throw new Error('Bank a working axe before running ShadesOfMortton');
+            if (!Equipment.contains(axe.name) && !(await Bank.withdrawX(axe.name, 1))) return false;
+            await Bank.close();
+            const trees = new Tile(2702, 3398, 0);
+            if (!(await this.walk(trees, 4))) return false;
+            let idle = 0;
+            for (let ticks = 0; ticks < 5000 && held(MAGIC_LOGS) < 24; ticks++) {
+                if (EventSignal.pending()) return false;
+                if (ChatDialog.canContinue()) await ChatDialog.continue();
+                if (!Game.animating() && ++idle >= 5) {
+                    const tree = Locs.query().name('Magic tree', 'Magic trees').action('Chop down').within(20).nearest();
+                    if (tree) await tree.interact('Chop down');
+                    idle = 0;
+                }
+                await Execution.delayTicks(1);
             }
-            await Execution.delayTicks(1);
         }
         const gathered = held(MAGIC_LOGS);
         this.log(`Gathered ${gathered} magic logs${sell ? ' for supplies' : ''}`);
@@ -176,6 +182,26 @@ export class Supplies {
             need -= qty * (4 - i);
         }
         await Bank.close();
+        return this.douse(count);
+    }
+
+    clearVials(): Promise<boolean> { return this.discard([229]); }
+
+    clearWaste(): Promise<boolean> { return this.discard([229, 2959]); }
+
+    private async discard(ids: readonly number[]): Promise<boolean> {
+        for (let i = 0; i < 28; i++) {
+            if (EventSignal.pending()) return false;
+            const vial = Inventory.items().find(item => ids.includes(item.id));
+            if (!vial) return true;
+            const before = held(vial.id);
+            if (!(await vial.interact('Drop'))) return false;
+            if (!(await Execution.delayUntil(() => held(vial.id) < before, 3000))) return false;
+        }
+        return ids.every(id => held(id) === 0);
+    }
+
+    async douse(count: number): Promise<boolean> {
         if (!(await this.combine())) return false;
         const before = held(3448);
         for (let i = 0; i < count && held(OIL[0]) > 0 && held(MAGIC_LOGS) > 0; i++) {
@@ -186,12 +212,14 @@ export class Supplies {
             if (!oil || !logs || !(await oil.useOn(logs))) return false;
             if (!(await Execution.delayUntil(() => held(3448) > previous, 5000))) return false;
         }
-        return held(3448) > before;
+        return held(3448) > before && await this.clearVials();
     }
 
     async sellLoot(before: Stock): Promise<boolean> {
-        const loot = Inventory.items().filter(item => held(item.id) > (before.get(item.id) ?? 0)
-            && /^(Steel|Black|Mithril|Adamant|Rune) (dagger|sword|longsword|scimitar|mace|warhammer|battleaxe|spear|med helm|full helm|chainbody|platebody|platelegs|plateskirt|kiteshield|sq shield|2h sword)/i.test(item.name ?? ''));
+        if (EventSignal.pending()) return false;
+        const baseline = lootBaseline(before, counts(), new Set(Equipment.items().map(item => item.id)));
+        const loot = Inventory.items().filter(item => !item.noted && CHEST_LOOT.has(item.id)
+            && held(item.id) > (baseline.get(item.id) ?? 0));
         if (!loot.length) return true;
         if (!(await this.walk(SM_TILE.RAZMIRE))) return false;
         const afflicted = Npcs.query().name(SM_NPC.RAZMIRE_AFFLICTED).within(12).nearest();
@@ -205,11 +233,16 @@ export class Supplies {
         const shopkeeper = Npcs.query().name(SM_NPC.RAZMIRE).action('Trade-General-Store').within(12).nearest();
         if (!shopkeeper || !(await shopkeeper.interact('Trade-General-Store'))
             || !(await Execution.delayUntil(() => Shop.isOpen(), 5000))) return false;
-        for (const item of loot) {
-            await Shop.sell(item.name!, held(item.id) - (before.get(item.id) ?? 0), entry => entry.id === item.id);
+        try {
+            for (const item of loot) {
+                if (EventSignal.pending()) return false;
+                const qty = held(item.id) - (baseline.get(item.id) ?? 0);
+                if (qty > 0 && await Shop.sell(item.name!, qty, entry => entry.id === item.id) < qty) return false;
+            }
+            return true;
+        } finally {
+            await Shop.close();
         }
-        await Shop.close();
-        return true;
     }
 
     async loadFood(qty = FOOD_LOAD): Promise<boolean> {
@@ -217,7 +250,7 @@ export class Supplies {
     }
 
     async loadTools(): Promise<boolean> {
-        for (const id of [590, 2347]) {
+        for (const id of [590, Bank.countById(3678) ? 3678 : 2347]) {
             if (!(await this.take(id, 1))) throw new Error(`Bank a ${id === 590 ? 'tinderbox' : 'hammer'} before running ShadesOfMortton`);
         }
         return true;

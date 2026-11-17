@@ -218,7 +218,7 @@ export class Minigame {
         return false;
     }
 
-    async openChests(): Promise<boolean> {
+    async openChests(minimumTier = 0): Promise<boolean> {
         let opened = false;
         if (this.chest) {
             if (!(await this.finishChest())) return false;
@@ -226,7 +226,7 @@ export class Minigame {
         }
         for (let i = 0; i < 26; i++) {
             if (!(await this.safe())) return false;
-            const key = spendableKeys(inventoryCounts())[0];
+            const key = spendableKeys(inventoryCounts()).find(key => keyTier(key.id) >= minimumTier);
             if (!key) return opened;
             if (Inventory.free() < 5) return opened;
             const matching = chestForKey(key.id);

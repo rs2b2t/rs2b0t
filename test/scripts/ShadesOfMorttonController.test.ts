@@ -33,46 +33,127 @@ test('an active local expedition continues without calling the bank', async () =
     let banks = 0;
     let steps = 0;
     Object.assign(bot, {
-        expedition: { phase: 'hunt', step: async () => { steps++; return 'continue'; } },
+        expedition: { phase: 'hunt', description: 'Hunting Fiyr shades', step: async () => { steps++; return 'continue'; } },
         supply: { bank: async () => { banks++; return true; } },
         minigame: { pending: () => false }
     });
     await bot.loop();
     expect(steps).toBe(1);
     expect(banks).toBe(0);
-    expect(bot.status).toContain('hunt');
+    expect(bot.status).toContain('Hunting');
 });
 
-test.each(['hunt', 'chests'] as const)('banked %s loads optional supplies before leaving the bank', async activity => {
-    const { Bank } = await import('../../src/bot/api/bank/Bank.js');
+test('automatic loop starts from ordinary magic logs without banked sacred oil or pyres', async () => {
     const { Equipment } = await import('../../src/bot/api/equipment/Equipment.js');
     const { ChatDialog } = await import('../../src/bot/api/ui/dialogue/ChatDialog.js');
-    const { Supplies } = await import('../../src/bot/scripts/ShadesOfMortton/supply.js');
-    const ready = spyOn(Game, 'sceneReady').mockReturnValue(true);
-    const pending = spyOn(EventSignal, 'pending').mockReturnValue(false);
-    const hp = spyOn(Skills, 'effective').mockReturnValue(70);
-    const levels = spyOn(Skills, 'level').mockReturnValue(70);
-    const weapon = spyOn(Equipment, 'items').mockReturnValue([new InvItem({ id: 1305, name: 'Dragon longsword', slot: 3, count: 1, comId: 1688, ops: [] })]);
-    const chat = spyOn(ChatDialog, 'canContinue').mockReturnValue(false);
-    const stock = spyOn(Bank, 'countById').mockImplementation(id => new Map([[139, 2], [561, 40], [554, 200]]).get(id) ?? 0);
-    const free = spyOn(Inventory, 'free').mockReturnValue(10);
-    const calls: (readonly [number, number] | 'close')[] = [];
-    const close = spyOn(Bank, 'close').mockImplementation(async () => { calls.push('close'); return true; });
-    const supply = new Supplies(() => {});
-    supply.stock = new Map([[379, 30], [995, 10000], [3448, 8], [3465, activity === 'chests' ? 2 : 1]]);
-    const bank = spyOn(supply, 'bank').mockResolvedValue(true);
-    const take = spyOn(supply, 'take').mockImplementation(async (id, count) => { calls.push([id, count]); return true; });
-    cleanups.push(() => ready.mockRestore(), () => pending.mockRestore(), () => hp.mockRestore(), () => levels.mockRestore(), () => free.mockRestore(), () => weapon.mockRestore(), () => chat.mockRestore(), () => stock.mockRestore(), () => close.mockRestore(), () => bank.mockRestore(), () => take.mockRestore());
+    const { Expedition } = await import('../../src/bot/scripts/ShadesOfMortton/expedition.js');
+    const mocks = [
+        spyOn(Game, 'sceneReady').mockReturnValue(true),
+        spyOn(EventSignal, 'pending').mockReturnValue(false),
+        spyOn(Skills, 'effective').mockReturnValue(70),
+        spyOn(Equipment, 'items').mockReturnValue([new InvItem({ id: 1305, name: 'Dragon longsword', slot: 3, count: 1, comId: 1688, ops: [] })]),
+        spyOn(ChatDialog, 'canContinue').mockReturnValue(false)
+    ];
+    const load = spyOn(Expedition.prototype, 'load').mockResolvedValue(true);
+    cleanups.push(...mocks.map(mock => () => mock.mockRestore()), () => load.mockRestore());
     const bot = new ShadesOfMortton();
     Object.assign(bot, {
-        local: false, prayer: true, alch: true, supply,
+        supply: { stock: new Map([[379, 40], [995, 10000], [1513, 40]]), bank: async () => true },
         combat: { standDown: async () => {} },
-        minigame: { pending: () => false, exit: async () => true, openChests: async () => true, hunt: async () => true },
-        loot: { process: async () => true }
+        minigame: { pending: () => false, exit: async () => true }
     });
     bot.bindLog(() => {});
     await bot.loop();
-    expect(calls).toEqual(activity === 'chests'
-        ? [[379, 8], [3465, 1], [3465, 1], [139, 1], [561, 40], [554, 200], 'close']
-        : [[379, 12], [3465, 1], [139, 1], 'close']);
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(bot.status).toBe('Preparing supplies in Mortton');
+});
+
+test('only resource-spending preferences are exposed', async () => {
+    const { SHADES_SETTINGS } = await import('../../src/bot/scripts/ShadesOfMortton/settings.js');
+    expect(Object.keys(SHADES_SETTINGS)).toEqual(['prayerPotions', 'highAlchemy']);
+});
+
+test('a prepared inventory starts the village loop without banking', async () => {
+    const { Equipment } = await import('../../src/bot/api/equipment/Equipment.js');
+    const { ChatDialog } = await import('../../src/bot/api/ui/dialogue/ChatDialog.js');
+    const { Expedition } = await import('../../src/bot/scripts/ShadesOfMortton/expedition.js');
+    const mocks = [
+        spyOn(Game, 'sceneReady').mockReturnValue(true),
+        spyOn(EventSignal, 'pending').mockReturnValue(false),
+        spyOn(Skills, 'effective').mockReturnValue(70),
+        spyOn(Equipment, 'items').mockReturnValue([new InvItem({ id: 1305, name: 'Dragon longsword', slot: 3, count: 1, comId: 1688, ops: [] })]),
+        spyOn(ChatDialog, 'canContinue').mockReturnValue(false),
+        spyOn(Inventory, 'countById').mockImplementation(id => new Map([[379, 4], [590, 1], [2347, 1], [995, 20000], [1513, 4], [3430, 4]]).get(id) ?? 0)
+    ];
+    const step = spyOn(Expedition.prototype, 'step').mockResolvedValue('continue');
+    cleanups.push(...mocks.map(mock => () => mock.mockRestore()), () => step.mockRestore());
+    const bot = new ShadesOfMortton();
+    let banks = 0;
+    Object.assign(bot, { supply: { bank: async () => { banks++; return true; } }, minigame: { pending: () => false } });
+    await bot.loop();
+    await bot.loop();
+    expect(banks).toBe(0);
+    expect(step).toHaveBeenCalled();
+});
+
+test('a resupply trip reloads the automatic loop without requiring gathering levels', async () => {
+    const { Equipment } = await import('../../src/bot/api/equipment/Equipment.js');
+    const { ChatDialog } = await import('../../src/bot/api/ui/dialogue/ChatDialog.js');
+    const { Expedition } = await import('../../src/bot/scripts/ShadesOfMortton/expedition.js');
+    const mocks = [
+        spyOn(Game, 'sceneReady').mockReturnValue(true),
+        spyOn(EventSignal, 'pending').mockReturnValue(false),
+        spyOn(Skills, 'effective').mockReturnValue(70),
+        spyOn(Skills, 'level').mockReturnValue(1),
+        spyOn(Equipment, 'items').mockReturnValue([new InvItem({ id: 1305, name: 'Dragon longsword', slot: 3, count: 1, comId: 1688, ops: [] })]),
+        spyOn(ChatDialog, 'canContinue').mockReturnValue(false),
+        spyOn(Expedition.prototype, 'load').mockResolvedValue(true)
+    ];
+    const step = spyOn(Expedition.prototype, 'step').mockResolvedValue('continue');
+    cleanups.push(...mocks.map(mock => () => mock.mockRestore()), () => step.mockRestore());
+    const bot = new ShadesOfMortton();
+    let banks = 0;
+    let finished = '';
+    bot.bindFinish(reason => { finished = reason; });
+    bot.bindLog(() => {});
+    Object.assign(bot, {
+        expedition: { phase: 'oil', cycles: 0, description: 'Making sacred oil', reason: 'logs exhausted', step: async () => 'bank' },
+        supply: { stock: new Map([[379, 40], [995, 10000], [1513, 40]]), bank: async () => { banks++; return true; } },
+        combat: { standDown: async () => {} },
+        minigame: { pending: () => false, exit: async () => true }
+    });
+    await bot.loop();
+    await bot.loop();
+    expect(banks).toBe(1);
+    expect(step).toHaveBeenCalledTimes(1);
+    expect(bot.status).toBe('Preparing supplies in Mortton');
+    expect(finished).toBe('');
+});
+
+test('missing serum ingredients gather an ash source even when pyre fuel is banked', async () => {
+    const { Equipment } = await import('../../src/bot/api/equipment/Equipment.js');
+    const { ChatDialog } = await import('../../src/bot/api/ui/dialogue/ChatDialog.js');
+    const { Expedition } = await import('../../src/bot/scripts/ShadesOfMortton/expedition.js');
+    const mocks = [
+        spyOn(Game, 'sceneReady').mockReturnValue(true),
+        spyOn(EventSignal, 'pending').mockReturnValue(false),
+        spyOn(Skills, 'effective').mockReturnValue(90),
+        spyOn(Skills, 'level').mockReturnValue(90),
+        spyOn(Equipment, 'items').mockReturnValue([new InvItem({ id: 1305, name: 'Dragon longsword', slot: 3, count: 1, comId: 1688, ops: [] })]),
+        spyOn(ChatDialog, 'canContinue').mockReturnValue(false)
+    ];
+    const load = spyOn(Expedition.prototype, 'load').mockResolvedValue(true);
+    cleanups.push(...mocks.map(mock => () => mock.mockRestore()), () => load.mockRestore());
+    const bot = new ShadesOfMortton();
+    let gathered = 0;
+    bot.bindLog(() => {});
+    Object.assign(bot, {
+        expedition: { phase: 'prepare', cycles: 0, reason: 'serum ingredients exhausted', step: async () => 'bank' },
+        supply: { stock: new Map([[379, 40], [995, 10000], [3448, 40]]), bank: async () => true, logs: async () => { gathered++; return true; } },
+        combat: { standDown: async () => {} },
+        minigame: { pending: () => false, exit: async () => true }
+    });
+    await bot.loop();
+    expect(gathered).toBe(1);
+    expect(load).not.toHaveBeenCalled();
 });

@@ -2,31 +2,34 @@
 
 # ShadesOfMortton
 
-Select **ShadesOfMortton** in the script library. The script progresses through access keys to Fiyr shades, burns remains with magic pyre logs and opens matching chests. One key of the highest available metal is always reserved for access.
+Select **ShadesOfMortton** in the script library. There is one automatic loop: obtain a silver access key, prepare sacred oil, collect one Fiyr remain per available log and oil bottle, burn the remains, and open silver chests. The cheapest colour of silver key is reserved for access and never spent on a chest.
 
-Start with Shades of Mortton and Priest in Peril complete, access through the Mort Myre gate, 80 Firemaking, 75 Woodcutting, 40 Fishing, 40 Cooking and at least 50 Hitpoints. Wear suitable melee equipment; high melee stats and armour substantially reduce food trips. Keep a working axe, lobster pot, hammer and tinderbox in the bank. Existing food, coins, logs, oils and pyre logs are used first.
+The setup follows [Garlic's 2004scape guide](https://www.youtube.com/watch?v=DxLwWL2Qg18&t=595): ordinary noted magic logs, noted food, coins, a hammer, a tinderbox and swamp paste. Wear suitable melee equipment before starting. The script prefers a banked Flamtaer hammer, carries up to 100 noted magic logs and 300 noted lobsters, and withdraws up to 50,000 coins. It keeps four loose lobsters and replenishes them locally. Existing banked pyre logs can also be used.
 
-The script replenishes lobsters by fishing and cooking at Catherby, gathers magic logs at Sorcerer's Tower, buys temple materials and olive oil, repairs the temple and makes sacred oil. Low coins trigger a separate magic-log gathering trip whose logs are sold to Arhein. Selected equipment looted from chests is sold to Razmire when his store is accessible. Fine cloth, keys, swamp paste and other loot are banked. No player trade or OSRS-only item is required.
+Complete Shades of Mortton and Priest in Peril, unlock the Mort Myre gate, and have 80 Firemaking and at least 50 Hitpoints. Higher melee stats and armour reduce food use. Gathering replacements requires 75 Woodcutting for magic logs, 40 Fishing for lobsters and 40 Cooking to cook them. These gathering levels are checked only when the corresponding supplies run out. Keep an axe and lobster pot in the bank if gathering is needed.
 
-Razmire is woken by talking before spending serum. When a cure is needed, the script uses banked serum or obtains tarromin from afflicted villagers and makes serum from it, a water vial and ashes. It sanctifies the remaining serum and permanently cures him.
+A usable carried inventory starts directly. Otherwise, the script visits the bank to load supplies. It uses the best access key already available, or works up through lower shades until it obtains silver access. Bootstrap cremations also use magic pyre logs.
 
-The default **Local** supply strategy carries up to 300 noted lobsters and noted magic pyre logs, then hunts, burns remains and opens chests without banking between every phase. Razmire converts notes through small sell-and-buy-back transactions. Each transaction checks affordability and verifies the supplies returned to the inventory. Shop stock is shared, so unavailable buybacks fall back to banked trips. **Banked** keeps the original separate batches.
+In Mortton, the script buys olive oil, repairs the temple as needed, sanctifies oil, and hunts enough shades for that batch. Batch size follows inventory space and available supplies. After hunting, it sells small batches of noted ordinary logs to Razmire, buys the logs back, douses them with sacred oil, and cremates the remains. It collects rewards, opens surplus silver keys, sells unwanted new chest equipment, and repeats. It preserves fine cloth, clues, resources, worn equipment and the reserved access key.
 
-Start with **Pyres per expedition: 40** and **Target hunting batch: 14**. Actual hunting batches shrink to leave space for supplies and rewards. The bot reserves its highest access key and banks protected loot when inventory space runs low. Buybacks cost coins; increasing the expedition size does not guarantee faster or more profitable runs.
+Food and optional prayer potions use the same local note exchange. Buybacks require coins and shared shop stock; the script verifies each purchase before continuing. Empty vials and rotten food are dropped to recover space. Repeated shop or temple failures stop with the current activity instead of silently changing strategy.
 
-**Protection: Auto** uses Protect from Melee at 43 Prayer during dungeon trips or combat. Banked prayer potions are carried, drunk when points run low and replenished from notes locally. The bot checks the dose change and restored points. Potions are optional: when they run out, food remains the renewable fallback. The script does not make prayer potions or flick prayers. Choose **Food only** to disable this support.
+Razmire is woken by talking first. If serum is needed, the script uses carried serum or makes it locally from tarromin, ashes and water. Bank preparation carries serum, ashes or one loose log for this purpose. The script sanctifies serum and applies the permanent cure. This setup does not require a separate trip to Varrock.
 
-**Chest equipment: Sell** sells eligible new equipment to Razmire. **High alch** first casts High Level Alchemy on eligible new equipment worth at least 1,000 coins at alchemy value, using banked nature and fire runes at 55 Magic. It preserves worn gear, keys and supplies, and sells remaining eligible equipment. Runes are optional and are not produced by the script. It uses ordinary spell timing and keeps the melee weapon equipped.
+There are two settings:
 
-Food shortages trigger a retreat; deaths or missing weapons stop the script. Random events yield to the shared event handler, then any pending funeral, chest or shop transaction is reconciled before banking. Repeated failures stop with the failing activity in the log. Check that message before restarting.
+- **Use prayer potions**: uses Protect from Melee at 43 Prayer and consumes banked potions. Food remains the fallback when potions run out. The script does not make potions or flick prayers.
+- **High alch valuable loot**: at 55 Magic, consumes banked nature and fire runes to alch eligible new chest equipment worth at least 1,000 coins. Otherwise, eligible equipment is sold to Razmire. The script does not produce runes.
 
-The renewable routes make continued operation possible without a stocked bank, but they take time. The script targets the highest shade tier; it does not claim an optimal XP or profit rate. Initial equipment, tools, levels and quests are prerequisites.
+Bank trips happen when supplies run out or protected loot fills the inventory. The script reloads banked supplies first, catches and cooks lobsters when needed, gathers magic logs, and sells logs to Arhein if shop money runs out. It then returns to the same village loop. These replacement trips take time; continued operation still requires the equipment, tools, levels and quests above.
+
+Food shortages trigger a retreat. Death or a missing weapon stops the script. Interrupted funeral, chest and shop transactions are reconciled before another action or bank trip.
 
 ## Validation
 
 ```sh
 bun test test/scripts/ShadesOfMortton*.test.ts
-ENGINE_DIR=/path/to/engine bun e2e/shades-of-mortton-live.ts cycle --minutes 35
+ENGINE_DIR=/path/to/engine bun e2e/shades-of-mortton-live.ts expedition --minutes 35
 ```
 
-The local harness also accepts `progression`, `oil`, `make`, `food`, `logs`, `funds`, `serum`, `pyre`, `hunt`, `unnote`, `prayer`, `alchemy` and `expedition`. Each creates a disposable account and seeds the unrelated prerequisites. `cycle` checks banked cremations, chest opening and another hunting trip. `progression` starts without access keys. `make` combines partial sacred-oil bottles into eight magic pyres. `pyre` isolates two cremations and reward pickups; `hunt` isolates two Fiyr kills and remains pickups. The advanced probes check supply buybacks, a verified potion dose, an alchemy cast and a local cycle with no second bank visit. Evidence is written under `out/sh<run>/proof.json` and `final.png`.
+The local harness creates disposable accounts. `expedition` starts with ordinary magic logs, no banked oil or pyre logs, and checks a complete village cycle without a second bank visit. `prepared` starts in Mortton with a supplied inventory and checks serum, oil and the next hunt without any bank visit. `cycle` exercises existing pyre stocks. Additional modes cover progression, oil, pyre crafting, food, logs, funds, serum, individual cremations, hunting, note exchange, prayer and alchemy. Evidence is written under `out/sh<run>/proof.json` and `final.png`.

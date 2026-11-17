@@ -877,11 +877,8 @@ Fiyr shades, magic pyres and silver chests with automatic key progression, templ
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `strategy` | string | `"Local"` | Supply strategy — one of: Local, Banked |
-| `protection` | string | `"Auto"` | Protection — one of: Auto, Food only |
-| `loot` | string | `"Sell"` | Chest equipment — one of: Sell, High alch |
-| `pyres` | number (1–200) | `40` | Pyres per expedition |
-| `targetRemains` | number (1–20) | `14` | Target hunting batch |
+| `prayerPotions` | boolean | `true` | Use prayer potions |
+| `highAlchemy` | boolean | `false` | High alch valuable loot |
 
 ## Mining
 

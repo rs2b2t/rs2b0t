@@ -13,7 +13,7 @@ import { held, type Supplies } from './supply.js';
 const COIN_RESERVE = 500;
 const STOCK_COMPONENT = 3900;
 const PLAYER_COMPONENT = 3823;
-const NONBASELINE_SUPPLIES = new Set([3448, 379, 2434, 139, 141, 143]);
+const NONBASELINE_SUPPLIES = new Set([1513, 3448, 379, 2434, 139, 141, 143]);
 
 function purchaseBudget(id: number): number {
     const cost = liveCatalog().byId.get(id)?.cost;
@@ -66,6 +66,8 @@ export class MorttonShop {
         await Execution.delayUntil(() => Shop.isOpen() || EventSignal.pending(), 5000);
         return Shop.isOpen() && !EventSignal.pending();
     }
+
+    budget(id: number): number { return purchaseBudget(id); }
 
     pending(): boolean {
         return this.transaction !== null;

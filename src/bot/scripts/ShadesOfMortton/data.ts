@@ -35,7 +35,8 @@ export const chestForKey = (id: number) => KEY_CHESTS.find(key => key.id === id)
 export const keyTier = (id: number): number => chestForKey(id)?.tier ?? -1;
 
 export function reserveKey(counts: ReadonlyMap<number, number>): number | null {
-    return [...KEY_CHESTS].reverse().find(key => (counts.get(key.id) ?? 0) > 0)?.id ?? null;
+    const tier = KEY_CHESTS.findLast(key => (counts.get(key.id) ?? 0) > 0)?.tier;
+    return KEY_CHESTS.find(key => key.tier === tier && (counts.get(key.id) ?? 0) > 0)?.id ?? null;
 }
 
 export function spendableKeys(counts: ReadonlyMap<number, number>): { id: number; count: number }[] {
@@ -45,3 +46,5 @@ export function spendableKeys(counts: ReadonlyMap<number, number>): { id: number
         return count > 0 ? [{ id: key.id, count }] : [];
     });
 }
+
+export const spendableSilverKeys = (counts: ReadonlyMap<number, number>) => spendableKeys(counts).filter(key => keyTier(key.id) === 3);

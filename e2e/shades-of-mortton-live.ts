@@ -12,7 +12,7 @@ assert(['localhost', '127.0.0.1'].includes(new URL(base).hostname));
 const mode = rest[0] ?? 'cycle';
 const tickMs = Number(process.env.SHADES_TICK_MS ?? 200);
 assert(Number.isInteger(tickMs) && tickMs >= 100 && tickMs <= 600);
-assert(['cycle', 'oil', 'make', 'food', 'logs', 'funds', 'progression', 'serum', 'pyre', 'hunt', 'unnote', 'prayer', 'alchemy', 'expedition'].includes(mode));
+assert(['cycle', 'oil', 'make', 'food', 'logs', 'funds', 'progression', 'serum', 'pyre', 'hunt', 'unnote', 'prayer', 'alchemy', 'expedition', 'prepared'].includes(mode));
 const tag = `sh${Date.now().toString(36)}`;
 const startBank = ['food', 'logs', 'funds'].includes(mode) ? { x: 2809, z: 3441, level: 0 } : { x: 3510, z: 3480, level: 0 };
 const output = `out/${tag}`;
@@ -43,7 +43,7 @@ try {
         assert(await cheatQuiet(page, `setstat ${skill} 90`));
         await clearChatDialogs(page);
     }
-    for (const [name, value] of [['prieststart', 60], ['priestperil', 61], ['druidspirit', 110], ['morttonquest', 85], ['morttonmulti', 536870912 + (mode === 'serum' ? 0 : 64)]] as const) {
+    for (const [name, value] of [['prieststart', 60], ['priestperil', 61], ['druidspirit', 110], ['morttonquest', 85], ['morttonmulti', 536870912 + (['serum', 'prepared'].includes(mode) ? 0 : 64)]] as const) {
         assert(await cheatQuiet(page, `setvar ${name} ${value}`));
     }
     await relog(page, tag);
@@ -57,8 +57,9 @@ try {
     if (mode !== 'funds') bank.push({ debugName: 'coins', displayName: 'Coins', qty: 20000 });
     if (mode !== 'food') bank.push({ debugName: 'lobster', displayName: 'Lobster', qty: 60 });
     if (['unnote', 'prayer', 'expedition'].includes(mode)) bank.push({ debugName: '3doseprayerrestore', displayName: 'Prayer potion(3)', qty: 8 });
-    if (['unnote', 'expedition'].includes(mode)) bank.push({ debugName: 'magic_logs_pyre', displayName: 'Magic pyre logs', qty: 40 });
+    if (mode === 'unnote') bank.push({ debugName: 'magic_logs_pyre', displayName: 'Magic pyre logs', qty: 40 });
     if (['cycle', 'progression', 'food'].includes(mode)) bank.push({ debugName: 'magic_logs_pyre', displayName: 'Magic pyre logs', qty: mode === 'cycle' ? 16 : 8 });
+    if (mode === 'expedition') bank.push({ debugName: 'magic_logs', displayName: 'Magic logs', qty: 40 });
     if (['oil', 'make', 'serum'].includes(mode)) bank.push({ debugName: 'magic_logs', displayName: 'Magic logs', qty: 8 });
     if (mode === 'make') bank.push(
         { debugName: 'sacred_oil3', displayName: 'Sacred oil(3)', qty: 10 },
@@ -83,10 +84,10 @@ try {
     assert(await teleTo(page, startBank, 2, 25000));
     await clearChatDialogs(page);
     assert(await cheatQuiet(page, `speed ${tickMs}`));
-    await setSettings(page, 'ShadesOfMortton', { strategy: mode === 'expedition' ? 'Local' : 'Banked', targetRemains: 2 });
+    await setSettings(page, 'ShadesOfMortton', { prayerPotions: true, highAlchemy: false });
     if (['unnote', 'prayer', 'alchemy'].includes(mode)) {
         if (mode === 'alchemy') {
-            for (const command of ['give rune_platebody 1', 'give naturerune 1', 'give firerune 5', 'give lobster 4']) assert(await cheatQuiet(page, command));
+            for (const command of ['give rune_longsword 1', 'give naturerune 1', 'give firerune 5', 'give lobster 4']) assert(await cheatQuiet(page, command));
         }
         if (mode === 'prayer') assert(await cheatQuiet(page, 'setstat prayer 43'));
         await page.evaluate(mode => {
@@ -100,7 +101,7 @@ try {
                 if (bot.probe) return;
                 bot.status = `${mode} probe`;
                 if (mode === 'alchemy') {
-                    bot.probe = await bot.loot.process(new Map(), true) && held(1127) === 0 && held(561) === 0 && held(554) === 0 && held(995) === 39000;
+                    bot.probe = await bot.loot.process(new Map(), true) && held(1303) === 0 && held(561) === 0 && held(554) === 0 && held(995) === 19200;
                     return;
                 }
                 if (!prepared) {
@@ -131,7 +132,21 @@ try {
             };
             g.runner.start({ ...meta, create: () => bot });
         }, mode);
-    } else if (mode === 'expedition') {
+    } else if (mode === 'make') {
+        await page.evaluate(() => {
+            const g = Reflect.get(globalThis as object, 'rs2b0t');
+            const meta = g.registry.get('ShadesOfMortton');
+            const bot = meta.create();
+            bot.loop = async () => {
+                if (!bot.probe) bot.probe = await bot.supply.make(8);
+            };
+            g.runner.start({ ...meta, create: () => bot });
+        });
+    } else if (mode === 'expedition' || mode === 'prepared') {
+        if (mode === 'prepared') {
+            for (const command of ['give tinderbox 1', 'give hammer 1', 'give coins 50000', 'give lobster 4', 'give cert_lobster 300', 'give cert_magic_logs 100', 'give shadekey_silver_brown 1', 'give mort_serum3 1']) assert(await cheatQuiet(page, command));
+            assert(await teleTo(page, { x: 3488, z: 3295, level: 0 }, 2, 25000));
+        }
         await page.evaluate(() => {
             const g = Reflect.get(globalThis as object, 'rs2b0t');
             const meta = g.registry.get('ShadesOfMortton');
@@ -186,18 +201,22 @@ try {
         if (state !== last) { console.log(state, sample.state, sample.logs); last = state; }
         assert(sample.state !== 'stopped' && sample.state !== 'crashed' && sample.state !== 'error', JSON.stringify(sample));
         if (mode === 'expedition') assert(sample.bankCalls <= 1, 'Local cycle returned to bank before completing');
+        if (mode === 'prepared') {
+            assert.equal(sample.bankCalls, 0, 'Prepared start left Mortton for the bank');
+            done = sample.expedition?.phase === 'hunt' && count(3430) > 0 && count(3466) === 1;
+        }
         if (mode === 'pyre') done = sample.burns >= 2;
         if (mode === 'hunt') done = count(3404) >= 2;
         if (['unnote', 'prayer', 'alchemy'].includes(mode)) done = sample.probe;
         if (mode === 'expedition') done = sample.burns >= 2 && sample.chests >= 1 && (sample.expedition?.cycles ?? 0) >= 1 && sample.expedition?.phase === 'hunt' && sample.bankCalls === 1;
-        if (mode === 'cycle') done = sample.burns >= 1 && sample.chests >= 1 && sample.cycles >= 3 && sample.activity === 'hunt';
+        if (mode === 'cycle') done = sample.burns >= 1 && sample.chests >= 1 && (sample.expedition?.cycles ?? 0) >= 1 && sample.expedition?.phase === 'hunt';
         if (mode === 'progression') done = sample.burns > 0 && sample.status?.includes('Phrin') === true;
-        if (mode === 'oil') done = sample.cycles > 0 && [3430, 3432, 3434, 3436].some(id => count(id) > 0);
-        if (mode === 'make') done = sample.cycles > 0 && count(3448) >= 8;
+        if (mode === 'oil') done = [3430, 3432, 3434, 3436].some(id => count(id) > 0);
+        if (mode === 'make') done = sample.probe && count(3448) >= 8;
         if (mode === 'food') done = sample.cycles > 0 && count(379) >= 12;
         if (mode === 'logs') done = sample.cycles > 0 && count(1513) >= 12;
         if (mode === 'funds') done = sample.cycles > 0 && count(995) >= 3000;
-        if (mode === 'serum') done = sample.cycles > 1 && [3430, 3432, 3434, 3436].some(id => count(id) > 0);
+        if (mode === 'serum') done = [3430, 3432, 3434, 3436].some(id => count(id) > 0);
         if (done) break;
         await page.waitForTimeout(2000);
     }
