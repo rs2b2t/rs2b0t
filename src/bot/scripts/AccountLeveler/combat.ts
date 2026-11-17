@@ -147,7 +147,7 @@ export function combatPlan(s: LevelerSnapshot, objective: string, memory: Sessio
     if (level >= 15 && !resource && camps.length) {
         camps = camps.filter(camp => tier(camp) <= trainingTier(s.levels));
         const best = Math.max(...camps.map(tier));
-        camps = camps.filter(camp => tier(camp) === best);
+        camps = camps.filter(camp => tier(camp) === best || camp.target === 'Guard');
     }
     const fresh = camps.filter(c => !memory.recent.slice(-3).includes(c.id));
     if (fresh.length) camps = fresh;
@@ -189,10 +189,10 @@ export function combatPlan(s: LevelerSnapshot, objective: string, memory: Sessio
             target: camp.target, spot: 'Custom coordinates', coordinates: new Tile(camp.x, camp.z, camp.level ?? 0), leashRadius: camp.leashRadius ?? 12,
             travelCoins: coins, travelItems: (camp.supplies ?? []).filter(need => !need.equip).map(need => need.item),
             combatStyle: style, meleeStyle, rangeStyle: 'rapid', spell: magic?.spell ?? 'Wind Strike', runesWithdraw: magic?.casts ?? 150,
-            ammo: 'Bronze arrow', ammoWithdraw: ammo.carry, useSpecial: style !== 'mage', solveClues: false,
+            ammo: 'Bronze arrow', ammoWithdraw: ammo.carry, useSpecial: style !== 'mage', solveClues: camp.target === 'Guard',
             banking: 'Auto', food: food ?? 'Shrimps', foodWithdraw: deathWalk ? 0 : 12, panicHp: deathWalk ? 0 : 15, buryBones: true, buryBigBones: true,
             buryBabyDragonBones: camp.target === 'Baby blue dragon',
-            loot: ['Bones', 'Air talisman', ...SECONDARY_LOOT, ...(resource === 'Cow hide' ? ['Cow hide'] : [])], avoidHerbs: [], loadout: '', bankEveryMinutes: 8
+            loot: ['Bones', 'Air talisman', ...SECONDARY_LOOT, ...(camp.target === 'Guard' ? ['Clue scroll'] : []), ...(resource === 'Cow hide' ? ['Cow hide'] : [])], avoidHerbs: [], loadout: '', bankEveryMinutes: 8
         }
     };
 }

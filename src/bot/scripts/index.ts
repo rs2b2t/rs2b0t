@@ -915,9 +915,9 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'AccountLeveler',
-    description: 'Trains melee first, then remaining combat skills, then other enabled members skills to 60. Stocks essence in batches of 1,000 and uses Edgeville monkey bars from Agility 15. Buys supplies, runs required quests, and recovers from death. Wilderness training is optional and enabled by default.',
+    description: 'Trains melee first, then remaining combat skills, then other enabled members skills to 60. Includes guard runs for clues, with one retry before discarding a failed trail. Stocks essence in batches of 1,000 and uses Edgeville monkey bars from Agility 15. Buys supplies, runs required quests, and recovers from death. Wilderness training is optional and enabled by default.',
     category: 'General',
-    tags: ['training', 'combat', 'skilling', 'quests', 'banking', 'death-recovery'],
+    tags: ['training', 'combat', 'skilling', 'quests', 'clues', 'banking', 'death-recovery'],
     settingsSchema: ACCOUNT_LEVELER_SETTINGS,
     create: () => new AccountLeveler()
 });

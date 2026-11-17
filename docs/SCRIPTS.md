@@ -137,6 +137,12 @@ Start-or-coordinate fighter — kills any named NPC in its leash, loots selected
 | `ammo` | string | `"Bronze arrow"` | Ammo (withdrawn from bank) |
 | `ammoWithdraw` | number (1–5000) | `500` | Ammo per bank trip |
 | `ammoRestockBelow` | number (0–100) | `25` | Bank for ammo below % |
+| `useSuperAttack` | boolean | `false` | Use super attack |
+| `superAttackCount` | number (1–27) | `1` | Super attack bottles per trip |
+| `useSuperStrength` | boolean | `false` | Use super strength |
+| `superStrengthCount` | number (1–27) | `1` | Super strength bottles per trip |
+| `useSuperDefence` | boolean | `false` | Use super defence |
+| `superDefenceCount` | number (1–27) | `1` | Super defence bottles per trip |
 | `loadout` | string | `""` | Loadout — one of:  |
 | `food` | string | `""` | Food to eat |
 | `foodWithdraw` | number (0–27) | `10` | Food to carry |
@@ -761,9 +767,9 @@ Spam-attaches feathers to stackable dart tips at the five-action-per-tick server
 
 ### AccountLeveler
 
-Trains melee first, then remaining combat skills, then other enabled members skills to 60. Stocks essence in batches of 1,000 and uses Edgeville monkey bars from Agility 15. Buys supplies, runs required quests, and recovers from death. Wilderness training is optional and enabled by default.
+Trains melee first, then remaining combat skills, then other enabled members skills to 60. Includes guard runs for clues, with one retry before discarding a failed trail. Stocks essence in batches of 1,000 and uses Edgeville monkey bars from Agility 15. Buys supplies, runs required quests, and recovers from death. Wilderness training is optional and enabled by default.
 
-- Tags: `training`, `combat`, `skilling`, `quests`, `banking`, `death-recovery`
+- Tags: `training`, `combat`, `skilling`, `quests`, `clues`, `banking`, `death-recovery`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|

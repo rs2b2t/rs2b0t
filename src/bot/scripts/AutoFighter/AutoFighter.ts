@@ -30,7 +30,7 @@ import { Navigator } from '../../event/webwalk/Navigator.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Sustain } from '../../api/sustain/Sustain.js';
 import { nearestBankReachable, BANK_LOCATIONS, bankUnlocked, type BankLocation } from '../../api/bank/BankLocations.js';
-import type { WorldTile } from '../../adapter/ClientAdapter.js';
+import { reader, type WorldTile } from '../../adapter/ClientAdapter.js';
 import { GroundItems, type GroundItem } from '../../api/grounditems/GroundItems.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import { Npcs, type Npc } from '../../api/npcs/Npcs.js';
@@ -64,9 +64,10 @@ import { paintClueProgress } from '../../api/ai/clues/cluePaint.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import { Reach } from '../../api/walking/Reach.js';
 import { RANDOM_EVENT_CASKET_ID } from '../../api/bank/Banking.js';
-import { scriptFood } from '../../api/loadout/loadoutPlan.js';
-import { LOADOUT_SETTING } from '../../api/loadout/loadoutSetting.js';
+import { scriptFood, suppliesOf } from '../../api/loadout/loadoutPlan.js';
+import { LOADOUT_SETTING, selectedLoadout } from '../../api/loadout/loadoutSetting.js';
 import { HERBS, HERB_OPTIONS } from '../../data/herbs.js';
+import { FighterPotions, fighterPotionPlans } from './potions.js';
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const KIT = ['spade', 'sextant', 'watch', 'chart'];
@@ -83,6 +84,7 @@ const SHOW_RANGE = { key: 'combatStyle', anyOf: ['range'] };
 const SHOW_MELEE = { key: 'combatStyle', anyOf: ['melee'] };
 const SHOW_MAGE_RANGE = { key: 'combatStyle', anyOf: ['mage', 'range'] };
 const SHOW_MELEE_RANGE = { key: 'combatStyle', anyOf: ['melee', 'range'] };
+const POTION_HELP = 'Drink in combat when the boost falls to 10% above base. Restock the selected bottle count on bank trips using any dose size.';
 
 export const SETTINGS: SettingsSchema = {
     target: { type: 'string', default: 'Guard', label: 'Target NPC name(s)', help: 'comma-separated exact in-game names to fight, e.g. Guard, Knight, Moss giant' },
@@ -105,6 +107,12 @@ export const SETTINGS: SettingsSchema = {
     ammo: { type: 'string', default: 'Bronze arrow', label: 'Ammo (withdrawn from bank)', group: 'Combat', showIf: SHOW_RANGE },
     ammoWithdraw: { type: 'number', default: 500, min: 1, max: 5000, label: 'Ammo per bank trip', group: 'Combat', showIf: SHOW_RANGE },
     ammoRestockBelow: { type: 'number', default: 25, min: 0, max: 100, label: 'Bank for ammo below %', group: 'Combat', showIf: SHOW_MAGE_RANGE, help: 'when not banking for food, go bank once magic casts / ranged ammo drop below this percentage of a full trip' },
+    useSuperAttack: { type: 'boolean', default: false, label: 'Use super attack', group: 'Combat', showIf: SHOW_MELEE, help: POTION_HELP },
+    superAttackCount: { type: 'number', default: 1, min: 1, max: 27, label: 'Super attack bottles per trip', group: 'Combat', showIf: { key: 'useSuperAttack', anyOf: ['true'] }, help: 'Total bottles to carry, including partial bottles. Overrides the loadout quantity; limited by food and inventory space.' },
+    useSuperStrength: { type: 'boolean', default: false, label: 'Use super strength', group: 'Combat', showIf: SHOW_MELEE, help: POTION_HELP },
+    superStrengthCount: { type: 'number', default: 1, min: 1, max: 27, label: 'Super strength bottles per trip', group: 'Combat', showIf: { key: 'useSuperStrength', anyOf: ['true'] }, help: 'Total bottles to carry, including partial bottles. Overrides the loadout quantity; limited by food and inventory space.' },
+    useSuperDefence: { type: 'boolean', default: false, label: 'Use super defence', group: 'Combat', help: POTION_HELP },
+    superDefenceCount: { type: 'number', default: 1, min: 1, max: 27, label: 'Super defence bottles per trip', group: 'Combat', showIf: { key: 'useSuperDefence', anyOf: ['true'] }, help: 'Total bottles to carry, including partial bottles. Overrides the loadout quantity; limited by food and inventory space.' },
     loadout: LOADOUT_SETTING,
     food: { type: 'string', default: '', label: 'Food to eat', help: 'exact item name to eat (e.g. Shark, Monkfish, Trout). Leave blank to use the loadout’s food, falling back to Trout' },
     foodWithdraw: { type: 'number', default: 10, min: 0, max: 27, label: 'Food to carry' },
@@ -295,6 +303,8 @@ export default class AutoFighter extends TaskBot {
     override loopDelay = 600;
 
     private kills = 0;
+    private postKillUntil = 0;
+    private opponent: { index: number; id: number } | null = null;
     private looted = 0;
     private buried = 0;
     private specials = 0;
@@ -307,6 +317,7 @@ export default class AutoFighter extends TaskBot {
     bankFoodEmpty = false;
     private supplyEmpty = false;
     travelSupplies: TravelSupply[] = [];
+    potions = new FighterPotions([], message => this.log(message));
     private status = 'starting';
     private startedAt = Date.now();
     private lastBankAt = Date.now();
@@ -314,7 +325,7 @@ export default class AutoFighter extends TaskBot {
     private combatXpLast = 0;
     private combatXpGainAt = 0;
     died = false;
-    resumeAttack = false;
+    resumeAttack = true;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -373,6 +384,7 @@ export default class AutoFighter extends TaskBot {
         AMMO = this.settings.str('ammo', 'Bronze arrow');
         AMMO_WITHDRAW = this.settings.num('ammoWithdraw', 500);
         AMMO_RESTOCK_BELOW = this.settings.num('ammoRestockBelow', 25) / 100;
+        this.potions = new FighterPotions(fighterPotionPlans(this.settings, STYLE, suppliesOf(selectedLoadout(this.settings))), message => this.log(message));
         TRACKED_GEAR = Equipment.items().map(i => i.name ?? '').filter(n => n.length > 0);
         const coins = Math.max(0, Math.floor(this.settings.num('travelCoins')));
         this.travelSupplies = [...(coins ? [{ item: 'Coins', count: coins }] : []),
@@ -383,14 +395,16 @@ export default class AutoFighter extends TaskBot {
             setStatus: s => {
                 if (s === 'clue solved') {
                     this.cluesSolved++;
-                    this.bankAfterSolve = true;
                 }
+                if (s === 'clue solved' || s === 'clue abandoned') this.bankAfterSolve = true;
                 this.setStatus(s);
             },
             isFood: n => matchesAny(n, [FOOD]),
             foodName: () => FOOD,
             foodWithdraw: () => FOOD_WITHDRAW,
-            enabled: () => SOLVE_CLUES
+            enabled: () => SOLVE_CLUES,
+            retryAbandoned: this.delegated,
+            discardAbandoned: this.delegated
         });
 
         Sustain.set(async () => {
@@ -442,6 +456,7 @@ export default class AutoFighter extends TaskBot {
             new EnableAutoRetaliate(this),
             new EatFood(this),
             new PanicRetreat(this),
+            new DrinkPotions(this),
             new BuryBones(this),
             new LootDrops(this),
             new ReequipGear(this),
@@ -453,6 +468,12 @@ export default class AutoFighter extends TaskBot {
             new Fight(this),
             new ReturnToAnchor(this)
         );
+    }
+
+    override async loop(): Promise<number | void> {
+        const kills = this.kills;
+        await super.loop();
+        if (this.kills > kills) return 0;
     }
 
     override grindTargets(): string[] {
@@ -486,7 +507,46 @@ export default class AutoFighter extends TaskBot {
     }
 
     setStatus(s: string): void { this.status = s; }
-    countKill(): void { this.kills++; }
+    clueInProgress(): boolean {
+        return this.bankAfterSolve || !!this.solveClue && (this.solveClue.ownsEquipment() || this.solveClue.validate());
+    }
+    canLoot(id: number, tile: Tile): boolean {
+        return this.solveClue?.canLoot(id, tile) ?? true;
+    }
+    countKill(): void {
+        if (!this.opponent) return;
+        this.opponent = null;
+        this.kills++;
+        this.postKillUntil = Date.now() + 6000;
+    }
+    beginFight(npc?: Npc): void {
+        this.postKillUntil = 0;
+        this.opponent = npc ? { index: npc.index, id: npc.id } : null;
+    }
+
+    combatActive(): boolean {
+        const here = Game.tile();
+        const npcs = Npcs.all();
+        const alive = (npc: Npc): boolean => !(npc.health === 0 && npc.snap.totalHealth > 0);
+        if (!this.died && !EventSignal.pending() && Game.sceneReady() && here && ANCHOR.distanceTo(here) <= LEASH + 4) {
+            if (this.opponent) {
+                const { index, id } = this.opponent;
+                const current = npcs.find(npc => npc.index === index && npc.id === id);
+                if (!current || !alive(current)) this.countKill();
+            }
+            if (!this.opponent && Game.inCombat()) {
+                const attacker = npcs.find(npc => alive(npc) && npc.inCombat && npc.targetsMe());
+                if (attacker) this.beginFight(attacker);
+            }
+        }
+        if (!Game.inCombat()) return false;
+        if (Date.now() >= this.postKillUntil) return true;
+        const facing = reader.selfFaceEntity();
+        if (npcs.some(npc => alive(npc) && (npc.targetsMe() || npc.index === facing))) return true;
+        const self = reader.selfSlot();
+        return self >= 0 && reader.players().some(player => player.index !== self && (player.faceEntity === 32768 + self || facing === 32768 + player.index));
+    }
+
     countLoot(): void { this.looted++; }
     countBurial(): void { this.buried++; }
     countSpecial(): void { this.specials++; }
@@ -502,6 +562,19 @@ export default class AutoFighter extends TaskBot {
         return shouldBankAfterMinutes(AUTO_BANK, BANK_EVERY_MINUTES, this.minutesSinceBank(), lootCount());
     }
     noteSupplyEmpty(v: boolean): void { this.supplyEmpty = v; }
+    potionDue(): boolean {
+        const here = Game.tile();
+        return !this.died && !needEat() && Skills.hpFraction() >= PANIC_AT && !ChatDialog.isOpen()
+            && this.combatActive() && !!here && Tile.from(here).distanceTo(ANCHOR) <= LEASH && this.potions.due() !== null;
+    }
+
+    async sipPotions(): Promise<boolean> {
+        if (!this.potionDue()) return false;
+        if (!(await this.potions.sip())) return false;
+        this.resumeAttack = true;
+        return true;
+    }
+
     async restockTravel(): Promise<boolean> {
         const missing = await restockTravelSupplies(this.travelSupplies, {
             count: item => Inventory.count(item),
@@ -524,6 +597,7 @@ export default class AutoFighter extends TaskBot {
         }
     }
     combatStalled(ms: number): boolean {
+        this.markCombatXp();
         return Date.now() - this.combatXpGainAt > ms;
     }
 }
@@ -564,6 +638,7 @@ class LootDrops implements Task {
         return GroundItems.query()
             .action('Take')
             .where(g => isLoot(g.name) && !isAvoidedHerb(g.id))
+            .where(g => this.bot.canLoot(g.id, g.tile()))
             .where(g => g.tile().distanceTo(ANCHOR) <= LEASH + 4)
             .within(LEASH + 4)
             .where(g => !this.skipped.has(this.key(g)))
@@ -571,7 +646,7 @@ class LootDrops implements Task {
             .nearest();
     }
     validate(): boolean {
-        return !Game.inCombat() && !Inventory.isFull() && this.find() !== null;
+        return !this.bot.combatActive() && !Inventory.isFull() && this.find() !== null;
     }
     async execute(): Promise<void> {
         const drop = this.find();
@@ -656,6 +731,13 @@ class EatFood implements Task {
     }
 }
 
+class DrinkPotions implements Task {
+    readonly label = 'Drink combat potion';
+    constructor(private bot: AutoFighter) {}
+    validate(): boolean { return this.bot.potionDue(); }
+    async execute(): Promise<void> { await this.bot.sipPotions(); }
+}
+
 class PanicRetreat implements Task {
     readonly label = 'Panic retreat';
     constructor(private bot: AutoFighter) {}
@@ -677,15 +759,7 @@ class PanicRetreat implements Task {
         await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 4, timeoutMs: 180_000, log: m => this.bot.log(`  ${m}`) });
         if (await openBank(bank, m => this.bot.log(`  ${m}`))) {
             if (!(await this.bot.restockTravel())) return;
-            for (let i = 0; i < FOOD_WITHDRAW && !Inventory.isFull(); i++) {
-                const before = foodCount();
-                if (!(await Bank.withdraw(FOOD, 'Withdraw-1'))) {
-                    break;
-                }
-                if (!(await Execution.delayUntil(() => foodCount() > before, 2000))) {
-                    break;
-                }
-            }
+            await restockFood();
         }
         if (foodCount() === 0) {
             this.bot.setStatus('panic: bank empty — waiting for regen');
@@ -704,7 +778,7 @@ class BuryBones implements Task {
             !EventSignal.pending() &&
             shouldBuryRegularBones({
                 enabled: BURY_BONES || BURY_BIG_BONES || BURY_BABY_DRAGON_BONES,
-                inCombat: Game.inCombat(),
+                inCombat: this.bot.combatActive(),
                 bankOpen: Bank.isOpen(),
                 boneCount: burialBones().length,
                 inventoryFull: Inventory.isFull()
@@ -736,7 +810,7 @@ class BankRun implements Task {
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
         const outOfSupplies = fullyOutOfSupplies();
-        if (Game.inCombat() && !outOfSupplies) {
+        if (this.bot.combatActive() && !outOfSupplies) {
             return false;
         }
         if (foodCount() > 0) {
@@ -757,7 +831,7 @@ class BankRun implements Task {
             this.bot.bankAfterSolve = false;
             return;
         }
-        const reason = this.bot.bankAfterSolve ? 'clue solved'
+        const reason = this.bot.bankAfterSolve ? 'clue finished'
             : (AUTO_BANK && shouldBank(lootSlots(), BANK_AT, Inventory.isFull()))
                 ? `loot ${lootSlots()}/${BANK_AT} slots or inventory full`
                 : this.bot.dueForTimedBank()
@@ -768,7 +842,7 @@ class BankRun implements Task {
                             ? `supplies below threshold (${supplyMetric()} < ${restockThreshold()})`
                             : 'unknown';
         this.bot.log(`BankRun triggered: ${reason}`);
-        this.bot.setStatus(this.bot.bankAfterSolve ? 'clue done — banking the loot' : 'banking');
+        this.bot.setStatus(this.bot.bankAfterSolve ? 'banking after clue' : 'banking');
         this.bot.log(`banking at the ${bank.name} bank (${bank.tile})`);
         const forced = forcedBank();
         if (forced && bank !== forced) {
@@ -780,18 +854,11 @@ class BankRun implements Task {
         if (!(await openBank(bank, m => this.bot.log(`  ${m}`)))) {
             return;
         }
-        const keep = [...TRACKED_GEAR, ...this.bot.travelSupplies.map(need => need.item)];
+        const keep = [...TRACKED_GEAR, ...this.bot.travelSupplies.map(need => need.item), ...this.bot.potions.keepNames()];
         await Bank.depositAllMatching((name, id) => !shouldKeepBankItem(name, id, FOOD, BANK_COMMON, STYLE === 'range' ? [AMMO] : [], keep, BURY_BONES, BURY_BIG_BONES, BURY_BABY_DRAGON_BONES), m => this.bot.log(`  ${m}`));
         if (!(await this.bot.restockTravel())) return;
-        for (let guard = 0; guard < FOOD_WITHDRAW && foodCount() < FOOD_WITHDRAW && !Inventory.isFull(); guard++) {
-            const before = foodCount();
-            if (!(await Bank.withdraw(FOOD, 'Withdraw-1'))) {
-                break;
-            }
-            if (!(await Execution.delayUntil(() => foodCount() > before, 2000))) {
-                break;
-            }
-        }
+        await this.bot.potions.restock(Math.max(0, FOOD_WITHDRAW - foodCount()));
+        await restockFood();
         if (foodCount() === 0 && FOOD_WITHDRAW > 0) {
             this.bot.bankFoodEmpty = true;
             this.bot.log(`no '${FOOD}' in the bank — fighting on without food (foodless safety disarmed)`);
@@ -849,6 +916,13 @@ class BankRun implements Task {
             this.bot.log(`ammo ready: ${after} total (${wieldedAmmo()} quiver, ${Inventory.count(AMMO)} inventory)`);
         }
     }
+}
+
+async function restockFood(): Promise<void> {
+    const count = Math.min(FOOD_WITHDRAW - foodCount(), Inventory.free());
+    if (count <= 0 || EventSignal.pending()) return;
+    await Bank.setNoteMode(false);
+    await Bank.withdrawX(FOOD, count);
 }
 
 async function withdrawTo(name: string, target: number): Promise<number> {
@@ -970,6 +1044,7 @@ class ReequipGear implements Task {
         return gear;
     }
     validate(): boolean {
+        if (this.bot.clueInProgress()) return false;
         return this.candidates().some(g => !Equipment.contains(g) && Inventory.first(g) !== null);
     }
     async execute(): Promise<void> {
@@ -998,7 +1073,7 @@ class Fight implements Task {
     constructor(private bot: AutoFighter) {}
     private key(npc: Npc): string { return `${npc.index}:${npc.id}`; }
     private eligible(npc: Npc): boolean {
-        return (npc.targetsMe() || !npc.inCombat) && !npc.targetsAnotherPlayer() && npc.tile().distanceTo(ANCHOR) <= LEASH;
+        return !(npc.health === 0 && npc.snap.totalHealth > 0) && (npc.targetsMe() || !npc.inCombat) && !npc.targetsAnotherPlayer() && npc.tile().distanceTo(ANCHOR) <= LEASH;
     }
     private reachable(npc: Npc): boolean {
         const tile = npc.tile(), here = Game.tile();
@@ -1040,14 +1115,14 @@ class Fight implements Task {
         if (this.bot.combatStalled(STALL_REATTACK_MS)) {
             return target !== null;
         }
-        return target !== null && (!Game.inCombat() || (this.bot.resumeAttack && target.targetsMe()));
+        return target !== null && (!this.bot.combatActive() || (this.bot.resumeAttack && target.targetsMe()));
     }
     async execute(): Promise<void> {
         const target = this.findTarget();
         if (!target) {
             return;
         }
-        if (!Game.inCombat() && !this.reachable(target)) {
+        if (!this.bot.combatActive() && !this.reachable(target)) {
             this.bot.setStatus(`approaching ${target.name} through obstacles`);
             const arrived = await Traversal.walkTo(target.tile(), { radius: 1, timeoutMs: 20_000, log: message => this.bot.log(message) });
             if (EventSignal.pending() || this.bot.died || needEat() || Skills.hpFraction() < PANIC_AT || ChatDialog.canContinue()) return;
@@ -1058,10 +1133,13 @@ class Fight implements Task {
                 return;
             }
         }
+        this.bot.beginFight(target);
         this.bot.setStatus(`attacking ${target.name} at ${target.tile()}`);
-        if (this.bot.resumeAttack && target.targetsMe()) {
+        const stalled = this.bot.combatStalled(STALL_REATTACK_MS);
+        if (target.targetsMe() && (this.bot.resumeAttack || stalled)) {
             if (!(await target.interact('Attack'))) return;
             this.bot.resumeAttack = false;
+            if (stalled) this.bot.log(`combat XP stalled; re-sent Attack to ${target.name}`);
         }
         const status = await Reach.entityOp({
             find: () => {
@@ -1069,7 +1147,10 @@ class Fight implements Task {
                 return current && this.eligible(current) ? current : null;
             },
             op: 'Attack',
-            expect: () => Game.inCombat() || ChatDialog.canContinue(),
+            expect: () => {
+                const current = this.track(target);
+                return ChatDialog.canContinue() || !!current && (current.targetsMe() && current.inCombat || current.health === 0 && current.snap.totalHealth > 0);
+            },
             // a wandering target postpones the server's can't-reach verdict forever,
             // so probe the scene and open the blocking door ourselves (#293)
             openWhenUnreachable: true,
@@ -1091,21 +1172,18 @@ class Fight implements Task {
             if (needEat() || Skills.hpFraction() < PANIC_AT) {
                 return;
             }
+            const cur = this.track(target);
+            if (!cur || (cur.health === 0 && cur.snap.totalHealth > 0)) {
+                this.bot.countKill();
+                return;
+            }
+            if (await this.bot.sipPotions()) return;
             if (STYLE === 'range' && wieldedAmmo() < restockThreshold() && Inventory.count(AMMO) > 0) {
                 this.bot.log(`ammo in quiver below ${restockThreshold()} — reloading from inventory`);
                 return;
             }
             if (fullyOutOfSupplies()) {
                 this.bot.log(`out of ${STYLE === 'mage' ? 'runes' : 'ammo'} — breaking off to restock`);
-                return;
-            }
-            const cur = this.track(target);
-            if (!cur || (cur.health === 0 && cur.snap.totalHealth > 0)) {
-                if (cur) {
-                    await Execution.delayUntil(() => this.track(target) === null, 10_000);
-                }
-                this.bot.countKill();
-                await Execution.delayTicks(2);
                 return;
             }
             // Why: auto-retaliate only fires on a landed hit, so the loop never re-triggers it on a zero-damage enemy; keep the XP clock fresh here while the sibling validate() re-issues the attack when XP goes flat.
@@ -1116,7 +1194,7 @@ class Fight implements Task {
             // Why: inline, not left to the sibling task, this loop owns the bot until the target dies.
             await armSpecial(this.bot);
             if (this.bot.resumeAttack) return;
-            await Execution.delayTicks(2);
+            await Execution.delayTicks(1);
         }
     }
 }
@@ -1126,7 +1204,7 @@ class ReturnToAnchor implements Task {
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
         const here = Game.tile();
-        return here !== null && ANCHOR.distanceTo(here) > LEASH + 6 && !Game.inCombat();
+        return here !== null && ANCHOR.distanceTo(here) > LEASH + 6 && !this.bot.combatActive();
     }
     async execute(): Promise<void> {
         this.bot.setStatus('heading to the spot');
