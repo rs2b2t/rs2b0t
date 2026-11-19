@@ -298,7 +298,6 @@ export function bankBeforeServing(freeSlots: number, packCoins: number, coinFloo
 }
 
 /** Coins worth going to the bank for: the gap up to the float, capped at what the bank holds. */
-// Why: asking for the raw float is a standing order the shop can never fill once the bank runs dry, and Settle deposits the pack before it tops up, so it banked and re-withdrew the same stack every loop.
 export function floatShortfall(packCoins: number, bankCoins: number, coinFloor: number): number {
     return Math.max(0, Math.min(coinFloor, packCoins + bankCoins) - packCoins);
 }

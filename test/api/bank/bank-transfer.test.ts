@@ -145,3 +145,43 @@ test('load withdrawal skips the click when an All-capable item has no free slots
     expect(await Bank.withdrawLoad('Herb')).toBe(true);
     expect(click).not.toHaveBeenCalled();
 });
+
+test('market deposits send up to five distinct goods per acknowledgement and retry leftover goods', async () => {
+    const state = fixture();
+    state.pack = [995, 1, 1, 2, 3, 4, 5, 6].map((id, slot) => ({ ...item(id, 1, slot), ops: ['Deposit-1', null, null, 'Deposit-All'] }));
+    const batches: number[][] = [];
+    let sent: number[] = [];
+    spyOn(Input, 'invButton').mockImplementation((id, _slot, _com, op) => {
+        expect(op).toBe(4);
+        sent.push(id);
+        return true;
+    });
+    state.advance = () => {
+        if (!sent.length) return;
+        batches.push(sent);
+        state.pack = state.pack.filter(row => !sent.includes(row.id) || (batches.length === 1 && row.id === 3));
+        sent = [];
+    };
+    await Bank.depositAllMatching((_name, id) => id !== 995, undefined, 5);
+    expect(batches).toEqual([[1, 2, 3, 4, 5], [3, 6]]);
+    expect(state.pack.map(row => row.id)).toEqual([995]);
+});
+
+test('Deposit-X confirms the exact surplus left the coin stack', async () => {
+    const state = fixture();
+    state.pack = [{ ...item(995, 250000), ops: ['Deposit 1', 'Deposit 5', 'Deposit 10', 'Deposit All', 'Deposit X'] }];
+    let dialog = false;
+    spyOn(reader, 'countDialogOpen').mockImplementation(() => dialog);
+    spyOn(Input, 'invButton').mockImplementation((id, slot, _com, op) => {
+        expect([id, slot, op]).toEqual([995, 0, 5]);
+        state.advance = () => { dialog = true; };
+        return true;
+    });
+    spyOn(actions, 'answerCountDialog').mockImplementation(count => {
+        expect(count).toBe(50000);
+        state.advance = () => { state.pack[0].count = 200000; };
+        return true;
+    });
+    expect(await Bank.depositXById(995, 50000)).toBe(true);
+    expect(state.pack[0].count).toBe(200000);
+});
