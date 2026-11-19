@@ -5,6 +5,7 @@ import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
+import { offersMatch } from '../../api/market/driveMarketTrade.js';
 import { liveCatalog, type Catalog } from '../../api/market/catalog.js';
 import { Players } from '../../api/players/Players.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
@@ -17,7 +18,8 @@ import { jiveFrame } from '../../paint/jive.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { COINS, PACK, TRADE_SLOTS, acceptAction, decide, dumpables, heldWithOffer, planPile, type Dumpable, type Step } from './logic.js';
+import { offerPile } from './offering.js';
+import { COINS, PACK, TRADE_SLOTS, acceptAction, decide, dumpables, heldWithOffer, itemCounts, planPile, type Dumpable, type Step } from './logic.js';
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const CATALOG_WAIT_MS = 15_000;
@@ -25,9 +27,9 @@ const WALK_MS = 120_000;
 /** The engine refuses a request while the maker banks, so one request gets one long wait and only a refusal earns another. */
 const WINDOW_WAIT_MS = 40_000;
 const BUSY_PAUSE_MS = 3_000;
-const OFFER_SETTLE_MS = 5_000;
 /** Past the maker's own give-up on a pile it will not pay for. */
 const OFFER_WAIT_MS = 20_000;
+const OFFER_STATUS_COMPONENT = 3431;
 const STABLE_POLLS = 3;
 const POLL_MS = 500;
 /** Ticks with neither screen up that still count as the handover between them. */
@@ -181,9 +183,12 @@ export default class JiveMarketDumper extends TaskBot {
 
     // Why: an offered item leaves the pack view, so mid-window the pile has to count what is already staked or it reads as empty and a good trade gets declined for nothing.
     packPile(): Dumpable[] {
-        const pack = Inventory.items().map(i => ({ id: i.id, count: i.count }));
-        const mine = Trade.active() ? heldWithOffer(pack, Trade.myOffer().map(o => ({ id: o.id, count: o.count }))) : pack;
-        return this.dumpable(mine);
+        if (Trade.onOfferScreen()) {
+            const pack = reader.tradeSidePack();
+            const offered = Trade.myOffer();
+            if (pack.length || offered.length) return this.dumpable(heldWithOffer(pack, offered));
+        }
+        return this.dumpable(Inventory.items());
     }
 
     step(): Step {
@@ -388,9 +393,12 @@ class Sell implements Task {
             await Trade.decline();
             return;
         }
-        if (!(await this.putUp(pile))) {
+        bot.setStatus(`offering ${describe(pile)}`);
+        if (!(await offerPile(pile))) {
+            if (Trade.onOfferScreen()) bot.log('[dumper] waiting for the full pile to appear in the offer');
             return;
         }
+        const goods = itemCounts(Trade.myOffer());
         bot.setStatus(`waiting on ${bot.maker}`);
         const offered = await this.awaitOffer();
         if (!Trade.active()) {
@@ -404,28 +412,7 @@ class Sell implements Task {
             await Trade.decline();
             return;
         }
-        await this.accept(pile, coinsBefore, offered);
-    }
-
-    private async putUp(pile: readonly Dumpable[]): Promise<boolean> {
-        this.bot.setStatus(`offering ${describe(pile)}`);
-        for (const line of pile) {
-            const id = line.notedId ?? line.id;
-            const n = Math.min(line.count, Inventory.countById(id));
-            if (n < 1) {
-                continue;
-            }
-            if (!(await Trade.offer(line.name, n, i => i.id === id))) {
-                this.bot.log(`[dumper] could not put up ${n} ${line.displayName}`);
-                return false;
-            }
-        }
-        const staked = (): boolean => pile.every(line => Trade.myOffer().filter(o => o.id === (line.notedId ?? line.id)).reduce((s, o) => s + Math.max(1, o.count), 0) >= line.count);
-        if (!(await Execution.delayUntil(() => !Trade.active() || staked(), OFFER_SETTLE_MS))) {
-            this.bot.log('[dumper] the offer never showed every line, retrying');
-            return false;
-        }
-        return Trade.active();
+        await this.accept(pile, coinsBefore, offered, goods);
     }
 
     /** The coins the maker settles on, or zero when it puts up nothing for the pile. */
@@ -433,19 +420,20 @@ class Sell implements Task {
         const deadline = Date.now() + OFFER_WAIT_MS;
         let coins = 0;
         let stable = 0;
-        while (Trade.active() && Date.now() < deadline) {
+        const makerAccepted = () => reader.ifText(OFFER_STATUS_COMPONENT) === 'Other player has accepted.';
+        while (Trade.onOfferScreen() && Date.now() < deadline) {
             const now = coinsOn(Trade.theirOffer());
             stable = now > 0 && now === coins ? stable + 1 : 0;
             coins = now;
-            if (stable >= STABLE_POLLS) {
+            if (stable >= STABLE_POLLS || (coins > 0 && makerAccepted())) {
                 return coins;
             }
-            await Execution.delay(POLL_MS);
+            await Execution.delayUntil(() => !Trade.onOfferScreen() || (coins > 0 && makerAccepted()) || coinsOn(Trade.theirOffer()) !== coins, POLL_MS);
         }
         return coins;
     }
 
-    private async accept(pile: Dumpable[], coinsBefore: number, offered: number): Promise<void> {
+    private async accept(pile: Dumpable[], coinsBefore: number, offered: number, goods: ReadonlyMap<number, number>): Promise<void> {
         const bot = this.bot;
         bot.setStatus(`accepting ${offered.toLocaleString()}gp`);
         let dead = 0;
@@ -454,7 +442,7 @@ class Sell implements Task {
             const view = { onOffer: Trade.onOfferScreen(), onConfirm: Trade.onConfirmScreen(), deadTicks: dead };
             sawConfirm = sawConfirm || view.onConfirm;
             const action = acceptAction(view, HANDOVER_TICKS);
-            if (action === 'done') {
+            if (action === 'done' || (action === 'wait' && sawConfirm && Inventory.countById(COINS) > coinsBefore)) {
                 break;
             }
             if (action === 'wait') {
@@ -463,8 +451,20 @@ class Sell implements Task {
                 continue;
             }
             dead = 0;
+            if (view.onConfirm) {
+                if (!reader.tradeConfirmReady()) {
+                    await Execution.delayTicks(1);
+                    continue;
+                }
+                const shown = reader.tradeConfirmOffers();
+                if (!offersMatch(itemCounts(shown.mine), goods) || coinsOn(shown.theirs) < offered) {
+                    bot.log('[dumper] goods or payment changed at confirmation, retrying the sale');
+                    await Trade.decline();
+                    return;
+                }
+            }
             await Trade.accept();
-            await Execution.delay(ACCEPT_STEP_MS);
+            await Execution.delayUntil(() => view.onOffer ? !Trade.onOfferScreen() : !Trade.onConfirmScreen(), ACCEPT_STEP_MS);
         }
         if (Trade.active()) {
             bot.log('[dumper] the trade never closed, walking out of it');

@@ -43,6 +43,7 @@ import { snapshotWorldState } from '#/bot/event/webwalk/worldStateLive.js';
 import { hardClueKit, GUARDIAN_WEAPON_IDS, SHARK_ID, type GuardianRangedLoadout } from './hardClueKit.js';
 import { hardKitSnapshot, hardKitFingerprint, stockHardWeapon, stockHardSupplies } from './hardCluePreparation.js';
 import { sustainUntil } from './Guardian.js';
+import type { WorldTile } from '#/bot/adapter/ClientAdapter.js';
 
 const CLUE_COINS = 1_000;
 const ALTAR_OP = 'Pray-at';
@@ -88,6 +89,8 @@ export interface SolveClueHost {
     weaponName?(): string;
     rangedLoadout?(): GuardianRangedLoadout | undefined;
     enabled?(): boolean;
+    retryAbandoned?: boolean;
+    discardAbandoned?: boolean;
     /** Travel to the initial bank with host upkeep intact; false blocks the trail. */
     prepareInitialBank?(): Promise<boolean>;
     /** Hard-clue dig guardians are fought under Protect from Magic. */
@@ -120,6 +123,9 @@ export class SolveClue implements Task {
     private completionPending = false;
     private collectingRewards = false;
     private trailWeapon: string | null = null;
+    private retriedAbandonment = false;
+    private discardPending = false;
+    private discarded = new Map<string, number>();
 
     private async retreatFromGuardian(): Promise<boolean> {
         const here = Game.tile();
@@ -187,6 +193,32 @@ export class SolveClue implements Task {
         return this.status;
     }
 
+    canLoot(id: number, tile: WorldTile): boolean {
+        for (const [key, until] of this.discarded) {
+            if (until <= Date.now()) this.discarded.delete(key);
+        }
+        return !this.discarded.has(`${id}:${tile.x}:${tile.z}:${tile.level}`);
+    }
+
+    private async discardClue(): Promise<void> {
+        if (EventSignal.pending()) return;
+        if (Bank.isOpen() && !(await Bank.close())) return;
+        if (Bank.isOpen()) return;
+        const id = this.abandonedClueId;
+        const item = Inventory.items().find(item => item.id === id);
+        if (item) {
+            const tile = Game.tile();
+            if (!tile || !(await item.interact('Drop'))) return;
+            this.discarded.set(`${id}:${tile.x}:${tile.z}:${tile.level}`, Date.now() + 300_000);
+            if (!(await Execution.delayUntil(() => Inventory.countById(item.id) === 0, 3000))) return;
+        }
+        this.discardPending = false;
+        this.retriedAbandonment = false;
+        this.status = 'abandoned';
+        this.host.setStatus('clue abandoned');
+        this.host.log(`[clue] discarded ${id ?? '?'} after the final failed attempt`);
+    }
+
     noteDeath(): void {
         this.recoveryPending = false;
         this.collectingRewards = false;
@@ -200,6 +232,7 @@ export class SolveClue implements Task {
     }
 
     validate(): boolean {
+        if (this.discardPending) return true;
         if (this.collectingRewards) return true;
         if (this.completionPending) return true;
         if (this.retreatPending) return true;
@@ -252,13 +285,14 @@ export class SolveClue implements Task {
     }
 
     async execute(): Promise<void> {
-        if (!this.collectingRewards && (!this.recoveryPending || this.restoring) && (this.completionPending || this.retreatPending || (this.strippedGear.length > 0 && (this.restoring || heldClueLikeId() === null)))) {
+        if (!this.collectingRewards && (!this.recoveryPending || this.restoring) && (this.discardPending || this.completionPending || this.retreatPending || (this.strippedGear.length > 0 && (this.restoring || heldClueLikeId() === null)))) {
             const upkeep = Sustain.hook;
             Sustain.set(() => this.upkeep());
             try {
                 if (this.retreatPending && !(await this.retreatFromGuardian())) return;
                 await this.restoreStrippedGear();
                 if (this.blockedKit !== null) this.blockHardKit();
+                if (this.discardPending && !this.restoring) await this.discardClue();
                 if (this.completionPending && !this.restoring) this.finishTrail();
             } finally {
                 Sustain.set(upkeep);
@@ -406,13 +440,29 @@ export class SolveClue implements Task {
             this.host.log(`[clue] ${outcome}: restoring starting weapon '${this.trailWeapon}' (equipped: '${current}')`);
         }
         if (outcome === 'abandon') {
+            if (this.host.retryAbandoned && !this.retriedAbandonment) {
+                this.retriedAbandonment = true;
+                this.recoveryPending = true;
+                this.bankedThisSolve = false;
+                this.initialBankVisited = true;
+                this.triedFoodRestock = false;
+                this.status = 'retrying clue';
+                this.host.setStatus('clue: preparing final attempt');
+                this.host.log('[clue] first attempt failed; rebuilding the pack for one final attempt');
+                return;
+            }
             this.abandonedClueId = heldClueLikeId();
+            this.discardPending = this.host.discardAbandoned ?? false;
             this.bankedThisSolve = false;
             this.initialBankVisited = false;
             this.restoring = true;
             this.retreatPending = Game.inCombat();
             if (this.retreatPending && !(await this.retreatFromGuardian())) return;
             await this.restoreStrippedGear();
+            if (this.discardPending) {
+                if (!this.restoring) await this.discardClue();
+                return;
+            }
             this.status = 'abandoned';
             this.host.log(`[clue] abandoned ${this.abandonedClueId ?? '?'} — leaving it in the pack`);
             return;
@@ -428,6 +478,7 @@ export class SolveClue implements Task {
     }
 
     private finishTrail(): void {
+        this.retriedAbandonment = false;
         this.completionPending = false;
         this.hardTrail = false;
         this.status = 'idle';

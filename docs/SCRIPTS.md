@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 77. Categories: 21.
+- Scripts: 78. Categories: 22.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -21,6 +21,7 @@
 - [General](#general) — 1
 - [Herblore](#herblore) — 5
 - [Magic](#magic) — 3
+- [Minigames](#minigames) — 1
 - [Mining](#mining) — 3
 - [Money making](#money-making) — 9
 - [Navigation](#navigation) — 2
@@ -37,7 +38,7 @@
 
 ### BrimhavenAgility
 
-Brimhaven Agility Arena — banks food+coins at Ardougne south, ships to Brimhaven, pays Cap'n Izzy, tags ticket pillars on the level-optimal path, and grinds centre spikes between tags. Optional steal restock (Thieving 20) takes cakes from the Baker's stall and coins from guards.
+Brimhaven Agility Arena — banks food+coins at Ardougne south, ships to Brimhaven, pays Cap'n Izzy, tags ticket pillars on the level-optimal path, and trains on the nearest usable spikes or pressure pads between tags. Uses Ardougne teleport when food runs out, stocking return runes from the bank when unlocked. Optional steal restock (Thieving 20) takes cakes from the Baker's stall and coins from guards.
 
 - Tags: `brimhaven`, `arena`, `tickets`, `banking`, `food`
 
@@ -136,6 +137,12 @@ Start-or-coordinate fighter — kills any named NPC in its leash, loots selected
 | `ammo` | string | `"Bronze arrow"` | Ammo (withdrawn from bank) |
 | `ammoWithdraw` | number (1–5000) | `500` | Ammo per bank trip |
 | `ammoRestockBelow` | number (0–100) | `25` | Bank for ammo below % |
+| `useSuperAttack` | boolean | `false` | Use super attack |
+| `superAttackCount` | number (1–27) | `1` | Super attack bottles per trip |
+| `useSuperStrength` | boolean | `false` | Use super strength |
+| `superStrengthCount` | number (1–27) | `1` | Super strength bottles per trip |
+| `useSuperDefence` | boolean | `false` | Use super defence |
+| `superDefenceCount` | number (1–27) | `1` | Super defence bottles per trip |
 | `loadout` | string | `""` | Loadout — one of:  |
 | `food` | string | `""` | Food to eat |
 | `foodWithdraw` | number (0–27) | `10` | Food to carry |
@@ -760,9 +767,9 @@ Spam-attaches feathers to stackable dart tips at the five-action-per-tick server
 
 ### AccountLeveler
 
-Trains melee first, then remaining combat skills, then other enabled members skills to 60. Stocks essence in batches of 1,000 and uses Edgeville monkey bars from Agility 15. Buys supplies, runs required quests, and recovers from death. Wilderness training is optional and enabled by default.
+Trains melee first, then remaining combat skills, then other enabled members skills to 60. Includes guard runs for clues, with one retry before discarding a failed trail. Stocks essence in batches of 1,000 and uses Edgeville monkey bars from Agility 15. Buys supplies, runs required quests, and recovers from death. Wilderness training is optional and enabled by default.
 
-- Tags: `training`, `combat`, `skilling`, `quests`, `banking`, `death-recovery`
+- Tags: `training`, `combat`, `skilling`, `quests`, `clues`, `banking`, `death-recovery`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
@@ -865,6 +872,19 @@ Stands at the nearest bank and enchants one jewel picked from the dropdown: wiel
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `jewel` | string | `"Sapphire ring"` | Jewel — one of: Sapphire ring, Sapphire necklace, Sapphire amulet, Emerald ring, Emerald amulet, Ruby ring, Ruby amulet, Diamond ring, Diamond amulet, Dragonstone ring, Dragonstone amulet |
+
+## Minigames
+
+### ShadesOfMortton
+
+Fiyr shades, magic pyres and silver chests with automatic key progression, temple repair and renewable supplies
+
+- Tags: `shades`, `mortton`, `firemaking`, `prayer`, `self-supplying`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `prayerPotions` | boolean | `true` | Use prayer potions |
+| `highAlchemy` | boolean | `false` | High alch valuable loot |
 
 ## Mining
 

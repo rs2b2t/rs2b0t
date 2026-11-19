@@ -27,19 +27,21 @@ let hp: number;
 let walked: Tile[];
 let opened: string[];
 let restores: (() => void)[];
+let withdrawals: { name: string; count: number }[];
 
 beforeEach(async () => {
     food = 0;
     hp = 100;
     walked = [];
     opened = [];
+    withdrawals = [];
     restores = [
         stubProps(Game, { tile: () => BASEMENT, ingame: () => true, inCombat: () => false }),
         stubProps(Skills, { xp: () => 0, level: () => 100, effective: () => hp, hpFraction: () => hp / 100 }),
         stubProps(Quests, { status: () => 'complete' }),
         stubProps(Sustain, { set: () => {} }),
         stubProps(Execution, { delayUntil: async (check: () => boolean) => check() }),
-        stubProps(Inventory, { count: () => food, items: () => Array.from({ length: food }, (_, slot) => new InvItem({ name: 'Trout', id: 333, count: 1, slot, comId: 1, ops: ['Eat'] })), isFull: () => false }),
+        stubProps(Inventory, { count: () => food, items: () => Array.from({ length: food }, (_, slot) => new InvItem({ name: 'Trout', id: 333, count: 1, slot, comId: 1, ops: ['Eat'] })), isFull: () => false, free: () => 28 - food }),
         stubProps(Navigator, { findPath: async (_from, to) => ({ ok: true, waypoints: [], expanded: 0, hops: [], cost: GUILD_BANK.equals(to) ? 50 : 300 }) }),
         stubProps(Traversal, { walkResilient: async (tile: Tile) => { walked.push(tile); return true; } }),
         stubProps(Bank, {
@@ -47,6 +49,8 @@ beforeEach(async () => {
             openNearest: async () => false,
             depositAllMatching: async () => {},
             withdraw: async () => { food++; return true; },
+            setNoteMode: async () => {},
+            withdrawX: async (name, count) => { withdrawals.push({ name, count }); food += count; return true; },
             close: async () => true
         })
     ];
@@ -68,6 +72,7 @@ test('food restocking walks to the upstairs guild banker and returns to the shad
     expect(walked).toEqual([GUILD_BANK, BASEMENT]);
     expect(opened).toEqual(['Banker:Bank']);
     expect(food).toBe(5);
+    expect(withdrawals).toEqual([{ name: 'Trout', count: 5 }]);
 });
 
 test('a foodless panic retreat uses the upstairs guild bank too', async () => {
@@ -78,6 +83,7 @@ test('a foodless panic retreat uses the upstairs guild bank too', async () => {
     expect(walked).toEqual([GUILD_BANK]);
     expect(opened).toEqual(['Banker:Bank']);
     expect(food).toBe(5);
+    expect(withdrawals).toEqual([{ name: 'Trout', count: 5 }]);
 });
 
 test('banking preserves Big bones selected for burial and deposits other loot', async () => {
@@ -134,4 +140,43 @@ test('delegated banking finishes at the bank when it cannot restore travel suppl
     bot.bankAfterSolve = true;
     await expect(bot.registered.find(task => task.constructor.name === 'BankRun')!.execute()).rejects.toThrow('Missing travel supply: Coins');
     expect(walked).toEqual([GUILD_BANK]);
+});
+
+test('bank trips preserve partial selected potions and restock missing ones before food', async () => {
+    const { FighterPotions, fighterPotionPlans } = await import('#/bot/scripts/AutoFighter/potions.js');
+    let pack = ['Super attack(1)', 'Uncut ruby', 'Super defence(3)'];
+    const stock = new Map([['Super strength(4)', 2]]);
+    restores.push(
+        stubProps(Inventory, {
+            items: () => pack.map((name, slot) => new InvItem({ name, id: slot + 1, count: 1, slot, comId: 1, ops: [] })),
+            count: name => pack.filter(item => item === name).length,
+            isFull: () => pack.length >= 28
+        }),
+        stubProps(Bank, {
+            setNoteMode: async () => {},
+            count: name => stock.get(name) ?? 0,
+            depositAllMatching: async match => { pack = pack.filter(name => !match(name, 1)); },
+            withdrawX: async (name, count) => { pack.push(...Array(count).fill(name)); stock.set(name, stock.get(name)! - count); return true; },
+            withdraw: async name => { pack.push(name); return true; }
+        })
+    );
+    bot.potions = new FighterPotions(fighterPotionPlans(new SettingsBag({ useSuperAttack: true, useSuperStrength: true }), 'melee', []), () => {});
+    bot.bankAfterSolve = true;
+    await bot.registered.find(task => task.constructor.name === 'BankRun')!.execute();
+    expect(pack).toEqual(['Super attack(1)', 'Super strength(4)', ...Array(5).fill('Trout')]);
+});
+
+
+test.each([
+    { carried: 2, free: 26, expected: 3 },
+    { carried: 0, free: 2, expected: 2 },
+    { carried: 5, free: 23, expected: 0 },
+    { carried: 0, free: 0, expected: 0 }
+])('bulk food top-up respects the target and free slots: %j', async ({ carried, free, expected }) => {
+    food = carried;
+    restores.push(stubProps(Inventory, { free: () => free }));
+    bot.bankAfterSolve = true;
+    await bot.registered.find(task => task.constructor.name === 'BankRun')!.execute();
+    expect(withdrawals).toEqual(expected ? [{ name: 'Trout', count: expected }] : []);
+    expect(food).toBe(carried + expected);
 });

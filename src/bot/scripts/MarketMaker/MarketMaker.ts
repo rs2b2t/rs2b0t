@@ -394,8 +394,8 @@ export default class MarketMaker extends TaskBot {
         return this.settleOwed || this.sortOwed;
     }
 
-    clearForcedSettle(): void {
-        this.settleOwed = false;
+    setSettleOwed(owed: boolean): void {
+        this.settleOwed = owed;
     }
 
     sortDue(): boolean {
@@ -1299,37 +1299,42 @@ class Settle implements Task {
     }
 
     async execute(): Promise<void> {
-        this.bot.clearForcedSettle();
+        this.bot.setSettleOwed(true);
         this.bot.setStatus('banking the takings');
         if (!(await Banking.open({ stand: this.bot.standTile(), boothName: BOOTH.name, boothOp: BOOTH.op, log: m => this.bot.log(m) }))) {
             this.bot.backOffBank('could not open the bank');
             return;
         }
 
-        // Why: an empty pack has nothing to deposit, and the deposit path bails on the side backpack view rather than no-opping.
-        if (Inventory.used() > 0) {
-            await Bank.depositAllMatching(() => true, m => this.bot.log(m));
-        }
+        try {
+            if (!(await Bank.backpackReady()) || !(await Bank.waitReady())) {
+                this.bot.backOffBank('bank inventory did not load');
+                return;
+            }
+            const coins = this.bot.coins();
+            await Bank.depositAllMatching((_name, id) => id !== coins, m => this.bot.log(m), 5);
+            if (!Bank.isOpen() || Inventory.items().some(item => item.id !== coins)) {
+                if (Bank.isOpen()) await this.bot.refreshLedger();
+                this.bot.backOffBank('goods still in the pack');
+                return;
+            }
 
-        // Why: read the float off the live bank rather than the ledger, which goes stale when a trip has gone wrong.
-        const short = this.bot.float() - this.bot.packCoins();
-        const inBank = Bank.countById(this.bot.coins());
-        if (short > 0 && inBank > 0) {
-            await Bank.setNoteMode(false);
-            await Bank.withdrawXById(this.bot.coins(), Math.min(short, inBank));
-            await Execution.delayUntil(() => this.bot.packCoins() >= Math.min(this.bot.float(), inBank), 5_000);
+            const purse = this.bot.packCoins();
+            const target = Math.min(this.bot.float(), purse + Bank.countById(coins));
+            if (purse > target) await Bank.depositXById(coins, purse - target);
+            if (purse < target) await Bank.withdrawXById(coins, target - purse);
+            if (!Bank.isOpen() || !(await this.bot.refreshLedger()) || this.bot.packCoins() !== target) {
+                this.bot.backOffBank(`float ${this.bot.packCoins()}/${target}`);
+                return;
+            }
+            this.bot.setSettleOwed(false);
+            if (this.bot.sortDue()) {
+                await this.bot.sortBankNow();
+                await this.bot.refreshLedger();
+            }
+        } finally {
+            if (!(await Bank.close())) await Execution.delayTicks(2);
         }
-
-        if (!(await this.bot.refreshLedger()) || this.bot.packCoins() < Math.min(this.bot.float(), inBank)) {
-            this.bot.backOffBank(`float ${this.bot.packCoins()}/${this.bot.float()}`);
-        }
-        if (this.bot.sortDue()) {
-            await this.bot.sortBankNow();
-            await this.bot.refreshLedger();
-        }
-        await Bank.close();
-        // Why: the modal reads closed a tick before the engine has settled it, and a trade request sent in that gap opens the window on the customer's client alone. Every purchase runs into it, since fetching the goods puts a bank trip directly in front of opening the window.
-        await Execution.delayTicks(2);
     }
 }
 

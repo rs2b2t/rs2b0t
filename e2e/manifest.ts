@@ -3,6 +3,28 @@ import type { Case } from './manifestTypes.js';
 /** Every case the e2e suite can run. The runner iterates this; nothing globs the directory. */
 export const CASES: readonly Case[] = [
     {
+        id: 'shades-of-mortton-expedition',
+        harness: 'shades-of-mortton-live.ts',
+        covers: { scripts: ['ShadesOfMortton'] },
+        status: 'documented',
+        documentedIn: 'docs/how-to/run-shades-of-mortton.md',
+        manual: true,
+        args: ['expedition'],
+        budgetMin: 15,
+        note: 'Local disposable account completes a hunt, buyback, cremation and chest cycle without a second bank visit. Supply, prayer and alchemy probes are available separately.'
+    },
+    {
+        id: 'shades-of-mortton-cycle',
+        harness: 'shades-of-mortton-live.ts',
+        covers: { scripts: ['ShadesOfMortton'] },
+        status: 'documented',
+        documentedIn: 'docs/how-to/run-shades-of-mortton.md',
+        manual: true,
+        args: ['cycle'],
+        budgetMin: 35,
+        note: 'Local disposable account checks Fiyr cremations, matching chests and a second hunt. Other harness modes isolate progression and renewable supplies.'
+    },
+    {
         id: 'gnome-magic-north-stair-live',
         harness: 'gnome-magic-north-stair-live.ts',
         covers: { scripts: ['GnomeMagicChopper'] },

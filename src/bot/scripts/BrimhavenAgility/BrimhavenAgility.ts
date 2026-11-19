@@ -1,3 +1,4 @@
+import { ardougneUnlocked, hasReturnRunes, returnRuneSlots, stockReturnTeleport, teleportToArdougne } from './teleport.js';
 import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
@@ -25,7 +26,6 @@ import {
     KARAMJA_GENERAL,
     ARENA_VARP,
     BOAT_FARE,
-    CENTRE_PLATFORM,
     DEFAULT_BANK_TICKETS,
     DEFAULT_FOOD_PER_TRIP,
     EAT_AT_HP,
@@ -50,6 +50,7 @@ import {
     hintMissed,
     TICKET_CAP_PER_HOUR,
     nextHop,
+    trainingHop,
     obstacleOutcome,
     onArenaPlatform,
     onBrimhavenSurface,
@@ -60,7 +61,6 @@ import {
     shouldBank,
     shouldEat,
     ticketInventoryGain,
-    onTicketHub,
     walkTrapStand,
     wantRunForGoal,
     type ArenaEdge
@@ -81,7 +81,7 @@ export const BRIMHAVEN_AGILITY_SETTINGS: SettingsSchema = {
         min: 1,
         max: 27,
         label: 'Food per trip',
-        help: 'default 25 leaves one slot for the coin stack (26 used)'
+        help: 'default 25; capped at 24 with return teleport runes to leave room for coins and tickets'
     },
     bankAtTickets: {
         type: 'number',
@@ -100,7 +100,6 @@ export const BRIMHAVEN_AGILITY_SETTINGS: SettingsSchema = {
 };
 
 export default class BrimhavenAgility extends TaskBot {
-    // One server tick between loops so the next hop can start the tick we go idle.
     override loopDelay = 600;
     override loopCadence = { kind: 'server-tick' as const, ticks: 1 };
 
@@ -109,6 +108,8 @@ export default class BrimhavenAgility extends TaskBot {
     private bankAtTickets = DEFAULT_BANK_TICKETS;
     private stealRestock = false;
     private stunnedUntilTick = 0;
+    private obstacleSettled = false;
+    returnTeleportFailed = false;
 
     private ticketsCollected = 0;
     private tags = 0;
@@ -163,6 +164,7 @@ export default class BrimhavenAgility extends TaskBot {
             new ContinueDialog(),
             new Eat(this),
             new ClimbOutOfPit(this),
+            new TeleportForFood(this),
             new LeaveForSteal(this),
             new SellFoodForBoat(this),
             new StealFood(this),
@@ -176,6 +178,18 @@ export default class BrimhavenAgility extends TaskBot {
         );
     }
 
+    override async loop(): Promise<number | void> {
+        const from = this.platform();
+        this.obstacleSettled = false;
+        await super.loop();
+        const to = this.platform();
+        if (this.obstacleSettled || (from >= 0 && to >= 0 && from !== to)) return 0;
+    }
+
+    noteObstacleSettled(): void {
+        this.obstacleSettled = true;
+    }
+
     setStatus(s: string): void {
         this.status = s;
     }
@@ -183,7 +197,7 @@ export default class BrimhavenAgility extends TaskBot {
     cfg() {
         return {
             food: this.foodName,
-            foodPerTrip: this.foodPerTrip,
+            foodPerTrip: Math.min(this.foodPerTrip, 26 - returnRuneSlots()),
             bankAtTickets: this.bankAtTickets,
             stealRestock: this.stealRestock
         };
@@ -400,6 +414,23 @@ function findEdible(food: string) {
     return Inventory.items().find(i => matchesAny(i.name, CAKE_ITEMS)) ?? null;
 }
 
+class TeleportForFood implements Task {
+    constructor(private bot: BrimhavenAgility) {}
+    validate(): boolean {
+        return !this.bot.returnTeleportFailed && this.bot.edibleInPack() === 0
+            && (this.bot.inArenaNow() || this.bot.onBrimhavenNow())
+            && ardougneUnlocked() && hasReturnRunes();
+    }
+    async execute(): Promise<void> {
+        this.bot.returnTeleportFailed = true;
+        this.bot.setStatus('teleporting to Ardougne for food');
+        this.bot.returnTeleportFailed = !(await teleportToArdougne(message => this.bot.log(message)));
+        if (this.bot.returnTeleportFailed) {
+            this.bot.log('Ardougne teleport did not land; using the normal restock route');
+        }
+    }
+}
+
 class LeaveForSteal implements Task {
     constructor(private bot: BrimhavenAgility) {}
     validate(): boolean {
@@ -595,7 +626,7 @@ class BankTrip implements Task {
         return needFood || needsCoinsRestock(this.bot.coinCount(), this.bot.paid(), atBrim);
     }
     async execute(): Promise<void> {
-        const { food, foodPerTrip, bankAtTickets } = this.bot.cfg();
+        const { food, bankAtTickets } = this.bot.cfg();
 
         if (this.bot.inArenaNow()) {
             this.bot.setStatus('leaving arena to bank');
@@ -613,7 +644,7 @@ class BankTrip implements Task {
             return;
         }
 
-        const keep = new Set(['coins', ...foodForms(food), ...(this.bot.cfg().stealRestock ? CAKE_ITEMS : [])]);
+        const keep = new Set(['coins', ...(ardougneUnlocked() ? ['law rune', 'water rune'] : []), ...foodForms(food), ...(this.bot.cfg().stealRestock ? CAKE_ITEMS : [])]);
         await Bank.depositAllMatching(name => !keep.has(name.toLowerCase()));
 
         // Always fund a full mainland→Brimhaven round-trip when stocking.
@@ -621,6 +652,9 @@ class BankTrip implements Task {
         if (withdrawCoins > 0) {
             await Bank.withdrawX('Coins', withdrawCoins);
         }
+        await stockReturnTeleport(food);
+        this.bot.returnTeleportFailed = false;
+        const { foodPerTrip } = this.bot.cfg();
         const have = this.bot.foodInPack();
         if (have < foodPerTrip) {
             await Bank.withdrawX(food, foodPerTrip - have);
@@ -899,22 +933,18 @@ class CrossObstacle implements Task {
         if (chasing) {
             return here !== target && nextHop(here, target, this.bot.agility()) !== null;
         }
-        // After a tag, walk back to the centre hub. Sitting on a tagged corner
-        // is what turns the next arrow into a 50s cross-map miss.
-        if (onTicketHub(here)) {
-            return false;
-        }
-        return nextHop(here, CENTRE_PLATFORM, this.bot.agility()) !== null;
+        return trainingHop(here, this.bot.agility()) !== null;
     }
     async execute(): Promise<void> {
         this.bot.noteHint();
         const here = this.bot.platform();
         const target = this.bot.targetPillar();
         const chasing = !this.bot.tagged() && target >= 0;
-        const goal = chasing ? target : CENTRE_PLATFORM;
-        const hop = nextHop(here, goal, this.bot.agility(), this.bot.avoidHop);
+        const hop = chasing
+            ? nextHop(here, target, this.bot.agility(), this.bot.avoidHop)
+            : trainingHop(here, this.bot.agility());
         if (hop === null) {
-            this.bot.log(`no path from platform ${here} to ${goal} at agility ${this.bot.agility()}`);
+            this.bot.log(`no path from platform ${here} at agility ${this.bot.agility()}`);
             return;
         }
         const edge = edgeBetween(here, hop, this.bot.agility());
@@ -928,8 +958,8 @@ class CrossObstacle implements Task {
             this.bot.avoidHop = -1;
         }
         this.bot.noteHop();
-        this.bot.log(`crossing ${edge.kind} ${here}→${hop} (goal ${goal}${chasing ? '' : ', back to centre'})`);
-        this.bot.setStatus(chasing ? `crossing ${edge.kind} ${here}→${hop}` : `back to centre ${here}→${hop}`);
+        this.bot.log(`crossing ${edge.kind} ${here}→${hop} (${chasing ? `goal ${target}` : 'training between pillars'})`);
+        this.bot.setStatus(`${chasing ? 'crossing' : 'training'} ${edge.kind} ${here}→${hop}`);
         await ensureRun(wantRunForGoal(chasing));
         await crossEdge(this.bot, edge, here, hop);
     }
@@ -1030,6 +1060,7 @@ async function waitObstacleSettled(bot: BrimhavenAgility, from: number, to: numb
     let lastTile = bot.here();
     const startPillar = PILLARS[from];
     const start = performance.now();
+    const startTick = Game.tick();
 
     while (performance.now() - start < timeoutMs) {
         const platform = bot.platform();
@@ -1053,6 +1084,7 @@ async function waitObstacleSettled(bot: BrimhavenAgility, from: number, to: numb
 
         const outcome = obstacleOutcome(platform, from, to, pit, anim);
         if (outcome === 'arrived' || outcome === 'fallen' || outcome === 'elsewhere') {
+            bot.noteObstacleSettled();
             bot.log(
                 `  settled ${outcome} platform ${platform} (from ${from}, want ${to}) anim=${anim} pit=${pit}`
             );
@@ -1064,9 +1096,8 @@ async function waitObstacleSettled(bot: BrimhavenAgility, from: number, to: numb
         } else {
             idleTicks = 0;
         }
-        // Soft fail / stuck mid-trap: after a live leave, a few idle ticks without
-        // arriving means bounce or stall, retry now (not a 8–12s hang).
-        if (leftStart && idleTicks >= 3) {
+        if (leftStart && idleTicks >= 1 && Game.tick() > startTick) {
+            bot.noteObstacleSettled();
             bot.log(
                 `  settled failed (stalled after leave) platform ${platform} distStart=${distFromStart} (from ${from}, want ${to})`
             );

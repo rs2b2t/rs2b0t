@@ -1,4 +1,5 @@
 import { resolveWorldNumber } from '../../../client/config/worlds.js';
+import AutoFighter from '../AutoFighter/AutoFighter.js';
 import { SeersAxeBuyer } from './market.js';
 import { refreshConsumables } from './catalog.js';
 import { COMBAT_CAMPS } from './combat.js';
@@ -150,6 +151,15 @@ export default class AccountLeveler extends LoopingBot {
             }
             const plan = this.session.plan;
             if (!plan) { this.phase = 'bank'; return; }
+            if (!this.activity.outcome && this.activity.child instanceof AutoFighter && this.activity.child.clueInProgress()) {
+                if (this.session.stalled(Date.now())) {
+                    this.fail('clue preparation or recovery made no progress for three minutes');
+                    return;
+                }
+                await this.activity.loop();
+                this.observe();
+                return;
+            }
             const snapshot = this.snapshot();
             if (plan.deathWalk && combatLevel(snapshot.levels) >= 15 && !Game.inCombat()) {
                 this.activity.stop();

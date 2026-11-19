@@ -89,6 +89,7 @@ test('magic with a clear firing line does not walk out of a safespot', async () 
 });
 
 test('a cooled-down dwarf becomes selectable immediately when it attacks us', async () => {
+    bot.resumeAttack = false;
     npcs = [dwarf(1, 2), dwarf(2, 5)];
     await fight.execute();npcs[0].faceEntity = 32769;npcs[0].inCombat = true;
     await fight.execute();expect(attacks).toEqual([1, 1]);

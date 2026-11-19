@@ -1,5 +1,8 @@
 import { expect, spyOn, test } from 'bun:test';
 import AccountLeveler from '#/bot/scripts/AccountLeveler/AccountLeveler.js';
+import AutoFighter from '#/bot/scripts/AutoFighter/AutoFighter.js';
+import { SolveClue } from '#/bot/api/ai/clues/SolveClue.js';
+import { reader } from '#/bot/adapter/ClientAdapter.js';
 import { planNext } from '#/bot/scripts/AccountLeveler/planner.js';
 import { LoopingBot } from '#/bot/api/bot/Bot.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
@@ -13,6 +16,50 @@ import { BotHost } from '#/bot/runtime/BotHost.js';
 import { ScriptRegistry } from '#/bot/runtime/ScriptRegistry.js';
 import { ScriptAborted, ScriptContext } from '#/bot/runtime/ScriptContext.js';
 import { ScriptRunner } from '#/bot/runtime/ScriptRunner.js';
+
+test.each([false, true])('an expired combat session keeps its clue unless progress stalls: stalled=%s', async stalled => {
+    const bot = new AccountLeveler();
+    const fighter = new AutoFighter();
+    const plan = { id: 'falador-west-guards', objective: 'attack', label: 'Guards', script: 'AutoFighter', combat: true, needs: [], settings: { solveClues: true } };
+    const patches = [
+        spyOn(Game, 'sceneReady').mockReturnValue(true),
+        spyOn(Game, 'inCombat').mockReturnValue(false),
+        spyOn(Game, 'tile').mockReturnValue({ x: 3250, z: 3420, level: 0 }),
+        spyOn(Game, 'myName').mockReturnValue(null),
+        spyOn(Skills, 'level').mockReturnValue(40),
+        spyOn(Skills, 'xp').mockReturnValue(0),
+        spyOn(Bank, 'ready').mockReturnValue(false),
+        spyOn(Bank, 'items').mockReturnValue([]),
+        spyOn(reader, 'inventory').mockReturnValue([{ id: 3490, name: 'Clue scroll', count: 1, slot: 0, comId: 1, ops: ['Read'] }]),
+        spyOn(Equipment, 'items').mockReturnValue([])
+    ];
+    const loop = spyOn(fighter, 'loop').mockResolvedValue(undefined);
+    try {
+        fighter['solveClue'] = new SolveClue({ log: () => {}, setStatus: () => {}, foodName: () => '', foodWithdraw: () => 0, isFood: () => false });
+        bot['activity'].child = fighter;
+        bot['phase'] = 'train';
+        bot['session'].start(plan, Date.now(), () => 0);
+        bot['session'].remainingMs = 0;
+        if (stalled) bot['session'].observe('unchanged clue preparation', Date.now() - 180001);
+        await bot.loop();
+        if (stalled) {
+            expect(bot['activity'].child).toBeNull();
+            expect(String(bot['phase'])).toBe('bank');
+            expect(bot['lastFailure']?.reason).toContain('no progress');
+            return;
+        }
+        expect(bot['session'].plan).toBe(plan);
+        expect(loop).toHaveBeenCalledTimes(1);
+        spyOn(reader, 'inventory').mockReturnValue([]);
+        await bot.loop();
+        expect(bot['session'].plan).toBeNull();
+        expect(String(bot['phase'])).toBe('bank');
+    } finally {
+        bot.onStop();
+        loop.mockRestore();
+        for (const patch of patches) patch.mockRestore();
+    }
+});
 
 test('a pending bank operation reports its action and position without claiming progress', async () => {
     let now = 1000;
