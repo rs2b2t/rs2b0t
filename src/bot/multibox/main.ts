@@ -377,7 +377,7 @@ function boot(): void {
             tabsHydrated = true;
             return;
         }
-        mergeSavedTabs(data.tabs);
+        applySavedGroups();
     }
 
     function mergeSavedTabs(tabs: string[]): void {
@@ -388,7 +388,7 @@ function boot(): void {
         if (changed) renderRail();
     }
 
-    function syncSavedGroups(): void {
+    function applySavedGroups(): string[] {
         const { tabs, assignments } = vault.adoptGroupState();
         mergeSavedTabs(tabs);
         const groups = new Map([...assignments].map(([name, tab]) => [normalizeUsername(name), tab]));
@@ -396,6 +396,11 @@ function boot(): void {
             const tab = groups.get(normalizeUsername(slot.username));
             if (tab) controller.setSlotTab(slot.id, tab);
         }
+        return tabs;
+    }
+
+    function syncSavedGroups(): void {
+        const tabs = applySavedGroups();
         for (const tab of controller.tabs().slice(1)) {
             if (!tabs.includes(tab)) controller.removeTab(tab);
         }

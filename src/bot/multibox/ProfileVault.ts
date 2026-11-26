@@ -568,7 +568,12 @@ export class ProfileVault {
                 }
                 await draft.saveTabState(merged, assignments, merged.includes(activeTab) ? activeTab : MAIN_TAB);
             }).then(() => {
-                this.sharedTabs = { tabs: requested, assignments: new Map(tabByUser) };
+                const { assignments } = this.sharedTabs;
+                for (const [username, tab] of assignments) {
+                    if (tab !== MAIN_TAB && !requested.includes(tab)) assignments.set(username, MAIN_TAB);
+                }
+                for (const [username, tab] of tabByUser) assignments.set(username, tab);
+                this.sharedTabs = { tabs: requested, assignments };
             });
         }
         const all = this.assertUnlocked();

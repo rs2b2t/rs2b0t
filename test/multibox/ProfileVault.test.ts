@@ -343,6 +343,10 @@ describe('ProfileVault tabs', () => {
             { username: 'alice', password: 'a', tab: 'Main' },
             { username: 'bob', password: 'b', tab: 'Main' }
         ]);
+        await v.saveTabState(['m'], new Map([['bob', 'm']]), 'Main');
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.list().find(p => p.username === 'bob')?.tab).toBe('m');
     });
 
     test('saveTabState rejects invalid tab lists loudly', async () => {

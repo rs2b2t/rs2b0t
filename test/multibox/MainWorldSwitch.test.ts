@@ -141,6 +141,61 @@ function chooserRow(username: string): HTMLElement | undefined {
     return Array.from(document.querySelectorAll<HTMLElement>('.mbx-chooser-overlay:not([hidden]) .mbx-profile-name')).find(el => el.textContent === username);
 }
 
+async function loadChooserRow(username: string): Promise<void> {
+    const key = 'rs2b0t:multibox:profiles';
+    const before = localStorage.getItem(key);
+    chooserRow(username)!.click();
+    await waitFor(() => localStorage.getItem(key) !== before);
+}
+
+test('settings import moves an already loaded profile to its imported group', async () => {
+    await withWall('local', async wall => {
+        await vault.assignGroup(['alice'], 'Old');
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!chooserRow('alice'));
+        await loadChooserRow('alice');
+        const [loaded] = wall.slots();
+        expect(loaded.tab).toBe('Old');
+
+        const open = spyOn(SettingsPanel.prototype, 'open');
+        try {
+            document.getElementById('mbx-settings')!.click();
+            const panel = open.mock.contexts[0] as SettingsPanel;
+            await panel.importText(serializeProfileFile({
+                profiles: [{ username: 'alice', password: 'a', tab: 'Fleet' }],
+                tabs: ['Fleet'], activeTab: 'Fleet', storage: {}
+            }));
+            expect(panel.el.hidden).toBe(true);
+            await vault.refresh();
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.list().map(p => p.tab)).toEqual(['Fleet']);
+            expect(wall.slots()[0]).toMatchObject({ id: loaded.id, tab: 'Fleet' });
+        } finally {
+            open.mockRestore();
+        }
+    });
+});
+
+test('loading a stale chooser row preserves a group edit from another tab', async () => {
+    await withWall('local', async wall => {
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!chooserRow('alice'));
+        await loadChooserRow('alice');
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!chooserRow('bob'));
+
+        const other = new ProfileVault();
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        await other.assignGroup(['bob'], 'Fleet');
+        await loadChooserRow('bob');
+        expect(wall.slots().map(slot => slot.username)).toEqual(['alice', 'bob']);
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.list().find(p => p.username === 'bob')?.tab).toBe('Fleet');
+    });
+});
+
 test('a stale chooser re-saves and loads a profile in its remotely created group', async () => {
     await withWall('local', async wall => {
         document.getElementById('mbx-add')!.click();
