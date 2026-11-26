@@ -5,8 +5,8 @@ const TAB_MIME = 'application/x-mbx-tab';
 interface TabBarCallbacks {
     onSelect(name: string): void;
     // Return false to keep the invalid name open and flagged.
-    onAdd(name: string): boolean;
-    onRename(oldName: string, newName: string): boolean;
+    onAdd(name: string): boolean | Promise<boolean>;
+    onRename(oldName: string, newName: string): boolean | Promise<boolean>;
     onRemove(name: string): void;
     // `toIndex` uses the full tab list, with Main pinned at 0.
     onMove(name: string, toIndex: number): void;
@@ -156,7 +156,7 @@ export class TabBar {
         return chip;
     }
 
-    private openInput(host: HTMLElement, initial: string, commit: (value: string) => boolean): void {
+    private openInput(host: HTMLElement, initial: string, commit: (value: string) => boolean | Promise<boolean>): void {
         this.editing = true;
         this.closeMenu();
         host.textContent = '';
@@ -172,12 +172,15 @@ export class TabBar {
                 this.rebuild();
             }
         };
-        input.addEventListener('keydown', ev => {
+        input.addEventListener('keydown', async ev => {
             ev.stopPropagation();
             if (ev.key === 'Enter') {
                 ev.preventDefault();
                 this.editing = false;
-                if (commit(input.value)) {
+                const result = commit(input.value);
+                const changed = typeof result === 'boolean' ? result : await result;
+                if (!this.container.contains(input)) return;
+                if (changed) {
                     close();
                 } else {
                     this.editing = true;

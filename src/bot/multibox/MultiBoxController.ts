@@ -72,11 +72,16 @@ export class MultiBoxController {
             if (!remaining.has(name)) remaining.set(name, profile);
         }
         const knownTabs = new Set([MAIN_TAB, ...tabs]);
+        const retained = new Set<string>();
         let modesChanged = this.active !== activeTab;
         for (const slot of this.slots) {
             const name = normalizeUsername(slot.account.username);
             const saved = remaining.get(name);
-            const tab = saved ? saved.tab ?? MAIN_TAB : slot.tab;
+            if (!saved) {
+                retained.add(slot.tab);
+                continue;
+            }
+            const tab = saved.tab ?? MAIN_TAB;
             const next = knownTabs.has(tab) ? tab : MAIN_TAB;
             if (slot.tab !== next) {
                 slot.tab = next;
@@ -85,9 +90,10 @@ export class MultiBoxController {
             remaining.delete(name);
         }
         for (const tab of this.customTabs) {
-            if (!knownTabs.has(tab)) this.lastFocusByTab.delete(tab);
+            if (retained.has(tab)) knownTabs.add(tab);
+            else if (!knownTabs.has(tab)) this.lastFocusByTab.delete(tab);
         }
-        this.customTabs = [...tabs];
+        this.customTabs = [...knownTabs].slice(1);
         this.active = activeTab;
         this.addGroup([...remaining.values()], modesChanged);
     }

@@ -73,6 +73,26 @@ function boot(): void {
     let draggingId: number | null = null;
     let suppressClick = false;
     let orderWrite = Promise.resolve();
+    let restoringTabs: Promise<void> | null = null;
+    let wallOnlyTabs = new Set<string>();
+
+    function afterTabRestore<T>(action: () => T): T | Promise<T> {
+        return restoringTabs ? restoringTabs.then(action) : action();
+    }
+
+    function updateSavedTabs(update: () => Promise<void>): Promise<void> {
+        const start = () => {
+            const write = orderWrite.then(update);
+            orderWrite = write.catch(() => {});
+            return write;
+        };
+        const write = restoringTabs ? restoringTabs.then(start) : start();
+        const ready = write.catch(() => {});
+        restoringTabs = ready;
+        return write.finally(() => {
+            if (restoringTabs === ready) restoringTabs = null;
+        });
+    }
 
     function railTiles(): HTMLElement[] {
         return orderedSlotElements(rail);
@@ -96,24 +116,32 @@ function boot(): void {
         if (vault.status() !== 'unlocked') {
             return;
         }
-        const customTabs = controller.tabs().slice(1);
-        const tabByUser = new Map(controller.snapshot().map(slot => [slot.username, slot.tab]));
-        if (renamed) {
-            for (const p of vault.list()) {
-                if (p.tab === renamed.from && !tabByUser.has(p.username)) tabByUser.set(p.username, renamed.to);
+        const tabs = controller.tabs().slice(1);
+        const activeTab = controller.activeTab();
+        const live = new Map(controller.snapshot().map(slot => [slot.username, slot.tab]));
+        const tabByUser = new Map<string, string>();
+        for (const profile of vault.list()) {
+            const tab = live.get(profile.username) ?? (renamed && profile.tab === renamed.from ? renamed.to : undefined);
+            if (tab !== undefined) {
+                tabByUser.set(profile.username, tab);
+                wallOnlyTabs.delete(tab);
             }
         }
-        const activeTab = controller.activeTab();
+        wallOnlyTabs.delete(activeTab);
+        wallOnlyTabs = new Set(tabs.filter(tab => wallOnlyTabs.has(tab)));
+        const customTabs = tabs.filter(tab => !wallOnlyTabs.has(tab));
         orderWrite = orderWrite.then(() => vault.saveTabState(customTabs, tabByUser, activeTab)).catch(err => console.error('[rs2b0t] failed to save tab state', err));
     }
 
-    function mutateTabs(action: () => boolean, renamed?: { from: string; to: string }): boolean {
-        const changed = action();
-        if (changed) {
-            renderRail();
-            persistTabState(renamed);
-        }
-        return changed;
+    function mutateTabs(action: () => boolean, renamed?: { from: string; to: string }) {
+        return afterTabRestore(() => {
+            const changed = action();
+            if (changed) {
+                renderRail();
+                persistTabState(renamed);
+            }
+            return changed;
+        });
     }
 
     const tabBar = new TabBar(document.getElementById('mbx-tabs')!, {
@@ -294,7 +322,7 @@ function boot(): void {
         }
         renderRail();
         // a fresh profile joins the active tab; record that membership
-        persistTabState();
+        afterTabRestore(() => persistTabState());
     }, {
         defaultWorld, worldRouting, onWorldChange: worldRouting ? changeProfileWorld : undefined,
         onLoadGroup: (profiles, tab) => {
@@ -392,14 +420,17 @@ function boot(): void {
         const { tabs, assignments } = vault.adoptGroupState();
         mergeSavedTabs(tabs);
         const groups = new Map([...assignments].map(([name, tab]) => [normalizeUsername(name), tab]));
+        const liveTabs = new Set(tabs);
         for (const slot of controller.snapshot()) {
             const tab = groups.get(normalizeUsername(slot.username));
             if (tab) controller.setSlotTab(slot.id, tab);
+            else if (slot.tab !== 'Main') liveTabs.add(slot.tab);
         }
         for (const tab of controller.tabs().slice(1)) {
-            if (!tabs.includes(tab)) controller.removeTab(tab);
+            if (!liveTabs.has(tab)) controller.removeTab(tab);
         }
-        controller.setTabState(tabs, controller.activeTab());
+        controller.setTabState([...liveTabs], controller.activeTab());
+        wallOnlyTabs = new Set([...liveTabs].filter(tab => !tabs.includes(tab)));
         renderRail();
     }
 
@@ -409,17 +440,15 @@ function boot(): void {
             ...vault.snapshot(),
             storage: collectBoxStorage(vault.list().map(p => p.username))
         }),
-        replaceAll: async data => {
-            await orderWrite;
+        replaceAll: data => updateSavedTabs(async () => {
             const previous = vault.list().map(p => p.username);
             await vault.replaceAll(data);
             applyBoxStorage(data.storage, [...previous, ...data.profiles.map(p => p.username)]);
-        },
-        onImported: data => {
             vault.adoptGroupState();
             controller.restoreProfiles(vault.list(), data.tabs, data.activeTab);
+            wallOnlyTabs = new Set(controller.tabs().slice(1).filter(tab => !data.tabs.includes(tab)));
             renderRail();
-        }
+        })
     });
     document.body.appendChild(settings.el);
     document.getElementById('mbx-settings')!.addEventListener('click', () => settings.open());
@@ -452,11 +481,10 @@ function boot(): void {
         tabs: () => controller.tabs(),
         activeTab: () => controller.activeTab(),
         worldRouting,
-        assignGroup: (usernames, name) => {
-            const save = orderWrite.then(() => vault.assignGroup(usernames, name));
-            orderWrite = save.catch(() => {});
-            return save.then(syncSavedGroups);
-        },
+        assignGroup: (usernames, name) => updateSavedTabs(async () => {
+            await vault.assignGroup(usernames, name);
+            syncSavedGroups();
+        }),
         edit: async profile => {
             const current = rosterProfiles().find(p => p.username === profile.username);
             const client = current?.slot ? controller.rosterClient(current.slot.id) : null;

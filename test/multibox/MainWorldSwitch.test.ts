@@ -16,7 +16,7 @@ import '#/client/config/target.js';
 interface Wall {
     controller: MultiBoxController;
     add(account: Account): SlotSnapshot;
-    addTab(name: string): boolean;
+    addTab(name: string): boolean | Promise<boolean>;
     slots(): SlotSnapshot[];
     setWorld(id: number, world: WorldNumber): Promise<boolean>;
 }
@@ -97,6 +97,16 @@ async function withWall(mode: 'local' | 'proxy', check: (wall: Wall) => Promise<
     }
 }
 
+function openSettings(): SettingsPanel {
+    const open = spyOn(SettingsPanel.prototype, 'open');
+    try {
+        document.getElementById('mbx-settings')!.click();
+        return open.mock.contexts[0] as SettingsPanel;
+    } finally {
+        open.mockRestore();
+    }
+}
+
 test.each([0, 4])('settings import applies modes once with %i profiles already loaded', async loaded => {
     await withWall('local', async wall => {
         const profiles = Array.from({ length: 24 }, (_, i) => ({
@@ -116,10 +126,8 @@ test.each([0, 4])('settings import applies modes once with %i profiles already l
             };
             return handle;
         });
-        const open = spyOn(SettingsPanel.prototype, 'open');
         try {
-            document.getElementById('mbx-settings')!.click();
-            const panel = open.mock.contexts[0] as SettingsPanel;
+            const panel = openSettings();
             if (loaded) await panel.importText(file(loaded));
             expect(wall.slots()).toHaveLength(loaded);
             modeCalls.length = 0;
@@ -139,7 +147,6 @@ test.each([0, 4])('settings import applies modes once with %i profiles already l
             expect(modeCalls).toHaveLength(0);
             expect(wall.slots()).toEqual(slots);
         } finally {
-            open.mockRestore();
             spawning.mockRestore();
         }
     });
@@ -148,23 +155,19 @@ test.each([0, 4])('settings import applies modes once with %i profiles already l
 test.each([30, 61])('settings import moves %i loaded profiles to the saved tab', async count => {
     await withWall('local', async wall => {
         const profiles = Array.from({ length: count }, (_, i) => ({ username: `fixture${i}`, password: 'fixture' }));
-        const spare = { username: 'spare', password: 'fixture' };
         const tabs = ['Empty', 'Fleet', 'Reserve'];
-        const imported = [...profiles.map(p => ({ ...p, tab: 'Fleet' })), { ...spare, tab: 'Main' }];
+        const imported = profiles.map(p => ({ ...p, tab: 'Fleet' }));
         const assignments = imported.map(p => [p.username, p.tab]);
-        const open = spyOn(SettingsPanel.prototype, 'open');
         const saves = spyOn(vault, 'saveTabState');
         try {
-            document.getElementById('mbx-settings')!.click();
-            const panel = open.mock.contexts[0] as SettingsPanel;
+            const panel = openSettings();
             await panel.importText(serializeProfileFile({
-                profiles: [...profiles, spare].map(p => ({ ...p, tab: 'Old' })),
+                profiles: profiles.map(p => ({ ...p, tab: 'Old' })),
                 tabs: ['Old', 'Reserve', 'Empty'], activeTab: 'Old', storage: {}
             }));
             await Promise.all(saves.mock.results.map(result => result.value));
             const original = wall.slots();
             expect(original.map(s => [s.username, s.tab])).toEqual(imported.map(p => [p.username, 'Old']));
-            const guest = wall.add({ username: 'guest', password: 'fixture', tab: 'Old' });
 
             wall.addTab('Local1');
             wall.addTab('Local2');
@@ -177,18 +180,77 @@ test.each([30, 61])('settings import moves %i loaded profiles to the saved tab',
             expect(reopened.tabState()).toEqual({ tabs, activeTab: 'Fleet' });
             expect(wall.controller.tabs()).toEqual(['Main', ...tabs]);
             expect(wall.controller.activeTab()).toBe('Fleet');
-            expect(wall.slots().map(s => s.id)).toEqual([...original.map(s => s.id), guest.id]);
-            expect(wall.slots().map(s => [s.username, s.tab])).toEqual([...assignments, ['guest', 'Main']]);
+            expect(wall.slots().map(s => s.id)).toEqual(original.map(s => s.id));
+            expect(wall.slots().map(s => [s.username, s.tab])).toEqual(assignments);
         } finally {
             saves.mockRestore();
-            open.mockRestore();
+        }
+    });
+});
+
+test('a mixed settings import keeps an omitted slot in its live tab only', async () => {
+    await withWall('local', async wall => {
+        const panel = openSettings();
+        const included = { username: 'included', password: 'fixture' };
+        const guest = { username: 'guest', password: 'fixture', tab: 'Work' };
+        await panel.importText(serializeProfileFile({
+            profiles: [{ ...included, tab: 'Old' }, guest], tabs: ['Old', 'Work'], activeTab: 'Work', storage: {}
+        }));
+        const ids = wall.slots().map(s => s.id);
+        const backup = { profiles: [{ ...included, tab: 'Fleet' }], tabs: ['Fleet'], activeTab: 'Fleet' };
+        await panel.importText(serializeProfileFile({ ...backup, storage: {} }));
+        expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toBe('');
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.snapshot()).toEqual(backup);
+        window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(wall.slots().map(s => [s.id, s.tab])).toEqual([[ids[0], 'Fleet'], [ids[1], 'Work']]);
+        expect(wall.controller.tabs()).toEqual(['Main', 'Fleet', 'Work']);
+        expect(wall.controller.activeTab()).toBe('Fleet');
+    });
+});
+
+test('a tab added during replacement is saved against the imported memberships', async () => {
+    await withWall('local', async wall => {
+        const panel = openSettings();
+        const profile = { username: 'fixture', password: 'fixture' };
+        await panel.importText(serializeProfileFile({
+            profiles: [{ ...profile, tab: 'Old' }, { username: 'guest', password: 'fixture', tab: 'Work' }],
+            tabs: ['Old', 'Work'], activeTab: 'Old', storage: {}
+        }));
+        let added: ReturnType<Wall['addTab']> | undefined;
+        const replaceAll = vault.replaceAll.bind(vault);
+        const replace = spyOn(vault, 'replaceAll').mockImplementationOnce(data => {
+            const replacing = replaceAll(data);
+            added = wall.addTab('Local');
+            return replacing;
+        });
+        const saves = spyOn(vault, 'saveTabState');
+        try {
+            await panel.importText(serializeProfileFile({
+                profiles: [{ ...profile, tab: 'Fleet' }], tabs: ['Fleet'], activeTab: 'Fleet', storage: {}
+            }));
+            expect(await added).toBe(true);
+            expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toBe('');
+            await Promise.all(saves.mock.results.map(result => result.value));
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.snapshot()).toEqual({
+                profiles: [{ ...profile, tab: 'Fleet' }], tabs: ['Fleet', 'Local'], activeTab: 'Fleet'
+            });
+            expect(wall.controller.tabs()).toEqual(['Main', 'Fleet', 'Work', 'Local']);
+            expect(wall.controller.activeTab()).toBe('Fleet');
+            expect(wall.slots().map(s => s.tab)).toEqual(['Fleet', 'Work']);
+        } finally {
+            replace.mockRestore();
+            saves.mockRestore();
         }
     });
 });
 
 test('overlapping settings imports remove the superseded profile settings from both stores', async () => {
     await withWall('local', async () => {
-        const open = spyOn(SettingsPanel.prototype, 'open');
         const profileFile = (username: string, selectedScript: string) => serializeProfileFile({
             profiles: [{ username, password: 'fixture' }], tabs: [], activeTab: 'Main',
             storage: { [username]: { selectedScript } }
@@ -196,8 +258,7 @@ test('overlapping settings imports remove the superseded profile settings from b
         const firstKey = 'rs2b0t:first:selectedScript';
         const secondKey = 'rs2b0t:second:selectedScript';
         try {
-            document.getElementById('mbx-settings')!.click();
-            const panel = open.mock.contexts[0] as SettingsPanel;
+            const panel = openSettings();
             await Promise.all([
                 panel.importText(profileFile('first', 'Miner')),
                 panel.importText(profileFile('second', 'Fisher'))
@@ -212,7 +273,6 @@ test('overlapping settings imports remove the superseded profile settings from b
                 expect(store.getItem(secondKey)).toBe('Fisher');
             }
         } finally {
-            open.mockRestore();
             for (const store of [localStorage, sessionStorage]) {
                 store.removeItem(firstKey);
                 store.removeItem(secondKey);
