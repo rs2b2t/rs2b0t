@@ -1,3 +1,4 @@
+import { itemCounts } from '../../../../lib/questSteps.js';
 import { beforeEach, describe, expect, test } from 'bun:test';
 
 import { DIG_ID, DIG_TILE } from '#/bot/api/ai/quests/defs/digsite/areas.js';
@@ -17,19 +18,11 @@ interface SnapOpts {
     tile?: { x: number; z: number; level: number } | null;
 }
 
-function ids(list: number[]): Map<number, number> {
-    const out = new Map<number, number>();
-    for (const id of list) {
-        out.set(id, (out.get(id) ?? 0) + 1);
-    }
-    return out;
-}
-
 function snap(o: SnapOpts = {}): QuestSnapshot {
     return {
         journal: o.journal ?? 'inProgress',
         inv: new Map(),
-        invIds: ids(o.invIds ?? []),
+        invIds: itemCounts(o.invIds ?? []),
         worn: new Set(),
         wornIds: new Set(),
         noProgress: 0,
@@ -37,7 +30,7 @@ function snap(o: SnapOpts = {}): QuestSnapshot {
         stage: o.stage,
         progress: o.stage === undefined ? undefined : { stage: o.stage, flags: new Set(o.flags ?? []) },
         bank: new Map(),
-        bankIds: ids(o.bankIds ?? []),
+        bankIds: itemCounts(o.bankIds ?? []),
         bankKnown: o.bankKnown ?? true,
         tile: (o.tile ?? { x: 3358, z: 3410, level: 0 }) as QuestSnapshot['tile'],
         freeSlots: 20
