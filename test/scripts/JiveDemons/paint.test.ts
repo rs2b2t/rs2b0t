@@ -2,62 +2,14 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import { JIVE_BYLINE } from '#/bot/paint/jive.js';
 import { paintState, resolveDock } from '#/bot/paint/paintLogic.js';
 import JiveDemons from '#/bot/scripts/JiveDemons/JiveDemons.js';
+import { type Box, type Drawn, recorder, spills } from '../../fixtures/script-paint.js';
 
-const CHAR_W = 7;
 const LINE = 16;
 const PANEL = resolveDock('chatbox');
 /** Baseline of the first body row, the one under the title strip. */
 const ROW_1 = PANEL.y + 20 + LINE / 2 + 1;
 const PARK_REASON = "no 'Lobster' left in the bank after a full trip. The run stopped at the booth rather than walk back to the demons with no way to heal. Deposit food, or point the loadout at food the bank has, and restart.";
 const SECTIONS = ['Overview', 'Combat', 'Loot'];
-
-interface Drawn {
-    text: string;
-    x: number;
-    y: number;
-}
-
-interface Box {
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-}
-
-function recorder(): { ctx: CanvasRenderingContext2D; drawn: Drawn[]; boxes: Box[] } {
-    const drawn: Drawn[] = [];
-    const boxes: Box[] = [];
-    const ctx = {
-        font: '',
-        textBaseline: '',
-        fillStyle: '',
-        strokeStyle: '',
-        lineWidth: 0,
-        lineJoin: '',
-        save: () => {},
-        restore: () => {},
-        beginPath: () => {},
-        moveTo: () => {},
-        lineTo: () => {},
-        stroke: () => {},
-        fillRect(x: number, y: number, w: number, h: number) {
-            boxes.push({ x, y, w, h });
-        },
-        strokeRect(x: number, y: number, w: number, h: number) {
-            boxes.push({ x, y, w, h });
-        },
-        measureText: (t: string) => ({ width: t.length * CHAR_W }),
-        fillText(t: string, x: number, y: number) {
-            drawn.push({ text: t, x, y });
-        }
-    };
-    return { ctx: ctx as unknown as CanvasRenderingContext2D, drawn, boxes };
-}
-
-/** Every rect that spills past the panel, a button under the bottom border included. */
-function spills(boxes: Box[]): Box[] {
-    return boxes.filter(b => b.x < PANEL.x || b.y < PANEL.y || b.x + b.w > PANEL.x + PANEL.w || b.y + b.h > PANEL.y + PANEL.h);
-}
 
 /** Which body rows the panel painted on, numbered from 1 under the title strip. */
 function bodyRows(drawn: Drawn[]): number[] {
