@@ -181,10 +181,56 @@ test('settings import moves an already loaded profile to its imported group', as
             const reopened = new ProfileVault();
             expect(await reopened.unlock('test-passphrase')).toBe(true);
             expect(reopened.list().map(p => p.tab)).toEqual(['Fleet']);
+            expect(reopened.tabState()).toEqual({ tabs: ['Fleet'], activeTab: 'Fleet' });
             expect(wall.slots()[0]).toMatchObject({ id: loaded.id, tab: 'Fleet' });
+            expect(wall.controller.tabs()).toEqual(['Main', 'Fleet']);
+            expect(wall.controller.activeTab()).toBe('Fleet');
         } finally {
             open.mockRestore();
         }
+    });
+});
+
+test('adding a tab while a roster move is saving preserves both groups', async () => {
+    await withWall('local', async wall => {
+        document.getElementById('mbx-manage')!.click();
+        await waitFor(() => !document.getElementById('mbx-roster')!.hidden);
+        document.querySelector<HTMLInputElement>('[aria-label="Select alice"]')!.click();
+        const name = document.querySelector<HTMLInputElement>('[aria-label="Profile group name"]')!;
+        name.value = 'Fleet';
+        name.dispatchEvent(new Event('input'));
+        document.getElementById('mbx-roster-move-group')!.click();
+        document.getElementById('mbx-roster-done')!.click();
+        expect(wall.addTab('Mining')).toBe(true);
+        await waitFor(() => vault.tabState().tabs.includes('Mining'));
+
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.list().find(p => p.username === 'alice')?.tab).toBe('Fleet');
+        expect(reopened.tabState().tabs).toEqual(['Fleet', 'Mining']);
+        expect(wall.controller.tabs()).toEqual(['Main', 'Fleet', 'Mining']);
+    });
+});
+
+test('loading a stale chooser row keeps a remotely deleted group deleted', async () => {
+    await withWall('local', async wall => {
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!chooserRow('alice'));
+        await loadChooserRow('alice');
+        const other = new ProfileVault();
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        await other.assignGroup(['bob'], 'Fleet');
+        await vault.setWorld('alice', 2);
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!chooserRow('bob'));
+        await other.saveTabState([], new Map(), 'Main');
+        await loadChooserRow('bob');
+        expect(wall.slots().map(slot => slot.username)).toEqual(['alice', 'bob']);
+
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.tabState()).toEqual({ tabs: [], activeTab: 'Main' });
+        expect(reopened.list().find(p => p.username === 'bob')?.tab).toBe('Main');
     });
 });
 
@@ -296,8 +342,9 @@ test('a stale wall renames only the current members of a group', async () => {
 
 test('deleting a stale group moves only its remaining loaded members to the prior group', async () => {
     await withWall('local', async wall => {
+        await vault.upsert({ username: 'carol', password: 'fixture' });
         await vault.saveTabState(['Prior', 'Old'], new Map([['alice', 'Old'], ['bob', 'Old']]), 'Old');
-        for (const username of ['alice', 'bob']) {
+        for (const username of ['alice', 'bob', 'carol']) {
             document.getElementById('mbx-add')!.click();
             await waitFor(() => !!chooserRow(username));
             await loadChooserRow(username);
@@ -306,6 +353,7 @@ test('deleting a stale group moves only its remaining loaded members to the prio
         const other = new ProfileVault();
         expect(await other.unlock('test-passphrase')).toBe(true);
         await other.assignGroup(['alice'], 'Remote');
+        await other.assignGroup(['carol'], 'Old');
         const key = 'rs2b0t:multibox:profiles';
         const before = localStorage.getItem(key);
         expect(wall.removeTab('Old')).toBe(true);
@@ -314,7 +362,7 @@ test('deleting a stale group moves only its remaining loaded members to the prio
         const reopened = new ProfileVault();
         expect(await reopened.unlock('test-passphrase')).toBe(true);
         expect(reopened.tabState().tabs).toEqual(['Prior', 'Remote']);
-        expect(reopened.list().map(p => [p.username, p.tab])).toEqual([['alice', 'Remote'], ['bob', 'Prior']]);
+        expect(reopened.list().map(p => [p.username, p.tab])).toEqual([['alice', 'Remote'], ['bob', 'Prior'], ['carol', 'Prior']]);
     });
 });
 

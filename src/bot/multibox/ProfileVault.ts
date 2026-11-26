@@ -542,8 +542,8 @@ export class ProfileVault {
         await this.persist();
     }
 
-    async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab: string, change?: TabChange): Promise<void> {
-        if (this.pendingImport) return this.afterImport(() => this.saveTabState(tabs, tabByUser, activeTab, change));
+    async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab: string, change?: TabChange, previousTabs?: string[]): Promise<void> {
+        if (this.pendingImport) return this.afterImport(() => this.saveTabState(tabs, tabByUser, activeTab, change, previousTabs));
         const requested = tabs.map(tab => tab.trim());
         assertTabStateValid(requested, activeTab, []);
         for (const [username, tab] of tabByUser) {
@@ -553,7 +553,7 @@ export class ProfileVault {
         }
         if (this.shared) {
             await this.sharedChange(async draft => {
-                const previous = this.sharedTabs;
+                const previous = previousTabs ?? this.sharedTabs;
                 const removed = new Set(previous.filter(tab => !requested.includes(tab)));
                 const merged = draft.customTabs.filter(tab => !removed.has(tab));
                 const ordered = requested.filter(tab => previous.includes(tab) && merged.includes(tab));

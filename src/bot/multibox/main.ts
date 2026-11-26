@@ -19,7 +19,7 @@ import { RosterPanel } from './RosterPanel.js';
 import { TabBar } from './TabBar.js';
 import { BotTabMenu } from './BotTabMenu.js';
 import { VaultPrompt } from './VaultPrompt.js';
-import { applyBoxStorage, collectBoxStorage, type ProfileSnapshot } from './ProfileTransfer.js';
+import { applyBoxStorage, collectBoxStorage } from './ProfileTransfer.js';
 import type { Account } from './types.js';
 
 type DesktopWall = Window & { rs2b0tLoginCoordinator?: LoginCoordinationRegistry & { parallelism: number } };
@@ -90,40 +90,41 @@ function boot(): void {
         orderWrite = orderWrite.then(() => vault.reorder(usernames)).catch(err => console.error('[rs2b0t] failed to save bot order', err));
     }
 
-    function persistTabState(tabByUser: ReadonlyMap<string, string> = new Map(), change?: TabChange): void {
+    function persistTabState(tabByUser: ReadonlyMap<string, string> = new Map(), previousTabs?: string[], change?: TabChange): void {
         if (!tabsHydrated || vault.status() !== 'unlocked') {
             return;
         }
         const customTabs = controller.tabs().slice(1);
         const activeTab = controller.activeTab();
-        orderWrite = orderWrite.then(() => vault.saveTabState(customTabs, tabByUser, activeTab, change)).catch(err => console.error('[rs2b0t] failed to save tab state', err));
+        orderWrite = orderWrite.then(() => vault.saveTabState(customTabs, tabByUser, activeTab, change, previousTabs ?? customTabs)).catch(err => console.error('[rs2b0t] failed to save tab state', err));
     }
 
     function renameTab(from: string, to: string): boolean {
-        if (!controller.renameTab(from, to)) return false;
+        return mutateTabs(() => controller.renameTab(from, to), { from, to: to.trim() });
+    }
+
+    function mutateTabs(action: () => boolean, change?: TabChange): boolean {
+        const previousTabs = controller.tabs().slice(1);
+        if (!action()) return false;
         renderRail();
-        persistTabState(undefined, { from, to: to.trim() });
+        persistTabState(undefined, previousTabs, change);
         return true;
     }
 
-    function mutateTabs(action: () => boolean, removedTab?: string): boolean {
-        const before = new Map(controller.snapshot().map(slot => [slot.username, slot.tab]));
-        const changed = action();
-        if (changed) {
-            const slots = controller.snapshot();
-            renderRail(slots);
-            const assignments = new Map<string, string>();
-            for (const slot of slots) {
-                if (before.get(slot.username) !== slot.tab) assignments.set(slot.username, slot.tab);
-            }
-            if (removedTab !== undefined) persistTabState(undefined, { from: removedTab, fallbackByUser: assignments });
-            else persistTabState(assignments);
-        }
-        return changed;
+    function setSlotTab(id: number, tab: string): boolean {
+        if (!controller.setSlotTab(id, tab)) return false;
+        const slots = controller.snapshot();
+        const slot = slots.find(slot => slot.id === id)!;
+        renderRail(slots);
+        persistTabState(new Map([[slot.username, tab]]));
+        return true;
     }
 
     function removeTab(name: string): boolean {
-        return mutateTabs(() => controller.removeTab(name), name);
+        const tabs = controller.tabs();
+        const prior = tabs[tabs.indexOf(name) - 1];
+        const fallbackByUser = new Map(controller.snapshot().map(slot => [slot.username, prior]));
+        return mutateTabs(() => controller.removeTab(name), { from: name, fallbackByUser });
     }
 
     const tabBar = new TabBar(document.getElementById('mbx-tabs')!, {
@@ -132,9 +133,9 @@ function boot(): void {
         onRename: renameTab,
         onRemove: removeTab,
         onMove: (name, toIndex) => void mutateTabs(() => controller.moveTab(name, toIndex)),
-        onDropBot: (id, tab) => void mutateTabs(() => controller.setSlotTab(id, tab))
+        onDropBot: setSlotTab
     });
-    const botTabMenu = new BotTabMenu((id, tab) => void mutateTabs(() => controller.setSlotTab(id, tab)));
+    const botTabMenu = new BotTabMenu(setSlotTab);
     rail.addEventListener('contextmenu', ev => {
         const tile = (ev.target as HTMLElement).closest<HTMLElement>('.mbx-slot');
         if (!tile) return;
@@ -378,16 +379,6 @@ function boot(): void {
         }
     }
 
-    function applyImportedTabs(data: ProfileSnapshot): void {
-        const live = controller.snapshot();
-        if (live.length === 0) {
-            controller.setTabState(data.tabs, data.activeTab);
-            tabsHydrated = true;
-            return;
-        }
-        applySavedGroups();
-    }
-
     function mergeSavedTabs(tabs: string[]): void {
         let changed = false;
         for (const tab of tabs) {
@@ -407,12 +398,12 @@ function boot(): void {
         return tabs;
     }
 
-    function syncSavedGroups(): void {
+    function syncSavedGroups(activeTab?: string): void {
         const tabs = applySavedGroups();
         for (const tab of controller.tabs().slice(1)) {
             if (!tabs.includes(tab)) controller.removeTab(tab);
         }
-        controller.setTabState(tabs, tabsHydrated ? controller.activeTab() : vault.tabState().activeTab);
+        controller.setTabState(tabs, activeTab ?? (tabsHydrated ? controller.activeTab() : vault.tabState().activeTab));
         tabsHydrated = true;
         renderRail();
     }
@@ -424,7 +415,6 @@ function boot(): void {
                 controller.add(p);
             }
         }
-        persistTabState();
         renderRail();
     }
 
@@ -440,7 +430,7 @@ function boot(): void {
             applyBoxStorage(data.storage, [...previous, ...data.profiles.map(p => p.username)]);
         },
         onImported: data => {
-            applyImportedTabs(data);
+            syncSavedGroups(data.activeTab);
             loadImportedProfiles();
         }
     });
@@ -478,7 +468,14 @@ function boot(): void {
         assignGroup: (usernames, name) => {
             const save = orderWrite.then(() => vault.assignGroup(usernames, name));
             orderWrite = save.catch(() => {});
-            return save.then(syncSavedGroups);
+            return save.then(async () => {
+                let pending;
+                do {
+                    pending = orderWrite;
+                    await pending;
+                } while (pending !== orderWrite);
+                syncSavedGroups();
+            });
         },
         edit: async profile => {
             const current = rosterProfiles().find(p => p.username === profile.username);
@@ -596,7 +593,7 @@ function boot(): void {
         removeTab,
         moveTab: (name: string, toIndex: number) => mutateTabs(() => controller.moveTab(name, toIndex)),
         setActiveTab: (name: string) => mutateTabs(() => controller.setActiveTab(name)),
-        setSlotTab: (id: number, tab: string) => mutateTabs(() => controller.setSlotTab(id, tab)),
+        setSlotTab,
         importProfiles: async (json: string | Profile[]): Promise<number> => {
             if (!(await ensureUnlocked())) {
                 return 0;
