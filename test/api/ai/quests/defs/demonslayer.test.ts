@@ -6,6 +6,7 @@ import { Traversal } from '#/bot/api/walking/Traversal.js';
 import * as RealInventory from '#/bot/api/inventory/Inventory.js';
 import { GroundItems } from '#/bot/api/grounditems/GroundItems.js';
 import { Npcs } from '#/bot/api/npcs/Npcs.js';
+import { groundItemQuery } from '../../../../lib/groundItemQuery.js';
 import { stubProps } from '../../../../lib/stubSingletons.js';
 
 interface TestNpc {
@@ -61,25 +62,7 @@ const restoreTraversal = stubProps(Traversal, {
     }
 });
 const restoreGround = stubProps(GroundItems, {
-    query: () => {
-        let matches = [...groundItems];
-        const chain = {
-            name: (...names: string[]) => {
-                matches = matches.filter(item => names.includes(item.name));
-                return chain;
-            },
-            where: (predicate: (item: TestGroundItem) => boolean) => {
-                matches = matches.filter(predicate);
-                return chain;
-            },
-            within: (distance: number) => {
-                matches = matches.filter(item => item.distance() <= distance);
-                return chain;
-            },
-            nearest: () => matches.sort((a, b) => a.distance() - b.distance())[0] ?? null
-        };
-        return chain as never;
-    }
+    query: () => groundItemQuery(groundItems) as never
 });
 const restoreNpcs = stubProps(Npcs, {
     query: () => {
