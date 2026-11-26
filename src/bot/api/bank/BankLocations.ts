@@ -187,17 +187,21 @@ export function nearestBank(from: WorldTile): BankLocation | null {
 /** Walk cost in run-tiles from `from` to a bank, or null when the bank is unreachable. */
 export type BankPathCost = (from: WorldTile, to: Tile) => number | null;
 
-export function nearestWalkableBank(from: WorldTile, pathCost: BankPathCost): BankLocation | null {
+function cheapestBank(banks: readonly BankLocation[], costFor: (bank: BankLocation, index: number) => number | null): BankLocation | null {
     let best: BankLocation | null = null;
     let bestCost = Infinity;
-    for (const bank of nearestBanks(from)) {
-        const cost = pathCost(from, bank.tile);
+    for (const [index, bank] of banks.entries()) {
+        const cost = costFor(bank, index);
         if (cost !== null && cost < bestCost) {
             bestCost = cost;
             best = bank;
         }
     }
     return best;
+}
+
+export function nearestWalkableBank(from: WorldTile, pathCost: BankPathCost): BankLocation | null {
+    return cheapestBank(nearestBanks(from), bank => pathCost(from, bank.tile));
 }
 
 /** Async walk cost: the nav pack lives in the worker, so a live caller pays per {@link Navigator.findPath} instead of a local {@link PathFinder}. */
@@ -207,16 +211,7 @@ export async function nearestWalkableBankAsync(from: WorldTile, pathCost: BankPa
     // Why: Promise.all keeps a full shortlist batch at one worker round-trip, since the async cost is a worker postMessage.
     const banks = nearestBanks(from);
     const costs = await Promise.all(banks.map(bank => pathCost(from, bank.tile).catch(() => null)));
-    let best: BankLocation | null = null;
-    let bestCost = Infinity;
-    for (const [i, bank] of banks.entries()) {
-        const cost = costs[i];
-        if (cost !== null && cost < bestCost) {
-            bestCost = cost;
-            best = bank;
-        }
-    }
-    return best;
+    return cheapestBank(banks, (_bank, index) => costs[index]);
 }
 
 export interface BankPathStamp {
