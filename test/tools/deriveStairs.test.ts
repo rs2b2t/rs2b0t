@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
 
 const generator = join(import.meta.dir, '../../tools/nav/derive-stairs.ts');
 const enricher = join(import.meta.dir, '../../tools/nav/enrich-transports.py');
@@ -273,11 +274,15 @@ test('a generated descent uses the staircase on its source floor', () => {
     runEnricher(['--check']);
 });
 
-test('a generated descent stays unresolved when only another floor has stairs', () => {
+test('a generated descent is unreachable when only another floor has stairs', () => {
     placeStairs('2 5 9: 1 10\n', '1=stairs\n', '[stairs]\nname=Stairs\nop1=Climb-down\n');
     const from = { x: 3205, z: 3209, level: 1 };
     const edge = { from, to: { ...from, level: 0 }, locName: 'Stairs', action: 'Climb-down', kind: 'stair' };
-    expect(enrich([{ ...edge, autoReverse: true }])).toEqual([{ ...edge, options: ['Climb-down'] }]);
+    const edges = enrich([{ ...edge, autoReverse: true }]);
+    const finder = new PathFinder(readFileSync(join(root, 'collision.lcnav')));
+    finder.addEdges([], [], edges);
+    expect(finder.findPath(from, edge.to)).toMatchObject({ ok: false, reason: 'unreachable' });
+    expect(edges).toEqual([{ ...edge, options: ['Climb-down'], disabledReason: expect.any(String) }]);
     runEnricher(['--check']);
 });
 

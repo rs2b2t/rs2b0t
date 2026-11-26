@@ -411,6 +411,8 @@ def main() -> None:
                 else:
                     edge.pop("openLocId", None)
             else:
+                if auto_reverse and not edge.get("disabledReason"):
+                    edge["disabledReason"] = "Generated reverse has no matching staircase on its source floor."
                 edge["options"] = [edge["action"]]
             enriched.append(edge)
         return enriched
