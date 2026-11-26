@@ -134,27 +134,31 @@ describe('filtering the book', () => {
 // Why: every edit commits through the store and rebuilds the panel, which used to drop the table back to the first row.
 describe('editing a row', () => {
     test.each([
-        { side: 'buy', pinned: '80', pending: '85', derived: '90' },
-        { side: 'sell', pinned: '120', pending: '125', derived: '110' }
-    ])('clears the $side pin while its input has a pending edit', ({ side, pinned, pending, derived }) => {
+        { side: 'buy', edit: 'buy', pinned: '80', pending: '85', derived: '90' },
+        { side: 'sell', edit: 'sell', pinned: '120', pending: '125', derived: '110' },
+        { side: 'sell', edit: 'mid', pinned: '125', pending: '85', derived: '94' }
+    ])('clears the $side pin while $edit has a pending edit', ({ side, edit, pinned, pending, derived }) => {
         const panel = openPanel();
         const row = '[data-item="440"]';
-        const field = () => panel.root.querySelector<HTMLInputElement>(`${row} [data-role="${side}"]`)!;
+        const field = (role = side) => panel.root.querySelector<HTMLInputElement>(`${row} [data-role="${role}"]`)!;
         const input = field();
         input.value = pinned;
         input.dispatchEvent(new Event('change'));
 
-        const editing = field();
+        const editing = field(edit);
         type(editing, pending);
+        editing.addEventListener('blur', () => editing.dispatchEvent(new Event('change')), { once: true });
         const clear = panel.root.querySelector<HTMLButtonElement>(`${row} [data-action="clear-${side}"]`)!;
         if (clear.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))) {
             clear.focus();
-            editing.dispatchEvent(new Event('change'));
         }
         if (clear.isConnected) {
             clear.click();
         }
 
+        const saved = PriceBooks.byName('seers')!.rows.find(row => row.id === 440)!;
+        expect(saved.mid).toBe(edit === 'mid' ? 85 : 100);
+        expect(saved).not.toHaveProperty(side);
         expect(field().value).toBe(derived);
         panel.close();
     });
@@ -162,7 +166,7 @@ describe('editing a row', () => {
     test.each([
         { side: 'buy', other: 'sell', pin: '250', derived: '90', afterMid: '180', afterSpread: '160' },
         { side: 'sell', other: 'buy', pin: '80', derived: '110', afterMid: '220', afterSpread: '240' }
-    ])('clears the $side pin and resumes derived pricing', ({ side, other, pin, derived, afterMid, afterSpread }) => {
+    ])('resumes derived $side pricing and keeps the other panel\'s $other pin', ({ side, other, pin, derived, afterMid, afterSpread }) => {
         const panel = openPanel();
         const row = '[data-item="440"]';
         const field = (role: string) => panel.root.querySelector<HTMLInputElement>(`${row} input[data-role="${role}"]`)!;
@@ -172,8 +176,13 @@ describe('editing a row', () => {
             input.dispatchEvent(new Event('change'));
         };
 
-        change(field('buy'), '80');
-        change(field('sell'), '250');
+        change(field('buy'), '75');
+        change(field('sell'), '125');
+        const second = new PriceBookPanel();
+        document.body.appendChild(second.root);
+        second.open('seers');
+        change(second.root.querySelector<HTMLInputElement>(`${row} input[data-role="${other}"]`)!, pin);
+        second.close();
         expect(clear()).not.toBeNull();
         clear()!.click();
         expect(clear()).toBeNull();

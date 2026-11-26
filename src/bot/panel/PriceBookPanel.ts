@@ -104,6 +104,11 @@ export class PriceBookPanel {
         this.render();
     }
 
+    private editCurrent(edit: (book: PriceBook) => PriceBook): void {
+        const current = this.current();
+        if (current) this.commit(edit(current));
+    }
+
     // Why: every edit commits through the store and rebuilds the panel, which would drop the scroll position and caret and send an edit on row 80 back to row 1.
     private render(): void {
         const held = this.hold();
@@ -428,7 +433,7 @@ export class PriceBookPanel {
                 book.margin,
                 'margin',
                 value => {
-                    this.commit(setMargin(book, value));
+                    this.editCurrent(current => setMargin(current, value));
                 },
                 'total spread, split either side of mid'
             )
@@ -440,7 +445,7 @@ export class PriceBookPanel {
                 book.maxTradeValue,
                 'max-trade',
                 value => {
-                    this.commit(setMaxTradeValue(book, value));
+                    this.editCurrent(current => setMaxTradeValue(current, value));
                 },
                 'refuse any single trade worth more than this',
                 true
@@ -701,10 +706,10 @@ export class PriceBookPanel {
         name.textContent = row.name;
         line.appendChild(name);
 
-        line.appendChild(this.priceCell('mid', row.mid, false, value => this.commit(setField(book, row.id, 'mid', value))));
-        line.appendChild(this.priceCell('buy', row.buy, row.pinnedBuy, value => this.commit(setField(book, row.id, 'buy', value))));
-        line.appendChild(this.priceCell('sell', row.sell, row.pinnedSell, value => this.commit(setField(book, row.id, 'sell', value))));
-        line.appendChild(this.priceCell('cap', row.cap, false, value => this.commit(setField(book, row.id, 'cap', value))));
+        line.appendChild(this.priceCell(row, 'mid'));
+        line.appendChild(this.priceCell(row, 'buy', row.pinnedBuy));
+        line.appendChild(this.priceCell(row, 'sell', row.pinnedSell));
+        line.appendChild(this.priceCell(row, 'cap'));
 
         line.appendChild(this.sideToggle('buying', row.buying, () => this.commit(toggleSide(book, row.id, 'buying'))));
         line.appendChild(this.sideToggle('selling', row.selling, () => this.commit(toggleSide(book, row.id, 'selling'))));
@@ -714,7 +719,9 @@ export class PriceBookPanel {
     }
 
     /** A pinned cell holds an override; clicking the pin clears it back to the derived price. */
-    private priceCell(role: string, value: number, pinned: boolean, onChange: (value: number | null) => void): HTMLElement {
+    private priceCell(row: DisplayRow, role: 'mid' | 'buy' | 'sell' | 'cap', pinned = false): HTMLElement {
+        const value = row[role];
+        const onChange = (next: number | null) => this.editCurrent(book => setField(book, row.id, role, next));
         const cell = el('span', 'rs2b0t-pricebook-cell');
         const input = el('input', 'rs2b0t-loadout-qty');
         // Why: the box shows 1.25M, which a number input will not hold, so it takes text and parses it back.
@@ -744,7 +751,7 @@ export class PriceBookPanel {
             clear.title = `Clear pinned ${role} price`;
             clear.setAttribute('aria-label', clear.title);
             clear.addEventListener('mousedown', event => {
-                if (event.button === 0 && document.activeElement === input) {
+                if (event.button === 0) {
                     event.preventDefault();
                 }
             });
