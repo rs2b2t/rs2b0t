@@ -1,6 +1,7 @@
 import { expect, jest, spyOn, test } from 'bun:test';
 import { EventTarget as DomEventTarget, PropertySymbol, Window } from 'happy-dom';
-import { regenerateBasemap } from '#/bot/panel/basemapRegen.js';
+import * as cache from '#/bot/panel/basemapLocalCache.js';
+import * as regen from '#/bot/panel/basemapRegen.js';
 import { WorldMapPicker } from '#/bot/panel/WorldMapPicker.js';
 
 function resources() {
@@ -121,7 +122,7 @@ test.each(['response', 'body'])('Rebuild recovers when the worldmap %s stalls', 
         rebuild.click();
         document.querySelector<HTMLButtonElement>('.rs2b0t-confirm-yes')?.click();
         await firstRequested.promise;
-        retry = regenerateBasemap().catch((err: Error) => err.message);
+        retry = regen.regenerateBasemap().catch((err: Error) => err.message);
         clock.advanceTimersByTime(60_000);
         const signal = await stalled.promise;
         clock.advanceTimersByTime(59_999);
@@ -140,5 +141,86 @@ test.each(['response', 'body'])('Rebuild recovers when the worldmap %s stalls', 
         jest.useRealTimers();
         dom.setURL(originalUrl);
         Object.defineProperty(globalThis, 'fetch', fetchDescriptor);
+    }
+});
+
+let pickerSession = 0;
+test.each(['early success', 'late success', 'late rejection'])('Rebuild keeps its basemap after %s', async order => {
+    const { WorldMapPicker: Picker }: typeof import('#/bot/panel/WorldMapPicker.js') =
+        await import(`../../src/bot/panel/WorldMapPicker.ts?session=${++pickerSession}`);
+    const manifest = {
+        schema: 2, fingerprint: 'deploy', basemapUrl: 'deploy.png',
+        origin: { x: 0, z: 0 }, sizeTiles: { w: 64, h: 64 }, pixelsPerTile: 1
+    };
+    const deploy = document.createElement('img');
+    const rebuilt = document.createElement('img');
+    deploy.alt = 'deploy';
+    rebuilt.alt = 'rebuilt';
+    const decode = spyOn(cache, 'blobToImage').mockResolvedValue(deploy);
+    const rebuild = spyOn(regen, 'regenerateBasemap').mockResolvedValue({
+        manifest: { ...manifest, fingerprint: 'rebuilt' }, image: rebuilt
+    });
+    const manifestRead = Promise.withResolvers<Response>();
+    let reads = 0;
+    const originalFetch = Object.getOwnPropertyDescriptor(globalThis, 'fetch')!;
+    Object.defineProperty(globalThis, 'fetch', {
+        configurable: true,
+        value: async (url: URL) => {
+            if (url.pathname.endsWith('/worldmap-basemap.manifest.json')) {
+                return ++reads === 1 ? manifestRead.promise : Response.json(manifest);
+            }
+            if (url.pathname.endsWith('/deploy.png')) return new Response(new Blob());
+            if (url.pathname.endsWith('/collision.lcnav.gz')) return new Response(packWithWalkableOrigin());
+            return new Response(null, { status: 404 });
+        }
+    });
+    const drawImage = jest.fn();
+    const noop = () => {};
+    const ctx: Partial<CanvasRenderingContext2D> = {
+        drawImage, fillRect: noop, save: noop, restore: noop, beginPath: noop, moveTo: noop, lineTo: noop, stroke: noop
+    };
+    const context = spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as CanvasRenderingContext2D);
+    const frame = spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(1);
+    const settle = () => new Promise<void>(resolve => setImmediate(resolve));
+    const expectPaint = (source: string) => {
+        drawImage.mockClear();
+        window.dispatchEvent(new Event('resize'));
+        frame.mock.lastCall![0](0);
+        frame.mockClear();
+        expect(drawImage.mock.calls[0]?.[0]?.alt).toBe(source);
+        expect(document.querySelector<HTMLElement>('.rs2b0t-walkmap-status')!.dataset.basemap).toBe('ready');
+    };
+    try {
+        void Picker.open();
+        await settle();
+        expect(reads).toBe(1);
+        if (order === 'early success') {
+            manifestRead.resolve(Response.json(manifest));
+            await settle();
+            expectPaint('deploy');
+        }
+        document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-rebuild')!.click();
+        document.querySelector<HTMLButtonElement>('.rs2b0t-confirm-yes')!.click();
+        await settle();
+        expectPaint('rebuilt');
+        if (order !== 'early success') {
+            if (order === 'late rejection') manifestRead.reject(new Error('manifest unavailable'));
+            else manifestRead.resolve(Response.json(manifest));
+            await settle();
+            expectPaint('rebuilt');
+        }
+        document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-cancel')!.click();
+        void Picker.open();
+        await settle();
+        expect(reads).toBe(1);
+        expectPaint('rebuilt');
+    } finally {
+        manifestRead.resolve(new Response(null, { status: 404 }));
+        document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-cancel')?.click();
+        frame.mockRestore();
+        context.mockRestore();
+        rebuild.mockRestore();
+        decode.mockRestore();
+        Object.defineProperty(globalThis, 'fetch', originalFetch);
     }
 });
