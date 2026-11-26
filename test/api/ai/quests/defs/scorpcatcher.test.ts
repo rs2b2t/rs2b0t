@@ -1,4 +1,3 @@
-import { itemCounts } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 
 import { BARCRAWL_CARD, BARCRAWL_GP } from '#/bot/api/ai/quests/barcrawl/BarcrawlLogic.js';
@@ -6,33 +5,9 @@ import {
     ANTIPOISON_DOSES, ANTIPOISON_GP, CAGE_ID, SC_STAGE
 } from '#/bot/api/ai/quests/defs/scorpcatcher/areas.js';
 import { decide, scorpcatcher } from '#/bot/api/ai/quests/defs/scorpcatcher/index.js';
-import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestStep } from '#/bot/api/ai/quests/engine/types.js';
 
-interface Options {
-    journal?: QuestSnapshot['journal'];
-    stage?: number;
-    noProgress?: boolean;
-    invIds?: number[];
-    bankIds?: number[];
-    bankKnown?: boolean;
-}
-
-function snap(options: Options = {}): QuestSnapshot {
-    return {
-        journal: options.journal ?? 'inProgress',
-        inv: new Map(),
-        invIds: itemCounts(options.invIds ?? []),
-        worn: new Set(),
-        wornIds: new Set(),
-        noProgress: 0,
-        bankCoins: 5000,
-        progress: options.noProgress ? undefined : { stage: options.stage ?? SC_STAGE.FIRST_HINT, flags: new Set() },
-        bank: new Map(),
-        bankIds: itemCounts(options.bankIds ?? []),
-        bankKnown: options.bankKnown ?? true,
-        freeSlots: 20
-    };
-}
+import { snap } from './scorpcatcher-snapshot.fixture.js';
 
 function talkTarget(step: QuestStep): string {
     return step.kind === 'talk' ? step.stop.npc : `(${step.kind})`;
