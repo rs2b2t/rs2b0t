@@ -5,7 +5,7 @@ import { ITEM_ALIASES, NAME_SYNONYMS } from '#/bot/data/itemAliases.js';
 import { NAME_COLLISIONS } from '#/bot/data/nameCollisions.js';
 import { UNTRADEABLE_IDS } from '#/bot/data/untradeable.js';
 import { worthStocking } from '#/bot/api/market/catalog.js';
-import type { ObjRecord } from '#/bot/adapter/ClientAdapter.js';
+import { rec } from '../fixtures/obj-record.js';
 
 const UNTRADEABLE = new Set(UNTRADEABLE_IDS);
 const BOOK_PAGES = [
@@ -23,10 +23,6 @@ const SHOP_VISIBLE = NAME_COLLISIONS.map(g => ({
     name: g.name,
     objs: g.objs.filter(o => !UNTRADEABLE.has(o.id))
 })).filter(g => g.objs.length > 1 && worthStocking(g.name));
-
-function rec(id: number, name: string, over: Partial<ObjRecord> = {}): ObjRecord {
-    return { id, name, cost: 1, stackable: false, members: false, equippable: false, certlink: -1, certtemplate: -1, ...over };
-}
 
 /** A catalog holding one collision group, so resolution can be asked about it in isolation. */
 // Why: the strung half of a bow or amulet pair is the one with a wear model and preferWorn splits on that flag, so a fixture that drops it tests a client the shop never talks to.
