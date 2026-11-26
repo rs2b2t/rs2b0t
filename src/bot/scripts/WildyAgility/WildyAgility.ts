@@ -2,7 +2,7 @@ import { FOOD_OPTIONS, foodHealAmount, isFoodItem, shouldEatToUseFood } from '..
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { actions, reader } from '../../adapter/ClientAdapter.js';
 import type { Task } from '../../api/bot/Bot.js';
-import { AgilityCourseBot } from '../shared/AgilityCourseBot.js';
+import { AgilityCourseBot } from '../../api/bot/AgilityCourseBot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Game, waitForPlayerTile } from '../../api/game/Game.js';

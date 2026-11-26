@@ -1,4 +1,4 @@
-import { TaskBot } from '../../api/bot/Bot.js';
+import { TaskBot } from './Bot.js';
 
 export abstract class AgilityCourseBot extends TaskBot {
     protected course: string[] = [];
