@@ -12,17 +12,24 @@ const { sharedStorage } = require('../../desktop/shared-storage.cjs');
 const cleanups: (() => void)[] = [];
 afterEach(() => { for (const cleanup of cleanups.splice(0).reverse()) cleanup(); });
 
+type Update = { version: number; changes: Record<string, string | null>; append?: string[] };
+type StorageReply = {
+    value?: string | string[] | boolean | null;
+    error?: string;
+    snapshot?: { version: number; data: Record<string, string> };
+};
+
 class Frame {
     url = 'http://localhost:8081/bot.html';
     detached = false;
     destroyed = false;
     fails = false;
     framesInSubtree: Frame[] = [this];
-    received: { version: number; data: Record<string, string> }[] = [];
+    received: Update[] = [];
     isDestroyed() { return this.destroyed; }
-    send(_channel: string, snapshot: { version: number; data: Record<string, string> }) {
+    send(_channel: string, update: Update) {
         if (this.fails) throw new Error('Render frame was disposed');
-        this.received.push(snapshot);
+        this.received.push(update);
     }
 }
 
@@ -48,7 +55,7 @@ async function fixture() {
     await module.exports.prepareStorage(app).start('http://localhost:8081');
     cleanups.push(() => app.emit('quit'));
     const request = (frame: Frame, method: string, ...args: unknown[]) => {
-        const event = { sender: contents, senderFrame: frame, returnValue: undefined as unknown as { error?: string; snapshot?: { version: number; data: Record<string, string> } } };
+        const event = { sender: contents, senderFrame: frame, returnValue: undefined as unknown as StorageReply };
         ipcMain.emit('rs2b0t-storage', event, method, ...args);
         return event.returnValue;
     };
@@ -62,7 +69,7 @@ test('storage changes reach registered bridges only, with the writer updated by 
     f.request(f.child, 'snapshot');
     const response = f.request(f.main, 'setItem', key, 'Shrimps');
     expect(response.snapshot?.data[key]).toBe('Shrimps');
-    expect(f.child.received.at(-1)?.data[key]).toBe('Shrimps');
+    expect(f.child.received).toEqual([{ version: 1, changes: { [key]: 'Shrimps' } }]);
     expect(f.main.received).toEqual([]);
     expect(f.plain.received).toEqual([]);
     expect(f.nested.received).toEqual([]);
@@ -77,7 +84,7 @@ test('subframe navigation unregisters its subtree until the new document request
     expect(f.nested.received).toEqual([]);
     expect(f.request(f.child, 'snapshot').snapshot?.data[key]).toBe('Trout');
     f.request(f.main, 'setItem', key, 'Salmon');
-    expect(f.child.received.at(-1)?.data[key]).toBe('Salmon');
+    expect(f.child.received.at(-1)?.changes[key]).toBe('Salmon');
     expect(f.nested.received).toEqual([]);
 });
 
@@ -87,7 +94,7 @@ test('same-document navigation keeps the subscription and external writes notify
     f.contents.emit('did-start-navigation', { isSameDocument: true, isMainFrame: false, frame: f.child });
     f.store.setItem(key, 'Lobster');
     f.watch();
-    expect(f.child.received.at(-1)?.data[key]).toBe('Lobster');
+    expect(f.child.received.at(-1)?.changes[key]).toBe('Lobster');
     expect(f.plain.received).toEqual([]);
 });
 
@@ -99,7 +106,7 @@ test.each(['detached', 'destroyed', 'fails'] as const)('a %s peer cannot break a
     expect(response.error).toBeUndefined();
     expect(response.snapshot?.data[key]).toBe('Shrimps');
     expect(f.child.received).toEqual([]);
-    expect(f.nested.received.at(-1)?.data[key]).toBe('Shrimps');
+    expect(f.nested.received.at(-1)?.changes[key]).toBe('Shrimps');
 });
 
 test.each(['navigation', 'destroyed'])('window %s removes all subscriptions', async action => {
@@ -121,4 +128,21 @@ test('a frame that leaves the trusted origin loses access and stops receiving sn
     f.request(f.main, 'setItem', key, 'Shrimps');
     expect(f.store.getItem(key)).toBe('Shrimps');
     expect(f.child.received).toEqual([]);
+});
+
+test('coalesced external writes send one ordered delta and preserve the full writer response', async () => {
+    const f = await fixture();
+    const [a, b, c, d, e] = ['a', 'b', 'c', 'd', 'e'].map(name => key + name);
+    for (const k of [a, b, c, d]) f.store.setItem(k, 'old');
+    expect(f.request(f.child, 'snapshot').snapshot?.version).toBe(1);
+    f.store.setItem(e, 'added');
+    f.store.removeItem(a);
+    f.store.removeItem(c);
+    f.store.setItem(c, 'old');
+    f.store.setItem(b, '');
+    f.watch();
+    const reply = f.request(f.main, 'compareAndSet', b, 'old', 'ignored');
+    expect(reply).toEqual({ value: false, snapshot: { version: 2, data: { [b]: '', [d]: 'old', [e]: 'added', [c]: 'old' } } });
+    expect(f.child.received).toEqual([{ version: 2, changes: { [a]: null, [b]: '', [e]: 'added' }, append: [c] }]);
+    expect(Object.keys(f.child.received[0].changes)).toEqual([a, b, e]);
 });
