@@ -178,8 +178,7 @@ test.each([
     ['select another card', 'Picked fixture'],
     ['assign from roster', 'Picked fixture'],
     ['dismiss', 'Previous fixture'],
-    ['wait', 'Imported fixture'],
-    ['fail a newer import', 'Imported fixture']
+    ['wait', 'Imported fixture']
 ])('file load after %s leaves %s selected', async (action, selected) => {
     const key = 'rs2b0t:selectedScript';
     for (const name of ['Previous fixture', 'Picked fixture']) {
@@ -200,10 +199,6 @@ test.each([
             browse.click();
         } else if (action === 'assign from roster') {
             await library.panel.configureScript('Picked fixture', null, false);
-        } else if (action === 'fail a newer import') {
-            const finishInvalid = library.startImport('Invalid fixture', 0);
-            await finishInvalid();
-            expect(backdrop.querySelector('.rs2b0t-load-error')).not.toBeNull();
         }
         await finish();
 
@@ -214,6 +209,33 @@ test.each([
         backdrop.click();
         library.restore();
         for (const name of ['Imported fixture', 'Picked fixture', 'Previous fixture']) ScriptRegistry.unregister(name);
+    }
+});
+
+test.each(['success', 'failure'])('selects the older valid import when the newer import fails (%s first)', async first => {
+    ScriptRegistry.register({ name: 'Previous fixture', description: '', create: () => { throw new Error('unused'); } });
+    const library = openLibrary();
+    try {
+        await library.panel.configureScript('Previous fixture', null, false);
+        const finishValid = library.startImport('Imported fixture');
+        const finishInvalid = library.startImport('Invalid fixture', 0);
+        if (first === 'success') {
+            await finishValid();
+            expect(library.backdrop.style.display).toBe('flex');
+            library.expectSelected('Previous fixture');
+            await finishInvalid();
+        } else {
+            await finishInvalid();
+            expect(library.backdrop.querySelector('.rs2b0t-load-error')).not.toBeNull();
+            await finishValid();
+        }
+        library.expectSelected('Imported fixture');
+        expect(library.backdrop.style.display).toBe('none');
+    } finally {
+        library.backdrop.click();
+        library.restore();
+        ScriptRegistry.unregister('Imported fixture');
+        ScriptRegistry.unregister('Previous fixture');
     }
 });
 
