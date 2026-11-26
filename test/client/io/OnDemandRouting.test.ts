@@ -74,7 +74,12 @@ test('cache worker receives the selected frame target instead of the wall origin
     try {
         Object.assign(TARGET, resolveTarget('proxy', 'localhost:8081', false, new URLSearchParams('world=2')));
         new OnDemand(versionlist, { ingame: false, db: null } as Client);
-        expect(post).toHaveBeenCalledWith({ type: 'init', versions: [[], [1], [1], []], crcs: [[], [0], [0], []], host: 'localhost:8081/__rs2b0t/world/2', secured: false, ingame: false, dbEnabled: false });
+        expect(post).toHaveBeenCalledWith({
+            type: 'init',
+            versions: [Uint16Array.of(), Uint16Array.of(1), Uint16Array.of(1), Uint16Array.of()],
+            crcs: [Int32Array.of(), Int32Array.of(0), Int32Array.of(0), Int32Array.of()],
+            host: 'localhost:8081/__rs2b0t/world/2', secured: false, ingame: false, dbEnabled: false
+        });
     } finally {
         delete TARGET.world;
         delete TARGET.httpPrefix;
@@ -305,7 +310,7 @@ test.each([
     { missing: 'location', file: 1, pendingStatus: -1 }
 ])('a missing $missing file waits only for the other map file and player info', async ({ file, pendingStatus }) => {
     const loader = loaderFixture();
-    loader.versions[3] = [1, 1];
+    loader.versions[3] = Uint16Array.of(1, 1);
     const mapBuild = mock(() => {});
     const client: Client = Object.assign(Object.create(Client.prototype), {
         onDemand: loader, sceneState: 1, awaitingPlayerInfo: true, minusedlevel: ClientBuild.minusedlevel,
