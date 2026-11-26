@@ -2,6 +2,7 @@ import { expect, spyOn, test } from 'bun:test';
 import { VaultPrompt } from '#/bot/multibox/VaultPrompt.js';
 import { ProfileVault, vault } from '#/bot/multibox/ProfileVault.js';
 import { serializeProfileFile } from '#/bot/multibox/ProfileTransfer.js';
+import { readBoxItem } from '#/bot/runtime/box.js';
 import { SettingsPanel } from '#/bot/multibox/SettingsPanel.js';
 import { ResourcePanel } from '#/bot/multibox/ResourcePanel.js';
 import { DomSlotOps } from '#/bot/multibox/DomSlotOps.js';
@@ -140,6 +141,41 @@ test.each([0, 4])('settings import applies modes once with %i profiles already l
         } finally {
             open.mockRestore();
             spawning.mockRestore();
+        }
+    });
+});
+
+test('retrying a restore after a quota error clears the previous set profile', async () => {
+    await withWall('local', async () => {
+        await vault.upsert({ username: 'set', password: '' });
+        const legacy = 'rs2b0t:set:set:Global:runEnergyMin';
+        localStorage.setItem(legacy, '42');
+        const backup = serializeProfileFile({ profiles: [{ username: 'eve', password: '' }], tabs: [], activeTab: 'Main', storage: {} });
+        const open = spyOn(SettingsPanel.prototype, 'open');
+        const write = localStorage.setItem;
+        let full = true;
+        Object.defineProperty(localStorage, 'setItem', { configurable: true, value(key: string, value: string) {
+            if (full && key === 'rs2b0t:set-profile-settings-v1') throw new DOMException('storage full', 'QuotaExceededError');
+            write.call(localStorage, key, value);
+        } });
+        try {
+            document.getElementById('mbx-settings')!.click();
+            const panel = open.mock.contexts[0] as SettingsPanel;
+            await panel.importText(backup);
+            expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toContain('storage full');
+            full = false;
+            await panel.importText(backup);
+            expect(panel.el.hidden).toBe(true);
+            sessionStorage.clear();
+            expect(vault.list().map(p => p.username)).toEqual(['eve']);
+            expect(readBoxItem('set:Global:runEnergyMin', 'set')).toBeNull();
+            expect(localStorage.getItem(legacy)).toBe('42');
+        } finally {
+            Object.defineProperty(localStorage, 'setItem', { configurable: true, value: write });
+            open.mockRestore();
+            localStorage.removeItem(legacy);
+            localStorage.removeItem('rs2b0t:set-profile-settings-v1');
+            sessionStorage.removeItem('rs2b0t:set-profile-settings-v1');
         }
     });
 });

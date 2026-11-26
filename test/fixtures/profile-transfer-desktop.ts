@@ -21,6 +21,7 @@ for (const user of users) {
 }
 
 let keyReads = 0;
+let syncReads = 0;
 let version = 0;
 runInNewContext(readFileSync(new URL('../../desktop/preload.cjs', import.meta.url), 'utf8'), {
     queueMicrotask,
@@ -33,7 +34,10 @@ runInNewContext(readFileSync(new URL('../../desktop/preload.cjs', import.meta.ur
         ipcRenderer: {
             on() {},
             sendSync(_: string, method: string, key: string, value: string) {
-                if (method === 'getItem') return { value: data[key] ?? null };
+                if (method === 'getItem') {
+                    syncReads++;
+                    return { value: data[key] ?? null };
+                }
                 if (method === 'removeItem') delete data[key];
                 else if (method === 'setItem') data[key] = value;
                 else assert.equal(method, 'snapshot');
@@ -43,6 +47,14 @@ runInNewContext(readFileSync(new URL('../../desktop/preload.cjs', import.meta.ur
     })
 });
 await import('../../src/bot/panel/desktopStorage.js');
+if (process.argv.includes('--settings')) {
+    const { SettingsStore } = await import('../../src/bot/runtime/Settings.js');
+    const browser = Reflect.get(window, 'happyDOM') as { setURL(url: string): void };
+    browser.setURL('http://localhost/bot.html?box=set');
+    const threshold = SettingsStore.globalBag().num('runEnergyMin');
+    console.log(JSON.stringify({ threshold, syncReads }));
+    process.exit(0);
+}
 const { collectBoxStorage, applyBoxStorage } = await import('../../src/bot/multibox/ProfileTransfer.js');
 
 sessionStorage.setItem('rs2b0t:user1:selectedScript', 'stale');

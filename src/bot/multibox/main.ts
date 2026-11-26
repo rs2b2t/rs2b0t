@@ -420,6 +420,7 @@ function boot(): void {
         renderRail();
     }
 
+    const pendingWipe = new Set<string>();
     const settings = new SettingsPanel({
         ensureUnlocked: () => ensureUnlocked(),
         snapshot: () => ({
@@ -430,7 +431,9 @@ function boot(): void {
         replaceAll: async data => {
             const previous = vault.list().map(p => p.username);
             await vault.replaceAll(data);
-            applyBoxStorage(data.storage, [...previous, ...data.profiles.map(p => p.username)]);
+            for (const user of [...previous, ...data.profiles.map(p => p.username), ...Object.keys(data.storage)]) pendingWipe.add(user);
+            applyBoxStorage(data.storage, [...pendingWipe]);
+            pendingWipe.clear();
         },
         onImported: data => {
             applyImportedTabs(data);

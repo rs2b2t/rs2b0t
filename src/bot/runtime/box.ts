@@ -41,7 +41,11 @@ function legacyKey(suffix: string, id: string): string | null {
 }
 
 function allowsLegacy(store: Storage, key: string, id: string): boolean {
-    return (id !== 'set' || store.getItem(setProfileMigrationKey) === null) && store.getItem(`rs2b0t::cleared:${key}`) === null;
+    if (id === 'set') {
+        if (store.getItem(setProfileMigrationKey) !== null) return false;
+        if (typeof localStorage !== 'undefined' && store !== localStorage && localStorage.getItem(setProfileMigrationKey) !== null) return false;
+    }
+    return store.getItem(`rs2b0t::cleared:${key}`) === null;
 }
 
 export function readBoxItem(suffix: string, id: string): string | null {

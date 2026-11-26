@@ -17,13 +17,18 @@ await import('../../src/bot/panel/desktopStorage.js');
 if (process.argv.includes('--export-set')) {
     const { SettingsStore } = await import('../../src/bot/runtime/Settings.js');
     const { collectBoxStorage } = await import('../../src/bot/multibox/ProfileTransfer.js');
-    const { boxKey } = await import('../../src/bot/runtime/box.js');
+    const { boxKey, readBoxItem, disableLegacySetProfileSettings } = await import('../../src/bot/runtime/box.js');
     SettingsStore.save('set', 'travel:mode', 'walk');
     sessionStorage.clear();
     sessionStorage.setItem('rs2b0t:set:set:Miner:rock', 'coal');
     for (const [key, value] of data) notify!(key, null, value);
     assert.equal(sessionStorage.getItem(boxKey('set:set:travel:mode', '')), 'walk');
-    console.log(JSON.stringify(collectBoxStorage(['set'], () => true)));
+    const before = collectBoxStorage(['set'], () => true);
+    disableLegacySetProfileSettings(localStorage);
+    assert.equal(readBoxItem('set:Miner:rock', 'set'), null);
+    const offered: string[] = [];
+    const after = collectBoxStorage(['set'], suffix => { offered.push(suffix); return true; });
+    console.log(JSON.stringify({ before, offered, after }));
     process.exit(0);
 }
 const { readProfileScript, readScriptSettings, replaceScriptSettings, writeProfileScript } = await import('../../src/bot/multibox/RosterStorage.js');

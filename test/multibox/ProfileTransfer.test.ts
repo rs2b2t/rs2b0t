@@ -103,7 +103,15 @@ describe('ProfileTransfer', () => {
     test('desktop export distinguishes mirrored standalone writes from legacy session settings', () => {
         const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--export-set']);
         expect(result.exitCode, result.stderr.toString()).toBe(0);
-        expect(JSON.parse(result.stdout.toString())).toEqual({ set: { 'set:Miner:rock': 'coal' } });
+        expect(JSON.parse(result.stdout.toString())).toEqual({
+            before: { set: { 'set:Miner:rock': 'coal' } }, offered: [], after: {}
+        });
+    });
+
+    test('reading missing global settings for set uses the desktop snapshot', () => {
+        const result = Bun.spawnSync(['bun', 'test/fixtures/profile-transfer-desktop.ts', '--settings']);
+        expect(result.exitCode, result.stderr.toString()).toBe(0);
+        expect(JSON.parse(result.stdout.toString())).toEqual({ threshold: 20, syncReads: 0 });
     });
 
     test('restores a colon-bearing profile key from its own export', () => {
