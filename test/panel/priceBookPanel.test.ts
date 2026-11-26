@@ -63,10 +63,14 @@ function type(box: HTMLInputElement, text: string): void {
     box.dispatchEvent(new Event('input'));
 }
 
-async function chooseImport(panel: PriceBookPanel, name: string, contents: string): Promise<void> {
+function selectImport(panel: PriceBookPanel, file: Pick<File, 'name' | 'text'>): void {
     const input = panel.root.querySelector('[data-role=orderbook-import]') as HTMLInputElement;
-    Object.defineProperty(input, 'files', { configurable: true, value: [new File([contents], name)] });
+    Object.defineProperty(input, 'files', { configurable: true, value: [file] });
     input.dispatchEvent(new Event('change'));
+}
+
+async function chooseImport(panel: PriceBookPanel, name: string, contents: string): Promise<void> {
+    selectImport(panel, new File([contents], name));
     await new Promise(resolve => setTimeout(resolve, 0));
 }
 
@@ -312,6 +316,29 @@ describe('transferring books', () => {
         (panel.root.querySelector('[data-action=apply-import]') as HTMLButtonElement).click();
         expect(PriceBooks.all()).toEqual(incoming);
         expect(panel.root.querySelector('[data-role=import-preview]')).toBeNull();
+    });
+
+    test.each(['succeeds', 'fails'])('keeps the latest import when an older read %s afterward', async outcome => {
+        const panel = openPanel();
+        const before = PriceBooks.all();
+        const book = { name: 'B', margin: 5, maxTradeValue: 700, rows: [] };
+        const older = Promise.withResolvers<string>();
+        selectImport(panel, { name: 'A.json', text: () => older.promise });
+        await chooseImport(panel, 'B.json', JSON.stringify([book]));
+        const preview = () => panel.root.querySelector('[data-role=import-preview]')?.textContent;
+        expect(preview()).toBe('B.json: B: 0 rows');
+
+        if (outcome === 'succeeds') {
+            older.resolve(JSON.stringify([{ ...book, name: 'A' }]));
+        } else {
+            older.reject(new Error('read failed'));
+        }
+        await Promise.resolve();
+
+        expect(preview()).toBe('B.json: B: 0 rows');
+        expect(panel.root.querySelector('[data-role=import-error]')).toBeNull();
+        panel.root.querySelector<HTMLButtonElement>('[data-action=apply-import]')!.click();
+        expect(PriceBooks.all()).toEqual([...before, book]);
     });
 
     test('Cancel discards a staged import without changing storage', async () => {
