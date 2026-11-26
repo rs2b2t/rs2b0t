@@ -1961,7 +1961,7 @@ export default class Model extends ModelSource {
 
                 for (let i: number = 0; i < faceCount; i++) {
                     const face = faces[i];
-                    const priority = this.facePriority[face];
+                    const priority: number = this.facePriority[face];
                     const count = Model.tmpPriorityFaceCount[priority]++;
                     let priorityFaces = Model.tmpPriorityFaces[priority];
                     if (count === (priorityFaces?.length ?? 0)) {
