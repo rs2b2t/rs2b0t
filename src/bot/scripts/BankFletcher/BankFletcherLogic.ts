@@ -349,9 +349,7 @@ export function needsRestock(opts: {
     input1: number;
 }): boolean {
     if (opts.kind === 'cut+string') {
-        const canCut = opts.logCount > 0 && opts.knifeCount > 0;
-        const canString = opts.input0 > 0 && opts.input1 > 0;
-        return !canCut && !canString;
+        return !hasFletchWork(opts);
     }
     if (opts.kind !== 'knife') {
         return opts.input0 === 0 || opts.input1 === 0;

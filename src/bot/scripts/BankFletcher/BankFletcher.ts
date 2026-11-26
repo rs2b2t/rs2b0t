@@ -405,26 +405,22 @@ export default class BankFletcher extends TaskBot {
         return attach ? Inventory.count(attach.product) : 0;
     }
 
-    canWork(): boolean {
-        const kind = this.workKind();
-        return hasFletchWork({
-            kind,
+    private readWorkInventory() {
+        return {
+            kind: this.workKind(),
             logCount: this.logCount(),
             knifeCount: this.knifeCount(),
             input0: this.instantInput0Count(),
             input1: this.instantInput1Count()
-        });
+        };
+    }
+
+    canWork(): boolean {
+        return hasFletchWork(this.readWorkInventory());
     }
 
     mustRestock(): boolean {
-        const kind = this.workKind();
-        return needsRestock({
-            kind,
-            logCount: this.logCount(),
-            knifeCount: this.knifeCount(),
-            input0: this.instantInput0Count(),
-            input1: this.instantInput1Count()
-        });
+        return needsRestock(this.readWorkInventory());
     }
 }
 
