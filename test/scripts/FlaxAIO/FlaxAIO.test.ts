@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import { Execution } from '#/bot/api/execution/Execution.js';
+import { EventSignal } from '#/bot/api/execution/EventSignal.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { Inventory, type InvItem } from '#/bot/api/inventory/Inventory.js';
+import { ChatDialog } from '#/bot/api/ui/dialogue/ChatDialog.js';
 import { ScriptRunner } from '#/bot/runtime/ScriptRunner.js';
 import { SettingsBag } from '#/bot/runtime/Settings.js';
 import FlaxAIO from '#/bot/scripts/FlaxAIO/flaxaio.js';
-import { AscendTask } from '#/bot/scripts/FlaxAIO/spinning.js';
+import { AscendTask, SpinTask } from '#/bot/scripts/FlaxAIO/spinning.js';
+import { stubProps } from '../../lib/stubSingletons.js';
 
 const original = {
     delayUntil: Execution.delayUntil,
@@ -120,4 +123,32 @@ describe('FlaxAIO ascend decision', () => {
         full = false;
         expect(new AscendTask(instance).validate()).toBe(true);
     });
+});
+
+test('logs the starting batch and spins through a pending event until the floor changes', async () => {
+    const instance = bot(false, true);
+    const logs: string[] = [];
+    instance.bindLog(message => logs.push(message));
+    await instance.onStart();
+    Game.tile = () => ({ x: 0, z: 0, level: 1 });
+    inv = [{ name: 'Flax', count: 4 }];
+    const delays: number[] = [];
+    const restores = [
+        stubProps(Game, { animating: () => true }),
+        stubProps(ChatDialog, { isMakeMenu: () => false, canContinue: () => false }),
+        stubProps(EventSignal, { pending: () => true }),
+        stubProps(Execution, {
+            delayTicks: async ticks => {
+                delays.push(ticks);
+                Game.tile = () => ({ x: 0, z: 0, level: 0 });
+            }
+        })
+    ];
+    try {
+        await new SpinTask(instance).execute();
+        expect(logs).toContain("riding the wheel with 4 'Flax'");
+        expect(delays).toEqual([1]);
+    } finally {
+        for (const restore of restores.reverse()) restore();
+    }
 });
