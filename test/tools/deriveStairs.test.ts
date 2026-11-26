@@ -76,12 +76,23 @@ test('restoring Catherby writes all eight directed edges and passes --check', ()
     expect(derive('--check').exitCode).toBe(0);
 });
 
-test('enrichment keeps each approach once at its scripted landing', () => {
+function placeStairs(placements: string) {
     mkdirSync(join(root, 'content/pack'));
     mkdirSync(join(root, 'content/maps'));
     writeFileSync(join(root, 'content/pack/loc.pack'), '1=stairs\n');
     writeFileSync(join(root, 'content/scripts/stairs.loc'), '[stairs]\nname=Stairs\nop1=Climb-up\n');
-    writeFileSync(join(root, 'content/maps/m50_50.jm2'), '==== LOC ====\n0 5 9: 1 10\n');
+    writeFileSync(join(root, 'content/maps/m50_50.jm2'), '==== LOC ====\n' + placements);
+}
+
+function enrich(rows: object[]) {
+    writeFileSync(out, JSON.stringify(rows));
+    const result = Bun.spawnSync(['python3', '-B', enricher, '--content', 'content'], { cwd: root });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    return JSON.parse(readFileSync(out, 'utf8'));
+}
+
+test('enrichment keeps each approach once at its scripted landing', () => {
+    placeStairs('0 5 9: 1 10\n');
     const loc = { x: 3205, z: 3209, level: 0 };
     const landing = { ...loc, level: 1 };
     const scripted = {
@@ -89,16 +100,46 @@ test('enrichment keeps each approach once at its scripted landing', () => {
     };
     const reverse = { ...scripted, to: { ...landing, x: 3204 }, autoReverse: true };
     const north = { ...loc, z: 3210 };
-    writeFileSync(out, JSON.stringify([
+    const edges = enrich([
         reverse,
         { ...reverse, from: north },
         { ...scripted, scriptedLocs: [{ ...loc, debugName: 'stairs', action: 'Climb-up' }] }
-    ]));
-    const result = Bun.spawnSync(['python3', '-B', enricher, '--content', 'content'], { cwd: root });
-    expect(result.exitCode, result.stderr.toString()).toBe(0);
-    const edges = JSON.parse(readFileSync(out, 'utf8'));
+    ]);
     const enriched = { ...scripted, locId: 1, locX: loc.x, locZ: loc.z, debugName: 'stairs', options: ['Climb-up'] };
     expect(edges).toHaveLength(2);
     expect(edges).toContainEqual(enriched);
     expect(edges).toContainEqual({ ...enriched, from: north });
+});
+
+test('a shared stand tile keeps the scripted landing of each adjacent staircase', () => {
+    placeStairs('0 5 9: 1 10\n0 7 9: 1 10\n');
+    const from = { x: 3206, z: 3209, level: 0 };
+    const stair = { from, locName: 'Stairs', action: 'Climb-up', kind: 'stair' };
+    const west = { ...from, x: 3205, debugName: 'stairs', action: stair.action };
+    const east = { ...west, x: 3207 };
+    const westLanding = { ...from, x: 3208, level: 1 };
+    const eastLanding = { ...westLanding, x: 3207 };
+    const edges = enrich([
+        { ...stair, to: { ...westLanding, x: 3204 }, autoReverse: true },
+        { ...stair, to: westLanding, scriptedLocs: [west] },
+        { ...stair, to: eastLanding, scriptedLocs: [east] }
+    ]);
+    const metadata = { ...stair, locId: 1, locZ: 3209, debugName: 'stairs', options: ['Climb-up'] };
+    expect(edges).toEqual([
+        { ...metadata, locX: 3205, to: westLanding },
+        { ...metadata, locX: 3207, to: eastLanding }
+    ]);
+    expect(enrich(edges)).toEqual(edges);
+});
+
+test('a snapped edge retains each distinct scripted placement with the same landing', () => {
+    placeStairs('0 5 9: 1 10\n0 7 9: 1 10\n');
+    const from = { x: 3206, z: 3209, level: 0 };
+    const to = { ...from, level: 1 };
+    const west = { ...from, x: 3205, debugName: 'stairs', action: 'Climb-up' };
+    const east = { ...west, x: 3207 };
+    const edges = enrich([
+        { from, to, locName: 'Stairs', action: 'Climb-up', kind: 'stair', scriptedLocs: [west, west, east] }
+    ]);
+    expect(edges.map((edge: { locX: number }) => edge.locX)).toEqual([3205, 3207]);
 });

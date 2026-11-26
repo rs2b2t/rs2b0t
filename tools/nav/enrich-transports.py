@@ -253,6 +253,31 @@ def edge_key(edge: dict) -> tuple[int, int, int, int, int, int, str, str]:
     )
 
 
+def stair_placements(
+    edge: dict,
+    configs: dict[int, LocConfig],
+    spatial: dict[tuple[int, int, int], list[Placement]],
+    allowed_stair_debugs: set[str],
+) -> dict[tuple[int, int, int, str, str], Placement]:
+    locs = edge.get("scriptedLocs", [])
+    if not locs and all(field in edge for field in ("locX", "locZ", "debugName")):
+        locs = [{
+            "x": edge["locX"], "z": edge["locZ"], "level": edge["from"]["level"],
+            "debugName": edge["debugName"], "action": edge["action"],
+        }]
+    matches = {}
+    for loc in locs:
+        if edge.get("kind") == "stair" and loc["debugName"] not in allowed_stair_debugs:
+            continue
+        tile = (loc["x"], loc["z"], loc["level"])
+        for placement in spatial.get(tile, []):
+            config = configs.get(placement.loc_id)
+            if config and config.debug_name == loc["debugName"] and loc["action"] in config.options:
+                matches[(*tile, config.debug_name, loc["action"])] = placement
+                break
+    return matches
+
+
 def closed_open_loc_ids(
     configs: dict[int, LocConfig],
     placement_loc_id: int,
@@ -314,15 +339,22 @@ def main() -> None:
     stairs = json.loads((data_dir / "stairEdges.json").read_text(encoding="utf-8"))
 
     scripted_edges = defaultdict(list)
-    for edge in stairs:
-        for loc in edge.pop("scriptedLocs", []):
-            key = (loc["x"], loc["z"], loc["level"], loc["debugName"], loc["action"])
-            scripted_edges[key].append(edge)
+    stair_rows = []
+    for raw in stairs:
+        placements = stair_placements(raw, configs, spatial, allowed_stair_debugs)
+        if not placements:
+            stair_rows.append((raw, None))
+        for key, placement in placements.items():
+            edge = {**raw, "action": key[-1]}
+            stair_rows.append((edge, placement))
+            if raw.get("scriptedLocs"):
+                scripted_edges[key].append(edge)
 
-    def enrich(edges: list[dict]) -> list[dict]:
+    def enrich(rows: Iterable[tuple[dict, Placement | None]]) -> list[dict]:
         enriched: list[dict] = []
-        for raw in edges:
+        for raw, bound_placement in rows:
             edge = dict(raw)
+            scripted_locs = edge.pop("scriptedLocs", [])
             auto_reverse = edge.pop("autoReverse", False)
             existing = configs.get(edge.get("locId", -1))
             source_backed_ladder = existing is not None and (
@@ -333,7 +365,12 @@ def main() -> None:
             if source_backed_ladder and all(field in edge for field in ("locId", "locX", "locZ", "debugName", "options")):
                 enriched.append(edge)
                 continue
-            resolved = resolve_source_loc(edge, configs, spatial, allowed_stair_debugs)
+            if bound_placement:
+                resolved = configs[bound_placement.loc_id], bound_placement
+            elif scripted_locs:
+                resolved = None
+            else:
+                resolved = resolve_source_loc(edge, configs, spatial, allowed_stair_debugs)
             if resolved:
                 config, placement = resolved
                 if auto_reverse and not edge.get("disabledReason"):
@@ -360,8 +397,8 @@ def main() -> None:
             enriched.append(edge)
         return enriched
 
-    enriched_curated = enrich(curated)
-    enriched_stairs = enrich(stairs)
+    enriched_curated = enrich((edge, None) for edge in curated)
+    enriched_stairs = enrich(stair_rows)
 
     def write_json(path: Path, edges: list[dict]) -> None:
         text = "[\n" + ",\n".join("    " + json.dumps(edge, separators=(",", ":")) for edge in edges) + "\n]\n"
