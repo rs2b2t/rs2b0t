@@ -11,6 +11,13 @@ const clearAll = () => {
 beforeEach(clearAll);
 afterEach(clearAll);
 
+function expectEncryptedEnvelope(): void {
+    const base64 = expect.stringMatching(/^[A-Za-z0-9+/]+={0,2}$/);
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({
+        v: 1, kdf: 'PBKDF2-SHA256', iter: 310000, salt: base64, iv: base64, ct: base64
+    });
+}
+
 describe('ProfileVault', () => {
     test('empty → setup unlocks with an empty list and writes an encrypted blob', async () => {
         const v = new ProfileVault();
@@ -18,10 +25,7 @@ describe('ProfileVault', () => {
         await v.setup('pw');
         expect(v.status()).toBe('unlocked');
         expect(v.list()).toEqual([]);
-        const blob = JSON.parse(localStorage.getItem(KEY)!) as { v: number; kdf: string; iter: number };
-        expect(blob.v).toBe(1);
-        expect(blob.kdf).toBe('PBKDF2-SHA256');
-        expect(blob.iter).toBe(310000);
+        expectEncryptedEnvelope();
     });
 
     test('round-trip: upsert/remove survive a real lock/unlock cycle', async () => {
@@ -63,9 +67,7 @@ describe('ProfileVault', () => {
         const v = new ProfileVault();
         await v.setup('pw');
         await v.upsert({ username: 'alice', password: 'hunter2' });
-        const raw = localStorage.getItem(KEY)!;
-        expect(raw).not.toContain('alice');
-        expect(raw).not.toContain('hunter2');
+        expectEncryptedEnvelope();
     });
 
     test('reorder is encrypted and survives locking and unlocking', async () => {
@@ -77,7 +79,7 @@ describe('ProfileVault', () => {
 
         await v.reorder(['carol', 'alice', 'bob']);
         expect(v.list().map(profile => profile.username)).toEqual(['carol', 'alice', 'bob']);
-        expect(localStorage.getItem(KEY)).not.toContain('carol');
+        expectEncryptedEnvelope();
 
         const reopened = new ProfileVault();
         expect(await reopened.unlock('pw')).toBe(true);
@@ -120,12 +122,18 @@ describe('ProfileVault', () => {
     });
 
     test('legacy plaintext array under the profiles key is adopted by setup', async () => {
-        localStorage.setItem(KEY, JSON.stringify([{ username: 'old', password: 'p' }]));
+        const profile = { username: 'old', password: 'p' };
+        localStorage.setItem(KEY, JSON.stringify([profile]));
         const v = new ProfileVault();
         expect(v.status()).toBe('plaintext-legacy');
         await v.setup('pw');
-        expect(v.list()).toEqual([{ username: 'old', password: 'p', tab: 'Main' }]);
-        expect(localStorage.getItem(KEY)!).not.toContain('old');
+        expect(v.list()).toEqual([{ ...profile, tab: 'Main' }]);
+        expectEncryptedEnvelope();
+
+        const reopened = new ProfileVault();
+        expect(reopened.status()).toBe('locked');
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.list()).toEqual([{ ...profile, tab: 'Main' }]);
     });
 
     test('pre-#30 roster key is adopted too, then deleted', async () => {
@@ -427,7 +435,7 @@ describe('ProfileVault worlds', () => {
             { username: 'legacy', password: 'b', tab: 'Main' },
             { username: 'alice', password: 'new', tab: 'miners', world: 2 }
         ]);
-        expect(localStorage.getItem(KEY)).not.toContain('alice');
+        expectEncryptedEnvelope();
     });
 
     test('setWorld persists only the assignment and rejects unknown usernames', async () => {
