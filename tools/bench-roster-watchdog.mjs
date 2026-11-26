@@ -44,7 +44,7 @@ async function sample(Actions, count, mixed = false) {
     });
 
     const timers = new Set();
-    const { setInterval, clearInterval } = globalThis;
+    const { setInterval, clearInterval, setTimeout, clearTimeout } = globalThis;
     const realNow = Date.now;
     Date.now = () => now;
     globalThis.setInterval = (callback, delay) => {
@@ -52,7 +52,14 @@ async function sample(Actions, count, mixed = false) {
         timers.add(callback);
         return callback;
     };
-    globalThis.clearInterval = callback => timers.delete(callback);
+    globalThis.setTimeout = (callback, delay) => {
+        const once = () => {
+            timers.delete(once);
+            callback();
+        };
+        return globalThis.setInterval(once, delay);
+    };
+    globalThis.clearTimeout = globalThis.clearInterval = callback => timers.delete(callback);
     try {
         const running = actions.run(saved.map(p => p.username), { kind: 'travel', destination: 'Varrock' }, r => events.push([now, r]));
         let ms = 0;
@@ -64,8 +71,9 @@ async function sample(Actions, count, mixed = false) {
                 controller.remove(2);
                 controller.add(saved[1]);
             }
+            const due = [...timers];
             const start = performance.now();
-            for (const poll of timers) poll();
+            for (const poll of due) poll();
             ms += performance.now() - start;
             if (mixed) {
                 if (tick === 10) gates.slice(3, count).forEach(gate => gate.resolve());
@@ -81,7 +89,7 @@ async function sample(Actions, count, mixed = false) {
         assert.deepEqual(stops, mixed ? [[300, 1], [300, 2], [11000, 3]] : []);
         return { metrics, output: { events, results, stops } };
     } finally {
-        Object.assign(globalThis, { setInterval, clearInterval });
+        Object.assign(globalThis, { setInterval, clearInterval, setTimeout, clearTimeout });
         Date.now = realNow;
     }
 }

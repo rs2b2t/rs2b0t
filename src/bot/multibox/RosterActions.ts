@@ -32,6 +32,12 @@ export interface RosterHooks {
 
 type FindProfile = (username: string) => RosterProfile | undefined;
 
+interface PendingTarget {
+    deadline: number;
+    timeout(): void;
+    check(find: FindProfile): boolean;
+}
+
 function active(state: string): boolean {
     return state === 'running' || state === 'paused' || state === 'stopping';
 }
@@ -43,8 +49,8 @@ export function rosterError(error: unknown): string {
 
 export class RosterActions {
     private running = false;
-    private pending = new Set<(find: FindProfile) => void>();
-    private watcher?: ReturnType<typeof setInterval>;
+    private pending = new Set<PendingTarget>();
+    private watcher?: ReturnType<typeof setTimeout>;
 
     constructor(private hooks: RosterHooks) {}
 
@@ -115,18 +121,35 @@ export class RosterActions {
         }
     }
 
-    private poll(): void {
+    private poll(nextPoll = Date.now()): void {
+        const now = Date.now();
+        let pollClients = now >= nextPoll;
+        if (pollClients) nextPoll = now + 100;
+        let wakeAt = nextPoll;
         let profiles: Map<string, RosterProfile> | undefined;
         const find: FindProfile = username => {
             if (!profiles) {
-                profiles = new Map();
-                for (const target of this.profiles()) {
-                    if (!profiles.has(target.username)) profiles.set(target.username, target);
+                try {
+                    const index = new Map<string, RosterProfile>();
+                    for (const profile of this.profiles()) {
+                        if (!index.has(profile.username)) index.set(profile.username, profile);
+                    }
+                    profiles = index;
+                } catch {
+                    pollClients = false;
                 }
             }
-            return profiles.get(username);
+            return profiles?.get(username);
         };
-        for (const check of this.pending) check(find);
+        for (const target of this.pending) {
+            if (Date.now() >= target.deadline) {
+                target.timeout();
+                continue;
+            }
+            wakeAt = Math.min(wakeAt, target.deadline);
+            if (pollClients) target.check(find);
+        }
+        if (this.pending.size) this.watcher = setTimeout(() => this.poll(nextPoll), Math.max(0, wakeAt - Date.now()));
     }
 
     private withClient(profile: RosterProfile, client: RosterClient, operation: () => Promise<void>): Promise<void> {
@@ -135,9 +158,9 @@ export class RosterActions {
             const finish = (success: boolean, error?: unknown): void => {
                 if (settled) return;
                 settled = true;
-                this.pending.delete(poll);
+                this.pending.delete(target);
                 if (!this.pending.size) {
-                    clearInterval(this.watcher);
+                    clearTimeout(this.watcher);
                     this.watcher = undefined;
                 }
                 if (success) resolve();
@@ -158,16 +181,18 @@ export class RosterActions {
                 if (!valid) cancel('Client was removed or replaced during the action.');
                 return valid;
             };
-            const deadline = Date.now() + 11_000;
-            const poll = (find: FindProfile): void => {
-                if (Date.now() >= deadline) cancel('Timed out waiting for the script action.');
-                else check(find);
+            const target = {
+                deadline: Date.now() + 11_000,
+                timeout: () => cancel('Timed out waiting for the script action.'),
+                check
             };
-            this.pending.add(poll);
-            this.watcher ??= setInterval(() => this.poll(), 100);
+            this.pending.add(target);
+            this.watcher ??= setTimeout(() => this.poll(), 100);
             try {
                 operation().then(() => {
-                    if (!settled && check(name => this.profiles().find(p => p.username === name))) finish(true);
+                    if (settled) return;
+                    if (Date.now() >= target.deadline) target.timeout();
+                    else if (check(name => this.profiles().find(p => p.username === name))) finish(true);
                 }, error => finish(false, error));
             } catch (error) {
                 finish(false, error);

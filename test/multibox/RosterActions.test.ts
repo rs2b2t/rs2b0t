@@ -176,6 +176,47 @@ test('removed travel targets settle while the batch waits for surviving targets'
     }
 });
 
+test('one failed poll snapshot only cancels the target that requested it', async () => {
+    jest.useFakeTimers();
+    await flushPromises();
+    const timers = testClock.getTimerCount();
+    const profiles = [profile('alice', 'running'), profile('bob', 'running')];
+    const clients = profiles.map(p => client(p.username));
+    let finish!: () => void;
+    const gate = new Promise<void>(resolve => { finish = resolve; });
+    for (const c of clients) c.travelTo = () => gate;
+    const stops = clients.map(c => spyOn(c, 'stopScript'));
+    let reads = 0;
+    let fail = false;
+    const actions = new RosterActions({ profiles: () => {
+        reads++;
+        if (fail) {
+            fail = false;
+            throw new Error('Snapshot unavailable');
+        }
+        return profiles;
+    }, client: p => clients[profiles.indexOf(p)], setWorld: async () => true });
+    const events: string[] = [];
+    try {
+        const running = actions.run(['alice', 'bob'], { kind: 'travel', destination: 'Varrock' }, r => events.push(r.username + ':' + r.state));
+        reads = 0;
+        fail = true;
+        testClock.advanceTimersByTime(100);
+        await flushPromises();
+        expect(reads).toBe(1);
+        expect(events).toEqual(['alice:pending', 'bob:pending', 'alice:failed']);
+        testClock.advanceTimersByTime(50);
+        finish();
+        expect((await running).map(r => r.state)).toEqual(['failed', 'done']);
+        expect(stops[0]).toHaveBeenCalledTimes(1);
+        expect(stops[1]).not.toHaveBeenCalled();
+        testClock.advanceTimersByTime(0);
+        expect(testClock.getTimerCount()).toBe(timers);
+    } finally {
+        jest.useRealTimers();
+    }
+});
+
 test('travel completion sees a slot replaced since the last poll', async () => {
     jest.useFakeTimers();
     let profiles = [profile('alice', 'running')];
@@ -201,44 +242,65 @@ test('parent travel timeout cancels each command at its own deadline and release
     jest.useFakeTimers();
     await flushPromises();
     const timers = testClock.getTimerCount();
-    const profiles = [profile('alice', 'running'), profile('bob', 'running')];
-    let cancelled = false;
+    const start = Date.now();
+    const profiles = ['alice', 'bob', 'carol'].map(name => profile(name, 'running'));
+    const stops: [string, number][] = [];
     let finish!: () => void;
     let lateStarts = 0;
-    const original = client('alice');
-    original.travelTo = () => {
-        testClock.advanceTimersByTime(100);
-        return new Promise<void>(resolve => { finish = resolve; }).then(() => { if (!cancelled) lateStarts++; });
-    };
-    original.stopScript = () => { cancelled = true; };
-    const later = client('bob');
-    later.travelTo = () => new Promise(() => {});
-    const stopLater = spyOn(later, 'stopScript');
-    const actions = new RosterActions({ profiles: () => profiles, client: p => p.username === 'alice' ? original : later, setWorld: async () => true });
+    let reads = 0;
+    const gate = new Promise<void>(resolve => { finish = resolve; });
+    const clients = new Map(profiles.map(p => {
+        const c = client(p.username);
+        let stopped = false;
+        c.travelTo = () => {
+            testClock.advanceTimersByTime(25);
+            return gate.then(() => { if (!stopped) lateStarts++; });
+        };
+        c.stopScript = () => {
+            stopped = true;
+            stops.push([p.username, Date.now() - start]);
+        };
+        return [p.username, c];
+    }));
+    const actions = new RosterActions({ profiles: () => { reads++; return profiles; }, client: p => clients.get(p.username)!, setWorld: async () => true });
     try {
-        const running = actions.run(['alice', 'bob'], { kind: 'travel', destination: 'Varrock' });
-        testClock.advanceTimersByTime(10_899);
-        expect(cancelled).toBe(false);
+        const running = actions.run([...clients.keys()], { kind: 'travel', destination: 'Varrock' });
+        testClock.advanceTimersByTime(11_000 - (Date.now() - start));
+        expect(stops).toEqual([['alice', 11_000]]);
         expect(actions.busy).toBe(true);
-        testClock.advanceTimersByTime(1);
-        await flushPromises();
-        expect(cancelled).toBe(true);
-        expect(stopLater).not.toHaveBeenCalled();
-        expect(actions.busy).toBe(true);
-        testClock.advanceTimersByTime(100);
-        await flushPromises();
-        expect(stopLater).toHaveBeenCalledTimes(1);
-        expect(actions.busy).toBe(false);
-        for (const result of await running) expect(result).toMatchObject({ state: 'failed', message: expect.stringMatching(/timed out/i) });
-        testClock.advanceTimersByTime(100);
-        expect(testClock.getTimerCount()).toBe(timers);
+        reads = 0;
+        testClock.advanceTimersByTime(25);
+        expect(stops).toEqual([['alice', 11_000], ['bob', 11_025]]);
+        expect(reads).toBe(0);
+        testClock.advanceTimersByTime(25);
         finish();
-        await flushPromises();
+        for (const result of await running) expect(result).toMatchObject({ state: 'failed', message: expect.stringMatching(/timed out/i) });
+        expect(stops).toEqual([['alice', 11_000], ['bob', 11_025], ['carol', 11_050]]);
         expect(lateStarts).toBe(0);
-        testClock.advanceTimersByTime(100);
+        expect(actions.busy).toBe(false);
+        testClock.advanceTimersByTime(0);
         expect(testClock.getTimerCount()).toBe(timers);
     } finally {
         jest.useRealTimers();
+    }
+});
+
+test('a late completion times out even if the watchdog has not run yet', async () => {
+    const clock = spyOn(Date, 'now').mockReturnValue(25);
+    const p = profile('alice', 'running');
+    const c = client(p.username);
+    let finish!: () => void;
+    c.travelTo = () => new Promise(resolve => { finish = resolve; });
+    const stop = spyOn(c, 'stopScript');
+    const actions = new RosterActions({ profiles: () => [p], client: () => c, setWorld: async () => true });
+    try {
+        const running = actions.run([p.username], { kind: 'travel', destination: 'Varrock' });
+        clock.mockReturnValue(11_050);
+        finish();
+        expect((await running)[0]).toMatchObject({ state: 'failed', message: expect.stringMatching(/timed out/i) });
+        expect(stop).toHaveBeenCalledTimes(1);
+    } finally {
+        clock.mockRestore();
     }
 });
 
