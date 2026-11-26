@@ -6,34 +6,19 @@ import { Inventory } from '#/bot/api/inventory/Inventory.js';
 import { Trade } from '#/bot/api/trade/Trade.js';
 import { QuestEngine } from '#/bot/api/ai/quests/engine/QuestEngine.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
-import { ArravConfig } from '#/bot/api/ai/quests/defs/shieldofarrav/config.js';
-import { HeroConfig } from '#/bot/api/ai/quests/defs/heroquest/config.js';
 import { ArravHandoffState } from '#/bot/api/ai/quests/defs/shieldofarrav/partner.js';
 import { HeroHandoffState } from '#/bot/api/ai/quests/defs/heroquest/partner.js';
-import { DragonSupplies } from '#/bot/api/ai/quests/defs/dragonslayer/supplies.js';
-import { LegendsConfig } from '#/bot/api/ai/quests/defs/legends/config.js';
-import { QuestFood } from '#/bot/api/ai/quests/food.js';
-import { QuestLoadout } from '#/bot/api/ai/quests/gear.js';
+import { snapshotQuestConfig } from './questConfig.fixture.js';
 
 let restore: () => void;
 beforeEach(() => {
-    const food = QuestFood.name;
-    const loadout = QuestLoadout.current;
-    const planks = DragonSupplies.wildernessPlanks;
-    const arrav = { ...ArravConfig };
-    const hero = { ...HeroConfig };
+    const restoreQuestConfig = snapshotQuestConfig();
     const arravHandoff = { ...ArravHandoffState };
     const heroHandoff = { ...HeroHandoffState };
-    const legends = { ...LegendsConfig };
     restore = () => {
-        QuestFood.name = food;
-        QuestLoadout.current = loadout;
-        DragonSupplies.wildernessPlanks = planks;
-        Object.assign(ArravConfig, arrav);
-        Object.assign(HeroConfig, hero);
+        restoreQuestConfig();
         Object.assign(ArravHandoffState, arravHandoff);
         Object.assign(HeroHandoffState, heroHandoff);
-        Object.assign(LegendsConfig, legends);
     };
 });
 afterEach(() => restore());
