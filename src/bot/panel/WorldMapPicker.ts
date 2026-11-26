@@ -994,23 +994,26 @@ export class WorldMapPicker {
                     status.textContent = 'rebuilding basemap (tab may freeze)…';
                     status.style.color = '#fa0';
                     try {
-                        const submitted = new Map(bakeEdits);
-                        const prefs = resolveBasemapBakePrefs(submitted);
+                        const submitted = Array.from(bakeEdits, ([key, value]) => ({
+                            key, value, expected: SettingsStore.durableBakePreference(key)
+                        }));
+                        const prefs = resolveBasemapBakePrefs(bakeEdits);
                         const next = await regenerateBasemap(prefs);
                         if (closed) {
                             return;
                         }
-                        const failed: string[] = [];
-                        for (const [key, value] of submitted) {
+                        const failed = new Map<string, string>();
+                        const conflicts: string[] = [];
+                        for (const { key, value, expected } of submitted) {
                             try {
-                                SettingsStore.saveBakePreference(key, value);
+                                if (!SettingsStore.saveBakePreference(key, value, expected)) {
+                                    conflicts.push(MAP_PICKER_SETTINGS[key].label ?? key);
+                                }
                                 if (bakeEdits.get(key) === value) bakeEdits.delete(key);
                             } catch {
-                                if (!bakeEdits.has(key)) bakeEdits.set(key, value);
-                                failed.push(MAP_PICKER_SETTINGS[key].label ?? key);
+                                failed.set(key, value);
                             }
                         }
-                        settingsModal.refreshCheckboxes(submitted.keys());
                         const crcKey = await fetchClientCrcKey();
                         if (crcKey) {
                             try {
@@ -1025,9 +1028,17 @@ export class WorldMapPicker {
                         setBasemapAttr('ready');
                         status.textContent = `basemap rebuilt (${next.manifest.fingerprint})`;
                         status.style.color = '#8ab4f8';
-                        if (failed.length) {
-                            showRebuildError(`Basemap rebuilt. Could not save: ${failed.join(', ')}. Rebuild to retry.`);
+                        const warnings: string[] = [];
+                        if (conflicts.length) warnings.push(`Kept newer preferences: ${conflicts.join(', ')}.`);
+                        if (failed.size) {
+                            for (const [key, value] of failed) {
+                                if (!bakeEdits.has(key)) bakeEdits.set(key, value);
+                            }
+                            const labels = Array.from(failed.keys(), key => MAP_PICKER_SETTINGS[key].label ?? key);
+                            warnings.push(`Could not save: ${labels.join(', ')}. Rebuild to retry.`);
                         }
+                        settingsModal.refreshCheckboxes(submitted.map(edit => edit.key));
+                        if (warnings.length) showRebuildError(`Basemap rebuilt. ${warnings.join(' ')}`);
                         requestPaint();
                     } catch (err) {
                         if (closed) {

@@ -609,6 +609,10 @@ class SettingsStoreImpl {
         if (hasLocal) {
             localStorage.setItem(storageKey(name, key), rawString);
         }
+        this.notify(name, key, rawString);
+    }
+
+    private notify(name: string, key: string, rawString: string): void {
         for (const fn of this.changeListeners) {
             try {
                 fn(name, key, rawString);
@@ -618,18 +622,31 @@ class SettingsStoreImpl {
         }
     }
 
-    saveBakePreference(key: string, value: string): void {
-        const id = boxKey(`set:${MAP_PICKER_SETTINGS_NS}:${key}`);
+    durableBakePreference(key: string): string | null {
+        return hasLocal ? localStorage.getItem(storageKey(MAP_PICKER_SETTINGS_NS, key)) : null;
+    }
+
+    saveBakePreference(key: string, value: string, expected: string | null): boolean {
+        const id = storageKey(MAP_PICKER_SETTINGS_NS, key);
         const previous = hasSession ? sessionStorage.getItem(id) : null;
+        if (hasSession) sessionStorage.setItem(id, value);
+        let saved = false;
         try {
-            this.save(MAP_PICKER_SETTINGS_NS, key, value);
-        } catch (err) {
-            if (hasSession && sessionStorage.getItem(id) !== previous) {
+            if (desktopStorage) {
+                if (!desktopStorage.compareAndSet(id, expected, value)) return false;
+            } else if (hasLocal) {
+                if (localStorage.getItem(id) !== expected) return false;
+                localStorage.setItem(id, value);
+            }
+            saved = true;
+        } finally {
+            if (!saved && hasSession && previous !== value) {
                 if (previous === null) sessionStorage.removeItem(id);
                 else sessionStorage.setItem(id, previous);
             }
-            throw err;
         }
+        this.notify(MAP_PICKER_SETTINGS_NS, key, value);
+        return true;
     }
 
     /** Subscribe to SettingsStore.save (same tab); an open map picker uses it to track Global settings edits. Returns the unsubscribe. */

@@ -448,6 +448,37 @@ describe('map picker bake settings drafts', () => {
         }
     });
 
+    test('a peer save during regeneration survives while the cache records the submitted labels', async () => {
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
+        const pending = Promise.withResolvers<ReturnType<typeof rebuiltMap>>();
+        const next = rebuiltMap();
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockReturnValue(pending.promise);
+        const crc = spyOn(localCache, 'fetchClientCrcKey').mockResolvedValue('test-crc');
+        const cache = spyOn(localCache, 'saveRegeneratedBasemapLocally').mockResolvedValue();
+        try {
+            await withPicker(async () => {
+                openSettings();
+                bakeCheckbox('Stamp labels into rebuild').click();
+                bakeCheckbox('Map-square borders').click();
+                clickRebuild(true);
+                expect(bake).toHaveBeenCalledWith(prefs({ labels: true, borders: true }));
+                localStorage.setItem('rs2b0t:set:MapPicker:bakeLabels', 'false');
+                pending.resolve(next);
+                await new Promise<void>(resolve => setImmediate(resolve));
+
+                expect(stored('bakeLabels')).toEqual({ local: 'false', session: null });
+                expect(stored('bakeBorders').local).toBe('true');
+                expect(cache).toHaveBeenCalledWith('test-crc', prefs({ labels: true, borders: true }), next.manifest, next.image);
+                expect(document.querySelector('[role="alert"]')?.textContent).toContain('Kept newer preferences: Stamp labels into rebuild');
+                expect(bakeCheckbox('Stamp labels into rebuild').checked).toBe(false);
+            });
+        } finally {
+            cache.mockRestore();
+            crc.mockRestore();
+            bake.mockRestore();
+        }
+    });
+
     test.each([null, '0'])('Retry saves only the field rejected by durable storage (previous value %p)', async previous => {
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
         const labels = 'rs2b0t:set:MapPicker:bakeLabels';
@@ -550,6 +581,42 @@ describe('map picker bake settings drafts', () => {
                 expect(bake).toHaveBeenLastCalledWith(prefs({ borders: !editBorders, npcs: true }));
             });
         } finally {
+            bake.mockRestore();
+        }
+    });
+
+    test('Retry uses the rejected borders draft when Settings closes during the cache write', async () => {
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
+        const pending = Promise.withResolvers<void>();
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockResolvedValue(rebuiltMap());
+        const crc = spyOn(localCache, 'fetchClientCrcKey').mockResolvedValue('test-crc');
+        const cache = spyOn(localCache, 'saveRegeneratedBasemapLocally').mockReturnValueOnce(pending.promise).mockResolvedValue();
+        const setItem = localStorage.setItem;
+        try {
+            await withPicker(async () => {
+                openSettings();
+                bakeCheckbox('Map-square borders').click();
+                Object.defineProperty(localStorage, 'setItem', { configurable: true, value() {
+                    throw new DOMException('storage full', 'QuotaExceededError');
+                } });
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(cache).toHaveBeenCalledTimes(1);
+                escapeSettings();
+                Object.defineProperty(localStorage, 'setItem', { value: setItem });
+                pending.resolve();
+                await new Promise<void>(resolve => setImmediate(resolve));
+
+                expect(document.querySelector('[role="alert"]')?.textContent).toMatch(/Map-square borders.*retry/i);
+                clickRebuild(false);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(bake).toHaveBeenLastCalledWith(prefs({ borders: true }));
+                expect(stored('bakeBorders').local).toBe('true');
+            });
+        } finally {
+            Object.defineProperty(localStorage, 'setItem', { value: setItem });
+            cache.mockRestore();
+            crc.mockRestore();
             bake.mockRestore();
         }
     });
