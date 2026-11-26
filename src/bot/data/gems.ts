@@ -17,7 +17,7 @@ export const OPAL = { key: 'opal', name: 'Opal', uncutId: 1625, cutId: 1609, lev
 export const JADE = { key: 'jade', name: 'Jade', uncutId: 1627, cutId: 1611, level: 13, xp: 200, canCrush: true } as const;
 export const RED_TOPAZ = { key: 'red_topaz', name: 'Red topaz', uncutId: 1629, cutId: 1613, level: 16, xp: 250, canCrush: true } as const;
 
-export const GEMS: readonly GemDef[] = [SAPPHIRE, EMERALD, RUBY, DIAMOND, DRAGONSTONE, OPAL, JADE, RED_TOPAZ];
+export const GEMS: readonly GemDef[] = [SAPPHIRE, EMERALD, RUBY, DIAMOND, DRAGONSTONE, OPAL, JADE, RED_TOPAZ].map(gem => ({ ...gem }));
 
 export function gemById(id: number): GemDef | null {
     return GEMS.find(g => g.uncutId === id || g.cutId === id) ?? null;
