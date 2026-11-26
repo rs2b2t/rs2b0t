@@ -494,6 +494,34 @@ test.each([
     });
 });
 
+test.each([
+    { local: 'Fleet', imported: 'Old', selected: 'Ops' },
+    { local: 'Old', imported: 'Fleet', selected: 'Fleet' }
+])('renaming Old after another window selects $imported preserves the stored tab order and selection', async ({ local, imported, selected }) => {
+    await withWall('local', async wall => {
+        const profile = { username: 'included', password: 'fixture', tab: 'Old' };
+        await openSettings().importText(serializeProfileFile({
+            profiles: [profile], tabs: ['Old', 'Fleet'], activeTab: local, storage: {}
+        }));
+        const other = new ProfileVault();
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        await other.replaceAll({ profiles: [profile], tabs: ['Fleet', 'Old'], activeTab: imported });
+
+        const saves = spyOn(vault, 'saveTabState');
+        try {
+            expect(await wall.renameTab('Old', 'Ops')).toBe(true);
+            await saves.mock.results[0].value;
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.snapshot()).toEqual({
+                profiles: [{ ...profile, tab: 'Ops' }], tabs: ['Fleet', 'Ops'], activeTab: selected
+            });
+        } finally {
+            saves.mockRestore();
+        }
+    });
+});
+
 test('moving a loaded slot preserves the second imported row for its username', async () => {
     await withWall('local', async wall => {
         const profiles = ['Fleet', 'Reserve'].map(tab => ({ username: 'fixture', password: 'fixture', tab }));
@@ -608,6 +636,47 @@ test('selecting a retained tab renamed during import saves its new name and sele
     });
 });
 
+async function prepareRosterMove(username: string, group: string) {
+    document.getElementById('mbx-manage')!.click();
+    await waitFor(() => !document.getElementById('mbx-roster')!.hidden);
+    document.querySelector<HTMLInputElement>(`[aria-label="Select ${username}"]`)!.click();
+    const name = document.querySelector<HTMLInputElement>('[aria-label="Profile group name"]')!;
+    name.value = group;
+    name.dispatchEvent(new Event('input'));
+    const move = document.querySelector<HTMLButtonElement>('#mbx-roster-move-group')!;
+    expect(move.disabled).toBe(false);
+    return { move, message: document.getElementById('mbx-roster-message')! };
+}
+
+test('a roster move from an older window edits only the imported roster', async () => {
+    await withWall('local', async wall => {
+        const included = { username: 'Included', password: 'fixture', tab: 'Work' };
+        const guest = { username: 'guest', password: 'fixture', tab: 'Work' };
+        await openSettings().importText(serializeProfileFile({
+            profiles: [included, guest], tabs: ['Work'], activeTab: 'Work', storage: {}
+        }));
+        const [running, omitted] = wall.slots();
+        const other = new ProfileVault();
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        const saved = { ...included, username: 'included', tab: 'Fleet' };
+        await other.replaceAll({ profiles: [saved], tabs: ['Fleet'], activeTab: 'Fleet' });
+        wall.controller.addTab('Stale');
+        window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
+        await waitFor(() => !wall.controller.tabs().includes('Stale'));
+
+        const { move, message } = await prepareRosterMove('Included', 'Ops');
+        move.click();
+        await waitFor(() => !!message.textContent);
+        expect(message.textContent).toBe('Moved 1 profile to Ops.');
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.snapshot()).toEqual({
+            profiles: [{ ...saved, tab: 'Ops' }], tabs: ['Fleet', 'Ops'], activeTab: 'Fleet'
+        });
+        expect(wall.slots().map(s => [s.id, s.tab])).toEqual([[running.id, 'Ops'], [omitted.id, 'Work']]);
+    });
+});
+
 test('a roster move queued during replacement uses the imported username', async () => {
     await withWall('local', async wall => {
         const panel = openSettings();
@@ -616,15 +685,7 @@ test('a roster move queued during replacement uses the imported username', async
             tabs: ['Old'], activeTab: 'Old', storage: {}
         }));
         const [original] = wall.slots();
-        document.getElementById('mbx-manage')!.click();
-        await waitFor(() => !document.getElementById('mbx-roster')!.hidden);
-        document.querySelector<HTMLInputElement>('[aria-label="Select Fixture"]')!.click();
-        const name = document.querySelector<HTMLInputElement>('[aria-label="Profile group name"]')!;
-        name.value = 'Work';
-        name.dispatchEvent(new Event('input'));
-        const move = document.querySelector<HTMLButtonElement>('#mbx-roster-move-group')!;
-        expect(move.disabled).toBe(false);
-        const message = document.getElementById('mbx-roster-message')!;
+        const { move, message } = await prepareRosterMove('Fixture', 'Work');
         const replaceAll = vault.replaceAll.bind(vault);
         const replace = spyOn(vault, 'replaceAll').mockImplementationOnce(data => {
             const replacing = replaceAll(data);

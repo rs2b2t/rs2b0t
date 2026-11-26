@@ -25,10 +25,6 @@ import type { Account, SlotSnapshot } from './types.js';
 
 type DesktopWall = Window & { rs2b0tLoginCoordinator?: LoginCoordinationRegistry & { parallelism: number } };
 
-function savedUsernames() {
-    return indexByUsername(vault.list().map(p => [p.username, p.username] as const));
-}
-
 if (typeof window !== 'undefined') {
     installVisibilityTableCache(window);
     installWorkerClockHub(window);
@@ -557,8 +553,7 @@ function boot(): void {
         worldRouting,
         assignGroup: (usernames, name) => updateSavedTabs(async () => {
             await flushTabEdits();
-            const saved = savedUsernames();
-            await vault.assignGroup(usernames.map(username => saved.get(username) ?? username), name);
+            await vault.assignGroup(usernames, name);
             syncSavedGroups();
         }),
         edit: async profile => {

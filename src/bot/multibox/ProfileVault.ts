@@ -475,13 +475,20 @@ export class ProfileVault {
     async assignGroup(usernames: string[], name: string): Promise<void> {
         const tab = name.trim();
         if (!tab || !usernames.length) throw new Error('Choose profiles and enter a group name.');
-        if (this.shared) return this.sharedChange(draft => draft.assignGroup(usernames, tab));
         if (this.pendingReplacement) return this.afterReplacement(() => this.assignGroup(usernames, tab));
-        const saved = new Set(this.assertUnlocked().map(p => p.username));
-        if (usernames.some(username => !saved.has(username))) throw new Error('Only saved profiles can be grouped.');
-        const tabs = [...this.customTabs];
-        if (tab !== MAIN_TAB && !tabs.includes(tab)) tabs.push(tab);
-        await this.applyTabState(tabs, new Map(usernames.map(username => [username, tab])), 'all', this.active);
+        const assign = async (draft: ProfileVault) => {
+            const saved = draft.savedUsernames();
+            const assignments = new Map<string, string>();
+            for (const username of usernames) {
+                const match = saved.get(username);
+                if (match === undefined) throw new Error('Only saved profiles can be grouped.');
+                assignments.set(match, tab);
+            }
+            const tabs = [...draft.customTabs];
+            if (tab !== MAIN_TAB && !tabs.includes(tab)) tabs.push(tab);
+            await draft.applyTabState(tabs, assignments, 'all');
+        };
+        return this.storage ? this.sharedChange(assign) : assign(this);
     }
 
     async remove(username: string): Promise<void> {
@@ -544,6 +551,14 @@ export class ProfileVault {
             assertTabStateValid(requested, activeTab ?? MAIN_TAB, []);
             const save = async (draft: ProfileVault) => {
                 if (replaced && !draft.customTabs.includes(replaced.from)) return;
+                if (replaced?.to !== undefined) {
+                    const { from, to } = replaced;
+                    const renamed = draft.customTabs.includes(to)
+                        ? draft.customTabs.filter(tab => tab !== from)
+                        : draft.customTabs.map(tab => tab === from ? to : tab);
+                    await draft.applyTabState(renamed, new Map(), 'all', draft.active === from ? to : draft.active, replaced);
+                    return;
+                }
                 const previous = previousTabs ?? this.sharedTabs;
                 const removed = new Set(previous.filter(tab => !requested.includes(tab)));
                 const merged = draft.customTabs.filter(tab => !removed.has(tab));
@@ -563,7 +578,7 @@ export class ProfileVault {
                 for (const tab of tabByUser.values()) {
                     if (tab !== MAIN_TAB && !requested.includes(tab)) throw new Error(`tab '${tab}' is not in the tab list`);
                 }
-                const selection = replaced && replaced.to === undefined && replaced.from !== draft.active ? draft.active : activeTab;
+                const selection = replaced && replaced.from !== draft.active ? draft.active : activeTab;
                 const selected = selection === MAIN_TAB || (selection && merged.includes(selection)) ? selection : undefined;
                 await draft.applyTabState(merged, assignments, replaced ? 'all' : 'first', selected, replaced);
             };
@@ -574,12 +589,15 @@ export class ProfileVault {
         return this.applyTabState(requested, new Map(tabByUser), replaced ? 'all' : 'first', activeTab, replaced);
     }
 
+    private savedUsernames() {
+        return indexByUsername(this.assertUnlocked().map(p => [p.username, p.username] as const));
+    }
+
     private resolveSlotTabs(tabByUser: ReadonlyMap<string, string>, from?: string): Map<string, string> {
         const assignments = new Map<string, string>();
         if (!tabByUser.size) return assignments;
-        const profiles = this.assertUnlocked();
-        const saved = indexByUsername(profiles.map(p => [p.username, p.username] as const));
-        const members = from === undefined ? undefined : new Set(profiles.filter(p => p.tab === from).map(p => p.username));
+        const saved = this.savedUsernames();
+        const members = from === undefined ? undefined : new Set(this.assertUnlocked().filter(p => p.tab === from).map(p => p.username));
         for (const [username, tab] of tabByUser) {
             const match = saved.get(username);
             if (match !== undefined && (!members || members.has(match))) assignments.set(match, tab);
