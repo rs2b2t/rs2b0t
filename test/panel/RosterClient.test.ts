@@ -3,6 +3,7 @@ import BotPanel, { type PanelRunner } from '#/bot/panel/BotPanel.js';
 import { RosterActions, type RosterProfile } from '#/bot/multibox/RosterActions.js';
 import { createRosterClient } from '#/bot/panel/RosterClient.js';
 import { BotHost } from '#/bot/runtime/BotHost.js';
+import { ScriptContext } from '#/bot/runtime/ScriptContext.js';
 import { ScriptRegistry, type ScriptMeta } from '#/bot/runtime/ScriptRegistry.js';
 import { SettingsStore } from '#/bot/runtime/Settings.js';
 import { TARGET } from '#/client/config/target.js';
@@ -12,7 +13,7 @@ const previousTarget = { ...TARGET };
 
 class Runner implements PanelRunner {
     state = 'idle';
-    ctx = null;
+    ctx: ScriptContext | null = null;
     meta: ScriptMeta | null = null;
     starts: string[] = [];
     stops = 0;
@@ -74,6 +75,77 @@ test('assign changes the actual panel selection and persisted selection', () => 
     client.startScript();
     expect(runner.starts).toEqual(['RosterOther']);
     expect(localStorage.getItem('rs2b0t:selectedScript')).toBe('RosterOther');
+});
+
+test('a full script log appends one row and keeps the other 199 through history rollover', () => {
+    const ctx = runner.ctx = new ScriptContext();
+    const box = root.querySelector<HTMLElement>('.rs2b0t-log')!;
+    const levels = ['info', 'warn', 'error'] as const;
+    const start = new Date(2020, 0, 1, 12).getTime();
+    const clock = spyOn(Date, 'now');
+    const add = (i: number) => {
+        clock.mockReturnValue(start + i * 1000);
+        ctx.addLog(levels[i % 3], `message ${i}`);
+    };
+    try {
+        for (let i = 0; i < 499; i++) add(i);
+        client.startScript();
+        for (const i of [499, 500, 501]) {
+            const before = Array.from(box.children);
+            const append = spyOn(box, 'appendChild');
+            try {
+                add(i);
+                expect(append).toHaveBeenCalledTimes(1);
+            } finally {
+                append.mockRestore();
+            }
+            expect(box.childElementCount).toBe(200);
+            expect(before[0].parentNode).toBeNull();
+            expect(before.slice(1).every((row, index) => row === box.children[index])).toBe(true);
+        }
+        for (const [index, row] of Array.from(box.children).entries()) {
+            const i = 302 + index;
+            const time = new Date(start + i * 1000).toTimeString().slice(0, 8);
+            expect(row.textContent).toBe(`${time} message ${i}`);
+            expect(row.className).toBe(`rs2b0t-log-line rs2b0t-log-${levels[i % 3]}`);
+        }
+    } finally {
+        clock.mockRestore();
+    }
+});
+
+test('state changes retain log rows until the runner switches contexts', () => {
+    const previous = runner.ctx = new ScriptContext();
+    previous.addLog('info', 'first run');
+    client.startScript();
+    const box = root.querySelector<HTMLElement>('.rs2b0t-log')!;
+    const row = box.firstElementChild;
+    runner.pause();
+    expect(box.firstElementChild).toBe(row);
+    runner.ctx = new ScriptContext();
+    runner.ctx.addLog('warn', 'new run');
+    runner.setState('running');
+    previous.addLog('info', 'late message');
+    runner.ctx.addLog('info', 'next message');
+    expect(Array.from(box.children, row => row.textContent?.slice(9))).toEqual(['new run', 'next message']);
+});
+
+test('script logs follow the bottom and compensate for a wrapped row evicted above the reader', () => {
+    const ctx = runner.ctx = new ScriptContext();
+    for (let i = 0; i < 200; i++) ctx.addLog('info', `line ${i}`);
+    client.startScript();
+    const box = root.querySelector<HTMLElement>('.rs2b0t-log')!;
+    Object.defineProperties(box, {
+        clientHeight: { value: 150 },
+        scrollHeight: { get: () => box.lastElementChild?.textContent?.includes('wrapped') ? 2020 : 2000 }
+    });
+    box.scrollTop = 1850;
+    ctx.addLog('info', 'wrapped\nmessage');
+    expect(box.scrollTop).toBeGreaterThanOrEqual(1870);
+    box.scrollTop = 100;
+    spyOn(box.firstElementChild!, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 300, 32.5));
+    ctx.addLog('info', 'another message');
+    expect(box.scrollTop).toBe(67.5);
 });
 
 test('copy replaces one namespace including stale parameters and refreshes its panel', () => {
