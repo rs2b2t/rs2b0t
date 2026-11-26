@@ -6,6 +6,7 @@ import { TANNED_LEATHER_IDS } from '../../data/tannedLeather.js';
 import Tile from '../../geometry/Tile.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { Bank } from '../../api/bank/Bank.js';
+import { withdrawXOpIndex } from '../../api/bank/bankOps.js';
 import { openBankAccess } from '../../api/bank/Banking.js';
 import { nearestBank, nearestBankReachable } from '../../api/bank/BankLocations.js';
 import { Navigator } from '../../event/webwalk/Navigator.js';
@@ -153,7 +154,7 @@ async function withdrawXById(id: number, count: number): Promise<WithdrawResult>
     if (!item) {
         return 'missing';
     }
-    const op = opIndex(item.ops, /withdraw[\s-]*x/i);
+    const op = withdrawXOpIndex(item.ops);
     if (op === -1) {
         return 'retry';
     }
