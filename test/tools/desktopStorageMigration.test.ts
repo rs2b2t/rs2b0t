@@ -195,8 +195,14 @@ test('an overlapping older empty seed reports how to recover the configured rost
     }
 });
 
-test.each([[custom, 'intact'], [original, 'intact'], [custom, 'reset']])('an interrupted 8082 migration restarts on %s with %s profile markers', async (server, marker) => {
-    const { launch, olderWrite, storeDir } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles) } });
+test.each([[custom, 'empty'], [original, 'empty'], [custom, 'populated'], [custom, 'reset']])('an interrupted 8082 migration restarts on %s when the shared roster is %s', async (server, roster) => {
+    const script = 'rs2b0t:fixture:selectedScript';
+    const ore = 'rs2b0t:set:Miner:ore';
+    const fallback = roster === 'populated' ? profiles.toReversed() : [];
+    const { launch, olderWrite, store, storeDir } = fixture({
+        [custom]: { [accounts]: JSON.stringify(profiles), [script]: 'Miner', [ore]: 'Tin' },
+        [original]: { ...(fallback.length ? { [accounts]: JSON.stringify(fallback) } : {}), [ore]: 'Copper' }
+    });
     const dir = dirname(storeDir);
     const pending = Bun.spawn([process.execPath, '-e', `
         require('./storage-session.cjs').prepareStorage({ on() {}, setPath() {} }, '${custom}/bot.html');
@@ -210,18 +216,21 @@ test.each([[custom, 'intact'], [original, 'intact'], [custom, 'reset']])('an int
     try {
         const { value } = await pending.stdout.getReader().read();
         expect(new TextDecoder().decode(value)).toBe('1');
-        expect(await launch(original)).toEqual([]);
+        expect(await launch(original)).toEqual(fallback);
+        store.removeItem(ore);
         expect(pending.exitCode).toBeNull();
     } finally {
         pending.stdin.end();
         await pending.exited;
     }
     expect(pending.exitCode).toBe(0);
-    if (marker === 'reset') olderWrite(vault, null);
-    const expected = marker === 'reset' ? [] : profiles;
+    if (roster === 'reset') olderWrite(vault, null);
+    const expected = roster === 'empty' ? profiles : fallback;
     expect(await launch(server)).toEqual(expected);
     expect(await launch(server)).toEqual(expected);
-    if (marker === 'reset') expect(await launch(server, true)).toEqual(profiles);
+    expect(store.getItem(script)).toBe(roster === 'reset' ? null : 'Miner');
+    expect(store.getItem(ore)).toBeNull();
+    if (roster === 'reset') expect(await launch(server, true)).toEqual(profiles);
 });
 
 const emptyRosters: Record<string, string>[] = [{}, { [accounts]: '[]' }, { [vault]: '[]' }];

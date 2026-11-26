@@ -175,6 +175,13 @@ function sharedStorage(dir) {
         if (!Object.keys(state.profileRetries).length) delete state.profileRetries;
         return true;
     }
+    function scheduleProfileRetry(state, origin, removed) {
+        if (!removed && !state.seededWithoutProfiles) return;
+        const retries = state.profileRetries ??= {};
+        const previous = retries[origin];
+        if (previous === undefined) retries[origin] = removed ?? null;
+        else if (previous && removed) retries[origin] = [...new Set([...previous, ...removed])];
+    }
     function write(state) {
         const temporary = join(dir, `${randomUUID()}.tmp`);
         try {
@@ -208,10 +215,7 @@ function sharedStorage(dir) {
                 process.kill(migration.pid, 0);
             } catch (error) {
                 if (error.code !== 'ESRCH') continue;
-                if (state.seededWithoutProfiles && migration.origin) {
-                    state.profileRetries ??= {};
-                    state.profileRetries[migration.origin] ??= null;
-                }
+                if (migration.origin) scheduleProfileRetry(state, migration.origin, migration.removed);
                 delete state.panelMigrations[id];
             }
         }
@@ -317,13 +321,7 @@ function sharedStorage(dir) {
                 }
                 if (!state.initialized && fallback) importSettings(state.data, fallback);
                 if (readError && (state.initialized ? recover && !profilesChanged : !fallback) && !savedProfileKey(state.data)) throw readError;
-                if (values === null && (migration?.removed || state.seededWithoutProfiles)) {
-                    state.profileRetries ??= {};
-                    const removed = state.profileRetries[profileOrigin];
-                    if (migration?.removed && removed !== null) {
-                        state.profileRetries[profileOrigin] = [...new Set([...(removed ?? []), ...migration.removed])];
-                    } else state.profileRetries[profileOrigin] = removed ?? null;
-                }
+                if (values === null) scheduleProfileRetry(state, profileOrigin, migration?.removed);
                 if (state.initialized) return false;
                 if (fallback === null) {
                     state.deletedDuringSettingsMigration = [];
