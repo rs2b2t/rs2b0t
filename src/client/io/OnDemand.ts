@@ -213,7 +213,7 @@ export default class OnDemand extends OnDemandProvider {
     }
 
     request(archive: number, file: number) {
-        if (this.workerError || archive < 0 || archive > this.versions.length || file < 0 || file > this.versions[archive].length || this.versions[archive][file] === 0) {
+        if (this.workerError || archive < 0 || archive >= this.versions.length || file < 0 || file >= this.versions[archive].length || this.versions[archive][file] === 0) {
             return;
         }
 
