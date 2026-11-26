@@ -4,7 +4,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { ownedService, releaseOnExit } from './ownedService.mjs';
+import { ownedService } from './ownedService.mjs';
 
 export async function clueSequenceEngine(users: readonly string[]): Promise<{ log: string; stop(): Promise<void> }> {
     const engine = process.env.ENGINE_DIR ?? `${homedir()}/code/rs2b2t-engine`;
@@ -40,7 +40,6 @@ console.log('[clue-sequence] fixture ready');
     const service = ownedService('node', process.env);
     const child = spawn(service.executablePath, [join(engine, 'node_modules/tsx/dist/cli.mjs'), entry], { cwd: engine, env: service.env, stdio: ['ignore', fd, fd], detached: true });
     closeSync(fd);
-    releaseOnExit(child);
     let startupError: Error | null = null;
     child.once('error', error => { startupError = error; });
     const running = (): boolean => child.pid !== undefined && child.exitCode === null && child.signalCode === null;

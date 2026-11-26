@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path';
 import { _electron, type ElectronApplication, type Page } from 'playwright-core';
 import type { SettingsStore } from '../src/bot/runtime/Settings.js';
 
-import { ownedService, releaseOnExit } from './lib/ownedService.mjs';
+import { ownedService } from './lib/ownedService.mjs';
 
 if (process.versions.bun) {
     const child = Bun.spawn(['node', import.meta.path], { stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' });
@@ -104,7 +104,6 @@ try {
         .filter((entry): entry is [string, string] => entry[1] !== undefined));
     delete env.ELECTRON_RUN_AS_NODE;
     app = await _electron.launch({ ...ownedService(require('../desktop/node_modules/electron'), env), args: [join(root, 'desktop'), `--server=${url}`] });
-    releaseOnExit(app.process());
     app.process().stderr?.on('data', chunk => { stderr += chunk.toString(); });
     let page: Page | undefined;
     for (let tries = 0; tries < 100; tries++) {

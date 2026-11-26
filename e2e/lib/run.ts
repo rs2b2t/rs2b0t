@@ -1,5 +1,5 @@
-import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { closeSync, constants, mkdtempSync, openSync, readdirSync, renameSync, rmSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { errorTail } from '../../tools/lib/e2e-report.js';
@@ -15,29 +15,29 @@ const active = new Set<() => void>();
 function killTree(proc: ChildProcess): void {
     if (!proc.pid) return;
     if (process.platform === 'win32') {
-        if (proc.exitCode !== null || proc.signalCode !== null) return;
-        const result = spawnSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore', timeout: 1000 });
-        if (result.status !== 0) proc.kill('SIGKILL');
+        proc.kill('SIGKILL');
         return;
     }
-    killGroup(proc.pid);
-}
-
-function killGroup(pid: number): void {
     try {
-        process.kill(-pid, 'SIGKILL');
+        process.kill(-proc.pid, 'SIGKILL');
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
     }
 }
 
 function stopServices(groups: string): void {
-    // Why: a service racing teardown must register before the rename or fail before exec.
+    // Why: after the rename a launcher can't open its control pipe and proceed to exec.
     const closed = groups + '.closed';
     renameSync(groups, closed);
     try {
-        for (const name of readdirSync(closed)) {
-            if (/^[1-9]\d*$/.test(name) && Number(name) > 1) killGroup(Number(name));
+        for (const entry of readdirSync(closed, { withFileTypes: true })) {
+            if (!entry.isFIFO()) continue;
+            const fd = openSync(join(closed, entry.name), constants.O_RDWR | constants.O_NONBLOCK);
+            try {
+                writeSync(fd, '\n');
+            } finally {
+                closeSync(fd);
+            }
         }
     } finally {
         rmSync(closed, { recursive: true, force: true });

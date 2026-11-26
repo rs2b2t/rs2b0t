@@ -23,13 +23,48 @@ function exited(pid: number): boolean {
     }
 }
 
-test('a zero exit in the last second of the budget passes', async () => {
-    expect((await fixture('early', 'setTimeout(() => {}, 800)')).status).toBe('pass');
-});
+async function waitFor(check: () => boolean) {
+    const deadline = performance.now() + 2000;
+    while (!check() && performance.now() < deadline) await Bun.sleep(10);
+    expect(check()).toBe(true);
+}
 
 const serviceFixture = join(import.meta.dirname, 'fixtures/run-service.mjs');
 
-test.each([
+test('a zero exit in the last second of the budget passes', async () => {
+    const cmd = ['node', serviceFixture, 'parent', join(dir, 'service'), '800'];
+    expect((await run('early', cmd, join(dir, 'early'), 1500)).status).toBe('pass');
+});
+
+test.skipIf(process.platform === 'win32')('an owned group stays live after its service and last child exit', async () => {
+    const prefix = join(dir, 'short');
+    const cmd = ['node', serviceFixture, 'parent'];
+    const sibling = run('sibling', [...cmd, join(dir, 'sibling'), '1800', 'detached'], join(dir, 'sibling.log'), 5000);
+    const harness = run('short', [...cmd, prefix, '0', 'detached', 'private', 'brief-child'], join(dir, 'case'), 5000);
+    let leader: number;
+    let last: number;
+    try {
+        await waitFor(() => existsSync(prefix + '.pid'));
+        leader = Number(readFileSync(prefix + '.pid', 'utf8'));
+        last = Number(readFileSync(prefix + '.last', 'utf8'));
+        await waitFor(() => exited(leader) && exited(last));
+        expect(() => process.kill(-leader, 0)).not.toThrow();
+    } finally {
+        writeFileSync(prefix + '.release', '');
+        const [result, other] = await Promise.all([harness, sibling]);
+        expect(result.status).toBe('pass');
+        expect(other.status).toBe('pass');
+        expect(other.tail).toContain('survived');
+    }
+    // Why: an unreaped orphan keeps its group ID allocated on Linux.
+    if (process.platform === 'linux' && existsSync(`/proc/${last}/stat`)) return;
+    await waitFor(() => {
+        try { process.kill(-leader, 0); return false; }
+        catch (error) { return (error as NodeJS.ErrnoException).code === 'ESRCH'; }
+    });
+}, 8000);
+
+test.skipIf(process.platform === 'win32').each([
     [],
     ['exit'],
     ['detached'],
@@ -37,7 +72,7 @@ test.each([
     ['detached', 'private'],
     ['detached', 'private', 'exit'],
     ['detached', 'private', 'exit', 'hold-pipe']
-].filter(flags => process.platform !== 'win32' || !flags.length).map(flags => ({ flags })))('cleans up the service and releases the worker ($flags)', async ({ flags }) => {
+].map(flags => ({ flags })))('cleans up the service and releases the worker ($flags)', async ({ flags }) => {
     const prefix = join(dir, 'service');
     const runtime = flags.includes('private') ? [process.execPath, '--no-env-file'] : ['node'];
     const cmd = [...runtime, serviceFixture, 'parent'];
@@ -59,13 +94,14 @@ test.each([
     expect(readFileSync(join(dir, 'next'), 'utf8')).toBe('done\n');
 }, 8000);
 
-test.skipIf(process.platform === 'win32')('the deadline releases readers held by an unregistered group', async () => {
+test('the deadline releases readers held by an unregistered child', async () => {
     const prefix = join(dir, 'unregistered');
     const start = performance.now();
     const result = await run('open pipes', ['node', serviceFixture, 'parent', prefix, '6000', 'detached', 'unregistered', 'exit'], join(dir, 'log'), 1500);
     const pid = Number(readFileSync(prefix + '.pid', 'utf8'));
     try {
         expect(result.status).toBe('timeout');
+        expect(existsSync(prefix + '.exited')).toBe(true);
         expect(performance.now() - start).toBeLessThan(2500);
     } finally {
         if (!exited(pid)) process.kill(pid, 'SIGKILL');
