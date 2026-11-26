@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { PathFinder, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
+import { twoLevelCollisionPack } from '../../fixtures/two-level-collision-pack.js';
 import { isolatedLandingFinder } from '../../lib/navCollision.js';
 
 for (const version of [1, 2]) {
@@ -31,34 +32,11 @@ for (const version of [1, 2]) {
     });
 }
 
-function fullyWalkablePack(exitMask = 0xff, mx = 0, mz = 0): Uint8Array {
-    const perLevel = 4096 + 512;
-    const bytes = new Uint8Array(10 + 3 + 2 * perLevel);
-    bytes[0] = 0x4c;
-    bytes[1] = 0x43;
-    bytes[2] = 0x4e;
-    bytes[3] = 0x56;
-    bytes[4] = 1;
-    bytes[5] = 0;
-    bytes[8] = 1;
-    let pos = 10;
-    bytes[pos++] = mx;
-    bytes[pos++] = mz;
-    bytes[pos++] = 0b0011;
-    for (let level = 0; level < 2; level++) {
-        bytes.fill(exitMask, pos, pos + 4096);
-        pos += 4096;
-        bytes.fill(0xff, pos, pos + 512);
-        pos += 512;
-    }
-    return bytes;
-}
-
 describe('PathFinder A* heuristic with transport shortcuts (#335)', () => {
     test('prefers a cheap long-range transport over pure walk', () => {
         // start (0,0) → goal (60,0); portal (0,10)→(59,0) costs ticksToCost(10)=20.
         // Optimal is walk 10 + hop 20 + walk 1 = 31 against 60 for a pure walk.
-        const finder = new PathFinder(fullyWalkablePack());
+        const finder = new PathFinder(twoLevelCollisionPack([[0, 0]]));
         const hop: TransportEdgeData = {
             from: { x: 0, z: 10, level: 0 },
             to: { x: 59, z: 0, level: 0 },
@@ -81,7 +59,7 @@ describe('PathFinder A* heuristic with transport shortcuts (#335)', () => {
     });
 
     test('walk-only still returns Chebyshev-optimal cost', () => {
-        const finder = new PathFinder(fullyWalkablePack());
+        const finder = new PathFinder(twoLevelCollisionPack([[0, 0]]));
         // No edges added → pure walk. Pack is fully walkable in a small region.
         const out = finder.findPath(
             { x: 0, z: 0, level: 0 },
@@ -94,7 +72,7 @@ describe('PathFinder A* heuristic with transport shortcuts (#335)', () => {
     });
 
     test('follows chained shortcuts when the first landing is farther from the goal', () => {
-        const finder = new PathFinder(fullyWalkablePack());
+        const finder = new PathFinder(twoLevelCollisionPack([[0, 0]]));
         const from = { x: 5, z: 5, level: 0 };
         const to = { x: 55, z: 5, level: 0 };
         const landing = { x: 4, z: 50, level: 0 };
@@ -139,7 +117,7 @@ describe('PathFinder A* heuristic with transport shortcuts (#335)', () => {
     test('only skips casts for a legal two-step walk', () => {
         const from = { x: 3211, z: 3424, level: 0 };
         const to = { ...from, x: 3213 };
-        const pack = fullyWalkablePack(0, 50, 53);
+        const pack = twoLevelCollisionPack([[50, 53]], 0);
         const startExit = 13 + (from.x & 63) * 64 + (from.z & 63);
         pack[startExit] = 2;
         pack[startExit + 64] = 2;
@@ -161,7 +139,7 @@ describe('PathFinder A* heuristic with transport shortcuts (#335)', () => {
         const entry = { ...from, x: 3202 };
         const varrock = { x: 3213, z: 3424, level: 0 };
         const goal = { ...varrock, x: 3243 };
-        const pack = fullyWalkablePack(0, 50, 53);
+        const pack = twoLevelCollisionPack([[50, 53]], 0);
         pack[13 + (entry.x & 63) * 64 + (entry.z & 63)] = 1 << 3;
         const finder = new PathFinder(pack);
         const tunnel = { kind: 'dungeon', locName: 'Tunnel', action: 'Enter' };
@@ -213,14 +191,14 @@ describe('PathFinder level-change avoidance', () => {
     });
 
     test('level-change transport is used when its key is NOT avoided', () => {
-        const finder = new PathFinder(fullyWalkablePack());
+        const finder = new PathFinder(twoLevelCollisionPack([[0, 0]]));
         finder.addEdges([], [], [stair]);
         const out = finder.findPath(from, to);
         expect(out.ok).toBe(true);
     });
 
     test('level-change transport is EXCLUDED when its from-tile key is avoided', () => {
-        const finder = new PathFinder(fullyWalkablePack());
+        const finder = new PathFinder(twoLevelCollisionPack([[0, 0]]));
         finder.addEdges([], [], [stair]);
         const out = finder.findPath(from, to, new Set([`${from.x}|${from.z}`]));
         expect(out.ok).toBe(false);
@@ -232,7 +210,7 @@ describe('PathFinder transport loc metadata', () => {
     const to = { x: 10, z: 12, level: 1 };
 
     test('propagates the exact clickable loc rather than the stand tile', () => {
-        const finder = new PathFinder(fullyWalkablePack());
+        const finder = new PathFinder(twoLevelCollisionPack([[0, 0]]));
         const stair: TransportEdgeData = {
             from,
             to,
@@ -256,7 +234,7 @@ describe('PathFinder transport loc metadata', () => {
     });
 
     test('retains the stand-tile fallback for legacy edges', () => {
-        const finder = new PathFinder(fullyWalkablePack());
+        const finder = new PathFinder(twoLevelCollisionPack([[0, 0]]));
         const stair: TransportEdgeData = { from, to, locName: 'Ladder', action: 'Climb-up', kind: 'stair' };
         finder.addEdges([], [], [stair]);
 
@@ -270,7 +248,7 @@ describe('PathFinder transport loc metadata', () => {
     });
 
     test('does not compile a documented disabled edge', () => {
-        const finder = new PathFinder(fullyWalkablePack());
+        const finder = new PathFinder(twoLevelCollisionPack([[0, 0]]));
         const stair: TransportEdgeData = {
             from,
             to,
