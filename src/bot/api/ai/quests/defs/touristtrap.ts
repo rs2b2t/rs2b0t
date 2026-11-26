@@ -1,3 +1,4 @@
+import { customStep as custom, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { findSceneTarget } from '../exec/prompts.js';
 import { normalizeJournal as journalText } from '../journalText.js';
@@ -19,6 +20,7 @@ import { Sustain } from '../../../sustain/Sustain.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import { GameMessages } from '../../../chatbox/gameMessages.js';
 import { QUESTS } from '../data/quests.js';
+import { bankedName as banked, hasName as held, heldName as heldCount, wornName as worn } from '../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { earnQuestCoinsStep } from '../exec/fundCoins.js';
 import { QuestFood } from '../food.js';
@@ -484,11 +486,7 @@ async function useItemOnNpc(
 }
 
 const lower = (name: string): string => name.toLowerCase();
-const heldCount = (snap: QuestSnapshot, name: string): number => snap.inv.get(lower(name)) ?? 0;
-const held = (snap: QuestSnapshot, name: string): boolean => heldCount(snap, name) > 0;
-const worn = (snap: QuestSnapshot, name: string): boolean => snap.worn.has(lower(name));
 const ownedNow = (snap: QuestSnapshot, name: string): number => heldCount(snap, name) + (worn(snap, name) ? 1 : 0);
-const banked = (snap: QuestSnapshot, name: string): number => snap.bank?.get(lower(name)) ?? 0;
 
 function configuredFoodName(): string | null {
     const name = QuestFood.name?.trim();
@@ -589,7 +587,7 @@ function makePreparationSpace(snap: QuestSnapshot, slots: number): QuestStep | n
     if (hasPreparationSpillover(snap)) {
         return { kind: 'deposit', keep: preparationKeep(), exactKeep: true };
     }
-    return { kind: 'wait', reason: `need ${slots} free inventory slot${slots === 1 ? '' : 's'} for the Tourist Trap loadout` };
+    return waitStep(`need ${slots} free inventory slot${slots === 1 ? '' : 's'} for the Tourist Trap loadout`);
 }
 
 function makeRescueSpace(snap: QuestSnapshot, slots: number): QuestStep | null {
@@ -598,7 +596,7 @@ function makeRescueSpace(snap: QuestSnapshot, slots: number): QuestStep | null {
     if ([...snap.inv.keys()].some(name => !keep.includes(name))) {
         return { kind: 'deposit', keep, exactKeep: true };
     }
-    return { kind: 'wait', reason: `need ${slots} free inventory slot${slots === 1 ? '' : 's'} for Tourist Trap survival supplies` };
+    return waitStep(`need ${slots} free inventory slot${slots === 1 ? '' : 's'} for Tourist Trap survival supplies`);
 }
 
 interface PrepTarget {
@@ -666,10 +664,7 @@ function configuredFoodWithdrawal(
 
     const bankedFood = bankedConfiguredFoodCount(snap);
     if (carried + bankedFood < target) {
-        return {
-            kind: 'wait',
-            reason: `configured Tourist Trap food '${name}' unavailable: need ${target}, carried ${carried}, banked ${bankedFood}`
-        };
+        return waitStep(`configured Tourist Trap food '${name}' unavailable: need ${target}, carried ${carried}, banked ${bankedFood}`);
     }
 
     let missing = target - carried;
@@ -1341,19 +1336,19 @@ async function returnToPunishmentMineForOutfit(log: (m: string) => void): Promis
 
 function safeRecoveryRoute(area: TouristTrapArea): QuestStep | null {
     if (area === 'bedabinTent') {
-        return { kind: 'custom', name: 'leave the prototype tent for item recovery', run: exitPrototypeTent };
+        return custom('leave the prototype tent for item recovery', exitPrototypeTent);
     }
     if (area === 'campUpper') {
         return { kind: 'custom', name: 'climb down before item recovery', run: log => climbCampLadder(false, log) };
     }
     if (area === 'campSurface') {
-        return { kind: 'custom', name: 'leave the camp safely for item recovery', run: leaveCamp };
+        return custom('leave the camp safely for item recovery', leaveCamp);
     }
     if (area === 'mineEntrance' || area === 'mineLower') {
-        return { kind: 'custom', name: 'leave the mine for item recovery', run: leaveMine };
+        return custom('leave the mine for item recovery', leaveMine);
     }
     if (area === 'mineDeep') {
-        return { kind: 'custom', name: 'ride back to the lower mine for item recovery', run: returnFromDeepMine };
+        return custom('ride back to the lower mine for item recovery', returnFromDeepMine);
     }
     return null;
 }
@@ -1385,7 +1380,7 @@ function makeCriticalItemSpace(snap: QuestSnapshot, slots = 1): QuestStep | null
     if (north) return north;
     const keep = criticalSlotKeep();
     if (![...snap.inv.keys()].some(name => !keep.includes(name))) {
-        return { kind: 'wait', reason: `need ${slots} safe inventory slot${slots === 1 ? '' : 's'} for a Tourist Trap quest item` };
+        return waitStep(`need ${slots} safe inventory slot${slots === 1 ? '' : 's'} for a Tourist Trap quest item`);
     }
     return { kind: 'deposit', keep, exactKeep: true };
 }
@@ -1430,7 +1425,7 @@ function sourceConsumable(snap: QuestSnapshot, name: string, target: number): Qu
     const withdrawal = withdrawBankedShortage(snap, name, target);
     if (withdrawal) return withdrawal;
     const shopTarget = SHANTAY_TARGETS.find(item => item.name === name);
-    if (!shopTarget) return { kind: 'wait', reason: `cannot naturally replace '${name}'` };
+    if (!shopTarget) return waitStep(`cannot naturally replace '${name}'`);
     const purchaseCost = shopTarget.estGp! * missing;
     const coins = sourceCoins(snap, purchaseCost, `replace ${name}`);
     if (coins) return coins;
@@ -1806,10 +1801,6 @@ async function claimReward(log: (m: string) => void): Promise<boolean> {
     return talkStrict(NPC.IRENA, IRENA, ['Agility.'], log);
 }
 
-function custom(name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep {
-    return { kind: 'custom', name, run };
-}
-
 function routeNorth(snap: QuestSnapshot): QuestStep | null {
     const area = touristTrapArea(snap.tile);
     if (area !== 'desert' && area !== 'irena' && area !== 'bedabin') return null;
@@ -2163,8 +2154,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete' || (snap.stage ?? 0) >= TOURIST_TRAP_STAGE.COMPLETE) {
         return { kind: 'done' };
     }
-    if (snap.journal === 'unknown') return { kind: 'wait', reason: 'quest journal not loaded' };
-    if (snap.stage === undefined) return { kind: 'wait', reason: 'Tourist Trap journal stage unavailable' };
+    if (snap.journal === 'unknown') return waitForJournal();
+    if (snap.stage === undefined) return waitStep('Tourist Trap journal stage unavailable');
 
     const stage = snap.stage;
     const area = touristTrapArea(snap.tile);
@@ -2396,7 +2387,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
             if (loadout) return loadout;
         }
         const south = routeSouth(snap);
-        return south ?? { kind: 'wait', reason: 'locating the visible Ana rescue checkpoint' };
+        return south ?? waitStep('locating the visible Ana rescue checkpoint');
     }
 
     if (stage === TOURIST_TRAP_STAGE.REWARD) {
@@ -2404,7 +2395,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return south ?? custom('claim both Tourist Trap skill rewards', claimReward);
     }
 
-    return { kind: 'wait', reason: `unrecognized Tourist Trap journal stage ${stage}` };
+    return waitStep(`unrecognized Tourist Trap journal stage ${stage}`);
 }
 
 export const touristtrap: QuestModule = {

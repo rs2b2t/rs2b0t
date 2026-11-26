@@ -3,9 +3,9 @@
 
 //   HEADED=1 bun e2e/biohazard-234-live.ts --stage 0 --until 16 --minutes 90 --tick 100
 //   HEADED=1 bun e2e/biohazard-234-live.ts --stage 5 --until 7 --minutes 25 --tick 100
-import type { Page } from 'playwright-core';
-
-import { deployIsolatedClient, launchBrowser } from './lib/harness.js';
+import { parseQuestArgs } from './lib/questArgs.js';
+import { printQuestLogs, questSnapshot, teleportToQuestStart } from './lib/questHarness.js';
+import { deployIsolatedClient, fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -14,57 +14,22 @@ import {
     relog,
     seedItemsToBank,
     startScript,
-    teleTo,
     type BankSeedItem
 } from './tutorial/harness.js';
 
-interface Args {
-    base: string;
-    user: string;
-    stage: number;
-    until: number;
-    minutes: number;
-    tickMs: number;
-    level: number;
-    food: string;
-    deploy: boolean;
-}
-
-function parse(argv: string[]): Args {
-    const out: Args = {
-        base: process.env.BASE ?? 'http://localhost:8890',
-        user: `bh${Date.now().toString(36).slice(-7)}`,
-        stage: 0,
-        until: 16,
-        minutes: 150,
-        tickMs: 300,
-        level: 70,
-        food: 'Lobster',
-        deploy: true
-    };
-    for (let i = 0; i < argv.length; i++) {
-        const flag = argv[i];
-        if (flag === '--no-deploy') { out.deploy = false; continue; }
-        const value = argv[++i];
-        if (value === undefined) { break; }
-        if (flag === '--base') { out.base = value; }
-        else if (flag === '--user') { out.user = value; }
-        else if (flag === '--stage') { out.stage = Number(value); }
-        else if (flag === '--until') { out.until = Number(value); }
-        else if (flag === '--minutes') { out.minutes = Number(value); }
-        else if (flag === '--tick') { out.tickMs = Number(value); }
-        else if (flag === '--level') { out.level = Number(value); }
-        else if (flag === '--food') { out.food = value; }
-    }
-    return out;
-}
-
-const args = parse(process.argv.slice(2));
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
+const args = parseQuestArgs(process.argv.slice(2), {
+    base: process.env.BASE ?? 'http://localhost:8890',
+    user: `bh${Date.now().toString(36).slice(-7)}`,
+    stage: 0,
+    until: 16,
+    minutes: 150,
+    tickMs: 300,
+    level: 70,
+    food: 'Lobster',
+    deploy: true
+}, {
+    values: { '--level': value => ({ level: Number(value) }) }
+});
 
 const QUEST = 'Biohazard';
 const PLAGUE_CITY_COMPLETE = 29;
@@ -105,34 +70,6 @@ const HANDED_OVER: Record<number, string[]> = {
     12: ['ethenea', 'liquid_honey', 'sulphuric_broline', 'plaguesample', 'touch_paper']
 };
 
-interface Snapshot {
-    pos: { x: number; z: number; level: number } | null;
-    status: string;
-    qp: number;
-    runner: string;
-    logs: { time: number; level: string; msg: string }[];
-}
-
-async function snapshot(page: Page): Promise<Snapshot> {
-    return page.evaluate(quest => {
-        const g = globalThis as never as {
-            __rs2b0t: {
-                reader: { worldTile(): { x: number; z: number; level: number } | null };
-                Quests: { status(n: string): string; points(): number };
-            };
-            rs2b0t: { runner: { state: string; ctx?: { log?: { time: number; level: string; msg: string }[] } } };
-        };
-        const ring = g.rs2b0t.runner.ctx?.log ?? [];
-        return {
-            pos: g.__rs2b0t.reader.worldTile(),
-            status: g.__rs2b0t.Quests.status(quest),
-            qp: g.__rs2b0t.Quests.points(),
-            runner: g.rs2b0t.runner.state,
-            logs: ring.slice(-80).map(l => ({ time: l.time, level: l.level, msg: l.msg }))
-        };
-    }, QUEST);
-}
-
 // Why: `public/bot` is shared by every worktree, and a concurrent deploy landing in the boot window
 // replaces navworker.js as well as botclient.js, the client still prints this quest's queue while
 // routing on somebody else's transport graph, which reads as a bug in this quest's own new edge.
@@ -146,13 +83,7 @@ const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, args.base, args.user, clientPage);
     console.log(`mainland-ready as '${args.user}' on ${clientPage}`);
@@ -192,12 +123,7 @@ try {
     }
 
     const start = STAGE_START[args.stage] ?? ARDOUGNE_BANK;
-    if (!(await teleTo(page, start, 10, 25_000))) {
-        await clearChatDialogs(page, 'pre-tele dialog(s)');
-        if (!(await teleTo(page, start, 10, 25_000))) {
-            fail(`tele to ${start.x},${start.z} did not arrive`);
-        }
-    }
+    await teleportToQuestStart(page, start);
     console.log(`start tile → ${start.x},${start.z},${start.level}`);
 
     await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', 'biohazard'));
@@ -210,7 +136,7 @@ try {
     let reached = 0;
     let queueChecked = false;
     while (Date.now() < deadline) {
-        const last = await snapshot(page);
+        const last = await questSnapshot(page, QUEST);
         const stage = (await getServerVarQuiet(page, 'biohazard')) ?? -1;
         reached = Math.max(reached, stage);
         const t = Math.round((Date.now() - t0) / 1000);
@@ -218,10 +144,7 @@ try {
             `  t=${t}s pos=${last.pos ? `${last.pos.x},${last.pos.z},${last.pos.level}` : '?'}`
             + ` biohazard=${stage} journal=${last.status} qp=${last.qp} runner=${last.runner}`
         );
-        for (const l of last.logs) {
-            if (l.time > lastLogTime) { console.log(`      · [${l.level}] ${l.msg}`); }
-        }
-        if (last.logs.length > 0) { lastLogTime = Math.max(lastLogTime, ...last.logs.map(l => l.time)); }
+        lastLogTime = printQuestLogs(last.logs, lastLogTime);
 
         // Why: one engine serves every worktree, so a concurrent session's deploy silently
         // replaces this bundle and the queue line is the first place it shows.

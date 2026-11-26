@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal, type JournalCache } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { HD_QUEST, HD_STAGE } from './areas.js';
 
@@ -84,25 +83,8 @@ export function parseHorrorJournal(lines: readonly string[] | string): QuestProg
 }
 
 /** Stands in when a read fails. */
-let lastGood: QuestProgress | undefined;
+const cache: JournalCache<QuestProgress> = {};
 
-export async function readHorrorProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(HD_QUEST);
-    if (status === 'complete') {
-        return { stage: HD_STAGE.COMPLETE, flags: new Set() };
-    }
-    if (status === 'notStarted') {
-        return { stage: HD_STAGE.NOT_STARTED, flags: new Set() };
-    }
-    if (status !== 'inProgress') {
-        return undefined;
-    }
-
-    const lines = await Quests.journal(HD_QUEST);
-    const progress = parseHorrorJournal(lines);
-    await Modals.closeIfOpen();
-    if (progress) {
-        lastGood = progress;
-    }
-    return progress ?? lastGood;
+export function readHorrorProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(HD_QUEST, HD_STAGE, parseHorrorJournal, questProgressAt, cache);
 }

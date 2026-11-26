@@ -1,3 +1,4 @@
+import { waitStep } from '../../engine/questSteps.js';
 import Tile from '../../../../../geometry/Tile.js';
 import { spotMatchesMethod } from '../../../../../data/fishingMethods.js';
 import { Execution } from '../../../../execution/Execution.js';
@@ -61,7 +62,7 @@ export function sourceCalebFish(
     const banked = fromBank(snap, raw, 1, FC_BANK.CATHERBY);
     if (held(snap, fish.raw) === 0 && banked) return banked;
     if (cooking < fish.cooking || (held(snap, fish.raw) === 0 && fishing < fish.fishing)) {
-        return { kind: 'wait', reason: `Caleb needs cooked ${missing.map(f => f.name).join(', ')}; gathering ${fish.name} needs Fishing ${fish.fishing} and Cooking ${fish.cooking} (have ${fishing}/${cooking})` };
+        return waitStep(`Caleb needs cooked ${missing.map(f => f.name).join(', ')}; gathering ${fish.name} needs Fishing ${fish.fishing} and Cooking ${fish.cooking} (have ${fishing}/${cooking})`);
     }
     if (held(snap, fish.raw) > 0) return { kind: 'custom', name: `cook ${fish.name} for Caleb`, run: log => cookFish(fish, log) };
     if ((snap.freeSlots ?? 28) < 4) {

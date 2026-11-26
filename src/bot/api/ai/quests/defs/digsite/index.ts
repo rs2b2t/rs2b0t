@@ -1,3 +1,4 @@
+import { customStep as custom, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
@@ -39,10 +40,6 @@ function withdraw(name: string, qty: number, id: number): QuestStep {
 /** Withdraw it when the bank has one, otherwise fall through to the world source. */
 function fromBank(snap: QuestSnapshot, id: number, name: string, qty = 1): QuestStep | null {
     return bankedId(snap, id) > 0 ? withdraw(name, qty, id) : null;
-}
-
-function custom(name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep {
-    return { kind: 'custom', name, run };
 }
 
 function useOnExpert(itemId: number, name: string, expect: () => boolean): QuestStep {
@@ -313,20 +310,20 @@ function plan(snap: QuestSnapshot, stage: number, underground: boolean): QuestSt
         }
 
         default:
-            return { kind: 'wait', reason: `nothing planned for stage ${stage}` };
+            return waitStep(`nothing planned for stage ${stage}`);
     }
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'complete') {
         return { kind: 'done' };
     }
     const stage = snap.progress?.stage ?? snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'quest stage not readable' };
+        return waitStep('quest stage not readable');
     }
     // Why: `ownsInventory` skips the engine's provisioning, so nothing else opens a booth and a banked trowel or vial stays invisible until one read happens.
     if (!snap.bankKnown) {

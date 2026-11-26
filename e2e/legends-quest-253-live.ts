@@ -6,8 +6,10 @@
 //   HEADED=1 bun e2e/legends-quest-253-live.ts --stage 8 --until 12 --kit       # one leg, pre-kitted
 //   HEADED=1 bun e2e/legends-quest-253-live.ts --stage 7 --until 8 --nobits      # the recovery a resume needs
 //   HEADED=1 bun e2e/legends-quest-253-live.ts --stage 8 --until 10 --prayer 99  # the trance at its worst odds
+import { parseQuestArgs, type QuestArgs } from './lib/questArgs.js';
+import { teleportToQuestStart } from './lib/questHarness.js';
 import type { Page } from 'playwright-core';
-import { deployIsolatedClient, launchBrowser } from './lib/harness.js';
+import { deployIsolatedClient, fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -16,20 +18,13 @@ import {
     relog,
     seedItemsToBank,
     startScript,
-    teleTo,
     type BankSeedItem
 } from './tutorial/harness.js';
 
 /** The quest's own requirements, as `legends_journal.rs2` renders them, at the level under test. */
 const STAT_LEVEL = 70;
 
-interface Args {
-    base: string;
-    user: string;
-    stage: number;
-    until: number;
-    minutes: number;
-    tickMs: number;
+interface Args extends QuestArgs {
     /** Seed the gems, gold bars and papyrus the module would otherwise mine and buy. */
     kit: boolean;
 // Why: stage 7 omits `asked_ungadulu_who` when testing the missing-topic recovery.
@@ -39,47 +34,26 @@ interface Args {
 
     /** Leave `%legends_bits` clear, to test the recovery a resume needs. */
     noBits: boolean;
-    deploy: boolean;
 }
 
-function parse(argv: string[]): Args {
-    const out: Args = {
-        base: process.env.BASE ?? 'http://localhost:8890',
-        user: `lq${Date.now().toString(36).slice(-7)}`,
-        stage: 0,
-        until: 75,
-        minutes: 180,
-        tickMs: 300,
-        kit: false,
-        prayer: STAT_LEVEL,
-        noBits: false,
-        deploy: true
-    };
-    for (let i = 0; i < argv.length; i++) {
-        const flag = argv[i];
-        // Why: these two take no value, so reading one first eats the next flag and drops both when they come last.
-        if (flag === '--kit') { out.kit = true; continue; }
-        if (flag === '--nobits') { out.noBits = true; continue; }
-        if (flag === '--no-deploy') { out.deploy = false; continue; }
-        const value = argv[++i];
-        if (value === undefined) { break; }
-        if (flag === '--base') { out.base = value; }
-        else if (flag === '--user') { out.user = value; }
-        else if (flag === '--stage') { out.stage = Number(value); }
-        else if (flag === '--until') { out.until = Number(value); }
-        else if (flag === '--minutes') { out.minutes = Number(value); }
-        else if (flag === '--tick') { out.tickMs = Number(value); }
-        else if (flag === '--prayer') { out.prayer = Number(value); }
-    }
-    return out;
-}
-
-const args = parse(process.argv.slice(2));
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
+const args = parseQuestArgs<Args>(process.argv.slice(2), {
+    base: process.env.BASE ?? 'http://localhost:8890',
+    user: `lq${Date.now().toString(36).slice(-7)}`,
+    stage: 0,
+    until: 75,
+    minutes: 180,
+    tickMs: 300,
+    kit: false,
+    prayer: STAT_LEVEL,
+    noBits: false,
+    deploy: true
+}, {
+    switches: {
+        '--kit': { kit: true },
+        '--nobits': { noBits: true }
+    },
+    values: { '--prayer': value => ({ prayer: Number(value) }) }
+});
 
 const QUEST = 'Legends Quest';
 // Why: Karamja has no bank in this content, so the quest's own float sits in Ardougne West.
@@ -249,13 +223,7 @@ const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, args.base, args.user, clientPage);
     console.log(`mainland-ready as '${args.user}'`);
@@ -331,12 +299,7 @@ try {
     }
 
     const start = STAGE_START[args.stage] ?? ARDOUGNE_BANK;
-    if (!(await teleTo(page, start, 10, 25_000))) {
-        await clearChatDialogs(page, 'pre-tele dialog(s)');
-        if (!(await teleTo(page, start, 10, 25_000))) {
-            fail(`tele to ${start.x},${start.z} did not arrive`);
-        }
-    }
+    await teleportToQuestStart(page, start);
     console.log(`start tile → ${start.x},${start.z},${start.level}`);
 
     await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', 'legends'));

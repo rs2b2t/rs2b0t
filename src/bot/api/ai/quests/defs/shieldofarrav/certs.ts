@@ -1,3 +1,4 @@
+import { customStep } from '../../engine/questSteps.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { bankedId, heldId, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { CURATOR, ROALD, SOA_ID } from './areas.js';
@@ -52,7 +53,7 @@ export function curatorStep(snap: QuestSnapshot, gang: ArravGang): QuestStep | n
         return { kind: 'withdraw', items: short.map(id => ({ name: 'Broken shield', qty: 1, id })) };
     }
     // Why: he mints 2 per pair and stops once either varp goes complete, so this is the only window.
-    return { kind: 'custom', name: 'mint two certificates at the curator', run: mintCertificates };
+    return customStep('mint two certificates at the curator', mintCertificates);
 }
 
 // Why: this runs after the handoffs, so the partner is paid before this bot spends the last certificate it holds.
@@ -71,7 +72,7 @@ export function certStep(snap: QuestSnapshot, gang: ArravGang): QuestStep | null
 
     if (doneMinting) {
         if (held > 0) {
-            return { kind: 'custom', name: 'claim the reward from King Roald', run: redeemCertificate };
+            return customStep('claim the reward from King Roald', redeemCertificate);
         }
         if (banked > 0) {
             // Why: withdraw 2 while a partner is owed one: redeem one, trade the other, and a trade can only offer from the pack.

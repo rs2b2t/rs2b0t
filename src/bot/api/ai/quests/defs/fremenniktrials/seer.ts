@@ -1,3 +1,4 @@
+import { customStep, talkTo } from '../../engine/questSteps.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
@@ -8,6 +9,7 @@ import { Locs } from '../../../../locs/Locs.js';
 import { Modals } from '../../../../ui/widgets/Modals.js';
 import { Reach } from '../../../../walking/Reach.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
+import { heldId as carried } from '../../engine/snapshotItems.js';
 import { hasFlag, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { afterDialogueAction, pickPreferred } from '../../exec/primitives.js';
 import { findSceneTarget, promptLoc, settleScene, useOnLoc } from '../../exec/prompts.js';
@@ -40,7 +42,6 @@ const PEER_START = ['Ask about becoming a Fremennik', 'Yes'];
 export const PEER_BANK = ['Ask about depositing your equipment', 'Bank your equipment', 'Yes'];
 
 const holding = (id: number): boolean => Inventory.countById(id) > 0;
-const carried = (snap: QuestSnapshot, id: number): number => snap.invIds?.get(id) ?? 0;
 
 const BUCKETS = [FT_ID.BUCKET_EMPTY, FT_ID.BUCKET_1, FT_ID.BUCKET_2, FT_ID.BUCKET_3, FT_ID.BUCKET_4, FT_ID.BUCKET_5];
 const JUGS = [FT_ID.JUG_EMPTY, FT_ID.JUG_1, FT_ID.JUG_2, FT_ID.JUG_3];
@@ -56,7 +57,7 @@ export function seerStep(snap: QuestSnapshot): QuestStep | null {
         return null;
     }
     if (!hasFlag(snap.progress, 'seer-started')) {
-        return { kind: 'talk', stop: PEER(PEER_START) };
+        return talkTo(PEER(PEER_START));
     }
     if (inPuzzleRoom(snap.tile)) {
         return puzzleFloor(snap);
@@ -65,20 +66,20 @@ export function seerStep(snap: QuestSnapshot): QuestStep | null {
         return eastRoom(snap);
     }
     if (inSeerWest(snap.tile)) {
-        return { kind: 'custom', name: 'climb to the puzzle floor', run: climbWest };
+        return customStep('climb to the puzzle floor', climbWest);
     }
     // Why: the trial refuses anyone carrying or wearing anything, and Peer's own spell is the only bank within reach.
     if (snap.inv.size > 0 || snap.worn.size > 0) {
-        return { kind: 'talk', stop: PEER(PEER_BANK) };
+        return talkTo(PEER(PEER_BANK));
     }
-    return { kind: 'custom', name: "solve the lock on Peer's door", run: solveRiddleAndEnter };
+    return customStep("solve the lock on Peer's door", solveRiddleAndEnter);
 }
 
 // The puzzle floor
 
 function puzzleFloor(snap: QuestSnapshot): QuestStep {
     if (carried(snap, FT_ID.SEERS_KEY) > 0) {
-        return { kind: 'custom', name: 'take the trapdoor down to the locked door', run: goDownEast };
+        return customStep('take the trapdoor down to the locked door', goDownEast);
     }
     if (carried(snap, FT_ID.FROZEN_KEY) > 0) {
         return useOnLocStep(FT_ID.FROZEN_KEY, 'Cooking range', FT_LOC.RANGE, FT_TILE.PUZZLE_RANGE,
@@ -96,7 +97,7 @@ function puzzleFloor(snap: QuestSnapshot): QuestStep {
             () => holding(FT_ID.VASE_WATER), 'fill the vase from the tap');
     }
     if (carried(snap, FT_ID.VASE) > 0) {
-        return { kind: 'custom', name: 'take the trapdoor down to the mural', run: goDownEast };
+        return customStep('take the trapdoor down to the mural', goDownEast);
     }
     if (carried(snap, FT_ID.RED_DISK) < 2) {
         return collectDisks(snap);
@@ -216,17 +217,17 @@ async function openContainer(shutId: number, openId: number, near: Tile, log: (m
 
 function eastRoom(snap: QuestSnapshot): QuestStep {
     if (carried(snap, FT_ID.SEERS_KEY) > 0) {
-        return { kind: 'custom', name: 'unlock the far door', run: unlockExit };
+        return customStep('unlock the far door', unlockExit);
     }
     if (carried(snap, FT_ID.RED_DISK) > 0) {
-        return { kind: 'custom', name: 'press a red disk into the mural', run: pressDisk };
+        return customStep('press a red disk into the mural', pressDisk);
     }
     // Why: the mural hands the lid back to anyone whose 2 disks are already in it, so gate this on still needing one.
     if (carried(snap, FT_ID.VASE) > 0 && carried(snap, FT_ID.VASE_LID) === 0) {
         return locStep('Abstract mural', 'Study', FT_LOC.MURAL, FT_TILE.MURAL_STAND,
             () => holding(FT_ID.VASE_LID), 'take the vase lid out of the mural');
     }
-    return { kind: 'custom', name: 'climb back to the puzzle floor', run: climbEast };
+    return customStep('climb back to the puzzle floor', climbEast);
 }
 
 async function pressDisk(log: (m: string) => void): Promise<boolean> {

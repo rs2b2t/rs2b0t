@@ -1,3 +1,4 @@
+import { customStep as custom, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../journalText.js';
 // docs/QUESTS.md
@@ -453,10 +454,6 @@ async function searchCupboard(log: (m: string) => void): Promise<boolean> {
     return driveToComplete(log);
 }
 
-function custom(name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep {
-    return { kind: 'custom', name, run };
-}
-
 function holdsArmour(snap: QuestSnapshot): boolean {
     return (snap.invIds?.get(ARMOUR_OBJ) ?? 0) > 0 || (snap.wornIds?.has(ARMOUR_OBJ) ?? false);
 }
@@ -484,14 +481,14 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     const progress = snap.progress;
     if (progress === undefined) {
-        return { kind: 'wait', reason: 'Hazeel Cult journal stage unavailable' };
+        return waitStep('Hazeel Cult journal stage unavailable');
     }
     if (hasFlag(progress, EVIL)) {
-        return { kind: 'wait', reason: 'this character joined the cult; the module runs the Carnillean side only' };
+        return waitStep('this character joined the cult; the module runs the Carnillean side only');
     }
     switch (progress.stage) {
         case HC_STAGE.NOT_STARTED:
@@ -506,7 +503,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         case HC_STAGE.RETURNED_ARMOUR:
             return custom("search Jones' cupboard for the evidence", searchCupboard);
         default:
-            return { kind: 'wait', reason: `Hazeel Cult stage ${progress.stage} is not implemented` };
+            return waitStep(`Hazeel Cult stage ${progress.stage} is not implemented`);
     }
 }
 

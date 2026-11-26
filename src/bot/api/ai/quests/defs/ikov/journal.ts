@@ -1,7 +1,6 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { readQuestJournal, type JournalCache } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
 // docs/QUESTS.md
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import { IKOV_QUEST } from './areas.js';
 
 /** `%ikov`. 20 and 30 render the same page, so the module folds them into `PULLED_LEVER`. */
@@ -38,24 +37,8 @@ export function parseIkovJournal(lines: readonly string[] | string): number | un
 }
 
 /** Stands in when a read fails. */
-let lastGood: number | undefined;
+const cache: JournalCache<number> = {};
 
-export async function readIkovStage(): Promise<number | undefined> {
-    const status = Quests.status(IKOV_QUEST);
-    if (status === 'complete') {
-        return IKOV_STAGE.COMPLETE;
-    }
-    if (status === 'notStarted') {
-        return IKOV_STAGE.NOT_STARTED;
-    }
-    if (status !== 'inProgress') {
-        return undefined;
-    }
-    const stage = parseIkovJournal(await Quests.journal(IKOV_QUEST));
-    // Why: the journal body is a main modal, and leaving it up makes every later read come back empty.
-    await Modals.closeIfOpen();
-    if (stage !== undefined) {
-        lastGood = stage;
-    }
-    return stage ?? lastGood;
+export function readIkovStage(): Promise<number | undefined> {
+    return readQuestJournal(IKOV_QUEST, IKOV_STAGE, parseIkovJournal, stage => stage, cache);
 }

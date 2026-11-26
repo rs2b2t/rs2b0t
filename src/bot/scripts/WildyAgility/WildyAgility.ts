@@ -4,7 +4,7 @@ import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
@@ -260,7 +260,7 @@ export default class WildyAgility extends TaskBot {
     obstacleTimes: number[] = [];
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         FOOD = (this.settings.str('food', '').trim() || scriptFood(this.settings, 'Lobster')).toLowerCase();
 

@@ -1,3 +1,4 @@
+import { talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { QUESTS } from '../../data/quests.js';
 import { hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
@@ -19,21 +20,21 @@ const VOTES_NEEDED = 7;
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'complete') {
         return { kind: 'done' };
     }
     const stage = snap.progress?.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'quest stage not readable' };
+        return waitStep('quest stage not readable');
     }
     // Why: `ownsInventory` skips the engine's provisioning, so nothing else ever opens a booth and a banked shark stays invisible until this read happens.
     if (!snap.bankKnown) {
         return { kind: 'scanBank', bank: FT_TILE.SEERS_BANK };
     }
     if (stage === FT_STAGE.NOT_STARTED) {
-        return { kind: 'talk', stop: BRUNDT(['Do you have any quests?', 'Yes, I am interested.', 'I want to become a Fremennik!']) };
+        return talkTo(BRUNDT(['Do you have any quests?', 'Yes, I am interested.', 'I want to become a Fremennik!']));
     }
     // Why: the 7th vote comes from the honourable death, which leaves you on a loft the walker has no edge off, so Brundt is unreachable until that ladder is climbed.
     const loft = leaveLoftStep(snap);
@@ -41,7 +42,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return loft;
     }
     if (stage >= VOTES_NEEDED) {
-        return { kind: 'talk', stop: BRUNDT(['Ask about becoming a Fremennik']) };
+        return talkTo(BRUNDT(['Ask about becoming a Fremennik']));
     }
 
     // Why: this is the order the map wants: the longhall trials, then the 2 east of town, then the maze, then the trade chain.
@@ -56,9 +57,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
     }
     // Why: Peer only offers to bank your equipment while Thorvald's trial is open, and the last 2 trials are walked with nothing.
     if (!hasFlag(snap.progress, 'warrior-started') && !hasFlag(snap.progress, 'warrior-done')) {
-        return { kind: 'talk', stop: THORVALD(['Yes']) };
+        return talkTo(THORVALD(['Yes']));
     }
-    return seerStep(snap) ?? warriorStep(snap) ?? { kind: 'wait', reason: 'seven votes are in but Brundt has not been told' };
+    return seerStep(snap) ?? warriorStep(snap) ?? waitStep('seven votes are in but Brundt has not been told');
 }
 
 function readiness(): string | null {

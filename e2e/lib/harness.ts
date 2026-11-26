@@ -12,6 +12,35 @@ export function fail(msg: string): never {
     process.exit(1);
 }
 
+const DEPLOYED = ['botclient.js', 'botclient.js.map', 'navworker.js', 'navworker.js.map'];
+
+export function deploySharedBundles(base: string): void {
+    const engine = process.env.ENGINE_DIR ?? `${homedir()}/code/rs2b2t-engine`;
+    const botDir = `${engine}/public/bot`;
+    if (!existsSync(botDir)) {
+        fail(`deploy: ${botDir} not found — set ENGINE_DIR to the engine serving ${base}`);
+    }
+    const build = Bun.spawnSync(['bun', 'run', 'build:bot'], { stdout: 'pipe', stderr: 'pipe' });
+    if (build.exitCode !== 0) {
+        fail(`deploy: build:bot failed\n${build.stderr.toString()}`);
+    }
+    const copy = Bun.spawnSync(['cp', ...DEPLOYED.map(file => `out/${file}`), botDir + '/']);
+    if (copy.exitCode !== 0) {
+        fail(`deploy: could not copy the bundles into ${botDir}`);
+    }
+    console.log(`deploy: fresh ${DEPLOYED.join(', ')} -> ${botDir}`);
+}
+
+export function logBotConsole(page: Page, t0: number): void {
+    page.on('pageerror', e => console.log(`pageerror: ${e}`));
+    page.on('console', m => {
+        const txt = m.text();
+        if (txt.startsWith('[bot]')) {
+            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
+        }
+    });
+}
+
 const SIM_PROBE_MS = 5000;
 
 // Why: a wrong port (`:889` for `:8890`) used to cost a deploy and answer with a Playwright stack trace from the first page load.

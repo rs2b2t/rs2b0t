@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 
 export const PC_STAGE = {
@@ -55,18 +54,6 @@ export function parsePlagueJournal(lines: readonly string[] | string): QuestProg
     return hit === undefined ? undefined : { stage: hit[1], flags: new Set() };
 }
 
-export async function readPlagueProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(PLAGUE_CITY);
-    if (status === 'complete') {
-        return { stage: PC_STAGE.COMPLETE, flags: new Set() };
-    }
-    if (status === 'notStarted') {
-        return { stage: PC_STAGE.NOT_STARTED, flags: new Set() };
-    }
-    if (status !== 'inProgress') {
-        return undefined;
-    }
-    const progress = parsePlagueJournal(await Quests.journal(PLAGUE_CITY));
-    await Modals.closeIfOpen();
-    return progress;
+export function readPlagueProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(PLAGUE_CITY, PC_STAGE, parsePlagueJournal, questProgressAt);
 }

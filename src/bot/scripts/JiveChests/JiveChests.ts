@@ -3,7 +3,7 @@ import { Bank } from '../../api/bank/Bank.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { GroundItems, type GroundItem } from '../../api/grounditems/GroundItems.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Locs } from '../../api/locs/Locs.js';
@@ -68,7 +68,7 @@ export default class JiveChests extends TaskBot {
     pendingLoot = false;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
         this.teleportHome = this.settings.bool('teleportHome', true);
         this.combineKeys = this.settings.bool('combineKeys');
         this.startedAt = Date.now();

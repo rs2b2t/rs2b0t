@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { readQuestJournal } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import { FC_NAME } from './areas.js';
 
 /** `%fishingcompo`. Every rung is rendered by its own journal page. */
@@ -37,18 +36,6 @@ export function parseFishingContestJournal(lines: readonly string[] | string): n
 
 // Why: Losing resets the stage to `started`, so a last-good cache could retain invalid progress.
 
-export async function readFishingContestStage(): Promise<number | undefined> {
-    const status = Quests.status(FC_NAME);
-    if (status === 'complete') {
-        return FC_STAGE.COMPLETE;
-    }
-    if (status === 'notStarted') {
-        return FC_STAGE.NOT_STARTED;
-    }
-    if (status !== 'inProgress') {
-        return undefined;
-    }
-    const stage = parseFishingContestJournal(await Quests.journal(FC_NAME));
-    await Modals.closeIfOpen();
-    return stage;
+export function readFishingContestStage(): Promise<number | undefined> {
+    return readQuestJournal(FC_NAME, FC_STAGE, parseFishingContestJournal, stage => stage);
 }

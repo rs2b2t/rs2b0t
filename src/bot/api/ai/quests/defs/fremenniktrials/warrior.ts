@@ -1,3 +1,4 @@
+import { customStep, talkTo } from '../../engine/questSteps.js';
 import { EventSignal } from '../../../../execution/EventSignal.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
@@ -22,16 +23,16 @@ export function warriorStep(snap: QuestSnapshot): QuestStep | null {
         return null;
     }
     if (!hasFlag(snap.progress, 'warrior-started')) {
-        return { kind: 'talk', stop: THORVALD(['Yes']) };
+        return talkTo(THORVALD(['Yes']));
     }
     if (inBattleground(snap.tile)) {
-        return { kind: 'custom', name: 'fight Koschei to the death', run: fightKoschei };
+        return customStep('fight Koschei to the death', fightKoschei);
     }
     // Why: the ladder refuses anyone carrying armour, a weapon, runes, logs, arrows or a clue, and Peer's spell is the nearest bank.
     if (snap.inv.size > 0 || snap.worn.size > 0) {
-        return { kind: 'talk', stop: PEER(PEER_BANK) };
+        return talkTo(PEER(PEER_BANK));
     }
-    return { kind: 'custom', name: "climb down to Thorvald's battleground", run: enterBattleground };
+    return customStep("climb down to Thorvald's battleground", enterBattleground);
 }
 
 // Why: the honourable death drops you on Thorvald's loft, which the walker has no baked edge off, so every route out reads unreachable until this ladder is climbed.
@@ -46,7 +47,7 @@ export function leaveLoftStep(snap: QuestSnapshot): QuestStep | null {
     if (!onLoft(snap.tile)) {
         return null;
     }
-    return { kind: 'custom', name: 'climb down from the loft', run: leaveLoft };
+    return customStep('climb down from the loft', leaveLoft);
 }
 
 async function enterBattleground(log: (m: string) => void): Promise<boolean> {

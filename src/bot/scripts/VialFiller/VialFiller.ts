@@ -1,7 +1,7 @@
 import { reader, type WorldTile } from '../../adapter/ClientAdapter.js';
 import { LoopingBot } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { Bank } from '../../api/bank/Bank.js';
@@ -59,7 +59,7 @@ export default class VialFiller extends LoopingBot {
     private startedAt = Date.now();
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         this.bankLabel = this.settings.str('bank', 'Falador West');
         this.bankStand = BANK_STANDS[this.bankLabel] ?? BANK_STANDS['Falador West'];

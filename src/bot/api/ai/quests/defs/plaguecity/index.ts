@@ -1,3 +1,4 @@
+import { customStep as custom, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { PC_ITEM, PC_TILE, held, owned, plagueArea, worn, type PlagueArea } from './areas.js';
@@ -45,9 +46,6 @@ import {
 const KEEP_IDS: readonly number[] = Object.values(PC_ITEM).map(item => item.id);
 
 const TIDY_FLOOR = 4;
-
-const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
-    ({ kind: 'custom', name, run });
 
 const TO_EAST = custom('walk back to East Ardougne', goEast);
 const TO_WEST = custom('cross into West Ardougne', goWest);
@@ -108,7 +106,7 @@ function waterLeg(snap: QuestSnapshot, area: PlagueArea): QuestStep {
         return inEast(area, custom('fill buckets at the Ardougne fountain', fillBuckets));
     }
     const more = sourceBucket(snap, BUCKET_TARGET - water);
-    return inEast(area, more ?? { kind: 'wait', reason: 'no bucket for the garden soil' });
+    return inEast(area, more ?? waitStep('no bucket for the garden soil'));
 }
 
 // Why: the cow field, the snape grass spawns, Taverley and Port Sarim are one eastward loop, so every raw ingredient is gathered before the first mix.
@@ -198,17 +196,17 @@ function stageStep(snap: QuestSnapshot, area: PlagueArea, stage: number): QuestS
         case PC_STAGE.FREED_ELENA:
             return inEast(area, custom('tell Edmond his daughter is safe', thankEdmond));
         default:
-            return { kind: 'wait', reason: `Plague City stage ${stage} is not implemented` };
+            return waitStep(`Plague City stage ${stage} is not implemented`);
     }
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     const area = plagueArea(snap.tile);
     if (area === 'unknown') {
-        return { kind: 'wait', reason: 'player location unavailable' };
+        return waitStep('player location unavailable');
     }
     if (snap.journal === 'complete' || (snap.stage ?? -1) >= PC_STAGE.COMPLETE) {
         if (area !== 'east') {
@@ -219,7 +217,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
             : { kind: 'done' };
     }
     if (snap.stage === undefined) {
-        return { kind: 'wait', reason: 'Plague City journal stage unavailable' };
+        return waitStep('Plague City journal stage unavailable');
     }
     return tidy(snap, area) ?? stageStep(snap, area, snap.stage);
 }

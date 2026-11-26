@@ -1,3 +1,4 @@
+import { customStep as custom, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import {
@@ -44,9 +45,6 @@ import {
     visitGuidor
 } from './varrock.js';
 import { poisonTheStew, searchTheCrate, takeDoctorGown, takeMournerKey, takeRottenApples } from './west.js';
-
-const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
-    ({ kind: 'custom', name, run });
 
 const TO_MAINLAND = custom('leave for the East Ardougne side', goMainland);
 const TO_WEST = custom("cross the wall on Omart's rope ladder", goWest);
@@ -99,7 +97,7 @@ function distillatorStep(snap: QuestSnapshot, area: BioArea): QuestStep {
     // Why: the cupboard hands nothing over while one is banked, so the banked copy is the only one this stage gets, and West Ardougne has no booth to draw it from.
     if (held(snap, BIO_ITEM.DOCTOR_GOWN) === 0 && !worn(snap, BIO_ITEM.DOCTOR_GOWN)) {
         const gown = reclaim(snap, BIO_ITEM.DOCTOR_GOWN);
-        return gown ? onMainland(area, gown) : { kind: 'wait', reason: "the doctors' gown is nowhere the bot can reach" };
+        return gown ? onMainland(area, gown) : waitStep("the doctors' gown is nowhere the bot can reach");
     }
     if (held(snap, BIO_ITEM.MOURNER_KEY) === 0) {
         const key = reclaim(snap, BIO_ITEM.MOURNER_KEY);
@@ -213,24 +211,24 @@ function stageStep(snap: QuestSnapshot, area: BioArea, stage: number): QuestStep
         case BIO_STAGE.REPORTED_ELENA:
             return onMainland(area, custom('confront King Lathas about the plague', confrontLathas));
         default:
-            return { kind: 'wait', reason: `Biohazard stage ${stage} is not implemented` };
+            return waitStep(`Biohazard stage ${stage} is not implemented`);
     }
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     const area = bioArea(snap.tile);
     if (area === 'unknown') {
-        return { kind: 'wait', reason: 'player location unavailable' };
+        return waitStep('player location unavailable');
     }
     const stage = snap.progress?.stage ?? snap.stage;
     if (snap.journal === 'complete' || (stage ?? -1) >= BIO_STAGE.COMPLETE) {
         return { kind: 'done' };
     }
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'Biohazard journal stage unavailable' };
+        return waitStep('Biohazard journal stage unavailable');
     }
     // Why: `ownsInventory` skips the engine's provisioning, so a banked gown, vial or key stays invisible until this module reads the bank; past the wall the navigator answers "unreachable" for every booth, so the read waits for the mainland.
     if (!snap.bankKnown) {

@@ -1,8 +1,18 @@
+import { waitStep } from '../../engine/questSteps.js';
+import {
+    bankedName as bankCountByName,
+    cachedBankId as banked,
+    heldId as held,
+    heldName,
+    inventoryAndBankCount as owned
+} from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { EW_ITEM, COAL_ROCKS, PICKAXES, PICKAXE_SPAWN, SEERS_BANK, type EwItem } from './areas.js';
 import { PICKAXES as MINING_PICKS } from '../../../../acquisition/Tools.js';
 import { MELEE_WEAPONS, bestBanked, bestHeld, packWeapon, wieldedWeapon } from '../../weapons.js';
+
+export { banked, held, heldName, owned };
 
 export const COAL_NEED = 4;
 const THREAD_NEED = 1;
@@ -99,24 +109,6 @@ export function warnElementalWorkshopReadiness(): string | null {
         + `Next probe ${EW_PROBE_COMBAT.attack}/${EW_PROBE_COMBAT.strength}/`
         + `${EW_PROBE_COMBAT.defence}/${EW_PROBE_COMBAT.hitpoints}. Untested — may fail or need low-power tactics later.`
     );
-}
-
-
-
-export function held(snap: QuestSnapshot, id: number): number {
-    return snap.invIds?.get(id) ?? 0;
-}
-
-export function banked(snap: QuestSnapshot, id: number): number {
-    return snap.bankIds?.get(id) ?? 0;
-}
-
-export function owned(snap: QuestSnapshot, id: number): number {
-    return held(snap, id) + banked(snap, id);
-}
-
-export function heldName(snap: QuestSnapshot, name: string): number {
-    return snap.inv.get(name.toLowerCase()) ?? 0;
 }
 
 export function hasPickaxe(snap: QuestSnapshot): boolean {
@@ -231,10 +223,6 @@ function keepNamesForEntry(): string[] {
     ];
 }
 
-function bankCountByName(snap: QuestSnapshot, name: string): number {
-    return snap.bank?.get(name.toLowerCase()) ?? 0;
-}
-
 function gatherCoal(snap: QuestSnapshot): QuestStep | null {
     const short = COAL_NEED - held(snap, EW_ITEM.COAL.id);
     const inBank = banked(snap, EW_ITEM.COAL.id);
@@ -249,7 +237,7 @@ function gatherCoal(snap: QuestSnapshot): QuestStep | null {
         return { kind: 'deposit', keep: keep.map(item => item.name), keepIds: keep.map(item => item.id), bank: SEERS_BANK, exactKeep: true };
     }
     if (inBank > 0) return withdraw([{ ...EW_ITEM.COAL, qty: Math.min(short, inBank) }]);
-    if (mining < 30) return { kind: 'wait', reason: `need Mining 30 to mine Coal, or ${short} Coal in the bank` };
+    if (mining < 30) return waitStep(`need Mining 30 to mine Coal, or ${short} Coal in the bank`);
     if (!pick) {
         const bankPick = picks.find(p => banked(snap, p.id) > 0);
         return bankPick
@@ -385,16 +373,16 @@ export function surfaceLoadout(snap: QuestSnapshot, needBellowsFix: boolean, nee
 
     // Hard waits when bank is known empty of critical tools.
     if (needSmelt && !hasPickaxe(snap) && !bestBankPickaxe(snap)) {
-        return { kind: 'wait', reason: 'need a pickaxe in the bank for Elemental ore' };
+        return waitStep('need a pickaxe in the bank for Elemental ore');
     }
     if (held(snap, EW_ITEM.HAMMER.id) === 0 && banked(snap, EW_ITEM.HAMMER.id) === 0) {
-        return { kind: 'wait', reason: 'need a Hammer in the bank to smith the Elemental shield' };
+        return waitStep('need a Hammer in the bank to smith the Elemental shield');
     }
     if (needBellowsFix && held(snap, EW_ITEM.THREAD.id) < THREAD_NEED && banked(snap, EW_ITEM.THREAD.id) === 0) {
-        return { kind: 'wait', reason: 'need Thread in the bank to fix the bellows' };
+        return waitStep('need Thread in the bank to fix the bellows');
     }
     if (needSmelt && !hasWeapon(snap) && !bestBankWeapon(snap)) {
-        return { kind: 'wait', reason: 'need a melee weapon in the bank for the Earth elemental' };
+        return waitStep('need a melee weapon in the bank for the Earth elemental');
     }
     if (!hasHeldSlashTool(snap) && !hasSlashTool(snap)
         && banked(snap, EW_ITEM.KNIFE.id) === 0 && !bestBankWeapon(snap)) {

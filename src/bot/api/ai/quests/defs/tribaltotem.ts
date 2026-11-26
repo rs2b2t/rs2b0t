@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { normalizeJournal as normalize } from '../journalText.js';
 // docs/QUESTS.md
 import { actions, reader } from '../../../../adapter/ClientAdapter.js';
@@ -332,31 +333,31 @@ async function takeTotem(log: (m: string) => void): Promise<boolean> {
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return { kind: 'wait', reason: 'quest journal not loaded' }; }
-    if (snap.journal === 'notStarted') { return { kind: 'talk', stop: KANGAI }; }
+    if (snap.journal === 'unknown') { return waitForJournal(); }
+    if (snap.journal === 'notStarted') { return talkTo(KANGAI); }
 
     const progress = snap.progress;
-    if (progress === undefined) { return { kind: 'wait', reason: 'Tribal Totem journal stage unavailable' }; }
+    if (progress === undefined) { return waitStep('Tribal Totem journal stage unavailable'); }
 
     // Why: the chest refuses a second totem while one is in the pack or bank, so holding it means the quest is over bar the walk.
-    if ((snap.invIds?.get(TOTEM_OBJ) ?? 0) > 0) { return { kind: 'talk', stop: KANGAI }; }
+    if ((snap.invIds?.get(TOTEM_OBJ) ?? 0) > 0) { return talkTo(KANGAI); }
 
     switch (progress.stage) {
         case TOTEM_STAGE.STARTED:
             return (snap.invIds?.get(LABEL_OBJ) ?? 0) > 0
-                ? { kind: 'custom', name: 'relabel the crate bound for the Wizards\' Tower', run: markCrate }
-                : { kind: 'custom', name: 'take the address label off the mansion crate', run: takeLabel };
+                ? customStep('relabel the crate bound for the Wizards\' Tower', markCrate)
+                : customStep('take the address label off the mansion crate', takeLabel);
         case TOTEM_STAGE.CRATE_MARKED:
-            return { kind: 'talk', stop: RPDT };
+            return talkTo(RPDT);
         case TOTEM_STAGE.CRATE_DELIVERED:
-            return { kind: 'talk', stop: CROMPERTY };
+            return talkTo(CROMPERTY);
         case TOTEM_STAGE.TELEPORTED:
-            if (!inMansion(snap.tile)) { return { kind: 'talk', stop: CROMPERTY }; }
+            if (!inMansion(snap.tile)) { return talkTo(CROMPERTY); }
             return hasFlag(progress, 'combo')
-                ? { kind: 'custom', name: 'take the totem from the mansion chest', run: takeTotem }
-                : { kind: 'custom', name: 'work out the security door combination', run: solveCombination };
+                ? customStep('take the totem from the mansion chest', takeTotem)
+                : customStep('work out the security door combination', solveCombination);
         default:
-            return { kind: 'wait', reason: `Tribal Totem stage ${progress.stage} is not implemented` };
+            return waitStep(`Tribal Totem stage ${progress.stage} is not implemented`);
     }
 }
 

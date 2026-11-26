@@ -2,7 +2,7 @@ import { reader } from '../../adapter/ClientAdapter.js';
 import type { Player } from '../../api/model/Player.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { liveCatalog, notedId as catalogNotedId } from '../../api/market/catalog.js';
 import { Players } from '../../api/players/Players.js';
@@ -224,7 +224,7 @@ export default class MuleDepot extends TaskBot implements MuleDepotContext {
     private startedAt = Date.now();
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
         this.startedAt = Date.now();
 
         const mode = this.settings.str('mode', 'Dump');

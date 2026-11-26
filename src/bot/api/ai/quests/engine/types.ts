@@ -58,19 +58,7 @@ export interface QuestSnapshot {
     combatXp?: number;
 }
 
-// Why: display names collide: "Broken shield", "Certificate", "Fishing spot" and "Gate" each name more than one thing, so a name lookup silently accepts the wrong object.
-
-/** How many of an exact object id the pack holds. */
-export function heldId(snap: QuestSnapshot, id: number): number {
-    return snap.invIds?.get(id) ?? 0;
-}
-
-// Why: Preserve unknown bank state instead of treating an unread bank as empty.
-
-/** How many of an exact object id the last bank read saw; 0 until one lands. */
-export function bankedId(snap: QuestSnapshot, id: number): number {
-    return snap.bankKnown ? (snap.bankIds?.get(id) ?? 0) : 0;
-}
+export { heldId, bankedId } from './snapshotItems.js';
 
 export type QuestStep =
     | { kind: 'talk'; stop: NpcStop }

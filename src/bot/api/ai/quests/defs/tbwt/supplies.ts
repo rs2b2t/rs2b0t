@@ -1,8 +1,10 @@
+import { waitStep } from '../../engine/questSteps.js';
 import { Equipment } from '../../../../equipment/Equipment.js';
 import { foodForms } from '../../../../combat/food.js';
 import { ITEM_DB } from '../../../../../data/itemdb.js';
 import { armourChoice, armourWorn } from '../../armour.js';
 import { QuestFood } from '../../food.js';
+import { bankedName as banked, cachedBankId as bankedId, heldId, heldName as held, wornName as worn } from '../../engine/snapshotItems.js';
 import { flagValue, hasFlag, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import {
     AGILITY_DOSES,
@@ -24,13 +26,9 @@ import {
 } from './areas.js';
 import { TB_FLAG } from './journal.js';
 import { foodNames, loadout, retainLoadout } from './loadout.js';
-export { foodNames } from './loadout.js';
 
-export const heldId = (snap: QuestSnapshot, id: number): number => snap.invIds?.get(id) ?? 0;
-export const bankedId = (snap: QuestSnapshot, id: number): number => snap.bankIds?.get(id) ?? 0;
-export const held = (snap: QuestSnapshot, name: string): number => snap.inv.get(name.toLowerCase()) ?? 0;
-export const banked = (snap: QuestSnapshot, name: string): number => snap.bank?.get(name.toLowerCase()) ?? 0;
-export const worn = (snap: QuestSnapshot, name: string): boolean => snap.worn.has(name.toLowerCase());
+export { banked, bankedId, held, heldId, worn };
+export { foodNames } from './loadout.js';
 
 export const lubufuStage = (snap: QuestSnapshot): number => flagValue(snap.progress, TB_FLAG.LUBUFU) ?? TB_LUBUFU.UNKNOWN;
 export const tinsayStage = (snap: QuestSnapshot): number => flagValue(snap.progress, TB_FLAG.TINSAY) ?? TB_TINSAY.UNKNOWN;
@@ -165,7 +163,7 @@ const buyAtJiminua = (item: string, qty: number): QuestStep => ({
 });
 
 function clearSpace(snap: QuestSnapshot, removeFood = false): QuestStep | null {
-    if (heldId(snap, TB_ID.RUM) > 0) return { kind: 'wait', reason: 'make and deliver the Karamjan rum before leaving the island to bank' };
+    if (heldId(snap, TB_ID.RUM) > 0) return waitStep('make and deliver the Karamjan rum before leaving the island to bank');
     const names = new Map<number, string>([
         ...ITEM_DB.map(item => [item.id, item.name] as [number, string]),
         ...[NET, KNIFE, PESTLE, TINDERBOX, SEAWEED].map(item => [item.id, item.name] as [number, string])
@@ -213,7 +211,7 @@ export function prepare(snap: QuestSnapshot): QuestStep | null {
     if (food > plan.food || (snap.freeSlots ?? 28) < plan.minFree) {
         const space = clearSpace(snap) ?? clearSpace(snap, true);
         if (space) return space;
-        return { kind: 'wait', reason: `${plan.phase} needs ${plan.minFree} free inventory slots` };
+        return waitStep(`${plan.phase} needs ${plan.minFree} free inventory slots`);
     }
 
     if (missing.length === 0 && gearMissing.length === 0 && armourMissing.length === 0 && kit.length === 2 && !coinsLow && !starving
@@ -280,7 +278,7 @@ export function prepare(snap: QuestSnapshot): QuestStep | null {
         return total + (stackable ? (held(snap, item.name) > 0 ? 0 : 1) : item.qty);
     }, 0);
     if (suppliesSlots + plan.minFree > (snap.freeSlots ?? 28)) {
-        return clearSpace(snap) ?? clearSpace(snap, true) ?? { kind: 'wait', reason: `${plan.phase} needs room for supplies and ${plan.minFree} free slots` };
+        return clearSpace(snap) ?? clearSpace(snap, true) ?? waitStep(`${plan.phase} needs room for supplies and ${plan.minFree} free slots`);
     }
     const foodCapacity = Math.max(0, (snap.freeSlots ?? 28) - suppliesSlots - plan.minFree);
     if (food < plan.food) {
@@ -289,7 +287,7 @@ export function prepare(snap: QuestSnapshot): QuestStep | null {
         if (stocked && foodCapacity > 0) {
             fromBank.push({ name: stocked, qty: Math.min(plan.food - food, foodCapacity, banked(snap, stocked)) });
         } else if (stocked && starving && fromBank.length === 0) {
-            return clearSpace(snap) ?? { kind: 'wait', reason: 'no room for combat food and Karambwan catches' };
+            return clearSpace(snap) ?? waitStep('no room for combat food and Karambwan catches');
         } else if (starving) {
             unavailable.push('any combat food');
         }
@@ -298,7 +296,7 @@ export function prepare(snap: QuestSnapshot): QuestStep | null {
         return { kind: 'withdraw', items: fromBank, bank: TB_TILE.ARDOUGNE_BANK };
     }
     if (unavailable.length > 0) {
-        return { kind: 'wait', reason: `bank has none of: ${unavailable.join(', ')}` };
+        return waitStep(`bank has none of: ${unavailable.join(', ')}`);
     }
     // What is left is a Jiminua line and the bank does not stock it.
     const shopped = missing.find(s => s.fromJiminua);

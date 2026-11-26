@@ -1,6 +1,5 @@
 import { TaskBot } from '../../api/bot/Bot.js';
-import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Paint } from '../../paint/Paint.js';
@@ -52,7 +51,7 @@ export default class FlaxAIO extends TaskBot {
     private spinningMode = true;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         this.pickingMode = this.settings.bool('picking', true);
         this.spinningMode = this.settings.bool('spinning', true);

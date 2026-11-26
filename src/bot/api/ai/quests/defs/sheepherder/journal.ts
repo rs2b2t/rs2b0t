@@ -1,7 +1,6 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { readQuestJournal } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
 // docs/QUESTS.md
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { ORDINAL, SHEEP, type SheepIndex } from './areas.js';
 
@@ -57,18 +56,9 @@ export function parseSheepHerderJournal(lines: readonly string[] | string): Ques
     return { stage: SH_STAGE.DISPOSING, flags };
 }
 
-export async function readSheepHerderProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(QUEST);
-    if (status === 'complete') {
-        return { stage: SH_STAGE.COMPLETE, flags: allBurnt() };
-    }
-    if (status === 'notStarted') {
-        return { stage: SH_STAGE.NOT_STARTED, flags: new Set() };
-    }
-    if (status !== 'inProgress') {
-        return undefined;
-    }
-    const progress = parseSheepHerderJournal(await Quests.journal(QUEST));
-    await Modals.closeIfOpen();
-    return progress;
+export function readSheepHerderProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(QUEST, SH_STAGE, parseSheepHerderJournal, stage => ({
+        stage,
+        flags: stage === SH_STAGE.COMPLETE ? allBurnt() : new Set<string>()
+    }));
 }

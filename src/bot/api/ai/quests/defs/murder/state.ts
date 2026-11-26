@@ -1,14 +1,8 @@
+import { bankedId as banked, heldId as held } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 import { MURDER_OBJ, suspectOrder, type Suspect } from './areas.js';
 
-export function held(snap: QuestSnapshot, id: number): number {
-    return snap.invIds?.get(id) ?? 0;
-}
-
-// Why: Preserve unknown bank state instead of treating an unread bank as empty.
-export function banked(snap: QuestSnapshot, id: number): number {
-    return snap.bankKnown ? (snap.bankIds?.get(id) ?? 0) : 0;
-}
+export { banked, held };
 
 export function owned(snap: QuestSnapshot, id: number): number {
     return held(snap, id) + banked(snap, id);

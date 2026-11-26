@@ -5,7 +5,7 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 
-import { launchBrowser } from './lib/harness.js';
+import { fail, launchBrowser } from './lib/harness.js';
 import { cheatQuiet, mainlandAccount } from './tutorial/harness.js';
 
 /**
@@ -24,11 +24,6 @@ const KIT: [string, string, string][] = [
 const base = process.env.BASE ?? 'http://localhost:8890';
 const user = `load${Date.now().toString(36).slice(-6)}`;
 const deploy = !process.argv.includes('--no-deploy');
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
 
 /** A live run loads the deployed bundle, never the working tree. */
 function deployBundle(): void {

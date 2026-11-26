@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitForJournal } from '../engine/questSteps.js';
 import { Execution } from '../../../execution/Execution.js';
 import { GameMessages } from '../../../chatbox/gameMessages.js';
 import { Inventory } from '../../../inventory/Inventory.js';
@@ -118,7 +119,7 @@ export function gatherFlour(snap: QuestSnapshot): QuestStep {
     if (!snap.inv.has('grain')) {
         return { kind: 'pickLoc', loc: 'Wheat', op: 'Pick', item: 'Grain', anchor: WHEAT_FIELD };
     }
-    return { kind: 'custom', name: 'mill flour', run: millFlour };
+    return customStep('mill flour', millFlour);
 }
 
 export function gatherMilk(snap: QuestSnapshot): QuestStep {
@@ -132,12 +133,12 @@ const gatherEgg = (): QuestStep => ({ kind: 'grabGround', item: 'Egg', anchor: E
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return { kind: 'wait', reason: 'quest journal not loaded' }; }
-    if (snap.journal === 'notStarted') { return { kind: 'talk', stop: COOK }; }
+    if (snap.journal === 'unknown') { return waitForJournal(); }
+    if (snap.journal === 'notStarted') { return talkTo(COOK); }
     if (!snap.inv.has('egg')) { return gatherEgg(); }
     if (!snap.inv.has('bucket of milk')) { return gatherMilk(snap); }
     if (!snap.inv.has('pot of flour')) { return gatherFlour(snap); }
-    return { kind: 'talk', stop: COOK };
+    return talkTo(COOK);
 }
 
 export const cooksassistant: QuestModule = {

@@ -5,7 +5,7 @@
 //   BASE=http://localhost:8888 bun e2e/pvp-signal-probe.ts
 import { appendFileSync, writeFileSync } from 'node:fs';
 import type { Page } from 'playwright-core';
-import { launchBrowser, parseArgs } from './lib/harness.js';
+import { fail, launchBrowser, parseArgs } from './lib/harness.js';
 import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, teleTo } from './tutorial/harness.js';
 
 const { base } = parseArgs(process.argv.slice(2), { base: process.env.BASE ?? 'http://localhost:8888' });
@@ -45,11 +45,6 @@ interface Row {
     hp: number;
     players: { id: number; name: string | null; faceEntity: number; combatCycle: number; d: number }[];
     npcs: { idx: number; name: string | null; faceEntity: number; combatCycle: number; d: number }[];
-}
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
 }
 
 /** Installs a self-contained sampler in the page; drained from Node between phases. */

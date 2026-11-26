@@ -1,3 +1,4 @@
+import { customStep as custom, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Equipment } from '../../../../equipment/Equipment.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Skills } from '../../../../skills/Skills.js';
@@ -20,9 +21,6 @@ import { type BoxDrive, talkBoxes } from './dialogue.js';
 import { ChestState, catchToad, huntChompy, openChest, watchRantzShoot } from './hunt.js';
 import { readChompyProgress } from './journal.js';
 import { feathersStep, heldId, loadoutStep, scanBank, toolStep, toolsHeld, withdraw } from './supplies.js';
-
-const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
-    ({ kind: 'custom', name, run });
 
 const TOADIES = 'How do we make the chompys come?';
 const STABBERS = ["Ok, I'll make you some 'stabbers'.", "Ok, I'll make the 'stabbers' for you."];
@@ -138,7 +136,7 @@ function bellowsStep(snap: QuestSnapshot): QuestStep | null {
     if (banked !== null) {
         return withdraw([{ name: 'Ogre bellows', qty: 1, id: banked }]);
     }
-    return { kind: 'wait', reason: 'no ogre bellows in the chest or the bank' };
+    return waitStep('no ogre bellows in the chest or the bank');
 }
 
 /** Feathers, shafts and tips, with an axe in the pack and the melee kit on before the wolves. */
@@ -203,7 +201,7 @@ function shootingLeg(snap: QuestSnapshot): QuestStep | null {
     if (!hasArrows(snap)) {
         if (!toolsHeld(snap)) {
             // Why: Bugs stops selling once the arrows are handed over, so past that point the tools have to already exist.
-            return toolStep(snap) ?? { kind: 'wait', reason: 'no knife or chisel to fletch more ogre arrows with' };
+            return toolStep(snap) ?? waitStep('no knife or chisel to fletch more ogre arrows with');
         }
         const fletch = fletchLeg(snap);
         if (fletch) {
@@ -230,14 +228,14 @@ function cookLeg(snap: QuestSnapshot): QuestStep {
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'complete') {
         return { kind: 'done' };
     }
     const stage = snap.progress?.stage ?? snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'quest stage not readable' };
+        return waitStep('quest stage not readable');
     }
 
     if (stage === CB_STAGE.NOT_STARTED) {

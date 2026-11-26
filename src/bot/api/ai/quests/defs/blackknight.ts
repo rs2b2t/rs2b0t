@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
@@ -8,6 +9,7 @@ import { Reach } from '../../../walking/Reach.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import Tile from '../../../../geometry/Tile.js';
 import { driveDialog, type NpcStop } from '../exec/primitives.js';
+import { hasName as has, wornName as worn } from '../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { QUESTS } from '../data/quests.js';
 import { Quests } from '../../../ui/questlog/Quests.js';
@@ -22,16 +24,13 @@ const GRILL = new Tile(3025, 3507, 0);
 const HOLE = new Tile(3031, 3508, 1);
 const CABBAGE_FIELD = new Tile(3053, 3295, 0);
 
-const has = (snap: QuestSnapshot, name: string): boolean => (snap.inv.get(name.toLowerCase()) ?? 0) > 0;
-const worn = (snap: QuestSnapshot, name: string): boolean => snap.worn.has(name.toLowerCase());
-
 function sourceItem(snap: QuestSnapshot, item: string): QuestStep {
     if (!snap.bankKnown) return { kind: 'scanBank' };
     const banked = item === 'Cabbage' && snap.bankIds ? snap.bankIds.get(CABBAGE) ?? 0 : snap.bank?.get(item.toLowerCase()) ?? 0;
     if (banked > 0) return { kind: 'withdraw', items: [{ name: item, ...(item === 'Cabbage' ? { id: CABBAGE } : {}), qty: 1 }] };
     if (item === IRON_CHAINBODY) return { kind: 'buy', item, qty: 1, shop: { npc: 'Wayne', anchor: new Tile(2973, 3312, 0) }, estGp: 300 };
     if (item === BRONZE_MED_HELM) return { kind: 'buy', item, qty: 1, shop: { npc: 'Peksa', anchor: new Tile(3076, 3429, 0) }, estGp: 50 };
-    return { kind: 'custom', name: 'pick cabbage', run: pickCabbage };
+    return customStep('pick cabbage', pickCabbage);
 }
 
 async function readStage(): Promise<number | undefined> {
@@ -50,9 +49,9 @@ async function readStage(): Promise<number | undefined> {
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return { kind: 'wait', reason: 'quest journal not loaded' }; }
-    if (snap.journal === 'notStarted' || snap.stage === 3) return { kind: 'talk', stop: SIR_AMIK };
-    if (snap.stage === undefined) return { kind: 'wait', reason: 'fortress journal stage unavailable' };
+    if (snap.journal === 'unknown') { return waitForJournal(); }
+    if (snap.journal === 'notStarted' || snap.stage === 3) return talkTo(SIR_AMIK);
+    if (snap.stage === undefined) return waitStep('fortress journal stage unavailable');
     for (const item of [IRON_CHAINBODY, BRONZE_MED_HELM]) {
         if (!worn(snap, item)) return has(snap, item) ? { kind: 'equip', item } : sourceItem(snap, item);
     }

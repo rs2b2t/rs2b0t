@@ -1,5 +1,7 @@
+import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { QUESTS } from '../../data/quests.js';
+import { heldId } from '../../engine/snapshotItems.js';
 import { hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { CAVE_HOPS, COMMANDER, COMMANDER_INSPECT, FALADOR_WEST_BANK, MC_FOOD_TARGET, MC_OBJ, NULODION } from './areas.js';
 import { MC_FLAG, MC_STAGE, readDwarfCannonProgress } from './journal.js';
@@ -8,37 +10,29 @@ import { fetchRemains, fixRailings, inCave, repairCannon, rescueChild } from './
 export { MCANNON_QUEST, MC_FLAG, MC_STAGE, parseDwarfCannonJournal, readDwarfCannonProgress } from './journal.js';
 export { CANNON_PARTS, MC_OBJ, MC_TILE, RAILINGS } from './areas.js';
 
-const heldId = (snap: QuestSnapshot, id: number): number => snap.invIds?.get(id) ?? 0;
-
-const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep => ({
-    kind: 'custom',
-    name,
-    run
-});
-
 export function decide(snap: QuestSnapshot): QuestStep {
     const stage = snap.progress?.stage ?? snap.stage;
     if (snap.journal === 'complete' || (stage ?? 0) >= MC_STAGE.COMPLETE) {
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'Dwarf Cannon journal stage unavailable' };
+        return waitStep('Dwarf Cannon journal stage unavailable');
     }
 
     if (stage === MC_STAGE.NOT_STARTED) {
-        return { kind: 'talk', stop: COMMANDER };
+        return talkTo(COMMANDER);
     }
     if (stage === MC_STAGE.RAILINGS) {
         return hasFlag(snap.progress, MC_FLAG.RAILINGS_DONE)
-            ? { kind: 'talk', stop: COMMANDER }
+            ? talkTo(COMMANDER)
             : custom('replace the six broken railings', fixRailings);
     }
     if (stage === MC_STAGE.GUARD_TOWER) {
         return heldId(snap, MC_OBJ.REMAINS.id) > 0
-            ? { kind: 'talk', stop: COMMANDER }
+            ? talkTo(COMMANDER)
             : custom('take the dwarf remains from the watchtower', fetchRemains);
     }
     if (stage === MC_STAGE.GOBLIN_CAVE || stage === MC_STAGE.FIND_CHILD) {
@@ -47,26 +41,26 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (stage === MC_STAGE.CHILD_RESCUED) {
         return inCave(snap.tile)
             ? custom('leave the goblin cave by the mud pile', log => rescueChild(true, log))
-            : { kind: 'talk', stop: COMMANDER };
+            : talkTo(COMMANDER);
     }
     if (stage === MC_STAGE.FIX_CANNON) {
         // Why: The Commander replaces lost toolkits at stages 6 and 7.
         return heldId(snap, MC_OBJ.TOOLKIT.id) > 0
             ? custom('repair the broken multicannon', repairCannon)
-            : { kind: 'talk', stop: COMMANDER };
+            : talkTo(COMMANDER);
     }
     if (stage === MC_STAGE.CANNON_FIXED) {
-        return { kind: 'talk', stop: COMMANDER_INSPECT };
+        return talkTo(COMMANDER_INSPECT);
     }
     if (stage === MC_STAGE.SEE_NULODION) {
-        return { kind: 'talk', stop: NULODION };
+        return talkTo(NULODION);
     }
     if (stage === MC_STAGE.RETURN_NOTES) {
         // Why: Nulodion re-issues whichever of the 2 is missing, and the Commander refuses the hand-over without both.
         const complete = heldId(snap, MC_OBJ.NOTES.id) > 0 && heldId(snap, MC_OBJ.MOULD.id) > 0;
-        return { kind: 'talk', stop: complete ? COMMANDER : NULODION };
+        return talkTo(complete ? COMMANDER : NULODION);
     }
-    return { kind: 'wait', reason: `unrecognized Dwarf Cannon stage ${stage}` };
+    return waitStep(`unrecognized Dwarf Cannon stage ${stage}`);
 }
 
 function warnDwarfCannonReadiness(): string | null {

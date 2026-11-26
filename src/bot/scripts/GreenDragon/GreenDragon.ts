@@ -4,7 +4,7 @@ import { BotHost } from '../../runtime/BotHost.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { DeathRecovery } from '../../api/tasks/DeathRecovery.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
@@ -937,7 +937,7 @@ export default class GreenDragon extends TaskBot {
     died = false;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         STYLE = this.settings.str('combatStyle', 'melee') as 'melee' | 'mage';
         MELEE_STYLE = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));

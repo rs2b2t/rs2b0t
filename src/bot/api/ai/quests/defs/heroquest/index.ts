@@ -1,3 +1,4 @@
+import { customStep, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { QUESTS } from '../../data/quests.js';
 import { talkAndClose, talkUntil } from '../../exec/legs.js';
@@ -43,7 +44,7 @@ function handInStep(snap: QuestSnapshot): QuestStep {
             if (bankedId(snap, item.id) > 0) {
                 return { kind: 'withdraw', items: [{ name: item.name, qty: 1, id: item.id }] };
             }
-            return { kind: 'wait', reason: `no ${item.name} to hand in` };
+            return waitStep(`no ${item.name} to hand in`);
         }
     }
     return {
@@ -69,14 +70,14 @@ const COIN_TOP_UP = 10_000;
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'complete') {
         return { kind: 'done' };
     }
     const stage = snap.progress?.stage ?? snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'quest stage not readable' };
+        return waitStep('quest stage not readable');
     }
     // Why: `ownsInventory` skips the engine's provisioning, so nothing else opens a booth and an armband or feather banked by an earlier run stays invisible until this read.
     if (!snap.bankKnown) {
@@ -141,15 +142,15 @@ function egress(snap: QuestSnapshot, step: QuestStep): QuestStep {
         return step;
     }
     if (inDeepDungeon(snap.tile)) {
-        return { kind: 'custom', name: 'leave the deep dungeon', run: leaveDeepDungeon };
+        return customStep('leave the deep dungeon', leaveDeepDungeon);
     }
     if (inVelrakCell(snap.tile)) {
-        return { kind: 'custom', name: "leave Velrak's cell", run: freeVelrak };
+        return customStep("leave Velrak's cell", freeVelrak);
     }
     if (!inSealedPocket(snap)) {
         return step;
     }
-    return { kind: 'custom', name: 'leave the sealed Brimhaven pocket', run: returnToStreet };
+    return customStep('leave the sealed Brimhaven pocket', returnToStreet);
 }
 
 export const heroquest: QuestModule = {

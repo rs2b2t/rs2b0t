@@ -59,6 +59,29 @@ export function openBankAccess(
     return Bank.openNearestAccess(dest?.access ?? fallback, log);
 }
 
+export async function openNearestBank(bot: { setStatus(status: string): void; log(message: string): void }, status?: string): Promise<BankLocation | null> {
+    const here = Game.tile();
+    const bank = here && nearestBank(here);
+    if (!here || !bank) {
+        bot.log('no reachable bank');
+        return null;
+    }
+
+    bot.setStatus(status ?? `banking at ${bank.name}`);
+    const log = (message: string) => bot.log(`  ${message}`);
+    if (bank.tile.level !== here.level || bank.tile.distanceTo(here) > 4) {
+        if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 4, timeoutMs: 180_000, log }))) {
+            bot.log('walk to the bank failed — retrying');
+            return null;
+        }
+    }
+    if (!(await openBankAccess(bank, { name: 'Bank booth', op: 'Use-quickly' }, log))) {
+        bot.log('could not open the bank — retrying');
+        return null;
+    }
+    return bank;
+}
+
 /**
  * Start-of-script pack cleanup (#170): deposit anything off the keep list so the bot can start with a junk pack.
  * Why: true when nothing needed banking or the purge finished; false when junk remains and the bank couldn't be opened or deposited.

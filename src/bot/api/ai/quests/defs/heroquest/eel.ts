@@ -1,3 +1,4 @@
+import { customStep } from '../../engine/questSteps.js';
 import { EventSignal } from '../../../../execution/EventSignal.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
@@ -254,9 +255,9 @@ function keyStep(snap: QuestSnapshot): QuestStep | null {
     if (heldId(snap, HERO_ID.JAIL_KEY) === 0) {
         return bankedId(snap, HERO_ID.JAIL_KEY) > 0
             ? withdraw(HERO_NAMED.JAIL_KEY, 1, HERO_ID.JAIL_KEY)
-            : { kind: 'custom', name: 'kill the Jailer for the jail key', run: killJailer };
+            : customStep('kill the Jailer for the jail key', killJailer);
     }
-    return { kind: 'custom', name: "free Velrak for the deep dungeon's key", run: freeVelrak };
+    return customStep("free Velrak for the deep dungeon's key", freeVelrak);
 }
 
 /**
@@ -268,7 +269,7 @@ export function eelStep(snap: QuestSnapshot): QuestStep | null {
         return null;
     }
     if (heldId(snap, HERO_ID.RAW_LAVA_EEL) > 0) {
-        return { kind: 'custom', name: 'cook the lava eel at Catherby', run: cookLavaEel };
+        return customStep('cook the lava eel at Catherby', cookLavaEel);
     }
     if (bankedId(snap, HERO_ID.RAW_LAVA_EEL) > 0) {
         return withdraw(HERO_NAMED.RAW_LAVA_EEL, 1, HERO_ID.RAW_LAVA_EEL);
@@ -280,7 +281,7 @@ export function eelStep(snap: QuestSnapshot): QuestStep | null {
                 ? withdraw(HERO_NAMED.FISHING_BAIT, BAIT_TARGET, HERO_ID.FISHING_BAIT)
                 : { kind: 'buy', item: HERO_NAMED.FISHING_BAIT, qty: BAIT_TARGET, shop: HERO_SHOP.GERRANT, estGp: 2_000 };
         }
-        return keyStep(snap) ?? { kind: 'custom', name: 'fish a lava eel in the Taverley dungeon', run: fishLavaEel };
+        return keyStep(snap) ?? customStep('fish a lava eel in the Taverley dungeon', fishLavaEel);
     }
     if (bankedId(snap, HERO_ID.OILY_ROD) > 0) {
         return withdraw(HERO_NAMED.OILY_ROD, 1, HERO_ID.OILY_ROD);
@@ -312,7 +313,7 @@ export function eelStep(snap: QuestSnapshot): QuestStep | null {
         }
         return bankedId(snap, HERO_ID.SLIME) > 0
             ? withdraw(HERO_NAMED.SLIME, 1, HERO_ID.SLIME)
-            : { kind: 'custom', name: 'ask Gerrant for a jar of blamish slime', run: askGerrantForSlime };
+            : customStep('ask Gerrant for a jar of blamish slime', askGerrantForSlime);
     }
     if (bankedId(snap, HERO_ID.HARRALANDER_VIAL) > 0) {
         return withdraw(HERO_NAMED.HARRALANDER_VIAL, 1, HERO_ID.HARRALANDER_VIAL);
@@ -335,7 +336,7 @@ export function eelStep(snap: QuestSnapshot): QuestStep | null {
     }
 
     if (heldId(snap, HERO_ID.UNID_HARRALANDER) > 0) {
-        return { kind: 'custom', name: 'identify the harralander', run: identifyHarralander };
+        return customStep('identify the harralander', identifyHarralander);
     }
     if (bankedId(snap, HERO_ID.UNID_HARRALANDER) > 0) {
         return withdraw(HERO_NAMED.UNID_HERB, 1, HERO_ID.UNID_HARRALANDER);
@@ -343,5 +344,5 @@ export function eelStep(snap: QuestSnapshot): QuestStep | null {
     if (heldFood(snap) < DRUID_FOOD) {
         return { kind: 'withdraw', items: [{ name: foodName(), qty: DRUID_FOOD * 2 }] };
     }
-    return { kind: 'custom', name: 'farm chaos druids for a harralander', run: farmHarralander };
+    return customStep('farm chaos druids for a harralander', farmHarralander);
 }

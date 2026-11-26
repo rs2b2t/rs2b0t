@@ -4,7 +4,7 @@ import { Bank } from '../../api/bank/Bank.js';
 import { Banking } from '../../api/bank/Banking.js';
 import { nearestBank } from '../../api/bank/BankLocations.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Trade } from '../../api/trade/Trade.js';
 import { Traversal } from '../../api/walking/Traversal.js';
@@ -221,7 +221,7 @@ export default class MarketMaker extends TaskBot {
     private gpOut = 0;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         // Why: the obj config unpacks after login, and reading the catalog before it lands reports the coin as missing, which is the same symptom as a genuine cache mismatch.
         await Execution.delayUntil(() => liveCatalog().items.length > 0, 15_000);

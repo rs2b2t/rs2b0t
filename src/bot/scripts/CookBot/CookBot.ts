@@ -14,7 +14,7 @@ import {
     type FirePlot
 } from '../../api/firemaking/Firemaking.js';
 import { lightFire, waitForFireSpace } from '../../api/firemaking/LightFire.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Locs } from '../../api/locs/Locs.js';
 import { Skills } from '../../api/skills/Skills.js';
@@ -104,7 +104,7 @@ export default class CookBot extends TaskBot {
     private readonly noLight = new NoLightTiles();
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         this.fish = this.settings.str('fish', 'Raw salmon');
         this.mode = parseSurfaceMode(this.settings.str('surface', 'Range'));
