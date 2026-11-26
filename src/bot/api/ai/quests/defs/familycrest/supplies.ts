@@ -1,5 +1,6 @@
 import { Skills } from '../../../../skills/Skills.js';
 import { Traversal } from '../../../../walking/Traversal.js';
+import { planItemFromBank } from '../../engine/provisioning.js';
 import { bankedName, cachedBankId as banked, heldId as held, heldName, wornId as worn } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { ANTIPOISON_IDS, DUEL_RING_IDS, FC_BANK, FC_ID, FC_ITEM, FC_SHOP, PICKAXES } from './areas.js';
@@ -209,17 +210,9 @@ export function withdraw(items: { name: string; qty: number; id?: number }[], ba
 
 /** Withdraw a shortfall when the bank has it. */
 export function fromBank(snap: QuestSnapshot, item: FcItem, qty = 1, bank?: Tile): QuestStep | null {
-    const short = qty - held(snap, item.id);
-    if (short <= 0) {
-        return null;
-    }
-    if (!snap.bankKnown) {
-        return scanBank(bank);
-    }
-    const inBank = banked(snap, item.id);
-    return inBank > 0
-        ? withdraw([{ name: item.name, id: item.id, qty: Math.min(short, inBank) }], bank)
-        : null;
+    const plan = planItemFromBank(snap, item, qty);
+    if (plan === 'scanBank') return scanBank(bank);
+    return plan ? withdraw([plan], bank) : null;
 }
 
 export function buy(item: FcItem, qty: number, shop: { npc: string; anchor: Tile }, estGp: number): QuestStep {
