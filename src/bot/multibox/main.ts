@@ -1,6 +1,7 @@
 import type { LoginCoordinationRegistry } from '../runtime/LoginCoordination.js';
 import '../panel/desktopStorage.js';
 import { resolveWorldNumber, type WorldNumber } from '../../client/config/worlds.js';
+import { installVisibilityTableCache } from '../../client/dash3d/VisibilityTable.js';
 import { supportsWorldRouting } from '../../client/config/target.js';
 import { BUILD_INFO, formatBuildInfo } from '../runtime/buildInfo.js';
 import { installNavWorkerPool, type NavPoolHost } from '../event/webwalk/NavWorkerClient.js';
@@ -25,6 +26,7 @@ import type { Account } from './types.js';
 type DesktopWall = Window & { rs2b0tLoginCoordinator?: LoginCoordinationRegistry & { parallelism: number } };
 
 if (typeof window !== 'undefined') {
+    installVisibilityTableCache(window);
     installWorkerClockHub(window);
     installNavWorkerPool(window as Window & NavPoolHost, (window as DesktopWall).rs2b0tLoginCoordinator?.parallelism);
 }

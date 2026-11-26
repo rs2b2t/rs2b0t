@@ -8,7 +8,8 @@
 
         "baseUrl": "src",
         "paths": {
-            "#/*": ["*"]
+            "#/*": ["*"],
+            "@rs2b0t/api": ["../packages/rs2b0t-api"]
         },
 
         "moduleResolution": "bundler",
