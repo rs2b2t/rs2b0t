@@ -4,23 +4,10 @@ import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Locs } from '../../api/locs/Locs.js';
+import { climbLadder } from '../../api/locs/climbLadder.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { walkOpening } from '../../event/webwalk/walkOpening.js';
 import type FlaxAIO from './flaxaio.js';
-
-async function climbLadder(bot: FlaxAIO, name: string, op: string): Promise<boolean> {
-    const ladder = Locs.query().name(name).action(op).nearest();
-    if (!ladder) {
-        bot.log(`no '${name}' offering '${op}' nearby`);
-        return false;
-    }
-    const before = Game.tile()?.level;
-    await ladder.interact(op);
-    return Execution.delayUntil(() => {
-        const t = Game.tile();
-        return t !== null && t.level !== before;
-    }, 8000);
-}
 
 export class AscendTask implements Task {
     constructor(private bot: FlaxAIO) {}
@@ -34,7 +21,7 @@ export class AscendTask implements Task {
         if (!ladder || ladder.distance() > 1) {
             await walkOpening(this.bot.ladderStand(), 1, this.bot.obstacleList(), m => this.bot.log(m));
         }
-        await climbLadder(this.bot, this.bot.ladderName(), this.bot.climbUpOp());
+        await climbLadder(this.bot.ladderName(), this.bot.climbUpOp(), m => this.bot.log(m));
     }
 }
 
@@ -94,6 +81,6 @@ export class DescendTask implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus('heading back down');
-        await climbLadder(this.bot, this.bot.ladderName(), this.bot.climbDownOp());
+        await climbLadder(this.bot.ladderName(), this.bot.climbDownOp(), m => this.bot.log(m));
     }
 }
