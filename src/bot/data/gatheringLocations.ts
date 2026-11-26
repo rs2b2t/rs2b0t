@@ -43,6 +43,26 @@ export interface BaitVendor {
 export const DEFAULT_BOOTH_NAME = 'Bank booth';
 export const DEFAULT_BOOTH_OP = 'Use-quickly';
 
+export function camp(
+    name: string,
+    spot: Tile,
+    bankStand: Tile,
+    resources: readonly string[],
+    notes?: string,
+    verified = true
+): GatheringLocation {
+    return {
+        name,
+        spot,
+        bankStand,
+        boothName: DEFAULT_BOOTH_NAME,
+        boothOp: DEFAULT_BOOTH_OP,
+        verified,
+        resources,
+        notes
+    };
+}
+
 /** Default camp membership when a named location omits {@link GatheringLocation.campRadius}. */
 export const DEFAULT_CAMP_RADIUS = 64;
 
