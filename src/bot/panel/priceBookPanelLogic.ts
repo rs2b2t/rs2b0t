@@ -1,5 +1,5 @@
 import { isPopular, shelfOf, type Category } from '../api/market/categories.js';
-import { displayName, searchCatalog, type Catalog } from '../api/market/catalog.js';
+import { displayName, normalizeItemName, searchCatalog, type Catalog } from '../api/market/catalog.js';
 import { rowOf, type PriceBook, type PriceRow } from '../api/market/priceBook.js';
 import { MARKET_PRICES } from '../data/marketprices.js';
 import { resolvePrices, rowValid } from '../api/market/prices.js';
@@ -123,11 +123,6 @@ export function pickerRows(
 export type SortKey = 'name' | 'category' | 'buy' | 'sell' | 'cap';
 export type SortDir = 'asc' | 'desc';
 
-/** Letters and digits, everything else a gap, so you never have to type an apostrophe. */
-function loose(text: string): string {
-    return text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-}
-
 /** Shortest query that may match on its letters alone. */
 // Why: over the 132-item price snapshot 3 letters in order still spray ('ore' matched 22 names, 'aro' 16); 4 cuts those to 4 and 0 and still lands 'rnplt' on the Rune plates.
 const SUBSEQUENCE_FLOOR = 4;
@@ -145,11 +140,11 @@ function subsequence(haystack: string, needle: string): boolean {
 
 /** Every word typed has to land, as a substring or as letters in order. */
 export function matchesFilter(name: string, query: string): boolean {
-    const q = loose(query);
+    const q = normalizeItemName(query);
     if (q.length === 0) {
         return true;
     }
-    const spaced = loose(name);
+    const spaced = normalizeItemName(name);
     const packed = spaced.replace(/ /g, '');
     return q.split(' ').every(term =>
         spaced.includes(term) || (term.length >= SUBSEQUENCE_FLOOR && subsequence(packed, term))
