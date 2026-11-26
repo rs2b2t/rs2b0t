@@ -37,6 +37,7 @@ type CompletedMessage = {
 
 type OutboundMessage =
     | CompletedMessage
+    | { type: 'ready' }
     | { type: 'message'; message: string }
     | { type: 'failCount'; failCount: number }
     | { type: 'ack'; id: number }
@@ -711,6 +712,7 @@ worker.addEventListener('message', (event: MessageEvent<InboundMessage>): void =
             worker.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
         });
 });
+worker.postMessage({ type: 'ready' });
 
 async function handleMessage(message: InboundMessage): Promise<void> {
     if (message.type === 'init') {

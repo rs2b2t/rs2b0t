@@ -29,7 +29,7 @@ export default class JagFile {
             this.data = src;
             this.unpacked = false;
         } else {
-            this.data = bunzip2(src.subarray(6));
+            this.data = bunzip2(src.subarray(6), false, false, unpackedSize);
             data = new Packet(this.data);
             this.unpacked = true;
         }
@@ -75,7 +75,7 @@ export default class JagFile {
             this.fileUnpacked[index] = src;
             return src;
         } else {
-            const data: Uint8Array = bunzip2(src);
+            const data: Uint8Array = bunzip2(src, false, false, this.fileUnpackedSize[index]);
             this.fileUnpacked[index] = data;
             return data;
         }

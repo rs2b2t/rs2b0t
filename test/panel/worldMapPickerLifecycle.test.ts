@@ -1,5 +1,6 @@
-import { expect, spyOn, test } from 'bun:test';
+import { expect, jest, spyOn, test } from 'bun:test';
 import { EventTarget as DomEventTarget, PropertySymbol, Window } from 'happy-dom';
+import { regenerateBasemap } from '#/bot/panel/basemapRegen.js';
 import { WorldMapPicker } from '#/bot/panel/WorldMapPicker.js';
 
 function resources() {
@@ -77,5 +78,67 @@ test.each(['Cancel', 'Escape', 'Confirm'])('%s releases picker settings after ea
         localStorage.clear();
         Object.assign(globalThis, sharedDOM);
         await pickerWindow.happyDOM.close();
+    }
+});
+
+test.each(['response', 'body'])('Rebuild recovers when the worldmap %s stalls', async stage => {
+    const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch')!;
+    const firstRequested = Promise.withResolvers<void>();
+    const stalled = Promise.withResolvers<AbortSignal | null | undefined>();
+    const held = Promise.withResolvers<void>();
+    let requests = 0;
+    Object.defineProperty(globalThis, 'fetch', {
+        configurable: true,
+        value: async (url: string | URL, init?: RequestInit) => {
+            if (!String(url).endsWith('/worldmap.jag')) return new Response(null, { status: 404 });
+            requests++;
+            if (requests === 1) {
+                firstRequested.resolve();
+                await new Promise(resolve => setTimeout(resolve, 60_000));
+                return new Response(null, { status: 404 });
+            }
+            if (requests === 2) {
+                const hang = async (): Promise<never> => {
+                    stalled.resolve(init?.signal);
+                    await held.promise;
+                    throw new Error('end of test');
+                };
+                return stage === 'response' ? hang() : { ok: true, arrayBuffer: hang };
+            }
+            return new Response(null, { status: 404 });
+        }
+    });
+    const frame = spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(1);
+    const originalUrl = location.href;
+    const dom = (window as unknown as Window).happyDOM;
+    const clock = jest as typeof jest & { advanceTimersByTime(ms: number): void };
+    let retry: Promise<unknown> | undefined;
+    try {
+        dom.setURL('https://picker.test/map/');
+        jest.useFakeTimers();
+        void WorldMapPicker.open();
+        const rebuild = document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-rebuild')!;
+        rebuild.click();
+        document.querySelector<HTMLButtonElement>('.rs2b0t-confirm-yes')?.click();
+        await firstRequested.promise;
+        retry = regenerateBasemap().catch((err: Error) => err.message);
+        clock.advanceTimersByTime(60_000);
+        const signal = await stalled.promise;
+        clock.advanceTimersByTime(59_999);
+        expect(signal?.aborted).not.toBe(true);
+        expect(rebuild.disabled).toBe(true);
+        clock.advanceTimersByTime(1);
+        expect(signal?.aborted).toBe(true);
+        expect(await retry).toContain('HTTP 404');
+        expect(rebuild.disabled).toBe(false);
+        expect(document.querySelector('.rs2b0t-walkmap-status')?.textContent).toMatch(/rebuild failed: .*timed out/);
+    } finally {
+        held.resolve();
+        await retry;
+        document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-cancel')?.click();
+        frame.mockRestore();
+        jest.useRealTimers();
+        dom.setURL(originalUrl);
+        Object.defineProperty(globalThis, 'fetch', fetchDescriptor);
     }
 });

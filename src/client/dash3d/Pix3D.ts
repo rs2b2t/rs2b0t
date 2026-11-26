@@ -25,6 +25,8 @@ export default class Pix3D extends Pix2D {
     static originY: number = 0;
     static texelPool: (Int32Array | null)[] | null = null;
     static poolSize: number = 0;
+    private static texelBuffers: Int32Array[] = [];
+    private static retainedPoolSize = 0;
     private static opaque: boolean = false;
 
     static cycle: number = 0;
@@ -75,14 +77,15 @@ export default class Pix3D extends Pix2D {
             return;
         }
 
-        this.poolSize = size;
-
-        if (this.lowMem) {
-            this.texelPool = new Int32Array2d(size, 16384);
+        const texelLength = this.lowMem ? 16384 : 65536;
+        if (this.texelBuffers.length !== size || this.texelBuffers[0]?.length !== texelLength) {
+            this.texelBuffers = new Int32Array2d(size, texelLength);
+            this.retainedPoolSize = 0;
         } else {
-            this.texelPool = new Int32Array2d(size, 65536);
+            this.retainedPoolSize = size;
         }
-
+        this.texelPool = [...this.texelBuffers];
+        this.poolSize = size;
         this.activeTexels.fill(null);
     }
 
@@ -147,10 +150,16 @@ export default class Pix3D extends Pix2D {
             return this.activeTexels[id];
         }
 
+        const texture = this.textures[id];
+        const palette = this.texPal[id];
         let texels: Int32Array | null;
         if (this.poolSize > 0 && this.texelPool) {
             texels = this.texelPool[--this.poolSize];
             this.texelPool[this.poolSize] = null;
+            if (this.poolSize < this.retainedPoolSize) {
+                this.retainedPoolSize = this.poolSize;
+                if (!texture || !palette) texels?.fill(0);
+            }
         } else {
             let cycle: number = 0;
             let selected: number = -1;
@@ -165,8 +174,6 @@ export default class Pix3D extends Pix2D {
         }
 
         this.activeTexels[id] = texels;
-        const texture: Pix8 | null = this.textures[id];
-        const palette: Int32Array | null = this.texPal[id];
 
         if (!texels || !texture || !palette) {
             return null;

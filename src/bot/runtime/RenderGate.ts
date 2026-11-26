@@ -12,14 +12,14 @@ export class RenderGateController {
         return this.rendererEnabled;
     }
 
-    shouldDraw(now: number): boolean {
+    shouldDraw(now: number, lastDrawAt = this.lastDrawAt): boolean {
         if (!this.rendererEnabled || this.mode === 'hidden') {
             return false;
         }
         if (this.mode === 'focused') {
             return true;
         }
-        return now - this.lastDrawAt >= this.backgroundIntervalMs;
+        return now - lastDrawAt >= this.backgroundIntervalMs;
     }
 
     markDrawn(now: number): void {

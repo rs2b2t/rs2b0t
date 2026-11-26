@@ -1,3 +1,5 @@
+import { openTrafficChannel, publisherTrafficChannel, type TrafficChannelOptions } from './TrafficChannel.js';
+
 export interface TrafficTotals {
     receivedBytes: number;
     sentBytes: number;
@@ -7,22 +9,15 @@ export type TrafficMessage =
     | ({ type: 'rs2b0t:traffic'; status: 'available' } & TrafficTotals)
     | { type: 'rs2b0t:traffic'; status: 'unavailable'; reason: string };
 
-type ChannelFactory = () => BroadcastChannel | null;
 type TimerHandle = ReturnType<typeof setTimeout>;
 
-export interface TrafficMeterOptions {
-    channelFactory?: ChannelFactory;
+export interface TrafficMeterOptions extends TrafficChannelOptions {
     intervalMs?: number;
     setTimeout?: (callback: () => void, delayMs: number) => TimerHandle;
     clearTimeout?: (timer: TimerHandle) => void;
 }
 
-const CHANNEL_NAME = 'rs2b0t:traffic:v1';
 const PUBLISH_INTERVAL_MS = 1000;
-
-function defaultChannelFactory(): BroadcastChannel | null {
-    return typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(CHANNEL_NAME);
-}
 
 function validBytes(bytes: number): boolean {
     return Number.isSafeInteger(bytes) && bytes >= 0;
@@ -48,11 +43,7 @@ export class TrafficMeter {
         this.scheduleTimeout = options.setTimeout ?? ((callback, delayMs) => globalThis.setTimeout(callback, delayMs));
         this.cancelTimeout = options.clearTimeout ?? (timer => globalThis.clearTimeout(timer));
 
-        try {
-            this.channel = (options.channelFactory ?? defaultChannelFactory)();
-        } catch {
-            this.channel = null;
-        }
+        this.channel = openTrafficChannel({ channelName: options.channelName ?? publisherTrafficChannel(), channelFactory: options.channelFactory });
         this.scheduleHeartbeat();
     }
 

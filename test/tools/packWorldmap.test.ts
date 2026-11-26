@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -12,6 +12,32 @@ const emptyMap = Buffer.from(
 );
 const cachedMap = Buffer.concat([emptyMap, Buffer.from('C')]);
 const tools = join(import.meta.dir, '../../tools');
+
+test('a failed download bake can retry and cache the valid worldmap', () => {
+    const root = mkdtempSync(join(tmpdir(), 'bake-worldmap-'));
+    try {
+        const out = join(root, 'out');
+        const jag = join(out, 'worldmap.jag');
+        const manifest = join(out, 'worldmap-basemap.manifest.json');
+        const bake = (fetchUrl: string) => execFileSync(process.execPath, [
+            '--no-install', join(tools, 'map/build-basemap.ts'), '--engine', join(root, 'engine'),
+            '--out', out, '--fetch-url', fetchUrl
+        ], { cwd: root, env: { HOME: root }, stdio: 'pipe' });
+
+        expect(() => bake('data:,invalid')).toThrow(/Invalid bz2 blocktype/);
+        expect(existsSync(manifest)).toBe(false);
+        expect(existsSync(jag)).toBe(false);
+
+        bake(`data:application/octet-stream;base64,${emptyMap.toString('base64')}`);
+        expect(readFileSync(jag)).toEqual(emptyMap);
+        expect(JSON.parse(readFileSync(manifest, 'utf8')).jagBytes).toBe(emptyMap.length);
+
+        bake('data:,invalid');
+        expect(readFileSync(jag)).toEqual(emptyMap);
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
 
 for (const sources of ['engine and cache', 'engine', 'cache']) {
     test(`fresh bake packages the selected worldmap with ${sources} present`, () => {

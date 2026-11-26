@@ -1728,13 +1728,18 @@ export class Client extends GameShell {
             this.imageRunes[i] = Pix8.depack(this.title, 'runes', flameIcon === 0 ? i : (i & 0x3) + 12);
         }
 
+        const runes = this.imageRunes;
         this.drawProgress('Connecting to fileserver', 10).then((): void => {
-            if (!this.titleFlames && this.imageTitle0 && this.imageTitle1) {
-                this.titleFlames = new TitleFlames(this.imageRunes);
+            if (this.imageRunes === runes && !this.titleFlames && this.imageTitle0 && this.imageTitle1) {
+                this.titleFlames = new TitleFlames(runes);
                 this.titleFlames.setupFire(this.imageTitle0, this.imageTitle1);
-                this.titleFlames.start();
+                this.startTitleFlames(this.titleFlames);
             }
         });
+    }
+
+    protected startTitleFlames(flames: TitleFlames): void {
+        flames.start();
     }
 
     public cancelWorldSwitch(): void {

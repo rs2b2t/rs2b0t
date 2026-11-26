@@ -53,6 +53,7 @@ export function selectByChanges(
     if (changed.some(c => /^src\/bot\/(adapter|runtime|api)\//.test(c) || c === 'package.json')) {
         return { cases: open, why: 'shared code changed (adapter, runtime or api) — everything is reachable' };
     }
+    const changedPaths = new Set(changed);
     const scripts = new Set<string>();
     const subsystems = new Set<Subsystem>();
     for (const path of changed) {
@@ -66,7 +67,8 @@ export function selectByChanges(
         }
     }
     const picked = open.filter(c =>
-        c.covers.scripts?.some(s => scripts.has(s)) === true
+        changedPaths.has(`e2e/${c.harness}`)
+        || c.covers.scripts?.some(s => scripts.has(s)) === true
         || c.covers.subsystems?.some(s => subsystems.has(s)) === true);
     return { cases: picked, why: `${changed.length} changed files matched ${picked.length} cases` };
 }
