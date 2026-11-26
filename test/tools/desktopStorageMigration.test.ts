@@ -32,7 +32,7 @@ function fixture(origins?: Record<string, Record<string, string>>) {
     const storeDir = join(dir, 'Shared Storage');
     const store = sharedStorage(storeDir);
 
-    let rendererStorage: Record<string, string> = {};
+    let rendererStorage: Partial<Record<string, string>> = {};
 
     async function launch(server: string, recover = false) {
         let runtime = '';
