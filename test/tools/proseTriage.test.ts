@@ -38,11 +38,11 @@ test('warnings are not counted as errors', () => {
     expect(manifest(dir)[0].errors).toBe(0);
 });
 
-test('multi-line blocks are counted', () => {
-    const dir = tree({ 'block.ts': '// one\n// two\n// three\nexport const a = 1;\n' });
+test('comment counts include delimiters and exempt lines while blocks count only findings', () => {
+    const dir = tree({ 'block.ts': '/**\n * one\n * two\n * three\n */\n\n// prettier-ignore\nexport const a = 1; // inline\n' });
     const rows = manifest(dir);
     expect(rows[0].blocks).toBe(1);
-    expect(rows[0].comments).toBe(3);
+    expect(rows[0].comments).toBe(6);
 });
 
 test('a root inside the repository is enumerated from git', () => {

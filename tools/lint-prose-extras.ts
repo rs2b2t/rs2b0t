@@ -42,12 +42,15 @@ const HEADER_MAX = 2;
 
 type Block = { start: number; lines: string[] };
 
+export function isCommentLine(line: string): boolean {
+    return /^\s*(\/\/|\/\*|\*)/.test(line);
+}
+
 function commentBlocks(body: string): Block[] {
     const blocks: Block[] = [];
     let current: Block | null = null;
     for (const [index, line] of body.split('\n').entries()) {
-        const isComment = /^\s*(\/\/|\/\*|\*)/.test(line);
-        if (isComment) {
+        if (isCommentLine(line)) {
             current ??= { start: index + 1, lines: [] };
             current.lines.push(line);
         } else if (current) {
