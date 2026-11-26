@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import type Pix3D from '#/client/dash3d/Pix3D.js';
+import Pix2D from '#/client/graphics/Pix2D.js';
 import Pix8 from '#/client/graphics/Pix8.js';
 
 let moduleId = 0;
@@ -46,6 +47,39 @@ for (const lowMem of [true, false]) {
         expect(buffers(renderer).filter(buffer => !original.has(buffer))).toHaveLength(0);
         expect(renderer['getTexels'](20)?.[0]).toBe(0x00f800);
     });
+
+    for (const missing of ['texture', 'palette']) {
+        test(`repeated draw with missing ${missing} after rebuild (lowMem=${lowMem})`, async () => {
+            const renderer = await loadRenderer(lowMem);
+            const palette = Int32Array.of(0, 0xf80000);
+            const texture = new Pix8(64, 64, palette);
+            texture.data.fill(1);
+            renderer.textures[0] = texture;
+            renderer.texPal[0] = palette;
+
+            const previous2D = { ...Pix2D };
+            const pixels = new Int32Array(16);
+            const draw = () => renderer.textureTriangle(0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 0);
+            try {
+                Pix2D.setPixels(pixels, 4, 4);
+                renderer.setRenderClipping();
+                draw();
+                expect(pixels[0]).toBe(0xf80000);
+
+                renderer.clearTexels();
+                renderer.initPool(20);
+                if (missing === 'texture') renderer.textures[0] = null;
+                else renderer.texPal[0] = null;
+                pixels.fill(0xffffff);
+                draw();
+                expect(pixels[0]).toBe(0xffffff);
+                draw();
+                expect(pixels[0]).toBe(0);
+            } finally {
+                Object.assign(Pix2D, previous2D);
+            }
+        });
+    }
 
     test(`rebuild sizes texels for the new memory mode (lowMem=${lowMem})`, async () => {
         const renderer = await loadRenderer(!lowMem);

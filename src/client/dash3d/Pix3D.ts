@@ -168,6 +168,7 @@ export default class Pix3D extends Pix2D {
         const palette: Int32Array | null = this.texPal[id];
 
         if (!texels || !texture || !palette) {
+            texels?.fill(0);
             return null;
         }
 
