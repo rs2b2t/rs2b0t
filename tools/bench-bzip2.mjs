@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import { execFileSync } from 'node:child_process';
+import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { bunzip2 } from '../src/client/io/BZip2.js';
 
