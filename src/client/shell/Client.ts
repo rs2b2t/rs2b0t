@@ -881,7 +881,6 @@ export class Client extends GameShell {
             for (let level: number = 0; level < BuildArea.LEVELS; level++) {
                 this.collision[level] = new CollisionMap();
             }
-            this.minimap = new Pix32(512, 512);
 
             const versionlist: JagFile = await this.getJagFile('update list', 60, 'versionlist', 5);
 
@@ -2662,6 +2661,7 @@ export class Client extends GameShell {
 
         this.clearCaches();
         this.world?.resetMap();
+        this.minimap = null;
 
         for (let level: number = 0; level < BuildArea.LEVELS; level++) {
             this.collision[level]?.reset();
@@ -5486,9 +5486,7 @@ export class Client extends GameShell {
     }
 
     private minimapBuildBuffer(level: number): void {
-        if (!this.minimap) {
-            return;
-        }
+        this.minimap ??= new Pix32(512, 512);
 
         const pixels: Int32Array = this.minimap.data;
         const length: number = pixels.length;
