@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 describe('DomSlotOps', () => {
-    test('a startup timeout stops bridge checks, admits the next frame and allows re-add', () => {
+    test.each(['missing', 'unreadable'])('a startup timeout (%s bridge) stops checks, admits the next frame and allows re-add', bridge => {
         jest.useFakeTimers();
         const clock = jest as typeof jest & { advanceTimersByTime(ms: number): void };
         const rail = document.getElementById('rail')!;
@@ -33,12 +33,18 @@ describe('DomSlotOps', () => {
         const [tile, queued] = orderedSlotElements(rail);
         const nextFrame = queued.querySelector('iframe')!;
         let checks = 0;
+        let unreadable = false;
         Object.defineProperty(tile.querySelector('iframe')!.contentWindow!, 'rs2b0t', {
-            get() { checks++; return undefined; }
+            get() {
+                checks++;
+                if (unreadable) throw new DOMException('Frame unavailable', 'SecurityError');
+                return undefined;
+            }
         });
         clock.advanceTimersByTime(179_999);
         expect(checks).toBeGreaterThan(0);
         expect(nextFrame.hasAttribute('src')).toBe(false);
+        unreadable = bridge === 'unreadable';
         clock.advanceTimersByTime(1);
         expect(nextFrame.hasAttribute('src')).toBe(true);
         const atDeadline = checks;

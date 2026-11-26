@@ -226,12 +226,18 @@ class DomSlotHandle implements SlotHandle {
         const poll = (atDeadline = false): void => {
             if (this.win) return;
             const w = frame.contentWindow as LcbWindow | null;
-            if (w?.rs2b0t) {
+            let bridge: Lcb | undefined;
+            try {
+                bridge = w?.rs2b0t;
+            } catch {
+                bridge = undefined;
+            }
+            if (bridge) {
                 this.win = w;
                 if (released) window.clearTimeout(timeout);
                 const flush = this.pending ?? [];
                 this.pending = [];
-                for (const fn of flush) fn(w.rs2b0t);
+                for (const fn of flush) fn(bridge);
             } else if (atDeadline) {
                 this.el.dataset.startup = 'Startup timed out';
                 this.pending = null;
