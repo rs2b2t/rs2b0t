@@ -1,14 +1,6 @@
 import { expect, test, describe } from 'bun:test';
 import { cooksassistant, decide, gatherFlour, gatherMilk } from '#/bot/api/ai/quests/defs/cooksassistant.js';
-import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
-
-const snap = (journal: string, items: [string, number][] = []): QuestSnapshot => ({
-    journal: journal as QuestSnapshot['journal'],
-    inv: new Map(items),
-    worn: new Set(),
-    noProgress: 0,
-    bankCoins: 0
-});
+import { snap } from './inventory-snapshot.fixture.js';
 
 describe('cooksassistant gathers', () => {
     test('flour: pot first, then grain, then the mill custom', () => {
