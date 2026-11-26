@@ -1,5 +1,5 @@
 import { questProgressAt, readQuestJournal, type JournalCache } from '../../journalReader.js';
-import { normalizeJournal } from '../../journalText.js';
+import { matchJournal, normalizeJournal } from '../../journalText.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { HERO_NAME } from './areas.js';
 
@@ -60,21 +60,7 @@ const FLAGS: readonly [string, string][] = [
 ];
 
 export function parseHeroQuestJournal(lines: readonly string[] | string): QuestProgress | undefined {
-    const text = normalize(lines);
-    if (text.length === 0) {
-        return undefined;
-    }
-    const hit = STAGES.find(([needle]) => text.includes(needle));
-    if (!hit) {
-        return undefined;
-    }
-    const flags = new Set<string>();
-    for (const [needle, flag] of FLAGS) {
-        if (text.includes(needle)) {
-            flags.add(flag);
-        }
-    }
-    return { stage: hit[1], flags };
+    return matchJournal(normalize(lines), STAGES, FLAGS);
 }
 
 /** A failed read is not evidence the quest went backwards. */
