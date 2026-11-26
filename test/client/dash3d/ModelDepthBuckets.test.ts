@@ -25,13 +25,14 @@ function triangles(count: number): Model {
     return model;
 }
 
-test('61 idle model modules allocate no depth face rows', async () => {
+test('61 idle model modules allocate no face ID rows', async () => {
     const models = new Set<typeof Model>();
     let rows = 0;
     for (let i = 0; i < 61; i++) {
         const model: typeof Model = (await import(`../../../src/client/dash3d/Model.ts?idle=${i}`)).default;
         models.add(model);
         rows += model.tmpDepthFaces.filter(Boolean).length;
+        rows += model.tmpPriorityFaces.filter(Boolean).length;
     }
     expect(models.size).toBe(61);
     expect(rows).toBe(0);
@@ -129,3 +130,23 @@ test('depth ties keep face order through both sorting paths', () => {
     model.objRender(0, 0, 0, 0, 0, 0, 512);
     expect(faces).toEqual([0, 2, 1, 3]);
 });
+
+for (const priority of [0, 10, 11]) {
+    test(`priority ${priority} draws all 2001 coplanar faces before priority 9`, () => {
+        const model = triangles(1);
+        model.faceVertexA = new Int32Array(2002);
+        model.faceVertexB = new Int32Array(2002).fill(1);
+        model.faceVertexC = new Int32Array(2002).fill(2);
+        model.facePriority = new Int32Array(2002).fill(priority);
+        model.facePriority[0] = 9;
+
+        const faces: number[] = [];
+        model['render3'] = face => faces.push(face);
+        for (const count of [2000, 2001]) {
+            model.numFaces = count + 1;
+            faces.length = 0;
+            model.objRender(0, 0, 0, 0, 0, 0, 512);
+            expect(faces).toEqual([...Array.from({ length: count }, (_, i) => i + 1), 0]);
+        }
+    });
+}

@@ -5,10 +5,17 @@ import Pix3D from '#/client/dash3d/Pix3D.js';
 
 import Packet from '#/client/io/Packet.js';
 
-import { Int32Array2d, TypedArray1d } from '#/client/util/Arrays.js';
+import { TypedArray1d } from '#/client/util/Arrays.js';
 import PointNormal from '#/client/dash3d/PointNormal.js';
 import ModelSource from '#/client/dash3d/ModelSource.js';
 import type OnDemandProvider from '#/client/io/OnDemandProvider.js';
+
+function growBucket(row?: Int32Array): Int32Array {
+    if (!row?.length) return new Int32Array(8);
+    const larger = new Int32Array(row.length * 2);
+    larger.set(row);
+    return larger;
+}
 
 class Metadata {
     src: Uint8Array | null = null;
@@ -104,9 +111,9 @@ export default class Model extends ModelSource {
     static tmpDepthFaceCount: Int32Array = new Int32Array(1500);
     static tmpDepthFaces: Int32Array[] = [];
     static tmpPriorityFaceCount: Int32Array = new Int32Array(12);
-    static tmpPriorityFaces: Int32Array[] = new Int32Array2d(12, 2000);
-    static tmpPriority10FaceDepth: Int32Array = new Int32Array(2000);
-    static tmpPriority11FaceDepth: Int32Array = new Int32Array(2000);
+    static tmpPriorityFaces: Int32Array[] = [];
+    static tmpPriority10FaceDepth: Int32Array = new Int32Array(0);
+    static tmpPriority11FaceDepth: Int32Array = new Int32Array(0);
     static tmpPriorityDepthSum: Int32Array = new Int32Array(12);
 
     static clippedX: Int32Array = new Int32Array(10);
@@ -1916,12 +1923,8 @@ export default class Model extends ModelSource {
             }
             const count = Model.tmpDepthFaceCount[depth]++;
             let faces = Model.tmpDepthFaces[depth];
-            if (!faces) {
-                faces = Model.tmpDepthFaces[depth] = new Int32Array(8);
-            } else if (count === faces.length) {
-                const larger = new Int32Array(count * 2);
-                larger.set(faces);
-                faces = Model.tmpDepthFaces[depth] = larger;
+            if (count === (faces?.length ?? 0)) {
+                faces = Model.tmpDepthFaces[depth] = growBucket(faces);
             }
             faces[count] = f;
         }
@@ -1957,18 +1960,23 @@ export default class Model extends ModelSource {
                 const faces: Int32Array = Model.tmpDepthFaces[depth];
 
                 for (let i: number = 0; i < faceCount; i++) {
-                    const priorityDepth: number = faces[i];
-                    const priorityFace: number = this.facePriority[priorityDepth];
-                    const priorityFaceCount: number = Model.tmpPriorityFaceCount[priorityFace]++;
+                    const face = faces[i];
+                    const priority = this.facePriority[face];
+                    const count = Model.tmpPriorityFaceCount[priority]++;
+                    let priorityFaces = Model.tmpPriorityFaces[priority];
+                    if (count === (priorityFaces?.length ?? 0)) {
+                        priorityFaces = Model.tmpPriorityFaces[priority] = growBucket(priorityFaces);
+                        if (priority === 10) Model.tmpPriority10FaceDepth = growBucket(Model.tmpPriority10FaceDepth);
+                        if (priority === 11) Model.tmpPriority11FaceDepth = growBucket(Model.tmpPriority11FaceDepth);
+                    }
+                    priorityFaces[count] = face;
 
-                    Model.tmpPriorityFaces[priorityFace][priorityFaceCount] = priorityDepth;
-
-                    if (priorityFace < 10) {
-                        Model.tmpPriorityDepthSum[priorityFace] += depth;
-                    } else if (priorityFace === 10) {
-                        Model.tmpPriority10FaceDepth[priorityFaceCount] = depth;
+                    if (priority < 10) {
+                        Model.tmpPriorityDepthSum[priority] += depth;
+                    } else if (priority === 10) {
+                        Model.tmpPriority10FaceDepth[count] = depth;
                     } else {
-                        Model.tmpPriority11FaceDepth[priorityFaceCount] = depth;
+                        Model.tmpPriority11FaceDepth[count] = depth;
                     }
                 }
             }
