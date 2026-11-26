@@ -5,8 +5,7 @@ import { WorldMapPicker } from '#/bot/panel/WorldMapPicker.js';
 import {
     prefsFingerprint,
     resolveBasemapBakePrefs,
-    restoreMapPickerBakeSettings,
-    snapshotMapPickerBakeSettings,
+    MapPickerBakeDraft,
     type BasemapBakePrefs
 } from '#/bot/panel/basemapRegen.js';
 import { MAP_PICKER_SETTINGS_NS, SettingsStore } from '#/bot/runtime/Settings.js';
@@ -151,6 +150,26 @@ describe('bake settings snapshot/restore (settings modal discard)', () => {
         }
     });
 
+    test.each([
+        ['before the first edit', 'false'],
+        ['after the last edit', 'false'],
+        ['after the last edit', '0']
+    ])("Escape keeps another tab's save to the edited key %s (initial value %s)", async (timing, initial) => {
+        const labels = 'rs2b0t:set:MapPicker:bakeLabels';
+        localStorage.setItem(labels, initial);
+        await withPicker(() => {
+            openSettings();
+            const checkbox = bakeCheckbox('Stamp labels into rebuild');
+            if (timing === 'before the first edit') localStorage.setItem(labels, 'true');
+            checkbox.click();
+            checkbox.click();
+            expect(SettingsStore.snapshotStored(MAP_PICKER_SETTINGS_NS, 'bakeLabels')).toEqual({ local: 'false', session: 'false' });
+            if (timing === 'after the last edit') localStorage.setItem(labels, 'true');
+            escapeSettings();
+            expect(SettingsStore.snapshotStored(MAP_PICKER_SETTINGS_NS, 'bakeLabels')).toEqual({ local: 'true', session: null });
+        });
+    });
+
     test.each([false, true])('Escape restores the settings used by a successful rebuild (Settings already open: %p)', async alreadyOpen => {
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeBorders', 'false');
@@ -259,14 +278,14 @@ describe('bake settings snapshot/restore (settings modal discard)', () => {
         const borders = 'rs2b0t:set:MapPicker:bakeBorders';
         localStorage.setItem(labels, '0');
         sessionStorage.setItem(borders, 'yes');
-        const snap = snapshotMapPickerBakeSettings();
+        const draft = new MapPickerBakeDraft();
 
-        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'true');
-        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeBorders', 'false');
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'true', draft.record);
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeBorders', 'false', draft.record);
         const restored: Record<string, string> = {};
         const unsubscribe = SettingsStore.onChange((_name, key, value) => { restored[key] = value; });
         try {
-            restoreMapPickerBakeSettings(snap, new Set(['bakeLabels', 'bakeBorders']));
+            draft.discard();
         } finally {
             unsubscribe();
         }

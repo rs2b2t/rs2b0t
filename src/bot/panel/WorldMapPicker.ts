@@ -22,8 +22,7 @@ import {
     BASEMAP_REGEN_TITLE,
     regenerateBasemap,
     resolveBasemapBakePrefs,
-    restoreMapPickerBakeSettings,
-    snapshotMapPickerBakeSettings
+    MapPickerBakeDraft
 } from './basemapRegen.js';
 import { showConfirmDialog } from './confirmDialog.js';
 import {
@@ -857,12 +856,15 @@ export class WorldMapPicker {
             };
 
             // In-picker Settings modal (not Global settings).
-            const editedSettings = new Map<string, number>();
-            let editSequence = 0;
+            let draft: MapPickerBakeDraft | null = null;
+            let editsDuringRebuild: MapPickerBakeDraft | null = null;
             const settingsModal = new ParamsModal(
                 () => false,
                 requestPaint,
-                key => editedSettings.set(key, ++editSequence)
+                (...write) => {
+                    draft?.record(...write);
+                    editsDuringRebuild?.record(...write);
+                }
             );
 
             const unsubSettings = SettingsStore.onChange((name, key) => {
@@ -939,22 +941,16 @@ export class WorldMapPicker {
                 requestPaint();
             });
 
-            // Rebuild-layer prefs (Basemap rebuild group) are draft while Settings is open; the snapshot is the baseline restored on close, and a successful Rebuild refreshes it so further uncommitted edits discard to the last rebuilt state.
-            // Display keys persist immediately for live preview.
-            let bakeSettingsSnapshot: ReturnType<typeof snapshotMapPickerBakeSettings> | null = null;
-
             settingsBtn.addEventListener('click', () => {
-                bakeSettingsSnapshot = snapshotMapPickerBakeSettings();
-                editedSettings.clear();
+                draft = new MapPickerBakeDraft();
                 // Above map picker overlay (1100). Default params backdrop is 1000.
                 settingsModal.open(MAP_PICKER_SETTINGS_NS, MAP_PICKER_SETTINGS, {
                     title: 'Map picker settings',
                     zIndex: 1200,
                     onClose: () => {
-                        if (bakeSettingsSnapshot) {
-                            restoreMapPickerBakeSettings(bakeSettingsSnapshot, new Set(editedSettings.keys()));
-                        }
-                        bakeSettingsSnapshot = null;
+                        draft?.discard();
+                        draft = null;
+                        editsDuringRebuild = null;
                     }
                 });
             });
@@ -994,19 +990,16 @@ export class WorldMapPicker {
                     status.style.color = '#fa0';
                     try {
                         const prefs = resolveBasemapBakePrefs();
-                        const baselineAtStart = bakeSettingsSnapshot;
-                        const rebuiltSettings = baselineAtStart ? snapshotMapPickerBakeSettings() : null;
-                        const lastBakedEdit = editSequence;
+                        const rebuildingDraft = draft;
+                        editsDuringRebuild = rebuildingDraft ? new MapPickerBakeDraft() : null;
                         const next = await regenerateBasemap(prefs);
                         if (closed) {
                             return;
                         }
-                        if (rebuiltSettings && bakeSettingsSnapshot === baselineAtStart) {
-                            bakeSettingsSnapshot = rebuiltSettings;
-                            for (const [key, sequence] of editedSettings) {
-                                if (sequence <= lastBakedEdit) editedSettings.delete(key);
-                            }
+                        if (editsDuringRebuild && draft === rebuildingDraft) {
+                            draft = editsDuringRebuild;
                         }
+                        editsDuringRebuild = null;
                         const crcKey = await fetchClientCrcKey();
                         if (crcKey) {
                             try {
@@ -1023,6 +1016,7 @@ export class WorldMapPicker {
                         status.style.color = '#8ab4f8';
                         requestPaint();
                     } catch (err) {
+                        editsDuringRebuild = null;
                         if (closed) {
                             return;
                         }

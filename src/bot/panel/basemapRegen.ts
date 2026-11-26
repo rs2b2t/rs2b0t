@@ -14,7 +14,8 @@ import {
     MAP_PICKER_SETTINGS_NS,
     SettingsBag,
     SettingsStore,
-    type StoredSetting
+    type SettingEdits,
+    type RecordSettingWrite
 } from '../runtime/Settings.js';
 
 export type BasemapBakePrefs = {
@@ -48,7 +49,7 @@ const DEFAULT_BASEMAP_BAKE_PREFS: BasemapBakePrefs = {
 };
 
 /** Schema keys that only take effect when the basemap is regenerated. */
-const MAP_PICKER_BAKE_KEYS = [
+const MAP_PICKER_BAKE_KEYS = new Set([
     'bakeLabels',
     'bakeBorders',
     'bakeNpcs',
@@ -56,10 +57,7 @@ const MAP_PICKER_BAKE_KEYS = [
     'bakeKeyIcons',
     'bakeMultimap',
     'bakeFreemap'
-] as const;
-
-type MapPickerBakeKey = (typeof MAP_PICKER_BAKE_KEYS)[number];
-type BakeSettingsSnapshot = Record<MapPickerBakeKey, StoredSetting>;
+]);
 
 export function resolveBasemapBakePrefs(): BasemapBakePrefs {
     const g = new SettingsBag(SettingsStore.resolve(MAP_PICKER_SETTINGS_NS, MAP_PICKER_SETTINGS));
@@ -74,20 +72,20 @@ export function resolveBasemapBakePrefs(): BasemapBakePrefs {
     };
 }
 
-/** Snapshot rebuild-layer settings (raw strings as stored). */
-export function snapshotMapPickerBakeSettings(): BakeSettingsSnapshot {
-    const out = {} as BakeSettingsSnapshot;
-    for (const key of MAP_PICKER_BAKE_KEYS) {
-        out[key] = SettingsStore.snapshotStored(MAP_PICKER_SETTINGS_NS, key);
-    }
-    return out;
-}
+export class MapPickerBakeDraft {
+    private edits = new Map<string, SettingEdits>();
 
-/** Restore rebuild-layer settings from a snapshot (discard uncommitted modal edits). */
-export function restoreMapPickerBakeSettings(snap: BakeSettingsSnapshot, editedKeys: ReadonlySet<string>): void {
-    for (const key of MAP_PICKER_BAKE_KEYS) {
-        if (editedKeys.has(key)) {
-            SettingsStore.restoreStored(MAP_PICKER_SETTINGS_NS, key, snap[key], MAP_PICKER_SETTINGS[key]);
+    record: RecordSettingWrite = (key, layer, before, value) => {
+        if (!MAP_PICKER_BAKE_KEYS.has(key)) return;
+        const edits = this.edits.get(key) ?? {};
+        const prior = edits[layer];
+        edits[layer] = { before: prior?.last === before ? prior.before : before, last: value };
+        this.edits.set(key, edits);
+    };
+
+    discard(): void {
+        for (const [key, edits] of this.edits) {
+            SettingsStore.restoreStored(MAP_PICKER_SETTINGS_NS, key, edits, MAP_PICKER_SETTINGS[key]);
         }
     }
 }

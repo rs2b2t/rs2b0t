@@ -556,8 +556,13 @@ type SettingChangeListener = (name: string, key: string, value: string) => void;
 
 export type StoredSetting = { session: string | null; local: string | null };
 
-function restoreItem(storage: Storage, key: string, value: string | null): boolean {
-    if (storage.getItem(key) === value) return false;
+type LayerEdit = { before: string | null; last: string };
+export type SettingEdits = Partial<Record<keyof StoredSetting, LayerEdit>>;
+export type RecordSettingWrite = (key: string, layer: keyof StoredSetting, before: string | null, value: string) => void;
+
+function restoreItem(storage: Storage, key: string, edit?: LayerEdit): boolean {
+    if (!edit || edit.before === edit.last || storage.getItem(key) !== edit.last) return false;
+    const value = edit.before;
     if (value === null) storage.removeItem(key);
     else storage.setItem(key, value);
     return true;
@@ -589,10 +594,10 @@ class SettingsStoreImpl {
         };
     }
 
-    restoreStored(name: string, key: string, value: StoredSetting, def: SettingDef): void {
+    restoreStored(name: string, key: string, edits: SettingEdits, def: SettingDef): void {
         const id = storageKey(name, key);
-        const sessionChanged = hasSession && restoreItem(sessionStorage, id, value.session);
-        const localChanged = hasLocal && restoreItem(localStorage, id, value.local);
+        const sessionChanged = hasSession && restoreItem(sessionStorage, id, edits.session);
+        const localChanged = hasLocal && restoreItem(localStorage, id, edits.local);
         if (sessionChanged || localChanged) {
             this.notifyChange(name, key, this.displayString(name, key, def));
         }
@@ -617,13 +622,15 @@ class SettingsStoreImpl {
         return name === 'JiveRC' ? this.saved('NatureCrafter', key) : undefined;
     }
 
-    save(name: string, key: string, rawString: string): void {
-        if (hasSession) {
-            sessionStorage.setItem(storageKey(name, key), rawString);
-        }
-        if (hasLocal) {
-            localStorage.setItem(storageKey(name, key), rawString);
-        }
+    save(name: string, key: string, rawString: string, record?: RecordSettingWrite): void {
+        const id = storageKey(name, key);
+        const write = (storage: Storage, layer: keyof StoredSetting): void => {
+            const before = record ? storage.getItem(id) : null;
+            storage.setItem(id, rawString);
+            record?.(key, layer, before, rawString);
+        };
+        if (hasSession) write(sessionStorage, 'session');
+        if (hasLocal) write(localStorage, 'local');
         this.notifyChange(name, key, rawString);
     }
 

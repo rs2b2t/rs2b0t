@@ -1,4 +1,4 @@
-import { SettingsStore, type SettingsSchema } from '../runtime/Settings.js';
+import { SettingsStore, type RecordSettingWrite, type SettingsSchema } from '../runtime/Settings.js';
 import { groupSchema, isVisible, renderControl, refreshDeps } from './paramControls.js';
 import { el } from './dom.js';
 import { Loadouts } from '../api/loadout/loadoutStore.js';
@@ -27,7 +27,7 @@ export default class ParamsModal {
     constructor(
         private isActive: () => boolean,
         private onChanged: (key: string) => void,
-        private onBeforeSave?: (key: string) => void
+        private recordWrite?: RecordSettingWrite
     ) {
         this.backdrop = el('div', 'rs2b0t-modal-backdrop');
         this.backdrop.addEventListener('click', e => {
@@ -240,8 +240,7 @@ export default class ParamsModal {
 
         const current = SettingsStore.displayString(this.scriptName, key, def);
         const control = renderControl(def, current, raw => {
-            this.onBeforeSave?.(key);
-            SettingsStore.save(this.scriptName, key, raw);
+            SettingsStore.save(this.scriptName, key, raw, this.recordWrite);
             this.onChanged(key);
             if (deps.has(key)) {
                 this.render();
