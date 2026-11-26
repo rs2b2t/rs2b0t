@@ -246,6 +246,7 @@ interface QueryableEntity extends Locatable {
  * @see docs/reference/api-entities.md#entityquery
  */
 export class EntityQuery<E extends QueryableEntity> {
+    private constructor();
     /** Case-insensitive exact name match against any of the given names. */
     name(...names: string[]): this;
     /** Entity offers this action (case-insensitive). */
@@ -459,7 +460,8 @@ export const Bank: {
      */
     depositAllMatching(
         match: (name: string, id: number) => boolean,
-        log?: (msg: string) => void
+        log?: (msg: string) => void,
+        batchSize?: 1 | 5
     ): Promise<void>;
     /**
      * Open a booth near a known stand tile (walk onto the counter if needed).
@@ -1015,11 +1017,17 @@ export interface SettingDef {
     label?: string;
     min?: number;
     max?: number;
+    step?: number;
     help?: string;
     options?: string[];
     optionLabels?: Record<string, string>;
+    selectionMode?: 'includeExclude';
+    optionStatuses?: () => Record<string, 'complete' | 'incomplete' | 'unknown'>;
     group?: string;
     showIf?: { key: string; anyOf: string[] };
+    color?: boolean;
+    optionsFrom?: 'loadouts' | 'priceBooks';
+    csvToggle?: string;
 }
 
 /** Parameter schema: shown as a form in the panel, overridable via
