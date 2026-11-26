@@ -15,7 +15,7 @@ import {
     setMargin,
     seedMid,
     setMaxTradeValue,
-    toggleSide,
+    setSide,
     matchesFilter,
     viewRows,
     type DisplayRow
@@ -118,10 +118,11 @@ describe('row edits', () => {
         expect(setField(BOOK, 9999, 'mid', 50).rows).toEqual(BOOK.rows);
     });
 
-    test('toggleSide flips one side only', () => {
-        const b = toggleSide(BOOK, 440, 'buying');
+    test('setSide updates one side only', () => {
+        const b = setSide(BOOK, 440, 'buying', false);
         expect(b.rows[0].buying).toBe(false);
         expect(b.rows[0].selling).toBe(true);
+        expect(setSide(b, 440, 'buying', true).rows).toEqual(BOOK.rows);
     });
 
     test('editing never mutates the input book', () => {
@@ -130,7 +131,7 @@ describe('row edits', () => {
         dropRow(BOOK, 440);
         setMargin(BOOK, 99);
         setField(BOOK, 440, 'mid', 1);
-        toggleSide(BOOK, 440, 'selling');
+        setSide(BOOK, 440, 'selling', false);
         expect(JSON.stringify(BOOK)).toBe(before);
     });
 });
