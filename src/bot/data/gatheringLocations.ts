@@ -52,14 +52,17 @@ export const DEFAULT_CAMP_RADIUS = 64;
  */
 export const DEFAULT_CHASE_RADIUS = 40;
 
-export function resolveCampRadius(campRadius: number | null | undefined, fallback = DEFAULT_CAMP_RADIUS): number {
-    const raw = campRadius != null && Number.isFinite(campRadius) ? campRadius : fallback;
+export function normalizeGatherRadius(radius: number | null | undefined, fallback: number): number {
+    const raw = radius != null && Number.isFinite(radius) ? radius : fallback;
     return Math.max(2, Math.floor(raw));
 }
 
+export function resolveCampRadius(campRadius: number | null | undefined, fallback = DEFAULT_CAMP_RADIUS): number {
+    return normalizeGatherRadius(campRadius, fallback);
+}
+
 export function resolveChaseRadius(chaseRadius: number | null | undefined, fallback = DEFAULT_CHASE_RADIUS): number {
-    const raw = chaseRadius != null && Number.isFinite(chaseRadius) ? chaseRadius : fallback;
-    return Math.max(2, Math.floor(raw));
+    return normalizeGatherRadius(chaseRadius, fallback);
 }
 
 /**
