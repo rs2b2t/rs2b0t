@@ -58,13 +58,23 @@ export class NavWorkerClient {
         worker.onmessage = (event: MessageEvent): void => this.onMessage(event.data as NavResponse);
         worker.onerror = (event: ErrorEvent): void => this.fail(`worker error: ${event.message}`);
 
-        navPackForWorker(new URL('./collision.lcnav.gz', import.meta.url))
-            .then(({ pack, transfer }) => {
-                if (this.worker === worker) {
-                    worker.postMessage({ type: 'init', pack }, transfer);
-                }
-            })
-            .catch(err => this.fail(err instanceof Error ? err.message : String(err)));
+        void this.initWorker(worker);
+    }
+
+    private async initWorker(worker: Worker): Promise<void> {
+        let payload;
+        try {
+            payload = await navPackForWorker(new URL('./collision.lcnav.gz', import.meta.url));
+        } catch (err) {
+            if (this.worker === worker) this.fail(err, 'idle');
+            return;
+        }
+        if (this.worker !== worker) return;
+        try {
+            worker.postMessage({ type: 'init', pack: payload.pack }, payload.transfer);
+        } catch (err) {
+            this.fail(err);
+        }
     }
 
     async findPath(from: NavPoint, to: NavPoint, opts: FindPathOpts & { state: WorldStateData }): Promise<PathResult> {
@@ -137,17 +147,22 @@ export class NavWorkerClient {
         }
     }
 
-    private fail(reason: string): void {
+    private fail(error: unknown, nextState: 'idle' | 'failed' = 'failed'): void {
+        const reason = error instanceof Error ? error.message : String(error);
         console.error(`[rs2b0t] navigator failed: ${reason}`);
         this.failReason = reason;
-        this.state = 'failed';
+        this.state = nextState;
         this.flushReadyWaiters();
         for (const [, request] of this.pending) {
             clearTimeout(request.timer);
             request.resolve({ ok: false, reason: `navigator failed: ${reason}`, expanded: 0 });
         }
         this.pending.clear();
-        this.worker?.terminate();
+        if (this.worker) {
+            this.worker.onmessage = null;
+            this.worker.onerror = null;
+            this.worker.terminate();
+        }
         this.worker = null;
     }
 
