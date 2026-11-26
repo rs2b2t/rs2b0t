@@ -9,28 +9,14 @@ import {
 } from '#/bot/api/ai/quests/defs/junglepotion.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 import { QuestFood } from '#/bot/api/ai/quests/food.js';
+import { decisionSnapshot } from './decision-snapshot.fixture.js';
 
 let originalFood: typeof QuestFood.name;
 beforeEach(() => { originalFood = QuestFood.name; QuestFood.name = 'Lobster'; });
 afterEach(() => { QuestFood.name = originalFood; });
 
 function snapshot(o: Partial<QuestSnapshot> = {}): QuestSnapshot {
-    return {
-        journal: o.journal ?? 'inProgress',
-        inv: o.inv ?? new Map(),
-        invIds: o.invIds ?? new Map(),
-        worn: o.worn ?? new Set(),
-        wornIds: o.wornIds ?? new Set(),
-        noProgress: 0,
-        bankCoins: o.bankCoins ?? 0,
-        stage: o.stage ?? o.progress?.stage,
-        progress: o.progress,
-        bank: o.bank ?? new Map(),
-        bankIds: o.bankIds ?? new Map(),
-        bankKnown: o.bankKnown ?? true,
-        tile: o.tile === undefined ? { x: 2809, z: 3086, level: 0 } : o.tile,
-        freeSlots: o.freeSlots ?? 28
-    };
+    return decisionSnapshot({ x: 2809, z: 3086, level: 0 }, o);
 }
 
 describe('jungle potion herbs', () => {
