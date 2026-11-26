@@ -1,3 +1,5 @@
+import { SAPPHIRE, EMERALD, RUBY, DIAMOND, DRAGONSTONE, type Amulet } from '../../data/amulets.js';
+
 export const COSMIC = 'Cosmic rune';
 export const PACK = 28;
 
@@ -36,20 +38,21 @@ export interface Jewel {
 }
 
 const jewel = (label: string, id: number, product: string, level: number, name = label): Jewel => ({ label, id, name, product, spell: SPELLS[level - 1]! });
+const amulet = ({ label, strung }: Amulet, product: string, level: number, name?: string): Jewel => jewel(label, strung, product, level, name);
 
 /** Every `convertobj` row of the enchant spells; the other necklaces have no enchant in this content. */
 export const JEWELS: readonly Jewel[] = [
     jewel('Sapphire ring', 1637, 'Ring of recoil', 1),
     jewel('Sapphire necklace', 1656, 'Games necklace(8)', 1),
-    jewel('Sapphire amulet', 1694, 'Amulet of magic', 1),
+    amulet(SAPPHIRE, 'Amulet of magic', 1),
     jewel('Emerald ring', 1639, 'Ring of dueling(8)', 2),
-    jewel('Emerald amulet', 1696, 'Amulet of defence', 2),
+    amulet(EMERALD, 'Amulet of defence', 2),
     jewel('Ruby ring', 1641, 'Ring of forging', 3),
-    jewel('Ruby amulet', 1698, 'Amulet of strength', 3),
+    amulet(RUBY, 'Amulet of strength', 3),
     jewel('Diamond ring', 1643, 'Ring of life', 4),
-    jewel('Diamond amulet', 1700, 'Amulet of power', 4),
+    amulet(DIAMOND, 'Amulet of power', 4),
     jewel('Dragonstone ring', 1645, 'Ring of wealth', 5),
-    jewel('Dragonstone amulet', 1702, 'Amulet of glory', 5, 'Dragonstoneamulet')
+    amulet(DRAGONSTONE, 'Amulet of glory', 5, 'Dragonstoneamulet')
 ];
 
 export const JEWEL_OPTIONS = JEWELS.map(j => j.label);
