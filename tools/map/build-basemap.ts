@@ -22,7 +22,7 @@ type BakeArgs = {
     engine: string;
     jag: string | null;
     outDir: string;
-    revision: string;
+    revision?: string;
     fetchUrl: string;
     ifNeeded: boolean;
 };
@@ -32,7 +32,7 @@ function parseArgs(): BakeArgs {
     let engine = process.env.ENGINE_DIR ?? `${process.env.HOME}/code/rs2b2t-engine`;
     let jag: string | null = null;
     let outDir = 'out';
-    let revision = '274';
+    let revision: string | undefined;
     let fetchUrl = 'https://2004.lostcity.rs/worldmap.jag';
     let ifNeeded = false;
     for (let i = 0; i < args.length; i++) {
@@ -62,29 +62,30 @@ function parseArgs(): BakeArgs {
     return { engine, jag, outDir, revision, fetchUrl, ifNeeded };
 }
 
-function hasCurrentBake(outDir: string, localFingerprint: string | null): boolean {
+function readCurrentBake(outDir: string, localFingerprint: string | null): BasemapManifest | null {
     try {
         const manifest: BasemapManifest = JSON.parse(fs.readFileSync(path.join(outDir, BASEMAP_MANIFEST_NAME), 'utf8'));
         const optionalAssets = [manifest.multiOverlayUrl, manifest.freeOverlayUrl, manifest.keyIndexUrl, manifest.playerMarkerUrl];
-        return (
-            manifest.schema === BASEMAP_SCHEMA &&
-            (localFingerprint === null || manifest.fingerprint === localFingerprint) &&
-            [
-                manifest.basemapUrl,
-                manifest.keyOverlayUrl,
-                manifest.labelsOverlayUrl,
-                ...optionalAssets.filter(url => url !== undefined),
-                ...Object.values(manifest.keyTypeOverlayUrls ?? {})
-            ].every(url => typeof url === 'string' && fs.statSync(path.join(outDir, url)).isFile())
-        );
+        if (manifest.schema !== BASEMAP_SCHEMA || (localFingerprint !== null && manifest.fingerprint !== localFingerprint)) {
+            return null;
+        }
+        const assets = [
+            manifest.basemapUrl,
+            manifest.keyOverlayUrl,
+            manifest.labelsOverlayUrl,
+            ...optionalAssets.filter(url => url !== undefined),
+            ...Object.values(manifest.keyTypeOverlayUrls ?? {})
+        ];
+        return assets.every(url => typeof url === 'string' && fs.statSync(path.join(outDir, url)).isFile()) ? manifest : null;
     } catch {
-        return false;
+        return null;
     }
 }
 
 function findLocalJag(opts: BakeArgs): string | null {
-    if (opts.jag) {
-        return fs.existsSync(opts.jag) ? opts.jag : null;
+    if (opts.jag !== null) {
+        if (!fs.existsSync(opts.jag)) throw new Error(`--jag not found: ${opts.jag}`);
+        return opts.jag;
     }
     const engineJag = path.join(opts.engine, 'data/pack/mapview/worldmap.jag');
     if (fs.existsSync(engineJag)) {
@@ -92,6 +93,23 @@ function findLocalJag(opts: BakeArgs): string | null {
     }
     const cacheJag = path.join(opts.outDir, 'worldmap.jag');
     return fs.existsSync(cacheJag) ? cacheJag : null;
+}
+
+function replaceFile(file: string, data: string | Uint8Array): void {
+    const temp = `${file}.${process.pid}.tmp`;
+    fs.writeFileSync(temp, data);
+    fs.renameSync(temp, file);
+}
+
+function stageJag(outDir: string, source: string | null, bytes: Uint8Array): void {
+    const staged = path.join(outDir, 'worldmap.jag');
+    if (source !== null && path.resolve(source) === path.resolve(staged)) return;
+    if (fs.existsSync(staged) && fs.readFileSync(staged).equals(bytes)) return;
+    replaceFile(staged, bytes);
+}
+
+function writeManifest(file: string, manifest: BasemapManifest): void {
+    replaceFile(file, JSON.stringify(manifest, null, 2) + '\n');
 }
 
 async function downloadJag(url: string): Promise<Uint8Array> {
@@ -352,15 +370,23 @@ async function main(): Promise<void> {
     const localJag = findLocalJag(opts);
     const localBytes = localJag === null ? null : fs.readFileSync(localJag);
     const localFingerprint = localBytes === null ? null : fingerprint(localBytes);
-    if (opts.ifNeeded && hasCurrentBake(opts.outDir, localFingerprint)) return;
-    if (opts.jag && localJag === null) throw new Error(`--jag not found: ${opts.jag}`);
+    const manPath = path.join(opts.outDir, BASEMAP_MANIFEST_NAME);
+    const current = opts.ifNeeded ? readCurrentBake(opts.outDir, localFingerprint) : null;
+    if (current) {
+        if (localBytes !== null) stageJag(opts.outDir, localJag, localBytes);
+        if (opts.revision !== undefined && current.revision !== opts.revision) {
+            writeManifest(manPath, { ...current, revision: opts.revision });
+        }
+        return;
+    }
 
     const source = localJag ?? opts.fetchUrl;
     const bytes = localBytes ?? await downloadJag(opts.fetchUrl);
     const fp = localFingerprint ?? fingerprint(bytes);
+    const revision = opts.revision ?? '274';
     console.log(`source: ${source}`);
     console.log(`fingerprint: ${fp}`);
-    console.log(`revision: ${opts.revision}`);
+    console.log(`revision: ${revision}`);
     console.log(`schema: ${BASEMAP_SCHEMA} (terrain + per-type Key overlays + multi/free)`);
 
     const result = await bake(bytes);
@@ -422,7 +448,7 @@ async function main(): Promise<void> {
 
     const manifest: BasemapManifest = {
         schema: BASEMAP_SCHEMA,
-        revision: opts.revision,
+        revision,
         fingerprint: fp,
         origin: { x: result.originX, z: result.originZ },
         sizeTiles: { w: width, h: height },
@@ -437,14 +463,8 @@ async function main(): Promise<void> {
         playerMarkerUrl,
         jagBytes: bytes.length
     };
-    const packagedJag = path.join(opts.outDir, 'worldmap.jag');
-    if (path.resolve(source) !== path.resolve(packagedJag)) {
-        const tempJag = `${packagedJag}.${process.pid}.tmp`;
-        fs.writeFileSync(tempJag, bytes);
-        fs.renameSync(tempJag, packagedJag);
-    }
-    const manPath = path.join(opts.outDir, BASEMAP_MANIFEST_NAME);
-    fs.writeFileSync(manPath, JSON.stringify(manifest, null, 2) + '\n');
+    stageJag(opts.outDir, localJag, bytes);
+    writeManifest(manPath, manifest);
 
     console.log('report:');
     console.log(`  terrain: ${terrainName} (${(terrainPng.length / 1024).toFixed(0)} KB)`);

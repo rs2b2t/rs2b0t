@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -17,6 +17,13 @@ const emptyMap = Buffer.from(
 );
 const cachedMap = Buffer.concat([emptyMap, Buffer.from('C')]);
 const tools = join(import.meta.dir, '../../tools');
+
+function bakeIfNeeded(root: string, ...args: string[]) {
+    return execFileSync(process.execPath, [
+        '--no-install', join(tools, 'map/build-basemap.ts'), '--engine', join(root, 'engine'),
+        '--out', root, '--fetch-url', 'data:,', '--if-needed', ...args
+    ], { cwd: root, env: { HOME: root }, stdio: 'pipe' });
+}
 
 function prepareDeployment(root: string, script: string) {
     for (const dir of ['tools', 'out', 'public-bot', 'engine/public/client', 'engine/data/pack/mapview']) {
@@ -144,6 +151,52 @@ test('packager restores a missing free overlay referenced by the manifest', () =
 
         pack();
         expect(readFileSync(staged)).toEqual(expected);
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('a cache hit repairs the staged JAG before packaging', () => {
+    const root = mkdtempSync(join(tmpdir(), 'pack-stale-jag-'));
+    try {
+        const pack = prepareDeployment(root, 'pack-rs2b0t.sh');
+        writeFileSync(join(root, 'engine/data/pack/mapview/worldmap.jag'), townMap);
+        pack();
+        writeFileSync(join(root, 'out/worldmap.jag'), emptyMap);
+        pack();
+        expect(readFileSync(join(root, 'out/worldmap.jag')).equals(townMap)).toBe(true);
+        expect(readFileSync(join(root, 'engine/public/rs2b0t/bot/worldmap.jag')).equals(townMap)).toBe(true);
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('a cache hit rejects a missing explicit JAG', () => {
+    const root = mkdtempSync(join(tmpdir(), 'bake-missing-jag-'));
+    try {
+        writeFileSync(join(root, 'worldmap.jag'), townMap);
+        bakeIfNeeded(root);
+        expect(() => bakeIfNeeded(root, '--jag', 'missing.jag')).toThrow(/--jag not found: missing.jag/);
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('a cache hit updates the requested revision and reuses the baked PNG', () => {
+    const root = mkdtempSync(join(tmpdir(), 'bake-revision-'));
+    try {
+        writeFileSync(join(root, 'worldmap.jag'), townMap);
+        bakeIfNeeded(root);
+        const manifest = () => JSON.parse(readFileSync(join(root, 'worldmap-basemap.manifest.json'), 'utf8'));
+        const first = manifest();
+        const labels = join(root, first.labelsOverlayUrl);
+        utimesSync(labels, 1, 1);
+
+        bakeIfNeeded(root, '--revision', '275');
+        expect(manifest()).toEqual({ ...first, revision: '275' });
+        bakeIfNeeded(root);
+        expect(manifest().revision).toBe('275');
+        expect(statSync(labels).mtimeMs).toBe(1000);
     } finally {
         rmSync(root, { recursive: true, force: true });
     }
