@@ -103,7 +103,7 @@ function prepareStorage(app, serverUrl) {
                         if (!automaticRetry) throw error;
                     }
                 }
-                if ((recover || automaticRetry) && !firstMigration) {
+                if (!firstMigration) {
                     // Why: the panel also imports settings from the temporary Chromium copy.
                     await session.defaultSession.clearStorageData({ storages: ['localstorage'] });
                 }

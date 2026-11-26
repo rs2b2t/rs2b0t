@@ -156,8 +156,8 @@ function sharedStorage(dir) {
                 if (readError && (!state.initialized || recover) && !savedProfileKey(state.data)) {
                     const hasSettings = Object.keys(state.data).some(key => !profileKeys.includes(key));
                     if (state.initialized || !fallback || !hasSettings) throw readError;
-                    if (state.seededWithoutProfiles) state.retryProfileOrigin = profileOrigin;
                 }
+                if (values === null && state.seededWithoutProfiles) state.retryProfileOrigin = profileOrigin;
                 if (state.initialized) return false;
                 if (fallback === null) {
                     state.deletedDuringSettingsMigration = [];

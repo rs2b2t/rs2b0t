@@ -112,7 +112,12 @@ function fixture(
         const roster = JSON.parse(store.getItem(vault) ?? store.getItem(accounts) ?? '[]');
         return Array.isArray(roster) ? roster : [];
     }
-    return { launch, saveLegacy, store, storeDir, rendererStorage: () => rendererStorage };
+    async function openPanel() {
+        const panel = await Bun.build({ entrypoints: [join(import.meta.dir, '../../src/bot/panel/desktopStorage.ts')] });
+        const native = Object.assign(new Storage(), rendererStorage);
+        runInNewContext(await panel.outputs[0].text(), { window: { localStorage: native }, rs2b0tDesktopStorage: { ...store, subscribe() {} } });
+    }
+    return { launch, openPanel, saveLegacy, store, storeDir, rendererStorage: () => rendererStorage };
 }
 
 test('a malformed server URL is logged and quits through the startup error handler', async () => {
@@ -166,6 +171,40 @@ test('an empty roster saved before the first seed takes precedence over a pendin
     ready.resolve();
     expect(await pending).toEqual([]);
     expect(store.snapshot()).toEqual({ [vault]: '[]' });
+});
+
+test('a failed configured read after another launch seeded settings retries the configured origin', async () => {
+    const script = 'rs2b0t:fixture:selectedScript';
+    let unreadable = true;
+    const { launch, store } = fixture({
+        [original]: { [script]: 'Fisher' },
+        [custom]: { [accounts]: JSON.stringify(profiles) }
+    }, origin => {
+        if (origin === custom && unreadable) throw new Error('Unreadable 8082 fixture');
+    });
+    const ready = Promise.withResolvers<void>();
+    const pending = launch(custom, false, ready.promise);
+    expect(await launch(original)).toEqual([]);
+    ready.resolve();
+    expect(await pending).toEqual([]);
+    expect(store.getItem(script)).toBe('Fisher');
+    unreadable = false;
+    expect(await launch(original)).toEqual(profiles);
+    expect(await launch(custom)).toEqual(profiles);
+});
+
+test('a panel opened by an overlapping first launch preserves a deleted setting', async () => {
+    const ore = 'rs2b0t:set:Miner:ore';
+    const { launch, openPanel, store } = fixture({ [original]: { [ore]: 'Tin' } });
+    const ready = Promise.withResolvers<void>();
+    const pending = launch(original, false, ready.promise);
+    await launch(original);
+    expect(store.getItem(ore)).toBe('Tin');
+    store.removeItem(ore);
+    ready.resolve();
+    await pending;
+    await openPanel();
+    expect(store.getItem(ore)).toBeNull();
 });
 
 test.each(['setItem', 'compareAndSet', 'removeItem'])('profile %s after the empty seed takes precedence over a pending migration', async method => {
@@ -383,18 +422,15 @@ test('the panel preserves 8081 setting precedence across a failed read and genui
     const tree = 'rs2b0t:set:Woodcutter:tree';
     const method = 'rs2b0t:set:Fisher:method';
     let unreadable = true;
-    const { launch, store, rendererStorage } = fixture({
+    const { launch, openPanel, store } = fixture({
         [custom]: { [accounts]: JSON.stringify(profiles), [script]: 'Miner', [ore]: 'Tin', [tree]: 'Oak', [method]: 'Bait' },
         [original]: { [script]: 'Fisher', [ore]: 'Gold', [method]: 'Fly' }
     }, origin => {
         if (origin === original && unreadable) throw new Error('Unreadable 8081 fixture');
     });
-    const panel = await Bun.build({ entrypoints: [join(import.meta.dir, '../../src/bot/panel/desktopStorage.ts')] });
     expect(await launch(custom)).toEqual(profiles);
     store.removeItem(method);
-    const native = new Storage();
-    Object.assign(native, rendererStorage());
-    runInNewContext(await panel.outputs[0].text(), { window: { localStorage: native }, rs2b0tDesktopStorage: { ...store, subscribe() {} } });
+    await openPanel();
     store.setItem(ore, 'Tin');
     unreadable = false;
     expect(await launch(custom)).toEqual(profiles);
