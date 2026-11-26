@@ -10,39 +10,34 @@ import {
     pie
 } from '#/bot/api/ai/quests/defs/knightssword/supplies.js';
 import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import { type BankOptions, COINS, knightsSwordSnapshot } from './knightssword-snapshot.fixture.js';
 
-const COINS = 995;
 const BRONZE_PICKAXE = 1265;
 const RUNE_PICKAXE = 1275;
 const MAX_MINING = 70;
 
-export function snap(invIds: [number, number][] = [], options: {
-    bankIds?: [number, number][];
-    bankKnown?: boolean;
-    tile?: QuestSnapshot['tile'];
-} = {}): QuestSnapshot {
-    return {
+export function snap(invIds: [number, number][] = [], options: BankOptions = {}): QuestSnapshot {
+    return knightsSwordSnapshot({
+        bankIds: options.bankIds,
+        bankKnown: options.bankKnown,
+        tile: options.tile,
         journal: 'inProgress',
-        inv: new Map(),
-        // Every case that is not about the float carries one, so the coin top-up
-        // never masks the step under test.
-        invIds: new Map([[COINS, COIN_LOW * 2], ...invIds]),
-        worn: new Set(),
-        wornIds: new Set(),
-        noProgress: 0,
-        bankCoins: 2_000_000,
-        bank: new Map(),
-        bankIds: new Map(options.bankIds ?? []),
-        bankKnown: options.bankKnown ?? true,
-        tile: options.tile ?? { x: 2946, z: 3369, level: 0 },
-        freeSlots: 20
-    };
+        defaultCoins: COIN_LOW * 2,
+        invIds
+    });
 }
 
 const withdrawn = (step: QuestStep): number[] =>
     step.kind === 'withdraw' ? step.items.map(i => i.id ?? -1) : [];
 
 const lobsters = (held: number) => ({ name: 'Lobster', held, target: 14, low: 4 });
+
+test('supply snapshots ignore inventory and equipment in bank options', () => {
+    const options = { bankKnown: true, inv: [['lobster', 14]], wornIds: [BRONZE_PICKAXE] };
+    const snapshot = snap([], options);
+    expect(snapshot.inv.size).toBe(0);
+    expect(snapshot.wornIds?.size).toBe(0);
+});
 
 describe('kit', () => {
     test('scans the bank before withdrawing anything it has not seen', () => {
