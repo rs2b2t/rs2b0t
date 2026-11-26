@@ -1,32 +1,14 @@
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
-import { QuestFood } from '#/bot/api/ai/quests/food.js';
-import { QuestLoadout } from '#/bot/api/ai/quests/gear.js';
-import { DragonSupplies } from '#/bot/api/ai/quests/defs/dragonslayer/supplies.js';
-import { ArravConfig } from '#/bot/api/ai/quests/defs/shieldofarrav/config.js';
-import { HeroConfig } from '#/bot/api/ai/quests/defs/heroquest/config.js';
-import { LegendsConfig } from '#/bot/api/ai/quests/defs/legends/config.js';
 import { reader } from '#/bot/adapter/ClientAdapter.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
 import AIOQuester, { AIO_SETTINGS } from '#/bot/scripts/AIOQuester/AIOQuester.js';
 import { SettingsBag, SettingsStore } from '#/bot/runtime/Settings.js';
 import { renderControl } from '#/bot/panel/paramControls.js';
+import { snapshotQuestConfig } from './questConfig.fixture.js';
 
 let restore: () => void;
 beforeEach(() => {
-    const food = QuestFood.name;
-    const loadout = QuestLoadout.current;
-    const planks = DragonSupplies.wildernessPlanks;
-    const arrav = { ...ArravConfig };
-    const hero = { ...HeroConfig };
-    const legends = { ...LegendsConfig };
-    restore = () => {
-        QuestFood.name = food;
-        QuestLoadout.current = loadout;
-        DragonSupplies.wildernessPlanks = planks;
-        Object.assign(ArravConfig, arrav);
-        Object.assign(HeroConfig, hero);
-        Object.assign(LegendsConfig, legends);
-    };
+    restore = snapshotQuestConfig();
 });
 
 afterEach(() => {
