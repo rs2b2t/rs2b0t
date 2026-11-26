@@ -570,6 +570,44 @@ test('a world-only refresh preserves the order of groups retained by running slo
     });
 });
 
+test('selecting a retained tab renamed during import saves its new name and selection', async () => {
+    await withWall('local', async wall => {
+        const panel = openSettings();
+        const guest = { username: 'guest', password: 'fixture', tab: 'Work' };
+        await panel.importText(serializeProfileFile({ profiles: [guest], tabs: ['Work'], activeTab: 'Work', storage: {} }));
+        const [omitted] = wall.slots();
+        const saved = { username: 'fixture', password: 'fixture', tab: 'Fleet' };
+        const backup = { profiles: [saved], tabs: ['Fleet'], activeTab: 'Fleet' };
+        let renamed: ReturnType<Wall['renameTab']> | undefined;
+        const replaceAll = vault.replaceAll.bind(vault);
+        const replace = spyOn(vault, 'replaceAll').mockImplementationOnce(data => {
+            const replacing = replaceAll(data);
+            renamed = wall.renameTab('Work', 'Ops');
+            return replacing;
+        });
+        const saves = spyOn(vault, 'saveTabState');
+        try {
+            await panel.importText(serializeProfileFile({ ...backup, storage: {} }));
+            expect(await renamed).toBe(true);
+            await saves.mock.results[0].value;
+            expect(wall.slots().find(slot => slot.id === omitted.id)?.tab).toBe('Ops');
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.snapshot()).toEqual(backup);
+
+            document.querySelector<HTMLElement>('.mbx-tabchip[data-tab="Ops"]')!.click();
+            expect(wall.controller.activeTab()).toBe('Ops');
+            await waitFor(() => saves.mock.results.length === 2);
+            await saves.mock.results[1].value;
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.snapshot()).toEqual({ ...backup, tabs: ['Fleet', 'Ops'], activeTab: 'Ops' });
+        } finally {
+            saves.mockRestore();
+            replace.mockRestore();
+        }
+    });
+});
+
 test('a roster move queued during replacement uses the imported username', async () => {
     await withWall('local', async wall => {
         const panel = openSettings();

@@ -169,7 +169,9 @@ function boot(): void {
                 if (active !== previousActive && wallOnlyTabs.delete(active)) {
                     previousTabs = previousTabs.filter(tab => tab !== active);
                 }
-                wallOnlyTabs = new Set(controller.tabs().filter(tab => wallOnlyTabs.has(tab)));
+                if (replaced && wallOnlyTabs.delete(replaced.from) && replaced.to !== undefined) {
+                    wallOnlyTabs.add(replaced.to);
+                }
                 const slots = controller.snapshot();
                 renderRail(slots);
                 const moved = ids.size ? slots.filter(slot => ids.has(slot.id)) : [];
