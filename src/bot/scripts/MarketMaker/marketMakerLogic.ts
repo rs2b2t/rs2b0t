@@ -1,8 +1,8 @@
 import type { SellIntent } from '../../api/market/appraise.js';
 import { displayName, resolveByName, type Catalog } from '../../api/market/catalog.js';
 import type { Candidate } from '../../api/market/chatProtocol.js';
-import { rowOf, type PriceBook, type PriceRow } from '../../api/market/priceBook.js';
-import { rowValid } from '../../api/market/prices.js';
+import type { PriceBook, PriceRow } from '../../api/market/priceBook.js';
+import { rowValid, tradeRow } from '../../api/market/prices.js';
 import { resolveSet, setVariants, type MarketSet } from '../../api/market/sets.js';
 import { salePrice, saleQuantity, saleStock } from '../../api/market/saleIntent.js';
 
@@ -397,10 +397,7 @@ export function resolveQuote(input: {
         }
         return best ? { kind: 'set', set: best } : { kind: 'miss', answer: !qtyImplied };
     }
-    const candidates = resolveByName(cat, query, { exactOnly: qtyImplied }).filter(r => {
-        const row = rowOf(book, r.id);
-        return row !== null && row[side] && rowValid(book, row);
-    });
+    const candidates = resolveByName(cat, query, { exactOnly: qtyImplied }).filter(r => tradeRow(book, r.id, side) !== null);
     if (candidates.length === 0) {
         return { kind: 'miss', answer: !qtyImplied };
     }
