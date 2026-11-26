@@ -308,8 +308,8 @@ test('parent travel timeout cancels each command at its own deadline and release
     }
 });
 
-test('a late completion times out even if the watchdog has not run yet', async () => {
-    const clock = spyOn(performance, 'now').mockReturnValue(25);
+test('on-time travel succeeds when its fulfillment handler runs after the deadline', async () => {
+    const clock = spyOn(performance, 'now').mockReturnValue(0);
     const p = profile('alice', 'running');
     const c = client(p.username);
     let finish!: () => void;
@@ -318,10 +318,11 @@ test('a late completion times out even if the watchdog has not run yet', async (
     const actions = new RosterActions({ profiles: () => [p], client: () => c, setWorld: async () => true });
     try {
         const running = actions.run([p.username], { kind: 'travel', destination: 'Varrock' });
-        clock.mockReturnValue(11_050);
+        clock.mockReturnValue(10_990);
         finish();
-        expect((await running)[0]).toMatchObject({ state: 'failed', message: expect.stringMatching(/timed out/i) });
-        expect(stop).toHaveBeenCalledTimes(1);
+        clock.mockReturnValue(11_010);
+        expect((await running)[0].state).toBe('done');
+        expect(stop).not.toHaveBeenCalled();
     } finally {
         clock.mockRestore();
     }

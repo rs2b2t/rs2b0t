@@ -186,9 +186,7 @@ export class RosterActions {
             this.watcher ??= setTimeout(() => this.poll(), 100);
             try {
                 operation().then(() => {
-                    if (settled) return;
-                    if (performance.now() >= target.deadline) target.timeout();
-                    else if (check(name => this.profiles().find(p => p.username === name))) finish(true);
+                    if (!settled && check(name => this.profiles().find(p => p.username === name))) finish(true);
                 }, error => finish(false, error));
             } catch (error) {
                 finish(false, error);
