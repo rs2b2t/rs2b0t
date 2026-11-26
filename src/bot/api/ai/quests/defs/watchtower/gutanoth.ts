@@ -14,10 +14,6 @@ import { settleScene } from './scene.js';
 
 export const CHASM_TOLL = 20;
 
-function heldId(id: number): number {
-    return Inventory.items().filter(item => item.id === id).reduce((sum, item) => sum + item.count, 0);
-}
-
 function locNear(id: number, op: string, within = 8): Loc | null {
     return Locs.query().where(loc => loc.id === id).action(op).within(within).nearest();
 }
@@ -60,7 +56,7 @@ async function offerRelic(log: (m: string) => void): Promise<boolean> {
 }
 
 export async function showRelicToGuard(log: (m: string) => void): Promise<boolean> {
-    if (heldId(WT_ITEM.OGRE_RELIC.id) === 0) {
+    if (Inventory.countById(WT_ITEM.OGRE_RELIC.id) === 0) {
         log('no Ogre relic in the pack');
         return false;
     }
@@ -78,7 +74,7 @@ export async function showRelicToGuard(log: (m: string) => void): Promise<boolea
 }
 
 export async function stealRockCake(log: (m: string) => void): Promise<boolean> {
-    if (heldId(WT_ITEM.ROCK_CAKE.id) > 0) {
+    if (Inventory.countById(WT_ITEM.ROCK_CAKE.id) > 0) {
         return true;
     }
     for (let attempt = 0; attempt < 8; attempt++) {
@@ -88,7 +84,7 @@ export async function stealRockCake(log: (m: string) => void): Promise<boolean> 
         }
         const stall = locNear(WT_LOC.ROCK_CAKE_STALL, 'Steal-From', 6);
         if (stall && (await stall.interact('Steal-From'))) {
-            if (await Execution.delayUntil(() => heldId(WT_ITEM.ROCK_CAKE.id) > 0, 6000)) {
+            if (await Execution.delayUntil(() => Inventory.countById(WT_ITEM.ROCK_CAKE.id) > 0, 6000)) {
                 return true;
             }
         }
@@ -170,7 +166,7 @@ async function jumpChasm(log: (m: string) => void): Promise<boolean> {
     if (watchtowerArea(Game.tile()) === 'cityGuard') {
         return true;
     }
-    if (heldId(WT_ITEM.COINS.id) < CHASM_TOLL) {
+    if (Inventory.countById(WT_ITEM.COINS.id) < CHASM_TOLL) {
         log(`need ${CHASM_TOLL} gp for the chasm toll`);
         return false;
     }
@@ -233,7 +229,7 @@ export async function askRiddle(log: (m: string) => void): Promise<boolean> {
 }
 
 export async function answerRiddle(log: (m: string) => void): Promise<boolean> {
-    if (heldId(WT_ITEM.DEATH_RUNE.id) === 0) {
+    if (Inventory.countById(WT_ITEM.DEATH_RUNE.id) === 0) {
         log('no Death rune to answer the riddle with');
         return false;
     }
@@ -251,7 +247,7 @@ export async function answerRiddle(log: (m: string) => void): Promise<boolean> {
     if (await awaitDialogue('the city guard', log)) {
         await talkThrough(WT_NPC.CITY_GUARD, [], log);
     }
-    return Execution.delayUntil(() => heldId(WT_ITEM.SKAVID_MAP.id) > 0, 10_000);
+    return Execution.delayUntil(() => Inventory.countById(WT_ITEM.SKAVID_MAP.id) > 0, 10_000);
 }
 
 // Why: the east gate is the only way to cave 6's side of the city, and its guard wants a bar of gold.
@@ -303,7 +299,7 @@ export async function crossEastGate(log: (m: string) => void, paid = false): Pro
         rememberGatePayment(false);
         return true;
     }
-    if (paid || goldGateNeedsPayment() === false || heldId(WT_ITEM.GOLD_BAR.id) === 0) {
+    if (paid || goldGateNeedsPayment() === false || Inventory.countById(WT_ITEM.GOLD_BAR.id) === 0) {
         if (!(await Traversal.walkResilient(WT_TILE.EAST_GATE_STAND, { radius: 1, attempts: 3, timeoutMs: 180_000, log }))) return false;
         const gate = locNear(WT_LOC.GATE_EAST, 'Open', 6);
         const mark = GameMessages.mark();

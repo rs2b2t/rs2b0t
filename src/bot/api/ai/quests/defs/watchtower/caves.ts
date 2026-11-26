@@ -45,10 +45,6 @@ export function nextSkavidCave(progress: QuestProgress | undefined): number {
     return 6;
 }
 
-function heldId(id: number): number {
-    return Inventory.items().filter(item => item.id === id).reduce((sum, item) => sum + item.count, 0);
-}
-
 function locNear(id: number, op: string, within = 20): Loc | null {
     return Locs.query().where(loc => loc.id === id).action(op).within(within).nearest();
 }
@@ -144,7 +140,7 @@ export async function learnWord(index: number, log: (m: string) => void): Promis
 }
 
 export async function takeNightshade(log: (m: string) => void): Promise<boolean> {
-    if (heldId(WT_ITEM.NIGHTSHADE.id) > 0) {
+    if (Inventory.countById(WT_ITEM.NIGHTSHADE.id) > 0) {
         return true;
     }
     // Cave 2's mouth is on the main component; cave 6's sits behind the battlement.
@@ -159,7 +155,7 @@ export async function takeNightshade(log: (m: string) => void): Promise<boolean>
         log('no Nightshade on the cave floor — it respawns, so this is worth retrying');
         return false;
     }
-    if (!(await Execution.delayUntil(() => heldId(WT_ITEM.NIGHTSHADE.id) > 0, 6000))) {
+    if (!(await Execution.delayUntil(() => Inventory.countById(WT_ITEM.NIGHTSHADE.id) > 0, 6000))) {
         return false;
     }
     return leaveCave(log);
@@ -178,7 +174,7 @@ export async function answerMadSkavid(log: (m: string) => void, gatePaid = false
     // He says one of 4 phrases at random, so a wrong guess costs only a retry.
     for (let attempt = 0; attempt < 5; attempt++) {
         await talkChoosingBy(WT_NPC.MAD_SKAVID, MAD_SKAVID_RULES, ["But I've lost it!"], log);
-        if (heldId(WT_ITEM.CRYSTAL2.id) > 0) {
+        if (Inventory.countById(WT_ITEM.CRYSTAL2.id) > 0) {
             return (await leaveCave(log)) && leaveEastGate(log);
         }
         await Execution.delayTicks(2);

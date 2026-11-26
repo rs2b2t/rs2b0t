@@ -10,10 +10,6 @@ function item(id: number): InvItem | null {
     return Inventory.items().find(entry => entry.id === id) ?? null;
 }
 
-function heldId(id: number): number {
-    return Inventory.items().filter(entry => entry.id === id).reduce((sum, entry) => sum + entry.count, 0);
-}
-
 async function combine(useId: number, ontoId: number, producesId: number, log: (m: string) => void): Promise<boolean> {
     const source = item(useId);
     const target = item(ontoId);
@@ -24,11 +20,11 @@ async function combine(useId: number, ontoId: number, producesId: number, log: (
     if (!(await source.useOn(target))) {
         return false;
     }
-    return Execution.delayUntil(() => heldId(producesId) > 0, 8000);
+    return Execution.delayUntil(() => Inventory.countById(producesId) > 0, 8000);
 }
 
 export async function grindBatBones(log: (m: string) => void): Promise<boolean> {
-    if (heldId(WT_ITEM.GROUND_BAT_BONES.id) > 0) {
+    if (Inventory.countById(WT_ITEM.GROUND_BAT_BONES.id) > 0) {
         return true;
     }
     return combine(WT_ITEM.PESTLE.id, WT_ITEM.BAT_BONES.id, WT_ITEM.GROUND_BAT_BONES.id, log);
@@ -36,15 +32,15 @@ export async function grindBatBones(log: (m: string) => void): Promise<boolean> 
 
 /** Guam, then jangerberries, then ground bat bones. Any other pairing calls potion_explosion: both items are destroyed and it costs 5 damage. */
 export async function brewOgrePotion(log: (m: string) => void): Promise<boolean> {
-    if (heldId(WT_ITEM.OGRE_POTION.id) > 0) {
+    if (Inventory.countById(WT_ITEM.OGRE_POTION.id) > 0) {
         return true;
     }
-    if (heldId(WT_ITEM.GUAM_VIAL.id) === 0 && heldId(WT_ITEM.GUAM_JANGER_VIAL.id) === 0) {
+    if (Inventory.countById(WT_ITEM.GUAM_VIAL.id) === 0 && Inventory.countById(WT_ITEM.GUAM_JANGER_VIAL.id) === 0) {
         if (!(await combine(WT_ITEM.GUAM_LEAF.id, WT_ITEM.VIAL_WATER.id, WT_ITEM.GUAM_VIAL.id, log))) {
             return false;
         }
     }
-    if (heldId(WT_ITEM.GUAM_JANGER_VIAL.id) === 0) {
+    if (Inventory.countById(WT_ITEM.GUAM_JANGER_VIAL.id) === 0) {
         if (!(await combine(WT_ITEM.JANGERBERRIES.id, WT_ITEM.GUAM_VIAL.id, WT_ITEM.GUAM_JANGER_VIAL.id, log))) {
             return false;
         }
@@ -62,5 +58,5 @@ export async function infusePotion(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     await driveDialog([], log);
-    return Execution.delayUntil(() => heldId(WT_ITEM.MAGIC_OGRE_POTION.id) > 0, 15_000);
+    return Execution.delayUntil(() => Inventory.countById(WT_ITEM.MAGIC_OGRE_POTION.id) > 0, 15_000);
 }
