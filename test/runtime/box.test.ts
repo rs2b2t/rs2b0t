@@ -16,7 +16,7 @@ test('opening a wall preserves memory and resolves its identity without carrying
 });
 
 test('encoded profile and standalone settings use distinct top-level keys and decode partial prefixes', () => {
-    for (const [id, prefix] of [['set', 'set:Miner:route%'], ['', 'set:set:route%']]) {
+    for (const [id, prefix] of [['set', 'set:Miner:route%'], ['', 'set:set:route%'], ['set:Global/north', 'route%']]) {
         const key = boxKey(prefix + '3A:out', id);
         expect(key).toStartWith('rs2b0t:');
         expect(key.slice('rs2b0t:'.length)).not.toContain(':');

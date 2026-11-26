@@ -310,6 +310,55 @@ describe('ProfileTransfer', () => {
         });
     });
 
+    test('overlapping profile names export and replace only their own settings', () => {
+        const names = ['set', 'set:Global', 'set:Loadouts'];
+        const loadout = { name: 'travel', worn: {}, carry: [] };
+        const threshold = 'set:Global:runEnergyMin';
+        SettingsStore.save('Global', 'runEnergyMin', '73');
+        Loadouts.save([loadout]);
+        for (const name of names) inBox(name, () => SettingsStore.save('Global', 'runEnergyMin', '31'));
+
+        const exported = collectBoxStorage(names);
+        const profile = { [threshold]: '31' };
+        expect(exported).toEqual({ set: profile, 'set:Global': profile, 'set:Loadouts': profile });
+
+        applyBoxStorage({ set: { [threshold]: '42' } }, names);
+        sessionStorage.clear();
+        expect(names.map(name => inBox(name, () => SettingsStore.saved('Global', 'runEnergyMin')))).toEqual(['42', undefined, undefined]);
+        expect(SettingsStore.saved('Global', 'runEnergyMin')).toBe('73');
+        expect(Loadouts.all()).toEqual([loadout]);
+    });
+
+    test('restoring a v1 backup with misclassified entries under overlapping names keeps standalone values', () => {
+        const loadout = { name: 'travel', worn: {}, carry: [] };
+        SettingsStore.save('Global', 'runEnergyMin', '73');
+        Loadouts.save([loadout]);
+        const profiles = ['set:Global', 'set:Loadouts'].map(username => ({ username, password: '' }));
+        const storage = { 'set:Global': { runEnergyMin: '10', selectedScript: 'Miner' }, 'set:Loadouts': { sets: '[]' } };
+        const file = JSON.stringify({ ...snap, profiles, storage, kind: PROFILE_FILE_KIND, v: 1 });
+        applyBoxStorage(parseProfileFile(file).storage, ['set', ...profiles.map(p => p.username)]);
+        sessionStorage.clear();
+        expect(SettingsStore.saved('Global', 'runEnergyMin')).toBe('73');
+        expect(Loadouts.all()).toEqual([loadout]);
+        expect(collectBoxStorage(profiles.map(p => p.username))).toEqual({ 'set:Global': { selectedScript: 'Miner' } });
+    });
+
+    test('round-trips explicit profile fields that also name standalone settings', () => {
+        const names = ['set:Global', 'set:Global/north', 'set:Global%2Fnorth'];
+        const suffix = 'route%3A:out';
+        const profiles = names.map(username => ({ username, password: '' }));
+        const storage = Object.fromEntries(names.map(name => [name, { [suffix]: name }]));
+        SettingsStore.save('Global', suffix, 'walk');
+        const file = serializeProfileFile({ ...snap, profiles, storage });
+        expect(JSON.parse(file).v).toBe(2);
+        applyBoxStorage(parseProfileFile(file).storage, names);
+        sessionStorage.clear();
+        expect(collectBoxStorage(names)).toEqual(storage);
+        applyBoxStorage({}, [names[1]]);
+        expect(collectBoxStorage(names)).toEqual({ [names[0]]: storage[names[0]], [names[2]]: storage[names[2]] });
+        expect(SettingsStore.saved('Global', suffix)).toBe('walk');
+    });
+
     test('round-trips distinct v1 settings for set and colon-prefixed profiles after a fresh session', () => {
         const neighbour = boxKey('set:Miner:', 'set').slice('rs2b0t:'.length);
         const names = ['set', ':profile:set', neighbour];

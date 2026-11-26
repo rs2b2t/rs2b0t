@@ -48,9 +48,15 @@ if (process.argv.includes('--export-cleared')) {
     SettingsStore.clear('Global', 'runEnergyMin');
     sessionStorage.clear();
     sessionStorage.setItem(legacy, '42');
+    const { boxKey } = await import('../../src/bot/runtime/box.js');
+    sessionStorage.setItem(boxKey('set:Global:runEnergyMin', 'set'), '65');
+    SettingsStore.save('Miner', 'rock', 'iron');
+    SettingsStore.clear('Miner', 'rock');
+    sessionStorage.setItem(boxKey('set:Miner:rock', 'set'), 'iron');
     assert.equal(SettingsStore.globalBag().num('runEnergyMin'), 20);
     const offered: string[] = [];
     const storage = collectBoxStorage(['set'], suffix => { offered.push(suffix); return true; });
+    assert.deepEqual(storage, {});
     applyBoxStorage(storage, ['set']);
     sessionStorage.clear();
     console.log(JSON.stringify({ offered, restored: SettingsStore.globalBag().num('runEnergyMin') }));
@@ -89,6 +95,7 @@ if (process.argv.includes('--export-set')) {
     sessionStorage.removeItem(current);
     localStorage.removeItem(current);
     disableLegacySetProfileSettings(localStorage);
+    sessionStorage.setItem(current, '51');
     assert.equal(readBoxItem('set:Miner:rock', 'set'), null);
     const offered: string[] = [];
     const after = collectBoxStorage(['set'], suffix => { offered.push(suffix); return true; });

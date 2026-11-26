@@ -18,8 +18,19 @@ function encodeSuffix(suffix: string): string {
     return suffix.replaceAll('%', '%25').replaceAll(':', '%3A');
 }
 
+function nestedProfilePrefix(id: string): string {
+    return settingsStoragePrefix + 'owner/' + encodeSuffix(id).replaceAll('/', '%2F') + '/';
+}
+
+export function isLegacyProfileSuffix(id: string, suffix: string): boolean {
+    if (id === 'set') return !suffix.includes(':') || isLegacySetProfileSetting(suffix);
+    if (!id.startsWith('set:')) return true;
+    return suffix.startsWith('set:') || suffix === 'creds' || suffix === 'selectedScript' || suffix === 'rendererEnabled';
+}
+
 export function boxKey(suffix: string, id = boxId()): string {
     if (id === 'set' && suffix.includes(':')) return setProfilePrefix + encodeSuffix(suffix);
+    if (id.startsWith('set:') && !isLegacyProfileSuffix(id, suffix)) return nestedProfilePrefix(id) + encodeSuffix(suffix);
     if (!id && suffix.startsWith('set:set:')) return settingsStoragePrefix + 'standalone/' + encodeSuffix(suffix);
     return id ? `rs2b0t:${id}:${suffix}` : `rs2b0t:${suffix}`;
 }
@@ -33,8 +44,10 @@ export function boxKeyTail(key: string, prefix: string): string | null {
 
 export function boxSuffix(key: string, prefix: string, id: string): string | null {
     if (id === 'set' && key.startsWith(setProfilePrefix)) return boxKeyTail(key, setProfilePrefix);
+    if (id.startsWith('set:') && isEncodedSettingKey(key)) return boxKeyTail(key, nestedProfilePrefix(id));
     if (!key.startsWith(prefix) || (id === 'set' && key.includes(':', prefix.length))) return null;
-    return key.slice(prefix.length);
+    const suffix = key.slice(prefix.length);
+    return isLegacyProfileSuffix(id, suffix) ? suffix : null;
 }
 
 export function isLegacySetProfileSetting(suffix: string): boolean {
@@ -55,7 +68,7 @@ function clearedKey(key: string): string {
     return settingsStoragePrefix + 'cleared/' + key.slice(settingsStoragePrefix.length);
 }
 
-function allowsLegacy(store: Storage, key: string, id: string): boolean {
+export function allowsLegacyBoxItem(store: Storage, key: string, id: string): boolean {
     const cleared = clearedKey(key);
     if (id === 'set') {
         if (store.getItem(setProfileMigrationKey) !== null) return false;
@@ -76,7 +89,7 @@ export function readBoxItem(suffix: string, id: string): string | null {
         if (!store) continue;
         const value = store.getItem(key);
         if (value !== null) return value;
-        if (legacy !== null && allowsLegacy(store, key, id)) {
+        if (legacy !== null && allowsLegacyBoxItem(store, key, id)) {
             const fallback = store.getItem(legacy);
             if (fallback !== null) return fallback;
         }
@@ -87,7 +100,8 @@ export function readBoxItem(suffix: string, id: string): string | null {
 export function clearBoxItem(store: Storage, suffix: string, id: string): void {
     const key = boxKey(suffix, id);
     const legacy = legacyKey(suffix, id);
-    if (legacy && allowsLegacy(store, key, id) && store.getItem(legacy) !== null) {
+    const savedOnDesktop = id === 'set' && desktopStorage && store === localStorage && store.getItem(key) !== null;
+    if (legacy && allowsLegacyBoxItem(store, key, id) && (savedOnDesktop || store.getItem(legacy) !== null)) {
         store.setItem(clearedKey(key), '1');
     }
     store.removeItem(key);
@@ -97,7 +111,7 @@ export function legacyBoxSuffix(store: Storage, key: string, id: string): string
     const prefix = id ? `rs2b0t:${id}:` : 'rs2b0t:';
     if (!key.startsWith(prefix)) return null;
     const suffix = key.slice(prefix.length);
-    return legacyKey(suffix, id) === key && allowsLegacy(store, boxKey(suffix, id), id) ? suffix : null;
+    return legacyKey(suffix, id) === key && allowsLegacyBoxItem(store, boxKey(suffix, id), id) ? suffix : null;
 }
 
 export function profileStorageKeys(store: Storage, id?: string): string[] {

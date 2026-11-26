@@ -1,4 +1,4 @@
-import { boxKey, boxSuffix, disableLegacySetProfileSettings, isLegacySetProfileSetting, legacyBoxSuffix } from '../runtime/box.js';
+import { allowsLegacyBoxItem, boxKey, boxSuffix, disableLegacySetProfileSettings, isLegacyProfileSuffix, legacyBoxSuffix } from '../runtime/box.js';
 import type { Profile } from './ProfileVault.js';
 import { desktopStorage, storeKeys } from '../runtime/desktopStorage.js';
 
@@ -24,9 +24,10 @@ const MAIN_TAB = 'Main';
 
 export function serializeProfileFile(data: ProfileSnapshot): string {
     requireProfiles(data.profiles);
+    const usernames = [...data.profiles.map(p => p.username), ...Object.keys(data.storage)];
     const file: ProfileFile = {
         kind: PROFILE_FILE_KIND,
-        v: data.profiles.some(p => p.username === 'set') || Object.hasOwn(data.storage, 'set') ? PROFILE_FILE_VERSION : 1,
+        v: usernames.some(user => user === 'set' || user.startsWith('set:')) ? PROFILE_FILE_VERSION : 1,
         profiles: data.profiles,
         tabs: data.tabs,
         activeTab: data.activeTab,
@@ -126,9 +127,10 @@ function readStore(store: Storage, usernames: string[], out: BoxStorageMap, lega
             if (suffix === null) {
                 continue;
             }
-            if (desktopSession) {
-                if (suffix === 'selectedScript') continue;
-                if (user === 'set' && suffix.startsWith('set:') && out.set && Object.hasOwn(out.set, suffix)) continue;
+            if (desktopSession && suffix === 'selectedScript') continue;
+            if (desktopSession && user === 'set' && suffix.startsWith('set:')) {
+                if (out.set && Object.hasOwn(out.set, suffix)) continue;
+                if (!allowsLegacyBoxItem(store, key, user)) continue;
             }
             const value = store.getItem(key);
             if (value === null) {
@@ -160,7 +162,7 @@ function parseStorage(raw: unknown, version: number): BoxStorageMap {
             if (typeof value !== 'string') {
                 throw new Error(`profile file storage '${user}.${suffix}' must be a string`);
             }
-            if (version === 1 && user === 'set' && suffix.includes(':') && !isLegacySetProfileSetting(suffix)) continue;
+            if (version === 1 && !isLegacyProfileSuffix(user, suffix)) continue;
             box[suffix] = value;
         }
         out[user] = box;
