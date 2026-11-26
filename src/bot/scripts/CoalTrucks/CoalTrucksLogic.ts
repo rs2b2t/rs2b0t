@@ -1,3 +1,4 @@
+import { COAL_ROCK_IDS as coalRockIds } from '../../data/miningRocks.js';
 import Tile from '../../geometry/Tile.js';
 
 export const COAL = 'Coal';
@@ -8,7 +9,7 @@ export const MINE_OP = 'Mine';
 
 export const TRUCK_MAX = 120;
 export const COAL_MINING_LEVEL = 30;
-export const COAL_ROCK_IDS: readonly number[] = [2096, 2097];
+export const COAL_ROCK_IDS: readonly number[] = [...coalRockIds];
 
 /** The truck line runs east across the river; the far-bank trucks are a 245-cost detour. */
 export const TRUCK_LEASH = 4;
