@@ -42,7 +42,11 @@ function migrateProfiles(data, sources, firstMigration) {
     }
     if (!selected.length) return;
     for (const key of profileKeys) delete data[key];
-    for (const [key, value] of selected) data[key] = value;
+    for (const [key, value] of selected) {
+        // Why: a pending vault setup compares the profiles key before it replaces the roster.
+        const destination = !firstMigration && selected.length === 1 ? vaultKey : key;
+        data[destination] = value;
+    }
 }
 
 function sharedStorage(dir) {
@@ -107,11 +111,10 @@ function sharedStorage(dir) {
         },
         seed(values, { fallback = {}, recover = false } = {}) {
             return update(state => {
-                const sources = [values, fallback];
                 if (state.initialized && !recover) return false;
-                migrateProfiles(state.data, sources, !state.initialized);
+                migrateProfiles(state.data, [values, fallback], !state.initialized);
                 if (state.initialized) return false;
-                for (const source of sources) {
+                for (const source of [fallback, values]) {
                     for (const [key, value] of Object.entries(source)) {
                         if (profileKeys.includes(key)) continue;
                         if (valid(key) && typeof value === 'string' && !(key in state.data)) state.data[key] = value;

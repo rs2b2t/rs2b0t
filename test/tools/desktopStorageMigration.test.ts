@@ -97,7 +97,8 @@ function fixture(origins?: Record<string, Record<string, string>>) {
             app.emit('quit');
         }
         expect(handlers.size).toBe(0);
-        return JSON.parse(store.getItem(accounts) ?? '[]');
+        const roster = JSON.parse(store.getItem(vault) ?? store.getItem(accounts) ?? '[]');
+        return Array.isArray(roster) ? roster : [];
     }
     return { launch, saveLegacy, store, storeDir, rendererStorage: () => rendererStorage };
 }
@@ -134,7 +135,7 @@ test('an old empty migration can recover profiles alongside newer shared setting
     store.setItem(key, 'new');
     expect(await launch(custom, true)).toEqual(profiles);
     expect(store.getItem(key)).toBe('new');
-    store.removeItem(accounts);
+    store.removeItem(vault);
     expect(await launch(custom)).toEqual([]);
 });
 
@@ -162,6 +163,28 @@ test('profiles on the configured origin take precedence over the 8081 fallback',
     expect(await launch(custom)).toEqual(profiles);
 });
 
+test('settings from 8081 keep precedence when the fallback supplies the roster', async () => {
+    const script = 'rs2b0t:fixture-0:selectedScript';
+    const { launch, store } = fixture({
+        [custom]: { [script]: 'Miner' },
+        [original]: { [accounts]: JSON.stringify(profiles), [script]: 'Fisher' }
+    });
+    expect(await launch(custom)).toEqual(profiles);
+    expect(store.getItem(script)).toBe('Fisher');
+});
+
+test('explicit recovery survives a vault setup that already read the empty store', async () => {
+    const { launch, store, storeDir } = fixture();
+    store.seed({});
+    const child = Bun.spawnSync([process.execPath, '--no-env-file', join(import.meta.dir, '../fixtures/desktop-recovery-during-setup.ts'), storeDir, JSON.stringify(profiles)]);
+    expect({ code: child.exitCode, errors: child.stderr.toString() }).toEqual({ code: 0, errors: '' });
+    await launch(custom);
+    const reopened = new ProfileVault(store);
+    expect(await reopened.unlock('fixture')).toBe(true);
+    expect(reopened.list()).toHaveLength(30);
+    expect(reopened.list()).toEqual(profiles.map(profile => ({ ...profile, tab: 'Main' })));
+});
+
 test.each([[accounts, accounts], [vault, accounts], [accounts, vault]])(
     'explicit recovery replaces an empty %s roster with profiles from %s', async (emptyKey, sourceKey) => {
         const saved = JSON.stringify(profiles);
@@ -170,9 +193,9 @@ test.each([[accounts, accounts], [vault, accounts], [accounts, vault]])(
         await launch(custom);
         expect(store.snapshot()).toEqual({ [emptyKey]: '[]' });
         await launch(custom, true);
-        expect(store.snapshot()).toEqual({ [sourceKey]: saved });
+        expect(store.snapshot()).toEqual({ [vault]: saved });
         await launch(custom);
-        expect(store.snapshot()).toEqual({ [sourceKey]: saved });
+        expect(store.snapshot()).toEqual({ [vault]: saved });
     }
 );
 
@@ -189,14 +212,14 @@ test('profile recovery keeps cleared settings out of shared and renderer storage
         shared: store.keys().sort(),
         nativeSetting: rendererStorage()[setting],
         nativeScript: rendererStorage()[selected]
-    }).toEqual({ shared: [accounts], nativeSetting: undefined, nativeScript: undefined });
+    }).toEqual({ shared: [vault], nativeSetting: undefined, nativeScript: undefined });
 });
 
 test('explicit recovery can use the fallback when the configured origin has only an empty roster', async () => {
     const { launch, store } = fixture({ [custom]: { [vault]: '[]' }, [original]: { [accounts]: JSON.stringify(profiles) } });
     store.seed({ [vault]: '[]' });
     expect(await launch(custom, true)).toEqual(profiles);
-    expect(store.getItem(vault)).toBeNull();
+    expect(store.getItem(accounts)).toBeNull();
 });
 
 test('first migration skips an empty configured roster across two launches', async () => {
@@ -226,7 +249,7 @@ test.each([
     const { launch, store } = fixture({ [custom]: { [vault]: value }, [original]: { [accounts]: JSON.stringify(profiles) } });
     store.seed({});
     expect((await launch(custom, true)).length).toBe(30);
-    expect(store.getItem(vault)).toBeNull();
+    expect(store.getItem(accounts)).toBeNull();
     expect(await launch(custom)).toEqual(profiles);
 });
 
@@ -235,7 +258,7 @@ test('an invalid source on first launch leaves room for explicit recovery later'
     await launch(custom);
     saveLegacy({ [custom]: { [accounts]: JSON.stringify(profiles) } });
     expect(await launch(custom, true)).toEqual(profiles);
-    expect(store.getItem(vault)).toBeNull();
+    expect(store.getItem(accounts)).toBeNull();
 });
 
 test('a migrated encrypted vault can be unlocked on the next launch', async () => {
