@@ -15,7 +15,7 @@ describe('tradeRow', () => {
     test.each([
         ['selling is disabled', row({ selling: false })],
         ['the spread is invalid', row({ buy: 12, sell: 12 })]
-    ] as const)('a later duplicate cannot enable a sale when %s on the first row', (_, first) => {
+    ] satisfies [string, PriceRow][])('a later duplicate cannot enable a sale when %s on the first row', (_, first) => {
         const prices = book({ rows: [first, row({ buy: 10, sell: 12 })] });
         expect(tradeRow(prices, first.id, 'selling')).toBeNull();
     });
