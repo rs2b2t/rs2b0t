@@ -1035,16 +1035,12 @@ export class Client extends GameShell {
             this.mapedge.trim();
 
             try {
-                for (let i: number = 0; i < 50; i++) {
-                    this.mapscene[i] = Pix8.depack(media, 'mapscene', i);
-                }
+                Pix8.depackSheet(media, 'mapscene', this.mapscene);
             } catch (_e) {
             }
 
             try {
-                for (let i: number = 0; i < 50; i++) {
-                    this.mapfunction[i] = Pix32.depack(media, 'mapfunction', i);
-                }
+                Pix32.depackSheet(media, 'mapfunction', this.mapfunction);
             } catch (_e) {
             }
 
