@@ -9,12 +9,12 @@ import { ChatDialog } from '#/bot/api/ui/dialogue/ChatDialog.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
 import Tile from '#/bot/geometry/Tile.js';
 import { stubProps } from '../../../../lib/stubSingletons.js';
+import { DelayedDialogue } from './delayed-dialogue.fixture.js';
 
 for (const mode of ['closed dialogue', 'in transit', 'exit refused'] as const) {
     test(`Merlin crate recovery: ${mode}`, async () => {
         let tile = new Tile(2778, 9839, 0);
-        let page = mode === 'in transit' ? 'voyage' : '';
-        let pending = '';
+        const dialogue = new DelayedDialogue(mode === 'in transit' ? 'voyage' : '');
         const query = Locs.query();
         const wall = new Loc({ typecode: 0, id: 65, name: 'Crate wall', tile, ops: ['Climb-out'], distance: 1 });
         const restores = [
@@ -24,36 +24,28 @@ for (const mode of ['closed dialogue', 'in transit', 'exit refused'] as const) {
             stubProps(wall, { interact: async op => {
                 expect(op).toBe('Climb-out');
                 if (mode === 'exit refused') return false;
-                expect(page).toBe('');
-                page = 'confirm';
+                expect(dialogue.page).toBe('');
+                dialogue.page = 'confirm';
                 return true;
             } }),
             stubProps(ChatDialog, {
-                isOpen: () => !!page,
-                canContinue: () => page === 'voyage' || page === 'exit',
-                options: () => page === 'confirm' ? ['Yes.', 'No.'] : [],
+                isOpen: () => !!dialogue.page,
+                canContinue: () => dialogue.page === 'voyage' || dialogue.page === 'exit',
+                options: () => dialogue.page === 'confirm' ? ['Yes.', 'No.'] : [],
                 continue: async () => {
-                    if (page === 'voyage') pending = 'confirm';
-                    if (page === 'exit') tile = new Tile(2778, 3401, 0);
-                    page = '';
+                    if (dialogue.page === 'voyage') dialogue.pending = 'confirm';
+                    if (dialogue.page === 'exit') tile = new Tile(2778, 3401, 0);
+                    dialogue.page = '';
                     return true;
                 },
                 chooseOption: async choice => {
                     expect(choice).toBe('Yes.');
-                    pending = 'exit';
-                    page = '';
+                    dialogue.pending = 'exit';
+                    dialogue.page = '';
                     return true;
                 }
             }),
-            stubProps(Execution, {
-                delayTicks: async () => {},
-                delayUntil: async check => {
-                    if (check()) return true;
-                    page = pending;
-                    pending = '';
-                    return check();
-                }
-            })
+            dialogue.stubExecution()
         ];
         try {
             const step = merlinscrystal.recover?.(tile);
