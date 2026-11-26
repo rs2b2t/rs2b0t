@@ -1,14 +1,6 @@
 import { expect, test, describe } from 'bun:test';
 import { decide, gatherOnion, gatherRatsTail, gatherEyeOfNewt, gatherBurntMeat, hetty } from '#/bot/api/ai/quests/defs/hetty.js';
-import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
-
-const snap = (journal: string, items: [string, number][] = [], bankCoins = 0): QuestSnapshot => ({
-    journal: journal as QuestSnapshot['journal'],
-    inv: new Map(items),
-    worn: new Set(),
-    noProgress: 0,
-    bankCoins
-});
+import { snap } from './inventory-snapshot.fixture.js';
 
 const TAIL = "rat's tail";
 const ALL_FOUR: [string, number][] = [[TAIL, 1], ['onion', 1], ['eye of newt', 1], ['burnt meat', 1]];
