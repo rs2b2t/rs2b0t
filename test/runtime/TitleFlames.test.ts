@@ -171,6 +171,47 @@ test('a rail switch queued before a due flame tick preserves that draw', () => {
     expect(draws).toEqual([35, 1050, 2065]);
 });
 
+test('focus queued on a skipped rail tick preserves that draw', () => {
+    RenderGate.backgroundIntervalMs = 1000;
+    RenderGate.setMode('background');
+    const flames = new TitleFlames([]);
+    const start = performance.now();
+    const draws: number[] = [];
+    flames.renderFlames = () => draws.push(performance.now() - start);
+    setTimeout(() => RenderGate.setMode('focused'), 70);
+    BotClient.prototype['startTitleFlames'](flames);
+    clock.advanceTimersByTime(140);
+    flames.close();
+    expect(draws).toEqual([35, 70, 105, 140]);
+});
+
+test.each([40, 1000])('a rail draws at every eligible coalesced timer delivery (%i ms)', batchMs => {
+    const start = performance.now();
+    let callbacks = 0;
+    const timers: Record<'setInterval' | 'setTimeout', (callback: () => void, ms: number) => unknown> = globalThis;
+    for (const name of ['setInterval', 'setTimeout'] as const) {
+        const arm = timers[name];
+        spyOn(timers, name).mockImplementation((callback, ms) => {
+            const elapsed = performance.now() - start;
+            const delivery = Math.ceil((elapsed + ms) / batchMs) * batchMs;
+            return arm(() => {
+                callbacks++;
+                callback();
+            }, delivery - elapsed);
+        });
+    }
+    RenderGate.backgroundIntervalMs = 1000;
+    RenderGate.setMode('background');
+    const flames = new TitleFlames([]);
+    const draws: number[] = [];
+    flames.renderFlames = () => draws.push(performance.now() - start);
+    BotClient.prototype['startTitleFlames'](flames);
+    clock.advanceTimersByTime(60_000);
+    flames.close();
+    expect(draws).toEqual(Array.from({ length: 60 }, (_, i) => batchMs + i * 1000));
+    expect(callbacks).toBe(draws.length);
+});
+
 test('unparking after a hidden tick waits for the next rail tick', () => {
     const gate = new RenderGateController();
     gate.setMode('hidden');
@@ -199,6 +240,22 @@ test('a late focused callback resumes on the original tick grid', () => {
     clock.advanceTimersByTime(140 - lateness);
     flames.close();
     expect(draws).toEqual([83, 105, 140]);
+});
+
+test('a rail returns to its tick grid when coalescing ends', () => {
+    const start = Date.now();
+    let lateness = 0;
+    spyOn(performance, 'now').mockImplementation(() => Date.now() - start + lateness);
+    const flames = new TitleFlames([]);
+    const draws: number[] = [];
+    flames.renderFlames = () => draws.push(performance.now());
+    RenderGate.setMode('background');
+    RenderGate.backgroundIntervalMs = 1000;
+    BotClient.prototype['startTitleFlames'](flames);
+    lateness = 965;
+    clock.advanceTimersByTime(3045 - lateness);
+    flames.close();
+    expect(draws).toEqual([1000, 2030, 3045]);
 });
 
 test('unloading while title progress is pending leaves no animation timer', async () => {

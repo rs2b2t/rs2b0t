@@ -122,36 +122,47 @@ export default class TitleFlames {
         const startedAt = performance.now();
         let timer: ReturnType<typeof setTimeout> | undefined;
         let dueAt = Infinity;
-        const schedule = () => {
-            const now = performance.now();
-            const delay = gate.delayUntilDraw(now, lastDrawAt);
-            if (delay === 0 && now >= dueAt) return;
-            clearTimeout(timer);
+        let coalesced = false;
+        const schedule = (now: number, delay: number) => {
             dueAt = Infinity;
             if (!Number.isFinite(delay)) return;
             const elapsed = now - startedAt;
             const nextTick = Math.floor(elapsed / FLAME_TICK_MS) + 1;
-            const eligibleTick = Math.ceil((elapsed + delay) / FLAME_TICK_MS);
+            const deadline = (elapsed + delay) / FLAME_TICK_MS;
+            // Why: a coalesced timer can deliver the preceding tick at the rail deadline.
+            const eligibleTick = coalesced ? Math.floor(deadline) : Math.ceil(deadline);
             dueAt = startedAt + Math.max(nextTick, eligibleTick) * FLAME_TICK_MS;
             timer = setTimeout(tick, Math.min(0x7fffffff, Math.ceil(dueAt - now)));
         };
         const tick = () => {
-            dueAt = Infinity;
             const now = performance.now();
-            if (gate.delayUntilDraw(now, lastDrawAt) === 0) {
+            const delay = gate.delayUntilDraw(now, lastDrawAt);
+            if (delay === 0) {
+                coalesced ||= now > dueAt;
                 lastDrawAt = now;
-                schedule();
+                schedule(now, gate.delayUntilDraw(now, lastDrawAt));
                 this.renderFlames();
             } else {
-                schedule();
+                coalesced = false;
+                schedule(now, delay);
             }
         };
-        const unsubscribe = gate.onChange(schedule);
+        const reschedule = () => {
+            const now = performance.now();
+            const delay = gate.delayUntilDraw(now, lastDrawAt);
+            if (delay === 0 && now >= dueAt) return;
+            clearTimeout(timer);
+            const elapsed = now - startedAt;
+            const onTick = elapsed >= FLAME_TICK_MS && elapsed % FLAME_TICK_MS === 0;
+            if (delay === 0 && Number.isFinite(dueAt) && onTick && now > lastDrawAt) tick();
+            else schedule(now, delay);
+        };
+        const unsubscribe = gate.onChange(reschedule);
         this.stopPlayback = () => {
             unsubscribe();
             clearTimeout(timer);
         };
-        schedule();
+        reschedule();
     }
 
     close(): void {
