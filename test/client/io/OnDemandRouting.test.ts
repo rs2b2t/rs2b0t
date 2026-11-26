@@ -7,6 +7,7 @@ import PixFont from '#/client/graphics/PixFont.js';
 import Database from '#/client/io/Database.js';
 import type JagFile from '#/client/io/JagFile.js';
 import OnDemand from '#/client/io/OnDemand.js';
+import { installWallTrafficChannel } from '#/client/io/TrafficChannel.js';
 import { Client } from '#/client/shell/Client.js';
 
 const originalWorker = globalThis.Worker;
@@ -28,6 +29,7 @@ const versionlist = {
 } as JagFile;
 
 class WorkerFixture {
+    constructor(_url: URL, readonly options: WorkerOptions) {}
     postMessage(_message: { type: string; id?: number }) {}
     terminate() {}
 }
@@ -40,6 +42,18 @@ function failWorker(loader: OnDemand) {
     const worker = loader.worker!;
     worker.onerror!(new ErrorEvent('error', { message: 'Synthetic module load failure' }));
 }
+
+test('cache workers inherit the traffic channel of the frame that starts them', () => {
+    const wall = document.implementation.createHTMLDocument();
+    const frame = wall.createElement('iframe');
+    const name = installWallTrafficChannel(wall);
+    Object.defineProperty(window, 'frameElement', { configurable: true, value: frame });
+    try {
+        expect(loaderFixture().worker).toMatchObject({ options: { type: 'module', name } });
+    } finally {
+        Reflect.deleteProperty(window, 'frameElement');
+    }
+});
 
 test('cache worker receives the selected frame target instead of the wall origin', () => {
     const previousTarget = { ...TARGET };
