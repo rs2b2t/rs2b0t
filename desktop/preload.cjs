@@ -5,12 +5,31 @@ const listeners = new Set();
 function accept(next) {
     if (!next || next.version <= snapshot.version) return;
     const previous = snapshot.data;
-    snapshot = next;
-    const changes = [...new Set([...Object.keys(previous), ...Object.keys(next.data)])]
-        .filter(key => previous[key] !== next.data[key]);
-    if (listeners.size) queueMicrotask(() => {
-        for (const key of changes) {
-            for (const callback of listeners) callback(key, previous[key] ?? null, next.data[key] ?? null);
+    const events = [];
+    if (next.changes) {
+        if (snapshot.version < 0 || next.version !== snapshot.version + 1) return call('snapshot');
+        for (const [key, value] of Object.entries(next.changes)) {
+            if (listeners.size) events.push([key, previous[key] ?? null, value]);
+            if (value === null) delete previous[key];
+            else previous[key] = value;
+        }
+        for (const key of next.append ?? []) {
+            const value = previous[key];
+            delete previous[key];
+            previous[key] = value;
+        }
+        snapshot.version = next.version;
+    } else {
+        if (listeners.size) {
+            for (const key of new Set([...Object.keys(previous), ...Object.keys(next.data)])) {
+                if (previous[key] !== next.data[key]) events.push([key, previous[key] ?? null, next.data[key] ?? null]);
+            }
+        }
+        snapshot = next;
+    }
+    if (events.length) queueMicrotask(() => {
+        for (const event of events) {
+            for (const callback of listeners) callback(...event);
         }
     });
 }

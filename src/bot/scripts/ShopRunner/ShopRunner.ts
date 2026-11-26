@@ -16,7 +16,7 @@ import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import { talkThrough } from '../../api/ai/quests/exec/primitives.js';
 import { buyoutPlan } from '../../api/shop/BuyoutLogic.js';
-import { clusterEligible, clusterSellsChosen, estimateClusterGp, nextCluster, withdrawFor } from './ShopRunnerRingLogic.js';
+import { chosenShopItem, clusterEligible, clusterSellsChosen, estimateClusterGp, nextCluster, withdrawFor } from './ShopRunnerRingLogic.js';
 import { SHOP_DB } from '../../data/shopdb.js';
 import { ROUTE } from './ShopRunnerRoute.js';
 import type { AccountView, NavPointLike, Route } from '../../api/shop/types.js';
@@ -262,11 +262,7 @@ class RunCluster implements Task {
                 continue;
             }
             const rec = SHOP_DB[shop.shopId];
-            const wanted = shop.buys.some(b => {
-                const item = rec?.items.find(i => i.obj === b.obj);
-                return item !== undefined && bot.chosen.has(item.name.toLowerCase());
-            });
-            if (!rec || !wanted) {
+            if (!rec || !shop.buys.some(b => chosenShopItem(rec, b.obj, bot.chosen))) {
                 continue;
             }
             bot.status = `buying at ${shop.shopId}`;
