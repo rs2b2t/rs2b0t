@@ -2,37 +2,14 @@ import { afterEach, describe, expect, test } from 'bun:test';
 
 import { reader, resetObjCatalog } from '#/bot/adapter/ClientAdapter.js';
 import ObjType from '#/client/config/ObjType.js';
+import { installObjTypeTable } from '../fixtures/obj-type-table.js';
 
 const realList = ObjType.list;
 const realCount = ObjType.numDefinitions;
 
 function stub(entries: Record<number, Partial<ObjType>>): void {
-    ObjType.numDefinitions = Math.max(...Object.keys(entries).map(Number)) + 1;
-    ObjType.list = ((id: number) => {
-        const base = new ObjType();
-        base.id = id;
-        base.name = null;
-        base.cost = 1;
-        base.certlink = -1;
-        base.certtemplate = -1;
-        base.countobj = null;
-        return Object.assign(base, entries[id] ?? {});
-    }) as typeof ObjType.list;
+    installObjTypeTable(entries);
     resetObjCatalog();
-}
-
-/** Re-point the client table without clearing the adapter's cache, to prove it re-reads on its own. */
-function stubKeepingCache(entries: Record<number, Partial<ObjType>>): void {
-    ObjType.numDefinitions = Math.max(...Object.keys(entries).map(Number)) + 1;
-    ObjType.list = ((id: number) => {
-        const base = new ObjType();
-        base.id = id;
-        base.name = null;
-        base.cost = 1;
-        base.certlink = -1;
-        base.certtemplate = -1;
-        return Object.assign(base, entries[id] ?? {});
-    }) as typeof ObjType.list;
 }
 
 afterEach(() => {
@@ -71,7 +48,7 @@ describe('reader.objCatalog', () => {
 
         expect(reader.objCatalog()).toEqual([]);
 
-        stubKeepingCache({ 561: { name: 'Nature rune', cost: 180, stackable: true } });
+        installObjTypeTable({ 561: { name: 'Nature rune', cost: 180, stackable: true } });
         expect(reader.objCatalog().map(r => r.name)).toEqual(['Nature rune']);
     });
 
