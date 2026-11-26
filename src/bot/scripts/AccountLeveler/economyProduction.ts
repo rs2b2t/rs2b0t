@@ -16,12 +16,6 @@ import { bankedStockOf, requirementKey, stockOf, type ActivityPlan, type Leveler
 
 const OBJECTIVE = 'economy';
 const gearNames = [...new Set(ITEM_DB.filter(item => item.slot).map(item => item.name.toLowerCase()))];
-const potionIds: Readonly<Record<string, number>> = {
-    'Guam leaf/Eye of newt': 121, 'Marrentill/Unicorn horn dust': 175, 'Tarromin/Limpwurt root': 115,
-    "Harralander/Red spiders' eggs": 127, 'Ranarr weed/White berries': 133, 'Ranarr weed/Snape grass': 139,
-    'Irit leaf/Eye of newt': 145, 'Irit leaf/Unicorn horn dust': 181, 'Kwuarm/Limpwurt root': 157,
-    'Cadantine/White berries': 163, 'Lantadyme/Dragon scale dust': 2454
-};
 const tool = (item: string): Requirement => ({ item, count: 1, carry: 1 });
 const material = (item: string, count = 1): Requirement => ({ item, count });
 
@@ -103,9 +97,8 @@ export function supplierProduction(snapshot: LevelerSnapshot, memory: SessionMem
         }
         for (const recipe of POTIONS) {
             if (s.levels.herblore < recipe.level) continue;
-            const id = potionIds[recipe.herb + '/' + recipe.secondary];
-            const item = ITEM_DB.find(entry => entry.id === id)?.name;
-            if (item) add(bankJob('PotionMaker', item, { herb: recipe.herb, secondary: recipe.secondary, outputId: id },
+            const item = ITEM_DB.find(entry => entry.id === recipe.outputId)?.name;
+            if (item) add(bankJob('PotionMaker', item, { herb: recipe.herb, secondary: recipe.secondary, outputId: recipe.outputId },
                 [material(recipe.herb), material(recipe.secondary), material('Vial of water')]), item, productionTier(recipe.level));
         }
     }

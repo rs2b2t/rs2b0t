@@ -97,17 +97,17 @@ export function nextMilestone(s: LevelerSnapshot, skill: string): number | undef
 }
 
 export const POTIONS = [
-    { level: 3, herb: 'Guam leaf', secondary: 'Eye of newt' },
-    { level: 5, herb: 'Marrentill', secondary: 'Unicorn horn dust' },
-    { level: 12, herb: 'Tarromin', secondary: 'Limpwurt root' },
-    { level: 22, herb: 'Harralander', secondary: "Red spiders' eggs" },
-    { level: 30, herb: 'Ranarr weed', secondary: 'White berries' },
-    { level: 38, herb: 'Ranarr weed', secondary: 'Snape grass' },
-    { level: 45, herb: 'Irit leaf', secondary: 'Eye of newt' },
-    { level: 48, herb: 'Irit leaf', secondary: 'Unicorn horn dust' },
-    { level: 55, herb: 'Kwuarm', secondary: 'Limpwurt root' },
-    { level: 66, herb: 'Cadantine', secondary: 'White berries' },
-    { level: 69, herb: 'Lantadyme', secondary: 'Dragon scale dust' }
+    { level: 3, herb: 'Guam leaf', secondary: 'Eye of newt', outputId: 121 },
+    { level: 5, herb: 'Marrentill', secondary: 'Unicorn horn dust', outputId: 175 },
+    { level: 12, herb: 'Tarromin', secondary: 'Limpwurt root', outputId: 115 },
+    { level: 22, herb: 'Harralander', secondary: "Red spiders' eggs", outputId: 127 },
+    { level: 30, herb: 'Ranarr weed', secondary: 'White berries', outputId: 133 },
+    { level: 38, herb: 'Ranarr weed', secondary: 'Snape grass', outputId: 139 },
+    { level: 45, herb: 'Irit leaf', secondary: 'Eye of newt', outputId: 145 },
+    { level: 48, herb: 'Irit leaf', secondary: 'Unicorn horn dust', outputId: 181 },
+    { level: 55, herb: 'Kwuarm', secondary: 'Limpwurt root', outputId: 157 },
+    { level: 66, herb: 'Cadantine', secondary: 'White berries', outputId: 163 },
+    { level: 69, herb: 'Lantadyme', secondary: 'Dragon scale dust', outputId: 2454 }
 ] as const;
 
 export function smithProduct(level: number, metal: string): string {

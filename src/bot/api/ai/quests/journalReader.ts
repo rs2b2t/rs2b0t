@@ -15,16 +15,17 @@ export async function readQuestJournal<T>(
     stages: { COMPLETE: number; NOT_STARTED: number },
     parse: (lines: string[]) => T | undefined,
     atStage: (stage: number) => T,
-    cache?: JournalCache<T>
+    cache?: JournalCache<T>,
+    { readNotStarted = false } = {}
 ): Promise<T | undefined> {
     const status = Quests.status(name);
     if (status === 'complete') return atStage(stages.COMPLETE);
-    if (status === 'notStarted') return atStage(stages.NOT_STARTED);
-    if (status !== 'inProgress') return undefined;
+    if (status === 'notStarted' && !readNotStarted) return atStage(stages.NOT_STARTED);
+    if (status !== 'inProgress' && status !== 'notStarted') return undefined;
 
     const result = parse(await Quests.journal(name));
     // Why: the journal body is a main modal, and leaving it up makes every later read come back empty.
     await Modals.closeIfOpen();
     if (cache && result !== undefined) cache.lastGood = result;
-    return result ?? cache?.lastGood;
+    return result ?? (status === 'notStarted' ? atStage(stages.NOT_STARTED) : cache?.lastGood);
 }
