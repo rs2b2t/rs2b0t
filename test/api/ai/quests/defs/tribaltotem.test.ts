@@ -1,4 +1,4 @@
-import { customName, itemCounts } from '../../../../lib/questSteps.js';
+import { customName } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 
 import {
@@ -11,7 +11,8 @@ import {
     parseTribalTotemJournal,
     tribaltotem
 } from '#/bot/api/ai/quests/defs/tribaltotem.js';
-import type { QuestProgress, QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import { progressSnapshot, type ProgressSnapshotOptions } from './progress-snapshot.fixture.js';
 
 const NOT_STARTED =
     '@dbl@I can start this quest by speaking to @dre@Kangai Mau@dbl@ in @dre@the Shrimp & Parrot@dbl@ restaurant in @dre@Brimhaven|'
@@ -55,35 +56,19 @@ const COMPLETE =
     + '@str@After bypassing the traps and security inside the|@str@mansion I was able to reclaim the totem, and take it|'
     + '@str@back to Kangai Mau, who rewarded me for all of my help.||@red@QUEST COMPLETE!';
 
-interface SnapshotOptions {
-    journal?: QuestSnapshot['journal'];
-    stage?: number;
+interface SnapshotOptions extends ProgressSnapshotOptions {
     combo?: boolean;
-    invIds?: number[];
-    tile?: { x: number; z: number; level: number } | null;
-    progress?: QuestProgress | undefined;
+    tile?: QuestSnapshot['tile'];
 }
 
 function snap(options: SnapshotOptions = {}): QuestSnapshot {
-    const progress =
-        'progress' in options
-            ? options.progress
-            : { stage: options.stage ?? TOTEM_STAGE.STARTED, flags: new Set(options.combo === true ? ['combo'] : []) };
-    return {
-        journal: options.journal ?? 'inProgress',
-        inv: new Map(),
-        invIds: itemCounts(options.invIds ?? []),
-        worn: new Set(),
-        noProgress: 0,
-        bankCoins: 2_000_000,
-        stage: progress?.stage,
-        progress,
-        bank: new Map(),
-        bankKnown: true,
-        // Why: the mansion legs branch on where the bot is standing, so the default snapshot is inside it.
-        tile: options.tile === undefined ? { x: 2638, z: 3321, level: 0 } : options.tile,
-        freeSlots: 28
-    };
+    const snapshot = progressSnapshot(options, () => ({
+        stage: options.stage ?? TOTEM_STAGE.STARTED,
+        flags: new Set(options.combo === true ? ['combo'] : [])
+    }));
+    // Why: the mansion legs branch on where the bot is standing, so the default snapshot is inside it.
+    snapshot.tile = options.tile === undefined ? { x: 2638, z: 3321, level: 0 } : options.tile;
+    return snapshot;
 }
 
 function npcName(step: QuestStep): string | null {

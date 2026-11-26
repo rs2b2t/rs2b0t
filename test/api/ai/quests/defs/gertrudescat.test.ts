@@ -1,4 +1,4 @@
-import { customName, itemCounts, nameCounts } from '../../../../lib/questSteps.js';
+import { customName } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 
 import {
@@ -8,7 +8,8 @@ import {
     gertrudescat,
     parseGertrudesCatJournal
 } from '#/bot/api/ai/quests/defs/gertrudescat.js';
-import type { QuestProgress, QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+import { progressSnapshot, type ProgressSnapshotOptions } from './progress-snapshot.fixture.js';
 
 const ACCEPTED = "@str@I accepted the challenge of finding Gertrude's lost cat.";
 const SPOKE = "@str@I spoke to Shilop, Gertrude's Son.";
@@ -32,33 +33,17 @@ const JOURNAL: Record<number, string> = {
         '@str@I helped Gertrude to find her lost cat,|@str@I fed it and returned her missing kitten,|@str@Gertrude gave me my very own pet for a reward.||@red@QUEST COMPLETE!'
 };
 
-interface SnapshotOptions {
-    journal?: QuestSnapshot['journal'];
-    stage?: number;
-    inv?: string[];
-    invIds?: number[];
+interface SnapshotOptions extends ProgressSnapshotOptions {
     coins?: number;
-    progress?: QuestProgress | undefined;
 }
 
 function snap(options: SnapshotOptions = {}): QuestSnapshot {
-    const progress =
-        'progress' in options ? options.progress : { stage: options.stage ?? FLUFFS_STAGE.STARTED, flags: new Set<string>() };
-    const inv = nameCounts(options.inv ?? []);
-    inv.set('coins', options.coins ?? 1000);
-    return {
-        journal: options.journal ?? 'inProgress',
-        inv,
-        invIds: itemCounts(options.invIds ?? []),
-        worn: new Set(),
-        noProgress: 0,
-        bankCoins: 2_000_000,
-        stage: progress?.stage,
-        progress,
-        bank: new Map(),
-        bankKnown: true,
-        freeSlots: 28
-    };
+    const snapshot = progressSnapshot(options, () => ({
+        stage: options.stage ?? FLUFFS_STAGE.STARTED,
+        flags: new Set()
+    }));
+    snapshot.inv.set('coins', options.coins ?? 1000);
+    return snapshot;
 }
 
 describe("Gertrude's Cat journal parsing", () => {
