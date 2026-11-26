@@ -36,9 +36,8 @@ describe('TrafficCollector', () => {
                     const frame = frameFor(walls[wall]);
                     frames.push(frame);
                     for (const worker of [false, true]) {
-                        let channel: MessagePort;
                         const { port } = openWorkerTrafficPort(() => channel.close(), frame)!;
-                        channel = worker ? structuredClone(port, { transfer: [port] }) : port;
+                        const channel = worker ? structuredClone(port, { transfer: [port] }) : port;
                         channel.onmessage = () => { peers++; };
                         let heartbeat: () => void;
                         const meter = new TrafficMeter({

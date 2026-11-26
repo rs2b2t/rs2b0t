@@ -100,21 +100,18 @@ test('reload drains a transferred worker heartbeat and rejects its later posts',
     const collector = new TrafficCollector({ wall });
     const posted = new Int32Array(new SharedArrayBuffer(4));
     const commands = new ThreadChannel();
-    let thread!: Thread;
-    class CacheWorker extends Thread {
-        constructor() {
-            super(`
-                const { parentPort, workerData: { posted, commands } } = require('node:worker_threads');
-                parentPort.once('message', ({ trafficPort }) => {
-                    const send = bytes => trafficPort.postMessage({ type: 'rs2b0t:traffic', status: 'available', receivedBytes: bytes, sentBytes: 0 });
-                    send(11);
-                    Atomics.store(posted, 0, 1);
-                    Atomics.notify(posted, 0);
-                    commands.on('message', bytes => { send(bytes); parentPort.postMessage('sent'); });
-                });
-            `, { eval: true, workerData: { posted, commands: commands.port2 }, transferList: [commands.port2] });
-            thread = this;
-        }
+    const thread = new Thread(`
+        const { parentPort, workerData: { posted, commands } } = require('node:worker_threads');
+        parentPort.once('message', ({ trafficPort }) => {
+            const send = bytes => trafficPort.postMessage({ type: 'rs2b0t:traffic', status: 'available', receivedBytes: bytes, sentBytes: 0 });
+            send(11);
+            Atomics.store(posted, 0, 1);
+            Atomics.notify(posted, 0);
+            commands.on('message', bytes => { send(bytes); parentPort.postMessage('sent'); });
+        });
+    `, { eval: true, workerData: { posted, commands: commands.port2 }, transferList: [commands.port2] });
+    function CacheWorker() {
+        return thread;
     }
     Reflect.set(globalThis, 'Worker', CacheWorker);
     Object.defineProperty(window, 'frameElement', { configurable: true, value: wall.createElement('iframe') });
@@ -138,7 +135,7 @@ test('reload drains a transferred worker heartbeat and rejects its later posts',
         loader.stop();
     } finally {
         commands.port1.close();
-        if (thread && thread.threadId !== -1) await thread.terminate();
+        if (thread.threadId !== -1) await thread.terminate();
         replacement?.close();
         Reflect.deleteProperty(window, 'frameElement');
         collector.close();
