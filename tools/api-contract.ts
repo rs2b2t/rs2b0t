@@ -141,7 +141,7 @@ export function packageExports(js = readFileSync(JS_FILE, 'utf8')): string[] {
  */
 export const PUBLISHED_API_MEMBERS = {
     Prayer: ['points', 'max', 'full', 'known', 'available', 'active', 'set', 'clear'],
-    Reachability: ['canReach', 'canStep', 'lineOfSight', 'walkable', 'probeable', 'arrivalProbe'],
+    Reachability: ['canReach', 'canStep', 'lineOfSight', 'walkable', 'probeable', 'routeProbe', 'arrivalProbe'],
     SettingsStore: ['saved', 'save', 'onChange', 'displayString', 'resolve', 'globalBag', 'isUrlOverride', 'clear']
 } as const;
 

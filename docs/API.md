@@ -29,7 +29,7 @@ was built for.
 | Root            | Members                                                                                        |
 | --------------- | ---------------------------------------------------------------------------------------------- |
 | `Prayer`        | `points`, `max`, `full`, `known`, `available`, `active`, `set`, `clear`                        |
-| `Reachability`  | `canReach`, `canStep`, `lineOfSight`, `walkable`, `probeable`, `arrivalProbe`                  |
+| `Reachability`  | `canReach`, `canStep`, `lineOfSight`, `walkable`, `probeable`, `routeProbe`, `arrivalProbe`                  |
 | `SettingsStore` | `saved`, `save`, `onChange`, `displayString`, `resolve`, `globalBag`, `isUrlOverride`, `clear` |
 
 `Reachability` uses the package's `WorldTile`, `ReachOptions`, and `ArrivalProbe`

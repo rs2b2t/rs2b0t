@@ -873,6 +873,7 @@ export const Reachability: {
     lineOfSight(from: WorldTile, to: WorldTile, size?: number): boolean;
     walkable(dest: WorldTile): boolean;
     probeable(dest: WorldTile): boolean;
+    routeProbe(me: WorldTile, maxSteps: number): (dest: WorldTile) => boolean;
     arrivalProbe(): ArrivalProbe;
 };
 
