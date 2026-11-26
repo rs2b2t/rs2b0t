@@ -1,8 +1,10 @@
 // docs/QUESTS.md
+import { customStep, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Game } from '../../../../game/Game.js';
 import { Equipment } from '../../../../equipment/Equipment.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { QUESTS } from '../../data/quests.js';
+import { heldId as held } from '../../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { talkStrict } from '../../exec/primitives.js';
 import {
@@ -63,10 +65,6 @@ const WARRIOR_FOOD_FLOOR = 2;
 // Why: the lava bridge weighs the pack, and stackables are free, so the trim is about the non-stackables the surface legs leave behind, the yew shortbow (3lb) and the iron axe most of all.
 const BRIDGE_KEEP = ['coins', 'candle', 'tinderbox', 'knife', 'pendant', 'boots of lightness', 'ice arrows', 'lever', ...IKOV_FOODS];
 const BRIDGE_WORN = new Set(['boots of lightness', 'pendant of lucien']);
-
-function held(snap: QuestSnapshot, id: number): number {
-    return snap.invIds?.get(id) ?? 0;
-}
 
 /** Bank whatever the crossing cannot afford to carry, before the bot is underground with no booth. */
 function bridgeTrimStep(snap: QuestSnapshot): QuestStep | null {
@@ -137,7 +135,7 @@ function warriorStep(snap: QuestSnapshot): QuestStep {
         ?? usable.find(bow => held(snap, bow.id) > 0) ?? usable[0];
     if (!bow) {
         const first = owned[0];
-        return { kind: 'wait', reason: first ? `need Ranged ${first.ranged} to wield ${first.name}` : 'need a strung yew or magic bow' };
+        return waitStep(first ? `need Ranged ${first.ranged} to wield ${first.name}` : 'need a strung yew or magic bow');
     }
     if (!snap.wornIds?.has(bow.id)) {
         const withdraw = withdrawFor(snap, [{ ...bow, qty: 1 }]);
@@ -187,30 +185,30 @@ export function decide(snap: QuestSnapshot, fletchingLevel?: number): QuestStep 
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     const stage = snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'Temple of Ikov journal stage unavailable' };
+        return waitStep('Temple of Ikov journal stage unavailable');
     }
     if (stage === IKOV_STAGE.NOT_STARTED) {
-        return { kind: 'talk', stop: LUCIEN_START };
+        return talkTo(LUCIEN_START);
     }
     if (!snap.bankKnown) {
         return { kind: 'scanBank' };
     }
 
     if (stage >= IKOV_STAGE.HELPING_ARMADYL) {
-        return { kind: 'custom', name: 'leave the temple and banish Lucien', run: finishForArmadyl };
+        return customStep('leave the temple and banish Lucien', finishForArmadyl);
     }
 
     if (stage >= IKOV_STAGE.PAID_WINELDA) {
-        return { kind: 'custom', name: 'join the Guardians of Armadyl', run: joinTheGuardians };
+        return customStep('join the Guardians of Armadyl', joinTheGuardians);
     }
 
     // Why: Lucien re-issues the pendant and the Door of Fear is shut without it; this sits below the stage-60 return so it can't fire on the far side of the lava, which has no walk back.
     if (!haveFearPendant(snap)) {
-        return { kind: 'talk', stop: LUCIEN_START };
+        return talkTo(LUCIEN_START);
     }
     const pendant = withdrawFor(snap, [{ name: IKOV_NAME.PENDANT_LUCIEN, id: IKOV_OBJ.PENDANT_LUCIEN, qty: 1 }]);
     if (pendant && snap.wornIds?.has(IKOV_OBJ.PENDANT_LUCIEN) !== true) {
@@ -234,11 +232,11 @@ export function decide(snap: QuestSnapshot, fletchingLevel?: number): QuestStep 
         if (carry) {
             return carry;
         }
-        return { kind: 'custom', name: 'pay Winelda her twenty limpwurt roots', run: talkToWinelda };
+        return customStep('pay Winelda her twenty limpwurt roots', talkToWinelda);
     }
 
     if (stage >= IKOV_STAGE.KILLED_WARRIOR) {
-        return { kind: 'custom', name: 'ask Winelda for the ferry across the lava', run: talkToWinelda };
+        return customStep('ask Winelda for the ferry across the lava', talkToWinelda);
     }
 
     // Why: the candle only lights the stairs down to the boots, so it leaves the kit once the boots are had.
@@ -264,18 +262,18 @@ export function decide(snap: QuestSnapshot, fletchingLevel?: number): QuestStep 
             if (boots) {
                 return boots;
             }
-            return { kind: 'custom', name: 'unlock the south gate', run: unlockSouthGate };
+            return customStep('unlock the south gate', unlockSouthGate);
         }
         // Why: past the lever the ice cavern needs no crossing, so this is the first leg that can wear anything, and 9 level-61 ice spiders stand on the circuit.
         const armour = rangedArmourStep(snap);
         if (armour) {
             return armour;
         }
-        return { kind: 'custom', name: 'stock ice arrows from the temple chests', run: stockIceArrows };
+        return customStep('stock ice arrows from the temple chests', stockIceArrows);
     }
 
     if (stage < IKOV_STAGE.PULLED_LEVER) {
-        return { kind: 'custom', name: 'disarm and pull the trap lever', run: pullTrapLever };
+        return customStep('disarm and pull the trap lever', pullTrapLever);
     }
 
     return warriorStep(snap);

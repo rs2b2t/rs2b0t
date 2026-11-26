@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 
 export const SHILO_QUEST = 'Shilo Village';
@@ -76,13 +75,6 @@ export function parseShiloJournal(lines: readonly string[] | string): QuestProgr
     return hit ? { stage: hit[1], flags: readFlags(text) } : undefined;
 }
 
-export async function readShiloProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(SHILO_QUEST);
-    if (status === 'complete') return { stage: SV_STAGE.COMPLETE, flags: new Set() };
-    if (status === 'notStarted') return { stage: SV_STAGE.NOT_STARTED, flags: new Set() };
-    if (status !== 'inProgress') return undefined;
-
-    const progress = parseShiloJournal(await Quests.journal(SHILO_QUEST));
-    await Modals.closeIfOpen();
-    return progress;
+export function readShiloProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(SHILO_QUEST, SV_STAGE, parseShiloJournal, questProgressAt);
 }

@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal, type JournalCache } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { GRAIL_NAME } from './areas.js';
 
@@ -42,18 +41,8 @@ export function parseHolyGrailJournal(lines: readonly string[] | string): QuestP
 }
 
 /** A failed read doesn't mean the quest went backwards. */
-let lastGood: QuestProgress | undefined;
+const cache: JournalCache<QuestProgress> = {};
 
-export async function readHolyGrailProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(GRAIL_NAME);
-    if (status === 'complete') { return { stage: GRAIL_STAGE.COMPLETE, flags: new Set() }; }
-    if (status === 'notStarted') { return { stage: GRAIL_STAGE.NOT_STARTED, flags: new Set() }; }
-    if (status !== 'inProgress') { return undefined; }
-
-    const progress = parseHolyGrailJournal(await Quests.journal(GRAIL_NAME));
-    await Modals.closeIfOpen();
-    if (progress) {
-        lastGood = progress;
-    }
-    return progress ?? lastGood;
+export function readHolyGrailProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(GRAIL_NAME, GRAIL_STAGE, parseHolyGrailJournal, questProgressAt, cache);
 }

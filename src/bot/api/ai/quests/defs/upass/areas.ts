@@ -1,6 +1,15 @@
 import Tile from '../../../../../geometry/Tile.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 
+export {
+    bankedItem as banked,
+    countHeldItems as countHeld,
+    heldItem as held,
+    heldOrBankedItem as owned,
+    heldOrWornItem as carried,
+    wornItem as worn
+} from '../../engine/snapshotItems.js';
+
 export interface UpassItem {
     id: number;
     name: string;
@@ -294,31 +303,6 @@ export function upassArea(tile: QuestSnapshot['tile']): UpassArea {
     }
     // Why: West Ardougne is sealed behind the wall with the Plague City sewer pipe the only way in, so it's its own region.
     return level === 0 && x >= 2433 && x <= 2556 && z >= 3266 && z <= 3334 ? 'westardougne' : 'mainland';
-}
-
-export function held(snap: QuestSnapshot, item: UpassItem): number {
-    return snap.invIds?.get(item.id) ?? 0;
-}
-
-export function banked(snap: QuestSnapshot, item: UpassItem): number {
-    return snap.bankIds?.get(item.id) ?? 0;
-}
-
-export function owned(snap: QuestSnapshot, item: UpassItem): number {
-    return held(snap, item) + banked(snap, item);
-}
-
-export function worn(snap: QuestSnapshot, item: UpassItem): boolean {
-    return snap.wornIds?.has(item.id) ?? false;
-}
-
-export function carried(snap: QuestSnapshot, item: UpassItem): number {
-    return held(snap, item) + (worn(snap, item) ? 1 : 0);
-}
-
-/** How many of a set the pack holds; the orbs, badges and amulets each share a display name. */
-export function countHeld(snap: QuestSnapshot, items: readonly UpassItem[]): number {
-    return items.filter(item => held(snap, item) > 0).length;
 }
 
 /** The trapped rectangle of the spiked grid: `inzone(upass_grid_col5, upass_grid_col1 + (1,0,9))`. */

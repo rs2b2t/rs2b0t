@@ -1,3 +1,4 @@
+import { customStep, talkTo } from '../../engine/questSteps.js';
 import type { WorldTile } from '../../../../../adapter/ClientAdapter.js';
 import { Game } from '../../../../game/Game.js';
 import { Locs } from '../../../../locs/Locs.js';
@@ -16,9 +17,9 @@ export function navigatorStep(snap: QuestSnapshot): QuestStep | null {
         return null;
     }
     if (!hasFlag(snap.progress, 'navigator-started')) {
-        return { kind: 'talk', stop: SWENSEN(['Yes']) };
+        return talkTo(SWENSEN(['Yes']));
     }
-    return { kind: 'custom', name: "walk Swensen's maze", run: runMaze };
+    return customStep("walk Swensen's maze", runMaze);
 }
 
 // Why: an attempt that ends before its portal fires leaves us on that portal's stand tile, which is mid-route; reading it as scattered ropes out and throws away every leg won.

@@ -1,6 +1,6 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import { DeathRecovery } from '../../api/tasks/DeathRecovery.js';
@@ -145,7 +145,7 @@ export default class ChickenKiller extends TaskBot {
     private trackedGear: string[] = [];
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         this.leash = this.settings.num('leashRadius', 12);
         this.fightHpGate = this.settings.num('fightHpGate', 45) / 100;

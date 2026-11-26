@@ -2,7 +2,7 @@ import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Paint } from '../../paint/Paint.js';
 import { Skills } from '../../api/skills/Skills.js';
@@ -47,7 +47,7 @@ export default class AgilityBot extends TaskBot {
     private xpAtStart = 0;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         this.course = this.settings
             .str('obstacles', '')

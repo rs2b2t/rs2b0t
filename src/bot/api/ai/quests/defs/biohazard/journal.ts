@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 
 /** `%biohazard`, from quest_biohazard.constant. 8, 9, 11 and 13 are unused. */
@@ -49,18 +48,6 @@ export function parseBiohazardJournal(lines: readonly string[] | string): QuestP
     return hit === undefined ? undefined : { stage: hit[1], flags: new Set() };
 }
 
-export async function readBiohazardProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(BIOHAZARD);
-    if (status === 'complete') {
-        return { stage: BIO_STAGE.COMPLETE, flags: new Set() };
-    }
-    if (status === 'notStarted') {
-        return { stage: BIO_STAGE.NOT_STARTED, flags: new Set() };
-    }
-    if (status !== 'inProgress') {
-        return undefined;
-    }
-    const progress = parseBiohazardJournal(await Quests.journal(BIOHAZARD));
-    await Modals.closeIfOpen();
-    return progress;
+export function readBiohazardProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(BIOHAZARD, BIO_STAGE, parseBiohazardJournal, questProgressAt);
 }

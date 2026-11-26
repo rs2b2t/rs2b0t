@@ -5,7 +5,7 @@ import { Banking } from '../../api/bank/Banking.js';
 import { sortBank, type BankSortResult } from '../../api/bank/bankSort.js';
 import { findQuestJunk, type QuestJunkFinding } from '../../api/bank/bankQuestJunk.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Quests, type QuestStatus } from '../../api/ui/questlog/Quests.js';
 import { Paint } from '../../paint/Paint.js';
@@ -43,7 +43,7 @@ export default class BankSorter extends TaskBot {
     private done = false;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         this.sort = this.settings.bool('sortBank', true);
         this.report = this.settings.bool('reportQuestJunk', true);

@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitStep } from '../../engine/questSteps.js';
 import { hasFlag, type QuestProgress, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { talkThrough } from '../../exec/primitives.js';
 import type { NpcStop } from '../../exec/primitives.js';
@@ -71,27 +72,27 @@ export function merchantStep(snap: QuestSnapshot): QuestStep | null {
         return null;
     }
     if (!hasFlag(snap.progress, 'merchant-started')) {
-        return { kind: 'talk', stop: SIGMUND(['Yes']) };
+        return talkTo(SIGMUND(['Yes']));
     }
 
     const carrying = HANDOVER.find(entry => heldId(snap, entry.id) > 0);
     if (carrying) {
-        return { kind: 'talk', stop: carrying.to(MERCHANT_FIRST) };
+        return talkTo(carrying.to(MERCHANT_FIRST));
     }
 
     const at = merchantAt(snap.progress);
     if (at === undefined) {
-        return { kind: 'custom', name: 'ask the Sailor and then Olaf about the flower', run: openChain };
+        return customStep('ask the Sailor and then Olaf about the flower', openChain);
     }
     if (at === 'thora') {
         return gatherCoins(snap, ASKELADDEN_FEE)
-            ?? { kind: 'talk', stop: ASKELADDEN([...MERCHANT_FIRST, 'Yes']) };
+            ?? talkTo(ASKELADDEN([...MERCHANT_FIRST, 'Yes']));
     }
     const next = ASK[at];
     if (!next) {
-        return { kind: 'wait', reason: `the merchant trial is at an unmapped step '${at}'` };
+        return waitStep(`the merchant trial is at an unmapped step '${at}'`);
     }
-    return { kind: 'talk', stop: next(MERCHANT_FIRST) };
+    return talkTo(next(MERCHANT_FIRST));
 }
 
 // Why: `sigmund_started` and `sigmund_spoke_sailor` render the same journal page, so the 2 openings are one step.

@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { findSceneTarget } from '../exec/prompts.js';
 import { Execution } from '../../../execution/Execution.js';
@@ -13,6 +14,7 @@ import { Npcs } from '../../../npcs/Npcs.js';
 import { Sustain } from '../../../sustain/Sustain.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import { QUESTS } from '../data/quests.js';
+import { bankedName as banked, hasName as held, heldName as heldCount, wornName as worn } from '../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { talkThrough, type NpcStop } from '../exec/primitives.js';
 import { FOOD_FLOAT, QuestFood } from '../food.js';
@@ -125,10 +127,6 @@ export function lostCityArea(tile: QuestSnapshot['tile']): LostCityArea {
     return 'mainland';
 }
 
-const held = (snap: QuestSnapshot, name: string): boolean => (snap.inv.get(name.toLowerCase()) ?? 0) > 0;
-const heldCount = (snap: QuestSnapshot, name: string): number => snap.inv.get(name.toLowerCase()) ?? 0;
-const worn = (snap: QuestSnapshot, name: string): boolean => snap.worn.has(name.toLowerCase());
-const banked = (snap: QuestSnapshot, name: string): number => snap.bank?.get(name.toLowerCase()) ?? 0;
 const hasAxe = (snap: QuestSnapshot): boolean => AXES.some(name => held(snap, name) || worn(snap, name));
 const wornAxe = (snap: QuestSnapshot): boolean => AXES.some(name => worn(snap, name));
 
@@ -166,7 +164,7 @@ function makeAcquisitionSpace(snap: QuestSnapshot, slots: number): QuestStep | n
     const disposable = [...snap.inv.keys()].some(name => !keep.includes(name));
     return disposable
         ? { kind: 'deposit', keep, bank: DRAYNOR_BANK, exactKeep: true }
-        : { kind: 'wait', reason: `need ${slots} free inventory slot${slots === 1 ? '' : 's'} for Lost City items` };
+        : waitStep(`need ${slots} free inventory slot${slots === 1 ? '' : 's'} for Lost City items`);
 }
 
 function sourceKnife(snap: QuestSnapshot): QuestStep | null {
@@ -205,7 +203,7 @@ function sourceMainlandAxe(snap: QuestSnapshot): QuestStep | null {
         if (banked(snap, 'Coins') > 0) {
             return withdraw([{ name: 'Coins', qty: Math.min(1000, banked(snap, 'Coins')) }]);
         }
-        return { kind: 'wait', reason: 'need coins for an axe from Bob' };
+        return waitStep('need coins for an axe from Bob');
     }
     return { kind: 'buy', item: 'Bronze axe', qty: 1, shop: BOB_AXES, estGp: 100 };
 }
@@ -232,7 +230,7 @@ async function unequipAll(_log: (m: string) => void): Promise<boolean> {
 function sourceCombatFood(snap: QuestSnapshot): QuestStep | null {
     const food = selectedFood();
     if (!food) {
-        return { kind: 'wait', reason: 'select a food item for the Lost City fights' };
+        return waitStep('select a food item for the Lost City fights');
     }
     const missing = LOST_CITY_FOOD_TARGET - heldCount(snap, food);
     if (missing <= 0) {
@@ -243,10 +241,7 @@ function sourceCombatFood(snap: QuestSnapshot): QuestStep | null {
     }
     const inBank = banked(snap, food);
     if (inBank < missing) {
-        return {
-            kind: 'wait',
-            reason: `need ${missing - inBank} more ${food} in the bank (${LOST_CITY_FOOD_TARGET} combat food total)`
-        };
+        return waitStep(`need ${missing - inBank} more ${food} in the bank (${LOST_CITY_FOOD_TARGET} combat food total)`);
     }
     const space = makeAcquisitionSpace(snap, missing);
     if (space) {
@@ -476,10 +471,10 @@ function sourceStrikeRunes(snap: QuestSnapshot): QuestStep | null {
 function travelToDungeon(snap: QuestSnapshot): QuestStep {
     const area = lostCityArea(snap.tile);
     if (area === 'entranaShip') {
-        return { kind: 'custom', name: 'disembark on Entrana', run: disembarkEntrana };
+        return customStep('disembark on Entrana', disembarkEntrana);
     }
     if (area === 'entrana') {
-        return { kind: 'custom', name: 'descend the one-way Entrana ladder', run: descendEntrana };
+        return customStep('descend the one-way Entrana ladder', descendEntrana);
     }
     if (area === 'mainland') {
         const knife = sourceKnife(snap);
@@ -490,7 +485,7 @@ function travelToDungeon(snap: QuestSnapshot): QuestStep {
             return { kind: 'deposit', keep: entranaKeep(), bank: DRAYNOR_BANK, exactKeep: true };
         }
         if (snap.worn.size > 0) {
-            return { kind: 'custom', name: 'remove Entrana-restricted equipment', run: unequipAll };
+            return customStep('remove Entrana-restricted equipment', unequipAll);
         }
         const food = sourceCombatFood(snap);
         if (food) {
@@ -500,14 +495,14 @@ function travelToDungeon(snap: QuestSnapshot): QuestStep {
             const runes = sourceStrikeRunes(snap);
             if (runes) return runes;
         }
-        return { kind: 'custom', name: 'sail from Port Sarim to Entrana', run: sailToEntrana };
+        return customStep('sail from Port Sarim to Entrana', sailToEntrana);
     }
-    return { kind: 'wait', reason: 'locating the Entrana route' };
+    return waitStep('locating the Entrana route');
 }
 
 function dungeonWork(snap: QuestSnapshot, stage: number): QuestStep {
     if (!hasAxe(snap)) {
-        return { kind: 'custom', name: 'get an axe from Entrana Zombies', run: acquireDungeonAxe };
+        return customStep('get an axe from Entrana Zombies', acquireDungeonAxe);
     }
     if (!wornAxe(snap)) {
         return { kind: 'equip', item: heldAxe(snap)! };
@@ -518,7 +513,7 @@ function dungeonWork(snap: QuestSnapshot, stage: number): QuestStep {
             run: log => defeatTreeSpirit(log, async () => (await readLostCityStage() ?? 0) >= LOST_CITY_STAGE.SPIRIT_DEFEATED)
         };
     }
-    return { kind: 'custom', name: 'cut a Dramen branch', run: chopBranch };
+    return customStep('cut a Dramen branch', chopBranch);
 }
 
 function localStaffCount(snap: QuestSnapshot): number {
@@ -536,7 +531,7 @@ function knownStaffMaterials(snap: QuestSnapshot): number {
 function craftHeldBranch(snap: QuestSnapshot, area: LostCityArea): QuestStep {
     const knife = sourceKnife(snap);
     if (knife) {
-        return area === 'dungeon' ? { kind: 'custom', name: 'leave the dungeon to replace the Knife', run: leaveDungeon } : knife;
+        return area === 'dungeon' ? customStep('leave the dungeon to replace the Knife', leaveDungeon) : knife;
     }
     return { kind: 'useOn', item: KNIFE, targetKind: 'item', target: BRANCH, anchor: DRAMEN_TREE, product: STAFF };
 }
@@ -559,7 +554,7 @@ function bankedStaffMaterialsToWithdraw(snap: QuestSnapshot): { name: string; qt
 
 function finishFiveStaves(snap: QuestSnapshot, stage: number, area: LostCityArea): QuestStep {
     if (area === 'zanaris') {
-        return { kind: 'wait', reason: 'waiting for Lost City completion' };
+        return waitStep('waiting for Lost City completion');
     }
 
     if (area === 'dungeon') {
@@ -569,7 +564,7 @@ function finishFiveStaves(snap: QuestSnapshot, stage: number, area: LostCityArea
         if (held(snap, BRANCH)) {
             return craftHeldBranch(snap, area);
         }
-        return { kind: 'custom', name: 'exit through the Wilderness portal', run: leaveDungeon };
+        return customStep('exit through the Wilderness portal', leaveDungeon);
     }
 
     if (area !== 'mainland') {
@@ -584,7 +579,7 @@ function finishFiveStaves(snap: QuestSnapshot, stage: number, area: LostCityArea
         if (!worn(snap, STAFF)) {
             return { kind: 'equip', item: STAFF };
         }
-        return { kind: 'custom', name: 'enter Zanaris through the swamp shed', run: enterZanaris };
+        return customStep('enter Zanaris through the swamp shed', enterZanaris);
     }
     if (!snap.bankKnown) {
         return scanBank();
@@ -614,12 +609,12 @@ function finishFiveStaves(snap: QuestSnapshot, stage: number, area: LostCityArea
     }
 
     if (localStaffCount(snap) < LOST_CITY_STAFF_TARGET) {
-        return { kind: 'wait', reason: `recovering ${LOST_CITY_STAFF_TARGET} Dramen staves` };
+        return waitStep(`recovering ${LOST_CITY_STAFF_TARGET} Dramen staves`);
     }
     if (!worn(snap, STAFF)) {
         return { kind: 'equip', item: STAFF };
     }
-    return { kind: 'custom', name: 'enter Zanaris through the swamp shed', run: enterZanaris };
+    return customStep('enter Zanaris through the swamp shed', enterZanaris);
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
@@ -627,23 +622,23 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
 
     const stage = snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'Lost City journal stage unavailable' };
+        return waitStep('Lost City journal stage unavailable');
     }
     const area = lostCityArea(snap.tile);
 
     if (stage === LOST_CITY_STAGE.NOT_STARTED) {
         const tool = mainlandTools(snap);
-        return tool ?? { kind: 'talk', stop: WARRIOR };
+        return tool ?? talkTo(WARRIOR);
     }
 
     if (stage === LOST_CITY_STAGE.STARTED) {
         const tool = mainlandTools(snap);
-        return tool ?? { kind: 'custom', name: 'reveal Shamus and learn about the staff', run: revealAndTalkShamus };
+        return tool ?? customStep('reveal Shamus and learn about the staff', revealAndTalkShamus);
     }
 
     if (stage === LOST_CITY_STAGE.SPOKEN_TO_SHAMUS || stage === LOST_CITY_STAGE.SPIRIT_DEFEATED) {
@@ -657,7 +652,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return finishFiveStaves(snap, stage, area);
     }
 
-    return { kind: 'wait', reason: `unrecognized Lost City stage ${stage}` };
+    return waitStep(`unrecognized Lost City stage ${stage}`);
 }
 
 export const lostcity: QuestModule = {

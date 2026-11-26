@@ -1,3 +1,4 @@
+import { customStep, waitStep } from '../../engine/questSteps.js';
 import { RUNE_LEGS } from '../../../../../data/runeLegs.js';
 import { questRuneLegs } from '../../armour.js';
 import { Skills } from '../../../../skills/Skills.js';
@@ -207,9 +208,9 @@ export function featherStep(snap: QuestSnapshot): QuestStep | null {
     // Why: the island has one way off it and no walkable route home, so a bot standing on it owes the ferry before anything else, a finished feather included.
     if (onEntrana(snap.tile)) {
         if (anywhere(snap, HERO_ID.FEATHER) > 0) {
-            return { kind: 'custom', name: 'sail back from Entrana', run: sailFromEntrana };
+            return customStep('sail back from Entrana', sailFromEntrana);
         }
-        return { kind: 'custom', name: 'take the firebird feather', run: takeFeather };
+        return customStep('take the firebird feather', takeFeather);
     }
     if (anywhere(snap, HERO_ID.FEATHER) > 0) {
         return null;
@@ -219,7 +220,7 @@ export function featherStep(snap: QuestSnapshot): QuestStep | null {
             return { kind: 'withdraw', items: [{ name: HERO_NAMED.ICE_GLOVES, qty: 1, id: HERO_ID.ICE_GLOVES }] };
         }
         const mining = Skills.level('mining');
-        if (mining < 50) return { kind: 'wait', reason: '50 Mining is required to clear the Ice Queen rockslide' };
+        if (mining < 50) return waitStep('50 Mining is required to clear the Ice Queen rockslide');
         const kit = combatKitStep(snap);
         if (kit) {
             return kit;
@@ -229,15 +230,15 @@ export function featherStep(snap: QuestSnapshot): QuestStep | null {
         if (heldFood(snap) < FOOD_TARGET) {
             return { kind: 'withdraw', items: [{ name: foodName(), qty: FOOD_TARGET }] };
         }
-        return { kind: 'custom', name: 'kill the Ice Queen for her gloves', run: killIceQueen };
+        return customStep('kill the Ice Queen for her gloves', killIceQueen);
     }
     if (hasEntranaSpillover(snap)) {
         return { kind: 'deposit', keep: entranaKeep(), bank: HERO_TILE.DRAYNOR_BANK, exactKeep: true };
     }
     if (wearingAnythingElse(snap)) {
-        return { kind: 'custom', name: 'strip the Entrana-restricted equipment', run: unequipAll };
+        return customStep('strip the Entrana-restricted equipment', unequipAll);
     }
-    return { kind: 'custom', name: 'sail from Port Sarim to Entrana', run: sailToEntrana };
+    return customStep('sail from Port Sarim to Entrana', sailToEntrana);
 }
 
 export const ENTRANA_LANDING = new Tile(2834, 3331, 1);

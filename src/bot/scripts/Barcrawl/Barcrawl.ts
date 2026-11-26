@@ -1,6 +1,5 @@
 import { LoopingBot } from '../../api/bot/Bot.js';
-import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Paint } from '../../paint/Paint.js';
@@ -22,7 +21,7 @@ export default class Barcrawl extends LoopingBot {
     private failures = 0;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
         this.log(`Barcrawl — ${BARS.length} bars, about ${BARCRAWL_GP}gp of drinks`);
     }
 

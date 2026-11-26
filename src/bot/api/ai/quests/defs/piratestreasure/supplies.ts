@@ -1,22 +1,13 @@
+import { cachedBankId as bankedId, heldId, wornId } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { PT_ID, PT_NAME, PT_TILE, THESSALIA_SHOP } from './areas.js';
+
+export { bankedId, heldId, wornId };
 
 // Why: the crossing costs 30gp each way and Karamja has no bank, so the float is a threshold; topping up to an exact balance puts a booth trip between every purchase.
 export const COIN_TARGET = 2000;
 export const COIN_LOW = 300;
 const APRON_GP = 50;
-
-export function heldId(snap: QuestSnapshot, id: number): number {
-    return snap.invIds?.get(id) ?? 0;
-}
-
-export function bankedId(snap: QuestSnapshot, id: number): number {
-    return snap.bankIds?.get(id) ?? 0;
-}
-
-export function wornId(snap: QuestSnapshot, id: number): boolean {
-    return snap.wornIds?.has(id) ?? false;
-}
 
 // Why: `ownsInventory` marks the quest provisioned before the engine reads `coinFloat`, so it is inert and this is the only place coins are drawn. The quest is free and nothing on it fights back, so it carries no food.
 

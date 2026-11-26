@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal, type JournalCache } from '../../journalReader.js';
 import { normalizeJournal } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { HERO_NAME } from './areas.js';
 
@@ -79,23 +78,13 @@ export function parseHeroQuestJournal(lines: readonly string[] | string): QuestP
 }
 
 /** A failed read is not evidence the quest went backwards. */
-let lastGood: QuestProgress | undefined;
+const cache: JournalCache<QuestProgress> = {};
 
 /** Test seam: the last good read is memoised for the process. */
 export function resetHeroQuestProgress(): void {
-    lastGood = undefined;
+    cache.lastGood = undefined;
 }
 
-export async function readHeroQuestProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(HERO_NAME);
-    if (status === 'complete') return { stage: HERO_STAGE.COMPLETE, flags: new Set() };
-    if (status === 'notStarted') return { stage: HERO_STAGE.NOT_STARTED, flags: new Set() };
-    if (status !== 'inProgress') return undefined;
-
-    const progress = parseHeroQuestJournal(await Quests.journal(HERO_NAME));
-    await Modals.closeIfOpen();
-    if (progress) {
-        lastGood = progress;
-    }
-    return progress ?? lastGood;
+export function readHeroQuestProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(HERO_NAME, HERO_STAGE, parseHeroQuestJournal, questProgressAt, cache);
 }

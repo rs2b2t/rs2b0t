@@ -8,9 +8,11 @@
 
 //   HEADED=1 bun e2e/temple-of-ikov-250-live.ts --until 100 --tick 200 --minutes 180
 //   HEADED=1 bun e2e/temple-of-ikov-250-live.ts --stage 40 --kit warrior --until 60 --tick 200 --minutes 60
+import { parseQuestArgs, type QuestArgs } from './lib/questArgs.js';
+import { setQuestStats, teleportToQuestStart } from './lib/questHarness.js';
 import type { Page } from 'playwright-core';
 
-import { deployIsolatedClient, launchBrowser } from './lib/harness.js';
+import { deployIsolatedClient, fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -19,62 +21,32 @@ import {
     relog,
     seedItemsToBank,
     startScript,
-    teleTo,
     type BankSeedItem
 } from './tutorial/harness.js';
 
 type Kit = 'none' | 'dungeon' | 'warrior' | 'roots' | 'guardian';
 
-interface Args {
-    base: string;
-    user: string;
-    stage: number;
-    until: number;
+interface Args extends QuestArgs {
     kit: Kit;
     lever: boolean;
-    minutes: number;
-    tickMs: number;
     stats: number;
-    deploy: boolean;
 }
 
-function parse(argv: string[]): Args {
-    const out: Args = {
-        base: process.env.BASE ?? 'http://localhost:8890',
-        user: `ikov${Date.now().toString(36).slice(-7)}`,
-        stage: 0,
-        until: 100,
-        kit: 'none',
-        lever: false,
-        minutes: 180,
-        tickMs: 200,
-        stats: 70,
-        deploy: true
-    };
-    for (let i = 0; i < argv.length; i++) {
-        const flag = argv[i];
-        if (flag === '--no-deploy') { out.deploy = false; continue; }
-        if (flag === '--lever') { out.lever = true; continue; }
-        const value = argv[++i];
-        if (value === undefined) { break; }
-        if (flag === '--base') { out.base = value; }
-        else if (flag === '--user') { out.user = value; }
-        else if (flag === '--stage') { out.stage = Number(value); }
-        else if (flag === '--until') { out.until = Number(value); }
-        else if (flag === '--kit') { out.kit = value as Kit; }
-        else if (flag === '--minutes') { out.minutes = Number(value); }
-        else if (flag === '--tick') { out.tickMs = Number(value); }
-        else if (flag === '--stats') { out.stats = Number(value); }
-    }
-    return out;
-}
-
-const args = parse(process.argv.slice(2));
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
+const args = parseQuestArgs<Args>(process.argv.slice(2), {
+    base: process.env.BASE ?? 'http://localhost:8890',
+    user: `ikov${Date.now().toString(36).slice(-7)}`,
+    stage: 0,
+    until: 100,
+    kit: 'none',
+    lever: false,
+    minutes: 180,
+    tickMs: 200,
+    stats: 70,
+    deploy: true
+}, {
+    switches: { '--lever': { lever: true } },
+    values: { '--kit': value => ({ kit: value as Kit }) }
+});
 
 const QUEST = 'Temple of Ikov';
 const ARDOUGNE_WEST_BANK = { x: 2616, z: 3332, level: 0 };
@@ -115,21 +87,6 @@ KITS.warrior = [
 KITS.roots = [...KITS.warrior, { debugName: 'limpwurt_root', displayName: 'Limpwurt root', qty: 20 }];
 // Why: past Winelda's ferry the shiny key is the only way out, and the McGrubor door is what walks a seeded stage-60 run back in.
 KITS.guardian = [...KITS.roots, { debugName: 'ikov_shinykey', displayName: 'Shiny key', qty: 1 }];
-
-const STATS = [
-    'attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic', 'prayer',
-    'cooking', 'woodcutting', 'fletching', 'fishing', 'firemaking', 'crafting',
-    'smithing', 'mining', 'herblore', 'agility', 'thieving', 'runecraft'
-];
-
-async function setStats(page: Page, level: number): Promise<void> {
-    for (const skill of STATS) {
-        await cheatQuiet(page, `setstat ${skill} ${level}`);
-    }
-    await clearChatDialogs(page, 'level-up dialog(s)');
-    await page.waitForTimeout(1500);
-    await clearChatDialogs(page, 'straggler dialog(s)');
-}
 
 interface Snapshot {
     pos: { x: number; z: number; level: number } | null;
@@ -186,13 +143,7 @@ const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, args.base, args.user, clientPage);
     console.log(`mainland-ready as '${args.user}'`);
@@ -200,7 +151,7 @@ try {
     await cheatQuiet(page, `speed ${args.tickMs}`);
     console.log(`tick rate: ${args.tickMs}ms`);
 
-    await setStats(page, args.stats);
+    await setQuestStats(page, args.stats);
     console.log(`stats: ${args.stats} across the board`);
 
     const seed = [...BASE_SEED, ...KITS[args.kit]];
@@ -222,12 +173,7 @@ try {
         await clearChatDialogs(page, 'post-relog dialog(s)');
     }
 
-    if (!(await teleTo(page, ARDOUGNE_WEST_BANK, 10, 25_000))) {
-        await clearChatDialogs(page, 'pre-tele dialog(s)');
-        if (!(await teleTo(page, ARDOUGNE_WEST_BANK, 10, 25_000))) {
-            fail(`tele to ${ARDOUGNE_WEST_BANK.x},${ARDOUGNE_WEST_BANK.z} did not arrive`);
-        }
-    }
+    await teleportToQuestStart(page, ARDOUGNE_WEST_BANK);
     console.log(`start tile -> ${ARDOUGNE_WEST_BANK.x},${ARDOUGNE_WEST_BANK.z},${ARDOUGNE_WEST_BANK.level}`);
 
     await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', 'ikov'));

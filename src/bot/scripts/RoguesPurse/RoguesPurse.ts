@@ -2,7 +2,7 @@ import { actions } from '../../adapter/ClientAdapter.js';
 import { BANK_LOCATIONS, bankUnlocked, type BankLocation } from '../../api/bank/BankLocations.js';
 import { LoopingBot } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import type Tile from '../../geometry/Tile.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { DeathRecovery } from '../../api/tasks/DeathRecovery.js';
@@ -69,7 +69,7 @@ export default class RoguesPurse extends LoopingBot {
     private recovery: DeathRecovery | null = null;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         this.startedAt = Date.now();
         this.xpStart = Skills.xp('herblore');

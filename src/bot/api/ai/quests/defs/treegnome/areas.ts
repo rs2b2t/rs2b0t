@@ -1,6 +1,7 @@
 import Tile from '../../../../../geometry/Tile.js';
 import type { WorldTile } from '../../../../../adapter/ClientAdapter.js';
-import type { QuestSnapshot } from '../../engine/types.js';
+
+export { bankedItem as banked, heldItem as held, heldOrBankedItem as owned } from '../../engine/snapshotItems.js';
 
 export interface TgItem {
     id: number;
@@ -100,16 +101,4 @@ export function inChestFloor(tile: WorldTile | null | undefined): boolean {
 
 export function inStronghold(tile: WorldTile | null | undefined): boolean {
     return inKhazardHall(tile) || inLadderRoom(tile) || inChestFloor(tile);
-}
-
-export function held(snap: QuestSnapshot, item: TgItem): number {
-    return snap.invIds?.get(item.id) ?? 0;
-}
-
-export function banked(snap: QuestSnapshot, item: TgItem): number {
-    return snap.bankIds?.get(item.id) ?? 0;
-}
-
-export function owned(snap: QuestSnapshot, item: TgItem): number {
-    return held(snap, item) + banked(snap, item);
 }

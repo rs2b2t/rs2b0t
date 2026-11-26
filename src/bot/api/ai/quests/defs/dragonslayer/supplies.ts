@@ -1,3 +1,4 @@
+import { customStep as custom, waitStep } from '../../engine/questSteps.js';
 import { findSceneTarget } from '../../exec/prompts.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
@@ -448,9 +449,6 @@ async function grabPlanks(need: number, log: (m: string) => void): Promise<boole
     return false;
 }
 
-const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
-    ({ kind: 'custom', name, run });
-
 // Why: the mining load is left out since 18 slots of ore is what fills the pack, and smithNails re-mines whatever gets banked.
 const SHOPPING_KEEP: readonly string[] = [
     'coins', 'maze key', 'pickaxe', 'hammer', 'lobster pot', "wizard's mind bomb",
@@ -469,7 +467,7 @@ function makeRoom(snap: QuestSnapshot, slots = 1): QuestStep | null {
     const spare = [...snap.inv.keys()].some(name => !keep.some(k => name.includes(k)));
     return spare
         ? { kind: 'deposit', keep }
-        : { kind: 'wait', reason: `no room for ${slots} more item${slots === 1 ? '' : 's'} and nothing spare to bank` };
+        : waitStep(`no room for ${slots} more item${slots === 1 ? '' : 's'} and nothing spare to bank`);
 }
 
 /** Keyed by item display name; decide() draws on these at the leg that spends the item. */
@@ -480,10 +478,10 @@ export const SUPPLY_GATHERS: Record<string, (snap: QuestSnapshot, need: number) 
     "wizard's mind bomb": snap => makeRoom(snap) ?? custom('buy a mind bomb at the Rising Sun', buyMindBomb),
     // A jug, then water, then clay, then the bowl: one free slot carries the lot.
     'unfired bowl': snap => Skills.effective('crafting') < 8
-        ? { kind: 'wait', reason: 'Crafting 8 is required to make an unfired bowl; train Crafting or obtain and bank an Unfired bowl' }
+        ? waitStep('Crafting 8 is required to make an unfired bowl; train Crafting or obtain and bank an Unfired bowl')
         : makeRoom(snap) ?? custom('make an unfired bowl', makeUnfiredBowl),
     plank: (snap, need) => !DragonSupplies.wildernessPlanks
-        ? { kind: 'wait', reason: 'Wilderness plank gathering is disabled; bank the remaining Planks to continue Dragon Slayer' }
+        ? waitStep('Wilderness plank gathering is disabled; bank the remaining Planks to continue Dragon Slayer')
         : makeRoom(snap, need) ?? custom(`fetch ${need} plank${need === 1 ? '' : 's'}`, log => grabPlanks(need, log))
 };
 

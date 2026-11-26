@@ -1,5 +1,8 @@
 import Tile from '../../../../../geometry/Tile.js';
+import { bankedItem as banked, heldItem as held, wornItem as worn } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot } from '../../engine/types.js';
+
+export { banked, held, worn };
 
 export interface BioItem {
     id: number;
@@ -146,18 +149,6 @@ export function inPigeonZone(tile: QuestSnapshot['tile']): boolean {
     }
     return tile.x >= PIGEON_ZONE.x0 && tile.x <= PIGEON_ZONE.x1
         && tile.z >= PIGEON_ZONE.z0 && tile.z <= PIGEON_ZONE.z1;
-}
-
-export function held(snap: QuestSnapshot, item: BioItem): number {
-    return snap.invIds?.get(item.id) ?? 0;
-}
-
-export function banked(snap: QuestSnapshot, item: BioItem): number {
-    return snap.bankIds?.get(item.id) ?? 0;
-}
-
-export function worn(snap: QuestSnapshot, item: BioItem): boolean {
-    return snap.wornIds?.has(item.id) ?? false;
 }
 
 /** What `obj_gettotal` counts: pack plus bank plus what is worn. */

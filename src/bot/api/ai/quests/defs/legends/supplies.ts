@@ -1,11 +1,15 @@
+import { customStep, waitStep } from '../../engine/questSteps.js';
 import { RUNE_LEGS } from '../../../../../data/runeLegs.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { Skills } from '../../../../skills/Skills.js';
+import { bankedName, cachedBankId as banked, heldId as held, heldName, wornId as worn } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { GEM_CUTS, GEM_ROCKS, LQ_BANK, LQ_ID, LQ_ITEM, LQ_SHOP, LQ_SKILLS, LQ_TILE } from './areas.js';
 import { mineGem, smeltGoldBar } from './gather.js';
 import { MELEE_WEAPONS, bestBanked, packWeapon, wieldedWeapon } from '../../weapons.js';
 import { QUEST_ARMOUR, armourChoice, armourHeld, armourWorn } from '../../armour.js';
+
+export { banked, bankedName, held, heldName, worn };
 
 export interface LqItem {
     id: number;
@@ -62,28 +66,8 @@ export const PICKAXES: readonly LqItem[] = [
     { id: LQ_ID.BRONZE_PICKAXE, name: 'Bronze pickaxe' }
 ];
 
-export function held(snap: QuestSnapshot, id: number): number {
-    return snap.invIds?.get(id) ?? 0;
-}
-
-export function banked(snap: QuestSnapshot, id: number): number {
-    return snap.bankIds?.get(id) ?? 0;
-}
-
-export function worn(snap: QuestSnapshot, id: number): boolean {
-    return snap.wornIds?.has(id) ?? false;
-}
-
 export function owned(snap: QuestSnapshot, id: number): number {
     return held(snap, id) + (worn(snap, id) ? 1 : 0);
-}
-
-export function heldName(snap: QuestSnapshot, name: string): number {
-    return snap.inv.get(name.toLowerCase()) ?? 0;
-}
-
-export function bankedName(snap: QuestSnapshot, name: string): number {
-    return snap.bank?.get(name.toLowerCase()) ?? 0;
 }
 
 export function scanBank(bank?: Tile): QuestStep {
@@ -193,7 +177,7 @@ export function bankOnly(snap: QuestSnapshot, item: LqItem, qty: number): QuestS
         return null;
     }
     return fromBank(snap, item, qty)
-        ?? { kind: 'wait', reason: `no ${item.name} in the pack or the bank, and no shop stocks one` };
+        ?? waitStep(`no ${item.name} in the pack or the bank, and no shop stocks one`);
 }
 
 export function coinTopUp(snap: QuestSnapshot, want = COIN_CARRY, bank?: Tile): QuestStep | null {
@@ -290,7 +274,7 @@ export function dressForCombat(snap: QuestSnapshot, bank?: Tile): QuestStep | nu
         if (piece) {
             return withdraw([{ name: piece.name, id: piece.id, qty: 1 }], bank);
         }
-        return { kind: 'wait', reason: `no usable ${slot} armour in the pack or bank` };
+        return waitStep(`no usable ${slot} armour in the pack or bank`);
     }
     if (armourChoice(snap, 'front')) {
         return null;
@@ -431,7 +415,7 @@ export function sourceGems(snap: QuestSnapshot, bank?: Tile): QuestStep | null {
     if (pickaxe) {
         return pickaxe;
     }
-    return { kind: 'custom', name: `mine a gem (${missing.length} of seven still missing)`, run: mineGem };
+    return customStep(`mine a gem (${missing.length} of seven still missing)`, mineGem);
 }
 
 // Why: Drogo's is the only gold-bar counter and its baseline stock is 0, so the chain is mine at Brimhaven and smelt at the Shilo furnace next to the booth.
@@ -447,7 +431,7 @@ export function sourceGoldBars(snap: QuestSnapshot, bank?: Tile): QuestStep | nu
         return fromTheBank;
     }
     if (heldName(snap, 'Gold ore') > 0) {
-        return { kind: 'custom', name: 'smelt a gold bar at the Ardougne furnace', run: smeltGoldBar };
+        return customStep('smelt a gold bar at the Ardougne furnace', smeltGoldBar);
     }
     const pickaxe = sourcePickaxe(snap, bank);
     if (pickaxe) {

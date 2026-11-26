@@ -7,9 +7,11 @@
 //   HEADED=1 bun e2e/chompy-bird-235-live.ts --stage 10 --until 40 --tick 200 --minutes 45
 //   HEADED=1 bun e2e/chompy-bird-235-live.ts --stage 40 --until 55 --tick 200 --minutes 45
 //   HEADED=1 bun e2e/chompy-bird-235-live.ts --stage 55 --until 65 --tick 200 --minutes 45
+import { parseQuestArgs, type QuestArgs } from './lib/questArgs.js';
+import { setQuestStats, teleportToQuestStart } from './lib/questHarness.js';
 import type { Page } from 'playwright-core';
 
-import { deployIsolatedClient, launchBrowser } from './lib/harness.js';
+import { deployIsolatedClient, fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -19,85 +21,41 @@ import {
     relog,
     seedItemsToBank,
     startScript,
-    teleTo,
     type BankSeedItem
 } from './tutorial/harness.js';
 
-interface Args {
-    base: string;
-    user: string;
-    stage: number;
-    until: number;
-    minutes: number;
-    tickMs: number;
+interface Args extends QuestArgs {
     stats: number;
     food: string;
     /** Enable the global `navTeleports` setting. */
     teleports: boolean;
     /** Bank the axe and feathers expected on an established account. */
     stocked: boolean;
-    deploy: boolean;
 }
 
-function parse(argv: string[]): Args {
-    const out: Args = {
-        base: process.env.BASE ?? 'http://localhost:8890',
-        user: `cb${Date.now().toString(36).slice(-7)}`,
-        stage: 0,
-        until: 65,
-        minutes: 180,
-        tickMs: 300,
-        stats: 70,
-        food: 'Lobster',
-        teleports: false,
-        stocked: false,
-        deploy: true
-    };
-    for (let i = 0; i < argv.length; i++) {
-        const flag = argv[i];
-        if (flag === '--no-deploy') { out.deploy = false; continue; }
-        if (flag === '--teleports') { out.teleports = true; continue; }
-        if (flag === '--stocked') { out.stocked = true; continue; }
-        const value = argv[++i];
-        if (value === undefined) { break; }
-        if (flag === '--base') { out.base = value; }
-        else if (flag === '--user') { out.user = value; }
-        else if (flag === '--stage') { out.stage = Number(value); }
-        else if (flag === '--until') { out.until = Number(value); }
-        else if (flag === '--minutes') { out.minutes = Number(value); }
-        else if (flag === '--tick') { out.tickMs = Number(value); }
-        else if (flag === '--stats') { out.stats = Number(value); }
-        else if (flag === '--food') { out.food = value; }
+const args = parseQuestArgs<Args>(process.argv.slice(2), {
+    base: process.env.BASE ?? 'http://localhost:8890',
+    user: `cb${Date.now().toString(36).slice(-7)}`,
+    stage: 0,
+    until: 65,
+    minutes: 180,
+    tickMs: 300,
+    stats: 70,
+    food: 'Lobster',
+    teleports: false,
+    stocked: false,
+    deploy: true
+}, {
+    switches: {
+        '--teleports': { teleports: true },
+        '--stocked': { stocked: true }
     }
-    return out;
-}
-
-const args = parse(process.argv.slice(2));
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
+});
 
 const QUEST = 'Big Chompy Bird Hunting';
 const YANILLE_BANK = { x: 2612, z: 3092, level: 0 };
 const RANTZ = { x: 2630, z: 2981, level: 0 };
 const BAIT = { x: 2636, z: 2966, level: 0 };
-
-const STATS = [
-    'attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic', 'prayer',
-    'cooking', 'woodcutting', 'fletching', 'fishing', 'firemaking', 'crafting',
-    'smithing', 'mining', 'herblore', 'agility', 'thieving', 'runecraft'
-];
-
-async function setStats(page: Page, level: number): Promise<void> {
-    for (const skill of STATS) {
-        await cheatQuiet(page, `setstat ${skill} ${level}`);
-    }
-    await clearChatDialogs(page, 'level-up dialog(s)');
-    await page.waitForTimeout(1500);
-    await clearChatDialogs(page, 'straggler dialog(s)');
-}
 
 /** Coins, food and a melee kit; the wolves that carry the arrow tips are level 64. */
 function bankSeed(): BankSeedItem[] {
@@ -187,13 +145,7 @@ const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, args.base, args.user, client.page);
     console.log(`mainland-ready as '${args.user}'`);
@@ -206,7 +158,7 @@ try {
         console.log('nav teleports: on');
     }
 
-    await setStats(page, args.stats);
+    await setQuestStats(page, args.stats);
     console.log(`stats: ${args.stats} across the board`);
 
     const seed = bankSeed();
@@ -227,12 +179,7 @@ try {
     await clearChatDialogs(page, 'post-relog dialog(s)');
 
     const start = STAGE_START[args.stage] ?? YANILLE_BANK;
-    if (!(await teleTo(page, start, 10, 25_000))) {
-        await clearChatDialogs(page, 'pre-tele dialog(s)');
-        if (!(await teleTo(page, start, 10, 25_000))) {
-            fail(`tele to ${start.x},${start.z} did not arrive`);
-        }
-    }
+    await teleportToQuestStart(page, start);
     console.log(`start tile → ${start.x},${start.z},${start.level}`);
 
     await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', 'chompybird'));

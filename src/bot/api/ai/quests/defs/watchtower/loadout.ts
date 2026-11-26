@@ -1,3 +1,4 @@
+import { waitStep } from '../../engine/questSteps.js';
 import { ITEM_DB } from '../../../../../data/itemdb.js';
 import { foodForms } from '../../../../combat/food.js';
 import { flagValue, hasFlag, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
@@ -95,7 +96,7 @@ export function clearSpace(snap: QuestSnapshot, reserve = 2): QuestStep {
     const inventory = [...snap.invIds ?? []].map(([id, count]) => ({ id, count, name: db.get(id)?.name ?? Object.values(I).find(item => item.id === id)?.name ?? null }));
     const plan = retainWatchtowerLoadout(snap, inventory, QuestFood.name, reserve);
     if (plan.keepIds.length < inventory.length || plan.caps.length > 0) return { kind: 'deposit', keep: [], exactKeep: true, ...plan, bank: WT_TILE.YANILLE_BANK };
-    return { kind: 'wait', reason: `Watch Tower needs ${reserve} free inventory slots; no surplus supplies to bank` };
+    return waitStep(`Watch Tower needs ${reserve} free inventory slots; no surplus supplies to bank`);
 }
 
 export function fitSupplies(snap: QuestSnapshot, step: QuestStep): QuestStep {

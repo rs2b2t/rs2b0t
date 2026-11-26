@@ -1,3 +1,4 @@
+import { waitStep } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import type Tile from '../../../../../geometry/Tile.js';
@@ -9,15 +10,18 @@ import { openDialogue } from '../../exec/primitives.js';
 import { driveUntil } from '../../exec/prompts.js';
 import { QuestFood } from '../../food.js';
 import { QuestLoadout, questWornGear } from '../../gear.js';
+import {
+    bankedName as banked,
+    cachedBankId as bankedId,
+    hasName as held,
+    heldId,
+    heldName as heldCount,
+    wornName as worn
+} from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { FT_ID, FT_TILE } from './areas.js';
 
-export const heldCount = (snap: QuestSnapshot, name: string): number => snap.inv.get(name.toLowerCase()) ?? 0;
-export const held = (snap: QuestSnapshot, name: string): boolean => heldCount(snap, name) > 0;
-export const worn = (snap: QuestSnapshot, name: string): boolean => snap.worn.has(name.toLowerCase());
-export const banked = (snap: QuestSnapshot, name: string): number => snap.bank?.get(name.toLowerCase()) ?? 0;
-export const heldId = (snap: QuestSnapshot, id: number): number => snap.invIds?.get(id) ?? 0;
-const bankedId = (snap: QuestSnapshot, id: number): number => snap.bankIds?.get(id) ?? 0;
+export { banked, held, heldCount, heldId, worn };
 
 const COMBAT_FOODS = ['Lobster', 'Swordfish', 'Tuna', 'Salmon', 'Trout'] as const;
 
@@ -117,7 +121,7 @@ export function gatherCoins(snap: QuestSnapshot, need: number): QuestStep | null
     }
     const available = banked(snap, 'Coins');
     if (available + heldCount(snap, 'Coins') < need) {
-        return { kind: 'wait', reason: `need ${need} gp and the bank cannot cover it` };
+        return waitStep(`need ${need} gp and the bank cannot cover it`);
     }
     return withdrawStep([{ name: 'Coins', qty: Math.min(available, Math.max(need, COIN_LUMP)) }]);
 }
@@ -202,7 +206,7 @@ export function combatKit(snap: QuestSnapshot): QuestStep | null {
     }
     const weapon = weaponOf(QuestLoadout.current);
     if (snap.worn.size === 0 && weapon === null) {
-        return { kind: 'wait', reason: 'no loadout gear and nothing worn — the Draugen hits back' };
+        return waitStep('no loadout gear and nothing worn — the Draugen hits back');
     }
     return null;
 }

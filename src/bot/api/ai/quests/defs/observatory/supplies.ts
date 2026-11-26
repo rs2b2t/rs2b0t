@@ -1,3 +1,4 @@
+import { customStep } from '../../engine/questSteps.js';
 import { findSceneTarget } from '../../exec/prompts.js';
 import { Execution } from '../../../../execution/Execution.js';
 import Tile from '../../../../../geometry/Tile.js';
@@ -5,22 +6,17 @@ import { Game } from '../../../../game/Game.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
+import { cachedBankId as bankedId, heldId } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { OBS_ID, OBS_ITEM, OBS_LOC_NAME, OBS_TILE, PLANKS_NEEDED } from './areas.js';
+
+export { bankedId, heldId };
 
 /** A bronze pickaxe is 1gp; this covers it with room to spare. */
 const SHOP_GP = 200;
 
 /** Port Khazard's counter, the only shop within 50 tiles of the copper and tin. */
 export const KHAZARD_SHOP = { npc: 'Shop keeper', anchor: new Tile(2641, 3171, 0) };
-
-export function heldId(snap: QuestSnapshot, id: number): number {
-    return snap.invIds?.get(id) ?? 0;
-}
-
-export function bankedId(snap: QuestSnapshot, id: number): number {
-    return snap.bankIds?.get(id) ?? 0;
-}
 
 const withdraw = (items: { name: string; qty: number; id?: number }[]): QuestStep =>
     ({ kind: 'withdraw', items });
@@ -114,7 +110,7 @@ const smeltBronzeRun = (log: (m: string) => void): Promise<boolean> => useOnLocF
     log
 );
 
-export const smeltBronze: QuestStep = { kind: 'custom', name: 'smelt a bronze bar', run: smeltBronzeRun };
+export const smeltBronze: QuestStep = customStep('smelt a bronze bar', smeltBronzeRun);
 
 /** The `bucket_sand` spawn 25 tiles from the reception, which skips both the bucket and the Yanille pit. */
 export function sand(snap: QuestSnapshot): QuestStep {
@@ -137,7 +133,7 @@ const cookSeaweed = (log: (m: string) => void): Promise<boolean> => useOnLocFrom
 /** Seaweed off the shore, then the range that turns it into soda ash. */
 export function sodaAsh(snap: QuestSnapshot): QuestStep {
     if (heldId(snap, OBS_ID.SEAWEED) > 0) {
-        return { kind: 'custom', name: 'cook seaweed into soda ash', run: cookSeaweed };
+        return customStep('cook seaweed into soda ash', cookSeaweed);
     }
     return fromBank(snap, OBS_ID.SEAWEED, OBS_ITEM.SEAWEED, 1)
         ?? { kind: 'grabGround', item: OBS_ITEM.SEAWEED, anchor: OBS_TILE.SEAWEED_SPAWN, waitIfMissing: true };
@@ -152,4 +148,4 @@ const smeltGlassRun = (log: (m: string) => void): Promise<boolean> => useOnLocFr
     log
 );
 
-export const smeltGlass: QuestStep = { kind: 'custom', name: 'smelt molten glass', run: smeltGlassRun };
+export const smeltGlass: QuestStep = customStep('smelt molten glass', smeltGlassRun);

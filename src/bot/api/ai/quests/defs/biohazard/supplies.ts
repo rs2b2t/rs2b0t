@@ -1,3 +1,4 @@
+import { waitStep } from '../../engine/questSteps.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { BIO_ITEM, BIO_TILE, banked, held, owned, type BioItem } from './areas.js';
 
@@ -55,7 +56,7 @@ export function sourceCoins(snap: QuestSnapshot, floor: number, blocking = true)
     }
     const available = banked(snap, BIO_ITEM.COINS);
     if (available <= 0) {
-        return blocking ? { kind: 'wait', reason: 'no coins banked for the priest gown' } : null;
+        return blocking ? waitStep('no coins banked for the priest gown') : null;
     }
     return withdraw([{ name: BIO_ITEM.COINS.name, id: BIO_ITEM.COINS.id, qty: Math.min(PURSE, available) }]);
 }

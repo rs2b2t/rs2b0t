@@ -3,7 +3,7 @@ import { Bank } from '../../api/bank/Bank.js';
 import { BANK_LOCATIONS, nearestBank, type BankLocation } from '../../api/bank/BankLocations.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { offersMatch } from '../../api/market/driveMarketTrade.js';
 import { liveCatalog, type Catalog } from '../../api/market/catalog.js';
@@ -84,7 +84,7 @@ export default class JiveMarketDumper extends TaskBot {
     refused = new Set<number>();
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         this.maker = this.settings.str('maker', '').trim();
         if (this.maker === '') {

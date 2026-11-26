@@ -3,13 +3,11 @@ import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Bank } from '../../api/bank/Bank.js';
-import { openBankAccess } from '../../api/bank/Banking.js';
+import { openBankAccess, openNearestBank } from '../../api/bank/Banking.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Paint } from '../../paint/Paint.js';
-import { Traversal } from '../../api/walking/Traversal.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { nearestBank } from '../../api/bank/BankLocations.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import {
     BATCH,
@@ -216,34 +214,7 @@ class RestockIngredients implements Task {
             return;
         }
 
-        if (!Bank.isOpen()) {
-            const here = Game.tile();
-            const bank = here ? nearestBank(here) : null;
-            if (!bank) {
-                this.bot.log('no reachable bank');
-                return;
-            }
-
-            this.bot.setStatus(`banking at ${bank.name}`);
-            const near = here !== null && bank.tile.level === here.level && bank.tile.distanceTo(here) <= 4;
-            if (!near) {
-                if (!(await Traversal.walkResilient(bank.tile, {
-                    radius: 3,
-                    attempts: 4,
-                    timeoutMs: 180_000,
-                    log: m => this.bot.log(`  ${m}`)
-                }))) {
-                    this.bot.log('walk to the bank failed — retrying');
-                    return;
-                }
-            }
-
-            const access = bank.access ?? BOOTH;
-            if (!(await openBankAccess(bank, access, m => this.bot.log(`  ${m}`)))) {
-                this.bot.log('could not open the bank — retrying');
-                return;
-            }
-        }
+        if (!Bank.isOpen() && !(await openNearestBank(this.bot))) return;
 
         if (!(await this.bot.depositInventory())) {
             this.bot.log('bank stock did not reload after the deposit, retrying');
@@ -347,32 +318,8 @@ class FinishPotions implements Task {
         if (!herb || !secondary) {
             return;
         }
-        const here = Game.tile();
-        const bank = here ? nearestBank(here) : null;
-        if (!bank) {
-            this.bot.log('no reachable bank');
-            return;
-        }
-
-        this.bot.setStatus(`withdrawing ${secondary.name}`);
-        const near = here !== null && bank.tile.level === here.level && bank.tile.distanceTo(here) <= 4;
-        if (!near) {
-            if (!(await Traversal.walkResilient(bank.tile, {
-                radius: 3,
-                attempts: 4,
-                timeoutMs: 180_000,
-                log: m => this.bot.log(`  ${m}`)
-            }))) {
-                this.bot.log('walk to the bank failed — retrying');
-                return;
-            }
-        }
-
-        const access = bank.access ?? BOOTH;
-        if (!(await openBankAccess(bank, access, m => this.bot.log(`  ${m}`)))) {
-            this.bot.log('could not open the bank — retrying');
-            return;
-        }
+        const bank = await openNearestBank(this.bot, `withdrawing ${secondary.name}`);
+        if (!bank) return;
 
         if (!(await this.bot.waitForDeposit())) {
             return;
@@ -407,7 +354,7 @@ class FinishPotions implements Task {
         if (!(await this.bot.mixBatch(secondary.id, herb.unfId, `${secondary.name} with unfinished potions`))) return;
 
         this.bot.setStatus('banking finished potions');
-        if (!(await openBankAccess(bank, access, m => this.bot.log(`  ${m}`)))) {
+        if (!(await openBankAccess(bank, BOOTH, m => this.bot.log(`  ${m}`)))) {
             this.bot.log('could not open the bank — retrying');
             return;
         }

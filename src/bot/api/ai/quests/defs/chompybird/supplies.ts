@@ -1,6 +1,9 @@
 import { QuestFood } from '../../food.js';
+import { bankedName as banked, cachedBankId as bankedId, heldId, heldName as held } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { BOB_AXES, CB_ID, CB_NAME, CB_TILE, GERRANT } from './areas.js';
+
+export { bankedId, heldId };
 
 /** 6 for Rantz and 6 to shoot with; a burnt chompy costs a second kill. */
 export const ARROW_TARGET = 12;
@@ -11,11 +14,6 @@ const COIN_FLOOR = 300;
 const AXES: readonly string[] = [
     'Rune axe', 'Adamant axe', 'Mithril axe', 'Black axe', 'Steel axe', 'Iron axe', 'Bronze axe'
 ];
-
-export const heldId = (snap: QuestSnapshot, id: number): number => snap.invIds?.get(id) ?? 0;
-export const bankedId = (snap: QuestSnapshot, id: number): number => snap.bankIds?.get(id) ?? 0;
-const held = (snap: QuestSnapshot, name: string): number => snap.inv.get(name.toLowerCase()) ?? 0;
-const banked = (snap: QuestSnapshot, name: string): number => snap.bank?.get(name.toLowerCase()) ?? 0;
 
 export function selectedFood(): string | null {
     const food = QuestFood.name?.trim();

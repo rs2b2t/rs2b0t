@@ -99,9 +99,8 @@ class DomSlotHandle implements SlotHandle {
     private iframe: HTMLIFrameElement;
     private mirror: HTMLCanvasElement;
     private mirrorTimer: number;
-    private pollTimer: number | null = null;
     private win: LcbWindow | null = null;
-    private pending: Array<(l: Lcb) => void> = [];
+    private pending: Array<(l: Lcb) => void> | null = [];
     private destroyed = false;
     private cancelStartup: () => void = () => {};
     private mode: RenderMode = 'background';
@@ -191,7 +190,6 @@ class DomSlotHandle implements SlotHandle {
         if (this.destroyed || !this.worldRouting) return;
         this.cancelStartup();
         const frame = this.createFrame();
-        if (this.pollTimer !== null) window.clearTimeout(this.pollTimer);
         this.win = null;
         this.pending = [];
         this.iframe.replaceWith(frame);
@@ -215,22 +213,55 @@ class DomSlotHandle implements SlotHandle {
         if (switching) url.searchParams.set('autologin', '0');
         this.el.dataset.startup = 'Queued to load';
         let timeout: number;
+        let pollTimer: number;
+        let released = false;
         const finish = (): void => {
-            window.clearTimeout(timeout);
+            released = true;
+            if (this.win) window.clearTimeout(timeout);
             frame.removeEventListener('mbx-client-initialized', finish);
             frame.removeEventListener('error', finish);
             delete this.el.dataset.startup;
             release();
         };
+        const poll = (atDeadline = false): void => {
+            if (this.win) return;
+            const w = frame.contentWindow as LcbWindow | null;
+            let bridge: Lcb | undefined;
+            try {
+                bridge = w?.rs2b0t;
+            } catch {
+                bridge = undefined;
+            }
+            if (bridge) {
+                this.win = w;
+                if (released) window.clearTimeout(timeout);
+                const flush = this.pending ?? [];
+                this.pending = [];
+                for (const fn of flush) fn(bridge);
+            } else if (atDeadline) {
+                this.el.dataset.startup = 'Startup timed out';
+                this.pending = null;
+            } else {
+                pollTimer = window.setTimeout(poll, 50);
+            }
+        };
         const release = this.startups.enqueue(() => {
             this.el.dataset.startup = 'Loading';
             frame.addEventListener('mbx-client-initialized', finish);
             frame.addEventListener('error', finish);
-            timeout = window.setTimeout(finish, 180_000);
+            timeout = window.setTimeout(() => {
+                window.clearTimeout(pollTimer);
+                finish();
+                poll(true);
+            }, 180_000);
             frame.src = url.href;
-            this.poll();
+            poll();
         });
-        this.cancelStartup = finish;
+        this.cancelStartup = () => {
+            window.clearTimeout(timeout);
+            window.clearTimeout(pollTimer);
+            finish();
+        };
     }
 
     cancelWorldSwitch(): void {
@@ -297,7 +328,6 @@ class DomSlotHandle implements SlotHandle {
         this.destroyed = true;
         this.cancelStartup();
         window.clearInterval(this.mirrorTimer);
-        if (this.pollTimer !== null) window.clearTimeout(this.pollTimer);
         window.removeEventListener('resize', this.onResize);
         this.el.remove();
     }
@@ -312,26 +342,11 @@ class DomSlotHandle implements SlotHandle {
         paintThumbnail(this.mirror.getContext('2d')!, game, overlay, TILE_W, TILE_H);
     };
 
-    private poll = (): void => {
-        if (this.destroyed) {
-            return;
-        }
-        const w = this.iframe.contentWindow as LcbWindow | null;
-        if (w?.rs2b0t) {
-            this.win = w;
-            const flush = this.pending;
-            this.pending = [];
-            for (const fn of flush) fn(w.rs2b0t);
-            return;
-        }
-        this.pollTimer = window.setTimeout(this.poll, 50);
-    };
-
     private whenReady(fn: (l: Lcb) => void): void {
         if (this.win?.rs2b0t) {
             fn(this.win.rs2b0t);
         } else {
-            this.pending.push(fn);
+            this.pending?.push(fn);
         }
     }
 

@@ -1,6 +1,6 @@
 import { LoopingBot } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { waitForPlayerTile } from '../../api/game/Game.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Paint } from '../../paint/Paint.js';
@@ -43,7 +43,7 @@ export default class DartFletcher extends LoopingBot {
     private finished = false;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         const selected = this.settings.str('tier', 'Bronze');
         const plan = dartPlanFor(selected);
