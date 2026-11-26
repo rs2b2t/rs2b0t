@@ -93,6 +93,14 @@ try {
     await first.refresh();
     assert.equal(first.list().find(p => p.username === 'first')?.tab, 'Main');
     assert.equal(first.list().find(p => p.username === 'second')?.tab, 'Logs');
+    const replacement = { profiles: [], tabs: [], activeTab: 'Main' };
+    await assert.rejects(first.replaceAll(replacement, { usernames: ['storage-only'], apply() {
+        throw new Error('storage full');
+    } }), /storage full/);
+    await second.upsert({ username: 'later', password: '' });
+    await second.replaceAll(replacement, { usernames: [], apply(wipe) {
+        assert.deepEqual(wipe.sort(), ['first', 'later', 'second', 'storage-only']);
+    } });
     first.reset();
     await second.refresh();
     assert.equal(second.status(), 'empty');

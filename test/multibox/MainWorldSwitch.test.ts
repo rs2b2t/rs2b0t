@@ -160,9 +160,10 @@ test.each([0, 4])('settings import applies modes once with %i profiles already l
 
 const pendingWipeKey = 'rs2b0t:pending-profile-wipe';
 const marker = 'rs2b0t:set-profile-settings-v1';
+const vaultKey = 'rs2b0t:multibox:profiles';
 
 const restoreFailures: ['localStorage' | 'sessionStorage', string][] = [
-    ['localStorage', pendingWipeKey],
+    ['localStorage', vaultKey],
     ['localStorage', marker],
     ['sessionStorage', marker]
 ];
@@ -186,18 +187,21 @@ test.each(restoreFailures)('reopening the wall retries a restore after %s fails 
             localStorage.setItem(orphan, 'Miner');
             const store = window[layer];
             const write = store.setItem;
+            const journals: string[] = [];
             Object.defineProperty(store, 'setItem', { configurable: true, value(key: string, value: string) {
-                if (key === failedKey || key.startsWith(failedKey + '/')) throw new DOMException('storage full', 'QuotaExceededError');
+                if (key.startsWith(pendingWipeKey)) journals.push(value);
+                if (key === failedKey) throw new DOMException('storage full', 'QuotaExceededError');
                 write.call(store, key, value);
             } });
             try {
                 const panel = await restore();
                 expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toContain('storage full');
+                expect(journals).toEqual([]);
             } finally {
                 Object.defineProperty(store, 'setItem', { configurable: true, value: write });
             }
         }, async () => {
-            expect(vault.list().map(p => p.username)).toEqual(failedKey === pendingWipeKey ? ['alice', 'bob', 'set'] : ['eve']);
+            expect(vault.list().map(p => p.username)).toEqual(failedKey === vaultKey ? ['alice', 'bob', 'set'] : ['eve']);
             const panel = await restore();
             expect(panel.el.hidden).toBe(true);
             expect(vault.list().map(p => p.username)).toEqual(['eve']);

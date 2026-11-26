@@ -52,12 +52,12 @@ export function readBoxItem(suffix: string, id: string): string | null {
     const live = !desktopStorage && typeof sessionStorage !== 'undefined' ? sessionStorage : undefined;
     const durable = typeof localStorage !== 'undefined' ? localStorage : undefined;
     const key = boxKey(suffix, id);
-    const value = live?.getItem(key) ?? durable?.getItem(key);
-    if (value != null) return value;
     const legacy = legacyKey(suffix, id);
-    if (legacy === null) return null;
     for (const store of [live, durable]) {
-        if (store && allowsLegacy(store, key, id)) {
+        if (!store) continue;
+        const value = store.getItem(key);
+        if (value !== null) return value;
+        if (legacy !== null && allowsLegacy(store, key, id)) {
             const fallback = store.getItem(legacy);
             if (fallback !== null) return fallback;
         }

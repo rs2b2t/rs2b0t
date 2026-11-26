@@ -72,7 +72,7 @@ export function boxStoragePrefix(username: string): string {
 
 export function collectBoxStorage(usernames: string[], includeLegacy?: (suffix: string) => boolean): BoxStorageMap {
     const out: BoxStorageMap = {};
-    const legacy = includeLegacy && usernames.includes('set') ? new Map<string, string>() : null;
+    const legacy = includeLegacy && usernames.includes('set') ? new Map<string, Storage>() : null;
     if (typeof localStorage !== 'undefined') {
         readStore(localStorage, usernames, out, legacy);
     }
@@ -80,8 +80,11 @@ export function collectBoxStorage(usernames: string[], includeLegacy?: (suffix: 
         readStore(sessionStorage, usernames, out, legacy, !desktopStorage);
     }
     if (legacy && includeLegacy) {
-        for (const [suffix, value] of legacy) {
-            if ((out.set && Object.hasOwn(out.set, suffix)) || !includeLegacy(suffix)) continue;
+        for (const [suffix, store] of legacy) {
+            const liveSession = !desktopStorage && store === globalThis.sessionStorage;
+            if (out.set && Object.hasOwn(out.set, suffix) && (!liveSession || store.getItem(boxKey(suffix, 'set')) !== null)) continue;
+            const value = store.getItem(boxStoragePrefix('set') + suffix);
+            if (value === null || !includeLegacy(suffix)) continue;
             out.set ??= {};
             out.set[suffix] = value;
         }
@@ -114,13 +117,10 @@ export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
     }
 }
 
-function readStore(store: Storage, usernames: string[], out: BoxStorageMap, legacy: Map<string, string> | null, includeSelectedScript = true): void {
+function readStore(store: Storage, usernames: string[], out: BoxStorageMap, legacy: Map<string, Storage> | null, includeSelectedScript = true): void {
     for (const key of storeKeys(store)) {
         const candidate = legacy && legacyBoxSuffix(store, key, 'set');
-        if (legacy && candidate !== null) {
-            const value = store.getItem(key);
-            if (value !== null) legacy.set(candidate, value);
-        }
+        if (legacy && candidate !== null) legacy.set(candidate, store);
         for (const user of usernames) {
             const suffix = boxSuffix(key, boxStoragePrefix(user), user);
             if (suffix === null) {

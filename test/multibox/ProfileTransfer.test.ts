@@ -162,6 +162,21 @@ describe('ProfileTransfer', () => {
         expect(localStorage.getItem(legacy)).toBe('walk');
     });
 
+    for (const consumer of ['settings', 'export']) {
+        test(`legacy session settings take precedence over a newer durable key during ${consumer}`, () => {
+            const suffix = 'set:Global:runEnergyMin';
+            sessionStorage.setItem('rs2b0t:set:set:Global:runEnergyMin', '42');
+            localStorage.setItem(boxKey(suffix, 'set'), '73');
+            const read = () => consumer === 'settings'
+                ? inBox('set', () => SettingsStore.saved('Global', 'runEnergyMin'))
+                : collectBoxStorage(['set'], () => true).set[suffix];
+            expect(read()).toBe('42');
+            expect(collectBoxStorage(['set'], () => false).set[suffix]).toBe('73');
+            localStorage.setItem('rs2b0t:set-profile-settings-v1', '1');
+            expect(read()).toBe('73');
+        });
+    }
+
     test('a legacy read preserves an interleaved durable profile save', () => {
         const legacy = 'rs2b0t:set:set:Global:runEnergyMin';
         const current = boxKey('set:Global:runEnergyMin', 'set');

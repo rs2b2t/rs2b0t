@@ -420,7 +420,6 @@ function boot(): void {
         renderRail();
     }
 
-    const pendingWipeKey = 'rs2b0t:pending-profile-wipe';
     const settings = new SettingsPanel({
         ensureUnlocked: () => ensureUnlocked(),
         snapshot: () => ({
@@ -428,36 +427,10 @@ function boot(): void {
             storage: collectBoxStorage(vault.list().map(p => p.username), suffix =>
                 window.confirm(`Older versions shared "${suffix}" between standalone settings and profile "set". Include it in this profile backup?`))
         }),
-        replaceAll: async data => {
-            const restoreId = crypto.randomUUID();
-            const ownKey = `${pendingWipeKey}/${restoreId}`;
-            let previousKey = pendingWipeKey;
-            let wipe: string[] = [];
-            try {
-                await vault.replaceAll(data, (previousNames, previousId) => {
-                    if (previousId) previousKey = `${pendingWipeKey}/${previousId}`;
-                    const saved = localStorage.getItem(previousKey);
-                    const pending: unknown = saved === null ? [] : JSON.parse(saved);
-                    if (!Array.isArray(pending) || pending.some(user => typeof user !== 'string' || !user)) {
-                        throw new Error('Invalid pending profile restore.');
-                    }
-                    wipe = [...new Set<string>([
-                        ...pending,
-                        ...previousNames,
-                        ...data.profiles.map(p => p.username),
-                        ...Object.keys(data.storage)
-                    ])];
-                    localStorage.setItem(ownKey, JSON.stringify(wipe));
-                    return restoreId;
-                });
-            } catch (error) {
-                localStorage.removeItem(ownKey);
-                throw error;
-            }
-            localStorage.removeItem(previousKey);
-            applyBoxStorage(data.storage, wipe);
-            localStorage.removeItem(ownKey);
-        },
+        replaceAll: data => vault.replaceAll(data, {
+            usernames: Object.keys(data.storage),
+            apply: wipe => applyBoxStorage(data.storage, wipe)
+        }),
         onImported: data => {
             applyImportedTabs(data);
             loadImportedProfiles();
