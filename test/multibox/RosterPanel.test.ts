@@ -144,6 +144,20 @@ test('copy uses the chosen source/script and preserves the target selected scrip
     expect(get('[data-profile="bob"]').textContent).toContain('Copied Miner settings.');
 });
 
+test('refresh includes saved choices and prefers the live selection, including an empty one', () => {
+    const { panel, client } = fixture();
+    writeProfileScript('alice', 'Woodcutter');
+    sessionStorage.setItem('rs2b0t:bob:selectedScript', 'NatureCrafter');
+    panel.refresh();
+    const label = (name: string) => get<HTMLTableRowElement>(`[data-profile="${name}"]`).cells[2].textContent;
+    expect(Array.from(get<HTMLSelectElement>('#mbx-roster-script').options, o => o.value)).toEqual(['Fisher', 'JiveRC', 'Miner', 'Woodcutter']);
+    expect(label('alice')).toBe('Miner');
+    expect(label('bob')).toBe('JiveRC');
+    client.selectedScript = () => '';
+    panel.refresh();
+    expect(label('alice')).toBe('None');
+});
+
 test('refresh preserves input identity, focus, selection, and reports live running status', () => {
     const { panel, profiles } = fixture();
     select('bob');

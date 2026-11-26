@@ -4,40 +4,25 @@ import { BLOOM_MAX_COST, NS_ID, NS_STAGE } from '#/bot/api/ai/quests/defs/druids
 import { decide, druidspirit } from '#/bot/api/ai/quests/defs/druidspirit/index.js';
 import { NS_FLAG } from '#/bot/api/ai/quests/defs/druidspirit/journal.js';
 import { QUEST_DEFS } from '#/bot/api/ai/quests/defs/index.js';
-import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+
+import { natureSpiritSnapshot, type NatureSpiritSnapshotOptions } from './druidspirit-snapshot.fixture.js';
 
 const CAMP = { x: 3440, z: 3336, level: 0 };
 const GROTTO = { x: 3442, z: 9734, level: 0 };
 const BANK = { x: 3253, z: 3420, level: 0 };
 
-function snap(options: {
-    journal?: QuestSnapshot['journal'];
-    stage?: number;
-    flags?: string[];
-    invIds?: [number, number][];
-    bankIds?: [number, number][];
-    wornIds?: number[];
-    tile?: QuestSnapshot['tile'];
-    prayer?: number;
-} = {}): QuestSnapshot {
+function snap(options: Partial<NatureSpiritSnapshotOptions> = {}) {
     const stage = options.stage ?? NS_STAGE.NOT_STARTED;
-    return {
-        journal: options.journal ?? (stage === NS_STAGE.NOT_STARTED ? 'notStarted' : 'inProgress'),
-        inv: new Map(),
-        invIds: new Map([[NS_ID.COINS, 50_000], ...(options.invIds ?? [])]),
-        worn: new Set(),
-        wornIds: new Set(options.wornIds ?? [NS_ID.GHOSTSPEAK]),
-        noProgress: 0,
-        bankCoins: 2_000_000,
+    return natureSpiritSnapshot({
+        ...options,
         stage,
-        progress: { stage, flags: new Set(options.flags ?? []) },
-        bank: new Map(),
-        bankIds: new Map(options.bankIds ?? []),
-        bankKnown: true,
+        journal: options.journal ?? (stage === NS_STAGE.NOT_STARTED ? 'notStarted' : 'inProgress'),
+        invIds: [[NS_ID.COINS, 50_000], ...(options.invIds ?? [])],
+        wornIds: options.wornIds ?? [NS_ID.GHOSTSPEAK],
         tile: options.tile ?? CAMP,
-        prayer: options.prayer,
-        freeSlots: 20
-    };
+        prayer: options.prayer
+    });
 }
 
 const step = (options: Parameters<typeof snap>[0] = {}): QuestStep => decide(snap(options));

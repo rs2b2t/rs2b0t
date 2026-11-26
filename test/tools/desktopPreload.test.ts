@@ -55,6 +55,7 @@ test('reloading a running older desktop keeps shared settings working until rest
             }
         })
     });
+    expect(storage.getItems).toBeUndefined();
     expect(storage.getItem('rs2b0t:set:Miner:ore')).toBe('Iron');
     const changes: (string | null)[][] = [];
     storage.subscribe((key, oldValue, newValue) => changes.push([key, oldValue, newValue]));
