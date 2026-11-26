@@ -49,7 +49,7 @@ function setupBankLeg(items: ReturnType<typeof Bank.items>) {
 }
 
 describe('TannerBot tanning modes', () => {
-    test.each([
+    test.each<[string, number]>([
         ['Soft leather', 1741],
         ['Hard leather', 1743],
         ['Green dragonhide', 1745],
@@ -57,7 +57,7 @@ describe('TannerBot tanning modes', () => {
         ['Red dragonhide', 2507],
         ['Black dragonhide', 2509],
         ['unknown', 1741]
-    ] as const)('%s selects product %i', async (hideType, productId) => {
+    ])('%s selects product %i', async (hideType, productId) => {
         Execution.delayUntil = async () => true;
         const bot = new TannerBot();
         bot.settings = new SettingsBag({ hideType });

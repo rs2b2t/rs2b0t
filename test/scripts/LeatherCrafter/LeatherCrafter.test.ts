@@ -221,7 +221,7 @@ describe('LeatherCrafter startup readiness', () => {
 });
 
 describe('LeatherCrafter bank withdrawals', () => {
-    test.each([
+    test.each<[string, number]>([
         ['Leather', LEATHER],
         ['Hard leather', 1743],
         ['Green dragon leather', 1745],
@@ -229,7 +229,7 @@ describe('LeatherCrafter bank withdrawals', () => {
         ['Red dragon leather', 2507],
         ['Black dragon leather', 2509],
         ['unknown', LEATHER]
-    ] as const)('%s withdraws material %i', async (leatherType, leatherId) => {
+    ])('%s withdraws material %i', async (leatherType, leatherId) => {
         Skills.level = () => 99;
         inventoryCounts.set(NEEDLE, 1);
         inventoryCounts.set(THREAD, 100);
