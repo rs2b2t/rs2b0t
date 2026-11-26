@@ -72,7 +72,7 @@ function prepareStorage(app, serverUrl) {
                     // Why: the panel also imports settings from the temporary Chromium copy.
                     await session.defaultSession.clearStorageData({ storages: ['localstorage'] });
                 }
-            }
+            } else if (!store.initialized()) store.seed({});
             const clients = new Map();
             const tracked = new WeakSet();
             const valid = frame => frame && !frame.isDestroyed() && !frame.detached && new URL(frame.url).origin === origin;

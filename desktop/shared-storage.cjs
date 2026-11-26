@@ -3,21 +3,46 @@ const { join } = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { lockSync } = require('proper-lockfile');
 
-const profileKeys = ['rs2b0t:multibox:profiles', 'rs2b0t:multibox:accounts'];
+const vaultKey = 'rs2b0t:multibox:profiles';
+const profileKeys = [vaultKey, 'rs2b0t:multibox:accounts'];
 
 function isEmptyRoster(value) {
     return typeof value === 'string' && /^[ \t\r\n]*\[[ \t\r\n]*\][ \t\r\n]*$/.test(value);
 }
 
-function recoverProfiles(data, sources) {
-    if (profileKeys.some(key => key in data && !isEmptyRoster(data[key]))) return;
-    for (const source of sources) {
-        const saved = profileKeys.filter(key => typeof source[key] === 'string' && !isEmptyRoster(source[key]));
-        if (!saved.length) continue;
-        for (const key of profileKeys) delete data[key];
-        for (const key of saved) data[key] = source[key];
-        return;
+function hasSavedProfiles(key, raw) {
+    if (typeof raw !== 'string') return false;
+    try {
+        const value = JSON.parse(raw);
+        if (Array.isArray(value)) {
+            const profiles = value.filter(p => typeof p?.username === 'string' && p.username.length > 0 && typeof p.password === 'string');
+            return profiles.length > 0 && profiles.every(p => p.world === undefined || [1, 2, 3].includes(p.world));
+        }
+        if (key !== vaultKey || value?.v !== 1 || (value.kdf !== undefined && value.kdf !== 'PBKDF2-SHA256')) return false;
+        if (!Number.isInteger(value.iter) || value.iter <= 0 || value.iter > 0xffffffff) return false;
+        return typeof value.salt === 'string' && atob(value.salt).length === 16
+            && typeof value.iv === 'string' && atob(value.iv).length === 12
+            && typeof value.ct === 'string' && atob(value.ct).length > 16;
+    } catch {
+        return false;
     }
+}
+
+function migrateProfiles(data, sources, firstMigration) {
+    if (profileKeys.some(key => key in data && (firstMigration || !isEmptyRoster(data[key])))) return;
+    let selected = [];
+    for (const source of sources) {
+        const entries = profileKeys.map(key => [key, source[key]]);
+        const populated = entries.filter(([key, value]) => hasSavedProfiles(key, value));
+        if (populated.length) {
+            selected = populated;
+            break;
+        }
+        if (firstMigration && !selected.length) selected = entries.filter(([, value]) => isEmptyRoster(value));
+    }
+    if (!selected.length) return;
+    for (const key of profileKeys) delete data[key];
+    for (const [key, value] of selected) data[key] = value;
 }
 
 function sharedStorage(dir) {
@@ -82,14 +107,13 @@ function sharedStorage(dir) {
         },
         seed(values, { fallback = {}, recover = false } = {}) {
             return update(state => {
-                if (state.initialized) {
-                    if (recover) recoverProfiles(state.data, [values, fallback]);
-                    return false;
-                }
-                for (const source of [values, fallback]) {
-                    const hasProfiles = profileKeys.some(key => key in state.data);
+                const sources = [values, fallback];
+                if (state.initialized && !recover) return false;
+                migrateProfiles(state.data, sources, !state.initialized);
+                if (state.initialized) return false;
+                for (const source of sources) {
                     for (const [key, value] of Object.entries(source)) {
-                        if (hasProfiles && profileKeys.includes(key)) continue;
+                        if (profileKeys.includes(key)) continue;
                         if (valid(key) && typeof value === 'string' && !(key in state.data)) state.data[key] = value;
                     }
                 }

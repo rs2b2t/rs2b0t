@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { URL } from 'node:url';
 import { runInNewContext } from 'node:vm';
+import { ProfileVault } from '#/bot/multibox/ProfileVault.js';
 
 const sessionModule = new URL('../../desktop/storage-session.cjs', import.meta.url);
 const require = createRequire(sessionModule);
@@ -20,11 +21,14 @@ afterEach(() => {
     for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-function fixture(origins: Record<string, Record<string, string>>) {
+function fixture(origins?: Record<string, Record<string, string>>) {
     const dir = mkdtempSync(join(tmpdir(), 'rs2b0t-migration-'));
     directories.push(dir);
-    mkdirSync(join(dir, 'Local Storage'));
-    writeFileSync(join(dir, 'Local Storage', 'fixture.json'), JSON.stringify(origins));
+    function saveLegacy(values: Record<string, Record<string, string>>) {
+        mkdirSync(join(dir, 'Local Storage'), { recursive: true });
+        writeFileSync(join(dir, 'Local Storage', 'fixture.json'), JSON.stringify(values));
+    }
+    if (origins) saveLegacy(origins);
     const storeDir = join(dir, 'Shared Storage');
     const store = sharedStorage(storeDir);
 
@@ -95,7 +99,7 @@ function fixture(origins: Record<string, Record<string, string>>) {
         expect(handlers.size).toBe(0);
         return JSON.parse(store.getItem(accounts) ?? '[]');
     }
-    return { launch, store, storeDir, rendererStorage: () => rendererStorage };
+    return { launch, saveLegacy, store, storeDir, rendererStorage: () => rendererStorage };
 }
 
 test('a malformed server URL is logged and quits through the startup error handler', async () => {
@@ -193,4 +197,58 @@ test('explicit recovery can use the fallback when the configured origin has only
     store.seed({ [vault]: '[]' });
     expect(await launch(custom, true)).toEqual(profiles);
     expect(store.getItem(vault)).toBeNull();
+});
+
+test('first migration skips an empty configured roster across two launches', async () => {
+    const { launch, store } = fixture({ [custom]: { [vault]: '[]' }, [original]: { [accounts]: JSON.stringify(profiles) } });
+    const first = await launch(custom);
+    const second = await launch(custom);
+    expect([first.length, second.length]).toEqual([30, 30]);
+    expect(store.snapshot()).toEqual({ [accounts]: JSON.stringify(profiles) });
+});
+
+test('a fresh installation keeps a deleted roster empty when legacy storage appears later', async () => {
+    const { launch, saveLegacy, store } = fixture();
+    await launch(custom);
+    store.setItem(accounts, JSON.stringify(profiles));
+    store.removeItem(accounts);
+    saveLegacy({ [custom]: { [accounts]: JSON.stringify(profiles) } });
+    expect(await launch(custom)).toEqual([]);
+    expect(await launch(custom, true)).toEqual(profiles);
+});
+
+test.each([
+    ['truncated JSON', '[{"username":'],
+    ['invalid roster', '[{"name":"fixture"}]'],
+    ['missing ciphertext', '{"v":1,"iter":310000}'],
+    ['invalid vault encoding', '{"v":1,"iter":310000,"salt":"!","iv":"!","ct":"!"}']
+])('recovery skips %s and imports the populated fallback', async (_, value) => {
+    const { launch, store } = fixture({ [custom]: { [vault]: value }, [original]: { [accounts]: JSON.stringify(profiles) } });
+    store.seed({});
+    expect((await launch(custom, true)).length).toBe(30);
+    expect(store.getItem(vault)).toBeNull();
+    expect(await launch(custom)).toEqual(profiles);
+});
+
+test('an invalid source on first launch leaves room for explicit recovery later', async () => {
+    const { launch, saveLegacy, store } = fixture({ [custom]: { [vault]: '{' } });
+    await launch(custom);
+    saveLegacy({ [custom]: { [accounts]: JSON.stringify(profiles) } });
+    expect(await launch(custom, true)).toEqual(profiles);
+    expect(store.getItem(vault)).toBeNull();
+});
+
+test('a migrated encrypted vault can be unlocked on the next launch', async () => {
+    const { launch, saveLegacy, store } = fixture();
+    const source = fixture().store;
+    source.setItem(accounts, JSON.stringify(profiles));
+    await new ProfileVault(source).setup('fixture');
+    const saved = source.getItem(vault);
+    saveLegacy({ [custom]: { [vault]: saved }, [original]: { [accounts]: JSON.stringify(profiles) } });
+    await launch(custom);
+    await launch(custom);
+    expect(store.snapshot()).toEqual({ [vault]: saved });
+    const reopened = new ProfileVault(store);
+    expect(await reopened.unlock('fixture')).toBe(true);
+    expect(reopened.list()).toEqual(profiles.map(profile => ({ ...profile, tab: 'Main' })));
 });
