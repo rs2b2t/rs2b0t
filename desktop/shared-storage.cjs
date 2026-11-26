@@ -6,6 +6,7 @@ const { lockSync } = require('proper-lockfile');
 const vaultKey = 'rs2b0t:multibox:profiles';
 const accountsKey = 'rs2b0t:multibox:accounts';
 const profileKeys = [vaultKey, accountsKey];
+const gcmTagBytes = 16;
 
 function isEmptyRoster(value) {
     return typeof value === 'string' && /^[ \t\r\n]*\[[ \t\r\n]*\][ \t\r\n]*$/.test(value);
@@ -23,7 +24,7 @@ function hasSavedProfiles(key, raw) {
         if (!Number.isInteger(value.iter) || value.iter <= 0 || value.iter > 0xffffffff) return false;
         if (typeof value.salt !== 'string' || typeof value.iv !== 'string' || typeof value.ct !== 'string') return false;
         atob(value.salt);
-        return atob(value.iv).length > 0 && atob(value.ct).length > 16;
+        return atob(value.iv).length > 0 && atob(value.ct).length >= gcmTagBytes + '[]'.length;
     } catch {
         return false;
     }
@@ -59,11 +60,17 @@ function migrateProfiles(data, sources, { firstMigration, recover }) {
     }
 }
 
-function writeItem(state, key, value) {
-    if (profileKeys.includes(key)) {
-        delete state.seededWithoutProfiles;
-        delete state.profileRetries;
+function cancelProfileImport(state) {
+    delete state.seededWithoutProfiles;
+    if (!state.profileRetries) return;
+    for (const [origin, removed] of Object.entries(state.profileRetries)) {
+        if (!removed) delete state.profileRetries[origin];
     }
+    if (!Object.keys(state.profileRetries).length) delete state.profileRetries;
+}
+
+function writeItem(state, key, value) {
+    if (profileKeys.includes(key)) cancelProfileImport(state);
     if (value === null) {
         delete state.data[key];
         const removals = Object.values(state.panelMigrations ?? {}).map(migration => migration.removed);
@@ -91,8 +98,7 @@ function decodeStore(document) {
     const marker = state.seededWithoutProfiles;
     if (marker || state.profileRetries) {
         if (!marker || !profileKeys.every(key => Object.hasOwn(marker, key) && marker[key] === state.data[key])) {
-            delete state.seededWithoutProfiles;
-            delete state.profileRetries;
+            cancelProfileImport(state);
         }
         for (const key of profileKeys) {
             if (state.data[key] === null) delete state.data[key];
@@ -178,7 +184,7 @@ function sharedStorage(dir) {
         return result;
     }
     function setValue(state, key, value) {
-        if (state.seededWithoutProfiles || state.panelMigrations || state.deletedDuringSettingsMigration) {
+        if (state.seededWithoutProfiles || state.profileRetries || state.panelMigrations || state.deletedDuringSettingsMigration) {
             updateMigration(state, current => writeItem(current, key, value));
         } else if ((state.data[key] ?? null) !== value) {
             writeItem(state, key, value);
@@ -236,13 +242,13 @@ function sharedStorage(dir) {
                         importSettings(state.pendingPanelSettings ?? state.data, values, migration.removed);
                     }
                 }
-                if (state.initialized && !recover && !state.seededWithoutProfiles) return false;
-                if (!state.initialized && !profileKeys.some(key => key in state.data)) state.seededWithoutProfiles = true;
                 const sources = [values ?? {}];
                 finishProfileRetry(state, profileOrigin, values);
                 for (const [origin, source] of retries) {
                     if (finishProfileRetry(state, origin, source)) sources.push(source);
                 }
+                if (state.initialized && !recover && !state.seededWithoutProfiles) return false;
+                if (!state.initialized && !profileKeys.some(key => key in state.data)) state.seededWithoutProfiles = true;
                 migrateProfiles(state.data, [...sources, fallback ?? {}], { firstMigration: !state.initialized, recover });
                 const hasRoster = profileKeys.some(key => key in state.data && !isEmptyRoster(state.data[key]));
                 if (hasRoster && !state.profileRetries) delete state.seededWithoutProfiles;

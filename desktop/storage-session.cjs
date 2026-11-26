@@ -71,12 +71,11 @@ function prepareStorage(app, serverUrl) {
                 try {
                     hidden = new BrowserWindow({ show: false });
                     await hidden.loadURL(migrationUrl);
-                    const entries = source === legacyOrigin
-                        ? 'Object.entries(localStorage).filter(([key]) => key.startsWith("rs2b0t:"))'
-                        : `${JSON.stringify(profileKeys)}.map(key => [key, localStorage[key]])`;
-                    const readPanelSettings = !initialized || automaticRetry;
-                    if (readPanelSettings && source !== legacyOrigin) return await hidden.webContents.executeJavaScript(`(() => {
-                        const values = Object.fromEntries(${entries});
+                    if (source === legacyOrigin) {
+                        return await hidden.webContents.executeJavaScript('Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.startsWith("rs2b0t:")))');
+                    }
+                    return await hidden.webContents.executeJavaScript(`(() => {
+                        const values = Object.fromEntries(${JSON.stringify(profileKeys)}.map(key => [key, localStorage[key]]));
                         for (const key of Object.keys(localStorage)) {
                             if (!key.startsWith("rs2b0t:") || (!key.includes(":set:") && !key.endsWith(":selectedScript"))) continue;
                             values[key] = localStorage[key];
@@ -84,7 +83,6 @@ function prepareStorage(app, serverUrl) {
                         }
                         return values;
                     })()`);
-                    return await hidden.webContents.executeJavaScript(`Object.fromEntries(${entries})`);
                 } finally {
                     hidden?.destroy();
                     session.defaultSession.protocol.unhandle(scheme);

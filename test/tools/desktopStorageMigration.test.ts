@@ -498,11 +498,13 @@ test('an unreadable configured origin still opens the 8081 roster', async () => 
     expect(await launch(custom, true)).toEqual(configured);
 });
 
-test.each(['retry', 'save', 'reset'])('8081 settings open while the configured roster is unreadable, then honor %s', async action => {
+test.each(['retry', 'recover', 'save', 'reset'])('8081 settings open while the configured roster is unreadable, then honor %s', async action => {
     const script = 'rs2b0t:fixture:selectedScript';
+    const selected = 'rs2b0t:custom:selectedScript';
+    const removed = 'rs2b0t:set:Miner:ore';
     let unreadable = true;
     const { launch, store } = fixture({
-        [custom]: { [accounts]: JSON.stringify(profiles) },
+        [custom]: { [accounts]: JSON.stringify(profiles), [selected]: 'Miner', [removed]: 'Tin' },
         [original]: { [script]: 'Fisher' }
     }, origin => {
         if (origin === custom && unreadable) throw new Error('Unreadable 8082 fixture');
@@ -513,10 +515,14 @@ test.each(['retry', 'save', 'reset'])('8081 settings open while the configured r
     const newer = [{ username: 'newer', password: 'fixture' }];
     if (action === 'save') store.setItem(accounts, JSON.stringify(newer));
     if (action === 'reset') store.removeItem(vault);
+    store.removeItem(removed);
     unreadable = false;
     const expected = action === 'save' ? newer : action === 'reset' ? [] : profiles;
+    if (action === 'recover') expect(await launch(custom, true)).toEqual(profiles);
     expect(await launch(original)).toEqual(expected);
     expect(await launch(custom)).toEqual(expected);
+    expect(store.getItem(selected)).toBe('Miner');
+    expect(store.getItem(removed)).toBeNull();
 });
 
 test('a pending retry from an older desktop recovers its origin and preserves deleted settings', async () => {
@@ -794,6 +800,19 @@ test('an invalid source on first launch leaves room for explicit recovery later'
 
 test.each<[string, boolean]>([
     ['first migration', false], ['explicit recovery', true]
+])('%s skips a 17-byte vault payload and recovers the 8081 roster', async (_, recover) => {
+    const damaged = JSON.stringify({
+        v: 1, iter: 310000, salt: Buffer.alloc(16).toString('base64'),
+        iv: Buffer.alloc(12).toString('base64'), ct: Buffer.alloc(17).toString('base64')
+    });
+    const { launch, store } = fixture({ [custom]: { [vault]: damaged }, [original]: { [accounts]: JSON.stringify(profiles) } });
+    if (recover) store.seed({});
+    expect(await launch(custom, recover)).toEqual(profiles);
+    expect(await launch(custom)).toEqual(profiles);
+});
+
+test.each<[string, boolean]>([
+    ['first migration', false], ['explicit recovery', true]
 ])('%s copies only the encrypted vault from a mixed source', async (_, recover) => {
     const { launch, saveLegacy, store } = fixture();
     const source = fixture().store;
@@ -814,15 +833,16 @@ test.each<[string, boolean]>([
     expect(store.getItem(accounts)).toBeNull();
 });
 
-test.each<[string, boolean, number]>([
-    ['first migration', false, 12],
-    ['explicit recovery', true, 16]
-])('a fallback vault with a 32-byte salt unlocks after %s and relaunch', async (_, recover, ivLength) => {
+test.each<[string, boolean, number, typeof profiles]>([
+    ['first migration', false, 12, profiles],
+    ['explicit recovery', true, 16, profiles],
+    ['migration of an 18-byte payload', false, 12, []]
+])('a fallback vault with a 32-byte salt unlocks after %s and relaunch', async (_, recover, ivLength, roster) => {
     const salt = randomBytes(32);
     const iv = randomBytes(ivLength);
     const iter = 310000;
     const cipher = createCipheriv('aes-256-gcm', pbkdf2Sync('fixture', salt, iter, 32, 'sha256'), iv);
-    const ct = Buffer.concat([cipher.update(JSON.stringify(profiles)), cipher.final(), cipher.getAuthTag()]);
+    const ct = Buffer.concat([cipher.update(JSON.stringify(roster)), cipher.final(), cipher.getAuthTag()]);
     const saved = JSON.stringify({ v: 1, kdf: 'PBKDF2-SHA256', iter, salt: salt.toString('base64'), iv: iv.toString('base64'), ct: ct.toString('base64') });
     const { launch, store } = fixture({ [original]: { [vault]: saved } });
     if (recover) store.seed({});
@@ -830,5 +850,5 @@ test.each<[string, boolean, number]>([
     await launch(custom);
     const reopened = new ProfileVault(store);
     expect(await reopened.unlock('fixture')).toBe(true);
-    expect(reopened.list()).toEqual(profiles.map(profile => ({ ...profile, tab: 'Main' })));
+    expect(reopened.list()).toEqual(roster.map(profile => ({ ...profile, tab: 'Main' })));
 });

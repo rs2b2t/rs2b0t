@@ -51,7 +51,8 @@ from the configured origin when the shared store has no value for them.
 If the configured origin is unreadable and 8081 is readable, the chooser opens
 even if 8081 is empty. When no profiles were found, the next launch retries
 each unreadable configured origin, starting with the current one if it is
-pending. Saving or resetting profiles cancels pending profile retries.
+pending. Saving or resetting profiles cancels pending profile imports.
+The desktop still retries unread script settings and preserves later edits and deletions.
 If 8081 is unreadable, the desktop can open with a populated configured roster
 and defer script settings until it can check 8081. With an empty configured
 roster, startup stops and the next launch tries migration again. Edits made
@@ -62,7 +63,8 @@ possible deletions.
 If an older migration left the chooser empty, run
 `B0T_RECOVER_LEGACY_PROFILES=1 bun run start -- --server=http://localhost:8082`
 once from `desktop/`, using the origin where you saved the profiles. On an
-initialized store, recovery imports only profiles. It can replace an empty
+initialized store, recovery imports only profiles unless a settings retry is
+already pending for that origin. It can replace an empty
 plaintext roster and preserves populated rosters and encrypted vaults.
 Ordinary launches preserve deletions.
 
