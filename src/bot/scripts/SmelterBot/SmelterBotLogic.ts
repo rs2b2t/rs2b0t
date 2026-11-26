@@ -1,4 +1,4 @@
-import { barsSmeltable, oresPerBar, primaryOre, RECIPES, type Recipe } from '../../data/smelting.js';
+import { barsSmeltable, oreQuantities, oresPerBar, primaryOre, RECIPES, type Recipe } from '../../data/smelting.js';
 
 export { primaryOre, RECIPES, type Recipe };
 
@@ -27,12 +27,11 @@ export function withdrawFor(recipe: Recipe, stock: (ore: string) => number): { o
     if (sets <= 0) {
         return [];
     }
-    return recipe.ingredients.map(i => ({ ore: i.ore, count: sets * i.perBar }));
+    return oreQuantities(recipe, sets);
 }
 
 export function withdrawPlan(recipe: Recipe): { ore: string; count: number }[] {
-    const sets = setsPerTrip(recipe);
-    return recipe.ingredients.map(i => ({ ore: i.ore, count: sets * i.perBar }));
+    return oreQuantities(recipe, setsPerTrip(recipe));
 }
 
 function matches(name: string | null, pattern: string): boolean {

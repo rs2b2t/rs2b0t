@@ -1,4 +1,4 @@
-import { RECIPES, type Recipe } from '../../data/smelting.js';
+import { oreQuantities, RECIPES, type Recipe } from '../../data/smelting.js';
 import { barsPerTrip } from '../../api/magic/superheat.js';
 
 export { barsSmeltable, oresPerBar, primaryOre, RECIPES, type Recipe } from '../../data/smelting.js';
@@ -42,10 +42,10 @@ export function recipeForBar(bar: string): Recipe | undefined {
 
 /** The exact per-item count to withdraw for one trip (27 ores or fewer). */
 export function withdrawSet(recipe: Recipe, useFireRunes = false): Record<string, number> {
-    const trips = barsPerTrip(recipe, useFireRunes);
+    const bars = barsPerTrip(recipe, useFireRunes);
     const set: Record<string, number> = {};
-    for (const i of recipe.ingredients) {
-        set[i.ore] = trips * i.perBar;
+    for (const { ore, count } of oreQuantities(recipe, bars)) {
+        set[ore] = count;
     }
     return set;
 }
