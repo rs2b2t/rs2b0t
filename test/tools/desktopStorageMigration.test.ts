@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, type CopySyncOptions } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { URL } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import { ProfileVault } from '#/bot/multibox/ProfileVault.js';
@@ -405,6 +405,23 @@ test.each(['ENOENT', 'EACCES'])('a settings retry opens the roster after %s duri
     failCopy = false;
     expect(await launch(custom)).toEqual(profiles);
     expect(store.getItem(script)).toBe('Fisher');
+});
+
+test('explicit recovery removes the partial runtime after a copy error and can retry', async () => {
+    let failedRuntime = '';
+    const { launch, storeDir } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles) } }, undefined, (src, dest, options) => {
+        if (failedRuntime) return cpSync(src, dest, options);
+        mkdirSync(dest);
+        cpSync(join(src, 'fixture.json'), join(dest, 'fixture.json'));
+        failedRuntime = dirname(dest);
+        throw Object.assign(new Error('Fixture disk full'), { code: 'ENOSPC' });
+    });
+    writeFileSync(join(storeDir, 'storage.json'), JSON.stringify({ initialized: true, data: {} }));
+
+    await expect(launch(custom, true)).rejects.toMatchObject({ code: 'ENOSPC' });
+    expect(existsSync(failedRuntime)).toBe(false);
+    expect(await launch(custom)).toEqual([]);
+    expect(await launch(custom, true)).toEqual(profiles);
 });
 
 test('a read failure with no usable roster leaves the first migration retryable', async () => {

@@ -37,6 +37,7 @@ function prepareStorage(app, serverUrl) {
             } catch (error) {
                 if (error.code === 'ENOENT') continue;
                 if (settingsOnly) break;
+                fs.rmSync(runtime, { recursive: true, force: true });
                 throw error;
             }
         }
