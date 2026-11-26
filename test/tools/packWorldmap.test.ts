@@ -5,6 +5,9 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync,
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+const decodePng: (png: Buffer) => { width: number; height: number; data: Buffer } =
+    import.meta.require('playwright-core/lib/utilsBundle').PNG.sync.read;
+
 // A whole-archive-compressed JAG with empty map layers and fonts.
 const emptyMap = Buffer.from(
     'AAfLAAC9MUFZJlNZPBJubgAAMf//0oGMAABUBV6gAgJRYApkoAQSB5UFQwIUKBQgHgIQKg0gAHQhChpoADQNA0GQG1AbUHoT9FCvUkGmhgTEDCME0000yaGgYTTNmlrJt3G/lOMtNkNVoCaYAJVXBgAIgUhSFAAxLGL8zAPJhAQoB5OM754akXc8ExxtmGGT0hu6KRd6NwOqiT4XSTLPHLRBx9TqpmKQTqjJN7/LQxuIieImPCLYP4u5IpwoSB4JNzcA',
@@ -12,6 +15,44 @@ const emptyMap = Buffer.from(
 );
 const cachedMap = Buffer.concat([emptyMap, Buffer.from('C')]);
 const tools = join(import.meta.dir, '../../tools');
+
+test('baking without map fonts draws Town at the center of the labels PNG only', () => {
+    const root = mkdtempSync(join(tmpdir(), 'bake-labels-'));
+    try {
+        const jag = join(root, 'town.jag');
+        writeFileSync(jag, Buffer.from(
+            'AAeFAACZMUFZJlNZcFT9XQAAINv/8p5ARAVCBFFgCaSAABIHFAEBAhQoFCAeABAADSAAdCpk0AaAAAAANNGQjKpiYQwAmjIZDAE9Jokn6vqpV9AbbACtdyJxJKUGEgPEBC+ssKyB2KIBg2EC+MQATSt6hpM+nAFFtexe7MteD8FJD56Yc3XIfhlxEX0yZ0RHIkkij8XckU4UJBwVP1dA',
+            'base64'
+        ));
+        execFileSync(process.execPath, [
+            '--no-install', join(tools, 'map/build-basemap.ts'), '--jag', jag, '--out', root, '--engine', root
+        ], { cwd: root, env: { HOME: root }, stdio: 'pipe' });
+
+        const manifest = JSON.parse(readFileSync(join(root, 'worldmap-basemap.manifest.json'), 'utf8'));
+        const labels = decodePng(readFileSync(join(root, manifest.labelsOverlayUrl)));
+        const terrain = decodePng(readFileSync(join(root, manifest.basemapUrl)));
+        expect([labels.width, labels.height]).toEqual([1600, 1216]);
+        expect([terrain.width, terrain.height]).toEqual([labels.width, labels.height]);
+
+        let inside = 0;
+        let outside = 0;
+        let changedTerrain = 0;
+        for (let y = 0; y < labels.height; y++) {
+            for (let x = 0; x < labels.width; x++) {
+                const offset = (y * labels.width + x) * 4;
+                if (terrain.data.readUInt32BE(offset) !== 0x000000ff) changedTerrain++;
+                if (labels.data[offset + 3] === 0) continue;
+                if (Math.abs(x - 800) <= 24 && Math.abs(y - 608) <= 12) inside++;
+                else outside++;
+            }
+        }
+        expect(changedTerrain).toBe(0);
+        expect(outside).toBe(0);
+        expect(inside).toBeGreaterThan(0);
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
 
 test('a failed download bake can retry and cache the valid worldmap', () => {
     const root = mkdtempSync(join(tmpdir(), 'bake-worldmap-'));

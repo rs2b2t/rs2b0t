@@ -15,6 +15,7 @@ import {
     type BasemapManifest,
     type WorldmapKeyIndex
 } from '#/bot/panel/worldMapBasemap.js';
+import { createBitmapFontContext } from './bitmapFont.js';
 import { encodePngRgba, pix2dToRgba } from './encodePng.js';
 
 const SCHEMA_TAG = `basemap-schema-${BASEMAP_SCHEMA}`;
@@ -89,54 +90,20 @@ function fingerprint(jag: Uint8Array): string {
 function installCanvasMock(): void {
     GlobalRegistrator.register();
 
-    function fake2d(c: { width: number; height: number }) {
-        return {
-            fillStyle: '#000',
-            strokeStyle: '#000',
-            font: '10px sans-serif',
-            textAlign: 'left' as CanvasTextAlign,
-            createImageData(w: number, h: number) {
-                return {
-                    data: new Uint8ClampedArray(w * h * 4),
-                    width: w,
-                    height: h,
-                    colorSpace: 'srgb' as const
-                };
-            },
-            getImageData(_x: number, _y: number, w: number, h: number) {
-                return {
-                    data: new Uint8ClampedArray(w * h * 4),
-                    width: w,
-                    height: h,
-                    colorSpace: 'srgb' as const
-                };
-            },
-            putImageData() {},
-            fillRect() {},
-            strokeRect() {},
-            fillText() {},
-            measureText: () => ({ width: 8 }),
-            drawImage() {},
-            beginPath() {},
-            moveTo() {},
-            lineTo() {},
-            stroke() {},
-            save() {},
-            restore() {},
-            clearRect() {},
-            canvas: c
-        };
-    }
-
+    const el = document.createElement('canvas');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (HTMLCanvasElement.prototype as any).getContext = function (type: string) {
-        if (type === '2d') {
-            return fake2d(this);
-        }
-        return null;
+        if (type !== '2d') return null;
+        if (this !== el) return createBitmapFontContext(this.width, this.height);
+        return {
+            createImageData(w: number, h: number) {
+                return { data: new Uint8ClampedArray(w * h * 4), width: w, height: h, colorSpace: 'srgb' };
+            },
+            fillRect() {},
+            putImageData() {}
+        };
     };
 
-    const el = document.createElement('canvas');
     el.id = 'canvas';
     el.width = 800;
     el.height = 600;
