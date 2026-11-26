@@ -79,7 +79,7 @@ export class MultiBoxController {
         return this.snap(slot);
     }
 
-    restoreProfiles(profiles: Account[], tabs: string[], activeTab: string): void {
+    restoreProfiles(profiles: Account[], tabs: string[], activeTab: string, loadMissing = true): void {
         const savedProfiles = indexByUsername(profiles.map(p => [p.username, p] as const));
         const knownTabs = new Set([MAIN_TAB, ...tabs]);
         const retained = new Set<string>();
@@ -104,7 +104,7 @@ export class MultiBoxController {
         }
         this.customTabs = [...knownTabs].slice(1);
         this.active = activeTab;
-        this.addGroup([...savedProfiles.firstByIdentity.values()], modesChanged);
+        this.addGroup(loadMissing ? [...savedProfiles.firstByIdentity.values()] : [], modesChanged);
     }
 
     addGroup(accounts: Account[], modesChanged = false): void {

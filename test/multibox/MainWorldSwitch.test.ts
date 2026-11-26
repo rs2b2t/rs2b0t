@@ -390,6 +390,9 @@ test.each([
         const saves = spyOn(vault, 'saveTabState');
         const spawn = spyOn(DomSlotOps.prototype, 'spawn');
         const setItem = sessionStorage.setItem;
+        const file = serializeProfileFile({
+            profiles, tabs: ['Fleet'], activeTab: 'Fleet', storage: { new: { selectedScript: 'Miner' } }
+        });
         try {
             if (result === 'fails to spawn') {
                 spawn.mockImplementationOnce(() => { throw new Error(expectedError); });
@@ -400,9 +403,7 @@ test.each([
                     value() { throw new DOMException(expectedError, 'QuotaExceededError'); }
                 });
             }
-            await panel.importText(serializeProfileFile({
-                profiles, tabs: ['Fleet'], activeTab: 'Fleet', storage: { fixture: { selectedScript: 'Miner' } }
-            }));
+            await panel.importText(file);
             expect(await added).toBe(true);
             expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toBe(expectedError);
             await Promise.all(saves.mock.results.map(result => result.value));
@@ -414,13 +415,22 @@ test.each([
             expect(wall.controller.tabs()).toEqual(['Main', 'Fleet', 'Work', 'Local']);
             expect(wall.controller.activeTab()).toBe('Fleet');
             const expectedSlots = [['fixture', 'Fleet'], ['guest', 'Work']];
-            if (result !== 'fails to spawn') expectedSlots.push(['new', 'Fleet']);
+            if (result === 'succeeds') expectedSlots.push(['new', 'Fleet']);
             expect(wall.slots().map(s => [s.username, s.tab])).toEqual(expectedSlots);
             expect(wall.slots().slice(0, 2).map(s => s.id)).toEqual([reused.id, omitted.id]);
+            if (result === 'exceeds quota') {
+                expect(spawn).not.toHaveBeenCalled();
+                Object.defineProperty(sessionStorage, 'setItem', { configurable: true, value: setItem });
+                await panel.importText(file);
+                expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toBe('');
+                expect(sessionStorage.getItem('rs2b0t:new:selectedScript')).toBe('Miner');
+                expect(spawn).toHaveBeenCalledTimes(1);
+                expect(wall.slots().map(s => [s.username, s.tab])).toEqual([...expectedSlots, ['new', 'Fleet']]);
+            }
         } finally {
             spawn.mockRestore();
             Object.defineProperty(sessionStorage, 'setItem', { configurable: true, value: setItem });
-            for (const store of [localStorage, sessionStorage]) store.removeItem('rs2b0t:fixture:selectedScript');
+            for (const store of [localStorage, sessionStorage]) store.removeItem('rs2b0t:new:selectedScript');
             replace.mockRestore();
             saves.mockRestore();
         }
