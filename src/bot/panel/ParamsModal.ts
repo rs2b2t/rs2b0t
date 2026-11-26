@@ -1,5 +1,5 @@
 import { SettingsStore, type SettingsSchema } from '../runtime/Settings.js';
-import { groupSchema, isVisible, renderControl, refreshDeps } from './paramControls.js';
+import { groupSchema, isTruthy, isVisible, renderControl, refreshDeps } from './paramControls.js';
 import { el } from './dom.js';
 import { Loadouts } from '../api/loadout/loadoutStore.js';
 import { PriceBooks } from '../api/market/bookStore.js';
@@ -75,6 +75,14 @@ export default class ParamsModal {
 
     isOpen(): boolean {
         return this.backdrop.style.display === 'flex';
+    }
+
+    refreshCheckboxes(keys: Iterable<string>): void {
+        if (!this.isOpen()) return;
+        for (const key of keys) {
+            const box = this.bodyEl.querySelector<HTMLInputElement>(`[data-setting-key="${CSS.escape(key)}"] .rs2b0t-param-cb`);
+            if (box) box.checked = isTruthy(SettingsStore.displayString(this.scriptName, key, this.schema[key], this.draft?.values));
+        }
     }
 
     open(
@@ -231,6 +239,7 @@ export default class ParamsModal {
     private renderRow(key: string, disabled: boolean, deps: Set<string>, valueOf: (key: string) => string): HTMLElement {
         const def = this.schema[key];
         const row = el('div', 'rs2b0t-param-row');
+        if (def.type === 'boolean') row.dataset.settingKey = key;
 
         const label = el('div', 'rs2b0t-param-label');
         label.textContent = def.label ?? key;

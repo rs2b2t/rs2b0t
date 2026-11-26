@@ -111,7 +111,7 @@ function listItems(value: string): string[] {
     return value.split(',').map(s => s.trim()).filter(s => s.length > 0);
 }
 
-function isTruthy(value: string): boolean {
+export function isTruthy(value: string): boolean {
     const normalized = value.trim().toLowerCase();
     return normalized === 'true' || normalized === '1' || normalized === 'yes';
 }

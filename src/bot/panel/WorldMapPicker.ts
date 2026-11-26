@@ -990,7 +990,7 @@ export class WorldMapPicker {
                         for (const [key, value] of submitted) {
                             if (bakeEdits.get(key) === value) bakeEdits.delete(key);
                         }
-                        if (submitted.size && settingsModal.isOpen()) settingsModal.render();
+                        settingsModal.refreshCheckboxes(submitted.keys());
                         const crcKey = await fetchClientCrcKey();
                         if (crcKey) {
                             try {

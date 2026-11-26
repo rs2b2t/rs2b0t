@@ -304,6 +304,36 @@ describe('map picker bake settings drafts', () => {
         }
     });
 
+    test('rebuild completion preserves a focused Walkable colour edit until change', async () => {
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
+        const pending = Promise.withResolvers<ReturnType<typeof rebuiltMap>>();
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockReturnValue(pending.promise);
+        try {
+            await withPicker(async () => {
+                openSettings();
+                bakeCheckbox('Stamp labels into rebuild').click();
+                clickRebuild(true);
+                bakeCheckbox('Show basemap').click();
+                const selector = '.rs2b0t-modal .rs2b0t-ctl-color input[type="text"]';
+                const colour = document.querySelector<HTMLInputElement>(selector)!;
+                colour.focus();
+                colour.value = '#123abc';
+                colour.dispatchEvent(new Event('input', { bubbles: true }));
+                pending.resolve(rebuiltMap());
+                await new Promise<void>(resolve => setImmediate(resolve));
+
+                expect(stored('bakeLabels')).toEqual({ local: 'true', session: 'true' });
+                expect(document.querySelector<HTMLInputElement>(selector)?.value).toBe('#123abc');
+                expect(document.activeElement).toBe(colour);
+                expect(stored('dotColor')).toEqual({ local: null, session: null });
+                colour.dispatchEvent(new Event('change', { bubbles: true }));
+                expect(stored('dotColor')).toEqual({ local: '#123abc', session: '#123abc' });
+            });
+        } finally {
+            bake.mockRestore();
+        }
+    });
+
     test('untouched close leaves the saved preference and absent keys alone under a URL override', async () => {
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'false');
         const params = SettingsStore['urlParams'];
