@@ -1,4 +1,4 @@
-import { trafficMeter } from './TrafficMeter.js';
+import { trafficMeter, type TrafficMeter } from './TrafficMeter.js';
 
 export default class ClientStream {
     private readonly socket: WebSocket;
@@ -23,11 +23,11 @@ export default class ClientStream {
         });
     }
 
-    constructor(socket: WebSocket) {
+    constructor(socket: WebSocket, meter = trafficMeter) {
         socket.onclose = this.remoteClose;
         socket.onerror = this.remoteClose;
-        this.wsin = new WebSocketReader(socket, 30000);
-        this.wsout = new WebSocketWriter(socket, 5000);
+        this.wsin = new WebSocketReader(socket, 30000, meter);
+        this.wsout = new WebSocketWriter(socket, 5000, meter);
         this.socket = socket;
     }
 
@@ -119,7 +119,7 @@ class WebSocketWriter {
     private closed: boolean = false;
     private ioerror: boolean = false;
 
-    constructor(socket: WebSocket, limit: number) {
+    constructor(socket: WebSocket, limit: number, private readonly meter: TrafficMeter) {
         this.socket = socket;
         this.limit = limit;
     }
@@ -140,7 +140,7 @@ class WebSocketWriter {
         }
         try {
             this.socket.send(src.slice(0, len));
-            trafficMeter.addSent(len);
+            this.meter.addSent(len);
         } catch (_e) {
             this.ioerror = true;
         }
@@ -195,7 +195,7 @@ class WebSocketReader {
     // Timestamp at receipt, before a shared multibox thread can delay processing.
     lastDataAt: number = performance.now();
 
-    constructor(socket: WebSocket, timeoutMs: number) {
+    constructor(socket: WebSocket, timeoutMs: number, private readonly meter: TrafficMeter) {
         this.socket = socket;
         this.timeoutMs = timeoutMs;
         socket.binaryType = 'arraybuffer';
@@ -217,7 +217,7 @@ class WebSocketReader {
 
         this.total += event.available;
         this.lastDataAt = performance.now();
-        trafficMeter.addReceived(event.len);
+        this.meter.addReceived(event.len);
 
         if (this.callback) {
             const cb = this.callback;
