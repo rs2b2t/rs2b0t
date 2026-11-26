@@ -98,15 +98,17 @@ export function buildPathQuads(
     tiles: PublishedPathTile[],
     pathIdx: number,
     cameraLevel: number,
-    project: ProjectCorner
+    project: ProjectCorner,
+    labelsOnly = false
 ): TileQuad[] {
     const forceHops: number[] = [];
-    for (let i = 0; i < tiles.length; i++) {
-        if (tiles[i]!.transport) {
+    for (let i = Math.max(0, pathIdx); i < tiles.length; i++) {
+        const tile = tiles[i]!;
+        if (tile.transport && (!labelsOnly || tile.label?.trim())) {
             forceHops.push(i);
         }
     }
-    const indices = selectDrawIndices(pathIdx, tiles.length, MAX_DRAW_TILES, NEAR_FULL_DENSITY, forceHops);
+    const indices = labelsOnly ? forceHops : selectDrawIndices(pathIdx, tiles.length, MAX_DRAW_TILES, NEAR_FULL_DENSITY, forceHops);
     const out: TileQuad[] = [];
     for (const idx of indices) {
         const t = tiles[idx]!;
@@ -427,12 +429,11 @@ export function paintNavPath(
     const project: ProjectCorner = (x, z, u, v) => reader.overlayPosWorld(x, z, 0, u, v);
 
     const trailFrom = Math.max(0, path.pathIdx - 4);
-    const quads = buildPathQuads(path.tiles, trailFrom, me.level, project);
+    const labelsOnly = opts?.labelsOnly === true;
+    const quads = labelsOnly && !theme.showText ? [] : buildPathQuads(path.tiles, trailFrom, me.level, project, labelsOnly);
     for (const q of quads) {
         q.done = q.idx < path.pathIdx;
     }
-
-    const labelsOnly = opts?.labelsOnly === true;
 
     ctx.save();
     try {
