@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { decodeCoord } from '../../tools/nav/stairsParse.js';
-import { buildClueDb, parseClueObjs, parseEnum, parsePuzzleTalk, parseTalkMappings } from '../../tools/clues/cluesParse.js';
+import { buildClueDb, parseChallengeTalk, parseClueObjs, parseEnum, parsePuzzleTalk, parseTalkMappings } from '../../tools/clues/cluesParse.js';
 
 const ENUM_FIXTURE = `
 [trail_easy_enum]
@@ -166,6 +166,29 @@ describe('parseTalkMappings', () => {
     });
     test('picks the last opnpc header before the call among single-line headers', () => {
         expect(parseTalkMappings(DUEL_SCRIPT)).toEqual([{ obj: 'trail_clue_easy_vague029', npc: 'duel_crowdfemale3' }]);
+    });
+});
+
+describe('parseChallengeTalk', () => {
+    const gates = `
+        inv_total(inv, trail_clue_medium_anagram001)
+        [opnpc1,ned] inv_total(inv, trail_clue_medium_anagram001)
+        [label,next]
+        inv_total(inv, trail_clue_medium_anagram001)
+        inv_total(inv, trail_clue_medium_anagram002)
+        [opnpc2,gerrant] inv_total(inv, trail_clue_medium_anagram001)
+    `;
+
+    test('attributes gates in order when the challenge appears later in the script', () => {
+        expect(parseChallengeTalk(gates + 'trail_clue_medium_anagram001_challenge')).toEqual([
+            { obj: 'trail_clue_medium_anagram001', npc: 'ned' },
+            { obj: 'trail_clue_medium_anagram001', npc: 'ned' },
+            { obj: 'trail_clue_medium_anagram001', npc: 'gerrant' }
+        ]);
+    });
+
+    test('ignores gates when the script has no challenge', () => {
+        expect(parseChallengeTalk(gates)).toEqual([]);
     });
 });
 
