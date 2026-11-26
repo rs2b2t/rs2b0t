@@ -258,7 +258,7 @@ class ScriptRunnerImpl {
 
         // Why: ctx.resume() re-arms the waiter a parked loop sits on, so that loop comes back by itself; clearing the flag would run a second body through the WalkExecutor singleton the first is still walking.
         // Why: with no waiter the loop is blocked on a promise the scheduler does not own (#580) and nothing will wake it, so the flag is cleared to let the pump start a fresh iteration.
-        if (ctx.waiters.length === 0) {
+        if (this.startupComplete && ctx.waiters.length === 0) {
             ctx.loopInFlight = false;
         }
 
