@@ -14,7 +14,6 @@ import {
     TB_TINSAY,
     TB_TIADECHE
 } from '#/bot/api/ai/quests/defs/tbwt/areas.js';
-import { TB_FLAG } from '#/bot/api/ai/quests/defs/tbwt/journal.js';
 import {
     arrowChoice,
     bowChoice,
@@ -26,6 +25,7 @@ import {
     spearWanted
 } from '#/bot/api/ai/quests/defs/tbwt/supplies.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+import { progressFlags, type ProgressOptions } from './tbwt-progress.fixture.js';
 
 const KARAMJA = { x: 2780, z: 3087, level: 0 };
 
@@ -39,13 +39,7 @@ const DOSE1 = TB_POTIONS[3]!;
 /** The kit a 70-ranged account with a stocked bank ends up in. */
 const KIT = ['Maple shortbow', 'Adamant arrow', ...TB_ARMOUR];
 
-interface Options {
-    lubufu?: number;
-    tiadeche?: number;
-    tamayu?: number;
-    tinsay?: number;
-    agility?: boolean;
-    spear?: boolean;
+interface Options extends ProgressOptions {
     invIds?: [number, number][];
     inv?: [string, number][];
     bank?: [string, number][];
@@ -57,18 +51,7 @@ interface Options {
 }
 
 function snap(options: Options = {}): QuestSnapshot {
-    const flags = new Set<string>([
-        `${TB_FLAG.LUBUFU}:${options.lubufu ?? TB_LUBUFU.UNKNOWN}`,
-        `${TB_FLAG.TIADECHE}:${options.tiadeche ?? TB_TIADECHE.UNKNOWN}`,
-        `${TB_FLAG.TAMAYU}:${options.tamayu ?? TB_TAMAYU.UNKNOWN}`,
-        `${TB_FLAG.TINSAY}:${options.tinsay ?? TB_TINSAY.UNKNOWN}`
-    ]);
-    if (options.agility) {
-        flags.add(TB_FLAG.AGILITY);
-    }
-    if (options.spear) {
-        flags.add(TB_FLAG.SPEAR);
-    }
+    const flags = progressFlags(options);
     return {
         journal: 'inProgress',
         inv: new Map(options.inv ?? []),
