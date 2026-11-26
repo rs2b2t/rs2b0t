@@ -12,6 +12,11 @@ Reflect.set(globalThis, 'rs2b0tDesktopStorage', {
         data.set(key, value);
     },
     removeItem: (key: string) => { data.delete(key); },
+    compareAndRemove(key, expected) {
+        if ((data.get(key) ?? null) !== expected) return false;
+        data.delete(key);
+        return true;
+    },
     keys: () => { keyReads++; return [...data.keys()]; },
     compareAndSet(key, expected, value) {
         if ((data.get(key) ?? null) !== expected) return false;

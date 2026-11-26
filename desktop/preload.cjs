@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('rs2b0tDesktopStorage', {
     getItemFresh: key => call('getItem', key),
     setItem: (key, value) => call('setItem', key, value),
     removeItem: (key, expected) => call('removeItem', key, expected),
+    ...(capabilities?.compareAndRemove && { compareAndRemove: (key, expected) => call('removeItem', key, expected) !== false }),
     keys: () => snapshot.version >= 0 ? Object.keys(snapshot.data) : call('keys'),
     ...(capabilities?.applySettings && { applySettings: (changes, checked) => call('applySettings', changes, checked ? snapshot.version : undefined) }),
     compareAndSet: (key, expected, value) => call('compareAndSet', key, expected, value),

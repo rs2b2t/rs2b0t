@@ -5,6 +5,7 @@ type ApplySettings = (changes: Record<string, string | null>, checked?: boolean)
 export const legacyCopyStorage = Symbol.for('rs2b0t:legacyCopyStorage');
 interface LegacyCopyStorage {
     read(key: string): string | null;
+    check(key: string, previous: string | null, value: string | null): void;
     swap(key: string, expected: string | null, value: string | null): boolean;
 }
 
@@ -16,6 +17,7 @@ export interface DesktopStorage {
     removeItem(key: string, expected?: string): boolean | void;
     keys(): string[];
     compareAndSet(key: string, expected: string | null, value: string): boolean;
+    compareAndRemove?(key: string, expected: string | null): boolean;
     subscribe(callback: (key: string, oldValue: string | null, newValue: string | null) => void): void;
 }
 

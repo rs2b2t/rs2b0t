@@ -71,11 +71,17 @@ export function installDesktopStorage(shared: DesktopStorage): void {
     } else {
         storage[legacyCopyStorage] = {
             read: key => (shared.getItemFresh ?? shared.getItem)(key),
+            check(key, previous, value) {
+                if (shared.getItemFresh && previous === value) return;
+                if (!shared.compareAndRemove && (previous === null || value === null)) {
+                    throw new Error('Update the desktop app to copy these settings safely.');
+                }
+                if (!shared.getItemFresh && !this.swap(key, previous, previous)) throw new Error('Saved settings changed during copy.');
+            },
             swap(key, expected, value) {
                 try {
                     if (value !== null) return shared.compareAndSet(key, expected, value);
-                    if (expected === null || !shared.compareAndSet(key, expected, expected)) return false;
-                    return shared.removeItem(key, expected) !== false;
+                    return shared.compareAndRemove?.(key, expected) === true;
                 } finally {
                     settings = undefined;
                 }

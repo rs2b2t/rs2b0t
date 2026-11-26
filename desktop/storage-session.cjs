@@ -113,7 +113,7 @@ function prepareStorage(app) {
                         event.returnValue = { value: applied, snapshot: refresh(event.senderFrame, data) };
                         return;
                     }
-                    const value = method === 'snapshot' ? { applySettings: true } : store[method](...args);
+                    const value = method === 'snapshot' ? { applySettings: true, compareAndRemove: true } : store[method](...args);
                     event.returnValue = { value, snapshot: method === 'getItem' || method === 'keys' ? undefined : refresh(event.senderFrame) };
                 } catch (error) {
                     event.returnValue = { error: error.message };

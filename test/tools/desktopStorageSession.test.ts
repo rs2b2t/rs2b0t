@@ -145,19 +145,26 @@ function failSecondWrite(store: Pick<Storage, 'setItem'>) {
     }
 }
 
-function installBridge(f: Awaited<ReturnType<typeof fixture>>, frame: Frame, batch: boolean, freshReads = true) {
+type BridgeVersion = 'batch' | 'conditional' | 'legacy';
+
+function installBridge(f: Awaited<ReturnType<typeof fixture>>, frame: Frame, version: BridgeVersion) {
     let deliver!: (channel: unknown, snapshot: Frame['received'][number]) => void;
     runInNewContext(readFileSync(new URL('../../desktop/preload.cjs', import.meta.url), 'utf8'), {
         queueMicrotask,
         require: () => ({
             contextBridge: { exposeInMainWorld: (_: string, bridge: DesktopStorage) => {
-                installDesktopStorage(freshReads ? bridge : { ...bridge, getItemFresh: undefined });
+                if (version === 'batch') return installDesktopStorage(bridge);
+                if (version === 'conditional') return installDesktopStorage({ ...bridge, applySettings: undefined });
+                installDesktopStorage({
+                    getItem: bridge.getItem, setItem: bridge.setItem, removeItem: key => bridge.removeItem(key),
+                    keys: bridge.keys, compareAndSet: bridge.compareAndSet, subscribe: bridge.subscribe
+                });
             } },
             ipcRenderer: {
                 on: (_: string, callback: typeof deliver) => { deliver = callback; },
                 sendSync: (_: string, method: string, ...args: unknown[]) => {
                     const response = f.request(frame, method, ...args);
-                    return !batch && method === 'snapshot' ? { snapshot: response.snapshot } : response;
+                    return version === 'legacy' && method === 'snapshot' ? { snapshot: response.snapshot } : response;
                 }
             }
         })
@@ -165,12 +172,12 @@ function installBridge(f: Awaited<ReturnType<typeof fixture>>, frame: Frame, bat
     return deliver;
 }
 
-async function copyFixture(batch = true, freshReads = true) {
+async function copyFixture(version: BridgeVersion = 'batch') {
     const f = await fixture();
     f.store.setItem(rock, 'iron');
     f.request(f.child, 'snapshot');
     const original = Object.getOwnPropertyDescriptor(window, 'localStorage')!;
-    const deliverToWall = installBridge(f, f.main, batch, freshReads);
+    const deliverToWall = installBridge(f, f.main, version);
     cleanups.push(() => {
         Object.defineProperty(window, 'localStorage', original);
         sessionStorage.removeItem(rock);
@@ -214,13 +221,13 @@ test('failed desktop copy preserves the session value after queued mirrors run',
 });
 
 test.each(['session', 'durable'])('legacy desktop copy preserves both stores after a %s failure and notifications in both frames', async limited => {
-    const f = await copyFixture(false);
+    const f = await copyFixture('conditional');
     const wallStore = localStorage;
     const top = Object.getOwnPropertyDescriptor(window, 'top')!;
     Object.defineProperty(window, 'top', { configurable: true, value: { localStorage: wallStore } });
     cleanups.push(() => Object.defineProperty(window, 'top', top));
     Object.defineProperty(window, 'localStorage', f.nativeStorage);
-    const deliverToChild = installBridge(f, f.child, false);
+    const deliverToChild = installBridge(f, f.child, 'conditional');
     if (limited === 'session') failSecondWrite(sessionStorage);
     else failDurableWrite();
     await Promise.resolve();
@@ -262,7 +269,7 @@ test('desktop copy publishes the committed snapshot when the file cannot be rere
 });
 
 test('legacy desktop mirrors ordinary writes queued immediately after a failed copy', async () => {
-    await copyFixture(false);
+    await copyFixture('conditional');
     failDurableWrite();
     localStorage.setItem(rock, 'copper');
     localStorage.setItem(rock, 'iron');
@@ -271,7 +278,7 @@ test('legacy desktop mirrors ordinary writes queued immediately after a failed c
 });
 
 test('legacy copy restores a removal that committed before its snapshot reread failed', async () => {
-    const f = await copyFixture(false);
+    const f = await copyFixture('conditional');
     const read = f.store.snapshot;
     const snapshot = spyOn(f.store, 'snapshot').mockImplementation(() => {
         if (f.store.getItem(rock) === null) throw new Error('reread failed');
@@ -289,7 +296,7 @@ test('legacy copy restores a removal that committed before its snapshot reread f
 });
 
 test('legacy copy preserves a peer edit with its notification still queued', async () => {
-    const f = await copyFixture(false);
+    const f = await copyFixture('conditional');
     f.request(f.child, 'setItem', rock, 'copper');
     failDurableWrite();
     await Promise.resolve();
@@ -309,7 +316,7 @@ test.each(['window', 'instance'])('desktop copy replaces a setting added by anot
 });
 
 test('a cached-only legacy bridge rejects a stale undo value before replacing the key', async () => {
-    const f = await copyFixture(false, false);
+    const f = await copyFixture('legacy');
     f.request(f.child, 'setItem', rock, 'copper');
     expect(copy).toThrow('changed during copy');
     await Promise.resolve();
@@ -318,8 +325,55 @@ test('a cached-only legacy bridge rejects a stale undo value before replacing th
     expect(sessionStorage.getItem(area)).toBeNull();
 });
 
+test.each(['legacy', 'conditional'] as const)('%s preload protects peer edits when rollback would remove a copied setting', async version => {
+    const f = await copyFixture(version);
+    const remove = f.store.removeItem;
+    f.store.removeItem = (key: string, expected?: string) => {
+        if (key === area) f.request(f.child, 'setItem', key, 'peer');
+        return remove(key, expected);
+    };
+    const swap = f.store.compareAndSet;
+    f.store.compareAndSet = (key: string, expected: string | null, value: string) => {
+        if (key === depth) throw new Error('quota');
+        return swap(key, expected, value);
+    };
+    const replace = () => replaceScriptSettings('target', 'Miner', { rock: 'coal', area: 'quarry', depth: 'deep' });
+    expect(replace).toThrow(version === 'legacy' ? 'Update the desktop app' : 'quota');
+    await Promise.resolve();
+    if (version === 'legacy') {
+        expect(f.child.received).toEqual([]);
+        expect(f.store.snapshot()).toEqual({ [rock]: 'iron' });
+    } else {
+        expect(f.store.snapshot()).toEqual({ [rock]: 'iron', [area]: 'peer' });
+    }
+    expect(sessionStorage.getItem(rock)).toBe('tin');
+    expect(sessionStorage.getItem(area)).toBeNull();
+    expect(sessionStorage.getItem(depth)).toBeNull();
+});
+
+test('a legacy preload rejects a stale cached value equal to the requested setting', async () => {
+    const f = await copyFixture('legacy');
+    f.request(f.child, 'setItem', rock, 'copper');
+    expect(() => replaceScriptSettings('target', 'Miner', { rock: 'iron' })).toThrow('changed during copy');
+    await Promise.resolve();
+    expect(f.store.snapshot()).toEqual({ [rock]: 'copper' });
+    expect(sessionStorage.getItem(rock)).toBe('tin');
+    replaceScriptSettings('target', 'Miner', { rock: 'coal' });
+    await Promise.resolve();
+    expect(f.store.snapshot()).toEqual({ [rock]: 'coal' });
+    expect(sessionStorage.getItem(rock)).toBe('coal');
+});
+
+test('a legacy preload rejects removal of an existing setting', async () => {
+    const f = await copyFixture('legacy');
+    expect(() => replaceScriptSettings('target', 'Miner', {})).toThrow();
+    await Promise.resolve();
+    expect(f.store.snapshot()).toEqual({ [rock]: 'iron' });
+    expect(sessionStorage.getItem(rock)).toBe('tin');
+});
+
 test('conditional removal preserves a peer write between validation and the disk lock', async () => {
-    const f = await copyFixture(false);
+    const f = await copyFixture('conditional');
     const remove = f.store.removeItem;
     f.store.removeItem = (key: string, expected: string) => {
         f.store.setItem(rock, 'copper');
@@ -333,7 +387,7 @@ test('conditional removal preserves a peer write between validation and the disk
 });
 
 test('legacy rollback preserves a peer removal after the first replacement', async () => {
-    const f = await copyFixture(false);
+    const f = await copyFixture('conditional');
     const swap = f.store.compareAndSet;
     f.store.compareAndSet = (key: string, expected: string | null, value: string) => {
         if (key === area && value === 'quarry') {

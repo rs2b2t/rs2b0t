@@ -152,17 +152,14 @@ export function replaceBoxSettings(id: string, script: string, clearSuffixes: st
     const changes: Record<string, string | null> = {};
     const legacy = localStorage[legacyCopyStorage];
     const undo: Array<() => void> = [];
-    const mirrorKeys: string[] = [];
-    function write(store: Storage, key: string, value: string | null): void {
+    function write(store: Storage, key: string, value: string | null, previous = store.getItem(key)): void {
         const bridge = store === localStorage ? legacy : undefined;
-        const previous = bridge ? bridge.read(key) : store.getItem(key);
         if (previous === value) return;
         undo.push(() => {
             if (bridge) bridge.swap(key, value, previous);
             else if (store.getItem(key) === value) writeItem(store, key, previous);
         });
         if (bridge) {
-            mirrorKeys.push(key);
             if (!bridge.swap(key, previous, value)) {
                 undo.pop();
                 throw new Error('Saved settings changed during copy.');
@@ -180,9 +177,10 @@ export function replaceBoxSettings(id: string, script: string, clearSuffixes: st
             if (select) stage(store, boxKey('selectedScript', id), script);
         }
         if (legacy) {
-            const entries = Object.entries(changes);
-            for (const [key, value] of entries) if (value === null) write(localStorage, key, null);
-            for (const [key, value] of entries) if (value !== null) write(localStorage, key, value);
+            const entries = Object.entries(changes).map(([key, value]) => ({ key, value, previous: legacy.read(key) }));
+            for (const { key, previous, value } of entries) legacy.check(key, previous, value);
+            for (const { key, previous, value } of entries) if (value === null) write(localStorage, key, null, previous);
+            for (const { key, previous, value } of entries) if (value !== null) write(localStorage, key, value, previous);
         }
         if (commit?.(changes) === false) throw new SettingsSnapshotChanged('Saved settings changed during copy.');
     } catch (error) {
@@ -190,7 +188,7 @@ export function replaceBoxSettings(id: string, script: string, clearSuffixes: st
         for (const restore of undo.reverse()) {
             try { restore(); } catch (cause) { rollbackError = cause; }
         }
-        discardMirrors?.(mirrorKeys);
+        discardMirrors?.(Object.keys(changes));
         if (rollbackError) throw rollbackError;
         throw error;
     }

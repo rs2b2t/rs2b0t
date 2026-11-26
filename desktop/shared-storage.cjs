@@ -81,7 +81,7 @@ function sharedStorage(dir) {
         removeItem(key, expected) {
             if (valid(key))
                 return withLockedState(state => {
-                    if (expected !== undefined && state.data[key] !== expected) return false;
+                    if (expected !== undefined && (state.data[key] ?? null) !== expected) return false;
                     if (!(key in state.data)) return;
                     delete state.data[key];
                     write(state);
