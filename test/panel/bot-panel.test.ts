@@ -221,8 +221,8 @@ test.each(['success', 'failure'])('selects the older valid import when the newer
         const finishInvalid = library.startImport('Invalid fixture', 0);
         if (first === 'success') {
             await finishValid();
-            expect(library.backdrop.style.display).toBe('flex');
-            library.expectSelected('Previous fixture');
+            library.expectSelected('Imported fixture');
+            expect(library.backdrop.style.display).toBe('none');
             await finishInvalid();
         } else {
             await finishInvalid();
@@ -272,8 +272,8 @@ test.each(['older', 'newer'])('latest import stays selected when the %s import f
         const finishNewer = library.startImport('Newer fixture');
         if (first === 'older') {
             await finishOlder();
-            library.expectSelected('Previous fixture');
-            expect(library.backdrop.style.display).toBe('flex');
+            library.expectSelected('Older fixture');
+            expect(library.backdrop.style.display).toBe('none');
             await finishNewer();
         } else {
             await finishNewer();
