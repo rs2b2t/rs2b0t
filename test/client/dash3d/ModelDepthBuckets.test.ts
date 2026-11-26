@@ -21,8 +21,6 @@ function triangles(count: number): Model {
     }
     model.faceRenderType = new Int32Array(count).fill(1);
     model.faceColourA = new Int32Array(count).fill(1);
-    model.faceColourB = model.faceColourA;
-    model.faceColourC = model.faceColourA;
     model.calcBoundingCylinder();
     return model;
 }
@@ -82,6 +80,8 @@ for (const priorities of [false, true]) {
 
 test('world rendering buckets triangles crossing the near plane', () => {
     const model = triangles(1);
+    model.faceColourB = model.faceColourA;
+    model.faceColourC = model.faceColourA;
     model.pointX!.set([-2, -2, 2]);
     model.pointY!.set([-2, 2, -2]);
     model.pointZ![0] = -3;
