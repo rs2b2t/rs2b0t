@@ -30,13 +30,22 @@ function bakeIfNeeded(root: string, ...args: string[]) {
     return bakeMap(root, '--if-needed', ...args);
 }
 
-function prepareDeployment(root: string, script: string) {
+function prepareDeployment(root: string, script: string, afterBake = '') {
     for (const dir of ['tools', 'out', 'public-bot', 'engine/public/client', 'engine/data/pack/mapview']) {
         mkdirSync(join(root, dir), { recursive: true });
     }
     copyFileSync(join(tools, script), join(root, 'tools', script));
     symlinkSync(join(tools, 'map'), join(root, 'tools/map'));
-    const bun = '#!/bin/sh\n[ "$1" = run ] && exit 0\nexec "$REAL_BUN" --no-install "$@" --fetch-url data:,\n';
+    const bun = `#!/bin/sh
+set -e
+case "$1" in
+    run) exit 0 ;;
+    tools/live-proxy.ts) cp -R "$B0T_INSTANCE_DIR/out" instance; exit 42 ;;
+    tools/map/build-basemap.ts) "$REAL_BUN" --no-install "$@" --fetch-url data:, ;;
+    *) exit 2 ;;
+esac
+${afterBake}
+`;
     writeFileSync(join(root, 'tools/bun'), bun, { mode: 0o755 });
     for (const bundle of ['botclient', 'client', 'ondemandworker', 'navworker', 'multibox']) {
         writeFileSync(join(root, `out/${bundle}.js`), '');
@@ -51,6 +60,7 @@ function prepareDeployment(root: string, script: string) {
         env: {
             PATH: `${root}/tools:${process.env.PATH}`,
             REAL_BUN: process.execPath,
+            B0T_VIEWER: 'none',
             ENGINE: join(root, 'engine'),
             ENGINE_DIR: join(root, 'engine'),
             PROD_RSAN: '1',
@@ -125,7 +135,99 @@ for (const script of ['pack-rs2b0t.sh', 'deploy-local.sh']) {
             rmSync(root, { recursive: true, force: true });
         }
     });
+
+    test(`${script} publishes the selected bake before a second baker can replace it`, () => {
+        const root = mkdtempSync(join(tmpdir(), 'pack-snapshot-'));
+        try {
+            const deploy = prepareDeployment(root, script,
+                '"$REAL_BUN" --no-install tools/map/build-basemap.ts --jag second.jag --engine engine --out out');
+            writeFileSync(join(root, 'out/worldmap.jag'), townMap);
+            writeFileSync(join(root, 'second.jag'), emptyMap);
+            deploy();
+            const dest = join(root, 'engine/public', script === 'deploy-local.sh' ? 'bot' : 'rs2b0t/bot');
+            const manifest = JSON.parse(readFileSync(join(dest, 'worldmap-basemap.manifest.json'), 'utf8'));
+            expect(readFileSync(join(root, 'out/worldmap.jag'))).toEqual(emptyMap);
+            expect(readFileSync(join(dest, 'worldmap.jag'))).toEqual(townMap);
+            expect(manifest.fingerprint).toBe('322ab26cb258482b');
+            expect(existsSync(join(dest, manifest.labelsOverlayUrl))).toBe(true);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test(`${script} keeps the published map when explicit JAG bytes are missing`, () => {
+        const root = mkdtempSync(join(tmpdir(), 'pack-missing-explicit-'));
+        try {
+            const deploy = prepareDeployment(root, script);
+            const out = join(root, 'out');
+            const dest = join(root, 'engine/public', script === 'deploy-local.sh' ? 'bot' : 'rs2b0t/bot');
+            writeFileSync(join(out, 'worldmap.jag'), emptyMap);
+            deploy();
+            const manifestPath = join(dest, 'worldmap-basemap.manifest.json');
+            const previous = readFileSync(manifestPath);
+            const selected = join(root, 'selected.jag');
+            writeFileSync(selected, townMap);
+            bakeMap(out, '--jag', selected);
+            rmSync(selected);
+            rmSync(join(out, 'worldmap.jag'));
+            expect(deploy).toThrow(/Selected worldmap.jag is missing/);
+            expect(readFileSync(manifestPath)).toEqual(previous);
+            expect(readFileSync(join(dest, 'worldmap.jag'))).toEqual(emptyMap);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
 }
+
+test('a failed overlay copy leaves the published JAG and manifest in place', () => {
+    const root = mkdtempSync(join(tmpdir(), 'pack-overlay-copy-'));
+    try {
+        const deploy = prepareDeployment(root, 'pack-rs2b0t.sh');
+        const dest = join(root, 'engine/public/rs2b0t/bot');
+        const source = join(root, 'engine/data/pack/mapview/worldmap.jag');
+        writeFileSync(source, emptyMap);
+        deploy();
+        const manifest = join(dest, 'worldmap-basemap.manifest.json');
+        const first = readFileSync(manifest);
+        writeFileSync(source, townMap);
+        mkdirSync(join(dest, 'worldmap-labels.322ab26cb258482b.png'));
+        expect(deploy).toThrow();
+        expect(readFileSync(manifest)).toEqual(first);
+        expect(readFileSync(join(dest, 'worldmap.jag'))).toEqual(emptyMap);
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('two launcher runs reuse the upgraded shared bake', () => {
+    const root = mkdtempSync(join(tmpdir(), 'launcher-basemap-'));
+    try {
+        const launch = prepareDeployment(root, 'b0t.sh');
+        mkdirSync(join(root, 'node_modules'));
+        writeFileSync(join(root, 'tools/curl'), `#!/bin/sh\necho ${'1'.repeat(250)}\n`, { mode: 0o755 });
+        const out = join(root, 'out');
+        const manifestName = 'worldmap-basemap.manifest.json';
+        writeFileSync(join(out, 'worldmap.jag'), townMap);
+        bakeMap(out, '--revision', '275');
+        const current = JSON.parse(readFileSync(join(out, manifestName), 'utf8'));
+        writeFileSync(join(out, manifestName), JSON.stringify({ ...current, schema: 2, fingerprint: '5f1c291201a299b0' }));
+        const labels = join(out, current.labelsOverlayUrl);
+        rmSync(labels);
+        for (let i = 0; i < 2; i++) {
+            expect(launch).toThrow(/proxy exited during startup \(status 42\)/);
+            expect(JSON.parse(readFileSync(join(out, manifestName), 'utf8'))).toEqual(current);
+            const instance = join(root, 'instance');
+            expect(readFileSync(join(instance, manifestName))).toEqual(readFileSync(join(out, manifestName)));
+            expect(readFileSync(join(instance, 'worldmap.jag'))).toEqual(townMap);
+            expect(readFileSync(join(instance, current.labelsOverlayUrl))).toEqual(readFileSync(labels));
+            if (i === 1) expect(statSync(labels).mtimeMs).toBe(1000);
+            utimesSync(labels, 1, 1);
+            rmSync(instance, { recursive: true });
+        }
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
 
 test('packager keeps an explicit JAG when the engine has a different map', () => {
     const root = mkdtempSync(join(tmpdir(), 'pack-explicit-map-'));

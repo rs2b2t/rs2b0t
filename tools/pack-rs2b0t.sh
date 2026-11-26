@@ -19,10 +19,8 @@ TARGET=prod PROD_RSAN="$PROD_RSAN" B0T_OUT_DIR=out bun run build:bot
 
 # the nav worker needs the baked collision pack; build it once if absent
 [ -f out/collision.lcnav.gz ] || bun tools/nav/build-collision.ts --engine "$ENGINE"
-# classic basemap for the map picker; copied below only when the bake produced one
-bun tools/map/build-basemap.ts --if-needed --engine "$ENGINE"
-
 DEST="$ENGINE/public/rs2b0t"
+bun tools/map/build-basemap.ts --if-needed --engine "$ENGINE" --publish-to "$DEST/bot"
 mkdir -p "$DEST/bot"
 cp out/botclient.js out/botclient.js.map out/ondemandworker.js out/ondemandworker.js.map \
    out/navworker.js out/navworker.js.map out/multibox.js out/multibox.js.map \
@@ -31,19 +29,6 @@ cp out/botclient.js out/botclient.js.map out/ondemandworker.js out/ondemandworke
 if [ -f out/version.json ]; then
     cp out/version.json "$DEST/version.json"
     cp out/version.json "$DEST/bot/version.json"
-fi
-if [ -f out/worldmap-basemap.manifest.json ]; then
-    cp out/worldmap-basemap.manifest.json "$DEST/bot/"
-    for f in out/worldmap-basemap.*.png out/worldmap-key.*.png out/worldmap-key-type-*.png \
-             out/worldmap-labels.*.png out/worldmap-player-marker.*.png \
-             out/worldmap-multi.*.png out/worldmap-free.*.png out/worldmap-key-index.*.json; do
-        [ -f "$f" ] && cp "$f" "$DEST/bot/"
-    done
-fi
-if [ -f out/worldmap.jag ]; then
-    cp out/worldmap.jag "$DEST/bot/"
-elif [ -f "$ENGINE/data/pack/mapview/worldmap.jag" ]; then
-    cp "$ENGINE/data/pack/mapview/worldmap.jag" "$DEST/bot/"
 fi
 cp public-bot/bot.html "$DEST/index.html"
 cp public-bot/bot.html "$DEST/bot.html"

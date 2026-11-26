@@ -218,14 +218,13 @@ cp public-bot/bot.html public-bot/multibox.html "$RUN_DIR/public-bot/"
 TARGET=proxy LIVE_RSAN="$MOD" B0T_OUT_DIR="$RUN_DIR/out" bun run build:bot >/dev/null
 echo '  built one client for World 1, World 2 and World 3.'
 
-for ASSET in out/collision.lcnav.gz out/worldmap*; do
-    [ ! -f "$ASSET" ] || cp "$ASSET" "$RUN_DIR/out/"
-done
-if [ ! -f "$RUN_DIR/out/collision.lcnav.gz" ]; then
+if [ -f out/collision.lcnav.gz ]; then
+    cp out/collision.lcnav.gz "$RUN_DIR/out/"
+else
     echo "→ collision pack missing — baking it from the engine map cache…"
     bun tools/nav/build-collision.ts --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}" --out "$RUN_DIR/out/collision.lcnav"
 fi
-bun tools/map/build-basemap.ts --if-needed --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}" --out "$RUN_DIR/out"
+bun tools/map/build-basemap.ts --if-needed --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}" --publish-to "$RUN_DIR/out"
 echo "  instance build: $RUN_DIR"
 
 reap_proxy() {

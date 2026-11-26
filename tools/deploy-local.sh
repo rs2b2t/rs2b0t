@@ -18,8 +18,7 @@ if [ ! -f out/collision.lcnav.gz ]; then
     bun tools/nav/build-collision.ts --engine "$ENGINE"
 fi
 
-bun tools/map/build-basemap.ts --if-needed --engine "$ENGINE"
-
+bun tools/map/build-basemap.ts --if-needed --engine "$ENGINE" --publish-to "$ENGINE/public/bot"
 cp out/client.js out/client.js.map out/ondemandworker.js out/ondemandworker.js.map \
    out/tinymidipcm.wasm "$ENGINE/public/client/"
 
@@ -27,21 +26,6 @@ mkdir -p "$ENGINE/public/bot"
 cp out/botclient.js out/botclient.js.map out/ondemandworker.js out/ondemandworker.js.map \
    out/navworker.js out/navworker.js.map out/collision.lcnav.gz \
    out/tinymidipcm.wasm "$ENGINE/public/bot/"
-# basemap + pre-baked overlays (fingerprinted names from the manifest)
-if [ -f out/worldmap-basemap.manifest.json ]; then
-    cp out/worldmap-basemap.manifest.json "$ENGINE/public/bot/"
-    for f in out/worldmap-basemap.*.png out/worldmap-key.*.png out/worldmap-key-type-*.png \
-             out/worldmap-labels.*.png out/worldmap-player-marker.*.png \
-             out/worldmap-multi.*.png out/worldmap-free.*.png out/worldmap-key-index.*.json; do
-        [ -f "$f" ] && cp "$f" "$ENGINE/public/bot/"
-    done
-fi
-# worldmap.jag so the picker can optionally rebuild the basemap live
-if [ -f out/worldmap.jag ]; then
-    cp out/worldmap.jag "$ENGINE/public/bot/"
-elif [ -f "$ENGINE/data/pack/mapview/worldmap.jag" ]; then
-    cp "$ENGINE/data/pack/mapview/worldmap.jag" "$ENGINE/public/bot/"
-fi
 # Change the module URL so browsers and Playwright load the new build.
 BUST=$(date +%s)
 sed "s|botclient.js?v=nav-v2|botclient.js?v=${BUST}|g; s|botclient.js\"|botclient.js?v=${BUST}\"|g" \
