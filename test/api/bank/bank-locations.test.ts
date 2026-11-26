@@ -2,7 +2,6 @@ import { afterEach, describe, expect, test } from 'bun:test';
 
 import {
     BANK_LOCATIONS,
-    USE_MAGE_BANK,
     approachOf,
     bankCostForFinder,
     bankCostForNavigator,
@@ -19,19 +18,9 @@ import Tile from '#/bot/geometry/Tile.js';
 import { richTransportQuestMap } from '#/bot/event/webwalk/transportQuestReqs.js';
 import { emptyWorldStateData, type WorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 import { fullMapFinder, hasCollisionPack } from '../../lib/navCollision.js';
+import { setMageBankSetting } from './mageBankSetting.js';
 
-const MAGE_KEY = `rs2b0t:set:Global:${USE_MAGE_BANK}`;
-
-function setSetting(on: boolean | null): void {
-    if (on === null) {
-        localStorage.removeItem(MAGE_KEY);
-        sessionStorage.removeItem(MAGE_KEY);
-        return;
-    }
-    localStorage.setItem(MAGE_KEY, String(on));
-}
-
-afterEach(() => setSetting(null));
+afterEach(() => setMageBankSetting(null));
 
 test('bank names are unique', () => {
     const names = BANK_LOCATIONS.map(b => b.name);
@@ -375,7 +364,7 @@ describe.skipIf(!hasCollisionPack)('nearestWalkableBank picks the walkable-neare
     }, 120_000);
 
     test('at the Mage Arena webs, the walk to Edgeville beats the air-close Gundai cellar', () => {
-        setSetting(true);
+        setMageBankSetting(true);
         const from = { x: 3094, z: 3785, level: 0 };
         // Why: off the ladder mouth the air line to Gundai's cellar is a few tiles, but the full route is a run to the webs plus the ladder, and Edgeville's plain road is cheaper.
         expect(nearestBank(from)?.name).toBe('Mage Arena');
@@ -384,7 +373,7 @@ describe.skipIf(!hasCollisionPack)('nearestWalkableBank picks the walkable-neare
     }, 120_000);
 
     test('ladder edge blocked, the Mage Arena is rejected outright', () => {
-        setSetting(true);
+        setMageBankSetting(true);
         const from = { x: 3091, z: 3958, level: 0 };
         // Why: the ladder loc at 3091|3957 is the only route to the cellar; blocking it makes the bank unreachable so the selector skips it and returns the nearest surface bank instead.
         expect(walkTo(from, 'Mage Arena', blockedCost)).toBeNull();
