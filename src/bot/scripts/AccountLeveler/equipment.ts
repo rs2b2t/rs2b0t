@@ -1,4 +1,5 @@
 import { AXES, PICKAXES } from '../../api/acquisition/Tools.js';
+import { DRAGONHIDE_SLOTS, DRAGONHIDE_TIERS } from '../../data/dragonhide.js';
 import { isRuneGearShop, purchaseBudget, supplyOffer } from './offers.js';
 import { requirementKey, stockOf, type LevelerSnapshot, type Requirement } from './types.js';
 
@@ -104,21 +105,18 @@ export function rangedBow(s: LevelerSnapshot): Requirement {
     return { item: 'Shortbow', id: 841, count: 1, carry: 1, equip: true };
 }
 
+const dragonhideNames = { body: 'Dragonhide body', chaps: 'Dragonhide chaps', vambraces: 'Dragon vambraces' };
+
 export function rangedArmour(s: LevelerSnapshot): Requirement[] {
-    const tiers = [
-        { level: 70, colour: 'Black', ids: [2503, 2497, 2491] },
-        { level: 60, colour: 'Red', ids: [2501, 2495, 2489] },
-        { level: 50, colour: 'Blue', ids: [2499, 2493, 2487] },
-        { level: 40, colour: 'Green', ids: [1135, 1099, 1065] }
-    ];
     let remaining = (s.stock.coins ?? 0) - 200;
     const gloves = combatGauntlets(s);
-    return ['Dragonhide body', 'Dragonhide chaps', 'Dragon vambraces'].flatMap<Requirement>((name, slot) => {
-        if (name === 'Dragon vambraces' && gloves.length) return gloves;
-        for (const tier of tiers) {
-            if (tier.level > s.levels.ranged || (slot === 0 && (s.levels.defence < 40 || (tier.level === 40 && !s.quests['Dragon Slayer'])))) continue;
-            const item = tier.level === 40 ? name : tier.colour + ' ' + name.toLowerCase();
-            const need = { item, id: tier.ids[slot], count: 1, carry: 1, equip: true };
+    return DRAGONHIDE_SLOTS.flatMap<Requirement>(slot => {
+        if (slot === 'vambraces' && gloves.length) return gloves;
+        const name = dragonhideNames[slot];
+        for (const tier of DRAGONHIDE_TIERS) {
+            if (tier.level > s.levels.ranged || (slot === 'body' && (s.levels.defence < 40 || (tier.colour === 'Green' && !s.quests['Dragon Slayer'])))) continue;
+            const item = tier.colour === 'Green' ? name : tier.colour + ' ' + name.toLowerCase();
+            const need = { item, id: tier[slot], count: 1, carry: 1, equip: true };
             const price = cost(s, s.levels.ranged, { ...need, level: tier.level });
             if (price === 0) return [need];
             if (price <= remaining) { remaining -= price; return [need]; }
