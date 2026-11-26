@@ -18,7 +18,7 @@ for (const outDir of [undefined, 'alt']) {
                 copyFileSync(join(import.meta.dir, '../..', file), join(root, file));
             }
             for (const file of artifacts) {
-                writeFileSync(join(root, 'out', file), `previous ${file}`);
+                if (outDir) writeFileSync(join(root, 'out', file), `previous ${file}`);
                 writeFileSync(join(root, 'current', file), `current ${file}`);
             }
             for (const file of ['collision.lcnav.gz', 'worldmap-basemap.manifest.json']) {
@@ -28,8 +28,7 @@ for (const outDir of [undefined, 'alt']) {
                 join(root, 'tools/bun'),
                 `#!/bin/sh
 set -e
-[ "$*" = "run build" ] && exit 0
-[ "$*" = "run build:bot" ] || exit 1
+[ "$*" = "run build:bot" ] || { echo "unexpected bun command: $*" >&2; exit 1; }
 dir=\${B0T_OUT_DIR:-out}
 mkdir -p "$dir"
 cp current/* "$dir/"

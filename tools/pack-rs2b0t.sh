@@ -15,7 +15,6 @@ cd "$ROOT"
 
 [ -d "$ENGINE/public" ] || { echo "engine public/ not found at $ENGINE" >&2; exit 1; }
 
-TARGET=prod PROD_RSAN="$PROD_RSAN" bun run build
 TARGET=prod PROD_RSAN="$PROD_RSAN" B0T_OUT_DIR=out bun run build:bot
 
 # the nav worker needs the baked collision pack; build it once if absent
