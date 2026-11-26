@@ -7,6 +7,7 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import { FOOD_FLOAT, QuestFood } from '../../food.js';
 import { questWornGear } from '../../gear.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
+import { selectTieredGear } from '../../tieredGear.js';
 import { settleScene } from '../../exec/prompts.js';
 import { LOGS_WANTED, TG_ITEM, TG_NPC, TG_TILE } from './areas.js';
 
@@ -108,47 +109,24 @@ export async function chopLogs(log: (m: string) => void): Promise<boolean> {
     return true;
 }
 
-const TIERS = ['rune', 'adamant', 'mithril', 'black', 'steel', 'iron', 'bronze'] as const;
-
 // Why: the warlord's config carries no per-style defence, so the fastest weapon wins and the slot list is plain best-available melee.
-const GEAR_SLOTS: readonly { kinds: readonly string[] }[] = [
-    { kinds: ['scimitar', 'longsword', 'sword', 'mace', 'battleaxe', 'warhammer'] },
-    { kinds: ['platebody', 'chainbody'] },
-    { kinds: ['platelegs', 'plateskirt'] },
-    { kinds: ['full helm', 'med helm'] },
-    { kinds: ['kiteshield', 'sq shield'] }
-];
+const GEAR_SLOTS = [
+    ['scimitar', 'longsword', 'sword', 'mace', 'battleaxe', 'warhammer'],
+    ['platebody', 'chainbody'],
+    ['platelegs', 'plateskirt'],
+    ['full helm', 'med helm'],
+    ['kiteshield', 'sq shield']
+] as const;
 
 /** Names `equip` has refused; a re-picked piece burns the run. */
 const unwearable = new Set<string>();
 
-function wearingKind(snap: QuestSnapshot, kinds: readonly string[]): boolean {
-    return [...snap.worn].some(name => kinds.some(kind => name.endsWith(kind)));
-}
-
-function bestAvailable(snap: QuestSnapshot, kinds: readonly string[]): string | null {
-    for (const tier of TIERS) {
-        for (const kind of kinds) {
-            const name = `${tier} ${kind}`;
-            if (unwearable.has(name)) {
-                continue;
-            }
-            if ((snap.bank?.get(name) ?? 0) > 0 || (snap.inv.get(name) ?? 0) > 0) {
-                return name[0]!.toUpperCase() + name.slice(1);
-            }
-        }
-    }
-    return null;
-}
-
 function plannedGear(snap: QuestSnapshot): string[] {
     const declared = Object.values(questWornGear(snap));
-    const names = declared.length > 0
-        ? declared
-        : GEAR_SLOTS.filter(slot => !wearingKind(snap, slot.kinds))
-            .map(slot => bestAvailable(snap, slot.kinds))
-            .filter((name): name is string => name !== null);
-    return names.filter(name => !unwearable.has(name.toLowerCase()) && !snap.worn.has(name.toLowerCase()));
+    if (declared.length === 0) {
+        return selectTieredGear(snap, GEAR_SLOTS, unwearable);
+    }
+    return declared.filter(name => !unwearable.has(name.toLowerCase()) && !snap.worn.has(name.toLowerCase()));
 }
 
 async function wearAll(names: readonly string[], log: (m: string) => void): Promise<boolean> {
