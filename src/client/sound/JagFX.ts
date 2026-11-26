@@ -8,8 +8,8 @@ export default class JagFX {
     static synth: (JagFX | null)[] = new TypedArray1d(1000, null);
     static delays: Int32Array = new Int32Array(1000);
 
-    static waveBytes: Uint8Array = new Uint8Array(22050 * 20);
-    static waveBuffer: Packet = new Packet(this.waveBytes);
+    static waveBytes?: Uint8Array;
+    static waveBuffer?: Packet;
 
     tones: (Tone | null)[] = new TypedArray1d(10, null);
     loopBegin: number = 0;
@@ -84,26 +84,28 @@ export default class JagFX {
     }
 
     getWave(loopCount: number): Packet {
-        const length = this.makeSound(loopCount);
-        JagFX.waveBuffer.pos = 0;
-        JagFX.waveBuffer.p4(0x52494646);
-        JagFX.waveBuffer.ip4(length + 36);
-        JagFX.waveBuffer.p4(0x57415645);
-        JagFX.waveBuffer.p4(0x666d7420);
-        JagFX.waveBuffer.ip4(16);
-        JagFX.waveBuffer.ip2(1);
-        JagFX.waveBuffer.ip2(1);
-        JagFX.waveBuffer.ip4(22050);
-        JagFX.waveBuffer.ip4(22050);
-        JagFX.waveBuffer.ip2(1);
-        JagFX.waveBuffer.ip2(8);
-        JagFX.waveBuffer.p4(0x64617461);
-        JagFX.waveBuffer.ip4(length);
-        JagFX.waveBuffer.pos += length;
-        return JagFX.waveBuffer;
+        const waveBytes = JagFX.waveBytes ??= new Uint8Array(22050 * 20);
+        const waveBuffer = JagFX.waveBuffer ??= new Packet(waveBytes);
+        const length = this.makeSound(loopCount, waveBytes);
+        waveBuffer.pos = 0;
+        waveBuffer.p4(0x52494646);
+        waveBuffer.ip4(length + 36);
+        waveBuffer.p4(0x57415645);
+        waveBuffer.p4(0x666d7420);
+        waveBuffer.ip4(16);
+        waveBuffer.ip2(1);
+        waveBuffer.ip2(1);
+        waveBuffer.ip4(22050);
+        waveBuffer.ip4(22050);
+        waveBuffer.ip2(1);
+        waveBuffer.ip2(8);
+        waveBuffer.p4(0x64617461);
+        waveBuffer.ip4(length);
+        waveBuffer.pos += length;
+        return waveBuffer;
     }
 
-    private makeSound(loopCount: number): number {
+    private makeSound(loopCount: number, waveBytes: Uint8Array): number {
         let duration = 0;
         for (let i = 0; i < 10; i++) {
             const tone = this.tones[i];
@@ -126,7 +128,7 @@ export default class JagFX {
 
         let totalSampleCount = sampleCount + (loopStop - loopStart) * (loopCount - 1);
         for (let sample = 44; sample < totalSampleCount + 44; sample++) {
-            JagFX.waveBytes[sample] = -128;
+            waveBytes[sample] = -128;
         }
 
         for (let i = 0; i < 10; i++) {
@@ -137,7 +139,7 @@ export default class JagFX {
                 const samples = tone.generate(toneSampleCount, tone.length);
 
                 for (let sample = 0; sample < toneSampleCount; sample++) {
-                    JagFX.waveBytes[sample + start + 44] += ((samples[sample] >> 8) << 24) >> 24;
+                    waveBytes[sample + start + 44] += ((samples[sample] >> 8) << 24) >> 24;
                 }
             }
         }
@@ -150,14 +152,14 @@ export default class JagFX {
 
             const endOffset = totalSampleCount - sampleCount;
             for (let sample = sampleCount - 1; sample >= loopStop; sample--) {
-                JagFX.waveBytes[sample + endOffset] = JagFX.waveBytes[sample];
+                waveBytes[sample + endOffset] = waveBytes[sample];
             }
 
             for (let loop = 1; loop < loopCount; loop++) {
                 const offset = (loopStop - loopStart) * loop;
 
                 for (let sample = loopStart; sample < loopStop; sample++) {
-                    JagFX.waveBytes[sample + offset] = JagFX.waveBytes[sample];
+                    waveBytes[sample + offset] = waveBytes[sample];
                 }
             }
 
