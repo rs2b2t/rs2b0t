@@ -49,6 +49,15 @@ test('script assignment persists without copying parameters and catalog excludes
     expect(() => writeProfileScript('a', '')).toThrow();
 });
 
+test('discovering scripts for set keeps raw settings visible to the set:set profile', () => {
+    localStorage.setItem('rs2b0t:set:set:set:Miner:rock', 'iron');
+    sessionStorage.setItem('rs2b0t:set:set:Fisher:fish', 'trout');
+    expect(readScriptSettings('set:set', 'Miner')).toEqual({ rock: 'iron' });
+    expect(storedScripts(['set', 'set:set'])).toContain('Miner');
+    expect(storedScripts(['set'])).toContain('Fisher');
+    expect(storedScripts(['set'])).not.toContain('Miner');
+});
+
 test('desktop copying reads durable settings instead of stale session values', () => {
     const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts'], { cwd: process.cwd(), stdout: 'pipe', stderr: 'pipe' });
     expect(result.exitCode).toBe(0);
