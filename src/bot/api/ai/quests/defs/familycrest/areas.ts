@@ -89,14 +89,7 @@ export const DUEL_RING_IDS = [2552, 2554, 2556, 2558, 2560, 2562, 2564, 2566] as
 /** Antipoison in every dose; any of them cures Johnathon. */
 export const ANTIPOISON_IDS = [FC_ID.ANTIPOISON_4, FC_ID.ANTIPOISON_3, FC_ID.ANTIPOISON_2, FC_ID.ANTIPOISON_1] as const;
 
-export const PICKAXES = [
-    { id: 1275, name: 'Rune pickaxe' },
-    { id: 1271, name: 'Adamant pickaxe' },
-    { id: 1273, name: 'Mithril pickaxe' },
-    { id: 1269, name: 'Steel pickaxe' },
-    { id: 1267, name: 'Iron pickaxe' },
-    { id: 1265, name: 'Bronze pickaxe' }
-] as const;
+export { PICKAXES } from '../../../../../data/pickaxes.js';
 
 /** Every coordinate here was read out of the engine's own map spawns. */
 export const FC_NPC = {
