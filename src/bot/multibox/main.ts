@@ -393,6 +393,10 @@ function boot(): void {
         });
     }, {
         defaultWorld, worldRouting, beforeRender: ensureChooserGroups, onWorldChange: worldRouting ? changeProfileWorld : undefined,
+        onRemove: () => {
+            syncSavedGroups();
+            renderRail();
+        },
         onLoadGroup: (profiles, tab) => {
             ensureChooserGroups();
             const selected = tab && controller.setActiveTab(tab);
@@ -457,6 +461,8 @@ function boot(): void {
     async function ensureUnlocked(): Promise<boolean> {
         const ok = await prompt.ensureUnlocked();
         if (ok) {
+            if (!tabsHydrated && pendingSettingsImport()) await refreshVault();
+            if (vault.status() !== 'unlocked') return false;
             hydrateTabState();
         }
         return ok;

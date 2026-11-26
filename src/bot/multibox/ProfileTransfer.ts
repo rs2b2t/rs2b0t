@@ -1,6 +1,9 @@
 import { allowsLegacyBoxItem, boxKey, boxSuffix, disableLegacySetProfileSettings, isLegacySetProfileSetting, isSetProfile, legacyBoxSuffix } from '../runtime/box.js';
 import type { Profile } from './ProfileVault.js';
 import { desktopStorage, isEncodedSettingKey, storeKeys } from '../runtime/desktopStorage.js';
+import { keepSessionCredentials, PROFILE_IMPORT_REVISION_KEY, recordCredentialRevision } from '../runtime/profileImportSession.js';
+
+export { PROFILE_IMPORT_REVISION_KEY };
 
 export const PROFILE_FILE_KIND = 'rs2b0t-multibox-profiles';
 export const PROFILE_FILE_VERSION = 2;
@@ -24,8 +27,6 @@ export interface ProfileFile extends ProfileSnapshot {
 }
 
 const MAIN_TAB = 'Main';
-export const PROFILE_IMPORT_REVISION_KEY = 'rs2b0t:profile-import-revision';
-const initialImportRevision = !desktopStorage && typeof localStorage !== 'undefined' ? localStorage.getItem(PROFILE_IMPORT_REVISION_KEY) : null;
 
 export function serializeProfileFile(data: ProfileSnapshot): string {
     requireProfiles(data.profiles);
@@ -86,8 +87,17 @@ export function collectBoxStorage(usernames: string[], includeLegacy?: ConfirmLe
     if (typeof localStorage !== 'undefined') {
         readStore(localStorage, usernames, out, legacy);
     }
-    if (typeof sessionStorage !== 'undefined' && !pendingSettingsImport()) {
-        readStore(sessionStorage, usernames, out, legacy, !!desktopStorage);
+    if (typeof sessionStorage !== 'undefined') {
+        const revision = pendingSettingsImport();
+        if (revision) {
+            for (const user of usernames) {
+                const key = boxKey('creds', user);
+                const creds = sessionStorage.getItem(key);
+                if (creds !== null && keepSessionCredentials(key, revision)) (out[user] ??= {}).creds = creds;
+            }
+        } else {
+            readStore(sessionStorage, usernames, out, legacy, !!desktopStorage);
+        }
     }
     if (legacy && includeLegacy) {
         for (const [key, { user, suffix, store }] of legacy) {
@@ -128,6 +138,9 @@ export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
     }
     if (!desktopStorage && typeof localStorage !== 'undefined' && typeof sessionStorage !== 'undefined') {
         const revision = crypto.randomUUID();
+        for (const { user } of boxes) {
+            recordCredentialRevision(boxKey('creds', user), Object.hasOwn(storage[user] ?? {}, 'creds') ? revision : null);
+        }
         sessionStorage.setItem(PROFILE_IMPORT_REVISION_KEY, revision);
         localStorage.setItem(PROFILE_IMPORT_REVISION_KEY, revision);
     }
@@ -136,18 +149,22 @@ export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
 export function pendingSettingsImport(): string | null {
     if (desktopStorage || typeof localStorage === 'undefined' || typeof sessionStorage === 'undefined') return null;
     const revision = localStorage.getItem(PROFILE_IMPORT_REVISION_KEY);
-    const applied = sessionStorage.getItem(PROFILE_IMPORT_REVISION_KEY) ?? initialImportRevision;
-    return revision === applied ? null : revision;
+    return revision === sessionStorage.getItem(PROFILE_IMPORT_REVISION_KEY) ? null : revision;
 }
 
 export function refreshImportedSettings(users: string[], revision: string): void {
     const boxes = users.map(user => ({ user, prefix: boxStoragePrefix(user) }));
+    const credentials = new Set(users.map(user => boxKey('creds', user)));
     for (const key of storeKeys(sessionStorage)) {
         if (!boxes.some(({ user, prefix }) => boxSuffix(key, prefix, user) !== null)) continue;
+        const isCredential = credentials.has(key);
+        if (isCredential && keepSessionCredentials(key, revision)) continue;
         const value = localStorage.getItem(key);
-        if (sessionStorage.getItem(key) === value) continue;
-        if (value === null) sessionStorage.removeItem(key);
-        else sessionStorage.setItem(key, value);
+        if (sessionStorage.getItem(key) !== value) {
+            if (value === null) sessionStorage.removeItem(key);
+            else sessionStorage.setItem(key, value);
+        }
+        if (isCredential) recordCredentialRevision(key, value === null ? null : revision);
     }
     sessionStorage.setItem(PROFILE_IMPORT_REVISION_KEY, revision);
 }

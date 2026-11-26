@@ -2,6 +2,7 @@ import { expect, mock, spyOn, test } from 'bun:test';
 import { VaultPrompt } from '#/bot/multibox/VaultPrompt.js';
 import { ProfileVault, vault } from '#/bot/multibox/ProfileVault.js';
 import { applyBoxStorage, collectBoxStorage, parseProfileFile, serializeProfileFile } from '#/bot/multibox/ProfileTransfer.js';
+import { Credentials } from '#/bot/runtime/Credentials.js';
 import { SettingsPanel } from '#/bot/multibox/SettingsPanel.js';
 import { ResourcePanel } from '#/bot/multibox/ResourcePanel.js';
 import { DomSlotOps } from '#/bot/multibox/DomSlotOps.js';
@@ -1045,7 +1046,7 @@ test.each([true, false])('a competing browser restore exports matching settings 
         });
         const file = (world: WorldNumber, script: string) => serializeProfileFile({
             profiles: [{ username: 'fixture', password: '', world }], tabs: [], activeTab: 'Main',
-            storage: { fixture: { selectedScript: script, ...(world === 1 ? { 'set:Miner:rock': 'Tin' } : { 'set:Fisher:fish': 'Trout' }) } }
+            storage: { fixture: { selectedScript: script, ...(world === 1 ? { 'set:Miner:rock': 'Tin', creds: 'old-fixture' } : { 'set:Fisher:fish': 'Trout' }) } }
         });
         const key = 'rs2b0t:fixture:selectedScript';
         const originalSession = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage')!;
@@ -1070,7 +1071,18 @@ test.each([true, false])('a competing browser restore exports matching settings 
             expect(await peer.unlock('test-passphrase')).toBe(true);
             expect(peer.list()).toEqual([{ username: 'fixture', password: '', tab: 'Main', world: 2 }]);
             expect(otherSession.getItem(key)).toBe('Fisher');
-            const settings = { selectedScript: 'Fisher', 'set:Fisher:fish': 'Trout' };
+            const imported = { selectedScript: 'Fisher', 'set:Fisher:fish': 'Trout' };
+            expect(collectBoxStorage(['fixture'])).toEqual({ fixture: imported });
+            const url = location.href;
+            const browser = Reflect.get(window, 'happyDOM') as { setURL(url: string): void };
+            try {
+                browser.setURL('http://localhost/bot.html?box=fixture');
+                Credentials.save('fixture', 'new-password');
+            } finally {
+                browser.setURL(url);
+            }
+            const creds = JSON.stringify({ username: 'fixture', password: 'new-password' });
+            const settings = { ...imported, creds };
             expect(collectBoxStorage(['fixture'])).toEqual({ fixture: settings });
             if (refresh) {
                 window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
@@ -1082,18 +1094,20 @@ test.each([true, false])('a competing browser restore exports matching settings 
             const backup = parseProfileFile(await blob.text());
             expect(backup.profiles[0].world).toBe(2);
             expect(backup.storage.fixture).toEqual(settings);
+            expect(sessionStorage.getItem('rs2b0t:fixture:creds')).toBe(creds);
             sessionStorage.setItem(key, 'HillGiant');
             localStorage.setItem('rs2b0t:fixture:set:Fisher:fish', 'Pike');
             await panel.exportProfile();
             const [next] = blobUrl.mock.calls[1];
             if (!(next instanceof Blob)) throw new Error('Expected a profile file');
-            expect(parseProfileFile(await next.text()).storage.fixture).toEqual({ selectedScript: 'HillGiant', 'set:Fisher:fish': 'Pike' });
+            expect(parseProfileFile(await next.text()).storage.fixture).toEqual({ selectedScript: 'HillGiant', 'set:Fisher:fish': 'Pike', creds });
         } finally {
             lock.mockRestore();
             download.mockRestore();
             blobUrl.mockRestore();
             for (const store of [localStorage, sessionStorage]) {
                 store.removeItem(key);
+                store.removeItem('rs2b0t:fixture:creds');
                 store.removeItem('rs2b0t:fixture:set:Miner:rock');
                 store.removeItem('rs2b0t:fixture:set:Fisher:fish');
             }
@@ -1157,6 +1171,27 @@ test('loading Work from the chooser keeps it active after adding a tab and reope
         } finally {
             saves.mockRestore();
         }
+    });
+});
+
+test('deleting a stale chooser row updates live memberships before the next pick', async () => {
+    await withWall('local', async wall => {
+        const bob = { username: 'bob', password: 'fixture', tab: 'Work' };
+        const tabs = ['Work', 'Fleet'];
+        await openSettings().importText(serializeProfileFile({
+            profiles: [{ ...bob, username: 'alice' }, bob], tabs, activeTab: 'Fleet', storage: {}
+        }));
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!document.querySelector('.mbx-profile-del'));
+        const peer = new ProfileVault();
+        expect(await peer.unlock('test-passphrase')).toBe(true);
+        await peer.assignGroup(['bob'], 'Fleet');
+        document.querySelector<HTMLButtonElement>('.mbx-profile-del')!.click();
+        await waitFor(() => document.querySelectorAll('.mbx-profile-row').length === 1);
+        document.querySelector<HTMLElement>('.mbx-profile-row')!.click();
+        const reopened = await reopenAfterAddingTab(wall);
+        expect(reopened.snapshot()).toEqual({ profiles: [{ ...bob, tab: 'Fleet' }], tabs: [...tabs, 'Local'], activeTab: 'Fleet' });
+        expect(wall.slots().find(slot => slot.username === 'bob')?.tab).toBe('Fleet');
     });
 });
 

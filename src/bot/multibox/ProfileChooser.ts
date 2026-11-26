@@ -4,6 +4,7 @@ import { supportsWorldRouting } from '../../client/config/target.js';
 
 export interface ProfileChooserOptions {
     beforeRender?: () => void;
+    onRemove?: () => void;
     onLoadGroup?: (profiles: Profile[], tab?: string) => void;
     worldRouting?: boolean;
     defaultWorld?: WorldNumber;
@@ -167,6 +168,7 @@ export class ProfileChooser {
         this.status.textContent = '';
         try {
             await vault.remove(username);
+            this.options.onRemove?.();
             this.render();
         } catch (error) {
             this.status.textContent = error instanceof Error ? error.message : 'Could not delete the profile';

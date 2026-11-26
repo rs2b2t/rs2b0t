@@ -7,6 +7,7 @@ import { SettingsStore } from '#/bot/runtime/Settings.js';
 import { boxKey } from '#/bot/runtime/box.js';
 
 import {
+    PROFILE_IMPORT_REVISION_KEY,
     PROFILE_FILE_KIND,
     PROFILE_FILE_VERSION,
     applyBoxStorage,
@@ -286,6 +287,23 @@ describe('ProfileTransfer', () => {
             expect(JSON.parse(result.stdout.toString())).toEqual({ exportReads: 1, importReads: 1 });
         });
     }
+
+    test('a reloaded tab exports the imported script before its storage event', async () => {
+        const session = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage')!;
+        sessionStorage.removeItem(PROFILE_IMPORT_REVISION_KEY);
+        sessionStorage.setItem('rs2b0t:alice:selectedScript', 'Miner');
+        Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value: new Storage() });
+        try {
+            applyBoxStorage({ alice: { selectedScript: 'Fisher' } }, ['alice']);
+        } finally {
+            Object.defineProperty(globalThis, 'sessionStorage', session);
+        }
+        const creds = JSON.stringify({ username: 'alice', password: 'fixture' });
+        sessionStorage.setItem(boxKey('creds', 'alice'), creds);
+        const entry = '../../src/bot/multibox/ProfileTransfer.ts?reload';
+        const reloaded: typeof import('#/bot/multibox/ProfileTransfer.js') = await import(entry);
+        expect(reloaded.collectBoxStorage(['alice'])).toEqual({ alice: { selectedScript: 'Fisher', creds } });
+    });
 
     test('collect/apply round-trips box keys and does not steal a prefixed neighbour', () => {
         localStorage.clear();

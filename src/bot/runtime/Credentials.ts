@@ -1,4 +1,5 @@
-import { boxKey } from './box.js';
+import { recordCredentialRevision } from './profileImportSession.js';
+import { boxId, boxKey } from './box.js';
 
 // Why: sessionStorage is per tab (per iframe in the MultiBox via ?box=), while origin-shared localStorage would make every tab log in as whichever tab saved last.
 const hasStorage = typeof sessionStorage !== 'undefined';
@@ -40,20 +41,24 @@ export const Credentials = {
             return;
         }
         const next = { username, password };
+        const user = boxId();
+        const key = boxKey('creds', user);
         const current = this.get();
-        if (current?.username === username && current.password === password) {
-            return;
-        }
+        const changed = current?.username !== username || current.password !== password;
         if (hasStorage) {
-            sessionStorage.setItem(boxKey('creds'), JSON.stringify(next));
+            if (changed) sessionStorage.setItem(key, JSON.stringify(next));
+            if (user) recordCredentialRevision(key);
         }
-        notify(next);
+        if (changed) notify(next);
     },
 
     clear(): void {
         const hadCredentials = this.get() !== null;
         if (hasStorage) {
-            sessionStorage.removeItem(boxKey('creds'));
+            const user = boxId();
+            const key = boxKey('creds', user);
+            sessionStorage.removeItem(key);
+            if (user) recordCredentialRevision(key, null);
         }
         if (hadCredentials) {
             notify(null);
