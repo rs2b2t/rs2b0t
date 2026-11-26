@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const { join, resolve } = require('node:path');
 const { tmpdir } = require('node:os');
 const { createHash } = require('node:crypto');
-const { profileKeys, sharedStorage } = require('./shared-storage.cjs');
+const { profileKeys, savedProfileKey, sharedStorage } = require('./shared-storage.cjs');
 const legacyOrigin = 'http://localhost:8081';
 
 function prepareStorage(app, serverUrl) {
@@ -69,7 +69,8 @@ function prepareStorage(app, serverUrl) {
             }
             if (migrate) {
                 const values = /^https?:\/\//.test(origin) ? await readLegacy(origin) : {};
-                const fallback = origin === legacyOrigin ? {} : await readLegacy(legacyOrigin);
+                const needsFallback = origin !== legacyOrigin && !(recover && savedProfileKey(values));
+                const fallback = needsFallback ? await readLegacy(legacyOrigin) : {};
                 const firstMigration = store.seed(values, { fallback, recover });
                 if (recover && !firstMigration) {
                     // Why: the panel also imports settings from the temporary Chromium copy.

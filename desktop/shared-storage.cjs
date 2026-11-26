@@ -29,6 +29,10 @@ function hasSavedProfiles(key, raw) {
     }
 }
 
+function savedProfileKey(source, keys = profileKeys) {
+    return keys.find(key => hasSavedProfiles(key, source[key]));
+}
+
 function migrateProfiles(data, sources, { firstMigration, recover }) {
     if (recover && !firstMigration && isEmptyRoster(data[vaultKey]) && hasSavedProfiles(accountsKey, data[accountsKey])) {
         data[vaultKey] = data[accountsKey];
@@ -39,19 +43,18 @@ function migrateProfiles(data, sources, { firstMigration, recover }) {
     let selected = [];
     for (const source of sources) {
         const keys = !recover && isEmptyRoster(source[vaultKey]) ? [vaultKey] : profileKeys;
-        const entries = keys.map(key => [key, source[key]]);
-        const populated = entries.filter(([key, value]) => hasSavedProfiles(key, value));
-        if (populated.length) {
-            selected = populated;
+        const key = savedProfileKey(source, keys);
+        if (key) {
+            selected = [[key, source[key]]];
             break;
         }
-        if (firstMigration && !selected.length) selected = entries.filter(([, value]) => isEmptyRoster(value));
+        if (firstMigration && !selected.length) selected = keys.filter(key => isEmptyRoster(source[key])).map(key => [key, source[key]]);
     }
     if (!selected.length) return;
     for (const key of profileKeys) delete data[key];
     for (const [key, value] of selected) {
         // Why: a pending vault setup compares the profiles key before it replaces the roster.
-        const destination = !firstMigration && selected.length === 1 ? vaultKey : key;
+        const destination = firstMigration ? key : vaultKey;
         data[destination] = value;
     }
 }
@@ -137,4 +140,4 @@ function sharedStorage(dir) {
     };
 }
 
-module.exports = { profileKeys, sharedStorage };
+module.exports = { profileKeys, savedProfileKey, sharedStorage };

@@ -22,7 +22,7 @@ afterEach(() => {
     for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-function fixture(origins?: Record<string, Record<string, string>>) {
+function fixture(origins?: Record<string, Record<string, string>>, onLegacyRead?: (origin: string) => void) {
     const dir = mkdtempSync(join(tmpdir(), 'rs2b0t-migration-'));
     directories.push(dir);
     function saveLegacy(values: Record<string, Record<string, string>>) {
@@ -75,6 +75,7 @@ function fixture(origins?: Record<string, Record<string, string>>) {
                     this.origin = parsed.origin;
                 }
                 webContents = { on() {}, executeJavaScript: (source: string) => {
+                    onLegacyRead?.(this.origin);
                     return runInNewContext(source, { localStorage: nativeStorage(this.origin) });
                 } };
                 destroy() {}
@@ -303,6 +304,18 @@ test('explicit recovery can use the fallback when the configured origin has only
     expect(store.getItem(accounts)).toBeNull();
 });
 
+test('explicit recovery finishes on the configured origin when 8081 is unreadable', async () => {
+    const reads: string[] = [];
+    const { launch, storeDir } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles) } }, origin => {
+        reads.push(origin);
+        if (origin === original) throw new Error('Unreadable 8081 fixture');
+    });
+    writeFileSync(join(storeDir, 'storage.json'), JSON.stringify({ initialized: true, data: {} }));
+    expect(await launch(custom, true)).toEqual(profiles);
+    expect(await launch(custom)).toEqual(profiles);
+    expect(reads).toEqual([custom]);
+});
+
 test('first migration skips an empty configured roster across two launches', async () => {
     const { launch, store } = fixture({ [custom]: { [vault]: '[]' }, [original]: { [accounts]: JSON.stringify(profiles) } });
     const first = await launch(custom);
@@ -356,19 +369,26 @@ test('an invalid source on first launch leaves room for explicit recovery later'
     expect(store.getItem(accounts)).toBeNull();
 });
 
-test('a migrated encrypted vault can be unlocked on the next launch', async () => {
+test.each<[string, boolean]>([
+    ['first migration', false], ['explicit recovery', true]
+])('%s copies only the encrypted vault from a mixed source', async (_, recover) => {
     const { launch, saveLegacy, store } = fixture();
     const source = fixture().store;
-    source.setItem(accounts, JSON.stringify(profiles));
+    const current = [{ username: 'vault-only', password: 'fixture' }];
+    source.setItem(accounts, JSON.stringify(current));
     await new ProfileVault(source).setup('fixture');
     const saved = source.getItem(vault);
-    saveLegacy({ [custom]: { [vault]: saved }, [original]: { [accounts]: JSON.stringify(profiles) } });
+    saveLegacy({
+        [custom]: { [vault]: saved, [accounts]: JSON.stringify(profiles) },
+        [original]: { [accounts]: JSON.stringify(profiles) }
+    });
+    if (recover) store.seed({});
+    await launch(custom, recover);
     await launch(custom);
-    await launch(custom);
-    expect(store.snapshot()).toEqual({ [vault]: saved });
     const reopened = new ProfileVault(store);
     expect(await reopened.unlock('fixture')).toBe(true);
-    expect(reopened.list()).toEqual(profiles.map(profile => ({ ...profile, tab: 'Main' })));
+    expect(reopened.list()).toEqual([{ ...current[0], tab: 'Main' }]);
+    expect(store.getItem(accounts)).toBeNull();
 });
 
 test.each<[string, boolean, number]>([
