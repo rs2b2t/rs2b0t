@@ -232,7 +232,7 @@ function sharedStorage(dir) {
     function setValue(state, key, value) {
         if (state.seededWithoutProfiles || state.profileRetries || state.panelMigrations || state.deletedDuringSettingsMigration) {
             updateMigration(state, current => writeItem(current, key, value));
-        } else if ((state.data[key] ?? null) !== value || (value === null && profileKeys.includes(key))) {
+        } else if ((state.data[key] ?? null) !== value || (value === null && state.profileRecovery && profileKeys.includes(key))) {
             writeItem(state, key, value);
             write(state);
         }
@@ -282,7 +282,7 @@ function sharedStorage(dir) {
         removeItem(key) {
             if (valid(key)) withLockedState(state => setValue(state, key, null));
         },
-        seed(values, { fallback, recover = false, expectedProfiles, readError, profileOrigin, retries = [] } = {}) {
+        seed(values, { fallback, recover = false, expectedProfiles, readError, profileOrigin, retries = [], retryOrigin } = {}) {
             return update(state => {
                 if (state.deletedDuringSettingsMigration && fallback) {
                     importSettings(state.data, fallback, state.deletedDuringSettingsMigration);
@@ -297,13 +297,15 @@ function sharedStorage(dir) {
                         importSettings(state.pendingPanelSettings ?? state.data, values, migration.removed);
                     }
                 }
-                const sources = [[profileOrigin ?? legacyOrigin, values ?? {}]];
+                const sources = values ? [[profileOrigin ?? legacyOrigin, values]] : [];
                 if (profileOrigin !== legacyOrigin) finishProfileRetry(state, profileOrigin, values);
                 for (const [origin, source] of retries) {
                     if (finishProfileRetry(state, origin, source)) sources.push([origin, source]);
                 }
                 finishProfileRetry(state, legacyOrigin, fallback);
-                sources.push([legacyOrigin, fallback ?? {}]);
+                if (fallback) sources.push([legacyOrigin, fallback]);
+                const preferred = sources.findIndex(([origin]) => origin === retryOrigin);
+                if (preferred > 0) sources.unshift(sources.splice(preferred, 1)[0]);
                 const profilesChanged = expectedProfiles && profileState(state).some((value, i) => value !== expectedProfiles[i]);
                 if (!profilesChanged && (!state.initialized || recover || state.seededWithoutProfiles)) {
                     if (!state.initialized && !profileKeys.some(key => key in state.data)) state.seededWithoutProfiles = true;

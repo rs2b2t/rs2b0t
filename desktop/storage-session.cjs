@@ -98,9 +98,10 @@ function prepareStorage(app, serverUrl) {
                 let fallback;
                 if (!initialized || retrySettings || retryProfileOrigins.includes(legacyOrigin)) fallback = await readLegacy(legacyOrigin).catch(failed);
                 const retries = [];
-                let values = {};
+                let values;
+                const retryOrigin = automaticRetry && retryProfileOrigins.includes(origin) ? origin : undefined;
                 if (automaticRetry) {
-                    const origins = retryProfileOrigins.includes(origin) ? new Set([origin, ...retryProfileOrigins]) : retryProfileOrigins;
+                    const origins = retryOrigin ? new Set([retryOrigin, ...retryProfileOrigins]) : retryProfileOrigins;
                     for (const source of origins) {
                         if (!isCustomOrigin(source)) continue;
                         const entries = await readLegacy(source).catch(failed);
@@ -111,9 +112,10 @@ function prepareStorage(app, serverUrl) {
                 let firstMigration = false;
                 if (!automaticRetry || fallback || retries.length) {
                     try {
-                        firstMigration = store.seed(values, { fallback, recover, expectedProfiles, readError, profileOrigin: automaticRetry ? undefined : origin, retries });
+                        firstMigration = store.seed(values, { fallback, recover, expectedProfiles, readError, profileOrigin: automaticRetry ? undefined : origin, retries, retryOrigin });
                     } catch (error) {
                         if (!automaticRetry) throw error;
+                        console.warn(`Could not save the desktop storage migration (${error.code ?? error.name}). Relaunch to retry.`);
                     }
                 }
                 if (!firstMigration) {

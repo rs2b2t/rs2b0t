@@ -106,7 +106,7 @@ function fixture(
         const module = { exports: {} };
         const env = { B0T_PROFILE_DIR: dir, B0T_RUNTIME_DIR: dir, B0T_RECOVER_LEGACY_PROFILES: recover ? '1' : undefined };
         const context = {
-            module, URL, Response, process: { argv: [`--server=${server}/bot.html?fixture=1`], env },
+            module, URL, Response, console, process: { argv: [`--server=${server}/bot.html?fixture=1`], env },
             require: (name: string) => {
                 if (name === 'node:fs') return { ...require(name), cpSync: copyLegacy };
                 return name === 'electron' ? electron : require(name);
@@ -762,6 +762,20 @@ test('the panel preserves 8081 setting precedence across a failed read and genui
     expect(store.getItem(method)).toBeNull();
 });
 
+function failStoreWrites(storeDir: string) {
+    const fs: typeof import('node:fs') = require('node:fs');
+    const write = fs.writeFileSync;
+    let failed = false;
+    const writes = spyOn(fs, 'writeFileSync').mockImplementation((file, ...args) => {
+        if (typeof file === 'string' && dirname(file) === storeDir) {
+            failed = true;
+            throw Object.assign(new Error('Fixture disk full'), { code: 'ENOSPC' });
+        }
+        write(file, ...args);
+    });
+    return { failed: () => failed, restore: () => writes.mockRestore() };
+}
+
 test('an unreadable 8081 opens the configured roster and retries missing settings on relaunch', async () => {
     const script = 'rs2b0t:fixture-0:selectedScript';
     const edited = 'rs2b0t:set:Miner:ore';
@@ -776,24 +790,18 @@ test('an unreadable 8081 opens the configured roster and retries missing setting
     expect(await launch(custom)).toEqual(profiles);
     store.setItem(edited, 'Gold');
     store.removeItem(removed);
-    const fs: typeof import('node:fs') = require('node:fs');
-    const write = fs.writeFileSync;
-    const inStore = (file: Parameters<typeof write>[0]) => typeof file === 'string' && dirname(file) === storeDir;
-    const writes = spyOn(fs, 'writeFileSync').mockImplementation((file, ...args) => {
-        if (inStore(file)) throw Object.assign(new Error('Fixture disk full'), { code: 'ENOSPC' });
-        write(file, ...args);
-    });
+    const writes = failStoreWrites(storeDir);
     try {
         expect(await launch(custom)).toEqual(profiles);
-        expect(writes.mock.calls.some(([file]) => inStore(file))).toBe(false);
+        expect(writes.failed()).toBe(false);
         expect(rendererStorage()).toEqual({});
         unreadable = false;
         expect(await launch(custom)).toEqual(profiles);
-        expect(writes.mock.calls.some(([file]) => inStore(file))).toBe(true);
+        expect(writes.failed()).toBe(true);
         expect(store.getItem(script)).toBeNull();
         expect(rendererStorage()).toEqual({});
     } finally {
-        writes.mockRestore();
+        writes.restore();
     }
     store.removeItem(accounts);
     expect(await launch(custom)).toEqual([]);
@@ -859,6 +867,26 @@ test('an empty readable fallback opens the chooser and retries the configured or
     expect(store.initialized()).toBe(true);
     unreadable = false;
     expect(await launch(original)).toEqual(profiles);
+    expect(await launch(custom)).toEqual(profiles);
+});
+
+test('a profile retry reports a failed write and saves the roster on relaunch', async () => {
+    let readable = false;
+    const { launch, storeDir } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles) } }, origin => {
+        if (origin === custom && !readable) throw new Error('Unreadable fixture');
+    });
+    expect(await launch(custom)).toEqual([]);
+    readable = true;
+    const writes = failStoreWrites(storeDir);
+    const warning = spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+        expect(await launch(custom)).toEqual([]);
+        expect(warning).toHaveBeenCalledWith(expect.stringMatching(/migration.*ENOSPC/));
+    } finally {
+        warning.mockRestore();
+        writes.restore();
+    }
+    expect(await launch(custom)).toEqual(profiles);
     expect(await launch(custom)).toEqual(profiles);
 });
 
@@ -952,6 +980,30 @@ test('a malformed 8081 roster opens the chooser with usable settings and retries
     expect(await launch(custom)).toEqual(profiles);
     expect(await launch(custom)).toEqual(profiles);
     expect(store.getItem(script)).toBeNull();
+});
+
+test.each([original, custom])('two repaired rosters prefer the pending configured origin %s', async server => {
+    const script = 'rs2b0t:fixture:selectedScript';
+    const { launch, saveLegacy, store } = fixture({
+        [original]: { [accounts]: '{', [script]: 'Fisher' },
+        [custom]: { [accounts]: '{', [script]: 'Miner' }
+    });
+    await expectMalformedRoster(() => launch(custom), accounts);
+    const alternate = profiles.slice(0, 1);
+    saveLegacy({ [original]: { [accounts]: JSON.stringify(profiles) }, [custom]: { [accounts]: JSON.stringify(alternate) } });
+    const expected = server === original ? profiles : alternate;
+    expect(await launch(server)).toEqual(expected);
+    expect(await launch(server)).toEqual(expected);
+    expect(store.getItem(script)).toBe('Fisher');
+});
+
+test('removing an absent roster after migration leaves the shared document unchanged', async () => {
+    const { launch, store, storeDir } = fixture({});
+    expect(await launch(original)).toEqual([]);
+    const file = join(storeDir, 'storage.json');
+    const before = readFileSync(file, 'utf8');
+    store.removeItem(vault);
+    expect(readFileSync(file, 'utf8')).toBe(before);
 });
 
 test('resetting profiles cancels a malformed roster retry', async () => {

@@ -50,8 +50,9 @@ On first migration, the desktop looks for profiles on the configured origin, the
 from the configured origin when the shared store has no value for them.
 If the configured origin is unreadable and 8081 is readable, the chooser opens
 even if 8081 is empty. When no profiles were found, the next launch retries
-each unreadable configured origin, starting with the current one if it is
-pending. Saving or resetting profiles cancels pending profile imports.
+pending origins, preferring the configured origin if it has a usable roster.
+Saving or resetting profiles cancels pending profile imports.
+A failed retry write logs the storage error and leaves the import pending for the next launch.
 The desktop still retries unread script settings and preserves later edits and deletions.
 If 8081 is unreadable, the desktop can open with a populated configured roster
 and defer script settings until it can check 8081. With an empty configured
