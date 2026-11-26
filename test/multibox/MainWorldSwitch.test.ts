@@ -141,6 +141,28 @@ function chooserRow(username: string): HTMLElement | undefined {
     return Array.from(document.querySelectorAll<HTMLElement>('.mbx-chooser-overlay:not([hidden]) .mbx-profile-name')).find(el => el.textContent === username);
 }
 
+test('a stale chooser re-saves and loads a profile in its remotely created group', async () => {
+    await withWall('local', async wall => {
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!chooserRow('alice'));
+        const other = new ProfileVault();
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        await other.upsert({ username: 'fleet1', password: 'old', world: 2 });
+        await other.assignGroup(['fleet1'], 'Fleet');
+
+        document.querySelector<HTMLInputElement>('#mbx-new-user')!.value = 'fleet1';
+        document.querySelector<HTMLInputElement>('#mbx-new-pass')!.value = 'updated';
+        document.querySelector('.mbx-chooser-form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+        await waitFor(() => wall.slots().some(slot => slot.username === 'fleet1'));
+        await vault.refresh();
+
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.list().find(p => p.username === 'fleet1')).toEqual({ username: 'fleet1', password: 'updated', world: 2, tab: 'Fleet' });
+        expect(wall.slots()[0].tab).toBe('Fleet');
+    });
+});
+
 test('a shared import can load from the open chooser and reveal its tile', async () => {
     await withWall('proxy', async wall => {
         const openChooser = async () => {

@@ -285,6 +285,7 @@ function boot(): void {
     });
 
     const chooser = new ProfileChooser((p, focus) => {
+        if (p.tab) controller.addTab(p.tab);
         const added = controller.add(p);
         if (focus) {
             const slot = added ?? controller.snapshot().find(s => normalizeUsername(s.username) === normalizeUsername(p.username));

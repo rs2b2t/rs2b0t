@@ -199,8 +199,9 @@ export class ProfileVault {
     }
 
     async refresh(): Promise<void> {
-        if (!this.shared || !this.key) return;
+        if (!this.shared) return;
         return this.enqueueShared(async () => {
+            if (!this.key) return;
             const generation = this.persistGeneration;
             const raw = this.storage!.getItem(KEY);
             const blob = parseBlob(raw);
@@ -224,7 +225,7 @@ export class ProfileVault {
         return parsePayload(new TextDecoder().decode(plaintext));
     }
 
-    private sharedChange(change: (draft: ProfileVault) => Promise<void>, retry = true): Promise<void> {
+    private sharedChange<T>(change: (draft: ProfileVault) => Promise<T>, retry = true): Promise<T> {
         const generation = this.persistGeneration;
         return this.enqueueShared(async () => {
             for (let attempt = 0; attempt < 8; attempt++) {
@@ -248,14 +249,14 @@ export class ProfileVault {
                 draft.cache = payload.profiles;
                 draft.customTabs = payload.tabs;
                 draft.active = payload.activeTab;
-                await change(draft);
+                const result = await change(draft);
                 if (generation !== this.persistGeneration) throw new Error('Vault changed before the accounts were saved.');
                 if (await this.compareAndSet(expected, values.get(KEY)!)) {
                     if (generation !== this.persistGeneration) throw new Error('Vault changed before the accounts were saved.');
                     this.cache = draft.cache;
                     this.customTabs = draft.customTabs;
                     this.active = draft.active;
-                    return;
+                    return result;
                 }
                 if (!retry) break;
             }
@@ -408,11 +409,11 @@ export class ProfileVault {
         }
     }
 
-    async upsert(p: Profile): Promise<void> {
+    async upsert(p: Profile): Promise<{ profile: Profile; created: boolean } | undefined> {
         if (this.shared) {
             const generation = this.persistGeneration;
             try {
-                await this.sharedChange(draft => draft.upsert(p));
+                return await this.sharedChange(draft => draft.upsert(p));
             } catch (error) {
                 if (desktopStorage || generation >= this.lastResetGeneration || this.status() !== 'empty') throw error;
             }
@@ -439,6 +440,7 @@ export class ProfileVault {
         }
         try {
             await this.persist();
+            return { profile: { ...entry, tab: entry.tab ?? MAIN_TAB }, created: i < 0 };
         } catch (error) {
             const index = this.cache?.indexOf(entry) ?? -1;
             if (generation === this.persistGeneration && this.cache && index >= 0) {

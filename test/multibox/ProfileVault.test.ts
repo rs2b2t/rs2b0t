@@ -205,6 +205,21 @@ describe('ProfileVault', () => {
         expect(reopened.status()).toBe('empty');
     });
 
+    test('refresh during unlock observes a reset from another tab', async () => {
+        const first = new ProfileVault();
+        await first.setup('pw');
+        await first.upsert({ username: 'alice', password: 'fixture' });
+        const second = new ProfileVault();
+        const unlocking = second.unlock('pw');
+        await Promise.resolve();
+        await first.reset();
+        await Promise.all([unlocking, second.refresh()]);
+
+        expect(new ProfileVault().status()).toBe('empty');
+        expect(second.status()).toBe('empty');
+        expect(() => second.list()).toThrow();
+    });
+
     test('a queued upsert rejects when refresh observes a reset from another tab', async () => {
         const first = new ProfileVault();
         await first.setup('pw');
