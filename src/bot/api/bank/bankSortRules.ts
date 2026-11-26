@@ -102,14 +102,11 @@ const RULES: readonly CategoryRule[] = [
     { category: 'junk', ids: [526, 532] }
 ];
 
-function ruleFor(item: SortableItem): CategoryRule | null {
+export function matchedCategory(item: SortableItem): BankCategory | null {
     const name = (item.name ?? '').toLowerCase();
     for (const rule of RULES) {
-        if (rule.ids?.includes(item.id)) {
-            return rule;
-        }
-        if (name.length > 0 && rule.match?.(name)) {
-            return rule;
+        if (rule.ids?.includes(item.id) || (name.length > 0 && rule.match?.(name))) {
+            return rule.category;
         }
     }
 
@@ -117,9 +114,9 @@ function ruleFor(item: SortableItem): CategoryRule | null {
 }
 
 export function categoryOf(item: SortableItem): BankCategory {
-    return ruleFor(item)?.category ?? 'junk';
+    return matchedCategory(item) ?? 'junk';
 }
 
 export function isUnmatched(item: SortableItem): boolean {
-    return ruleFor(item) === null;
+    return matchedCategory(item) === null;
 }
