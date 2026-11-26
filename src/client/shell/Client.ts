@@ -901,7 +901,9 @@ export class Client extends GameShell {
 
                 while (this.onDemand.remaining() > 0) {
                     await this.onDemandLoop();
-                    await sleep(100);
+                    if (this.onDemand.remaining() > 0) {
+                        await sleep(100);
+                    }
                 }
             }
 
@@ -919,7 +921,9 @@ export class Client extends GameShell {
                 }
 
                 await this.onDemandLoop();
-                await sleep(100);
+                if (this.onDemand.remaining() > 0) {
+                    await sleep(100);
+                }
             }
 
             await this.drawProgress('Requesting models', 70);
@@ -940,7 +944,9 @@ export class Client extends GameShell {
                 }
 
                 await this.onDemandLoop();
-                await sleep(100);
+                if (this.onDemand.remaining() > 0) {
+                    await sleep(100);
+                }
             }
 
             const prefetchAssets = !this.searchParams.has('box');
@@ -973,7 +979,9 @@ export class Client extends GameShell {
                     }
 
                     await this.onDemandLoop();
-                    await sleep(100);
+                    if (this.onDemand.remaining() > 0) {
+                        await sleep(100);
+                    }
                 }
             }
 
