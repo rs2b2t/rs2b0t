@@ -81,6 +81,7 @@ import { buildExperienceThresholds } from '#/shared/experience.js';
 
 const MAX_PLAYER_COUNT = 2048;
 const LOCAL_PLAYER_INDEX = 2047;
+const MINIMAP_DOT_RADIUS = 80;
 
 const MAX_CHATS = 50;
 const CHAT_COLOURS = [Colour.YELLOW, Colour.RED, Colour.GREEN, Colour.CYAN, Colour.MAGENTA, Colour.WHITE];
@@ -11517,8 +11518,10 @@ export class Client extends GameShell {
         }
 
         const angle: number = (this.orbitCameraYaw + this.macroMinimapAngle) & 0x7ff;
-        let anchorX: number = ((this.localPlayer.x / 32) | 0) + 48;
-        let anchorY: number = 464 - ((this.localPlayer.z / 32) | 0);
+        const playerMapX = (this.localPlayer.x / 32) | 0;
+        const playerMapZ = (this.localPlayer.z / 32) | 0;
+        let anchorX: number = playerMapX + 48;
+        let anchorY: number = 464 - playerMapZ;
 
         this.minimap?.scanlineRotatePlotSprite(25, 5, 146, 151, anchorX, anchorY, angle, this.macroMinimapZoom + 256, this.minimapMaskLineOffsets, this.minimapMaskLineLengths);
         this.compass?.scanlineRotatePlotSprite(0, 0, 33, 33, 25, 25, this.orbitCameraYaw, 256, this.compassMaskLineOffsets, this.compassMaskLineLengths);
@@ -11529,12 +11532,17 @@ export class Client extends GameShell {
             this.minimapDrawDot(anchorY, this.activeMapFunctions[i], anchorX);
         }
 
-        for (let ltx: number = 0; ltx < BuildArea.SIZE; ltx++) {
-            for (let ltz: number = 0; ltz < BuildArea.SIZE; ltz++) {
-                const objs = this.groundObj[this.minusedlevel][ltx][ltz];
+        const minTileX = Math.max(0, Math.ceil((playerMapX - 2 - MINIMAP_DOT_RADIUS) / 4));
+        const maxTileX = Math.min(BuildArea.SIZE - 1, Math.floor((playerMapX - 2 + MINIMAP_DOT_RADIUS) / 4));
+        const minTileZ = Math.max(0, Math.ceil((playerMapZ - 2 - MINIMAP_DOT_RADIUS) / 4));
+        const maxTileZ = Math.min(BuildArea.SIZE - 1, Math.floor((playerMapZ - 2 + MINIMAP_DOT_RADIUS) / 4));
+        for (let ltx = minTileX; ltx <= maxTileX; ltx++) {
+            const row = this.groundObj[this.minusedlevel][ltx];
+            for (let ltz = minTileZ; ltz <= maxTileZ; ltz++) {
+                const objs = row[ltz];
                 if (objs) {
-                    anchorX = ltx * 4 + 2 - ((this.localPlayer.x / 32) | 0);
-                    anchorY = ltz * 4 + 2 - ((this.localPlayer.z / 32) | 0);
+                    anchorX = ltx * 4 + 2 - playerMapX;
+                    anchorY = ltz * 4 + 2 - playerMapZ;
                     this.minimapDrawDot(anchorY, this.mapdots1, anchorX);
                 }
             }
@@ -11642,7 +11650,7 @@ export class Client extends GameShell {
         }
 
         const distance: number = dx * dx + dy * dy;
-        if (distance > 6400) {
+        if (distance > MINIMAP_DOT_RADIUS * MINIMAP_DOT_RADIUS) {
             return;
         }
 
