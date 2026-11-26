@@ -59,10 +59,11 @@ export default class Pix2D extends Linkable2 {
     }
 
     static cls(): void {
-        const len: number = this.width * this.height;
-        for (let i: number = 0; i < len; i++) {
-            this.pixels[i] = 0;
+        if (this.pixels.length === 0) {
+            return;
         }
+        const len = Math.max(0, Math.ceil(this.width * this.height));
+        this.pixels.fill(0, 0, len);
     }
 
     static fillRectTrans(x: number, y: number, width: number, height: number, rgb: number, alpha: number): void {
