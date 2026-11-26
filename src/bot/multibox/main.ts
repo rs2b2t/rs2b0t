@@ -116,6 +116,11 @@ function boot(): void {
         orderWrite = orderWrite.then(() => vault.reorder(usernames)).catch(err => console.error('[rs2b0t] failed to save bot order', err));
     }
 
+    function persistActiveTab(tab: string): void {
+        if (vault.status() !== 'unlocked' || controller.activeTab() !== tab) return;
+        orderWrite = orderWrite.then(() => vault.saveActiveTab(tab)).catch(err => console.error('[rs2b0t] failed to save active tab', err));
+    }
+
     function persistTabState(selected?: string, moved: SlotSnapshot[] = [], replaced?: TabReplacement): void {
         if (vault.status() !== 'unlocked') {
             return;
@@ -345,12 +350,15 @@ function boot(): void {
         const selected = controller.activeTab();
         renderRail();
         afterTabRestore(() => {
-            let assigned: SlotSnapshot[] = [];
             if (p.tab === undefined && slot && vault.status() === 'unlocked') {
                 const saved = vault.list().find(profile => profile.username === p.username);
-                if (saved) assigned = controller.snapshot().filter(s => s.id === slot.id && s.tab !== saved.tab);
+                const current = controller.snapshot().find(s => s.id === slot.id);
+                if (saved && current && current.tab !== saved.tab) {
+                    persistTabState(selected !== previousActive ? selected : undefined, [current]);
+                    return;
+                }
             }
-            persistTabState(selected !== previousActive ? selected : undefined, assigned);
+            if (selected !== previousActive) persistActiveTab(selected);
         });
     }, {
         defaultWorld, worldRouting, onWorldChange: worldRouting ? changeProfileWorld : undefined,
@@ -359,10 +367,7 @@ function boot(): void {
             if (tab) controller.setActiveTab(tab);
             controller.addGroup(profiles);
             renderRail();
-            if (tab) afterTabRestore(() => {
-                if (vault.status() !== 'unlocked' || controller.activeTab() !== tab) return;
-                orderWrite = orderWrite.then(() => vault.saveActiveTab(tab)).catch(err => console.error('[rs2b0t] failed to save active tab', err));
-            });
+            if (tab) afterTabRestore(() => persistActiveTab(tab));
         }
     });
     document.body.appendChild(chooser.el);

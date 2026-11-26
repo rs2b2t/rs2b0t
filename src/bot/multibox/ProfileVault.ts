@@ -480,7 +480,7 @@ export class ProfileVault {
         if (usernames.some(username => !saved.has(username))) throw new Error('Only saved profiles can be grouped.');
         const tabs = [...this.customTabs];
         if (tab !== MAIN_TAB && !tabs.includes(tab)) tabs.push(tab);
-        await this.saveTabState(tabs, new Map(usernames.map(username => [username, tab])), this.active);
+        await this.applyTabState(tabs, new Map(usernames.map(username => [username, tab])), 'all', this.active);
     }
 
     async remove(username: string): Promise<void> {
@@ -562,11 +562,15 @@ export class ProfileVault {
                 this.sharedTabs = requested;
             });
         }
+        return this.applyTabState(tabs, new Map(tabByUser), replaced ? 'all' : 'first', activeTab, replaced);
+    }
+
+    private async applyTabState(tabs: string[], assignments: Map<string, string>, matches: 'first' | 'all', activeTab?: string, replaced?: TabReplacement): Promise<void> {
         const all = this.assertUnlocked();
         const trimmed = tabs.map(t => t.trim());
         const active = activeTab ?? (trimmed.includes(this.active) ? this.active : MAIN_TAB);
         assertTabStateValid(trimmed, active, []);
-        for (const [username, tab] of tabByUser) {
+        for (const [username, tab] of assignments) {
             if (tab !== MAIN_TAB && !trimmed.includes(tab)) {
                 throw new Error(`tab '${tab}' for '${username}' is not in the tab list`);
             }
@@ -574,7 +578,8 @@ export class ProfileVault {
         this.customTabs = trimmed;
         this.active = active;
         for (const p of all) {
-            const next = replaced && p.tab !== replaced.from ? p.tab : replaced?.to ?? tabByUser.get(p.username) ?? p.tab;
+            const next = replaced && p.tab !== replaced.from ? p.tab : replaced?.to ?? assignments.get(p.username) ?? p.tab;
+            if (matches === 'first') assignments.delete(p.username);
             // a profile not loaded in this wall keeps its stored tab, landing in Main when that tab has been deleted
             // Why: the deleting wall only knows prior-tab targets for the bots it has loaded
             if (next !== undefined && next !== MAIN_TAB && trimmed.includes(next)) {
