@@ -14,7 +14,7 @@ afterEach(() => { for (const cleanup of cleanups.splice(0).reverse()) cleanup();
 
 type Update = { version: number; changes: Record<string, string | null>; append?: string[] };
 type StorageReply = {
-    value?: string | string[] | boolean | null;
+    value?: string | (string | null)[] | boolean | null | { getItems: boolean };
     error?: string;
     snapshot?: { version: number; data: Record<string, string> };
 };
@@ -62,6 +62,15 @@ async function fixture() {
     return { main, child, nested, plain, contents, request, store, watch: () => watch('rename', 'storage.json') };
 }
 const key = 'rs2b0t:set:Fisher:method';
+
+test('batch reads return requested values in order before the file watcher runs', async () => {
+    const f = await fixture();
+    const keys = ['rs2b0t:a:selectedScript', 'rs2b0t:b:selectedScript'];
+    f.request(f.child, 'snapshot');
+    f.store.setItem(keys[1], 'Miner');
+    expect(f.request(f.main, 'getItems', keys)).toEqual({ value: [null, 'Miner'], snapshot: undefined });
+    expect(f.child.received).toEqual([]);
+});
 
 test('storage changes reach registered bridges only, with the writer updated by its response', async () => {
     const f = await fixture();

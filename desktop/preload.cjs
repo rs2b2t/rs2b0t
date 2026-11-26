@@ -47,10 +47,11 @@ ipcRenderer.on('rs2b0t-storage-changed', (_, next, oldValue, newValue) => {
         for (const callback of listeners) callback(next, oldValue, newValue);
     } else accept(next);
 });
-call('snapshot');
+const capabilities = call('snapshot');
 
 contextBridge.exposeInMainWorld('rs2b0tDesktopStorage', {
     getItem: key => snapshot.version >= 0 && key.startsWith('rs2b0t:') && key.includes(':set:') ? snapshot.data[key] ?? null : call('getItem', key),
+    ...(capabilities?.getItems && { getItems: keys => call('getItems', keys) }),
     setItem: (key, value) => call('setItem', key, value),
     removeItem: key => call('removeItem', key),
     keys: () => snapshot.version >= 0 ? Object.keys(snapshot.data) : call('keys'),
