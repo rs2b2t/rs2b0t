@@ -11,24 +11,7 @@ import { combatKitStep, featherStep } from '#/bot/api/ai/quests/defs/heroquest/f
 import { snipeKitOwned, snipeKitStep } from '#/bot/api/ai/quests/defs/heroquest/phoenix.js';
 import { QuestFood } from '#/bot/api/ai/quests/food.js';
 import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
-
-function snap(over: Partial<QuestSnapshot> = {}): QuestSnapshot {
-    return {
-        journal: 'inProgress',
-        inv: new Map(),
-        invIds: new Map(),
-        worn: new Set(),
-        wornIds: new Set(),
-        noProgress: 0,
-        bankCoins: 2_000_000,
-        bank: new Map(),
-        bankIds: new Map(),
-        bankKnown: true,
-        tile: { x: 3210, z: 3490, level: 0 } as QuestSnapshot['tile'],
-        freeSlots: 20,
-        ...over
-    };
-}
+import { heroSnapshot as snap } from './heroquest-snapshot.fixture.js';
 
 function name(step: QuestStep | null): string {
     return JSON.stringify(step ?? {});
