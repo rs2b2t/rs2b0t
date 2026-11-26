@@ -67,9 +67,14 @@ export default class ParamsModal {
 
     private readonly onKeyDown = (e: KeyboardEvent): void => {
         if (e.key === 'Escape' && this.isOpen()) {
-            // Why: nested hosts (map picker window keydown) would otherwise treat this Escape as "close the outer modal" too.
+            const layers = document.querySelectorAll<HTMLElement>('.rs2b0t-modal-backdrop, .rs2b0t-modal-overlay');
+            const top = Array.from(layers)
+                .filter(layer => layer.style.display === 'flex')
+                .sort((a, b) => Number(getComputedStyle(a).zIndex) - Number(getComputedStyle(b).zIndex))
+                .at(-1);
+            if (top !== this.backdrop) return;
             e.preventDefault();
-            e.stopPropagation();
+            e.stopImmediatePropagation();
             this.close();
         }
     };

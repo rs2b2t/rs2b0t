@@ -53,6 +53,7 @@ const TILES_AT_ZOOM1 = 320;
 
 let finderPromise: Promise<PathFinder> | null = null;
 let basemapPromise: Promise<LoadedBasemap | null> | null = null;
+let pendingCacheWrite: AbortController | undefined;
 
 async function loadFinder(): Promise<PathFinder> {
     if (!finderPromise) {
@@ -238,15 +239,19 @@ function paintYouAreHere(
 }
 
 async function cacheRebuiltBasemap(prefs: BasemapBakePrefs, map: LoadedBasemap): Promise<void> {
+    pendingCacheWrite?.abort();
     const controller = new AbortController();
+    pendingCacheWrite = controller;
     const { signal } = controller;
-    const timer = setTimeout(() => controller.abort(), 5_000);
+    const write = fetchClientCrcKey(signal).then(crc => {
+        if (crc && !signal.aborted) return saveRegeneratedBasemapLocally(crc, prefs, map.manifest, map.image, signal);
+    }).finally(() => {
+        if (pendingCacheWrite === controller) pendingCacheWrite = undefined;
+    });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<void>(resolve => { timer = setTimeout(resolve, 5_000); });
     try {
-        const expired = new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
-        const write = fetchClientCrcKey(signal).then(crc => {
-            if (crc && !signal.aborted) return saveRegeneratedBasemapLocally(crc, prefs, map.manifest, map.image, signal);
-        });
-        await Promise.race([write, expired]);
+        await Promise.race([write, deadline]);
     } catch {
         /* local cache optional */
     } finally {

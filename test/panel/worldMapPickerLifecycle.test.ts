@@ -2,6 +2,8 @@ import { expect, jest, spyOn, test } from 'bun:test';
 import { EventTarget as DomEventTarget, PropertySymbol, Window } from 'happy-dom';
 import { regenerateBasemap } from '#/bot/panel/basemapRegen.js';
 import { WorldMapPicker } from '#/bot/panel/WorldMapPicker.js';
+import ParamsModal from '#/bot/panel/ParamsModal.js';
+import { SettingsStore } from '#/bot/runtime/Settings.js';
 
 function resources() {
     if (!(document instanceof DomEventTarget)) throw new Error('Expected a synthetic document');
@@ -17,10 +19,11 @@ function pressEscape(): void {
     document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 }
 
-function packWithWalkableOrigin(): Uint8Array<ArrayBuffer> {
+function packWithWalkableTile(x: number, z: number): Uint8Array<ArrayBuffer> {
     const pack = new Uint8Array(13 + 4096 + 512);
-    pack.set([0x4c, 0x43, 0x4e, 0x56, 1, 0, 0, 0, 1, 0, 0, 0, 1]);
-    pack[13 + 4096] = 1;
+    pack.set([0x4c, 0x43, 0x4e, 0x56, 1, 0, 0, 0, 1, 0, x >> 6, z >> 6, 1]);
+    const index = (x % 64) * 64 + (z % 64);
+    pack[13 + 4096 + (index >> 3)] = 1 << (index % 8);
     return pack;
 }
 
@@ -32,23 +35,24 @@ function selectCentre(picker: HTMLElement): void {
     canvas.dispatchEvent(new MouseEvent('click', point));
 }
 
-test.each(['Cancel', 'Escape', 'Confirm'])('%s releases picker settings after each visit', async action => {
-    const tile = { x: 0, z: 0, level: 0 };
+test.each(['Cancel', 'Escape', 'Confirm'])('%s returns to the script tile control and releases picker settings', async action => {
     const originalFetch = Object.getOwnPropertyDescriptor(globalThis, 'fetch')!;
     Object.defineProperty(globalThis, 'fetch', {
         configurable: true,
         value: async (url: URL) => url.pathname.endsWith('/collision.lcnav.gz')
-            ? new Response(packWithWalkableOrigin())
+            ? new Response(packWithWalkableTile(3213, 3424))
             : new Response(null, { status: 404 })
     });
     const frame = spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(1);
     const sharedDOM = { window, document };
     const pickerWindow = new Window();
     Object.assign(globalThis, { window: pickerWindow, document: pickerWindow.document });
+    const script = new ParamsModal(() => false, () => {});
     try {
+        script.open('PickerFixture', { target: { type: 'tile', default: null } });
         const before = resources();
         for (let i = 0; i < 5; i++) {
-            const result = WorldMapPicker.open(tile);
+            document.querySelector<HTMLButtonElement>('.rs2b0t-ctl-tile button')!.click();
             await new Promise<void>(resolve => setImmediate(resolve));
             const picker = document.querySelector<HTMLElement>('.rs2b0t-walkmap-overlay')!;
             if (action === 'Confirm') {
@@ -67,11 +71,14 @@ test.each(['Cancel', 'Escape', 'Confirm'])('%s releases picker settings after ea
             } else {
                 picker.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-cancel')!.click();
             }
+            await new Promise<void>(resolve => setImmediate(resolve));
+            expect(SettingsStore.saved('PickerFixture', 'target')).toBe(action === 'Confirm' ? '3213,3424,0' : undefined);
+            expect(script.isOpen()).toBe(true);
             expect(resources()).toEqual(before);
-            expect(await result).toEqual(action === 'Confirm' ? tile : null);
         }
     } finally {
         document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-cancel')?.click();
+        script.dispose();
         frame.mockRestore();
         Object.defineProperty(globalThis, 'fetch', originalFetch);
         sessionStorage.clear();

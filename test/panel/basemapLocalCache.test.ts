@@ -882,6 +882,40 @@ describe('map picker bake settings drafts', () => {
         }
     });
 
+    test('a slow CRC still caches the submitted map after the Rebuild button is released', async () => {
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
+        const next = rebuiltMap();
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockResolvedValue(next);
+        const crc = spyOn(localCache, 'fetchClientCrcKey').mockResolvedValue(null);
+        const cache = spyOn(localCache, 'saveRegeneratedBasemapLocally').mockResolvedValue();
+        const clock = jest as typeof jest & { advanceTimersByTime(ms: number): void };
+        try {
+            await withPicker(async () => {
+                openSettings();
+                bakeCheckbox('Map-square borders').click();
+                jest.useFakeTimers();
+                crc.mockImplementationOnce(() => new Promise(resolve => setTimeout(() => resolve('slow-crc'), 6_000)));
+                const rebuild = document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-rebuild')!;
+                rebuild.click();
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(stored('bakeBorders').local).toBe('true');
+                clock.advanceTimersByTime(5_000);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(rebuild.disabled).toBe(false);
+                expect(cache).not.toHaveBeenCalled();
+                clock.advanceTimersByTime(1_000);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(cache).toHaveBeenCalledTimes(1);
+                expect(cache).toHaveBeenCalledWith('slow-crc', prefs({ borders: true }), next.manifest, next.image, expect.any(AbortSignal));
+            });
+        } finally {
+            jest.useRealTimers();
+            cache.mockRestore();
+            crc.mockRestore();
+            bake.mockRestore();
+        }
+    });
+
     test.each(['CRC lookup', 'cache write'])('a stalled %s leaves a quota failure visible and retryable', async stage => {
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
         const held = Promise.withResolvers<void>();
