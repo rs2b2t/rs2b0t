@@ -55,6 +55,7 @@ import {
     shouldYieldGathering,
     spotWithinGatherRange
 } from '#/bot/scripts/GatheringBot/GatheringBot.js';
+import * as TargetPick from '#/bot/scripts/GatheringBot/TargetPick.js';
 import { AXE_BAR_FOR } from '#/bot/api/acquisition/ToolAcquire.js';
 import { DEFAULT_CAMP_RADIUS, resolveCampRadius, resolveChaseRadius } from '#/bot/data/gatheringLocations.js';
 import Tile from '#/bot/geometry/Tile.js';
@@ -408,48 +409,10 @@ describe('gatherHuntRadius', () => {
     });
 });
 
-describe('pickNearestPreferLocal (mine/chop target pick)', () => {
-    const rock = (id: string, dist: number) => ({ id, dist });
-
-    test('prefers local cluster when any rock is within prefer radius', () => {
-        // Dwarven-style: iron 3 tiles away and iron 28 tiles across the tunnel.
-        const near = rock('near', 3);
-        const far = rock('far', 28);
-        expect(LOCAL_MINE_PREFER_RADIUS).toBe(12);
-        expect(pickNearestPreferLocal([far, near], r => r.dist)?.id).toBe('near');
-        // Far alone still returns far when nothing local is up.
-        expect(pickNearestPreferLocal([far], r => r.dist)?.id).toBe('far');
-    });
-
-    test('among local rocks picks the closest', () => {
-        const a = rock('a', 5);
-        const b = rock('b', 2);
-        const far = rock('far', 40);
-        expect(pickNearestPreferLocal([a, far, b], r => r.dist)?.id).toBe('b');
-    });
-
-    test('empty candidates → null', () => {
-        expect(pickNearestPreferLocal([], () => 0)).toBe(null);
-    });
-
-    test('preferRadius 0 falls back to global nearest', () => {
-        const near = rock('near', 3);
-        const far = rock('far', 28);
-        expect(pickNearestPreferLocal([far, near], r => r.dist, 0)?.id).toBe('near');
-    });
-});
-
-describe('shouldCooldownGatherTile (iron respawn thrash)', () => {
-    test('does not cooldown after a successful ore/log', () => {
-        // Iron respawn ~6t; old always-cooldown 8t sent the bot across the mine.
-        expect(shouldCooldownGatherTile(true, true)).toBe(false);
-        expect(shouldCooldownGatherTile(true, false)).toBe(false);
-    });
-
-    test('cools only failed clicks when other targets exist', () => {
-        expect(shouldCooldownGatherTile(false, true)).toBe(true);
-        expect(shouldCooldownGatherTile(false, false)).toBe(false);
-    });
+test('GatheringBot re-exports the target selection helpers and radius', () => {
+    expect(pickNearestPreferLocal).toBe(TargetPick.pickNearestPreferLocal);
+    expect(shouldCooldownGatherTile).toBe(TargetPick.shouldCooldownGatherTile);
+    expect(LOCAL_MINE_PREFER_RADIUS).toBe(TargetPick.LOCAL_MINE_PREFER_RADIUS);
 });
 
 describe('shouldYieldGathering', () => {
