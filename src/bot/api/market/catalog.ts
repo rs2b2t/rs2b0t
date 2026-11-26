@@ -17,7 +17,7 @@ export interface Catalog {
 }
 
 // Why: players type "maple longbow u", so punctuation can't separate them from "Maple longbow (u)".
-function key(name: string): string {
+export function normalizeItemName(name: string): string {
     return name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
@@ -58,20 +58,20 @@ function buildAliases(): Map<number, ItemAlias> {
 }
 
 const ALIASES = buildAliases();
-/** key(label) -> the ids answering to it. */
+/** normalizeItemName(label) -> the ids answering to it. */
 const BY_LABEL = new Map<string, number[]>();
 /** Every word that narrows a repeated name to one obj. */
 const ALIAS_WORDS = new Set<string>();
 for (const [id, alias] of ALIASES) {
-    const k = key(alias.label);
+    const k = normalizeItemName(alias.label);
     BY_LABEL.set(k, [...(BY_LABEL.get(k) ?? []), id]);
     for (const word of alias.words) {
-        ALIAS_WORDS.add(key(word));
+        ALIAS_WORDS.add(normalizeItemName(word));
     }
 }
-/** key(shorthand) -> key(display name). */
+/** normalizeItemName(shorthand) -> normalizeItemName(display name). */
 const SYNONYMS = new Map<string, string>(
-    Object.entries(NAME_SYNONYMS).flatMap(([name, shorts]) => shorts.map(s => [key(s), key(name)] as const))
+    Object.entries(NAME_SYNONYMS).flatMap(([name, shorts]) => shorts.map(s => [normalizeItemName(s), normalizeItemName(name)] as const))
 );
 
 /** What the shop calls an obj, which is the plain name until the content repeats it. */
@@ -117,11 +117,11 @@ export function notedId(cat: Catalog, id: number): number | null {
 
 /** Whether the words name this obj, by its own name or by what the shop calls it. */
 function named(cat: Catalog, r: ObjRecord, q: string): boolean {
-    return key(r.name).includes(q) || key(displayName(cat, r.id)).includes(q);
+    return normalizeItemName(r.name).includes(q) || normalizeItemName(displayName(cat, r.id)).includes(q);
 }
 
 export function searchCatalog(cat: Catalog, query: string, limit = 50): ObjRecord[] {
-    const q = expandSynonyms(key(query));
+    const q = expandSynonyms(normalizeItemName(query));
     const hits = q.length === 0 ? cat.items : cat.items.filter(r => named(cat, r, q));
     return hits.slice(0, limit);
 }
@@ -139,12 +139,12 @@ function preferWorn(matches: readonly ObjRecord[], unstrung: boolean): ObjRecord
 /** Exact match, forgiving a plural. */
 // Why: people ask for "1k maple longbows", and the item is called "Maple longbow".
 function exactish(cat: Catalog, q: string): ObjRecord[] {
-    const hit = cat.items.filter(r => key(r.name) === q);
+    const hit = cat.items.filter(r => normalizeItemName(r.name) === q);
     if (hit.length > 0 || !q.endsWith('s')) {
         return hit;
     }
     const singular = q.slice(0, -1);
-    return cat.items.filter(r => key(r.name) === singular);
+    return cat.items.filter(r => normalizeItemName(r.name) === singular);
 }
 
 /** Swap "dhide" and the like for the display name they stand in for. */
@@ -195,7 +195,7 @@ function resolveAliased(cat: Catalog, q: string): ObjRecord[] {
     }
     return base.filter(r => {
         const alias = cat.aliases.get(r.id);
-        return alias !== undefined && words.every(w => alias.words.some(x => key(x) === w));
+        return alias !== undefined && words.every(w => alias.words.some(x => normalizeItemName(x) === w));
     });
 }
 
@@ -206,7 +206,7 @@ export function resolveByName(cat: Catalog, query: string, opts: { exactOnly?: b
         return hit ? [hit] : [];
     }
 
-    const q = key(query);
+    const q = normalizeItemName(query);
     if (q.length === 0) {
         return [];
     }
