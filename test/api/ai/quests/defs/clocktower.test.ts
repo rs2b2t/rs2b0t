@@ -1,8 +1,9 @@
-import { customName, itemCounts, nameCounts } from '../../../../lib/questSteps.js';
+import { customName } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 
 import { COG_OBJ, COG_STAGE, clocktower, decide, parseClockTowerJournal } from '#/bot/api/ai/quests/defs/clocktower.js';
-import type { QuestProgress, QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+import { progressSnapshot, type ProgressSnapshotOptions } from './progress-snapshot.fixture.js';
 
 const NOT_STARTED =
     '@dbl@I can start this quest by talking to @dre@Brother Kojo@dbl@ at the|@dre@Clock Tower@dbl@ which is located @dre@South@dbl@ of @dre@Ardougne|';
@@ -40,36 +41,15 @@ const COMPLETE =
     '@str@I have placed all four cogs successfully on the spindles.|' +
     '@str@Brother Kojo was grateful for all my help and rewarded me.||@red@QUEST COMPLETE!';
 
-interface SnapshotOptions {
-    journal?: QuestSnapshot['journal'];
+interface SnapshotOptions extends ProgressSnapshotOptions {
     placed?: string[];
-    stage?: number;
-    inv?: string[];
-    invIds?: number[];
-    bank?: string[];
-    bankKnown?: boolean;
-    progress?: QuestProgress | undefined;
 }
 
 function snap(options: SnapshotOptions = {}): QuestSnapshot {
-    const placed = options.placed ?? [];
-    const progress =
-        'progress' in options
-            ? options.progress
-            : { stage: options.stage ?? COG_STAGE.STARTED, flags: new Set(placed.map(c => `placed-${c}`)) };
-    return {
-        journal: options.journal ?? 'inProgress',
-        inv: nameCounts(options.inv ?? []),
-        invIds: itemCounts(options.invIds ?? []),
-        worn: new Set(),
-        noProgress: 0,
-        bankCoins: 2_000_000,
-        stage: progress?.stage,
-        progress,
-        bank: nameCounts(options.bank ?? []),
-        bankKnown: options.bankKnown ?? true,
-        freeSlots: 28
-    };
+    return progressSnapshot(options, () => ({
+        stage: options.stage ?? COG_STAGE.STARTED,
+        flags: new Set((options.placed ?? []).map(c => `placed-${c}`))
+    }));
 }
 
 describe('Clock Tower journal parsing', () => {
