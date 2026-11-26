@@ -18,11 +18,15 @@ const emptyMap = Buffer.from(
 const cachedMap = Buffer.concat([emptyMap, Buffer.from('C')]);
 const tools = join(import.meta.dir, '../../tools');
 
-function bakeIfNeeded(root: string, ...args: string[]) {
+function bakeMap(root: string, ...args: string[]) {
     return execFileSync(process.execPath, [
         '--no-install', join(tools, 'map/build-basemap.ts'), '--engine', join(root, 'engine'),
-        '--out', root, '--fetch-url', 'data:,', '--if-needed', ...args
+        '--out', root, '--fetch-url', 'data:,', ...args
     ], { cwd: root, env: { HOME: root }, stdio: 'pipe' });
+}
+
+function bakeIfNeeded(root: string, ...args: string[]) {
+    return bakeMap(root, '--if-needed', ...args);
 }
 
 function prepareDeployment(root: string, script: string) {
@@ -78,6 +82,7 @@ for (const script of ['pack-rs2b0t.sh', 'deploy-local.sh']) {
             writeFileSync(join(out, 'worldmap.jag'), townMap);
             writeFileSync(join(out, 'worldmap-basemap.manifest.json'), JSON.stringify({
                 schema: 2,
+                revision: '275',
                 fingerprint: oldFingerprint,
                 origin: { x: 2048, z: 2816 },
                 sizeTiles: { w: 1600, h: 1216 },
@@ -87,10 +92,14 @@ for (const script of ['pack-rs2b0t.sh', 'deploy-local.sh']) {
                 labelsOverlayUrl: oldLabels
             }, null, 2));
 
+            if (script === 'pack-rs2b0t.sh') {
+                writeFileSync(join(root, 'engine/data/pack/mapview/worldmap.jag'), emptyMap);
+            }
             deploy();
             const manifest = JSON.parse(readFileSync(join(dest, 'worldmap-basemap.manifest.json'), 'utf8'));
             expect(manifest.labelsOverlayUrl).not.toBe(oldLabels);
             expect(manifest.fingerprint).not.toBe(oldFingerprint);
+            expect(manifest.revision).toBe('275');
             const labels = decodePng(readFileSync(join(dest, manifest.labelsOverlayUrl)));
             expect(readFileSync(join(dest, manifest.basemapUrl)).equals(terrain)).toBe(true);
             expect([labels.width, labels.height]).toEqual([1600, 1216]);
@@ -108,13 +117,37 @@ for (const script of ['pack-rs2b0t.sh', 'deploy-local.sh']) {
             expect(outside).toBe(0);
             expect(inside).toBeGreaterThan(0);
 
-            rmSync(join(out, 'worldmap.jag'));
+            if (script === 'deploy-local.sh') rmSync(join(out, 'worldmap.jag'));
             deploy();
         } finally {
             rmSync(root, { recursive: true, force: true });
         }
     });
 }
+
+test('packager keeps an explicit JAG when the engine has a different map', () => {
+    const root = mkdtempSync(join(tmpdir(), 'pack-explicit-map-'));
+    try {
+        const pack = prepareDeployment(root, 'pack-rs2b0t.sh');
+        const out = join(root, 'out');
+        const dest = join(root, 'engine/public/rs2b0t/bot');
+        const selected = join(root, 'selected.jag');
+        writeFileSync(selected, townMap);
+        bakeMap(out, '--jag', selected);
+        rmSync(selected);
+        writeFileSync(join(root, 'engine/data/pack/mapview/worldmap.jag'), emptyMap);
+
+        const manifest = JSON.parse(readFileSync(join(out, 'worldmap-basemap.manifest.json'), 'utf8'));
+        rmSync(join(out, manifest.labelsOverlayUrl));
+        pack();
+        expect(readFileSync(join(out, 'worldmap.jag')).equals(townMap)).toBe(true);
+        expect(readFileSync(join(dest, 'worldmap.jag')).equals(townMap)).toBe(true);
+        expect(JSON.parse(readFileSync(join(dest, 'worldmap-basemap.manifest.json'), 'utf8')).fingerprint).toBe(manifest.fingerprint);
+        expect(existsSync(join(dest, manifest.labelsOverlayUrl))).toBe(true);
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
 
 test('packager refreshes the bake and packaged JAG when the engine map changes', () => {
     const root = mkdtempSync(join(tmpdir(), 'pack-changed-map-'));
@@ -124,12 +157,15 @@ test('packager refreshes the bake and packaged JAG when the engine map changes',
         const dest = join(root, 'engine/public/rs2b0t/bot');
         const manifest = () => JSON.parse(readFileSync(join(dest, 'worldmap-basemap.manifest.json'), 'utf8'));
         writeFileSync(engineJag, emptyMap);
+        bakeIfNeeded(join(root, 'out'), '--engine', join(root, 'engine'), '--revision', '275');
         pack();
         const first = manifest();
+        expect(first.revision).toBe('275');
 
         writeFileSync(engineJag, townMap);
         pack();
         expect(manifest().fingerprint).not.toBe(first.fingerprint);
+        expect(manifest().revision).toBe('274');
         expect(readFileSync(join(dest, 'worldmap.jag'))).toEqual(townMap);
     } finally {
         rmSync(root, { recursive: true, force: true });
@@ -197,6 +233,24 @@ test('a cache hit updates the requested revision and reuses the baked PNG', () =
         bakeIfNeeded(root);
         expect(manifest().revision).toBe('275');
         expect(statSync(labels).mtimeMs).toBe(1000);
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('a direct schema upgrade keeps the source revision unless explicitly overridden', () => {
+    const root = mkdtempSync(join(tmpdir(), 'bake-upgrade-revision-'));
+    try {
+        writeFileSync(join(root, 'worldmap.jag'), townMap);
+        bakeMap(root, '--revision', '275');
+        const path = join(root, 'worldmap-basemap.manifest.json');
+        const manifest = () => JSON.parse(readFileSync(path, 'utf8'));
+        const legacy = { ...manifest(), schema: 2, fingerprint: '5f1c291201a299b0' };
+        for (const revision of [undefined, '276']) {
+            writeFileSync(path, JSON.stringify(legacy));
+            bakeMap(root, ...(revision ? ['--revision', revision] : []));
+            expect(manifest().revision).toBe(revision ?? '275');
+        }
     } finally {
         rmSync(root, { recursive: true, force: true });
     }

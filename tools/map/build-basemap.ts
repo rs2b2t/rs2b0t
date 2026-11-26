@@ -1,5 +1,5 @@
 /** Bake terrain and transparent key, multi and free overlays from worldmap.jag.
- * Input order: --jag, $ENGINE/data/pack/mapview, out/, then a 2004scape download. */
+ * Fresh input order: --jag, $ENGINE/data/pack/mapview, out/, then a 2004scape download. */
 
 // Usage:
 //   bun tools/map/build-basemap.ts [--engine DIR] [--jag PATH] [--out DIR] [--revision TAG] [--if-needed]
@@ -10,13 +10,14 @@ import { createHash } from 'node:crypto';
 import {
     BASEMAP_MANIFEST_NAME,
     BASEMAP_SCHEMA,
+    isBasemapManifest,
     type BasemapManifest,
     type WorldmapKeyIndex
 } from '#/bot/panel/worldMapBasemap.js';
 import { createBitmapFontContext } from './bitmapFont.js';
 import { encodePngRgba, pix2dToRgba } from './encodePng.js';
 
-const SCHEMA_TAG = `basemap-schema-${BASEMAP_SCHEMA}`;
+type BakeManifest = BasemapManifest & { explicitJag?: boolean };
 
 type BakeArgs = {
     engine: string;
@@ -62,12 +63,20 @@ function parseArgs(): BakeArgs {
     return { engine, jag, outDir, revision, fetchUrl, ifNeeded };
 }
 
-function readCurrentBake(outDir: string, localFingerprint: string | null): BasemapManifest | null {
+function readManifest(file: string): BakeManifest | null {
     try {
-        const manifest: BasemapManifest = JSON.parse(fs.readFileSync(path.join(outDir, BASEMAP_MANIFEST_NAME), 'utf8'));
+        const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+        return isBasemapManifest(manifest) ? manifest : null;
+    } catch {
+        return null;
+    }
+}
+
+function isCurrentBake(outDir: string, manifest: BakeManifest, localFingerprint: string | null): boolean {
+    try {
         const optionalAssets = [manifest.multiOverlayUrl, manifest.freeOverlayUrl, manifest.keyIndexUrl, manifest.playerMarkerUrl];
         if (manifest.schema !== BASEMAP_SCHEMA || (localFingerprint !== null && manifest.fingerprint !== localFingerprint)) {
-            return null;
+            return false;
         }
         const assets = [
             manifest.basemapUrl,
@@ -76,23 +85,32 @@ function readCurrentBake(outDir: string, localFingerprint: string | null): Basem
             ...optionalAssets.filter(url => url !== undefined),
             ...Object.values(manifest.keyTypeOverlayUrls ?? {})
         ];
-        return assets.every(url => typeof url === 'string' && fs.statSync(path.join(outDir, url)).isFile()) ? manifest : null;
+        return assets.every(url => typeof url === 'string' && fs.statSync(path.join(outDir, url)).isFile());
     } catch {
-        return null;
+        return false;
     }
 }
 
-function findLocalJag(opts: BakeArgs): string | null {
+function findLocalJag(opts: BakeArgs, previous: BakeManifest | null) {
     if (opts.jag !== null) {
         if (!fs.existsSync(opts.jag)) throw new Error(`--jag not found: ${opts.jag}`);
-        return opts.jag;
+        return { path: opts.jag, bytes: fs.readFileSync(opts.jag), explicit: true };
     }
     const engineJag = path.join(opts.engine, 'data/pack/mapview/worldmap.jag');
-    if (fs.existsSync(engineJag)) {
-        return engineJag;
-    }
     const cacheJag = path.join(opts.outDir, 'worldmap.jag');
-    return fs.existsSync(cacheJag) ? cacheJag : null;
+    if (previous && previous.explicitJag !== false && fs.existsSync(cacheJag)) {
+        const bytes = fs.readFileSync(cacheJag);
+        if (fingerprint(bytes, previous.schema) === previous.fingerprint) {
+            return { path: cacheJag, bytes, explicit: true };
+        }
+    }
+    const file = fs.existsSync(engineJag) ? engineJag : cacheJag;
+    if (!fs.existsSync(file)) return null;
+    const bytes = fs.readFileSync(file);
+    if (previous?.explicitJag && fingerprint(bytes, previous.schema) !== previous.fingerprint) {
+        throw new Error('Selected worldmap.jag is missing or changed. Supply --jag to select an archive.');
+    }
+    return { path: file, bytes, explicit: previous?.explicitJag === true };
 }
 
 function replaceFile(file: string, data: string | Uint8Array): void {
@@ -108,7 +126,7 @@ function stageJag(outDir: string, source: string | null, bytes: Uint8Array): voi
     replaceFile(staged, bytes);
 }
 
-function writeManifest(file: string, manifest: BasemapManifest): void {
+function writeManifest(file: string, manifest: BakeManifest): void {
     replaceFile(file, JSON.stringify(manifest, null, 2) + '\n');
 }
 
@@ -121,8 +139,8 @@ async function downloadJag(url: string): Promise<Uint8Array> {
     return new Uint8Array(await res.arrayBuffer());
 }
 
-function fingerprint(jag: Uint8Array): string {
-    return createHash('sha256').update(jag).update(SCHEMA_TAG).digest('hex').slice(0, 16);
+function fingerprint(jag: Uint8Array, schema = BASEMAP_SCHEMA): string {
+    return createHash('sha256').update(jag).update(`basemap-schema-${schema}`).digest('hex').slice(0, 16);
 }
 
 async function installCanvasMock(): Promise<void> {
@@ -367,23 +385,27 @@ async function main(): Promise<void> {
     const opts = parseArgs();
     const started = performance.now();
 
-    const localJag = findLocalJag(opts);
-    const localBytes = localJag === null ? null : fs.readFileSync(localJag);
-    const localFingerprint = localBytes === null ? null : fingerprint(localBytes);
     const manPath = path.join(opts.outDir, BASEMAP_MANIFEST_NAME);
-    const current = opts.ifNeeded ? readCurrentBake(opts.outDir, localFingerprint) : null;
-    if (current) {
-        if (localBytes !== null) stageJag(opts.outDir, localJag, localBytes);
-        if (opts.revision !== undefined && current.revision !== opts.revision) {
-            writeManifest(manPath, { ...current, revision: opts.revision });
+    const existing = readManifest(manPath);
+    const previous = opts.ifNeeded || existing?.schema !== BASEMAP_SCHEMA ? existing : null;
+    const local = findLocalJag(opts, previous);
+    const localFingerprint = local && fingerprint(local.bytes);
+    const explicitJag = local?.explicit ?? previous?.explicitJag;
+    if (opts.ifNeeded && previous && isCurrentBake(opts.outDir, previous, localFingerprint)) {
+        if (local) stageJag(opts.outDir, local.path, local.bytes);
+        const revision = opts.revision ?? previous.revision;
+        if (previous.revision !== revision || previous.explicitJag !== explicitJag) {
+            writeManifest(manPath, { ...previous, revision, explicitJag });
         }
         return;
     }
 
-    const source = localJag ?? opts.fetchUrl;
-    const bytes = localBytes ?? await downloadJag(opts.fetchUrl);
+    if (previous?.explicitJag && !local) throw new Error('Selected worldmap.jag is missing. Supply --jag to rebuild.');
+    const source = local?.path ?? opts.fetchUrl;
+    const bytes = local?.bytes ?? await downloadJag(opts.fetchUrl);
     const fp = localFingerprint ?? fingerprint(bytes);
-    const revision = opts.revision ?? '274';
+    const sameSource = previous && fingerprint(bytes, previous.schema) === previous.fingerprint;
+    const revision = opts.revision ?? (sameSource ? previous.revision : undefined) ?? '274';
     console.log(`source: ${source}`);
     console.log(`fingerprint: ${fp}`);
     console.log(`revision: ${revision}`);
@@ -446,9 +468,10 @@ async function main(): Promise<void> {
     const placementCount = Object.values(result.keyIndex.placements).reduce((n, a) => n + a.length, 0);
     const typeCount = Object.keys(result.keyIndex.placements).length;
 
-    const manifest: BasemapManifest = {
+    const manifest: BakeManifest = {
         schema: BASEMAP_SCHEMA,
         revision,
+        explicitJag: explicitJag ?? false,
         fingerprint: fp,
         origin: { x: result.originX, z: result.originZ },
         sizeTiles: { w: width, h: height },
@@ -463,7 +486,7 @@ async function main(): Promise<void> {
         playerMarkerUrl,
         jagBytes: bytes.length
     };
-    stageJag(opts.outDir, localJag, bytes);
+    stageJag(opts.outDir, local?.path ?? null, bytes);
     writeManifest(manPath, manifest);
 
     console.log('report:');
