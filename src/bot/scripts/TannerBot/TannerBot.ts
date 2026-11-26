@@ -6,6 +6,7 @@ import { TANNED_LEATHER_IDS } from '../../data/tannedLeather.js';
 import Tile from '../../geometry/Tile.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { Bank } from '../../api/bank/Bank.js';
+import { withdrawXOpIndex } from '../../api/bank/bankOps.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Paint } from '../../paint/Paint.js';
 import { Shop } from '../../api/shop/Shop.js';
@@ -62,16 +63,6 @@ function bankItemById(id: number) {
     return Bank.items().find(i => i.id === id) ?? null;
 }
 
-function opIndex(ops: readonly (string | null)[], pattern: RegExp): number {
-    for (let i = 0; i < ops.length; i++) {
-        const op = ops[i];
-        if (op !== null && pattern.test(op)) {
-            return i + 1;
-        }
-    }
-    return -1;
-}
-
 // Bank.withdrawX cannot distinguish the four same-named dragonhides.
 async function withdrawXById(id: number, count: number): Promise<boolean> {
     if (count <= 0) {
@@ -81,7 +72,7 @@ async function withdrawXById(id: number, count: number): Promise<boolean> {
     if (!item) {
         return false;
     }
-    const op = opIndex(item.ops, /withdraw[\s-]*x/i);
+    const op = withdrawXOpIndex(item.ops);
     if (op === -1) {
         return false;
     }
