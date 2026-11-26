@@ -118,14 +118,14 @@ describe('map picker bake settings drafts', () => {
         };
     }
 
-    async function withPicker(check: () => void | Promise<void>): Promise<void> {
+    async function withPicker(check: (paint: () => void) => void | Promise<void>): Promise<void> {
         const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch')!;
         const frame = spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(1);
         Object.defineProperty(globalThis, 'fetch', { configurable: true, value: async () => new Response(null, { status: 404 }) });
         try {
             const result = WorldMapPicker.open();
             await new Promise<void>(resolve => setImmediate(resolve));
-            await check();
+            await check(() => frame.mock.lastCall![0](0));
             document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-cancel')!.click();
             expect(await result).toBeNull();
         } finally {
@@ -550,6 +550,46 @@ describe('map picker bake settings drafts', () => {
                 expect(bake).toHaveBeenLastCalledWith(prefs({ borders: !editBorders, npcs: true }));
             });
         } finally {
+            bake.mockRestore();
+        }
+    });
+
+    test('a quota warning survives repaint when Settings closes during the rebuild', async () => {
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockResolvedValue(rebuiltMap());
+        const context: Partial<CanvasRenderingContext2D> = {
+            fillRect() {}, fillText() {}, strokeRect() {}, save() {}, restore() {}, drawImage() {},
+            beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}
+        };
+        const canvas = spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context as CanvasRenderingContext2D);
+        const setItem = localStorage.setItem;
+        try {
+            await withPicker(async paint => {
+                openSettings();
+                bakeCheckbox('Map-square borders').click();
+                clickRebuild(true);
+                escapeSettings();
+                Object.defineProperty(localStorage, 'setItem', { configurable: true, value() {
+                    throw new DOMException('storage full', 'QuotaExceededError');
+                } });
+                await new Promise<void>(resolve => setImmediate(resolve));
+                paint();
+
+                const warning = /Map-square borders.*retry/i;
+                expect(document.querySelector('.rs2b0t-walkmap-overlay [role="alert"]')?.textContent).toMatch(warning);
+                expect(stored('bakeBorders')).toEqual({ local: null, session: null });
+                Object.defineProperty(localStorage, 'setItem', { value: setItem });
+                openSettings();
+                expect(document.querySelector('.rs2b0t-modal [role="alert"]')?.textContent).toMatch(warning);
+                expect(bakeCheckbox('Map-square borders').checked).toBe(true);
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(stored('bakeBorders').local).toBe('true');
+                expect(document.querySelector('[role="alert"]')).toBeNull();
+            });
+        } finally {
+            Object.defineProperty(localStorage, 'setItem', { value: setItem });
+            canvas.mockRestore();
             bake.mockRestore();
         }
     });

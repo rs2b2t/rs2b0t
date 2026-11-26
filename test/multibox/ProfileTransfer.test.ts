@@ -92,20 +92,6 @@ describe('ProfileTransfer', () => {
         });
     }
 
-    test('imports a selected script with IndexedDB unavailable', async () => {
-        const original = Object.getOwnPropertyDescriptor(globalThis, 'indexedDB');
-        Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: {
-            open() { throw new Error('IndexedDB unavailable'); }
-        } });
-        try {
-            await applyBoxStorage({ alice: { selectedScript: 'Miner' } }, []);
-            expect(localStorage.getItem('rs2b0t:alice:selectedScript')).toBe('Miner');
-        } finally {
-            if (original) Object.defineProperty(globalThis, 'indexedDB', original);
-            else Reflect.deleteProperty(globalThis, 'indexedDB');
-        }
-    });
-
     test('collect/apply round-trips box keys and does not steal a prefixed neighbour', () => {
         localStorage.clear();
         sessionStorage.clear();

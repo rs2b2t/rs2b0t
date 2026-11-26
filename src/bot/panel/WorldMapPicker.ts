@@ -948,15 +948,14 @@ export class WorldMapPicker {
                         bakeEdits.clear();
                     }
                 });
+                if (rebuildError.isConnected) rebuildBtn.after(rebuildError);
             });
 
             const showRebuildError = (message: string): void => {
                 status.textContent = message;
                 status.style.color = '#f88';
-                if (settingsModal.isOpen()) {
-                    rebuildError.textContent = message;
-                    rebuildBtn.after(rebuildError);
-                }
+                rebuildError.textContent = message;
+                rebuildBtn.after(rebuildError);
             };
 
             // Manual rebuild only, behind an in-app Yes/No with Don't ask again.
