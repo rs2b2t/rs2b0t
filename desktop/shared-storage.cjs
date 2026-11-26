@@ -120,9 +120,9 @@ function sharedStorage(dir) {
         seed(values, { fallback = {}, recover = false } = {}) {
             return update(state => {
                 if (state.initialized && !recover && !state.seededWithoutProfiles) return false;
+                if (!state.initialized && !profileKeys.some(key => key in state.data)) state.seededWithoutProfiles = true;
                 migrateProfiles(state.data, [values, fallback], { firstMigration: !state.initialized, recover });
-                if (profileKeys.some(key => key in state.data)) delete state.seededWithoutProfiles;
-                else if (!state.initialized) state.seededWithoutProfiles = true;
+                if (profileKeys.some(key => key in state.data && !isEmptyRoster(state.data[key]))) delete state.seededWithoutProfiles;
                 if (state.initialized) return false;
                 for (const source of [fallback, values]) {
                     for (const [key, value] of Object.entries(source)) {

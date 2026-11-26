@@ -129,8 +129,12 @@ test.each([custom, original])('an initialized empty store stays empty until reco
     expect(await launch(server)).toEqual(profiles);
 });
 
-test('overlapping first launches recover all profiles after the empty origin seeds first', async () => {
-    const { launch } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles) } });
+const emptyRosters: Record<string, string>[] = [{}, { [accounts]: '[]' }, { [vault]: '[]' }];
+test.each(emptyRosters)('overlapping first launches recover all profiles when 8081 seeds %j first', async empty => {
+    const { launch } = fixture({
+        [original]: empty,
+        [custom]: { [accounts]: JSON.stringify(profiles) }
+    });
     const ready = Promise.withResolvers<void>();
     const pending = launch(custom, false, ready.promise);
     expect(await launch(original)).toEqual([]);
@@ -140,6 +144,17 @@ test('overlapping first launches recover all profiles after the empty origin see
     expect([first.length, second.length]).toEqual([30, 30]);
     expect(first).toEqual(profiles);
     expect(second).toEqual(profiles);
+});
+
+test('an empty roster saved before the first seed takes precedence over a pending migration', async () => {
+    const { launch, store } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles) } });
+    const ready = Promise.withResolvers<void>();
+    const pending = launch(custom, false, ready.promise);
+    store.setItem(vault, '[]');
+    await launch(original);
+    ready.resolve();
+    expect(await pending).toEqual([]);
+    expect(store.snapshot()).toEqual({ [vault]: '[]' });
 });
 
 test.each(['setItem', 'compareAndSet', 'removeItem'])('profile %s after the empty seed takes precedence over a pending migration', async method => {
