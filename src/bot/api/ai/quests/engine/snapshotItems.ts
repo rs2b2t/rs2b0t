@@ -9,20 +9,24 @@ function itemId(item: number | NamedItem): number {
     return typeof item === 'number' ? item : item.id;
 }
 
-function itemCount(counts: ReadonlyMap<number, number> | undefined, item: number | NamedItem): number {
-    return counts?.get(itemId(item)) ?? 0;
+function inventoryCount(snap: QuestSnapshot, item: number | NamedItem): number {
+    return snap.invIds?.get(itemId(item)) ?? 0;
 }
 
-function isWorn(ids: ReadonlySet<number> | undefined, item: number | NamedItem): boolean {
-    return ids?.has(itemId(item)) ?? false;
+function cachedBankCount(snap: QuestSnapshot, item: number | NamedItem): number {
+    return snap.bankIds?.get(itemId(item)) ?? 0;
+}
+
+function isWorn(snap: QuestSnapshot, item: number | NamedItem): boolean {
+    return snap.wornIds?.has(itemId(item)) ?? false;
 }
 
 export function heldId(snap: QuestSnapshot, id: number): number {
-    return itemCount(snap.invIds, id);
+    return inventoryCount(snap, id);
 }
 
 export function cachedBankId(snap: QuestSnapshot, id: number): number {
-    return itemCount(snap.bankIds, id);
+    return cachedBankCount(snap, id);
 }
 
 export function inventoryAndBankCount(snap: QuestSnapshot, id: number): number {
@@ -34,7 +38,7 @@ export function bankedId(snap: QuestSnapshot, id: number): number {
 }
 
 export function wornId(snap: QuestSnapshot, id: number): boolean {
-    return isWorn(snap.wornIds, id);
+    return isWorn(snap, id);
 }
 
 export function heldName(snap: QuestSnapshot, name: string): number {
@@ -54,15 +58,15 @@ export function wornName(snap: QuestSnapshot, name: string): boolean {
 }
 
 export function heldItem(snap: QuestSnapshot, item: NamedItem): number {
-    return itemCount(snap.invIds, item);
+    return inventoryCount(snap, item);
 }
 
 export function bankedItem(snap: QuestSnapshot, item: NamedItem): number {
-    return itemCount(snap.bankIds, item);
+    return cachedBankCount(snap, item);
 }
 
 export function wornItem(snap: QuestSnapshot, item: NamedItem): boolean {
-    return isWorn(snap.wornIds, item);
+    return isWorn(snap, item);
 }
 
 export function heldOrBankedItem(snap: QuestSnapshot, item: NamedItem): number {
