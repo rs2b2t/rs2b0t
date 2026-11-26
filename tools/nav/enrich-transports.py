@@ -313,10 +313,17 @@ def main() -> None:
     curated = json.loads((data_dir / "transports.json").read_text(encoding="utf-8"))
     stairs = json.loads((data_dir / "stairEdges.json").read_text(encoding="utf-8"))
 
+    scripted_landings = defaultdict(list)
+    for edge in stairs:
+        for loc in edge.pop("scriptedLocs", []):
+            key = (loc["x"], loc["z"], loc["level"], loc["debugName"], loc["action"])
+            scripted_landings[key].append(edge["to"])
+
     def enrich(edges: list[dict]) -> list[dict]:
         enriched: list[dict] = []
         for raw in edges:
             edge = dict(raw)
+            auto_reverse = edge.pop("autoReverse", False)
             existing = configs.get(edge.get("locId", -1))
             source_backed_ladder = existing is not None and (
                 normalized(existing.display_name) == "ladder"
@@ -329,6 +336,11 @@ def main() -> None:
             resolved = resolve_source_loc(edge, configs, spatial, allowed_stair_debugs)
             if resolved:
                 config, placement = resolved
+                if auto_reverse and not edge.get("disabledReason"):
+                    key = (placement.x, placement.z, placement.level, config.debug_name, edge["action"])
+                    landings = scripted_landings.get(key)
+                    if landings and edge["to"] not in landings:
+                        edge["disabledReason"] = "Generated reverse conflicts with the landing in stairs.rs2."
                 edge["locX"] = placement.x
                 edge["locZ"] = placement.z
                 edge["debugName"] = config.debug_name

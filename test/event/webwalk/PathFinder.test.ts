@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
+import stairs from '#/bot/event/webwalk/data/stairEdges.json';
 import { PathFinder, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
 
-function fullyWalkablePack(exitMask = 0xff): Uint8Array {
+function fullyWalkablePack(exitMask = 0xff, mx = 0, mz = 0): Uint8Array {
     const perLevel = 4096 + 512;
     const bytes = new Uint8Array(10 + 3 + 2 * perLevel);
     bytes[0] = 0x4c;
@@ -12,8 +13,8 @@ function fullyWalkablePack(exitMask = 0xff): Uint8Array {
     bytes[5] = 0;
     bytes[8] = 1;
     let pos = 10;
-    bytes[pos++] = 0;
-    bytes[pos++] = 0;
+    bytes[pos++] = mx;
+    bytes[pos++] = mz;
     bytes[pos++] = 0b0011;
     for (let level = 0; level < 2; level++) {
         bytes.fill(exitMask, pos, pos + 4096);
@@ -106,6 +107,22 @@ describe('PathFinder level-change avoidance', () => {
     const from = { x: 10, z: 10, level: 0 };
     const to = { x: 10, z: 12, level: 1 };
     const stair: TransportEdgeData = { from, to, locName: 'Test Staircase', action: 'Climb-up', kind: 'stair' };
+
+    test('walking away and back cannot change the Falador staircase landing', () => {
+        const start = { x: 3034, z: 3362, level: 0 };
+        const landing = { x: 3036, z: 3363, level: 1 };
+        const pack = fullyWalkablePack(0, start.x >> 6, start.z >> 6);
+        const upstairs = pack.subarray(13 + 4096 + 512);
+        const landingIndex = (landing.x & 63) * 64 + (landing.z & 63);
+        upstairs[landingIndex] = 1;
+        upstairs[landingIndex + 1] = 1 << 2;
+
+        const finder = new PathFinder(pack);
+        finder.addEdges([], [], stairs);
+        expect(finder.findPath(start, landing)).toMatchObject({ ok: true, cost: 6 });
+        expect(finder.findPath(start, { x: 3033, z: 3363, level: 0 })).toMatchObject({ ok: false, reason: 'unreachable' });
+        expect(finder.findPath({ x: 3035, z: 3364, level: 1 }, { ...landing, level: 0 })).toMatchObject({ ok: true, cost: 6 });
+    });
 
     test('keeps the dungeon arrival when an equal-cost stair arrival cannot descend', () => {
         const pack = fullyWalkablePack(0);

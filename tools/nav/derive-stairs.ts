@@ -24,6 +24,11 @@ const packPath = argVal('--pack') ?? 'out/collision.lcnav.gz';
 
 const LADDER_LOC_IDS = new Set([1746, 1747, 1748, 1749, 1750]);
 
+interface StairEdge extends TransportEdgeData {
+    scriptedLocs?: (NavPoint & { debugName: string; action: string })[];
+    autoReverse?: boolean;
+}
+
 // The Castle Wars spawn trapdoors have no Climb-down, and the Handelmort stairs are trapped.
 // Why: the rejected auto-reverses stay in stairEdges.json as documentation, and PathFinder must not route through them.
 const DISABLED_AUTO_REVERSES = new Map<string, string>([
@@ -211,9 +216,9 @@ function pivotBoth(finder: PathFinder, x: number, z: number, a: number, b: numbe
     return fallback;
 }
 
-function snapAndReverse(finder: PathFinder, curated: TransportEdgeData[], raw: TransportEdgeData[]): { edges: TransportEdgeData[]; dropped: number; supersededDropped: number } {
+function snapAndReverse(finder: PathFinder, curated: TransportEdgeData[], raw: StairEdge[]): { edges: StairEdge[]; dropped: number; supersededDropped: number } {
     // Why: reverse landing tiles are unknown; moving them to the approach side can disconnect pockets such as Yanille and south Falador.
-    const snapped: { edge: TransportEdgeData; landing: NavPoint }[] = [];
+    const snapped: { edge: StairEdge; landing: NavPoint }[] = [];
     let dropped = 0;
     for (const e of raw) {
         let f: NavPoint | null;
@@ -235,14 +240,15 @@ function snapAndReverse(finder: PathFinder, curated: TransportEdgeData[], raw: T
         }
         snapped.push({ edge: { ...e, from: f, to: t }, landing });
     }
-    const seen = new Set<string>();
-    const edges: TransportEdgeData[] = [];
+    const edges = new Map<string, StairEdge>();
     const key = (e: TransportEdgeData): string => `${e.from.x},${e.from.z},${e.from.level}>${e.to.x},${e.to.z},${e.to.level}`;
-    const add = (e: TransportEdgeData): void => {
+    const add = (e: StairEdge): void => {
         const k = key(e);
-        if (!seen.has(k)) {
-            seen.add(k);
-            edges.push(e);
+        const existing = edges.get(k);
+        if (!existing) {
+            edges.set(k, e);
+        } else if (e.scriptedLocs) {
+            (existing.scriptedLocs ??= []).push(...e.scriptedLocs);
         }
     };
     for (const { edge: e } of snapped) {
@@ -250,7 +256,14 @@ function snapAndReverse(finder: PathFinder, curated: TransportEdgeData[], raw: T
     }
     for (const { edge: e, landing } of snapped) {
         if (changesFloor(e) && /-(up|down)/i.test(e.action)) {
-            const reverse: TransportEdgeData = { from: e.to, to: landing, locName: e.locName, action: reverseAction(e.action), kind: edgeKind(e) };
+            const reverse: StairEdge = {
+                from: e.to,
+                to: landing,
+                locName: e.locName,
+                action: reverseAction(e.action),
+                kind: edgeKind(e),
+                autoReverse: true
+            };
             const disabledReason = DISABLED_AUTO_REVERSES.get(key(reverse));
             add(disabledReason ? { ...reverse, disabledReason } : reverse);
         }
@@ -271,7 +284,7 @@ function snapAndReverse(finder: PathFinder, curated: TransportEdgeData[], raw: T
         froms.add(tileKey(c.from));
     }
     let supersededDropped = 0;
-    const kept = edges.filter(e => {
+    const kept = [...edges.values()].filter(e => {
         const froms = curatedFromsByDest.get(tileKey(e.to));
         if (froms && !froms.has(tileKey(e.from))) {
             supersededDropped++;
@@ -284,7 +297,7 @@ function snapAndReverse(finder: PathFinder, curated: TransportEdgeData[], raw: T
 
 function main(): void {
     const { configs } = loadLocTypes(engine);
-    const edges: TransportEdgeData[] = [];
+    const edges: StairEdge[] = [];
 
     const byDebug = new Map<string, (typeof configs)[number]>();
     for (const c of configs) {
@@ -304,7 +317,10 @@ function main(): void {
         }
         const guildStair = s.debugname === 'stairs' && s.from.level === 0 && s.from.x === 3188 && s.from.z === 3355;
         const approach = guildStair ? { x: 3188, z: 3358, level: 0 } : s.from;
-        edges.push(edge(approach, s.to, def.name ?? s.debugname, action));
+        edges.push({
+            ...edge(approach, s.to, def.name ?? s.debugname, action),
+            scriptedLocs: [{ ...s.from, debugName: s.debugname, action }]
+        });
         stairsCases++;
     }
 
