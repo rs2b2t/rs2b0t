@@ -7,6 +7,8 @@ import { FreezeWatch } from '#/bot/runtime/diag/FreezeWatch.js';
 import type { MultiBoxController } from '#/bot/multibox/MultiBoxController.js';
 import type { Account, SlotSnapshot } from '#/bot/multibox/types.js';
 import type { WorldNumber } from '#/client/config/worlds.js';
+// Why: TARGET captures the environment on first import, before withWall overrides it for the fixture.
+import '#/client/config/target.js';
 
 interface Wall {
     controller: MultiBoxController;
