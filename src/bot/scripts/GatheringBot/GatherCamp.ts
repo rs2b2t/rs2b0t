@@ -5,6 +5,7 @@
 import {
     AUTO_LEGACY,
     DEFAULT_CAMP_RADIUS,
+    normalizeGatherRadius,
     USE_CLOSEST,
     USE_CUSTOM_POSITION,
     USE_START_POSITION
@@ -21,11 +22,11 @@ export const START_TILE_LEASH_FLOOR = NAMED_CAMP_LEASH_FLOOR;
 
 /** Effective gather leash from the UI value and the location mode. */
 export function effectiveGatherLeash(settingLeash: number, locationSetting: string): number {
-    const raw = Math.max(2, Math.floor(Number.isFinite(settingLeash) ? settingLeash : 10));
+    const radius = normalizeGatherRadius(settingLeash, 10);
     if (isAutoLocation(locationSetting)) {
-        return raw;
+        return radius;
     }
-    return Math.max(NAMED_CAMP_LEASH_FLOOR, raw);
+    return Math.max(NAMED_CAMP_LEASH_FLOOR, radius);
 }
 
 /** True when Location is Auto / Use Start Position / Use Custom Position, expert freeform; no mob-flee babysitting. */
@@ -68,8 +69,8 @@ export function spotWithinGatherRange(distFromOrigin: number, maxDist: number): 
  * Freeform has no camp fence, callers skip this check.
  */
 export function resourceWithinCamp(distFromHome: number, campRadius: number): boolean {
-    const R = Math.max(2, Math.floor(Number.isFinite(campRadius) ? campRadius : NAMED_CAMP_LEASH_FLOOR));
-    return Number.isFinite(distFromHome) && distFromHome <= R;
+    const radius = normalizeGatherRadius(campRadius, NAMED_CAMP_LEASH_FLOOR);
+    return Number.isFinite(distFromHome) && distFromHome <= radius;
 }
 
 /**
@@ -77,8 +78,8 @@ export function resourceWithinCamp(distFromHome: number, campRadius: number): bo
  * Named camps do not use this, they accept any spot in camp membership.
  */
 export function gatherHuntRadius(primaryDisk: number): number {
-    const L = Math.max(2, Math.floor(Number.isFinite(primaryDisk) ? primaryDisk : 10));
-    return Math.max(L + 24, 48);
+    const radius = normalizeGatherRadius(primaryDisk, 10);
+    return Math.max(48, radius + 24);
 }
 
 export interface CampPoint {
