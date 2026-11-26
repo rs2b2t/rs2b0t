@@ -27,5 +27,5 @@
         "noUnusedParameters": false,
         "noPropertyAccessFromIndexSignature": false
     },
-    "exclude": ["node_modules", "out", "packages", "docs/script-template", "desktop"]
+    "exclude": ["node_modules", "out", "packages", "docs/local", "docs/script-template", "desktop"]
 }
