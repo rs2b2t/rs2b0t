@@ -16,6 +16,7 @@ import { Skills } from '../../../skills/Skills.js';
 import { GroundItems } from '../../../grounditems/GroundItems.js';
 import { Locs } from '../../../locs/Locs.js';
 import { ROCK_TYPES } from '../../../../data/miningRocks.js';
+import { createPickaxes } from '../../../../data/pickaxes.js';
 import { PICKAXES } from '../../../acquisition/Tools.js';
 import { questRecord } from '../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
@@ -35,14 +36,9 @@ export const DORIC_ITEM = {
     BRONZE_PICKAXE: { name: 'Bronze pickaxe', id: 1265 }
 } as const;
 
-const PICKAXE_ID: Readonly<Record<string, number>> = {
-    'Bronze pickaxe': 1265,
-    'Iron pickaxe': 1267,
-    'Steel pickaxe': 1269,
-    'Adamant pickaxe': 1271,
-    'Mithril pickaxe': 1273,
-    'Rune pickaxe': 1275
-};
+const PICKAXE_ID: Readonly<Record<string, number>> = Object.fromEntries(
+    createPickaxes().map(({ name, id }) => [name, id])
+);
 
 /** Best-first, matching the server's Mining-level gates. */
 export const DORIC_PICKAXES = PICKAXES.map(pickaxe => ({

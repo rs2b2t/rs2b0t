@@ -30,6 +30,14 @@ export interface RosterHooks {
     setWorld(profile: RosterProfile, world: WorldNumber): Promise<boolean>;
 }
 
+type FindProfile = (username: string) => RosterProfile | undefined;
+
+interface PendingTarget {
+    deadline: number;
+    timeout(): void;
+    check(find: FindProfile): boolean;
+}
+
 function active(state: string): boolean {
     return state === 'running' || state === 'paused' || state === 'stopping';
 }
@@ -41,6 +49,8 @@ export function rosterError(error: unknown): string {
 
 export class RosterActions {
     private running = false;
+    private pending = new Set<PendingTarget>();
+    private watcher?: ReturnType<typeof setTimeout>;
 
     constructor(private hooks: RosterHooks) {}
 
@@ -111,13 +121,44 @@ export class RosterActions {
         }
     }
 
+    private poll(nextPoll = performance.now()): void {
+        const now = performance.now();
+        const pollClients = now >= nextPoll;
+        if (pollClients) nextPoll = now + 100;
+        let wakeAt = nextPoll;
+        let profiles: Map<string, RosterProfile> | undefined;
+        const find: FindProfile = username => {
+            if (!profiles) {
+                const index = new Map<string, RosterProfile>();
+                for (const profile of this.profiles()) {
+                    if (!index.has(profile.username)) index.set(profile.username, profile);
+                }
+                profiles = index;
+            }
+            return profiles.get(username);
+        };
+        for (const target of this.pending) {
+            if (performance.now() >= target.deadline) {
+                target.timeout();
+                continue;
+            }
+            wakeAt = Math.min(wakeAt, target.deadline);
+            if (pollClients) target.check(find);
+        }
+        if (this.pending.size) this.watcher = setTimeout(() => this.poll(nextPoll), Math.max(0, Math.ceil(wakeAt - performance.now())));
+    }
+
     private withClient(profile: RosterProfile, client: RosterClient, operation: () => Promise<void>): Promise<void> {
         return new Promise((resolve, reject) => {
             let settled = false;
             const finish = (success: boolean, error?: unknown): void => {
                 if (settled) return;
                 settled = true;
-                clearInterval(watcher);
+                this.pending.delete(target);
+                if (!this.pending.size) {
+                    clearTimeout(this.watcher);
+                    this.watcher = undefined;
+                }
                 if (success) resolve();
                 else reject(error);
             };
@@ -127,23 +168,26 @@ export class RosterActions {
                 try { client.stopScript(); } catch { finish(false, error); return; }
                 finish(false, error);
             };
-            const current = (): boolean => {
-                const target = this.profiles().find(target => target.username === profile.username);
-                return !!target?.slot && target.slot.id === profile.slot?.id && this.hooks.client(target) === client;
-            };
-            const check = (): boolean => {
+            const check = (find: FindProfile): boolean => {
                 let valid = false;
-                try { valid = current(); } catch { valid = false; }
+                try {
+                    const target = find(profile.username);
+                    valid = !!target?.slot && target.slot.id === profile.slot?.id && this.hooks.client(target) === client;
+                } catch { valid = false; }
                 if (!valid) cancel('Client was removed or replaced during the action.');
                 return valid;
             };
-            const deadline = Date.now() + 11_000;
-            const watcher = setInterval(() => {
-                if (Date.now() >= deadline) cancel('Timed out waiting for the script action.');
-                else check();
-            }, 100);
+            const target = {
+                deadline: performance.now() + 11_000,
+                timeout: () => cancel('Timed out waiting for the script action.'),
+                check
+            };
+            this.pending.add(target);
+            this.watcher ??= setTimeout(() => this.poll(), 100);
             try {
-                operation().then(() => { if (!settled && check()) finish(true); }, error => finish(false, error));
+                operation().then(() => {
+                    if (!settled && check(name => this.profiles().find(p => p.username === name))) finish(true);
+                }, error => finish(false, error));
             } catch (error) {
                 finish(false, error);
             }
