@@ -345,15 +345,13 @@ export default class ObjType {
 
     static getSprite(id: number, count: number, outlineRgb: number): Pix32 | null {
         if (outlineRgb === 0) {
-            let icon = ObjType.spriteCache.find(BigInt(id));
-
-            if (icon && icon.ohi !== count && icon.ohi !== -1) {
-                icon.unlink();
-                icon = null;
-            }
-
+            const key = BigInt(id);
+            const icon = ObjType.spriteCache.find(key);
             if (icon) {
-                return icon;
+                if (icon.ohi === count || icon.ohi === -1) {
+                    return icon;
+                }
+                ObjType.spriteCache.remove(key);
             }
         }
 
