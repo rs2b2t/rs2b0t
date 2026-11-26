@@ -1,4 +1,5 @@
 import Tile from '../../../../../geometry/Tile.js';
+import { inWestArdougne } from '../../../../map/regions.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 
 export { bankedItem as banked, heldItem as held, heldOrBankedItem as owned, wornItem as worn } from '../../engine/snapshotItems.js';
@@ -120,7 +121,7 @@ export function plagueArea(tile: QuestSnapshot['tile']): PlagueArea {
     if (level === 1 && x >= 2520 && x <= 2540 && z >= 3322 && z <= 3340) {
         return 'upstairs';
     }
-    if (level === 0 && x >= 2433 && x <= 2556 && z >= 3266 && z <= 3334) {
+    if (inWestArdougne(tile)) {
         return 'west';
     }
     return level === 0 ? 'east' : 'unknown';
