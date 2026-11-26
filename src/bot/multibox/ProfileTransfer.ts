@@ -1,4 +1,4 @@
-import { boxKey, boxSuffix, finishSetProfileMigration, isLegacySetProfileSetting, needsSetProfileMigration, uncopiedSetProfileSuffix } from '../runtime/box.js';
+import { boxKey, boxSuffix, disableLegacySetProfileSettings, isLegacySetProfileSetting, legacyBoxSuffix } from '../runtime/box.js';
 import type { Profile } from './ProfileVault.js';
 import { desktopStorage, storeKeys } from '../runtime/desktopStorage.js';
 
@@ -17,7 +17,7 @@ export interface ProfileSnapshot {
 
 export interface ProfileFile extends ProfileSnapshot {
     kind: typeof PROFILE_FILE_KIND;
-    v: typeof PROFILE_FILE_VERSION;
+    v: 1 | typeof PROFILE_FILE_VERSION;
 }
 
 const MAIN_TAB = 'Main';
@@ -26,7 +26,7 @@ export function serializeProfileFile(data: ProfileSnapshot): string {
     requireProfiles(data.profiles);
     const file: ProfileFile = {
         kind: PROFILE_FILE_KIND,
-        v: PROFILE_FILE_VERSION,
+        v: data.profiles.some(p => p.username === 'set') || Object.hasOwn(data.storage, 'set') ? PROFILE_FILE_VERSION : 1,
         profiles: data.profiles,
         tabs: data.tabs,
         activeTab: data.activeTab,
@@ -70,13 +70,21 @@ export function boxStoragePrefix(username: string): string {
     return `rs2b0t:${username}:`;
 }
 
-export function collectBoxStorage(usernames: string[]): BoxStorageMap {
+export function collectBoxStorage(usernames: string[], includeLegacy?: (suffix: string) => boolean): BoxStorageMap {
     const out: BoxStorageMap = {};
+    const legacy = includeLegacy && usernames.includes('set') ? new Map<string, string>() : null;
     if (typeof localStorage !== 'undefined') {
-        readStore(localStorage, usernames, out);
+        readStore(localStorage, usernames, out, legacy);
     }
     if (typeof sessionStorage !== 'undefined') {
-        readStore(sessionStorage, usernames, out, !desktopStorage);
+        readStore(sessionStorage, usernames, out, legacy, !desktopStorage);
+    }
+    if (legacy && includeLegacy) {
+        for (const [suffix, value] of legacy) {
+            if ((out.set && Object.hasOwn(out.set, suffix)) || !includeLegacy(suffix)) continue;
+            out.set ??= {};
+            out.set[suffix] = value;
+        }
     }
     return out;
 }
@@ -97,7 +105,7 @@ export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
                 store.removeItem(key);
             }
         }
-        if (replacesSet) finishSetProfileMigration(store);
+        if (replacesSet) disableLegacySetProfileSettings(store);
         for (const [user, entries] of Object.entries(storage)) {
             for (const [suffix, value] of Object.entries(entries)) {
                 store.setItem(boxKey(suffix, user), value);
@@ -106,12 +114,15 @@ export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
     }
 }
 
-function readStore(store: Storage, usernames: string[], out: BoxStorageMap, includeSelectedScript = true): void {
-    const includeLegacy = usernames.includes('set') && needsSetProfileMigration(store);
+function readStore(store: Storage, usernames: string[], out: BoxStorageMap, legacy: Map<string, string> | null, includeSelectedScript = true): void {
     for (const key of storeKeys(store)) {
+        const candidate = legacy && legacyBoxSuffix(store, key, 'set');
+        if (legacy && candidate !== null) {
+            const value = store.getItem(key);
+            if (value !== null) legacy.set(candidate, value);
+        }
         for (const user of usernames) {
-            let suffix = boxSuffix(key, boxStoragePrefix(user), user);
-            if (suffix === null && includeLegacy && user === 'set') suffix = uncopiedSetProfileSuffix(store, key);
+            const suffix = boxSuffix(key, boxStoragePrefix(user), user);
             if (suffix === null) {
                 continue;
             }

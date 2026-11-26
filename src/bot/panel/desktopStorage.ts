@@ -1,5 +1,4 @@
 import { desktopStorage } from '../runtime/desktopStorage.js';
-import { migrateSetProfileStorage } from '../runtime/box.js';
 
 if (desktopStorage) {
     const shared = desktopStorage;
@@ -35,7 +34,6 @@ if (desktopStorage) {
     });
     shared.subscribe((key, oldValue, newValue) => {
         if (key.includes(':set:')) {
-            if (key.startsWith('rs2b0t:set:set:')) migrateSetProfileStorage();
             if (newValue === null) sessionStorage.removeItem(key);
             else sessionStorage.setItem(key, newValue);
         }

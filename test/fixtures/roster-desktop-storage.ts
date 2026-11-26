@@ -17,12 +17,13 @@ await import('../../src/bot/panel/desktopStorage.js');
 if (process.argv.includes('--export-set')) {
     const { SettingsStore } = await import('../../src/bot/runtime/Settings.js');
     const { collectBoxStorage } = await import('../../src/bot/multibox/ProfileTransfer.js');
+    const { boxKey } = await import('../../src/bot/runtime/box.js');
     SettingsStore.save('set', 'travel:mode', 'walk');
     sessionStorage.clear();
     sessionStorage.setItem('rs2b0t:set:set:Miner:rock', 'coal');
     for (const [key, value] of data) notify!(key, null, value);
-    assert.equal(sessionStorage.getItem('rs2b0t:set:set:travel:mode'), 'walk');
-    console.log(JSON.stringify(collectBoxStorage(['set'])));
+    assert.equal(sessionStorage.getItem(boxKey('set:set:travel:mode', '')), 'walk');
+    console.log(JSON.stringify(collectBoxStorage(['set'], () => true)));
     process.exit(0);
 }
 const { readProfileScript, readScriptSettings, replaceScriptSettings, writeProfileScript } = await import('../../src/bot/multibox/RosterStorage.js');

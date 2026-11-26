@@ -1,7 +1,6 @@
-import { desktopStorage } from './desktopStorage.js';
 import Tile from '../geometry/Tile.js';
 import { WORLDMAP_KEY_NAMES } from '../../client/mapview/worldmapKeyNames.js';
-import { boxId, boxKey, migrateSetProfileStorage } from './box.js';
+import { boxId, boxKey, clearBoxItem, readBoxItem } from './box.js';
 import { signedOptions } from './optionSelection.js';
 
 type SettingType = 'boolean' | 'number' | 'string' | 'string[]' | 'tile';
@@ -547,14 +546,6 @@ export const PRICE_BOOK_SETTINGS: SettingsSchema = {
 const hasSession = typeof sessionStorage !== 'undefined';
 const hasLocal = typeof localStorage !== 'undefined';
 
-// Two box-scoped layers (see box.ts): sessionStorage is the live-tab authority and localStorage the durable copy a fresh instance of the same box reloads.
-function storageKey(name: string, key: string): string {
-    const id = boxId();
-    const suffix = `set:${name}:${key}`;
-    if (id === 'set' || (!id && suffix.startsWith('set:set:'))) migrateSetProfileStorage();
-    return boxKey(suffix, id);
-}
-
 type SettingChangeListener = (name: string, key: string, value: string) => void;
 
 class SettingsStoreImpl {
@@ -576,30 +567,16 @@ class SettingsStoreImpl {
     }
 
     saved(name: string, key: string): string | undefined {
-        if (desktopStorage) {
-            return localStorage.getItem(storageKey(name, key)) ?? (name === 'JiveRC' ? this.saved('NatureCrafter', key) : undefined);
-        }
-        if (hasSession) {
-            const v = sessionStorage.getItem(storageKey(name, key));
-            if (v !== null) {
-                return v;
-            }
-        }
-        if (hasLocal) {
-            const v = localStorage.getItem(storageKey(name, key));
-            if (v !== null) {
-                return v;
-            }
-        }
-        return name === 'JiveRC' ? this.saved('NatureCrafter', key) : undefined;
+        return readBoxItem(`set:${name}:${key}`, boxId()) ?? (name === 'JiveRC' ? this.saved('NatureCrafter', key) : undefined);
     }
 
     save(name: string, key: string, rawString: string): void {
+        const address = boxKey(`set:${name}:${key}`);
         if (hasSession) {
-            sessionStorage.setItem(storageKey(name, key), rawString);
+            sessionStorage.setItem(address, rawString);
         }
         if (hasLocal) {
-            localStorage.setItem(storageKey(name, key), rawString);
+            localStorage.setItem(address, rawString);
         }
         for (const fn of this.changeListeners) {
             try {
@@ -624,11 +601,13 @@ class SettingsStoreImpl {
     }
 
     clear(name: string, key: string): void {
+        const id = boxId();
+        const suffix = `set:${name}:${key}`;
         if (hasSession) {
-            sessionStorage.removeItem(storageKey(name, key));
+            clearBoxItem(sessionStorage, suffix, id);
         }
         if (hasLocal) {
-            localStorage.removeItem(storageKey(name, key));
+            clearBoxItem(localStorage, suffix, id);
         }
         if (name === 'JiveRC') {
             this.clear('NatureCrafter', key);

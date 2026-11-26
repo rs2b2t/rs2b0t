@@ -116,12 +116,79 @@ describe('ProfileTransfer', () => {
         expect(sessionStorage.getItem(key)).toBe('walk');
     });
 
+    test('an ambiguous pre-upgrade standalone value stays out of profile exports', () => {
+        for (const store of [localStorage, sessionStorage]) store.setItem('rs2b0t:set:set:travel:mode', 'walk');
+        expect(collectBoxStorage(['set'])).toEqual({});
+        expect(inBox('set', () => SettingsStore.saved('travel', 'mode'))).toBe('walk');
+        expect(collectBoxStorage(['set'])).toEqual({});
+        sessionStorage.clear();
+        expect(SettingsStore.saved('set', 'travel:mode')).toBe('walk');
+    });
+
+    test('export includes each confirmed legacy setting once and keeps declined values local', () => {
+        for (const store of [localStorage, sessionStorage]) {
+            store.setItem('rs2b0t:set:set:Global:runEnergyMin', '42');
+            store.setItem('rs2b0t:set:set:travel:mode', 'walk');
+        }
+        const choices: string[] = [];
+        const storage = collectBoxStorage(['set'], suffix => {
+            choices.push(suffix);
+            return suffix === 'set:Global:runEnergyMin';
+        });
+        expect(choices.sort()).toEqual(['set:Global:runEnergyMin', 'set:travel:mode']);
+        expect(storage).toEqual({ set: { 'set:Global:runEnergyMin': '42' } });
+        expect(SettingsStore.saved('set', 'travel:mode')).toBe('walk');
+    });
+
+    test('standalone saves and clears leave the shared legacy value readable by the profile', () => {
+        const legacy = 'rs2b0t:set:set:travel:mode';
+        localStorage.setItem(legacy, 'walk');
+        SettingsStore.save('set', 'travel:mode', 'ride');
+        sessionStorage.clear();
+        expect(SettingsStore.saved('set', 'travel:mode')).toBe('ride');
+        expect(inBox('set', () => SettingsStore.saved('travel', 'mode'))).toBe('walk');
+        SettingsStore.clear('set', 'travel:mode');
+        sessionStorage.clear();
+        expect(SettingsStore.saved('set', 'travel:mode')).toBeUndefined();
+        expect(inBox('set', () => SettingsStore.saved('travel', 'mode'))).toBe('walk');
+        expect(localStorage.getItem(legacy)).toBe('walk');
+    });
+
+    test('a legacy read preserves an interleaved durable profile save', () => {
+        const legacy = 'rs2b0t:set:set:Global:runEnergyMin';
+        const current = boxKey('set:Global:runEnergyMin', 'set');
+        localStorage.setItem(legacy, '42');
+        const getItem = localStorage.getItem.bind(localStorage);
+        let interleaved = false;
+        Object.defineProperty(localStorage, 'getItem', { configurable: true, value(key: string) {
+            const value = getItem(key);
+            if (key === legacy && !interleaved) {
+                interleaved = true;
+                localStorage.setItem(current, '73');
+            }
+            return value;
+        } });
+        try {
+            inBox('set', () => SettingsStore.saved('Global', 'runEnergyMin'));
+        } finally {
+            Reflect.deleteProperty(localStorage, 'getItem');
+        }
+        expect(interleaved).toBe(true);
+        sessionStorage.clear();
+        expect(inBox('set', () => SettingsStore.saved('Global', 'runEnergyMin'))).toBe('73');
+    });
+
+    test('fixture-only backups remain readable by version 1 clients', () => {
+        expect(JSON.parse(serializeProfileFile(snap)).v).toBe(1);
+    });
+
     test('exports a readable legacy threshold when storage is full', () => {
         localStorage.setItem('rs2b0t:set:set:Global:runEnergyMin', '42');
         const setItem = localStorage.setItem;
         Object.defineProperty(localStorage, 'setItem', { value() { throw new DOMException('storage full', 'QuotaExceededError'); } });
         try {
-            expect(collectBoxStorage(['set'])).toEqual({ set: { 'set:Global:runEnergyMin': '42' } });
+            expect(inBox('set', () => SettingsStore.saved('Global', 'runEnergyMin'))).toBe('42');
+            expect(collectBoxStorage(['set'], () => true)).toEqual({ set: { 'set:Global:runEnergyMin': '42' } });
         } finally {
             Object.defineProperty(localStorage, 'setItem', { value: setItem });
         }
@@ -180,7 +247,7 @@ describe('ProfileTransfer', () => {
             expect(SettingsStore.globalBag().num('runEnergyMin')).toBe(42);
             expect(Loadouts.all()).toEqual([loadout]);
         });
-        expect(collectBoxStorage(['set'])).toEqual({ set: {
+        expect(collectBoxStorage(['set'], () => true)).toEqual({ set: {
             'set:Global:runEnergyMin': '42', 'set:Loadouts:sets': JSON.stringify([loadout])
         } });
         expect(SettingsStore.globalBag().num('runEnergyMin')).toBe(73);
@@ -192,7 +259,7 @@ describe('ProfileTransfer', () => {
         localStorage.setItem('rs2b0t:set:set%3AMiner%3Atool', 'pickaxe');
         localStorage.setItem('rs2b0t:set:set:Miner:tool', 'old');
 
-        expect(collectBoxStorage(['set'])).toEqual({ set: { 'set:Miner:rock': 'coal', 'set:Miner:tool': 'pickaxe' } });
+        expect(collectBoxStorage(['set'], () => true)).toEqual({ set: { 'set:Miner:rock': 'coal', 'set:Miner:tool': 'pickaxe' } });
         sessionStorage.clear();
         expect(readScriptSettings('set', 'Miner')).toEqual({ rock: 'iron', tool: 'pickaxe' });
         replaceScriptSettings('set', 'Miner', {});

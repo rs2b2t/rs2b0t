@@ -424,7 +424,8 @@ function boot(): void {
         ensureUnlocked: () => ensureUnlocked(),
         snapshot: () => ({
             ...vault.snapshot(),
-            storage: collectBoxStorage(vault.list().map(p => p.username))
+            storage: collectBoxStorage(vault.list().map(p => p.username), suffix =>
+                window.confirm(`Older versions shared "${suffix}" between standalone settings and profile "set". Include it in this profile backup?`))
         }),
         replaceAll: async data => {
             const previous = vault.list().map(p => p.username);

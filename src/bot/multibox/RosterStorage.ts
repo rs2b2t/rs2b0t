@@ -1,6 +1,5 @@
 import { isRosterScript } from './RosterTypes.js';
-import { desktopStorage } from '../runtime/desktopStorage.js';
-import { boxKey, boxSuffix, migrateSetProfileStorage } from '../runtime/box.js';
+import { boxKey, boxSuffix, clearBoxItem, profileStorageKeys, readBoxItem } from '../runtime/box.js';
 
 function canonicalScript(script: string): string {
     return script === 'NatureCrafter' ? 'JiveRC' : script;
@@ -15,27 +14,13 @@ function stores(): Storage[] {
     return [localStorage, sessionStorage];
 }
 
-function read(key: string): string | null {
-    return desktopStorage ? localStorage.getItem(key) : sessionStorage.getItem(key) ?? localStorage.getItem(key);
-}
-
-function keys(prefix: string): string[] {
-    const result = new Set<string>();
-    if (desktopStorage) {
-        for (const key of desktopStorage.keys()) if (key.startsWith(prefix)) result.add(key);
-    }
-    for (const store of desktopStorage ? [sessionStorage] : stores()) {
-        const length = store.length;
-        for (let i = 0; i < length; i++) {
-            const key = store.key(i);
-            if (key?.startsWith(prefix)) result.add(key);
-        }
-    }
-    return [...result];
+function keys(prefix: string, id?: string): string[] {
+    const saved = stores().flatMap(store => profileStorageKeys(store, id));
+    return [...new Set(saved.filter(key => key.startsWith(prefix)))];
 }
 
 export function readProfileScript(username: string): string {
-    return canonicalScript(read(boxKey('selectedScript', username)) ?? '');
+    return canonicalScript(readBoxItem('selectedScript', username) ?? '');
 }
 
 export function writeProfileScript(username: string, script: string): void {
@@ -44,21 +29,20 @@ export function writeProfileScript(username: string, script: string): void {
 }
 
 function scriptEntries(username: string, script: string) {
-    if (username === 'set') migrateSetProfileStorage();
     const names = script === 'JiveRC' ? ['NatureCrafter', script] : [script];
     return names.flatMap(name => {
         const prefix = boxKey(`set:${name}:`, username);
-        return keys(prefix).flatMap(key => {
+        return keys(prefix, username).flatMap(key => {
             const setting = boxSuffix(key, prefix, username);
-            return setting === null ? [] : [{ key, setting }];
+            return setting === null ? [] : [{ suffix: `set:${name}:${setting}`, setting }];
         });
     });
 }
 
 export function readScriptSettings(username: string, script: string): Record<string, string> {
     script = requireScript(script);
-    return Object.fromEntries(scriptEntries(username, script).flatMap(({ key, setting }) => {
-        const value = read(key);
+    return Object.fromEntries(scriptEntries(username, script).flatMap(({ suffix, setting }) => {
+        const value = readBoxItem(suffix, username);
         return value === null ? [] : [[setting, value]];
     }));
 }
@@ -67,15 +51,14 @@ export function replaceScriptSettings(username: string, script: string, values: 
     script = requireScript(script);
     const previous = scriptEntries(username, script);
     for (const store of stores()) {
-        for (const { key } of previous) store.removeItem(key);
+        for (const { suffix } of previous) clearBoxItem(store, suffix, username);
         for (const [key, value] of Object.entries(values)) store.setItem(boxKey(`set:${script}:${key}`, username), value);
     }
 }
 
 export function storedScripts(usernames: string[]): string[] {
-    if (usernames.includes('set')) migrateSetProfileStorage();
     const scripts = new Set<string>();
-    const savedKeys = keys('rs2b0t:');
+    const savedKeys = keys('rs2b0t:', usernames.includes('set') ? 'set' : undefined);
     for (const username of usernames) {
         const selected = readProfileScript(username);
         if (selected) scripts.add(selected);
