@@ -23,6 +23,7 @@ type InboundMessage =
     | { type: 'stop' }
     | { type: 'setIngame'; ingame: boolean }
     | { type: 'request'; archive: number; file: number }
+    | { type: 'requestBatch'; archive: number; files: number[] }
     | { type: 'prefetchPriority'; archive: number; file: number; priority: number; id?: number }
     | { type: 'prefetch'; archive: number; file: number }
     | { type: 'clearPrefetches' };
@@ -728,6 +729,8 @@ async function handleMessage(message: InboundMessage): Promise<void> {
         }
     } else if (message.type === 'request') {
         onDemand?.request(message.archive, message.file);
+    } else if (message.type === 'requestBatch') {
+        for (const file of message.files) onDemand?.request(message.archive, file);
     } else if (message.type === 'prefetchPriority') {
         try {
             await onDemand?.prefetchPriority(message.archive, message.file, message.priority);
