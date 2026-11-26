@@ -1,5 +1,5 @@
 // docs/reference/nav-pathfinding.md
-import type { PathHop, PathPolicy, TransportRequires, WorldState } from './types.js';
+import type { PathHop, PathPolicy, TransportKind, TransportRequires, WorldState } from './types.js';
 import type { WorldStateData } from './worldStateData.js';
 import { worldStateFromData } from './worldStateData.js';
 import { meetsRequires } from './requires.js';
@@ -139,7 +139,6 @@ export type NavResponse =
     | ({ type: 'path'; id: number; elapsedMs: number } & PathOutcome);
 
 const DOOR_COST = DEFAULT_EDGE_COST.door;
-// Why: long-range edges force Dijkstra; match the 1.2M recovery budget so long routes don't need a second search.
 const MAX_EXPANSIONS = 1_200_000;
 
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];
@@ -257,10 +256,7 @@ export class PathFinder {
     readonly members: boolean;
 
     private readonly edges = new Map<number, CompiledEdge[]>();
-    // Why: Chebyshev is then inadmissible without a transport-aware lower bound (#335).
-
-    /** True when any compiled edge spans more tiles than its cost (dungeon z+/-6400, ships, portals). */
-    private hasLongRangeEdges = false;
+    private readonly longRangeEdges: { from: number; edge: CompiledEdge }[] = [];
     doorEdges = 0;
     transportEdges = 0;
 
@@ -439,16 +435,17 @@ export class PathFinder {
         kind?: string,
         teleportId?: string
     ): void {
+        const edge = { to, cost, transport, requires, kind, teleportId };
         const span = Math.max(Math.abs(nodeX(to) - nodeX(from)), Math.abs(nodeZ(to) - nodeZ(from)));
         if (span > cost) {
-            this.hasLongRangeEdges = true;
+            this.longRangeEdges.push({ from, edge });
         }
         let list = this.edges.get(from);
         if (!list) {
             list = [];
             this.edges.set(from, list);
         }
-        list.push({ to, cost, transport, requires, kind, teleportId });
+        list.push(edge);
     }
 
     // Why: a walkable tile with no exit expands nothing, so snapping onto one reports everything unreachable; the Shilo log's midpoint is one and the walker stands on it mid-crossing.
@@ -610,7 +607,7 @@ export class PathFinder {
 
         const cardinal = this.cardinalGoals(toRaw);
         if (cardinal.size > 0) {
-            const direct = this.search(from, toRaw, cardinal, 1, avoidDoors, maxExpansions, ctx);
+            const direct = this.search(from, toRaw, cardinal, avoidDoors, maxExpansions, ctx);
             if (direct.ok) {
                 return direct;
             }
@@ -624,8 +621,7 @@ export class PathFinder {
                 expanded: 0
             };
         }
-        const goalSlack = goals.size === 1 && goals.has(nodeId(toRaw.x, toRaw.z, toRaw.level)) ? 0 : 5;
-        return this.search(from, toRaw, goals, goalSlack, avoidDoors, maxExpansions, ctx);
+        return this.search(from, toRaw, goals, avoidDoors, maxExpansions, ctx);
     }
 
     private buildSearchContext(from: NavPoint, to: NavPoint, opts: FindPathCallOptions): SearchContext {
@@ -712,11 +708,12 @@ export class PathFinder {
     }
 
     /** Requires check with the path-local essence return, which can differ from the snapshot after an entry hop. */
-    private edgeAllowedOnPath(
-        requires: TransportRequires | undefined,
-        baseState: WorldState | undefined,
-        pathEssenceIdx: number
-    ): boolean {
+    private edgeAllowedOnPath(edge: CompiledEdge, ctx: SearchContext, pathEssenceIdx: number): boolean {
+        if (edge.kind && !kindAllowedByPolicy(edge.kind as TransportKind, ctx.policy)) {
+            return false;
+        }
+        const { requires } = edge;
+        const baseState = ctx.state;
         if (!requires) {
             return true;
         }
@@ -745,46 +742,70 @@ export class PathFinder {
         return meetsRequires(other, stateForMeets).ok;
     }
 
+    private buildHeuristic(goal: NavPoint, goals: Set<number>, ctx: SearchContext): (x: number, z: number) => number {
+        let slack = 0;
+        for (const id of goals) {
+            slack = Math.max(slack, Math.abs(nodeX(id) - goal.x), Math.abs(nodeZ(id) - goal.z));
+        }
+        const walk = (x: number, z: number): number =>
+            Math.max(0, Math.max(Math.abs(x - goal.x), Math.abs(z - goal.z)) - slack);
+        const pending = this.longRangeEdges
+            .concat(ctx.teleFromStart.map(edge => ({ from: ctx.startId, edge })))
+            .filter(({ edge }) => this.edgeAllowedOnPath(edge, ctx, 0))
+            .map(({ from, edge }) => ({
+                x: nodeX(from),
+                z: nodeZ(from),
+                toX: nodeX(edge.to),
+                toZ: nodeZ(edge.to),
+                cost: edge.cost,
+                remaining: edge.cost + walk(nodeX(edge.to), nodeZ(edge.to))
+            }));
+        const entrances: { x: number; z: number; remaining: number }[] = [];
+        const estimate = (x: number, z: number): number => {
+            let best = walk(x, z);
+            for (const entrance of entrances) {
+                if (entrance.remaining >= best) break;
+                const steps = Math.max(Math.abs(x - entrance.x), Math.abs(z - entrance.z));
+                best = Math.min(best, steps + entrance.remaining);
+            }
+            return best;
+        };
+
+        // Why: reverse Dijkstra over obstacle-free walks and directed transports bounds even chained shortcuts.
+        while (pending.length > 0) {
+            let next = 0;
+            for (let i = 1; i < pending.length; i++) {
+                if (pending[i].remaining < pending[next].remaining) next = i;
+            }
+            const [edge] = pending.splice(next, 1);
+            if (edge.remaining >= estimate(edge.x, edge.z)) continue;
+            entrances.push(edge);
+            for (const other of pending) {
+                const steps = Math.max(Math.abs(other.toX - edge.x), Math.abs(other.toZ - edge.z));
+                other.remaining = Math.min(other.remaining, other.cost + steps + edge.remaining);
+            }
+        }
+
+        return estimate;
+    }
+
     private search(
         from: NavPoint,
         toRaw: NavPoint,
         goals: Set<number>,
-        goalSlack: number,
         avoidDoors: Set<string> | undefined,
         maxExpansions: number,
         ctx: SearchContext
     ): PathOutcome {
         const startTile = nodeId(from.x, from.z, from.level);
         const start = packSearchKey(startTile, ctx.startEssenceIdx);
-        const goalX = toRaw.x;
-        const goalZ = toRaw.z;
-
         const gScore = new Map<number, number>();
         const cameFrom = new Map<number, number>();
         /** Arrival search-key to transport metadata + edge cost for hop reconstruct. */
         const viaEdge = new Map<number, { transport: TransportInfo; cost: number; kind?: string }>();
         const closed = new Set<number>();
         const open = new MinHeap();
-        // Why: unit-cost walk makes Chebyshev an admissible lower bound (#335).
-        // Why: originless spell teles injected at the start give min over teleCost + Chebyshev(landing, goal), admissible from any node since the cast works anywhere.
-        // Why: long-range graph edges (dungeons z+/-6400, ships, portals) make pure Chebyshev inadmissible, so without a tele floor the search falls back to Dijkstra (h=0).
-        // Why: classic and v2 share this graph and both need correct transport preference (#335 test); the tele inject uses teleFloor to keep long hard-clue OD pairs under budget.
-        const chebAt = (x: number, z: number): number =>
-            Math.max(0, Math.max(Math.abs(x - goalX), Math.abs(z - goalZ)) - goalSlack);
-        let teleFloor = Infinity;
-        for (const e of ctx.teleFromStart) {
-            teleFloor = Math.min(teleFloor, e.cost + chebAt(nodeX(e.to), nodeZ(e.to)));
-        }
-        const heuristic = (x: number, z: number): number => {
-            const walk = chebAt(x, z);
-            if (teleFloor !== Infinity) {
-                return Math.min(walk, teleFloor);
-            }
-            if (this.hasLongRangeEdges) {
-                return 0;
-            }
-            return walk;
-        };
+        const heuristic = this.buildHeuristic(toRaw, goals, ctx);
 
         gScore.set(start, 0);
         open.push(heuristic(from.x, from.z) * 1048576, start);
@@ -863,10 +884,7 @@ export class PathFinder {
                 if (avoidDoors && avoidDoors.has(`${edge.transport.locX}|${edge.transport.locZ}`)) {
                     continue;
                 }
-                if (edge.kind && !kindAllowedByPolicy(edge.kind as never, ctx.policy)) {
-                    continue;
-                }
-                if (!this.edgeAllowedOnPath(edge.requires, ctx.state, curEssence)) {
+                if (!this.edgeAllowedOnPath(edge, ctx, curEssence)) {
                     continue;
                 }
                 // Apply the same outside-in rule to transport landings and hops.

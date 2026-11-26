@@ -62,6 +62,44 @@ describe('PathFinder A* heuristic with transport shortcuts (#335)', () => {
             expect(out.cost).toBe(5);
         }
     });
+
+    test('follows chained shortcuts when the first landing is farther from the goal', () => {
+        const finder = new PathFinder(fullyWalkablePack());
+        const from = { x: 5, z: 5, level: 0 };
+        const to = { x: 55, z: 5, level: 0 };
+        const landing = { x: 4, z: 50, level: 0 };
+        const tunnel = { locName: 'Tunnel', action: 'Enter', kind: 'shortcut' };
+        finder.addEdges([], [
+            { ...tunnel, from: { ...from, x: 6 }, to: landing },
+            { ...tunnel, from: { ...landing, z: 51 }, to }
+        ]);
+        expect(finder.findPath(from, to, { maxExpansions: 10 })).toMatchObject({ ok: true, cost: 22 });
+    });
+
+    test.each([
+        { useShortcuts: true, maxExpansions: 10, cost: 11, transport: { kind: 'shortcut' } },
+        { useShortcuts: false, maxExpansions: 100, cost: 40, transport: { teleportId: 'varrock' } }
+    ])('chooses the cheapest route with Varrock teleport available and useShortcuts=$useShortcuts', opts => {
+        const finder = new PathFinder(v2Pack(50, 53).bytes);
+        const from = { x: 3201, z: 3430, level: 0 };
+        const to = { x: 3243, z: 3424, level: 0 };
+        finder.addEdges([], [{ from: { ...from, x: 3202 }, to, locName: 'Tunnel', action: 'Enter', kind: 'shortcut' }]);
+        const out = finder.findPath(from, to, {
+            policy: { useShortcuts: opts.useShortcuts, useTeleports: true },
+            state: {
+                members: true,
+                skills: { magic: 25 },
+                quests: {},
+                freeSlots: 25,
+                items: { 'Law rune': 1, 'Fire rune': 1, 'Air rune': 3 }
+            },
+            maxExpansions: opts.maxExpansions
+        });
+        expect(out).toMatchObject({ ok: true, cost: opts.cost });
+        if (out.ok) {
+            expect(out.waypoints.find(w => w.transport)?.transport).toMatchObject(opts.transport);
+        }
+    });
 });
 
 describe('PathFinder level-change avoidance', () => {
@@ -146,7 +184,7 @@ describe('PathFinder transport loc metadata', () => {
 const DX8 = [0, 1, 0, -1, 1, 1, -1, -1];
 const DZ8 = [1, 0, -1, 0, 1, -1, -1, 1];
 
-function v2Pack(): { bytes: Uint8Array; blockTile(x: number, z: number): void } {
+function v2Pack(mx = 0, mz = 0): { bytes: Uint8Array; blockTile(x: number, z: number): void } {
     const perLevel = 4096 + 512 + 2048;
     const bytes = new Uint8Array(10 + 3 + perLevel);
     bytes[0] = 0x4c;
@@ -156,8 +194,8 @@ function v2Pack(): { bytes: Uint8Array; blockTile(x: number, z: number): void } 
     bytes[4] = 2;
     bytes[5] = 0;
     bytes[8] = 1;
-    bytes[10] = 0;
-    bytes[11] = 0;
+    bytes[10] = mx;
+    bytes[11] = mz;
     bytes[12] = 0b0001;
     const exitBase = 13;
     const walkBase = exitBase + 4096;
