@@ -603,7 +603,7 @@ class SettingsStoreImpl {
         const stores: Storage[] = [];
         if (hasSession) stores.push(sessionStorage);
         if (hasLocal) stores.push(localStorage);
-        const writes: { store: Storage; id: string; previous: string | null }[] = [];
+        const writes: { store: Storage; id: string; previous: string | null; value: string }[] = [];
         try {
             for (const [key, value] of values) {
                 const id = storageKey(name, key);
@@ -611,11 +611,12 @@ class SettingsStoreImpl {
                     const previous = store.getItem(id);
                     if (previous === value) continue;
                     store.setItem(id, value);
-                    writes.push({ store, id, previous });
+                    writes.push({ store, id, previous, value });
                 }
             }
         } catch (err) {
-            for (const { store, id, previous } of writes.reverse()) {
+            for (const { store, id, previous, value } of writes.reverse()) {
+                if (store.getItem(id) !== value) continue;
                 if (previous === null) store.removeItem(id);
                 else store.setItem(id, previous);
             }

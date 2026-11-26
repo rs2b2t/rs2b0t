@@ -429,6 +429,33 @@ describe('map picker bake settings drafts', () => {
         }
     });
 
+    test("a quota error preserves another tab's label save during the batch", () => {
+        const labels = 'rs2b0t:set:MapPicker:bakeLabels';
+        const borders = 'rs2b0t:set:MapPicker:bakeBorders';
+        const setItem = localStorage.setItem;
+        Object.defineProperty(localStorage, 'setItem', {
+            configurable: true,
+            value: (id: string, value: string) => {
+                if (id === borders) {
+                    expect(localStorage.getItem(labels)).toBe('false');
+                    setItem.call(localStorage, labels, 'true');
+                    throw new DOMException('storage full', 'QuotaExceededError');
+                }
+                setItem.call(localStorage, id, value);
+            }
+        });
+        try {
+            const edits = new Map([['bakeLabels', 'false'], ['bakeBorders', 'true']]);
+            expect(() => SettingsStore.saveBatch(MAP_PICKER_SETTINGS_NS, edits)).toThrow('storage full');
+            expect(stored('bakeLabels')).toEqual({ local: 'true', session: null });
+            expect(stored('bakeBorders')).toEqual({ local: null, session: null });
+            sessionStorage.clear();
+            expect(resolveBasemapBakePrefs().labels).toBe(true);
+        } finally {
+            Object.defineProperty(localStorage, 'setItem', { value: setItem });
+        }
+    });
+
     test('a failed rebuild leaves the original draft baseline in place', async () => {
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
         const bake = spyOn(basemapRegen, 'regenerateBasemap').mockRejectedValue(new Error('fixture failure'));
