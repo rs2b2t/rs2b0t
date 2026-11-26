@@ -167,17 +167,16 @@ export class ProfileChooser {
         this.status.textContent = '';
         try {
             await vault.remove(username);
+            this.render();
         } catch (error) {
             this.status.textContent = error instanceof Error ? error.message : 'Could not delete the profile';
         } finally {
             this.setPending(false);
-            this.render();
         }
     }
 
     private render(): void {
         this.list.textContent = '';
-        if (vault.status() !== 'unlocked') return;
         const profiles = vault.list();
         if (profiles.length === 0) {
             const none = document.createElement('div');

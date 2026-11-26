@@ -2,7 +2,6 @@ const fs = require('node:fs');
 const { join } = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { lockSync } = require('proper-lockfile');
-const { replaceBoxItems } = require('./box-storage.cjs');
 
 function sharedStorage(dir) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -55,23 +54,6 @@ function sharedStorage(dir) {
             return update(state => {
                 if ((state.data[key] ?? null) !== expected) return false;
                 state.data[key] = value;
-                return true;
-            });
-        },
-        restoreProfiles(expected, value, settings, legacyKey) {
-            const key = 'rs2b0t:multibox:profiles';
-            if (typeof expected !== 'string' || typeof value !== 'string') throw new Error('Invalid saved vault');
-            return update(({ data }) => {
-                if (data[key] !== expected) return false;
-                replaceBoxItems({
-                    removeItem: name => { delete data[name]; },
-                    setItem(name, setting) {
-                        if (!valid(name) || typeof setting !== 'string') throw new Error('Invalid saved setting');
-                        data[name] = setting;
-                    }
-                }, Object.keys(data), settings);
-                if (legacyKey && valid(legacyKey)) delete data[legacyKey];
-                data[key] = value;
                 return true;
             });
         },

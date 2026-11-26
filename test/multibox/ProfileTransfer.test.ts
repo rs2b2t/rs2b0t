@@ -311,8 +311,8 @@ describe('ProfileTransfer', () => {
         expect(SettingsStore.saved('set', 'travel:mode')).toBe('walk');
     });
 
-    for (const incoming of ['set', 'fixture', 'legacy set']) {
-        test(`restoring ${incoming} over set preserves standalone storage`, () => {
+    for (const [previous, incoming] of [['set', 'set'], ['set', 'fixture'], ['fixture', 'set'], ['set', 'legacy set']]) {
+        test(`restoring ${incoming} over ${previous} preserves standalone storage`, () => {
             const loadout = { name: 'travel', worn: {}, carry: [{ item: 'Lobster', qty: 2 }] };
             Loadouts.save([loadout]);
             SettingsStore.save('Global', 'runEnergyMin', '73');
@@ -337,7 +337,7 @@ describe('ProfileTransfer', () => {
                 ? JSON.stringify({ ...snapshot, kind: PROFILE_FILE_KIND, v: 1 })
                 : serializeProfileFile(snapshot);
             const backup = parseProfileFile(file);
-            applyBoxStorage(backup.storage, ['set', ...backup.profiles.map(p => p.username)]);
+            applyBoxStorage(backup.storage, [previous, ...backup.profiles.map(p => p.username)]);
 
             expect(inBox('set', () => SettingsStore.saved('Global', 'runEnergyMin'))).toBe(user === 'set' ? '42' : undefined);
             for (const store of [localStorage, sessionStorage]) {
@@ -349,7 +349,9 @@ describe('ProfileTransfer', () => {
             sessionStorage.clear();
             expect(SettingsStore.saved('Global', 'runEnergyMin')).toBe('73');
             expect(Loadouts.all()).toEqual([loadout]);
-            expect(collectBoxStorage(['set']).set?.['Global:runEnergyMin']).toBeUndefined();
+            if (incoming === 'legacy set') {
+                expect(collectBoxStorage(['set'])).toEqual({ set: { [threshold]: '42', 'set:travel:mode': 'ride' } });
+            }
             expect(inBox('set', () => Loadouts.all())).toEqual([]);
             expect(SettingsStore.saved('set', 'travel:mode')).toBe('walk');
             expect(inBox(user, () => SettingsStore.saved('Global', 'runEnergyMin'))).toBe('42');

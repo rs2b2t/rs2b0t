@@ -42,6 +42,7 @@ if (process.argv.includes('--export-set')) {
     applyBoxStorage(before, ['set']);
     sessionStorage.clear();
     assert.equal(readBoxItem('set:Global:runEnergyMin', 'set'), '73');
+    assert.equal(readBoxItem('set:Miner:rock', 'set'), 'coal');
     console.log(JSON.stringify({ before, offered, after }));
     process.exit(0);
 }

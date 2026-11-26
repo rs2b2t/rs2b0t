@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { ProfileVault, type Profile } from '#/bot/multibox/ProfileVault.js';
 
 const KEY = 'rs2b0t:multibox:profiles';
@@ -36,17 +36,27 @@ describe('ProfileVault', () => {
         expect(v2.list()).toEqual([{ username: 'alice', password: 'hunter2', tab: 'Main' }]);
     });
 
-    test('browser refresh adopts the latest roster and its write version', async () => {
-        const wall = new ProfileVault();
-        const peer = new ProfileVault();
-        await wall.setup('pw');
-        expect(await peer.unlock('pw')).toBe(true);
-        await peer.upsert({ username: 'set', password: '', world: 2 });
-        await wall.refresh();
-        expect(wall.list()).toEqual(peer.list());
-        await wall.setWorld('set', 3);
-        await peer.refresh();
-        expect(peer.list()[0].world).toBe(3);
+    test('a failed delete keeps the profile through a tab save and a successful retry stays deleted', async () => {
+        const storage = quotaLimitedStorage();
+        const v = new ProfileVault(storage);
+        const profile: Profile = { username: 'alice', password: 'a', world: 2 };
+        await v.setup('pw');
+        await v.upsert(profile);
+
+        storage.failNextWrite = true;
+        await expect(v.remove('alice')).rejects.toThrow('storage full');
+        expect(v.list()).toEqual([{ ...profile, tab: 'Main' }]);
+        await v.saveTabState(['miners'], new Map([['alice', 'miners']]), 'miners');
+        const reopened = new ProfileVault(storage);
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.list()).toEqual([{ ...profile, tab: 'miners' }]);
+
+        const retry = v.remove('alice');
+        const save = v.saveTabState(['miners'], new Map(), 'Main');
+        await Promise.all([retry, save]);
+        expect(v.list()).toEqual([]);
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.snapshot()).toEqual({ profiles: [], tabs: ['miners'], activeTab: 'Main' });
     });
 
     test('stored blob never contains plaintext', async () => {
@@ -329,89 +339,6 @@ describe('ProfileVault tabs', () => {
         await v.replaceAll(imported);
         expect(v.snapshot()).toEqual(imported);
         expect(await reopen()).toEqual(imported);
-    });
-
-    test("a stale wall cannot discard a failed restore's pending settings cleanup", async () => {
-        const wall = new ProfileVault();
-        const stale = new ProfileVault();
-        await wall.setup('pw');
-        expect(await stale.unlock('pw')).toBe(true);
-        const empty = { profiles: [], tabs: [], activeTab: 'Main' };
-        const key = 'rs2b0t:set:set%3AGlobal%3ArunEnergyMin';
-        const settings = { set: { 'set:Global:runEnergyMin': '42' } };
-        const write = sessionStorage.setItem;
-        Object.defineProperty(sessionStorage, 'setItem', { configurable: true, value() { throw new Error('storage full'); } });
-        try {
-            await expect(wall.replaceAll(empty, settings)).rejects.toThrow('storage full');
-        } finally {
-            Object.defineProperty(sessionStorage, 'setItem', { configurable: true, value: write });
-        }
-        expect(localStorage.getItem(key)).toBe('42');
-        await expect(stale.upsert({ username: 'later', password: '' })).rejects.toThrow(/changed/);
-        const retry = new ProfileVault();
-        expect(await retry.unlock('pw')).toBe(true);
-        await retry.replaceAll(empty, {});
-        expect(localStorage.getItem(key)).toBeNull();
-    });
-
-    test("a late cleanup preserves the winning wall's encrypted wipe list", async () => {
-        const first = new ProfileVault();
-        const second = new ProfileVault();
-        await first.setup('pw');
-        await first.upsert({ username: 'original', password: '' });
-        expect(await second.unlock('pw')).toBe(true);
-        const roster = (username: string) => ({ profiles: [{ username, password: '' }], tabs: [], activeTab: 'Main' });
-        const cleaning = Promise.withResolvers<void>();
-        const resume = Promise.withResolvers<void>();
-        const encrypt = crypto.subtle.encrypt.bind(crypto.subtle);
-        const spy = spyOn(crypto.subtle, 'encrypt');
-        try {
-            spy.mockImplementationOnce(encrypt).mockImplementationOnce(async (...args) => {
-                cleaning.resolve();
-                await resume.promise;
-                return encrypt(...args);
-            });
-            const pending = first.replaceAll(roster('first'), { 'storage-only': { selectedScript: 'Miner' } });
-            await cleaning.promise;
-            const write = localStorage.setItem;
-            Object.defineProperty(localStorage, 'setItem', { configurable: true, value(key: string, value: string) {
-                if (key === 'rs2b0t:second:selectedScript') throw new Error('storage full');
-                write.call(localStorage, key, value);
-            } });
-            try {
-                await expect(second.replaceAll(roster('second'), { second: { selectedScript: 'Fisher' } })).rejects.toThrow('storage full');
-            } finally {
-                Object.defineProperty(localStorage, 'setItem', { configurable: true, value: write });
-                resume.resolve();
-                await expect(pending).rejects.toThrow(/changed/);
-            }
-            const reopened = new ProfileVault();
-            expect(await reopened.unlock('pw')).toBe(true);
-            expect(reopened.list().map(p => p.username)).toEqual(['second']);
-            const oldKeys = ['first', 'original', 'second', 'storage-only'].map(name => `rs2b0t:${name}:selectedScript`);
-            for (const key of oldKeys) localStorage.setItem(key, 'Miner');
-            await reopened.replaceAll(roster('retry'), {});
-            for (const key of oldKeys) expect(localStorage.getItem(key)).toBeNull();
-            for (const key of oldKeys) localStorage.setItem(key, 'Fisher');
-            await reopened.replaceAll(roster('next'), {});
-            for (const key of oldKeys) expect(localStorage.getItem(key)).toBe('Fisher');
-        } finally {
-            spy.mockRestore();
-        }
-    });
-
-    test('migrates the legacy wipe referenced by the encrypted restore ID', async () => {
-        await writeBlob('pw', { profiles: [], tabs: [], activeTab: 'Main', restoreId: 'fixture' });
-        const key = 'rs2b0t:pending-profile-wipe/';
-        localStorage.setItem(key + 'fixture', '["previous"]');
-        localStorage.setItem(key + 'other', '["unrelated"]');
-        const v = new ProfileVault();
-        expect(await v.unlock('pw')).toBe(true);
-        localStorage.setItem('rs2b0t:previous:selectedScript', 'Miner');
-        await v.replaceAll(v.snapshot(), {});
-        expect(localStorage.getItem('rs2b0t:previous:selectedScript')).toBeNull();
-        expect(localStorage.getItem(key + 'fixture')).toBeNull();
-        expect(localStorage.getItem(key + 'other')).toBe('["unrelated"]');
     });
 
     test('replaceAll rejects a profile pointing at a missing tab', async () => {

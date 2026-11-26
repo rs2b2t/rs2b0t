@@ -2,7 +2,6 @@ import { expect, spyOn, test } from 'bun:test';
 import { VaultPrompt } from '#/bot/multibox/VaultPrompt.js';
 import { ProfileVault, vault } from '#/bot/multibox/ProfileVault.js';
 import { serializeProfileFile } from '#/bot/multibox/ProfileTransfer.js';
-import { readBoxItem } from '#/bot/runtime/box.js';
 import { SettingsPanel } from '#/bot/multibox/SettingsPanel.js';
 import { ResourcePanel } from '#/bot/multibox/ResourcePanel.js';
 import { DomSlotOps } from '#/bot/multibox/DomSlotOps.js';
@@ -37,25 +36,7 @@ function captureListeners(target: EventTarget): () => void {
 
 let fixtureId = 0;
 
-type WallCheck = (wall: Wall) => Promise<void>;
-
-async function withWall(mode: 'local' | 'proxy', check: WallCheck, reopen?: WallCheck): Promise<void> {
-    vault.reset();
-    try {
-        await vault.setup('test-passphrase');
-        await vault.upsert({ username: 'alice', password: 'a', world: 1 });
-        await vault.upsert({ username: 'bob', password: 'b', world: 2 });
-        await withWallPage(mode, check);
-        if (reopen) {
-            expect(await vault.unlock('test-passphrase')).toBe(true);
-            await withWallPage(mode, reopen);
-        }
-    } finally {
-        vault.reset();
-    }
-}
-
-async function withWallPage(mode: 'local' | 'proxy', check: WallCheck): Promise<void> {
+async function withWall(mode: 'local' | 'proxy', check: (wall: Wall) => Promise<void>): Promise<void> {
     const previousMode = process.env.RS2B0T_TARGET;
     process.env.RS2B0T_TARGET = mode;
     const interval = Object.getOwnPropertyDescriptor(window, 'setInterval');
@@ -76,6 +57,10 @@ async function withWallPage(mode: 'local' | 'proxy', check: WallCheck): Promise<
     const browser = Reflect.get(window, 'happyDOM') as { setURL(url: string): void };
     try {
         browser.setURL(mode === 'proxy' ? 'https://w1.rs2b2t.com/rs2b0t/wall' : 'http://localhost:8890/multibox.html?nodeid=42&world=2');
+        vault.reset();
+        await vault.setup('test-passphrase');
+        await vault.upsert({ username: 'alice', password: 'a', world: 1 });
+        await vault.upsert({ username: 'bob', password: 'b', world: 2 });
         document.body.innerHTML = '<div id="mbx-app"><div id="mbx-rail"><div id="mbx-tabs"></div><div id="mbx-add"></div></div></div>';
         for (const id of ['build', 'start-all', 'stop-all', 'renderers-off', 'renderers-on', 'resource-bots', 'resource-cpu', 'resource-memory', 'resource-traffic', 'resource-cpu-row', 'resource-memory-row', 'settings', 'manage', 'drawer']) {
             const el = document.createElement('button');
@@ -102,6 +87,7 @@ async function withWallPage(mode: 'local' | 'proxy', check: WallCheck): Promise<
         freeze.mockRestore();
         if (observer) Object.defineProperty(window, 'PerformanceObserver', observer);
         else Reflect.deleteProperty(window, 'PerformanceObserver');
+        vault.reset();
         Reflect.deleteProperty(globalThis, 'multibox');
         document.body.innerHTML = '';
         browser.setURL(previousUrl);
@@ -156,132 +142,6 @@ test.each([0, 4])('settings import applies modes once with %i profiles already l
             spawning.mockRestore();
         }
     });
-});
-
-const pendingWipeKey = 'rs2b0t:pending-profile-wipe';
-const marker = 'rs2b0t:set-profile-settings-v1';
-const vaultKey = 'rs2b0t:multibox:profiles';
-
-const restoreFailures: ['localStorage' | 'sessionStorage', string][] = [
-    ['localStorage', vaultKey],
-    ['localStorage', marker],
-    ['sessionStorage', marker]
-];
-
-test.each(restoreFailures)('reopening the wall retries a restore after %s fails to write %s', async (layer, failedKey) => {
-    const legacy = 'rs2b0t:set:set:Global:runEnergyMin';
-    const orphan = 'rs2b0t:old:selectedScript';
-    const backup = serializeProfileFile({ profiles: [{ username: 'eve', password: '' }], tabs: [], activeTab: 'Main', storage: {} });
-    const open = spyOn(SettingsPanel.prototype, 'open');
-    const restore = async () => {
-        document.getElementById('mbx-settings')!.click();
-        const panel = open.mock.contexts.at(-1) as SettingsPanel;
-        await panel.importText(backup);
-        return panel;
-    };
-    try {
-        await withWall('local', async () => {
-            await vault.upsert({ username: 'set', password: '' });
-            localStorage.setItem(legacy, '42');
-            localStorage.setItem(pendingWipeKey, '["old"]');
-            localStorage.setItem(orphan, 'Miner');
-            const store = window[layer];
-            const write = store.setItem;
-            const journals: string[] = [];
-            Object.defineProperty(store, 'setItem', { configurable: true, value(key: string, value: string) {
-                if (key.startsWith(pendingWipeKey)) journals.push(value);
-                if (key === failedKey) throw new DOMException('storage full', 'QuotaExceededError');
-                write.call(store, key, value);
-            } });
-            try {
-                const panel = await restore();
-                expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toContain('storage full');
-                expect(journals).toEqual([]);
-            } finally {
-                Object.defineProperty(store, 'setItem', { configurable: true, value: write });
-            }
-        }, async () => {
-            expect(vault.list().map(p => p.username)).toEqual(failedKey === vaultKey ? ['alice', 'bob', 'set'] : ['eve']);
-            const panel = await restore();
-            expect(panel.el.hidden).toBe(true);
-            expect(vault.list().map(p => p.username)).toEqual(['eve']);
-            expect(localStorage.getItem(pendingWipeKey)).toBeNull();
-            expect(Object.keys(localStorage).filter(key => key.startsWith(pendingWipeKey + '/'))).toEqual([]);
-            expect(localStorage.getItem(orphan)).toBeNull();
-            expect(sessionStorage.getItem(marker)).toBe('1');
-            sessionStorage.clear();
-            expect(readBoxItem('set:Global:runEnergyMin', 'set')).toBeNull();
-            expect(localStorage.getItem(legacy)).toBe('42');
-        });
-    } finally {
-        open.mockRestore();
-        localStorage.removeItem(pendingWipeKey);
-        localStorage.removeItem(orphan);
-        localStorage.removeItem(legacy);
-        localStorage.removeItem(marker);
-        sessionStorage.removeItem(marker);
-    }
-});
-
-test("a rejected import preserves another panel's pending wipe", async () => {
-    const open = spyOn(SettingsPanel.prototype, 'open');
-    const openPanel = () => {
-        document.getElementById('mbx-settings')!.click();
-        return open.mock.contexts.at(-1) as SettingsPanel;
-    };
-    const backup = serializeProfileFile({ profiles: [{ username: 'eve', password: '' }], tabs: [], activeTab: 'Main', storage: {} });
-    const legacy = 'rs2b0t:set:set:Global:runEnergyMin';
-    let first: SettingsPanel;
-    try {
-        await withWall('local', async () => {
-            await vault.upsert({ username: 'set', password: '' });
-            localStorage.setItem(legacy, '42');
-            first = openPanel();
-        }, async () => {
-            const second = openPanel();
-            const started = Promise.withResolvers<void>();
-            const otherVault = new ProfileVault();
-            expect(await otherVault.unlock('test-passphrase')).toBe(true);
-            const replace = spyOn(vault, 'replaceAll').mockImplementationOnce(otherVault.replaceAll.bind(otherVault));
-            const conflict = Promise.withResolvers<ArrayBuffer>();
-            const encrypt = spyOn(crypto.subtle, 'encrypt').mockImplementationOnce(() => {
-                started.resolve();
-                return conflict.promise;
-            });
-            const firstImport = first.importText(backup);
-            try {
-                await started.promise;
-                const write = localStorage.setItem;
-                Object.defineProperty(localStorage, 'setItem', { configurable: true, value(key: string, value: string) {
-                    if (key === marker) throw new Error('storage full');
-                    write.call(localStorage, key, value);
-                } });
-                try {
-                    await second.importText(backup);
-                    expect(second.el.querySelector('#mbx-settings-error')!.textContent).toBe('storage full');
-                    expect(vault.list().map(p => p.username)).toEqual(['eve']);
-                } finally {
-                    Object.defineProperty(localStorage, 'setItem', { configurable: true, value: write });
-                }
-            } finally {
-                conflict.reject(new Error('vault changed'));
-                await firstImport;
-                encrypt.mockRestore();
-                replace.mockRestore();
-            }
-            expect(first.el.querySelector('#mbx-settings-error')!.textContent).toBe('vault changed');
-            await second.importText(backup);
-            expect(second.el.hidden).toBe(true);
-            sessionStorage.clear();
-            expect(readBoxItem('set:Global:runEnergyMin', 'set')).toBeNull();
-            expect(localStorage.getItem(legacy)).toBe('42');
-        });
-    } finally {
-        open.mockRestore();
-        localStorage.removeItem(legacy);
-        localStorage.removeItem(marker);
-        sessionStorage.removeItem(marker);
-    }
 });
 
 test('overlapping settings imports remove the superseded profile settings from both stores', async () => {
