@@ -1,15 +1,25 @@
-import { describe, expect, test } from 'bun:test';
-import fs from 'node:fs';
+import { expect, test } from 'bun:test';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-// Why: a process.env read that survives bundling throws in the browser at load; bun tests never see it.
-const OUTPUTS = ['out/botclient.js', 'out/client.js', 'out/mapview.js', 'out/multibox.js', 'out/ondemandworker.js', 'out/navworker.js'];
-const PRESENT = OUTPUTS.filter(f => fs.existsSync(f));
+import { checkBundleDefines } from '../../tools/check-bundle-defines.js';
 
-describe.skipIf(PRESENT.length === 0)('browser bundle outputs (build-gated)', () => {
-    for (const path of PRESENT) {
-        test(`${path} has no surviving process.env reference`, () => {
-            const source = fs.readFileSync(path, 'utf8');
-            expect(source).not.toContain('process.env');
-        });
+test('checks every requested bundle for surviving process.env references', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bundle-defines-'));
+    try {
+        const client = join(dir, 'client.js');
+        const worker = join(dir, 'ondemandworker.js');
+        writeFileSync(client, 'void 0;');
+        const check = () => checkBundleDefines([client, worker]);
+        expect(check).toThrow(worker);
+
+        writeFileSync(worker, 'postMessage(process.env.TARGET);');
+        expect(check).toThrow(`${worker} contains process.env`);
+
+        writeFileSync(worker, 'postMessage("local");');
+        expect(check).not.toThrow();
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
     }
 });

@@ -34,6 +34,11 @@ function select(id: string): HTMLSelectElement {
     return el;
 }
 
+function showResult(cell: HTMLTableCellElement, result: RosterResult): void {
+    cell.querySelector('small')?.remove();
+    cell.append(node('small', `mbx-roster-result is-${result.state}`, result.message));
+}
+
 function choices(el: HTMLSelectElement | HTMLDataListElement, values: string[]): void {
     if (JSON.stringify(Array.from(el.options).map(option => option.value)) === JSON.stringify(values)) return;
     const previous = 'value' in el ? el.value : undefined;
@@ -313,7 +318,7 @@ export class RosterPanel {
         const state = !slot ? 'Unloaded' : slot.switchingWorld !== null ? `Switching world · ${scriptState}` : !slot.ready ? 'Loading' : !slot.ingame ? `Logged out · ${scriptState}` : scriptState;
         const result = this.results.get(profile.username);
         cells[4].replaceChildren(node('span', profile.slot?.scriptState === 'running' ? 'is-running' : '', state));
-        if (result) cells[4].append(node('small', `mbx-roster-result is-${result.state}`, result.message));
+        if (result) showResult(cells[4], result);
     }
 
     private async assignGroup(): Promise<void> {
@@ -337,7 +342,11 @@ export class RosterPanel {
         this.message.textContent = 'Applying changes…';
         this.refresh();
         try {
-            await this.actions.run([...this.selected], command, result => { this.results.set(result.username, result); this.refresh(); });
+            await this.actions.run([...this.selected], command, result => {
+                this.results.set(result.username, result);
+                const row = this.rows.get(result.username);
+                if (row && !this.el.hidden) showResult(row.cells[4], result);
+            });
             this.message.textContent = 'Action finished. See each profile’s result.';
         } catch (err) { this.message.textContent = this.error(err); }
         finally { this.pending = false; this.refresh(); }

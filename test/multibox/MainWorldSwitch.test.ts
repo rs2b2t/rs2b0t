@@ -1,7 +1,10 @@
 import { expect, spyOn, test } from 'bun:test';
 import { VaultPrompt } from '#/bot/multibox/VaultPrompt.js';
-import { vault } from '#/bot/multibox/ProfileVault.js';
+import { ProfileVault, vault } from '#/bot/multibox/ProfileVault.js';
+import { serializeProfileFile } from '#/bot/multibox/ProfileTransfer.js';
+import { SettingsPanel } from '#/bot/multibox/SettingsPanel.js';
 import { ResourcePanel } from '#/bot/multibox/ResourcePanel.js';
+import { DomSlotOps } from '#/bot/multibox/DomSlotOps.js';
 import { DiagSampler } from '#/bot/multibox/DiagSampler.js';
 import { FreezeWatch } from '#/bot/runtime/diag/FreezeWatch.js';
 import type { MultiBoxController } from '#/bot/multibox/MultiBoxController.js';
@@ -92,6 +95,89 @@ async function withWall(mode: 'local' | 'proxy', check: (wall: Wall) => Promise<
         else process.env.RS2B0T_TARGET = previousMode;
     }
 }
+
+test.each([0, 4])('settings import applies modes once with %i profiles already loaded', async loaded => {
+    await withWall('local', async wall => {
+        const profiles = Array.from({ length: 24 }, (_, i) => ({
+            username: `fixture${i}`, password: 'fixture', tab: i % 2 === 0 ? 'Main' : 'Fleet'
+        }));
+        const file = (count: number) => serializeProfileFile({
+            profiles: profiles.slice(0, count), tabs: ['Fleet'], activeTab: 'Main', storage: {}
+        });
+        const modeCalls: string[] = [];
+        const spawn = DomSlotOps.prototype.spawn;
+        const spawning = spyOn(DomSlotOps.prototype, 'spawn').mockImplementation(function (this: DomSlotOps, account) {
+            const handle = spawn.call(this, account);
+            const apply = handle.setRenderMode.bind(handle);
+            handle.setRenderMode = mode => {
+                modeCalls.push(account.username);
+                apply(mode);
+            };
+            return handle;
+        });
+        const open = spyOn(SettingsPanel.prototype, 'open');
+        try {
+            document.getElementById('mbx-settings')!.click();
+            const panel = open.mock.contexts[0] as SettingsPanel;
+            if (loaded) await panel.importText(file(loaded));
+            expect(wall.slots()).toHaveLength(loaded);
+            modeCalls.length = 0;
+            const all = file(profiles.length);
+            await panel.importText(all);
+            const slots = wall.slots();
+            expect(slots.map(slot => [slot.username, slot.tab])).toEqual(profiles.map(p => [p.username, p.tab]));
+            expect(slots.filter(slot => slot.focused).map(slot => slot.username)).toEqual(['fixture22']);
+            expect(modeCalls).toHaveLength(24);
+            expect(modeCalls).toEqual(profiles.map(profile => profile.username));
+
+            modeCalls.length = 0;
+            spawning.mockClear();
+            await panel.importText(all);
+            expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toBe('');
+            expect(spawning).not.toHaveBeenCalled();
+            expect(modeCalls).toHaveLength(0);
+            expect(wall.slots()).toEqual(slots);
+        } finally {
+            open.mockRestore();
+            spawning.mockRestore();
+        }
+    });
+});
+
+test('overlapping settings imports remove the superseded profile settings from both stores', async () => {
+    await withWall('local', async () => {
+        const open = spyOn(SettingsPanel.prototype, 'open');
+        const profileFile = (username: string, selectedScript: string) => serializeProfileFile({
+            profiles: [{ username, password: 'fixture' }], tabs: [], activeTab: 'Main',
+            storage: { [username]: { selectedScript } }
+        });
+        const firstKey = 'rs2b0t:first:selectedScript';
+        const secondKey = 'rs2b0t:second:selectedScript';
+        try {
+            document.getElementById('mbx-settings')!.click();
+            const panel = open.mock.contexts[0] as SettingsPanel;
+            await Promise.all([
+                panel.importText(profileFile('first', 'Miner')),
+                panel.importText(profileFile('second', 'Fisher'))
+            ]);
+            expect(panel.el.hidden).toBe(true);
+
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.list().map(p => p.username)).toEqual(['second']);
+            for (const store of [localStorage, sessionStorage]) {
+                expect(store.getItem(firstKey)).toBeNull();
+                expect(store.getItem(secondKey)).toBe('Fisher');
+            }
+        } finally {
+            open.mockRestore();
+            for (const store of [localStorage, sessionStorage]) {
+                store.removeItem(firstKey);
+                store.removeItem(secondKey);
+            }
+        }
+    });
+});
 
 test('a shared import can load from the open chooser and reveal its tile', async () => {
     await withWall('proxy', async wall => {

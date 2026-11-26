@@ -78,6 +78,20 @@ describe('ProfileTransfer', () => {
         expect(parsed.storage).toEqual({});
     });
 
+    test('desktop export includes the script selected in another window', () => {
+        const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--export']);
+        expect(result.exitCode).toBe(0);
+        expect(parseProfileFile(result.stdout.toString()).storage.source.selectedScript).toBe('Fisher');
+    });
+
+    for (const size of [16, 32]) {
+        test(`desktop export and import each enumerate shared keys once for ${size} accounts`, () => {
+            const result = Bun.spawnSync(['bun', 'test/fixtures/profile-transfer-desktop.ts', String(size)]);
+            expect(result.exitCode, result.stderr.toString()).toBe(0);
+            expect(JSON.parse(result.stdout.toString())).toEqual({ exportReads: 1, importReads: 1 });
+        });
+    }
+
     test('collect/apply round-trips box keys and does not steal a prefixed neighbour', () => {
         localStorage.clear();
         sessionStorage.clear();

@@ -53,6 +53,39 @@ const settle = async (): Promise<void> => { await new Promise(resolve => setTime
 
 afterEach(() => { document.body.replaceChildren(); localStorage.clear(); sessionStorage.clear(); });
 
+test.each([8, 16])('bulk Stop bounds row settings reads for %i loaded profiles', async size => {
+    const { panel, profiles, client } = fixture();
+    profiles.length = 0;
+    for (let i = 0; i < size; i++) {
+        const username = `miner${i}`;
+        profiles.push({ username, tab: 'Miners', world: 1, slot: slot(username, 'running') });
+    }
+    let reads = 0;
+    let stops = 0;
+    let readsBeforeDispatch = 0;
+    client.readSettings = () => { reads++; return {}; };
+    client.stopScript = () => {
+        if (stops === 0) readsBeforeDispatch = reads;
+        stops++;
+    };
+    panel.refresh();
+    get('[aria-label="Select visible profiles"]').click();
+    get('[data-action="stop"]').click();
+    reads = 0;
+    const apply = get<HTMLButtonElement>('#mbx-roster-apply');
+    apply.click();
+    expect(apply.disabled).toBe(true);
+    expect(document.querySelectorAll('[data-profile] .is-pending')).toHaveLength(size);
+    await settle();
+    expect(apply.disabled).toBe(false);
+    expect(stops).toBe(size);
+    for (const { username } of profiles) {
+        expect(get(`[data-profile="${username}"] .is-done`).textContent).toBe('Stop requested.');
+    }
+    expect(readsBeforeDispatch).toBeLessThanOrEqual(2 * size);
+    expect(reads).toBeLessThanOrEqual(4 * size);
+});
+
 test('tab and search filters clear selected targets without changing wall scope', () => {
     const { panel } = fixture();
     expect(document.querySelectorAll('[data-profile]')).toHaveLength(2);
@@ -126,29 +159,23 @@ test('refresh preserves input identity, focus, selection, and reports live runni
 });
 
 test('busy actions disable mutation controls and retain each result on refresh', async () => {
-    const { panel, actions, profiles } = fixture();
+    const { panel, actions, client } = fixture();
     let finish!: () => void;
     const waiting = new Promise<void>(resolve => { finish = resolve; });
-    const client: RosterClient = { scripts: () => ['Miner'], selectedScript: () => 'Miner', readSettings: () => ({}), assignScript: script => writeProfileScript('alice', script), copySettings: (script, values) => replaceScriptSettings('alice', script, values),
-        configureScript: async (script, values, start) => {
-            profiles[0].slot!.scriptState = 'stopped';
-            if (values) replaceScriptSettings('alice', script, values);
-            if (!values || start) writeProfileScript('alice', script);
-            if (start) profiles[0].slot!.scriptState = 'running';
-        }, startScript: () => {}, stopScript: () => {}, travelTo: () => waiting, editSettings: async () => {} };
-    const running = new RosterActions({ profiles: () => profiles, client: () => client, setWorld: async () => true });
-    panel.close(); panel.el.remove();
-    const busyPanel = new RosterPanel(running, { tabs: () => ['Main', 'Miners'], activeTab: () => 'Miners', worldRouting: true, edit: () => {} });
-    document.body.append(busyPanel.el); busyPanel.open();
-    select('alice'); get('[data-action="travel"]').click();
+    client.travelTo = () => waiting;
+    select('alice'); select('bob'); get('[data-action="travel"]').click();
     get('#mbx-roster-apply').focus();
     get('#mbx-roster-apply').click();
+    await settle();
+    expect(get('[data-profile="alice"] .is-pending').textContent).toBe('Waiting…');
+    expect(get('[data-profile="bob"] .is-skipped').textContent).toBe('Load this profile first.');
     expect(document.activeElement === get('#mbx-roster-close')).toBe(true);
     expect(get<HTMLButtonElement>('#mbx-roster-apply').disabled).toBe(true);
     expect(get<HTMLInputElement>('[data-profile="alice"] input').disabled).toBe(true);
     expect(get<HTMLSelectElement>('#mbx-roster-destination').disabled).toBe(true);
-    finish(); await settle(); busyPanel.refresh();
+    finish(); await settle(); panel.refresh();
     expect(get('[data-profile="alice"]').textContent).toContain('WalkTo started: Lumbridge.');
+    expect(get('[data-profile="bob"] .is-skipped').textContent).toBe('Load this profile first.');
     expect(actions.busy).toBe(false);
 });
 

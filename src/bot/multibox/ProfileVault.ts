@@ -165,6 +165,7 @@ export class ProfileVault {
     private persistTail = Promise.resolve();
     private persistGeneration = 0;
     private worldTail = Promise.resolve();
+    private pendingImport: Promise<void> | null = null;
 
     private sharedTail = Promise.resolve();
     private sharedTabs: { tabs: string[]; assignments: Map<string, string> } | null = null;
@@ -285,6 +286,7 @@ export class ProfileVault {
     }
 
     async unlock(pass: string): Promise<boolean> {
+        if (this.pendingImport) return this.afterImport(() => this.unlock(pass));
         const blob = parseBlob(this.storage ? this.storage!.getItem(KEY) : null);
         if (!blob) {
             return false;
@@ -341,22 +343,44 @@ export class ProfileVault {
         return { profiles: this.list(), ...this.tabState() };
     }
 
-    async replaceAll(data: { profiles: Profile[]; tabs: string[]; activeTab: string }): Promise<void> {
+    private afterImport<T>(change: () => Promise<T>): Promise<T> {
+        const generation = this.persistGeneration;
+        return this.pendingImport!.then(() => {
+            if (generation !== this.persistGeneration) throw new Error('Vault changed before the accounts were saved.');
+            return change();
+        });
+    }
+
+    async replaceAll(data: VaultPayload): Promise<void> {
         if (this.shared) return this.sharedChange(draft => draft.replaceAll(data), false);
+        if (this.pendingImport) return this.afterImport(() => this.replaceAll(data));
         this.assertUnlocked();
         const profiles = profilesFrom(data.profiles);
         if (profiles.length !== data.profiles.length) {
             throw new Error('profile list contains an invalid entry');
         }
         assertTabStateValid(data.tabs, data.activeTab, profiles);
-        this.cache = profiles.map(p => ({ ...p }));
-        this.customTabs = [...data.tabs];
-        this.active = data.activeTab;
-        await this.persist();
+        const payload = { profiles, tabs: [...data.tabs], activeTab: data.activeTab };
+        const generation = this.persistGeneration;
+        const write = Promise.all([this.worldTail, this.persistTail]).then(async () => {
+            if (generation !== this.persistGeneration) return;
+            await this.persist(undefined, payload);
+            if (generation !== this.persistGeneration) return;
+            this.cache = profiles;
+            this.customTabs = payload.tabs;
+            this.active = payload.activeTab;
+        });
+        this.pendingImport = write.catch(() => {});
+        try {
+            await write;
+        } finally {
+            this.pendingImport = null;
+        }
     }
 
     async upsert(p: Profile): Promise<void> {
         if (this.shared) return this.sharedChange(draft => draft.upsert(p));
+        if (this.pendingImport) return this.afterImport(() => this.upsert(p));
         if (p.world !== undefined) {
             assertWorld(p.world);
         }
@@ -390,6 +414,7 @@ export class ProfileVault {
 
     async setWorld(username: string, world: WorldNumber): Promise<void> {
         if (this.shared) return this.sharedChange(draft => draft.setWorld(username, world));
+        if (this.pendingImport) return this.afterImport(() => this.setWorld(username, world));
         assertWorld(world);
         const generation = this.persistGeneration;
         const change = this.worldTail.then(async () => {
@@ -422,6 +447,7 @@ export class ProfileVault {
         const tab = name.trim();
         if (!tab || !usernames.length) throw new Error('Choose profiles and enter a group name.');
         if (this.shared) return this.sharedChange(draft => draft.assignGroup(usernames, tab));
+        if (this.pendingImport) return this.afterImport(() => this.assignGroup(usernames, tab));
         const saved = new Set(this.assertUnlocked().map(p => p.username));
         if (usernames.some(username => !saved.has(username))) throw new Error('Only saved profiles can be grouped.');
         const tabs = [...this.customTabs];
@@ -431,12 +457,14 @@ export class ProfileVault {
 
     async remove(username: string): Promise<void> {
         if (this.shared) return this.sharedChange(draft => draft.remove(username));
+        if (this.pendingImport) return this.afterImport(() => this.remove(username));
         this.cache = this.assertUnlocked().filter(x => x.username !== username);
         await this.persist();
     }
 
     async reorder(usernames: string[]): Promise<void> {
         if (this.shared) return this.sharedChange(draft => draft.reorder(usernames));
+        if (this.pendingImport) return this.afterImport(() => this.reorder(usernames));
         const all = this.assertUnlocked();
         const byUsername = new Map(all.map(profile => [profile.username, profile]));
         const seen = new Set<string>();
@@ -464,6 +492,7 @@ export class ProfileVault {
     }
 
     async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab: string): Promise<void> {
+        if (this.pendingImport) return this.afterImport(() => this.saveTabState(tabs, tabByUser, activeTab));
         if (this.shared) {
             const requested = tabs.map(tab => tab.trim());
             assertTabStateValid(requested, activeTab, []);
@@ -522,13 +551,13 @@ export class ProfileVault {
         return this.cache;
     }
 
-    private persist(expected?: string | null): Promise<void> {
+    private persist(expected?: string | null, replacement?: VaultPayload): Promise<void> {
         if (!this.storage || !this.key || !this.salt || !this.cache) {
             return Promise.resolve();
         }
         const key = this.key;
         const salt = this.salt;
-        const payload: VaultPayload = { profiles: this.cache, tabs: this.customTabs, activeTab: this.active };
+        const payload = replacement ?? { profiles: this.cache, tabs: this.customTabs, activeTab: this.active };
         const plaintext = new TextEncoder().encode(JSON.stringify(payload));
         const generation = this.persistGeneration;
         const write = this.persistTail.then(async () => {
