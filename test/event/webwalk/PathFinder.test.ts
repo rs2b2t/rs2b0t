@@ -2,6 +2,35 @@ import { describe, expect, test } from 'bun:test';
 import { PathFinder, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
 import { isolatedLandingFinder } from '../../lib/navCollision.js';
 
+for (const version of [1, 2]) {
+    test(`LCNV v${version} indexes tile masks by level and enumerates squares in numeric order`, () => {
+        const perLevel = 4096 + 512 + (version === 2 ? 2048 : 0);
+        const bytes = new Uint8Array(10 + 6 + 3 * perLevel);
+        bytes.set([0x4c, 0x43, 0x4e, 0x56, version, 1, 0, 0, 2, 0]);
+        bytes.set([50, 49, 0b1001], 10);
+        const high = 13 + perLevel;
+        bytes[high] = 8;
+        bytes[high + 4096] = 2;
+        if (version === 2) bytes[high + 4096 + 512] = 0x73;
+        bytes.set([1, 2, 1], high + perLevel);
+        const finder = new PathFinder(bytes);
+
+        expect(finder.populatedSquares()).toEqual([
+            { level: 0, mx: 1, mz: 2 },
+            { level: 0, mx: 50, mz: 49 },
+            { level: 3, mx: 50, mz: 49 }
+        ]);
+        const masks = (x: number, z: number, level: number) => [
+            finder.walkable(x, z, level), finder.exitMask(x, z, level), finder.wallMask(x, z, level)
+        ];
+        expect(masks(3200, 3136, 3)).toEqual([false, 8, version === 2 ? 3 : 0]);
+        expect(masks(3200, 3137, 3)).toEqual([true, 0, version === 2 ? 7 : 0]);
+        expect(masks(3200, 3136, 0)).toEqual([false, 0, 0]);
+        expect(masks(3200, 3137, 1)).toEqual([false, 0, 0]);
+        expect(masks(3264, 3137, 3)).toEqual([false, 0, 0]);
+    });
+}
+
 function fullyWalkablePack(exitMask = 0xff, mx = 0, mz = 0): Uint8Array {
     const perLevel = 4096 + 512;
     const bytes = new Uint8Array(10 + 3 + 2 * perLevel);

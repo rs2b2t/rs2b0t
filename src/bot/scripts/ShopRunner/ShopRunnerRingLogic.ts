@@ -1,16 +1,22 @@
 import { unitPrice } from '#/bot/api/shop/StockModel.js';
-import type { AccountView, Route, RouteCluster, ShopRecord } from '#/bot/api/shop/types.js';
+import type { AccountView, Route, RouteCluster, ShopItemDef, ShopRecord } from '#/bot/api/shop/types.js';
 
-export function buyoutCostFromBaseline(rec: ShopRecord, obj: string): number {
+export function chosenShopItem(rec: ShopRecord, obj: string, chosen: ReadonlySet<string>): ShopItemDef | undefined {
     const item = rec.items.find(i => i.obj === obj);
-    if (!item) {
-        return 0;
-    }
+    return item && chosen.has(item.name.toLowerCase()) ? item : undefined;
+}
+
+function itemBuyoutCost(rec: ShopRecord, item: ShopItemDef): number {
     let cost = 0;
     for (let stock = item.baseline; stock > 0; stock--) {
         cost += unitPrice(item, { sell: rec.sell, delta: rec.delta }, stock);
     }
     return cost;
+}
+
+export function buyoutCostFromBaseline(rec: ShopRecord, obj: string): number {
+    const item = rec.items.find(i => i.obj === obj);
+    return item ? itemBuyoutCost(rec, item) : 0;
 }
 
 export function estimateClusterGp(cluster: RouteCluster, db: Record<string, ShopRecord>, chosen: ReadonlySet<string>): number {
@@ -21,9 +27,9 @@ export function estimateClusterGp(cluster: RouteCluster, db: Record<string, Shop
             continue;
         }
         for (const buy of shop.buys) {
-            const item = rec.items.find(i => i.obj === buy.obj);
-            if (item && chosen.has(item.name.toLowerCase())) {
-                total += buyoutCostFromBaseline(rec, buy.obj);
+            const item = chosenShopItem(rec, buy.obj, chosen);
+            if (item) {
+                total += itemBuyoutCost(rec, item);
             }
         }
     }
@@ -60,8 +66,7 @@ export function clusterSellsChosen(cluster: RouteCluster, db: Record<string, Sho
             continue;
         }
         for (const buy of shop.buys) {
-            const item = rec.items.find(i => i.obj === buy.obj);
-            if (item && chosen.has(item.name.toLowerCase())) {
+            if (chosenShopItem(rec, buy.obj, chosen)) {
                 return true;
             }
         }

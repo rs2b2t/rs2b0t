@@ -27,6 +27,7 @@ export default class OnDemand extends OnDemandProvider {
     running: boolean = true;
     app: Client;
     requests: LinkList2<OnDemandRequest> = new LinkList2();
+    private readonly pendingByArchive: Map<number, OnDemandRequest>[] = [];
     completed: LinkList<OnDemandRequest> = new LinkList();
     message: string = '';
     cycle: number = 0;
@@ -43,6 +44,7 @@ export default class OnDemand extends OnDemandProvider {
 
         const version: string[] = ['model_version', 'anim_version', 'midi_version', 'map_version'];
         for (let i = 0; i < 4; i++) {
+            this.pendingByArchive[i] = new Map();
             const data = versionlist.read(version[i]);
             if (!data) {
                 throw new Error();
@@ -220,10 +222,9 @@ export default class OnDemand extends OnDemandProvider {
             return;
         }
 
-        for (let req = this.requests.head(); req !== null; req = this.requests.next()) {
-            if (req.archive === archive && req.file === file) {
-                return;
-            }
+        const pending = this.pendingByArchive[archive];
+        if (pending.has(file)) {
+            return;
         }
 
         const req = new OnDemandRequest();
@@ -232,6 +233,7 @@ export default class OnDemand extends OnDemandProvider {
         req.urgent = true;
 
         this.requests.push(req);
+        pending.set(file, req);
         this.postWorker({
             type: 'request',
             archive,
@@ -252,7 +254,10 @@ export default class OnDemand extends OnDemandProvider {
             return null;
         }
 
-        req.unlink2();
+        if (req.prev2) {
+            this.pendingByArchive[req.archive].delete(req.file);
+            req.unlink2();
+        }
 
         if (req.data === null) {
             return req;
@@ -356,6 +361,7 @@ export default class OnDemand extends OnDemandProvider {
             console.error(this.workerError);
             this.terminateWorker();
             this.requests = new LinkList2();
+            for (const pending of this.pendingByArchive) pending.clear();
             this.completed.clear();
         };
 
@@ -403,10 +409,7 @@ export default class OnDemand extends OnDemandProvider {
     }
 
     private receiveCompleted(archive: number, file: number, urgent: boolean, data: ArrayBuffer | null): void {
-        let req = this.findRequest(archive, file);
-        if (!req) {
-            req = new OnDemandRequest();
-        }
+        const req = this.pendingByArchive[archive]?.get(file) ?? new OnDemandRequest();
 
         req.archive = archive;
         req.file = file;
@@ -414,15 +417,5 @@ export default class OnDemand extends OnDemandProvider {
         req.data = data ? new Uint8Array(data) : null;
 
         this.completed.push(req);
-    }
-
-    private findRequest(archive: number, file: number): OnDemandRequest | null {
-        for (let req = this.requests.head(); req !== null; req = this.requests.next()) {
-            if (req.archive === archive && req.file === file) {
-                return req;
-            }
-        }
-
-        return null;
     }
 }

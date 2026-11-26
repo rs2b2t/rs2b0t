@@ -272,7 +272,7 @@ const CARDINAL_SIDES: readonly [number, number, number][] = [
 const FOOTPRINT_RADIUS = 2;
 
 export class PathFinder {
-    private readonly slots: (LevelSlot | null)[] = new Array(4 << 16).fill(null);
+    private readonly slots = new Map<number, LevelSlot>();
     readonly mapsquares: number;
     readonly members: boolean;
 
@@ -313,7 +313,7 @@ export class PathFinder {
                     wall = pack.subarray(pos, pos + 2048);
                     pos += 2048;
                 }
-                this.slots[(level << 16) | (mx << 8) | mz] = { exit, walk, wall };
+                this.slots.set((level << 16) | (mx << 8) | mz, { exit, walk, wall });
             }
         }
         if (pos !== pack.length) {
@@ -322,19 +322,15 @@ export class PathFinder {
         this.mapsquares = count;
     }
 
-    private slotAt(x: number, z: number, level: number): LevelSlot | null {
-        return this.slots[(level << 16) | ((x >> 6) << 8) | (z >> 6)];
+    private slotAt(x: number, z: number, level: number): LevelSlot | undefined {
+        return this.slots.get((level << 16) | ((x >> 6) << 8) | (z >> 6));
     }
 
     /** Every (level, mapsquare) the pack carries, for full-map sweeps. */
     populatedSquares(): { mx: number; mz: number; level: number }[] {
-        const out: { mx: number; mz: number; level: number }[] = [];
-        for (let key = 0; key < this.slots.length; key++) {
-            if (this.slots[key]) {
-                out.push({ level: key >> 16, mx: (key >> 8) & 0xff, mz: key & 0xff });
-            }
-        }
-        return out;
+        return [...this.slots.keys()]
+            .sort((a, b) => a - b)
+            .map(key => ({ level: key >> 16, mx: (key >> 8) & 0xff, mz: key & 0xff }));
     }
 
     /** Transport/door/stair hops leaving a tile, for connectivity analysis. */
