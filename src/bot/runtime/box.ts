@@ -1,5 +1,5 @@
 import { botFrameUrl } from '../../client/config/worlds.js';
-import { desktopStorage, isEncodedSettingKey, settingsStoragePrefix, storeKeys } from './desktopStorage.js';
+import { desktopStorage, isEncodedSettingKey, setProfileMigrationKey, settingsStoragePrefix, storeKeys } from './desktopStorage.js';
 
 // docs/decisions/architecture.md#per-instance-storage
 // Why: same-origin multibox frames share sessionStorage, so `?box=<account>` namespaces each bot.
@@ -13,7 +13,7 @@ export function boxId(): string {
 
 const setProfilePrefix = settingsStoragePrefix + 'profile/';
 
-// Why: a colon after the empty username could make this key belong to a colon-prefixed profile.
+// Why: every profile prefix contains another colon after rs2b0t:.
 function encodeSuffix(suffix: string): string {
     return suffix.replaceAll('%', '%25').replaceAll(':', '%3A');
 }
@@ -40,8 +40,6 @@ export function boxSuffix(key: string, prefix: string, id: string): string | nul
 export function isLegacySetProfileSetting(suffix: string): boolean {
     return /^set:[^:]+:/.test(suffix);
 }
-
-const setProfileMigrationKey = 'rs2b0t:set-profile-settings-v1';
 
 export function disableLegacySetProfileSettings(store: Storage): void {
     store.setItem(setProfileMigrationKey, '1');

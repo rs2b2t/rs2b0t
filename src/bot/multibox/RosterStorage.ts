@@ -61,12 +61,13 @@ export function replaceScriptSettings(username: string, script: string, values: 
 
 export function storedScripts(usernames: string[]): string[] {
     const scripts = new Set<string>();
-    const savedKeys = keys(usernames.includes('set') ? 'set' : undefined);
+    const rawKeys = keys();
+    const setKeys = usernames.includes('set') ? keys('set') : [];
     for (const username of usernames) {
         const selected = readProfileScript(username);
         if (selected) scripts.add(selected);
         const prefix = boxKey('set:', username);
-        for (const key of savedKeys) {
+        for (const key of username === 'set' ? setKeys : rawKeys) {
             const suffix = boxKeyTail(key, prefix);
             if (suffix === null) continue;
             const end = suffix.indexOf(':');

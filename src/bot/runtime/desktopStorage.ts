@@ -37,7 +37,8 @@ function resolveDesktopStorage(): DesktopStorage | undefined {
 
 export const desktopStorage = resolveDesktopStorage();
 
-export const settingsStoragePrefix = 'rs2b0t::';
+export const setProfileMigrationKey = 'rs2b0t:set-profile-settings-v1';
+export const settingsStoragePrefix = 'rs2b0t:set-settings-v1/';
 
 export function isEncodedSettingKey(key: string): boolean {
     return key.startsWith(settingsStoragePrefix) && !key.includes(':', settingsStoragePrefix.length);

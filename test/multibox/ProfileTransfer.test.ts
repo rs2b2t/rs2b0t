@@ -123,7 +123,13 @@ describe('ProfileTransfer', () => {
     test('reading missing global settings for set uses the desktop snapshot', () => {
         const result = Bun.spawnSync(['bun', 'test/fixtures/profile-transfer-desktop.ts', '--settings']);
         expect(result.exitCode, result.stderr.toString()).toBe(0);
-        expect(JSON.parse(result.stdout.toString())).toEqual({ threshold: 20, syncReads: 0 });
+        expect(JSON.parse(result.stdout.toString())).toEqual({ threshold: 20, syncReads: 0, keyReads: 1 });
+    });
+
+    test('migrating native storage keeps the durable marker for cleared set settings', () => {
+        const result = Bun.spawnSync(['bun', 'test/fixtures/profile-transfer-desktop.ts', '--settings', '--migrate']);
+        expect(result.exitCode, result.stderr.toString()).toBe(0);
+        expect(JSON.parse(result.stdout.toString()).threshold).toBe(20);
     });
 
     test('desktop export respects a profile setting cleared in another session', () => {
@@ -293,7 +299,7 @@ describe('ProfileTransfer', () => {
     });
 
     test('round-trips distinct v1 settings for set and colon-prefixed profiles after a fresh session', () => {
-        const neighbour = ':profile/set%3AMiner%3A';
+        const neighbour = boxKey('set:Miner:', 'set').slice('rs2b0t:'.length);
         const names = ['set', ':profile:set', neighbour];
         const profiles = names.map(username => ({ username, password: '' }));
         const storage = {
