@@ -535,8 +535,10 @@ export default class ClientBuild {
 
     static noise(x: number, y: number): number {
         const n: number = x + y * 57;
-        const n1: bigint = BigInt((n << 13) ^ n);
-        return Number(((n1 * (n1 * n1 * 15731n + 789221n) + 1376312589n) & 0x7fffffffn) >> 19n) & 0xff;
+        const n1: number = (n << 13) ^ n;
+        const square: number = Math.imul(n1, n1);
+        const hash: number = Math.imul(n1, Math.imul(square, 15731) + 789221) + 1376312589;
+        return (hash >>> 19) & 0xff;
     }
 
     fadeAdjacent(startZ: number, startX: number, endZ: number, endX: number) {
