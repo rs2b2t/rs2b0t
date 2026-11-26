@@ -36,25 +36,16 @@ export default class Pix8 extends Pix2D {
     }
 
     private static readFrame(sheet: SpriteSheet, bpal: Int32Array): Pix8 {
-        const { dat } = sheet;
-        const { xof, yof, wi, hi, encoding } = sheet.readFrameHeader();
-        const image: Pix8 = new Pix8(wi, hi, bpal);
-        image.xof = xof;
-        image.yof = yof;
+        const frame = sheet.readFrameHeader();
+        const image: Pix8 = new Pix8(frame.wi, frame.hi, bpal);
+        image.xof = frame.xof;
+        image.yof = frame.yof;
         image.owi = sheet.owi;
         image.ohi = sheet.ohi;
 
-        if (encoding === 0) {
-            for (let i: number = 0; i < image.wi * image.hi; i++) {
-                image.data[i] = dat.g1b();
-            }
-        } else if (encoding === 1) {
-            for (let x: number = 0; x < image.wi; x++) {
-                for (let y: number = 0; y < image.hi; y++) {
-                    image.data[x + y * image.wi] = dat.g1b();
-                }
-            }
-        }
+        sheet.readFramePixels(frame, (offset, paletteIndex) => {
+            image.data[offset] = paletteIndex;
+        });
 
         return image;
     }
