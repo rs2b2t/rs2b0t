@@ -340,7 +340,7 @@ test('a stale wall renames only the current members of a group', async () => {
     });
 });
 
-test('a stale wall restores saved groups when the rename destination already exists', async () => {
+test('a stale wall discards a deletion queued after a conflicting rename', async () => {
     await withWall('local', async wall => {
         await vault.saveTabState(['Old'], new Map([['alice', 'Old']]), 'Old');
         document.getElementById('mbx-add')!.click();
@@ -350,8 +350,9 @@ test('a stale wall restores saved groups when the rename destination already exi
         const other = new ProfileVault();
         expect(await other.unlock('test-passphrase')).toBe(true);
         await other.assignGroup(['bob'], 'Fleet');
-        wall.renameTab('Old', 'Fleet');
-        await waitFor(() => wall.controller.tabs().includes('Old') && wall.controller.tabs().includes('Fleet'));
+        expect(wall.renameTab('Old', 'Fleet')).toBe(true);
+        expect(wall.removeTab('Fleet')).toBe(true);
+        await waitFor(() => wall.controller.tabs().includes('Old'));
 
         const reopened = new ProfileVault();
         expect(await reopened.unlock('test-passphrase')).toBe(true);
@@ -360,6 +361,11 @@ test('a stale wall restores saved groups when the rename destination already exi
         expect(wall.controller.tabs()).toEqual(['Main', 'Old', 'Fleet']);
         expect(wall.controller.activeTab()).toBe('Old');
         expect(wall.slots()[0].tab).toBe('Old');
+
+        expect(wall.setSlotTab(wall.slots()[0].id, 'Fleet')).toBe(true);
+        await waitFor(() => vault.list()[0].tab === 'Fleet');
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.list().map(p => p.tab)).toEqual(['Fleet', 'Fleet']);
     });
 });
 
@@ -389,23 +395,33 @@ test('deleting a stale group moves only its remaining loaded members to the prio
     });
 });
 
-test('a chooser re-save can move a profile back to its original group', async () => {
+test('a chooser re-save focuses an already loaded profile in its saved group', async () => {
     await withWall('local', async wall => {
         await vault.assignGroup(['alice'], 'Original');
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!chooserRow('alice'));
+        await loadChooserRow('alice');
+        const loaded = wall.slots()[0];
         document.getElementById('mbx-add')!.click();
         await waitFor(() => !!chooserRow('alice'));
         const other = new ProfileVault();
         expect(await other.unlock('test-passphrase')).toBe(true);
         await other.assignGroup(['alice'], 'Remote');
         submitChooserProfile('alice', 'updated');
+        await waitFor(() => !chooserRow('alice'));
+        expect(wall.slots()).toHaveLength(1);
+        expect(wall.slots()[0]).toMatchObject({ id: loaded.id, tab: 'Remote', focused: true });
+        expect(wall.controller.activeTab()).toBe('Remote');
         await waitFor(() => vault.tabState().activeTab === 'Remote');
-        expect(wall.slots()[0].tab).toBe('Remote');
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.tabState().activeTab).toBe('Remote');
+        expect(reopened.list()[0].tab).toBe('Remote');
 
         const key = 'rs2b0t:multibox:profiles';
         const before = localStorage.getItem(key);
         expect(wall.setSlotTab(wall.slots()[0].id, 'Original')).toBe(true);
         await waitFor(() => localStorage.getItem(key) !== before);
-        const reopened = new ProfileVault();
         expect(await reopened.unlock('test-passphrase')).toBe(true);
         expect(reopened.list()[0]).toEqual({ username: 'alice', password: 'updated', world: 1, tab: 'Original' });
     });
@@ -493,6 +509,25 @@ test('a relocked wall closes the roster and preserves replacement groups on its 
         const reopened = new ProfileVault();
         expect(await reopened.unlock('replacement')).toBe(true);
         expect(reopened.snapshot()).toEqual({ profiles, tabs: ['Fleet'], activeTab: 'Main' });
+    });
+});
+
+test('a reset during the unlock prompt cancels the pending wall action', async () => {
+    await withWall('local', async wall => {
+        const other = new ProfileVault();
+        await other.reset();
+        await vault.refresh();
+        await other.setup('replacement');
+
+        document.getElementById('mbx-add')!.click();
+        const importing = wall.importProfiles([{ username: 'carol', password: 'fixture' }]);
+        document.querySelector<HTMLInputElement>('#mbx-vault-pass')!.value = 'replacement';
+        document.getElementById('mbx-vault-go')!.click();
+        await other.reset();
+        await vault.refresh();
+        expect(await importing).toBe(0);
+        expect(vault.status()).toBe('empty');
+        expect(document.querySelector('#mbx-new-user')!.closest<HTMLElement>('.mbx-chooser-overlay')!.hidden).toBe(true);
     });
 });
 

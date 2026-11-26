@@ -71,6 +71,7 @@ function boot(): void {
     let draggingId: number | null = null;
     let suppressClick = false;
     let orderWrite = Promise.resolve();
+    let recoveringTabs = false;
 
     function railTiles(): HTMLElement[] {
         return orderedSlotElements(rail);
@@ -96,9 +97,14 @@ function boot(): void {
         }
         const customTabs = controller.tabs().slice(1);
         const activeTab = controller.activeTab();
-        orderWrite = orderWrite.then(() => vault.saveTabState(customTabs, tabByUser, activeTab, change, previousTabs ?? customTabs)).catch(err => {
+        orderWrite = orderWrite.then(() => {
+            if (!recoveringTabs) return vault.saveTabState(customTabs, tabByUser, activeTab, change, previousTabs ?? customTabs);
+        }).catch(err => {
             console.error('[rs2b0t] failed to save tab state', err);
-            if (change && 'to' in change) refreshSavedAccounts(true);
+            if (change && 'to' in change) {
+                recoveringTabs = true;
+                refreshSavedAccounts();
+            }
         });
     }
 
@@ -300,9 +306,10 @@ function boot(): void {
         }
     });
 
-    const chooser = new ProfileChooser((p, focus) => {
+    const chooser = new ProfileChooser((p, focus, savedTab) => {
         if (p.tab) controller.addTab(p.tab);
         const slot = controller.add(p) ?? controller.snapshot().find(s => normalizeUsername(s.username) === normalizeUsername(p.username));
+        if (slot && savedTab) controller.setSlotTab(slot.id, savedTab);
         if (focus && slot) controller.focus(slot.id);
         renderRail();
         persistTabState(p.tab === undefined && slot ? new Map([[p.username, slot.tab]]) : undefined);
@@ -319,20 +326,22 @@ function boot(): void {
 
     const prompt = new VaultPrompt(vault);
     document.body.appendChild(prompt.el);
-    function refreshSavedAccounts(restoreActiveTab = false): void {
+    function refreshSavedAccounts(): void {
         const pendingWrites = orderWrite;
         void pendingWrites.then(() => vault.refresh()).then(() => {
             if (vault.status() !== 'unlocked') {
                 tabsHydrated = false;
+                recoveringTabs = false;
                 chooser.close();
                 roster?.close();
                 return;
             }
             if (pendingWrites !== orderWrite) {
-                if (restoreActiveTab) refreshSavedAccounts(true);
+                if (recoveringTabs) refreshSavedAccounts();
                 return;
             }
-            syncSavedGroups(restoreActiveTab ? vault.tabState().activeTab : undefined);
+            syncSavedGroups(recoveringTabs ? vault.tabState().activeTab : undefined);
+            recoveringTabs = false;
             if (!chooser.el.hidden) chooser.open();
             roster?.refresh();
         }).catch(error => console.error('[rs2b0t] failed to refresh saved accounts', error));
@@ -345,10 +354,9 @@ function boot(): void {
 
     async function ensureUnlocked(): Promise<boolean> {
         const ok = await prompt.ensureUnlocked();
-        if (ok && !tabsHydrated) {
-            syncSavedGroups();
-        }
-        return ok;
+        if (!ok || vault.status() !== 'unlocked') return false;
+        if (!tabsHydrated) syncSavedGroups();
+        return true;
     }
 
     async function changeProfileWorld(profile: Profile, world: WorldNumber): Promise<boolean> {
@@ -473,7 +481,10 @@ function boot(): void {
         activeTab: () => controller.activeTab(),
         worldRouting,
         assignGroup: (usernames, name) => {
-            const save = orderWrite.then(() => vault.assignGroup(usernames, name));
+            const save = orderWrite.then(() => {
+                if (recoveringTabs) throw new Error('Saved groups changed. Try again after the wall refreshes.');
+                return vault.assignGroup(usernames, name);
+            });
             orderWrite = save.catch(() => {});
             return save.then(async () => {
                 let pending;

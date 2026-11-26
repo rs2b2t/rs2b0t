@@ -553,8 +553,9 @@ export class ProfileVault {
         }
         if (this.shared) {
             await this.sharedChange(async draft => {
-                if (change && 'to' in change && draft.customTabs.includes(change.to)) {
-                    throw new Error(`Group '${change.to}' already exists.`);
+                if (change && 'to' in change) {
+                    if (!draft.customTabs.includes(change.from)) throw new Error(`Group '${change.from}' no longer exists.`);
+                    if (draft.customTabs.includes(change.to)) throw new Error(`Group '${change.to}' already exists.`);
                 }
                 const previous = previousTabs ?? this.sharedTabs;
                 const removed = new Set(previous.filter(tab => !requested.includes(tab)));
