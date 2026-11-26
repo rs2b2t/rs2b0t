@@ -52,6 +52,16 @@ export class TypedArray4d<T> extends Array<Array<Array<Array<T>>>> {
     }
 }
 
+export class Uint8Array2d extends Array<Uint8Array> {
+    constructor(width: number, height: number) {
+        super(width);
+        const cells = new Uint8Array(width * height);
+        for (let x = 0; x < width; x++) {
+            this[x] = cells.subarray(x * height, (x + 1) * height);
+        }
+    }
+}
+
 export class Uint8Array3d extends Array<Array<Uint8Array>> {
     constructor(length: number, width: number, height: number) {
         super(length);
