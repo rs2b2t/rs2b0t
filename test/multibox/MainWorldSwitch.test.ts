@@ -627,10 +627,11 @@ test('creating a profile in the active tab preserves the imported rows', async (
 });
 
 test.each([
-    { active: 'Work', tabs: ['Fleet'], expected: 'Fleet' },
-    { active: 'Main', tabs: ['Fleet'], expected: 'Fleet' },
-    { active: 'Main', tabs: ['Fleet', 'Work'], expected: 'Work' }
-])('picking a loaded row from $active preserves a replacement with tabs $tabs', async ({ active, tabs, expected }) => {
+    { pick: '.mbx-profile-row', active: 'Work', tabs: ['Fleet'], expected: 'Fleet' },
+    { pick: '.mbx-profile-row', active: 'Main', tabs: ['Fleet'], expected: 'Fleet' },
+    { pick: '.mbx-profile-row', active: 'Main', tabs: ['Fleet', 'Work'], expected: 'Work' },
+    { pick: '.mbx-load-group', active: 'Work', tabs: ['Fleet', 'Work'], expected: 'Fleet' }
+])('picking $pick from $active preserves a replacement with tabs $tabs through the next edit', async ({ pick, active, tabs, expected }) => {
     await withWall('local', async wall => {
         await openSettings().importText(serializeProfileFile({
             profiles: [{ username: 'earlier', password: 'fixture', tab: 'Work' }],
@@ -638,26 +639,36 @@ test.each([
         }));
         const [slot] = wall.slots();
         document.getElementById('mbx-add')!.click();
-        await waitFor(() => !!document.querySelector('.mbx-profile-row'));
+        await waitFor(() => !!document.querySelector(pick));
         const other = new ProfileVault();
         expect(await other.unlock('test-passphrase')).toBe(true);
         const backup = { profiles: [{ username: 'saved', password: 'fixture', tab: 'Fleet' }], tabs, activeTab: 'Fleet' };
         await other.replaceAll(backup);
         const key = 'rs2b0t:multibox:profiles';
-        const writes = spyOn(localStorage, 'setItem');
+        const beforePick = localStorage.getItem(key);
+        const selections = spyOn(vault, 'saveActiveTab');
         try {
-            document.querySelector<HTMLElement>('.mbx-profile-row')!.click();
+            document.querySelector<HTMLElement>(pick)!.click();
+            await Promise.resolve();
+            await Promise.all(selections.mock.results.map(result => result.value));
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.snapshot()).toEqual({ ...backup, activeTab: expected });
+            if (active === 'Work') expect(localStorage.getItem(key)).toBe(beforePick);
+
+            const beforeEdit = localStorage.getItem(key);
+            expect(await wall.addTab('Local')).toBe(true);
+            await waitFor(() => localStorage.getItem(key) !== beforeEdit);
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.snapshot()).toEqual({ ...backup, tabs: [...tabs, 'Local'], activeTab: expected });
+
             wall.controller.addTab('Stale');
             window.dispatchEvent(new StorageEvent('storage', { key }));
             await waitFor(() => !wall.controller.tabs().includes('Stale'));
             expect(wall.slots().map(s => [s.id, s.tab])).toEqual([[slot.id, 'Work']]);
             expect(wall.controller.activeTab()).toBe('Work');
-            const reopened = new ProfileVault();
-            expect(await reopened.unlock('test-passphrase')).toBe(true);
-            expect(reopened.snapshot()).toEqual({ ...backup, activeTab: expected });
-            if (active === 'Work') expect(writes.mock.calls.filter(([name]) => name === key)).toHaveLength(0);
         } finally {
-            writes.mockRestore();
+            selections.mockRestore();
         }
     });
 });

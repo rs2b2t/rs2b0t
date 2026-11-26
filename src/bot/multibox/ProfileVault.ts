@@ -533,13 +533,13 @@ export class ProfileVault {
         return this.storage ? this.sharedChange(select) : select(this);
     }
 
-    async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab?: string, replaced?: TabReplacement): Promise<void> {
-        if (this.pendingReplacement) return this.afterReplacement(() => this.saveTabState(tabs, tabByUser, activeTab, replaced));
-        if (this.shared) {
+    async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab?: string, replaced?: TabReplacement, previousTabs?: string[]): Promise<void> {
+        if (this.pendingReplacement) return this.afterReplacement(() => this.saveTabState(tabs, tabByUser, activeTab, replaced, previousTabs));
+        if (this.shared || (this.storage && previousTabs)) {
             const requested = tabs.map(tab => tab.trim());
             assertTabStateValid(requested, activeTab ?? MAIN_TAB, []);
             return this.sharedChange(async draft => {
-                const previous = this.sharedTabs;
+                const previous = previousTabs ?? this.sharedTabs;
                 const removed = new Set(previous.filter(tab => !requested.includes(tab)));
                 const merged = draft.customTabs.filter(tab => !removed.has(tab));
                 const ordered = requested.filter(tab => previous.includes(tab) && merged.includes(tab));

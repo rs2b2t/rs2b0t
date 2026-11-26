@@ -121,7 +121,11 @@ function boot(): void {
         orderWrite = orderWrite.then(() => vault.saveActiveTab(tab)).catch(err => console.error('[rs2b0t] failed to save active tab', err));
     }
 
-    function persistTabState(selected?: string, moved: SlotSnapshot[] = [], replaced?: TabReplacement): void {
+    function savedWallTabs(): string[] {
+        return controller.tabs().slice(1).filter(tab => !wallOnlyTabs.has(tab));
+    }
+
+    function persistTabState(previousTabs: string[], selected?: string, moved: SlotSnapshot[] = [], replaced?: TabReplacement): void {
         if (vault.status() !== 'unlocked') {
             return;
         }
@@ -139,11 +143,12 @@ function boot(): void {
         wallOnlyTabs = new Set(tabs.filter(tab => wallOnlyTabs.has(tab)));
         const customTabs = tabs.filter(tab => !wallOnlyTabs.has(tab));
         const activeTab = selected === controller.activeTab() && !wallOnlyTabs.has(selected) ? selected : undefined;
-        orderWrite = orderWrite.then(() => vault.saveTabState(customTabs, tabByUser, activeTab, replaced)).catch(err => console.error('[rs2b0t] failed to save tab state', err));
+        orderWrite = orderWrite.then(() => vault.saveTabState(customTabs, tabByUser, activeTab, replaced, previousTabs)).catch(err => console.error('[rs2b0t] failed to save tab state', err));
     }
 
     function mutateTabs(action: () => boolean, movedIds?: () => number[], replaced?: TabReplacement) {
         return afterTabRestore(() => {
+            const previousTabs = savedWallTabs();
             const previousActive = controller.activeTab();
             const ids = new Set(movedIds?.());
             const changed = action();
@@ -153,7 +158,7 @@ function boot(): void {
                 const slots = controller.snapshot();
                 renderRail(slots);
                 const moved = ids.size ? slots.filter(slot => ids.has(slot.id)) : [];
-                persistTabState(active !== previousActive ? active : undefined, moved, replaced);
+                persistTabState(previousTabs, active !== previousActive ? active : undefined, moved, replaced);
             }
             return changed;
         });
@@ -354,7 +359,7 @@ function boot(): void {
                 const saved = vault.list().find(profile => profile.username === p.username);
                 const current = controller.snapshot().find(s => s.id === slot.id);
                 if (saved && current && current.tab !== saved.tab) {
-                    persistTabState(selected !== previousActive ? selected : undefined, [current]);
+                    persistTabState(savedWallTabs(), selected !== previousActive ? selected : undefined, [current]);
                     return;
                 }
             }
@@ -364,10 +369,10 @@ function boot(): void {
         defaultWorld, worldRouting, onWorldChange: worldRouting ? changeProfileWorld : undefined,
         onLoadGroup: (profiles, tab) => {
             mergeSavedTabs(vault.tabState().tabs);
-            if (tab) controller.setActiveTab(tab);
+            const selected = tab && controller.setActiveTab(tab);
             controller.addGroup(profiles);
             renderRail();
-            if (tab) afterTabRestore(() => persistActiveTab(tab));
+            if (selected) afterTabRestore(() => persistActiveTab(tab));
         }
     });
     document.body.appendChild(chooser.el);
