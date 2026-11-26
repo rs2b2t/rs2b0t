@@ -14,7 +14,7 @@ import { Sustain } from '../../../sustain/Sustain.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import Tile from '../../../../geometry/Tile.js';
 import { afterDialogueAction, gotoNpc, openDialogue, pickPreferred, talkThrough, type NpcStop } from '../exec/primitives.js';
-import { gpShort } from '../engine/provisioning.js';
+import { buyOrWait } from '../engine/provisioning.js';
 import { hasName as has } from '../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { questRecord } from '../data/quests.js';
@@ -91,13 +91,6 @@ async function wieldWeapon(log: (m: string) => void): Promise<void> {
     if (await Equipment.equip(WEAPON)) {
         log(`wielded ${WEAPON}`);
     }
-}
-
-function buyOrWait(snap: QuestSnapshot, step: Extract<QuestStep, { kind: 'buy' }>): QuestStep {
-    if (gpShort(snap, step.estGp) > 0) {
-        return waitStep(`need ~${step.estGp} gp for ${step.item}`);
-    }
-    return step;
 }
 
 export function breadPlan(snap: QuestSnapshot, _thievingLevel = 0, _passesUsed = 0): QuestStep {
