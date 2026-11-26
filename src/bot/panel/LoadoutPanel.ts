@@ -43,8 +43,7 @@ export class LoadoutPanel {
     private selected: string | null = null;
     private picker: Target | null = null;
     private query = '';
-    /** Supply row label to the item that row holds. See {@link supplyRow}. */
-    private readonly supplyItem = new Map<string, string>();
+    private readonly supplyRowsByLoadout = new Map<string, Map<string, string>>();
     private renaming = false;
     private iconTries = 0;
     private iconTimer: ReturnType<typeof setTimeout> | null = null;
@@ -126,14 +125,24 @@ export class LoadoutPanel {
         return missing;
     }
 
+    private supplyRowsFor(name: string): Map<string, string> {
+        let rows = this.supplyRowsByLoadout.get(name);
+        if (!rows) {
+            rows = new Map<string, string>();
+            this.supplyRowsByLoadout.set(name, rows);
+        }
+        return rows;
+    }
+
     /** Restore saved carry entries; entries after the six named rows stay unclaimed. */
     private adoptCarry(): void {
         const loadout = this.current();
         if (!loadout) {
             return;
         }
-        const claimed = new Set(this.supplyItem.values());
-        const free = SUPPLY_ROWS.filter(r => !this.supplyItem.has(r.label));
+        const rows = this.supplyRowsFor(loadout.name);
+        const claimed = new Set(rows.values());
+        const free = SUPPLY_ROWS.filter(r => !rows.has(r.label));
         for (const entry of loadout.carry) {
             if (claimed.has(entry.item)) {
                 continue;
@@ -142,7 +151,7 @@ export class LoadoutPanel {
             if (!row) {
                 return;
             }
-            this.supplyItem.set(row.label, entry.item);
+            rows.set(row.label, entry.item);
             claimed.add(entry.item);
         }
     }
@@ -205,16 +214,20 @@ export class LoadoutPanel {
             if (!from) {
                 return;
             }
-            this.commit({ ...from, name: uniqueName(Loadouts.all(), from.name) });
+            const name = uniqueName(Loadouts.all(), from.name);
+            this.supplyRowsByLoadout.set(name, new Map(this.supplyRowsFor(from.name)));
+            this.commit({ ...from, name });
         }));
         bar.appendChild(this.action('delete', 'delete', () => {
             if (this.selected === null) {
                 return;
             }
             Loadouts.save(removeLoadout(Loadouts.all(), this.selected));
+            this.supplyRowsByLoadout.delete(this.selected);
             this.ensureLoadout();
             this.selected = Loadouts.names()[0] ?? null;
             this.picker = null;
+            this.adoptCarry();
             this.render();
         }));
         bar.appendChild(this.action('close', '\u2715', () => this.close()));
@@ -233,7 +246,6 @@ export class LoadoutPanel {
         select.addEventListener('change', () => {
             this.selected = select.value;
             this.picker = null;
-            this.supplyItem.clear();
             this.adoptCarry();
             this.render();
         });
@@ -278,6 +290,8 @@ export class LoadoutPanel {
         const without = removeLoadout(Loadouts.all(), from.name);
         const name = uniqueName(without, typed);
         Loadouts.save(upsertLoadout(without, { ...from, name }));
+        this.supplyRowsByLoadout.set(name, this.supplyRowsFor(from.name));
+        this.supplyRowsByLoadout.delete(from.name);
         this.selected = name;
         this.render();
     }
@@ -369,7 +383,7 @@ export class LoadoutPanel {
         label.textContent = row.label;
         line.appendChild(label);
 
-        const item = this.supplyItem.get(row.label) ?? null;
+        const item = loadout ? this.supplyRowsFor(loadout.name).get(row.label) ?? null : null;
         const entry = item === null ? null : (loadout?.carry.find(e => e.item === item) ?? null);
 
         const pick = el('button', 'rs2b0t-button');
@@ -441,8 +455,9 @@ export class LoadoutPanel {
                 this.commit({ ...loadout, worn: wearItem(loadout.worn, target.slot, record.name) });
                 return;
             }
-            const previous = this.supplyItem.get(target.row.label);
-            this.supplyItem.set(target.row.label, record.name);
+            const rows = this.supplyRowsFor(loadout.name);
+            const previous = rows.get(target.row.label);
+            rows.set(target.row.label, record.name);
             const kept = previous === undefined ? loadout.carry : loadout.carry.filter(e => e.item !== previous);
             const existing = kept.find(e => e.item === record.name);
             this.commit({ ...loadout, carry: setCarry(kept, record.name, existing?.qty ?? 1) });
