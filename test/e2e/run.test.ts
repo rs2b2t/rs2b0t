@@ -161,7 +161,7 @@ test('the deadline releases readers held by an unregistered child', async () => 
     const prefix = join(dir, 'unregistered');
     const start = performance.now();
     const harness = run('open pipes', ['node', serviceFixture, 'parent', prefix, '6000', 'detached', 'unregistered', 'exit'], join(dir, 'log'), 1500);
-    await waitFor(() => existsSync(prefix + '.exited') && exited(Number(readFileSync(prefix + '.exited', 'utf8'))));
+    await waitFor(() => existsSync(prefix + (process.platform === 'win32' ? '.exited' : '.orphan')));
     const pid = Number(readFileSync(prefix + '.pid', 'utf8'));
     try {
         const result = await harness;
@@ -186,25 +186,43 @@ test.skipIf(process.platform === 'win32')('cleanup never signals a retired harne
     const prefix = join(dir, 'retired');
     const cmd = ['node', serviceFixture, 'parent', prefix, '6000', 'detached', 'unregistered', 'ordinary-child', 'exit'];
     const harness = run('retired', cmd, join(dir, 'case.log'), 1500);
-    await waitFor(() => existsSync(prefix + '.exited') && exited(Number(readFileSync(prefix + '.exited', 'utf8'))));
+    const sibling = run('sibling', ['node', serviceFixture, 'parent', join(dir, 'sibling'), '1800'], join(dir, 'sibling.log'), 4000);
+    await waitFor(() => existsSync(prefix + '.orphan'));
     const leader = Number(readFileSync(prefix + '.exited', 'utf8'));
     const ordinary = Number(readFileSync(prefix + '.ordinary', 'utf8'));
     const detached = Number(readFileSync(prefix + '.pid', 'utf8'));
     const kill = process.kill.bind(process);
+    let lastChildExited = false;
+    const replacementSignals: NodeJS.Signals[] = [];
+    function retired() {
+        try { kill(leader, 0); return false; }
+        catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ESRCH') return true;
+            throw error;
+        }
+    }
     const signals = spyOn(process, 'kill').mockImplementation((pid, signal) => {
-        if (pid === -leader && signal === 'SIGKILL') throw Object.assign(new Error('retired group'), { code: 'ESRCH' });
+        if (pid === -leader && lastChildExited && retired()) {
+            if (signal === 'SIGKILL') replacementSignals.push(signal);
+            return true;
+        }
         return kill(pid, signal);
     });
     try {
         kill(ordinary, 'SIGTERM');
         await waitFor(() => exited(ordinary));
+        lastChildExited = true;
         const result = await harness;
         expect(result.status).toBe('timeout');
         expect(result.ms).toBeLessThan(2500);
-        expect(signals).not.toHaveBeenCalledWith(-leader, 'SIGKILL');
+        expect(replacementSignals).toEqual([]);
+        const other = await sibling;
+        expect(other.status).toBe('pass');
+        expect(other.tail).toContain('survived');
     } finally {
         signals.mockRestore();
         if (!exited(detached)) kill(detached, 'SIGKILL');
+        await sibling;
     }
 });
 

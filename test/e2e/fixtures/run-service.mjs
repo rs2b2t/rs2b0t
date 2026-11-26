@@ -15,6 +15,15 @@ if (mode === 'service') {
         const lock = spawnSync('/usr/bin/python3', ['-I', '-c', 'import fcntl; fcntl.flock(0, fcntl.LOCK_EX | fcntl.LOCK_NB)'], { stdio: [fd, 'ignore', 'inherit'] });
         if (lock.status !== 0) throw new Error('Could not acquire fixture lock');
     }
+    if (flags.includes('unregistered') && flags.includes('exit')) {
+        const parent = process.ppid;
+        const timer = setInterval(() => {
+            if (process.ppid === parent) return;
+            writeFileSync(prefix + '.orphan', '');
+            clearInterval(timer);
+        }, 10);
+        timer.unref();
+    }
     writeFileSync(prefix + '.pid', String(process.pid));
     console.log('ready');
     process.send('ready');

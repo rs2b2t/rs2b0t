@@ -12,6 +12,7 @@ const VERBOSE = process.argv.includes('--verbose') || process.argv.includes('-v'
 const HEARTBEAT_MS = 30_000;
 const CLEANUP_MS = 500;
 const active = new Set<() => void>();
+const spawnPosix = process.platform === 'win32' ? undefined : (await import('./posixHarness.js')).spawnHarness;
 
 function openGroups() {
     let prefix = resolve(tmpdir(), 'e2e-groups-');
@@ -68,11 +69,13 @@ export async function run(label: string, cmd: string[], logFile: string, budgetM
     const launch = () => {
         if (ownsServices && process.platform !== 'win32') groups = openGroups();
         const env = { ...process.env, HEADED: '0', ...caseEnv, E2E_SERVICE_GROUPS: groups?.dir };
-        return spawn(cmd[0], cmd.slice(1), {
-            detached: process.platform !== 'win32',
-            stdio: ['ignore', 'pipe', 'pipe'],
-            env
+        if (spawnPosix) return spawnPosix(cmd, env);
+        const child = spawn(cmd[0], cmd.slice(1), { stdio: ['ignore', 'pipe', 'pipe'], env });
+        const closed = new Promise<number | null>((resolve, reject) => {
+            child.once('close', resolve);
+            child.once('error', reject);
         });
+        return { stdout: child.stdout, stderr: child.stderr, closed, stop: () => child.kill('SIGKILL'), pid: undefined };
     };
     let proc: ReturnType<typeof launch>;
     try {
@@ -82,27 +85,19 @@ export async function run(label: string, cmd: string[], logFile: string, budgetM
         await log.end();
         throw error;
     }
-    let harnessGroup = process.platform !== 'win32' ? proc.pid : undefined;
-    proc.once('exit', () => {
-        if (harnessGroup && !groupExists(harnessGroup)) harnessGroup = undefined;
-    });
     let stoppingGroups: number[] = [];
     function stop(killHarness = true): void {
         if (!active.delete(stop)) return;
-        if (groups) stoppingGroups = closeGroups(groups);
-        if (harnessGroup && groupExists(harnessGroup)) {
-            try {
-                process.kill(-harnessGroup, 'SIGKILL');
-                stoppingGroups.push(harnessGroup);
-            } catch (error) {
-                if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
-            }
-        } else if (killHarness && process.platform === 'win32') proc.kill('SIGKILL');
+        try {
+            if (groups) stoppingGroups = closeGroups(groups);
+        } finally {
+            if (proc.pid !== undefined || killHarness) proc.stop();
+            if (proc.pid !== undefined) stoppingGroups.push(proc.pid);
+        }
     }
     active.add(stop);
     const completion = Promise.withResolvers<number | null | 'timeout'>();
-    proc.once('close', completion.resolve);
-    proc.once('error', completion.reject);
+    void proc.closed.then(completion.resolve, completion.reject);
     const timer = setTimeout(() => completion.resolve('timeout'), Math.max(0, budgetMs - (Date.now() - started)));
     const lines: string[] = [];
     let last = '';
