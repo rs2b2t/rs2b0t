@@ -4,28 +4,19 @@ import { EVERY_CAGE, SC_STAGE } from '#/bot/api/ai/quests/defs/scorpcatcher/area
 import { decide } from '#/bot/api/ai/quests/defs/scorpcatcher/index.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
+import { snap as scorpionSnapshot } from './scorpcatcher-snapshot.fixture.js';
+
 const STAGES = [SC_STAGE.STARTED, SC_STAGE.FIRST_HINT, SC_STAGE.SECOND_HINT];
 
 /** Every place a cage can be sitting when a run resumes. */
 const WHERE = ['pack', 'bank', 'lost'] as const;
 
 function snap(stage: number, cage: number | null, where: (typeof WHERE)[number]): QuestSnapshot {
-    const held = where === 'pack' && cage !== null ? new Map([[cage, 1]]) : new Map<number, number>();
-    const banked = where === 'bank' && cage !== null ? new Map([[cage, 1]]) : new Map<number, number>();
-    return {
-        journal: 'inProgress',
-        inv: new Map(),
-        invIds: held,
-        worn: new Set(),
-        wornIds: new Set(),
-        noProgress: 0,
-        bankCoins: 5000,
-        progress: { stage, flags: new Set() },
-        bank: new Map(),
-        bankIds: banked,
-        bankKnown: true,
-        freeSlots: 20
-    };
+    return scorpionSnapshot({
+        stage,
+        invIds: where === 'pack' && cage !== null ? [cage] : [],
+        bankIds: where === 'bank' && cage !== null ? [cage] : []
+    });
 }
 
 // Why: the engine restarts a killed run by re-deciding from the snapshot, so a state that answers `wait` is a state the quest can never leave.
