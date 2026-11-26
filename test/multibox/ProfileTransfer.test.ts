@@ -78,6 +78,12 @@ describe('ProfileTransfer', () => {
         expect(parsed.storage).toEqual({});
     });
 
+    test('desktop export includes the script selected in another window', () => {
+        const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--export']);
+        expect(result.exitCode).toBe(0);
+        expect(parseProfileFile(result.stdout.toString()).storage.source.selectedScript).toBe('Fisher');
+    });
+
     test('collect/apply round-trips box keys and does not steal a prefixed neighbour', () => {
         localStorage.clear();
         sessionStorage.clear();

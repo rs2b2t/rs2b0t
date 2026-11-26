@@ -1,4 +1,8 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { renderSpec, resolveSpec, rewriteSource } from '../../tools/codemod-move.js';
 
 const ROOT = process.cwd();
@@ -10,6 +14,58 @@ const KNOWN = new Set([
     abs('src/bot/panel/WorldMapPicker.ts')
 ]);
 const exists = (p: string) => KNOWN.has(p);
+
+describe('move map validation', () => {
+    let root: string;
+    const importer = "import './b.js';";
+
+    beforeEach(() => {
+        root = mkdtempSync(join(tmpdir(), 'codemod-move-'));
+        for (const dir of ['src', 'test', 'tools']) {
+            mkdirSync(join(root, dir));
+        }
+        writeFileSync(join(root, 'src/a.ts'), importer);
+        writeFileSync(join(root, 'src/b.ts'), 'export {};');
+        const git = '#!/bin/sh\necho "$@" >> git-calls\n[ "$1" = mv ] && [ ! -e "$3" ] && /bin/mv "$2" "$3"\n';
+        writeFileSync(join(root, 'tools/git'), git, { mode: 0o755 });
+    });
+
+    afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+    function run(secondTarget: string, ...args: string[]) {
+        writeFileSync(join(root, 'moves.json'), JSON.stringify({ 'src/a.ts': 'src/new/c.ts', 'src/b.ts': secondTarget }));
+        return spawnSync(process.execPath, [abs('tools/codemod-move.ts'), 'moves.json', ...args], {
+            cwd: root,
+            env: { PATH: join(root, 'tools') },
+            encoding: 'utf8'
+        });
+    }
+
+    for (const args of [[], ['--dry']]) {
+        test(`rejects normalized duplicate destinations before changes in ${args.length ? 'dry' : 'apply'} mode`, () => {
+            const result = run('src/new/./c.ts', ...args);
+            expect(existsSync(join(root, 'git-calls'))).toBe(false);
+            expect(existsSync(join(root, 'src/new'))).toBe(false);
+            expect(result.status).toBe(1);
+            expect(result.stderr).toContain('src/new/c.ts');
+            expect(readFileSync(join(root, 'src/a.ts'), 'utf8')).toBe(importer);
+            expect(readFileSync(join(root, 'src/b.ts'), 'utf8')).toBe('export {};');
+        });
+    }
+
+    test('previews and applies two distinct destinations', () => {
+        const preview = run('src/new/d.ts', '--dry');
+        expect(preview.status).toBe(0);
+        expect(preview.stdout).toContain('2 files move');
+        expect(existsSync(join(root, 'src/new'))).toBe(false);
+
+        expect(run('src/new/d.ts').status).toBe(0);
+        expect(readFileSync(join(root, 'src/new/c.ts'), 'utf8')).toBe("import './d.js';");
+        expect(readFileSync(join(root, 'src/new/d.ts'), 'utf8')).toBe('export {};');
+        expect(existsSync(join(root, 'src/a.ts'))).toBe(false);
+        expect(existsSync(join(root, 'src/b.ts'))).toBe(false);
+    });
+});
 
 describe('resolveSpec', () => {
     test('resolves a relative .js specifier to its .ts source', () => {
