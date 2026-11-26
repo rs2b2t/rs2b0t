@@ -66,45 +66,15 @@ export const Shop = {
         return out;
     },
 
-    async buy(name: string, n: number): Promise<number> {
-        let bought = 0;
-        while (bought < n && Shop.isOpen()) {
-            const it = reader.shopInv(SHOP_STOCK_COM).find(s => s.name?.toLowerCase() === name.toLowerCase());
-            if (!it || it.count === 0) {
-                break;
-            }
-
-            const got = await tradeBatch(it, 'buy', n - bought, () => countHeld(name));
-            if (got <= 0) {
-                break;
-            }
-
-            bought += got;
-        }
-
-        return bought;
+    buy(name: string, n: number): Promise<number> {
+        return buyMatching(n, item => item.name?.toLowerCase() === name.toLowerCase(), () => countHeld(name));
     },
 
     // Why: a shop can stock two objects with the same name (Thessalia's priest-gown halves are 426 and 428), and buying by name takes the first slot twice.
 
     /** Buy by exact object id, for stock whose display name is shared. */
-    async buyById(id: number, n: number): Promise<number> {
-        let bought = 0;
-        while (bought < n && Shop.isOpen()) {
-            const it = reader.shopInv(SHOP_STOCK_COM).find(s => s.id === id);
-            if (!it || it.count === 0) {
-                break;
-            }
-
-            const got = await tradeBatch(it, 'buy', n - bought, () => heldById(id));
-            if (got <= 0) {
-                break;
-            }
-
-            bought += got;
-        }
-
-        return bought;
+    buyById(id: number, n: number): Promise<number> {
+        return buyMatching(n, item => item.id === id, () => heldById(id));
     },
 
     // pick chooses among same-name pack slots, e.g. the noted stack over unnoted singles
@@ -155,6 +125,24 @@ export const Shop = {
         await Execution.delayUntil(() => !Shop.isOpen(), 3000);
     }
 };
+
+async function buyMatching(n: number, matches: (item: InvItemSnapshot) => boolean, held: () => number): Promise<number> {
+    let bought = 0;
+    while (bought < n && Shop.isOpen()) {
+        const item = reader.shopInv(SHOP_STOCK_COM).find(matches);
+        if (!item || item.count === 0) {
+            break;
+        }
+
+        const got = await tradeBatch(item, 'buy', n - bought, held);
+        if (got <= 0) {
+            break;
+        }
+
+        bought += got;
+    }
+    return bought;
+}
 
 function countHeld(name: string): number {
     return Inventory.count(name);
