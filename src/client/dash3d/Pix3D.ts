@@ -25,6 +25,7 @@ export default class Pix3D extends Pix2D {
     static originY: number = 0;
     static texelPool: (Int32Array | null)[] | null = null;
     static poolSize: number = 0;
+    private static texelBuffers: Int32Array[] = [];
     private static opaque: boolean = false;
 
     static cycle: number = 0;
@@ -75,14 +76,12 @@ export default class Pix3D extends Pix2D {
             return;
         }
 
-        this.poolSize = size;
-
-        if (this.lowMem) {
-            this.texelPool = new Int32Array2d(size, 16384);
-        } else {
-            this.texelPool = new Int32Array2d(size, 65536);
+        const texelLength = this.lowMem ? 16384 : 65536;
+        if (this.texelBuffers.length !== size || this.texelBuffers[0]?.length !== texelLength) {
+            this.texelBuffers = new Int32Array2d(size, texelLength);
         }
-
+        this.texelPool = [...this.texelBuffers];
+        this.poolSize = size;
         this.activeTexels.fill(null);
     }
 
