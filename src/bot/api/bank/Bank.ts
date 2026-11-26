@@ -5,7 +5,7 @@ import { lockedBankAt, type BankNpcAccess, type BankObjectAccess } from './BankL
 import { Execution } from '../execution/Execution.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import { Traversal } from '../walking/Traversal.js';
-import { Locs } from '../locs/Locs.js';
+import { type Loc, Locs } from '../locs/Locs.js';
 import { Npcs } from '../npcs/Npcs.js';
 import { ChatDialog } from '../ui/dialogue/ChatDialog.js';
 import { backpackCapacity, backpackSnapshots, Inventory } from '../inventory/Inventory.js';
@@ -57,6 +57,17 @@ async function continueObjectBankDialog(log?: (msg: string) => void): Promise<bo
         return false;
     }
     return true;
+}
+
+async function interactAndCheckBankOpen(booth: Loc, op: string, log?: (msg: string) => void): Promise<boolean> {
+    await booth.interact(op);
+    if (!(await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 8000))) {
+        return false;
+    }
+    if (ChatDialog.canContinue() && await continueObjectBankDialog(log)) {
+        return true;
+    }
+    return Bank.isOpen();
 }
 
 /**
@@ -385,12 +396,8 @@ export const Bank = {
             }
 
             const chosen = pick(booth.actions());
-            if (chosen) {
-                await booth.interact(chosen);
-                if (await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 8000)) {
-                    if (ChatDialog.canContinue() && await continueObjectBankDialog(log)) { return openedReady(log); }
-                    if (Bank.isOpen()) { return openedReady(log); }
-                }
+            if (chosen && await interactAndCheckBankOpen(booth, chosen, log)) {
+                return openedReady(log);
             }
 
             log?.(`booth didn't open from here — stepping near (${stand.x}, ${stand.z}, ${stand.level})`);
@@ -539,10 +546,8 @@ export const Bank = {
             const chosen = pick(booth.actions());
             if (chosen) {
                 log?.(`bank: '${chosen}' '${boothName}' at ${booth.tile()} (attempt ${attempt + 1}/6)`);
-                await booth.interact(chosen);
-                if (await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 8000)) {
-                    if (ChatDialog.canContinue() && await continueObjectBankDialog(log)) { return openedReady(log); }
-                    if (Bank.isOpen()) { return openedReady(log); }
+                if (await interactAndCheckBankOpen(booth, chosen, log)) {
+                    return openedReady(log);
                 }
             }
 
