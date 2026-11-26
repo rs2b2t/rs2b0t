@@ -1,6 +1,9 @@
 #!/usr/bin/env bun
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, posix, relative } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { posix, relative } from 'node:path';
+import { walk } from './lib/walkTypeScriptFiles.js';
+
+export { walk };
 
 export const SPEC = /(?:from\s+|import\s*\(\s*|require\s*\(\s*|import\s+)['"]([^'"]+)['"]/g;
 
@@ -173,13 +176,6 @@ const BUN_TEST = /(?:\.|_)(?:test|spec)\.(?:ts|tsx|js|jsx)$/;
 
 export function bunTestNamesUnder(prefix: string, files: string[]): string[] {
     return files.filter(f => f.startsWith(`${prefix}/`) && BUN_TEST.test(f)).sort();
-}
-
-export function walk(dir: string): string[] {
-    return readdirSync(dir).flatMap(name => {
-        const p = join(dir, name);
-        return statSync(p).isDirectory() ? walk(p) : p.endsWith('.ts') ? [p] : [];
-    });
 }
 
 export function readTree(dir: string): Map<string, string> {
