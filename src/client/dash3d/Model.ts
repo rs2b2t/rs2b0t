@@ -17,6 +17,11 @@ function growBucket(row?: Int32Array): Int32Array {
     return larger;
 }
 
+function copyActive(dst: Int32Array, src: Int32Array, count: number): void {
+    dst.set(src.length > count ? src.subarray(0, count) : src);
+    if (src.length < count) dst.fill(0, src.length, count);
+}
+
 class Metadata {
     src: Uint8Array | null = null;
 
@@ -926,10 +931,10 @@ export default class Model extends ModelSource {
         this.pointY = Model.tmpVertexY;
         this.pointZ = Model.tmpVertexZ;
 
-        for (let v: number = 0; v < this.numPoints; v++) {
-            this.pointX[v] = src.pointX![v];
-            this.pointY[v] = src.pointY![v];
-            this.pointZ[v] = src.pointZ![v];
+        if (this.numPoints > 0) {
+            copyActive(this.pointX, src.pointX!, this.numPoints);
+            copyActive(this.pointY, src.pointY!, this.numPoints);
+            copyActive(this.pointZ, src.pointZ!, this.numPoints);
         }
 
         if (shareAlpha) {
@@ -942,13 +947,9 @@ export default class Model extends ModelSource {
             this.faceAlpha = Model.tempFTran;
 
             if (!src.faceAlpha) {
-                for (let f: number = 0; f < this.numFaces; f++) {
-                    this.faceAlpha[f] = 0;
-                }
+                this.faceAlpha.fill(0, 0, this.numFaces);
             } else {
-                for (let f: number = 0; f < this.numFaces; f++) {
-                    this.faceAlpha[f] = src.faceAlpha[f];
-                }
+                copyActive(this.faceAlpha, src.faceAlpha, this.numFaces);
             }
         }
 
