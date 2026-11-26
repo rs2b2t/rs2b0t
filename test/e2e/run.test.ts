@@ -81,6 +81,18 @@ test('a zero exit in the last second of the budget passes', async () => {
     expect((await run('early', cmd, join(dir, 'early'), 1500)).status).toBe('pass');
 });
 
+test.skipIf(process.platform === 'win32')('the deadline observes a zero exit between polls after both pipes close', async () => {
+    const script = 'exec 1>&- 2>&-; exec /bin/sleep 0.1';
+    const resume = Promise.withResolvers<void>();
+    const poll = spyOn(Bun, 'sleep').mockReturnValueOnce(resume.promise);
+    try {
+        expect((await run('closed', ['/bin/sh', '-c', script], join(dir, 'log'), 500)).status).toBe('pass');
+    } finally {
+        poll.mockRestore();
+        resume.resolve();
+    }
+});
+
 test.skipIf(process.platform === 'win32')('a detached service starts under a long TMPDIR', async () => {
     const longDir = join(dir, 'x'.repeat(104));
     mkdirSync(longDir);

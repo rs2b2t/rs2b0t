@@ -1,10 +1,14 @@
 #define _GNU_SOURCE
+#if defined(__linux__) && !__has_include(<spawn.h>)
+#include "linux-spawn-abi.h"
+#else
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <spawn.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#endif
 
 static int output_pipe(posix_spawn_file_actions_t *actions, int fds[2], int target) {
     if (pipe(fds) < 0) return errno;

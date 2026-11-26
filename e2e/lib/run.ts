@@ -131,6 +131,7 @@ export async function run(label: string, cmd: string[], logFile: string, budgetM
     let code;
     try {
         code = await completion.promise;
+        if (code === 'timeout' && 'exitCode' in proc) code = proc.exitCode() ?? 'timeout';
     } finally {
         clearTimeout(timer);
         proc.stdout?.destroy();

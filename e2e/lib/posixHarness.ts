@@ -5,14 +5,22 @@ import { delimiter, join } from 'node:path';
 import { getSystemErrorName } from 'node:util';
 
 function loadBindings() {
-    return cc({
+    const options = {
         source: new URL('./posix-harness.c', import.meta.url),
         symbols: {
             launch: { args: ['cstring', 'ptr', 'ptr', 'ptr'], returns: 'int' },
             harness_status: { args: ['int'], returns: 'int' },
             reap: { args: ['int'], returns: 'int' }
         }
-    });
+    } as const;
+    if (process.platform === 'linux') {
+        try {
+            return cc({ ...options, flags: '-nostdlib', library: ':libc.so.6' });
+        } catch (error) {
+            if (!(error instanceof Error && error.message.includes("library ':libc.so.6' not found"))) throw error;
+        }
+    }
+    return cc(options);
 }
 
 let bindings: ReturnType<typeof loadBindings>;
@@ -53,14 +61,19 @@ export function spawnHarness(cmd: string[], env: NodeJS.ProcessEnv) {
 
     const [stdout, stderr] = Array.from(fds, fd => createReadStream('', { fd }));
     let stopped = false;
+    function exitCode() {
+        if (stopped || !stdout.readableEnded || !stderr.readableEnded) return null;
+        const status = symbols.harness_status(pid);
+        if (status < 0) throw new Error(`waitid: ${getSystemErrorName(status)}`);
+        return status === RUNNING ? null : status;
+    }
     const closed = Promise.all([stdout, stderr].map(stream => new Promise<void>((resolve, reject) => {
         stream.once('end', resolve);
         stream.once('error', reject);
     }))).then(async () => {
         while (!stopped) {
-            const status = symbols.harness_status(pid);
-            if (status < 0) throw new Error(`waitid: ${getSystemErrorName(status)}`);
-            if (status !== RUNNING) return status;
+            const code = exitCode();
+            if (code !== null) return code;
             await Bun.sleep(10);
         }
         return null;
@@ -85,5 +98,5 @@ export function spawnHarness(cmd: string[], env: NodeJS.ProcessEnv) {
             }
         }
     }
-    return { stdout, stderr, closed, stop, pid };
+    return { stdout, stderr, closed, exitCode, stop, pid };
 }
