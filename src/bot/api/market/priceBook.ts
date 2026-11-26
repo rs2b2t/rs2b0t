@@ -1,4 +1,4 @@
-import { firstFreeName, upsertNamedEntry } from '../namedEntries.js';
+import { firstFreeName, parseNamedEntries, upsertNamedEntry } from '../namedEntries.js';
 
 export interface PriceRow {
     /** Unnoted obj id. The book's only key. */
@@ -68,33 +68,12 @@ function parseRow(raw: unknown): PriceRow | null {
 
 // Why: storage is player-editable JSON, so a malformed book degrades to an empty list instead of throwing inside a panel render.
 export function parseBooks(json: string): PriceBook[] {
-    let raw: unknown;
-    try {
-        raw = JSON.parse(json);
-    } catch {
-        return [];
-    }
-    if (!Array.isArray(raw)) {
-        return [];
-    }
-
-    const out: PriceBook[] = [];
-    for (const entry of raw) {
-        if (typeof entry !== 'object' || entry === null) {
-            continue;
-        }
-        const b = entry as Record<string, unknown>;
-        if (typeof b.name !== 'string' || b.name.trim() === '') {
-            continue;
-        }
-        out.push({
-            name: b.name,
-            margin: int(b.margin, DEFAULT_MARGIN),
-            maxTradeValue: int(b.maxTradeValue, DEFAULT_MAX_TRADE),
-            rows: Array.isArray(b.rows) ? b.rows.map(parseRow).filter((r): r is PriceRow => r !== null) : []
-        });
-    }
-    return out;
+    return parseNamedEntries(json).map(entry => ({
+        name: entry.name,
+        margin: int(entry.margin, DEFAULT_MARGIN),
+        maxTradeValue: int(entry.maxTradeValue, DEFAULT_MAX_TRADE),
+        rows: Array.isArray(entry.rows) ? entry.rows.map(parseRow).filter((r): r is PriceRow => r !== null) : []
+    }));
 }
 
 export function serializeBooks(books: readonly PriceBook[]): string {
