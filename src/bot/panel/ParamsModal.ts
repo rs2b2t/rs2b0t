@@ -9,6 +9,7 @@ export default class ParamsModal {
     private titleEl: HTMLElement;
     private bodyEl: HTMLElement;
     private scriptName = '';
+    private dialogVersion = 0;
     private startButton: HTMLButtonElement;
     private onStart: (() => void) | null = null;
     private schema: SettingsSchema = {};
@@ -97,6 +98,7 @@ export default class ParamsModal {
         }
         this.onStart = opts?.onStart ?? null;
         this.startButton.hidden = !this.onStart;
+        this.dialogVersion++;
         this.scriptName = scriptName;
         this.schema = schema;
         this.openTitle = opts?.title ?? null;
@@ -113,6 +115,7 @@ export default class ParamsModal {
         if (!this.isOpen()) {
             return;
         }
+        this.dialogVersion++;
         this.backdrop.style.display = 'none';
         this.backdrop.style.zIndex = '';
         this.openIntro = null;
@@ -235,7 +238,9 @@ export default class ParamsModal {
         }
 
         const current = SettingsStore.displayString(this.scriptName, key, def);
+        const dialogVersion = this.dialogVersion;
         const control = renderControl(def, current, raw => {
+            if (dialogVersion !== this.dialogVersion) return;
             SettingsStore.save(this.scriptName, key, raw);
             this.onChanged();
             if (deps.has(key)) {

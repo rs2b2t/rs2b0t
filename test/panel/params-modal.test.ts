@@ -1,5 +1,7 @@
-import { beforeEach, expect, test } from 'bun:test';
+import { beforeEach, expect, spyOn, test } from 'bun:test';
 import ParamsModal from '#/bot/panel/ParamsModal.js';
+import { WorldMapPicker } from '#/bot/panel/WorldMapPicker.js';
+import { boxKey } from '#/bot/runtime/box.js';
 import { SettingsStore, type SettingsSchema } from '#/bot/runtime/Settings.js';
 
 const schema: SettingsSchema = {
@@ -35,6 +37,49 @@ test('editing a control live-saves through SettingsStore + fires onChanged', () 
     expect(SettingsStore.saved('Demo2', 'leash')).toBe('12');
     expect(changed).toBeGreaterThan(0);
     modal.close();
+});
+
+test.each(['still open', 'closed', 'switched', 'reopened', 'replaced'])('pending map pick and CSV paste with dialog %s', async state => {
+    const schema: SettingsSchema = {
+        bankStand: { type: 'tile', default: null },
+        mode: { type: 'string', default: 'csv' },
+        items: { type: 'string[]', default: [], csvToggle: 'mode' }
+    };
+    const pick = Promise.withResolvers<{ x: number; z: number; level: number }>();
+    const paste = Promise.withResolvers<string>();
+    const picker = spyOn(WorldMapPicker, 'open').mockReturnValue(pick.promise);
+    const clipboard = spyOn(navigator.clipboard, 'readText').mockReturnValue(paste.promise);
+    let changes = 0;
+    const modal = new ParamsModal(() => false, () => changes++);
+    try {
+        SettingsStore.save('BankFletcher', 'bankStand', '1,2,0');
+        SettingsStore.save('BankFletcher', 'items', 'Logs');
+        SettingsStore.save('SmelterBot', 'bankStand', '3,4,0');
+        SettingsStore.save('SmelterBot', 'items', 'Ore');
+        modal.open('BankFletcher', schema);
+        const buttons = Array.from(document.querySelectorAll('button'));
+        buttons.find(button => button.textContent === 'Pick on Map')!.click();
+        buttons.find(button => button.textContent === 'Paste')!.click();
+
+        if (state === 'closed' || state === 'switched' || state === 'reopened') modal.close();
+        if (state === 'switched' || state === 'replaced') modal.open('SmelterBot', schema);
+        if (state === 'reopened') modal.open('BankFletcher', schema);
+        pick.resolve({ x: 7, z: 8, level: 1 });
+        paste.resolve(' Ash, Oak ');
+        await Promise.all([pick.promise, paste.promise]);
+
+        const active = state === 'still open';
+        for (const storage of [sessionStorage, localStorage]) {
+            const saved = (script: string) => ['bankStand', 'items'].map(key => storage.getItem(boxKey(`set:${script}:${key}`)));
+            expect(saved('BankFletcher')).toEqual(active ? ['7,8,1', 'Ash, Oak'] : ['1,2,0', 'Logs']);
+            expect(saved('SmelterBot')).toEqual(['3,4,0', 'Ore']);
+        }
+        expect(changes).toBe(active ? 2 : 0);
+    } finally {
+        modal.dispose();
+        picker.mockRestore();
+        clipboard.mockRestore();
+    }
 });
 
 const styled: SettingsSchema = {
