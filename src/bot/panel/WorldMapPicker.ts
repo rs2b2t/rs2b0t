@@ -970,6 +970,7 @@ export class WorldMapPicker {
                         }
                         if (answer.dontAskAgain) {
                             SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
+                            settingsModal.refreshCheckboxes(['skipRebuildConfirm']);
                         }
                     }
 

@@ -218,6 +218,26 @@ describe('map picker bake settings drafts', () => {
         });
     });
 
+    test("Don't ask again checks the preference in open Settings as soon as the rebuild is confirmed", async () => {
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockResolvedValue(rebuiltMap());
+        try {
+            await withPicker(async () => {
+                openSettings();
+                const skip = bakeCheckbox("Don't ask before rebuild");
+                expect(skip.checked).toBe(false);
+                clickRebuild(true);
+                document.querySelector<HTMLInputElement>('.rs2b0t-confirm-dont-ask-check')!.click();
+                document.querySelector<HTMLButtonElement>('.rs2b0t-confirm-yes')!.click();
+                await Promise.resolve();
+
+                expect(stored('skipRebuildConfirm')).toEqual({ local: 'true', session: 'true' });
+                expect(skip.checked).toBe(true);
+            });
+        } finally {
+            bake.mockRestore();
+        }
+    });
+
     test.each([false, true])('Escape restores the settings used by a successful rebuild (Settings already open: %p)', async alreadyOpen => {
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeBorders', 'false');
         const pending = Promise.withResolvers<Awaited<ReturnType<typeof basemapRegen.regenerateBasemap>>>();
