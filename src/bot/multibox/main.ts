@@ -77,6 +77,10 @@ function boot(): void {
     let draggingId: number | null = null;
     let suppressClick = false;
     let orderWrite = Promise.resolve();
+    const pendingTabEdits: (() => Promise<void>)[] = [];
+    const tabSaveError = document.createElement('div');
+    tabSaveError.setAttribute('role', 'alert');
+    tabSaveError.textContent = 'Tab edits could not be saved. Check the groups and retry your edit.';
     let restoringTabs: Promise<void> | null = null;
     let wallOnlyTabs = new Set<string>();
 
@@ -116,9 +120,27 @@ function boot(): void {
         orderWrite = orderWrite.then(() => vault.reorder(usernames)).catch(err => console.error('[rs2b0t] failed to save bot order', err));
     }
 
+    async function flushTabEdits(): Promise<void> {
+        while (pendingTabEdits.length) {
+            await pendingTabEdits[0]();
+            pendingTabEdits.shift();
+        }
+        tabSaveError.remove();
+    }
+
+    function queueTabEdit(save: () => Promise<void>): void {
+        orderWrite = orderWrite.then(() => {
+            pendingTabEdits.push(save);
+            return flushTabEdits();
+        }).catch(err => {
+            document.getElementById('mbx-tabs')!.after(tabSaveError);
+            console.error('[rs2b0t] failed to save tab state', err);
+        });
+    }
+
     function persistActiveTab(tab: string): void {
         if (vault.status() !== 'unlocked' || controller.activeTab() !== tab) return;
-        orderWrite = orderWrite.then(() => vault.saveActiveTab(tab)).catch(err => console.error('[rs2b0t] failed to save active tab', err));
+        queueTabEdit(() => vault.saveActiveTab(tab));
     }
 
     function persistTabState(previousTabs: string[], selected?: string, moved: SlotSnapshot[] = [], replaced?: TabReplacement): void {
@@ -128,7 +150,7 @@ function boot(): void {
         const customTabs = controller.tabs().slice(1);
         const tabByUser = new Map(moved.map(slot => [slot.username, slot.tab]));
         const activeTab = selected === controller.activeTab() ? selected : undefined;
-        orderWrite = orderWrite.then(() => vault.saveTabState(customTabs, tabByUser, activeTab, replaced, previousTabs)).catch(err => console.error('[rs2b0t] failed to save tab state', err));
+        queueTabEdit(() => vault.saveTabState(customTabs, tabByUser, activeTab, replaced, previousTabs));
     }
 
     function mutateTabs(action: () => boolean, movedIds?: () => number[], replaced?: TabReplacement) {
@@ -372,6 +394,7 @@ function boot(): void {
             const pendingWrites = orderWrite;
             void pendingWrites.then(() => vault.refresh()).then(() => {
                 if (pendingWrites !== orderWrite) return;
+                pendingTabEdits.length = 0;
                 if (vault.status() !== 'unlocked') {
                     chooser.close();
                     roster?.close();
@@ -474,6 +497,8 @@ function boot(): void {
         replaceAll: data => updateSavedTabs(async () => {
             const previous = vault.list().map(p => p.username);
             await vault.replaceAll(data);
+            pendingTabEdits.length = 0;
+            tabSaveError.remove();
             let settingsApplied = false;
             try {
                 applyBoxStorage(data.storage, [...previous, ...data.profiles.map(p => p.username)]);
@@ -521,6 +546,7 @@ function boot(): void {
         activeTab: () => controller.activeTab(),
         worldRouting,
         assignGroup: (usernames, name) => updateSavedTabs(async () => {
+            await flushTabEdits();
             const saved = savedUsernames();
             await vault.assignGroup(usernames.map(username => saved.get(username) ?? username), name);
             syncSavedGroups();

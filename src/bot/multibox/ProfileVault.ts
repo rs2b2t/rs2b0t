@@ -559,8 +559,8 @@ export class ProfileVault {
                 for (const tab of tabByUser.values()) {
                     if (tab !== MAIN_TAB && !requested.includes(tab)) throw new Error(`tab '${tab}' is not in the tab list`);
                 }
-                const active = activeTab ?? draft.active;
-                await draft.applyTabState(merged, assignments, replaced ? 'all' : 'first', merged.includes(active) ? active : MAIN_TAB, replaced);
+                const selected = activeTab === MAIN_TAB || (activeTab && merged.includes(activeTab)) ? activeTab : undefined;
+                await draft.applyTabState(merged, assignments, replaced ? 'all' : 'first', selected, replaced);
             };
             await (this.storage ? this.sharedChange(save) : save(this));
             this.sharedTabs = requested;

@@ -318,28 +318,75 @@ test.each([
     });
 });
 
+async function failTabWrite(edit: () => boolean | Promise<boolean>): Promise<void> {
+    const saves = spyOn(vault, 'saveTabState');
+    const write = localStorage.setItem;
+    const failOnce = mock(write.bind(localStorage)).mockImplementationOnce(() => { throw new Error('fixture storage full'); });
+    try {
+        Object.defineProperty(localStorage, 'setItem', { configurable: true, value: failOnce });
+        expect(await edit()).toBe(true);
+        await expect(saves.mock.results[0].value).rejects.toThrow('fixture storage full');
+    } finally {
+        Object.defineProperty(localStorage, 'setItem', { configurable: true, value: write });
+        saves.mockRestore();
+    }
+}
+
 test('moving a slot retries its destination after the tab creation write fails', async () => {
     await withWall('local', async wall => {
         const profile = { username: 'fixture', password: 'fixture', tab: 'Fleet' };
         await openSettings().importText(serializeProfileFile({ profiles: [profile], tabs: ['Fleet'], activeTab: 'Fleet', storage: {} }));
         const [slot] = wall.slots();
-        const saves = spyOn(vault, 'saveTabState');
-        const write = localStorage.setItem;
-        const failOnce = mock(write.bind(localStorage)).mockImplementationOnce(() => { throw new Error('fixture storage full'); });
-        try {
-            Object.defineProperty(localStorage, 'setItem', { configurable: true, value: failOnce });
-            expect(await wall.addTab('Work')).toBe(true);
-            await expect(saves.mock.results[0].value).rejects.toThrow('fixture storage full');
+        await failTabWrite(() => wall.addTab('Work'));
+        expect(await wall.setSlotTab(slot.id, 'Work')).toBe(true);
+        await waitFor(() => vault.list()[0].tab === 'Work');
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.snapshot()).toEqual({ profiles: [{ ...profile, tab: 'Work' }], tabs: ['Fleet', 'Work'], activeTab: 'Fleet' });
+    });
+});
 
-            expect(await wall.setSlotTab(slot.id, 'Work')).toBe(true);
-            await saves.mock.results[1].value;
-            const reopened = new ProfileVault();
-            expect(await reopened.unlock('test-passphrase')).toBe(true);
-            expect(reopened.snapshot()).toEqual({ profiles: [{ ...profile, tab: 'Work' }], tabs: ['Fleet', 'Work'], activeTab: 'Fleet' });
-        } finally {
-            Object.defineProperty(localStorage, 'setItem', { configurable: true, value: write });
-            saves.mockRestore();
+test.each([
+    { outcome: 'is saved with the next tab edit', replace: false, expectedTab: 'Work', expectedTabs: ['Fleet', 'Work', 'Local'] },
+    { outcome: 'is superseded by a settings import', replace: true, expectedTab: 'Fleet', expectedTabs: ['Fleet', 'Local'] }
+])('a failed profile move $outcome', async ({ replace, expectedTab, expectedTabs }) => {
+    await withWall('local', async wall => {
+        const profile = { username: 'fixture', password: 'fixture', tab: 'Fleet' };
+        const tabs = ['Fleet', 'Work'];
+        const panel = openSettings();
+        await panel.importText(serializeProfileFile({ profiles: [profile], tabs, activeTab: 'Fleet', storage: {} }));
+        const [slot] = wall.slots();
+        await failTabWrite(() => wall.setSlotTab(slot.id, 'Work'));
+        if (replace) {
+            await panel.importText(serializeProfileFile({ profiles: [profile], tabs: ['Fleet'], activeTab: 'Fleet', storage: {} }));
         }
+        expect(await wall.addTab('Local')).toBe(true);
+        await waitFor(() => vault.tabState().tabs.includes('Local'));
+        expect(wall.slots().map(s => [s.id, s.tab])).toEqual([[slot.id, expectedTab]]);
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.snapshot()).toEqual({
+            profiles: [{ ...profile, tab: expectedTab }], tabs: expectedTabs, activeTab: 'Fleet'
+        });
+        expect(document.querySelector('#mbx-rail [role="alert"]')).toBeNull();
+    });
+});
+
+test('a storage refresh rolls a failed move back to the imported group', async () => {
+    await withWall('local', async wall => {
+        const profile = { username: 'fixture', password: 'fixture', tab: 'Old' };
+        await openSettings().importText(serializeProfileFile({ profiles: [profile], tabs: ['Old', 'Work'], activeTab: 'Old', storage: {} }));
+        const [slot] = wall.slots();
+        await failTabWrite(() => wall.setSlotTab(slot.id, 'Work'));
+        const backup = { profiles: [{ ...profile, tab: 'Fleet' }], tabs: ['Fleet'], activeTab: 'Fleet' };
+        await vault.replaceAll(backup);
+        window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
+        await waitFor(() => wall.controller.tabs().includes('Fleet'));
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.snapshot()).toEqual(backup);
+        expect(wall.slots().map(s => [s.id, s.tab])).toEqual([[slot.id, 'Fleet']]);
+        expect(document.querySelector('#mbx-rail [role="alert"]')?.textContent).toContain('retry');
     });
 });
 
@@ -655,6 +702,28 @@ test('loading Work from a stale chooser preserves a newer saved assignment', asy
         expect(reopened.snapshot()).toEqual({
             profiles: [{ ...bob, tab: 'Fleet' }], tabs: ['Work', 'Fleet', 'Local', 'Extra'], activeTab: 'Work'
         });
+    });
+});
+
+test('clicking a removed tab chip keeps the replacement active tab', async () => {
+    await withWall('local', async wall => {
+        await openSettings().importText(serializeProfileFile({
+            profiles: [], tabs: ['Work'], activeTab: 'Main', storage: {}
+        }));
+        const other = new ProfileVault();
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        const backup = { profiles: [{ username: 'fixture', password: 'fixture', tab: 'Fleet' }], tabs: ['Fleet'], activeTab: 'Fleet' };
+        await other.replaceAll(backup);
+        document.querySelector<HTMLElement>('.mbx-tabchip[data-tab="Work"]')!.click();
+        expect(wall.controller.activeTab()).toBe('Work');
+        await waitFor(() => vault.tabState().tabs.includes('Fleet'));
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.snapshot()).toEqual(backup);
+        document.querySelector<HTMLElement>('.mbx-tabchip[data-tab="Main"]')!.click();
+        await waitFor(() => vault.tabState().activeTab === 'Main');
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.snapshot()).toEqual({ ...backup, activeTab: 'Main' });
     });
 });
 
