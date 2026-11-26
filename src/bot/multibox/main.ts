@@ -91,7 +91,7 @@ function boot(): void {
     }
 
     function persistTabState(renamed?: { from: string; to: string }): void {
-        if (vault.status() !== 'unlocked') {
+        if (!tabsHydrated || vault.status() !== 'unlocked') {
             return;
         }
         const customTabs = controller.tabs().slice(1);
@@ -310,14 +310,14 @@ function boot(): void {
         if (event.key === 'rs2b0t:multibox:profiles') {
             const pendingWrites = orderWrite;
             void pendingWrites.then(() => vault.refresh()).then(() => {
-                if (pendingWrites !== orderWrite) return;
                 if (vault.status() !== 'unlocked') {
+                    tabsHydrated = false;
                     chooser.close();
                     roster?.close();
                     return;
                 }
-                if (tabsHydrated) syncSavedGroups();
-                else hydrateTabState();
+                if (pendingWrites !== orderWrite) return;
+                syncSavedGroups();
                 if (!chooser.el.hidden) chooser.open();
                 roster?.refresh();
             }).catch(error => console.error('[rs2b0t] failed to refresh saved accounts', error));
@@ -325,20 +325,11 @@ function boot(): void {
     });
 
     let tabsHydrated = false;
-    function hydrateTabState(): void {
-        if (tabsHydrated) {
-            return;
-        }
-        tabsHydrated = true;
-        const { tabs, activeTab } = vault.tabState();
-        controller.setTabState(tabs, activeTab);
-        renderRail();
-    }
 
     async function ensureUnlocked(): Promise<boolean> {
         const ok = await prompt.ensureUnlocked();
-        if (ok) {
-            hydrateTabState();
+        if (ok && !tabsHydrated) {
+            syncSavedGroups();
         }
         return ok;
     }
@@ -407,7 +398,8 @@ function boot(): void {
         for (const tab of controller.tabs().slice(1)) {
             if (!tabs.includes(tab)) controller.removeTab(tab);
         }
-        controller.setTabState(tabs, controller.activeTab());
+        controller.setTabState(tabs, tabsHydrated ? controller.activeTab() : vault.tabState().activeTab);
+        tabsHydrated = true;
         renderRail();
     }
 
@@ -593,7 +585,7 @@ function boot(): void {
         setActiveTab: (name: string) => mutateTabs(() => controller.setActiveTab(name)),
         setSlotTab: (id: number, tab: string) => mutateTabs(() => controller.setSlotTab(id, tab)),
         importProfiles: async (json: string | Profile[]): Promise<number> => {
-            if (!(await prompt.ensureUnlocked())) {
+            if (!(await ensureUnlocked())) {
                 return 0;
             }
             const arr = typeof json === 'string' ? (JSON.parse(json) as Profile[]) : json;

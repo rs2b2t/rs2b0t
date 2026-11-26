@@ -129,24 +129,37 @@ test('overlapping settings imports remove the superseded profile settings from b
     });
 });
 
+async function waitFor(done: () => boolean): Promise<void> {
+    const deadline = performance.now() + 2000;
+    while (!done()) {
+        if (performance.now() >= deadline) throw new Error('wall did not finish updating');
+        await Bun.sleep(5);
+    }
+}
+
+function chooserRow(username: string): HTMLElement | undefined {
+    return Array.from(document.querySelectorAll<HTMLElement>('.mbx-chooser-overlay:not([hidden]) .mbx-profile-name')).find(el => el.textContent === username);
+}
+
 test('a shared import can load from the open chooser and reveal its tile', async () => {
     await withWall('proxy', async wall => {
         const openChooser = async () => {
             document.getElementById('mbx-add')!.click();
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await waitFor(() => !!chooserRow('alice'));
         };
         await openChooser();
         const alice = wall.add(vault.list()[0]);
         const original = document.querySelector('iframe');
         const tab = 'Fleet Levelers';
-        await vault.replaceAll({
+        const other = new ProfileVault();
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        await other.replaceAll({
             tabs: [tab], activeTab: 'Main',
             profiles: [...vault.list(), { username: 'fleet1', password: 'test', tab }]
         });
         window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
-        await new Promise(resolve => setTimeout(resolve, 0));
-        const pick = () => Array.from(document.querySelectorAll<HTMLElement>('.mbx-profile-name')).find(el => el.textContent === 'fleet1')!.click();
-        expect(wall.controller.tabs()).toContain(tab);
+        await waitFor(() => wall.controller.tabs().includes(tab) && !!chooserRow('fleet1'));
+        const pick = () => chooserRow('fleet1')!.click();
         expect(wall.controller.activeTab()).toBe('Main');
         pick();
         expect(wall.controller.activeTab()).toBe(tab);
@@ -163,20 +176,39 @@ test('a shared import can load from the open chooser and reveal its tile', async
     });
 });
 
-test('roster closes when shared profiles are reset or relocked', async () => {
-    await withWall('proxy', async () => {
+test('a relocked wall closes the roster and preserves replacement groups on its next load', async () => {
+    await withWall('proxy', async wall => {
+        await vault.assignGroup(['bob'], 'Old');
         document.getElementById('mbx-manage')!.click();
-        await new Promise(resolve => setTimeout(resolve, 0));
         const roster = document.getElementById('mbx-roster')!;
-        expect(roster.hidden).toBe(false);
-        const refresh = spyOn(vault, 'refresh').mockImplementation(() => vault.reset());
-        try {
-            window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
-            await new Promise(resolve => setTimeout(resolve, 0));
-            expect(roster.hidden).toBe(true);
-        } finally {
-            refresh.mockRestore();
-        }
+        await waitFor(() => !roster.hidden);
+        wall.add(vault.list().find(p => p.username === 'bob')!);
+
+        const other = new ProfileVault();
+        await other.reset();
+        await other.setup('replacement');
+        const profiles = [
+            { username: 'alice', password: 'a', tab: 'Main' },
+            { username: 'bob', password: 'b', tab: 'Fleet' },
+            { username: 'unused', password: 'c', tab: 'Fleet' }
+        ];
+        await other.replaceAll({ profiles, tabs: ['Fleet'], activeTab: 'Fleet' });
+        const key = 'rs2b0t:multibox:profiles';
+        const beforeLoad = localStorage.getItem(key);
+        window.dispatchEvent(new StorageEvent('storage', { key }));
+        await waitFor(() => roster.hidden);
+        expect(vault.status()).toBe('locked');
+
+        document.getElementById('mbx-add')!.click();
+        document.querySelector<HTMLInputElement>('#mbx-vault-pass')!.value = 'replacement';
+        document.getElementById('mbx-vault-go')!.click();
+        await waitFor(() => !!chooserRow('alice'));
+        chooserRow('alice')!.click();
+        await waitFor(() => localStorage.getItem(key) !== beforeLoad);
+
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('replacement')).toBe(true);
+        expect(reopened.snapshot()).toEqual({ profiles, tabs: ['Fleet'], activeTab: 'Main' });
     });
 });
 

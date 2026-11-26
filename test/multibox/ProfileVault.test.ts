@@ -387,6 +387,19 @@ describe('ProfileVault tabs', () => {
         expect(reopened.snapshot()).toEqual(v.snapshot());
     });
 
+    test('unlock during a shared import reads the imported roster', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        await v.upsert({ username: 'old', password: 'a' });
+        const imported = { profiles: [{ username: 'new', password: 'b', tab: 'Fleet' }], tabs: ['Fleet'], activeTab: 'Fleet' };
+        const [, unlocked] = await Promise.all([v.replaceAll(imported), v.unlock('pw')]);
+        expect(unlocked).toBe(true);
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.snapshot()).toEqual(imported);
+        expect(v.snapshot()).toEqual(imported);
+    });
+
     test('a failed import preserves the roster for later saves and allows an explicit retry', async () => {
         const storage = quotaLimitedStorage();
         const v = new ProfileVault(storage);

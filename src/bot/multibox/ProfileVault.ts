@@ -182,6 +182,12 @@ export class ProfileVault {
         return hasLocal && this.storage === localStorage;
     }
 
+    private enqueueShared<T>(operation: () => Promise<T>): Promise<T> {
+        const result = this.sharedTail.then(operation);
+        this.sharedTail = result.then(() => {}, () => {});
+        return result;
+    }
+
     private async compareAndSet(expected: string | null, value: string): Promise<boolean> {
         if (desktopStorage) return desktopStorage.compareAndSet(KEY, expected, value);
         const generation = this.persistGeneration;
@@ -194,7 +200,7 @@ export class ProfileVault {
 
     async refresh(): Promise<void> {
         if (!this.shared || !this.key) return;
-        const refresh = this.sharedTail.then(async () => {
+        return this.enqueueShared(async () => {
             const generation = this.persistGeneration;
             const raw = this.storage!.getItem(KEY);
             const blob = parseBlob(raw);
@@ -210,8 +216,6 @@ export class ProfileVault {
             this.customTabs = payload.tabs;
             this.active = payload.activeTab;
         });
-        this.sharedTail = refresh.catch(() => {});
-        return refresh;
     }
 
     private async decrypt(blob: StoredBlob): Promise<VaultPayload> {
@@ -222,7 +226,7 @@ export class ProfileVault {
 
     private sharedChange(change: (draft: ProfileVault) => Promise<void>, retry = true): Promise<void> {
         const generation = this.persistGeneration;
-        const write = this.sharedTail.then(async () => {
+        return this.enqueueShared(async () => {
             for (let attempt = 0; attempt < 8; attempt++) {
                 this.assertUnlocked();
                 const expected = this.storage!.getItem(KEY);
@@ -257,8 +261,6 @@ export class ProfileVault {
             }
             throw new Error('Saved accounts changed in another instance; try again.');
         });
-        this.sharedTail = write.catch(() => {});
-        return write;
     }
 
     status(): VaultStatus {
@@ -304,6 +306,11 @@ export class ProfileVault {
 
     async unlock(pass: string): Promise<boolean> {
         if (this.pendingImport) return this.afterImport(() => this.unlock(pass));
+        if (this.shared) return this.enqueueShared(() => this.unlockStored(pass));
+        return this.unlockStored(pass);
+    }
+
+    private async unlockStored(pass: string): Promise<boolean> {
         const blob = parseBlob(this.storage ? this.storage!.getItem(KEY) : null);
         if (!blob) {
             return false;
