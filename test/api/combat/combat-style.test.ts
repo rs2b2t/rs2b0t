@@ -141,6 +141,11 @@ describe('resolveCombatStyle', () => {
             .toEqual({ requested: 'minimum', effective: 'defence', mode: 3 });
     });
 
+    test('minimum uses shared XP when a spear lacks the lowest skill style', () => {
+        expect(resolveCombatStyle('minimum', SPEAR, { attack: 1, strength: 20, defence: 50 }))
+            .toEqual({ requested: 'minimum', effective: 'controlled', mode: 0 });
+    });
+
     test('a minimum resolution describes the style it moved to, not an unavailable one', () => {
         const resolution = resolveCombatStyle('minimum', ORDINARY_SWORD, { attack: 33, strength: 31, defence: 32 });
         expect(resolution).not.toBeNull();

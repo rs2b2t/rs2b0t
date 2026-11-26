@@ -39,7 +39,7 @@ Game.setAutoRetaliate(on: boolean): boolean
 Game.attackedByPlayer(): boolean // the local player's target is another player
 ```
 
-`minimum` is a melee choice, not a real style: `combatStyleResolution`, `combatStyleMode`, `hasCombatStyle` and `setCombatStyle` resolve it to whichever of attack, strength and defence is lowest when called, so it moves on as levels change. A tie goes attack, then strength, then defence.
+`minimum` is a melee choice, not a real style: `combatStyleResolution`, `combatStyleMode`, `hasCombatStyle` and `setCombatStyle` resolve it to whichever of attack, strength and defence is lowest when called, so it moves on as levels change. A tie goes attack, then strength, then defence. If the weapon lacks a dedicated style for the lowest skill, a controlled style can still train it through shared XP.
 
 Send nothing before `Game.sceneReady()` is true: menu and walk packets injected
 while the scene is still building soft-fail or retry (#445).

@@ -142,7 +142,9 @@ export function resolveCombatStyle(
         const { attack, strength, defence } = levels ?? currentMeleeLevels();
         wanted = minimumMeleeStyle(attack, strength, defence);
     }
-    const selected = modes.find(option => option.style === wanted) ?? modes.findLast(option => option.style === 'defence');
+    const selected = modes.find(option => option.style === wanted)
+        ?? (style === 'minimum' ? modes.find(option => option.style === 'controlled') : undefined)
+        ?? modes.findLast(option => option.style === 'defence');
     if (!selected) {
         return null;
     }
