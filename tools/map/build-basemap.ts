@@ -132,7 +132,7 @@ function findLocalJag(opts: BakeArgs, previous: BakeManifest | null) {
         for (const candidate of [cacheJag, published]) {
             const bytes = candidate && readMatchingJag(candidate, previous);
             if (bytes) {
-                const explicit = previous.explicitJag ?? !matchesEngineJag(bytes, engineJag);
+                const explicit = previous.explicitJag ?? (previous.schema === BASEMAP_SCHEMA && !matchesEngineJag(bytes, engineJag));
                 return { path: candidate, bytes, explicit };
             }
         }
@@ -533,6 +533,7 @@ async function buildBasemap(opts: BakeArgs): Promise<{ manifest: BakeManifest; b
     const bytes = local?.bytes ?? await downloadJag(opts.fetchUrl);
     const fp = localFingerprint ?? fingerprint(bytes);
     const sameSource = previous && fingerprint(bytes, previous.schema) === previous.fingerprint;
+    const pinLegacyJag = sameSource && previous.schema !== BASEMAP_SCHEMA && previous.explicitJag === undefined;
     const revision = opts.revision ?? (sameSource ? previous.revision : undefined) ?? '274';
     console.log(`source: ${source}`);
     console.log(`fingerprint: ${fp}`);
@@ -597,7 +598,7 @@ async function buildBasemap(opts: BakeArgs): Promise<{ manifest: BakeManifest; b
     const manifest: BakeManifest = {
         schema: BASEMAP_SCHEMA,
         revision,
-        explicitJag: explicitJag ?? false,
+        explicitJag: pinLegacyJag || (explicitJag ?? false),
         fingerprint: fp,
         origin: { x: result.originX, z: result.originZ },
         sizeTiles: { w: width, h: height },

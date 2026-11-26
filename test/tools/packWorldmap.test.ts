@@ -533,34 +533,36 @@ test('packager keeps an explicit JAG when the engine has a different map', () =>
     }
 });
 
-test('a schema 2 engine bake follows engine changes after the packager upgrades it', () => {
-    const root = mkdtempSync(join(tmpdir(), 'pack-changed-map-'));
-    try {
-        const pack = prepareDeployment(root, 'pack-rs2b0t.sh');
-        const engineJag = join(root, 'engine/data/pack/mapview/worldmap.jag');
-        const dest = join(root, 'engine/public/rs2b0t/bot');
-        const manifest = () => JSON.parse(readFileSync(join(dest, 'worldmap-basemap.manifest.json'), 'utf8'));
-        const out = join(root, 'out');
-        const legacy = join(out, 'worldmap-basemap.manifest.json');
-        writeFileSync(engineJag, townMap);
-        bakeMap(out, '--engine', join(root, 'engine'), '--revision', '275');
-        const original = JSON.parse(readFileSync(legacy, 'utf8'));
-        delete original.explicitJag;
-        writeFileSync(legacy, JSON.stringify({ ...original, schema: 2, fingerprint: '5f1c291201a299b0' }));
-        pack();
-        const first = manifest();
-        expect(first.revision).toBe('275');
-        expect(first.explicitJag).toBe(false);
+for (const source of ['staging', 'engine only']) {
+    test(`packager keeps a schema 2 selection from ${source} after the engine changes`, () => {
+        const root = mkdtempSync(join(tmpdir(), 'pack-changed-map-'));
+        try {
+            const pack = prepareDeployment(root, 'pack-rs2b0t.sh');
+            const engineJag = join(root, 'engine/data/pack/mapview/worldmap.jag');
+            const out = join(root, 'out');
+            const dest = join(root, 'engine/public/rs2b0t/bot');
+            const name = 'worldmap-basemap.manifest.json';
+            writeFileSync(join(out, name), JSON.stringify({
+                schema: 2, revision: '275', fingerprint: '5f1c291201a299b0', basemapUrl: './worldmap-old.png',
+                origin: { x: 2048, z: 2816 }, sizeTiles: { w: 1600, h: 1216 }, pixelsPerTile: 1
+            }));
+            if (source === 'staging') writeFileSync(join(out, 'worldmap.jag'), townMap);
+            writeFileSync(engineJag, townMap);
+            pack();
+            const upgraded = readFileSync(join(out, name));
+            expect(JSON.parse(upgraded.toString())).toMatchObject({ revision: '275', fingerprint: '322ab26cb258482b' });
 
-        writeFileSync(engineJag, emptyMap);
-        pack();
-        expect(manifest().fingerprint).not.toBe(first.fingerprint);
-        expect(manifest().revision).toBe('274');
-        expect(readFileSync(join(dest, 'worldmap.jag'))).toEqual(emptyMap);
-    } finally {
-        rmSync(root, { recursive: true, force: true });
-    }
-});
+            writeFileSync(engineJag, emptyMap);
+            pack();
+            for (const dir of [out, dest]) {
+                expect(readFileSync(join(dir, 'worldmap.jag'))).toEqual(townMap);
+                expect(readFileSync(join(dir, name))).toEqual(upgraded);
+            }
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+}
 
 test('a schema 2 upgrade preserves the selected map when the engine JAG is unreadable', () => {
     const root = mkdtempSync(join(tmpdir(), 'pack-unreadable-engine-'));
