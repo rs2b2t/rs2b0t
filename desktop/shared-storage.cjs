@@ -73,13 +73,35 @@ function writeItem(state, key, value) {
     } else state.data[key] = value;
 }
 
+function decodeStore(state) {
+    const marker = state.seededWithoutProfiles;
+    if (marker || state.retryProfileOrigin) {
+        if (!marker || !profileKeys.every(key => Object.hasOwn(marker, key) && marker[key] === state.data[key])) {
+            delete state.seededWithoutProfiles;
+            delete state.retryProfileOrigin;
+            delete state.deletedDuringProfileRetry;
+        }
+        for (const key of profileKeys) {
+            if (state.data[key] === null) delete state.data[key];
+        }
+    }
+    return state;
+}
+
+function encodeStore(state) {
+    if (!state.seededWithoutProfiles) return state;
+    // Why: older desktops read null as missing, but their saves and resets replace or remove the key.
+    const marker = Object.fromEntries(profileKeys.map(key => [key, state.data[key] ?? null]));
+    return { ...state, data: { ...marker, ...state.data }, seededWithoutProfiles: marker };
+}
+
 function sharedStorage(dir) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     const file = join(dir, 'storage.json');
     const migrationId = randomUUID();
     const read = () => {
         try {
-            return JSON.parse(fs.readFileSync(file, 'utf8'));
+            return decodeStore(JSON.parse(fs.readFileSync(file, 'utf8')));
         } catch (error) {
             if (error.code === 'ENOENT') return { initialized: false, data: {} };
             throw error;
@@ -92,7 +114,16 @@ function sharedStorage(dir) {
             if (valid(key) && typeof value === 'string' && !(key in data)) data[key] = value;
         }
     }
-    function update(change) {
+    function write(state) {
+        const temporary = join(dir, `${randomUUID()}.tmp`);
+        try {
+            fs.writeFileSync(temporary, JSON.stringify(encodeStore(state)), { mode: 0o600 });
+            fs.renameSync(temporary, file);
+        } finally {
+            fs.rmSync(temporary, { force: true });
+        }
+    }
+    function withLockedState(change) {
         const deadline = Date.now() + 15000;
         let release;
         while (!release) {
@@ -103,27 +134,39 @@ function sharedStorage(dir) {
                 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
             }
         }
-        const temporary = join(dir, `${randomUUID()}.tmp`);
         try {
-            const state = read();
-            // Why: a first launch can exit before seed() drops its deletion list.
-            for (const [id, migration] of Object.entries(state.panelMigrations ?? {})) {
-                try {
-                    process.kill(migration.pid, 0);
-                } catch (error) {
-                    if (error.code === 'ESRCH') delete state.panelMigrations[id];
-                }
-            }
-            const result = change(state);
-            if (!state.retryProfileOrigin) delete state.deletedDuringProfileRetry;
-            if (state.panelMigrations && !Object.keys(state.panelMigrations).length) delete state.panelMigrations;
-            fs.writeFileSync(temporary, JSON.stringify(state), { mode: 0o600 });
-            fs.renameSync(temporary, file);
-            return result;
+            return change(read());
         } finally {
-            fs.rmSync(temporary, { force: true });
             release();
         }
+    }
+    function updateMigration(state, change) {
+        const previous = JSON.stringify(state);
+        // Why: a first launch can exit before seed() drops its deletion list.
+        for (const [id, migration] of Object.entries(state.panelMigrations ?? {})) {
+            try {
+                process.kill(migration.pid, 0);
+            } catch (error) {
+                if (error.code === 'ESRCH') delete state.panelMigrations[id];
+            }
+        }
+        const result = change(state);
+        if (!state.retryProfileOrigin) delete state.deletedDuringProfileRetry;
+        if (state.panelMigrations && !Object.keys(state.panelMigrations).length) delete state.panelMigrations;
+        if (!state.retryProfileOrigin && !state.panelMigrations) delete state.seededWithoutProfiles;
+        if (JSON.stringify(state) !== previous) write(state);
+        return result;
+    }
+    function setValue(state, key, value) {
+        if (state.seededWithoutProfiles || state.panelMigrations || state.deletedDuringSettingsMigration) {
+            updateMigration(state, current => writeItem(current, key, value));
+        } else if ((state.data[key] ?? null) !== value) {
+            writeItem(state, key, value);
+            write(state);
+        }
+    }
+    function update(change) {
+        return withLockedState(state => updateMigration(state, change));
     }
     return {
         initialized: () => read().initialized,
@@ -145,18 +188,18 @@ function sharedStorage(dir) {
         keys: () => Object.keys(read().data),
         setItem(key, value) {
             if (!valid(key) || typeof value !== 'string') throw new Error('Invalid saved setting');
-            update(state => writeItem(state, key, value));
+            withLockedState(state => setValue(state, key, value));
         },
         compareAndSet(key, expected, value) {
             if (!valid(key) || typeof value !== 'string') throw new Error('Invalid saved setting');
-            return update(state => {
+            return withLockedState(state => {
                 if ((state.data[key] ?? null) !== expected) return false;
-                writeItem(state, key, value);
+                setValue(state, key, value);
                 return true;
             });
         },
         removeItem(key) {
-            if (valid(key)) update(state => writeItem(state, key, null));
+            if (valid(key)) withLockedState(state => setValue(state, key, null));
         },
         seed(values, { fallback, recover = false, readError, profileOrigin } = {}) {
             return update(state => {

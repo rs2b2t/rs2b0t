@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync, utimesSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -27,6 +27,32 @@ test('desktop instances share saved values and preserve concurrent writes to dif
         first.removeItem('rs2b0t:account');
         expect(second.getItem('rs2b0t:account')).toBe(null);
         expect(sharedStorage(root).getItem('rs2b0t:settings')).toBe('second');
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('unchanged mutations preserve the settings file and compare-and-set results', () => {
+    const root = mkdtempSync(join(tmpdir(), 'rs2b0t-shared-test-'));
+    try {
+        const store = sharedStorage(root);
+        const key = 'rs2b0t:fixture:selectedScript';
+        store.setItem(key, 'Miner');
+        store.seed({});
+        expect(sharedStorage(root).initialized()).toBe(true);
+
+        const file = join(root, 'storage.json');
+        utimesSync(file, 1234567890, 1234567890);
+        const before = statSync(file).mtimeMs;
+        store.setItem(key, 'Miner');
+        store.removeItem('rs2b0t:missing');
+        expect(store.compareAndSet(key, 'stale', 'Fisher')).toBe(false);
+        expect(store.compareAndSet(key, 'Miner', 'Miner')).toBe(true);
+        store.seed({ 'rs2b0t:missing': 'legacy' });
+        expect(statSync(file).mtimeMs).toBe(before);
+
+        expect(store.compareAndSet(key, 'Miner', 'Fisher')).toBe(true);
+        expect(sharedStorage(root).snapshot()).toEqual({ [key]: 'Fisher' });
     } finally {
         rmSync(root, { recursive: true, force: true });
     }

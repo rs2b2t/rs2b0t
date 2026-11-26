@@ -476,6 +476,49 @@ test.each(['retry', 'save', 'reset'])('8081 settings open while the configured r
     expect(await launch(custom)).toEqual(expected);
 });
 
+test('an older pending retry without profile markers requires explicit recovery', async () => {
+    const { launch, storeDir } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles) } });
+    writeFileSync(join(storeDir, 'storage.json'), JSON.stringify({
+        initialized: true, data: {}, seededWithoutProfiles: true, retryProfileOrigin: custom
+    }));
+    expect(await launch(custom)).toEqual([]);
+    expect(await launch(custom, true)).toEqual(profiles);
+});
+
+test.each(['before', 'during'])('an older desktop reset %s a configured-origin retry stays empty across launches', async when => {
+    const script = 'rs2b0t:fixture:selectedScript';
+    let unreadable = true;
+    const { launch, storeDir } = fixture({
+        [original]: { [script]: 'Miner' },
+        [custom]: { [accounts]: JSON.stringify(profiles) }
+    }, origin => {
+        if (origin === custom && unreadable) throw new Error('Unreadable 8082 fixture');
+    });
+    expect(await launch(custom)).toEqual([]);
+
+    const file = join(storeDir, 'storage.json');
+    function olderWrite(key: string, value: string | null) {
+        const state = JSON.parse(readFileSync(file, 'utf8'));
+        if (value === null) {
+            if (!(key in state.data)) return;
+            delete state.data[key];
+        } else state.data[key] = value;
+        writeFileSync(file, JSON.stringify(state));
+    }
+    unreadable = false;
+    const ready = Promise.withResolvers<void>();
+    const pending = when === 'during' ? launch(custom, false, ready.promise) : undefined;
+    olderWrite(vault, JSON.stringify([{ username: 'newer', password: 'fixture' }]));
+    olderWrite(vault, null);
+    olderWrite(accounts, null);
+    olderWrite(script, null);
+    ready.resolve();
+    if (pending) expect(await pending).toEqual([]);
+    expect(await launch(custom)).toEqual([]);
+    expect(await launch(custom)).toEqual([]);
+    expect(await launch(custom, true)).toEqual(profiles);
+});
+
 test('the panel preserves 8081 setting precedence across a failed read and genuine edits', async () => {
     const script = 'rs2b0t:fixture:selectedScript';
     const ore = 'rs2b0t:set:Miner:ore';
