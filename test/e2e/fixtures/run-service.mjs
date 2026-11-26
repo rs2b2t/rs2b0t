@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { closeSync, existsSync, openSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 import { ownedService } from '../../../e2e/lib/ownedService.mjs';
@@ -9,6 +9,11 @@ if (mode === 'service') {
         const last = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 400)'], { stdio: 'ignore' });
         writeFileSync(prefix + '.last', String(last.pid));
         last.unref();
+    }
+    if (flags.includes('lock')) {
+        const fd = openSync(prefix + '.lock', 'w');
+        const lock = spawnSync('/usr/bin/python3', ['-I', '-c', 'import fcntl; fcntl.flock(0, fcntl.LOCK_EX | fcntl.LOCK_NB)'], { stdio: [fd, 'ignore', 'inherit'] });
+        if (lock.status !== 0) throw new Error('Could not acquire fixture lock');
     }
     writeFileSync(prefix + '.pid', String(process.pid));
     console.log('ready');
@@ -31,7 +36,7 @@ if (mode === 'service') {
     if (flags.includes('hold-pipe')) {
         spawn('node', ['-e', 'setTimeout(() => {}, 6000)'], { stdio: 'inherit' }).unref();
     }
-    process.on('exit', () => writeFileSync(prefix + '.exited', ''));
+    process.on('exit', () => writeFileSync(prefix + '.exited', String(process.pid)));
     child.once('message', () => {
         child.disconnect();
         if (flags.includes('exit')) child.unref();
