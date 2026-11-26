@@ -297,8 +297,4 @@ export class NoLightTiles {
         }
         return all;
     }
-
-    clear(): void {
-        this.refused.clear();
-    }
 }

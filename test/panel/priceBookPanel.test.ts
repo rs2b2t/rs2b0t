@@ -7,34 +7,19 @@ import { boxKey } from '#/bot/runtime/box.js';
 import { parseOrderbookFile } from '#/bot/api/market/orderbook-format.js';
 import { resetObjCatalog } from '#/bot/adapter/ClientAdapter.js';
 import ObjType from '#/client/config/ObjType.js';
+import { installObjTypeTable } from '../fixtures/obj-type-table.js';
 
 const realList = ObjType.list;
 const realCount = ObjType.numDefinitions;
 
-const ITEMS: Record<number, string> = {
-    440: 'Iron ore',
-    453: 'Coal',
-    1515: 'Yew logs',
-    1127: 'Rune platebody',
-    1079: 'Rune platelegs',
-    561: 'Nature rune'
+const ITEMS = {
+    440: { name: 'Iron ore' },
+    453: { name: 'Coal' },
+    1515: { name: 'Yew logs' },
+    1127: { name: 'Rune platebody' },
+    1079: { name: 'Rune platelegs' },
+    561: { name: 'Nature rune' }
 };
-
-function stubCatalog(): void {
-    ObjType.numDefinitions = Math.max(...Object.keys(ITEMS).map(Number)) + 1;
-    ObjType.list = ((id: number) => {
-        const base = new ObjType();
-        base.id = id;
-        base.name = ITEMS[id] ?? null;
-        base.cost = 10;
-        base.certlink = -1;
-        base.certtemplate = -1;
-        base.countobj = null;
-        return base;
-    }) as typeof ObjType.list;
-    resetObjCatalog();
-    resetLiveCatalog();
-}
 
 function openPanel(): PriceBookPanel {
     PriceBooks.save([
@@ -76,7 +61,9 @@ async function chooseImport(panel: PriceBookPanel, name: string, contents: strin
 }
 
 beforeEach(() => {
-    stubCatalog();
+    installObjTypeTable(ITEMS, 10);
+    resetObjCatalog();
+    resetLiveCatalog();
     PriceBooks.save([]);
     document.body.innerHTML = '';
 });

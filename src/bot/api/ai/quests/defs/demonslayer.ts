@@ -1,4 +1,4 @@
-import { customStep, journalStep, talkTo, waitStep } from '../engine/questSteps.js';
+import { customStep, journalStep, talkTo } from '../engine/questSteps.js';
 import { findSceneTarget } from '../exec/prompts.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
@@ -14,7 +14,7 @@ import { Traversal } from '../../../walking/Traversal.js';
 import Tile from '../../../../geometry/Tile.js';
 import { afterDialogueAction, gotoNpc, isUnderground, talkThrough, type NpcStop } from '../exec/primitives.js';
 import { executeStep } from '../exec/steps.js';
-import { gpShort } from '../engine/provisioning.js';
+import { buyOrWait } from '../engine/provisioning.js';
 import { hasName as has, wornName as worn } from '../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { questRecord } from '../data/quests.js';
@@ -62,13 +62,6 @@ const GOBLIN_ID = 100;
 const GOBLIN_RADIUS = 20;
 
 const heldId = (id: number): boolean => Inventory.items().some(i => i.id === id);
-
-function buyOrWait(snap: QuestSnapshot, step: Extract<QuestStep, { kind: 'buy' }>): QuestStep {
-    if (gpShort(snap, step.estGp) > 0) {
-        return waitStep(`need ~${step.estGp} gp for ${step.item}`);
-    }
-    return step;
-}
 
 function fillBucket(snap: QuestSnapshot): QuestStep {
     if (has(snap, 'bucket')) {

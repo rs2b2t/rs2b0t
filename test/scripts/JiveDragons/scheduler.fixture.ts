@@ -79,10 +79,22 @@ export async function scenario(siteId = 'taverley-black', style = 'range', setti
     return { bot, fight, state, dragon, task, engage };
 }
 
+/** Reset module-level state with stubbed waits so onStart cannot park. */
+export async function resetScenario(): Promise<void> {
+    const until = spyOn(Execution, 'delayUntil').mockResolvedValue(true);
+    const untilTicks = spyOn(Execution, 'delayUntilTicks').mockResolvedValue(true);
+    try {
+        const bot = new JiveDragons();
+        bot.bindLog(() => {});
+        await bot.onStart();
+        Sustain.set(null);
+    } finally {
+        until.mockRestore();
+        untilTicks.mockRestore();
+    }
+}
+
 export async function restoreScenario(): Promise<void> {
-    const bot = new JiveDragons();
-    bot.bindLog(() => {});
-    await bot.onStart();
-    Sustain.set(null);
+    await resetScenario();
     mock.restore();
 }

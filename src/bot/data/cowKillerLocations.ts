@@ -59,9 +59,7 @@ export function resolveCowLocation(setting: string, start: WorldTile): CowLocati
         return COW_LOCATIONS.find(location => location.name.toLowerCase() === normalized) ?? null;
     }
 
-    return COW_LOCATIONS.reduce((nearest, location) =>
-        location.anchor.distanceTo(start) < nearest.anchor.distanceTo(start) ? location : nearest
-    );
+    return nearestCowLocation(start);
 }
 
 export function nearestCowLocation(tile: WorldTile): CowLocation {
