@@ -93,10 +93,9 @@ function assetUrls(manifest: BakeManifest): string[] {
     });
 }
 
-function isCurrentBake(outDir: string, manifest: BakeManifest, localFingerprint: string | null): boolean {
+function hasCurrentAssets(outDir: string, manifest: BakeManifest): boolean {
     try {
         return manifest.schema === BASEMAP_SCHEMA &&
-            (localFingerprint === null || manifest.fingerprint === localFingerprint) &&
             assetUrls(manifest).every(url => fs.statSync(path.join(outDir, url)).isFile());
     } catch {
         return false;
@@ -117,13 +116,17 @@ function readMatchingJag(file: string, manifest: BakeManifest): Buffer | null {
     return fingerprint(bytes, manifest.schema) === manifest.fingerprint ? bytes : null;
 }
 
-function findLocalJag(opts: BakeArgs, previous: BakeManifest | null) {
+function findLocalJag(opts: BakeArgs, previous: BakeManifest | null, currentAssets: boolean) {
     if (opts.jag !== null) {
         if (!fs.existsSync(opts.jag)) throw new Error(`--jag not found: ${opts.jag}`);
         return { path: opts.jag, bytes: fs.readFileSync(opts.jag), explicit: true };
     }
     const engineJag = path.join(opts.engine, 'data/pack/mapview/worldmap.jag');
     const cacheJag = path.join(opts.outDir, 'worldmap.jag');
+    if (currentAssets && previous?.explicitJag === false) {
+        const staged = readMatchingJag(cacheJag, previous);
+        if (staged) return { path: cacheJag, bytes: staged, explicit: false };
+    }
     const hasEngine = fs.existsSync(engineJag);
     const file = hasEngine ? engineJag : cacheJag;
     const hasLocal = hasEngine || fs.existsSync(cacheJag);
@@ -470,8 +473,7 @@ function recoverBakePairs(dir: string): void {
         if (!entry.isDirectory() || !/^\.basemap-[a-zA-Z0-9]{6}$/.test(entry.name)) continue;
         const pending = path.join(dir, entry.name);
         const backup = path.join(pending, 'previous.jag');
-        if (!fs.existsSync(backup)) continue;
-        if (!fs.existsSync(path.join(pending, 'worldmap.jag')) && fs.existsSync(path.join(pending, BASEMAP_MANIFEST_NAME))) {
+        if (fs.existsSync(backup) && !fs.existsSync(path.join(pending, 'worldmap.jag')) && fs.existsSync(path.join(pending, BASEMAP_MANIFEST_NAME))) {
             const manifest = readManifest(path.join(dir, BASEMAP_MANIFEST_NAME));
             if (manifest && fingerprint(fs.readFileSync(backup), manifest.schema) !== manifest.fingerprint) continue;
             fs.renameSync(backup, path.join(dir, 'worldmap.jag'));
@@ -517,11 +519,12 @@ async function buildBasemap(opts: BakeArgs): Promise<{ manifest: BakeManifest; b
     const manPath = path.join(opts.outDir, BASEMAP_MANIFEST_NAME);
     const existing = readManifest(manPath);
     const previous = opts.ifNeeded || existing?.schema !== BASEMAP_SCHEMA ? existing : null;
-    const local = findLocalJag(opts, previous);
+    const currentAssets = previous !== null && hasCurrentAssets(opts.outDir, previous);
+    const local = findLocalJag(opts, previous, currentAssets);
     const localFingerprint = local && fingerprint(local.bytes);
     const explicitJag = local?.explicit ?? previous?.explicitJag;
     if (previous?.explicitJag && !local) throw new Error('Selected worldmap.jag is missing. Supply --jag to rebuild.');
-    if (opts.ifNeeded && previous && (local || !opts.publishTo) && isCurrentBake(opts.outDir, previous, localFingerprint)) {
+    if (currentAssets && previous && (localFingerprint === null ? !opts.publishTo : previous.fingerprint === localFingerprint)) {
         const revision = opts.revision ?? previous.revision;
         const changed = previous.revision !== revision || previous.explicitJag !== explicitJag;
         const manifest = changed ? { ...previous, revision, explicitJag } : undefined;
