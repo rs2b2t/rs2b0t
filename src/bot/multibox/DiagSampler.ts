@@ -163,13 +163,13 @@ export class DiagSampler {
     compare(agoMs: number): { agoMs: number; then: number; now: number; bots: { box: string; field: string; then: number; now: number; delta: number }[] } {
         const now = this.wallClock();
         const then = now - agoMs;
-        const past = this.at(then);
-        const present = this.at(now);
-
         const rows: { box: string; field: string; then: number; now: number; delta: number }[] = [];
-        for (const [box, nowRow] of Object.entries(present)) {
-            const thenRow = past[box];
-            if (!thenRow) {
+        for (const [box, tier] of this.bots) {
+            const coarseBaseline = agoMs >= COLD_INTERVAL_MS ? tier.cold.at(then) : null;
+            const ring = coarseBaseline ? tier.cold : tier.hot;
+            const thenRow = coarseBaseline ?? ring.at(then);
+            const nowRow = ring.at(now);
+            if (!thenRow || !nowRow) {
                 continue;
             }
             for (const field of BOT_FIELDS) {
