@@ -8,6 +8,7 @@ import { Inventory } from '../../api/inventory/Inventory.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { BankMagicBot } from '../../api/magic/BankMagicBot.js';
+import { superheatBatchSize } from '../../api/magic/superheat.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Paint } from '../../paint/Paint.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
@@ -437,7 +438,7 @@ class Restock implements Task {
             return this.withdrawAllOf(ore, withdrawSet(recipe, this.bot.useFireRunes)[ore]);
         }
         if (!(await Bank.waitReady(3500))) return false;
-        const bars = Math.min(barsPerTrip(recipe, this.bot.useFireRunes), this.bot.fundedCasts(), barsSmeltable(recipe, ore => Bank.count(ore)));
+        const bars = superheatBatchSize(recipe, this.bot.fundedCasts(), this.bot.useFireRunes, ore => Bank.count(ore));
         if (!bars) {
             this.bot.requestFinish(`the bank cannot supply one ${recipe.bar} bar`);
             return false;
