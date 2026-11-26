@@ -13,12 +13,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // Why: e2e-report stays on the tools side because it needs no browser; e2e may import tools.
-import { driftVerdict, errorTail } from '../tools/lib/e2e-report.js';
+import { driftVerdict } from '../tools/lib/e2e-report.js';
+import { run, stopRuns, type Status } from './lib/run.js';
 import { CASES } from './manifest.js';
 import { casesForLevel, selectByChanges } from './manifestQuery.js';
 import type { Case, Level } from './manifestTypes.js';
 
-type Status = 'pass' | 'fail' | 'timeout' | 'skip';
 interface Result { name: string; kind: 'gate' | 'harness'; status: Status; ms: number; note: string; }
 interface Run { startedAt: string; git: string; level: Level; results: Result[]; }
 
@@ -70,72 +70,6 @@ function pick(level: Level, only: string[]): { cases: Case[]; why: string } {
         why += '; filtered by --only';
     }
     return { cases, why };
-}
-
-const TTY = Boolean(process.stdout.isTTY);
-const VERBOSE = process.argv.includes('--verbose') || process.argv.includes('-v');
-/** How often a non-TTY run (cron, CI) prints a still-alive line. */
-const HEARTBEAT_MS = 30_000;
-
-function statusLine(label: string, started: number, last: string): void {
-    const el = `${Math.floor((Date.now() - started) / 1000)}s`.padStart(5);
-    const text = `  ⏳ ${label} ${el}  ${last}`.slice(0, (process.stdout.columns || 100) - 1);
-    if (TTY) process.stdout.write(`\r\u001b[2K${text}`);
-    else console.log(text);
-}
-
-async function run(label: string, cmd: string[], logFile: string, budgetMs: number, verdict?: (text: string) => Status, caseEnv?: Readonly<Record<string, string>>): Promise<{ status: Status; ms: number; tail: string }> {
-    const started = Date.now();
-    // Why: the case env lands after HEADED so a case may ask for a headed run of its own.
-    const proc = Bun.spawn(cmd, { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, HEADED: '0', ...caseEnv } });
-    const timer = setTimeout(() => proc.kill(9), budgetMs);
-    const log = Bun.file(logFile).writer();
-    const lines: string[] = [];
-    let last = '';
-    let beat = Date.now();
-
-    const pump = async (stream: ReadableStream<Uint8Array>): Promise<void> => {
-        const decoder = new TextDecoder();
-        const rd = stream.getReader();
-        let buf = '';
-        for (;;) {
-            const { done, value } = await rd.read();
-            if (done) break;
-            buf += decoder.decode(value, { stream: true });
-            const parts = buf.split('\n');
-            buf = parts.pop() ?? '';
-            for (const line of parts) {
-                log.write(`${line}\n`);
-                lines.push(line);
-                if (lines.length > 400) lines.shift();
-                const clean = line.trim();
-                if (!clean) continue;
-                last = clean;
-                if (VERBOSE) {
-                    if (TTY) process.stdout.write('\r\u001b[2K');
-                    console.log(`     ${clean}`.slice(0, (process.stdout.columns || 100) - 1));
-                } else if (TTY || Date.now() - beat > HEARTBEAT_MS) {
-                    beat = Date.now();
-                    statusLine(label, started, clean);
-                }
-            }
-        }
-    };
-
-    const ticker = TTY && !VERBOSE ? setInterval(() => statusLine(label, started, last), 1000) : null;
-    await Promise.all([pump(proc.stdout), pump(proc.stderr)]);
-    const code = await proc.exited;
-    clearTimeout(timer);
-    if (ticker) clearInterval(ticker);
-    if (TTY) process.stdout.write('\r\u001b[2K');
-    await log.end();
-
-    const ms = Date.now() - started;
-    const text = lines.join('\n');
-    const timedOut = ms >= budgetMs - 1000;
-    const tail = errorTail(lines);
-    const status: Status = timedOut ? 'timeout' : verdict ? verdict(text) : code === 0 ? 'pass' : 'fail';
-    return { status, ms, tail };
 }
 
 const mins = (ms: number): string => `${(ms / 60000).toFixed(1)}m`;
@@ -204,6 +138,9 @@ if (has('list')) {
 }
 
 mkdirSync(LOGS, { recursive: true });
+process.once('exit', stopRuns);
+process.once('SIGINT', () => process.exit(130));
+process.once('SIGTERM', () => process.exit(143));
 const git = (await new Response(Bun.spawn(['git', 'rev-parse', '--short', 'HEAD'], { stdout: 'pipe' }).stdout).text()).trim();
 const now: Run = { startedAt: new Date().toISOString(), git, level, results: [] };
 
