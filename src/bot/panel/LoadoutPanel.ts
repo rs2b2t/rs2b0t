@@ -233,6 +233,8 @@ export class LoadoutPanel {
         select.addEventListener('change', () => {
             this.selected = select.value;
             this.picker = null;
+            this.supplyItem.clear();
+            this.adoptCarry();
             this.render();
         });
         return select;

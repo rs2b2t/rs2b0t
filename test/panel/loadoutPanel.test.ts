@@ -78,6 +78,38 @@ describe('LoadoutPanel', () => {
         expect(Loadouts.all()[0]!.carry).toEqual([{ item: 'Lobster', qty: 16 }]);
     });
 
+    test('switching loadouts shows and edits the selected loadout\'s supplies', () => {
+        Loadouts.save([
+            { name: 'A', worn: {}, carry: [{ item: 'Lobster', qty: 16 }] },
+            { name: 'B', worn: {}, carry: [{ item: 'Shark', qty: 8 }] }
+        ]);
+        const panel = openPanel();
+        const selectLoadout = (name: string) => {
+            const select = panel.root.querySelector('select')!;
+            select.value = name;
+            select.dispatchEvent(new Event('change'));
+        };
+        const foodQuantity = () => panel.root.querySelector<HTMLInputElement>('[data-supply=Food] input')!;
+        const expectFood = (item: string, qty: number) => {
+            expect(panel.root.querySelector('[data-supply=Food] [data-role=supply-item]')!.textContent).toBe(item);
+            expect(foodQuantity().value).toBe(String(qty));
+        };
+
+        expectFood('Lobster', 16);
+        selectLoadout('B');
+        expectFood('Shark', 8);
+        const qty = foodQuantity();
+        qty.value = '10';
+        qty.dispatchEvent(new Event('change'));
+
+        panel.close();
+        panel.open();
+        expectFood('Shark', 10);
+        expect(Loadouts.byName('B')!.carry).toEqual([{ item: 'Shark', qty: 10 }]);
+        selectLoadout('A');
+        expectFood('Lobster', 16);
+    });
+
     test('a zero quantity removes the carried item', () => {
         Loadouts.save([{ name: 'melee', worn: {}, carry: [{ item: 'Lobster', qty: 16 }] }]);
         const panel = openPanel();
