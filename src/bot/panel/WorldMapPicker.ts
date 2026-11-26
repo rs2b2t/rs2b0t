@@ -938,7 +938,11 @@ export class WorldMapPicker {
                 settingsModal.open(MAP_PICKER_SETTINGS_NS, MAP_PICKER_SETTINGS, {
                     title: 'Map picker settings',
                     zIndex: 1200,
-                    onClose: () => bakeEdits.clear()
+                    footerButton: rebuildBtn,
+                    onClose: () => {
+                        toolbar.appendChild(rebuildBtn);
+                        bakeEdits.clear();
+                    }
                 });
             });
 
@@ -982,8 +986,8 @@ export class WorldMapPicker {
                         if (closed) {
                             return;
                         }
+                        SettingsStore.saveBatch(MAP_PICKER_SETTINGS_NS, submitted);
                         for (const [key, value] of submitted) {
-                            SettingsStore.save(MAP_PICKER_SETTINGS_NS, key, value);
                             if (bakeEdits.get(key) === value) bakeEdits.delete(key);
                         }
                         if (submitted.size && settingsModal.isOpen()) settingsModal.render();

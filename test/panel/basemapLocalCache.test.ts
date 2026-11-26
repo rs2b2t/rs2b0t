@@ -97,6 +97,13 @@ describe('map picker bake settings drafts', () => {
         document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-settings')!.click();
     }
 
+    function clickRebuild(inSettings: boolean): void {
+        const root = inSettings ? '.rs2b0t-modal' : '.rs2b0t-walkmap-overlay';
+        const button = document.querySelector<HTMLButtonElement>(`${root} .rs2b0t-walkmap-rebuild`);
+        expect(button).not.toBeNull();
+        button!.click();
+    }
+
     function escapeSettings(): void {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     }
@@ -212,18 +219,18 @@ describe('map picker bake settings drafts', () => {
     });
 
     test.each([false, true])('Escape restores the settings used by a successful rebuild (Settings already open: %p)', async alreadyOpen => {
-        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeBorders', 'false');
         const pending = Promise.withResolvers<Awaited<ReturnType<typeof basemapRegen.regenerateBasemap>>>();
         const bake = spyOn(basemapRegen, 'regenerateBasemap').mockReturnValue(pending.promise);
         try {
             await withPicker(async () => {
-                const rebuild = document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-rebuild')!;
                 if (alreadyOpen) {
                     openSettings();
                     bakeCheckbox('Stamp labels into rebuild').click();
                 }
-                rebuild.click();
+                clickRebuild(alreadyOpen);
+                document.querySelector<HTMLButtonElement>('.rs2b0t-confirm-yes')!.click();
+                await Promise.resolve();
                 expect(bake).toHaveBeenCalledWith(prefs({ labels: alreadyOpen }));
                 if (!alreadyOpen) openSettings();
                 bakeCheckbox('Map-square borders').click();
@@ -234,6 +241,7 @@ describe('map picker bake settings drafts', () => {
                 expect(document.querySelector('.rs2b0t-walkmap-status')?.textContent).toContain('basemap rebuilt');
                 bakeCheckbox('NPC dots').click();
                 escapeSettings();
+                expect(document.querySelector('.rs2b0t-walkmap-overlay .rs2b0t-walkmap-rebuild')).not.toBeNull();
                 expect(stored('bakeBorders')).toEqual({ local: 'false', session: 'false' });
                 expect(SettingsStore.saved(MAP_PICKER_SETTINGS_NS, 'bakeLabels')).toBe(alreadyOpen ? 'true' : undefined);
                 expect(SettingsStore.saved(MAP_PICKER_SETTINGS_NS, 'bakeNpcs')).toBeUndefined();
@@ -250,7 +258,7 @@ describe('map picker bake settings drafts', () => {
         try {
             await withPicker(async () => {
                 if (reopened) openSettings();
-                document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-rebuild')!.click();
+                clickRebuild(reopened);
                 expect(bake).toHaveBeenCalledWith(prefs());
                 if (reopened) escapeSettings();
                 localStorage.setItem('rs2b0t:set:MapPicker:bakeLabels', 'true');
@@ -277,7 +285,7 @@ describe('map picker bake settings drafts', () => {
                 openSettings();
                 bakeCheckbox("Don't ask before rebuild").click();
                 bakeCheckbox('Stamp labels into rebuild').click();
-                document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-rebuild')!.click();
+                clickRebuild(true);
                 expect(bake).toHaveBeenCalledWith(prefs({ labels: true }));
                 escapeSettings();
                 openSettings();
@@ -335,6 +343,42 @@ describe('map picker bake settings drafts', () => {
         });
     });
 
+    test.each([false, true])('a quota error restores both storage layers (previous values present: %p)', async seeded => {
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
+        const labels = 'rs2b0t:set:MapPicker:bakeLabels';
+        const borders = 'rs2b0t:set:MapPicker:bakeBorders';
+        if (seeded) {
+            sessionStorage.setItem(labels, 'false');
+            localStorage.setItem(labels, '0');
+            sessionStorage.setItem(borders, '0');
+        }
+        const before = [stored('bakeLabels'), stored('bakeBorders')];
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockResolvedValue(rebuiltMap());
+        const setItem = localStorage.setItem;
+        Object.defineProperty(localStorage, 'setItem', {
+            configurable: true,
+            value: (id: string, value: string) => {
+                if (id === borders) throw new DOMException('storage full', 'QuotaExceededError');
+                setItem.call(localStorage, id, value);
+            }
+        });
+        try {
+            await withPicker(async () => {
+                openSettings();
+                bakeCheckbox('Stamp labels into rebuild').click();
+                bakeCheckbox('Map-square borders').click();
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(document.querySelector('.rs2b0t-walkmap-status')?.textContent).toContain('rebuild failed: storage full');
+                escapeSettings();
+                expect([stored('bakeLabels'), stored('bakeBorders')]).toEqual(before);
+            });
+        } finally {
+            Object.defineProperty(localStorage, 'setItem', { value: setItem });
+            bake.mockRestore();
+        }
+    });
+
     test('a failed rebuild leaves the original draft baseline in place', async () => {
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
         const bake = spyOn(basemapRegen, 'regenerateBasemap').mockRejectedValue(new Error('fixture failure'));
@@ -342,7 +386,7 @@ describe('map picker bake settings drafts', () => {
             await withPicker(async () => {
                 openSettings();
                 bakeCheckbox('Map-square borders').click();
-                document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-rebuild')!.click();
+                clickRebuild(true);
                 await new Promise<void>(resolve => setImmediate(resolve));
                 expect(document.querySelector('.rs2b0t-walkmap-status')?.textContent).toContain('rebuild failed');
                 escapeSettings();

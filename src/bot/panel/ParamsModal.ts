@@ -85,6 +85,7 @@ export default class ParamsModal {
             zIndex?: number;
             onClose?: () => void;
             onStart?: () => void;
+            footerButton?: HTMLButtonElement;
             intro?: string;
             /** Default true when scriptName is Global. Set false for Nav settings. */
             showGlobalExtra?: boolean;
@@ -101,6 +102,7 @@ export default class ParamsModal {
         }
         this.onStart = opts?.onStart ?? null;
         this.startButton.hidden = !this.onStart;
+        if (opts?.footerButton) this.startButton.after(opts.footerButton);
         this.scriptName = scriptName;
         this.schema = schema;
         this.openTitle = opts?.title ?? null;

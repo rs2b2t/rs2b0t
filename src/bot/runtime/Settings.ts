@@ -595,6 +595,36 @@ class SettingsStoreImpl {
         const id = storageKey(name, key);
         if (hasSession) sessionStorage.setItem(id, rawString);
         if (hasLocal) localStorage.setItem(id, rawString);
+        this.notifyChange(name, key, rawString);
+    }
+
+    saveBatch(name: string, values: ReadonlyMap<string, string>): void {
+        if (!values.size) return;
+        const stores: Storage[] = [];
+        if (hasSession) stores.push(sessionStorage);
+        if (hasLocal) stores.push(localStorage);
+        const writes: { store: Storage; id: string; previous: string | null }[] = [];
+        try {
+            for (const [key, value] of values) {
+                const id = storageKey(name, key);
+                for (const store of stores) {
+                    const previous = store.getItem(id);
+                    if (previous === value) continue;
+                    store.setItem(id, value);
+                    writes.push({ store, id, previous });
+                }
+            }
+        } catch (err) {
+            for (const { store, id, previous } of writes.reverse()) {
+                if (previous === null) store.removeItem(id);
+                else store.setItem(id, previous);
+            }
+            throw err;
+        }
+        for (const [key, value] of values) this.notifyChange(name, key, value);
+    }
+
+    private notifyChange(name: string, key: string, rawString: string): void {
         for (const fn of this.changeListeners) {
             try {
                 fn(name, key, rawString);
