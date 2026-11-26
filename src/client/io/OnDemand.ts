@@ -29,6 +29,7 @@ export default class OnDemand extends OnDemandProvider {
     cycle: number = 0;
     failCount: number = 0;
     worker: Worker | null = null;
+    private workerError: Error | null = null;
     private lastIngame: boolean = false;
     private workerMessageId: number = 0;
     private workerAcks: Map<number, () => void> = new Map();
@@ -130,10 +131,18 @@ export default class OnDemand extends OnDemandProvider {
     }
 
     stop() {
-        this.running = false;
         this.worker?.postMessage({ type: 'stop' });
-        this.worker?.terminate();
-        this.worker = null;
+        this.terminateWorker();
+    }
+
+    private terminateWorker() {
+        this.running = false;
+        if (this.worker) {
+            this.worker.onmessage = null;
+            this.worker.onerror = null;
+            this.worker.terminate();
+            this.worker = null;
+        }
         for (const resolve of this.workerAcks.values()) {
             resolve();
         }
@@ -197,7 +206,7 @@ export default class OnDemand extends OnDemandProvider {
     }
 
     request(archive: number, file: number) {
-        if (archive < 0 || archive > this.versions.length || file < 0 || file > this.versions[archive].length || this.versions[archive][file] === 0) {
+        if (this.workerError || archive < 0 || archive > this.versions.length || file < 0 || file > this.versions[archive].length || this.versions[archive][file] === 0) {
             return;
         }
 
@@ -221,6 +230,9 @@ export default class OnDemand extends OnDemandProvider {
     }
 
     remaining() {
+        if (this.workerError) {
+            throw this.workerError;
+        }
         return this.requests.size();
     }
 
@@ -287,7 +299,7 @@ export default class OnDemand extends OnDemandProvider {
     }
 
     private startWorker(): void {
-        if (this.worker) {
+        if (this.worker || this.workerError) {
             return;
         }
 
@@ -321,11 +333,11 @@ export default class OnDemand extends OnDemandProvider {
         };
 
         worker.onerror = (event: ErrorEvent): void => {
-            console.error(event.message);
-            for (const resolve of this.workerAcks.values()) {
-                resolve();
-            }
-            this.workerAcks.clear();
+            this.workerError = new Error(event.message || 'Asset worker failed to load');
+            console.error(this.workerError);
+            this.terminateWorker();
+            this.requests = new LinkList2();
+            this.completed.clear();
         };
 
         worker.postMessage({
@@ -347,14 +359,17 @@ export default class OnDemand extends OnDemandProvider {
     private async postWorkerAck(message: Record<string, unknown>): Promise<void> {
         this.startWorker();
 
-        await new Promise<void>((resolve): void => {
-            const id = ++this.workerMessageId;
-            this.workerAcks.set(id, resolve);
-            this.worker?.postMessage({
-                ...message,
-                id
+        const worker = this.worker;
+        if (worker) {
+            await new Promise<void>((resolve): void => {
+                const id = ++this.workerMessageId;
+                this.workerAcks.set(id, resolve);
+                worker.postMessage({ ...message, id });
             });
-        });
+        }
+        if (this.workerError) {
+            throw this.workerError;
+        }
     }
 
     private receiveCompleted(archive: number, file: number, urgent: boolean, data: ArrayBuffer | null): void {
