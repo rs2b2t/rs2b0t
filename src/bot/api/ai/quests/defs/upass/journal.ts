@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 
 // Why: these are the `%upass` values themselves, so `--stage N` in the harness and the module's stage are one scale. "Started" is bit 11 of `%ibanmulti`, carried as a flag.
@@ -86,15 +85,6 @@ export function parseUpassJournal(lines: readonly string[] | string): QuestProgr
     return { stage: hit[1], flags };
 }
 
-export async function readUpassProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(UPASS);
-    if (status === 'complete') {
-        return { stage: UP_STAGE.COMPLETE, flags: new Set() };
-    }
-    if (status !== 'inProgress' && status !== 'notStarted') {
-        return undefined;
-    }
-    const progress = parseUpassJournal(await Quests.journal(UPASS));
-    await Modals.closeIfOpen();
-    return progress ?? (status === 'notStarted' ? { stage: UP_STAGE.NOT_STARTED, flags: new Set() } : undefined);
+export function readUpassProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(UPASS, UP_STAGE, parseUpassJournal, questProgressAt, undefined, { readNotStarted: true });
 }
