@@ -9,6 +9,7 @@ import type JagFile from '#/client/io/JagFile.js';
 import OnDemand from '#/client/io/OnDemand.js';
 import { installWallTrafficChannel } from '#/client/io/TrafficChannel.js';
 import { Client } from '#/client/shell/Client.js';
+import ClientBuild from '#/client/shell/ClientBuild.js';
 
 const originalWorker = globalThis.Worker;
 
@@ -41,6 +42,17 @@ function loaderFixture() {
 function failWorker(loader: OnDemand) {
     const worker = loader.worker!;
     worker.onerror!(new ErrorEvent('error', { message: 'Synthetic module load failure' }));
+}
+
+function completeFile(loader: OnDemand, archive: number, file: number, data: Uint8Array | null) {
+    let buffer: ArrayBuffer | null = null;
+    if (data) {
+        const compressed = gzipSync(data);
+        const payload = new Uint8Array(compressed.length + 2);
+        payload.set(compressed);
+        buffer = payload.buffer;
+    }
+    loader.worker!.onmessage!(new MessageEvent('message', { data: { type: 'completed', archive, file, urgent: true, data: buffer } }));
 }
 
 test('cache workers inherit the traffic channel of the frame that starts them', () => {
@@ -124,16 +136,58 @@ test('a healthy worker delivers the requested animation exactly once', async () 
     expect(post).toHaveBeenCalledWith({ type: 'request', archive: 1, file: 0 });
     expect(loader.remaining()).toBe(1);
 
-    const compressed = gzipSync(Uint8Array.of(42));
-    const file = new Uint8Array(compressed.length + 2);
-    file.set(compressed);
-    const worker = loader.worker!;
-    worker.onmessage!(new MessageEvent('message', { data: { type: 'completed', archive: 1, file: 0, urgent: true, data: file.buffer } }));
+    completeFile(loader, 1, 0, Uint8Array.of(42));
 
     await loader.run();
     expect(loader.loop()).toMatchObject({ archive: 1, file: 0, data: Uint8Array.of(42) });
     expect(loader.remaining()).toBe(0);
     expect(loader.loop()).toBeNull();
+});
+
+test.each([
+    { missing: 'ground', file: 0, pendingStatus: -2 },
+    { missing: 'location', file: 1, pendingStatus: -1 }
+])('a missing $missing file waits only for the other map file and player info', async ({ file, pendingStatus }) => {
+    const loader = loaderFixture();
+    loader.versions[3] = [1, 1];
+    const mapBuild = mock(() => {});
+    const client: Client = Object.assign(Object.create(Client.prototype), {
+        onDemand: loader, sceneState: 1, awaitingPlayerInfo: true, minusedlevel: ClientBuild.minusedlevel,
+        mapBuildIndex: Int32Array.of(0), mapBuildGroundFile: [0], mapBuildLocationFile: [1],
+        mapBuildGroundData: [null], mapBuildLocationData: [null], mapBuild, out: { p1Enc() {} }
+    });
+    loader.request(3, 0);
+    loader.request(3, 1);
+    completeFile(loader, 3, file, null);
+    await client.onDemandLoop();
+    expect(loader.remaining()).toBe(1);
+    expect(client['mapBuildGroundFile']).toEqual([file === 0 ? -1 : 0]);
+    expect(client['mapBuildLocationFile']).toEqual([file === 1 ? -1 : 1]);
+    expect(client['checkScene']()).toBe(pendingStatus);
+    expect(client['sceneState']).toBe(1);
+
+    const data = Uint8Array.of(0);
+    completeFile(loader, 3, 1 - file, data);
+    await client.onDemandLoop();
+    expect(loader.remaining()).toBe(0);
+    expect(client['mapBuildGroundData']).toEqual([file === 0 ? null : data]);
+    expect(client['mapBuildLocationData']).toEqual([file === 1 ? null : data]);
+    expect(client['checkScene']()).toBe(-4);
+    client['awaitingPlayerInfo'] = false;
+    expect(client['checkScene']()).toBe(0);
+    expect(client['sceneState']).toBe(2);
+    expect(mapBuild).toHaveBeenCalledTimes(1);
+});
+
+test('a missing animation drains without unpacking', async () => {
+    const loader = loaderFixture();
+    const client: Client = Object.assign(Object.create(Client.prototype), { onDemand: loader });
+    const unpack = spyOn(AnimFrame, 'unpack').mockImplementation(() => {});
+    loader.request(1, 0);
+    completeFile(loader, 1, 0, null);
+    await client.onDemandLoop();
+    expect(loader.remaining()).toBe(0);
+    expect(unpack).not.toHaveBeenCalled();
 });
 
 test('priority prefetch resolves on acknowledgement or normal shutdown', async () => {

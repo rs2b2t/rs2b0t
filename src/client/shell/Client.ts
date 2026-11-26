@@ -1342,27 +1342,7 @@ export class Client extends GameShell {
                 return;
             }
 
-            if (!req.data) {
-                continue;
-            }
-
-            if (req.archive === 0) {
-                Model.unpack(req.file, req.data);
-
-                if ((this.onDemand.getModelUse(req.file) & 0x62) != 0) {
-                    this.redrawSide = true;
-
-                    if (this.chatModalId !== -1) {
-                        this.redrawChat = true;
-                    }
-                }
-            } else if (req.archive === 1) {
-                AnimFrame.unpack(req.data);
-            } else if (req.archive === 2) {
-                if (this.midiSong === req.file) {
-                    this.saveMidi(req.data, this.midiFading);
-                }
-            } else if (req.archive === 3) {
+            if (req.archive === 3) {
                 if (this.mapBuildGroundData && this.mapBuildLocationData && this.sceneState === 1) {
                     for (let i = 0; i < this.mapBuildGroundData.length; i++) {
                         if (this.mapBuildGroundFile[i] == req.file) {
@@ -1385,6 +1365,24 @@ export class Client extends GameShell {
                             break;
                         }
                     }
+                }
+            } else if (!req.data) {
+                continue;
+            } else if (req.archive === 0) {
+                Model.unpack(req.file, req.data);
+
+                if ((this.onDemand.getModelUse(req.file) & 0x62) != 0) {
+                    this.redrawSide = true;
+
+                    if (this.chatModalId !== -1) {
+                        this.redrawChat = true;
+                    }
+                }
+            } else if (req.archive === 1) {
+                AnimFrame.unpack(req.data);
+            } else if (req.archive === 2) {
+                if (this.midiSong === req.file) {
+                    this.saveMidi(req.data, this.midiFading);
                 }
             } else if (req.archive === 93) {
                 if (this.onDemand.hasMapLocFile(req.file)) {
