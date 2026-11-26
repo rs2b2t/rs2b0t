@@ -1,4 +1,5 @@
 import Tile from '../../../../../geometry/Tile.js';
+import { inWestArdougne } from '../../../../map/regions.js';
 import { bankedItem as banked, heldItem as held, wornItem as worn } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 
@@ -129,7 +130,7 @@ export function bioArea(tile: QuestSnapshot['tile']): BioArea {
     if (level === 0 && x >= 2542 && x <= 2555 && z >= 3321 && z <= 3327) {
         return 'hq';
     }
-    if (level === 0 && x >= 2433 && x <= 2556 && z >= 3266 && z <= 3334) {
+    if (inWestArdougne(tile)) {
         return 'west';
     }
     return level === 0 ? 'mainland' : 'unknown';

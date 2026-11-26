@@ -218,13 +218,35 @@ export default class OnDemand extends OnDemandProvider {
     }
 
     request(archive: number, file: number) {
+        if (this.registerRequest(archive, file)) {
+            this.postWorker({ type: 'request', archive, file });
+        }
+    }
+
+    requestStartupFiles(archive: 0 | 1) {
+        let files: number[] = [];
+        const count = this.getFileCount(archive);
+        for (let file = 0; file < count; file++) {
+            if (archive === 0 && (this.getModelUse(file) & 1) === 0) continue;
+            if (!this.registerRequest(archive, file)) continue;
+
+            files.push(file);
+            if (files.length === 32) {
+                this.postWorker({ type: 'requestBatch', archive, files });
+                files = [];
+            }
+        }
+        if (files.length) this.postWorker({ type: 'requestBatch', archive, files });
+    }
+
+    private registerRequest(archive: number, file: number): boolean {
         if (this.workerError || archive < 0 || archive >= this.versions.length || file < 0 || file >= this.versions[archive].length || this.versions[archive][file] === 0) {
-            return;
+            return false;
         }
 
         const pending = this.pendingByArchive[archive];
         if (pending.has(file)) {
-            return;
+            return false;
         }
 
         const req = new OnDemandRequest();
@@ -234,11 +256,7 @@ export default class OnDemand extends OnDemandProvider {
 
         this.requests.push(req);
         pending.set(file, req);
-        this.postWorker({
-            type: 'request',
-            archive,
-            file
-        });
+        return true;
     }
 
     remaining() {
