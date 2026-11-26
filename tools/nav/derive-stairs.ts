@@ -27,6 +27,7 @@ const LADDER_LOC_IDS = new Set([1746, 1747, 1748, 1749, 1750]);
 // The Castle Wars spawn trapdoors have no Climb-down, and the Handelmort stairs are trapped.
 // Why: the rejected auto-reverses stay in stairEdges.json as documentation, and PathFinder must not route through them.
 const DISABLED_AUTO_REVERSES = new Map<string, string>([
+    ['3220,3496,1>3217,3496,0', 'Varrock Palace northeast staircase descends to (3220,3496,0) in stairs.rs2.'],
     ['2370,3134,2>2370,3134,1', 'Castle Wars Zamorak spawn trapdoor (loc 4472) only offers Open; revision 274 has no Climb-down loc or handler.'],
     ['2429,3075,2>2429,3075,1', 'Castle Wars Saradomin spawn trapdoor (loc 4471) only offers Open; revision 274 has no Climb-down loc or handler.'],
     ['2631,3325,0>2631,3321,1', 'Handelmort Mansion stairs are trapped: quest_totem.rs2 drops anyone who has not Investigated them into the Ardougne sewers for a fifth of their hitpoints. defs/tribaltotem.ts disarms and climbs them itself.']

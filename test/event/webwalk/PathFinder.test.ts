@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { PathFinder, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
 
-function fullyWalkablePack(): Uint8Array {
+function fullyWalkablePack(exitMask = 0xff): Uint8Array {
     const perLevel = 4096 + 512;
     const bytes = new Uint8Array(10 + 3 + 2 * perLevel);
     bytes[0] = 0x4c;
@@ -16,7 +16,7 @@ function fullyWalkablePack(): Uint8Array {
     bytes[pos++] = 0;
     bytes[pos++] = 0b0011;
     for (let level = 0; level < 2; level++) {
-        bytes.fill(0xff, pos, pos + 4096);
+        bytes.fill(exitMask, pos, pos + 4096);
         pos += 4096;
         bytes.fill(0xff, pos, pos + 512);
         pos += 512;
@@ -106,6 +106,30 @@ describe('PathFinder level-change avoidance', () => {
     const from = { x: 10, z: 10, level: 0 };
     const to = { x: 10, z: 12, level: 1 };
     const stair: TransportEdgeData = { from, to, locName: 'Test Staircase', action: 'Climb-up', kind: 'stair' };
+
+    test('keeps the dungeon arrival when an equal-cost stair arrival cannot descend', () => {
+        const pack = fullyWalkablePack(0);
+        const exits = pack.subarray(13, 13 + 4096);
+        const start = { x: 24, z: 20, level: 0 };
+        const landing = { x: 28, z: 20, level: 1 };
+        const goal = { x: 29, z: 20, level: 0 };
+        const north = 1, east = 2;
+        for (let x = start.x; x < 27; x++) exits[x * 64 + start.z] = east;
+        exits[start.x * 64 + start.z] |= north;
+
+        const finder = new PathFinder(pack);
+        finder.addEdges([], [
+            { ...stair, from: { ...start, x: 27 }, to: landing },
+            { ...stair, from: landing, to: goal, action: 'Climb-down' },
+            { from: { ...start, x: 1 }, to: goal, locName: 'Passage', action: 'Enter', kind: 'shortcut' }
+        ]);
+        expect(finder.findPath(start, goal)).toMatchObject({ ok: false, reason: 'unreachable' });
+
+        finder.addEdges([], [{ from: { ...start, z: 21 }, to: landing, locName: 'Tunnel', action: 'Enter', kind: 'dungeon' }]);
+        expect(finder.findPath(start, goal)).toMatchObject({
+            ok: true, cost: 15, hops: [{ kind: 'dungeon' }, { kind: 'stair' }]
+        });
+    });
 
     test('level-change transport is used when its key is NOT avoided', () => {
         const finder = new PathFinder(fullyWalkablePack());

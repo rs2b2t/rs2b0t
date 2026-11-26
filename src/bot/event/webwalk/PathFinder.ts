@@ -21,11 +21,13 @@ import { DEFAULT_EDGE_COST, edgeCostForKind, teleportEdgeCost } from './geometry
 // Why: multiply instead of bit-shifting so the 0-15 essence return index survives JS's 32-bit wrap.
 const TILE_KEY_MASK = 0x3fffffff;
 const ESSENCE_STATE_SLOTS = 16;
-function packSearchKey(tileId: number, essenceReturnIdx: number): number {
-    return (tileId & TILE_KEY_MASK) * ESSENCE_STATE_SLOTS + (essenceReturnIdx & 0xf);
+const STAIR_ORIGIN_STRIDE = (TILE_KEY_MASK + 1) * ESSENCE_STATE_SLOTS;
+function packSearchKey(tileId: number, essenceReturnIdx: number, stairOriginLevel = -1): number {
+    const tileAndEssence = (tileId & TILE_KEY_MASK) * ESSENCE_STATE_SLOTS + (essenceReturnIdx & 0xf);
+    return (stairOriginLevel + 1) * STAIR_ORIGIN_STRIDE + tileAndEssence;
 }
 function searchTileId(key: number): number {
-    return (key / ESSENCE_STATE_SLOTS) | 0;
+    return (key / ESSENCE_STATE_SLOTS) & TILE_KEY_MASK;
 }
 function searchEssenceIdx(key: number): number {
     return key % ESSENCE_STATE_SLOTS;
@@ -802,7 +804,7 @@ export class PathFinder {
         const gScore = new Map<number, number>();
         const cameFrom = new Map<number, number>();
         /** Arrival search-key to transport metadata + edge cost for hop reconstruct. */
-        const viaEdge = new Map<number, { transport: TransportInfo; cost: number; kind?: string }>();
+        const viaEdge = new Map<number, { transport: TransportInfo; cost: number }>();
         const closed = new Set<number>();
         const open = new MinHeap();
         const heuristic = this.buildHeuristic(toRaw, goals, ctx);
@@ -873,12 +875,9 @@ export class PathFinder {
             // Why: a staircase with 2 ground-floor stand tiles is baked as one edge per combination, so up-then-back-down composes into a same-level teleport through the wall between them.
             // Why: the server lands you on one tile only, so the walker climbs down on the wrong side and bounces; a stair hop back to the level it came from is refused.
             // Why: a multi-storey climb keeps going the same way and is unaffected.
-            const arrivedBy = viaEdge.get(current);
-            const cameFromLevel = arrivedBy?.kind === 'stair'
-                ? nodeLevel(searchTileId(cameFrom.get(current) ?? current))
-                : null;
+            const cameFromLevel = Math.floor(current / STAIR_ORIGIN_STRIDE) - 1;
             for (const edge of extras) {
-                if (cameFromLevel !== null && edge.kind === 'stair' && nodeLevel(edge.to) === cameFromLevel) {
+                if (edge.kind === 'stair' && nodeLevel(edge.to) === cameFromLevel) {
                     continue;
                 }
                 if (avoidDoors && avoidDoors.has(`${edge.transport.locX}|${edge.transport.locZ}`)) {
@@ -898,7 +897,7 @@ export class PathFinder {
                 // Entry hop updates path session return (content sets exit_essence_mine_coord).
                 const sets = edge.requires?.essenceEntrySetsReturn;
                 const nextEssence = sets !== undefined ? essenceReturnStateIndex(sets) : curEssence;
-                const neighbor = packSearchKey(edge.to, nextEssence);
+                const neighbor = packSearchKey(edge.to, nextEssence, edge.kind === 'stair' ? level : -1);
                 if (closed.has(neighbor)) {
                     continue;
                 }
@@ -909,7 +908,7 @@ export class PathFinder {
                 }
                 gScore.set(neighbor, tentative);
                 cameFrom.set(neighbor, current);
-                viaEdge.set(neighbor, { transport: edge.transport, cost: edge.cost, kind: edge.kind });
+                viaEdge.set(neighbor, { transport: edge.transport, cost: edge.cost });
                 open.push((tentative + heuristic(nodeX(edge.to), nodeZ(edge.to))) * 1048576 - tentative, neighbor);
             }
         }
