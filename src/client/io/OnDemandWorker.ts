@@ -1,3 +1,5 @@
+import { TrafficMeter, type TrafficMessage } from '#/client/io/TrafficMeter.js';
+import { TRAFFIC_END } from '#/client/io/TrafficChannel.js';
 import ClientStream from '#/client/io/ClientStream.js';
 
 type WorkerRequest = {
@@ -10,6 +12,7 @@ type WorkerRequest = {
 
 type InitMessage = {
     type: 'init';
+    trafficPort?: MessagePort | 'relay' | null;
     versions: Uint16Array[];
     crcs: Int32Array[];
     host: string;
@@ -37,6 +40,7 @@ type CompletedMessage = {
 };
 
 type OutboundMessage =
+    | TrafficMessage
     | CompletedMessage
     | { type: 'ready' }
     | { type: 'message'; message: string }
@@ -172,6 +176,9 @@ class WorkerOnDemand {
     loopBusy: boolean = false;
     dbReady: Promise<void>;
 
+    private readonly meter: TrafficMeter;
+    private readonly trafficPort?: MessagePort | null;
+
     constructor(message: InitMessage) {
         this.versions = message.versions;
         this.crcs = message.crcs;
@@ -179,6 +186,12 @@ class WorkerOnDemand {
         this.host = message.host;
         this.secured = message.secured;
         this.ingame = message.ingame;
+        if (message.trafficPort === 'relay') {
+            this.meter = new TrafficMeter({ channel: { postMessage: delta => worker.postMessage(delta), close() {} } });
+        } else {
+            this.trafficPort = message.trafficPort;
+            this.meter = new TrafficMeter({ channel: this.trafficPort });
+        }
 
         if (message.dbEnabled) {
             this.dbReady = openDatabase().then((db) => {
@@ -191,6 +204,8 @@ class WorkerOnDemand {
 
     stop(): void {
         this.running = false;
+        this.trafficPort?.postMessage(TRAFFIC_END);
+        this.meter.close();
         this.stream?.close();
         this.stream = null;
         this.db?.close();
@@ -600,7 +615,7 @@ class WorkerOnDemand {
                 }
 
                 this.socketOpenTime = now;
-                this.stream = new ClientStream(await ClientStream.openSocket(this.host, this.secured));
+                this.stream = new ClientStream(await ClientStream.openSocket(this.host, this.secured), this.meter);
 
                 this.buf[0] = 15;
                 this.stream.write(this.buf, 1);

@@ -7,7 +7,6 @@ import { BUILD_INFO, formatBuildInfo } from '../runtime/buildInfo.js';
 import { installNavWorkerPool, type NavPoolHost } from '../event/webwalk/NavWorkerClient.js';
 import { installWorkerClockHub } from '../runtime/WorkerClock.js';
 import { installDiagnostics } from './installDiagnostics.js';
-import { installWallTrafficChannel } from '../../client/io/TrafficChannel.js';
 import { TrafficCollector } from '../adapter/TrafficAdapter.js';
 import { DomSlotOps, orderedSlotElements } from './DomSlotOps.js';
 import { indexByUsername, MultiBoxController, normalizeUsername } from './MultiBoxController.js';
@@ -59,7 +58,7 @@ function boot(): void {
     stopAll.addEventListener('click', () => controller.stopAll());
     renderersOff.addEventListener('click', () => controller.setAllRenderers(false));
     renderersOn.addEventListener('click', () => controller.setAllRenderers(true));
-    const traffic = new TrafficCollector({ channelName: installWallTrafficChannel(document) });
+    const traffic = new TrafficCollector({ wall: document });
     const resources = new ResourcePanel(
         {
             botCount: document.getElementById('mbx-resource-bots')!,

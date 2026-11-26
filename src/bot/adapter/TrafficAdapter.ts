@@ -1,4 +1,4 @@
-import { openTrafficChannel, type TrafficChannelOptions } from '#/client/io/TrafficChannel.js';
+import { installWallTrafficChannel, openTrafficChannel, type TrafficChannelOptions } from '#/client/io/TrafficChannel.js';
 import type { TrafficTotals } from '#/client/io/TrafficMeter.js';
 
 export type { TrafficTotals } from '#/client/io/TrafficMeter.js';
@@ -9,6 +9,7 @@ export type TrafficSnapshot =
     | { status: 'unavailable'; reason: string };
 
 interface TrafficCollectorOptions extends TrafficChannelOptions {
+    wall?: Document;
     now?: () => number;
     publisherTimeoutMs?: number;
 }
@@ -25,7 +26,7 @@ function validBytes(value: unknown): value is number {
 
 /** Aggregates payload deltas published by every bot frame and cache worker. */
 export class TrafficCollector {
-    private readonly channel: BroadcastChannel | null;
+    private readonly closeChannel: (() => void) | null;
     private readonly now: () => number;
     private readonly publisherTimeoutMs: number;
     private readonly startedAt: number | null;
@@ -43,17 +44,22 @@ export class TrafficCollector {
         }
         this.startedAt = this.readNow();
 
-        const channel = openTrafficChannel(options);
-        this.channel = channel;
+        if (options.wall) {
+            this.closeChannel = installWallTrafficChannel(options.wall, data => this.receive(data));
+        } else {
+            const channel = openTrafficChannel(options);
+            if (channel) channel.onmessage = event => this.receive(event.data);
+            this.closeChannel = channel && (() => channel.close());
+        }
 
-        if (!channel) {
+        if (options.wall && typeof MessageChannel === 'undefined') {
+            this.snapshotState = { status: 'unavailable', reason: 'MessageChannel is unavailable' };
+        } else if (!this.closeChannel) {
             this.snapshotState = { status: 'unavailable', reason: 'BroadcastChannel is unavailable' };
         } else if (this.startedAt === null) {
             this.snapshotState = { status: 'unavailable', reason: 'browser traffic clock is unavailable' };
-            channel.onmessage = event => this.receive(event.data);
         } else {
             this.snapshotState = { status: 'measuring' };
-            channel.onmessage = event => this.receive(event.data);
         }
     }
 
@@ -62,7 +68,7 @@ export class TrafficCollector {
             return { status: 'unavailable', reason: 'browser traffic collector is closed' };
         }
         const now = this.readNow();
-        if (this.channel && now === null) {
+        if (this.closeChannel && now === null) {
             this.snapshotState = { status: 'unavailable', reason: 'browser traffic clock is unavailable' };
         } else if (now !== null && this.snapshotState.status === 'measuring' && this.startedAt !== null && now - this.startedAt >= this.publisherTimeoutMs) {
             this.snapshotState = { status: 'unavailable', reason: 'browser traffic publisher did not appear' };
@@ -77,10 +83,7 @@ export class TrafficCollector {
             return;
         }
         this.closed = true;
-        if (this.channel) {
-            this.channel.onmessage = null;
-            this.channel.close();
-        }
+        this.closeChannel?.();
     }
 
     private receive(value: unknown): void {
