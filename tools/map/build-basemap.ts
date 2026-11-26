@@ -109,24 +109,21 @@ function findLocalJag(opts: BakeArgs, previous: BakeManifest | null) {
     }
     const engineJag = path.join(opts.engine, 'data/pack/mapview/worldmap.jag');
     const cacheJag = path.join(opts.outDir, 'worldmap.jag');
-    if (previous && previous.explicitJag !== false && fs.existsSync(cacheJag)) {
-        const bytes = fs.readFileSync(cacheJag);
-        if (fingerprint(bytes, previous.schema) === previous.fingerprint) {
-            const explicit = previous.explicitJag ?? (!fs.existsSync(engineJag) || !bytes.equals(fs.readFileSync(engineJag)));
-            return { path: cacheJag, bytes, explicit };
-        }
-    }
-    const file = fs.existsSync(engineJag) ? engineJag : cacheJag;
-    if (!fs.existsSync(file)) {
+    const hasEngine = fs.existsSync(engineJag);
+    const file = hasEngine ? engineJag : cacheJag;
+    const hasLocal = hasEngine || fs.existsSync(cacheJag);
+    if (previous && (previous.explicitJag !== false || previous.schema !== BASEMAP_SCHEMA || !hasLocal)) {
         const published = opts.publishTo && path.join(opts.publishTo, 'worldmap.jag');
-        if (previous && published && fs.existsSync(published)) {
-            const bytes = fs.readFileSync(published);
+        for (const candidate of [cacheJag, published]) {
+            if (!candidate || !fs.existsSync(candidate)) continue;
+            const bytes = fs.readFileSync(candidate);
             if (fingerprint(bytes, previous.schema) === previous.fingerprint) {
-                return { path: published, bytes, explicit: previous.explicitJag ?? true };
+                const explicit = previous.explicitJag ?? (!hasEngine || !bytes.equals(fs.readFileSync(engineJag)));
+                return { path: candidate, bytes, explicit };
             }
         }
-        return null;
     }
+    if (!hasLocal) return null;
     const bytes = fs.readFileSync(file);
     if (previous?.explicitJag && fingerprint(bytes, previous.schema) !== previous.fingerprint) {
         throw new Error('Selected worldmap.jag is missing or changed. Supply --jag to select an archive.');
@@ -404,30 +401,55 @@ async function bake(jagBytes: Uint8Array): Promise<BakeResult> {
 
 async function main(): Promise<void> {
     const opts = parseArgs();
-    fs.mkdirSync(opts.outDir, { recursive: true });
-    // Why: an exclusive SQLite transaction locks this output directory across processes, even while a baker is paused.
-    const lock = new Database(path.join(opts.outDir, '.basemap-lock.sqlite'));
+    const dirs = [opts.outDir];
+    if (opts.publishTo) dirs.push(opts.publishTo);
+    const lockDirs = new Set(dirs.map(dir => {
+        fs.mkdirSync(dir, { recursive: true });
+        return fs.realpathSync(dir);
+    }));
+    const locks: Database[] = [];
     try {
-        lock.run('PRAGMA busy_timeout = 60000');
-        lock.run('BEGIN EXCLUSIVE');
+        // Why: both staging and published archives can be inputs, so lock them in a consistent order.
+        for (const dir of [...lockDirs].sort()) {
+            const lock = new Database(path.join(dir, '.basemap-lock.sqlite'));
+            locks.push(lock);
+            lock.run('PRAGMA busy_timeout = 60000');
+            lock.run('BEGIN EXCLUSIVE');
+        }
         const manifest = await buildBasemap(opts);
-        if (opts.publishTo) publishBasemap(opts.outDir, opts.publishTo, manifest);
+        if (opts.publishTo && lockDirs.size > 1) publishBasemap(opts.outDir, opts.publishTo, manifest);
     } finally {
-        lock.close();
+        for (const lock of locks.reverse()) lock.close();
     }
 }
 
 function publishBasemap(outDir: string, dest: string, manifest: BakeManifest): void {
-    fs.mkdirSync(dest, { recursive: true });
-    for (const name of [...assetUrls(manifest), 'worldmap.jag', BASEMAP_MANIFEST_NAME]) {
-        const file = path.join(dest, name);
-        const temp = `${file}.${process.pid}.tmp`;
-        try {
-            fs.copyFileSync(path.join(outDir, name), temp);
-            fs.renameSync(temp, file);
-        } finally {
-            fs.rmSync(temp, { force: true });
+    const pending = fs.mkdtempSync(path.join(dest, '.basemap-'));
+    function stage(name: string): string {
+        const temp = path.join(pending, name);
+        fs.copyFileSync(path.join(outDir, name), temp);
+        return temp;
+    }
+    try {
+        for (const name of assetUrls(manifest)) {
+            fs.renameSync(stage(name), path.join(dest, name));
         }
+        const jag = path.join(dest, 'worldmap.jag');
+        const nextJag = stage('worldmap.jag');
+        const nextManifest = stage(BASEMAP_MANIFEST_NAME);
+        const backup = path.join(pending, 'previous.jag');
+        const hadJag = fs.existsSync(jag);
+        if (hadJag) fs.copyFileSync(jag, backup);
+        fs.renameSync(nextJag, jag);
+        try {
+            fs.renameSync(nextManifest, path.join(dest, BASEMAP_MANIFEST_NAME));
+        } catch (err) {
+            if (hadJag) fs.renameSync(backup, jag);
+            else fs.unlinkSync(jag);
+            throw err;
+        }
+    } finally {
+        fs.rmSync(pending, { recursive: true, force: true });
     }
 }
 
