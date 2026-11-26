@@ -1,4 +1,4 @@
-
+export { countMatching, lastMatchingIndex } from '../../api/cooking/CookingInventory.js';
 
 export const COOK_MODE_OPTIONS = ['Off', 'Cook then bank', 'Bank raw then cook'] as const;
 export type CookMode = 'off' | 'cook-then-bank' | 'bank-raw-then-cook';
@@ -124,19 +124,6 @@ export function rawMatchesCookFilter(name: string | null | undefined, filter: st
     const n = (name ?? '').toLowerCase();
     const bare = f.replace(/^raw\s+/, '');
     return n.includes(f) || (bare.length > 0 && n.includes(bare));
-}
-
-export function countMatching(items: readonly { name: string | null }[], pred: (n: string | null) => boolean): number {
-    return items.filter(i => pred(i.name)).length;
-}
-
-export function lastMatchingIndex(items: readonly { name: string | null }[], pred: (n: string | null) => boolean): number {
-    for (let i = items.length - 1; i >= 0; i--) {
-        if (pred(items[i].name)) {
-            return i;
-        }
-    }
-    return -1;
 }
 
 export function countRawInBank(
