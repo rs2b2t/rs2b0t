@@ -505,17 +505,7 @@ export class PriceBookPanel {
         const input = el('input', 'rs2b0t-loadout-qty');
         input.dataset.role = role;
         if (big) {
-            input.type = 'text';
-            input.inputMode = 'numeric';
-            input.value = formatPrice(value);
-            input.addEventListener('change', () => {
-                const parsed = parsePrice(input.value);
-                if (parsed === null) {
-                    input.value = formatPrice(value);
-                    return;
-                }
-                onChange(parsed);
-            });
+            this.configurePriceInput(input, value, onChange);
         } else {
             input.type = 'number';
             input.min = '0';
@@ -524,6 +514,22 @@ export class PriceBookPanel {
         }
         wrap.appendChild(input);
         return wrap;
+    }
+
+    private configurePriceInput(input: HTMLInputElement, value: number, onChange: (value: number) => void): () => void {
+        input.type = 'text';
+        input.inputMode = 'numeric';
+        input.value = formatPrice(value);
+        const savePrice = (): void => {
+            const parsed = parsePrice(input.value);
+            if (parsed === null) {
+                input.value = formatPrice(value);
+                return;
+            }
+            onChange(parsed);
+        };
+        input.addEventListener('change', savePrice);
+        return savePrice;
     }
 
     private table(rows: readonly DisplayRow[]): HTMLElement {
@@ -717,21 +723,8 @@ export class PriceBookPanel {
         const onChange = (next: number | null) => this.editCurrent(book => setField(book, row.id, role, next));
         const cell = el('span', 'rs2b0t-pricebook-cell');
         const input = el('input', 'rs2b0t-loadout-qty');
-        // Why: the box shows 1.25M, which a number input will not hold, so it takes text and parses it back.
-        input.type = 'text';
-        input.inputMode = 'numeric';
         input.dataset.role = role;
-        input.value = formatPrice(value);
-        const savePrice = (): void => {
-            const parsed = parsePrice(input.value);
-            if (parsed === null) {
-                // Why: an unreadable edit would store NaN, so the box goes back to the old value.
-                input.value = formatPrice(value);
-                return;
-            }
-            onChange(parsed);
-        };
-        input.addEventListener('change', savePrice);
+        const savePrice = this.configurePriceInput(input, value, onChange);
         cell.appendChild(input);
         if (pinned) {
             input.dataset.pinned = 'true';
