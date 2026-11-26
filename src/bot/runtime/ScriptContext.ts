@@ -9,7 +9,7 @@ type ScriptState = 'running' | 'paused' | 'stopping' | 'stopped' | 'crashed';
 
 type LogLevel = 'info' | 'warn' | 'error';
 
-interface LogLine {
+export interface LogLine {
     time: number;
     level: LogLevel;
     msg: string;
@@ -53,28 +53,29 @@ export class ScriptContext {
     private pausedAt = 0;
 
     log: LogLine[] = [];
-    private logListeners = new Set<() => void>();
+    private logListeners = new Set<(line: LogLine) => void>();
 
     get aborted(): boolean {
         return this.state === 'stopping' || this.state === 'stopped' || this.state === 'crashed';
     }
 
     addLog(level: LogLevel, msg: string): void {
-        this.log.push({ time: Date.now(), level, msg });
+        const line = { time: Date.now(), level, msg };
+        this.log.push(line);
         if (this.log.length > LOG_RING_CAPACITY) {
             this.log.splice(0, this.log.length - LOG_RING_CAPACITY);
         }
 
         for (const listener of this.logListeners) {
             try {
-                listener();
+                listener(line);
             } catch {
                 // A broken log listener must not take down the script it is watching.
             }
         }
     }
 
-    onLog(cb: () => void): () => void {
+    onLog(cb: (line: LogLine) => void): () => void {
         this.logListeners.add(cb);
         return () => this.logListeners.delete(cb);
     }
