@@ -1,3 +1,5 @@
+import { restockQuantity } from './restockQuantity.js';
+
 export interface FishingGearPiece {
 
     name: string;
@@ -137,16 +139,10 @@ export function fishingRestockPlan(
 ): { name: string; qty: number }[] {
     const plan: { name: string; qty: number }[] = [];
     for (const g of method.gear) {
-        const have = invCount(g.name);
-        const need = g.restock - have;
-        if (need <= 0) {
-            continue;
+        const qty = restockQuantity(g.name, g.restock, invCount, bankCount);
+        if (qty !== 0) {
+            plan.push({ name: g.name, qty });
         }
-        const available = bankCount(g.name);
-        if (available <= 0) {
-            continue;
-        }
-        plan.push({ name: g.name, qty: Math.min(need, available) });
     }
     return plan;
 }

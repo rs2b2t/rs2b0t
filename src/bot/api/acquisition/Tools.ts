@@ -1,4 +1,6 @@
 
+import { restockQuantity } from '../../data/restockQuantity.js';
+
 export interface ToolTier {
     name: string;
     /** Skill level required to *use* the tool (mining / woodcutting). */
@@ -225,18 +227,11 @@ export function toolRestockPlan(
             plan.push({ name: bestOwned, qty: 1, equip: r.equip === true });
             continue;
         }
-        const min = r.min ?? 1;
-        const target = r.restock ?? min;
-        const have = invCount(r.name);
-        const need = target - have;
-        if (need <= 0) {
-            continue;
+        const target = r.restock ?? r.min ?? 1;
+        const qty = restockQuantity(r.name, target, invCount, bankCount);
+        if (qty !== 0) {
+            plan.push({ name: r.name, qty, equip: r.equip === true });
         }
-        const available = bankCount(r.name);
-        if (available <= 0) {
-            continue;
-        }
-        plan.push({ name: r.name, qty: Math.min(need, available), equip: r.equip === true });
     }
     return plan;
 }
