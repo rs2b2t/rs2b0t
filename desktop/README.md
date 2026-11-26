@@ -67,6 +67,9 @@ initialized store, recovery imports only profiles unless a settings retry is
 already pending for that origin. It can replace an empty
 plaintext roster and preserves populated rosters and encrypted vaults.
 Ordinary launches preserve deletions.
+If neither origin has a usable roster and one contains malformed profile data,
+startup reports the affected storage key. Correcting the legacy data lets the
+next migration attempt recover the profiles.
 
 ## Package a distributable
 

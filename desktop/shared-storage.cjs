@@ -8,6 +8,8 @@ const accountsKey = 'rs2b0t:multibox:accounts';
 const profileKeys = [vaultKey, accountsKey];
 const gcmTagBytes = 16;
 
+class InvalidLegacyProfiles extends Error {}
+
 function isEmptyRoster(value) {
     return typeof value === 'string' && /^[ \t\r\n]*\[[ \t\r\n]*\][ \t\r\n]*$/.test(value);
 }
@@ -42,15 +44,19 @@ function migrateProfiles(data, sources, { firstMigration, recover }) {
     }
     if (profileKeys.some(key => key in data && (firstMigration || !isEmptyRoster(data[key])))) return;
     let selected = [];
+    let invalidKey;
     for (const source of sources) {
         const keys = !recover && isEmptyRoster(source[vaultKey]) ? [vaultKey] : profileKeys;
         const key = savedProfileKey(source, keys);
         if (key) {
             selected = [[key, source[key]]];
+            invalidKey = undefined;
             break;
         }
+        invalidKey ??= keys.find(key => typeof source[key] === 'string' && !isEmptyRoster(source[key]));
         if (firstMigration && !selected.length) selected = keys.filter(key => isEmptyRoster(source[key])).map(key => [key, source[key]]);
     }
+    if (invalidKey) throw new InvalidLegacyProfiles(`Invalid legacy profile data in ${invalidKey}. Expected a saved vault or a roster with usernames, passwords and optional worlds 1, 2 or 3.`);
     if (!selected.length) return;
     for (const key of profileKeys) delete data[key];
     for (const [key, value] of selected) {
@@ -70,12 +76,13 @@ function cancelProfileImport(state) {
 }
 
 function profileState(state) {
-    return [state.profileRevision ?? 0, ...profileKeys.map(key => state.data[key])];
+    return [state.profileRecovery, state.profileRevision ?? 0, ...profileKeys.map(key => state.data[key])];
 }
 
 function writeItem(state, key, value) {
     if (profileKeys.includes(key)) {
         state.profileRevision = (state.profileRevision ?? 0) + 1;
+        delete state.profileRecovery;
         cancelProfileImport(state);
     }
     if (value === null) {
@@ -107,18 +114,19 @@ function decodeStore(document) {
         if (!marker || !profileKeys.every(key => Object.hasOwn(marker, key) && marker[key] === state.data[key])) {
             cancelProfileImport(state);
         }
-        for (const key of profileKeys) {
-            if (state.data[key] === null) delete state.data[key];
-        }
     }
+    if (state.profileRecovery && !profileKeys.every(key => Object.hasOwn(state.data, key))) delete state.profileRecovery;
+    for (const key of profileKeys) if (state.data[key] === null) delete state.data[key];
     return state;
 }
 
 function encodeStore(state) {
-    if (!state.seededWithoutProfiles) return state;
+    if (!state.seededWithoutProfiles && !state.profileRecovery) return state;
     // Why: older desktops read null as missing, but their saves and resets replace or remove the key.
     const marker = Object.fromEntries(profileKeys.map(key => [key, state.data[key] ?? null]));
-    return { ...state, data: { ...marker, ...state.data }, seededWithoutProfiles: marker };
+    const encoded = { ...state, data: { ...marker, ...state.data } };
+    if (state.seededWithoutProfiles) encoded.seededWithoutProfiles = marker;
+    return encoded;
 }
 
 function sharedStorage(dir) {
@@ -205,9 +213,12 @@ function sharedStorage(dir) {
         initialized: () => read().initialized,
         migrationStatus(trackPanel = false, recover = false) {
             let state = read();
-            if (!state.initialized && trackPanel) {
+            if ((!state.initialized && trackPanel) || recover) {
                 state = update(current => {
-                    if (!current.initialized) {
+                    if (recover && profileKeys.every(key => !(key in current.data) || isEmptyRoster(current.data[key]))) {
+                        current.profileRecovery ??= migrationId;
+                    }
+                    if (!current.initialized && trackPanel) {
                         current.panelMigrations ??= {};
                         current.panelMigrations[migrationId] = { pid: process.pid, removed: [] };
                     }
@@ -264,7 +275,10 @@ function sharedStorage(dir) {
                     if (!state.initialized && !profileKeys.some(key => key in state.data)) state.seededWithoutProfiles = true;
                     migrateProfiles(state.data, [...sources, fallback ?? {}], { firstMigration: !state.initialized, recover });
                 }
-                if (profileKeys.some(key => key in state.data && !isEmptyRoster(state.data[key]))) delete state.seededWithoutProfiles;
+                if (profileKeys.some(key => key in state.data && !isEmptyRoster(state.data[key]))) {
+                    delete state.seededWithoutProfiles;
+                    delete state.profileRecovery;
+                }
                 if (!state.initialized && fallback) importSettings(state.data, fallback);
                 if (readError && (state.initialized ? recover && !profilesChanged : !fallback) && !savedProfileKey(state.data)) throw readError;
                 if (values === null && (migration?.removed || state.seededWithoutProfiles)) {
@@ -287,4 +301,4 @@ function sharedStorage(dir) {
     };
 }
 
-module.exports = { profileKeys, savedProfileKey, sharedStorage };
+module.exports = { InvalidLegacyProfiles, profileKeys, savedProfileKey, sharedStorage };

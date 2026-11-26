@@ -160,6 +160,19 @@ test.each([custom, original])('an initialized empty store stays empty until reco
     expect(await launch(server)).toEqual(profiles);
 });
 
+test('a concurrent recovery from an empty origin leaves the populated origin eligible', async () => {
+    const { launch, olderWrite, store } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles) } });
+    store.seed({});
+    const ready = Promise.withResolvers<void>();
+    const pending = launch(custom, true, ready.promise);
+    expect(await launch(original, true)).toEqual([]);
+    olderWrite('rs2b0t:setting', 'changed');
+    ready.resolve();
+    expect(await pending).toEqual(profiles);
+    expect(await launch(custom)).toEqual(profiles);
+    expect(store.getItem('rs2b0t:setting')).toBe('changed');
+});
+
 const emptyRosters: Record<string, string>[] = [{}, { [accounts]: '[]' }, { [vault]: '[]' }];
 test.each(emptyRosters)('overlapping first launches recover all profiles when 8081 seeds %j first', async empty => {
     const { launch } = fixture({
@@ -397,7 +410,7 @@ test('explicit recovery leaves an existing vault intact', async () => {
     expect(store.snapshot()).toEqual({ [vault]: current, [accounts]: '[]' });
 });
 
-test.each([['populated', 'current'], ['empty', 'current'], ['populated', 'older']])(
+test.each([['populated', 'current'], ['empty', 'current'], ['populated', 'older'], ['empty', 'older']])(
     'resetting the %s vault from the %s desktop during explicit recovery survives relaunch', async (initial, writer) => {
         const { launch, olderWrite, store } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles) } });
         store.seed({});
@@ -409,8 +422,9 @@ test.each([['populated', 'current'], ['empty', 'current'], ['populated', 'older'
         const ready = Promise.withResolvers<void>();
         const pending = launch(custom, true, ready.promise);
         if (writer === 'older') {
-            olderWrite(vault, null);
-            olderWrite(accounts, null);
+            if (initial === 'empty') olderWrite(accounts, JSON.stringify([{ username: 'newer', password: 'fixture' }]));
+            new ProfileVault({ ...store, removeItem: (key: string) => olderWrite(key, null) }).reset();
+            store.setItem('rs2b0t:setting', 'changed');
         } else owner.reset();
         ready.resolve();
         expect([(await pending).length, (await launch(custom)).length]).toEqual([0, 0]);
@@ -835,12 +849,35 @@ test.each([
     expect(await launch(custom)).toEqual(profiles);
 });
 
-test('an invalid source on first launch leaves room for explicit recovery later', async () => {
+test('an invalid source on first launch leaves migration pending', async () => {
     const { launch, saveLegacy, store } = fixture({ [custom]: { [vault]: '{' } });
-    await launch(custom);
+    await expect(launch(custom)).rejects.toMatchObject({ cause: { message: expect.stringContaining('Invalid legacy profile') } });
+    expect(store.initialized()).toBe(false);
     saveLegacy({ [custom]: { [accounts]: JSON.stringify(profiles) } });
-    expect(await launch(custom, true)).toEqual(profiles);
-    expect(store.getItem(accounts)).toBeNull();
+    expect(await launch(custom)).toEqual(profiles);
+});
+
+test.each([original, custom])('a mixed roster with an unsupported world on %s leaves migration retryable', async origin => {
+    const malformed = [...profiles, { username: 'invalid-world', password: 'fixture', world: 4 }];
+    const { launch, saveLegacy, store } = fixture({ [origin]: { [accounts]: JSON.stringify(malformed) } });
+    await expect(launch(origin)).rejects.toMatchObject({ cause: { message: expect.stringContaining('Invalid legacy profile') } });
+    expect(store.initialized()).toBe(false);
+    saveLegacy({ [origin]: { [accounts]: JSON.stringify(profiles) } });
+    expect(await launch(origin)).toEqual(profiles);
+    expect(await launch(origin)).toEqual(profiles);
+});
+
+test('a deferred profile import reports a malformed roster and retries after repair', async () => {
+    let readable = false;
+    const { launch, saveLegacy } = fixture({ [custom]: { [accounts]: '{' } }, origin => {
+        if (!readable && origin === custom) throw new Error('Unreadable fixture');
+    });
+    expect(await launch(custom)).toEqual([]);
+    readable = true;
+    await expect(launch(custom)).rejects.toMatchObject({ cause: { message: expect.stringContaining('Invalid legacy profile') } });
+    saveLegacy({ [custom]: { [accounts]: JSON.stringify(profiles) } });
+    expect(await launch(custom)).toEqual(profiles);
+    expect(await launch(custom)).toEqual(profiles);
 });
 
 test.each<[string, boolean]>([
