@@ -4,6 +4,7 @@ import { removeLoadout, uniqueName, upsertLoadout, type Loadout } from '../api/l
 import type { ItemRecord, Slot } from '../api/loadout/types.js';
 import { el } from './dom.js';
 import { itemIconDataUrl } from './itemIcon.js';
+import { ItemIconRetry } from './ItemIconRetry.js';
 import {
     consumableOptions,
     searchItems,
@@ -45,8 +46,7 @@ export class LoadoutPanel {
     private query = '';
     private readonly supplyRowsByLoadout = new Map<string, Map<string, string>>();
     private renaming = false;
-    private iconTries = 0;
-    private iconTimer: ReturnType<typeof setTimeout> | null = null;
+    private readonly iconRetry = new ItemIconRetry(() => this.fillIcons());
 
     constructor() {
         this.root.style.display = 'none';
@@ -80,28 +80,7 @@ export class LoadoutPanel {
     close(): void {
         this.root.style.display = 'none';
         this.picker = null;
-        this.stopIconFill();
-    }
-
-    /** Retry streamed sprites in place so an update does not reset the active search box. */
-    private scheduleIconFill(): void {
-        this.stopIconFill();
-        if (this.iconTries >= ICON_FILL_TRIES) {
-            return;
-        }
-        this.iconTimer = setTimeout(() => {
-            this.iconTries++;
-            if (this.fillIcons() > 0) {
-                this.scheduleIconFill();
-            }
-        }, ICON_FILL_MS);
-    }
-
-    private stopIconFill(): void {
-        if (this.iconTimer !== null) {
-            clearTimeout(this.iconTimer);
-            this.iconTimer = null;
-        }
+        this.iconRetry.cancel();
     }
 
     /** Returns how many faces are still waiting on a sprite. */
@@ -176,9 +155,7 @@ export class LoadoutPanel {
         if (this.picker) {
             this.window.appendChild(this.pickerList(this.picker));
         }
-        if (this.fillIcons() > 0) {
-            this.scheduleIconFill();
-        }
+        this.iconRetry.fill();
     }
 
     private header(): HTMLElement {
@@ -467,9 +444,6 @@ export class LoadoutPanel {
         return row;
     }
 }
-
-const ICON_FILL_MS = 500;
-const ICON_FILL_TRIES = 12;
 
 function iconUrlFor(name: string): string | null {
     const record = recordByName(name);
