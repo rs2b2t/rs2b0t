@@ -29,6 +29,48 @@ function draw(renderer: typeof Pix3D, id: number) {
     renderer.textureTriangle(0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, id);
 }
 
+test('retrying the last buffer allocation keeps all 20 textures cached', async () => {
+    const renderer = await loadRenderer(true);
+    renderer.numTextures = 20;
+    for (let id = 0; id < 20; id++) {
+        setTexture(renderer, id, 0xf80000);
+    }
+    for (let id = 0; id < 19; id++) {
+        renderer['getTexels'](id);
+    }
+
+    const allocator = globalThis.Int32Array;
+    try {
+        globalThis.Int32Array = new Proxy(allocator, {
+            construct() { throw new RangeError('texel allocation failed'); }
+        });
+        expect(() => renderer['getTexels'](19)).toThrow('texel allocation failed');
+    } finally {
+        globalThis.Int32Array = allocator;
+    }
+
+    expect(renderer['getTexels'](19)?.[0]).toBe(0xf80000);
+    let misses = 0;
+    for (let pass = 0; pass < 2; pass++) {
+        for (let id = 0; id < 20; id++) {
+            if (!renderer.activeTexels[id]) misses++;
+            expect(renderer['getTexels'](id)?.[0]).toBe(0xf80000);
+        }
+    }
+    expect(misses).toBe(0);
+});
+
+test('retrying a failed mode switch returns standard-width texels', async () => {
+    const renderer = await loadRenderer(true);
+    setTexture(renderer, 0, 0xf80000);
+    expect(renderer['getTexels'](0)?.length).toBe(16384);
+    renderer.clearTexels();
+    renderer.lowMem = false;
+    expect(() => renderer.initPool(-1)).toThrow(RangeError);
+    renderer.initPool(20);
+    expect(renderer['getTexels'](0)?.length).toBe(65536);
+});
+
 for (const lowMem of [true, false]) {
     test(`two draws allocate two buffers and reuse them after rebuild (lowMem=${lowMem})`, async () => {
         const renderer = await loadRenderer(lowMem);

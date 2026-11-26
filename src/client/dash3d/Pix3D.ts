@@ -80,8 +80,8 @@ export default class Pix3D extends Pix2D {
 
         const texelLength = this.lowMem ? 16384 : 65536;
         if (this.texelBuffers.length !== size || this.texelLength !== texelLength) {
-            this.texelLength = texelLength;
             this.texelBuffers = new TypedArray1d(size, null);
+            this.texelLength = texelLength;
             this.retainedPoolSize = 0;
         } else {
             this.retainedPoolSize = size;
@@ -156,15 +156,17 @@ export default class Pix3D extends Pix2D {
         const palette = this.texPal[id];
         let texels: Int32Array | null;
         if (this.poolSize > 0 && this.texelPool) {
-            texels = this.texelPool[--this.poolSize];
-            this.texelPool[this.poolSize] = null;
-            if (this.poolSize < this.retainedPoolSize) {
-                this.retainedPoolSize = this.poolSize;
-                if (!texture || !palette) texels?.fill(0);
-            }
+            const slot = this.poolSize - 1;
+            texels = this.texelPool[slot];
             if (!texels) {
                 texels = new Int32Array(this.texelLength);
-                this.texelBuffers[this.poolSize] = texels;
+                this.texelBuffers[slot] = texels;
+            }
+            this.poolSize = slot;
+            this.texelPool[slot] = null;
+            if (slot < this.retainedPoolSize) {
+                this.retainedPoolSize = slot;
+                if (!texture || !palette) texels.fill(0);
             }
         } else {
             let cycle: number = 0;
