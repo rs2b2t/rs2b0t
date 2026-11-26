@@ -22,7 +22,8 @@ import {
     BASEMAP_REGEN_TITLE,
     regenerateBasemap,
     resolveBasemapBakePrefs,
-    MAP_PICKER_BAKE_KEYS
+    MAP_PICKER_BAKE_KEYS,
+    type BasemapBakePrefs
 } from './basemapRegen.js';
 import { showConfirmDialog } from './confirmDialog.js';
 import {
@@ -234,6 +235,23 @@ function paintYouAreHere(
     ctx.strokeText('You Are Here', sx + 10, sy - 6);
     ctx.fillText('You Are Here', sx + 10, sy - 6);
     ctx.restore();
+}
+
+async function cacheRebuiltBasemap(prefs: BasemapBakePrefs, map: LoadedBasemap): Promise<void> {
+    const controller = new AbortController();
+    const { signal } = controller;
+    const timer = setTimeout(() => controller.abort(), 5_000);
+    try {
+        const expired = new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
+        const write = fetchClientCrcKey(signal).then(crc => {
+            if (crc && !signal.aborted) return saveRegeneratedBasemapLocally(crc, prefs, map.manifest, map.image, signal);
+        });
+        await Promise.race([write, expired]);
+    } catch {
+        /* local cache optional */
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 /** Load the basemap once per page without running MapView: an IndexedDB hit on matching CRC + bake prefs wins, then the local copy marked `crc-unverified` when `/crc` is unavailable, then the deploy PNG with a Rebuild hint when CRC or prefs mismatch. Manual Rebuild always regenerates and overwrites the local entry. */
@@ -860,7 +878,8 @@ export class WorldMapPicker {
 
             // In-picker Settings modal (not Global settings).
             type BakeEdit = { value: string; expected: string | null };
-            const bakeEdits = new Map<string, BakeEdit>();
+            let bakeEdits = new Map<string, BakeEdit>();
+            const failedBakeEdits = new Map<string, BakeEdit>();
             const draft = {
                 get: (key: string) => bakeEdits.get(key)?.value,
                 set(key: string, value: string) {
@@ -950,9 +969,10 @@ export class WorldMapPicker {
                     zIndex: 1200,
                     footerButton: rebuildBtn,
                     onClose: () => {
-                        rebuildError.remove();
                         toolbar.appendChild(rebuildBtn);
-                        bakeEdits.clear();
+                        bakeEdits = new Map(failedBakeEdits);
+                        if (rebuildBtn.disabled && rebuildError.isConnected) rebuildBtn.after(rebuildError);
+                        else rebuildError.remove();
                     }
                 });
                 if (rebuildError.isConnected) rebuildBtn.after(rebuildError);
@@ -1012,7 +1032,6 @@ export class WorldMapPicker {
                         if (closed) {
                             return;
                         }
-                        const failed = new Map<string, BakeEdit>();
                         const conflicts: string[] = [];
                         for (const [key, edit] of submitted) {
                             try {
@@ -1025,15 +1044,7 @@ export class WorldMapPicker {
                                     current.expected = edit.value;
                                 }
                             } catch {
-                                failed.set(key, edit);
-                            }
-                        }
-                        const crcKey = await fetchClientCrcKey();
-                        if (crcKey) {
-                            try {
-                                await saveRegeneratedBasemapLocally(crcKey, prefs, next.manifest, next.image);
-                            } catch {
-                                /* local cache optional */
+                                failedBakeEdits.set(key, edit);
                             }
                         }
                         const installed: LoadedBasemap = { ...next };
@@ -1043,16 +1054,17 @@ export class WorldMapPicker {
                         status.textContent = `basemap rebuilt (${next.manifest.fingerprint})`;
                         status.style.color = '#8ab4f8';
                         if (conflicts.length) warnings.push(`Kept newer preferences: ${conflicts.join(', ')}.`);
-                        if (failed.size) {
-                            for (const [key, edit] of failed) {
+                        if (failedBakeEdits.size) {
+                            for (const [key, edit] of failedBakeEdits) {
                                 if (!bakeEdits.has(key)) bakeEdits.set(key, edit);
                             }
-                            const labels = Array.from(failed.keys(), key => MAP_PICKER_SETTINGS[key].label ?? key);
+                            const labels = Array.from(failedBakeEdits.keys(), key => MAP_PICKER_SETTINGS[key].label ?? key);
                             warnings.push(`Could not save: ${labels.join(', ')}. Rebuild to retry.`);
                         }
                         settingsModal.refreshCheckboxes(submitted.keys());
                         if (warnings.length) showRebuildError(`Basemap rebuilt. ${warnings.join(' ')}`);
                         requestPaint();
+                        await cacheRebuiltBasemap(prefs, installed);
                     } catch (err) {
                         if (closed) {
                             return;
@@ -1060,6 +1072,7 @@ export class WorldMapPicker {
                         const msg = err instanceof Error ? err.message : String(err);
                         showRebuildError([`rebuild failed: ${msg}`, ...warnings].join(' '));
                     } finally {
+                        failedBakeEdits.clear();
                         if (!closed) {
                             rebuildBtn.disabled = false;
                         }

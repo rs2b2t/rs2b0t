@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, jest, spyOn, test } from 'bun:test';
 import * as basemapRegen from '#/bot/panel/basemapRegen.js';
 import * as localCache from '#/bot/panel/basemapLocalCache.js';
 import { WorldMapPicker } from '#/bot/panel/WorldMapPicker.js';
@@ -551,6 +551,47 @@ describe('map picker bake settings drafts', () => {
         }
     });
 
+    test.skipIf(!desktopStorage).each([
+        { cached: 'false', durable: 'true', conflict: true },
+        { cached: '0', durable: 'false', conflict: false }
+    ])('desktop rebuild checks the durable preference with stale renderer value $cached', async ({ cached, durable, conflict }) => {
+        const shared = desktopStorage!;
+        const id = 'rs2b0t:set:MapPicker:bakeBorders';
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeBorders', 'false');
+        const read = shared.getItem.bind(shared);
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockResolvedValue(rebuiltMap());
+        let stale = false;
+        const getItem = spyOn(shared, 'getItem').mockImplementation(key => key === id && stale ? cached : read(key));
+        const compare = shared.compareAndSet.bind(shared);
+        const cas = spyOn(shared, 'compareAndSet').mockImplementation((key, expected, value) => {
+            stale = false;
+            return compare(key, expected, value);
+        });
+        try {
+            await withPicker(async () => {
+                openSettings();
+                const borders = bakeCheckbox('Map-square borders');
+                borders.click();
+                if (conflict) borders.click();
+                shared.setItem(id, durable);
+                stale = true;
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+
+                expect(read(id)).toBe('true');
+                const alert = document.querySelector('[role="alert"]');
+                if (conflict) expect(alert?.textContent).toContain('Kept newer preferences: Map-square borders');
+                else expect(alert).toBeNull();
+                expect(borders.checked).toBe(true);
+            });
+        } finally {
+            cas.mockRestore();
+            getItem.mockRestore();
+            bake.mockRestore();
+        }
+    });
+
     test('a matching peer save becomes the baseline for the next rebuild', async () => {
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeBorders', 'false');
@@ -608,7 +649,7 @@ describe('map picker bake settings drafts', () => {
 
                 expect(stored('bakeLabels')).toEqual({ local: 'false', session: null });
                 expect(stored('bakeBorders').local).toBe('true');
-                expect(cache).toHaveBeenCalledWith('test-crc', prefs({ labels: true, borders: true }), next.manifest, next.image);
+                expect(cache).toHaveBeenCalledWith('test-crc', prefs({ labels: true, borders: true }), next.manifest, next.image, expect.any(AbortSignal));
                 expect(document.querySelector('[role="alert"]')?.textContent).toContain('Kept newer preferences: Stamp labels into rebuild');
                 expect(bakeCheckbox('Stamp labels into rebuild').checked).toBe(false);
             });
@@ -776,7 +817,7 @@ describe('map picker bake settings drafts', () => {
                 expect(checkbox.checked).toBe(true);
                 const alert = () => document.querySelector('.rs2b0t-modal [role="alert"]')?.textContent;
                 expect(alert()).toContain('Map-square borders');
-                expect(cache).toHaveBeenCalledWith('test-crc', prefs({ labels: true, borders: true, npcs: true }), next.manifest, next.image);
+                expect(cache).toHaveBeenCalledWith('test-crc', prefs({ labels: true, borders: true, npcs: true }), next.manifest, next.image, expect.any(AbortSignal));
 
                 peerSave('false');
                 writes.length = 0;
@@ -837,6 +878,51 @@ describe('map picker bake settings drafts', () => {
                 expect(bake).toHaveBeenLastCalledWith(prefs({ borders: !editBorders, npcs: true }));
             });
         } finally {
+            bake.mockRestore();
+        }
+    });
+
+    test.each(['CRC lookup', 'cache write'])('a stalled %s leaves a quota failure visible and retryable', async stage => {
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
+        const held = Promise.withResolvers<void>();
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockResolvedValue(rebuiltMap());
+        const crc = spyOn(localCache, 'fetchClientCrcKey').mockResolvedValue('test-crc');
+        const cache = spyOn(localCache, 'saveRegeneratedBasemapLocally').mockResolvedValue();
+        const setItem = localStorage.setItem;
+        try {
+            await withPicker(async () => {
+                openSettings();
+                bakeCheckbox('Map-square borders').click();
+                Object.defineProperty(localStorage, 'setItem', { configurable: true, value() {
+                    throw new DOMException('storage full', 'QuotaExceededError');
+                } });
+                if (stage === 'CRC lookup') crc.mockReturnValueOnce(held.promise.then(() => 'old-crc'));
+                else cache.mockReturnValueOnce(held.promise);
+                jest.useFakeTimers();
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(document.querySelector('.rs2b0t-modal [role="alert"]')?.textContent).toMatch(/Map-square borders.*retry/i);
+
+                Object.defineProperty(localStorage, 'setItem', { value: setItem });
+                (jest as typeof jest & { advanceTimersByTime(ms: number): void }).advanceTimersByTime(5_000);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(stored('bakeBorders').local).toBe('true');
+                expect(document.querySelector('[role="alert"]')).toBeNull();
+
+                held.resolve();
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(cache.mock.calls.map(([crcKey]) => crcKey)).toEqual(
+                    stage === 'CRC lookup' ? ['test-crc'] : ['test-crc', 'test-crc']
+                );
+            });
+        } finally {
+            held.resolve();
+            jest.useRealTimers();
+            Object.defineProperty(localStorage, 'setItem', { value: setItem });
+            cache.mockRestore();
+            crc.mockRestore();
             bake.mockRestore();
         }
     });

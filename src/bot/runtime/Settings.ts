@@ -572,13 +572,12 @@ function mapPickerStorageKey(key: string): string {
 }
 
 function saveDurableMapPickerPreference(id: string, value: string, expected: string | null): boolean {
-    const store = desktopStorage ?? (hasLocal ? localStorage : undefined);
-    if (!store) return true;
-    const current = store.getItem(id);
+    if (desktopStorage) return desktopStorage.compareAndSet(id, expected, value) || desktopStorage.getItem(id) === value;
+    if (!hasLocal) return true;
+    const current = localStorage.getItem(id);
     if (current === value) return true;
     if (current !== expected) return false;
-    if (desktopStorage) return desktopStorage.compareAndSet(id, expected, value) || desktopStorage.getItem(id) === value;
-    store.setItem(id, value);
+    localStorage.setItem(id, value);
     return true;
 }
 

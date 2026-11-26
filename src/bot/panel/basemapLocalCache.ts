@@ -26,9 +26,9 @@ export type LoadedBasemap = {
 };
 
 /** The same `/crc` fetched before jag downloads and login. */
-export async function fetchClientCrcKey(): Promise<string | null> {
+export async function fetchClientCrcKey(signal?: AbortSignal): Promise<string | null> {
     try {
-        const res = await fetch(new URL('/crc', typeof location !== 'undefined' ? location.origin : 'http://localhost'));
+        const res = await fetch(new URL('/crc', typeof location !== 'undefined' ? location.origin : 'http://localhost'), { signal });
         if (!res.ok) {
             return null;
         }
@@ -83,8 +83,13 @@ export async function readBasemapLocalCache(): Promise<BasemapLocalRecord | null
     }
 }
 
-async function writeBasemapLocalCache(rec: BasemapLocalRecord): Promise<void> {
+async function writeBasemapLocalCache(rec: BasemapLocalRecord, signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) return;
     const db = await openDb();
+    if (signal?.aborted) {
+        db.close();
+        return;
+    }
     await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(STORE, 'readwrite');
         tx.objectStore(STORE).put(rec, ROW_KEY);
@@ -159,7 +164,8 @@ export async function saveRegeneratedBasemapLocally(
     crcKey: string,
     prefs: BasemapBakePrefs,
     manifest: BasemapManifest,
-    image: CanvasImageSource
+    image: CanvasImageSource,
+    signal?: AbortSignal
 ): Promise<void> {
     const w = manifest.sizeTiles.w * manifest.pixelsPerTile;
     const h = manifest.sizeTiles.h * manifest.pixelsPerTile;
@@ -170,5 +176,5 @@ export async function saveRegeneratedBasemapLocally(
         manifest: { ...manifest, basemapUrl: 'local-cache' },
         imageBlob,
         savedAt: Date.now()
-    });
+    }, signal);
 }
