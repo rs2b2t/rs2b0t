@@ -15,8 +15,8 @@ import { publisherTrafficChannel } from '#/client/io/TrafficChannel.js';
 declare const ONDEMAND_WORKER_URL: string;
 
 export default class OnDemand extends OnDemandProvider {
-    versions: number[][] = [];
-    crcs: number[][] = [];
+    versions: Uint16Array[] = [];
+    crcs: Int32Array[] = [];
     modelUse: number[] = [];
     mapIndex: number[] = [];
     mapLand: number[] = [];
@@ -50,9 +50,11 @@ export default class OnDemand extends OnDemandProvider {
             }
 
             const count = data.length / 2;
+            // Why: the startup screen displays Array's native error for partial entries.
+            if (!Number.isInteger(count)) Array(count);
             const buf = new Packet(data);
 
-            this.versions[i] = new Array(count);
+            this.versions[i] = new Uint16Array(count);
 
             for (let j = 0; j < count; j++) {
                 this.versions[i][j] = buf.g2();
@@ -67,9 +69,10 @@ export default class OnDemand extends OnDemandProvider {
             }
 
             const count = data.length / 4;
+            if (!Number.isInteger(count)) Array(count);
             const buf = new Packet(data);
 
-            this.crcs[i] = new Array(count);
+            this.crcs[i] = new Int32Array(count);
 
             for (let j = 0; j < count; j++) {
                 this.crcs[i][j] = buf.g4();

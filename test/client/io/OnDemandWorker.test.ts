@@ -21,7 +21,12 @@ async function message(data: object) {
 }
 
 async function init(dbEnabled = true) {
-    await message({ type: 'init', versions: [[1, 1], [], [], []], crcs: [[0, 0], [], [], []], dbEnabled, ingame: true, host: 'fixture.invalid', secured: false });
+    await message({
+        type: 'init',
+        versions: [Uint16Array.of(1, 1), Uint16Array.of(), Uint16Array.of(), Uint16Array.of()],
+        crcs: [Int32Array.of(0, 0), Int32Array.of(), Int32Array.of(), Int32Array.of()],
+        dbEnabled, ingame: true, host: 'fixture.invalid', secured: false
+    });
 }
 
 async function advance(ms: number) {
