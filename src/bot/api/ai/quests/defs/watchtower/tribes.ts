@@ -11,10 +11,6 @@ import { settleScene } from './scene.js';
 
 export const JANGERBERRY_TARGET = 2;
 
-function heldId(id: number): number {
-    return Inventory.items().filter(item => item.id === id).reduce((sum, item) => sum + item.count, 0);
-}
-
 function locNear(id: number, op: string, within = 8): Loc | null {
     return Locs.query().where(loc => loc.id === id).action(op).within(within).nearest();
 }
@@ -66,7 +62,7 @@ export async function leaveTobanCamp(log: (m: string) => void): Promise<boolean>
 }
 
 export async function openTobanChest(log: (m: string) => void): Promise<boolean> {
-    if (heldId(WT_ITEM.STOLEN_GOLD.id) > 0) {
+    if (Inventory.countById(WT_ITEM.STOLEN_GOLD.id) > 0) {
         return true;
     }
     if (!(await enterTobanCamp(log))) {
@@ -85,7 +81,7 @@ export async function openTobanChest(log: (m: string) => void): Promise<boolean>
     if (!(await key.useOn(chest))) {
         return false;
     }
-    return Execution.delayUntil(() => heldId(WT_ITEM.STOLEN_GOLD.id) > 0, 8000);
+    return Execution.delayUntil(() => Inventory.countById(WT_ITEM.STOLEN_GOLD.id) > 0, 8000);
 }
 
 export async function talkToToban(log: (m: string) => void): Promise<boolean> {
@@ -161,14 +157,14 @@ export async function talkToGrew(log: (m: string) => void): Promise<boolean> {
 }
 
 export async function pickJangerberries(log: (m: string) => void): Promise<boolean> {
-    if (heldId(WT_ITEM.JANGERBERRIES.id) >= JANGERBERRY_TARGET) {
+    if (Inventory.countById(WT_ITEM.JANGERBERRIES.id) >= JANGERBERRY_TARGET) {
         return true;
     }
     if (!(await swingToGrewIsland(log))) {
         return false;
     }
     for (const spot of WT_TILE.JANGERBERRIES) {
-        if (heldId(WT_ITEM.JANGERBERRIES.id) >= JANGERBERRY_TARGET) {
+        if (Inventory.countById(WT_ITEM.JANGERBERRIES.id) >= JANGERBERRY_TARGET) {
             return true;
         }
         if (!(await Traversal.walkResilient(spot, { radius: 1, attempts: 2, timeoutMs: 45_000, log }))) {
@@ -178,16 +174,16 @@ export async function pickJangerberries(log: (m: string) => void): Promise<boole
         if (!berry) {
             continue;
         }
-        const before = heldId(WT_ITEM.JANGERBERRIES.id);
+        const before = Inventory.countById(WT_ITEM.JANGERBERRIES.id);
         if (await berry.interact('Take')) {
-            await Execution.delayUntil(() => heldId(WT_ITEM.JANGERBERRIES.id) > before, 5000);
+            await Execution.delayUntil(() => Inventory.countById(WT_ITEM.JANGERBERRIES.id) > before, 5000);
         }
     }
-    return heldId(WT_ITEM.JANGERBERRIES.id) > 0;
+    return Inventory.countById(WT_ITEM.JANGERBERRIES.id) > 0;
 }
 
 export async function killGorad(log: (m: string) => void): Promise<boolean> {
-    if (heldId(WT_ITEM.OGRE_TOOTH.id) > 0) {
+    if (Inventory.countById(WT_ITEM.OGRE_TOOTH.id) > 0) {
         return true;
     }
     if (Inventory.free() === 0) {
@@ -203,5 +199,5 @@ export async function killGorad(log: (m: string) => void): Promise<boolean> {
     if (!(await talkThrough(WT_NPC.GORAD, ["I don't know who you are."], log))) {
         return false;
     }
-    return Execution.delayUntil(() => heldId(WT_ITEM.OGRE_TOOTH.id) > 0, 240_000);
+    return Execution.delayUntil(() => Inventory.countById(WT_ITEM.OGRE_TOOTH.id) > 0, 240_000);
 }
