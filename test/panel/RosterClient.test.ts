@@ -232,8 +232,15 @@ for (const start of [false, true]) test.each(['loaded', 'unloaded'])(`%s copy ro
     limited.setItem('padding', '1');
     const capacity = limited.length;
     const setItem = limited.setItem;
+    let quotaReached = false;
     Object.defineProperty(limited, 'setItem', { configurable: true, value(key: string, value: string) {
-        if (limited.getItem(key) === null && limited.length >= capacity) throw new DOMException(key, 'QuotaExceededError');
+        if (limited.getItem(key) === null) {
+            if (quotaReached && key === prefix + 'leash') setItem.call(limited, 'peer', '1');
+            if (limited.length >= capacity) {
+                quotaReached = true;
+                throw new DOMException(key, 'QuotaExceededError');
+            }
+        }
         setItem.call(limited, key, value);
     } });
     const command = { kind: 'copy', script: 'RosterDemo', source: 'source', start } as const;
@@ -242,7 +249,7 @@ for (const start of [false, true]) test.each(['loaded', 'unloaded'])(`%s copy ro
     try {
         const [good, failed] = await actions.run(['good', target], command);
         expect(good.state).toBe('done');
-        expect(failed).toMatchObject({ state: 'failed', message: start ? selection : prefix + 'mode' });
+        expect(failed.state).toBe('failed');
         expect(changes).toEqual([]);
         expect(runner.starts).toEqual([]);
         if (start) expect(client.selectedScript()).toBe('RosterOther');
@@ -254,6 +261,7 @@ for (const start of [false, true]) test.each(['loaded', 'unloaded'])(`%s copy ro
             expect(store.getItem('rs2b0t:good:set:RosterDemo:leash')).toBe('12');
             expect(store.getItem('rs2b0t:good:set:RosterDemo:mode')).toBe('None');
         }
+        expect(failed.message).toBe(start ? selection : prefix + 'mode');
         limited.removeItem('padding');
         expect((await actions.run([target], command))[0].state).toBe('done');
         expect(changes).toEqual(target === 'loaded' ? ['leash', 'mode'] : []);

@@ -74,6 +74,11 @@ export function installDesktopStorage(shared: DesktopStorage): void {
             check(key, previous, value) {
                 if (shared.getItemFresh && previous === value) return;
                 if (!shared.compareAndRemove && (previous === null || value === null)) {
+                    if (previous === null && value === null) {
+                        // Why: a same-value comparison refreshes the prior preload's cached snapshot.
+                        shared.compareAndSet(key, '', '');
+                        if (shared.getItem(key) === null) return;
+                    }
                     throw new Error('Update the desktop app to copy these settings safely.');
                 }
                 if (!shared.getItemFresh && !this.swap(key, previous, previous)) throw new Error('Saved settings changed during copy.');

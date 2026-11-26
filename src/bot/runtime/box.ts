@@ -149,7 +149,7 @@ export function retrySettingsCopy<T>(copy: () => T): T {
 export function replaceBoxSettings(id: string, script: string, clearSuffixes: string[], values: Record<string, string>, select = false): void {
     const commit = localStorage[commitDesktopSettings];
     const discardMirrors = localStorage[beginLegacySettingsCopy]?.();
-    const changes: Record<string, string | null> = {};
+    const durableChanges: Record<string, string | null> = {};
     const legacy = localStorage[legacyCopyStorage];
     const undo: Array<() => void> = [];
     function write(store: Storage, key: string, value: string | null, previous = store.getItem(key)): void {
@@ -166,29 +166,36 @@ export function replaceBoxSettings(id: string, script: string, clearSuffixes: st
             }
         } else writeItem(store, key, value);
     }
-    function stage(store: Storage, key: string, value: string | null): void {
-        if (store === localStorage && (commit || legacy)) changes[key] = value;
-        else write(store, key, value);
-    }
     try {
         for (const store of [sessionStorage, localStorage]) {
+            const changes: Record<string, string | null> = store === localStorage ? durableChanges : {};
+            const stage = (_store: Storage, key: string, value: string | null) => { changes[key] = value; };
             for (const suffix of clearSuffixes) clearBoxItem(store, suffix, id, stage);
-            for (const [key, value] of Object.entries(values)) stage(store, boxKey(`set:${script}:${key}`, id), value);
-            if (select) stage(store, boxKey('selectedScript', id), script);
+            for (const [key, value] of Object.entries(values)) changes[boxKey(`set:${script}:${key}`, id)] = value;
+            if (select) changes[boxKey('selectedScript', id)] = script;
+            if (store === localStorage && (commit || legacy)) continue;
+
+            const growing: [string, string][] = [];
+            for (const [key, value] of Object.entries(changes)) {
+                const previous = store.getItem(key);
+                if (value !== null && (previous === null || value.length > previous.length)) growing.push([key, value]);
+                else write(store, key, value, previous);
+            }
+            for (const [key, value] of growing) write(store, key, value);
         }
         if (legacy) {
-            const entries = Object.entries(changes).map(([key, value]) => ({ key, value, previous: legacy.read(key) }));
+            const entries = Object.entries(durableChanges).map(([key, value]) => ({ key, value, previous: legacy.read(key) }));
             for (const { key, previous, value } of entries) legacy.check(key, previous, value);
             for (const { key, previous, value } of entries) if (value === null) write(localStorage, key, null, previous);
             for (const { key, previous, value } of entries) if (value !== null) write(localStorage, key, value, previous);
         }
-        if (commit?.(changes) === false) throw new SettingsSnapshotChanged('Saved settings changed during copy.');
+        if (commit?.(durableChanges) === false) throw new SettingsSnapshotChanged('Saved settings changed during copy.');
     } catch (error) {
         let rollbackError;
         for (const restore of undo.reverse()) {
             try { restore(); } catch (cause) { rollbackError = cause; }
         }
-        discardMirrors?.(Object.keys(changes));
+        discardMirrors?.(Object.keys(durableChanges));
         if (rollbackError) throw rollbackError;
         throw error;
     }

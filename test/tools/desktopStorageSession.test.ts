@@ -10,6 +10,7 @@ import { runInNewContext } from 'node:vm';
 import { installDesktopStorage } from '#/bot/panel/desktopStorage.js';
 import { replaceScriptSettings } from '#/bot/multibox/RosterStorage.js';
 import type { DesktopStorage } from '#/bot/runtime/desktopStorage.js';
+import { SettingsStore } from '#/bot/runtime/Settings.js';
 
 const require = createRequire(import.meta.url);
 const { sharedStorage } = require('../../desktop/shared-storage.cjs');
@@ -370,6 +371,25 @@ test('a legacy preload rejects removal of an existing setting', async () => {
     await Promise.resolve();
     expect(f.store.snapshot()).toEqual({ [rock]: 'iron' });
     expect(sessionStorage.getItem(rock)).toBe('tin');
+});
+
+test.each([null, ''] as const)('legacy loaded copy checks an omitted schema field with durable value %j', async peerValue => {
+    const f = await copyFixture('legacy');
+    if (peerValue !== null) f.request(f.child, 'setItem', area, peerValue);
+    const browser = Reflect.get(window, 'happyDOM');
+    const previousUrl = location.href;
+    browser.setURL('http://localhost:8081/bot.html?box=target');
+    try {
+        const replace = () => SettingsStore.replace('Miner', new Set(['area', 'rock']), { rock: 'coal' });
+        if (peerValue === null) replace();
+        else expect(replace).toThrow('Update the desktop app');
+        await Promise.resolve();
+        expect(f.store.snapshot()).toEqual(peerValue === null ? { [rock]: 'coal' } : { [rock]: 'iron', [area]: '' });
+        expect(sessionStorage.getItem(rock)).toBe(peerValue === null ? 'coal' : 'tin');
+        expect(sessionStorage.getItem(area)).toBeNull();
+    } finally {
+        browser.setURL(previousUrl);
+    }
 });
 
 test('conditional removal preserves a peer write between validation and the disk lock', async () => {
