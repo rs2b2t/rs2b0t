@@ -554,6 +554,15 @@ function storageKey(name: string, key: string): string {
 
 type SettingChangeListener = (name: string, key: string, value: string) => void;
 
+export type StoredSetting = { session: string | null; local: string | null };
+
+function restoreItem(storage: Storage, key: string, value: string | null): boolean {
+    if (storage.getItem(key) === value) return false;
+    if (value === null) storage.removeItem(key);
+    else storage.setItem(key, value);
+    return true;
+}
+
 class SettingsStoreImpl {
     private urlParams: URLSearchParams | null = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
     /** Same-tab subscribers (open modals). `storage` events only fire across tabs. */
@@ -570,6 +579,23 @@ class SettingsStoreImpl {
             }
         }
         return null;
+    }
+
+    snapshotStored(name: string, key: string): StoredSetting {
+        const id = storageKey(name, key);
+        return {
+            session: hasSession ? sessionStorage.getItem(id) : null,
+            local: hasLocal ? localStorage.getItem(id) : null
+        };
+    }
+
+    restoreStored(name: string, key: string, value: StoredSetting, def: SettingDef): void {
+        const id = storageKey(name, key);
+        const sessionChanged = hasSession && restoreItem(sessionStorage, id, value.session);
+        const localChanged = hasLocal && restoreItem(localStorage, id, value.local);
+        if (sessionChanged || localChanged) {
+            this.notifyChange(name, key, this.displayString(name, key, def));
+        }
     }
 
     saved(name: string, key: string): string | undefined {
@@ -598,6 +624,10 @@ class SettingsStoreImpl {
         if (hasLocal) {
             localStorage.setItem(storageKey(name, key), rawString);
         }
+        this.notifyChange(name, key, rawString);
+    }
+
+    private notifyChange(name: string, key: string, rawString: string): void {
         for (const fn of this.changeListeners) {
             try {
                 fn(name, key, rawString);

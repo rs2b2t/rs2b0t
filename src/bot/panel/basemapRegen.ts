@@ -13,7 +13,8 @@ import {
     MAP_PICKER_SETTINGS,
     MAP_PICKER_SETTINGS_NS,
     SettingsBag,
-    SettingsStore
+    SettingsStore,
+    type StoredSetting
 } from '../runtime/Settings.js';
 
 export type BasemapBakePrefs = {
@@ -58,6 +59,7 @@ const MAP_PICKER_BAKE_KEYS = [
 ] as const;
 
 type MapPickerBakeKey = (typeof MAP_PICKER_BAKE_KEYS)[number];
+type BakeSettingsSnapshot = Record<MapPickerBakeKey, StoredSetting>;
 
 export function resolveBasemapBakePrefs(): BasemapBakePrefs {
     const g = new SettingsBag(SettingsStore.resolve(MAP_PICKER_SETTINGS_NS, MAP_PICKER_SETTINGS));
@@ -73,22 +75,18 @@ export function resolveBasemapBakePrefs(): BasemapBakePrefs {
 }
 
 /** Snapshot rebuild-layer settings (raw strings as stored). */
-export function snapshotMapPickerBakeSettings(): Record<MapPickerBakeKey, string> {
-    const out = {} as Record<MapPickerBakeKey, string>;
+export function snapshotMapPickerBakeSettings(): BakeSettingsSnapshot {
+    const out = {} as BakeSettingsSnapshot;
     for (const key of MAP_PICKER_BAKE_KEYS) {
-        const def = MAP_PICKER_SETTINGS[key];
-        out[key] = SettingsStore.displayString(MAP_PICKER_SETTINGS_NS, key, def);
+        out[key] = SettingsStore.snapshotStored(MAP_PICKER_SETTINGS_NS, key);
     }
     return out;
 }
 
 /** Restore rebuild-layer settings from a snapshot (discard uncommitted modal edits). */
-export function restoreMapPickerBakeSettings(snap: Record<MapPickerBakeKey, string>): void {
+export function restoreMapPickerBakeSettings(snap: BakeSettingsSnapshot): void {
     for (const key of MAP_PICKER_BAKE_KEYS) {
-        const raw = snap[key];
-        if (raw !== undefined) {
-            SettingsStore.save(MAP_PICKER_SETTINGS_NS, key, raw);
-        }
+        SettingsStore.restoreStored(MAP_PICKER_SETTINGS_NS, key, snap[key], MAP_PICKER_SETTINGS[key]);
     }
 }
 
