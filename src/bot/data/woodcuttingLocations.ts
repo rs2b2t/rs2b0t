@@ -2,6 +2,7 @@ import type { WorldTile } from '../adapter/ClientAdapter.js';
 import Tile from '../geometry/Tile.js';
 import { BANK_STAND_COORDINATES } from './bankStandCoordinates.js';
 import {
+    camp,
     locationOptions,
     resolveGatheringLocation,
     type GatheringLocation
@@ -40,26 +41,6 @@ const BANK = {
     ardougneWest: new Tile(...BANK_STAND_COORDINATES.ardougneWest),
     grandTree: new Tile(...BANK_STAND_COORDINATES.grandTree)
 } as const;
-
-function camp(
-    name: string,
-    spot: Tile,
-    bankStand: Tile,
-    resources: readonly string[],
-    notes?: string,
-    verified = true
-): WoodcuttingLocation {
-    return {
-        name,
-        spot,
-        bankStand,
-        boothName: 'Bank booth',
-        boothOp: 'Use-quickly',
-        verified,
-        resources,
-        notes
-    };
-}
 
 export const WOODCUTTING_LOCATIONS: WoodcuttingLocation[] = [
     camp(

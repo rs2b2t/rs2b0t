@@ -2,6 +2,7 @@ import type { WorldTile } from '../adapter/ClientAdapter.js';
 import Tile from '../geometry/Tile.js';
 import { BANK_STAND_COORDINATES } from './bankStandCoordinates.js';
 import {
+    camp,
     locationOptions,
     resolveGatheringLocation,
     type GatheringLocation
@@ -36,18 +37,11 @@ function mine(
     bankStand: Tile,
     resources: readonly string[],
     notes?: string,
-    verified = true,
+    verified?: boolean,
     recommendedCombat?: number
 ): MiningLocation {
     return {
-        name,
-        spot,
-        bankStand,
-        boothName: 'Bank booth',
-        boothOp: 'Use-quickly',
-        verified,
-        resources,
-        notes,
+        ...camp(name, spot, bankStand, resources, notes, verified),
         recommendedCombat
     };
 }
