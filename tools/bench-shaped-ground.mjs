@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 
 const [source, count] = process.argv.slice(2);
@@ -26,12 +27,12 @@ function buildGrid(Ground, client) {
     return tiles;
 }
 
-global.gc();
+globalThis.gc();
 const initialHeap = process.memoryUsage().heapUsed;
 const start = performance.now();
 const grids = constructors.map(buildGrid);
 const ms = performance.now() - start;
-global.gc();
+globalThis.gc();
 const retainedMiB = (process.memoryUsage().heapUsed - initialHeap) / 2 ** 20;
 
 const hash = createHash('sha256');
