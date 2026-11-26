@@ -84,9 +84,10 @@ function placeStairs(placements: string, pack = '1=stairs\n', configs = '[stairs
     writeFileSync(join(root, 'content/maps/m50_50.jm2'), '==== LOC ====\n' + placements);
 }
 
-function runEnricher(...args: string[]) {
+function runEnricher(args: string[] = [], exitCode = 0) {
     const result = Bun.spawnSync(['python3', '-B', enricher, '--content', 'content', ...args], { cwd: root });
-    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(result.exitCode, result.stderr.toString()).toBe(exitCode);
+    return result;
 }
 
 function enrich(rows: object[]) {
@@ -94,6 +95,52 @@ function enrich(rows: object[]) {
     runEnricher();
     return JSON.parse(readFileSync(out, 'utf8'));
 }
+
+test('rerunning the ladder generator preserves scripted staircase approaches', () => {
+    placeStairs('0 5 9: 1 10\n1 5 9: 1 10\n', '1=stairs\n',
+        '[stairs]\nname=Staircase\nop1=Climb-up\nop2=Climb-down\n');
+    const loc = { x: 3205, z: 3209, level: 0 };
+    const upstairs = { ...loc, level: 1 };
+    const stair = { locName: 'Staircase', kind: 'stair' };
+    enrich([
+        { ...stair, from: { ...loc, x: 3204 }, to: upstairs, action: 'Climb-up',
+            scriptedLocs: [{ ...loc, debugName: 'stairs', action: 'Climb-up' }] },
+        { ...stair, from: upstairs, to: { ...loc, z: 3211 }, action: 'Climb-down',
+            scriptedLocs: [{ ...upstairs, debugName: 'stairs', action: 'Climb-down' }] }
+    ]);
+    const before = readFileSync(out, 'utf8');
+    const ladders = join(import.meta.dir, '../../tools/nav/derive-ladders.py');
+    for (const args of [[], ['--check']]) {
+        const result = Bun.spawnSync(['python3', '-B', ladders, '--engine', 'engine', '--content', 'content',
+            '--pack', 'collision.lcnav', ...args], { cwd: root });
+        expect(result.exitCode, result.stderr.toString()).toBe(0);
+        expect(readFileSync(out, 'utf8')).toBe(before);
+    }
+});
+
+test.each([{ shared: false }, { shared: true }])('missing scripted placement fails before writing (shared=$shared)', ({ shared }) => {
+    placeStairs('0 6 9: 1 10\n');
+    const from = { x: 3205, z: 3209, level: 0 };
+    const missing = { ...from, debugName: 'stairs', action: 'Climb-up' };
+    const scriptedLocs = shared ? [{ ...missing, x: 3206 }, missing] : [missing];
+    const input = JSON.stringify([{ from, to: { ...from, level: 1 }, locName: 'Stairs',
+        action: 'Climb-up', kind: 'stair', scriptedLocs }]);
+    writeFileSync(out, input);
+    const result = runEnricher([], 1);
+    expect(result.stderr.toString()).toContain('3205, 3209, 0');
+    expect(readFileSync(out, 'utf8')).toBe(input);
+    expect(readFileSync(join(root, 'src/bot/event/webwalk/data/transports.json'), 'utf8')).toBe('[]');
+});
+
+test('alternative handlers on the same scripted tile bind the placed staircase', () => {
+    placeStairs('0 5 9: 1 10\n');
+    const from = { x: 3205, z: 3209, level: 0 };
+    const loc = { ...from, debugName: 'stairs', action: 'Climb-up' };
+    const edge = { from, to: { ...from, level: 1 }, locName: 'Stairs', action: loc.action, kind: 'stair' };
+    const edges = enrich([{ ...edge, scriptedLocs: [{ ...loc, debugName: 'alternate_stairs' }, loc] }]);
+    expect(edges).toEqual([{ ...edge, locId: 1, locX: from.x, locZ: from.z, debugName: 'stairs', options: [loc.action] }]);
+    runEnricher(['--check']);
+});
 
 test('a scripted open trapdoor binds to its exact closed placement and passes --check', () => {
     placeStairs('0 5 9: 1 10\n0 6 9: 2 10\n', '1=trapdoor\n2=trapdoor_open\n',
@@ -107,7 +154,7 @@ test('a scripted open trapdoor binds to its exact closed placement and passes --
     expect(edges).toEqual([{
         ...edge, locX: 3205, locZ: 3209, locId: 1, openLocId: 2, debugName: 'trapdoor_open', options: ['Climb-down']
     }]);
-    runEnricher('--check');
+    runEnricher(['--check']);
 });
 
 test('enrichment keeps each approach once at its scripted landing', () => {

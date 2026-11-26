@@ -279,6 +279,12 @@ def stair_placements(
             if placement.loc_id == config.loc_id or (closed and placement.loc_id == closed.loc_id):
                 matches[(*tile, debug, loc["action"])] = (config, placement)
                 break
+    # Why: alternate handlers can describe the same action on the same tile.
+    matched_actions = {(x, z, level, action) for x, z, level, _, action in matches}
+    for loc in edge.get("scriptedLocs", []):
+        tile = (loc["x"], loc["z"], loc["level"])
+        if (*tile, loc["action"]) not in matched_actions:
+            raise SystemExit(f"Missing scripted placement for {loc['debugName']} ({loc['action']}) at {tile}")
     return matches
 
 
