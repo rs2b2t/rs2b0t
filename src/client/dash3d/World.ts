@@ -18,7 +18,7 @@ import Pix2D from '#/client/graphics/Pix2D.js';
 import Pix3D from '#/client/dash3d/Pix3D.js';
 import Model from '#/client/dash3d/Model.js';
 
-import { Int32Array3d, TypedArray1d, TypedArray2d, TypedArray3d, TypedArray4d } from '#/client/util/Arrays.js';
+import { Int32Array3d, TypedArray1d, TypedArray2d, TypedArray3d } from '#/client/util/Arrays.js';
 import type ModelSource from '#/client/dash3d/ModelSource.js';
 import type PointNormal from '#/client/dash3d/PointNormal.js';
 
@@ -873,7 +873,9 @@ export default class World {
     }
 
     private static fillVisibilityTable(table: boolean[][][][], pitchDistance: Int32Array, frustumStart: number, frustumEnd: number): void {
-        const visBacking: boolean[][][][] = new TypedArray4d(9, 32, 53, 53, false);
+        const width = 53;
+        const pitchStride = width * width;
+        const yawMasks = new Uint32Array(9 * pitchStride);
         for (let pitch: number = 128; pitch <= 384; pitch += 32) {
             for (let yaw: number = 0; yaw < 2048; yaw += 64) {
                 this.cameraSinX = Pix3D.sinTable[pitch];
@@ -882,57 +884,37 @@ export default class World {
                 this.cameraCosY = Pix3D.cosTable[yaw];
 
                 const pitchLevel: number = ((pitch - 128) / 32) | 0;
-                const yawLevel: number = (yaw / 64) | 0;
+                const yawBit = 1 << (yaw / 64);
                 for (let dx: number = -26; dx <= 26; dx++) {
+                    const row = pitchLevel * pitchStride + (dx + 26) * width;
                     for (let dz: number = -26; dz <= 26; dz++) {
                         const x: number = dx * 128;
                         const z: number = dz * 128;
 
-                        let visible: boolean = false;
                         for (let y: number = -frustumStart; y <= frustumEnd; y += 128) {
                             if (this.testPoint(x, z, pitchDistance[pitchLevel] + y)) {
-                                visible = true;
+                                yawMasks[row + dz + 26] |= yawBit;
                                 break;
                             }
                         }
-
-                        visBacking[pitchLevel][yawLevel][dx + 25 + 1][dz + 25 + 1] = visible;
                     }
                 }
             }
         }
 
-        for (let pitchLevel: number = 0; pitchLevel < 8; pitchLevel++) {
-            for (let yawLevel: number = 0; yawLevel < 32; yawLevel++) {
-                for (let x: number = -25; x < 25; x++) {
-                    for (let z: number = -25; z < 25; z++) {
-                        let visible: boolean = false;
-
-                        check_areas: for (let dx: number = -1; dx <= 1; dx++) {
-                            for (let dz: number = -1; dz <= 1; dz++) {
-                                if (visBacking[pitchLevel][yawLevel][x + dx + 25 + 1][z + dz + 25 + 1]) {
-                                    visible = true;
-                                    break check_areas;
-                                }
-
-                                if (visBacking[pitchLevel][(yawLevel + 1) % 31][x + dx + 25 + 1][z + dz + 25 + 1]) {
-                                    visible = true;
-                                    break check_areas;
-                                }
-
-                                if (visBacking[pitchLevel + 1][yawLevel][x + dx + 25 + 1][z + dz + 25 + 1]) {
-                                    visible = true;
-                                    break check_areas;
-                                }
-
-                                if (visBacking[pitchLevel + 1][(yawLevel + 1) % 31][x + dx + 25 + 1][z + dz + 25 + 1]) {
-                                    visible = true;
-                                    break check_areas;
-                                }
-                            }
+        for (let pitchLevel = 0; pitchLevel < 8; pitchLevel++) {
+            for (let x = 0; x < 50; x++) {
+                for (let z = 0; z < 50; z++) {
+                    let mask = 0;
+                    for (let dx = 0; dx < 3; dx++) {
+                        const row = pitchLevel * pitchStride + (x + dx) * width + z;
+                        for (let dz = 0; dz < 3; dz++) {
+                            mask |= yawMasks[row + dz] | yawMasks[row + dz + pitchStride];
                         }
-
-                        table[pitchLevel][yawLevel][x + 25][z + 25] = visible;
+                    }
+                    for (let yaw = 0; yaw < 32; yaw++) {
+                        const yawPair = (1 << yaw) | (1 << ((yaw + 1) % 31));
+                        table[pitchLevel][yaw][x][z] = (mask & yawPair) !== 0;
                     }
                 }
             }

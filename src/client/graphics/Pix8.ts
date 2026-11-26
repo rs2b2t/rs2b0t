@@ -1,7 +1,7 @@
 import Pix2D from '#/client/graphics/Pix2D.js';
+import SpriteSheet from '#/client/graphics/SpriteSheet.js';
 
 import JagFile from '#/client/io/JagFile.js';
-import Packet from '#/client/io/Packet.js';
 
 export default class Pix8 extends Pix2D {
     data: Int8Array;
@@ -24,42 +24,26 @@ export default class Pix8 extends Pix2D {
     }
 
     static depack(jag: JagFile, name: string, sprite: number = 0): Pix8 {
-        const dat: Packet = new Packet(jag.read(name + '.dat'));
-        const index: Packet = new Packet(jag.read('index.dat'));
+        const sheet = new SpriteSheet(jag, name, 0, sprite);
+        return Pix8.readFrame(sheet, sheet.palette);
+    }
 
-        index.pos = dat.g2();
-        const owi: number = index.g2();
-        const ohi: number = index.g2();
-
-        const bpalCount: number = index.g1();
-        const bpal: Int32Array = new Int32Array(bpalCount);
-
-        for (let i: number = 0; i < bpalCount - 1; i++) {
-            bpal[i + 1] = index.g3();
+    static depackSheet(jag: JagFile, name: string, frames: (Pix8 | null)[]): void {
+        const sheet = new SpriteSheet(jag, name, 0);
+        for (let i = 0; i < frames.length; i++) {
+            frames[i] = Pix8.readFrame(sheet, sheet.palette.slice());
         }
+    }
 
-        for (let i: number = 0; i < sprite; i++) {
-            index.pos += 2;
-            dat.pos += index.g2() * index.g2();
-            index.pos += 1;
-        }
-
-        if (dat.pos > dat.length || index.pos > index.length) {
-            throw new Error();
-        }
-
-        const xof: number = index.g1();
-        const yof: number = index.g1();
-        const wi: number = index.g2();
-        const hi: number = index.g2();
-
+    private static readFrame(sheet: SpriteSheet, bpal: Int32Array): Pix8 {
+        const { dat } = sheet;
+        const { xof, yof, wi, hi, encoding } = sheet.readFrameHeader();
         const image: Pix8 = new Pix8(wi, hi, bpal);
         image.xof = xof;
         image.yof = yof;
-        image.owi = owi;
-        image.ohi = ohi;
+        image.owi = sheet.owi;
+        image.ohi = sheet.ohi;
 
-        const encoding: number = index.g1();
         if (encoding === 0) {
             for (let i: number = 0; i < image.wi * image.hi; i++) {
                 image.data[i] = dat.g1b();
