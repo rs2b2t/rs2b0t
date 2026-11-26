@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { prefsKeyFromBakePrefs } from '#/bot/panel/basemapLocalCache.js';
+import { WorldMapPicker } from '#/bot/panel/WorldMapPicker.js';
 import {
     prefsFingerprint,
     resolveBasemapBakePrefs,
@@ -82,13 +83,52 @@ describe('bake settings snapshot/restore (settings modal discard)', () => {
         localStorage.clear();
     });
 
+    test.each([false, true])("Escape preserves another tab's label save (edited borders: %p)", async editBorders => {
+        const labels = 'rs2b0t:set:MapPicker:bakeLabels';
+        const borders = 'rs2b0t:set:MapPicker:bakeBorders';
+        const params = SettingsStore['urlParams'];
+        const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch')!;
+        const frame = spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(1);
+        Object.defineProperty(globalThis, 'fetch', { configurable: true, value: async () => new Response(null, { status: 404 }) });
+        try {
+            SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'false');
+            SettingsStore['urlParams'] = new URLSearchParams('MapPicker.bakeLabels=true');
+            const result = WorldMapPicker.open();
+            await new Promise<void>(resolve => setImmediate(resolve));
+            document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-settings')!.click();
+            localStorage.setItem(labels, 'true');
+            if (editBorders) {
+                const row = Array.from(document.querySelectorAll('.rs2b0t-param-row'))
+                    .find(row => row.querySelector('.rs2b0t-param-label')?.textContent === 'Map-square borders')!;
+                row.querySelector<HTMLInputElement>('input')!.click();
+                expect(localStorage.getItem(borders)).toBe('true');
+            }
+            const writes = countStorageWrites(() => {
+                document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            });
+            expect(writes).toBe(editBorders ? 2 : 0);
+            expect(localStorage.getItem(borders)).toBeNull();
+            expect(sessionStorage.getItem(borders)).toBeNull();
+            sessionStorage.clear();
+            SettingsStore['urlParams'] = new URLSearchParams();
+            expect(resolveBasemapBakePrefs().labels).toBe(true);
+            document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-cancel')!.click();
+            expect(await result).toBeNull();
+        } finally {
+            document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-cancel')?.click();
+            SettingsStore['urlParams'] = params;
+            Object.defineProperty(globalThis, 'fetch', fetchDescriptor);
+            frame.mockRestore();
+        }
+    });
+
     test('untouched close leaves the saved preference and absent keys alone under a URL override', () => {
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'false');
         const params = SettingsStore['urlParams'];
         try {
             SettingsStore['urlParams'] = new URLSearchParams('MapPicker.bakeLabels=true');
             expect(resolveBasemapBakePrefs().labels).toBe(true);
-            const writes = countStorageWrites(() => restoreMapPickerBakeSettings(snapshotMapPickerBakeSettings()));
+            const writes = countStorageWrites(() => restoreMapPickerBakeSettings(snapshotMapPickerBakeSettings(), new Set()));
             expect(writes).toBe(0);
             expect(localStorage.length).toBe(1);
             expect(sessionStorage.length).toBe(1);
@@ -114,7 +154,7 @@ describe('bake settings snapshot/restore (settings modal discard)', () => {
         const restored: Record<string, string> = {};
         const unsubscribe = SettingsStore.onChange((_name, key, value) => { restored[key] = value; });
         try {
-            restoreMapPickerBakeSettings(snap);
+            restoreMapPickerBakeSettings(snap, new Set(['bakeLabels', 'bakeBorders']));
         } finally {
             unsubscribe();
         }
@@ -132,7 +172,7 @@ describe('bake settings snapshot/restore (settings modal discard)', () => {
 
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'false');
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeNpcs', 'true');
-        restoreMapPickerBakeSettings(baseline);
+        restoreMapPickerBakeSettings(baseline, new Set(['bakeLabels', 'bakeNpcs']));
         expect(SettingsStore.saved(MAP_PICKER_SETTINGS_NS, 'bakeLabels')).toBe('true');
         expect(SettingsStore.saved(MAP_PICKER_SETTINGS_NS, 'bakeNpcs')).toBeUndefined();
     });

@@ -84,9 +84,11 @@ export function snapshotMapPickerBakeSettings(): BakeSettingsSnapshot {
 }
 
 /** Restore rebuild-layer settings from a snapshot (discard uncommitted modal edits). */
-export function restoreMapPickerBakeSettings(snap: BakeSettingsSnapshot): void {
+export function restoreMapPickerBakeSettings(snap: BakeSettingsSnapshot, editedKeys: ReadonlySet<string>): void {
     for (const key of MAP_PICKER_BAKE_KEYS) {
-        SettingsStore.restoreStored(MAP_PICKER_SETTINGS_NS, key, snap[key], MAP_PICKER_SETTINGS[key]);
+        if (editedKeys.has(key)) {
+            SettingsStore.restoreStored(MAP_PICKER_SETTINGS_NS, key, snap[key], MAP_PICKER_SETTINGS[key]);
+        }
     }
 }
 

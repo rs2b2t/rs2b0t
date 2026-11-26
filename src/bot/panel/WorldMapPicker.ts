@@ -857,9 +857,13 @@ export class WorldMapPicker {
             };
 
             // In-picker Settings modal (not Global settings).
+            const editedSettings = new Set<string>();
             const settingsModal = new ParamsModal(
                 () => false,
-                () => requestPaint()
+                key => {
+                    editedSettings.add(key);
+                    requestPaint();
+                }
             );
 
             const unsubSettings = SettingsStore.onChange((name, key) => {
@@ -942,13 +946,14 @@ export class WorldMapPicker {
 
             settingsBtn.addEventListener('click', () => {
                 bakeSettingsSnapshot = snapshotMapPickerBakeSettings();
+                editedSettings.clear();
                 // Above map picker overlay (1100). Default params backdrop is 1000.
                 settingsModal.open(MAP_PICKER_SETTINGS_NS, MAP_PICKER_SETTINGS, {
                     title: 'Map picker settings',
                     zIndex: 1200,
                     onClose: () => {
                         if (bakeSettingsSnapshot) {
-                            restoreMapPickerBakeSettings(bakeSettingsSnapshot);
+                            restoreMapPickerBakeSettings(bakeSettingsSnapshot, editedSettings);
                         }
                         bakeSettingsSnapshot = null;
                     }
@@ -996,6 +1001,7 @@ export class WorldMapPicker {
                         }
                         // The post-rebuild bake keys become the discard baseline, so later toggles without a rebuild still discard on close.
                         bakeSettingsSnapshot = snapshotMapPickerBakeSettings();
+                        editedSettings.clear();
                         const crcKey = await fetchClientCrcKey();
                         if (crcKey) {
                             try {
