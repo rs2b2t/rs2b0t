@@ -1,3 +1,4 @@
+import { indexSavedProfiles } from './profileUsername.js';
 import { desktopStorage } from '../runtime/desktopStorage.js';
 import type { WorldNumber } from '../../client/config/worlds.js';
 
@@ -32,7 +33,7 @@ const MAIN_TAB = 'Main';
 const hasLocal = typeof localStorage !== 'undefined';
 type VaultStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
-function withBrowserLock<T>(change: () => T): Promise<T> {
+async function withBrowserLock<T>(change: () => T | Promise<T>): Promise<T> {
     if (!navigator.locks?.request) throw new Error('Saving profiles requires a browser with Web Locks support.');
     return navigator.locks.request(KEY, change);
 }
@@ -442,7 +443,10 @@ export class ProfileVault {
                 return [];
             }
             const payload = { ...build(), pendingWipe: this.pendingWipe };
-            if (restore) return this.restoreStorage(payload, restore, generation);
+            if (restore) {
+                if (this.shared && !desktopStorage) return withBrowserLock(() => this.restoreStorage(payload, restore, generation, true));
+                return this.restoreStorage(payload, restore, generation);
+            }
             const previous = this.assertUnlocked();
             await this.persist(undefined, payload);
             if (generation === this.persistGeneration) this.adopt(payload);
@@ -458,7 +462,7 @@ export class ProfileVault {
         }
     }
 
-    private async restoreStorage(payload: VaultPayload, restore: RestoreStorage, generation: number): Promise<Profile[]> {
+    private async restoreStorage(payload: VaultPayload, restore: RestoreStorage, generation: number, browserLockHeld = false): Promise<Profile[]> {
         const expected = this.storage?.getItem(KEY) ?? null;
         const blob = parseBlob(expected);
         if (!blob) throw new Error('Saved accounts changed; unlock the vault again.');
@@ -476,12 +480,12 @@ export class ProfileVault {
             ...restore.usernames
         ])];
         const replacement = { ...payload, pendingWipe: { names, legacyId } };
-        const written = await this.persist(expected, replacement);
+        const written = await this.persist(expected, replacement, browserLockHeld);
         if (generation !== this.persistGeneration || !written) throw new Error('Vault changed before the accounts were saved.');
         this.adopt(replacement);
         if (legacy !== null) this.storage!.removeItem(legacyKey);
         restore.apply(names);
-        await this.persist(written, { ...payload, pendingWipe: undefined });
+        await this.persist(written, { ...payload, pendingWipe: undefined }, browserLockHeld);
         if (generation !== this.persistGeneration) throw new Error('Vault changed before the accounts were saved.');
         this.pendingWipe = undefined;
         return previous.profiles;
@@ -570,11 +574,16 @@ export class ProfileVault {
             return;
         }
         if (this.pendingReplacement) return this.afterReplacement(() => this.assignGroup(usernames, tab));
-        const saved = new Set(this.assertUnlocked().map(p => p.username));
-        if (usernames.some(username => !saved.has(username))) throw new Error('Only saved profiles can be grouped.');
+        const { find } = indexSavedProfiles(this.assertUnlocked());
+        const assignments = new Map<string, string>();
+        for (const username of usernames) {
+            const profile = find(username);
+            if (!profile) throw new Error('Only saved profiles can be grouped.');
+            assignments.set(profile.username, tab);
+        }
         const tabs = [...this.customTabs];
         if (tab !== MAIN_TAB && !tabs.includes(tab)) tabs.push(tab);
-        await this.saveTabState(tabs, new Map(usernames.map(username => [username, tab])), this.active);
+        await this.saveTabState(tabs, assignments, this.active);
     }
 
     async remove(username: string): Promise<void> {
@@ -631,6 +640,19 @@ export class ProfileVault {
                     if (!draft.customTabs.includes(change.from)) throw new Error(`Group '${change.from}' no longer exists.`);
                     if (draft.customTabs.includes(change.to)) throw new Error(`Group '${change.to}' already exists.`);
                 }
+                const { find } = indexSavedProfiles(draft.assertUnlocked());
+                const resolveTabs = (moves: ReadonlyMap<string, string>, from?: string) => {
+                    const resolved = new Map<string, string>();
+                    for (const [username, tab] of moves) {
+                        const profile = find(username);
+                        if (profile && (from === undefined || profile.tab === from)) resolved.set(profile.username, tab);
+                    }
+                    return resolved;
+                };
+                const deletion = change && 'fallbackByUser' in change
+                    ? { from: change.from, fallbackByUser: resolveTabs(change.fallbackByUser, change.from) }
+                    : undefined;
+                const fallbackTabs = new Set(deletion?.fallbackByUser.values());
                 const previous = previousTabs ?? this.sharedTabs;
                 const removed = new Set(previous.filter(tab => !requested.includes(tab)));
                 const merged = draft.customTabs.filter(tab => !removed.has(tab));
@@ -641,12 +663,13 @@ export class ProfileVault {
                     for (let slot = 0; slot < merged.length; slot++) if (ordered.includes(merged[slot])) merged[slot] = ordered[index++];
                 }
                 for (const [index, tab] of requested.entries()) {
-                    if (previous.includes(tab) || merged.includes(tab)) continue;
+                    const liveDestination = fallbackTabs.has(tab) && !this.customTabs.includes(tab);
+                    if (merged.includes(tab) || (previous.includes(tab) && !liveDestination)) continue;
                     const next = requested.slice(index + 1).find(candidate => merged.includes(candidate));
                     merged.splice(next ? merged.indexOf(next) : merged.length, 0, tab);
                 }
                 const selected = activeTab === undefined || merged.includes(activeTab) ? activeTab : MAIN_TAB;
-                await draft.saveTabState(merged, tabByUser, selected, change);
+                await draft.saveTabState(merged, resolveTabs(tabByUser), selected, deletion ?? change);
             });
             this.sharedTabs = requested;
             return;
@@ -682,7 +705,7 @@ export class ProfileVault {
         return this.cache;
     }
 
-    private persist(expected?: string | null, replacement?: VaultPayload): Promise<string | undefined> {
+    private persist(expected?: string | null, replacement?: VaultPayload, browserLockHeld = false): Promise<string | undefined> {
         if (!this.storage || !this.key || !this.salt || !this.cache) {
             return Promise.resolve(undefined);
         }
@@ -691,7 +714,7 @@ export class ProfileVault {
         const payload = replacement ?? { profiles: this.cache, tabs: this.customTabs, activeTab: this.active, pendingWipe: this.pendingWipe };
         const plaintext = new TextEncoder().encode(JSON.stringify(payload));
         const generation = this.persistGeneration;
-        const write = this.persistTail.then(async () => {
+        const save = async () => {
             const iv = crypto.getRandomValues(new Uint8Array(12));
             const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext);
             if (generation !== this.persistGeneration) {
@@ -699,14 +722,16 @@ export class ProfileVault {
             }
             const blob: StoredBlob = { v: 1, kdf: 'PBKDF2-SHA256', iter: ITER, salt: b64(salt), iv: b64(iv), ct: b64(new Uint8Array(ct)) };
             const encoded = JSON.stringify(blob);
-            if (this.shared) {
+            if (this.shared && !browserLockHeld) {
                 if (!await this.compareAndSet(expected ?? null, encoded)) throw new Error('Saved accounts changed in another instance; unlock the vault again.');
             } else {
                 if (expected !== undefined && this.storage!.getItem(KEY) !== expected) throw new Error('Saved accounts changed in another instance; try again.');
                 this.storage!.setItem(KEY, encoded);
             }
             return encoded;
-        });
+        };
+        if (browserLockHeld) return save();
+        const write = this.persistTail.then(save);
         this.persistTail = write.then(() => {}, () => {});
         return write;
     }

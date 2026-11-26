@@ -5,16 +5,13 @@ import type {
     LoginCoordinationRegistry
 } from '../runtime/LoginCoordination.js';
 import { LoginCoordinator } from './LoginCoordinator.js';
-import JString from '../../client/datastruct/JString.js';
+import { indexSavedProfiles, normalizeUsername } from './profileUsername.js';
 import { waitForWorldSwitch } from '../runtime/WorldSwitch.js';
 import type { WorldNumber } from '../../client/config/worlds.js';
 
-export const MAIN_TAB = 'Main';
+export { normalizeUsername } from './profileUsername.js';
 
-export function normalizeUsername(username: string): string {
-    const hash = JString.toUserhash(username);
-    return hash === 0n ? '' : JString.toRawUsername(hash);
-}
+export const MAIN_TAB = 'Main';
 
 interface Slot {
     id: number;
@@ -66,17 +63,12 @@ export class MultiBoxController {
     }
 
     restoreProfiles(profiles: Account[], tabs: string[], activeTab: string, loadMissing = true): void {
-        const remaining = new Map<string, Account>();
-        for (const profile of profiles) {
-            const name = normalizeUsername(profile.username);
-            if (!remaining.has(name)) remaining.set(name, profile);
-        }
+        const { find, byIdentity: remaining } = indexSavedProfiles(profiles);
         const knownTabs = new Set([MAIN_TAB, ...tabs]);
         const retained = new Set<string>();
         let modesChanged = false;
         for (const slot of this.slots) {
-            const name = normalizeUsername(slot.account.username);
-            const saved = remaining.get(name);
+            const saved = find(slot.account.username);
             if (!saved) {
                 retained.add(slot.tab);
                 continue;
@@ -87,7 +79,7 @@ export class MultiBoxController {
                 slot.tab = next;
                 modesChanged = true;
             }
-            remaining.delete(name);
+            remaining.delete(normalizeUsername(saved.username));
         }
         for (const tab of this.customTabs) {
             if (retained.has(tab)) knownTabs.add(tab);

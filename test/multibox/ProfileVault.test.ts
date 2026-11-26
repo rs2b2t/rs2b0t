@@ -426,6 +426,19 @@ describe('ProfileVault tabs', () => {
         expect(reopened.list().find(p => p.username === 'bob')?.tab).toBe('m');
     });
 
+    test('a deletion fallback keeps a previously saved destination deleted by a peer', async () => {
+        const wall = new ProfileVault();
+        await wall.setup('pw');
+        await wall.replaceAll({ profiles: [{ username: 'bob', password: '', tab: 'New' }], tabs: ['Prior', 'New'], activeTab: 'Main' });
+        const peer = new ProfileVault();
+        expect(await peer.unlock('pw')).toBe(true);
+        await peer.saveTabState(['New'], new Map());
+        await wall.saveTabState(['Prior'], new Map(), undefined, { from: 'New', fallbackByUser: new Map([['bob', 'Prior']]) });
+
+        expect(await peer.unlock('pw')).toBe(true);
+        expect(peer.snapshot()).toEqual({ profiles: [{ username: 'bob', password: '', tab: 'Main' }], tabs: [], activeTab: 'Main' });
+    });
+
     test('saveTabState rejects invalid tab lists loudly', async () => {
         const v = new ProfileVault();
         await v.setup('pw');
@@ -523,9 +536,37 @@ describe('ProfileVault tabs', () => {
         expect(await reopen()).toEqual(imported);
     });
 
-    test("a late cleanup preserves the winning wall's encrypted wipe list", async () => {
+    test('a competing browser import keeps the winning world and settings together', async () => {
         const first = new ProfileVault();
         const second = new ProfileVault();
+        await first.setup('pw');
+        expect(await second.unlock('pw')).toBe(true);
+        const key = 'rs2b0t:fixture:selectedScript';
+        const importWorld = (vault: ProfileVault, world: 1 | 2, script: string) => vault.replaceAll({
+            profiles: [{ username: 'fixture', password: '', world }], tabs: [], activeTab: 'Main'
+        }, { usernames: ['fixture'], apply() { localStorage.setItem(key, script); } });
+        const request = navigator.locks.request.bind(navigator.locks);
+        const lock = spyOn(navigator.locks, 'request').mockImplementationOnce(async (name, callback) => {
+            if (typeof callback !== 'function') throw new Error('Expected an exclusive lock callback');
+            const result = await request(name, callback);
+            await importWorld(second, 2, 'Fisher');
+            return result;
+        });
+        try {
+            const [firstImport] = await Promise.allSettled([importWorld(first, 1, 'Miner')]);
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('pw')).toBe(true);
+            expect([reopened.list()[0].world, localStorage.getItem(key)]).toEqual([2, 'Fisher']);
+            expect(firstImport.status).toBe('fulfilled');
+        } finally {
+            lock.mockRestore();
+        }
+    });
+
+    test("a late cleanup preserves the winning wall's encrypted wipe list", async () => {
+        const storage = quotaLimitedStorage();
+        const first = new ProfileVault(storage);
+        const second = new ProfileVault(storage);
         await first.setup('pw');
         await first.upsert({ username: 'original', password: '' });
         expect(await second.unlock('pw')).toBe(true);
@@ -551,7 +592,7 @@ describe('ProfileVault tabs', () => {
                 resume.resolve();
                 await expect(pending).rejects.toThrow(/changed/);
             }
-            const reopened = new ProfileVault();
+            const reopened = new ProfileVault(storage);
             expect(await reopened.unlock('pw')).toBe(true);
             expect(reopened.list().map(p => p.username)).toEqual(['second']);
             const wipes: string[][] = [];

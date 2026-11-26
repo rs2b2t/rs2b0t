@@ -25,17 +25,6 @@ import type { Account } from './types.js';
 
 type DesktopWall = Window & { rs2b0tLoginCoordinator?: LoginCoordinationRegistry & { parallelism: number } };
 
-function resolveSavedUsernames(profiles: Profile[]): (username: string) => string {
-    const exact = new Set<string>();
-    const byIdentity = new Map<string, string>();
-    for (const { username } of profiles) {
-        exact.add(username);
-        const identity = normalizeUsername(username);
-        if (identity && !byIdentity.has(identity)) byIdentity.set(identity, username);
-    }
-    return username => exact.has(username) ? username : byIdentity.get(normalizeUsername(username)) ?? username;
-}
-
 if (typeof window !== 'undefined') {
     installVisibilityTableCache(window);
     installWorkerClockHub(window);
@@ -157,10 +146,7 @@ function boot(): void {
             const slots = controller.snapshot();
             const slot = slots.find(slot => slot.id === id)!;
             renderRail(slots);
-            if (vault.status() === 'unlocked') {
-                const savedUsername = resolveSavedUsernames(vault.list());
-                persistTabState(new Map([[savedUsername(slot.username), tab]]));
-            }
+            persistTabState(new Map([[slot.username, tab]]));
             return true;
         });
     }
@@ -501,8 +487,7 @@ function boot(): void {
         assignGroup: (usernames, name) => {
             const save = orderWrite.then(() => {
                 if (!groupsReady()) throw new Error('Saved groups changed. Try again after the wall refreshes.');
-                const savedUsername = resolveSavedUsernames(vault.list());
-                return vault.assignGroup(usernames.map(savedUsername), name);
+                return vault.assignGroup(usernames, name);
             });
             orderWrite = save.catch(() => {});
             return save.then(async () => {

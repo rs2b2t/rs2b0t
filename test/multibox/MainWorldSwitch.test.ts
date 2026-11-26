@@ -278,6 +278,64 @@ test('import and peer refresh retain only the live groups omitted from the backu
     });
 });
 
+test('import and refresh prefer the exact spelling of a loaded profile', async () => {
+    await withWall('local', async wall => {
+        const loaded = wall.add({ username: 'Fixture', password: 'b' });
+        const profiles = [
+            { username: 'fixture', password: 'a', tab: 'Work' },
+            { username: 'Fixture', password: 'b', tab: 'Fleet' }
+        ];
+        await importSettings({ profiles, tabs: ['Work', 'Fleet'], activeTab: 'Main', storage: {} });
+        expect(wall.slots()).toMatchObject([{ id: loaded.id, tab: 'Fleet' }]);
+
+        const peer = new ProfileVault();
+        expect(await peer.unlock('test-passphrase')).toBe(true);
+        await peer.assignGroup(['Fixture'], 'New');
+        window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
+        await waitFor(() => wall.controller.tabs().includes('New'));
+        expect(wall.slots()).toMatchObject([{ id: loaded.id, tab: 'New' }]);
+    });
+});
+
+test.each(['move', 'delete'])('rail %s uses the username from the current saved roster', async edit => {
+    await withWall('local', async wall => {
+        const profile = { username: 'Bob', password: 'b', tab: 'Fleet' };
+        const backup = { profiles: [profile], tabs: ['Prior', 'Fleet'], activeTab: 'Main' };
+        await importSettings({ ...backup, storage: {} });
+        const peer = new ProfileVault();
+        expect(await peer.unlock('test-passphrase')).toBe(true);
+        const renamed = { ...profile, username: 'bob' };
+        await peer.replaceAll({ ...backup, profiles: [renamed] });
+
+        const changed = edit === 'move' ? wall.setSlotTab(wall.slots()[0].id, 'Prior') : wall.removeTab('Fleet');
+        expect(changed).toBe(true);
+        await waitFor(() => vault.list()[0].username === 'bob');
+        expect(await peer.unlock('test-passphrase')).toBe(true);
+        expect(peer.list()).toEqual([{ ...renamed, tab: 'Prior' }]);
+    });
+});
+
+test('deleting a group persists the live-only destination of a saved member', async () => {
+    await withWall('local', async wall => {
+        const live = { username: 'alice', password: 'a', tab: 'Work' };
+        const saved = { username: 'bob', password: 'b', tab: 'Fleet' };
+        await importSettings({ profiles: [live, saved], tabs: ['Work', 'Fleet'], activeTab: 'Main', storage: {} });
+        await importSettings({ profiles: [saved], tabs: ['Fleet'], activeTab: 'Main', storage: {} });
+        expect(wall.addTab('New')).toBe(true);
+        expect(wall.setSlotTab(wall.slots()[1].id, 'New')).toBe(true);
+        await waitFor(() => vault.list()[0].tab === 'New');
+        expect(wall.controller.tabs()).toEqual(['Main', 'Fleet', 'Work', 'New']);
+        expect(vault.tabState().tabs).toEqual(['Fleet', 'New']);
+
+        expect(wall.removeTab('New')).toBe(true);
+        await waitFor(() => !vault.tabState().tabs.includes('New'));
+        expect(wall.slots().map(slot => slot.tab)).toEqual(['Work', 'Work']);
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.snapshot()).toEqual({ profiles: [{ ...saved, tab: 'Work' }], tabs: ['Fleet', 'Work'], activeTab: 'Main' });
+    });
+});
+
 test('a roster move queued during replacement uses the imported username', async () => {
     await withWall('local', async wall => {
         await importSettings({
