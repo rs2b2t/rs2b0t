@@ -25,15 +25,14 @@ export default class CollisionMap {
     }
 
     reset(): void {
-        for (let x: number = 0; x < this.sizeX; x++) {
-            for (let z: number = 0; z < this.sizeZ; z++) {
-                const index: number = CollisionMap.index(x, z);
-                if (x === 0 || z === 0 || x === this.sizeX - 1 || z === this.sizeZ - 1) {
-                    this.flags[index] = CollisionFlag._BOUNDS;
-                } else {
-                    this.flags[index] = CollisionFlag._OPEN;
-                }
-            }
+        const { flags, sizeZ } = this;
+        const lastRow = flags.length - sizeZ;
+        flags.fill(CollisionFlag._OPEN);
+        flags.fill(CollisionFlag._BOUNDS, 0, sizeZ);
+        flags.fill(CollisionFlag._BOUNDS, lastRow);
+        for (let row = sizeZ; row < lastRow; row += sizeZ) {
+            flags[row] = CollisionFlag._BOUNDS;
+            flags[row + sizeZ - 1] = CollisionFlag._BOUNDS;
         }
     }
 
