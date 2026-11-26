@@ -1,11 +1,24 @@
 import assert from 'node:assert/strict';
-import Pix8 from '../../src/client/graphics/Pix8.ts';
-import Pix32 from '../../src/client/graphics/Pix32.ts';
-import Packet from '../../src/client/io/Packet.ts';
-import { mapSpriteArchive } from '../../test/client/graphics/mapSprites.fixture.ts';
+import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
+import { argv } from 'node:process';
+import { createJiti } from 'jiti';
 
-const Before8 = (await import(new URL('./Pix8.mjs', import.meta.url))).default;
-const Before32 = (await import(new URL('./Pix32.mjs', import.meta.url))).default;
+const revision = argv[2] ?? '01a82434';
+const load = createJiti(import.meta.url, { fsCache: false, alias: { '#': resolve('src') } });
+
+function baseline(name) {
+    const path = `src/client/graphics/${name}`;
+    const source = execFileSync('git', ['show', `${revision}:${path}.ts`], { encoding: 'utf8' });
+    return load.evalModule(source, { filename: resolve(`${path}.baseline.ts`) }).default;
+}
+
+const Before8 = baseline('Pix8');
+const Before32 = baseline('Pix32');
+const Pix8 = load(resolve('src/client/graphics/Pix8.ts')).default;
+const Pix32 = load(resolve('src/client/graphics/Pix32.ts')).default;
+const Packet = load(resolve('src/client/io/Packet.ts')).default;
+const { mapSpriteArchive } = load(resolve('test/client/graphics/mapSprites.fixture.ts'));
 
 function before(jag, scenes, functions) {
     for (let i = 0; i < scenes.length; i++) scenes[i] = Before8.depack(jag, 'mapscene', i);
