@@ -1862,9 +1862,9 @@ export default class Model extends ModelSource {
     }
 
     private render2(clipped: boolean, picking: boolean, typecode: number): void {
-        for (let depth: number = 0; depth < this.maxDepth; depth++) {
-            Model.tmpDepthFaceCount[depth] = 0;
-        }
+        Model.tmpDepthFaceCount.fill(0, 0, this.maxDepth);
+        let minFaceDepth = this.maxDepth;
+        let maxFaceDepth = -1;
 
         for (let f: number = 0; f < this.numFaces; f++) {
             if (this.faceRenderType && this.faceRenderType[f] === -1) {
@@ -1921,10 +1921,12 @@ export default class Model extends ModelSource {
                 faces = Model.tmpDepthFaces[depth] = growBucket(faces);
             }
             faces[count] = f;
+            if (depth < minFaceDepth) minFaceDepth = depth;
+            if (depth > maxFaceDepth) maxFaceDepth = depth;
         }
 
         if (!this.facePriority) {
-            for (let depth: number = this.maxDepth - 1; depth >= 0; depth--) {
+            for (let depth = maxFaceDepth; depth >= minFaceDepth; depth--) {
                 const count: number = Model.tmpDepthFaceCount[depth];
                 if (count <= 0) {
                     continue;
@@ -1947,7 +1949,7 @@ export default class Model extends ModelSource {
             Model.tmpPriorityDepthSum[priority] = 0;
         }
 
-        for (let depth: number = this.maxDepth - 1; depth >= 0; depth--) {
+        for (let depth = maxFaceDepth; depth >= minFaceDepth; depth--) {
             const faceCount: number = Model.tmpDepthFaceCount[depth];
 
             if (faceCount > 0) {
