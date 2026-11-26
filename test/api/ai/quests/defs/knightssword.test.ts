@@ -5,8 +5,8 @@ import { decideAt, knightssword } from '#/bot/api/ai/quests/defs/knightssword/in
 import { QUEST_DEFS } from '#/bot/api/ai/quests/defs/index.js';
 import { QuestFood } from '#/bot/api/ai/quests/food.js';
 import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import { type BankOptions, COINS, knightsSwordSnapshot } from './knightssword-snapshot.fixture.js';
 
-const COINS = 995;
 const BRONZE_PICKAXE = 1265;
 const MAX_MINING = 70;
 
@@ -17,33 +17,23 @@ beforeAll(() => { QuestFood.name = 'Lobster'; });
 afterAll(() => { QuestFood.name = originalFood; });
 
 /** Kitted out by default, so every case exercises the branch it names. */
-function snap(options: {
+function snap(options: BankOptions & {
     journal?: QuestSnapshot['journal'];
     stage?: number;
     invIds?: [number, number][];
-    bankIds?: [number, number][];
     wornIds?: number[];
-    bankKnown?: boolean;
     food?: number;
-    tile?: QuestSnapshot['tile'];
 } = {}): QuestSnapshot {
     const stage = options.stage ?? KS_STAGE.NOT_STARTED;
-    const inv = new Map<string, number>([['lobster', options.food ?? 14]]);
     return {
-        journal: options.journal ?? (stage === KS_STAGE.NOT_STARTED ? 'notStarted' : 'inProgress'),
-        inv,
-        invIds: new Map([[COINS, 1000], ...(options.invIds ?? [])]),
-        worn: new Set(),
-        wornIds: new Set(options.wornIds ?? []),
-        noProgress: 0,
-        bankCoins: 2_000_000,
+        ...knightsSwordSnapshot({
+            ...options,
+            journal: options.journal ?? (stage === KS_STAGE.NOT_STARTED ? 'notStarted' : 'inProgress'),
+            inv: [['lobster', options.food ?? 14]],
+            defaultCoins: 1000
+        }),
         stage,
-        progress: { stage, flags: new Set() },
-        bank: new Map(),
-        bankIds: new Map(options.bankIds ?? []),
-        bankKnown: options.bankKnown ?? true,
-        tile: options.tile ?? { x: 2946, z: 3369, level: 0 },
-        freeSlots: 20
+        progress: { stage, flags: new Set() }
     };
 }
 
@@ -175,9 +165,7 @@ describe('stage 6, the materials and the sword', () => {
     });
 
     test('tops the coin float up before anything else', () => {
-        const bare = snap({ stage: KS_STAGE.SPOKEN_RELDO });
-        bare.invIds = new Map([[COINS, 1]]);
-        const step = decideAt(bare, MAX_MINING, 15);
+        const step = decide({ stage: KS_STAGE.SPOKEN_RELDO, invIds: [[COINS, 1]] });
         expect(step.kind === 'withdraw' && step.items.some(i => i.id === COINS)).toBe(true);
     });
 });
