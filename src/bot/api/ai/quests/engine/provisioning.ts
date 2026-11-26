@@ -1,6 +1,21 @@
 // docs/reference/quest-provisioning.md
 import type { QuestStatus } from '../../../ui/questlog/Quests.js';
 import type { QuestItem } from '../types.js';
+import { cachedBankId, heldId } from './snapshotItems.js';
+import type { QuestSnapshot } from './types.js';
+
+export function planItemFromBank(
+    snap: QuestSnapshot,
+    item: { name: string; id: number },
+    qty = 1
+): 'scanBank' | { name: string; id: number; qty: number } | null {
+    const shortfall = qty - heldId(snap, item.id);
+    if (shortfall <= 0) return null;
+    if (!snap.bankKnown) return 'scanBank';
+
+    const available = cachedBankId(snap, item.id);
+    return available > 0 ? { name: item.name, id: item.id, qty: Math.min(shortfall, available) } : null;
+}
 
 interface ProvisionPlan {
     withdraw: { name: string; qty: number }[];
