@@ -73,11 +73,12 @@ if (packPath) {
     for (const [label, x, z, endX, endZ] of routes) {
         const from = { x, z, level: 0 };
         const to = { x: endX, z: endZ, level: 0 };
-        measure(label, () => full.findPath(from, to, options), 5, 1);
+        measure(label, () => full.findPath(from, to, options), 7, 1);
     }
     const bank = { x: 3253, z: 3420, level: 0 };
     measure('One-step bank walk', () => full.findPath(bank, { ...bank, x: 3254 }, options), 61, 10);
-    measure('Yanille budget=5000', () => full.findPath({ x: 3222, z: 3218, level: 0 }, { x: 2612, z: 3093, level: 0 }, {
-        ...options, maxExpansions: 5000
-    }), 5, 1);
+    measure('Two-step bank walk', () => full.findPath(bank, { ...bank, x: 3255 }, options), 31, 50);
+    measure('Yanille budget=4700', () => full.findPath({ x: 3222, z: 3218, level: 0 }, { x: 2612, z: 3093, level: 0 }, {
+        ...options, maxExpansions: 4700
+    }), 7, 1);
 }

@@ -21,13 +21,11 @@ import { DEFAULT_EDGE_COST, edgeCostForKind, teleportEdgeCost } from './geometry
 // Why: multiply instead of bit-shifting so the 0-15 essence return index survives JS's 32-bit wrap.
 const TILE_KEY_MASK = 0x3fffffff;
 const ESSENCE_STATE_SLOTS = 16;
-const STAIR_ARRIVAL_STRIDE = (TILE_KEY_MASK + 1) * ESSENCE_STATE_SLOTS;
-function packSearchKey(tileId: number, essenceReturnIdx: number, stairArrival = 0): number {
-    const tileAndEssence = (tileId & TILE_KEY_MASK) * ESSENCE_STATE_SLOTS + (essenceReturnIdx & 0xf);
-    return stairArrival * STAIR_ARRIVAL_STRIDE + tileAndEssence;
+function packSearchKey(tileId: number, essenceReturnIdx: number): number {
+    return (tileId & TILE_KEY_MASK) * ESSENCE_STATE_SLOTS + (essenceReturnIdx & 0xf);
 }
 function searchTileId(key: number): number {
-    return (key / ESSENCE_STATE_SLOTS) & TILE_KEY_MASK;
+    return (key / ESSENCE_STATE_SLOTS) | 0;
 }
 function searchEssenceIdx(key: number): number {
     return key % ESSENCE_STATE_SLOTS;
@@ -140,8 +138,12 @@ export type NavResponse =
     | { type: 'error'; message: string }
     | ({ type: 'path'; id: number; elapsedMs: number } & PathOutcome);
 
+const ORIGIN_TELEPORTS = [...SPELL_TELEPORTS, ...JEWELLERY_TELEPORTS];
+const MIN_CAST_COST = Math.min(...ORIGIN_TELEPORTS.map(dest => dest.cost ?? teleportEdgeCost(dest.family)));
 const DOOR_COST = DEFAULT_EDGE_COST.door;
 const MAX_EXPANSIONS = 1_200_000;
+const MAPSQUARE_WIDTH = 64;
+const GOAL_WALK_DEPTH = 8;
 
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];
 const DZ = [1, 0, -1, 0, 1, -1, -1, 1];
@@ -167,6 +169,23 @@ function nodeZ(id: number): number {
 
 function nodeLevel(id: number): number {
     return (id >> 28) & 0x3;
+}
+
+type WalkBound = (x: number, z: number) => number;
+
+function walkBound(tiles: Iterable<number>, remaining: number): WalkBound {
+    let minX = Infinity, maxX = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+    for (const tile of tiles) {
+        minX = Math.min(minX, nodeX(tile));
+        maxX = Math.max(maxX, nodeX(tile));
+        minZ = Math.min(minZ, nodeZ(tile));
+        maxZ = Math.max(maxZ, nodeZ(tile));
+    }
+    if (minX === maxX && minZ === maxZ) {
+        return (x, z) => remaining + Math.max(Math.abs(x - minX), Math.abs(z - minZ));
+    }
+    return (x, z) => remaining + Math.max(0, minX - x, x - maxX, minZ - z, z - maxZ);
 }
 
 interface CompiledEdge {
@@ -258,8 +277,8 @@ export class PathFinder {
     readonly members: boolean;
 
     private readonly edges = new Map<number, CompiledEdge[]>();
-    private readonly stairExits = new Map<number, number>();
-    private hasEssenceEntries = false;
+    private readonly transportLandings = new Set<number>();
+    private minLongRangeCost = Infinity;
     private readonly longRangeEdges: { from: number; edge: CompiledEdge }[] = [];
     doorEdges = 0;
     transportEdges = 0;
@@ -440,16 +459,11 @@ export class PathFinder {
         teleportId?: string
     ): void {
         const edge = { to, cost, transport, requires, kind, teleportId };
-        if (requires?.essenceEntrySetsReturn !== undefined) this.hasEssenceEntries = true;
-        if (kind === 'stair') {
-            const exit = from * 4 + nodeLevel(to);
-            if (!this.stairExits.has(exit)) {
-                this.stairExits.set(exit, this.stairExits.size + 1);
-            }
-        }
+        this.transportLandings.add(to);
         const span = Math.max(Math.abs(nodeX(to) - nodeX(from)), Math.abs(nodeZ(to) - nodeZ(from)));
         if (span > cost) {
             this.longRangeEdges.push({ from, edge });
+            this.minLongRangeCost = Math.min(this.minLongRangeCost, cost);
         }
         let list = this.edges.get(from);
         if (!list) {
@@ -614,22 +628,11 @@ export class PathFinder {
             };
         }
 
-        const { x, z, level } = toRaw;
-        const dx = x - from.x;
-        const dz = z - from.z;
-        if (level === from.level && Math.max(Math.abs(dx), Math.abs(dz)) === 1 && !opts.avoidZones?.length && maxExpansions >= 1) {
-            const mask = this.exitMask(from.x, from.z, level);
-            const canStep = DX.some((step, dir) => step === dx && DZ[dir] === dz && (mask & (1 << dir)) !== 0);
-            if (canStep && this.walkable(x, z, level)) {
-                return { ok: true, cost: 1, expanded: 1, waypoints: [from, { x, z, level }], hops: [] };
-            }
-        }
-
         const ctx = this.buildSearchContext(from, toRaw, opts);
 
         const cardinal = this.cardinalGoals(toRaw);
         if (cardinal.size > 0) {
-            const direct = this.search(from, toRaw, cardinal, avoidDoors, maxExpansions, ctx);
+            const direct = this.search(from, cardinal, avoidDoors, maxExpansions, ctx);
             if (direct.ok) {
                 return direct;
             }
@@ -643,7 +646,20 @@ export class PathFinder {
                 expanded: 0
             };
         }
-        return this.search(from, toRaw, goals, avoidDoors, maxExpansions, ctx);
+        return this.search(from, goals, avoidDoors, maxExpansions, ctx);
+    }
+
+    private hasDirectWalk(from: NavPoint, to: NavPoint, steps: number): boolean {
+        if (from.level !== to.level || !this.walkable(to.x, to.z, to.level)) return false;
+        let { x, z } = from;
+        for (let i = 0; i < steps; i++) {
+            const dx = Math.sign(to.x - x), dz = Math.sign(to.z - z);
+            const dir = DX.findIndex((step, i) => step === dx && DZ[i] === dz);
+            if (!(this.exitMask(x, z, from.level) & (1 << dir))) return false;
+            x += dx;
+            z += dz;
+        }
+        return x === to.x && z === to.z;
     }
 
     private buildSearchContext(from: NavPoint, to: NavPoint, opts: FindPathCallOptions): SearchContext {
@@ -655,9 +671,12 @@ export class PathFinder {
             opts.useTeleportCatalog === true ||
             (opts.useTeleportCatalog !== false && policy !== undefined && policy.useTeleports !== false);
 
+        const minHopCost = Math.min(this.minLongRangeCost, injectTele ? MIN_CAST_COST : Infinity);
+        // Why: a confirmed walk below the cheapest long hop needs neither cast checks nor shortcut relaxation.
+        const shortWalk = minHopCost < Infinity && routeSpan < minHopCost && !avoidZones && this.hasDirectWalk(from, to, routeSpan);
         const teleEdges: CompiledEdge[] = [];
-        if (injectTele && policy?.useTeleports !== false) {
-            for (const dest of [...SPELL_TELEPORTS, ...JEWELLERY_TELEPORTS]) {
+        if (injectTele && !shortWalk && policy?.useTeleports !== false) {
+            for (const dest of ORIGIN_TELEPORTS) {
                 if (!this.walkable(dest.to.x, dest.to.z, dest.to.level)) {
                     continue;
                 }
@@ -722,6 +741,7 @@ export class PathFinder {
         return {
             state,
             policy,
+            shortWalkCost: shortWalk ? routeSpan : undefined,
             teleFromStart: teleEdges,
             startId: nodeId(from.x, from.z, from.level),
             startEssenceIdx: essenceReturnStateIndex(state?.essenceExitReturn),
@@ -731,9 +751,7 @@ export class PathFinder {
 
     /** Requires check with the path-local essence return, which can differ from the snapshot after an entry hop. */
     private edgeAllowedOnPath(edge: CompiledEdge, ctx: SearchContext, pathEssenceIdx: number): boolean {
-        if (edge.kind && !kindAllowedByPolicy(edge.kind as TransportKind, ctx.policy)) {
-            return false;
-        }
+        if (edge.kind && !kindAllowedByPolicy(edge.kind as TransportKind, ctx.policy)) return false;
         const { requires } = edge;
         const baseState = ctx.state;
         if (!requires) {
@@ -764,17 +782,49 @@ export class PathFinder {
         return meetsRequires(other, stateForMeets).ok;
     }
 
-    private buildHeuristic(goal: NavPoint, goals: Set<number>, ctx: SearchContext): (x: number, z: number) => number {
-        let slack = 0;
-        for (const id of goals) {
-            slack = Math.max(slack, Math.abs(nodeX(id) - goal.x), Math.abs(nodeZ(id) - goal.z));
+    private buildHeuristic(goals: Set<number>, ctx: SearchContext): (x: number, z: number, tile: number) => number {
+        const direct = walkBound(goals, 0);
+        if (ctx.shortWalkCost !== undefined) {
+            const cost = ctx.shortWalkCost;
+            return (x, z) => Math.min(cost, direct(x, z));
         }
-        const walk = (x: number, z: number): number =>
-            Math.max(0, Math.max(Math.abs(x - goal.x), Math.abs(z - goal.z)) - slack);
-        // Why: returning to the start can only improve a cast if the path changed its essence return.
-        const shortcuts = this.hasEssenceEntries
-            ? this.longRangeEdges.concat(ctx.teleFromStart.map(edge => ({ from: ctx.startId, edge })))
-            : this.longRangeEdges;
+        if (!this.longRangeEdges.length && !ctx.teleFromStart.length) return direct;
+        const nearGoal = (tile: number) => direct(nodeX(tile), nodeZ(tile)) <= MAPSQUARE_WIDTH;
+        if (nearGoal(ctx.startId) || ctx.teleFromStart.some(edge => nearGoal(edge.to))) {
+            return this.shortcutBound(direct, ctx);
+        }
+
+        // Why: outside these walk-only layers every path must reach the perimeter and still pay its depth.
+        const distance = new Map<number, number>();
+        let frontier = [...goals];
+        for (const tile of frontier) distance.set(tile, 0);
+        let depth = 0;
+        while (depth < GOAL_WALK_DEPTH) {
+            if (frontier.some(tile => this.transportLandings.has(tile)) || ctx.teleFromStart.some(edge => distance.has(edge.to))) break;
+            const next: number[] = [];
+            for (const tile of frontier) {
+                const level = nodeLevel(tile);
+                for (let dir = 0; dir < DX.length; dir++) {
+                    const x = nodeX(tile) - DX[dir], z = nodeZ(tile) - DZ[dir];
+                    if (!(this.exitMask(x, z, level) & (1 << dir))) continue;
+                    const prev = nodeId(x, z, level);
+                    if (distance.has(prev)) continue;
+                    distance.set(prev, depth + 1);
+                    next.push(prev);
+                }
+            }
+            if (!next.length) break;
+            frontier = next;
+            depth++;
+        }
+        if (!depth) return this.shortcutBound(direct, ctx);
+        const perimeter = walkBound(frontier, depth);
+        const estimate = this.shortcutBound(perimeter, ctx);
+        return (x, z, tile) => distance.get(tile) ?? estimate(x, z);
+    }
+
+    private shortcutBound(walk: WalkBound, ctx: SearchContext): WalkBound {
+        const shortcuts = this.longRangeEdges.concat(ctx.teleFromStart.map(edge => ({ from: ctx.startId, edge })));
         const pending = shortcuts
             .filter(({ edge }) => this.edgeAllowedOnPath(edge, ctx, 0))
             .map(({ from, edge }) => ({
@@ -816,7 +866,6 @@ export class PathFinder {
 
     private search(
         from: NavPoint,
-        toRaw: NavPoint,
         goals: Set<number>,
         avoidDoors: Set<string> | undefined,
         maxExpansions: number,
@@ -824,13 +873,14 @@ export class PathFinder {
     ): PathOutcome {
         const startTile = nodeId(from.x, from.z, from.level);
         const start = packSearchKey(startTile, ctx.startEssenceIdx);
+
         const gScore = new Map<number, number>();
         const cameFrom = new Map<number, number>();
         /** Arrival search-key to transport metadata + edge cost for hop reconstruct. */
-        const viaEdge = new Map<number, { transport: TransportInfo; cost: number }>();
+        const viaEdge = new Map<number, { transport: TransportInfo; cost: number; kind?: string }>();
         const closed = new Set<number>();
         const open = new MinHeap();
-        const heuristic = this.buildHeuristic(toRaw, goals, ctx);
+        const heuristic = this.buildHeuristic(goals, ctx);
 
         gScore.set(start, 0);
         open.push(0, start);
@@ -844,11 +894,7 @@ export class PathFinder {
             closed.add(current);
 
             const curTile = searchTileId(current);
-            const stairArrival = Math.floor(current / STAIR_ARRIVAL_STRIDE);
             const curEssence = searchEssenceIdx(current);
-            const g = gScore.get(current)!;
-            // Why: a cheaper unrestricted arrival at this tile can take every exit.
-            if (stairArrival && (gScore.get(current % STAIR_ARRIVAL_STRIDE) ?? Infinity) <= g) continue;
 
             if (goals.has(curTile)) {
                 return this.reconstruct(start, current, gScore.get(current)!, expanded, cameFrom, viaEdge);
@@ -865,6 +911,7 @@ export class PathFinder {
             const x = nodeX(curTile);
             const z = nodeZ(curTile);
             const level = nodeLevel(curTile);
+            const g = gScore.get(current)!;
             const escapingDangerZone = ctx.avoidZones ? tileInDangerZones(x, z, level, ctx.avoidZones) : false;
 
             const mask = this.exitMask(x, z, level);
@@ -879,9 +926,7 @@ export class PathFinder {
                     continue;
                 }
                 const neighborTile = nodeId(nx, nz, level);
-                const walkKey = packSearchKey(neighborTile, curEssence);
-                if (stairArrival && (gScore.get(walkKey) ?? Infinity) <= g + 1) continue;
-                const neighbor = walkKey + stairArrival * STAIR_ARRIVAL_STRIDE;
+                const neighbor = packSearchKey(neighborTile, curEssence);
                 if (closed.has(neighbor)) {
                     continue;
                 }
@@ -893,16 +938,22 @@ export class PathFinder {
                 gScore.set(neighbor, tentative);
                 cameFrom.set(neighbor, current);
                 viaEdge.delete(neighbor);
-                open.push((tentative + heuristic(nx, nz)) * 1048576 - tentative, neighbor);
+                open.push((tentative + heuristic(nx, nz, neighborTile)) * 1048576 - tentative, neighbor);
             }
 
-            let extras = this.edges.get(curTile);
-            if (curTile === ctx.startId && (current === start || curEssence !== ctx.startEssenceIdx)) {
-                extras = extras ? extras.concat(ctx.teleFromStart) : ctx.teleFromStart;
+            const extras: CompiledEdge[] = [...(this.edges.get(curTile) ?? [])];
+            if (curTile === ctx.startId) {
+                extras.push(...ctx.teleFromStart);
             }
-            if (!extras) continue;
+            // Why: a staircase with 2 ground-floor stand tiles is baked as one edge per combination, so up-then-back-down composes into a same-level teleport through the wall between them.
+            // Why: the server lands you on one tile only, so the walker climbs down on the wrong side and bounces; a stair hop back to the level it came from is refused.
+            // Why: a multi-storey climb keeps going the same way and is unaffected.
+            const arrivedBy = viaEdge.get(current);
+            const cameFromLevel = arrivedBy?.kind === 'stair'
+                ? nodeLevel(searchTileId(cameFrom.get(current) ?? current))
+                : null;
             for (const edge of extras) {
-                if (stairArrival && edge.kind === 'stair' && stairArrival === this.stairExits.get(curTile * 4 + nodeLevel(edge.to))) {
+                if (cameFromLevel !== null && edge.kind === 'stair' && nodeLevel(edge.to) === cameFromLevel) {
                     continue;
                 }
                 if (avoidDoors && avoidDoors.has(`${edge.transport.locX}|${edge.transport.locZ}`)) {
@@ -922,8 +973,7 @@ export class PathFinder {
                 // Entry hop updates path session return (content sets exit_essence_mine_coord).
                 const sets = edge.requires?.essenceEntrySetsReturn;
                 const nextEssence = sets !== undefined ? essenceReturnStateIndex(sets) : curEssence;
-                const arrival = edge.kind === 'stair' ? this.stairExits.get(edge.to * 4 + level) : 0;
-                const neighbor = packSearchKey(edge.to, nextEssence, arrival);
+                const neighbor = packSearchKey(edge.to, nextEssence);
                 if (closed.has(neighbor)) {
                     continue;
                 }
@@ -934,8 +984,8 @@ export class PathFinder {
                 }
                 gScore.set(neighbor, tentative);
                 cameFrom.set(neighbor, current);
-                viaEdge.set(neighbor, { transport: edge.transport, cost: edge.cost });
-                open.push((tentative + heuristic(nodeX(edge.to), nodeZ(edge.to))) * 1048576 - tentative, neighbor);
+                viaEdge.set(neighbor, { transport: edge.transport, cost: edge.cost, kind: edge.kind });
+                open.push((tentative + heuristic(nodeX(edge.to), nodeZ(edge.to), edge.to)) * 1048576 - tentative, neighbor);
             }
         }
 
@@ -1017,6 +1067,7 @@ function hasOtherGates(requires: TransportRequires): boolean {
 interface SearchContext {
     state: ReturnType<typeof worldStateFromData> | undefined;
     policy: PathPolicy | undefined;
+    shortWalkCost?: number;
     teleFromStart: CompiledEdge[];
     startId: number;
     /** Path-state essence return at search start (0 = unknown). */

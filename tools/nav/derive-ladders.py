@@ -604,9 +604,9 @@ def main() -> None:
     generated.sort(key=edge_sort_key)
     generated_transports = [edge for edge in generated if edge["kind"] == "dungeon"]
     generated_stairs = [edge for edge in generated if edge["kind"] == "stair"]
-    repaired = pair_up_approaches(generated_stairs)
     output_transports = transports + generated_transports
     output_stairs = stairs + generated_stairs
+    repaired = pair_up_approaches(output_stairs) + pair_up_approaches(output_transports)
     write_json(transport_path, output_transports, args.check)
     write_json(stair_path, output_stairs, args.check)
 

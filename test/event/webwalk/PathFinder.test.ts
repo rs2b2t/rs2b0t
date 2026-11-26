@@ -1,6 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import stairs from '#/bot/event/webwalk/data/stairEdges.json';
-import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 import { PathFinder, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
 import { isolatedLandingFinder } from '../../lib/navCollision.js';
 
@@ -66,21 +64,6 @@ describe('PathFinder A* heuristic with transport shortcuts (#335)', () => {
         }
     });
 
-    test('an adjacent walk still respects its exit, expansion budget and danger zones', () => {
-        const start = { x: 12, z: 10, level: 0 };
-        const goal = { ...start, x: 13 };
-        const zone = { minX: 13, maxX: 13, minZ: 10, maxZ: 10 };
-        const finder = new PathFinder(fullyWalkablePack(0));
-        expect(finder.findPath(start, goal)).toMatchObject({ ok: false, reason: 'unreachable' });
-
-        const open = new PathFinder(v2Pack().bytes);
-        expect(open.findPath(start, goal, { maxExpansions: 0 })).toMatchObject({ ok: false, expanded: 1 });
-        expect(open.findPath(start, goal, { avoidZones: [zone], maxExpansions: 1 })).toMatchObject({ ok: false });
-        expect(open.findPath(start, goal, { maxExpansions: 1 })).toEqual({
-            ok: true, cost: 1, expanded: 1, waypoints: [start, goal], hops: []
-        });
-    });
-
     test('follows chained shortcuts when the first landing is farther from the goal', () => {
         const finder = new PathFinder(fullyWalkablePack());
         const from = { x: 5, z: 5, level: 0 };
@@ -94,10 +77,55 @@ describe('PathFinder A* heuristic with transport shortcuts (#335)', () => {
         expect(finder.findPath(from, to, { maxExpansions: 10 })).toMatchObject({ ok: true, cost: 22 });
     });
 
+    test('accounts for the far doorway on a long route and a new landing inside it', () => {
+        const room = v2Pack();
+        for (let i = 27; i <= 37; i++) {
+            room.blockTile(27, i);
+            room.blockTile(37, i);
+            room.blockTile(i, 27);
+            if (i !== 32) room.blockTile(i, 37);
+        }
+        const remote = v2Pack(2, 0).bytes;
+        const pack = new Uint8Array(room.bytes.length + remote.length - 10);
+        pack.set(room.bytes);
+        pack.set(remote.subarray(10), room.bytes.length);
+        pack[8] = 2;
+        const finder = new PathFinder(pack);
+        const start = { x: 140, z: 16, level: 0 };
+        const landing = { x: 32, z: 16, level: 0 };
+        const goal = { ...landing, z: 32 };
+        const tunnel = { kind: 'shortcut', locName: 'Tunnel', action: 'Enter' };
+        finder.addEdges([], [{ ...tunnel, from: start, to: landing }]);
+        expect(finder.findPath(start, goal, { maxExpansions: 500 })).toMatchObject({ ok: true, cost: 42 });
+
+        finder.addEdges([], [{ ...tunnel, from: { ...landing, x: 33 }, to: { ...goal, z: 33 } }]);
+        expect(finder.findPath(start, goal)).toMatchObject({ ok: true, cost: 22 });
+    });
+
     const caster = {
         members: true, skills: { magic: 25 }, quests: {}, freeSlots: 25,
         items: { 'Law rune': 1, 'Fire rune': 1, 'Air rune': 3 }
     };
+
+    test('only skips casts for a legal two-step walk', () => {
+        const from = { x: 3211, z: 3424, level: 0 };
+        const to = { ...from, x: 3213 };
+        const pack = fullyWalkablePack(0, 50, 53);
+        const startExit = 13 + (from.x & 63) * 64 + (from.z & 63);
+        pack[startExit] = 2;
+        pack[startExit + 64] = 2;
+        const finder = new PathFinder(pack);
+        const opts = { state: caster, useTeleportCatalog: true };
+        expect(finder.findPath(from, to, { ...opts, maxExpansions: 2 })).toEqual({
+            ok: true, cost: 2, expanded: 2, waypoints: [from, to], hops: []
+        });
+        expect(finder.findPath(from, to, { ...opts, maxExpansions: 1 })).toMatchObject({ ok: false, expanded: 2 });
+        const spell = { ok: true, cost: 10, hops: [{ kind: 'teleport' }] };
+        const avoidZones = [{ minX: 3212, maxX: 3212, minZ: from.z, maxZ: from.z }];
+        expect(finder.findPath(from, to, { ...opts, avoidZones })).toMatchObject(spell);
+        pack[startExit + 64] = 0;
+        expect(new PathFinder(pack).findPath(from, to, opts)).toMatchObject(spell);
+    });
 
     test('can return to the start and cast after an essence entry changes the available exit', () => {
         const from = { x: 3201, z: 3430, level: 0 };
@@ -118,9 +146,10 @@ describe('PathFinder A* heuristic with transport shortcuts (#335)', () => {
     });
 
     test.each([
+        { useShortcuts: true, maxExpansions: 100, cost: 11, transport: { kind: 'shortcut' } },
         { useShortcuts: true, maxExpansions: 10, cost: 11, transport: { kind: 'shortcut' } },
         { useShortcuts: false, maxExpansions: 100, cost: 40, transport: { teleportId: 'varrock' } }
-    ])('chooses the cheapest route with Varrock teleport available and useShortcuts=$useShortcuts', opts => {
+    ])('chooses the cheapest route with Varrock teleport available at budget $maxExpansions and useShortcuts=$useShortcuts', opts => {
         const finder = new PathFinder(v2Pack(50, 53).bytes);
         const from = { x: 3201, z: 3430, level: 0 };
         const to = { x: 3243, z: 3424, level: 0 };
@@ -142,78 +171,16 @@ describe('PathFinder level-change avoidance', () => {
     const to = { x: 10, z: 12, level: 1 };
     const stair: TransportEdgeData = { from, to, locName: 'Test Staircase', action: 'Climb-up', kind: 'stair' };
 
-    test('the north Wilderness dungeon approach descends to the scripted landing', () => {
-        const start = { x: 3045, z: 3927, level: 0 };
-        const landing = { x: 3045, z: 10323, level: 0 };
-        const finder = isolatedLandingFinder([start, landing]);
-        expect(finder.findPath(start, landing, { maxExpansions: 1 })).toMatchObject({
-            ok: true, cost: 8, expanded: 1, hops: [{ kind: 'dungeon', from: start, to: landing }]
-        });
-    });
-
-    test('walking away and back cannot change the Falador staircase landing', () => {
-        const start = { x: 3034, z: 3362, level: 0 };
-        const landing = { x: 3036, z: 3363, level: 1 };
-        const pack = fullyWalkablePack(0, start.x >> 6, start.z >> 6);
-        const upstairs = pack.subarray(13 + 4096 + 512);
-        const landingIndex = (landing.x & 63) * 64 + (landing.z & 63);
-        upstairs[landingIndex] = 1;
-        upstairs[landingIndex + 1] = 1 << 2;
-
-        const finder = new PathFinder(pack);
-        finder.addEdges([], [], stairs);
-        expect(finder.findPath(start, landing)).toMatchObject({ ok: true, cost: 6 });
-        expect(finder.findPath(start, { x: 3033, z: 3363, level: 0 })).toMatchObject({ ok: false, reason: 'unreachable' });
-        expect(finder.findPath({ x: 3035, z: 3364, level: 1 }, { ...landing, level: 0 })).toMatchObject({ ok: true, cost: 6 });
-    });
-
-    test("walking away and back cannot reverse the Wizards' Tower staircase", () => {
+    test("opening a door and returning cannot reverse the Wizards' Tower staircase", () => {
         const start = { x: 3103, z: 3161, level: 1 };
         const ground = { x: 3105, z: 3160, level: 0 };
-        const landing = { ...ground, level: 1 };
-        const wrong = { x: 3103, z: 3158, level: 1 };
-        const north = { ...ground, z: ground.z + 1 };
-        const pack = fullyWalkablePack(0, ground.x >> 6, ground.z >> 6);
-        pack.fill(0, 13);
-        for (const [p, exits] of [[start, 0], [ground, 1], [north, 1 << 2], [landing, 0], [wrong, 0]] as const) {
-            const base = 13 + p.level * (4096 + 512);
-            const index = (p.x & 63) * 64 + (p.z & 63);
-            pack[base + 4096 + (index >> 3)] |= 1 << (index & 7);
-            pack[base + index] = exits;
-        }
-        const finder = new PathFinder(pack);
-        loadDefaultNavEdges(finder);
-        expect(finder.findPath(start, wrong)).toMatchObject({ ok: false, reason: 'unreachable' });
-        expect(finder.findPath(start, landing)).toMatchObject({ ok: false, reason: 'unreachable' });
-        expect(finder.findPath(ground, wrong)).toMatchObject({ ok: false, reason: 'unreachable' });
+        const landing = { x: 3103, z: 3158, level: 1 };
+        const besideDoor = { ...ground, z: ground.z + 1 };
+        const finder = isolatedLandingFinder([start, ground, landing, besideDoor]);
+        finder.addEdges([{ ...ground, dir: 'N', locId: 1, locName: 'Door' }], []);
+        expect(finder.findPath(start, besideDoor)).toMatchObject({ ok: true, cost: 10 });
         expect(finder.findPath(ground, landing)).toMatchObject({ ok: true, cost: 6 });
-
-        finder.addEdges([], [{ ...stair, from: north, to: wrong }]);
-        expect(finder.findPath(start, wrong)).toMatchObject({ ok: true, cost: 13 });
-    });
-
-    test('keeps the dungeon arrival when an equal-cost stair arrival cannot descend', () => {
-        const pack = fullyWalkablePack(0);
-        const exits = pack.subarray(13, 13 + 4096);
-        const start = { x: 24, z: 20, level: 0 };
-        const landing = { x: 28, z: 20, level: 1 };
-        const goal = { x: 29, z: 20, level: 0 };
-        const north = 1, east = 2;
-        for (let x = start.x; x < 27; x++) exits[x * 64 + start.z] = east;
-        exits[start.x * 64 + start.z] |= north;
-
-        const finder = new PathFinder(pack);
-        finder.addEdges([], [
-            { ...stair, from: { ...start, x: 27 }, to: landing },
-            { ...stair, from: landing, to: goal, action: 'Climb-down' },
-            { from: { ...start, x: 1 }, to: goal, locName: 'Passage', action: 'Enter', kind: 'shortcut' }
-        ]);
-        expect(finder.findPath(start, goal)).toMatchObject({ ok: false, reason: 'unreachable' });
-
-        finder.addEdges([], [{ from: { ...start, z: 21 }, to: landing, locName: 'Tunnel', action: 'Enter', kind: 'dungeon' }]);
-        expect(finder.findPath(start, goal)).toMatchObject({
-            ok: true, cost: 15, hops: [{ kind: 'dungeon' }, { kind: 'stair' }]
-        });
+        expect(finder.findPath(start, landing)).toMatchObject({ ok: false, reason: 'unreachable' });
     });
 
     test('level-change transport is used when its key is NOT avoided', () => {

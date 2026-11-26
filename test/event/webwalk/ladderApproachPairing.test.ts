@@ -4,14 +4,13 @@ import stairsJson from '#/bot/event/webwalk/data/stairEdges.json';
 interface StairRow {
     from: { x: number; z: number; level: number };
     to: { x: number; z: number; level: number };
-    locName: string;
     locX?: number;
     locZ?: number;
     debugName?: string;
     disabledReason?: string;
 }
 
-const rows = (stairsJson as StairRow[]).filter(row => row.locName === 'Ladder' || row.debugName?.includes('ladder'));
+const rows = stairsJson as unknown as StairRow[];
 const cheb = (ax: number, az: number, bx: number, bz: number): number =>
     Math.max(Math.abs(ax - bx), Math.abs(az - bz));
 

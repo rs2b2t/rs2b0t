@@ -22,9 +22,6 @@ class LocConfig:
     debug_name: str
     display_name: str | None = None
     options: list[str | None] = field(default_factory=lambda: [None] * 5)
-    width: int = 1
-    length: int = 1
-    force_approach: str | None = None
 
 
 @dataclass(frozen=True)
@@ -39,7 +36,6 @@ class Placement:
 
 SECTION_RE = re.compile(r"^\[([^\]]+)]\s*$")
 MAP_FILE_RE = re.compile(r"^m(\d+)_(\d+)\.jm2$")
-LEVEL_ONE_FLAGS_RE = re.compile(r"^1\s+(\d+)\s+(\d+):.*\bf(\d+)\b")
 LOC_LINE_RE = re.compile(
     r"^(\d+)\s+(\d+)\s+(\d+):\s+(\d+)\s+(\d+)(?:\s+(\d+))?\s*$"
 )
@@ -90,12 +86,6 @@ def load_loc_configs(content: Path) -> dict[int, LocConfig]:
             value = clean_value(value)
             if key == "name":
                 current.display_name = value
-            elif key == "width":
-                current.width = int(value)
-            elif key == "length":
-                current.length = int(value)
-            elif key == "forceapproach":
-                current.force_approach = value
             elif len(key) == 3 and key.startswith("op") and key[2].isdigit():
                 index = int(key[2]) - 1
                 if 0 <= index < 5:
@@ -112,34 +102,24 @@ def load_placements(content: Path) -> tuple[list[Placement], dict[tuple[int, int
         if not match:
             continue
         mx, mz = map(int, match.groups())
-        bridged_tiles: set[tuple[int, int]] = set()
-        loc_lines: list[str] = []
-        section = ""
+        in_locs = False
         for raw in path.read_text(encoding="utf-8").splitlines():
-            if raw.startswith("==== "):
-                section = raw
-            elif section == "==== MAP ====":
-                flags = LEVEL_ONE_FLAGS_RE.match(raw)
-                if flags:
-                    x, z, value = map(int, flags.groups())
-                    if value & 2:
-                        bridged_tiles.add((x, z))
-            elif section == "==== LOC ====":
-                loc_lines.append(raw)
-        for raw in loc_lines:
+            if raw == "==== LOC ====":
+                in_locs = True
+                continue
+            if in_locs and raw.startswith("==== "):
+                break
+            if not in_locs:
+                continue
             loc = LOC_LINE_RE.match(raw)
             if not loc:
                 continue
-            raw_level, local_x, local_z, loc_id, shape, angle = loc.groups()
-            x, z = int(local_x), int(local_z)
-            level = int(raw_level) - 1 if (x, z) in bridged_tiles else int(raw_level)
-            if level < 0:
-                continue
+            level, local_x, local_z, loc_id, shape, angle = loc.groups()
             placement = Placement(
                 loc_id=int(loc_id),
-                x=mx * 64 + x,
-                z=mz * 64 + z,
-                level=level,
+                x=mx * 64 + int(local_x),
+                z=mz * 64 + int(local_z),
+                level=int(level),
                 shape=int(shape),
                 angle=int(angle or 0),
             )
@@ -159,9 +139,11 @@ def option_values(config: LocConfig) -> list[str]:
 def candidates_near(
     spatial: dict[tuple[int, int, int], list[Placement]],
     point: dict[str, int],
-    levels: Iterable[int],
     radius: int = 4,
 ) -> Iterable[tuple[int, Placement]]:
+    # Map bridge flags can move a location down more than one effective level
+    # in stacked/instanced map areas, so inspect every raw map level.
+    levels = range(4)
     for level in levels:
         for dx in range(-radius, radius + 1):
             for dz in range(-radius, radius + 1):
@@ -170,42 +152,16 @@ def candidates_near(
                     yield distance, placement
 
 
-def can_operate(source: dict, walls: int, placement: Placement, config: LocConfig) -> bool:
-    width, length = config.width, config.length
-    if placement.angle & 1:
-        width, length = length, width
-    x, z = source["x"] - placement.x, source["z"] - placement.z
-    if 0 <= x < width and 0 <= z < length:
-        return True
-    if 0 <= x < width and z == length:
-        side = 0
-    elif x == width and 0 <= z < length:
-        side = 1
-    elif 0 <= x < width and z == -1:
-        side = 2
-    elif x == -1 and 0 <= z < length:
-        side = 3
-    else:
-        return False
-    if walls & (1 << ((side + 2) % 4)):
-        return False
-    directions = ("north", "east", "south", "west")
-    return not config.force_approach or config.force_approach == directions[(side - placement.angle) % 4]
-
-
 def resolve_source_loc(
     edge: dict,
     configs: dict[int, LocConfig],
-    candidates: Iterable[tuple[int, Placement]],
+    spatial: dict[tuple[int, int, int], list[Placement]],
     allowed_stair_debugs: set[str],
-    *,
-    generated_stair: bool,
-    reverse_walls: int | None = None,
 ) -> tuple[LocConfig, Placement] | None:
     wanted_name = normalized(edge.get("locName"))
     wanted_action = normalized(edge.get("action"))
     kind = normalized(edge.get("kind"))
-    ranked: list[tuple[bool, float, float, int, int, LocConfig, Placement]] = []
+    ranked: list[tuple[float, float, int, int, LocConfig, Placement]] = []
 
     source = edge["from"]
     destination = edge["to"]
@@ -215,7 +171,7 @@ def resolve_source_loc(
     midpoint_x = (source["x"] + destination["x"]) / 2
     midpoint_z = (source["z"] + destination["z"]) / 2
 
-    for distance, placement in candidates:
+    for distance, placement in candidates_near(spatial, edge["from"]):
         placed_config = configs.get(placement.loc_id)
         if not placed_config:
             continue
@@ -250,7 +206,11 @@ def resolve_source_loc(
                 or (kind in {"dungeon", "shortcut"} and action_match)
             )
 
-            if not action_match and (generated_stair or kind == "stair" or not name_match):
+            # Stairs must expose the exact action; otherwise an auto-generated
+            # reverse edge can be incorrectly attached to an up-only ladder.
+            if kind == "stair" and not action_match:
+                continue
+            if kind != "stair" and not (name_match or action_match):
                 continue
             score = 0
             if name_match:
@@ -266,14 +226,17 @@ def resolve_source_loc(
             corridor_distance = max(abs(placement.x - midpoint_x), abs(placement.z - midpoint_z))
             proximity = corridor_distance if use_midpoint else distance
             score -= proximity * 6
-            if score >= 70:
-                operable = reverse_walls is None or can_operate(source, reverse_walls, placement, placed_config)
-                ranked.append((operable, score, -proximity, -distance, -placement.loc_id, config, placement))
+            ranked.append((score, -proximity, -distance, -placement.loc_id, config, placement))
 
     if not ranked:
         return None
-    best = max(ranked, key=lambda item: item[:5])
-    return best[-2], best[-1]
+    ranked.sort(key=lambda item: item[:4], reverse=True)
+    best = ranked[0]
+    # Name-only matches far from the source are too ambiguous for common names
+    # such as Door, Gate, Ladder, and Staircase.
+    if best[0] < 70:
+        return None
+    return best[4], best[5]
 
 
 def edge_key(edge: dict) -> tuple[int, int, int, int, int, int, str, str]:
@@ -288,41 +251,6 @@ def edge_key(edge: dict) -> tuple[int, int, int, int, int, int, str, str]:
         edge.get("action", ""),
         edge.get("kind", ""),
     )
-
-
-def stair_placements(
-    edge: dict,
-    configs_by_debug: dict[str, LocConfig],
-    spatial: dict[tuple[int, int, int], list[Placement]],
-    allowed_stair_debugs: set[str],
-) -> dict[tuple[int, int, int, str, str], tuple[LocConfig, Placement]]:
-    locs = edge.get("scriptedLocs", [])
-    if not locs and all(field in edge for field in ("locX", "locZ", "debugName")):
-        locs = [{
-            "x": edge["locX"], "z": edge["locZ"], "level": edge["from"]["level"],
-            "debugName": edge["debugName"], "action": edge["action"],
-        }]
-    matches = {}
-    for loc in locs:
-        debug = loc["debugName"]
-        if edge.get("kind") == "stair" and debug not in allowed_stair_debugs:
-            continue
-        config = configs_by_debug.get(debug)
-        if not config or loc["action"] not in config.options:
-            continue
-        closed = configs_by_debug.get(debug.removesuffix("_open")) if debug.endswith("_open") else None
-        tile = (loc["x"], loc["z"], loc["level"])
-        for placement in spatial.get(tile, []):
-            if placement.loc_id == config.loc_id or (closed and placement.loc_id == closed.loc_id):
-                matches[(*tile, debug, loc["action"])] = (config, placement)
-                break
-    # Why: alternate handlers can describe the same action on the same tile.
-    matched_actions = {(x, z, level, action) for x, z, level, _, action in matches}
-    for loc in edge.get("scriptedLocs", []):
-        tile = (loc["x"], loc["z"], loc["level"])
-        if (*tile, loc["action"]) not in matched_actions:
-            raise SystemExit(f"Missing scripted placement for {loc['debugName']} ({loc['action']}) at {tile}")
-    return matches
 
 
 def closed_open_loc_ids(
@@ -374,7 +302,6 @@ def main() -> None:
     args = parser.parse_args()
 
     configs = load_loc_configs(args.content)
-    configs_by_debug = {cfg.debug_name: cfg for cfg in configs.values()}
     _, spatial = load_placements(args.content)
     # Include quest ladders with oploc handlers, but exclude decorative ladders.
     allowed_stair_debugs: set[str] = set()
@@ -386,25 +313,10 @@ def main() -> None:
     curated = json.loads((data_dir / "transports.json").read_text(encoding="utf-8"))
     stairs = json.loads((data_dir / "stairEdges.json").read_text(encoding="utf-8"))
 
-    scripted_edges = defaultdict(list)
-    stair_rows = []
-    for raw in stairs:
-        placements = stair_placements(raw, configs_by_debug, spatial, allowed_stair_debugs)
-        if not placements:
-            stair_rows.append((raw, None))
-        for key, resolved in placements.items():
-            edge = {**raw, "action": key[-1]}
-            stair_rows.append((edge, resolved))
-            if raw.get("scriptedLocs"):
-                scripted_edges[(*key[:-1], normalized(edge["action"]))].append(edge)
-
-    def enrich(rows: Iterable[tuple[dict, tuple[LocConfig, Placement] | None]], *, generated_stairs: bool) -> list[dict]:
+    def enrich(edges: list[dict]) -> list[dict]:
         enriched: list[dict] = []
-        for raw, resolved in rows:
+        for raw in edges:
             edge = dict(raw)
-            scripted_locs = edge.pop("scriptedLocs", [])
-            auto_reverse = edge.pop("autoReverse", False)
-            walls = edge.pop("fromWalls", 0)
             existing = configs.get(edge.get("locId", -1))
             source_backed_ladder = existing is not None and (
                 normalized(existing.display_name) == "ladder"
@@ -414,26 +326,9 @@ def main() -> None:
             if source_backed_ladder and all(field in edge for field in ("locId", "locX", "locZ", "debugName", "options")):
                 enriched.append(edge)
                 continue
-            if resolved is None and not scripted_locs:
-                levels = (edge["from"]["level"],) if generated_stairs else range(4)
-                candidates = candidates_near(spatial, edge["from"], levels)
-                resolved = resolve_source_loc(
-                    edge, configs, candidates, allowed_stair_debugs,
-                    generated_stair=generated_stairs, reverse_walls=walls if auto_reverse else None,
-                )
+            resolved = resolve_source_loc(edge, configs, spatial, allowed_stair_debugs)
             if resolved:
                 config, placement = resolved
-                if auto_reverse and not edge.get("disabledReason"):
-                    key = (placement.x, placement.z, placement.level, config.debug_name, normalized(edge["action"]))
-                    matches = scripted_edges.get(key, [])
-                    if not can_operate(edge["from"], walls, placement, configs[placement.loc_id]):
-                        edge["disabledReason"] = "Generated reverse cannot operate the staircase from its starting tile."
-                    elif matches and all(e["to"] == matches[0]["to"] for e in matches):
-                        if any(e["from"] == edge["from"] for e in matches):
-                            continue
-                        edge["to"] = matches[0]["to"]
-                    elif matches and all(e["to"] != edge["to"] for e in matches):
-                        edge["disabledReason"] = "Generated reverse conflicts with the landing in stairs.rs2."
                 edge["locX"] = placement.x
                 edge["locZ"] = placement.z
                 edge["debugName"] = config.debug_name
@@ -445,14 +340,12 @@ def main() -> None:
                 else:
                     edge.pop("openLocId", None)
             else:
-                if auto_reverse and not edge.get("disabledReason"):
-                    edge["disabledReason"] = "Generated reverse has no matching staircase on its source floor."
                 edge["options"] = [edge["action"]]
             enriched.append(edge)
         return enriched
 
-    enriched_curated = enrich(((edge, None) for edge in curated), generated_stairs=False)
-    enriched_stairs = enrich(stair_rows, generated_stairs=True)
+    enriched_curated = enrich(curated)
+    enriched_stairs = enrich(stairs)
 
     def write_json(path: Path, edges: list[dict]) -> None:
         text = "[\n" + ",\n".join("    " + json.dumps(edge, separators=(",", ":")) for edge in edges) + "\n]\n"
@@ -468,7 +361,7 @@ def main() -> None:
 
     combined = [*enriched_curated, *enriched_stairs]
     resolved_count = sum("locId" in edge for edge in combined)
-    cross_file_keys = {edge_key(edge) for edge in enriched_curated} & {edge_key(edge) for edge in enriched_stairs}
+    cross_file_keys = {edge_key(edge) for edge in curated} & {edge_key(edge) for edge in stairs}
     kinds: dict[str, int] = defaultdict(int)
     for edge in combined:
         kinds[edge.get("kind", "unknown")] += 1
