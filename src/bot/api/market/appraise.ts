@@ -3,7 +3,7 @@ import { rowOf, type PriceBook } from './priceBook.js';
 import { resolvePrices, rowValid } from './prices.js';
 import { formatGp, truncateChat } from './chatProtocol.js';
 import type { OfferItem, ValuedLine } from './quote.js';
-import { saleItems, saleName, salePrice, saleStock, type SellIntent } from './saleIntent.js';
+import { saleItems, saleName, salePrice, saleQuantity, saleStock, type SellIntent } from './saleIntent.js';
 
 export type { SellIntent } from './saleIntent.js';
 
@@ -107,7 +107,7 @@ function sale(
         return nothing(ignored, `I don't sell ${name} any more`);
     }
 
-    const qty = Math.min(intent.maxQty, saleStock(intent, desk.available), Math.floor(book.maxTradeValue / each));
+    const qty = saleQuantity(intent.maxQty, saleStock(intent, desk.available), each, book.maxTradeValue);
     if (qty <= 0) {
         return nothing(ignored, `I'm out of ${name}`);
     }
