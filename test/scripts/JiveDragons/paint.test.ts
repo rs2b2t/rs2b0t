@@ -4,7 +4,7 @@ import { ClueExecutor } from '#/bot/api/ai/clues/ClueExecutor.js';
 import { JIVE_BYLINE } from '#/bot/paint/jive.js';
 import { paintState, resolveDock } from '#/bot/paint/paintLogic.js';
 import JiveDragons from '#/bot/scripts/JiveDragons/JiveDragons.js';
-import { restoreScenario, scenario } from './scheduler.fixture.js';
+import { restoreScenario, resetScenario, scenario } from './scheduler.fixture.js';
 import { SettingsStore } from '#/bot/runtime/Settings.js';
 import { type Box, type Drawn, recorder, spills } from '../../fixtures/script-paint.js';
 
@@ -35,6 +35,11 @@ function paintSection(section: string, page = 'Statistics'): { drawn: Drawn[]; b
     bot.onPaint!(ctx);
     return { drawn, boxes };
 }
+
+// Why: the default lifecycle restores module-level paint settings before each test.
+beforeEach(async () => {
+    await resetScenario();
+});
 
 describe('JiveDragons paint', () => {
     beforeEach(() => paintState.reset());
