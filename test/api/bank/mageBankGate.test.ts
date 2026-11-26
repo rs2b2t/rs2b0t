@@ -1,24 +1,15 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import { BANK_LOCATIONS, USE_MAGE_BANK, bankUnlocked, nearestBank } from '#/bot/api/bank/BankLocations.js';
+import { BANK_LOCATIONS, bankUnlocked, nearestBank } from '#/bot/api/bank/BankLocations.js';
 import TRANSPORTS from '#/bot/event/webwalk/data/transports.json';
+import { setMageBankSetting } from './mageBankSetting.js';
 
 const MAGE = BANK_LOCATIONS.find(b => b.name === 'Mage Arena')!;
-const KEY = `rs2b0t:set:Global:${USE_MAGE_BANK}`;
 
 /** At the web/ladder entrance in deep Wilderness. Gundai is nearest by far. */
 const DEEP_WILDERNESS = { x: 3091, z: 3958, level: 0 };
 
-function setSetting(on: boolean | null): void {
-    if (on === null) {
-        localStorage.removeItem(KEY);
-        sessionStorage.removeItem(KEY);
-        return;
-    }
-    localStorage.setItem(KEY, String(on));
-}
-
-afterEach(() => setSetting(null));
+afterEach(() => setMageBankSetting(null));
 
 describe('Mage Arena bank gate', () => {
     test('sits where the ladder lands, approached from the ladder mouth', () => {
@@ -51,19 +42,19 @@ describe('Mage Arena bank gate', () => {
     });
 
     test('stays off when the setting is explicitly false', () => {
-        setSetting(false);
+        setMageBankSetting(false);
         expect(bankUnlocked(MAGE)).toBe(false);
         expect(nearestBank(DEEP_WILDERNESS)?.name).not.toBe('Mage Arena');
     });
 
     test('opting in makes it selectable, and it wins from inside the Wilderness', () => {
-        setSetting(true);
+        setMageBankSetting(true);
         expect(bankUnlocked(MAGE)).toBe(true);
         expect(nearestBank(DEEP_WILDERNESS)?.name).toBe('Mage Arena');
     });
 
     test('even opted in, an Ardougne bot still banks in Ardougne', () => {
-        setSetting(true);
+        setMageBankSetting(true);
         const ardy = nearestBank({ x: 2616, z: 3332, level: 0 });
         expect(ardy?.name).toBe('Ardougne West');
     });
