@@ -1908,12 +1908,15 @@ export default class Model extends ModelSource {
             }
 
             const depth = (((zA + zB + zC) / 3) | 0) + this.minDepth;
+            if (depth < 0 || depth >= Model.tmpDepthFaceCount.length) {
+                return;
+            }
+            if (depth >= this.maxDepth) {
+                continue;
+            }
             const count = Model.tmpDepthFaceCount[depth]++;
             let faces = Model.tmpDepthFaces[depth];
             if (!faces) {
-                if (depth < 0 || depth >= Model.tmpDepthFaceCount.length) {
-                    return;
-                }
                 faces = Model.tmpDepthFaces[depth] = new Int32Array(8);
             } else if (count === faces.length) {
                 const larger = new Int32Array(count * 2);

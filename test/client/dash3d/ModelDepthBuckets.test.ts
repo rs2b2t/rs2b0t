@@ -78,6 +78,27 @@ for (const priorities of [false, true]) {
     });
 }
 
+test('repeated draws skip the maxDepth bucket and paint the next face', () => {
+    const model = triangles(2);
+    model.pointX!.set([-1, -1, 1, -1, -1, 1]);
+    model.pointY!.set([-1, 1, -1, -1, 1, -1]);
+    model.pointZ!.set([100, 100, 100, 99, 99, 99]);
+    model.calcBoundingCylinder();
+    expect(model.minDepth).toBe(100);
+    expect(model.maxDepth).toBe(200);
+
+    const row = Model.tmpDepthFaces[200];
+    const count = Model.tmpDepthFaceCount[200];
+    withViewport(pixels => {
+        for (let i = 0; i < 1025; i++) {
+            model.objRender(0, 0, 0, 0, 0, 0, 128);
+        }
+        expect(pixels.includes(1)).toBe(true);
+    });
+    expect(Model.tmpDepthFaces[200]?.length).toBe(row?.length);
+    expect(Model.tmpDepthFaceCount[200]).toBe(count);
+});
+
 test('world rendering buckets triangles crossing the near plane', () => {
     const model = triangles(1);
     model.faceColourB = model.faceColourA;
