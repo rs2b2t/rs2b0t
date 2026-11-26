@@ -74,6 +74,31 @@ afterEach(() => {
     Traversal.walkResilient = original.walkResilient;
 });
 
+test('resync selects the first matching obstacle and only a wrap counts a lap', async () => {
+    const instance = bot();
+    await instance.onStart();
+    const messages: string[] = [];
+    instance.bindLog(message => messages.push(message));
+
+    instance.resyncTo('balancing rope');
+    instance.advance();
+    expect(instance.currentName()).toBe('tree branch');
+    expect(instance.resyncTo('missing')).toBe(false);
+    expect(instance.resyncTo('tree branch')).toBe(true);
+    instance.advance();
+    expect(instance.currentName()).toBe('balancing rope');
+
+    instance.resyncTo('obstacle pipe');
+    instance.advance();
+    expect(instance.currentName()).toBe('log balance');
+    expect(messages).toEqual([
+        'course re-sync: step 0 (log balance) -> 3 (balancing rope)',
+        'course re-sync: step 4 (tree branch) -> 2 (tree branch)',
+        'course re-sync: step 3 (balancing rope) -> 6 (obstacle pipe)',
+        'lap 1 complete'
+    ]);
+});
+
 describe('GnomeCourse travel', () => {
     test('recognises the whole course on every obstacle plane', () => {
         expect(atGnomeCourse(GNOME_COURSE_START)).toBe(true);

@@ -1,5 +1,6 @@
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
-import { TaskBot, type Task } from '../../api/bot/Bot.js';
+import type { Task } from '../../api/bot/Bot.js';
+import { AgilityCourseBot } from '../../api/bot/AgilityCourseBot.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game, waitForPlayerTile } from '../../api/game/Game.js';
@@ -34,13 +35,10 @@ export const AGILITY_SETTINGS: SettingsSchema = {
     searchRadius: { type: 'number', default: 20, min: 4, max: 64, label: 'Obstacle search radius (tiles)' }
 };
 
-export default class AgilityBot extends TaskBot {
+export default class AgilityBot extends AgilityCourseBot {
     override loopDelay = 600;
 
-    private course: string[] = [];
-    private step = 0;
     private radius = 20;
-    private laps = 0;
     private obstaclesCleared = 0;
     private status = 'starting';
     private startedAt = Date.now();
@@ -82,32 +80,11 @@ export default class AgilityBot extends TaskBot {
     searchRadius(): number {
         return this.radius;
     }
-    currentName(): string {
-        return this.course[this.step];
-    }
-    courseNames(): string[] {
-        return this.course;
-    }
     cleared(): void {
         this.obstaclesCleared++;
     }
-    advance(): void {
-        this.step++;
-        if (this.step >= this.course.length) {
-            this.step = 0;
-            this.laps++;
-            this.log(`lap ${this.laps} complete`);
-        }
-    }
-    resyncTo(name: string): boolean {
-        const idx = this.course.indexOf(name);
-        if (idx === -1) {
-            return false;
-        }
-
-        this.log(`course re-sync: step ${this.step} (${this.currentName()}) -> ${idx} (${name})`);
-        this.step = idx;
-        return true;
+    protected override logResync(change: string): void {
+        this.log(`course re-sync: ${change}`);
     }
 }
 
