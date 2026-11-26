@@ -48,6 +48,12 @@ Point at another server with `bun run start -- --server=https://your-host`, or
 On first migration, the desktop looks for profiles on the configured origin, then
 `http://localhost:8081`. The panel still migrates script settings and selections
 from the configured origin when the shared store has no value for them.
+If the configured origin is unreadable, the desktop can open with settings from
+8081 and retry the profiles on the next launch. Saving or resetting profiles
+cancels that retry. If 8081 is unreadable, the desktop opens with the configured
+roster and defers script settings until it can check 8081. Edits made in the
+meantime take precedence.
+
 If an older migration left the chooser empty, run
 `B0T_RECOVER_LEGACY_PROFILES=1 bun run start -- --server=http://localhost:8082`
 once from `desktop/`, using the origin where you saved the profiles. On an

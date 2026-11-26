@@ -60,7 +60,10 @@ function migrateProfiles(data, sources, { firstMigration, recover }) {
 }
 
 function writeItem(state, key, value) {
-    if (profileKeys.includes(key)) delete state.seededWithoutProfiles;
+    if (profileKeys.includes(key)) {
+        delete state.seededWithoutProfiles;
+        delete state.retryProfileOrigin;
+    }
     if (value === null) {
         delete state.data[key];
         const removed = state.deletedDuringSettingsMigration;
@@ -113,7 +116,7 @@ function sharedStorage(dir) {
         initialized: () => read().initialized,
         migrationStatus() {
             const state = read();
-            return { initialized: state.initialized, retrySettings: !!state.deletedDuringSettingsMigration };
+            return { initialized: state.initialized, retrySettings: !!state.deletedDuringSettingsMigration, retryProfileOrigin: state.retryProfileOrigin };
         },
         snapshot: () => read().data,
         getItem: key => (valid(key) ? (read().data[key] ?? null) : null),
@@ -133,21 +136,34 @@ function sharedStorage(dir) {
         removeItem(key) {
             if (valid(key)) update(state => writeItem(state, key, null));
         },
-        seed(values, { fallback, recover = false, readError } = {}) {
+        seed(values, { fallback, recover = false, readError, profileOrigin } = {}) {
             return update(state => {
                 if (state.deletedDuringSettingsMigration && fallback) {
                     importSettings(state.data, fallback, state.deletedDuringSettingsMigration);
+                    importSettings(state.data, state.pendingPanelSettings ?? {}, state.deletedDuringSettingsMigration);
                     delete state.deletedDuringSettingsMigration;
+                    delete state.pendingPanelSettings;
                 }
                 if (state.initialized && !recover && !state.seededWithoutProfiles) return false;
                 if (!state.initialized && !profileKeys.some(key => key in state.data)) state.seededWithoutProfiles = true;
-                migrateProfiles(state.data, [values, fallback ?? {}], { firstMigration: !state.initialized, recover });
-                if (readError && (!state.initialized || recover) && !savedProfileKey(state.data)) throw readError;
-                if (profileKeys.some(key => key in state.data && !isEmptyRoster(state.data[key]))) delete state.seededWithoutProfiles;
+                migrateProfiles(state.data, [values ?? {}, fallback ?? {}], { firstMigration: !state.initialized, recover });
+                if (values && profileOrigin === state.retryProfileOrigin) delete state.retryProfileOrigin;
+                if (profileKeys.some(key => key in state.data && !isEmptyRoster(state.data[key]))) {
+                    delete state.seededWithoutProfiles;
+                    delete state.retryProfileOrigin;
+                }
+                if (!state.initialized && fallback) importSettings(state.data, fallback);
+                if (readError && (!state.initialized || recover) && !savedProfileKey(state.data)) {
+                    const hasSettings = Object.keys(state.data).some(key => !profileKeys.includes(key));
+                    if (state.initialized || !fallback || !hasSettings) throw readError;
+                    if (state.seededWithoutProfiles) state.retryProfileOrigin = profileOrigin;
+                }
                 if (state.initialized) return false;
-                if (fallback === null) state.deletedDuringSettingsMigration = [];
-                if (fallback) importSettings(state.data, fallback);
-                importSettings(state.data, values);
+                if (fallback === null) {
+                    state.deletedDuringSettingsMigration = [];
+                    state.pendingPanelSettings = {};
+                    importSettings(state.pendingPanelSettings, values ?? {});
+                } else importSettings(state.data, values ?? {});
                 state.initialized = true;
                 return true;
             });

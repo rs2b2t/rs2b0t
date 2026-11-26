@@ -51,9 +51,12 @@ function fixture(
             quit: () => opened.reject(new Error('app.quit', { cause: startupError }))
         });
         const handlers = new Map<string, (request: { url: string }) => Response>();
+        let runtimeOrigins: Record<string, Record<string, string>> | undefined;
         function nativeStorage(origin: string): Record<string, string> {
             const file = join(runtime, 'Local Storage', 'fixture.json');
-            return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8'))[origin] ?? {} : {};
+            if (!existsSync(file)) return {};
+            runtimeOrigins ??= JSON.parse(readFileSync(file, 'utf8')) as Record<string, Record<string, string>>;
+            return runtimeOrigins[origin] ?? {};
         }
         const electron = {
             app,
@@ -351,6 +354,54 @@ test('an unreadable configured origin still opens the 8081 roster', async () => 
     store.removeItem(accounts);
     expect(await launch(custom)).toEqual([]);
     expect(await launch(custom, true)).toEqual(configured);
+});
+
+test.each(['retry', 'save', 'reset'])('8081 settings open while the configured roster is unreadable, then honor %s', async action => {
+    const script = 'rs2b0t:fixture:selectedScript';
+    let unreadable = true;
+    const { launch, store } = fixture({
+        [custom]: { [accounts]: JSON.stringify(profiles) },
+        [original]: { [script]: 'Fisher' }
+    }, origin => {
+        if (origin === custom && unreadable) throw new Error('Unreadable 8082 fixture');
+    });
+    expect(await launch(custom)).toEqual([]);
+    expect(store.getItem(script)).toBe('Fisher');
+    expect(await launch(custom)).toEqual([]);
+    const newer = [{ username: 'newer', password: 'fixture' }];
+    if (action === 'save') store.setItem(accounts, JSON.stringify(newer));
+    if (action === 'reset') store.removeItem(vault);
+    unreadable = false;
+    const expected = action === 'save' ? newer : action === 'reset' ? [] : profiles;
+    expect(await launch(original)).toEqual(expected);
+    expect(await launch(custom)).toEqual(expected);
+});
+
+test('the panel preserves 8081 setting precedence across a failed read and genuine edits', async () => {
+    const script = 'rs2b0t:fixture:selectedScript';
+    const ore = 'rs2b0t:set:Miner:ore';
+    const tree = 'rs2b0t:set:Woodcutter:tree';
+    const method = 'rs2b0t:set:Fisher:method';
+    let unreadable = true;
+    const { launch, store, rendererStorage } = fixture({
+        [custom]: { [accounts]: JSON.stringify(profiles), [script]: 'Miner', [ore]: 'Tin', [tree]: 'Oak', [method]: 'Bait' },
+        [original]: { [script]: 'Fisher', [ore]: 'Gold', [method]: 'Fly' }
+    }, origin => {
+        if (origin === original && unreadable) throw new Error('Unreadable 8081 fixture');
+    });
+    const panel = await Bun.build({ entrypoints: [join(import.meta.dir, '../../src/bot/panel/desktopStorage.ts')] });
+    expect(await launch(custom)).toEqual(profiles);
+    store.removeItem(method);
+    const native = new Storage();
+    Object.assign(native, rendererStorage());
+    runInNewContext(await panel.outputs[0].text(), { window: { localStorage: native }, rs2b0tDesktopStorage: { ...store, subscribe() {} } });
+    store.setItem(ore, 'Tin');
+    unreadable = false;
+    expect(await launch(custom)).toEqual(profiles);
+    expect(store.getItem(script)).toBe('Fisher');
+    expect(store.getItem(ore)).toBe('Tin');
+    expect(store.getItem(tree)).toBe('Oak');
+    expect(store.getItem(method)).toBeNull();
 });
 
 test('an unreadable 8081 opens the configured roster and retries missing settings on relaunch', async () => {
