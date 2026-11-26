@@ -7,7 +7,7 @@
 //   BASE=http://localhost:8890 BUDGET_S=900 bun e2e/thievingbot-test.ts
 //   HEADED=1 SLOWMO=200 bun e2e/thievingbot-test.ts
 import type { Page } from 'playwright-core';
-import { launchBrowser, parseArgs } from './lib/harness.js';
+import { fail, launchBrowser, parseArgs } from './lib/harness.js';
 import { cheatQuiet, mainlandAccount, startScript } from './tutorial/harness.js';
 
 const { base } = parseArgs(process.argv.slice(2), { base: process.env.BASE ?? 'http://localhost:8890' });
@@ -22,11 +22,6 @@ const TARGET_XPH = Number(process.env.TARGET_XPH) || 25_000;
 const GUARD_SPOT = { x: 2661, z: 3306, level: 0 } as const;
 /** Pack food only, enough for a default ~12 min soak without a bank trip. */
 const INV_FOOD = 22;
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
 
 type Tile = { x: number; z: number; level: number };
 

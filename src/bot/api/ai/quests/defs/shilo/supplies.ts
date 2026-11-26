@@ -1,3 +1,4 @@
+import { customStep, waitStep } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { Shop } from '../../../../shop/Shop.js';
@@ -5,9 +6,18 @@ import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { Locs } from '../../../../locs/Locs.js';
+import {
+    bankedName as bankedByName,
+    cachedBankId as banked,
+    heldId as held,
+    inventoryAndBankCount as owned,
+    wornId as worn
+} from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { QuestFood } from '../../food.js';
 import { BONE_SPAWNS, SV_ITEM, SV_NPC, SV_TILE, type ShiloItem } from './areas.js';
+
+export { banked, held, owned, worn };
 
 // Why: Jiminua stocks rope, spade, chisel, candle, tinderbox, hammer and a bronze bar 35 tiles from Trufitus, and Karamja has no bank until this quest opens Shilo's, so everything but coins, bones and food is bought here.
 const JIMINUA_SHOP = { npc: SV_NPC.JIMINUA, anchor: SV_TILE.JIMINUA };
@@ -17,26 +27,6 @@ export const KARAMJA_PURSE = 2000;
 
 /** Drawn in this order when the food the script was given is not in the bank. */
 export const FOOD_FALLBACKS = ['Lobster', 'Swordfish', 'Tuna', 'Salmon', 'Trout'] as const;
-
-export function held(snap: QuestSnapshot, id: number): number {
-    return snap.invIds?.get(id) ?? 0;
-}
-
-export function banked(snap: QuestSnapshot, id: number): number {
-    return snap.bankIds?.get(id) ?? 0;
-}
-
-function bankedByName(snap: QuestSnapshot, name: string): number {
-    return snap.bank?.get(name.toLowerCase()) ?? 0;
-}
-
-export function owned(snap: QuestSnapshot, id: number): number {
-    return held(snap, id) + banked(snap, id);
-}
-
-export function worn(snap: QuestSnapshot, id: number): boolean {
-    return snap.wornIds?.has(id) ?? false;
-}
 
 export function scanBank(): QuestStep {
     return { kind: 'scanBank', bank: SV_TILE.ARDOUGNE_BANK };
@@ -92,7 +82,7 @@ export function sourceCoins(snap: QuestSnapshot, want: number): QuestStep | null
     }
     const available = banked(snap, SV_ITEM.COINS.id);
     if (available <= 0) {
-        return { kind: 'wait', reason: `need ${want} gp for the Karamja crossing and Jiminua's shop` };
+        return waitStep(`need ${want} gp for the Karamja crossing and Jiminua's shop`);
     }
     return withdrawFrom([{ name: SV_ITEM.COINS.name, id: SV_ITEM.COINS.id, qty: Math.min(want, available) }]);
 }
@@ -131,7 +121,7 @@ export function sourceFood(snap: QuestSnapshot, want: number): QuestStep | null 
     }
     const stocked = foodNames().find(name => bankedByName(snap, name) > 0);
     if (!stocked) {
-        return { kind: 'wait', reason: `bank has no food: none of ${foodNames().join(', ')}` };
+        return waitStep(`bank has no food: none of ${foodNames().join(', ')}`);
     }
     return withdrawFrom([{ name: stocked, qty: Math.min(want - carried, bankedByName(snap, stocked)) }]);
 }
@@ -145,7 +135,7 @@ export function sourceLitCandle(snap: QuestSnapshot, need: readonly ShiloItem[] 
     if (short.length > 0) {
         return stockUp(short);
     }
-    return { kind: 'custom', name: 'light the candle', run: lightCandle };
+    return customStep('light the candle', lightCandle);
 }
 
 export async function lightCandle(log: (m: string) => void): Promise<boolean> {
@@ -173,7 +163,7 @@ export function sourceBronzeWire(snap: QuestSnapshot, need: readonly ShiloItem[]
     if (short.length > 0) {
         return stockUp(short);
     }
-    return { kind: 'custom', name: 'smith the bronze bar into wire', run: smithBronzeWire };
+    return customStep('smith the bronze bar into wire', smithBronzeWire);
 }
 
 async function smithBronzeWire(log: (m: string) => void): Promise<boolean> {

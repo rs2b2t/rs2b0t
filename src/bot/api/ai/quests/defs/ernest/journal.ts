@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal, type JournalCache } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { EC_QUEST, EC_STAGE } from './areas.js';
 
@@ -20,19 +19,8 @@ export function parseErnestJournal(lines: readonly string[] | string): QuestProg
 }
 
 /** A failed read is not evidence the quest went backwards. */
-let lastGood: QuestProgress | undefined;
+const cache: JournalCache<QuestProgress> = {};
 
-export async function readErnestProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(EC_QUEST);
-    if (status === 'complete') return { stage: EC_STAGE.COMPLETE, flags: new Set() };
-    if (status === 'notStarted') return { stage: EC_STAGE.NOT_STARTED, flags: new Set() };
-    if (status !== 'inProgress') return undefined;
-
-    const lines = await Quests.journal(EC_QUEST);
-    const progress = parseErnestJournal(lines);
-    await Modals.closeIfOpen();
-    if (progress) {
-        lastGood = progress;
-    }
-    return progress ?? lastGood;
+export function readErnestProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(EC_QUEST, EC_STAGE, parseErnestJournal, questProgressAt, cache);
 }

@@ -4,12 +4,12 @@
 
 //   HEADED=1 bun e2e/scorpion-catcher-258-live.ts --stage 0 --until 4 --minutes 180 --tick 200
 //   HEADED=1 bun e2e/scorpion-catcher-258-live.ts --stage 3 --until 2 --minutes 45 --tick 200
-import { existsSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { parseQuestArgs } from './lib/questArgs.js';
+import { printQuestLogs, setQuestStats, teleportToQuestStart } from './lib/questHarness.js';
 
 import type { Page } from 'playwright-core';
 
-import { launchBrowser } from './lib/harness.js';
+import { deploySharedBundles, fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -18,69 +18,31 @@ import {
     relog,
     seedItemsToBank,
     startScript,
-    teleTo,
     type BankSeedItem
 } from './tutorial/harness.js';
 
-interface Args {
-    base: string;
-    user: string;
-    stage: number;
-    until: number;
-    minutes: number;
-    tickMs: number;
-    food: string;
-    stats: number;
-    deploy: boolean;
-    skipBarcrawl: boolean;
-    order: boolean;
-    dusty: boolean;
-    antipoison: boolean;
-}
-
-function parse(argv: string[]): Args {
-    const out: Args = {
-        base: process.env.BASE ?? 'http://localhost:8890',
-        user: `sc${Date.now().toString(36).slice(-7)}`,
-        stage: 0,
-        until: 4,
-        minutes: 180,
-        tickMs: 300,
-        food: 'Lobster',
-        stats: 70,
-        deploy: true,
-        skipBarcrawl: false,
-        order: false,
-        dusty: false,
-        antipoison: false
-    };
-    for (let i = 0; i < argv.length; i++) {
-        const flag = argv[i];
-        if (flag === '--no-deploy') { out.deploy = false; continue; }
-        if (flag === '--skip-barcrawl') { out.skipBarcrawl = true; continue; }
-        if (flag === '--order') { out.order = true; continue; }
-        if (flag === '--dusty') { out.dusty = true; continue; }
-        if (flag === '--antipoison') { out.antipoison = true; continue; }
-        const value = argv[++i];
-        if (value === undefined) { break; }
-        if (flag === '--base') { out.base = value; }
-        else if (flag === '--user') { out.user = value; }
-        else if (flag === '--stage') { out.stage = Number(value); }
-        else if (flag === '--until') { out.until = Number(value); }
-        else if (flag === '--minutes') { out.minutes = Number(value); }
-        else if (flag === '--tick') { out.tickMs = Number(value); }
-        else if (flag === '--food') { out.food = value; }
-        else if (flag === '--stats') { out.stats = Number(value); }
+const args = parseQuestArgs(process.argv.slice(2), {
+    base: process.env.BASE ?? 'http://localhost:8890',
+    user: `sc${Date.now().toString(36).slice(-7)}`,
+    stage: 0,
+    until: 4,
+    minutes: 180,
+    tickMs: 300,
+    food: 'Lobster',
+    stats: 70,
+    deploy: true,
+    skipBarcrawl: false,
+    order: false,
+    dusty: false,
+    antipoison: false
+}, {
+    switches: {
+        '--skip-barcrawl': { skipBarcrawl: true },
+        '--order': { order: true },
+        '--dusty': { dusty: true },
+        '--antipoison': { antipoison: true }
     }
-    return out;
-}
-
-const args = parse(process.argv.slice(2));
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
+});
 
 const QUEST = 'Scorpion Catcher';
 const FALADOR_WEST_BANK = { x: 2946, z: 3369, level: 0 };
@@ -90,21 +52,6 @@ const BANK_SEED: BankSeedItem[] = [
     { debugName: 'coins', displayName: 'Coins', qty: 2_000_000 },
     { debugName: 'lobster', displayName: 'Lobster', qty: 60 }
 ];
-
-const STATS = [
-    'attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic', 'prayer',
-    'cooking', 'woodcutting', 'fletching', 'fishing', 'firemaking', 'crafting',
-    'smithing', 'mining', 'herblore', 'agility', 'thieving', 'runecraft'
-];
-
-async function setStats(page: Page, level: number): Promise<void> {
-    for (const skill of STATS) {
-        await cheatQuiet(page, `setstat ${skill} ${level}`);
-    }
-    await clearChatDialogs(page, 'level-up dialog(s)');
-    await page.waitForTimeout(1500);
-    await clearChatDialogs(page, 'straggler dialog(s)');
-}
 
 /** `%scorpcatcher` and the cage each stage starts from; the cage debug name carries which scorpions are already in it. */
 const STAGES: { varp: number; cage: string | null; caught: number; what: string }[] = [
@@ -153,28 +100,6 @@ async function snapshot(page: Page): Promise<Snapshot> {
     }, [QUEST, Object.keys(CAGE_CAUGHT).map(Number)] as [string, number[]]);
 }
 
-/** A live run loads the deployed bundles, never the working tree.
- *  Why: the transport graph compiles into navworker.js, a separate entrypoint, deploying only botclient.js leaves the navigator on the old edges and every route reports "unreachable". */
-const DEPLOYED = ['botclient.js', 'botclient.js.map', 'navworker.js', 'navworker.js.map'];
-
-function deployBundle(): void {
-    const engine = process.env.ENGINE_DIR ?? `${homedir()}/code/rs2b2t-engine`;
-    const botDir = `${engine}/public/bot`;
-    if (!existsSync(botDir)) {
-        fail(`deploy: ${botDir} not found — set ENGINE_DIR to the engine serving ${args.base}`);
-    }
-    const build = Bun.spawnSync(['bun', 'run', 'build:bot'], { stdout: 'pipe', stderr: 'pipe' });
-    if (build.exitCode !== 0) {
-        fail(`deploy: build:bot failed\n${build.stderr.toString()}`);
-    }
-    const files = DEPLOYED.map(f => `out/${f}`).join(' ');
-    const copy = Bun.spawnSync(['sh', '-c', `cp ${files} "${botDir}/"`]);
-    if (copy.exitCode !== 0) {
-        fail(`deploy: could not copy the bundles into ${botDir}`);
-    }
-    console.log(`deploy: fresh ${DEPLOYED.join(', ')} -> ${botDir}`);
-}
-
 if (args.stage < 0 || args.stage >= STAGES.length) {
     fail(`--stage runs 0 to ${STAGES.length - 1}`);
 }
@@ -183,7 +108,7 @@ if (args.until < 0 || args.until > 4) {
 }
 
 if (args.deploy) {
-    deployBundle();
+    deploySharedBundles(args.base);
 }
 
 const seed = STAGES[args.stage];
@@ -192,13 +117,7 @@ const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, args.base, args.user);
     console.log(`mainland-ready as '${args.user}'`);
@@ -206,7 +125,7 @@ try {
     await cheatQuiet(page, `speed ${args.tickMs}`);
     console.log(`tick rate: ${args.tickMs}ms`);
 
-    await setStats(page, args.stats);
+    await setQuestStats(page, args.stats);
     console.log(`stats: ${args.stats} across the board`);
 
     const bankSeed: BankSeedItem[] = [...BANK_SEED];
@@ -244,12 +163,7 @@ try {
         await clearChatDialogs(page, 'post-relog dialog(s)');
     }
 
-    if (!(await teleTo(page, FALADOR_WEST_BANK, 10, 25_000))) {
-        await clearChatDialogs(page, 'pre-tele dialog(s)');
-        if (!(await teleTo(page, FALADOR_WEST_BANK, 10, 25_000))) {
-            fail(`tele to ${FALADOR_WEST_BANK.x},${FALADOR_WEST_BANK.z} did not arrive`);
-        }
-    }
+    await teleportToQuestStart(page, FALADOR_WEST_BANK);
     console.log(`start tile → ${FALADOR_WEST_BANK.x},${FALADOR_WEST_BANK.z},${FALADOR_WEST_BANK.level}`);
 
     await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', 'scorpcatcher'));
@@ -280,10 +194,7 @@ try {
             + ` caught=${caught}/3 cage=${last.cage ?? '-'} scorpcatcher=${varp}`
             + ` journal=${last.status} qp=${last.qp} runner=${last.runner}`
         );
-        for (const l of last.logs) {
-            if (l.time > lastLogTime) { console.log(`      · [${l.level}] ${l.msg}`); }
-        }
-        if (last.logs.length > 0) { lastLogTime = Math.max(lastLogTime, ...last.logs.map(l => l.time)); }
+        lastLogTime = printQuestLogs(last.logs, lastLogTime);
 
         const done = args.until >= 4 ? last.status === 'complete' : reached >= args.until;
         if (done) {

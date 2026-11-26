@@ -1,26 +1,22 @@
-import { TaskBot, type Task } from '../../api/bot/Bot.js';
+import type { Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Bank } from '../../api/bank/Bank.js';
-import { openBankAccess } from '../../api/bank/Banking.js';
+import { BankMagicBot } from '../../api/magic/BankMagicBot.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Paint } from '../../paint/Paint.js';
-import { Traversal } from '../../api/walking/Traversal.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { nearestBankReachable, type BankLocation } from '../../api/bank/BankLocations.js';
-import { Navigator } from '../../event/webwalk/Navigator.js';
 import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { Input } from '../../input/Input.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import {
     BAR_OPTIONS,
-    FIRE_STAVES,
     MAGIC_REQUIRED,
     NATURES_DEFAULT,
     NATURES_MIN,
@@ -29,7 +25,6 @@ import {
     barsPerTrip,
     barsSmeltable,
     opIndex,
-    pickFireStaff,
     primaryOre,
     recipeForBar,
     wantsGoldsmithGauntlets,
@@ -37,7 +32,6 @@ import {
     type Recipe
 } from './SuperheaterLogic.js';
 
-const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const MAGIC_TAB = 6;
 const SUPERHEAT_ITEM = 'Superheat Item';
 
@@ -79,7 +73,7 @@ export const SUPERHEATER_SETTINGS: SettingsSchema = {
     }
 };
 
-export default class Superheater extends TaskBot {
+export default class Superheater extends BankMagicBot {
     override loopDelay = 400;
 
     private bar: Recipe = recipeForBar('Bronze')!;
@@ -87,10 +81,6 @@ export default class Superheater extends TaskBot {
     useFireRunes = false;
     private goldsmith = true;
     private fastBank = true;
-
-    // Why: the bank access is resolved once; every trip only opens the booth.
-    private bank: BankLocation | null = null;
-    private bankAccess: { name: string; op: string } = BOOTH;
 
     private smelted = 0;
     private trips = 0;
@@ -100,7 +90,7 @@ export default class Superheater extends TaskBot {
     private magicXpAtStart = 0;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         const barName = this.settings.str('bar', 'Bronze');
         this.bar = recipeForBar(barName) ?? recipeForBar('Bronze')!;
@@ -131,50 +121,21 @@ export default class Superheater extends TaskBot {
         }
         this.add(
             new ContinueDialog(),
-            new EnsureGear(this),
+            this.fireStaffTask(() => this.useFireRunes, mustYield),
             new EnsureGauntlets(this),
             new Restock(this),
             new Smelt(this)
         );
     }
 
-    // Why: resolve the cheapest reachable bank once and walk to it; later trips reuse bankAccess.
-    async resolveBank(): Promise<boolean> {
-        const here = Game.tile();
-        if (!here) {
-            return false;
-        }
-        const bank = await nearestBankReachable(here, Navigator);
-        if (!bank) {
-            this.log('no reachable bank — stopping');
-            this.requestFinish('no reachable bank');
-            return false;
-        }
-        this.bank = bank;
-        this.bankAccess = bank.npcAccess ?? bank.access ?? BOOTH;
-        this.log(`banking at ${bank.name} (${this.bankAccess.name} / ${this.bankAccess.op})`);
-
-        const near = bank.tile.level === here.level && bank.tile.distanceTo(here) <= 4;
-        if (near) {
-            return true;
-        }
-        this.setStatus(`walking to ${bank.name}`);
-        if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 4, timeoutMs: 180_000, log: m => this.log(`  ${m}`) }))) {
-            this.log('walk to the bank failed — stopping');
-            this.requestFinish('walk to the bank failed');
-            return false;
-        }
-        return true;
-    }
-
     // Why: once at the bank the scene lookup picks the closest booth/chest, so no stored stand is needed.
-    async openBank(): Promise<boolean> {
+    override async openBank(): Promise<boolean> {
         if (Bank.isOpen()) {
             return true;
         }
         this.setStatus('opening bank');
         this.log(`opening ${this.bankAccess.name} (${this.bankAccess.op})`);
-        if (!(await openBankAccess(this.bank, BOOTH, m => this.log(`  ${m}`)))) {
+        if (!(await this.openResolvedBank())) {
             this.log('could not open the bank — retrying');
             return false;
         }
@@ -182,7 +143,7 @@ export default class Superheater extends TaskBot {
         return true;
     }
 
-    setStatus(s: string): void {
+    override setStatus(s: string): void {
         this.status = s;
     }
     recipe(): Recipe {
@@ -261,15 +222,6 @@ export default class Superheater extends TaskBot {
         return true;
     }
 
-    // Why: Bank.isOpen() only proves the component exists. The item list fills a beat after opening and again after every deposit, so a count of zero can be a list that has not loaded rather than an empty bank. Before halting on "out of X", confirm the bank is ready and every named item reads zero; otherwise retry.
-    async bankTrulyOutOf(...names: string[]): Promise<boolean> {
-        const settled = await Bank.waitReady(3500);
-        if (!settled) {
-            return false;
-        }
-        return names.every(name => Bank.count(name) === 0);
-    }
-
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#ff9d3b' });
         p.title(`Superheater — ${this.status}`);
@@ -293,71 +245,6 @@ export default class Superheater extends TaskBot {
     }
 }
 
-// Why: set a fire-rune staff once. Deposit everything, withdraw one, close so Wield is a backpack op, wield, reopen.
-class EnsureGear implements Task {
-    constructor(private bot: Superheater) {}
-
-    validate(): boolean {
-        return !mustYield() && !this.bot.useFireRunes && pickFireStaff(name => Equipment.contains(name)) === undefined;
-    }
-
-    async execute(): Promise<void> {
-        if (!(await this.bot.openBank())) {
-            return;
-        }
-        if (mustYield()) {
-            return;
-        }
-        if (Inventory.used() > 0) {
-            await Bank.depositAllMatching(() => true);
-        }
-        let staff = pickFireStaff(name => Inventory.count(name) > 0);
-        if (!staff) {
-            staff = pickFireStaff(name => Bank.count(name) > 0);
-            if (!staff) {
-                // The bank list may still be settling after open, so re-check before declaring every fire staff gone.
-                if (!(await this.bot.bankTrulyOutOf(...FIRE_STAVES))) {
-                    this.bot.log('withdraw of a fire staff stalled but the bank list is still settling — retrying');
-                    return;
-                }
-                this.bot.log('no fire staff in the bank — stopping');
-                this.bot.requestFinish('no fire staff in the bank');
-                return;
-            }
-            this.bot.log(`withdrawing ${staff}`);
-            if (!(await Bank.withdrawX(staff, 1))) {
-                if (!(await this.bot.bankTrulyOutOf(...FIRE_STAVES))) {
-                    this.bot.log(`withdraw of ${staff} stalled but the bank list is still settling — retrying`);
-                    return;
-                }
-                this.bot.log('no fire staff in the bank — stopping');
-                this.bot.requestFinish('no fire staff in the bank');
-                return;
-            }
-        }
-        if (!(await Bank.close())) {
-            this.bot.log('bank would not close — retrying');
-            return;
-        }
-        // Why: close leaves Deposit-* ops on the side pack for a beat, so wait for Wield before equip.
-        await Execution.delayUntil(
-            () => !Bank.isOpen() && (Inventory.first(staff)?.actions().some(o => /wield|wear|equip/i.test(o)) ?? false),
-            3000
-        );
-        if (mustYield()) {
-            return;
-        }
-        this.bot.setStatus(`wielding ${staff}`);
-        if (!(await Equipment.equip(staff))) {
-            this.bot.log(`could not wield ${staff} — stopping`);
-            this.bot.requestFinish(`could not wield ${staff}`);
-            return;
-        }
-        this.bot.log(`wore ${staff} — casts need only ${NATURE_RUNE}s now`);
-        await this.bot.openBank();
-    }
-}
-
 // Why: gold bars get 2.5x Smithing XP with the gauntlets, so the toggle stops the run rather than quietly smelting at the base rate.
 class EnsureGauntlets implements Task {
     constructor(private bot: Superheater) {}
@@ -374,33 +261,17 @@ class EnsureGauntlets implements Task {
             return;
         }
         if (Inventory.first('Goldsmith gauntlet') === null) {
-            if (Bank.count('Goldsmith gauntlet') === 0) {
-                if (!(await this.bot.bankTrulyOutOf('Goldsmith gauntlet'))) {
-                    return;
+            const available = Bank.count('Goldsmith gauntlet') !== 0;
+            if (available) this.bot.log('withdrawing Goldsmith gauntlet');
+            if (!available || !(await Bank.withdrawX('Goldsmith gauntlet', 1))) {
+                if (await this.bot.bankTrulyOutOf('Goldsmith gauntlet')) {
+                    this.bot.log('no Goldsmith gauntlet in the bank — stopping');
+                    this.bot.requestFinish('no Goldsmith gauntlet in the bank');
                 }
-                this.bot.log('no Goldsmith gauntlet in the bank — stopping');
-                this.bot.requestFinish('no Goldsmith gauntlet in the bank');
-                return;
-            }
-            this.bot.log('withdrawing Goldsmith gauntlet');
-            if (!(await Bank.withdrawX('Goldsmith gauntlet', 1))) {
-                if (!(await this.bot.bankTrulyOutOf('Goldsmith gauntlet'))) {
-                    return;
-                }
-                this.bot.log('no Goldsmith gauntlet in the bank — stopping');
-                this.bot.requestFinish('no Goldsmith gauntlet in the bank');
                 return;
             }
         }
-        if (!(await Bank.close())) {
-            this.bot.log('bank would not close — retrying');
-            return;
-        }
-        await Execution.delayUntil(
-            () => !Bank.isOpen() && (Inventory.first('Goldsmith gauntlet')?.actions().some(o => /wear|wield|equip/i.test(o)) ?? false),
-            3000
-        );
-        if (mustYield()) {
+        if (!(await this.bot.closeBankToEquip('Goldsmith gauntlet')) || mustYield()) {
             return;
         }
         this.bot.setStatus('wearing Goldsmith gauntlet');

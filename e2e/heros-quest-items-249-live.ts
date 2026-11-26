@@ -2,12 +2,12 @@
 
 //   HEADED=1 bun e2e/heros-quest-items-249-live.ts --tick 300 --minutes 60
 //   HEADED=1 bun e2e/heros-quest-items-249-live.ts --skip-eel --minutes 30
+import { setQuestStats } from './lib/questHarness.js';
 import type { Page } from 'playwright-core';
 
-import { deployIsolatedClient, launchBrowser } from './lib/harness.js';
+import { deployIsolatedClient, fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import {
     cheatQuiet,
-    clearChatDialogs,
     getServerVarQuiet,
     mainlandAccount,
     relog,
@@ -57,19 +57,8 @@ function parse(argv: string[]): Args {
 
 const args = parse(process.argv.slice(2));
 
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
-
 const QUEST = "Hero's Quest";
 const VARROCK_WEST_BANK = { x: 3185, z: 3440, level: 0 };
-
-const STATS = [
-    'attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic', 'prayer',
-    'cooking', 'woodcutting', 'fletching', 'fishing', 'firemaking', 'crafting',
-    'smithing', 'mining', 'herblore', 'agility', 'thieving', 'runecraft'
-];
 
 function bankSeed(): BankSeedItem[] {
     const seed: BankSeedItem[] = [
@@ -86,15 +75,6 @@ function bankSeed(): BankSeedItem[] {
         seed.push({ debugName: 'hot_feather', displayName: 'Fire feather', qty: 1 });
     }
     return seed;
-}
-
-async function setStats(page: Page, level: number): Promise<void> {
-    for (const skill of STATS) {
-        await cheatQuiet(page, `setstat ${skill} ${level}`);
-    }
-    await clearChatDialogs(page, 'level-up dialog(s)');
-    await page.waitForTimeout(1500);
-    await clearChatDialogs(page, 'straggler dialog(s)');
 }
 
 interface Snapshot {
@@ -135,17 +115,11 @@ const browser = await launchBrowser({ swiftshader: true });
 const t0 = Date.now();
 try {
     const page = await browser.newPage();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, args.base, args.user, client.page);
     await cheatQuiet(page, `speed ${args.tickMs}`);
-    await setStats(page, args.stats);
+    await setQuestStats(page, args.stats);
     // Why: the values `quest.constant` calls complete, `~send_quest_progress` colours the list
     // green only on `current >= complete`.
     for (const [name, value] of [['zanaris', 6], ['dragonquest', 10], ['arthur', 7], ['blackarmgang', 4]] as const) {

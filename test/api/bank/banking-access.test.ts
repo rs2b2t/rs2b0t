@@ -1,7 +1,7 @@
 import { afterEach, expect, spyOn, test } from 'bun:test';
 import { reader, type LocSnapshot } from '#/bot/adapter/ClientAdapter.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
-import { Banking } from '#/bot/api/bank/Banking.js';
+import { Banking, openNearestBank } from '#/bot/api/bank/Banking.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
@@ -38,6 +38,22 @@ function fixture(distance: number, fishing = 1, guild = 'Fishing Guild') {
     restores.push(...patches.map(patch => () => patch.mockRestore()));
     return { logs, booth, here: () => here, walked: () => walked };
 }
+
+test.each([4, 5])('nearest-bank trips walk when the stand is over four tiles away (%i tiles)', async distance => {
+    const f = fixture(0, 68);
+    const tile = spyOn(Game, 'tile').mockReturnValue({ x: 2586 + distance, z: 3420, level: 0 });
+    restores.push(() => tile.mockRestore());
+    const bot = { setStatus: (s: string) => f.logs.push(s), log: (s: string) => f.logs.push(s) };
+    const bank = await openNearestBank(bot);
+    expect(bank?.name).toBe('Fishing Guild');
+    expect(f.logs[0]).toBe('banking at Fishing Guild');
+    expect(f.walked()).toBe(distance > 4);
+    if (distance > 4) {
+        expect(Traversal.walkResilient).toHaveBeenCalledWith(bank!.tile, {
+            radius: 3, attempts: 4, timeoutMs: 180_000, log: expect.any(Function)
+        });
+    }
+});
 
 test.each([10, 40])('leveler skips a locked Fishing Guild booth visible %s tiles away and logs its alternative', async distance => {
     const f = fixture(distance);

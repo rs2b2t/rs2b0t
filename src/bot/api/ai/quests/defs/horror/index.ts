@@ -1,3 +1,4 @@
+import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
@@ -18,9 +19,6 @@ import {
     bankedId, dungeonKit, foodWant, hammer, heldId, HORROR_TOOLS, kit, NAILS_NEEDED, nails, PLANKS_NEEDED,
     planks, runeKit, sealedArea, warnHorrorReadiness
 } from './supplies.js';
-
-const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
-    ({ kind: 'custom', name, run });
 
 // Why: Gunnjorn is inside the Barbarian Outpost course behind the gate and the pipe, and the gate's guard intercepts anyone without the 10-bar barcrawl.
 
@@ -102,7 +100,7 @@ function beforeTheDoor(snap: QuestSnapshot): QuestStep {
     if (short) {
         return short;
     }
-    return { kind: 'talk', stop: LARRISSA };
+    return talkTo(LARRISSA);
 }
 
 // Why: the lighthouse, basement and cavern are sealed pockets linked by scripted teleports, and a death drops you on the mainland mid-stage, so every branch starts by locating the pocket.
@@ -147,14 +145,14 @@ function reachTheCavern(snap: QuestSnapshot, atCavern: QuestStep): QuestStep {
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'complete') {
         return { kind: 'done' };
     }
     const stage = snap.progress?.stage ?? snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'quest stage not readable' };
+        return waitStep('quest stage not readable');
     }
     // Why: upkeep never runs inside a sealed pocket, or a mid-fight top-up walks you back out of the cavern.
     if (!sealedArea(snap.tile)) {
@@ -167,7 +165,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         case HD_STAGE.NOT_STARTED:
             // Why: the bridge kit comes before Larrissa since the kit is Varrock and the outpost, on the way to the lighthouse, and nothing in it is quest-gated.
             // Why: `bridgeKit` checks the bank first and skips sourcing nails already owned.
-            return bridgeKit(snap) ?? { kind: 'talk', stop: LARRISSA };
+            return bridgeKit(snap) ?? talkTo(LARRISSA);
         case HD_STAGE.STARTED:
             return beforeTheDoor(snap);
         case HD_STAGE.ENTERED_LIGHTHOUSE:

@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { readQuestJournal } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import { OBS_QUEST, OBS_STAGE } from './areas.js';
 
 // Why: `itgronigen_journal.rs2` appends, so every earlier stage's text is still on the page and only the newest paragraph separates one stage from the next.
@@ -22,18 +21,6 @@ export function parseObservatoryJournal(lines: readonly string[] | string): numb
     return MARKERS.find(m => text.includes(m.text))?.stage;
 }
 
-export async function readObservatoryStage(): Promise<number | undefined> {
-    const status = Quests.status(OBS_QUEST);
-    if (status === 'complete') {
-        return OBS_STAGE.COMPLETE;
-    }
-    if (status === 'notStarted') {
-        return OBS_STAGE.NOT_STARTED;
-    }
-    if (status !== 'inProgress') {
-        return undefined;
-    }
-    const stage = parseObservatoryJournal(await Quests.journal(OBS_QUEST));
-    await Modals.closeIfOpen();
-    return stage;
+export function readObservatoryStage(): Promise<number | undefined> {
+    return readQuestJournal(OBS_QUEST, OBS_STAGE, parseObservatoryJournal, stage => stage);
 }

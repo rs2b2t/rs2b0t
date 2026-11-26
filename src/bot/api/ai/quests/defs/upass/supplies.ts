@@ -1,6 +1,7 @@
 import { Equipment } from '../../../../equipment/Equipment.js';
 import { QuestLoadout, questWornGear } from '../../gear.js';
 import Tile from '../../../../../geometry/Tile.js';
+import { bankedName as bankedNamed, heldName as heldNamed } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { ITEM_DB } from '../../../../../data/itemdb.js';
 import { UP_ITEM, UP_TILE, banked, carried, held, type UpassItem } from './areas.js';
@@ -195,9 +196,6 @@ const GEAR_SLOTS: readonly { slot: string; kinds: readonly string[] }[] = [
 
 /** Refusals are silent, `equip` returns false, so a re-picked piece would burn the run. */
 const unwearable = new Set<string>();
-
-const bankedNamed = (snap: QuestSnapshot, name: string): number => snap.bank?.get(name.toLowerCase()) ?? 0;
-const heldNamed = (snap: QuestSnapshot, name: string): number => snap.inv.get(name.toLowerCase()) ?? 0;
 
 function wearingSlot(snap: QuestSnapshot, kinds: readonly string[]): boolean {
     for (const name of snap.worn) {

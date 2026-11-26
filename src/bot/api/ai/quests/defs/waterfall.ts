@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { normalizeJournal } from '../journalText.js';
 import { actions, reader } from '../../../../adapter/ClientAdapter.js';
@@ -546,7 +547,7 @@ export function sourceFood(snap: QuestSnapshot, bank: Tile = ARDOUGNE_BANK): Que
     if (!snap.bankKnown) return scanBank(bank);
     let missing = FOOD_TARGET - held;
     if (snap.freeSlots !== undefined && snap.freeSlots < missing) {
-        return { kind: 'wait', reason: `need ${missing} free slots for Waterfall cakes` };
+        return waitStep(`need ${missing} free slots for Waterfall cakes`);
     }
     const items: WithdrawItem[] = [];
     for (const food of FOODS) {
@@ -555,7 +556,7 @@ export function sourceFood(snap: QuestSnapshot, bank: Tile = ARDOUGNE_BANK): Que
         missing -= qty;
     }
     return items.length > 0 ? withdraw(items, bank)
-        : { kind: 'custom', name: 'steal Waterfall cakes', run: stealWaterfallCakes };
+        : customStep('steal Waterfall cakes', stealWaterfallCakes);
 }
 
 function nearBetty(snap: QuestSnapshot): boolean {
@@ -1090,7 +1091,7 @@ function prepareTombEntry(snap: QuestSnapshot): QuestStep {
         const travelFood = sourceFood(snap, bank);
         if (travelFood) return travelFood;
         if (banked(snap, ITEM.PEBBLE) > 0) return withdrawExact(ITEM.PEBBLE, 1, bank);
-        return { kind: 'custom', name: 'recover Glarial pebble from Golrie', run: pebbleLeg };
+        return customStep('recover Glarial pebble from Golrie', pebbleLeg);
     }
     const normalize = normalizeLoadout(snap, withFood(TOMB_KEEP), 'strip prohibited items before Glarial tomb');
     if (normalize) return normalize;
@@ -1099,7 +1100,7 @@ function prepareTombEntry(snap: QuestSnapshot): QuestStep {
     // Why: surviving relics get banked on the exposed Golrie leg and brought into the tomb, so only the missing one is looted.
     const survivingRelics = withdrawBankedRelics(snap, bank);
     if (survivingRelics) return survivingRelics;
-    return { kind: 'custom', name: 'loot Glarial amulet and urn', run: tombLeg };
+    return customStep('loot Glarial amulet and urn', tombLeg);
 }
 
 function recoverRelics(snap: QuestSnapshot): QuestStep | null {
@@ -1109,7 +1110,7 @@ function recoverRelics(snap: QuestSnapshot): QuestStep | null {
 
 function resumePebbleRecovery(snap: QuestSnapshot, area: WaterfallArea): QuestStep | null {
     if (area !== 'tgvDungeon' || !recoverRelics(snap)) return null;
-    return { kind: 'custom', name: 'recover Glarial pebble from Golrie', run: pebbleLeg };
+    return customStep('recover Glarial pebble from Golrie', pebbleLeg);
 }
 
 function withdrawBankedRelics(snap: QuestSnapshot, bank: Tile = ARDOUGNE_BANK): QuestStep | null {
@@ -1153,38 +1154,38 @@ function prepareDungeon(snap: QuestSnapshot, finalTrip: boolean): QuestStep | nu
         if (runes) return runes;
     }
     if (!held(snap, ITEM.AMULET) && !worn(snap, ITEM.AMULET)) {
-        return { kind: 'wait', reason: "Glarial's amulet is not in the final loadout" };
+        return waitStep("Glarial's amulet is not in the final loadout");
     }
     if (!held(snap, ITEM.FULL_URN)) {
-        return { kind: 'wait', reason: "Glarial's full urn is not in the final loadout" };
+        return waitStep("Glarial's full urn is not in the final loadout");
     }
     return null;
 }
 
 function escapeUnexpectedArea(area: WaterfallArea): QuestStep | null {
     if (area === 'hudonMound') {
-        return { kind: 'custom', name: 'swim back from Hudon mound', run: leaveHudonMound };
+        return customStep('swim back from Hudon mound', leaveHudonMound);
     }
     if (area === 'fallsLedge') {
-        return { kind: 'custom', name: 'leave the Waterfall ledge by barrel', run: barrelEscape };
+        return customStep('leave the Waterfall ledge by barrel', barrelEscape);
     }
     if (area === 'fallsTreeBank') {
-        return { kind: 'wait', reason: 'cannot leave the Waterfall tree bank safely without Rope' };
+        return waitStep('cannot leave the Waterfall tree bank safely without Rope');
     }
     if (area === 'tgvDungeon') {
-        return { kind: 'custom', name: 'leave the Tree Gnome Village dungeon', run: leaveTgvDungeon };
+        return customStep('leave the Tree Gnome Village dungeon', leaveTgvDungeon);
     }
     if (area === 'glarialTomb') {
-        return { kind: 'custom', name: "leave Glarial's tomb", run: tombExit };
+        return customStep("leave Glarial's tomb", tombExit);
     }
     if (area === 'waterfallDungeon' || area === 'puzzleRoom' || area === 'raisedRoom') {
-        return { kind: 'custom', name: 'leave the Waterfall dungeon safely', run: exitWaterfallDungeon };
+        return customStep('leave the Waterfall dungeon safely', exitWaterfallDungeon);
     }
     return null;
 }
 
 function stageZero(snap: QuestSnapshot, area: WaterfallArea): QuestStep {
-    if (area === 'unknown') return { kind: 'wait', reason: 'player location unavailable' };
+    if (area === 'unknown') return waitStep('player location unavailable');
     const escape = escapeUnexpectedArea(area);
     if (escape) return escape;
     const bank = ARDOUGNE_BANK;
@@ -1197,11 +1198,11 @@ function stageZero(snap: QuestSnapshot, area: WaterfallArea): QuestStep {
     if (food) return food;
     const rope = sourceRope(snap, bank);
     if (rope) return rope;
-    return { kind: 'talk', stop: ALMERA };
+    return talkTo(ALMERA);
 }
 
 function stageTwo(snap: QuestSnapshot, area: WaterfallArea): QuestStep {
-    if (area === 'hudonMound') return { kind: 'custom', name: 'swim downstream to the tourist office', run: leaveHudonMound };
+    if (area === 'hudonMound') return customStep('swim downstream to the tourist office', leaveHudonMound);
     const escape = escapeUnexpectedArea(area);
     if (escape) return escape;
     const bank = ARDOUGNE_BANK;
@@ -1210,39 +1211,39 @@ function stageTwo(snap: QuestSnapshot, area: WaterfallArea): QuestStep {
     if (normalize) return normalize;
     const food = sourceFood(snap);
     if (food) return food;
-    if (held(snap, ITEM.BOOK)) return { kind: 'custom', name: 'read the Book on Baxtorian', run: readBook };
+    if (held(snap, ITEM.BOOK)) return customStep('read the Book on Baxtorian', readBook);
     if (banked(snap, ITEM.BOOK) > 0) return withdrawExact(ITEM.BOOK, 1);
-    return { kind: 'custom', name: 'find and read the Book on Baxtorian', run: bookLeg };
+    return customStep('find and read the Book on Baxtorian', bookLeg);
 }
 
 function stageThree(snap: QuestSnapshot, area: WaterfallArea): QuestStep {
-    if (area === 'glarialTomb') return { kind: 'custom', name: 'loot Glarial amulet and urn', run: tombLeg };
-    if (area === 'tgvDungeon') return { kind: 'custom', name: 'recover Glarial pebble from Golrie', run: pebbleLeg };
+    if (area === 'glarialTomb') return customStep('loot Glarial amulet and urn', tombLeg);
+    if (area === 'tgvDungeon') return customStep('recover Glarial pebble from Golrie', pebbleLeg);
     const escape = escapeUnexpectedArea(area);
     if (escape) return escape;
     return prepareTombEntry(snap);
 }
 
 function stageFour(snap: QuestSnapshot, area: WaterfallArea): QuestStep {
-    if (area === 'glarialTomb') return { kind: 'custom', name: 'loot Glarial amulet and urn', run: tombLeg };
+    if (area === 'glarialTomb') return customStep('loot Glarial amulet and urn', tombLeg);
     const pebbleRecovery = resumePebbleRecovery(snap, area);
     if (pebbleRecovery) return pebbleRecovery;
     if (area === 'fallsLedge' && !held(snap, ITEM.AMULET) && !worn(snap, ITEM.AMULET)) {
-        return { kind: 'custom', name: 'leave the ledge without risking the amulet door', run: barrelEscape };
+        return customStep('leave the ledge without risking the amulet door', barrelEscape);
     }
     if (area === 'hudonMound' && !held(snap, ITEM.ROPE)) {
-        return { kind: 'custom', name: 'swim back from Hudon mound', run: leaveHudonMound };
+        return customStep('swim back from Hudon mound', leaveHudonMound);
     }
     if (area === 'fallsTreeBank' && !held(snap, ITEM.ROPE)) {
-        return { kind: 'wait', reason: 'Rope missing on the one-way Waterfall crossing' };
+        return waitStep('Rope missing on the one-way Waterfall crossing');
     }
     if (area === 'hudonMound' || area === 'fallsTreeBank' || area === 'fallsLedge') {
-        return { kind: 'custom', name: 'enter Baxtorian Falls', run: fallsLeg };
+        return customStep('enter Baxtorian Falls', fallsLeg);
     }
     const escape = escapeUnexpectedArea(area);
     if (escape) return escape;
     const prep = prepareDungeon(snap, false);
-    return prep ?? { kind: 'custom', name: 'enter Baxtorian Falls', run: fallsLeg };
+    return prep ?? customStep('enter Baxtorian Falls', fallsLeg);
 }
 
 function stageFiveOrSix(snap: QuestSnapshot, stage: number, area: WaterfallArea): QuestStep {
@@ -1253,30 +1254,30 @@ function stageFiveOrSix(snap: QuestSnapshot, stage: number, area: WaterfallArea)
             run: log => dungeonLeg(stage, log)
         };
     }
-    if (area === 'glarialTomb') return { kind: 'custom', name: 'finish recovering Glarial relics', run: tombLeg };
+    if (area === 'glarialTomb') return customStep('finish recovering Glarial relics', tombLeg);
     const pebbleRecovery = resumePebbleRecovery(snap, area);
     if (pebbleRecovery) return pebbleRecovery;
-    if (area === 'tgvDungeon') return { kind: 'custom', name: 'leave the Tree Gnome Village dungeon', run: leaveTgvDungeon };
+    if (area === 'tgvDungeon') return customStep('leave the Tree Gnome Village dungeon', leaveTgvDungeon);
     if (area === 'fallsLedge' && !held(snap, ITEM.AMULET) && !worn(snap, ITEM.AMULET)) {
-        return { kind: 'custom', name: 'leave the ledge without risking the amulet door', run: barrelEscape };
+        return customStep('leave the ledge without risking the amulet door', barrelEscape);
     }
     if (area === 'hudonMound' && !held(snap, ITEM.ROPE)) {
-        return { kind: 'custom', name: 'swim back from Hudon mound', run: leaveHudonMound };
+        return customStep('swim back from Hudon mound', leaveHudonMound);
     }
     if (area === 'fallsTreeBank' && !held(snap, ITEM.ROPE)) {
-        return { kind: 'wait', reason: 'Rope missing on the one-way Waterfall crossing' };
+        return waitStep('Rope missing on the one-way Waterfall crossing');
     }
-    if (area !== 'mainland') return { kind: 'custom', name: 'cross into Baxtorian Falls', run: fallsLeg };
+    if (area !== 'mainland') return customStep('cross into Baxtorian Falls', fallsLeg);
     const prep = prepareDungeon(snap, false);
-    return prep ?? { kind: 'custom', name: 'cross into Baxtorian Falls', run: fallsLeg };
+    return prep ?? customStep('cross into Baxtorian Falls', fallsLeg);
 }
 
 function stageEight(snap: QuestSnapshot, area: WaterfallArea): QuestStep {
     if (area === 'raisedRoom') {
         if (!held(snap, ITEM.FULL_URN) || (snap.freeSlots ?? 0) < 5) {
-            return { kind: 'custom', name: 'wash out to recover the final loadout', run: exitWaterfallDungeon };
+            return customStep('wash out to recover the final loadout', exitWaterfallDungeon);
         }
-        return { kind: 'custom', name: "pour Glarial's ashes into the Chalice", run: completeQuest };
+        return customStep("pour Glarial's ashes into the Chalice", completeQuest);
     }
     if (area === 'waterfallDungeon' || area === 'puzzleRoom') {
         return {
@@ -1285,37 +1286,37 @@ function stageEight(snap: QuestSnapshot, area: WaterfallArea): QuestStep {
             run: log => dungeonLeg(WATERFALL_STAGE.RAISED_FLOOR, log)
         };
     }
-    if (area === 'glarialTomb') return { kind: 'custom', name: 'recover final Glarial relics', run: tombLeg };
+    if (area === 'glarialTomb') return customStep('recover final Glarial relics', tombLeg);
     const pebbleRecovery = resumePebbleRecovery(snap, area);
     if (pebbleRecovery) return pebbleRecovery;
-    if (area === 'tgvDungeon') return { kind: 'custom', name: 'leave the Tree Gnome Village dungeon', run: leaveTgvDungeon };
+    if (area === 'tgvDungeon') return customStep('leave the Tree Gnome Village dungeon', leaveTgvDungeon);
     if (area === 'fallsLedge' && !held(snap, ITEM.AMULET) && !worn(snap, ITEM.AMULET)) {
-        return { kind: 'custom', name: 'leave the ledge without risking the amulet door', run: barrelEscape };
+        return customStep('leave the ledge without risking the amulet door', barrelEscape);
     }
     if (area === 'hudonMound' && !held(snap, ITEM.ROPE)) {
-        return { kind: 'custom', name: 'swim back from Hudon mound', run: leaveHudonMound };
+        return customStep('swim back from Hudon mound', leaveHudonMound);
     }
     if (area === 'fallsTreeBank' && !held(snap, ITEM.ROPE)) {
-        return { kind: 'wait', reason: 'Rope missing on the one-way Waterfall crossing' };
+        return waitStep('Rope missing on the one-way Waterfall crossing');
     }
-    if (area !== 'mainland') return { kind: 'custom', name: 'return to the Waterfall dungeon', run: fallsLeg };
+    if (area !== 'mainland') return customStep('return to the Waterfall dungeon', fallsLeg);
     const prep = prepareDungeon(snap, true);
-    return prep ?? { kind: 'custom', name: 'return to the Waterfall dungeon', run: fallsLeg };
+    return prep ?? customStep('return to the Waterfall dungeon', fallsLeg);
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete' || (snap.stage ?? 0) >= WATERFALL_STAGE.COMPLETE) return { kind: 'done' };
-    if (snap.journal === 'unknown') return { kind: 'wait', reason: 'quest journal not loaded' };
-    if (snap.stage === undefined) return { kind: 'wait', reason: 'Waterfall Quest journal stage unavailable' };
+    if (snap.journal === 'unknown') return waitForJournal();
+    if (snap.stage === undefined) return waitStep('Waterfall Quest journal stage unavailable');
 
     const area = waterfallArea(snap.tile);
     switch (snap.stage) {
         case WATERFALL_STAGE.NOT_STARTED:
             return stageZero(snap, area);
         case WATERFALL_STAGE.STARTED:
-            if (area === 'hudonMound') return { kind: 'custom', name: 'speak to Hudon', run: stageOneLeg };
+            if (area === 'hudonMound') return customStep('speak to Hudon', stageOneLeg);
             if (area !== 'mainland') {
-                return escapeUnexpectedArea(area) ?? { kind: 'wait', reason: 'cannot reach Almera raft from this area' };
+                return escapeUnexpectedArea(area) ?? waitStep('cannot reach Almera raft from this area');
             }
             {
                 const bank = ARDOUGNE_BANK;
@@ -1325,7 +1326,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
                 const food = sourceFood(snap);
                 if (food) return food;
             }
-            return { kind: 'custom', name: 'board Almera raft and find Hudon', run: stageOneLeg };
+            return customStep('board Almera raft and find Hudon', stageOneLeg);
         case WATERFALL_STAGE.SPOKEN_TO_HUDON:
             return stageTwo(snap, area);
         case WATERFALL_STAGE.READ_BOOK:
@@ -1338,7 +1339,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         case WATERFALL_STAGE.RAISED_FLOOR:
             return stageEight(snap, area);
         default:
-            return { kind: 'wait', reason: 'unrecognized Waterfall Quest stage ' + snap.stage };
+            return waitStep('unrecognized Waterfall Quest stage ' + snap.stage);
     }
 }
 

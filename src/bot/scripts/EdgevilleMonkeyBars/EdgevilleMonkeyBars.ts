@@ -1,6 +1,6 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Bank } from '../../api/bank/Bank.js';
@@ -262,7 +262,7 @@ class EdgevilleMonkeyBars extends TaskBot {
     died = false;
 
     override async onStart() {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         const agility = Skills.level('agility');
         if (agility < MIN_AGILITY) {

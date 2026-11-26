@@ -9,12 +9,12 @@
 //   HEADED=1 bun e2e/tbwt-261-live.ts --stage 3 --lubufu 31 --tiadeche 4 --tamayu 3 --flags 480   # the killing hunt
 //   HEADED=1 bun e2e/tbwt-261-live.ts --stage 3 --lubufu 31 --tiadeche 4 --tamayu 4 --at 2764,2976,0   # Tinsay
 //   HEADED=1 bun e2e/tbwt-261-live.ts --stage 3 --lubufu 31 --tiadeche 4 --no-spear --at 2844,3042,0   # the Jogre spear hunt
-import { existsSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { parseQuestArgs, type QuestArgs } from './lib/questArgs.js';
+import { printQuestLogs, teleportToQuestStart } from './lib/questHarness.js';
 
 import type { Page } from 'playwright-core';
 
-import { launchBrowser } from './lib/harness.js';
+import { deploySharedBundles, fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -24,7 +24,6 @@ import {
     relog,
     seedItemsToBank,
     startScript,
-    teleTo,
     type BankSeedItem
 } from './tutorial/harness.js';
 
@@ -34,18 +33,12 @@ interface Tile {
     level: number;
 }
 
-interface Args {
-    base: string;
-    user: string;
-    stage: number;
+interface Args extends QuestArgs {
     lubufu: number;
     tiadeche: number;
     tinsay: number;
     tamayu: number;
     flags: number;
-    until: number;
-    minutes: number;
-    tickMs: number;
     skills: number;
     food: string;
     at: Tile | null;
@@ -53,7 +46,6 @@ interface Args {
     packed: boolean;
     /** Seed no spear at all, so the Tamayu leg has to hunt Jogres for one. */
     noSpear: boolean;
-    deploy: boolean;
 }
 
 function parseTile(s: string): Tile {
@@ -64,57 +56,39 @@ function parseTile(s: string): Tile {
     return { x: x!, z: z!, level: level! };
 }
 
-function parse(argv: string[]): Args {
-    const out: Args = {
-        base: process.env.BASE ?? 'http://localhost:8890',
-        user: `tbwt${Date.now().toString(36).slice(-6)}`,
-        stage: 0,
-        lubufu: 0,
-        tiadeche: 0,
-        tinsay: 0,
-        tamayu: 0,
-        flags: 0,
-        until: 6,
-        minutes: 180,
-        tickMs: 300,
-        skills: 70,
-        food: 'Lobster',
-        at: null,
-        packed: false,
-        noSpear: false,
-        deploy: true
-    };
-    for (let i = 0; i < argv.length; i++) {
-        const flag = argv[i];
-        if (flag === '--no-deploy') { out.deploy = false; continue; }
-        if (flag === '--packed') { out.packed = true; continue; }
-        if (flag === '--no-spear') { out.noSpear = true; continue; }
-        const value = argv[++i];
-        if (value === undefined) { break; }
-        if (flag === '--base') { out.base = value; }
-        else if (flag === '--user') { out.user = value; }
-        else if (flag === '--stage') { out.stage = Number(value); }
-        else if (flag === '--lubufu') { out.lubufu = Number(value); }
-        else if (flag === '--tiadeche') { out.tiadeche = Number(value); }
-        else if (flag === '--tinsay') { out.tinsay = Number(value); }
-        else if (flag === '--tamayu') { out.tamayu = Number(value); }
-        else if (flag === '--flags') { out.flags = Number(value); }
-        else if (flag === '--until') { out.until = Number(value); }
-        else if (flag === '--minutes') { out.minutes = Number(value); }
-        else if (flag === '--tick') { out.tickMs = Number(value); }
-        else if (flag === '--skills') { out.skills = Number(value); }
-        else if (flag === '--food') { out.food = value; }
-        else if (flag === '--at') { out.at = parseTile(value); }
+const args = parseQuestArgs<Args>(process.argv.slice(2), {
+    base: process.env.BASE ?? 'http://localhost:8890',
+    user: `tbwt${Date.now().toString(36).slice(-6)}`,
+    stage: 0,
+    lubufu: 0,
+    tiadeche: 0,
+    tinsay: 0,
+    tamayu: 0,
+    flags: 0,
+    until: 6,
+    minutes: 180,
+    tickMs: 300,
+    skills: 70,
+    food: 'Lobster',
+    at: null,
+    packed: false,
+    noSpear: false,
+    deploy: true
+}, {
+    switches: {
+        '--packed': { packed: true },
+        '--no-spear': { noSpear: true }
+    },
+    values: {
+        '--lubufu': value => ({ lubufu: Number(value) }),
+        '--tiadeche': value => ({ tiadeche: Number(value) }),
+        '--tinsay': value => ({ tinsay: Number(value) }),
+        '--tamayu': value => ({ tamayu: Number(value) }),
+        '--flags': value => ({ flags: Number(value) }),
+        '--skills': value => ({ skills: Number(value) }),
+        '--at': value => ({ at: parseTile(value) })
     }
-    return out;
-}
-
-const args = parse(process.argv.slice(2));
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
+});
 
 const QUEST = 'Tai Bwo Wannai Trio';
 const ARDOUGNE_WEST_BANK: Tile = { x: 2616, z: 3332, level: 0 };
@@ -217,43 +191,15 @@ async function snapshot(page: Page): Promise<Snapshot> {
     }, QUEST);
 }
 
-/** A live run loads the deployed bundles, never the working tree.
- *  Why: navworker.js is a second entrypoint holding the transport graph, so a client-only deploy leaves the navigator on the old edges. */
-const DEPLOYED = ['botclient.js', 'botclient.js.map', 'navworker.js', 'navworker.js.map'];
-
-function deployBundle(): void {
-    const engine = process.env.ENGINE_DIR ?? `${homedir()}/code/rs2b2t-engine`;
-    const botDir = `${engine}/public/bot`;
-    if (!existsSync(botDir)) {
-        fail(`deploy: ${botDir} not found — set ENGINE_DIR to the engine serving ${args.base}`);
-    }
-    const build = Bun.spawnSync(['bun', 'run', 'build:bot'], { stdout: 'pipe', stderr: 'pipe' });
-    if (build.exitCode !== 0) {
-        fail(`deploy: build:bot failed\n${build.stderr.toString()}`);
-    }
-    const files = DEPLOYED.map(f => `out/${f}`).join(' ');
-    const copy = Bun.spawnSync(['sh', '-c', `cp ${files} "${botDir}/"`]);
-    if (copy.exitCode !== 0) {
-        fail(`deploy: could not copy the bundles into ${botDir}`);
-    }
-    console.log(`deploy: fresh ${DEPLOYED.join(', ')} -> ${botDir}`);
-}
-
 if (args.deploy) {
-    deployBundle();
+    deploySharedBundles(args.base);
 }
 
 const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, args.base, args.user);
     console.log(`mainland-ready as '${args.user}'`);
@@ -318,12 +264,7 @@ try {
     await clearChatDialogs(page, 'post-relog dialog(s)');
 
     const start = startTile();
-    if (!(await teleTo(page, start, 10, 25_000))) {
-        await clearChatDialogs(page, 'pre-tele dialog(s)');
-        if (!(await teleTo(page, start, 10, 25_000))) {
-            fail(`tele to ${start.x},${start.z} did not arrive`);
-        }
-    }
+    await teleportToQuestStart(page, start);
     console.log(`start tile → ${start.x},${start.z},${start.level}`);
 
     await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', 'tbwt'));
@@ -357,13 +298,7 @@ try {
             + ` journal=${last.status} qp=${last.qp} runner=${last.runner}`
             + (last.modal.main === -1 ? '' : ` MAIN-MODAL=${last.modal.main}`)
         );
-        for (const l of last.logs) {
-            if (l.time > lastLogTime) {
-                const at = ((l.time - t0) / 1000).toFixed(1).padStart(6);
-                console.log(`      ·${at}s [${l.level}] ${l.msg}`);
-            }
-        }
-        if (last.logs.length > 0) { lastLogTime = Math.max(lastLogTime, ...last.logs.map(l => l.time)); }
+        lastLogTime = printQuestLogs(last.logs, lastLogTime, t0);
 
         // A full run waits for the journal to go green: the completion recolour and the
         // QP award land a tick behind %tbwt_main.

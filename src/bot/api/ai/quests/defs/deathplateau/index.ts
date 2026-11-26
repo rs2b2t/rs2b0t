@@ -1,3 +1,4 @@
+import { customStep as custom, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { MiniMenuAction } from '#/client/shell/MiniMenuAction.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
@@ -9,6 +10,7 @@ import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
 import { QUESTS } from '../../data/quests.js';
+import { bankedName, cachedBankId as bankedId, heldId, heldName } from '../../engine/snapshotItems.js';
 import type { QuestModule, QuestProgress, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { hasFlag } from '../../engine/types.js';
 import { afterDialogueAction, driveDialog, openDialogue } from '../../exec/primitives.js';
@@ -67,15 +69,6 @@ export {
 export { closeDiceIfOpen, insideHaroldRoom } from './harold.js';
 
 // snapshot helpers
-
-const heldName = (snap: QuestSnapshot, name: string): number =>
-    snap.inv.get(name.toLowerCase()) ?? 0;
-const heldId = (snap: QuestSnapshot, id: number): number =>
-    snap.invIds?.get(id) ?? 0;
-const bankedName = (snap: QuestSnapshot, name: string): number =>
-    snap.bank?.get(name.toLowerCase()) ?? 0;
-const bankedId = (snap: QuestSnapshot, id: number): number =>
-    snap.bankIds?.get(id) ?? 0;
 
 function liveId(id: number): number {
     return Inventory.items().filter(i => i.id === id).reduce((n, i) => n + i.count, 0);
@@ -183,7 +176,7 @@ function sourceCoins(snap: QuestSnapshot, need: number): QuestStep | null {
     }
     const inBank = bankedName(snap, 'Coins');
     if (inBank <= 0) {
-        return { kind: 'wait', reason: 'need coins for Death Plateau' };
+        return waitStep('need coins for Death Plateau');
     }
     return makeSpace(snap, heldName(snap, 'Coins') === 0 ? 1 : 0)
         ?? withdraw([{ name: 'Coins', qty: Math.min(COIN_FLOAT, inBank) }]);
@@ -213,7 +206,7 @@ function sourceNamed(
         return depositKeep(KEEP.filter(item => item !== name.toLowerCase()), [id]);
     }
     if (inBank <= 0) {
-        return { kind: 'wait', reason: `need ${qty}× ${name} in bank for Death Plateau` };
+        return waitStep(`need ${qty}× ${name} in bank for Death Plateau`);
     }
     return makeSpace(snap, short) ?? withdraw([{ name, qty: Math.min(short, inBank), id }]);
 }
@@ -570,22 +563,18 @@ async function giveCertToDunstan(log: (m: string) => void): Promise<boolean> {
 
 // decide
 
-function custom(name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep {
-    return { kind: 'custom', name, run };
-}
-
 /** Pure decide from journal stage, map flags and inventory. The equip-room track runs before the map track so pack space is free for balls. */
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') {
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
 
     const progress = snap.progress;
     if (progress === undefined && snap.journal === 'inProgress') {
-        return { kind: 'wait', reason: 'Death Plateau journal stage unavailable' };
+        return waitStep('Death Plateau journal stage unavailable');
     }
 
     const stage = equipFloor(snap, progress);
@@ -768,7 +757,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return custom('scout the secret path north of Tenzing', scoutSecretPath);
     }
 
-    return { kind: 'wait', reason: `Death Plateau unhandled state stage=${stage}` };
+    return waitStep(`Death Plateau unhandled state stage=${stage}`);
 }
 
 export const deathplateau: QuestModule = {

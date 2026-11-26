@@ -1,7 +1,7 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { foodCount as countFood, isFoodItem, foodHealAmount, shouldEatToUseFood } from '../../api/combat/food.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
@@ -183,7 +183,7 @@ export default class ChaosDruidKiller extends TaskBot {
     private lastArea = chaosDruidArea(null);
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         const locationName = this.settings.str('location', 'Edgeville Dungeon') as DruidLocationName;
         if (!DRUID_SPOTS[locationName]) {

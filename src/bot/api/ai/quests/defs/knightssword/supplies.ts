@@ -1,3 +1,4 @@
+import { customStep, waitStep } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
@@ -5,10 +6,13 @@ import { Skills } from '../../../../skills/Skills.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { DORIC_PICKAXES } from '../doric.js';
+import { cachedBankId as bankedId, heldId } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { isUnderground } from '../../exec/primitives.js';
 import { driveUntil, useOnLoc } from '../../exec/prompts.js';
 import { GENERAL_STORE, KS_ID, KS_NAME, KS_TILE, WYDIN } from './areas.js';
+
+export { bankedId, heldId };
 
 const COINS_ID = 995;
 
@@ -25,14 +29,6 @@ export interface FoodWant {
     held: number;
     target: number;
     low: number;
-}
-
-export function heldId(snap: QuestSnapshot, id: number): number {
-    return snap.invIds?.get(id) ?? 0;
-}
-
-export function bankedId(snap: QuestSnapshot, id: number): number {
-    return snap.bankIds?.get(id) ?? 0;
 }
 
 function withdraw(items: { name: string; qty: number; id?: number }[]): QuestStep {
@@ -136,7 +132,7 @@ const combine = (item: string, target: string, product: string): QuestStep =>
 /** The next rung of the redberry-pie chain. */
 export function pie(snap: QuestSnapshot): QuestStep {
     if (heldId(snap, KS_ID.REDBERRY_PIE) > 0) {
-        return { kind: 'wait', reason: 'redberry pie already held' };
+        return waitStep('redberry pie already held');
     }
     if (!snap.bankKnown) {
         return scanBank;
@@ -146,10 +142,10 @@ export function pie(snap: QuestSnapshot): QuestStep {
     }
     // Why: the burnt pie still holds the dish and Empty Dish is a free op; re-deriving would walk back to Varrock.
     if (heldId(snap, KS_ID.BURNT_PIE) > 0) {
-        return { kind: 'custom', name: 'empty the burnt dish', run: emptyBurntPie };
+        return customStep('empty the burnt dish', emptyBurntPie);
     }
     if (heldId(snap, KS_ID.UNCOOKED_PIE) > 0) {
-        return { kind: 'custom', name: 'cook the redberry pie', run: cookPie };
+        return customStep('cook the redberry pie', cookPie);
     }
     if (heldId(snap, KS_ID.PIE_SHELL) > 0) {
         return heldId(snap, KS_ID.REDBERRIES) > 0
@@ -165,7 +161,7 @@ export function pie(snap: QuestSnapshot): QuestStep {
     // Why: buying the bucket from Port Sarim's reach costs a 360-tile round trip back to Falador between the berries and the range.
     if (heldId(snap, KS_ID.BUCKET_OF_WATER) === 0) {
         return heldId(snap, KS_ID.BUCKET) > 0
-            ? { kind: 'custom', name: 'fill the bucket', run: fillBucket }
+            ? customStep('fill the bucket', fillBucket)
             : buy(KS_NAME.BUCKET, GENERAL_STORE);
     }
     if (heldId(snap, KS_ID.PIE_DISH) === 0) {
@@ -177,7 +173,7 @@ export function pie(snap: QuestSnapshot): QuestStep {
     if (heldId(snap, KS_ID.REDBERRIES) === 0) {
         return buy(KS_NAME.REDBERRIES, WYDIN);
     }
-    return { kind: 'custom', name: 'mix pastry dough', run: mixDough };
+    return customStep('mix pastry dough', mixDough);
 }
 
 // Why: smelting.rs2 loses half of every batch, "The ore is too impure and you fail to refine it."
@@ -234,7 +230,7 @@ async function smeltIron(log: (m: string) => void): Promise<boolean> {
 export function ironBarsAt(snap: QuestSnapshot, miningLevel: number, smithingLevel: number): QuestStep {
     const held = heldId(snap, KS_ID.IRON_BAR);
     if (held >= 2) {
-        return { kind: 'wait', reason: 'two iron bars already held' };
+        return waitStep('two iron bars already held');
     }
     if (!snap.bankKnown) {
         return scanBank;
@@ -244,15 +240,15 @@ export function ironBarsAt(snap: QuestSnapshot, miningLevel: number, smithingLev
         return withdraw([{ name: KS_NAME.IRON_BAR, qty: Math.min(2 - held, banked), id: KS_ID.IRON_BAR }]);
     }
     if (smithingLevel < 15) {
-        return { kind: 'wait', reason: 'Smithing 15 is required to smelt iron bars; train Smithing or obtain and bank two Iron bars' };
+        return waitStep('Smithing 15 is required to smelt iron bars; train Smithing or obtain and bank two Iron bars');
     }
     // Why: `mineRock` ignores its qty and mines one ore per invocation, so the batch is counted here.
     // Why: smelting on the first ore would walk the 130 tiles between Rimmington and the furnace 8 times.
     if (heldId(snap, KS_ID.IRON_ORE) >= ORE_PER_TRIP) {
-        return { kind: 'custom', name: 'smelt iron bars', run: smeltIron };
+        return customStep('smelt iron bars', smeltIron);
     }
     if (miningLevel < 15) {
-        return { kind: 'wait', reason: 'Mining 15 is required to mine iron ore; train Mining or obtain and bank two Iron bars' };
+        return waitStep('Mining 15 is required to mine iron ore; train Mining or obtain and bank two Iron bars');
     }
     return pickaxeAt(snap, miningLevel)
         ?? { kind: 'mineRock', rock: 'Iron', item: KS_NAME.IRON_ORE, qty: ORE_PER_TRIP, anchor: KS_TILE.IRON_ROCKS };

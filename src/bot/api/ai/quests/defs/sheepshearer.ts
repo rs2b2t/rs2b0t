@@ -1,3 +1,4 @@
+import { talkTo, waitForJournal } from '../engine/questSteps.js';
 import Tile from '../../../../geometry/Tile.js';
 import type { NpcStop } from '../exec/primitives.js';
 import { gatherWool, type WoolSites } from '../exec/wool.js';
@@ -23,10 +24,10 @@ export function gatherBalls(snap: QuestSnapshot, need: number): QuestStep {
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return { kind: 'wait', reason: 'quest journal not loaded' }; }
-    if (snap.journal === 'notStarted') { return { kind: 'talk', stop: FRED }; }
+    if (snap.journal === 'unknown') { return waitForJournal(); }
+    if (snap.journal === 'notStarted') { return talkTo(FRED); }
     if ((snap.inv.get('ball of wool') ?? 0) > 0) {
-        return { kind: 'talk', stop: FRED };
+        return talkTo(FRED);
     }
     return gatherBalls(snap, BALLS_NEEDED);
 }

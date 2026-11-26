@@ -1,3 +1,4 @@
+import { customStep, talkTo as talk, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { QUESTS } from '../../data/quests.js';
 import { FOOD_FLOAT, QuestFood } from '../../food.js';
@@ -9,8 +10,6 @@ import { readKnightsSwordProgress } from './journal.js';
 import { fetchPortrait } from './portrait.js';
 import { bankedId, heldId, ironBarsAt, kit, pickaxeAt, pie, pieDish } from './supplies.js';
 
-
-const talk = (stop: typeof SQUIRE): QuestStep => ({ kind: 'talk', stop });
 
 /**
  * `squire_status_report` at stage 6 has one branch per place the sword can be,
@@ -42,21 +41,21 @@ function materials(snap: QuestSnapshot, miningLevel: number, smithingLevel: numb
     }
     if (heldId(snap, KS_ID.BLURITE_ORE) === 0) {
         // Stock up above ground; kit() refuses to send the bot back out of the cave.
-        return kit(snap) ?? pickaxeAt(snap, miningLevel) ?? { kind: 'custom', name: 'mine blurite', run: mineBlurite };
+        return kit(snap) ?? pickaxeAt(snap, miningLevel) ?? customStep('mine blurite', mineBlurite);
     }
     return talk(THURGO);
 }
 
 export function decideAt(snap: QuestSnapshot, miningLevel: number, smithingLevel: number): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'complete') {
         return { kind: 'done' };
     }
     const stage = snap.progress?.stage ?? snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'quest stage not readable' };
+        return waitStep('quest stage not readable');
     }
     const food = QuestFood.name;
     const heldFood = food ? (snap.inv.get(food.toLowerCase()) ?? 0) : 0;
@@ -91,7 +90,7 @@ export function decideAt(snap: QuestSnapshot, miningLevel: number, smithingLevel
         case KS_STAGE.LOOKING_PORTRAIT:
             return heldId(snap, KS_ID.PORTRAIT) > 0
                 ? talk(THURGO)
-                : { kind: 'custom', name: 'take the portrait', run: fetchPortrait };
+                : customStep('take the portrait', fetchPortrait);
         case KS_STAGE.LOOKING_BLURITE:
             return materials(snap, miningLevel, smithingLevel);
         default:

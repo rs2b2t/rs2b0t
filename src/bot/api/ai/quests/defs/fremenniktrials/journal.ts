@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal, type JournalCache } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { FT_NAME } from './areas.js';
 
@@ -76,22 +75,12 @@ export function parseFremennikJournal(lines: readonly string[] | string): QuestP
 }
 
 /** Last good read, so a failed read can't look like the quest went backwards. */
-let lastGood: QuestProgress | undefined;
+const cache: JournalCache<QuestProgress> = {};
 
 export function resetFremennikJournalCache(): void {
-    lastGood = undefined;
+    cache.lastGood = undefined;
 }
 
-export async function readFremennikProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(FT_NAME);
-    if (status === 'complete') return { stage: FT_STAGE.COMPLETE, flags: new Set() };
-    if (status === 'notStarted') return { stage: FT_STAGE.NOT_STARTED, flags: new Set() };
-    if (status !== 'inProgress') return undefined;
-
-    const progress = parseFremennikJournal(await Quests.journal(FT_NAME));
-    await Modals.closeIfOpen();
-    if (progress) {
-        lastGood = progress;
-    }
-    return progress ?? lastGood;
+export function readFremennikProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(FT_NAME, FT_STAGE, parseFremennikJournal, questProgressAt, cache);
 }

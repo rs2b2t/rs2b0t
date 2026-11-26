@@ -4,7 +4,7 @@ import { foodHealAmount, shouldEatToUseFood } from '../../api/combat/food.js';
 import { TaskBot } from '../../api/bot/Bot.js';
 import type { Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { nearestBank } from '../../api/bank/BankLocations.js';
 import { Sustain } from '../../api/sustain/Sustain.js';
 import { Paint } from '../../paint/Paint.js';
@@ -41,7 +41,7 @@ export default class ClueSolver extends TaskBot {
     private returnToBank = false;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         const food = this.settings.str('food').trim() || scriptFood(this.settings, '');
         const foodPat = food.toLowerCase();

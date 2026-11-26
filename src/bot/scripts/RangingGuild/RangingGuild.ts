@@ -1,7 +1,7 @@
 import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { LoopingBot } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import type Tile from '../../geometry/Tile.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { findSceneTarget, Reach } from '../../api/walking/Reach.js';
@@ -113,7 +113,7 @@ export default class RangingGuild extends LoopingBot {
     private bankedCoins = 0;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
         this.startedAt = Date.now();
         this.xpStart = Skills.xp('ranged');
         const level = Skills.level('ranged');

@@ -1,4 +1,4 @@
-import { launchBrowser } from './lib/harness.js';
+import { fail, launchBrowser } from './lib/harness.js';
 import fs from 'node:fs';
 
 const base = process.argv[2] ?? 'http://localhost:8888';
@@ -6,11 +6,6 @@ const username = process.argv[3] ?? `ext${Date.now().toString(36).slice(-7)}`;
 const engineDir = process.env.ENGINE_DIR ?? `${process.env.HOME}/code/rs2b2t-engine`;
 
 const TELE = '::tele 0,50,50,20,20';
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
 
 const build = Bun.spawnSync(['bun', 'run', 'build'], { cwd: 'docs/script-template' });
 if (build.exitCode !== 0) fail(`template build failed: ${build.stderr.toString()}`);

@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { Quests } from '../../../ui/questlog/Quests.js';
 import { EventSignal } from '../../../execution/EventSignal.js';
@@ -14,6 +15,7 @@ import { Traversal } from '../../../walking/Traversal.js';
 import Tile from '../../../../geometry/Tile.js';
 import { afterDialogueAction, gotoNpc, openDialogue, pickPreferred, talkThrough, type NpcStop } from '../exec/primitives.js';
 import { gpShort } from '../engine/provisioning.js';
+import { hasName as has } from '../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { QUESTS } from '../data/quests.js';
 import { FOOD_FLOAT } from '../food.js';
@@ -82,8 +84,6 @@ const BAT_ANCHOR = new Tile(2589, 3478, 0);
 const BAKER_SHOP = { npc: 'Baker', anchor: new Tile(2669, 3310, 0) };
 const RIMMINGTON_SHOP = { npc: 'Shop keeper', anchor: new Tile(2947, 3216, 0) };
 
-const has = (snap: QuestSnapshot, name: string): boolean => (snap.inv.get(name.toLowerCase()) ?? 0) > 0;
-
 async function wieldWeapon(log: (m: string) => void): Promise<void> {
     if (Equipment.contains(WEAPON) || !Inventory.contains(WEAPON)) {
         return;
@@ -95,7 +95,7 @@ async function wieldWeapon(log: (m: string) => void): Promise<void> {
 
 function buyOrWait(snap: QuestSnapshot, step: Extract<QuestStep, { kind: 'buy' }>): QuestStep {
     if (gpShort(snap, step.estGp) > 0) {
-        return { kind: 'wait', reason: `need ~${step.estGp} gp for ${step.item}` };
+        return waitStep(`need ~${step.estGp} gp for ${step.item}`);
     }
     return step;
 }
@@ -683,19 +683,19 @@ export function decide(snap: QuestSnapshot): QuestStep {
         mordredBriefed = false;
         return { kind: 'done' };
     }
-    if (snap.journal === 'unknown') { return { kind: 'wait', reason: 'quest journal not loaded' }; }
+    if (snap.journal === 'unknown') { return waitForJournal(); }
     if (snap.journal === 'notStarted') {
         mordredBriefed = false;
-        return { kind: 'talk', stop: KING_ARTHUR };
+        return talkTo(KING_ARTHUR);
     }
 
-    if (snap.stage === undefined) return { kind: 'wait', reason: 'Merlin journal stage unavailable' };
+    if (snap.stage === undefined) return waitStep('Merlin journal stage unavailable');
     mordredBriefed = snap.stage >= 4;
-    if (snap.stage < 3) return { kind: 'custom', name: 'opening (knights + fortress)', run: openingLeg };
-    if (snap.stage === 3) return { kind: 'custom', name: 'fortress (Mordred + Morgan)', run: fortress };
+    if (snap.stage < 3) return customStep('opening (knights + fortress)', openingLeg);
+    if (snap.stage === 3) return customStep('fortress (Mordred + Morgan)', fortress);
     const here = snap.tile ?? Game.tile();
-    if (here && insideKeep(here)) return { kind: 'custom', name: 'leave Mordred fortress', run: leaveKeep };
-    if (snap.stage >= 6) return { kind: 'talk', stop: KING_ARTHUR };
+    if (here && insideKeep(here)) return customStep('leave Mordred fortress', leaveKeep);
+    if (snap.stage >= 6) return talkTo(KING_ARTHUR);
 
     const hasExcalibur = has(snap, EXCALIBUR) || snap.worn.has('excalibur');
     if (!hasExcalibur) {
@@ -704,8 +704,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
     }
     if (snap.stage === 5) {
         return hasExcalibur
-            ? { kind: 'custom', name: 'summon Thrantax + break the crystal', run: summonAndBreak }
-            : { kind: 'custom', name: 'get Excalibur (Lady of the Lake + Beggar)', run: getExcalibur };
+            ? customStep('summon Thrantax + break the crystal', summonAndBreak)
+            : customStep('get Excalibur (Lady of the Lake + Beggar)', getExcalibur);
     }
     const hasUnlit = has(snap, UNLIT_CANDLE);
     const hasLit = has(snap, LIT_CANDLE);
@@ -713,28 +713,28 @@ export function decide(snap: QuestSnapshot): QuestStep {
     const hasWax = has(snap, WAX);
 
     if (!hasBones) {
-        return { kind: 'custom', name: 'kill a Giant bat for bones', run: killGiantBat };
+        return customStep('kill a Giant bat for bones', killGiantBat);
     }
     if (!hasUnlit && !hasLit && !hasWax) {
-        return { kind: 'custom', name: 'gather wax for the black candle', run: getWax };
+        return customStep('gather wax for the black candle', getWax);
     }
     if (hasWax && !hasUnlit && !hasLit) {
-        return { kind: 'talk', stop: CANDLE_MAKER };
+        return talkTo(CANDLE_MAKER);
     }
     if (hasUnlit && !hasLit) {
-        return { kind: 'custom', name: 'light the black candle', run: lightCandle };
+        return customStep('light the black candle', lightCandle);
     }
     if (!hasExcalibur) {
-        return { kind: 'custom', name: 'get Excalibur (Lady of the Lake + Beggar)', run: getExcalibur };
+        return customStep('get Excalibur (Lady of the Lake + Beggar)', getExcalibur);
     }
-    return { kind: 'custom', name: 'summon Thrantax + break the crystal', run: summonAndBreak };
+    return customStep('summon Thrantax + break the crystal', summonAndBreak);
 }
 
 export const merlinscrystal: QuestModule = {
     record: QUESTS.find(r => r.id === 'arthur')!,
     bank: new Tile(2725, 3491, 0),
     readStage: readMerlinStage,
-    recover: tile => insideCrate(tile) ? { kind: 'custom', name: 'climb out of Merlin crate', run: recoverCrate } : null,
+    recover: tile => insideCrate(tile) ? customStep('climb out of Merlin crate', recoverCrate) : null,
     food: FOOD_FLOAT,
     gather: {
         'insect repellent': () => ({ kind: 'grabGround', item: 'Insect repellent', anchor: REPELLENT_SPAWN }),

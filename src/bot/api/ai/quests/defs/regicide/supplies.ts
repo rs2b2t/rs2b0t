@@ -1,3 +1,4 @@
+import { waitStep } from '../../engine/questSteps.js';
 import Tile from '../../../../../geometry/Tile.js';
 import { gpShort } from '../../engine/provisioning.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
@@ -68,7 +69,7 @@ export function fromBank(snap: QuestSnapshot, item: RegicideItem, qty: number): 
 
 function buyOrWait(snap: QuestSnapshot, step: Extract<QuestStep, { kind: 'buy' }>): QuestStep {
     if (gpShort(snap, step.estGp) > 0) {
-        return { kind: 'wait', reason: `need ~${step.estGp} gp for ${step.item}` };
+        return waitStep(`need ~${step.estGp} gp for ${step.item}`);
     }
     return step;
 }

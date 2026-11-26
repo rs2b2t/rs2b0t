@@ -1,3 +1,4 @@
+import { customStep } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Modals } from '../../../../ui/widgets/Modals.js';
@@ -47,7 +48,7 @@ function sourcePineappleChunks(snap: QuestSnapshot): QuestStep | null {
         return withdraw(snap, [{ name: ER_ITEM.PINEAPPLE_CHUNKS.name, id: ER_ITEM.PINEAPPLE_CHUNKS.id, qty: 1 }]);
     }
     if (held(snap, ER_ITEM.PINEAPPLE) > 0) {
-        return sourceKnife(snap) ?? { kind: 'custom', name: 'dice the pineapple', run: dicePineapple };
+        return sourceKnife(snap) ?? customStep('dice the pineapple', dicePineapple);
     }
     if (banked(snap, ER_ITEM.PINEAPPLE) > 0) {
         return withdraw(snap, [{ name: ER_ITEM.PINEAPPLE.name, id: ER_ITEM.PINEAPPLE.id, qty: 1 }]);
@@ -111,5 +112,5 @@ export function sourceParrot(snap: QuestSnapshot): QuestStep | null {
     }
     return sourcePineappleChunks(snap)
         ?? sourceLiquor(snap)
-        ?? { kind: 'custom', name: `catch a parrot with ${(heldLiquor(snap) ?? ER_ITEM.VODKA).name.toLowerCase()} chunks`, run: catchParrot };
+        ?? customStep(`catch a parrot with ${(heldLiquor(snap) ?? ER_ITEM.VODKA).name.toLowerCase()} chunks`, catchParrot);
 }

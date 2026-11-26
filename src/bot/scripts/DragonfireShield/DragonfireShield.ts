@@ -4,7 +4,7 @@ import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { GroundItems, type GroundItem } from '../../api/grounditems/GroundItems.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Npcs, talkOp } from '../../api/npcs/Npcs.js';
@@ -83,7 +83,7 @@ export default class DragonfireShield extends TaskBot {
     hasBankedShields = false;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
         this.startedAt = Date.now();
         this.tripSecs = this.settings.num('tripSecs', 50);
         this.carryNotes = this.settings.bool('carryNotes', true);

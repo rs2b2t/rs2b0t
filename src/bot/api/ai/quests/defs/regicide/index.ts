@@ -1,3 +1,4 @@
+import { customStep as custom, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { QUESTS } from '../../data/quests.js';
@@ -47,9 +48,6 @@ import { RG_FLAG, RG_STAGE, readRegicideProgress } from './journal.js';
 import { enterTirannwn, leaveTirannwn } from './pass.js';
 import { COAL_TARGET, KEEP_IDS, KIT, RETURN_KIT, STILL_FOOD, bowCarried, kitShortfall, sourceCoal, sourceKit, type Supply } from './supplies.js';
 
-const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
-    ({ kind: 'custom', name, run });
-
 function flag(snap: QuestSnapshot, name: string): boolean {
     return snap.progress?.flags.has(name) ?? false;
 }
@@ -76,7 +74,7 @@ function readyForTirannwn(snap: QuestSnapshot, kit: readonly Supply[]): QuestSte
     if (!meleeCarried(snap)) {
         missing.push('a melee weapon (the soldiers and the elf warriors), have none');
     }
-    return missing.length === 0 ? null : { kind: 'wait', reason: `not equipped for Tirannwn: ${missing.join('; ')}` };
+    return missing.length === 0 ? null : waitStep(`not equipped for Tirannwn: ${missing.join('; ')}`);
 }
 
 // Why: the fire arrow is built inside the pass with Koftik's damp cloth in hand, and `make_clotharrow` tests `inv_itemspace` before it deletes the cloth. 2 spare slots is the cloth and the arrow it becomes; a pack that crosses full reads "You don't have space to do that." at the bridge with no bank within an hour's walk.
@@ -294,23 +292,23 @@ function stageStep(snap: QuestSnapshot, area: RegicideArea, stage: number): Ques
                 ? custom('leave Tirannwn through the Arandar palisade', log => leaveTirannwn(RG_TILE.ARDOUGNE_BANK, stage, log))
                 : custom('hand King Lathas the letter', reportToLathas);
         default:
-            return { kind: 'wait', reason: `Regicide stage ${stage} is not implemented` };
+            return waitStep(`Regicide stage ${stage} is not implemented`);
     }
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     const area = regicideArea(snap.tile);
     if (area === 'unknown') {
-        return { kind: 'wait', reason: 'player location unavailable' };
+        return waitStep('player location unavailable');
     }
     if (snap.journal === 'complete' || (snap.stage ?? -1) >= RG_STAGE.COMPLETE) {
         return { kind: 'done' };
     }
     if (snap.stage === undefined) {
-        return { kind: 'wait', reason: 'Regicide journal stage unavailable' };
+        return waitStep('Regicide journal stage unavailable');
     }
     return stageStep(snap, area, snap.stage);
 }

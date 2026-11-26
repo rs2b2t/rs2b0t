@@ -3,13 +3,11 @@ import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import { Inventory, type InvItem } from '../../api/inventory/Inventory.js';
 import { Bank } from '../../api/bank/Bank.js';
-import { openBankAccess } from '../../api/bank/Banking.js';
+import { openNearestBank } from '../../api/bank/Banking.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Paint } from '../../paint/Paint.js';
-import { Traversal } from '../../api/walking/Traversal.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { nearestBank } from '../../api/bank/BankLocations.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import {
     CHISEL_ID,
@@ -19,7 +17,6 @@ import {
     type GemDef
 } from './GemCutterLogic.js';
 
-const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 
 export const GEM_CUTTER_SETTINGS: SettingsSchema = {
     gems: {
@@ -229,32 +226,8 @@ class BankTrip implements Task {
     }
 
     async execute(): Promise<void> {
-        const here = Game.tile();
-        const bank = here ? nearestBank(here) : null;
-        if (!bank) {
-            this.bot.log('no reachable bank');
-            return;
-        }
-
-        this.bot.setStatus(`banking at ${bank.name}`);
-        const near = here !== null && bank.tile.level === here.level && bank.tile.distanceTo(here) <= 4;
-        if (!near) {
-            if (!(await Traversal.walkResilient(bank.tile, {
-                radius: 3,
-                attempts: 4,
-                timeoutMs: 180_000,
-                log: m => this.bot.log(`  ${m}`)
-            }))) {
-                this.bot.log('walk to the bank failed — retrying');
-                return;
-            }
-        }
-
-        const access = bank.access ?? BOOTH;
-        if (!(await openBankAccess(bank, access, m => this.bot.log(`  ${m}`)))) {
-            this.bot.log('could not open the bank — retrying');
-            return;
-        }
+        const bank = await openNearestBank(this.bot);
+        if (!bank) return;
 
         this.bot.log('bank opened, starting withdraw/deposit cycle');
 

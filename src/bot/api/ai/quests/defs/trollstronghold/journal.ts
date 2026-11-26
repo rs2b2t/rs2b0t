@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 
 /** Matches content `troll_quest` varp stages. */
@@ -95,19 +94,6 @@ export function parseTrollStrongholdJournal(lines: readonly string[] | string): 
     return { stage, flags: readFlags(text) };
 }
 
-export async function readTrollStrongholdProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(TROLL_QUEST);
-    if (status === 'complete') {
-        return { stage: TROLL_STAGE.COMPLETE, flags: new Set() };
-    }
-    if (status === 'notStarted') {
-        return { stage: TROLL_STAGE.NOT_STARTED, flags: new Set() };
-    }
-    if (status !== 'inProgress') {
-        return undefined;
-    }
-
-    const progress = parseTrollStrongholdJournal(await Quests.journal(TROLL_QUEST));
-    await Modals.closeIfOpen();
-    return progress;
+export function readTrollStrongholdProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(TROLL_QUEST, TROLL_STAGE, parseTrollStrongholdJournal, questProgressAt);
 }

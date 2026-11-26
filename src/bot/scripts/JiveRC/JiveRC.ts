@@ -1,7 +1,7 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { BotHost } from '../../runtime/BotHost.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { depositAllExcept, RANDOM_EVENT_CASKET_ID } from '../../api/bank/Banking.js';
 import { Bank } from '../../api/bank/Bank.js';
@@ -101,7 +101,7 @@ export default class JiveRC extends TaskBot {
     private xp = new XpTracker(['runecraft'], Skills);
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
         this.mode = this.settings.str('mode', 'Master');
         this.rune = this.settings.str('rune', DEFAULT_RUNE);
         this.conf = RUNES[this.rune] ?? RUNES[DEFAULT_RUNE];

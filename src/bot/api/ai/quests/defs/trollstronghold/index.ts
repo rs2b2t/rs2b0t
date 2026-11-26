@@ -1,3 +1,4 @@
+import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import Tile from '../../../../../geometry/Tile.js';
@@ -10,6 +11,7 @@ import { Locs } from '../../../../locs/Locs.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { QUESTS } from '../../data/quests.js';
+import { bankedName as banked, hasName as held, heldName as heldCount, wornName as worn } from '../../engine/snapshotItems.js';
 import { hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { talkChoosingBy } from '../../exec/primitives.js';
 import { QuestFood } from '../../food.js';
@@ -47,11 +49,6 @@ export {
 export { trollZone, committed, ITEM, COMBAT_FOODS, FOOD_TARGET, FALADOR_WEST_BANK } from './areas.js';
 
 // Snapshot helpers
-
-const heldCount = (snap: QuestSnapshot, name: string): number => snap.inv.get(name.toLowerCase()) ?? 0;
-const held = (snap: QuestSnapshot, name: string): boolean => heldCount(snap, name) > 0;
-const worn = (snap: QuestSnapshot, name: string): boolean => snap.worn.has(name.toLowerCase());
-const banked = (snap: QuestSnapshot, name: string): number => snap.bank?.get(name.toLowerCase()) ?? 0;
 
 function foodNames(): string[] {
     const configured = QuestFood.name?.trim();
@@ -173,10 +170,7 @@ const wearOrShed = (name: string): QuestStep => wearAll([name]);
 /** Wear the climbing boots. */
 function wearBoots(): QuestStep {
     if (unwearable.has(ITEM.CLIMBING_BOOTS.toLowerCase())) {
-        return {
-            kind: 'wait',
-            reason: 'the server will not let these Climbing boots on — Death Plateau is not actually complete'
-        };
+        return waitStep('the server will not let these Climbing boots on — Death Plateau is not actually complete');
     }
     return wearOrShed(ITEM.CLIMBING_BOOTS);
 }
@@ -274,24 +268,24 @@ export function prepare(snap: QuestSnapshot, zone: TrollZone = 'mainland'): Ques
 
     if (!bootsReady) {
         if (heldCount(snap, ITEM.COINS) < BOOT_COST) {
-            return { kind: 'wait', reason: `need ${BOOT_COST} gp for Climbing boots — bank has none` };
+            return waitStep(`need ${BOOT_COST} gp for Climbing boots — bank has none`);
         }
-        return { kind: 'custom', name: 'buy Climbing boots from Tenzing (12gp)', run: buyBoots };
+        return custom('buy Climbing boots from Tenzing (12gp)', buyBoots);
     }
     if (!worn(snap, ITEM.CLIMBING_BOOTS)) {
         return wearBoots();
     }
 
     if (foodHeld(snap) === 0) {
-        return { kind: 'wait', reason: `no combat food in the bank (tried ${foodNames().join(', ')})` };
+        return waitStep(`no combat food in the bank (tried ${foodNames().join(', ')})`);
     }
     // Missing armour is survivable; a missing weapon is not worth walking up for.
     const weapon = weaponOf(QuestLoadout.current);
     if (weapon !== null && missing.some(name => name.toLowerCase() === weapon.toLowerCase())) {
-        return { kind: 'wait', reason: `loadout weapon '${weapon}' is not in the bank` };
+        return waitStep(`loadout weapon '${weapon}' is not in the bank`);
     }
     if (!wearingSlot(snap, GEAR_SLOTS[0]!.kinds)) {
-        return { kind: 'wait', reason: 'no melee weapon — put one in your loadout, or bank one' };
+        return waitStep('no melee weapon — put one in your loadout, or bank one');
     }
     return null;
 }
@@ -537,29 +531,25 @@ async function freePrisoners(freedEadgar: boolean, log: (m: string) => void): Pr
 
 // decide
 
-function custom(name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep {
-    return { kind: 'custom', name, run };
-}
-
 export function decide(snap: QuestSnapshot): QuestStep {
     const stage = snap.progress?.stage ?? snap.stage;
     if (snap.journal === 'complete' || (stage ?? 0) >= TROLL_STAGE.COMPLETE) {
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'Troll Stronghold journal stage unavailable' };
+        return waitStep('Troll Stronghold journal stage unavailable');
     }
     if (stage === TROLL_STAGE.NOT_STARTED && Quests.status('Death Plateau') !== 'complete') {
-        return { kind: 'wait', reason: 'Death Plateau must be complete before Troll Stronghold' };
+        return waitStep('Death Plateau must be complete before Troll Stronghold');
     }
 
     const zone = trollZone(snap.tile);
 
     if (stage === TROLL_STAGE.NOT_STARTED) {
-        return prepare(snap) ?? { kind: 'talk', stop: DENULTH_START };
+        return prepare(snap) ?? talkTo(DENULTH_START);
     }
     if (stage === TROLL_STAGE.STARTED) {
         return prepare(snap, zone) ?? custom('defeat Dad in the troll arena', fightDad);
@@ -586,9 +576,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
         );
     }
     if (stage === TROLL_STAGE.FREED_GODRIC) {
-        return { kind: 'talk', stop: DUNSTAN_FINISH };
+        return talkTo(DUNSTAN_FINISH);
     }
-    return { kind: 'wait', reason: `unrecognized Troll Stronghold stage ${stage}` };
+    return waitStep(`unrecognized Troll Stronghold stage ${stage}`);
 }
 
 function warnTrollStrongholdReadiness(): string | null {
