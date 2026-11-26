@@ -24,8 +24,8 @@ afterEach(() => {
 
 const versionlist = {
     read(name: string) {
-        if (name === 'anim_version') return Uint8Array.of(0, 1);
-        return new Uint8Array(name === 'anim_crc' ? 4 : 0);
+        if (name === 'anim_version' || name === 'midi_version') return Uint8Array.of(0, 1);
+        return new Uint8Array(name === 'anim_crc' || name === 'midi_crc' ? 4 : 0);
     }
 } as JagFile;
 
@@ -73,7 +73,7 @@ test('cache worker receives the selected frame target instead of the wall origin
     try {
         Object.assign(TARGET, resolveTarget('proxy', 'localhost:8081', false, new URLSearchParams('world=2')));
         new OnDemand(versionlist, { ingame: false, db: null } as Client);
-        expect(post).toHaveBeenCalledWith({ type: 'init', versions: [[], [1], [], []], crcs: [[], [0], [], []], host: 'localhost:8081/__rs2b0t/world/2', secured: false, ingame: false, dbEnabled: false });
+        expect(post).toHaveBeenCalledWith({ type: 'init', versions: [[], [1], [1], []], crcs: [[], [0], [0], []], host: 'localhost:8081/__rs2b0t/world/2', secured: false, ingame: false, dbEnabled: false });
     } finally {
         delete TARGET.world;
         delete TARGET.httpPrefix;
@@ -127,6 +127,26 @@ test('pending and subsequent priority prefetches settle after worker load failur
     loader.request(1, 0);
     expect(loader.requests.size()).toBe(0);
     expect(loader.worker).toBeNull();
+});
+
+test.each([
+    { archive: 2, file: 1 },
+    { archive: 4, file: 0 }
+])('request($archive, $file) leaves the queue empty and the last MIDI file still completes', ({ archive, file }) => {
+    const loader = loaderFixture();
+    const post = spyOn(WorkerFixture.prototype, 'postMessage');
+    loader.request(archive, file);
+    expect(loader.remaining()).toBe(0);
+    expect(post).not.toHaveBeenCalled();
+
+    loader.request(2, 0);
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith({ type: 'request', archive: 2, file: 0 });
+    expect(loader.remaining()).toBe(1);
+    completeFile(loader, 2, 0, Uint8Array.of(42));
+    expect(loader.loop()).toMatchObject({ archive: 2, file: 0, data: Uint8Array.of(42) });
+    expect(loader.loop()).toBeNull();
+    expect(loader.remaining()).toBe(0);
 });
 
 test('a healthy worker delivers the requested animation exactly once', async () => {
