@@ -116,7 +116,12 @@ check('normalized name', friend);
 for (const client of clients) client.players[11] = { ...client.players[11], name: 'Newplayer' };
 check('replacement', ordinary);
 const added = JString.toUserhash('Newplayer');
-for (const client of clients) client.addFriend(added);
+for (const client of clients) {
+    client.membersAccount = 1;
+    client.addFriend(added);
+    assert.equal(client.friendCount, 101);
+    assert.equal(client.friendUserhash[100], added);
+}
 check('local add', ordinary);
 for (const client of clients) await update(client, added, 15);
 check('online after add', friend);
