@@ -1,10 +1,9 @@
 import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { checkComments } from './lint-prose-extras.js';
+import { checkComments, isCommentLine } from './lint-prose-extras.js';
 
 const VALE = 'node_modules/@vvago/vale/bin/vale';
-const COMMENT = /^\s*(\/\/|\/\*|\*)/;
 
 export type Row = { file: string; comments: number; blocks: number; errors: number };
 
@@ -56,7 +55,7 @@ export function manifest(root: string): Row[] {
     const rows: Row[] = [];
     for (const file of files) {
         const lines = readFileSync(file, 'utf8').split('\n');
-        const comments = lines.filter(line => COMMENT.test(line)).length;
+        const comments = lines.filter(isCommentLine).length;
         if (comments === 0) continue;
         const blocks = checkComments([file]).filter(f => f.check === 'comment-block').length;
         rows.push({ file, comments, blocks, errors: errors.get(file) ?? 0 });
