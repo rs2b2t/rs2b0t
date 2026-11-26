@@ -74,6 +74,11 @@ function boot(): void {
     let suppressClick = false;
     let orderWrite = Promise.resolve();
     let recoveringTabs = false;
+    let restoringTabs: Promise<void> | null = null;
+
+    function afterTabRestore<T>(edit: () => T): T | Promise<T> {
+        return restoringTabs ? restoringTabs.then(edit) : edit();
+    }
 
     function railTiles(): HTMLElement[] {
         return orderedSlotElements(rail);
@@ -112,7 +117,7 @@ function boot(): void {
         });
     }
 
-    function renameTab(from: string, to: string): boolean {
+    function renameTab(from: string, to: string) {
         return mutateTabs(() => controller.renameTab(from, to), { from, to: to.trim() });
     }
 
@@ -121,7 +126,11 @@ function boot(): void {
         return !recoveringTabs;
     }
 
-    function mutateTabs(action: () => boolean, change?: TabChange): boolean {
+    function mutateTabs(action: () => boolean, change?: TabChange) {
+        return afterTabRestore(() => applyTabEdit(action, change));
+    }
+
+    function applyTabEdit(action: () => boolean, change?: TabChange): boolean {
         if (!groupsReady()) return false;
         const previousTabs = controller.tabs().slice(1);
         const previousActive = controller.activeTab();
@@ -131,20 +140,30 @@ function boot(): void {
         return true;
     }
 
-    function setSlotTab(id: number, tab: string): boolean {
-        if (!groupsReady() || !controller.setSlotTab(id, tab)) return false;
-        const slots = controller.snapshot();
-        const slot = slots.find(slot => slot.id === id)!;
-        renderRail(slots);
-        persistTabState(new Map([[slot.username, tab]]));
-        return true;
+    function setSlotTab(id: number, tab: string) {
+        return afterTabRestore(() => {
+            if (!groupsReady() || !controller.setSlotTab(id, tab)) return false;
+            const slots = controller.snapshot();
+            const slot = slots.find(slot => slot.id === id)!;
+            renderRail(slots);
+            if (vault.status() === 'unlocked') {
+                const name = normalizeUsername(slot.username);
+                const profiles = vault.list();
+                const saved = profiles.find(profile => profile.username === slot.username)
+                    ?? profiles.find(profile => normalizeUsername(profile.username) === name);
+                persistTabState(new Map([[saved?.username ?? slot.username, tab]]));
+            }
+            return true;
+        });
     }
 
-    function removeTab(name: string): boolean {
-        const tabs = controller.tabs();
-        const prior = tabs[tabs.indexOf(name) - 1];
-        const fallbackByUser = new Map(controller.snapshot().map(slot => [slot.username, prior]));
-        return mutateTabs(() => controller.removeTab(name), { from: name, fallbackByUser });
+    function removeTab(name: string) {
+        return afterTabRestore(() => {
+            const tabs = controller.tabs();
+            const prior = tabs[tabs.indexOf(name) - 1];
+            const fallbackByUser = new Map(controller.snapshot().map(slot => [slot.username, prior]));
+            return applyTabEdit(() => controller.removeTab(name), { from: name, fallbackByUser });
+        });
     }
 
     const tabBar = new TabBar(document.getElementById('mbx-tabs')!, {
@@ -414,34 +433,11 @@ function boot(): void {
         if (changed) renderRail();
     }
 
-    function applySavedGroups(): string[] {
-        const { tabs, assignments } = vault.adoptGroupState();
-        mergeSavedTabs(tabs);
-        const groups = new Map([...assignments].map(([name, tab]) => [normalizeUsername(name), tab]));
-        for (const slot of controller.snapshot()) {
-            const tab = groups.get(normalizeUsername(slot.username));
-            if (tab) controller.setSlotTab(slot.id, tab);
-        }
-        return tabs;
-    }
-
-    function syncSavedGroups(activeTab?: string): void {
-        const tabs = applySavedGroups();
-        for (const tab of controller.tabs().slice(1)) {
-            if (!tabs.includes(tab)) controller.removeTab(tab);
-        }
+    function syncSavedGroups(activeTab?: string, loadMissing = false): void {
+        const { tabs } = vault.adoptGroupState();
         const selected = activeTab ?? (tabsHydrated ? controller.activeTab() : vault.tabState().activeTab);
-        const current = controller.tabs().slice(1);
-        if (selected !== controller.activeTab() || current.length !== tabs.length || current.some((tab, i) => tab !== tabs[i])) {
-            controller.setTabState(tabs, selected);
-        }
+        controller.restoreProfiles(vault.list(), tabs, selected, loadMissing);
         tabsHydrated = true;
-        renderRail();
-    }
-
-    function loadImportedProfiles(): void {
-        const live = new Set(controller.snapshot().map(slot => slot.username));
-        controller.addGroup(vault.list().filter(profile => !live.has(profile.username)));
         renderRail();
     }
 
@@ -451,19 +447,14 @@ function boot(): void {
             ...vault.snapshot(),
             storage: collectBoxStorage(vault.list().map(p => p.username))
         }),
-        replaceAll: async data => {
-            const previous = vault.list().map(p => p.username);
-            await vault.replaceAll(data);
-            applyBoxStorage(data.storage, [...previous, ...data.profiles.map(p => p.username)]);
-        },
-        onImported: data => {
-            const imported = new Set(data.profiles.map(p => normalizeUsername(p.username)));
-            if (controller.snapshot().some(slot => !imported.has(normalizeUsername(slot.username)))) {
-                applySavedGroups();
-            } else {
-                syncSavedGroups(data.activeTab);
-            }
-            loadImportedProfiles();
+        replaceAll: data => {
+            const write = orderWrite.then(async () => {
+                const previous = await vault.replaceAll(data);
+                applyBoxStorage(data.storage, [...previous, ...data.profiles.map(p => p.username)]);
+                syncSavedGroups(data.activeTab, true);
+            });
+            restoringTabs = orderWrite = write.catch(() => {});
+            return write.finally(() => { restoringTabs = null; });
         }
     });
     document.body.appendChild(settings.el);

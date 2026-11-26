@@ -65,12 +65,50 @@ export class MultiBoxController {
         return this.snap(slot);
     }
 
-    addGroup(accounts: Account[]): void {
+    restoreProfiles(profiles: Account[], tabs: string[], activeTab: string, loadMissing = true): void {
+        const remaining = new Map<string, Account>();
+        for (const profile of profiles) {
+            const name = normalizeUsername(profile.username);
+            if (!remaining.has(name)) remaining.set(name, profile);
+        }
+        const knownTabs = new Set([MAIN_TAB, ...tabs]);
+        const retained = new Set<string>();
+        let modesChanged = false;
+        for (const slot of this.slots) {
+            const name = normalizeUsername(slot.account.username);
+            const saved = remaining.get(name);
+            if (!saved) {
+                retained.add(slot.tab);
+                continue;
+            }
+            const tab = saved.tab ?? MAIN_TAB;
+            const next = knownTabs.has(tab) ? tab : MAIN_TAB;
+            if (slot.tab !== next) {
+                slot.tab = next;
+                modesChanged = true;
+            }
+            remaining.delete(name);
+        }
+        for (const tab of this.customTabs) {
+            if (retained.has(tab)) knownTabs.add(tab);
+            else if (!knownTabs.has(tab)) this.lastFocusByTab.delete(tab);
+        }
+        if (!knownTabs.has(activeTab)) {
+            const prior = this.tabs().slice(0, this.tabs().indexOf(activeTab));
+            activeTab = prior.reverse().find(tab => knownTabs.has(tab)) ?? MAIN_TAB;
+        }
+        modesChanged ||= this.active !== activeTab;
+        this.customTabs = [...knownTabs].slice(1);
+        this.active = activeTab;
+        this.addGroup(loadMissing ? [...remaining.values()] : [], modesChanged);
+    }
+
+    addGroup(accounts: Account[], modesChanged = false): void {
         const before = this.slots.length;
         try {
             for (const account of accounts) this.addSlot(account);
         } finally {
-            if (this.slots.length !== before) this.applyModes();
+            if (modesChanged || this.slots.length !== before) this.applyModes();
         }
     }
 

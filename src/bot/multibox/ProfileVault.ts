@@ -385,11 +385,11 @@ export class ProfileVault {
         });
     }
 
-    async replaceAll(data: VaultPayload): Promise<void> {
+    async replaceAll(data: VaultPayload): Promise<string[]> {
         if (this.shared) {
-            await this.sharedChange(draft => draft.replaceAll(data), false);
+            const previous = await this.sharedChange(draft => draft.replaceAll(data), false);
             this.adoptGroupState();
-            return;
+            return previous;
         }
         if (this.pendingReplacement) return this.afterReplacement(() => this.replaceAll(data));
         this.assertUnlocked();
@@ -399,7 +399,12 @@ export class ProfileVault {
         }
         assertTabStateValid(data.tabs, data.activeTab, profiles);
         const payload = { profiles, tabs: [...data.tabs], activeTab: data.activeTab };
-        return this.persistReplacement(() => payload);
+        let previous: string[] = [];
+        await this.persistReplacement(() => {
+            previous = this.assertUnlocked().map(p => p.username);
+            return payload;
+        });
+        return previous;
     }
 
     private async persistReplacement(build: () => VaultPayload): Promise<void> {

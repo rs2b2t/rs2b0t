@@ -16,10 +16,10 @@ import '#/client/config/target.js';
 interface Wall {
     controller: MultiBoxController;
     add(account: Account): SlotSnapshot;
-    addTab(name: string): boolean;
-    renameTab(from: string, to: string): boolean;
-    removeTab(name: string): boolean;
-    setSlotTab(id: number, tab: string): boolean;
+    addTab(name: string): boolean | Promise<boolean>;
+    renameTab(from: string, to: string): boolean | Promise<boolean>;
+    removeTab(name: string): boolean | Promise<boolean>;
+    setSlotTab(id: number, tab: string): boolean | Promise<boolean>;
     importProfiles(profiles: Profile[]): Promise<number>;
     slots(): SlotSnapshot[];
     setWorld(id: number, world: WorldNumber): Promise<boolean>;
@@ -244,29 +244,84 @@ test('settings import moves an already loaded profile to its imported group', as
     });
 });
 
-test('settings import preserves the group and selection of an omitted live slot', async () => {
+test('import and peer refresh retain only the live groups omitted from the backup', async () => {
     await withWall('local', async wall => {
-        await vault.saveTabState(['Work'], new Map([['alice', 'Work']]), 'Work');
-        document.getElementById('mbx-add')!.click();
-        await waitFor(() => !!chooserRow('alice'));
-        await loadChooserRow('alice');
-        const [loaded] = wall.slots();
+        await importSettings({
+            profiles: [{ username: 'alice', password: 'a', tab: 'Work' }, { username: 'Bob', password: 'b', tab: 'Old' }],
+            tabs: ['Old', 'Work'], activeTab: 'Work', storage: {}
+        });
+        const [alice, bob] = wall.slots();
         const profiles = [{ username: 'bob', password: 'b', tab: 'Fleet' }];
-        await importSettings({ profiles, tabs: ['Fleet'], activeTab: 'Fleet', storage: {} });
+        const backup = { profiles, tabs: ['Fleet'], activeTab: 'Fleet' };
+        await importSettings({ ...backup, storage: {} });
 
-        expect(wall.slots()).toMatchObject([{ id: loaded.id, tab: 'Work' }, { username: 'bob', tab: 'Fleet' }]);
-        expect(wall.controller.activeTab()).toBe('Work');
         const reopened = new ProfileVault();
         expect(await reopened.unlock('test-passphrase')).toBe(true);
-        expect(reopened.snapshot()).toEqual({ profiles, tabs: ['Fleet'], activeTab: 'Fleet' });
+        expect(reopened.snapshot()).toEqual(backup);
+        const checkWall = () => {
+            expect(wall.controller.tabs()).toEqual(['Main', 'Fleet', 'Work']);
+            expect(wall.controller.activeTab()).toBe('Fleet');
+            expect(wall.slots()).toMatchObject([{ id: alice.id, tab: 'Work' }, { id: bob.id, tab: 'Fleet' }]);
+        };
+        checkWall();
+        await reopened.setWorld('bob', 3);
+        window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
+        await waitFor(() => vault.list()[0].world === 3);
+        checkWall();
 
-        const bob = wall.slots()[1];
         expect(wall.setSlotTab(bob.id, 'Work')).toBe(true);
-        await waitFor(() => vault.list()[0].tab === 'Work' || wall.slots()[1].tab !== 'Work');
+        await waitFor(() => vault.list()[0].tab === 'Work');
         expect(await reopened.unlock('test-passphrase')).toBe(true);
         expect(reopened.snapshot()).toEqual({
-            profiles: [{ ...profiles[0], tab: 'Work' }], tabs: ['Work', 'Fleet'], activeTab: 'Fleet'
+            profiles: [{ ...profiles[0], tab: 'Work', world: 3 }], tabs: ['Fleet', 'Work'], activeTab: 'Fleet'
         });
+    });
+});
+
+test('a tab added during replacement updates the restored wall and vault', async () => {
+    await withWall('local', async wall => {
+        await importSettings({
+            profiles: [{ username: 'alice', password: 'a', tab: 'Work' }],
+            tabs: ['Work'], activeTab: 'Work', storage: {}
+        });
+        const replace = vault.replaceAll.bind(vault);
+        let edit: ReturnType<Wall['addTab']> | undefined;
+        const replacing = spyOn(vault, 'replaceAll').mockImplementationOnce(data => {
+            const pending = replace(data);
+            edit = wall.addTab('During');
+            return pending;
+        });
+        try {
+            const profiles = [{ username: 'bob', password: 'b', tab: 'Fleet' }];
+            expect(wall.addTab('Before')).toBe(true);
+            await importSettings({ profiles, tabs: ['Fleet'], activeTab: 'Fleet', storage: {} });
+            expect(await edit).toBe(true);
+            await waitFor(() => vault.tabState().tabs.includes('During'));
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.snapshot()).toEqual({ profiles, tabs: ['Fleet', 'During'], activeTab: 'Fleet' });
+            expect(wall.controller.tabs()).toEqual(['Main', 'Fleet', 'Work', 'During']);
+        } finally {
+            replacing.mockRestore();
+        }
+    });
+});
+
+test('settings import cleans up the peer profile removed by replacement', async () => {
+    await withWall('local', async () => {
+        const peer = new ProfileVault();
+        expect(await peer.unlock('test-passphrase')).toBe(true);
+        await peer.upsert({ username: 'peer', password: 'fixture' });
+        const key = 'rs2b0t:peer:selectedScript';
+        for (const store of [localStorage, sessionStorage]) store.setItem(key, 'Miner');
+        try {
+            await importSettings({ profiles: [], tabs: [], activeTab: 'Main', storage: {} });
+            expect(await peer.unlock('test-passphrase')).toBe(true);
+            expect(peer.list()).toEqual([]);
+            for (const store of [localStorage, sessionStorage]) expect(store.getItem(key)).toBeNull();
+        } finally {
+            for (const store of [localStorage, sessionStorage]) store.removeItem(key);
+        }
     });
 });
 
