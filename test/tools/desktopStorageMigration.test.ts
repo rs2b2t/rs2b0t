@@ -1,7 +1,7 @@
 import { afterEach, expect, spyOn, test } from 'bun:test';
 import { createCipheriv, pbkdf2Sync, randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, type CopySyncOptions } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync, type CopySyncOptions } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -36,6 +36,21 @@ function fixture(
     if (origins) saveLegacy(origins);
     const storeDir = join(dir, 'Shared Storage');
     const store = sharedStorage(storeDir);
+
+    function olderWrite(key: string, value: string | null) {
+        const file = join(storeDir, 'storage.json');
+        const state = JSON.parse(readFileSync(file, 'utf8'));
+        if (value === null) {
+            if (!(key in state.data)) return;
+            delete state.data[key];
+        } else {
+            if (state.data[key] === value) return;
+            state.data[key] = value;
+        }
+        const temporary = join(storeDir, 'older-writer.tmp');
+        writeFileSync(temporary, JSON.stringify(state));
+        renameSync(temporary, file);
+    }
 
     let rendererStorage: Partial<Record<string, string>> = {};
 
@@ -117,7 +132,7 @@ function fixture(
         const native = Object.assign(new Storage(), rendererStorage);
         runInNewContext(await panel.outputs[0].text(), { window: { localStorage: native }, rs2b0tDesktopStorage: { ...store, subscribe() {} } });
     }
-    return { launch, openPanel, saveLegacy, store, storeDir, rendererStorage: () => rendererStorage };
+    return { launch, openPanel, olderWrite, saveLegacy, store, storeDir, rendererStorage: () => rendererStorage };
 }
 
 test('a malformed server URL is logged and quits through the startup error handler', async () => {
@@ -488,7 +503,7 @@ test('an older pending retry without profile markers requires explicit recovery'
 test.each(['before', 'during'])('an older desktop reset %s a configured-origin retry stays empty across launches', async when => {
     const script = 'rs2b0t:fixture:selectedScript';
     let unreadable = true;
-    const { launch, storeDir } = fixture({
+    const { launch, olderWrite } = fixture({
         [original]: { [script]: 'Miner' },
         [custom]: { [accounts]: JSON.stringify(profiles) }
     }, origin => {
@@ -496,15 +511,6 @@ test.each(['before', 'during'])('an older desktop reset %s a configured-origin r
     });
     expect(await launch(custom)).toEqual([]);
 
-    const file = join(storeDir, 'storage.json');
-    function olderWrite(key: string, value: string | null) {
-        const state = JSON.parse(readFileSync(file, 'utf8'));
-        if (value === null) {
-            if (!(key in state.data)) return;
-            delete state.data[key];
-        } else state.data[key] = value;
-        writeFileSync(file, JSON.stringify(state));
-    }
     unreadable = false;
     const ready = Promise.withResolvers<void>();
     const pending = when === 'during' ? launch(custom, false, ready.promise) : undefined;
@@ -517,6 +523,31 @@ test.each(['before', 'during'])('an older desktop reset %s a configured-origin r
     expect(await launch(custom)).toEqual([]);
     expect(await launch(custom)).toEqual([]);
     expect(await launch(custom, true)).toEqual(profiles);
+});
+
+test.each([original, custom])('a deferred read from %s preserves a setting cleared by an older desktop', async deferred => {
+    const script = 'rs2b0t:fixture:selectedScript';
+    let unreadable = true;
+    const { launch, olderWrite, openPanel, store } = fixture({
+        [original]: deferred === original ? { [script]: 'Fisher' } : { 'rs2b0t:setting': 'fixture' },
+        [custom]: { [accounts]: JSON.stringify(profiles), [script]: 'Miner' }
+    }, origin => {
+        if (origin === deferred && unreadable) throw new Error('Unreadable fixture');
+    });
+    expect(await launch(custom)).toEqual(deferred === original ? profiles : []);
+    unreadable = false;
+    const ready = Promise.withResolvers<void>();
+    const pending = launch(custom, false, ready.promise);
+    olderWrite(script, 'edited');
+    olderWrite(script, null);
+    store.setItem('rs2b0t:other', 'newer');
+    expect(store.getItem(script)).toBeNull();
+    ready.resolve();
+    expect(await pending).toEqual(profiles);
+    await openPanel();
+    expect(store.getItem(script)).toBeNull();
+    expect(await launch(custom)).toEqual(profiles);
+    expect(store.getItem(script)).toBeNull();
 });
 
 test('the panel preserves 8081 setting precedence across a failed read and genuine edits', async () => {
@@ -631,12 +662,24 @@ test('explicit recovery removes the partial runtime after a copy error and can r
     expect(await launch(custom, true)).toEqual(profiles);
 });
 
-test('a read failure with no usable roster leaves the first migration retryable', async () => {
+test('an empty readable fallback opens the chooser and retries the configured origin', async () => {
     let unreadable = true;
     const { launch, store } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles) } }, origin => {
         if (origin === custom && unreadable) throw new Error('Unreadable 8082 fixture');
     });
-    await expect(launch(custom)).rejects.toMatchObject({ cause: { message: 'Unreadable 8082 fixture' } });
+    expect(await launch(custom)).toEqual([]);
+    expect(store.initialized()).toBe(true);
+    unreadable = false;
+    expect(await launch(original)).toEqual(profiles);
+    expect(await launch(custom)).toEqual(profiles);
+});
+
+test('two failed origin reads leave the first migration retryable', async () => {
+    let unreadable = true;
+    const { launch, store } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles) } }, () => {
+        if (unreadable) throw new Error('Unreadable fixture');
+    });
+    await expect(launch(custom)).rejects.toMatchObject({ cause: { message: 'Unreadable fixture' } });
     expect(store.initialized()).toBe(false);
     unreadable = false;
     expect(await launch(custom)).toEqual(profiles);

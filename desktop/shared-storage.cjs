@@ -73,7 +73,15 @@ function writeItem(state, key, value) {
     } else state.data[key] = value;
 }
 
-function decodeStore(state) {
+function decodeStore(document) {
+    const state = JSON.parse(document);
+    // Why: older writers drop the trailing newline and cannot record setting deletions.
+    if (state.initialized && !document.endsWith('\n')) {
+        delete state.deletedDuringSettingsMigration;
+        delete state.pendingPanelSettings;
+        delete state.deletedDuringProfileRetry;
+        for (const migration of Object.values(state.panelMigrations ?? {})) delete migration.removed;
+    }
     const marker = state.seededWithoutProfiles;
     if (marker || state.retryProfileOrigin) {
         if (!marker || !profileKeys.every(key => Object.hasOwn(marker, key) && marker[key] === state.data[key])) {
@@ -101,7 +109,7 @@ function sharedStorage(dir) {
     const migrationId = randomUUID();
     const read = () => {
         try {
-            return decodeStore(JSON.parse(fs.readFileSync(file, 'utf8')));
+            return decodeStore(fs.readFileSync(file, 'utf8'));
         } catch (error) {
             if (error.code === 'ENOENT') return { initialized: false, data: {} };
             throw error;
@@ -117,7 +125,7 @@ function sharedStorage(dir) {
     function write(state) {
         const temporary = join(dir, `${randomUUID()}.tmp`);
         try {
-            fs.writeFileSync(temporary, JSON.stringify(encodeStore(state)), { mode: 0o600 });
+            fs.writeFileSync(temporary, JSON.stringify(encodeStore(state)) + '\n', { mode: 0o600 });
             fs.renameSync(temporary, file);
         } finally {
             fs.rmSync(temporary, { force: true });
@@ -212,7 +220,7 @@ function sharedStorage(dir) {
                 const migration = state.panelMigrations?.[migrationId];
                 if (migration) {
                     delete state.panelMigrations[migrationId];
-                    if (state.initialized && values) {
+                    if (state.initialized && values && migration.removed) {
                         importSettings(state.pendingPanelSettings ?? state.data, values, migration.removed);
                     }
                 }
@@ -228,14 +236,11 @@ function sharedStorage(dir) {
                     delete state.retryProfileOrigin;
                 }
                 if (!state.initialized && fallback) importSettings(state.data, fallback);
-                if (readError && (!state.initialized || recover) && !savedProfileKey(state.data)) {
-                    const hasSettings = Object.keys(state.data).some(key => !profileKeys.includes(key));
-                    if (state.initialized || !fallback || !hasSettings) throw readError;
-                }
+                if (readError && (state.initialized ? recover : !fallback) && !savedProfileKey(state.data)) throw readError;
                 if (values === null && state.seededWithoutProfiles) {
                     const removed = state.retryProfileOrigin === profileOrigin ? state.deletedDuringProfileRetry : undefined;
                     state.retryProfileOrigin = profileOrigin;
-                    state.deletedDuringProfileRetry = migration ? [...new Set([...(removed ?? []), ...migration.removed])] : removed;
+                    state.deletedDuringProfileRetry = migration?.removed ? [...new Set([...(removed ?? []), ...migration.removed])] : removed;
                 }
                 if (state.initialized) return false;
                 if (fallback === null) {
