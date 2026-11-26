@@ -58,7 +58,7 @@ export function replaceScriptSettings(username: string, script: string, values: 
 
 export function storedScripts(usernames: string[]): string[] {
     const scripts = new Set<string>();
-    const savedKeys = keys('rs2b0t:', usernames.includes('set') ? 'set' : undefined);
+    const savedKeys = keys('', usernames.includes('set') ? 'set' : undefined);
     for (const username of usernames) {
         const selected = readProfileScript(username);
         if (selected) scripts.add(selected);

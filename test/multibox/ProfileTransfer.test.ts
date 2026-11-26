@@ -287,6 +287,34 @@ describe('ProfileTransfer', () => {
         });
     });
 
+    test('round-trips distinct v1 settings for set and :profile:set after a fresh session', () => {
+        const names = ['set', ':profile:set'];
+        const profiles = names.map(username => ({ username, password: '' }));
+        const storage = { set: { 'set:Global:runEnergyMin': '42' }, ':profile:set': { 'set:Global:runEnergyMin': '73' } };
+        const file = JSON.stringify({ ...snap, profiles, storage, kind: PROFILE_FILE_KIND, v: 1 });
+        applyBoxStorage(parseProfileFile(file).storage, names);
+        sessionStorage.clear();
+
+        expect(names.map(name => inBox(name, () => SettingsStore.globalBag().num('runEnergyMin')))).toEqual([42, 73]);
+        const exported = serializeProfileFile({ ...snap, profiles, storage: collectBoxStorage(names) });
+        expect(parseProfileFile(exported).storage).toEqual(storage);
+        applyBoxStorage({}, ['set']);
+        sessionStorage.clear();
+        expect(collectBoxStorage(names)).toEqual({ ':profile:set': storage[':profile:set'] });
+    });
+
+    test('restoring colon-prefixed profiles preserves standalone settings and clears', () => {
+        localStorage.setItem('rs2b0t:set:set:travel:mode', 'legacy');
+        SettingsStore.clear('set', 'travel:mode');
+        SettingsStore.save('set', 'travel:route', 'walk');
+        const names = [':set', ':cleared'];
+        expect(collectBoxStorage(names)).toEqual({});
+        applyBoxStorage({}, names);
+        sessionStorage.clear();
+        expect(SettingsStore.saved('set', 'travel:mode')).toBeUndefined();
+        expect(SettingsStore.saved('set', 'travel:route')).toBe('walk');
+    });
+
     test('a fresh set profile reads and exports its pre-upgrade settings and loadouts', () => {
         const loadout = { name: 'profile', worn: {}, carry: [] };
         localStorage.setItem('rs2b0t:set:set:Global:runEnergyMin', '42');

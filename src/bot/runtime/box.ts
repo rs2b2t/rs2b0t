@@ -1,5 +1,5 @@
 import { botFrameUrl } from '../../client/config/worlds.js';
-import { desktopStorage, storeKeys } from './desktopStorage.js';
+import { desktopStorage, settingsStoragePrefix, storeKeys } from './desktopStorage.js';
 
 // docs/decisions/architecture.md#per-instance-storage
 // Why: same-origin multibox frames share sessionStorage, so `?box=<account>` namespaces each bot.
@@ -11,11 +11,11 @@ export function boxId(): string {
     return new URLSearchParams(location.search).get('box') ?? '';
 }
 
-const setProfilePrefix = 'rs2b0t::profile:set:';
+const setProfilePrefix = settingsStoragePrefix + 'profile:set:';
 
 export function boxKey(suffix: string, id = boxId()): string {
     if (id === 'set' && suffix.includes(':')) return setProfilePrefix + suffix;
-    if (!id && suffix.startsWith('set:set:')) return `rs2b0t::${suffix}`;
+    if (!id && suffix.startsWith('set:set:')) return `${settingsStoragePrefix}standalone:${suffix}`;
     return id ? `rs2b0t:${id}:${suffix}` : `rs2b0t:${suffix}`;
 }
 
@@ -42,7 +42,7 @@ function legacyKey(suffix: string, id: string): string | null {
 }
 
 function allowsLegacy(store: Storage, key: string, id: string): boolean {
-    const cleared = `rs2b0t::cleared:${key}`;
+    const cleared = `${settingsStoragePrefix}cleared:${key}`;
     if (id === 'set') {
         if (store.getItem(setProfileMigrationKey) !== null) return false;
         if (typeof localStorage !== 'undefined' && store !== localStorage) {
@@ -74,7 +74,7 @@ export function clearBoxItem(store: Storage, suffix: string, id: string): void {
     const key = boxKey(suffix, id);
     const legacy = legacyKey(suffix, id);
     if (legacy && allowsLegacy(store, key, id) && store.getItem(legacy) !== null) {
-        store.setItem(`rs2b0t::cleared:${key}`, '1');
+        store.setItem(`${settingsStoragePrefix}cleared:${key}`, '1');
     }
     store.removeItem(key);
 }

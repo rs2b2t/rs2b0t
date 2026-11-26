@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { boxKey } from '#/bot/runtime/box.js';
 
 const require = createRequire(import.meta.url);
 const { sharedStorage } = require('../../desktop/shared-storage.cjs');
@@ -21,12 +22,13 @@ test('desktop instances share saved values and preserve concurrent writes to dif
         const second = sharedStorage(root);
         first.setItem('rs2b0t:account', 'first');
         expect(second.getItem('rs2b0t:account')).toBe('first');
-        second.setItem('rs2b0t:settings', 'second');
-        expect(first.getItem('rs2b0t:settings')).toBe('second');
-        expect(first.keys().sort()).toEqual(['rs2b0t:account', 'rs2b0t:settings']);
+        const threshold = boxKey('set:Global:runEnergyMin', 'set');
+        second.setItem(threshold, '42');
+        expect(first.getItem(threshold)).toBe('42');
+        expect(first.keys().sort()).toEqual(['rs2b0t:account', threshold].sort());
         first.removeItem('rs2b0t:account');
         expect(second.getItem('rs2b0t:account')).toBe(null);
-        expect(sharedStorage(root).getItem('rs2b0t:settings')).toBe('second');
+        expect(sharedStorage(root).getItem(threshold)).toBe('42');
     } finally {
         rmSync(root, { recursive: true, force: true });
     }

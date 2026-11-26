@@ -14,7 +14,7 @@ function sharedStorage(dir) {
             throw error;
         }
     };
-    const valid = key => typeof key === 'string' && key.startsWith('rs2b0t:');
+    const valid = key => typeof key === 'string' && (key.startsWith('rs2b0t:') || key.startsWith('rs2b0t-settings:'));
     function update(change) {
         const deadline = Date.now() + 15000;
         let release;

@@ -1,9 +1,8 @@
-import { desktopStorage } from '../runtime/desktopStorage.js';
+import { desktopStorage, isSharedStorageKey as isShared } from '../runtime/desktopStorage.js';
 
 if (desktopStorage) {
     const shared = desktopStorage;
     const native = window.localStorage;
-    const isShared = (key: string) => key.startsWith('rs2b0t:');
     for (const key of Object.keys(native)) {
         if (!isShared(key) || (!key.includes(':set:') && !key.endsWith(':selectedScript'))) continue;
         const value = native.getItem(key);
