@@ -219,6 +219,30 @@ test('an empty roster saved before the first seed takes precedence over a pendin
     expect(store.snapshot()).toEqual({ [vault]: '[]' });
 });
 
+test.each(['first launch', 'overlapping launch'])('unread custom settings retry alongside a populated 8081 roster on %s', async mode => {
+    const script = 'rs2b0t:fixture:selectedScript';
+    const ore = 'rs2b0t:set:Miner:ore';
+    let unreadable = true;
+    const { launch, openPanel, store } = fixture({
+        [original]: { [accounts]: JSON.stringify(profiles) },
+        [custom]: { [accounts]: JSON.stringify([{ username: 'older', password: 'fixture' }]), [script]: 'Miner', [ore]: 'Tin' }
+    }, origin => {
+        if (origin === custom && unreadable) throw new Error('Unreadable 8082 fixture');
+    });
+    const ready = Promise.withResolvers<void>();
+    const pending = launch(custom, false, ready.promise);
+    if (mode === 'overlapping launch') expect(await launch(original)).toEqual(profiles);
+    ready.resolve();
+    expect(await pending).toEqual(profiles);
+    store.removeItem(ore);
+    unreadable = false;
+    expect(await launch(custom)).toEqual(profiles);
+    await openPanel();
+    expect(store.getItem(script)).toBe('Miner');
+    expect(store.getItem(ore)).toBeNull();
+    expect(await launch(original)).toEqual(profiles);
+});
+
 test('a failed configured read after another launch seeded settings retries the configured origin', async () => {
     const script = 'rs2b0t:fixture:selectedScript';
     let unreadable = true;
@@ -372,6 +396,27 @@ test('explicit recovery leaves an existing vault intact', async () => {
     expect(await launch(custom, true)).toEqual([]);
     expect(store.snapshot()).toEqual({ [vault]: current, [accounts]: '[]' });
 });
+
+test.each([['populated', 'current'], ['empty', 'current'], ['populated', 'older']])(
+    'resetting the %s vault from the %s desktop during explicit recovery survives relaunch', async (initial, writer) => {
+        const { launch, olderWrite, store } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles) } });
+        store.seed({});
+        const owner = new ProfileVault(store);
+        if (initial === 'populated') {
+            store.setItem(accounts, JSON.stringify([{ username: 'current', password: 'fixture' }]));
+            await owner.setup('fixture');
+        }
+        const ready = Promise.withResolvers<void>();
+        const pending = launch(custom, true, ready.promise);
+        if (writer === 'older') {
+            olderWrite(vault, null);
+            olderWrite(accounts, null);
+        } else owner.reset();
+        ready.resolve();
+        expect([(await pending).length, (await launch(custom)).length]).toEqual([0, 0]);
+        expect(await launch(custom, true)).toEqual(profiles);
+    }
+);
 
 test('profiles on the configured origin take precedence over the 8081 fallback', async () => {
     const { launch } = fixture({

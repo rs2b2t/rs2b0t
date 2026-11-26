@@ -69,8 +69,15 @@ function cancelProfileImport(state) {
     if (!Object.keys(state.profileRetries).length) delete state.profileRetries;
 }
 
+function profileState(state) {
+    return [state.profileRevision ?? 0, ...profileKeys.map(key => state.data[key])];
+}
+
 function writeItem(state, key, value) {
-    if (profileKeys.includes(key)) cancelProfileImport(state);
+    if (profileKeys.includes(key)) {
+        state.profileRevision = (state.profileRevision ?? 0) + 1;
+        cancelProfileImport(state);
+    }
     if (value === null) {
         delete state.data[key];
         const removals = Object.values(state.panelMigrations ?? {}).map(migration => migration.removed);
@@ -186,7 +193,7 @@ function sharedStorage(dir) {
     function setValue(state, key, value) {
         if (state.seededWithoutProfiles || state.profileRetries || state.panelMigrations || state.deletedDuringSettingsMigration) {
             updateMigration(state, current => writeItem(current, key, value));
-        } else if ((state.data[key] ?? null) !== value) {
+        } else if ((state.data[key] ?? null) !== value || (value === null && profileKeys.includes(key))) {
             writeItem(state, key, value);
             write(state);
         }
@@ -196,7 +203,7 @@ function sharedStorage(dir) {
     }
     return {
         initialized: () => read().initialized,
-        migrationStatus(trackPanel = false) {
+        migrationStatus(trackPanel = false, recover = false) {
             let state = read();
             if (!state.initialized && trackPanel) {
                 state = update(current => {
@@ -207,7 +214,12 @@ function sharedStorage(dir) {
                     return current;
                 });
             }
-            return { initialized: state.initialized, retrySettings: !!state.deletedDuringSettingsMigration, retryProfileOrigins: Object.keys(state.profileRetries ?? {}) };
+            return {
+                initialized: state.initialized,
+                retrySettings: !!state.deletedDuringSettingsMigration,
+                retryProfileOrigins: Object.keys(state.profileRetries ?? {}),
+                expectedProfiles: recover ? profileState(state) : undefined
+            };
         },
         snapshot: () => read().data,
         getItem: key => (valid(key) ? (read().data[key] ?? null) : null),
@@ -227,7 +239,7 @@ function sharedStorage(dir) {
         removeItem(key) {
             if (valid(key)) withLockedState(state => setValue(state, key, null));
         },
-        seed(values, { fallback, recover = false, readError, profileOrigin, retries = [] } = {}) {
+        seed(values, { fallback, recover = false, expectedProfiles, readError, profileOrigin, retries = [] } = {}) {
             return update(state => {
                 if (state.deletedDuringSettingsMigration && fallback) {
                     importSettings(state.data, fallback, state.deletedDuringSettingsMigration);
@@ -247,14 +259,15 @@ function sharedStorage(dir) {
                 for (const [origin, source] of retries) {
                     if (finishProfileRetry(state, origin, source)) sources.push(source);
                 }
-                if (state.initialized && !recover && !state.seededWithoutProfiles) return false;
-                if (!state.initialized && !profileKeys.some(key => key in state.data)) state.seededWithoutProfiles = true;
-                migrateProfiles(state.data, [...sources, fallback ?? {}], { firstMigration: !state.initialized, recover });
-                const hasRoster = profileKeys.some(key => key in state.data && !isEmptyRoster(state.data[key]));
-                if (hasRoster && !state.profileRetries) delete state.seededWithoutProfiles;
+                const profilesChanged = expectedProfiles && profileState(state).some((value, i) => value !== expectedProfiles[i]);
+                if (!profilesChanged && (!state.initialized || recover || state.seededWithoutProfiles)) {
+                    if (!state.initialized && !profileKeys.some(key => key in state.data)) state.seededWithoutProfiles = true;
+                    migrateProfiles(state.data, [...sources, fallback ?? {}], { firstMigration: !state.initialized, recover });
+                }
+                if (profileKeys.some(key => key in state.data && !isEmptyRoster(state.data[key]))) delete state.seededWithoutProfiles;
                 if (!state.initialized && fallback) importSettings(state.data, fallback);
-                if (readError && (state.initialized ? recover : !fallback) && !savedProfileKey(state.data)) throw readError;
-                if (values === null && state.seededWithoutProfiles && !hasRoster) {
+                if (readError && (state.initialized ? recover && !profilesChanged : !fallback) && !savedProfileKey(state.data)) throw readError;
+                if (values === null && (migration?.removed || state.seededWithoutProfiles)) {
                     state.profileRetries ??= {};
                     const removed = state.profileRetries[profileOrigin];
                     if (migration?.removed && removed !== null) {

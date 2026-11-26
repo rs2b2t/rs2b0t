@@ -18,8 +18,8 @@ function prepareStorage(app, serverUrl) {
     const legacy = join(directory, 'Local Storage');
     const recover = process.env.B0T_RECOVER_LEGACY_PROFILES === '1';
     const hasLegacy = fs.existsSync(legacy);
-    const { initialized, retrySettings, retryProfileOrigins = [] } = hasLegacy
-        ? store.migrationStatus(URL.canParse(serverUrl) && isCustomOrigin(new URL(serverUrl).origin))
+    const { initialized, retrySettings, retryProfileOrigins = [], expectedProfiles } = hasLegacy || recover
+        ? store.migrationStatus(hasLegacy && URL.canParse(serverUrl) && isCustomOrigin(new URL(serverUrl).origin), recover)
         : {};
     const automaticRetry = initialized && !recover;
     const runtime = fs.mkdtempSync(join(cacheRoot, 'rs2b0t-session-'));
@@ -110,7 +110,7 @@ function prepareStorage(app, serverUrl) {
                 let firstMigration = false;
                 if (!automaticRetry || fallback || retries.length) {
                     try {
-                        firstMigration = store.seed(values, { fallback, recover, readError, profileOrigin: automaticRetry ? undefined : origin, retries });
+                        firstMigration = store.seed(values, { fallback, recover, expectedProfiles, readError, profileOrigin: automaticRetry ? undefined : origin, retries });
                     } catch (error) {
                         if (!automaticRetry) throw error;
                     }
@@ -119,7 +119,7 @@ function prepareStorage(app, serverUrl) {
                     // Why: the panel also imports settings from the temporary Chromium copy.
                     await session.defaultSession.clearStorageData({ storages: ['localstorage'] });
                 }
-            } else if (recover || !store.initialized()) store.seed({}, { recover });
+            } else if (recover || !store.initialized()) store.seed({}, { recover, expectedProfiles });
             const clients = new Map();
             const tracked = new WeakSet();
             const valid = frame => frame && !frame.isDestroyed() && !frame.detached && new URL(frame.url).origin === origin;
