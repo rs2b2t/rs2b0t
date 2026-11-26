@@ -11,6 +11,7 @@ export default class ScriptLibrary {
 
     private category = 'All';
     private query = '';
+    private closeCount = 0;
 
     constructor(private onSelect: (name: string) => void) {
         this.backdrop = el('div', 'rs2b0t-modal-backdrop');
@@ -115,6 +116,7 @@ export default class ScriptLibrary {
     }
 
     private async handleLoad(pending: Promise<LoadResult>): Promise<void> {
+        const closeCount = this.closeCount;
         this.loadStatus.textContent = 'loading…';
         this.loadStatus.className = 'rs2b0t-load-status';
 
@@ -122,8 +124,10 @@ export default class ScriptLibrary {
         if (result.ok && result.name) {
             this.loadStatus.textContent = `loaded '${result.name}'`;
             this.loadStatus.className = 'rs2b0t-load-status rs2b0t-load-ok';
-            this.onSelect(result.name);
-            this.close();
+            if (closeCount === this.closeCount) {
+                this.onSelect(result.name);
+                this.close();
+            }
         } else {
             this.loadStatus.textContent = `load failed: ${result.ok ? 'no bot exported' : result.error}`;
             this.loadStatus.className = 'rs2b0t-load-status rs2b0t-load-error';
@@ -142,6 +146,7 @@ export default class ScriptLibrary {
     }
 
     close(): void {
+        this.closeCount++;
         this.backdrop.style.display = 'none';
     }
 

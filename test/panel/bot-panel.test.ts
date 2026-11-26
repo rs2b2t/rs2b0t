@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import { LoopingBot } from '#/bot/api/bot/Bot.js';
 import type { BotHostImpl } from '#/bot/runtime/BotHost.js';
 import { ScriptRegistry } from '#/bot/runtime/ScriptRegistry.js';
 import { ScriptRunner } from '#/bot/runtime/ScriptRunner.js';
+import * as loader from '#/bot/runtime/loader.js';
 import BotPanel from '#/bot/panel/BotPanel.js';
 import { Credentials } from '#/bot/runtime/Credentials.js';
 import { TARGET, resolveTarget } from '#/client/config/target.js';
@@ -137,6 +138,52 @@ test('render controls appear below the log and persist per bot', () => {
     expect(toggle.checked).toBe(false);
     expect(enabled).toEqual([false, true, false]);
     expect(localStorage.getItem('rs2b0t:alice:rendererEnabled')).toBe('0');
+});
+
+test.each([
+    ['select another card', 'Picked fixture'],
+    ['dismiss', 'Previous fixture'],
+    ['wait', 'Imported fixture']
+])('file load after %s leaves %s selected', async (action, selected) => {
+    const key = 'rs2b0t:selectedScript';
+    const fileLoad = spyOn(loader, 'loadFromFile');
+    for (const name of ['Previous fixture', 'Picked fixture']) {
+        ScriptRegistry.register({ name, description: '', create: () => { throw new Error('unused'); } });
+    }
+    try {
+        localStorage.setItem(key, 'Previous fixture');
+        sessionStorage.setItem(key, 'Previous fixture');
+        const root = document.createElement('div');
+        const panel = new BotPanel(root, { selfTestMissing: [], addDrawListener: () => {} } as unknown as BotHostImpl);
+        const browse = Array.from(root.querySelectorAll('button')).find(b => b.textContent === 'Browse…')!;
+        browse.click();
+        const picker = document.querySelector<HTMLInputElement>('.rs2b0t-library-load input[type=file]')!;
+        const backdrop = picker.closest<HTMLElement>('.rs2b0t-modal-backdrop')!;
+        const transfer = new DataTransfer();
+        const source = "export default { __rs2b0tManifest: 1, name: 'Imported fixture', create() {} }";
+        transfer.items.add(new File([source], 'fixture.js', { type: 'text/javascript' }));
+        picker.files = transfer.files;
+        picker.dispatchEvent(new Event('change'));
+
+        if (action === 'select another card') {
+            const cardName = Array.from(backdrop.querySelectorAll('.rs2b0t-card-name')).find(el => el.textContent === 'Picked fixture')!;
+            cardName.closest<HTMLElement>('.rs2b0t-library-card')!.click();
+        } else if (action === 'dismiss') {
+            backdrop.click();
+        }
+        if (action !== 'wait') browse.click();
+        await fileLoad.mock.results[0].value;
+
+        expect(panel.selectedScriptName()).toBe(selected);
+        expect(localStorage.getItem(key)).toBe(selected);
+        expect(sessionStorage.getItem(key)).toBe(selected);
+        expect(backdrop.style.display).toBe(action === 'wait' ? 'none' : 'flex');
+        expect(Array.from(backdrop.querySelectorAll('.rs2b0t-card-name'), el => el.textContent)).toContain('Imported fixture ⇪');
+    } finally {
+        document.querySelector('.rs2b0t-library-load')?.closest<HTMLElement>('.rs2b0t-modal-backdrop')?.click();
+        fileLoad.mockRestore();
+        for (const name of ['Imported fixture', 'Picked fixture', 'Previous fixture']) ScriptRegistry.unregister(name);
+    }
 });
 
 test('wall start and stop use the script selected in the bot panel', async () => {
