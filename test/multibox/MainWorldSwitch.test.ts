@@ -15,6 +15,7 @@ import '#/client/config/target.js';
 interface Wall {
     controller: MultiBoxController;
     add(account: Account): SlotSnapshot;
+    addTab(name: string): boolean;
     importProfiles(profiles: Profile[]): Promise<number>;
     slots(): SlotSnapshot[];
     setWorld(id: number, world: WorldNumber): Promise<boolean>;
@@ -149,6 +150,12 @@ async function loadChooserRow(username: string): Promise<void> {
     await waitFor(() => localStorage.getItem(key) !== before);
 }
 
+function submitChooserProfile(username: string, password: string): void {
+    document.querySelector<HTMLInputElement>('#mbx-new-user')!.value = username;
+    document.querySelector<HTMLInputElement>('#mbx-new-pass')!.value = password;
+    document.querySelector('.mbx-chooser-form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+}
+
 test('settings import moves an already loaded profile to its imported group', async () => {
     await withWall('local', async wall => {
         await vault.assignGroup(['alice'], 'Old');
@@ -214,6 +221,30 @@ test('loading an imported profile from a stale chooser preserves its new group',
     });
 });
 
+test('loading a profile discovered during another save preserves its remote group', async () => {
+    await withWall('local', async wall => {
+        const other = new ProfileVault();
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        await other.upsert({ username: 'remote', password: 'fixture' });
+        await wall.importProfiles([{ username: 'local', password: 'fixture' }]);
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!chooserRow('remote'));
+
+        await other.assignGroup(['remote'], 'Fleet');
+        await loadChooserRow('remote');
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.list().find(p => p.username === 'remote')?.tab).toBe('Fleet');
+
+        const key = 'rs2b0t:multibox:profiles';
+        const before = localStorage.getItem(key);
+        expect(wall.addTab('Mining')).toBe(true);
+        await waitFor(() => localStorage.getItem(key) !== before);
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.list().find(p => p.username === 'remote')?.tab).toBe('Fleet');
+    });
+});
+
 test('a stale chooser re-saves and loads a profile in its remotely created group', async () => {
     await withWall('local', async wall => {
         document.getElementById('mbx-add')!.click();
@@ -223,9 +254,7 @@ test('a stale chooser re-saves and loads a profile in its remotely created group
         await other.upsert({ username: 'fleet1', password: 'old', world: 2 });
         await other.assignGroup(['fleet1'], 'Fleet');
 
-        document.querySelector<HTMLInputElement>('#mbx-new-user')!.value = 'fleet1';
-        document.querySelector<HTMLInputElement>('#mbx-new-pass')!.value = 'updated';
-        document.querySelector('.mbx-chooser-form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+        submitChooserProfile('fleet1', 'updated');
         await waitFor(() => wall.slots().some(slot => slot.username === 'fleet1'));
         await vault.refresh();
 
@@ -233,6 +262,20 @@ test('a stale chooser re-saves and loads a profile in its remotely created group
         expect(await reopened.unlock('test-passphrase')).toBe(true);
         expect(reopened.list().find(p => p.username === 'fleet1')).toEqual({ username: 'fleet1', password: 'updated', world: 2, tab: 'Fleet' });
         expect(wall.slots()[0].tab).toBe('Fleet');
+    });
+});
+
+test('creating a profile in the chooser saves its active group', async () => {
+    await withWall('local', async wall => {
+        await vault.saveTabState(['Mining'], new Map(), 'Mining');
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!chooserRow('alice'));
+        submitChooserProfile('miner', 'fixture');
+        await waitFor(() => vault.list().some(p => p.username === 'miner' && p.tab === 'Mining'));
+        expect(wall.slots()[0].tab).toBe('Mining');
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.list().find(p => p.username === 'miner')?.tab).toBe('Mining');
     });
 });
 

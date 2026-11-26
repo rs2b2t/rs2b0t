@@ -90,26 +90,31 @@ function boot(): void {
         orderWrite = orderWrite.then(() => vault.reorder(usernames)).catch(err => console.error('[rs2b0t] failed to save bot order', err));
     }
 
-    function persistTabState(renamed?: { from: string; to: string }): void {
+    function persistTabState(tabByUser: ReadonlyMap<string, string> = new Map()): void {
         if (!tabsHydrated || vault.status() !== 'unlocked') {
             return;
         }
         const customTabs = controller.tabs().slice(1);
-        const tabByUser = new Map(controller.snapshot().map(slot => [slot.username, slot.tab]));
-        if (renamed) {
-            for (const p of vault.list()) {
-                if (p.tab === renamed.from && !tabByUser.has(p.username)) tabByUser.set(p.username, renamed.to);
-            }
-        }
         const activeTab = controller.activeTab();
         orderWrite = orderWrite.then(() => vault.saveTabState(customTabs, tabByUser, activeTab)).catch(err => console.error('[rs2b0t] failed to save tab state', err));
     }
 
     function mutateTabs(action: () => boolean, renamed?: { from: string; to: string }): boolean {
+        const before = new Map(controller.snapshot().map(slot => [slot.username, slot.tab]));
         const changed = action();
         if (changed) {
-            renderRail();
-            persistTabState(renamed);
+            const slots = controller.snapshot();
+            renderRail(slots);
+            const assignments = new Map<string, string>();
+            for (const slot of slots) {
+                if (before.get(slot.username) !== slot.tab) assignments.set(slot.username, slot.tab);
+            }
+            if (renamed && vault.status() === 'unlocked') {
+                for (const p of vault.list()) {
+                    if (p.tab === renamed.from && !before.has(p.username)) assignments.set(p.username, renamed.to);
+                }
+            }
+            persistTabState(assignments);
         }
         return changed;
     }
@@ -286,14 +291,10 @@ function boot(): void {
 
     const chooser = new ProfileChooser((p, focus) => {
         if (p.tab) controller.addTab(p.tab);
-        const added = controller.add(p);
-        if (focus) {
-            const slot = added ?? controller.snapshot().find(s => normalizeUsername(s.username) === normalizeUsername(p.username));
-            if (slot) controller.focus(slot.id);
-        }
+        const slot = controller.add(p) ?? controller.snapshot().find(s => normalizeUsername(s.username) === normalizeUsername(p.username));
+        if (focus && slot) controller.focus(slot.id);
         renderRail();
-        // a fresh profile joins the active tab; record that membership
-        persistTabState();
+        persistTabState(p.tab === undefined && slot ? new Map([[p.username, slot.tab]]) : undefined);
     }, {
         defaultWorld, worldRouting, onWorldChange: worldRouting ? changeProfileWorld : undefined,
         onLoadGroup: (profiles, tab) => {
@@ -523,9 +524,8 @@ function boot(): void {
 
     // Bind live status (name + running dot) onto the rail tiles, which DomSlotOps keeps in slot order, so snapshot[i] is tile[i].
     // Why: tabs filter by visibility only, hidden tiles stay in the DOM, keeping that mapping intact.
-    function renderRail(): void {
+    function renderRail(snaps = controller.snapshot()): void {
         tabBar.render(controller.tabs(), controller.activeTab());
-        const snaps = controller.snapshot();
         resources.setBotCount(snaps.length, snaps.filter(slotIsRunning).length);
         const empty = snaps.length === 0;
         startAll.disabled = empty;
