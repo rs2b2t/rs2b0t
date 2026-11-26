@@ -89,13 +89,20 @@ test('cache worker receives the selected frame target instead of the wall origin
 });
 
 test.each([
-    { row: 'model_version', bytes: 3 },
-    { row: 'model_crc', bytes: 7 }
-])('a partial $row fails with the startup diagnostic before posting to the worker', ({ row, bytes }) => {
+    { row: 'model_version', bytes: 3, entrySize: 2 },
+    { row: 'model_crc', bytes: 7, entrySize: 4 }
+])('a partial $row fails with the native array diagnostic before creating the worker', ({ row, bytes, entrySize }) => {
     const files = { read: (name: string) => name === row ? new Uint8Array(bytes) : versionlist.read(name) } as JagFile;
-    const post = spyOn(WorkerFixture.prototype, 'postMessage');
-    throws(() => new OnDemand(files, { ingame: false } as Client), { name: 'RangeError', message: 'Invalid array length' });
-    expect(post).not.toHaveBeenCalled();
+    const worker = spyOn(globalThis, 'Worker');
+    let message: string | undefined;
+    try {
+        Array(bytes / entrySize);
+    } catch (error) {
+        if (!(error instanceof RangeError)) throw error;
+        message = error.message;
+    }
+    throws(() => new OnDemand(files, { ingame: false } as Client), { name: 'RangeError', message });
+    expect(worker).not.toHaveBeenCalled();
 });
 
 test('worker load failure reaches the startup error screen while requesting animations', async () => {

@@ -50,7 +50,8 @@ export default class OnDemand extends OnDemandProvider {
             }
 
             const count = data.length / 2;
-            if (!Number.isInteger(count)) throw new RangeError('Invalid array length');
+            // Why: the startup screen displays Array's native error for partial entries.
+            if (!Number.isInteger(count)) Array(count);
             const buf = new Packet(data);
 
             this.versions[i] = new Uint16Array(count);
@@ -68,7 +69,7 @@ export default class OnDemand extends OnDemandProvider {
             }
 
             const count = data.length / 4;
-            if (!Number.isInteger(count)) throw new RangeError('Invalid array length');
+            if (!Number.isInteger(count)) Array(count);
             const buf = new Packet(data);
 
             this.crcs[i] = new Int32Array(count);
