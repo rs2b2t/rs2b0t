@@ -16,7 +16,7 @@ export interface Member {
 export type Members = Map<string, Member> | null;
 export type Surface = Map<string, Members>;
 
-export type DriftKind = 'undeclared-export' | 'phantom-export' | 'missing-at-runtime' | 'undeclared-member' | 'phantom-member';
+export type DriftKind = 'undeclared-export' | 'phantom-export' | 'missing-at-runtime' | 'undeclared-member' | 'phantom-member' | 'missing-published-export' | 'missing-published-member' | 'unexpected-published-member';
 export interface Drift {
     kind: DriftKind;
     export: string;
@@ -136,6 +136,42 @@ export function packageExports(js = readFileSync(JS_FILE, 'utf8')): string[] {
     return block[1].split('\n').map(l => l.replace(/\/\/.*$/, '').trim()).join(',').split(',').map(s => s.trim()).filter(Boolean);
 }
 
+/**
+ * Exact published runtime member sets, documented in docs/API.md.
+ */
+export const PUBLISHED_API_MEMBERS = {
+    Prayer: ['points', 'max', 'full', 'known', 'available', 'active', 'set', 'clear'],
+    Reachability: ['canReach', 'canStep', 'lineOfSight', 'walkable', 'probeable', 'arrivalProbe'],
+    SettingsStore: ['saved', 'save', 'onChange', 'displayString', 'resolve', 'globalBag', 'isUrlOverride', 'clear']
+} as const;
+
+export function publicationDrifts(runtime: Surface, exports: readonly string[]): Drift[] {
+    const drifts: Drift[] = [];
+    for (const [name, expected] of Object.entries(PUBLISHED_API_MEMBERS)) {
+        if (!exports.includes(name)) {
+            drifts.push({ kind: 'missing-published-export', export: name });
+            continue;
+        }
+        const actual = runtime.get(name);
+        if (actual === undefined) {
+            continue;
+        }
+        const actualMembers = actual ?? new Map<string, Member>();
+        const expectedMembers = new Set<string>(expected);
+        for (const member of expectedMembers) {
+            if (!actualMembers.has(member)) {
+                drifts.push({ kind: 'missing-published-member', export: name, member });
+            }
+        }
+        for (const member of actualMembers.keys()) {
+            if (!expectedMembers.has(member)) {
+                drifts.push({ kind: 'unexpected-published-member', export: name, member });
+            }
+        }
+    }
+    return drifts;
+}
+
 export function compare(runtime: Surface, declared: Surface, exports: readonly string[], allow: ReadonlySet<string> = new Set()): Drift[] {
     const drifts: Drift[] = [];
     const add = (d: Drift): void => {
@@ -178,6 +214,16 @@ export function compare(runtime: Surface, declared: Surface, exports: readonly s
     return drifts;
 }
 
+export function checkContract(runtime: Surface, declared: Surface, exports: readonly string[], allow: ReadonlySet<string> = new Set()): Drift[] {
+    const drifts = compare(runtime, declared, exports, allow);
+    for (const d of publicationDrifts(runtime, exports)) {
+        if (!drifts.some(existing => existing.export === d.export && existing.member === d.member)) {
+            drifts.push(d);
+        }
+    }
+    return drifts;
+}
+
 export function allowlist(): Set<string> {
     try {
         return new Set(Object.keys(JSON.parse(readFileSync(ALLOWLIST_FILE, 'utf8')) as Record<string, string>));
@@ -188,7 +234,7 @@ export function allowlist(): Set<string> {
 
 export function report(drifts: readonly Drift[]): string {
     if (drifts.length === 0) {
-        return 'api-contract: index.d.ts matches the runtime ABI over every index.js export';
+        return 'api-contract: index.d.ts matches every index.js export; published roots and members are intact';
     }
     const lines = [`api-contract: ${drifts.length} drift(s)`];
     for (const d of drifts) {
@@ -199,7 +245,10 @@ export function report(drifts: readonly Drift[]): string {
 }
 
 if (import.meta.main) {
-    const drifts = compare(runtimeSurface(), declaredSurface(), packageExports(), allowlist());
+    const runtime = runtimeSurface();
+    const declared = declaredSurface();
+    const exports = packageExports();
+    const drifts = checkContract(runtime, declared, exports, allowlist());
     console.log(report(drifts));
     if (process.argv.includes('--check') && drifts.length > 0) {
         process.exit(1);
