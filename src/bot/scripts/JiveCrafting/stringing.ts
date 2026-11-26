@@ -5,20 +5,11 @@ import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
+import type { Amulet } from '../../data/amulets.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 
+export { AMULETS, type Amulet } from '../../data/amulets.js';
 export const BALL_OF_WOOL = 1759;
-
-export const AMULETS = [
-    { label: 'Gold amulet', unstrung: 1673, strung: 1692 },
-    { label: 'Sapphire amulet', unstrung: 1675, strung: 1694 },
-    { label: 'Emerald amulet', unstrung: 1677, strung: 1696 },
-    { label: 'Ruby amulet', unstrung: 1679, strung: 1698 },
-    { label: 'Diamond amulet', unstrung: 1681, strung: 1700 },
-    { label: 'Dragonstone amulet', unstrung: 1683, strung: 1702 }
-] as const;
-
-export type Amulet = typeof AMULETS[number];
 
 interface Host {
     log(message: string): void;
