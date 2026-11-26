@@ -78,6 +78,54 @@ describe('LoadoutPanel', () => {
         expect(Loadouts.all()[0]!.carry).toEqual([{ item: 'Lobster', qty: 16 }]);
     });
 
+    test('switching loadouts shows and edits the selected loadout\'s supplies', () => {
+        Loadouts.save([
+            { name: 'A', worn: {}, carry: [{ item: 'Lobster', qty: 16 }, { item: 'Prayer potion(4)', qty: 2 }] },
+            { name: 'B', worn: {}, carry: [{ item: 'Shark', qty: 8 }] }
+        ]);
+        const panel = openPanel();
+        const selectLoadout = (name: string) => {
+            const select = panel.root.querySelector('select')!;
+            select.value = name;
+            select.dispatchEvent(new Event('change'));
+        };
+        const setFoodQuantity = (value: number) => {
+            const qty = panel.root.querySelector<HTMLInputElement>('[data-supply=Food] input')!;
+            qty.value = String(value);
+            qty.dispatchEvent(new Event('change'));
+        };
+        const expectSupply = (label: string, item: string, qty: number) => {
+            const row = panel.root.querySelector(`[data-supply="${label}"]`)!;
+            expect(row.querySelector('[data-role=supply-item]')!.textContent).toBe(item);
+            expect(row.querySelector('input')!.value).toBe(String(qty));
+        };
+
+        expectSupply('Food', 'Lobster', 16);
+        selectLoadout('B');
+        expectSupply('Food', 'Shark', 8);
+        setFoodQuantity(10);
+
+        panel.close();
+        panel.open();
+        expectSupply('Food', 'Shark', 10);
+        expect(Loadouts.byName('B')!.carry).toEqual([{ item: 'Shark', qty: 10 }]);
+        selectLoadout('A');
+        expectSupply('Food', 'Lobster', 16);
+        expectSupply('Prayer potion', 'Prayer potion(4)', 2);
+        setFoodQuantity(10);
+        selectLoadout('B');
+        selectLoadout('A');
+        expectSupply('Food', 'Lobster', 10);
+        expectSupply('Prayer potion', 'Prayer potion(4)', 2);
+        setFoodQuantity(12);
+        const carry = Loadouts.byName('A')!.carry;
+        expect(carry).toHaveLength(2);
+        expect(carry).toEqual(expect.arrayContaining([
+            { item: 'Lobster', qty: 12 },
+            { item: 'Prayer potion(4)', qty: 2 }
+        ]));
+    });
+
     test('a zero quantity removes the carried item', () => {
         Loadouts.save([{ name: 'melee', worn: {}, carry: [{ item: 'Lobster', qty: 16 }] }]);
         const panel = openPanel();
@@ -155,6 +203,23 @@ describe('LoadoutPanel', () => {
         field.value = 'range';
         field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
         expect(Loadouts.names().sort()).toEqual(['range', 'range 2']);
+    });
+
+    test('renaming a duplicate to the original name keeps its supplies visible', () => {
+        Loadouts.save([{ name: 'melee', worn: {}, carry: [{ item: 'Shark', qty: 8 }] }]);
+        const panel = openPanel();
+        panel.root.querySelector<HTMLButtonElement>('[data-action=duplicate]')!.click();
+        panel.root.querySelector<HTMLButtonElement>('[data-action=rename]')!.click();
+        const field = panel.root.querySelector<HTMLInputElement>('[data-role=loadout-name]')!;
+        expect(field.value).toBe('melee 2');
+        field.value = 'melee';
+        field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+        expect(panel.root.querySelector('select')!.value).toBe('melee 2');
+        expect(Loadouts.byName('melee 2')!.carry).toEqual([{ item: 'Shark', qty: 8 }]);
+        const food = panel.root.querySelector('[data-supply=Food]')!;
+        expect(food.querySelector('input')!.value).toBe('8');
+        expect(food.querySelector('[data-role=supply-item]')!.textContent).toBe('Shark');
     });
 
     test('duplicating gives the copy a free name', () => {
