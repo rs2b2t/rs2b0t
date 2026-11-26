@@ -39,7 +39,10 @@ interface VaultPayload {
     profiles: Profile[];
     tabs: string[];
     activeTab: string;
+    restoreId?: string;
 }
+
+type PrepareRestore = (previousNames: string[], previousRestoreId?: string) => string;
 
 function b64(bytes: Uint8Array): string {
     let s = '';
@@ -142,11 +145,12 @@ function parsePayload(text: string): VaultPayload {
     if (Array.isArray(parsed)) {
         return { profiles: profilesFrom(parsed), tabs: [], activeTab: MAIN_TAB };
     }
-    const obj = parsed as { profiles?: unknown; tabs?: unknown; activeTab?: unknown };
+    const obj = parsed as { profiles?: unknown; tabs?: unknown; activeTab?: unknown; restoreId?: unknown };
     if (!obj || typeof obj !== 'object' || !Array.isArray(obj.profiles) || !Array.isArray(obj.tabs) || obj.tabs.some(t => typeof t !== 'string') || typeof obj.activeTab !== 'string') {
         throw new Error('vault decrypted, but its payload has an unrecognized shape');
     }
     const payload: VaultPayload = { profiles: profilesFrom(obj.profiles), tabs: obj.tabs as string[], activeTab: obj.activeTab };
+    if (typeof obj.restoreId === 'string') payload.restoreId = obj.restoreId;
     assertTabStateValid(payload.tabs, payload.activeTab, payload.profiles);
     return payload;
 }
@@ -160,6 +164,7 @@ export class ProfileVault {
     private cache: Profile[] | null = null;
     private customTabs: string[] = [];
     private active: string = MAIN_TAB;
+    private restoreId?: string;
     private key: CryptoKey | null = null;
     private salt: Uint8Array<ArrayBuffer> | null = null;
     private persistTail = Promise.resolve();
@@ -193,6 +198,7 @@ export class ProfileVault {
             this.cache = payload.profiles;
             this.customTabs = payload.tabs;
             this.active = payload.activeTab;
+            this.restoreId = payload.restoreId;
         });
         this.sharedTail = refresh.catch(() => {});
         return refresh;
@@ -228,12 +234,14 @@ export class ProfileVault {
                 draft.cache = payload.profiles;
                 draft.customTabs = payload.tabs;
                 draft.active = payload.activeTab;
+                draft.restoreId = payload.restoreId;
                 await change(draft);
                 if (generation !== this.persistGeneration) throw new Error('Vault changed before the accounts were saved.');
                 if (desktopStorage!.compareAndSet(KEY, expected, values.get(KEY)!)) {
                     this.cache = draft.cache;
                     this.customTabs = draft.customTabs;
                     this.active = draft.active;
+                    this.restoreId = draft.restoreId;
                     return;
                 }
                 if (!retry) break;
@@ -271,6 +279,7 @@ export class ProfileVault {
         this.salt = crypto.getRandomValues(new Uint8Array(16));
         this.key = await deriveKey(pass, this.salt, ITER);
         this.cache = legacy;
+        this.restoreId = undefined;
         this.customTabs = [];
         this.active = MAIN_TAB;
         try {
@@ -303,6 +312,7 @@ export class ProfileVault {
         this.cache = payload.profiles;
         this.customTabs = payload.tabs;
         this.active = payload.activeTab;
+        this.restoreId = payload.restoreId;
         this.key = key;
         this.salt = salt;
         this.adoptGroupState();
@@ -317,6 +327,7 @@ export class ProfileVault {
         }
         this.cache = null;
         this.customTabs = [];
+        this.restoreId = undefined;
         this.active = MAIN_TAB;
         this.key = null;
         this.salt = null;
@@ -351,28 +362,31 @@ export class ProfileVault {
         });
     }
 
-    async replaceAll(data: VaultPayload): Promise<void> {
-        if (this.shared) return this.sharedChange(draft => draft.replaceAll(data), false);
-        if (this.pendingImport) return this.afterImport(() => this.replaceAll(data));
+    async replaceAll(data: VaultPayload, prepareRestore?: PrepareRestore): Promise<void> {
+        if (this.shared) return this.sharedChange(draft => draft.replaceAll(data, prepareRestore), false);
+        if (this.pendingImport) return this.afterImport(() => this.replaceAll(data, prepareRestore));
         this.assertUnlocked();
         const profiles = profilesFrom(data.profiles);
         if (profiles.length !== data.profiles.length) {
             throw new Error('profile list contains an invalid entry');
         }
         assertTabStateValid(data.tabs, data.activeTab, profiles);
-        const payload = { profiles, tabs: [...data.tabs], activeTab: data.activeTab };
+        const payload = { profiles, tabs: [...data.tabs], activeTab: data.activeTab, restoreId: this.restoreId };
         const generation = this.persistGeneration;
         const write = Promise.all([this.worldTail, this.persistTail]).then(async () => {
             if (generation !== this.persistGeneration) return;
+            if (prepareRestore) payload.restoreId = prepareRestore(this.assertUnlocked().map(p => p.username), this.restoreId);
             await this.persist(undefined, payload);
             if (generation !== this.persistGeneration) return;
             this.cache = profiles;
             this.customTabs = payload.tabs;
             this.active = payload.activeTab;
+            this.restoreId = payload.restoreId;
         });
         this.pendingImport = write.catch(() => {});
         try {
             await write;
+            if (prepareRestore && generation !== this.persistGeneration) throw new Error('Vault changed before the accounts were saved.');
         } finally {
             this.pendingImport = null;
         }
@@ -557,7 +571,7 @@ export class ProfileVault {
         }
         const key = this.key;
         const salt = this.salt;
-        const payload = replacement ?? { profiles: this.cache, tabs: this.customTabs, activeTab: this.active };
+        const payload = replacement ?? { profiles: this.cache, tabs: this.customTabs, activeTab: this.active, restoreId: this.restoreId };
         const plaintext = new TextEncoder().encode(JSON.stringify(payload));
         const generation = this.persistGeneration;
         const write = this.persistTail.then(async () => {

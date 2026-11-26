@@ -429,27 +429,34 @@ function boot(): void {
                 window.confirm(`Older versions shared "${suffix}" between standalone settings and profile "set". Include it in this profile backup?`))
         }),
         replaceAll: async data => {
-            const saved = localStorage.getItem(pendingWipeKey);
-            const pending: unknown = saved === null ? [] : JSON.parse(saved);
-            if (!Array.isArray(pending) || pending.some(user => typeof user !== 'string' || !user)) {
-                throw new Error('Invalid pending profile restore.');
-            }
-            const wipe = [...new Set<string>([
-                ...pending,
-                ...vault.list().map(p => p.username),
-                ...data.profiles.map(p => p.username),
-                ...Object.keys(data.storage)
-            ])];
-            localStorage.setItem(pendingWipeKey, JSON.stringify(wipe));
+            const restoreId = crypto.randomUUID();
+            const ownKey = `${pendingWipeKey}/${restoreId}`;
+            let previousKey = pendingWipeKey;
+            let wipe: string[] = [];
             try {
-                await vault.replaceAll(data);
+                await vault.replaceAll(data, (previousNames, previousId) => {
+                    if (previousId) previousKey = `${pendingWipeKey}/${previousId}`;
+                    const saved = localStorage.getItem(previousKey);
+                    const pending: unknown = saved === null ? [] : JSON.parse(saved);
+                    if (!Array.isArray(pending) || pending.some(user => typeof user !== 'string' || !user)) {
+                        throw new Error('Invalid pending profile restore.');
+                    }
+                    wipe = [...new Set<string>([
+                        ...pending,
+                        ...previousNames,
+                        ...data.profiles.map(p => p.username),
+                        ...Object.keys(data.storage)
+                    ])];
+                    localStorage.setItem(ownKey, JSON.stringify(wipe));
+                    return restoreId;
+                });
             } catch (error) {
-                if (saved === null) localStorage.removeItem(pendingWipeKey);
-                else localStorage.setItem(pendingWipeKey, saved);
+                localStorage.removeItem(ownKey);
                 throw error;
             }
+            localStorage.removeItem(previousKey);
             applyBoxStorage(data.storage, wipe);
-            localStorage.removeItem(pendingWipeKey);
+            localStorage.removeItem(ownKey);
         },
         onImported: data => {
             applyImportedTabs(data);
