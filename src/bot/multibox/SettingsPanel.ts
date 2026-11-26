@@ -7,6 +7,7 @@ export interface SettingsPanelHooks {
     replaceAll: (data: ProfileSnapshot) => Promise<void>;
     download?: (filename: string, text: string) => void;
     onImported?: (data: ProfileSnapshot) => void;
+    beforeExport?: () => Promise<void>;
 }
 
 function downloadTextFile(filename: string, text: string): void {
@@ -108,8 +109,13 @@ export class SettingsPanel {
         if (!(await this.hooks.ensureUnlocked())) {
             return;
         }
-        const text = serializeProfileFile(this.hooks.snapshot());
-        (this.hooks.download ?? downloadTextFile)(PROFILE_FILE_NAME, text);
+        try {
+            await this.hooks.beforeExport?.();
+            const text = serializeProfileFile(this.hooks.snapshot());
+            (this.hooks.download ?? downloadTextFile)(PROFILE_FILE_NAME, text);
+        } catch (e) {
+            this.err.textContent = e instanceof Error ? e.message : String(e);
+        }
     }
 
     async importText(text: string): Promise<void> {
