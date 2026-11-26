@@ -9,6 +9,7 @@ export const HOT_INTERVAL_MS = 1000;
 const HOT_CAPACITY = 600; // 10 minutes
 export const COLD_INTERVAL_MS = 30_000;
 const COLD_CAPACITY = 2880; // 24 hours
+const COLD_RETENTION_MS = COLD_CAPACITY * COLD_INTERVAL_MS;
 
 const BOT_FIELDS = ['logicMs', 'drawMs', 'logicMaxMs', 'drawMaxMs', 'logicCount', 'drawCount', 'ingame'] as const;
 const WALL_FIELDS = ['botCount', 'stallMs', 'inputMaxMs', 'inputCount', 'freezeCount'] as const;
@@ -19,6 +20,7 @@ const SUMMED = new Set<string>(['logicMs', 'drawMs', 'logicCount', 'drawCount', 
 class Tier {
     readonly hot: DiagRing;
     readonly cold: DiagRing;
+    lastSampleAt = 0;
     private accumulator: number[];
     private accumulated = 0;
 
@@ -35,6 +37,7 @@ class Tier {
     /** Aggregates the coarse tier so spikes survive downsampling. */
     push(at: number, values: number[]): void {
         this.hot.push(at, values);
+        this.lastSampleAt = at;
         for (let i = 0; i < values.length; i++) {
             const field = this.fields[i];
             if (SUMMED.has(field)) {
@@ -98,6 +101,11 @@ export class DiagSampler {
         const at = this.wallClock();
         const frames = this.collect();
 
+        for (const [box, tier] of this.bots) {
+            if (at - tier.lastSampleAt > COLD_RETENTION_MS) {
+                this.bots.delete(box);
+            }
+        }
         for (const frame of frames) {
             let tier = this.bots.get(frame.box);
             if (!tier) {
@@ -204,7 +212,7 @@ export class DiagSampler {
         return {
             takenAt: this.wallClock(),
             bytes: this.bytes,
-            retention: { hotMs: HOT_CAPACITY * HOT_INTERVAL_MS, coldMs: COLD_CAPACITY * COLD_INTERVAL_MS },
+            retention: { hotMs: HOT_CAPACITY * HOT_INTERVAL_MS, coldMs: COLD_RETENTION_MS },
             wall: {
                 hot: Object.fromEntries(WALL_FIELDS.map(f => [f, [...this.wall.hot.series(f)]])),
                 cold: Object.fromEntries(WALL_FIELDS.map(f => [f, [...this.wall.cold.series(f)]])),

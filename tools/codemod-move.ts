@@ -102,6 +102,7 @@ if (import.meta.main) {
     const exists = (p: string) => known.has(p);
     const move = (p: string) => moves.get(p) ?? p;
 
+    const destinations = new Set<string>();
     for (const [from, to] of moves) {
         if (!known.has(from)) {
             console.error(`move source missing: ${relative(ROOT, from)}`);
@@ -111,6 +112,11 @@ if (import.meta.main) {
             console.error(`move target exists: ${relative(ROOT, to)}`);
             process.exit(1);
         }
+        if (destinations.has(to)) {
+            console.error(`duplicate move target: ${relative(ROOT, to)}`);
+            process.exit(1);
+        }
+        destinations.add(to);
     }
 
     const pending: Array<[string, string]> = [];

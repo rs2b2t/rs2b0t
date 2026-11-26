@@ -47,7 +47,10 @@ function harness(frames: () => FrameSample[]) {
                 sampler.sample();
             }
         },
-        now: (): number => clock
+        now: (): number => clock,
+        advance: (ms: number): void => {
+            clock += ms;
+        }
     };
 }
 
@@ -125,6 +128,41 @@ describe('DiagSampler', () => {
         // 24h retention for 27 bots must not balloon: budget was ~10MB
         expect(h.sampler.bytes).toBeLessThan(10 * 1024 * 1024);
         expect(h.sampler.bytes).toBeGreaterThan(1024 * 1024);
+    });
+
+    test('retains a retired bot for 24 hours and frees its rings on the next sample', () => {
+        let boxes = ['active'];
+        const h = harness(() => boxes.map(box => frame(box)));
+        h.tick();
+        const activeBytes = h.sampler.bytes;
+        boxes = ['active', 'retired'];
+        h.tick();
+        const lastSeen = h.now();
+        boxes = ['active'];
+        h.advance(24 * 60 * 60 * 1000);
+        h.sampler.sample();
+        expect(h.sampler.at(lastSeen).retired).toBeDefined();
+        expect(h.sampler.bytes).toBeGreaterThan(activeBytes);
+        h.tick();
+        expect(h.sampler.at(lastSeen).retired).toBeUndefined();
+        expect(h.sampler.at(lastSeen).active).toBeDefined();
+        expect(h.sampler.bytes).toBe(activeBytes);
+    });
+
+    test('a returning bot keeps recent history and starts fresh after an expired gap', () => {
+        let present = true;
+        const h = harness(() => present ? [frame('returning', { logicCount: 10 })] : []);
+        h.tick();
+        const original = h.now();
+        present = false;
+        h.tick();
+        present = true;
+        h.tick();
+        expect(h.sampler.at(original).returning?.logicCount).toBe(10);
+        h.advance(24 * 60 * 60 * 1000);
+        h.tick();
+        expect(h.sampler.at(original).returning).toBeUndefined();
+        expect(h.sampler.at(h.now()).returning?.logicCount).toBe(10);
     });
 
     test('blames the bot whose phase overlapped the stall, not whoever runs later', () => {
