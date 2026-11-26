@@ -1,4 +1,4 @@
-import { blocks, field } from '../lib/content.js';
+import { blocks, field, readObjMetadata } from '../lib/content.js';
 import type { ShopRecord } from '#/bot/api/shop/types.js';
 
 export interface ParsedInv {
@@ -67,11 +67,12 @@ export function parseNpcKeepers(text: string): ParsedKeeper[] {
 export function parseObjDefs(text: string): Record<string, ParsedObj> {
     const out: Record<string, ParsedObj> = {};
     for (const b of blocks(text)) {
+        const { name, cost, members } = readObjMetadata(b);
         out[b.id] = {
-            name: field(b.lines, 'name') ?? b.id,
-            cost: Number(field(b.lines, 'cost') ?? '1'),
+            name,
+            cost,
             stackable: field(b.lines, 'stackable') === 'yes',
-            members: field(b.lines, 'members') === 'yes'
+            members
         };
     }
     return out;
