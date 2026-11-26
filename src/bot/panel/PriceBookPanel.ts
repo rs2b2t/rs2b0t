@@ -743,6 +743,11 @@ export class PriceBookPanel {
             clear.classList.add('rs2b0t-pricebook-unpin');
             clear.title = `Clear pinned ${role} price`;
             clear.setAttribute('aria-label', clear.title);
+            clear.addEventListener('mousedown', event => {
+                if (event.button === 0 && document.activeElement === input) {
+                    event.preventDefault();
+                }
+            });
             cell.appendChild(clear);
         }
         return cell;
