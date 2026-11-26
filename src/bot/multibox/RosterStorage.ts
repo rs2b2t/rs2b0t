@@ -1,6 +1,6 @@
 import { isRosterScript } from './RosterTypes.js';
 import { boxKey, boxKeyTail, clearBoxItem, profileStorageKeys, readBoxItem } from '../runtime/box.js';
-import { storeKeys } from '../runtime/desktopStorage.js';
+import { desktopStorage, storeKeys } from '../runtime/desktopStorage.js';
 
 function canonicalScript(script: string): string {
     return script === 'NatureCrafter' ? 'JiveRC' : script;
@@ -22,6 +22,13 @@ function keys(id: string): string[] {
 
 export function readProfileScript(username: string): string {
     return canonicalScript(readBoxItem('selectedScript', username) ?? '');
+}
+
+export function readProfileScripts(usernames: string[]): Map<string, string> {
+    if (!usernames.length) return new Map();
+    if (!desktopStorage?.getItems) return new Map(usernames.map(name => [name, readProfileScript(name)]));
+    const values = desktopStorage.getItems(usernames.map(name => boxKey('selectedScript', name)));
+    return new Map(usernames.map((name, i) => [name, canonicalScript(values[i] ?? '')]));
 }
 
 export function writeProfileScript(username: string, script: string): void {
@@ -60,8 +67,8 @@ export function replaceScriptSettings(username: string, script: string, values: 
     }
 }
 
-export function storedScripts(usernames: string[]): string[] {
-    const scripts = new Set(usernames.map(readProfileScript));
+export function storedScripts(usernames: string[], selections = readProfileScripts(usernames)): string[] {
+    const scripts = new Set(selections.values());
     for (const store of stores()) {
         const saved = storeKeys(store);
         for (const username of usernames) {

@@ -4,9 +4,17 @@ import type { DesktopStorage } from '#/bot/runtime/desktopStorage.js';
 
 const data = new Map<string, string>();
 let keyReads = 0;
+let selectionReads = 0;
 let notify: Parameters<DesktopStorage['subscribe']>[0];
 Reflect.set(globalThis, 'rs2b0tDesktopStorage', {
-    getItem: (key: string) => data.get(key) ?? null,
+    getItem: (key: string) => {
+        if (key.endsWith(':selectedScript')) selectionReads++;
+        return data.get(key) ?? null;
+    },
+    getItems: (keys: string[]) => {
+        selectionReads++;
+        return keys.map(key => data.get(key) ?? null);
+    },
     setItem: (key: string, value: string) => {
         if (!key.startsWith('rs2b0t:')) throw new Error('Invalid saved setting');
         data.set(key, value);
@@ -180,13 +188,20 @@ if (process.argv.includes('--roster')) {
     const actions = new RosterActions({ profiles: () => profiles, client: () => null, setWorld: async () => true });
     const panel = new RosterPanel(actions, { tabs: () => ['Main'], activeTab: () => 'Main', worldRouting: true, edit: () => {} });
     document.body.append(panel.el);
+    selectionReads = 0;
     keyReads = 0;
     panel.open();
+    const openSelectionReads = selectionReads;
     const openReads = keyReads;
     data.set('rs2b0t:miner_0:set:Fisher:fish', 'trout');
     data.set('rs2b0t:miner_0:set:Miner:setting_0', 'coal');
+    data.set('rs2b0t:miner_1:selectedScript', 'NatureCrafter');
+    data.delete('rs2b0t:miner_2:selectedScript');
+    selectionReads = 0;
     keyReads = 0;
     panel.refresh();
-    console.log(JSON.stringify({ openReads, refreshReads: keyReads, rows: panel.el.querySelectorAll('tbody tr').length,
-        scripts: actions.scripts(), updated: panel.el.querySelector('tbody tr')?.textContent?.includes('coal') }));
+    const labels = Array.from(panel.el.querySelectorAll<HTMLTableRowElement>('tbody tr'), row => row.cells[2].textContent);
+    const choices = Array.from(panel.el.querySelectorAll<HTMLOptionElement>('#mbx-roster-script option'), option => option.value);
+    console.log(JSON.stringify({ openSelectionReads, refreshSelectionReads: selectionReads, labels, openReads, refreshReads: keyReads, rows: panel.el.querySelectorAll('tbody tr').length,
+        scripts: choices, updated: panel.el.querySelector('tbody tr')?.textContent?.includes('coal') }));
 }

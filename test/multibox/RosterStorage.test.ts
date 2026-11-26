@@ -86,7 +86,10 @@ test('desktop roster opens and refreshes without enumerating shared storage for 
     expect(result.exitCode).toBe(0);
     const report = JSON.parse(result.stdout.toString().trim().split('\n').at(-1)!);
     expect(report.rows).toBe(12);
-    expect(report.scripts).toEqual(['Fisher', 'Miner']);
+    expect(report.scripts).toEqual(['Fisher', 'JiveRC', 'Miner']);
+    expect(report.labels).toEqual(['Miner', 'JiveRC', 'None', ...Array(9).fill('Miner')]);
+    expect(report.openSelectionReads).toBe(1);
+    expect(report.refreshSelectionReads).toBe(1);
     expect(report.updated).toBe(true);
     expect(report.openReads).toBeLessThan(100);
     expect(report.refreshReads).toBeLessThan(100);
