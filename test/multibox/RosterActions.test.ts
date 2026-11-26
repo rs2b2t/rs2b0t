@@ -176,43 +176,66 @@ test('removed travel targets settle while the batch waits for surviving targets'
     }
 });
 
-test('one failed poll snapshot only cancels the target that requested it', async () => {
+for (const failures of [1, 3]) test(`watchdog retries failed roster reads (failure count ${failures})`, async () => {
     jest.useFakeTimers();
     await flushPromises();
     const timers = testClock.getTimerCount();
-    const profiles = [profile('alice', 'running'), profile('bob', 'running')];
-    const clients = profiles.map(p => client(p.username));
+    const profiles = ['alice', 'bob', 'carol'].map(name => profile(name, 'running'));
     let finish!: () => void;
     const gate = new Promise<void>(resolve => { finish = resolve; });
-    for (const c of clients) c.travelTo = () => gate;
-    const stops = clients.map(c => spyOn(c, 'stopScript'));
+    const stops: string[] = [];
+    const clients = profiles.map(p => ({ ...client(p.username), travelTo: () => gate, stopScript: () => stops.push(p.username) }));
+    let failuresLeft = 0;
     let reads = 0;
-    let fail = false;
     const actions = new RosterActions({ profiles: () => {
         reads++;
-        if (fail) {
-            fail = false;
+        if (failuresLeft > 0) {
+            failuresLeft--;
             throw new Error('Snapshot unavailable');
         }
         return profiles;
     }, client: p => clients[profiles.indexOf(p)], setWorld: async () => true });
-    const events: string[] = [];
+    const names = profiles.map(p => p.username);
     try {
-        const running = actions.run(['alice', 'bob'], { kind: 'travel', destination: 'Varrock' }, r => events.push(r.username + ':' + r.state));
+        const running = actions.run(names, { kind: 'travel', destination: 'Varrock' });
         reads = 0;
-        fail = true;
+        failuresLeft = failures;
         testClock.advanceTimersByTime(100);
-        await flushPromises();
-        expect(reads).toBe(1);
-        expect(events).toEqual(['alice:pending', 'bob:pending', 'alice:failed']);
+        expect(stops).toEqual(names.slice(0, failures));
+        expect(reads).toBe(Math.min(failures + 1, names.length));
         testClock.advanceTimersByTime(50);
+        failuresLeft = 0;
         finish();
-        expect((await running).map(r => r.state)).toEqual(['failed', 'done']);
-        expect(stops[0]).toHaveBeenCalledTimes(1);
-        expect(stops[1]).not.toHaveBeenCalled();
+        expect((await running).map(r => r.state)).toEqual(names.map((_, i) => i < failures ? 'failed' : 'done'));
         testClock.advanceTimersByTime(0);
         expect(testClock.getTimerCount()).toBe(timers);
     } finally {
+        jest.useRealTimers();
+    }
+});
+
+test('wall clock rollback preserves elapsed client checks and deadlines', async () => {
+    jest.useFakeTimers();
+    const wallNow = Date.now;
+    const clock = spyOn(Date, 'now');
+    const profiles = ['pending', 'removed'].map(name => profile(name, 'running'));
+    const stops: string[] = [];
+    const clients = profiles.map(p => ({ ...client(p.username), travelTo: () => new Promise<void>(() => {}), stopScript: () => stops.push(p.username) }));
+    const actions = new RosterActions({ profiles: () => profiles, client: p => clients[profiles.indexOf(p)], setWorld: async () => true });
+    try {
+        const running = actions.run(profiles.map(p => p.username), { kind: 'travel', destination: 'Varrock' });
+        testClock.advanceTimersByTime(150);
+        profiles.pop();
+        clock.mockImplementation(() => wallNow() - 5000);
+        testClock.advanceTimersByTime(50);
+        expect(stops).toEqual(['removed']);
+        testClock.advanceTimersByTime(10_799);
+        expect(stops).toEqual(['removed']);
+        testClock.advanceTimersByTime(1);
+        expect(stops).toEqual(['removed', 'pending']);
+        expect((await running).map(r => r.message)).toEqual([expect.stringMatching(/timed out/i), expect.stringMatching(/removed/i)]);
+    } finally {
+        clock.mockRestore();
         jest.useRealTimers();
     }
 });
@@ -286,7 +309,7 @@ test('parent travel timeout cancels each command at its own deadline and release
 });
 
 test('a late completion times out even if the watchdog has not run yet', async () => {
-    const clock = spyOn(Date, 'now').mockReturnValue(25);
+    const clock = spyOn(performance, 'now').mockReturnValue(25);
     const p = profile('alice', 'running');
     const c = client(p.username);
     let finish!: () => void;

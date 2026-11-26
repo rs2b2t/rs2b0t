@@ -46,7 +46,8 @@ async function sample(Actions, count, mixed = false) {
     const timers = new Set();
     const { setInterval, clearInterval, setTimeout, clearTimeout } = globalThis;
     const realNow = Date.now;
-    Date.now = () => now;
+    const realPerformanceNow = performance.now;
+    performance.now = Date.now = () => now;
     globalThis.setInterval = (callback, delay) => {
         assert.equal(delay, 100);
         timers.add(callback);
@@ -72,9 +73,9 @@ async function sample(Actions, count, mixed = false) {
                 controller.add(saved[1]);
             }
             const due = [...timers];
-            const start = performance.now();
+            const start = realPerformanceNow.call(performance);
             for (const poll of due) poll();
-            ms += performance.now() - start;
+            ms += realPerformanceNow.call(performance) - start;
             if (mixed) {
                 if (tick === 10) gates.slice(3, count).forEach(gate => gate.resolve());
                 await setImmediate();
@@ -91,6 +92,7 @@ async function sample(Actions, count, mixed = false) {
     } finally {
         Object.assign(globalThis, { setInterval, clearInterval, setTimeout, clearTimeout });
         Date.now = realNow;
+        performance.now = realPerformanceNow;
     }
 }
 

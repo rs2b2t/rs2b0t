@@ -121,35 +121,31 @@ export class RosterActions {
         }
     }
 
-    private poll(nextPoll = Date.now()): void {
-        const now = Date.now();
-        let pollClients = now >= nextPoll;
+    private poll(nextPoll = performance.now()): void {
+        const now = performance.now();
+        const pollClients = now >= nextPoll;
         if (pollClients) nextPoll = now + 100;
         let wakeAt = nextPoll;
         let profiles: Map<string, RosterProfile> | undefined;
         const find: FindProfile = username => {
             if (!profiles) {
-                try {
-                    const index = new Map<string, RosterProfile>();
-                    for (const profile of this.profiles()) {
-                        if (!index.has(profile.username)) index.set(profile.username, profile);
-                    }
-                    profiles = index;
-                } catch {
-                    pollClients = false;
+                const index = new Map<string, RosterProfile>();
+                for (const profile of this.profiles()) {
+                    if (!index.has(profile.username)) index.set(profile.username, profile);
                 }
+                profiles = index;
             }
-            return profiles?.get(username);
+            return profiles.get(username);
         };
         for (const target of this.pending) {
-            if (Date.now() >= target.deadline) {
+            if (performance.now() >= target.deadline) {
                 target.timeout();
                 continue;
             }
             wakeAt = Math.min(wakeAt, target.deadline);
             if (pollClients) target.check(find);
         }
-        if (this.pending.size) this.watcher = setTimeout(() => this.poll(nextPoll), Math.max(0, wakeAt - Date.now()));
+        if (this.pending.size) this.watcher = setTimeout(() => this.poll(nextPoll), Math.max(0, Math.ceil(wakeAt - performance.now())));
     }
 
     private withClient(profile: RosterProfile, client: RosterClient, operation: () => Promise<void>): Promise<void> {
@@ -182,7 +178,7 @@ export class RosterActions {
                 return valid;
             };
             const target = {
-                deadline: Date.now() + 11_000,
+                deadline: performance.now() + 11_000,
                 timeout: () => cancel('Timed out waiting for the script action.'),
                 check
             };
@@ -191,7 +187,7 @@ export class RosterActions {
             try {
                 operation().then(() => {
                     if (settled) return;
-                    if (Date.now() >= target.deadline) target.timeout();
+                    if (performance.now() >= target.deadline) target.timeout();
                     else if (check(name => this.profiles().find(p => p.username === name))) finish(true);
                 }, error => finish(false, error));
             } catch (error) {
